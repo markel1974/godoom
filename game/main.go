@@ -43,7 +43,7 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
 
 	//TODO TEST
-	cfg, err := randomData()
+	cfg, err := GenerateWorld(16, 16)
 	//cfg, err := ParseOldData(stubOld2)
 	if err != nil {
 		fmt.Println(err)
@@ -69,12 +69,11 @@ func (g *Game) Run() {
 		panic(err)
 	}
 
-	c := win.Bounds().Center()
-
-	g.Setup(c)
+	g.Setup(win.Bounds().Center())
 
 	var currentTimer float64
 	var lastTimer float64
+	mouseConnected := true
 
 	//text := pixel.NewText(pixel.V(10, 10), pixel.Atlas7x13)
 	//_, _ = text.WriteString("test")
@@ -86,12 +85,14 @@ func (g *Game) Run() {
 			g.Update(win)
 		}
 
-		mousePos := win.MousePosition()
-		mousePrevPos := win.MousePreviousPosition()
-		if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
-			mouseX := mousePos.X - mousePrevPos.X
-			mouseY := mousePos.Y - mousePrevPos.Y
-			g.world.DoPlayerMouseMove(mouseX, mouseY)
+		if mouseConnected && win.MouseInsideWindow() {
+			mousePos := win.MousePosition()
+			mousePrevPos := win.MousePreviousPosition()
+			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
+				mouseX := mousePos.X - mousePrevPos.X
+				mouseY := mousePos.Y - mousePrevPos.Y
+				g.world.DoPlayerMouseMove(mouseX, mouseY)
+			}
 		}
 
 		var up, down, left, right, slow bool
@@ -144,8 +145,10 @@ func (g *Game) Run() {
 		if win.JustPressed(pixels.KeySpace) || win.Pressed(pixels.MouseButton1) {
 			g.world.DoPlayerJump()
 		}
+		if win.JustPressed(pixels.KeyM) {
+			mouseConnected = !mouseConnected
+		}
 
-		//g.world.ComputePlayer(moves, ducking, jumping, mouseX, mouseY)
 		win.Update()
 
 		//text.Draw(win, g.mainMatrix)

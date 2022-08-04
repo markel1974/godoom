@@ -7,4 +7,4 @@
 .idea/misc.xml
 .idea/modules.xml
 build/godoom*
-game/stub.go
+game/legacy.go

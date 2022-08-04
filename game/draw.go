@@ -180,7 +180,7 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 	}
 }
 
-func (dp *DrawPolygon) DrawTexturePlayer(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *Texture, yMap float64) {
+func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *Texture, yMap float64) {
 	if dp.surface == nil {
 		return
 	}

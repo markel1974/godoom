@@ -2,11 +2,11 @@ package main
 
 import (
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/markel1974/godoom/pixels"
+	"github.com/markel1974/godoom/pixels/executor"
 	"image"
 	"image/draw"
 	_ "image/png"
-	"markel/mgl/pixels"
-	"markel/mgl/pixels/executor"
 	"os"
 	"time"
 )

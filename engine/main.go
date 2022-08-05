@@ -43,14 +43,11 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
 
-	//TODO TEST
-
+	//cfg, err := legacy.ParseLegacyData(legacy.StubOld2)
 	//wb := wad.NewBuilder()
 	//wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
 	//cfg, err := wb.Setup(wadFile, 1)
-
 	cfg, err := world.Generate(16, 16)
-	//cfg, err := ParseOldData(stubOld2)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

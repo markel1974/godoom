@@ -124,7 +124,7 @@ func (l *Loader) loadPatchLumps(w * WAD) error {
 			return err
 		}
 		if n != int(lumpInfo.Size) {
-			return fmt.Errorf("Truncated lump")
+			return fmt.Errorf("truncated lump")
 		}
 		reader := bytes.NewBuffer(lump[0:])
 		var header PictureHeader
@@ -142,7 +142,7 @@ func (l *Loader) loadPatchLumps(w * WAD) error {
 		pixels := make([]byte, size, size)
 		for y := 0; y < int(header.Height); y++ {
 			for x := 0; x < int(header.Width); x++ {
-				pixels[y*int(header.Width)+x] = l.transparentPaletteIndex
+				pixels[y*int(header.Width)+x] = w.transparentPaletteIndex
 			}
 		}
 		for columnIndex, offset := range offsets {

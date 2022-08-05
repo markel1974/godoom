@@ -2,6 +2,7 @@ package wad
 
 import (
 	"errors"
+	"io"
 	"os"
 )
 
@@ -16,7 +17,8 @@ func ToString(s [8]byte) string {
 }
 
 func Seek(f * os.File, offset int64) error {
-	off, err := f.Seek(offset, os.SEEK_SET)
+	//off, err := f.Seek(offset, os.SEEK_SET)
+	off, err := f.Seek(offset, io.SeekStart)
 	if err != nil {
 		return err
 	}

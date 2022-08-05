@@ -178,8 +178,6 @@ type WAD struct {
 
 
 
-
-
 func New() *WAD {
 	return &WAD{
 		transparentPaletteIndex: 255,

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/markel1974/godoom/engine/config"
 	"github.com/markel1974/godoom/pixels"
 )
 
@@ -38,7 +39,7 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 	return w
 }
 
-func (w *World) Setup(cfg *Config) error {
+func (w *World) Setup(cfg *config.Config) error {
 	playerSector, err := w.tree.Setup(cfg.Player.Sector, cfg.Sectors)
 	if err != nil {
 		return err

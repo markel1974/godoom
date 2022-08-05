@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/markel1974/godoom/engine/wad"
+	"github.com/markel1974/godoom/engine/world"
 	"github.com/markel1974/godoom/pixels"
 	"image/color"
 	"os"
@@ -44,7 +45,7 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
 
 	//TODO TEST
-	cfg, err := GenerateWorld(16, 16)
+	cfg, err := world.Generate(16, 16)
 	//cfg, err := ParseOldData(stubOld2)
 	if err != nil {
 		fmt.Println(err)

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/markel1974/godoom/engine/config"
 	"math"
 	"strconv"
 	"strings"
@@ -98,7 +99,7 @@ func NewBSPTree(width int, height int, maxQueue int, textures *Textures) *BSPTre
 	return r
 }
 
-func (r *BSPTree) Setup(playerSector string, cfgSectors []*ConfigSector) (*Sector, error) {
+func (r *BSPTree) Setup(playerSector string, cfgSectors []*config.Sector) (*Sector, error) {
 	cache := make(map[string]int)
 
 	for idx, cfgSector := range cfgSectors {

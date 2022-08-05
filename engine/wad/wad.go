@@ -66,7 +66,7 @@ type Level struct {
 	Segments   []Seg
 	SubSectors []SubSector
 	Nodes      []Node
-	Sectors    []Sector
+	Sectors    []*Sector
 }
 
 type Thing struct {
@@ -325,7 +325,7 @@ func (w *WAD) readNodes(lumpInfo *LumpInfo) ([]Node, error) {
 	return nodes, nil
 }
 
-func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]Sector, error) {
+func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]*Sector, error) {
 	type privateSector struct {
 		FloorHeight   int16
 		CeilingHeight int16
@@ -341,9 +341,9 @@ func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]Sector, error) {
 	if err := binary.Read(w.file, binary.LittleEndian, pSectors); err != nil {
 		return nil, err
 	}
-	sectors := make([]Sector, count, count)
-	for _, p := range pSectors {
-		sectors = append(sectors, Sector{
+	sectors := make([]*Sector, count, count)
+	for idx, p := range pSectors {
+		sectors[idx] = &Sector{
 			FloorHeight:   p.FloorHeight,
 			CeilingHeight: p.CeilingHeight,
 			FloorPic:      ToString(p.FloorPic),
@@ -351,7 +351,7 @@ func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]Sector, error) {
 			LightLevel:    p.LightLevel,
 			SpecialSector: p.SpecialSector,
 			Tag:           p.Tag,
-		})
+		}
 	}
 	return sectors, nil
 }

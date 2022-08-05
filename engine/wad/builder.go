@@ -3,9 +3,11 @@ package wad
 import (
 	"errors"
 	"fmt"
+	"github.com/markel1974/godoom/engine/config"
 	"image"
 	"image/color"
 	"os"
+	"strconv"
 )
 
 //http://www.gamers.org/dhs/helpdocs/dmsp1666.html
@@ -37,26 +39,29 @@ func MakePoint3(x, y, z, u, v int16) Point3{
 
 
 type Builder struct {
-	w * WAD
+	w   *WAD
+	cfg map[int16]*config.Sector
 }
 
 func NewBuilder() * Builder {
 	return &Builder{
+		cfg : make(map[int16]*config.Sector),
+		//cfg : &config.Config{Sectors: nil, Player: &config.Player{}},
 	}
 }
 
-func (b * Builder) Setup(wadFile string, levelNumber int) error {
+func (b * Builder) Setup(wadFile string, levelNumber int) (*config.Config, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
-		return err
+		return nil, err
 	}
 	levelNames := b.w.GetLevels()
 	if len(levelNames) == 0 {
-		return errors.New("error: No levels found")
+		return nil,errors.New("error: No levels found")
 	}
 	levelIdx := levelNumber - 1
 	if levelIdx >= len(levelNames) {
-		return errors.New(fmt.Sprintf("error: No such level number %d", levelNumber))
+		return nil, errors.New(fmt.Sprintf("error: No such level number %d", levelNumber))
 	}
 	levelName := levelNames[levelIdx]
 	fmt.Printf("Loading level %s ...\n", levelName)
@@ -66,7 +71,23 @@ func (b * Builder) Setup(wadFile string, levelNumber int) error {
 		os.Exit(1)
 	}
 	b.createSubSector(level)
-	return nil
+
+	var sectors[]*config.Sector
+	for _, c := range b.cfg {
+		sectors = append(sectors, c)
+	}
+
+	player1 := level.Things[1]
+	position := config.XY{
+		X: float64(player1.XPosition),
+		Y: float64(player1.YPosition),
+	}
+
+	cfg := &config.Config{Sectors: sectors, Player: &config.Player{ Position: position, Angle: float64(player1.Angle), Sector: "0" }}
+
+	//t, _ := json.MarshalIndent(b.cfg, "", " ")
+	//fmt.Println(string(t))
+	return cfg, nil
 }
 
 func (b * Builder) createSubSector(level *Level) {
@@ -87,9 +108,11 @@ func (b * Builder) createSegment(level *Level, segmentId int) {
 	if sideDef == nil { return }
 	sector := level.Sectors[sideDef.SectorRef]
 
+	//fmt.Println(sideDef.SectorRef) => SectorId
+
 	oppositeSideDef := b.segmentOppositeSideDef(level, &segment, &lineDef)
 
-	start := level.Vertexes[segment.VertexStart]
+	//start := level.Vertexes[segment.VertexStart]
 	end := level.Vertexes[segment.VertexEnd]
 
 	upperTexture := sideDef.UpperTexture
@@ -98,16 +121,33 @@ func (b * Builder) createSegment(level *Level, segmentId int) {
 
 	//fmt.Println(sector, start, end)
 
-	if upperTexture != "-" && oppositeSideDef != nil {
+	if oppositeSideDef != nil {
+		current := b.getConfigSector(sideDef.SectorRef, sector)
 		neighbor := level.Sectors[oppositeSideDef.SectorRef]
+
+		next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
+		current.Neighbors = append(current.Neighbors, &config.Neighbor{
+			XY: config.XY{X: float64(end.XCoord), Y: float64(end.YCoord)},
+			Id: next.Id,
+		})
+	}
+
+	if upperTexture != "-" && oppositeSideDef != nil {
+		//neighbor := level.Sectors[oppositeSideDef.SectorRef]
 		//sector.Neighbor = append(sector.Neighbor, neighbor)
 		//sector.Vertex = append(sector.Vertex, XY{X:float64(start.XCoord), Y: float64(start.YCoord)})
 		//sector.Vertex = append(sector.Vertex, XY{X:float64(start.XCoord), Y: float64(start.YCoord)})
 
-		var vertices []Point3
-		vertices = append(vertices, MakePoint3(start.XCoord, start.YCoord, sector.CeilingHeight,0.0,1.0))
-		vertices = append(vertices, MakePoint3(end.XCoord, end.YCoord, sector.CeilingHeight,0.0,1.0))
-		vertices = append(vertices, MakePoint3(end.XCoord, end.YCoord, neighbor.CeilingHeight,0.0,1.0))
+		//next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
+		//current.Neighbors = append(current.Neighbors, &config.Neighbor{
+		//	XY: config.XY{X: float64(start.XCoord), Y: float64(start.YCoord)},
+		//	Id: next.Id,
+		//})
+
+		//var test []Point3
+		//test = append(test, MakePoint3(start.XCoord, start.YCoord, sector.CeilingHeight,0.0,1.0))
+		//test = append(test, MakePoint3(end.XCoord, end.YCoord, sector.CeilingHeight,0.0,1.0))
+		//test = append(test, MakePoint3(end.XCoord, end.YCoord, neighbor.CeilingHeight,0.0,1.0))
 
 		//vertices = append(vertices, Point3{X: float64(-start.XCoord), Y: float64(sector.CeilingHeight), Z: float64(start.YCoord), U: 0.0, V: 1.0})
 		//vertices = append(vertices, Point3{X: float64(-start.XCoord), Y: float64(sector.CeilingHeight), Z: float64(start.YCoord), U: 0.0, V: 0.0})
@@ -120,7 +160,7 @@ func (b * Builder) createSegment(level *Level, segmentId int) {
 		//meshes = append(meshes, NewMesh(upperTexture, sector.LightLevel, vertices))
 		//scene.CacheTexture(wad, upperTexture)
 
-		fmt.Println(vertices)
+		//fmt.Println(vertices)
 	}
 
 	if middleTexture != "-" {
@@ -143,9 +183,15 @@ func (b * Builder) createSegment(level *Level, segmentId int) {
 	}
 
 	if lowerTexture != "-" && oppositeSideDef != nil {
-		oppositeSector := level.Sectors[oppositeSideDef.SectorRef]
+		//neighbor := level.Sectors[oppositeSideDef.SectorRef]
 
-		fmt.Println(oppositeSector)
+		//next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
+		//current.Neighbors = append(current.Neighbors, &config.Neighbor{
+		//	XY: config.XY{X: float64(start.XCoord), Y: float64(start.YCoord)},
+		//	Id: next.Id,
+		//})
+
+		//fmt.Println(oppositeSector)
 
 		/*
 		vertices := []Point3{}
@@ -227,4 +273,25 @@ func (b * Builder) loadTexture(wad *WAD, textureName string) (*image.RGBA, error
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(rgba.Rect.Size().X), int32(rgba.Rect.Size().Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(rgba.Pix))
 	return texId, nil
 	*/
+}
+
+
+func (b * Builder) getConfigSector(id int16, sector *Sector) * config.Sector{
+	c, ok := b.cfg[id]
+	if !ok {
+		c = &config.Sector {
+			Id:           strconv.Itoa(int(id)),
+			Ceil:         float64(sector.CeilingHeight),
+			Floor:        float64(sector.FloorHeight),
+			Textures:     false,
+			FloorTexture: "",
+			CeilTexture:  "",
+			UpperTexture: "",
+			LowerTexture: "",
+			WallTexture:  "",
+			Neighbors:    nil,
+		}
+		b.cfg[id] = c
+	}
+	return c
 }

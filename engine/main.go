@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/markel1974/godoom/engine/wad"
 	"github.com/markel1974/godoom/engine/world"
 	"github.com/markel1974/godoom/pixels"
 	"image/color"
@@ -45,6 +44,11 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
 
 	//TODO TEST
+
+	//wb := wad.NewBuilder()
+	//wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
+	//cfg, err := wb.Setup(wadFile, 1)
+
 	cfg, err := world.Generate(16, 16)
 	//cfg, err := ParseOldData(stubOld2)
 	if err != nil {
@@ -69,12 +73,6 @@ func (g *Game) Run() {
 	win, err := pixels.NewGLWindow(cfg)
 	if err != nil {
 		panic(err)
-	}
-
-	wb := wad.NewBuilder()
-	wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-	if err := wb.Setup(wadFile, 1); err != nil {
-		fmt.Println(err)
 	}
 
 	g.Setup(win.Bounds().Center())

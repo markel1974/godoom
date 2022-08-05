@@ -160,7 +160,7 @@ func (r *BSPTree) Setup(playerSector string, cfgSectors []*config.Sector) (*Sect
 	//Verify Loop
 	for idx, sect := range r.sectors {
 		if len(sect.Vertices) == 0 {
-			return nil, errors.New(fmt.Sprintf("sector %d: vertices as zero len", idx))
+			return nil, errors.New(fmt.Sprintf("sector %s (idx: %d): vertices as zero len", sect.Id, idx))
 		}
 		hasLoop := false
 		vFirst := sect.Vertices[0]

@@ -17,15 +17,15 @@ type Neighbor struct {
 }
 
 type Sector struct {
-	Id           string            `json:"id"`
-	Ceil         float64           `json:"ceil"`
-	Floor        float64           `json:"floor"`
-	Textures     bool              `json:"textures"`
-	FloorTexture string            `json:"floorTexture"`
-	CeilTexture  string            `json:"ceilTexture"`
-	UpperTexture string            `json:"upperTexture"`
-	LowerTexture string            `json:"lowerTexture"`
-	WallTexture  string            `json:"wallTexture"`
+	Id           string      `json:"id"`
+	Ceil         float64     `json:"ceil"`
+	Floor        float64     `json:"floor"`
+	Textures     bool        `json:"textures"`
+	FloorTexture string      `json:"floorTexture"`
+	CeilTexture  string      `json:"ceilTexture"`
+	UpperTexture string      `json:"upperTexture"`
+	LowerTexture string      `json:"lowerTexture"`
+	WallTexture  string      `json:"wallTexture"`
 	Neighbors    []*Neighbor `json:"neighbors"`
 }
 

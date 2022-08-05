@@ -10,3 +10,4 @@ build/godoom*
 engine/legacy.go
 build/resources/wad/
 game/
+engine/legacy/

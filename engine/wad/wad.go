@@ -173,6 +173,7 @@ type WAD struct {
 	lumps                   map[string]int
 	lumpInfos               []*LumpInfo
 	file                    *os.File
+	transparentPaletteIndex byte
 }
 
 
@@ -181,6 +182,7 @@ type WAD struct {
 
 func New() *WAD {
 	return &WAD{
+		transparentPaletteIndex: 255,
 	}
 }
 
@@ -355,3 +357,5 @@ func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]Sector, error) {
 	}
 	return sectors, nil
 }
+
+

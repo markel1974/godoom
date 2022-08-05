@@ -3,6 +3,8 @@ package wad
 import (
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
 	"os"
 )
 
@@ -45,11 +47,9 @@ func NewBuilder() * Builder {
 
 func (b * Builder) Setup(wadFile string, levelNumber int) error {
 	b.w = New()
-
 	if err := b.w.Load(wadFile); err != nil {
 		return err
 	}
-
 	levelNames := b.w.GetLevels()
 	if len(levelNames) == 0 {
 		return errors.New("error: No levels found")
@@ -179,4 +179,52 @@ func (b * Builder) segmentOppositeSideDef(level *Level, seg *Seg, lineDef *LineD
 		return &level.SideDefs[lineDef.SideDefLeft]
 	}
 	return &level.SideDefs[lineDef.SideDefRight]
+}
+
+func (b * Builder) loadTexture(wad *WAD, textureName string) (*image.RGBA, error) {
+	texture, ok := wad.GetTexture(textureName)
+	if !ok {
+		return nil, errors.New("unknown texture " + textureName)
+	}
+	if texture.Header == nil {
+		return nil, nil
+	}
+	bounds := image.Rect(0, 0, int(texture.Header.Width), int(texture.Header.Height))
+	rgba := image.NewRGBA(bounds)
+	if rgba.Stride != rgba.Rect.Size().X*4 {
+		return nil, fmt.Errorf("unsupported stride")
+	}
+	for _, patch := range texture.Patches {
+		img, ok := wad.GetImage(patch.PNameNumber)
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("unknown patch %d for %s", patch.PNameNumber, textureName))
+		}
+		for y := 0; y < img.Height; y++ {
+			for x := 0; x < img.Width; x++ {
+				pixel := img.Pixels[y*img.Width+x]
+				var alpha uint8
+				if pixel == wad.transparentPaletteIndex {
+					alpha = 0
+				} else {
+					alpha = 255
+				}
+				rgb := wad.playPal.Palettes[0].Table[pixel]
+				rgba.Set(int(patch.XOffset) + x, int(patch.YOffset) + y, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: alpha})
+			}
+		}
+	}
+	return rgba, nil
+
+	/*
+	var texId uint32
+	gl.GenTextures(1, &texId)
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, texId)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(rgba.Rect.Size().X), int32(rgba.Rect.Size().Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(rgba.Pix))
+	return texId, nil
+	*/
 }

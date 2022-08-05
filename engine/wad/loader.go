@@ -15,12 +15,10 @@ type header struct {
 
 type Loader struct {
 	header *header
-	transparentPaletteIndex byte
 }
 
 func NewLoader() * Loader {
 	return &Loader{
-		transparentPaletteIndex: 255,
 	}
 }
 
@@ -181,7 +179,7 @@ func (l *Loader) loadTextureLumps(w * WAD) error {
 	w.textures = make(map[string]*Texture)
 	for _, i := range textureLumps {
 		lumpInfo := w.lumpInfos[i]
-		if err := Seek(w.file, int64(lumpInfo.Filepos)); err != nil {
+		if err := Seek(w.file, lumpInfo.Filepos); err != nil {
 			return err
 		}
 		var count uint32

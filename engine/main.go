@@ -69,6 +69,12 @@ func (g *Game) Run() {
 		panic(err)
 	}
 
+	//wb := wad.NewBuilder()
+	//wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
+	//if err := wb.Setup(wadFile, 1); err != nil {
+	//	fmt.Println(err)
+	//}
+
 	g.Setup(win.Bounds().Center())
 
 	var currentTimer float64

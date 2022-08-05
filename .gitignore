@@ -8,3 +8,5 @@
 .idea/modules.xml
 build/godoom*
 engine/legacy.go
+build/resources/wad/
+game/

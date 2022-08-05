@@ -9,18 +9,9 @@ import (
 const fullLightDistance = 0.0039 // 1 / distance == 1 / 255
 
 func toRGB(rgb int, light float64) (r uint8, g uint8, b uint8) {
-	fr := float64(uint8((rgb>>16)&255)) * light
-	if fr > 255 {
-		fr = 255
-	}
-	fg := float64(uint8((rgb>>8)&255)) * light
-	if fg > 255 {
-		fg = 255
-	}
-	fb := float64(uint8(rgb&255)) * light
-	if fb > 255 {
-		fb = 255
-	}
+	fr := float64(uint8((rgb>>16) & 255)) * light
+	fg := float64(uint8((rgb>>8) & 255)) * light
+	fb := float64(uint8(rgb & 255)) * light
 	return uint8(fr), uint8(fg), uint8(fb)
 }
 
@@ -157,9 +148,7 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 				y2 := nodeY[i+1]
 				//div := (float64(y2) * ty2Scale) - (float64(y1) * ty1Scale)
 				div := ((float64(y2)) - (float64(y1))) * yRef
-				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
-					continue
-				}
+				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
 				//cY1 := clamp(y1, -1, dp.maxH)
 				//cY2 := clamp(y2, -1, dp.maxH)
 				cY1 := clamp(y1, 0, dp.lastH)
@@ -171,7 +160,7 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					//txtY := int(float64(pixelY - y1) * float64(TextureEnd - TextureBegin) / float64(y2 - y1) + TextureBegin)
 					txtY := int(((float64(pixelY))-(float64(y1)))*(float64(TextureEnd-TextureBegin))/div + TextureBegin)
-					r0, g0, b0 := toRGB(texture.Get(txtX, txtY), dp.lightStart)
+					r0, g0, b0 := toRGB(texture.Get(uint(txtX), uint(txtY)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
 				}
 			}
@@ -198,18 +187,16 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 			for i := 0; i < len(nodeY); i += 2 {
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]
-				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
-					continue
-				}
-				cY1 := clamp(y1, 0, dp.lastH)
-				cY2 := clamp(y2, 0, dp.lastH)
+				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
+				cY1 := clamp(y1,0, dp.lastH)
+				cY2 := clamp(y2,0, dp.lastH)
 				p3 := (dp.halfW - float64(pixelX)) / dp.screenHFov
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					tz := p1 / ((dp.halfH - float64(pixelY)) - p2)
 					tx := tz * p3
 					txtX := (((tz * aCos) + (tx * aSin)) + x) * textureZoom
 					txtZ := (((tz * aSin) - (tx * aCos)) + y) * textureZoom
-					red, green, blue := toRGB(texture.Get(int(txtZ), int(txtX)), dp.lightStart)
+					red, green, blue := toRGB(texture.Get(uint(txtZ), uint(txtX)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
 				}
 			}
@@ -230,9 +217,7 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 			for i := 0; i < len(nodeY); i += 2 {
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]
-				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
-					continue
-				}
+				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
 				cY1 := clamp(y1, -1, dp.maxH)
 				cY2 := clamp(y2, -1, dp.maxH)
 				if filled {
@@ -288,11 +273,7 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 
 	errorDx := dx / 2.0
 	var yStep int
-	if y1 < y2 {
-		yStep = 1
-	} else {
-		yStep = -1
-	}
+	if y1 < y2 { yStep = 1 } else { yStep = -1 }
 	y := int(y1)
 
 	maxX := int(x2)

@@ -88,7 +88,7 @@ func (s *PictureRGBA) SetRGBA(x int, y int, r uint8, g uint8, b uint8, a uint8) 
 	//flip
 	//y = (int(s.rect.Max.Y) -1) - y
 	y = s.lastY - y
-	i := (y-int(s.rect.Min.Y))*s.stride + (x-int(s.rect.Min.X))*4
+	i := (y - int(s.rect.Min.Y)) * s.stride + (x - int(s.rect.Min.X)) * 4
 	if i >= 0 && i < s.length {
 		s.pixels[i] = r
 		s.pixels[i+1] = g

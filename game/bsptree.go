@@ -120,7 +120,7 @@ func (r *BSPTree) Setup(playerSector string, cfgSectors []*ConfigSector) (*Secto
 			s.UpperTexture = r.textures.Get(cfgSector.UpperTexture)
 			s.LowerTexture = r.textures.Get(cfgSector.LowerTexture)
 			s.WallTexture = r.textures.Get(cfgSector.WallTexture)
-			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil {
+			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil || s.WallTexture == nil {
 				fmt.Println("invalid textures configuration for sector", s.Id)
 				s.Textures = false
 			}
@@ -403,29 +403,23 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 	for head != tail {
 		current := tail
 		tailIdx++
-		if tailIdx == queueLen {
-			tailIdx = 0
-		}
+		if tailIdx == queueLen { tailIdx = 0 }
 		tail = r.queue[tailIdx]
 
 		sector := current.sector
 
 		sector.Reference(r.compileId)
 		// Odd = still, 0x20 = give up
-		if sector.GetUsage()&r.maxSectors != 0 {
-			continue
-		}
+		if sector.GetUsage() & r.maxSectors != 0 { continue }
 		sector.AddUsage()
 
 		sq, sqCount := r.compileSector(vi, sector, current)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
-			if q.x2 >= q.x1 && (headIdx+queueLen+1-tailIdx)%queueLen != 0 {
+			if q.x2 >= q.x1 && (headIdx + queueLen + 1 - tailIdx) % queueLen != 0 {
 				head.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
 				headIdx++
-				if headIdx >= queueLen {
-					headIdx = 0
-				}
+				if headIdx >= queueLen { headIdx = 0 }
 				head = r.queue[headIdx]
 			}
 		}

@@ -118,15 +118,12 @@ func intersectF(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 f
 }
 
 func intersectFn(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) (float64, float64, bool) {
-	d := (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
-	if d == 0 {
-		return 0, 0, false
-	}
-	pre := x1*y2 - y1*x2
-	post := x3*y4 - y3*x4
-	x := (pre*(x3-x4) - (x1-x2)*post) / d
-	y := (pre*(y3-y4) - (y1-y2)*post) / d
-	// Check if the x and y coordinates are within both lines
+	d := (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+	if d == 0 { return 0, 0, false }
+	pre := (x1 * y2) - (y1 * x2)
+	post := (x3 * y4) - (y3 * x4)
+	x := (pre * (x3 - x4) - (x1 - x2) * post) / d
+	y := (pre * (y3 - y4) - (y1 - y2) * post) / d
 	//if x < minF(x1, x2) || x > maxF(x1, x2) || x < minF(x3, x4) || x > maxF(x3, x4) { return 0, 0, false }
 	//if y < minF(y1, y2) || y > maxF(y1, y2) || y < minF(y3, y4) || y > maxF(y3, y4) { return 0, 0, false }
 	return x, y, true

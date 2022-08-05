@@ -409,7 +409,6 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 		sector := current.sector
 
 		sector.Reference(r.compileId)
-		// Odd = still, 0x20 = give up
 		if sector.GetUsage() & r.maxSectors != 0 { continue }
 		sector.AddUsage()
 
@@ -429,6 +428,8 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 	return r.compiledSectors, r.compiledCount
 }
 
+
+//TODO MOVE TO SoftwareRender
 func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]*queueItem, int) {
 	first := r.compiledCount == 0
 	cs := r.compiledSectors[r.compiledCount]
@@ -458,13 +459,13 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		tx2 := (vx2 * vi.angleSin) - (vy2 * vi.angleCos)
 		tz2 := (vx2 * vi.angleCos) + (vy2 * vi.angleSin)
 
-		// Is the wall at least partially in front of the player?
+		// If is partially in front of the player continue
 		if tz1 <= 0 && tz2 <= 0 { continue }
 
 		u0 := 0.0
 		u1 := float64(TextureEnd)
 
-		// If partially behind the player, clip it against player's view frustum
+		// If partially in front of the player, clip it against player's view frustum
 		if tz1 <= 0 || tz2 <= 0 {
 			// Find an intersection between the wall and the approximate edges of player's view
 			i1X, i1Y, _ := intersectFn(tx1, tz1, tx2, tz2, -nearSide, nearZ, -farSide, farZ)
@@ -483,7 +484,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 			}
 		}
 
-		// Do perspective transformation
+		// Perspective transformation
 		xScale1 := r.screenHFov / tz1
 		yScale1 := r.screenVFov / tz1
 		x1 := float64(r.screenWidthHalf) - (tx1 * xScale1)
@@ -491,14 +492,14 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		yScale2 := r.screenVFov / tz2
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
-		// Render if is visible
+		// Compile if visible
 		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
 		x1Max := maxF(x1, qi.x1)
 		x2Min := minF(x2, qi.x2)
 
 		screenHeightHalf := float64(r.screenHeightHalf)
 
-		// Project our ceiling & floor heights into screen coordinates (Y coordinate)
+		// Project ceiling and floor into Y coordinates
 		y1a := screenHeightHalf + (-Yaw(sectorYCeil, tz1, vi.yaw) * yScale1)
 		y2a := screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.yaw) * yScale2)
 		y1b := screenHeightHalf + (-Yaw(sectorYFloor, tz1, vi.yaw) * yScale1)

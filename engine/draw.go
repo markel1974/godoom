@@ -259,18 +259,11 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 	// Bresenham's line algorithm
 	r0, g0, b0 := toRGB(dp.color, dp.lightStart)
 	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
-	if steep {
-		x1, y1 = swapF(x1, y1)
-		x2, y2 = swapF(x2, y2)
-	}
-	if x1 > x2 {
-		x1, x2 = swapF(x1, x2)
-		y1, y2 = swapF(y1, y2)
-	}
+	if steep { x1, y1 = swapF(x1, y1); x2, y2 = swapF(x2, y2) }
 
+	if x1 > x2 { x1, x2 = swapF(x1, x2); y1, y2 = swapF(y1, y2) }
 	dx := x2 - x1
 	dy := math.Abs(y2 - y1)
-
 	errorDx := dx / 2.0
 	var yStep int
 	if y1 < y2 { yStep = 1 } else { yStep = -1 }

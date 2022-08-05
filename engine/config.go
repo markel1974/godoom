@@ -58,8 +58,6 @@ func ParseJsonData(source []byte) (*Config, error) {
 }
 
 var availableCeil = []string{"ceil.ppm", "ceil2.ppm", "ceil2_norm.ppm"}
-
-//var availableFloor = []string{"floor.ppm", "ceil.ppm", "ceil2.ppm"}
 var availableFloor = []string{"floor.ppm"}
 var availableUpper = []string{"wall2.ppm"}
 var availableLower = []string{"wall2.ppm"}
@@ -94,31 +92,6 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	}
 	return sector
 }
-
-/*
-func randomData() (*Config, error) {
-	cfg := & Config{ Sectors:  nil, player: &ConfigPlayer{} }
-	s1 := createCube(0, 0, 8, 0, 20)
-	s1.Id = "root"
-	cfg.Sectors = append(cfg.Sectors, s1)
-
-	s2 := createCube(8, 0, 8, 0, 20)
-	s1.Id = "toor"
-	cfg.Sectors = append(cfg.Sectors, s2)
-	for x := 1; x < 128; x ++ {
-		ceil := randomF(15, 30)
-		floor := randomF(0, 2)
-		s3 := createCube(0, 8 * float64(x), 8, floor, ceil)
-		cfg.Sectors = append(cfg.Sectors, s3)
-	}
-	cfg.player.Position.X = 1
-	cfg.player.Position.Y = 1
-	cfg.player.Sector = s1.Id
-
-	return cfg, nil
-}
-
-*/
 
 func GenerateWorld(maxX int, maxY int) (*Config, error) {
 	cfg := &Config{Sectors: nil, Player: &ConfigPlayer{}}

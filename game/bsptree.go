@@ -465,9 +465,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		tz2 := (vx2 * vi.angleCos) + (vy2 * vi.angleSin)
 
 		// Is the wall at least partially in front of the player?
-		if tz1 <= 0 && tz2 <= 0 {
-			continue
-		}
+		if tz1 <= 0 && tz2 <= 0 { continue }
 
 		u0 := 0.0
 		u1 := float64(TextureEnd)
@@ -477,31 +475,12 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 			// Find an intersection between the wall and the approximate edges of player's view
 			i1X, i1Y, _ := intersectFn(tx1, tz1, tx2, tz2, -nearSide, nearZ, -farSide, farZ)
 			i2X, i2Y, _ := intersectFn(tx1, tz1, tx2, tz2, nearSide, nearZ, farSide, farZ)
-			org1x := tx1
-			org1y := tz1
-			org2x := tx2
-			org2y := tz2
-			if tz1 < nearZ {
-				if i1Y > 0 {
-					tx1 = i1X
-					tz1 = i1Y
-				} else {
-					tx1 = i2X
-					tz1 = i2Y
-				}
-			}
-			if tz2 < nearZ {
-				if i1Y > 0 {
-					tx2 = i1X
-					tz2 = i1Y
-				} else {
-					tx2 = i2X
-					tz2 = i2Y
-				}
-			}
+			org1x := tx1; org1y := tz1; org2x := tx2; org2y := tz2
+			if tz1 < nearZ { if i1Y > 0 { tx1 = i1X; tz1 = i1Y } else { tx1 = i2X; tz1 = i2Y } }
+			if tz2 < nearZ { if i1Y > 0 { tx2 = i1X; tz2 = i1Y} else {tx2 = i2X; tz2 = i2Y } }
 
 			//https://en.wikipedia.org/wiki/Texture_mapping
-			if math.Abs(tx2-tx1) > math.Abs(tz2-tz1) {
+			if math.Abs(tx2 - tx1) > math.Abs(tz2 - tz1) {
 				u0 = (tx1 - org1x) * TextureEnd / (org2x - org1x)
 				u1 = (tx2 - org1x) * TextureEnd / (org2x - org1x)
 			} else {
@@ -519,9 +498,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
 		// Render if is visible
-		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 {
-			continue
-		}
+		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
 		x1Max := maxF(x1, qi.x1)
 		x2Min := minF(x2, qi.x2)
 
@@ -532,47 +509,28 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		y2a := screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.yaw) * yScale2)
 		y1b := screenHeightHalf + (-Yaw(sectorYFloor, tz1, vi.yaw) * yScale1)
 		y2b := screenHeightHalf + (-Yaw(sectorYFloor, tz2, vi.yaw) * yScale2)
-		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
-		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
-		ybStart := (x1Max-x1)*(y2b-y1b)/(x2-x1) + y1b
-		ybStop := (x2Min-x1)*(y2b-y1b)/(x2-x1) + y1b
-		zStart := ((x1Max-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
-		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
+		yaStart := (x1Max - x1) * (y2a - y1a) / (x2 - x1) + y1a
+		yaStop :=  (x2Min - x1) * (y2a - y1a) / (x2 - x1) + y1a
+		ybStart := (x1Max - x1) * (y2b - y1b) / (x2 - x1) + y1b
+		ybStop :=  (x2Min - x1) * (y2b - y1b) / (x2 - x1) + y1b
+		zStart := ((x1Max - x1) * (tz2 - tz1) / (x2 - x1) + tz1) * 8
+		zStop :=  ((x2Min - x1) * (tz2 - tz1) / (x2 - x1) + tz1) * 8
 		lightStart := 1 - (zStart * fullLightDistance)
-		lightStop := 1 - (zStop * fullLightDistance)
+		lightStop :=  1 - (zStop  * fullLightDistance)
 
-		if zStart <= 0 {
-			zStart = 10e4
-		}
-		if zStop <= 0 {
-			zStop = 10e4
-		}
-		if lightStart < 0 {
-			lightStart = 0
-		}
-		if lightStop < 0 {
-			lightStop = 0
-		}
+		if zStart <= 0 { zStart = 10e4 }
+		if zStop <= 0 { zStop = 10e4 }
+		if lightStart < 0 { lightStart = 0 }
+		if lightStop < 0 { lightStop = 0 }
 
-		y1Ceil := qi.y1t
-		y2Ceil := qi.y2t
-		y1Floor := qi.y1b
-		y2Floor := qi.y2b
+		y1Ceil := qi.y1t; y2Ceil := qi.y2t; y1Floor := qi.y1b; y2Floor := qi.y2b
 		if x1Max != qi.x1 {
-			if _, i1, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok {
-				y1Ceil = i1
-			}
-			if _, i1, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok {
-				y1Floor = i1
-			}
+			if _, i1, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok { y1Ceil = i1 }
+			if _, i1, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok { y1Floor = i1 }
 		}
 		if x2Min != qi.x2 {
-			if _, i2, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok {
-				y2Ceil = i2
-			}
-			if _, i2, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok {
-				y2Floor = i2
-			}
+			if _, i2, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok { y2Ceil = i2 }
+			if _, i2, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok { y2Floor = i2 }
 		}
 
 		ceilP := cs.Acquire(neighbor, IdCeil, x1, x2, tz1, tz2, u0, u1)
@@ -587,8 +545,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 			neighborYCeil := neighbor.Ceil - vi.where.Z
 			ny1a := screenHeightHalf + (-Yaw(neighborYCeil, tz1, vi.yaw) * yScale1)
 			ny2a := screenHeightHalf + (-Yaw(neighborYCeil, tz2, vi.yaw) * yScale2)
-			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
-			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
+			nYaStart := (x1Max - x1) * (ny2a - ny1a) / (x2 - x1) + ny1a
+			nYaStop :=  (x2Min - x1) * (ny2a - ny1a) / (x2 - x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
 				upperP := cs.Acquire(neighbor, IdUpper, x1, x2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
@@ -599,8 +557,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 			neighborYFloor := neighbor.Floor - vi.where.Z
 			ny1b := screenHeightHalf + (-Yaw(neighborYFloor, tz1, vi.yaw) * yScale1)
 			ny2b := screenHeightHalf + (-Yaw(neighborYFloor, tz2, vi.yaw) * yScale2)
-			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
-			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
+			nYbStart := (x1Max - x1) * (ny2b - ny1b) / (x2 - x1) + ny1b
+			nYbStop :=  (x2Min - x1) * (ny2b - ny1b) / (x2 - x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {
 				lowerP := cs.Acquire(neighbor, IdLower, x1, x2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)

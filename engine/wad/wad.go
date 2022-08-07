@@ -8,11 +8,6 @@ import (
 	"unsafe"
 )
 
-
-//type String8 [8]byte
-
-
-
 type LumpInfo struct {
 	Filepos int64
 	Size    int32
@@ -21,7 +16,7 @@ type LumpInfo struct {
 
 type Texture struct {
 	Header  *TextureHeader
-	Patches []Patch
+	Patches []*Patch
 }
 
 type TextureHeader struct {

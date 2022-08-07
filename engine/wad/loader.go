@@ -195,7 +195,6 @@ func (l *Loader) loadTextureLumps(w * WAD) error {
 			if err := Seek(w.file, lumpInfo.Filepos + int64(offset)); err != nil {
 				return err
 			}
-
 			type PrivateTextureHeader struct {
 				TexName         [8]byte
 				Masked          int32
@@ -204,14 +203,13 @@ func (l *Loader) loadTextureLumps(w * WAD) error {
 				ColumnDirectory int32
 				NumPatches      int16
 			}
-
 			pHeader := &PrivateTextureHeader{}
 			if err := binary.Read(w.file, binary.LittleEndian, pHeader); err != nil {
 				return err
 			}
 			name := ToString(pHeader.TexName)
-			patches := make([]Patch, pHeader.NumPatches, pHeader.NumPatches)
-			if err := binary.Read(w.file, binary.LittleEndian, patches); err != nil {
+			pPatches := make([]Patch, pHeader.NumPatches, pHeader.NumPatches)
+			if err := binary.Read(w.file, binary.LittleEndian, pPatches); err != nil {
 				return err
 			}
 			header := &TextureHeader{
@@ -221,6 +219,16 @@ func (l *Loader) loadTextureLumps(w * WAD) error {
 				Height:          pHeader.Height,
 				ColumnDirectory: pHeader.ColumnDirectory,
 				NumPatches:      pHeader.NumPatches,
+			}
+			patches := make([]*Patch, pHeader.NumPatches, pHeader.NumPatches)
+			for idx, p := range pPatches {
+				patches[idx] = &Patch{
+					XOffset:     p.XOffset,
+					YOffset:     p.YOffset,
+					PNameNumber: p.PNameNumber,
+					StepDir:     p.StepDir,
+					ColorMap:    p.ColorMap,
+				}
 			}
 			w.textures[name] = &Texture{Header: header, Patches: patches}
 		}

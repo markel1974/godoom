@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/markel1974/godoom/engine/config"
 	"github.com/markel1974/godoom/engine/world"
 	"github.com/markel1974/godoom/pixels"
 	"image/color"
+	"math"
 	"os"
 )
 
@@ -23,6 +25,8 @@ type Game struct {
 	world       *World
 	enableClear bool
 	viewMode    int
+	cfg         *config.Config
+	stubIdx     int
 }
 
 func NewGame() *Game {
@@ -30,6 +34,7 @@ func NewGame() *Game {
 }
 
 func (g *Game) Setup(c pixels.Vec) {
+	var err error
 	g.viewMode = -1
 	g.enableClear = false //true
 	if g.enableClear {
@@ -43,18 +48,18 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
 
-	//cfg, err := legacy.ParseLegacyData(legacy.StubOld2)
+	//g.cfg, err = legacy.ParseLegacyData(legacy.StubOld2)
 	//wb := wad.NewBuilder()
 	//wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-	//cfg, err := wb.Setup(wadFile, 1)
-	cfg, err := world.Generate(16, 16)
+	//g.cfg, err = wb.Setup(wadFile, 1)
+	g.cfg, err = world.Generate(16, 16)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	g.world = NewWorld(_W, _H, _MaxQueue, g.viewMode)
-	if err := g.world.Setup(cfg); err != nil {
+	if err := g.world.Setup(g.cfg); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -149,6 +154,12 @@ func (g *Game) Run() {
 		if win.JustPressed(pixels.KeySpace) || win.Pressed(pixels.MouseButton1) {
 			g.world.DoPlayerJump()
 		}
+		if win.JustPressed(pixels.Key0) {
+			g.stubIdx++
+		}
+		if win.JustPressed(pixels.Key9) {
+			g.stubIdx--
+		}
 		if win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
 		}
@@ -166,10 +177,44 @@ func (g *Game) Update(win *pixels.GLWindow) {
 		g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	}
 	g.world.Update(g.mainSurface)
+	//drawStub(g.mainSurface, g.cfg.Sectors[g.stubIdx])
 	g.mainSprite.Draw(win, g.mainMatrix)
 }
 
 func main() {
 	g := NewGame()
 	pixels.GLRun(g.Run)
+}
+
+
+func drawStub(surface *pixels.PictureRGBA, sector *config.Sector) {
+	t  := make([]XYZ, len(sector.Neighbors))
+	maxX := 0.0
+	maxY := 0.0
+	for idx := 0; idx < len(sector.Neighbors); idx++ {
+		x := math.Abs(sector.Neighbors[idx].X)
+		y := math.Abs(sector.Neighbors[idx].Y)
+		if x > maxX { maxX = x }
+		if y > maxY { maxY = y }
+	}
+
+	if maxX > 300 { maxX = -(300 - maxX)}
+	if maxY > 400 { maxY = -(400 - maxY)}
+
+	if maxX < 30 { maxX -= 30}
+	if maxY < 30 { maxY -= 30}
+
+	for idx := 0; idx < len(sector.Neighbors); idx++ {
+		x := math.Abs(sector.Neighbors[idx].X) - maxX
+		y := math.Abs(sector.Neighbors[idx].Y) - maxY
+		t[idx].X = x
+		t[idx].Y = y
+	}
+
+	//t = t[0:5]
+	dp := NewDrawPolygon(640, 480)
+	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
+	dp.DrawPoints(10)
+	dp.color = 0xff0000
+	dp.DrawLines()
 }

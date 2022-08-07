@@ -92,8 +92,8 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	w.vi.angleSin = sin
 	w.vi.yaw = w.player.GetYaw()
 
-	 cs, count := w.tree.Compile(w.vi)
-	 w.render.Render(surface, w.vi, cs, count)
+	cs, count := w.tree.Compile(w.vi)
+	w.render.Render(surface, w.vi, cs, count)
 
 	w.player.VerticalCollision()
 	if !w.player.IsMoving() {

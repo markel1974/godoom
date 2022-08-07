@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/markel1974/godoom/pixels"
-	"math"
 	"sync"
 )
 
@@ -177,49 +174,4 @@ func (r *RenderSoftware) renderPolygon(vi *viewItem, cp *CompiledPolygon, dr *Dr
 	default:
 		dr.DrawWireFrame(true)
 	}
-}
-
-
-func (r *RenderSoftware) stub(surface *pixels.PictureRGBA, dr *DrawPolygon) {
-	body := `{"id":"103","ceil":0,"floor":20,"textures":false,"floorTexture":"","ceilTexture":"","upperTexture":"","lowerTexture":"","wallTexture":"","neighbors":[{"x":1152,"y":-3648,"id":"wall"},{"x":1088,"y":-3648,"id":"wall"},{"x":1024,"y":-3648,"id":"wall"},{"x":960,"y":-3648,"id":"wall"},{"x":1280,"y":-3552,"id":"wall"},{"x":1152,"y":-3648,"id":"wall"},{"x":960,"y":-3648,"id":"wall"},{"x":832,"y":-3552,"id":"wall"},{"x":1088,"y":-3648,"id":"wall"},{"x":1024,"y":-3648,"id":"wall"}]}`
-	//body := `{"id":"0","ceil":0,"floor":20,"textures":false,"floorTexture":"","ceilTexture":"","upperTexture":"","lowerTexture":"","wallTexture":"","neighbors":[{"x":1552,"y":-2560,"id":"wall"},{"x":1552,"y":-2432,"id":"wall"},{"x":1664,"y":-2560,"id":"wall"},{"x":1552,"y":-2560,"id":"wall"},{"x":1552,"y":-2432,"id":"wall"},{"x":1664,"y":-2432,"id":"wall"},{"x":1664,"y":-2432,"id":"wall"},{"x":1664,"y":-2560,"id":"wall"}]}`
-	//body := `{"id":"1","ceil":0,"floor":20,"textures":false,"floorTexture":"","ceilTexture":"","upperTexture":"","lowerTexture":"","wallTexture":"","neighbors":[{"x":1664,"y":-2368,"id":"wall"},{"x":1600,"y":-2368,"id":"wall"},{"x":1600,"y":-2368,"id":"wall"},{"x":1600,"y":-2112,"id":"wall"},{"x":1600,"y":-2048,"id":"wall"},{"x":1664,"y":-2048,"id":"wall"},{"x":1600,"y":-2112,"id":"wall"},{"x":1600,"y":-2048,"id":"wall"},{"x":1664,"y":-2112,"id":"wall"},{"x":1664,"y":-2368,"id":"wall"}]}`
-	//body := `{"id":"1","ceil":0,"floor":20,"textures":false,"floorTexture":"","ceilTexture":"","upperTexture":"","lowerTexture":"","wallTexture":"","neighbors":[{"x":1664,"y":-2368,"id":"wall"},{"x":1600,"y":-2112,"id":"wall"},{"x":1600,"y":-2048,"id":"wall"},{"x":1600,"y":-2048,"id":"wall"},{"x":1664,"y":-2368,"id":"wall"}]}`
-	//body := `{"id":"103","ceil":0,"floor":20,"textures":false,"floorTexture":"","ceilTexture":"","upperTexture":"","lowerTexture":"","wallTexture":"","neighbors":[{"x":1152,"y":-3648,"id":"wall"},{"x":1024,"y":-3648,"id":"wall"},{"x":1280,"y":-3648,"id":"wall"},{"x":960,"y":-3552,"id":"wall"},{"x":1088,"y":-3648,"id":"wall"}]}`
-
-	type Stub struct { Neighbor []XY `json:"neighbors"`}
-	var data Stub
-	//t, _ := json.Unmarshal([]byte(st), &test)
-	err := json.Unmarshal([]byte(body), &data)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	//var t  = []XYZ{{1152,-3648, 0},{1088,-3648,0},{1024,-3648,0},{960,-3648, 0},{1280,-3552,0},{1152,-3648,0},{960, -3648, 0}, {832, -3552, 0}, {1088, -3648,0}, {1024, -3648,0}}
-	t  := make([]XYZ, len(data.Neighbor))
-	maxX := 0.0
-	maxY := 0.0
-	for idx := 0; idx < len(data.Neighbor); idx++ {
-		x := math.Abs(data.Neighbor[idx].X)
-		y := math.Abs(data.Neighbor[idx].Y)
-		if x > maxX { maxX = x }
-		if y > maxY { maxY = y }
-	}
-
-	if maxX > 300 { maxX = -(300 - maxX)}
-	if maxY > 400 { maxY = -(400 - maxY)}
-
-
-	for idx := 0; idx < len(data.Neighbor); idx++ {
-		x := math.Abs(data.Neighbor[idx].X) - maxX
-		y := math.Abs(data.Neighbor[idx].Y) - maxY
-		t[idx].X = x
-		t[idx].Y = y
-	}
-
-	//t = t[0:5]
-
-	dr.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
-	dr.DrawPoints(10)
-	dr.color = 0xff0000
-	dr.DrawLines()
 }

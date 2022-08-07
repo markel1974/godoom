@@ -52,6 +52,7 @@ func (g *Game) Setup(c pixels.Vec) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	g.world = NewWorld(_W, _H, _MaxQueue, g.viewMode)
 	if err := g.world.Setup(cfg); err != nil {
 		fmt.Println(err)

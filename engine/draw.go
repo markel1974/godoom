@@ -73,28 +73,24 @@ func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []XYZ, pointsL
 			dp.bottom = int(dp.points[x].Y)
 		}
 	}
-	if !intersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) {
-		return
-	}
-
 	dp.left = clamp(dp.left, 0, dp.maxW-1)
 	dp.right = clamp(dp.right, 0, dp.maxW-1)
-	if dp.right-dp.left < 1 {
-		return
-	}
 	dp.top = clamp(dp.top, 0, dp.maxH-1)
 	dp.bottom = clamp(dp.bottom, 0, dp.maxH-1)
-	if dp.bottom-dp.top < 1 {
-		return
-	}
 
 	dp.lightStart = lightStart
-
 	if lightStart > lightStop {
 		dp.lightStep = -(lightStart - lightStop) / float64(dp.right-dp.left) //left
 	} else {
 		dp.lightStep = (lightStop - lightStart) / float64(dp.right-dp.left) //right
 	}
+}
+
+func (dp * DrawPolygon) Verify() bool {
+	if !intersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) { return false }
+	if dp.right - dp.left < 1 { return false }
+	if dp.bottom - dp.top < 1 { return false }
+	return true
 }
 
 func (dp *DrawPolygon) compileNodes(pixelX int) []int {
@@ -135,6 +131,8 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 		dp.DrawWireFrame(true)
 		return
 	}
+	if !dp.Verify() { return }
+
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
 			txtX := int((u0*((x2-float64(pixelX))*tz2) + u1*((float64(pixelX)-x1)*tz1)) / ((x2-float64(pixelX))*tz2 + (float64(pixelX)-x1)*tz1))
@@ -177,7 +175,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 		dp.DrawWireFrame(true)
 		return
 	}
-
+	if !dp.Verify() { return }
 	const textureZoom = 256
 	p1 := (yMap - z) * dp.screenVFov
 	p2 := yaw * dp.screenVFov
@@ -206,10 +204,8 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 }
 
 func (dp *DrawPolygon) DrawWireFrame(filled bool) {
-	if dp.surface == nil {
-		return
-	}
-
+	if dp.surface == nil { return }
+	if !dp.Verify() { return }
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
 			r0, g0, b0 := toRGB(dp.color, dp.lightStart)
@@ -252,6 +248,17 @@ func (dp *DrawPolygon) DrawRectangle() {
 		dp.drawLine(dp.points[0].X, dp.points[0].Y, dp.points[3].X, dp.points[3].Y)
 		dp.drawLine(dp.points[1].X, dp.points[1].Y, dp.points[2].X, dp.points[2].Y)
 		dp.drawLine(dp.points[2].X, dp.points[2].Y, dp.points[3].X, dp.points[3].Y)
+	}
+}
+
+func (dp *DrawPolygon) DrawLines() {
+	if dp.surface == nil {
+		return
+	}
+	for c := 0; c < len(dp.points) - 1; c ++ {
+		from := dp.points[c]
+		to := dp.points[c+1]
+		dp.drawLine(from.X, from.Y, to.X, to.Y)
 	}
 }
 

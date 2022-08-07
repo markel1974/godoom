@@ -1,6 +1,7 @@
 package wad
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/markel1974/godoom/engine/config"
@@ -13,6 +14,11 @@ import (
 //http://www.gamers.org/dhs/helpdocs/dmsp1666.html
 //http://doomwiki.org/
 //https://github.com/penberg/godoom
+
+type Point struct {
+	X int16
+	Y int16
+}
 
 type XY struct {
 	X float64
@@ -72,159 +78,109 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*config.Config, error
 	}
 	b.createSubSector(level)
 
-	var sectors[]*config.Sector
+	var sectors []*config.Sector
 	for _, c := range b.cfg {
 		sectors = append(sectors, c)
 	}
 
-	player1 := level.Things[1]
+	p1 := level.Things[1]
 	position := config.XY{
-		X: float64(player1.XPosition),
-		Y: float64(player1.YPosition),
+		X : float64(p1.XPosition),
+		Y : float64(p1.YPosition),
 	}
 
-	cfg := &config.Config{Sectors: sectors, Player: &config.Player{ Position: position, Angle: float64(player1.Angle), Sector: "0" }}
+	playerSectorId, playerSSectorId, playerSector := b.findSector(level, p1.XPosition, p1.YPosition, len(level.Nodes)-1)
 
-	//t, _ := json.MarshalIndent(b.cfg, "", " ")
-	//fmt.Println(string(t))
+
+	out, _ := json.Marshal(b.cfg[int16(playerSSectorId)])
+	//out, _ := json.Marshal(b.cfg[1])
+	fmt.Println(string(out))
+
+	fmt.Println(playerSector, playerSectorId, playerSSectorId)
+
+	cfg := &config.Config{Compile: false, Sectors: sectors, Player: &config.Player{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+
 	return cfg, nil
 }
 
+
+//level--> SECTOR
+//SECTOR --> SUBSECTOR
+//....
+/*
+SSECTOR stands for sub-sector. These divide up all the SECTORS into
+convex polygons. They are then referenced through the NODES resources.
+There will be (number of nodes + 1) ssectors.
+Each ssector is 4 bytes in 2 <short> fields:
+
+(1) This many SEGS are in this SSECTOR...
+(2) ...starting with this SEG number
+
+The segs in ssector 0 should be segs 0 through x, then ssector 1
+contains segs x+1 through y, ssector 2 containg segs y+1 to z, etc.
+*/
 func (b * Builder) createSubSector(level *Level) {
-	for _, subSector := range level.SubSectors {
-		for seg := subSector.StartSeg; seg < subSector.StartSeg + subSector.NumSegments; seg++ {
-			b.createSegment(level, int(seg))
+	//fmt.Println(len(level.SubSectors), len(level.Sectors), len(level.SubSectors) / len(level.Sectors))
+
+	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
+		subSector := level.SubSectors[subSectorId]
+		endSegmentId := subSector.StartSeg + subSector.NumSegments
+		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
+			b.createSegment(level, subSectorId, segmentId)
 		}
+
+		//test, _ := b.cfg[int16(subSectorId)]
+		//out, _ := json.MarshalIndent(test, "", " ")
+		//fmt.Println(string(out))
+		//fmt.Println("-------------")
 	}
 }
 
-func (b * Builder) createSegment(level *Level, segmentId int) {
+func (b * Builder) createSegment(level *Level, subSectorId int16, segmentId int16) {
+	//In general, being a convex polygon is the goal of a ssector.
+	//Convex  means a line connecting any two points that are inside the polygon will be completely contained in the polygon.
 	segment := level.Segments[segmentId]
 
-	//meshes := scene.meshes[subSectorId]
-
 	lineDef := level.LineDefs[int(segment.LineNum)]
-	sideDef := b.segmentSideDef(level, &segment, &lineDef)
+	_, sideDef := b.segmentSideDef(level, segment, lineDef)
 	if sideDef == nil { return }
-	sector := level.Sectors[sideDef.SectorRef]
 
-	//fmt.Println(sideDef.SectorRef) => SectorId
-
-	oppositeSideDef := b.segmentOppositeSideDef(level, &segment, &lineDef)
-
-	//start := level.Vertexes[segment.VertexStart]
+	start := level.Vertexes[segment.VertexStart]
 	end := level.Vertexes[segment.VertexEnd]
 
-	upperTexture := sideDef.UpperTexture
-	middleTexture := sideDef.MiddleTexture
-	lowerTexture := sideDef.LowerTexture
+	//upperTexture := sideDef.UpperTexture
+	//middleTexture := sideDef.MiddleTexture
+	//lowerTexture := sideDef.LowerTexture
 
-	//fmt.Println(sector, start, end)
+	//_, oppositeSideDef := b.segmentOppositeSideDef(level, &segment, &lineDef)
+	sector := level.Sectors[sideDef.SectorRef]
 
-	if oppositeSideDef != nil {
-		current := b.getConfigSector(sideDef.SectorRef, sector)
-		neighbor := level.Sectors[oppositeSideDef.SectorRef]
+	neighborId := "wall"
+	//if oppositeSideDef != nil {
+		//z := b.findSubSector(level, start.XCoord, start.YCoord, len(level.Nodes)-1)
+		//fmt.Println("RESULT", sideDef.SectorRef, z, oppositeSideDef.SectorRef)
+		//Il neighborId deve essere necessariamente il subsector!
+		//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
+	//}
 
-		next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
-		current.Neighbors = append(current.Neighbors, &config.Neighbor{
-			XY: config.XY{X: float64(end.XCoord), Y: float64(end.YCoord)},
-			Id: next.Id,
-		})
-	}
-
-	if upperTexture != "-" && oppositeSideDef != nil {
-		//neighbor := level.Sectors[oppositeSideDef.SectorRef]
-		//sector.Neighbor = append(sector.Neighbor, neighbor)
-		//sector.Vertex = append(sector.Vertex, XY{X:float64(start.XCoord), Y: float64(start.YCoord)})
-		//sector.Vertex = append(sector.Vertex, XY{X:float64(start.XCoord), Y: float64(start.YCoord)})
-
-		//next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
-		//current.Neighbors = append(current.Neighbors, &config.Neighbor{
-		//	XY: config.XY{X: float64(start.XCoord), Y: float64(start.YCoord)},
-		//	Id: next.Id,
-		//})
-
-		//var test []Point3
-		//test = append(test, MakePoint3(start.XCoord, start.YCoord, sector.CeilingHeight,0.0,1.0))
-		//test = append(test, MakePoint3(end.XCoord, end.YCoord, sector.CeilingHeight,0.0,1.0))
-		//test = append(test, MakePoint3(end.XCoord, end.YCoord, neighbor.CeilingHeight,0.0,1.0))
-
-		//vertices = append(vertices, Point3{X: float64(-start.XCoord), Y: float64(sector.CeilingHeight), Z: float64(start.YCoord), U: 0.0, V: 1.0})
-		//vertices = append(vertices, Point3{X: float64(-start.XCoord), Y: float64(sector.CeilingHeight), Z: float64(start.YCoord), U: 0.0, V: 0.0})
-		//vertices = append(vertices, Point3{X: float64(-end.XCoord), Y: float64(sector.CeilingHeight), Z: float64(end.YCoord), U: 1.0, V: 0.0})
-
-		//vertices = append(vertices, Point3{X: float64(-end.XCoord), Y: float64(sector.CeilingHeight), Z: float64(end.YCoord), U: 1.0, V: 0.0})
-		//vertices = append(vertices, Point3{X: float64(-end.XCoord), Y: float64(sector.CeilingHeight), Z: float64(end.YCoord), U: 1.0, V: 1.0})
-		//vertices = append(vertices, Point3{X: float64(-start.XCoord), Y: float64(sector.CeilingHeight), Z: float64(start.YCoord), U: 0.0, V: 1.0})
-
-		//meshes = append(meshes, NewMesh(upperTexture, sector.LightLevel, vertices))
-		//scene.CacheTexture(wad, upperTexture)
-
-		//fmt.Println(vertices)
-	}
-
-	if middleTexture != "-" {
-		//fmt.Println("TEST")
-		/*
-		vertices := []Point3{}
-
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: sector.FloorHeight, Z: start.YCoord, U: 0.0, V: 1.0})
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: sector.CeilingHeight, Z: start.YCoord, U: 0.0, V: 0.0})
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: sector.CeilingHeight, Z: end.YCoord, U: 1.0, V: 0.0})
-
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: sector.CeilingHeight, Z: end.YCoord, U: 1.0, V: 0.0})
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: sector.FloorHeight, Z: end.YCoord, U: 1.0, V: 1.0})
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: sector.FloorHeight, Z: start.YCoord, U: 0.0, V: 1.0})
-
-		meshes = append(meshes, NewMesh(middleTexture, sector.LightLevel, vertices))
-
-		scene.CacheTexture(wad, middleTexture)
-		*/
-	}
-
-	if lowerTexture != "-" && oppositeSideDef != nil {
-		//neighbor := level.Sectors[oppositeSideDef.SectorRef]
-
-		//next := b.getConfigSector(oppositeSideDef.SectorRef, neighbor)
-		//current.Neighbors = append(current.Neighbors, &config.Neighbor{
-		//	XY: config.XY{X: float64(start.XCoord), Y: float64(start.YCoord)},
-		//	Id: next.Id,
-		//})
-
-		//fmt.Println(oppositeSector)
-
-		/*
-		vertices := []Point3{}
-
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: sector.FloorHeight, Z: start.YCoord, U: 0.0, V: 1.0})
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: oppositeSector.FloorHeight, Z: start.YCoord, U: 0.0, V: 0.0})
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: oppositeSector.FloorHeight, Z: end.YCoord, U: 1.0, V: 0.0})
-
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: oppositeSector.FloorHeight, Z: end.YCoord, U: 1.0, V: 0.0})
-		vertices = append(vertices, Point3{X: -end.XCoord, Y: sector.FloorHeight, Z: end.YCoord, U: 1.0, V: 1.0})
-		vertices = append(vertices, Point3{X: -start.XCoord, Y: sector.FloorHeight, Z: start.YCoord, U: 0.0, V: 1.0})
-
-		meshes = append(meshes, NewMesh(lowerTexture, sector.LightLevel, vertices))
-
-		scene.CacheTexture(wad, lowerTexture)
-		*/
-	}
-
-	//scene.meshes[ssectorId] = meshes
+	current := b.getConfigSector(subSectorId, sector)
+	//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
+	current.Neighbors = append(current.Neighbors, &config.Neighbor{Id: neighborId, XY: config.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}})
+	current.Neighbors = append(current.Neighbors, &config.Neighbor{Id: neighborId, XY: config.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}})
 }
 
-func (b * Builder) segmentSideDef(level *Level, seg *Seg, lineDef *LineDef) *SideDef {
-	if seg.SegmentSide == 0 { return &level.SideDefs[lineDef.SideDefRight] }
-	if lineDef.SideDefLeft == -1 { return nil }
-	return &level.SideDefs[lineDef.SideDefLeft]
+func (b * Builder) segmentSideDef(level *Level, seg *Seg, lineDef *LineDef) (int16, *SideDef) {
+	if seg.SegmentSide == 0 { return lineDef.SideDefRight, level.SideDefs[lineDef.SideDefRight] }
+	if lineDef.SideDefLeft == -1 { return 0, nil }
+	return lineDef.SideDefLeft, level.SideDefs[lineDef.SideDefLeft]
 }
 
-func (b * Builder) segmentOppositeSideDef(level *Level, seg *Seg, lineDef *LineDef) *SideDef {
+func (b * Builder) segmentOppositeSideDef(level *Level, seg *Seg, lineDef *LineDef) (int16, *SideDef) {
 	if seg.SegmentSide == 0 {
-		if lineDef.SideDefLeft == -1 { return nil }
-		return &level.SideDefs[lineDef.SideDefLeft]
+		if lineDef.SideDefLeft == -1 { return 0, nil }
+		return lineDef.SideDefLeft, level.SideDefs[lineDef.SideDefLeft]
 	}
-	return &level.SideDefs[lineDef.SideDefRight]
+	return lineDef.SideDefRight, level.SideDefs[lineDef.SideDefRight]
 }
 
 func (b * Builder) loadTexture(wad *WAD, textureName string) (*image.RGBA, error) {
@@ -281,8 +237,8 @@ func (b * Builder) getConfigSector(id int16, sector *Sector) * config.Sector{
 	if !ok {
 		c = &config.Sector {
 			Id:           strconv.Itoa(int(id)),
-			Ceil:         float64(sector.CeilingHeight),
-			Floor:        float64(sector.FloorHeight),
+			Ceil:         float64(0),
+			Floor:        float64(20),
 			Textures:     false,
 			FloorTexture: "",
 			CeilTexture:  "",
@@ -294,4 +250,38 @@ func (b * Builder) getConfigSector(id int16, sector *Sector) * config.Sector{
 		b.cfg[id] = c
 	}
 	return c
+}
+
+
+func (b * Builder) findSector(level *Level, x int16, y int16, idx int) (int16, int, *Sector) {
+	const subSectorBit = int(0x8000)
+
+	if idx & subSectorBit == subSectorBit {
+		idx = int(uint16(idx) & ^uint16(subSectorBit))
+		sSector := level.SubSectors[idx]
+		for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
+			seg := level.Segments[segIdx]
+			lineDef := level.LineDefs[seg.LineNum]
+			_, sideDef := b.segmentSideDef(level, seg, lineDef)
+			if sideDef != nil {
+				return sideDef.SectorRef, idx, level.Sectors[sideDef.SectorRef]
+			}
+			_, oppositeSideDef := b.segmentOppositeSideDef(level, seg, lineDef)
+			if oppositeSideDef != nil {
+				return oppositeSideDef.SectorRef, idx, level.Sectors[oppositeSideDef.SectorRef]
+			}
+		}
+	}
+	node := level.Nodes[idx]
+	if b.intersects(x, y, &node.BBox[0]) {
+		return b.findSector(level, x, y, int(node.Child[0]))
+	}
+	if b.intersects(x, y, &node.BBox[1]) {
+		return b.findSector(level, x, y, int(node.Child[1]))
+	}
+	return 0, 0, nil
+}
+
+func (b * Builder) intersects(x int16, y int16, bbox *BBox) bool {
+	return x > bbox.Left && x < bbox.Right && y > bbox.Bottom && y <=bbox.Top
 }

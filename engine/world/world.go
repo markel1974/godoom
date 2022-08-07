@@ -51,7 +51,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 }
 
 func Generate(maxX int, maxY int) (*config.Config, error) {
-	cfg := &config.Config{Sectors: nil, Player: &config.Player{}}
+	cfg := &config.Config{Sectors: nil, Player: &config.Player{}, Compile: true }
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

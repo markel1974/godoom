@@ -59,13 +59,13 @@ type Flat struct {
 }
 
 type Level struct {
-	Things     []Thing
-	LineDefs   []LineDef
-	SideDefs   []SideDef
-	Vertexes   []Vertex
-	Segments   []Seg
-	SubSectors []SubSector
-	Nodes      []Node
+	Things     []*Thing
+	LineDefs   []*LineDef
+	SideDefs   []*SideDef
+	Vertexes   []*Vertex
+	Segments   []*Seg
+	SubSectors []*SubSector
+	Nodes      []*Node
 	Sectors    []*Sector
 }
 
@@ -237,28 +237,49 @@ func (w *WAD) GetLevel(levelName string) (*Level, error) {
 	return level, nil
 }
 
-
-func (w *WAD) readThings(lumpInfo *LumpInfo) ([]Thing, error) {
-	var thing Thing
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(thing))
-	things := make([]Thing, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, things); err != nil {
+func (w *WAD) readThings(lumpInfo *LumpInfo) ([]*Thing, error) {
+	var pThing Thing
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pThing))
+	pThings := make([]Thing, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pThings); err != nil {
 		return nil, err
+	}
+	things := make([]*Thing, count, count)
+	for idx, t := range pThings {
+		things[idx] = &Thing{
+			XPosition: t.XPosition,
+			YPosition: t.YPosition,
+			Angle:     t.Angle,
+			Type:      t.Type,
+			Options:   t.Options,
+		}
 	}
 	return things, nil
 }
 
-func (w *WAD) readLineDefs(lumpInfo *LumpInfo) ([]LineDef, error) {
-	var lineDef LineDef
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(lineDef))
-	lineDefs := make([]LineDef, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, lineDefs); err != nil {
+func (w *WAD) readLineDefs(lumpInfo *LumpInfo) ([]*LineDef, error) {
+	var pLineDef LineDef
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pLineDef))
+	pLineDefs := make([]LineDef, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pLineDefs); err != nil {
 		return nil, err
+	}
+	lineDefs := make([]*LineDef, count, count)
+	for idx, ld := range pLineDefs {
+		lineDefs[idx] = &LineDef{
+			VertexStart:  ld.VertexStart,
+			VertexEnd:    ld.VertexEnd,
+			Flags:        ld.Flags,
+			Function:     ld.Function,
+			Tag:          ld.Tag,
+			SideDefRight: ld.SideDefRight,
+			SideDefLeft:  ld.SideDefLeft,
+		}
 	}
 	return lineDefs, nil
 }
 
-func (w *WAD) readSideDefs(lumpInfo *LumpInfo) ([]SideDef, error) {
+func (w *WAD) readSideDefs(lumpInfo *LumpInfo) ([]*SideDef, error) {
 	type PrivateSideDef struct {
 		XOffset       int16
 		YOffset       int16
@@ -273,54 +294,92 @@ func (w *WAD) readSideDefs(lumpInfo *LumpInfo) ([]SideDef, error) {
 	if err := binary.Read(w.file, binary.LittleEndian, pSideDefs); err != nil {
 		return nil, err
 	}
-	out := make([]SideDef, count, count)
+	sideDef := make([]*SideDef, count, count)
 	for idx, p := range pSideDefs {
-		out[idx].XOffset = p.XOffset
-		out[idx].YOffset = p.YOffset
-		out[idx].UpperTexture = ToString(p.UpperTexture)
-		out[idx].MiddleTexture = ToString(p.MiddleTexture)
-		out[idx].LowerTexture = ToString(p.LowerTexture)
-		out[idx].SectorRef = p.SectorRef
+		sideDef[idx] = &SideDef{
+			XOffset:       p.XOffset,
+			YOffset:       p.YOffset,
+			UpperTexture:  ToString(p.UpperTexture),
+			LowerTexture:  ToString(p.LowerTexture),
+			MiddleTexture: ToString(p.MiddleTexture),
+			SectorRef:     p.SectorRef,
+		}
 	}
-	return out, nil
+	return sideDef, nil
 }
 
-func (w *WAD) readVertexes(lumpInfo *LumpInfo) ([]Vertex, error) {
-	var vertex Vertex
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(vertex))
-	vertexes := make([]Vertex, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, vertexes); err != nil {
+func (w *WAD) readVertexes(lumpInfo *LumpInfo) ([]*Vertex, error) {
+	var pVertex Vertex
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pVertex))
+	pVertexes := make([]Vertex, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pVertexes); err != nil {
 		return nil, err
+	}
+	vertexes := make([]*Vertex, count, count)
+	for idx, v := range pVertexes {
+		vertexes[idx] = &Vertex{
+			XCoord: v.XCoord,
+			YCoord: v.YCoord,
+		}
 	}
 	return vertexes, nil
 }
 
-func (w *WAD) readSegments(lumpInfo *LumpInfo) ([]Seg, error) {
-	var seg Seg
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(seg))
-	segments := make([]Seg, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, segments); err != nil {
+func (w *WAD) readSegments(lumpInfo *LumpInfo) ([]*Seg, error) {
+	var pSeg Seg
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSeg))
+	pSegments := make([]Seg, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pSegments); err != nil {
 		return nil, err
+	}
+	segments := make([]*Seg, count, count)
+	for idx, s := range pSegments {
+		segments[idx] = &Seg{
+			VertexStart:   s.VertexStart,
+			VertexEnd:     s.VertexEnd,
+			Bams:          s.Bams,
+			LineNum:       s.LineNum,
+			SegmentSide:   s.SegmentSide,
+			SegmentOffset: s.SegmentOffset,
+		}
 	}
 	return segments, nil
 }
 
-func (w *WAD) readSubSectors(lumpInfo *LumpInfo) ([]SubSector, error) {
-	var sSector SubSector
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(sSector))
-	sSectors := make([]SubSector, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, sSectors); err != nil {
+func (w *WAD) readSubSectors(lumpInfo *LumpInfo) ([]*SubSector, error) {
+	var pSubSector SubSector
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSubSector))
+	pSubSectors := make([]SubSector, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pSubSectors); err != nil {
 		return nil, err
 	}
-	return sSectors, nil
+	subSectors := make([]*SubSector, count, count)
+	for idx, s := range pSubSectors {
+		subSectors[idx] = &SubSector{
+			NumSegments: s.NumSegments,
+			StartSeg:    s.StartSeg,
+		}
+	}
+	return subSectors, nil
 }
 
-func (w *WAD) readNodes(lumpInfo *LumpInfo) ([]Node, error) {
-	var node Node
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(node))
-	nodes := make([]Node, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, nodes); err != nil {
+func (w *WAD) readNodes(lumpInfo *LumpInfo) ([]*Node, error) {
+	var pNode Node
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pNode))
+	pNodes := make([]Node, count, count)
+	if err := binary.Read(w.file, binary.LittleEndian, pNodes); err != nil {
 		return nil, err
+	}
+	nodes := make([]*Node, count, count)
+	for idx, n := range pNodes {
+		nodes[idx] = &Node{
+			X:     n.X,
+			Y:     n.Y,
+			DX:    n.DX,
+			DY:    n.DY,
+			BBox:  n.BBox,
+			Child: n.Child,
+		}
 	}
 	return nodes, nil
 }

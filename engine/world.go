@@ -40,7 +40,7 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 }
 
 func (w *World) Setup(cfg *config.Config) error {
-	playerSector, err := w.tree.Setup(cfg.Player.Sector, cfg.Sectors)
+	playerSector, err := w.tree.Setup(cfg)
 	if err != nil {
 		return err
 	}
@@ -73,9 +73,9 @@ func (w *World) movePlayer(dx float64, dy float64) {
 			}
 		}
 	}
+
 	if !found {
 		if !pointInPolygonF(px1, py1, sector.Vertices[:sector.NPoints]) {
-			//fmt.Println("OUTSIDE SECTOR")
 			return
 		}
 	}
@@ -92,9 +92,8 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	w.vi.angleSin = sin
 	w.vi.yaw = w.player.GetYaw()
 
-	if cs, count := w.tree.Compile(w.vi); count > 1 {
-		w.render.Render(surface, w.vi, cs, count)
-	}
+	 cs, count := w.tree.Compile(w.vi)
+	 w.render.Render(surface, w.vi, cs, count)
 
 	w.player.VerticalCollision()
 	if !w.player.IsMoving() {

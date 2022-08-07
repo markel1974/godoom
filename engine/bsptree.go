@@ -99,10 +99,10 @@ func NewBSPTree(width int, height int, maxQueue int, textures *Textures) *BSPTre
 	return r
 }
 
-func (r *BSPTree) Setup(playerSector string, cfgSectors []*config.Sector) (*Sector, error) {
+func (r *BSPTree) Setup(cfg *config.Config) (*Sector, error) {
 	cache := make(map[string]int)
 
-	for idx, cfgSector := range cfgSectors {
+	for idx, cfgSector := range cfg.Sectors {
 		var vertices []XY
 		var neighborsIds []string
 
@@ -145,16 +145,16 @@ func (r *BSPTree) Setup(playerSector string, cfgSectors []*config.Sector) (*Sect
 		}
 	}
 
-	playerSectorIdx, ok := cache[playerSector]
+	playerSectorIdx, ok := cache[cfg.Player.Sector]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("invalid player sector: %s", playerSector))
+		return nil, errors.New(fmt.Sprintf("invalid player sector: %s", cfg.Player.Sector))
 	}
 
 	r.compiledSectors = make([]*CompiledSector, len(r.sectors)*16)
 
 	for cs := 0; cs < len(r.compiledSectors); cs++ {
 		r.compiledSectors[cs] = NewCompiledSector()
-		r.compiledSectors[cs].Setup(128)
+		r.compiledSectors[cs].Setup(512)
 	}
 
 	//Verify Loop
@@ -171,8 +171,14 @@ func (r *BSPTree) Setup(playerSector string, cfgSectors []*config.Sector) (*Sect
 		if !hasLoop {
 			vLast := sect.Vertices[len(sect.Vertices)-1]
 			sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-			fmt.Printf("creating loop for sector %d\n", idx)
+			//fmt.Printf("creating loop for sector %d\n", idx)
 		}
+
+		sect.NPoints = uint64(len(sect.Vertices) -1)
+	}
+
+	if !cfg.Compile {
+		goto Finalize
 	}
 
 Rescan:
@@ -184,6 +190,7 @@ Rescan:
 			p2 := vert[b+1]
 			found := 0
 			for d, neighbor := range r.sectors {
+				//fmt.Println("neighbor", neighbor.Id)
 				for c := uint64(0); c < neighbor.NPoints; c++ {
 					c0x := neighbor.Vertices[c+0].X
 					c0y := neighbor.Vertices[c+0].Y
@@ -192,7 +199,7 @@ Rescan:
 					if c1x == p1.X && c1y == p1.Y && c0x == p2.X && c0y == p2.Y {
 						neighborIdx := neighbor.NeighborsRefs[c]
 						if idx != neighborIdx {
-							fmt.Printf("sector %d: Neighbor behind line (%g,%g)-(%g,%g) should be %d, %d found instead. Fixing.\n", c, p2.X, p2.Y, p1.Y, p1.Y, idx, neighbor.NeighborsRefs[c])
+							fmt.Printf("sector %s (idx: %d): Neighbor behind line (%g,%g)-(%g,%g) should be %d, %d found instead. Fixing.\n", sect.Id, c, p2.X, p2.Y, p1.Y, p1.Y, idx, neighbor.NeighborsRefs[c])
 							neighbor.NeighborsRefs[c] = idx
 							goto Rescan
 						}
@@ -344,6 +351,8 @@ Rescan:
 		}
 	}
 
+Finalize:
+
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
 		sect.Neighbors = make([]*Sector, sect.NPoints)
@@ -363,6 +372,11 @@ Rescan:
 			}
 		}
 	}
+
+	//out, _ := json.MarshalIndent(r.sectors, "", " ")
+	//fmt.Println(string(out))
+
+	fmt.Println("Scan complete")
 
 	return r.sectors[playerSectorIdx], nil
 }

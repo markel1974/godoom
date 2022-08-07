@@ -45,4 +45,5 @@ type Config struct {
 	Sectors []*Sector `json:"sectors"`
 	Lights  []*Light  `json:"lights"`
 	Player  *Player   `json:"player"`
+	Compile bool      `json:"player"`
 }

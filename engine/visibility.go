@@ -1,9 +1,11 @@
 package main
 
+import "github.com/markel1974/godoom/engine/model"
+
 type VisibilityData struct {
 	id    int
-	begin XY
-	end   XY
+	begin model.XY
+	end   model.XY
 }
 
 func NewVisibilityData() *VisibilityData {
@@ -45,11 +47,11 @@ func (w *Visibility) All() [][]*VisibilityData {
 	return w.data
 }
 
-func (w *Visibility) Add(x int, y int, begin XY, end XY) {
+func (w *Visibility) Add(x int, y int, begin model.XY, end model.XY) {
 	w.set(x, y, begin, end)
 }
 
-func (w *Visibility) set(x int, y int, begin XY, end XY) {
+func (w *Visibility) set(x int, y int, begin model.XY, end model.XY) {
 	if !w.valid(x, y) {
 		return
 	}
@@ -59,14 +61,14 @@ func (w *Visibility) set(x int, y int, begin XY, end XY) {
 	d.end = end
 }
 
-func (w *Visibility) Get(x int, y int) (XY, XY, bool) {
+func (w *Visibility) Get(x int, y int) (model.XY, model.XY, bool) {
 	if w.valid(x, y) {
 		d := w.data[x][y]
 		if d.id == w.id {
 			return d.begin, d.end, true
 		}
 	}
-	return XY{}, XY{}, false
+	return model.XY{}, model.XY{}, false
 }
 
 func (w *Visibility) Has(x int, y int) bool {

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/mathematic"
+	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	"math"
 	"sort"
@@ -27,7 +30,7 @@ type DrawPolygon struct {
 
 	surface    *pixels.PictureRGBA
 	color      int
-	points     []XYZ
+	points     []model.XYZ
 	pointsLen  int
 	top        int
 	bottom     int
@@ -50,7 +53,7 @@ func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
 	}
 }
 
-func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []XYZ, pointsLen1 int, color int, lightStart float64, lightStop float64) {
+func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []model.XYZ, pointsLen1 int, color int, lightStart float64, lightStop float64) {
 	dp.color = color
 	dp.surface = surface
 	dp.points = points1
@@ -73,10 +76,10 @@ func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []XYZ, pointsL
 			dp.bottom = int(dp.points[x].Y)
 		}
 	}
-	dp.left = clamp(dp.left, 0, dp.maxW-1)
-	dp.right = clamp(dp.right, 0, dp.maxW-1)
-	dp.top = clamp(dp.top, 0, dp.maxH-1)
-	dp.bottom = clamp(dp.bottom, 0, dp.maxH-1)
+	dp.left = mathematic.Clamp(dp.left, 0, dp.maxW-1)
+	dp.right = mathematic.Clamp(dp.right, 0, dp.maxW-1)
+	dp.top = mathematic.Clamp(dp.top, 0, dp.maxH-1)
+	dp.bottom = mathematic.Clamp(dp.bottom, 0, dp.maxH-1)
 
 	dp.lightStart = lightStart
 	if lightStart > lightStop {
@@ -87,7 +90,7 @@ func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []XYZ, pointsL
 }
 
 func (dp * DrawPolygon) Verify() bool {
-	if !intersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) { return false }
+	if !mathematic.IntersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) { return false }
 	if dp.right - dp.left < 1 { return false }
 	if dp.bottom - dp.top < 1 { return false }
 	return true
@@ -114,7 +117,7 @@ func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	case 2:
 		nodeY = dp.nodeY[:nodes]
 		if nodeY[0] > nodeY[1] {
-			nodeY[0], nodeY[1] = swap(nodeY[0], nodeY[1])
+			nodeY[0], nodeY[1] = mathematic.Swap(nodeY[0], nodeY[1])
 		}
 	default:
 		nodeY = dp.nodeY[:nodes]
@@ -123,7 +126,7 @@ func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	return nodeY
 }
 
-func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64) {
+func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64) {
 	if dp.surface == nil {
 		return
 	}
@@ -138,7 +141,7 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 			txtX := int((u0*((x2-float64(pixelX))*tz2) + u1*((float64(pixelX)-x1)*tz1)) / ((x2-float64(pixelX))*tz2 + (float64(pixelX)-x1)*tz1))
 			//TODO BUG VALORE NEGATIVO IN txtX!!!!!
 			if txtX < 0 {
-				txtX = abs(txtX)
+				txtX = mathematic.Abs(txtX)
 			}
 
 			for i := 0; i < len(nodeY); i += 2 {
@@ -149,15 +152,15 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
 				//cY1 := clamp(y1, -1, dp.maxH)
 				//cY2 := clamp(y2, -1, dp.maxH)
-				cY1 := clamp(y1, 0, dp.lastH)
-				cY2 := clamp(y2, 0, dp.lastH)
+				cY1 := mathematic.Clamp(y1, 0, dp.lastH)
+				cY2 := mathematic.Clamp(y2, 0, dp.lastH)
 
 				//txtY := int(((float64(cY1))-(float64(y1)))*(float64(TextureEnd-TextureBegin))/div + TextureBegin)
 				//r0, g0, b0 := toRGB(texture.Get(txtX, txtY), lightStart)
 
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					//txtY := int(float64(pixelY - y1) * float64(TextureEnd - TextureBegin) / float64(y2 - y1) + TextureBegin)
-					txtY := int(((float64(pixelY))-(float64(y1)))*(float64(TextureEnd-TextureBegin))/div + TextureBegin)
+					txtY := int(((float64(pixelY))-(float64(y1)))*(float64(textures.TextureEnd-textures.TextureBegin))/div + textures.TextureBegin)
 					r0, g0, b0 := toRGB(texture.Get(uint(txtX), uint(txtY)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
 				}
@@ -167,7 +170,7 @@ func (dp *DrawPolygon) DrawTexture(texture *Texture, x1 float64, x2 float64, tz1
 	}
 }
 
-func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *Texture, yMap float64) {
+func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64) {
 	if dp.surface == nil {
 		return
 	}
@@ -186,8 +189,8 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]
 				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
-				cY1 := clamp(y1,0, dp.lastH)
-				cY2 := clamp(y2,0, dp.lastH)
+				cY1 := mathematic.Clamp(y1,0, dp.lastH)
+				cY2 := mathematic.Clamp(y2,0, dp.lastH)
 				p3 := (dp.halfW - float64(pixelX)) / dp.screenHFov
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					tz := p1 / ((dp.halfH - float64(pixelY)) - p2)
@@ -214,8 +217,8 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]
 				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) { continue }
-				cY1 := clamp(y1, -1, dp.maxH)
-				cY2 := clamp(y2, -1, dp.maxH)
+				cY1 := mathematic.Clamp(y1, -1, dp.maxH)
+				cY2 := mathematic.Clamp(y2, -1, dp.maxH)
 				if filled {
 					for pixelY := cY1; pixelY <= cY2; pixelY++ {
 						dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
@@ -266,9 +269,9 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 	// Bresenham's line algorithm
 	r0, g0, b0 := toRGB(dp.color, dp.lightStart)
 	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
-	if steep { x1, y1 = swapF(x1, y1); x2, y2 = swapF(x2, y2) }
+	if steep { x1, y1 = mathematic.SwapF(x1, y1); x2, y2 = mathematic.SwapF(x2, y2) }
 
-	if x1 > x2 { x1, x2 = swapF(x1, x2); y1, y2 = swapF(y1, y2) }
+	if x1 > x2 { x1, x2 = mathematic.SwapF(x1, x2); y1, y2 = mathematic.SwapF(y1, y2) }
 	dx := x2 - x1
 	dy := math.Abs(y2 - y1)
 	errorDx := dx / 2.0

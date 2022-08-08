@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/mathematic"
 	"math"
 )
 
@@ -12,22 +14,22 @@ const (
 )
 
 type Player struct {
-	where    XYZ
-	velocity XYZ
+	where    model.XYZ
+	velocity model.XYZ
 	angle    float64
 	angleSin float64
 	angleCos float64
 	yaw      float64
 	yawState float64
-	sector   *Sector
+	sector   *model.Sector
 	ducking  bool
 	falling  bool
 }
 
-func NewPlayer(x float64, y float64, z float64, angle float64, sector *Sector) *Player {
+func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sector) *Player {
 	p := &Player{
-		where:    XYZ{X: x, Y: y, Z: z + EyeHeight},
-		velocity: XYZ{},
+		where:    model.XYZ{X: x, Y: y, Z: z + EyeHeight},
+		velocity: model.XYZ{},
 		yaw:      0,
 		yawState: 0,
 		sector:   sector,
@@ -51,7 +53,7 @@ func (p *Player) GetAngle() (float64, float64, float64) {
 }
 
 func (p *Player) SetYaw(y float64) {
-	p.yawState = clampF(p.yawState-(y*0.05), -5, 5)
+	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
 	p.yaw = p.yawState - (p.velocity.Z * 0.5)
 }
 
@@ -104,6 +106,12 @@ func (p *Player) GetCoords() (float64, float64) {
 	return p.where.X, p.where.Y
 }
 
+func (p *Player) SetCoords(x float64, y float64) {
+	p.where.X = x
+	p.where.Y = y
+	p.falling = true
+}
+
 func (p *Player) AddCoords(x float64, y float64) {
 	p.where.X += x
 	p.where.Y += y
@@ -118,11 +126,11 @@ func (p *Player) GetVelocity() (float64, float64) {
 	return p.velocity.X, p.velocity.Y
 }
 
-func (p *Player) GetSector() *Sector {
+func (p *Player) GetSector() *model.Sector {
 	return p.sector
 }
 
-func (p *Player) SetSector(sector *Sector) {
+func (p *Player) SetSector(sector *model.Sector) {
 	p.sector = sector
 }
 

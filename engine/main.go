@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/markel1974/godoom/engine/config"
+	"github.com/markel1974/godoom/engine/legacy"
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/wad"
 	"github.com/markel1974/godoom/engine/world"
 	"github.com/markel1974/godoom/pixels"
 	"image/color"
-	"math"
 	"os"
 )
 
@@ -25,8 +26,7 @@ type Game struct {
 	world       *World
 	enableClear bool
 	viewMode    int
-	cfg         *config.Config
-	stubIdx     int
+	cfg         *model.Input
 }
 
 func NewGame() *Game {
@@ -37,6 +37,23 @@ func (g *Game) Setup(c pixels.Vec) {
 	var err error
 	g.viewMode = -1
 	g.enableClear = false //true
+	m := 1
+
+	switch m {
+	case 0:
+		g.cfg, err = legacy.ParseLegacyData(legacy.StubOld2)
+	case 1:
+		g.cfg, err = world.Generate(16, 16)
+	case 2:
+		wb := wad.NewBuilder()
+		wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
+		g.cfg, err = wb.Setup(wadFile, 2)
+	}
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	if g.enableClear {
 		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")
 	}
@@ -47,16 +64,6 @@ func (g *Game) Setup(c pixels.Vec) {
 	g.mainSprite.SetCached(pixels.CacheModeUpdate)
 	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
-
-	//g.cfg, err = legacy.ParseLegacyData(legacy.StubOld2)
-	//wb := wad.NewBuilder()
-	//wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-	//g.cfg, err = wb.Setup(wadFile, 1)
-	g.cfg, err = world.Generate(16, 16)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 
 	g.world = NewWorld(_W, _H, _MaxQueue, g.viewMode)
 	if err := g.world.Setup(g.cfg); err != nil {
@@ -89,7 +96,7 @@ func (g *Game) Run() {
 
 	for !win.Closed() {
 		currentTimer = pixels.GLGetTime()
-		if currentTimer-lastTimer >= 1.0/framerate {
+		if currentTimer - lastTimer >= 1.0 / framerate {
 			lastTimer = currentTimer
 			g.Update(win)
 		}
@@ -119,22 +126,13 @@ func (g *Game) Run() {
 
 		for v := range win.KeysPressed() {
 			switch v {
-			case pixels.KeyEscape:
-				return
-			case pixels.KeyUp:
-				up = true
-			case pixels.KeyW:
-				up = true
-				slow = true
-			case pixels.KeyDown:
-				down = true
-			case pixels.KeyS:
-				down = true
-				slow = true
-			case pixels.KeyLeft:
-				left = true
-			case pixels.KeyRight:
-				right = true
+				case pixels.KeyEscape: return
+				case pixels.KeyUp: up = true
+				case pixels.KeyW: up = true; slow = true
+				case pixels.KeyDown: down = true
+				case pixels.KeyS: down = true; slow = true
+				case pixels.KeyLeft: left = true
+				case pixels.KeyRight: right = true
 			}
 		}
 		g.world.DoPlayerMoves(up, down, left, right, slow)
@@ -155,17 +153,15 @@ func (g *Game) Run() {
 			g.world.DoPlayerJump()
 		}
 		if win.JustPressed(pixels.Key0) {
-			g.stubIdx++
+			g.world.DoDebug(1)
 		}
 		if win.JustPressed(pixels.Key9) {
-			g.stubIdx--
+			g.world.DoDebug(-1)
 		}
 		if win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
 		}
-
 		win.Update()
-
 		//text.Draw(win, g.mainMatrix)
 	}
 }
@@ -177,44 +173,11 @@ func (g *Game) Update(win *pixels.GLWindow) {
 		g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	}
 	g.world.Update(g.mainSurface)
-	//drawStub(g.mainSurface, g.cfg.Sectors[g.stubIdx])
+	//g.drawStub(g.mainSurface, g.stubIdx)
 	g.mainSprite.Draw(win, g.mainMatrix)
 }
 
 func main() {
 	g := NewGame()
 	pixels.GLRun(g.Run)
-}
-
-
-func drawStub(surface *pixels.PictureRGBA, sector *config.Sector) {
-	t  := make([]XYZ, len(sector.Neighbors))
-	maxX := 0.0
-	maxY := 0.0
-	for idx := 0; idx < len(sector.Neighbors); idx++ {
-		x := math.Abs(sector.Neighbors[idx].X)
-		y := math.Abs(sector.Neighbors[idx].Y)
-		if x > maxX { maxX = x }
-		if y > maxY { maxY = y }
-	}
-
-	if maxX > 300 { maxX = -(300 - maxX)}
-	if maxY > 400 { maxY = -(400 - maxY)}
-
-	if maxX < 30 { maxX -= 30}
-	if maxY < 30 { maxY -= 30}
-
-	for idx := 0; idx < len(sector.Neighbors); idx++ {
-		x := math.Abs(sector.Neighbors[idx].X) - maxX
-		y := math.Abs(sector.Neighbors[idx].Y) - maxY
-		t[idx].X = x
-		t[idx].Y = y
-	}
-
-	//t = t[0:5]
-	dp := NewDrawPolygon(640, 480)
-	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
-	dp.DrawPoints(10)
-	dp.color = 0xff0000
-	dp.DrawLines()
 }

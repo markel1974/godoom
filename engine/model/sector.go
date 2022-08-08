@@ -1,4 +1,6 @@
-package main
+package model
+
+import "github.com/markel1974/godoom/engine/textures"
 
 type Sector struct {
 	Id           string
@@ -11,11 +13,11 @@ type Sector struct {
 	NeighborsRefs []int
 	Neighbors     []*Sector
 	Textures      bool
-	FloorTexture  *Texture
-	CeilTexture   *Texture
-	UpperTexture  *Texture
-	LowerTexture  *Texture
-	WallTexture   *Texture
+	FloorTexture  *textures.Texture
+	CeilTexture   *textures.Texture
+	UpperTexture  *textures.Texture
+	LowerTexture  *textures.Texture
+	WallTexture   *textures.Texture
 	usage         int
 	compileId     int
 }

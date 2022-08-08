@@ -1,17 +1,15 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"github.com/markel1974/godoom/engine/config"
+	"github.com/markel1974/godoom/engine/mathematic"
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 	"math"
-	"strconv"
-	"strings"
 )
 
 const (
 	defaultQueueLen = 32
-	wallDefinition  = -1
 	hFov            = 0.73
 	vFov            = 0.2
 
@@ -22,16 +20,16 @@ const (
 )
 
 type viewItem struct {
-	where    XYZ
+	where    model.XYZ
 	angleSin float64
 	angleCos float64
 	yaw      float64
-	sector   *Sector
+	sector   *model.Sector
 	zoom     float64
 }
 
 type queueItem struct {
-	sector *Sector
+	sector *model.Sector
 	x1     float64
 	x2     float64
 	y1t    float64
@@ -40,7 +38,7 @@ type queueItem struct {
 	y2b    float64
 }
 
-func (qi *queueItem) Update(sector *Sector, x1 float64, x2 float64, y1t float64, y2t float64, y1b float64, y2b float64) {
+func (qi *queueItem) Update(sector *model.Sector, x1 float64, x2 float64, y1t float64, y2t float64, y1b float64, y2b float64) {
 	qi.sector = sector
 	qi.x1 = x1
 	qi.x2 = x2
@@ -62,13 +60,13 @@ type BSPTree struct {
 	screenVFov       float64
 	compileId        int
 	sectorsMaxHeight float64
-	textures         *Textures
-	sectors          []*Sector
+	textures         *textures.Textures
+	sectors          []*model.Sector
 	compiledSectors  []*CompiledSector
 	compiledCount    int
 }
 
-func NewBSPTree(width int, height int, maxQueue int, textures *Textures) *BSPTree {
+func NewBSPTree(width int, height int, maxQueue int, textures *textures.Textures) *BSPTree {
 	if maxQueue != 0 && (maxQueue&(maxQueue-1)) != 0 {
 		fmt.Printf("maxQueue is not a power of two, using %d\n", defaultQueueLen)
 		maxQueue = defaultQueueLen
@@ -99,286 +97,15 @@ func NewBSPTree(width int, height int, maxQueue int, textures *Textures) *BSPTre
 	return r
 }
 
-func (r *BSPTree) Setup(cfg *config.Config) (*Sector, error) {
-	cache := make(map[string]int)
-
-	for idx, cfgSector := range cfg.Sectors {
-		var vertices []XY
-		var neighborsIds []string
-
-		for _, cfgNeighbor := range cfgSector.Neighbors {
-			vertices = append(vertices, XY{X: cfgNeighbor.X, Y: cfgNeighbor.Y})
-			neighborsIds = append(neighborsIds, cfgNeighbor.Id)
-		}
-
-		s := NewSector(cfgSector.Id, uint64(len(vertices)), vertices, neighborsIds)
-		s.Ceil = cfgSector.Ceil
-		s.Floor = cfgSector.Floor
-		s.Textures = cfgSector.Textures
-		if s.Textures {
-			s.FloorTexture = r.textures.Get(cfgSector.FloorTexture)
-			s.CeilTexture = r.textures.Get(cfgSector.CeilTexture)
-			s.UpperTexture = r.textures.Get(cfgSector.UpperTexture)
-			s.LowerTexture = r.textures.Get(cfgSector.LowerTexture)
-			s.WallTexture = r.textures.Get(cfgSector.WallTexture)
-			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil || s.WallTexture == nil {
-				fmt.Println("invalid textures configuration for sector", s.Id)
-				s.Textures = false
-			}
-		}
-		r.sectors = append(r.sectors, s)
-		cache[cfgSector.Id] = idx
-	}
-
-	for _, sect := range r.sectors {
-		for _, id := range sect.NeighborsIds {
-			switch strings.Trim(strings.ToLower(id), " \t\n") {
-			case "", "-1", "wall":
-				sect.NeighborsRefs = append(sect.NeighborsRefs, wallDefinition)
-			default:
-				idx, ok := cache[id]
-				if !ok {
-					return nil, errors.New(fmt.Sprintf("can't find secor id: %s", id))
-				}
-				sect.NeighborsRefs = append(sect.NeighborsRefs, idx)
-			}
-		}
-	}
-
-	playerSectorIdx, ok := cache[cfg.Player.Sector]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("invalid player sector: %s", cfg.Player.Sector))
-	}
-
-	r.compiledSectors = make([]*CompiledSector, len(r.sectors)*16)
-
+func (r *BSPTree) Setup(sectors []*model.Sector, maxHeight float64) error {
+	r.sectors = sectors
+	r.sectorsMaxHeight = maxHeight
+	r.compiledSectors = make([]*CompiledSector, len(r.sectors) * 16)
 	for cs := 0; cs < len(r.compiledSectors); cs++ {
 		r.compiledSectors[cs] = NewCompiledSector()
 		r.compiledSectors[cs].Setup(512)
 	}
-
-	//Verify Loop
-	for idx, sect := range r.sectors {
-		if len(sect.Vertices) == 0 {
-			return nil, errors.New(fmt.Sprintf("sector %s (idx: %d): vertices as zero len", sect.Id, idx))
-		}
-		hasLoop := false
-		vFirst := sect.Vertices[0]
-		if len(sect.Vertices) > 1 {
-			vLast := sect.Vertices[len(sect.Vertices)-1]
-			hasLoop = vFirst.X == vLast.X && vFirst.Y == vLast.Y
-		}
-		if !hasLoop {
-			vLast := sect.Vertices[len(sect.Vertices)-1]
-			sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-			//fmt.Printf("creating loop for sector %d\n", idx)
-		}
-
-		sect.NPoints = uint64(len(sect.Vertices) -1)
-	}
-
-	if !cfg.Compile {
-		goto Finalize
-	}
-
-Rescan:
-	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
-	for idx, sect := range r.sectors {
-		vert := sect.Vertices
-		for b := uint64(0); b < sect.NPoints; b++ {
-			p1 := vert[b]
-			p2 := vert[b+1]
-			found := 0
-			for d, neighbor := range r.sectors {
-				//fmt.Println("neighbor", neighbor.Id)
-				for c := uint64(0); c < neighbor.NPoints; c++ {
-					c0x := neighbor.Vertices[c+0].X
-					c0y := neighbor.Vertices[c+0].Y
-					c1x := neighbor.Vertices[c+1].X
-					c1y := neighbor.Vertices[c+1].Y
-					if c1x == p1.X && c1y == p1.Y && c0x == p2.X && c0y == p2.Y {
-						neighborIdx := neighbor.NeighborsRefs[c]
-						if idx != neighborIdx {
-							fmt.Printf("sector %s (idx: %d): Neighbor behind line (%g,%g)-(%g,%g) should be %d, %d found instead. Fixing.\n", sect.Id, c, p2.X, p2.Y, p1.Y, p1.Y, idx, neighbor.NeighborsRefs[c])
-							neighbor.NeighborsRefs[c] = idx
-							goto Rescan
-						}
-						if d != sect.NeighborsRefs[b] {
-							fmt.Printf("sector %d: Neighbor behind line (%g,%g)-(%g,%g) should be %d, %d found instead. Fixing.\n", c, p1.X, p1.Y, p2.X, p2.Y, idx, sect.NeighborsRefs[b])
-							sect.NeighborsRefs[b] = d
-							goto Rescan
-						} else {
-							found++
-						}
-					}
-				}
-			}
-			if sect.NeighborsRefs[b] >= 0 && sect.NeighborsRefs[b] < len(r.sectors) && found != 1 {
-				fmt.Printf("sectors %d and its neighbor %d don't share line (%g,%g)-(%g,%g)\n", idx, sect.NeighborsRefs[b], p1.X, p1.Y, p2.X, p2.Y)
-			}
-		}
-	}
-
-	// Verify that the vertexes form a convex hull.
-	for idx, sect := range r.sectors {
-		vert := sect.Vertices
-		for b := uint64(0); b < sect.NPoints; b++ {
-			c := (b + 1) % sect.NPoints
-			d := (b + 2) % sect.NPoints
-			x0 := vert[b].X
-			y0 := vert[b].Y
-			x1 := vert[c].X
-			y1 := vert[c].Y
-			switch pointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
-			case 0:
-				continue
-				//Note: This used to be a problem for my engine, but is not anymore, so it is disabled. if you enable this change, you will not need the IntersectBox calls in some locations anymore.
-				//if sect.Neighbors[b] == sect.Neighbors[c] { continue }
-				//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", a, b, c, c, d)
-			case -1:
-				fmt.Printf("Sector %d: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", idx, b, c, c, d)
-			default:
-				continue
-			}
-
-			fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
-
-			// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
-			// e cannot be c, c-1 or c+1
-			// line (c)-(e) cannot intersect with any edge in this sector
-			nearestDist := 1e29
-			nearestPoint := ^uint64(0)
-			for n := (d + 1) % sect.NPoints; n != b; n = (n + 1) % sect.NPoints {
-				// Don't go through b, c, d
-				x2 := vert[n].X
-				y2 := vert[n].Y
-				distX := x2 - x1
-				distY := y2 - y1
-				dist := distX*distX + distY*distY
-				if dist >= nearestDist {
-					continue
-				}
-				if pointSideF(x2, y2, x0, y0, x1, y1) != 1 {
-					continue
-				}
-				ok := true
-				x1 += distX * 1e-4
-				x2 -= distX * 1e-4
-				y1 += distY * 1e-4
-				y2 -= distY * 1e-4
-				for f := 0; f < int(sect.NPoints); f++ {
-					if intersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
-						ok = false
-						break
-					}
-				}
-				if !ok {
-					continue
-				}
-				// Check whether this split would resolve the original problem
-				if pointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 {
-					dist += 1e6
-				}
-				if dist >= nearestDist {
-					continue
-				}
-				nearestDist = dist
-				nearestPoint = n
-			}
-
-			if nearestPoint == ^uint64(0) {
-				fmt.Printf("  ERROR: Could not find a vertex to pair with\n")
-				continue
-			}
-			e := nearestPoint
-			fmt.Printf(" - and point %d - (%g,%g) as the far point\n", e, vert[e].X, vert[e].Y)
-
-			// Now that we have a chain: a b c d e f g h
-			// And we're supposed to split it at "c" and "e", the outcome should be two chains:
-			// c d e         (c)
-			// e f g h a b c (e)
-
-			var vert1 []XY
-			var neigh1 []int
-			// Create chain 1: from c to e.
-			for n := uint64(0); n < sect.NPoints; n++ {
-				m := (c + n) % sect.NPoints
-				neigh1 = append(neigh1, sect.NeighborsRefs[m])
-				vert1 = append(vert1, sect.Vertices[m])
-				if m == e {
-					vert1 = append(vert1, vert1[0])
-					break
-				}
-			}
-
-			neigh1Idx := len(r.sectors)
-			neigh1 = append(neigh1, neigh1Idx)
-
-			var vert2 []XY
-			var neigh2 []int
-			// Create chain 2: from e to c.
-			for n := uint64(0); n < sect.NPoints; n++ {
-				m := (e + n) % sect.NPoints
-				neigh2 = append(neigh2, sect.NeighborsRefs[m])
-				vert2 = append(vert2, sect.Vertices[m])
-				if m == c {
-					vert2 = append(vert2, vert2[0])
-					break
-				}
-			}
-			neigh2 = append(neigh2, idx)
-
-			// using chain1
-			sect.Vertices = vert1
-			sect.NeighborsRefs = neigh1
-			sect.NPoints = uint64(len(vert1) - 1)
-			sect = r.sectors[idx]
-
-			ns := NewSector("AutoGenerated_"+strconv.Itoa(neigh1Idx), uint64(len(vert2)-1), vert2, sect.NeighborsIds)
-			ns.NeighborsRefs = neigh2
-			ns.Floor = sect.Floor
-			ns.Ceil = sect.Ceil
-			ns.Textures = sect.Textures
-			ns.FloorTexture = sect.FloorTexture
-			ns.CeilTexture = sect.CeilTexture
-			ns.UpperTexture = sect.UpperTexture
-			ns.LowerTexture = sect.LowerTexture
-			ns.WallTexture = sect.WallTexture
-			r.sectors = append(r.sectors, ns)
-
-			// We needs to rescan
-			goto Rescan
-		}
-	}
-
-Finalize:
-
-	r.sectorsMaxHeight = 0
-	for _, sect := range r.sectors {
-		sect.Neighbors = make([]*Sector, sect.NPoints)
-
-		if h := sect.Ceil - sect.Floor; h > r.sectorsMaxHeight {
-			r.sectorsMaxHeight = h
-		}
-
-		for s := uint64(0); s < sect.NPoints; s++ {
-			neighborIdx := sect.NeighborsRefs[s]
-			if neighborIdx > wallDefinition {
-				neighbor := r.sectors[neighborIdx]
-				sect.Neighbors[s] = r.sectors[neighborIdx]
-				if h := neighbor.Ceil - neighbor.Floor; h > r.sectorsMaxHeight {
-					r.sectorsMaxHeight = h
-				}
-			}
-		}
-	}
-
-	//out, _ := json.MarshalIndent(r.sectors, "", " ")
-	//fmt.Println(string(out))
-
-	fmt.Println("Scan complete")
-
-	return r.sectors[playerSectorIdx], nil
+	return nil
 }
 
 func (r *BSPTree) clear() {
@@ -445,7 +172,7 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 
 
 //TODO MOVE TO SoftwareRender
-func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]*queueItem, int) {
+func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueItem) ([]*queueItem, int) {
 	first := r.compiledCount == 0
 	cs := r.compiledSectors[r.compiledCount]
 	r.compiledCount++
@@ -478,24 +205,24 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 		if tz1 <= 0 && tz2 <= 0 { continue }
 
 		u0 := 0.0
-		u1 := float64(TextureEnd)
+		u1 := float64(textures.TextureEnd)
 
 		// If partially in front of the player, clip it against player's view frustum
 		if tz1 <= 0 || tz2 <= 0 {
 			// Find an intersection between the wall and the approximate edges of player's view
-			i1X, i1Y, _ := intersectFn(tx1, tz1, tx2, tz2, -nearSide, nearZ, -farSide, farZ)
-			i2X, i2Y, _ := intersectFn(tx1, tz1, tx2, tz2, nearSide, nearZ, farSide, farZ)
+			i1X, i1Y, _ := mathematic.IntersectFn(tx1, tz1, tx2, tz2, -nearSide, nearZ, -farSide, farZ)
+			i2X, i2Y, _ := mathematic.IntersectFn(tx1, tz1, tx2, tz2, nearSide, nearZ, farSide, farZ)
 			org1x := tx1; org1y := tz1; org2x := tx2; org2y := tz2
 			if tz1 < nearZ { if i1Y > 0 { tx1 = i1X; tz1 = i1Y } else { tx1 = i2X; tz1 = i2Y } }
 			if tz2 < nearZ { if i1Y > 0 { tx2 = i1X; tz2 = i1Y} else {tx2 = i2X; tz2 = i2Y } }
 
 			//https://en.wikipedia.org/wiki/Texture_mapping
 			if math.Abs(tx2 - tx1) > math.Abs(tz2 - tz1) {
-				u0 = (tx1 - org1x) * TextureEnd / (org2x - org1x)
-				u1 = (tx2 - org1x) * TextureEnd / (org2x - org1x)
+				u0 = (tx1 - org1x) * textures.TextureEnd / (org2x - org1x)
+				u1 = (tx2 - org1x) * textures.TextureEnd / (org2x - org1x)
 			} else {
-				u0 = (tz1 - org1y) * TextureEnd / (org2y - org1y)
-				u1 = (tz2 - org1y) * TextureEnd / (org2y - org1y)
+				u0 = (tz1 - org1y) * textures.TextureEnd / (org2y - org1y)
+				u1 = (tz2 - org1y) * textures.TextureEnd / (org2y - org1y)
 			}
 		}
 
@@ -509,8 +236,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 
 		// Compile if visible
 		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
-		x1Max := maxF(x1, qi.x1)
-		x2Min := minF(x2, qi.x2)
+		x1Max := mathematic.MaxF(x1, qi.x1)
+		x2Min := mathematic.MinF(x2, qi.x2)
 
 		screenHeightHalf := float64(r.screenHeightHalf)
 
@@ -535,12 +262,12 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 
 		y1Ceil := qi.y1t; y2Ceil := qi.y2t; y1Floor := qi.y1b; y2Floor := qi.y2b
 		if x1Max != qi.x1 {
-			if _, i1, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok { y1Ceil = i1 }
-			if _, i1, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok { y1Floor = i1 }
+			if _, i1, ok := mathematic.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok { y1Ceil = i1 }
+			if _, i1, ok := mathematic.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok { y1Floor = i1 }
 		}
 		if x2Min != qi.x2 {
-			if _, i2, ok := intersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok { y2Ceil = i2 }
-			if _, i2, ok := intersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok { y2Floor = i2 }
+			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok { y2Ceil = i2 }
+			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok { y2Floor = i2 }
 		}
 
 		ceilP := cs.Acquire(neighbor, IdCeil, x1, x2, tz1, tz2, u0, u1)
@@ -561,8 +288,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 				upperP := cs.Acquire(neighbor, IdUpper, x1, x2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
 			}
-			y1Ceil = maxF(yaStart, nYaStart)
-			y2Ceil = maxF(yaStop, nYaStop)
+			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
+			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := neighbor.Floor - vi.where.Z
 			ny1b := screenHeightHalf + (-Yaw(neighborYFloor, tz1, vi.yaw) * yScale1)
@@ -573,8 +300,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *Sector, qi *queueItem) ([]
 				lowerP := cs.Acquire(neighbor, IdLower, x1, x2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)
 			}
-			y1Floor = minF(nYbStart, ybStart)
-			y2Floor = minF(nYbStop, ybStop)
+			y1Floor = mathematic.MinF(nYbStart, ybStart)
+			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
 			r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 			outIdx++

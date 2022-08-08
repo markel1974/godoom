@@ -1,33 +1,43 @@
 package main
 
 import (
-	"github.com/markel1974/godoom/engine/config"
+	"github.com/markel1974/godoom/engine/mathematic"
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
+	"math"
 )
 
-type XY struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
+
+
+func pointInPolygonF(px float64, py float64, points []model.XY) bool {
+	nVert := len(points)
+	j := nVert - 1
+	c := false
+	for i := 0; i < nVert; i++ {
+		if ((points[i].Y >= py) != (points[j].Y >= py)) && (px <= (points[j].X-points[i].X)*(py-points[i].Y)/(points[j].Y-points[i].Y)+points[i].X) {
+			c = !c
+		}
+		j = i
+	}
+	return c
 }
 
-type XYZ struct {
-	X float64 `json:"x"`
-	Y float64 `json:"x"`
-	Z float64 `json:"z"`
-}
 
 type World struct {
 	screenWidth  int
 	screenHeight int
-	textures     *Textures
+	textures     *textures.Textures
 	tree         *BSPTree
 	render       IRender
 	player       *Player
 	vi           *viewItem
+	debug        bool
+	debugIdx     int
 }
 
 func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *World {
-	t, _ := NewTextures(viewMode)
+	t, _ := textures.NewTextures(viewMode)
 	w := &World{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
@@ -39,11 +49,13 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 	return w
 }
 
-func (w *World) Setup(cfg *config.Config) error {
-	playerSector, err := w.tree.Setup(cfg)
-	if err != nil {
-		return err
-	}
+func (w *World) Setup(cfg *model.Input) error {
+	compiler := model.NewCompiler()
+	err := compiler.Setup(cfg, w.textures)
+	if err != nil { return err }
+	playerSector, err := compiler.Get(cfg.Player.Sector)
+	if err != nil { return err }
+	if err := w.tree.Setup(compiler.GetSectors(), compiler.GetMaxHeight()); err != nil { return err }
 	w.player = NewPlayer(cfg.Player.Position.X, cfg.Player.Position.Y, playerSector.Floor, cfg.Player.Angle, playerSector)
 	w.render = NewSoftwareRender(w.screenWidth, w.screenHeight, w.textures, w.tree.sectorsMaxHeight)
 	return nil
@@ -63,8 +75,8 @@ func (w *World) movePlayer(dx float64, dy float64) {
 		if neighbor := sector.Neighbors[s]; neighbor != nil {
 			curr := vert[s]
 			next := vert[s+1]
-			if intersectBoxF(px0, py0, px1, py1, curr.X, curr.Y, next.X, next.Y) {
-				ps := pointSideF(px1, py1, curr.X, curr.Y, next.X, next.Y)
+			if mathematic.IntersectBoxF(px0, py0, px1, py1, curr.X, curr.Y, next.X, next.Y) {
+				ps := mathematic.PointSideF(px1, py1, curr.X, curr.Y, next.X, next.Y)
 				if ps < 0 {
 					w.player.SetSector(neighbor)
 					found = true
@@ -74,9 +86,11 @@ func (w *World) movePlayer(dx float64, dy float64) {
 		}
 	}
 
-	if !found {
-		if !pointInPolygonF(px1, py1, sector.Vertices[:sector.NPoints]) {
-			return
+	if !w.debug {
+		if !found {
+			if !pointInPolygonF(px1, py1, sector.Vertices[:sector.NPoints]) {
+				return
+			}
 		}
 	}
 	w.player.AddCoords(dx, dy)
@@ -87,13 +101,16 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	px, py := w.player.GetCoords()
 	pz := w.player.GetZ()
 	w.vi.sector = w.player.GetSector()
-	w.vi.where = XYZ{X: px, Y: py, Z: pz}
+	w.vi.where = model.XYZ{X: px, Y: py, Z: pz}
 	w.vi.angleCos = cos
 	w.vi.angleSin = sin
 	w.vi.yaw = w.player.GetYaw()
 
 	cs, count := w.tree.Compile(w.vi)
 	w.render.Render(surface, w.vi, cs, count)
+	if w.debug {
+		w.drawStub(surface)
+	}
 
 	w.player.VerticalCollision()
 	if !w.player.IsMoving() {
@@ -113,8 +130,8 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 		curr := vert[s]
 		next := vert[s+1]
 
-		if intersectBoxF(px, py, p1, p2, curr.X, curr.Y, next.X, next.Y) &&
-			pointSideF(p1, p2, curr.X, curr.Y, next.X, next.Y) < 0 {
+		if mathematic.IntersectBoxF(px, py, p1, p2, curr.X, curr.Y, next.X, next.Y) &&
+			mathematic.PointSideF(p1, p2, curr.X, curr.Y, next.X, next.Y) < 0 {
 
 			neighbor := sect.Neighbors[s]
 
@@ -122,8 +139,8 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 			holeLow := 9e9
 			holeHigh := -9e9
 			if neighbor != nil {
-				holeLow = maxF(sect.Floor, neighbor.Floor)
-				holeHigh = minF(sect.Ceil, neighbor.Ceil)
+				holeLow = mathematic.MaxF(sect.Floor, neighbor.Floor)
+				holeHigh = mathematic.MinF(sect.Ceil, neighbor.Ceil)
 			}
 
 			// Check whether we're bumping into a wall
@@ -184,6 +201,53 @@ func (w *World) DebugMoveSectorToggle() {
 
 func (w *World) DoZoom(zoom float64) {
 	w.vi.zoom += zoom
+}
+
+func (w *World) DoDebug(next int) {
+	w.debug = true
+	idx := w.debugIdx + next
+	if idx < 0 || idx >= len(w.tree.sectors) { return }
+	w.debugIdx = idx
+	sector := w.tree.sectors[idx]
+	x := sector.Vertices[0].X
+	y := sector.Vertices[0].Y
+	w.player.SetSector(sector)
+	w.player.SetCoords(x + 5, y + 5)
+}
+
+func  (w * World) drawStub(surface *pixels.PictureRGBA) {
+	sector := w.tree.sectors[w.debugIdx]
+	t  := make([]model.XYZ, len(sector.Neighbors))
+	maxX := 0.0
+	maxY := 0.0
+	for idx := uint64(0); idx < sector.NPoints; idx++ {
+		v := sector.Vertices[idx]
+		x := math.Abs(v.X)
+		y := math.Abs(v.Y)
+		if x > maxX { maxX = x }
+		if y > maxY { maxY = y }
+	}
+
+	if maxX > 300 { maxX = -(300 - maxX)}
+	if maxY > 400 { maxY = -(400 - maxY)}
+
+	if maxX < 30 { maxX -= 30}
+	if maxY < 30 { maxY -= 30}
+
+	for idx := uint64(0); idx < sector.NPoints; idx++ {
+		v := sector.Vertices[idx]
+		x := math.Abs(v.X) - maxX
+		y := math.Abs(v.Y) - maxY
+		t[idx].X = x
+		t[idx].Y = y
+	}
+
+	//t = t[0:5]
+	dp := NewDrawPolygon(640, 480)
+	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
+	dp.DrawPoints(10)
+	dp.color = 0xff0000
+	dp.DrawLines()
 }
 
 /*

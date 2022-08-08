@@ -1,5 +1,7 @@
 package main
 
+import "github.com/markel1974/godoom/engine/model"
+
 const (
 	IdEmpty = 0
 	IdFloor = 0xA9A9A9
@@ -14,13 +16,13 @@ const (
 
 type CompiledPolygon struct {
 	id       float64
-	Sector   *Sector
-	Neighbor *Sector
+	Sector   *model.Sector
+	Neighbor *model.Sector
 	kind     int
 	light1   float64
 	light2   float64
 	zIndex   float64
-	points   []XYZ
+	points   []model.XYZ
 	pLen     int
 
 	x1  float64
@@ -33,7 +35,7 @@ type CompiledPolygon struct {
 
 func NewCompiledPolygon() *CompiledPolygon {
 	return &CompiledPolygon{
-		points: make([]XYZ, 32),
+		points: make([]model.XYZ, 32),
 		pLen:   0,
 	}
 }
@@ -128,7 +130,7 @@ func (cp *CompiledPolygons) Clear() {
 	cp.idx = 0
 }
 
-func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(sector *model.Sector, neighbor *model.Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
 	p := cp.data[cp.idx]
 	p.id = float64(cp.idx)
 	cp.idx++

@@ -1,6 +1,7 @@
 package main
 
 import (
+	textures2 "github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	"sync"
 )
@@ -8,7 +9,7 @@ import (
 type RenderSoftware struct {
 	screenWidth        int
 	screenHeight       int
-	textures           *Textures
+	textures           *textures2.Textures
 	sectorsMaxHeight   float64
 	targetSectors      map[int]bool
 	targetIdx          int
@@ -17,7 +18,7 @@ type RenderSoftware struct {
 	dp                 *DrawPolygon
 }
 
-func NewSoftwareRender(screenWidth int, screenHeight int, textures *Textures, sectorsMaxHeight float64) *RenderSoftware {
+func NewSoftwareRender(screenWidth int, screenHeight int, textures *textures2.Textures, sectorsMaxHeight float64) *RenderSoftware {
 	return &RenderSoftware{
 		screenWidth:        screenWidth,
 		screenHeight:       screenHeight,
@@ -63,7 +64,7 @@ func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *viewItem, css [
 
 func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem, css []*CompiledSector, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
-		mode := r.textures.viewMode
+		mode := r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2
@@ -84,7 +85,7 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *viewIte
 	wg.Add(compiled)
 
 	for idx := compiled - 1; idx >= 0; idx-- {
-		mode := r.textures.viewMode
+		mode := r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2

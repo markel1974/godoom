@@ -1,4 +1,4 @@
-package main
+package textures
 
 import (
 	"bufio"
@@ -21,7 +21,7 @@ type Texture struct {
 func (t *Texture) Get(x uint, y uint) int {
 	//return t.data[x % TextureSize][y % TextureSize]
 	//TextureSize (1024) is a power of 2, we can use bitwise operator
-	return t.data[x & TextureEnd][y & TextureEnd]
+	return t.data[x &TextureEnd][y &TextureEnd]
 }
 
 
@@ -55,6 +55,10 @@ func NewTextures(viewMode int) (*Textures, error) {
 		}
 	}
 	return t, nil
+}
+
+func (t * Textures) GetViewMode() int {
+	return t.viewMode
 }
 
 func (t *Textures) load(filename string) (*Texture, error) {

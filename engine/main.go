@@ -36,7 +36,7 @@ func NewGame() *Game {
 func (g *Game) Setup(c pixels.Vec) {
 	var err error
 	g.viewMode = -1
-	g.enableClear = false //true
+	g.enableClear = true //true
 	m := 1
 
 	switch m {
@@ -47,7 +47,7 @@ func (g *Game) Setup(c pixels.Vec) {
 	case 2:
 		wb := wad.NewBuilder()
 		wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-		g.cfg, err = wb.Setup(wadFile, 2)
+		g.cfg, err = wb.Setup(wadFile, 5)
 	}
 	if err != nil {
 		fmt.Println(err)
@@ -58,18 +58,18 @@ func (g *Game) Setup(c pixels.Vec) {
 		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")
 	}
 
+	g.world = NewWorld(_W, _H, _MaxQueue, g.viewMode)
+	if err := g.world.Setup(g.cfg); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	g.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(_W), float64(_H)))
 
 	g.mainSprite = pixels.NewSprite()
 	g.mainSprite.SetCached(pixels.CacheModeUpdate)
 	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
 	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
-
-	g.world = NewWorld(_W, _H, _MaxQueue, g.viewMode)
-	if err := g.world.Setup(g.cfg); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 }
 
 func (g *Game) Run() {

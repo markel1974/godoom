@@ -51,7 +51,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 }
 
 func Generate(maxX int, maxY int) (*model.Input, error) {
-	cfg := &model.Input{Sectors: nil, Player: &model.InputPlayer{}, Compile: true }
+	cfg := &model.Input{Sectors: nil, Player: &model.InputPlayer{} }
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

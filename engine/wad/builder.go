@@ -15,7 +15,21 @@ import (
 //http://www.gamers.org/dhs/helpdocs/dmsp1666.html
 //http://doomwiki.org/
 //https://github.com/penberg/godoom
-const scaleFactor = 15.0
+const scaleFactor = 10.0
+
+
+
+/*
+type lineDef struct { start *Vertex; end *Vertex; subSectorId string }
+func lineDefHash(start *Vertex, end *Vertex) string {
+	startX := strconv.Itoa(int(start.XCoord))
+	startY := strconv.Itoa(int(start.YCoord))
+	endX := strconv.Itoa(int(end.XCoord))
+	endY := strconv.Itoa(int(end.YCoord))
+	return startX + "|" + startY + "=>" + endX + "|" + endY
+}*/
+
+
 
 type Point struct {
 	X int16
@@ -99,7 +113,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	playerSectorId, playerSSectorId, playerSector := b.findSector(level, p1.XPosition, p1.YPosition, len(level.Nodes)-1)
 	//TEST
-	playerSSectorId = 34
+	playerSSectorId = 44
 	position.X = 1520 + 5
 	position.Y = -3168 + 5
 
@@ -110,7 +124,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	fmt.Println(playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.Input{Compile: true, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+	cfg := &model.Input{ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
 
 	return cfg, nil
 }
@@ -132,7 +146,19 @@ The segs in ssector 0 should be segs 0 through x, then ssector 1
 contains segs x+1 through y, ssector 2 containg segs y+1 to z, etc.
 */
 func (b * Builder) createSubSector(level *Level) {
-	//fmt.Println(len(level.SubSectors), len(level.Sectors), len(level.SubSectors) / len(level.Sectors))
+	//CACHE
+	/*
+	t := make(map[string] lineDef)
+	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
+		subSector := level.SubSectors[subSectorId]
+		for segmentId := subSector.StartSeg; segmentId < subSector.StartSeg + subSector.NumSegments; segmentId++ {
+			segment := level.Segments[segmentId]
+			start := level.Vertexes[segment.VertexStart]
+			end := level.Vertexes[segment.VertexEnd]
+			t[lineDefHash(start, end)] = lineDef{start: start, end: end, subSectorId: strconv.Itoa(int(subSectorId)) }
+		}
+	}
+	*/
 
 	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
 		subSector := level.SubSectors[subSectorId]
@@ -146,71 +172,55 @@ func (b * Builder) createSubSector(level *Level) {
 		sector := level.Sectors[sideDef.SectorRef]
 		if sector == nil { continue }
 
-		current := b.getConfigSector(subSectorId, sector)
-
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
 		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
 			segment := level.Segments[segmentId]
+			lineDef := level.LineDefs[int(segment.LineNum)]
+			_, sideDef := b.segmentSideDef(level, segment, lineDef)
+			if sideDef == nil { continue }
+			//_, oppositeSideDef := b.segmentOppositeSideDef(level, segment, lineDef)
+			//if oppositeSideDef == nil {
+			//	return
+			//}
 
-			b.createSegment(level, segment, current)
-			//b.createSegment(level, subSectorId, segmentId)
+			//impassible 0
+			//Block Monsters
+			//twoSided
+			//upperUnpegged
+			//lowerUnpegged
+			//secret
+			//blockSound
+			//NotOnMap
+			//Already on Map
+			//if (lineDef.Flags >> 2) & 1 == 0 {
+			//	continue
+			//}
+
+			//fmt.Println(lineDef.Tag)
+
+			current := b.getConfigSector(subSectorId, sector, lineDef)
+			start := level.Vertexes[segment.VertexStart]
+			end := level.Vertexes[segment.VertexEnd]
+
+			//fmt.Println(lineDef.Flags & 0x3)
+			//fmt.Println(sideDef.MiddleTexture, sideDef.UpperTexture, sideDef.LowerTexture)
+
+			//upperTexture := sideDef.UpperTexture
+			//middleTexture := sideDef.MiddleTexture
+			//lowerTexture := sideDef.LowerTexture
+
+			//if  ld, ok := t[lineDefHash(end, start)]; ok {
+			//	neighborId = ld.subSectorId
+			//}
+
+			neighborId := "wall"
+			neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: -float64(start.XCoord), Y: float64(start.YCoord)}}
+			neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: -float64(end.XCoord), Y: float64(end.YCoord)}}
+			current.Neighbors = append(current.Neighbors, neighborStart)
+			current.Neighbors = append(current.Neighbors, neighborEnd)
+			//b.createSegment(level, segment, current)
 		}
 	}
-}
-
-func (b * Builder) createSegment(level *Level, segment * Seg, current * model.InputSector) {
-	//func (b * Builder) createSegment(level *Level, subSectorId int16, segmentId int16) {
-	//In general, being a convex polygon is the goal of a ssector.
-	//Convex  means a line connecting any two points that are inside the polygon will be completely contained in the polygon.
-	//segment := level.Segments[segmentId]
-
-	//lineDef := level.LineDefs[int(segment.LineNum)]
-	//_, sideDef := b.segmentSideDef(level, segment, lineDef)
-	//if sideDef == nil { return }
-
-	start := level.Vertexes[segment.VertexStart]
-	end := level.Vertexes[segment.VertexEnd]
-
-	//upperTexture := sideDef.UpperTexture
-	//middleTexture := sideDef.MiddleTexture
-	//lowerTexture := sideDef.LowerTexture
-
-	//_, oppositeSideDef := b.segmentOppositeSideDef(level, segment, lineDef)
-	//sector := level.Sectors[sideDef.SectorRef]
-
-	neighborId := "wall"
-	//if oppositeSideDef != nil {
-		//z := b.findSubSector(level, start.XCoord, start.YCoord, len(level.Nodes)-1)
-		//fmt.Println("RESULT", sideDef.SectorRef, z, oppositeSideDef.SectorRef)
-		//Il neighborId deve essere necessariamente il subsector!
-		//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
-	//}
-
-	//current := b.getConfigSector(subSectorId, sector)
-	//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
-	neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(start.XCoord) / scaleFactor, Y: -float64(start.YCoord) / scaleFactor}}
-	neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(end.XCoord) / scaleFactor, Y: -float64(end.YCoord) / scaleFactor}}
-
-
-	addStart := true
-
-	/*
-
-	if len(current.Neighbors) > 0 {
-		last := current.Neighbors[len(current.Neighbors) - 1]
-		if last.X == neighborStart.X && last.Y == neighborStart.Y {
-			addStart = false
-			fmt.Println("Start already added")
-		}
-	}
-	*/
-
-	if addStart {
-		current.Neighbors = append(current.Neighbors, neighborStart)
-	}
-	current.Neighbors = append(current.Neighbors, neighborEnd)
-	//current.Neighbors = append([]*commonmodel.Neighbor{neighborStart}, current.Neighbors...)
-	//current.Neighbors = append([]*commonmodel.Neighbor{neighborEnd}, current.Neighbors...)
 }
 
 func (b * Builder) segmentSideDef(level *Level, seg *Seg, lineDef *LineDef) (int16, *SideDef) {
@@ -276,13 +286,13 @@ func (b * Builder) loadTexture(wad *WAD, textureName string) (*image.RGBA, error
 }
 
 
-func (b * Builder) getConfigSector(id int16, sector *Sector) * model.InputSector{
+func (b * Builder) getConfigSector(id int16, sector *Sector, ld * LineDef) * model.InputSector{
 	c, ok := b.cfg[id]
 	if !ok {
 		c = &model.InputSector{
 			Id:           strconv.Itoa(int(id)),
-			Ceil:         float64(sector.CeilingHeight) / 8,
-			Floor:        float64(sector.FloorHeight) / 8,
+			Ceil:         float64(sector.CeilingHeight) / 3,
+			Floor:        float64(sector.FloorHeight) / 3,
 			Textures:     true,
 			WallTexture:  "wall2.ppm",
 			LowerTexture: "wall.ppm",
@@ -329,3 +339,54 @@ func (b * Builder) findSector(level *Level, x int16, y int16, idx int) (int16, i
 func (b * Builder) intersects(x int16, y int16, bbox *BBox) bool {
 	return x > bbox.Left && x < bbox.Right && y > bbox.Bottom && y <=bbox.Top
 }
+
+/*
+func (b * Builder) createSegment(level *Level, segment * Seg, current * model.InputSector) {
+	//func (b * Builder) createSegment(level *Level, subSectorId int16, segmentId int16) {
+	//In general, being a convex polygon is the goal of a ssector.
+	//Convex  means a line connecting any two points that are inside the polygon will be completely contained in the polygon.
+	//segment := level.Segments[segmentId]
+
+	//lineDef := level.LineDefs[int(segment.LineNum)]
+	//_, sideDef := b.segmentSideDef(level, segment, lineDef)
+	//if sideDef == nil { return }
+
+	start := level.Vertexes[segment.VertexStart]
+	end := level.Vertexes[segment.VertexEnd]
+
+	//upperTexture := sideDef.UpperTexture
+	//middleTexture := sideDef.MiddleTexture
+	//lowerTexture := sideDef.LowerTexture
+
+	//_, oppositeSideDef := b.segmentOppositeSideDef(level, segment, lineDef)
+	//sector := level.Sectors[sideDef.SectorRef]
+
+	neighborId := "wall"
+	//if oppositeSideDef != nil {
+		//z := b.findSubSector(level, start.XCoord, start.YCoord, len(level.Nodes)-1)
+		//fmt.Println("RESULT", sideDef.SectorRef, z, oppositeSideDef.SectorRef)
+		//Il neighborId deve essere necessariamente il subsector!
+		//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
+	//}
+
+	//current := b.getConfigSector(subSectorId, sector)
+	//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
+	neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(start.XCoord) / scaleFactor, Y: -float64(start.YCoord) / scaleFactor}}
+	neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(end.XCoord) / scaleFactor, Y: -float64(end.YCoord) / scaleFactor}}
+
+	addStart := true
+
+
+	//if len(current.Neighbors) > 0 {
+	//	last := current.Neighbors[len(current.Neighbors) - 1]
+	//	if last.X == neighborStart.X && last.Y == neighborStart.Y {
+	//		addStart = false
+	//		fmt.Println("Start already added")
+	//	}}
+	if addStart {
+		current.Neighbors = append(current.Neighbors, neighborStart)
+	}
+	current.Neighbors = append(current.Neighbors, neighborEnd)
+}
+
+*/

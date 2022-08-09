@@ -10,6 +10,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 //http://www.gamers.org/dhs/helpdocs/dmsp1666.html
@@ -17,17 +18,20 @@ import (
 //https://github.com/penberg/godoom
 const scaleFactor = 10.0
 
+const (
+	impassible = 0
+	blockMonsters = 1
+	twoSided = 2
+	upperUnpegged = 3
+	lowerUnpegged = 4
+	secret = 5
+	blockSound = 6
+	notOnMap = 7
+	alreadyOnMap
+)
 
 
-/*
-type lineDef struct { start *Vertex; end *Vertex; subSectorId string }
-func lineDefHash(start *Vertex, end *Vertex) string {
-	startX := strconv.Itoa(int(start.XCoord))
-	startY := strconv.Itoa(int(start.YCoord))
-	endX := strconv.Itoa(int(end.XCoord))
-	endY := strconv.Itoa(int(end.YCoord))
-	return startX + "|" + startY + "=>" + endX + "|" + endY
-}*/
+
 
 
 
@@ -145,20 +149,27 @@ Each ssector is 4 bytes in 2 <short> fields:
 The segs in ssector 0 should be segs 0 through x, then ssector 1
 contains segs x+1 through y, ssector 2 containg segs y+1 to z, etc.
 */
+
 func (b * Builder) createSubSector(level *Level) {
-	//CACHE
-	/*
-	t := make(map[string] lineDef)
+	type pLineDef struct { start *Vertex; end *Vertex; subSectorId string }
+
+	createHash := func(start *Vertex, end *Vertex) string {
+		startX := strconv.Itoa(int(start.XCoord))
+		startY := strconv.Itoa(int(start.YCoord))
+		endX := strconv.Itoa(int(end.XCoord))
+		endY := strconv.Itoa(int(end.YCoord))
+		return startX + "|" + startY + "=>" + endX + "|" + endY
+	}
+	t := make(map[string] pLineDef)
 	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
 		subSector := level.SubSectors[subSectorId]
 		for segmentId := subSector.StartSeg; segmentId < subSector.StartSeg + subSector.NumSegments; segmentId++ {
 			segment := level.Segments[segmentId]
 			start := level.Vertexes[segment.VertexStart]
 			end := level.Vertexes[segment.VertexEnd]
-			t[lineDefHash(start, end)] = lineDef{start: start, end: end, subSectorId: strconv.Itoa(int(subSectorId)) }
+			t[createHash(start, end)] = pLineDef{start: start, end: end, subSectorId: strconv.Itoa(int(subSectorId)) }
 		}
 	}
-	*/
 
 	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
 		subSector := level.SubSectors[subSectorId]
@@ -169,7 +180,8 @@ func (b * Builder) createSubSector(level *Level) {
 		if lineDef == nil { continue}
 		_, sideDef := b.segmentSideDef(level, segment, lineDef)
 		if sideDef == nil { continue }
-		sector := level.Sectors[sideDef.SectorRef]
+		sectorId := sideDef.SectorRef
+		sector := level.Sectors[sectorId]
 		if sector == nil { continue }
 
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
@@ -179,46 +191,53 @@ func (b * Builder) createSubSector(level *Level) {
 			_, sideDef := b.segmentSideDef(level, segment, lineDef)
 			if sideDef == nil { continue }
 			//_, oppositeSideDef := b.segmentOppositeSideDef(level, segment, lineDef)
-			//if oppositeSideDef == nil {
-			//	return
-			//}
 
-			//impassible 0
-			//Block Monsters
-			//twoSided
-			//upperUnpegged
-			//lowerUnpegged
-			//secret
-			//blockSound
-			//NotOnMap
-			//Already on Map
-			//if (lineDef.Flags >> 2) & 1 == 0 {
-			//	continue
-			//}
-
-			//fmt.Println(lineDef.Tag)
-
-			current := b.getConfigSector(subSectorId, sector, lineDef)
+			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 			start := level.Vertexes[segment.VertexStart]
 			end := level.Vertexes[segment.VertexEnd]
 
-			//fmt.Println(lineDef.Flags & 0x3)
-			//fmt.Println(sideDef.MiddleTexture, sideDef.UpperTexture, sideDef.LowerTexture)
+			//b.printBits(lineDef)
 
-			//upperTexture := sideDef.UpperTexture
-			//middleTexture := sideDef.MiddleTexture
-			//lowerTexture := sideDef.LowerTexture
+			neighborId := "unknown"
+			if  ld, ok := t[createHash(end, start)]; ok {
+				neighborId = ld.subSectorId
+			}
 
-			//if  ld, ok := t[lineDefHash(end, start)]; ok {
-			//	neighborId = ld.subSectorId
+			/*
+			if subSectorId == 35 {
+				fmt.Println(b.printBits(lineDef))
+				fmt.Println(sideDef.UpperTexture, sideDef.MiddleTexture, sideDef.LowerTexture)
+				if  ld, ok := t[createHash(end, start)]; ok {
+					fmt.Println(ld.subSectorId)
+				}
+				neighborId = "wall"
+			}
+			*/
+
+			//if (lineDef.Flags >> twoSided) & 1 == 0 {
+			//	neighborId = "wall"
 			//}
 
-			neighborId := "wall"
+			//if oppositeSideDef != nil {
+			//	neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
+			//}
+
 			neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: -float64(start.XCoord), Y: float64(start.YCoord)}}
 			neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: -float64(end.XCoord), Y: float64(end.YCoord)}}
+
+			//add := true
+			//if len(current.Neighbors) > 0 {
+			//	last := current.Neighbors[len(current.Neighbors) - 1]
+			//	if last.X == neighborStart.X && last.Y == neighborStart.Y {
+			//		add = false
+			//	}
+			//}
+
+			//if add {
+			//	current.Neighbors = append(current.Neighbors, neighborStart)
+			//}
 			current.Neighbors = append(current.Neighbors, neighborStart)
 			current.Neighbors = append(current.Neighbors, neighborEnd)
-			//b.createSegment(level, segment, current)
 		}
 	}
 }
@@ -286,11 +305,11 @@ func (b * Builder) loadTexture(wad *WAD, textureName string) (*image.RGBA, error
 }
 
 
-func (b * Builder) getConfigSector(id int16, sector *Sector, ld * LineDef) * model.InputSector{
-	c, ok := b.cfg[id]
+func (b * Builder) getConfigSector(sectorId int16, sector *Sector, subSectorId int16, ld * LineDef) * model.InputSector{
+	c, ok := b.cfg[subSectorId]
 	if !ok {
 		c = &model.InputSector{
-			Id:           strconv.Itoa(int(id)),
+			Id:           strconv.Itoa(int(subSectorId)),
 			Ceil:         float64(sector.CeilingHeight) / 3,
 			Floor:        float64(sector.FloorHeight) / 3,
 			Textures:     true,
@@ -300,8 +319,9 @@ func (b * Builder) getConfigSector(id int16, sector *Sector, ld * LineDef) * mod
 			FloorTexture: "floor.ppm",
 			CeilTexture:  "ceil.ppm",
 			Neighbors:    nil,
+			Tag:          strconv.Itoa(int(sectorId)),
 		}
-		b.cfg[id] = c
+		b.cfg[subSectorId] = c
 	}
 	return c
 }
@@ -338,6 +358,20 @@ func (b * Builder) findSector(level *Level, x int16, y int16, idx int) (int16, i
 
 func (b * Builder) intersects(x int16, y int16, bbox *BBox) bool {
 	return x > bbox.Left && x < bbox.Right && y > bbox.Bottom && y <=bbox.Top
+}
+
+func (b * Builder) printBits(lineDef *LineDef) string {
+	var data []string
+	if (lineDef.Flags >> twoSided) & 1 == 1 { data = append(data,"twoSided")}
+	if (lineDef.Flags >> impassible) & 1 == 1 { data = append(data,"impassible")}
+	if (lineDef.Flags >> blockMonsters) & 1 == 1 { data = append(data,"blockMonsters")}
+	if (lineDef.Flags >> upperUnpegged) & 1 == 1 { data = append(data,"upperUnpegged")}
+	if (lineDef.Flags >> lowerUnpegged) & 1 == 1 { data = append(data,"lowerUnpegged")}
+	if (lineDef.Flags >> secret) & 1 == 1 { data = append(data,"secret")}
+	if (lineDef.Flags >> blockSound) & 1 == 1 { data = append(data,"blockSound")}
+	if (lineDef.Flags >> notOnMap) & 1 == 1 { data = append(data,"notOnMap")}
+	if (lineDef.Flags >> alreadyOnMap) & 1 == 1 { data = append(data,"alreadyOnMap")}
+	return strings.Join(data, ",")
 }
 
 /*

@@ -14,8 +14,8 @@ const (
 	vFov            = 0.2
 
 	nearZ    = 1e-4
-	farZ     = 5.0
 	nearSide = 1e-5
+	farZ     = 5.0
 	farSide  = 20.0
 )
 
@@ -185,7 +185,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 
 	for s := uint64(0); s < sector.NPoints; s++ {
 		vertexCurr := sector.Vertices[s]
-		vertexNext := sector.Vertices[s+1]
+		vertexNext := sector.Vertices[s + 1]
 		neighbor := sector.Neighbors[s]
 		sectorYCeil := sector.Ceil - vi.where.Z
 		sectorYFloor := sector.Floor - vi.where.Z
@@ -234,7 +234,6 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		yScale2 := r.screenVFov / tz2
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
-		// Compile if visible
 		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)

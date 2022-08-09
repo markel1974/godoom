@@ -36,7 +36,7 @@ func NewGame() *Game {
 func (g *Game) Setup(c pixels.Vec) {
 	var err error
 	g.viewMode = -1
-	g.enableClear = true //true
+	g.enableClear = false //true
 	m := 1
 
 	switch m {
@@ -47,7 +47,7 @@ func (g *Game) Setup(c pixels.Vec) {
 	case 2:
 		wb := wad.NewBuilder()
 		wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-		g.cfg, err = wb.Setup(wadFile, 5)
+		g.cfg, err = wb.Setup(wadFile, 1)
 	}
 	if err != nil {
 		fmt.Println(err)

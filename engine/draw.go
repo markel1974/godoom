@@ -162,7 +162,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 					//txtY := int(float64(pixelY - y1) * float64(TextureEnd - TextureBegin) / float64(y2 - y1) + TextureBegin)
 					txtY := int(((float64(pixelY))-(float64(y1)))*(float64(textures.TextureEnd-textures.TextureBegin))/div + textures.TextureBegin)
 					//TODO REMOVE
-					//dp.lightStart = 1.0
+					dp.lightStart = 1.0
 
 					r0, g0, b0 := toRGB(texture.Get(uint(txtX), uint(txtY)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
@@ -201,7 +201,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 					txtX := (((tz * aCos) + (tx * aSin)) + x) * textureZoom
 					txtZ := (((tz * aSin) - (tx * aCos)) + y) * textureZoom
 					//TODO REMOVE
-					//dp.lightStart = 1.0
+					dp.lightStart = 1.0
 
 					red, green, blue := toRGB(texture.Get(uint(txtZ), uint(txtX)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
@@ -218,10 +218,10 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
 			//TODO REMOVE
-			//dp.lightStart = 1.0
+			dp.lightStart = 1.0
 
 			r0, g0, b0 := toRGB(dp.color, dp.lightStart)
-			r1, g1, b1 := toRGB(dp.color, dp.lightStart/2)
+			r1, g1, b1 := toRGB(dp.color, dp.lightStart / 2)
 			for i := 0; i < len(nodeY); i += 2 {
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]

@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	wallDefinition  = -1
+	wallDefinition = -1
+	unknownDefinition = -2
 )
 
 type lineDef struct { start XY; end XY; sectorId int; np int }
 
 
-func lineDefHash(even bool, start XY, end XY) string {
+func lineDefHash(start XY, end XY) string {
 	startX := strconv.FormatFloat(start.X, 'f', -1, 64)
 	startY := strconv.FormatFloat(start.Y, 'f', -1, 64)
 	endX := strconv.FormatFloat(end.X, 'f', -1, 64)
 	endY := strconv.FormatFloat(end.Y, 'f', -1, 64)
-	var sign string; if even { sign = "E" } else { sign = "O" }
-	return startX + "|" + startY + "=>" +  endX + "|" + endY + "|" + sign
+	return startX + "|" + startY + "=>" +  endX + "|" + endY
 }
 
 
@@ -74,8 +74,10 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	for _, sect := range r.sectors {
 		for _, id := range sect.NeighborsIds {
 			switch strings.Trim(strings.ToLower(id), " \t\n") {
-			case "", "-1", "wall":
+			case "-1", "wall":
 				sect.NeighborsRefs = append(sect.NeighborsRefs, wallDefinition)
+			case "", "-2", "unknown":
+				sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
 			default:
 				idx, ok := r.cache[id]
 				if !ok {
@@ -92,58 +94,58 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			return errors.New(fmt.Sprintf("sector %s (idx: %d): vertices as zero len", sect.Id, idx))
 		}
 		hasLoop := false
+		vFirst := sect.Vertices[0]
 		if len(sect.Vertices) > 1 {
-			vFirst := sect.Vertices[0]
 			vLast := sect.Vertices[len(sect.Vertices)-1]
 			hasLoop = vFirst.X == vLast.X && vFirst.Y == vLast.Y
 		}
 		if !hasLoop {
+			//TODO StubOld2 funziona solo se viene aggiunto in testa.....
 			//vLast := sect.Vertices[len(sect.Vertices)-1]
 			//sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-			vFirst := sect.Vertices[0]
-			sect.Vertices = append(sect.Vertices, vFirst)
-			//sect.NPoints = uint64(len(sect.Vertices) -1)
 			//fmt.Printf("creating loop for sector %d\n", idx)
+			sect.Vertices = append(sect.Vertices, vFirst)
 		} else {
-			//TODO Il settore finale viene aggiunto
-			//vFirst := sect.Vertices[0]
-			//sect.Vertices = append(sect.Vertices, vFirst)
-			//sect.NPoints = uint64(len(sect.Vertices) - 1)
-			//fmt.Println("LOOP ALREADY PRESENT!!!!!!")
+			fmt.Println("Adding an extra vertex")
+			sect.Vertices = append(sect.Vertices, XY{})
+			//vLast := sect.Vertices[len(sect.Vertices) - 1]
+			//sect.Vertices = append(sect.Vertices, vLast)
 		}
-
 		sect.NPoints = uint64(len(sect.Vertices) - 1)
 	}
 
 Rescan:
 	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
-	even, odd, lineDefsCache := r.makeLineDefsCache()
-	if !even && !odd {
-		return errors.New("cache is unusable")
-	}
+	lineDefsCache := r.makeLineDefsCache()
 	for _, sector := range r.sectors {
 		vert := sector.Vertices
 		for np1 := uint64(0); np1 < sector.NPoints; np1++ {
-			if sector.NeighborsRefs[np1] != wallDefinition { continue }
+			//if sector.NeighborsRefs[np1] >= wallDefinition { continue }
 			np2 := np1 + 1
 			v1start := vert[np1]
 			v1end := vert[np2]
-			if even {
-				if ld, ok := lineDefsCache[lineDefHash(true, v1end, v1start)]; ok {
-					sector.NeighborsRefs[np1] = ld.sectorId
-					fmt.Printf("sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
-					continue
+			if ld, ok := lineDefsCache[lineDefHash(v1end, v1start)]; ok {
+				if sector.NeighborsRefs[np1] < wallDefinition {
+					if ld.sectorId != sector.NeighborsRefs[np1] {
+						fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
+						sector.NeighborsRefs[np1] = ld.sectorId
+					}
 				}
-			}
-			if odd {
-				if ld, ok := lineDefsCache[lineDefHash(false, v1end, v1start)]; ok {
-					sector.NeighborsRefs[np1] = ld.sectorId
-					fmt.Printf("sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
-					continue
+				/*
+				if np2 < uint64(len(sector.NeighborsRefs)) {
+					if sector.NeighborsRefs[np2] < wallDefinition {
+						if ld.sectorId != sector.NeighborsRefs[np2] {
+							fmt.Printf("p2 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np2])
+							sector.NeighborsRefs[np2] = ld.sectorId
+						}
+					}
 				}
+				*/
 			}
+			//np1++
 		}
 	}
+
 
 	// Verify that the vertexes form a convex hull.
 	for idx, sect := range r.sectors {
@@ -311,29 +313,28 @@ func (r * Compiler) GetMaxHeight() float64 {
 	return r.sectorsMaxHeight
 }
 
-func (r * Compiler) makeLineDefsCache() (bool, bool, map[string]lineDef) {
+
+func (r * Compiler) makeLineDefsCache() map[string]lineDef {
 	t := make(map[string] lineDef)
-	even := true
-	odd := true
 	for sectorId, sect := range r.sectors {
 		for np := uint64(0); np < sect.NPoints; np++ {
 			v1start := sect.Vertices[np]
 			v1end := sect.Vertices[np + 1]
-			test := np % 2 == 0
-			hash := lineDefHash(test, v1start, v1end)
+			hash := lineDefHash(v1start, v1end)
 			ld := lineDef{sectorId: sectorId, np: int(np), start: v1start, end: v1end }
 			if fld, ok := t[hash]; ok {
 				if sectorId != fld.sectorId {
 					//if test { even = false } else { odd = false }
-					fmt.Println("line segment already added", sectorId, fld.sectorId, hash)
+					fmt.Println("line segment already added", sectorId, fld.sectorId, hash, np)
 				}
 			} else {
 				t[hash] = ld
 			}
 		}
 	}
-	return even, odd, t
+	return t
 }
+
 
 
 

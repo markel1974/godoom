@@ -13,6 +13,7 @@ type Sector struct {
 	NeighborsRefs []int
 	Neighbors     []*Sector
 	Textures      bool
+	Tag           string
 	FloorTexture  *textures.Texture
 	CeilTexture   *textures.Texture
 	UpperTexture  *textures.Texture

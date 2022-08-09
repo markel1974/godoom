@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/textures"
@@ -211,6 +212,7 @@ func (w *World) DoDebug(next int) {
 	sector := w.tree.sectors[idx]
 	x := sector.Vertices[0].X
 	y := sector.Vertices[0].Y
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total noints:", sector.NPoints, "vertices:", len(sector.Vertices))
 	w.player.SetSector(sector)
 	w.player.SetCoords(x + 5, y + 5)
 }
@@ -227,6 +229,9 @@ func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 		if x > maxX { maxX = x }
 		if y > maxY { maxY = y }
 	}
+
+	maxX /= 2
+	maxY /= 2
 
 	if maxX > 300 { maxX = -(300 - maxX)}
 	if maxY > 400 { maxY = -(400 - maxY)}

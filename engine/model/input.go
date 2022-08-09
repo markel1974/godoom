@@ -12,8 +12,8 @@ type XYZ struct {
 }
 
 type InputNeighbor struct {
-	XY
-	Id string `json:"id"`
+	XY  `json:"id"`
+	Id  string `json:"id"`
 }
 
 type InputSector struct {
@@ -27,6 +27,7 @@ type InputSector struct {
 	LowerTexture string           `json:"lowerTexture"`
 	WallTexture  string           `json:"wallTexture"`
 	Neighbors    []*InputNeighbor `json:"neighbors"`
+	Tag          string           `json:"tag"`
 }
 
 type InputLight struct {

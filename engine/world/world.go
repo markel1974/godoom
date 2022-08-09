@@ -44,7 +44,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		case 2:	xy.X = x + max;	xy.Y = y + max
 		case 3:	xy.X = x; xy.Y = y + max
 		}
-		neighbor := &model.InputNeighbor{XY: xy, Id: "wall"}
+		neighbor := &model.InputNeighbor{XY: xy, Id: "unknown"}
 		sector.Neighbors = append(sector.Neighbors, neighbor)
 	}
 	return sector

@@ -1,173 +1,28 @@
 package wad
 
 import (
-	"encoding/binary"
+	"errors"
 	"fmt"
+	"github.com/markel1974/godoom/engine/wad/lumps"
+	"image"
+	"image/color"
 	"os"
 	"sort"
-	"unsafe"
 )
 
-type LumpInfo struct {
-	Filepos int64
-	Size    int32
-	Name    string
-}
-
-type Texture struct {
-	Header  *TextureHeader
-	Patches []*Patch
-}
-
-type TextureHeader struct {
-	TexName         string
-	Masked          int32
-	Width           int16
-	Height          int16
-	ColumnDirectory int32
-	NumPatches      int16
-}
-
-type Patch struct {
-	XOffset     int16
-	YOffset     int16
-	PNameNumber int16
-	StepDir     int16
-	ColorMap    int16
-}
-
-type Image struct {
-	Width  int
-	Height int
-	Pixels []byte
-}
-
-type PictureHeader struct {
-	Width      int16
-	Height     int16
-	LeftOffset int16
-	TopOffset  int16
-}
-
-type Flat struct {
-	Data []byte
-}
-
-type Level struct {
-	Things     []*Thing
-	LineDefs   []*LineDef
-	SideDefs   []*SideDef
-	Vertexes   []*Vertex
-	Segments   []*Seg
-	SubSectors []*SubSector
-	Nodes      []*Node
-	Sectors    []*Sector
-}
-
-type Thing struct {
-	XPosition int16
-	YPosition int16
-	Angle     int16
-	Type      int16
-	Options   int16
-}
-
-type LineDef struct {
-	VertexStart  int16
-	VertexEnd    int16
-	Flags        int16
-	Function     int16
-	Tag          int16
-	SideDefRight int16
-	SideDefLeft  int16
-}
-
-type SideDef struct {
-	XOffset       int16
-	YOffset       int16
-	UpperTexture  string
-	LowerTexture  string
-	MiddleTexture string
-	SectorRef     int16
-}
-
-type Vertex struct {
-	XCoord int16
-	YCoord int16
-}
-
-type Seg struct {
-	VertexStart   int16
-	VertexEnd     int16
-	Bams          int16
-	LineNum       int16
-	SegmentSide   int16
-	SegmentOffset int16
-}
-
-type SubSector struct {
-	NumSegments int16
-	StartSeg    int16
-}
-
-type BBox struct {
-	Top    int16
-	Bottom int16
-	Left   int16
-	Right  int16
-}
-
-type Node struct {
-	X     int16
-	Y     int16
-	DX    int16
-	DY    int16
-	BBox  [2]BBox
-	Child [2]int16
-}
-
-type Sector struct {
-	FloorHeight   int16
-	CeilingHeight int16
-	FloorPic      string
-	CeilingPic    string
-	LightLevel    int16
-	SpecialSector int16
-	Tag           int16
-}
-
-type Reject struct {
-}
-
-type BlockMap struct {
-}
-
-type RGB struct {
-	Red   uint8
-	Green uint8
-	Blue  uint8
-}
-
-type Palette struct {
-	Table [256]RGB
-}
-
-type PlayPal struct {
-	Palettes [14]Palette
-}
 
 
 
 type WAD struct {
-	pNames                  []string
-	patches                 map[string]*Image
-	playPal                 *PlayPal
-	textures                map[string]*Texture
-	flats                   map[string]*Flat
+	file                    *os.File
+	lumpInfos               []*lumps.LumpInfo
+	playPal                 *lumps.PlayPal
+	patches                 map[string]*lumps.Image
+	textures                map[string]*lumps.Texture
+	flats                   map[string]*lumps.Flat
 	levels                  map[string]int
 	lumps                   map[string]int
-	lumpInfos               []*LumpInfo
-	file                    *os.File
+	pNames                  []string
 	transparentPaletteIndex byte
 }
 
@@ -175,6 +30,11 @@ type WAD struct {
 
 func New() *WAD {
 	return &WAD{
+		lumps:                   make(map[string]int),
+		levels:                  make(map[string]int),
+		textures:                make(map[string]*lumps.Texture),
+		flats:                   make(map[string]*lumps.Flat),
+		patches:                 make(map[string]*lumps.Image),
 		transparentPaletteIndex: 255,
 	}
 }
@@ -182,21 +42,103 @@ func New() *WAD {
 func (w * WAD) Load(filename string) error {
 	var err error
 	if w.file, err = os.Open(filename); err != nil { return err }
-	l := NewLoader()
-	return l.Setup(w)
+	if err = w.loadInfoTables(); err != nil { return err }
+	if err = w.loadPlayPals(); err != nil { return err }
+	if err = w.loadPatches(); err != nil { return err }
+	if err = w.loadTextures(); err != nil { return err }
+	if err = w.loadFlats(); err != nil { return err }
+	return nil
 }
 
-func (w *WAD) GetTexture(name string) (*Texture, bool) {
+func (w *WAD) loadInfoTables() error {
+	var err error
+	w.lumpInfos, err = lumps.NewLumpInfos(w.file)
+	if err != nil { return err }
+	for i, l := range w.lumpInfos {
+		if l.Name == "THINGS" {
+			levelIdx := i - 1
+			levelLump := w.lumpInfos[levelIdx]
+			w.levels[levelLump.Name] = levelIdx
+		}
+		w.lumps[l.Name] = i
+	}
+	return nil
+}
+
+func (w *WAD) loadPlayPals() error {
+	var err error
+	playPalLump, ok := w.lumps["PLAYPAL"]
+	if !ok { return fmt.Errorf("PLAYPAL not found") }
+	lumpInfo := w.lumpInfos[playPalLump]
+	if w.playPal, err = lumps.NewPlayPal(w.file, lumpInfo); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *WAD) loadPatches() error {
+	var err error
+	pNamesLump, ok := w.lumps["PNAMES"]
+	if !ok { return fmt.Errorf("PNAMES not found") }
+	lumpInfo := w.lumpInfos[pNamesLump]
+	w.pNames, err = lumps.NewPatchNames(w.file, lumpInfo)
+	if err != nil {
+		return err
+	}
+	for _, pName := range w.pNames {
+		var err error
+		pNamesLump := w.lumps[pName]
+		lumpInfo := w.lumpInfos[pNamesLump]
+		w.patches[pName], err = lumps.NewImage(w.file, lumpInfo, w.transparentPaletteIndex)
+		if err != nil { return err }
+	}
+	return nil
+}
+
+func (w *WAD) loadTextures() error {
+	var textureLumps []int
+	if lump, ok := w.lumps["TEXTURE1"]; ok {
+		textureLumps = append(textureLumps, lump)
+	}
+	if lump, ok := w.lumps["TEXTURE2"]; ok {
+		textureLumps = append(textureLumps, lump)
+	}
+	for _, i := range textureLumps {
+		lumpInfo := w.lumpInfos[i]
+		textures, err := lumps.NewTextures(w.file, lumpInfo)
+		if err != nil { return err }
+		for _, t := range textures {
+			w.textures[t.Header.TexName] = t
+		}
+	}
+	return nil
+}
+
+func (w *WAD) loadFlats() error {
+	start, ok := w.lumps["F_START"]
+	if !ok { return fmt.Errorf("F_START not found") }
+	end, ok := w.lumps["F_END"]
+	if !ok { return fmt.Errorf("F_END not found") }
+	for i := start; i < end; i++ {
+		var err error
+		lumpInfo := w.lumpInfos[i]
+		w.flats[lumpInfo.Name], err = lumps.NewFlat(w.file, lumpInfo)
+		if err != nil { return err }
+	}
+	return nil
+}
+
+func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 	texture, ok := w.textures[name]
 	return texture, ok
 }
 
-func (w *WAD) GetImage(pNameNumber int16) (*Image, bool) {
+func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, bool) {
 	image, ok := w.patches[w.pNames[pNameNumber]]
 	return image, ok
 }
 
-func (w *WAD) GetFlat(flatName string) (*Flat, bool) {
+func (w *WAD) GetFlat(flatName string) (*lumps.Flat, bool) {
 	flat, ok := w.flats[flatName]
 	return flat, ok
 }
@@ -216,198 +158,67 @@ func (w *WAD) GetLevel(levelName string) (*Level, error) {
 	levelIdx := w.levels[levelName]
 	for i := levelIdx + 1; i < levelIdx+11; i++ {
 		lumpInfo := w.lumpInfos[i]
-		if err := Seek(w.file, lumpInfo.Filepos); err != nil { return nil, err }
+		if err := lumps.Seek(w.file, lumpInfo.Filepos); err != nil { return nil, err }
 		switch lumpInfo.Name {
-		case "THINGS": if level.Things, err = w.readThings(lumpInfo); err != nil { return nil, err }
-		case "SIDEDEFS": if level.SideDefs, err = w.readSideDefs(lumpInfo); err != nil { return nil, err }
-		case "LINEDEFS": if level.LineDefs, err = w.readLineDefs(lumpInfo); err != nil { return nil, err }
-		case "VERTEXES": if level.Vertexes, err = w.readVertexes(lumpInfo); err != nil { return nil, err }
-		case "SEGS": if level.Segments, err = w.readSegments(lumpInfo); err != nil { return nil, err }
-		case "SSECTORS": if level.SubSectors, err = w.readSubSectors(lumpInfo); err != nil { return nil, err }
-		case "NODES": if level.Nodes, err = w.readNodes(lumpInfo); err != nil { return nil, err }
-		case "SECTORS": if level.Sectors, err = w.readSectors(lumpInfo); err != nil { return nil, err }
+		case "THINGS": if level.Things, err = lumps.NewThings(w.file, lumpInfo); err != nil { return nil, err }
+		case "SIDEDEFS": if level.SideDefs, err = lumps.NewSideDefs(w.file, lumpInfo); err != nil { return nil, err }
+		case "LINEDEFS": if level.LineDefs, err = lumps.NewLineDefs(w.file, lumpInfo); err != nil { return nil, err }
+		case "VERTEXES": if level.Vertexes, err = lumps.NewVertexes(w.file, lumpInfo); err != nil { return nil, err }
+		case "SEGS": if level.Segments, err = lumps.NewSegments(w.file, lumpInfo); err != nil { return nil, err }
+		case "SSECTORS": if level.SubSectors, err = lumps.NewSubSectors(w.file, lumpInfo); err != nil { return nil, err }
+		case "NODES": if level.Nodes, err = lumps.NewNodes(w.file, lumpInfo); err != nil { return nil, err }
+		case "SECTORS": if level.Sectors, err = lumps.NewSectors(w.file, lumpInfo); err != nil { return nil, err }
 		default: fmt.Printf("Unhandled lump %s\n", lumpInfo.Name)
 		}
 	}
 	return level, nil
 }
 
-func (w *WAD) readThings(lumpInfo *LumpInfo) ([]*Thing, error) {
-	var pThing Thing
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pThing))
-	pThings := make([]Thing, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pThings); err != nil {
-		return nil, err
+
+func (w * WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
+	texture, ok := w.GetTexture(textureName)
+	if !ok {
+		return nil, errors.New("unknown texture " + textureName)
 	}
-	things := make([]*Thing, count, count)
-	for idx, t := range pThings {
-		things[idx] = &Thing{
-			XPosition: t.XPosition,
-			YPosition: t.YPosition,
-			Angle:     t.Angle,
-			Type:      t.Type,
-			Options:   t.Options,
+	if texture.Header == nil {
+		return nil, nil
+	}
+	bounds := image.Rect(0, 0, int(texture.Header.Width), int(texture.Header.Height))
+	rgba := image.NewRGBA(bounds)
+	if rgba.Stride != rgba.Rect.Size().X*4 {
+		return nil, fmt.Errorf("unsupported stride")
+	}
+	for _, patch := range texture.Patches {
+		img, ok := w.GetImage(patch.PNameNumber)
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("unknown patch %d for %s", patch.PNameNumber, textureName))
+		}
+		for y := 0; y < img.Height; y++ {
+			for x := 0; x < img.Width; x++ {
+				pixel := img.Pixels[y*img.Width+x]
+				var alpha uint8
+				if pixel == w.transparentPaletteIndex {
+					alpha = 0
+				} else {
+					alpha = 255
+				}
+				rgb := w.playPal.Palettes[0].Table[pixel]
+				rgba.Set(int(patch.XOffset) + x, int(patch.YOffset) + y, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: alpha})
+			}
 		}
 	}
-	return things, nil
+	return rgba, nil
+
+	/*
+		var texId uint32
+		gl.GenTextures(1, &texId)
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, texId)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(rgba.Rect.Size().X), int32(rgba.Rect.Size().Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(rgba.Pix))
+		return texId, nil
+	*/
 }
-
-func (w *WAD) readLineDefs(lumpInfo *LumpInfo) ([]*LineDef, error) {
-	var pLineDef LineDef
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pLineDef))
-	pLineDefs := make([]LineDef, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pLineDefs); err != nil {
-		return nil, err
-	}
-	lineDefs := make([]*LineDef, count, count)
-	for idx, ld := range pLineDefs {
-		lineDefs[idx] = &LineDef{
-			VertexStart:  ld.VertexStart,
-			VertexEnd:    ld.VertexEnd,
-			Flags:        ld.Flags,
-			Function:     ld.Function,
-			Tag:          ld.Tag,
-			SideDefRight: ld.SideDefRight,
-			SideDefLeft:  ld.SideDefLeft,
-		}
-	}
-	return lineDefs, nil
-}
-
-func (w *WAD) readSideDefs(lumpInfo *LumpInfo) ([]*SideDef, error) {
-	type PrivateSideDef struct {
-		XOffset       int16
-		YOffset       int16
-		UpperTexture  [8]byte
-		LowerTexture  [8]byte
-		MiddleTexture [8]byte
-		SectorRef     int16
-	}
-	var pSideDef PrivateSideDef
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSideDef))
-	pSideDefs := make([]PrivateSideDef, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pSideDefs); err != nil {
-		return nil, err
-	}
-	sideDef := make([]*SideDef, count, count)
-	for idx, p := range pSideDefs {
-		sideDef[idx] = &SideDef{
-			XOffset:       p.XOffset,
-			YOffset:       p.YOffset,
-			UpperTexture:  ToString(p.UpperTexture),
-			LowerTexture:  ToString(p.LowerTexture),
-			MiddleTexture: ToString(p.MiddleTexture),
-			SectorRef:     p.SectorRef,
-		}
-	}
-	return sideDef, nil
-}
-
-func (w *WAD) readVertexes(lumpInfo *LumpInfo) ([]*Vertex, error) {
-	var pVertex Vertex
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pVertex))
-	pVertexes := make([]Vertex, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pVertexes); err != nil {
-		return nil, err
-	}
-	vertexes := make([]*Vertex, count, count)
-	for idx, v := range pVertexes {
-		vertexes[idx] = &Vertex{
-			XCoord: v.XCoord,
-			YCoord: v.YCoord,
-		}
-	}
-	return vertexes, nil
-}
-
-func (w *WAD) readSegments(lumpInfo *LumpInfo) ([]*Seg, error) {
-	var pSeg Seg
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSeg))
-	pSegments := make([]Seg, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pSegments); err != nil {
-		return nil, err
-	}
-	segments := make([]*Seg, count, count)
-	for idx, s := range pSegments {
-		segments[idx] = &Seg{
-			VertexStart:   s.VertexStart,
-			VertexEnd:     s.VertexEnd,
-			Bams:          s.Bams,
-			LineNum:       s.LineNum,
-			SegmentSide:   s.SegmentSide,
-			SegmentOffset: s.SegmentOffset,
-		}
-	}
-	return segments, nil
-}
-
-func (w *WAD) readSubSectors(lumpInfo *LumpInfo) ([]*SubSector, error) {
-	var pSubSector SubSector
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSubSector))
-	pSubSectors := make([]SubSector, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pSubSectors); err != nil {
-		return nil, err
-	}
-	subSectors := make([]*SubSector, count, count)
-	for idx, s := range pSubSectors {
-		subSectors[idx] = &SubSector{
-			NumSegments: s.NumSegments,
-			StartSeg:    s.StartSeg,
-		}
-	}
-	return subSectors, nil
-}
-
-func (w *WAD) readNodes(lumpInfo *LumpInfo) ([]*Node, error) {
-	var pNode Node
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pNode))
-	pNodes := make([]Node, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pNodes); err != nil {
-		return nil, err
-	}
-	nodes := make([]*Node, count, count)
-	for idx, n := range pNodes {
-		nodes[idx] = &Node{
-			X:     n.X,
-			Y:     n.Y,
-			DX:    n.DX,
-			DY:    n.DY,
-			BBox:  n.BBox,
-			Child: n.Child,
-		}
-	}
-	return nodes, nil
-}
-
-func (w *WAD) readSectors(lumpInfo *LumpInfo) ([]*Sector, error) {
-	type privateSector struct {
-		FloorHeight   int16
-		CeilingHeight int16
-		FloorPic      [8]byte
-		CeilingPic    [8]byte
-		LightLevel    int16
-		SpecialSector int16
-		Tag           int16
-	}
-	var pSector privateSector
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSector))
-	pSectors := make([]privateSector, count, count)
-	if err := binary.Read(w.file, binary.LittleEndian, pSectors); err != nil {
-		return nil, err
-	}
-	sectors := make([]*Sector, count, count)
-	for idx, p := range pSectors {
-		sectors[idx] = &Sector{
-			FloorHeight:   p.FloorHeight,
-			CeilingHeight: p.CeilingHeight,
-			FloorPic:      ToString(p.FloorPic),
-			CeilingPic:    ToString(p.CeilingPic),
-			LightLevel:    p.LightLevel,
-			SpecialSector: p.SpecialSector,
-			Tag:           p.Tag,
-		}
-	}
-	return sectors, nil
-}
-
-

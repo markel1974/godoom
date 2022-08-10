@@ -1,4 +1,4 @@
-package wad
+package lumps
 
 import (
 	"errors"

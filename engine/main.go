@@ -36,8 +36,8 @@ func NewGame() *Game {
 func (g *Game) Setup(c pixels.Vec) {
 	var err error
 	g.viewMode = -1
-	g.enableClear = false //true
-	m := 1
+	g.enableClear = true //true
+	m := 2
 
 	switch m {
 	case 0:

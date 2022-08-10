@@ -106,8 +106,8 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			//fmt.Printf("creating loop for sector %d\n", idx)
 			sect.Vertices = append(sect.Vertices, vFirst)
 		} else {
-			fmt.Println("Adding an extra vertex")
-			sect.Vertices = append(sect.Vertices, XY{})
+			//fmt.Println("Adding an extra vertex")
+			//sect.Vertices = append(sect.Vertices, XY{})
 			//vLast := sect.Vertices[len(sect.Vertices) - 1]
 			//sect.Vertices = append(sect.Vertices, vLast)
 		}

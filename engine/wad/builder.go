@@ -180,13 +180,8 @@ func (b * Builder) createSubSector(level *Level) {
 					neighborStart = last
 					add = false
 				} else {
-					//TODO Manca la definizione last - neighborStart!!!!!
-					//test := b.getOppositeSubSectorByLine(level, subSectorId, int16(last.X), int16(last.Y), int16(neighborStart.X), int16(neighborStart.Y))
-					//if test == strconv.Itoa(int(subSectorId)) || test == "unknown" || test == "wall" {
-					//	last.Neighbor = "wall"
-					//	wall = true
-					//}
-					//fmt.Println(test, subSectorId)
+					// la definizione last - neighborStart
+					// viene realizzata in fase di Setup
 				}
 			}
 			if wall {

@@ -20,6 +20,7 @@ const (
 )
 
 type Game struct {
+	win        *pixels.GLWindow
 	mainSurface *pixels.PictureRGBA
 	mainMatrix  pixels.Matrix
 	mainSprite  *pixels.Sprite
@@ -33,7 +34,7 @@ func NewGame() *Game {
 	return &Game{}
 }
 
-func (g *Game) Setup(c pixels.Vec) {
+func (g *Game) Setup() {
 	var err error
 	g.viewMode = -1
 	g.enableClear = true //true
@@ -64,15 +65,6 @@ func (g *Game) Setup(c pixels.Vec) {
 		os.Exit(1)
 	}
 
-	g.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(_W), float64(_H)))
-
-	g.mainSprite = pixels.NewSprite()
-	g.mainSprite.SetCached(pixels.CacheModeUpdate)
-	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
-	g.mainMatrix = pixels.IM.Moved(c).Scaled(c, _scale)
-}
-
-func (g *Game) Run() {
 	cfg := pixels.WindowConfig{
 		Bounds:      pixels.R(0, 0, float64(_W)*_scale, float64(_H)*_scale),
 		VSync:       true,
@@ -80,12 +72,20 @@ func (g *Game) Run() {
 		Smooth:      false,
 	}
 
-	win, err := pixels.NewGLWindow(cfg)
-	if err != nil {
-		panic(err)
-	}
+	g.win, err = pixels.NewGLWindow(cfg)
+	if err != nil { panic(err) }
+	center := g.win.Bounds().Center()
 
-	g.Setup(win.Bounds().Center())
+	g.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(_W), float64(_H)))
+
+	g.mainSprite = pixels.NewSprite()
+	g.mainSprite.SetCached(pixels.CacheModeUpdate)
+	g.mainSprite.Set(g.mainSurface, g.mainSurface.Bounds())
+	g.mainMatrix = pixels.IM.Moved(center).Scaled(center, _scale)
+}
+
+func (g *Game) Run() {
+	g.Setup()
 
 	var currentTimer float64
 	var lastTimer float64
@@ -94,16 +94,16 @@ func (g *Game) Run() {
 	//text := pixel.NewText(pixel.V(10, 10), pixel.Atlas7x13)
 	//_, _ = text.WriteString("test")
 
-	for !win.Closed() {
+	for !g.win.Closed() {
 		currentTimer = pixels.GLGetTime()
 		if currentTimer - lastTimer >= 1.0 / framerate {
 			lastTimer = currentTimer
-			g.Update(win)
+			g.Update(g.win)
 		}
 
-		if mouseConnected && win.MouseInsideWindow() {
-			mousePos := win.MousePosition()
-			mousePrevPos := win.MousePreviousPosition()
+		if mouseConnected && g.win.MouseInsideWindow() {
+			mousePos := g.win.MousePosition()
+			mousePrevPos := g.win.MousePreviousPosition()
 			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
 				mouseX := mousePos.X - mousePrevPos.X
 				mouseY := mousePos.Y - mousePrevPos.Y
@@ -113,7 +113,7 @@ func (g *Game) Run() {
 
 		var up, down, left, right, slow bool
 
-		scroll := win.MouseScroll()
+		scroll := g.win.MouseScroll()
 		if scroll.Y != 0 {
 			if scroll.Y > 0 {
 				//g.world.DoZoom(1)
@@ -124,7 +124,7 @@ func (g *Game) Run() {
 			}
 		}
 
-		for v := range win.KeysPressed() {
+		for v := range g.win.KeysPressed() {
 			switch v {
 				case pixels.KeyEscape: return
 				case pixels.KeyUp: up = true
@@ -136,32 +136,32 @@ func (g *Game) Run() {
 			}
 		}
 		g.world.DoPlayerMoves(up, down, left, right, slow)
-		if win.JustPressed(pixels.KeyC) {
+		if g.win.JustPressed(pixels.KeyC) {
 			g.enableClear = true
 			g.world.DebugMoveSectorToggle()
 		}
-		if win.JustPressed(pixels.KeyZ) {
+		if g.win.JustPressed(pixels.KeyZ) {
 			g.world.DebugMoveSector(true)
 		}
-		if win.JustPressed(pixels.KeyX) {
+		if g.win.JustPressed(pixels.KeyX) {
 			g.world.DebugMoveSector(false)
 		}
-		if win.JustPressed(pixels.KeyTab) || win.Pressed(pixels.MouseButton2) {
+		if g.win.JustPressed(pixels.KeyTab) || g.win.Pressed(pixels.MouseButton2) {
 			g.world.DoPlayerDuckingToggle()
 		}
-		if win.JustPressed(pixels.KeySpace) || win.Pressed(pixels.MouseButton1) {
+		if g.win.JustPressed(pixels.KeySpace) || g.win.Pressed(pixels.MouseButton1) {
 			g.world.DoPlayerJump()
 		}
-		if win.JustPressed(pixels.Key0) {
+		if g.win.JustPressed(pixels.Key0) {
 			g.world.DoDebug(1)
 		}
-		if win.JustPressed(pixels.Key9) {
+		if g.win.JustPressed(pixels.Key9) {
 			g.world.DoDebug(-1)
 		}
-		if win.JustPressed(pixels.KeyM) {
+		if g.win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		win.Update()
+		g.win.Update()
 		//text.Draw(win, g.mainMatrix)
 	}
 }

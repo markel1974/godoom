@@ -12,8 +12,9 @@ type XYZ struct {
 }
 
 type InputNeighbor struct {
-	XY  `json:"id"`
-	Id  string `json:"id"`
+	XY       `json:"id"`
+	Neighbor string `json:"neighbor"`
+	Tag      string `json:"tag"`
 }
 
 type InputSector struct {

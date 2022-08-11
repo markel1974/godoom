@@ -65,7 +65,13 @@ func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *viewItem, css [
 }
 
 func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem, css []*CompiledSector, compiled int) {
+	//test := make(map[string]bool)
 	for idx := compiled - 1; idx >= 0; idx-- {
+		//if _, ok := test[css[idx].sector.Id]; ok {
+		//	fmt.Println("Already rendered")
+		//	continue
+		//}
+		//test[css[idx].sector.Id] = true
 		mode := r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
@@ -76,7 +82,7 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem,
 					id := ""; if z != nil { id = z.Id }
 					neighbors = append(neighbors, id)
 				}
-				fmt.Println("Current target Sector:", css[idx].sector.Id, strings.Join(neighbors, ","))
+				fmt.Println("Current target Sector:", css[idx].sector.Id, strings.Join(neighbors, ","), css[idx].sector.Tag)
 			}
 		}
 		polygons := css[idx].Get()

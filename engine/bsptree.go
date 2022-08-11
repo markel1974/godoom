@@ -189,6 +189,10 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		neighbor := sector.Neighbors[s]
 		sectorYCeil := sector.Ceil - vi.where.Z
 		sectorYFloor := sector.Floor - vi.where.Z
+		if neighbor == sector {
+			//fmt.Println("Circuit breaker")
+			continue
+		}
 
 		vx1 := vertexCurr.X - vi.where.X
 		vy1 := vertexCurr.Y - vi.where.Y

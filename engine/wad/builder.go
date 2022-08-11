@@ -85,8 +85,34 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	}
 	b.createSubSector(level)
 
+	for _, c := range b.cfg {
+		for idx := 0; idx < len(c.Neighbors); idx++ {
+			curr := c.Neighbors[idx]
+			var next *model.InputNeighbor
+			if idx < len(c.Neighbors)-1 {
+				next = c.Neighbors[idx+1]
+			} else {
+				next = c.Neighbors[0]
+			}
+
+			if curr.Neighbor != "wall" {
+				id, _ := strconv.Atoi(c.Id)
+				opposite := b.getOppositeSubSectorByLine(level, int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+				curr.Neighbor = opposite
+				//fmt.Println(opposite)
+			}
+		}
+	}
+
+	//os.Exit(-1)
+
 	var sectors []*model.InputSector
 	for _, c := range b.cfg {
+		for idx := 0; idx < len(c.Neighbors); idx++ {
+			curr := c.Neighbors[idx]
+			curr.X = math.Abs(curr.X)
+			curr.Y = math.Abs(curr.Y)
+		}
 		sectors = append(sectors, c)
 	}
 
@@ -104,9 +130,11 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	playerSectorId, playerSSectorId, playerSector := level.FindSector(p1.XPosition, p1.YPosition)
 	//TEST
-	playerSSectorId = 44
-	position.X = 1520 + 5
-	position.Y = -3168 + 5
+	//playerSSectorId = 44
+	//position.X = 1520 + 5
+	//position.Y = -3168 + 5
+	position.X = math.Abs(position.X)
+	position.Y = math.Abs(position.Y)
 
 	out, _ := json.Marshal(b.cfg[int16(playerSSectorId)])
 	//out, _ := json.Marshal(b.cfg[1])
@@ -119,86 +147,15 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	return cfg, nil
 }
 
-
-//level--> SECTOR
-//SECTOR --> SUBSECTOR
-//....
-/*
-SSECTOR stands for sub-sector. These divide up all the SECTORS into
-convex polygons. They are then referenced through the NODES resources.
-There will be (number of nodes + 1) ssectors.
-Each ssector is 4 bytes in 2 <short> fields:
-
-(1) This many SEGS are in this SSECTOR...
-(2) ...starting with this SEG number
-
-The segs in ssector 0 should be segs 0 through x, then ssector 1
-contains segs x+1 through y, ssector 2 containg segs y+1 to z, etc.
-*/
-
-type SContainer struct {
-	SegmentId      int16
-	LineNum        int16
-	Line           *lumps.LineDef
-	SubSectors     int16
-}
-type LineContainer struct {
-	Container     []*SContainer
-}
-
-func (b * Builder) createSectorCache (level *Level) map[int16] *LineContainer {
-	var t = make(map[int16] *LineContainer)
-
-	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
-		subSector := level.SubSectors[subSectorId]
-		for segmentId := subSector.StartSeg; segmentId < subSector.StartSeg + subSector.NumSegments; segmentId++ {
-			segment := level.Segments[segmentId]
-			if segment == nil { continue }
-			lineDef := level.LineDefs[int(segment.LineNum)]
-			if lineDef == nil { continue}
-			//(7) "left" SIDEDEF, if this line adjoins 2 SECTORS. Otherwise, it is
-			//equal to -1 (FFFF hex).
-
-			//if !lineDef.HasFlag(lumps.TwoSided) { continue }
-			var sectorId int16
-			if _, sideDef := level.SegmentSideDef(segment, lineDef); sideDef != nil {
-				sectorId = sideDef.SectorRef
-			} else {
-				continue
-			}
-			//fmt.Println("R:", lineDef.SideDefLeft, lineDef.SideDefRight)
-			sc := &SContainer{SegmentId: segmentId, LineNum: segment.LineNum, Line: lineDef, SubSectors: subSectorId }
-			if z, ok := t[sectorId]; ok {
-				z.Container = append(z.Container, sc)
-			} else {
-				t[sectorId] = &LineContainer{ Container: []*SContainer{sc}}
-			}
-		}
-	}
-	return t
-}
-
 func (b * Builder) createSubSector(level *Level) {
-	t := b.createSectorCache(level)
-
-	same := 0
-	different := 0
-	unknown := 0
-	unmatch := 0
-	total := 0
-
 	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
 		subSector := level.SubSectors[subSectorId]
-		if subSector == nil { continue }
 		segment := level.Segments[subSector.StartSeg]
-		if segment == nil { continue }
 		lineDef := level.LineDefs[int(segment.LineNum)]
-		if lineDef == nil { continue}
 		_, sideDef := level.SegmentSideDef(segment, lineDef)
 		if sideDef == nil { continue }
 		sectorId := sideDef.SectorRef
 		sector := level.Sectors[sectorId]
-		if sector == nil { continue }
 
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
 		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
@@ -207,103 +164,95 @@ func (b * Builder) createSubSector(level *Level) {
 			_, sideDef := level.SegmentSideDef(segment, lineDef)
 			if sideDef == nil { continue }
 
-			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 			start := level.Vertexes[segment.VertexStart]
 			end := level.Vertexes[segment.VertexEnd]
 
-			neighborId := "wall"
+			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
+			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
 
-			/*
-			if lineDef.HasFlag(lumps.TwoSided) {
-				sAId, ssAId, sBId, ssBId, _ := level.FindSubSectorByLine(int(start.XCoord), int(start.YCoord), int(end.XCoord), int(end.YCoord))
-				fmt.Println()
-				fmt.Println("---------------", sectorId, subSectorId)
-
-				if ssAId == subSectorId {
-					neighborId = strconv.Itoa(int(ssBId))
-					fmt.Println("Target", sAId, "B", sBId)
-					fmt.Println("SSA:", ssAId, "SSB:", ssBId)
-				} else if ssBId == subSectorId {
-					neighborId = strconv.Itoa(int(ssAId))
-					fmt.Println("A", sAId, "B", sBId)
-					fmt.Println("SSA:", ssAId, "SSB:", ssBId)
+			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
+			wall := sideDef.LowerTexture == "-" && sideDef.MiddleTexture != "-" && sideDef.UpperTexture == "-"
+			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
+			add := true
+			if len(current.Neighbors) > 0 {
+				last := current.Neighbors[len(current.Neighbors) - 1]
+				if last.X == neighborStart.X && last.Y == neighborStart.Y {
+					neighborStart = last
+					add = false
 				} else {
-					fmt.Println("CAN'T FIND")
+					//TODO Manca la definizione last - neighborStart!!!!!
+					//test := b.getOppositeSubSectorByLine(level, subSectorId, int16(last.X), int16(last.Y), int16(neighborStart.X), int16(neighborStart.Y))
+					//if test == strconv.Itoa(int(subSectorId)) || test == "unknown" || test == "wall" {
+					//	last.Neighbor = "wall"
+					//	wall = true
+					//}
+					//fmt.Println(test, subSectorId)
 				}
 			}
-			*/
-
-
-			if !lineDef.HasFlag(lumps.TwoSided)  {
-				neighborId = "wall"
-				//fmt.Println("------------")
-				//fmt.Println(lineDef.PrintBits())
-				//fmt.Println(sideDef.LowerTexture, sideDef.MiddleTexture, sideDef.UpperTexture)
-			} else {
-				total ++
-				count := 0
-				_, oppositeSideDef := level.SegmentOppositeSideDef(segment, lineDef)
-				if oppositeSideDef != nil {
-					if ld, ok := t[oppositeSideDef.SectorRef]; ok {
-						for _, z := range ld.Container {
-							if z.LineNum == segment.LineNum {
-								neighborId = strconv.Itoa(int(z.SubSectors))
-								count++
-							}
-						}
-					}
-				}
-
-				if count != 1 {
-					neighborId = "wall"
-					ssAId, ssBId, ok := level.FindSubSectorByLine(int(start.XCoord), int(start.YCoord), int(end.XCoord), int(end.YCoord))
-					if ok {
-						if ssAId == subSectorId {
-							if count == 1 && neighborId != strconv.Itoa(int(ssBId)) {
-								different++
-							} else {
-								same++
-							}
-							neighborId = strconv.Itoa(int(ssBId))
-						} else if ssBId == subSectorId {
-							if count == 1 && neighborId != strconv.Itoa(int(ssAId)) {
-								different++
-							} else {
-								same++
-							}
-							neighborId = strconv.Itoa(int(ssAId))
-						} else {
-							unmatch++
-							//fmt.Println("CAN'T FIND")
-						}
-					} else {
-						unknown++
-					}
-				}
+			if wall {
+				neighborStart.Neighbor = "wall"
 			}
-
-			neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: math.Abs(float64(start.XCoord)), Y: math.Abs(float64(start.YCoord))}}
-			neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: math.Abs(float64(end.XCoord)), Y: math.Abs(float64(end.YCoord))}}
-			current.Neighbors = append(current.Neighbors, neighborStart)
+			tag := "--" + neighborStart.Neighbor + "(" + lineDef.PrintBits() + ")" + "[" + sideDef.LowerTexture + sideDef.MiddleTexture + sideDef.UpperTexture + "]"
+			neighborStart.Tag = tag
+			if add {
+				current.Neighbors = append(current.Neighbors, neighborStart)
+			}
 			current.Neighbors = append(current.Neighbors, neighborEnd)
 		}
 	}
 
-	fmt.Println("TOTAL:", total)
-	fmt.Println("SAME:", same)
-	fmt.Println("DIFFERENT:", different)
-	fmt.Println("UNMATCH:", unmatch)
-	fmt.Println("UNKNOWN:", unknown)
 	//os.Exit(-1)
 }
+
+
+func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
+	alpha, beta := level.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
+	best := alpha; if best == -1 { best = beta }
+	out := int16(-2)
+	if alpha == subSectorId {
+		out = beta
+	} else if beta == subSectorId {
+		out = alpha
+	}
+	if out == -1 {
+		out = best
+	}
+	switch out {
+	case -2: return "unknown"
+	case -1: return "wall"
+	default: return strconv.Itoa(int(out))
+	}
+}
+
+/*
+func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
+	alpha, beta := level.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
+	best := alpha; if best == -1 { best = beta }
+	out := int16(-2)
+	if alpha == subSectorId {
+		out = beta
+	} else if beta == subSectorId {
+		out = alpha
+	}
+	if out == -1 {
+		out = best
+	}
+	switch out {
+	case -2: return "unknown"
+	case -1: return "wall"
+	default: return strconv.Itoa(int(out))
+	}
+}
+
+ */
 
 func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSectorId int16, ld *lumps.LineDef) * model.InputSector{
 	c, ok := b.cfg[subSectorId]
 	if !ok {
 		c = &model.InputSector{
 			Id:           strconv.Itoa(int(subSectorId)),
-			Ceil:         float64(sector.CeilingHeight) / 3,
-			Floor:        float64(sector.FloorHeight) / 3,
+			Ceil:         float64(sector.CeilingHeight) / 5,
+			Floor:        float64(sector.FloorHeight) / 5,
 			Textures:     true,
 			WallTexture:  "wall2.ppm",
 			LowerTexture: "wall.ppm",
@@ -317,57 +266,3 @@ func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSect
 	}
 	return c
 }
-
-
-
-
-/*
-func (b * Builder) createSegment(level *Level, segment * Seg, current * model.InputSector) {
-	//func (b * Builder) createSegment(level *Level, subSectorId int16, segmentId int16) {
-	//In general, being a convex polygon is the goal of a ssector.
-	//Convex  means a line connecting any two points that are inside the polygon will be completely contained in the polygon.
-	//segment := level.Segments[segmentId]
-
-	//lineDef := level.LineDefs[int(segment.LineNum)]
-	//_, sideDef := b.segmentSideDef(level, segment, lineDef)
-	//if sideDef == nil { return }
-
-	start := level.Vertexes[segment.VertexStart]
-	end := level.Vertexes[segment.VertexEnd]
-
-	//upperTexture := sideDef.UpperTexture
-	//middleTexture := sideDef.MiddleTexture
-	//lowerTexture := sideDef.LowerTexture
-
-	//_, oppositeSideDef := b.segmentOppositeSideDef(level, segment, lineDef)
-	//sector := level.Sectors[sideDef.SectorRef]
-
-	neighborId := "wall"
-	//if oppositeSideDef != nil {
-		//z := b.findSubSector(level, start.XCoord, start.YCoord, len(level.Nodes)-1)
-		//fmt.Println("RESULT", sideDef.SectorRef, z, oppositeSideDef.SectorRef)
-		//Il neighborId deve essere necessariamente il subsector!
-		//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
-	//}
-
-	//current := b.getConfigSector(subSectorId, sector)
-	//neighborId = strconv.Itoa(int(oppositeSideDef.SectorRef))
-	neighborStart := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(start.XCoord) / scaleFactor, Y: -float64(start.YCoord) / scaleFactor}}
-	neighborEnd := &model.InputNeighbor{Id: neighborId, XY: model.XY{X: float64(end.XCoord) / scaleFactor, Y: -float64(end.YCoord) / scaleFactor}}
-
-	addStart := true
-
-
-	//if len(current.Neighbors) > 0 {
-	//	last := current.Neighbors[len(current.Neighbors) - 1]
-	//	if last.X == neighborStart.X && last.Y == neighborStart.Y {
-	//		addStart = false
-	//		fmt.Println("Start already added")
-	//	}}
-	if addStart {
-		current.Neighbors = append(current.Neighbors, neighborStart)
-	}
-	current.Neighbors = append(current.Neighbors, neighborEnd)
-}
-
-*/

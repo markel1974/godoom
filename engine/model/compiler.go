@@ -74,7 +74,10 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	}
 
 	for _, sect := range r.sectors {
-		for _, id := range sect.NeighborsIds {
+
+		for idx := 0; idx < len(sect.NeighborsIds); idx++ {
+			id := sect.NeighborsIds[idx]
+			//	for _, id := range sect.NeighborsIds {
 			switch strings.Trim(strings.ToLower(id), " \t\n") {
 			case "-1", "wall":
 				sect.NeighborsRefs = append(sect.NeighborsRefs, wallDefinition)
@@ -85,7 +88,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 				if !ok {
 					fmt.Printf("sector %s: can't find neighbor id %s\n", sect.Id, id)
 					//return errors.New(fmt.Sprintf("sector %s: can't find neighbor id %s", sect.Id, id))
-					sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
+					//sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
 					continue
 				}
 				sect.NeighborsRefs = append(sect.NeighborsRefs, idx)
@@ -140,11 +143,14 @@ Rescan:
 					}
 				} else {
 					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Can't fix setting unknown...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
-					sector.NeighborsRefs[np1] = unknownDefinition
+					//sector.NeighborsRefs[np1] = unknownDefinition
+
+					//sector.Vertices = append(sector.Vertices[:np1], sector.Vertices[np1+1:]...)
+					//sector.NeighborsRefs = append(sector.NeighborsRefs[:np1], sector.NeighborsRefs[np1+1:]...)
+					//sector.NPoints = uint64(len(sector.Vertices) - 1)
 					unmatch++
 				}
 			}
-			//np1++
 		}
 	}
 	fmt.Println("unmatch:", unmatch, "fixed:", fixed)

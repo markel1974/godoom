@@ -80,6 +80,9 @@ func (w *World) movePlayer(dx float64, dy float64) {
 				ps := mathematic.PointSideF(px1, py1, curr.X, curr.Y, next.X, next.Y)
 				if ps < 0 {
 					w.player.SetSector(neighbor)
+					if w.debug {
+						fmt.Println("New Sector", neighbor.Id)
+					}
 					found = true
 					break
 				}

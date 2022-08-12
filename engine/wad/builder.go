@@ -104,9 +104,14 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 				next = c.Neighbors[0]
 			}
 			if curr.Neighbor != "wall" {
-				id, _ := strconv.Atoi(c.Id)
-				opposite := b.getOppositeSubSectorByLine(level, int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-				curr.Neighbor = opposite
+				tst, ld := b.bruteForceLineDef(level, int16(next.X), int16(next.Y), int16(curr.X), int16(curr.Y))
+				if ld != nil {
+					curr.Neighbor = strconv.Itoa(int(tst))
+				} else {
+					id, _ := strconv.Atoi(c.Id)
+					curr.Neighbor = b.getOppositeSubSectorByLine(level, int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+				}
+
 				//fmt.Println(opposite)
 			}
 		}
@@ -249,7 +254,7 @@ func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, 
 		out = alpha
 	} else {
 		//TODO PATCH ASPETTANDO FindSubSectorByLine
-		out = alpha
+		//out = alpha
 	}
 	switch out {
 	case -1: return "unknown"
@@ -276,4 +281,28 @@ func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSect
 		b.cfg[subSectorId] = c
 	}
 	return c
+}
+
+func (b * Builder) bruteForceLineDef(level * Level, startX int16, startY int16, endX int16, endY int16) (int16, *lumps.SideDef) {
+	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId++ {
+		subSector := level.SubSectors[subSectorId]
+
+		endSegmentId := subSector.StartSeg + subSector.NumSegments
+		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
+			segment := level.Segments[segmentId]
+			lineDef := level.LineDefs[int(segment.LineNum)]
+			_, sideDef := level.SegmentSideDef(segment, lineDef)
+			if sideDef == nil {
+				continue
+			}
+
+			start := level.Vertexes[segment.VertexStart]
+			end := level.Vertexes[segment.VertexEnd]
+
+			if start.XCoord == startX && start.YCoord == startY && end.XCoord == endX && end.YCoord == endY {
+				return subSectorId, sideDef
+			}
+		}
+	}
+	return -1, nil
 }

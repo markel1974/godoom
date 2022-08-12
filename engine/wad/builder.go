@@ -103,7 +103,6 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 			} else {
 				next = c.Neighbors[0]
 			}
-
 			if curr.Neighbor != "wall" {
 				id, _ := strconv.Atoi(c.Id)
 				opposite := b.getOppositeSubSectorByLine(level, int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
@@ -111,6 +110,8 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 				//fmt.Println(opposite)
 			}
 		}
+
+		//c.Neighbors = c.Neighbors[:len(c.Neighbors)-1]
 	}
 
 	//os.Exit(-1)
@@ -195,8 +196,12 @@ func (b * Builder) scanSubSectors(level *Level) {
 			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
 
 			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
-			wall := lower == "-" && middle != "-" && upper == "-"
+			wall := false
+			if !lineDef.HasFlag(lumps.TwoSided) {
+				wall = middle != "-"
+			}
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
+
 			add := true
 			if len(current.Neighbors) > 0 {
 				last := current.Neighbors[len(current.Neighbors) - 1]
@@ -224,12 +229,10 @@ func (b * Builder) scanSubSectors(level *Level) {
 			if add {
 				current.Neighbors = append(current.Neighbors, neighborStart)
 			}
-
 			current.Neighbors = append(current.Neighbors, neighborEnd)
-
-			if segmentId < endSegmentId - 1 {
-				neighborEnd.Tag = "last"
-			}
+			//if segmentId < endSegmentId - 1 {
+				//neighborEnd.Tag = "last"
+			//}
 		}
 	}
 
@@ -239,44 +242,20 @@ func (b * Builder) scanSubSectors(level *Level) {
 
 func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
 	alpha, beta := level.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
-	best := alpha; if best == -1 { best = beta }
-	out := int16(-2)
+	out := int16(-1)
 	if alpha == subSectorId {
 		out = beta
 	} else if beta == subSectorId {
 		out = alpha
-	}
-	if out == -1 {
-		out = best
-	}
-	switch out {
-	case -2: return "unknown"
-	case -1: return "wall"
-	default: return strconv.Itoa(int(out))
-	}
-}
-
-/*
-func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
-	alpha, beta := level.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
-	best := alpha; if best == -1 { best = beta }
-	out := int16(-2)
-	if alpha == subSectorId {
-		out = beta
-	} else if beta == subSectorId {
+	} else {
+		//TODO PATCH ASPETTANDO FindSubSectorByLine
 		out = alpha
 	}
-	if out == -1 {
-		out = best
-	}
 	switch out {
-	case -2: return "unknown"
-	case -1: return "wall"
+	case -1: return "unknown"
 	default: return strconv.Itoa(int(out))
 	}
 }
-
- */
 
 func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSectorId int16, ld *lumps.LineDef) * model.InputSector{
 	c, ok := b.cfg[subSectorId]

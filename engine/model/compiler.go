@@ -83,7 +83,10 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			default:
 				idx, ok := r.cache[id]
 				if !ok {
-					return errors.New(fmt.Sprintf("sector %s: can't find neighbor id %s", sect.Id, id))
+					fmt.Printf("sector %s: can't find neighbor id %s\n", sect.Id, id)
+					//return errors.New(fmt.Sprintf("sector %s: can't find neighbor id %s", sect.Id, id))
+					sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
+					continue
 				}
 				sect.NeighborsRefs = append(sect.NeighborsRefs, idx)
 			}
@@ -136,9 +139,8 @@ Rescan:
 						fixed++
 					}
 				} else {
-					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Can't fix setting wall...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
-
-					sector.NeighborsRefs[np1] = wallDefinition
+					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Can't fix setting unknown...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
+					sector.NeighborsRefs[np1] = unknownDefinition
 					unmatch++
 				}
 			}

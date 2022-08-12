@@ -41,39 +41,40 @@ func (l *Level) FindSubSectorByLine(x1 int, y1 int, x2 int, y2 int) (int16, int1
 	a := -1
 	b := -1
 
-	//test := map[int]int{}
+	found := 0
+
 	for _, c := range rt {
 		if _, subSector, ok := l.findSubSector(int16(c.X), int16(c.Y), len(l.Nodes) - 1); ok {
-			//test[subSector]=sector
-			//fmt.Println("subSector:", sector, "subSector:", subSector)
 			if a == - 1 {
 				a = subSector
-			} else if a != -1 && b == -1 && subSector != a {
-				b = subSector
-				break
+				found++
+				continue
+			}
+			if b == -1 {
+				if subSector != a {
+					b = subSector
+					found++
+				}
+				continue
+			}
+			if subSector != a && subSector != b {
+				found++
 			}
 		}
 	}
 
-	//TODO RIMUOVERE LE LINEE DESCRITTIVE E LASCIARE SOLO QUELLE FUNZIONALI
-	/*
-	if len(test) == 0 {
-		fmt.Println("0 - LINE DOESN'T EXISTS")
-	} else if len(test) == 1 {
-		//TODO CERCARE LA RETTA OPPOSTA NEL SETTORE
-		fmt.Println("1 - Line is inside a sector")
-	} else if len(test) == 2 {
-		fmt.Println("2 - LINE IS OK.")
-	} else if len(test) > 2 {
-		//TODO
-		fmt.Println("3 - LINE HAVE TO MUCH NEIGHBOR")
-		fmt.Println(len(test), test)
+	switch found {
+	case 0:
+		return -1, -1
+	case 1:
+		//TODO IN QUESTO CASO SCEGLIERE LA RETTA MIGLIORE ALL'INTERNO DEL SETTORE
+		return int16(a), int16(a)
+	case 2:
+		return int16(a), int16(b)
+	default:
+		//TODO TROPPI RISULTATI,  MIGLIORARE LA RICERCA
+		return int16(a), int16(b)
 	}
-	*/
-
-	//fmt.Println(len(test), test)
-	//fmt.Println(a, b)
-	return int16(a), int16(b)
 }
 
 

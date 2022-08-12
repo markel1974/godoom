@@ -15,6 +15,9 @@ type InputNeighbor struct {
 	XY       `json:"id"`
 	Neighbor string `json:"neighbor"`
 	Tag      string `json:"tag"`
+	Upper    string `json:"upper"`
+	Middle   string `json:"middle"`
+	Lower    string `json:"lower"`
 }
 
 type InputSector struct {

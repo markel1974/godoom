@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 )
 
 func ToString(s [8]byte) string {
@@ -26,5 +27,10 @@ func Seek(f * os.File, offset int64) error {
 		return errors.New("seek failed")
 	}
 	return nil
+}
+
+
+func FixName(in string) string {
+	return strings.Trim(strings.ToUpper(in), "\n\r\t ")
 }
 

@@ -108,7 +108,7 @@ func (w *WAD) loadTextures() error {
 		textures, err := lumps.NewTextures(w.file, lumpInfo)
 		if err != nil { return err }
 		for _, t := range textures {
-			w.textures[t.Header.TexName] = t
+			w.textures[lumps.FixName(t.Header.TexName)] = t
 		}
 	}
 	return nil
@@ -129,13 +129,13 @@ func (w *WAD) loadFlats() error {
 }
 
 func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
-	texture, ok := w.textures[name]
+	texture, ok := w.textures[lumps.FixName(name)]
 	return texture, ok
 }
 
 func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, bool) {
-	image, ok := w.patches[w.pNames[pNameNumber]]
-	return image, ok
+	img, ok := w.patches[w.pNames[pNameNumber]]
+	return img, ok
 }
 
 func (w *WAD) GetFlat(flatName string) (*lumps.Flat, bool) {
@@ -181,12 +181,12 @@ func (w * WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
 		return nil, errors.New("unknown texture " + textureName)
 	}
 	if texture.Header == nil {
-		return nil, nil
+		return nil, errors.New("nil header " + textureName)
 	}
 	bounds := image.Rect(0, 0, int(texture.Header.Width), int(texture.Header.Height))
 	rgba := image.NewRGBA(bounds)
 	if rgba.Stride != rgba.Rect.Size().X*4 {
-		return nil, fmt.Errorf("unsupported stride")
+		return nil, fmt.Errorf("unsupported stride " + textureName)
 	}
 	for _, patch := range texture.Patches {
 		img, ok := w.GetImage(patch.PNameNumber)

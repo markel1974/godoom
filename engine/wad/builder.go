@@ -52,14 +52,15 @@ func MakePoint3(x, y, z, u, v int16) Point3{
 
 
 type Builder struct {
-	w   *WAD
-	cfg map[int16]*model.InputSector
+	w        *WAD
+	cfg      map[int16]*model.InputSector
+	textures map[string]bool
 }
 
 func NewBuilder() * Builder {
 	return &Builder{
-		cfg : make(map[int16]*model.InputSector),
-		//cfg : &config.Config{Sectors: nil, Player: &config.Player{}},
+		cfg:      nil,
+		textures: nil,
 	}
 }
 
@@ -83,7 +84,15 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
-	b.createSubSector(level)
+	b.scanSubSectors(level)
+
+	for textureId := range b.textures {
+		if texture, err := b.w.GetTextureImage(textureId); err != nil {
+			fmt.Println(textureId, err.Error())
+		} else {
+			fmt.Println(textureId, texture.Rect)
+		}
+	}
 
 	for _, c := range b.cfg {
 		for idx := 0; idx < len(c.Neighbors); idx++ {
@@ -147,7 +156,14 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	return cfg, nil
 }
 
-func (b * Builder) createSubSector(level *Level) {
+func (b * Builder) scanSubSectors(level *Level) {
+	b.cfg = make(map[int16]*model.InputSector)
+	b.textures = make(map[string]bool)
+
+	//TODO e se end e last fossero il prosegumento della retta start?
+	//provare a creare una nuova retta con le stessa caratteristiche della principale
+	//l'analisi della retta con getOppositeSubSectorByLine deve essere fatta necessariamente all'interno del ciclo....
+
 	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
 		subSector := level.SubSectors[subSectorId]
 		segment := level.Segments[subSector.StartSeg]
@@ -167,11 +183,19 @@ func (b * Builder) createSubSector(level *Level) {
 			start := level.Vertexes[segment.VertexStart]
 			end := level.Vertexes[segment.VertexEnd]
 
+			lower := sideDef.LowerTexture
+			middle := sideDef.MiddleTexture
+			upper := sideDef.UpperTexture
+
+			if lower != "-" { b.textures[lower] = true }
+			if middle != "-" { b.textures[middle] = true }
+			if upper != "-" { b.textures[upper] = true }
+
 			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
 			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
 
 			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
-			wall := sideDef.LowerTexture == "-" && sideDef.MiddleTexture != "-" && sideDef.UpperTexture == "-"
+			wall := lower == "-" && middle != "-" && upper == "-"
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 			add := true
 			if len(current.Neighbors) > 0 {
@@ -182,6 +206,10 @@ func (b * Builder) createSubSector(level *Level) {
 				} else {
 					// la definizione last - neighborStart
 					// viene realizzata in fase di Setup
+					//TODO NEIGHBOR, TAG, UPPER, MIDDLE, LOWER
+					//neighborStart.Upper = upper
+					//neighborStart.Middle = middle
+					//neighborStart.Lower = lower
 				}
 			}
 			if wall {
@@ -189,10 +217,19 @@ func (b * Builder) createSubSector(level *Level) {
 			}
 			tag := "--" + neighborStart.Neighbor + "(" + lineDef.PrintBits() + ")" + "[" + sideDef.LowerTexture + sideDef.MiddleTexture + sideDef.UpperTexture + "]"
 			neighborStart.Tag = tag
+			neighborStart.Upper = upper
+			neighborStart.Middle = middle
+			neighborStart.Lower = lower
+
 			if add {
 				current.Neighbors = append(current.Neighbors, neighborStart)
 			}
+
 			current.Neighbors = append(current.Neighbors, neighborEnd)
+
+			if segmentId < endSegmentId - 1 {
+				neighborEnd.Tag = "last"
+			}
 		}
 	}
 

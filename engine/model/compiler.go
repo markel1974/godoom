@@ -36,9 +36,9 @@ type Compiler struct {
 
 func NewCompiler() * Compiler{
 	return &Compiler{
-		sectors: nil,
+		sectors:          nil,
 		sectorsMaxHeight: 0,
-		cache: make(map[string]int),
+		cache:            make(map[string]int),
 	}
 }
 

@@ -189,10 +189,6 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		neighbor := sector.Neighbors[s]
 		sectorYCeil := sector.Ceil - vi.where.Z
 		sectorYFloor := sector.Floor - vi.where.Z
-		if neighbor == sector {
-			//fmt.Println("Circuit breaker")
-			continue
-		}
 
 		vx1 := vertexCurr.X - vi.where.X
 		vy1 := vertexCurr.Y - vi.where.Y
@@ -306,8 +302,10 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
-			r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
-			outIdx++
+			if neighbor != sector { //circuit breaker
+				r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
+				outIdx++
+			}
 		} else {
 			wallP := cs.Acquire(neighbor, IdWall, x1, x2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)
@@ -321,8 +319,10 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		for s := uint64(0); s < sector.NPoints; s++ {
 			neighbor := sector.Neighbors[s]
 			if neighbor != nil {
-				r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
-				outIdx++
+				if neighbor != sector {
+					r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
+					outIdx++
+				}
 			}
 		}
 	}

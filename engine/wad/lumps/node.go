@@ -24,7 +24,7 @@ type BBox struct {
 
 
 func (b * BBox) Intersect(x int16, y int16) bool {
-	return x > b.Left && x < b.Right && y > b.Bottom && y < b.Top
+	return x >= b.Left && x <= b.Right && y >= b.Bottom && y <= b.Top
 }
 
 

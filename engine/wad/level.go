@@ -2,7 +2,6 @@ package wad
 
 import "C"
 import (
-	"fmt"
 	"github.com/markel1974/godoom/engine/wad/lumps"
 )
 
@@ -42,12 +41,8 @@ func (l *Level) FindSubSectorByLine(x1 int, y1 int, x2 int, y2 int) (int16, int1
 	a := -1
 	b := -1
 
-
-	//count := 0
-
 	//test := map[int]bool{}
 	for _, c := range rt {
-		//count++
 		if i, ok := l.findSubSector(int16(c.X), int16(c.Y), len(l.Nodes) - 1); ok {
 			//test[i]=true
 			if a == - 1 {
@@ -58,8 +53,19 @@ func (l *Level) FindSubSectorByLine(x1 int, y1 int, x2 int, y2 int) (int16, int1
 			}
 		}
 	}
-	//fmt.Println(count, len(test), test)
-	fmt.Println(a, b)
+	/*
+	if len(test) == 0 {
+		fmt.Println("0 - LINE DOESN'T EXISTS. You have to remove")
+	} else if len(test) == 1 {
+		fmt.Println("1 - LINE DOESN'T HAVE A NEIGHBOR. This is a wall")
+	} else if len(test) == 2 {
+		fmt.Println("2 - LINE IS OK.")
+	} else if len(test) > 2 {
+		fmt.Println("3 - LINE HAVE TO MUCH NEIGHBOR. Wrong State!")
+	}
+	*/
+	//fmt.Println(len(test), test)
+	//fmt.Println(a, b)
 	return int16(a), int16(b)
 }
 

@@ -44,3 +44,8 @@ func NewSideDefs(f * os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
 	}
 	return sideDef, nil
 }
+
+
+func (s * SideDef) PrintTexture() string {
+	return s.UpperTexture + " " + s.MiddleTexture + " " + s.LowerTexture
+}

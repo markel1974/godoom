@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/markel1974/godoom/engine/mathematic"
+
+	//"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/textures"
 	"math"
 	"strconv"
@@ -43,7 +45,9 @@ func NewCompiler() * Compiler{
 }
 
 func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
-	for idx, cfgSector := range cfg.Sectors {
+
+	for idx := 0; idx < len(cfg.Sectors); idx++ {
+		cfgSector := cfg.Sectors[idx]
 		var vertices []XY
 		var neighborsIds []string
 		var tags[] string
@@ -51,6 +55,13 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			tags = append(tags, cfgNeighbor.Tag)
 			vertices = append(vertices, XY{X: cfgNeighbor.X, Y: cfgNeighbor.Y})
 			neighborsIds = append(neighborsIds, cfgNeighbor.Neighbor)
+		}
+
+		if len(vertices) == 0 {
+			fmt.Printf("sector %s (idx: %d): vertices as zero len, removing\n", cfgSector.Id, idx)
+			cfg.Sectors = append(cfg.Sectors[:idx], cfg.Sectors[idx+1:]...)
+			idx--
+			continue
 		}
 
 		s := NewSector(cfgSector.Id, uint64(len(vertices)), vertices, neighborsIds)
@@ -74,7 +85,6 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	}
 
 	for _, sect := range r.sectors {
-
 		for idx := 0; idx < len(sect.NeighborsIds); idx++ {
 			id := sect.NeighborsIds[idx]
 			//	for _, id := range sect.NeighborsIds {
@@ -87,9 +97,10 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 				idx, ok := r.cache[id]
 				if !ok {
 					fmt.Printf("sector %s: can't find neighbor id %s\n", sect.Id, id)
+					idx = -1
 					//return errors.New(fmt.Sprintf("sector %s: can't find neighbor id %s", sect.Id, id))
 					//sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
-					continue
+					//continue
 				}
 				sect.NeighborsRefs = append(sect.NeighborsRefs, idx)
 			}
@@ -97,10 +108,8 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	}
 
 	//Verify Loop
-	for idx, sect := range r.sectors {
-		if len(sect.Vertices) == 0 {
-			return errors.New(fmt.Sprintf("sector %s (idx: %d): vertices as zero len", sect.Id, idx))
-		}
+	for idx := 0; idx < len(r.sectors); idx++ {
+		sect := r.sectors[idx]
 		hasLoop := false
 		vFirst := sect.Vertices[0]
 		if len(sect.Vertices) > 1 {
@@ -154,7 +163,6 @@ Rescan:
 		}
 	}
 	fmt.Println("unmatch:", unmatch, "fixed:", fixed)
-
 
 	// Verify that the vertexes form a convex hull.
 	for idx, sect := range r.sectors {

@@ -55,12 +55,15 @@ type Builder struct {
 	w        *WAD
 	cfg      map[int16]*model.InputSector
 	textures map[string]bool
+	level * Level
+	bsp * BSP
 }
 
 func NewBuilder() * Builder {
 	return &Builder{
 		cfg:      nil,
 		textures: nil,
+		level:    nil,
 	}
 }
 
@@ -79,12 +82,16 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	}
 	levelName := levelNames[levelIdx]
 	fmt.Printf("Loading level %s ...\n", levelName)
-	level, err := b.w.GetLevel(levelName)
+	var err error
+	b.level, err = b.w.GetLevel(levelName)
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
-	b.scanSubSectors(level)
+
+	b.bsp = NewBsp(b.level)
+
+	b.scanSubSectors()
 
 	for textureId := range b.textures {
 		if texture, err := b.w.GetTextureImage(textureId); err != nil {
@@ -94,6 +101,11 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 		}
 	}
 
+	//stubs := NewFooBsp()
+	//stubs.Verify(b.level, b.bsp)
+	//os.Exit(-1)
+
+	//Rescan:
 	for _, c := range b.cfg {
 		for idx := 0; idx < len(c.Neighbors); idx++ {
 			curr := c.Neighbors[idx]
@@ -104,20 +116,37 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 				next = c.Neighbors[0]
 			}
 			if curr.Neighbor != "wall" {
-				tst, ld := b.bruteForceLineDef(level, int16(next.X), int16(next.Y), int16(curr.X), int16(curr.Y))
-				if ld != nil {
-					curr.Neighbor = strconv.Itoa(int(tst))
-				} else {
+				//tst, ld := b.bsp.BruteForceLineDef(int16(next.X), int16(next.Y), int16(curr.X), int16(curr.Y))
+				//if ld != nil {
+				//	curr.Neighbor = strconv.Itoa(int(tst))
+					//stubs.Add(c.Tag, c.Id, int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y), tst, curr.Tag)
+				//} else {
+					//id, _ := strconv.Atoi(c.Id)
+					//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
 					id, _ := strconv.Atoi(c.Id)
-					curr.Neighbor = b.getOppositeSubSectorByLine(level, int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-				}
-
-				//fmt.Println(opposite)
+					_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
+					if oppositeSubSector >= 0 {
+						curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
+					} else if oppositeSubSector == -2 {
+						curr.Neighbor = c.Id
+						//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+					 } else if oppositeSubSector == -1 {
+					 	fmt.Println("UNKNOWN")
+						//c.Neighbors = append(c.Neighbors[:idx], c.Neighbors[idx+1:]...)
+						//goto Rescan
+					 } else if oppositeSubSector == -3 {
+					 	//TODO BETTER IMPLEMENTATION
+						curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+					 	fmt.Println("TOO MUCH NEIGHBOR!!!!")
+					}
+				//}
 			}
 		}
 
 		//c.Neighbors = c.Neighbors[:len(c.Neighbors)-1]
 	}
+
+	//stubs.Print()
 
 	//os.Exit(-1)
 
@@ -137,13 +166,13 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 		return a < b
 	})
 
-	p1 := level.Things[1]
+	p1 := b.level.Things[1]
 	position := model.XY{
 		X : float64(p1.XPosition),
 		Y : float64(p1.YPosition),
 	}
 
-	playerSectorId, playerSSectorId, playerSector := level.FindSector(p1.XPosition, p1.YPosition)
+	playerSectorId, playerSSectorId, playerSector := b.bsp.FindSector(p1.XPosition, p1.YPosition)
 	//TEST
 	//playerSSectorId = 44
 	//position.X = 1520 + 5
@@ -162,7 +191,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	return cfg, nil
 }
 
-func (b * Builder) scanSubSectors(level *Level) {
+func (b * Builder) scanSubSectors() {
 	b.cfg = make(map[int16]*model.InputSector)
 	b.textures = make(map[string]bool)
 
@@ -170,24 +199,25 @@ func (b * Builder) scanSubSectors(level *Level) {
 	//provare a creare una nuova retta con le stessa caratteristiche della principale
 	//l'analisi della retta con getOppositeSubSectorByLine deve essere fatta necessariamente all'interno del ciclo....
 
-	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId ++ {
-		subSector := level.SubSectors[subSectorId]
-		segment := level.Segments[subSector.StartSeg]
-		lineDef := level.LineDefs[int(segment.LineNum)]
-		_, sideDef := level.SegmentSideDef(segment, lineDef)
+
+	for subSectorId := int16(0); subSectorId < int16(len(b.level.SubSectors)); subSectorId ++ {
+		subSector := b.level.SubSectors[subSectorId]
+		segment := b.level.Segments[subSector.StartSeg]
+		lineDef := b.level.LineDefs[int(segment.LineNum)]
+		_, sideDef := b.level.SegmentSideDef(segment, lineDef)
 		if sideDef == nil { continue }
 		sectorId := sideDef.SectorRef
-		sector := level.Sectors[sectorId]
+		sector := b.level.Sectors[sectorId]
 
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
 		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
-			segment := level.Segments[segmentId]
-			lineDef := level.LineDefs[int(segment.LineNum)]
-			_, sideDef := level.SegmentSideDef(segment, lineDef)
+			segment := b.level.Segments[segmentId]
+			lineDef := b.level.LineDefs[int(segment.LineNum)]
+			_, sideDef := b.level.SegmentSideDef(segment, lineDef)
 			if sideDef == nil { continue }
 
-			start := level.Vertexes[segment.VertexStart]
-			end := level.Vertexes[segment.VertexEnd]
+			start := b.level.Vertexes[segment.VertexStart]
+			end := b.level.Vertexes[segment.VertexEnd]
 
 			lower := sideDef.LowerTexture
 			middle := sideDef.MiddleTexture
@@ -197,14 +227,23 @@ func (b * Builder) scanSubSectors(level *Level) {
 			if middle != "-" { b.textures[middle] = true }
 			if upper != "-" { b.textures[upper] = true }
 
-			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
-			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
-
-			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
 			wall := false
 			if !lineDef.HasFlag(lumps.TwoSided) {
 				wall = middle != "-"
 			}
+
+			//_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(subSectorId), int(start.XCoord), int(start.YCoord), int(end.XCoord), int(end.YCoord))
+			//if oppositeSubSector == -2 {
+			////	if sideDef.MiddleTexture == "-" {
+			//		fmt.Println(subSectorId, oppositeSubSector, lineDef.PrintBits(), sideDef.PrintTexture())
+			//	}
+			//}
+
+			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
+			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
+
+			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
+
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 
 			add := true
@@ -222,6 +261,7 @@ func (b * Builder) scanSubSectors(level *Level) {
 					//neighborStart.Lower = lower
 				}
 			}
+
 			if wall {
 				neighborStart.Neighbor = "wall"
 			}
@@ -245,8 +285,8 @@ func (b * Builder) scanSubSectors(level *Level) {
 }
 
 
-func (b * Builder) getOppositeSubSectorByLine(level * Level, subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
-	alpha, beta := level.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
+func (b * Builder) getOppositeSubSectorByLine(subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
+	alpha, beta := b.bsp.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
 	out := int16(-1)
 	if alpha == subSectorId {
 		out = beta
@@ -281,28 +321,4 @@ func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSect
 		b.cfg[subSectorId] = c
 	}
 	return c
-}
-
-func (b * Builder) bruteForceLineDef(level * Level, startX int16, startY int16, endX int16, endY int16) (int16, *lumps.SideDef) {
-	for subSectorId := int16(0); subSectorId < int16(len(level.SubSectors)); subSectorId++ {
-		subSector := level.SubSectors[subSectorId]
-
-		endSegmentId := subSector.StartSeg + subSector.NumSegments
-		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
-			segment := level.Segments[segmentId]
-			lineDef := level.LineDefs[int(segment.LineNum)]
-			_, sideDef := level.SegmentSideDef(segment, lineDef)
-			if sideDef == nil {
-				continue
-			}
-
-			start := level.Vertexes[segment.VertexStart]
-			end := level.Vertexes[segment.VertexEnd]
-
-			if start.XCoord == startX && start.YCoord == startY && end.XCoord == endX && end.YCoord == endY {
-				return subSectorId, sideDef
-			}
-		}
-	}
-	return -1, nil
 }

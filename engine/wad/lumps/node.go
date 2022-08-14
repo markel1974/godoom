@@ -48,3 +48,60 @@ func NewNodes(f * os.File, lumpInfo *LumpInfo) ([]*Node, error) {
 	}
 	return nodes, nil
 }
+
+
+func (n * Node) Print() {
+	/*
+	Each node is 28 bytes in 14 <short> fields:
+
+	(1)  X coordinate of partition line's start
+	(2)  Y coordinate of partition line's start
+	(3)  DX, change in X to end of partition line
+	(4)  DY, change in Y to end of partition line
+
+	If (1) to (4) equaled 64, 128, -64, -64, the partition line would go from (64, 128) to (0, 64).
+
+	(5)  Y upper bound for right bounding-box.\
+	(6)  Y lower bound                         All SEGS in right child of node
+	(7)  X lower bound                         must be within this box.
+	(8)  X upper bound                        /
+
+	(9)  Y upper bound for left bounding box. \
+	(10) Y lower bound                         All SEGS in left child of node
+	(11) X lower bound                         must be within this box.
+	(12) X upper bound                        /
+
+	(13) a NODE or SSECTOR number for the right child. If bit 15 of this
+	<short> is set, then the rest of the number represents the
+	child SSECTOR. If not, the child is a recursed node.
+	(14) a NODE or SSECTOR number for the left child.
+
+	 */
+}
+
+func (n *Node) PointOnSide(x int16, y int16) int {
+	dx := int(x) - int(n.X)
+	dy := int(y) - int(n.Y)
+	// Perp dot product:
+	left := (int(n.DY) >> 16) * dx
+	right := (int(n.DX) >> 16) * dy
+	if right < left {
+		// Point is on front side:
+		return 0
+	}
+	// Point is on the back side:
+	return 1
+}
+
+func (n * Node) Intersect(x int16, y int16) (int16, bool) {
+	if n.BBox[0].Intersect(x, y) {
+		return n.Child[0], true
+		//return bsp.findSubSector(x, y, int(node.Child[0]))
+		//return 0
+	}
+	if n.BBox[1].Intersect(x, y) {
+		return n.Child[1], true
+		//return bsp.findSubSector(x, y, int(node.Child[1]))
+	}
+	return -1, false
+}

@@ -19,11 +19,6 @@ const scaleFactor = 10.0
 
 
 
-
-
-
-
-
 type Point struct {
 	X int16
 	Y int16
@@ -116,34 +111,36 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 				next = c.Neighbors[0]
 			}
 			if curr.Neighbor != "wall" {
-				//tst, ld := b.bsp.BruteForceLineDef(int16(next.X), int16(next.Y), int16(curr.X), int16(curr.Y))
-				//if ld != nil {
-				//	curr.Neighbor = strconv.Itoa(int(tst))
-					//stubs.Add(c.Tag, c.Id, int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y), tst, curr.Tag)
-				//} else {
-					//id, _ := strconv.Atoi(c.Id)
+				id, _ := strconv.Atoi(c.Id)
+				_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
+				//_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
+				if oppositeSubSector >= 0 {
+					curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
+				} else if oppositeSubSector == -2 {
+					curr.Neighbor = c.Id
 					//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-					id, _ := strconv.Atoi(c.Id)
-					_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
+				 } else if oppositeSubSector == -1 {
+					oppositeSubSector := b.bsp.FindOppositeSubSectorByPoints(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
 					if oppositeSubSector >= 0 {
 						curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
-					} else if oppositeSubSector == -2 {
-						curr.Neighbor = c.Id
-						//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-					 } else if oppositeSubSector == -1 {
-					 	fmt.Println("UNKNOWN")
-						//c.Neighbors = append(c.Neighbors[:idx], c.Neighbors[idx+1:]...)
-						//goto Rescan
-					 } else if oppositeSubSector == -3 {
-					 	//TODO BETTER IMPLEMENTATION
-						curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-					 	fmt.Println("TOO MUCH NEIGHBOR!!!!")
+					} else {
+						fmt.Println("UNKNOWN")
 					}
-				//}
+					//c.Neighbors = append(c.Neighbors[:idx], c.Neighbors[idx+1:]...)
+					//goto Rescan
+				 } else if oppositeSubSector == -3 {
+					oppositeSubSector := b.bsp.FindOppositeSubSectorByPoints(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
+					if oppositeSubSector >= 0 {
+						curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
+					} else {
+						fmt.Println("TOO MUCH NEIGHBOR!!!!")
+					}
+					//TODO BETTER IMPLEMENTATION
+					//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+					//fmt.Println("TOO MUCH NEIGHBOR!!!!")
+				}
 			}
 		}
-
-		//c.Neighbors = c.Neighbors[:len(c.Neighbors)-1]
 	}
 
 	//stubs.Print()
@@ -284,24 +281,6 @@ func (b * Builder) scanSubSectors() {
 	//os.Exit(-1)
 }
 
-
-func (b * Builder) getOppositeSubSectorByLine(subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
-	alpha, beta := b.bsp.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
-	out := int16(-1)
-	if alpha == subSectorId {
-		out = beta
-	} else if beta == subSectorId {
-		out = alpha
-	} else {
-		//TODO PATCH ASPETTANDO FindSubSectorByLine
-		//out = alpha
-	}
-	switch out {
-	case -1: return "unknown"
-	default: return strconv.Itoa(int(out))
-	}
-}
-
 func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSectorId int16, ld *lumps.LineDef) * model.InputSector{
 	c, ok := b.cfg[subSectorId]
 	if !ok {
@@ -322,3 +301,24 @@ func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSect
 	}
 	return c
 }
+
+
+/*
+func (b * Builder) getOppositeSubSectorByLine(subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
+	alpha, beta := b.bsp.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
+	out := int16(-1)
+	if alpha == subSectorId {
+		out = beta
+	} else if beta == subSectorId {
+		out = alpha
+	} else {
+		//TODO PATCH ASPETTANDO FindSubSectorByLine
+		//out = alpha
+	}
+	switch out {
+	case -1: return "unknown"
+	default: return strconv.Itoa(int(out))
+	}
+}
+
+*/

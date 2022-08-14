@@ -30,6 +30,22 @@ func swap(a int, b int) (int, int) {
 	return b, a
 }
 
+func (l * Level) GetSectorFromSubSector(subSectorId int16) (int16, bool){
+	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
+		return  -1, false
+	}
+	sSector := l.SubSectors[subSectorId]
+	for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
+		seg := l.Segments[segIdx]
+		lineDef := l.LineDefs[seg.LineNum]
+		_, sideDef := l.SegmentSideDef(seg, lineDef)
+		if sideDef != nil {
+			return sideDef.SectorRef, true
+		}
+	}
+	return -1, false
+}
+
 func (l *Level) SegmentSideDef(seg *lumps.Seg, lineDef *lumps.LineDef) (int16, *lumps.SideDef) {
 	if seg.SegmentSide == 0 { return lineDef.SideDefRight, l.SideDefs[lineDef.SideDefRight] }
 	if lineDef.SideDefLeft == -1 { return 0, nil }

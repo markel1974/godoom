@@ -69,6 +69,69 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	for _, c := range f.Container {
 		//x := (c.StartX + c.EndX) / 2
 		//y := (c.StartY + c.EndY) / 2
+
+
+		if c.SubSector == c.Result {
+			continue
+		}
+
+		checkSubSector := bsp.FindOppositeSubSectorByPoints(c.SubSector, int(c.StartX), int(c.StartY), int(c.EndX), int(c.EndY))
+		if c.Result == checkSubSector {
+			//printHeader(c.Sector, c.SubSector, c.Tag, c.Result)
+			//fmt.Println("Check Ok:", checkSubSector, "(", checkSector, ")")
+		} else {
+			if checkSubSector == -1 {
+				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+				//fmt.Println("ERROR UNKNOWN Check (segment is unknown you have to remove)")
+				checkUnknownError++
+			} else if checkSubSector == - 2 {
+				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+				//fmt.Println("ERROR SAME Check (is inside the same sector you have to remove)")
+				checkSameError++
+			} else if checkSubSector == - 3 {
+				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+				//fmt.Println("ERROR MULTI Check")
+				checkMultiError++
+			} else {
+				printHeader(c.Sector, c.SubSector, c.Tag, c.Result, 0)
+				out := bsp.TraverseBsp(c.StartX, c.StartY, false)
+				//outOpposite := bsp.TraverseBsp(c.StartX, c.StartY, true)
+				fmt.Println("----> Traverse", out)
+				fmt.Println("ERROR Unexpected (may be correct...)", unexpected)
+				unexpected++
+			}
+		}
+		//fmt.Println("Computed:", out, "Computed Opposite:", outOpposite)
+	}
+	fmt.Println()
+	fmt.Println()
+	totalError := checkUnknownError + checkSameError + checkMultiError + unexpected
+	fmt.Println("TOTAL:", len( f.Container))
+	fmt.Println("TOTAL CHECK UNKNOWN ERROR:", checkUnknownError)
+	fmt.Println("TOTAL CHECK SAME ERROR:", checkSameError)
+	fmt.Println("TOTAL CHECK MULTI ERROR:", checkMultiError)
+	fmt.Println("TOTAL UNEXPECTED:", unexpected)
+	fmt.Println("TOTAL GOOD:", len( f.Container) - totalError)
+	fmt.Println("TOTAL ERROR:", totalError)
+}
+
+func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {
+	_ = json.Unmarshal([]byte(FooBspStub), f)
+
+	printHeader := func(sector int16, subSector int16, tag string, result int16, length float64) {
+		fmt.Println("--------------------------------", subSector, "(", sector, ")")
+		fmt.Println("TAG:", tag)
+		fmt.Println("LENGTH:", length)
+		fmt.Println("Expected:", result)
+	}
+
+	checkUnknownError := 0
+	checkSameError := 0
+	checkMultiError := 0
+	unexpected := 0
+	for _, c := range f.Container {
+		//x := (c.StartX + c.EndX) / 2
+		//y := (c.StartY + c.EndY) / 2
 		//out := bsp.TraverseBsp(x, y, false)
 		//outOpposite := bsp.TraverseBsp(x, y, true)
 
@@ -112,7 +175,6 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	fmt.Println("TOTAL GOOD:", len( f.Container) - totalError)
 	fmt.Println("TOTAL ERROR:", totalError)
 }
-
 
 
 const FooBspStub = `

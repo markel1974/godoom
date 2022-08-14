@@ -135,7 +135,7 @@ Rescan:
 	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
 	lineDefsCache := r.makeLineDefsCache()
 	fixed := 0
-	unmatch := 0
+	walls := 0
 	for _, sector := range r.sectors {
 		vert := sector.Vertices
 		for np1 := uint64(0); np1 < sector.NPoints; np1++ {
@@ -151,19 +151,19 @@ Rescan:
 						fixed++
 					}
 				} else {
-					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Can't fix setting unknown...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
+					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g). Can't found, converting to wall...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y)
 					sector.NeighborsRefs[np1] = wallDefinition
 					//sector.NeighborsRefs[np1] = unknownDefinition
 
 					//sector.Vertices = append(sector.Vertices[:np1], sector.Vertices[np1+1:]...)
 					//sector.NeighborsRefs = append(sector.NeighborsRefs[:np1], sector.NeighborsRefs[np1+1:]...)
 					//sector.NPoints = uint64(len(sector.Vertices) - 1)
-					unmatch++
+					walls++
 				}
 			}
 		}
 	}
-	fmt.Println("unmatch:", unmatch, "fixed:", fixed)
+	fmt.Println("walls:", walls, "fixed:", fixed)
 
 	// Verify that the vertexes form a convex hull.
 	for idx, sect := range r.sectors {

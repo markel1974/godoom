@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	"math"
+	"strconv"
 )
 
 
@@ -82,6 +83,10 @@ func (w *World) movePlayer(dx float64, dy float64) {
 					w.player.SetSector(neighbor)
 					if w.debug {
 						fmt.Println("New Sector", neighbor.Id)
+
+						if i, err := strconv.Atoi(neighbor.Id); err == nil {
+							w.debugIdx = i
+						}
 					}
 					found = true
 					break

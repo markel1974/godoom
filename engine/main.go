@@ -133,6 +133,8 @@ func (g *Game) Run() {
 				case pixels.KeyS: down = true; slow = true
 				case pixels.KeyLeft: left = true
 				case pixels.KeyRight: right = true
+				case pixels.KeyV: g.world.DebugMoveSector(true)
+				case pixels.KeyB: g.world.DebugMoveSector(false)
 			}
 		}
 		g.world.DoPlayerMoves(up, down, left, right, slow)

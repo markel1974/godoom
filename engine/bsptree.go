@@ -113,8 +113,14 @@ func (r *BSPTree) clear() {
 	r.compiledCount = 0
 }
 
+
+
+var __patch map[*model.Sector]int
+
 func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 	r.clear()
+
+	 __patch = make(map[*model.Sector]int)
 
 	queueLen := len(r.queue)
 	headIdx := 0
@@ -157,7 +163,7 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 		sq, sqCount := r.compileSector(vi, sector, current)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
-			if q.x2 >= q.x1 && (headIdx + queueLen + 1 - tailIdx) % queueLen != 0 {
+			if q.x2 > q.x1 && (headIdx + queueLen + 1 - tailIdx) % queueLen != 0 {
 				head.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
 				headIdx++
 				if headIdx >= queueLen { headIdx = 0 }
@@ -201,7 +207,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		tx2 := (vx2 * vi.angleSin) - (vy2 * vi.angleCos)
 		tz2 := (vx2 * vi.angleCos) + (vy2 * vi.angleSin)
 
-		// If is partially in front of the player continue
+		//TODO RIATTIVARE
 		if tz1 <= 0 && tz2 <= 0 { continue }
 
 		u0 := 0.0
@@ -234,7 +240,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		yScale2 := r.screenVFov / tz2
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
-		if x1 >= x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
+		//TODO RIATTIVARE
+		if x1 > x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
@@ -302,6 +309,18 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
+
+			//TODO RIMUOVERE!!!!!!!!
+			if v, ok := __patch[neighbor]; ok {
+				if v >= 3 {
+					continue
+				}
+				__patch[neighbor] = v + 1
+			} else {
+				__patch[neighbor] = 1
+			}
+
+			//TODO RIATTIVARE
 			if neighbor != sector { //circuit breaker
 				r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 				outIdx++
@@ -319,6 +338,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		for s := uint64(0); s < sector.NPoints; s++ {
 			neighbor := sector.Neighbors[s]
 			if neighbor != nil {
+				//TODO RIATTIVARE
 				if neighbor != sector {
 					r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
 					outIdx++

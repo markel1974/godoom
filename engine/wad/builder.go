@@ -127,7 +127,6 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 					} else {
 						unknown++
 						curr.Neighbor = "wall"
-						fmt.Println("UNKNOWN")
 					}
 				 }
 			}
@@ -222,17 +221,8 @@ func (b * Builder) scanSubSectors() {
 				wall = middle != "-"
 			}
 
-			//_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(subSectorId), int(start.XCoord), int(start.YCoord), int(end.XCoord), int(end.YCoord))
-			//if oppositeSubSector == -2 {
-			////	if sideDef.MiddleTexture == "-" {
-			//		fmt.Println(subSectorId, oppositeSubSector, lineDef.PrintBits(), sideDef.PrintTexture())
-			//	}
-			//}
-
 			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
 			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
-
-			//transparent := sideDef.LowerTexture == "-" && sideDef.MiddleTexture == "-" && sideDef.UpperTexture == "-"
 
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 
@@ -243,6 +233,14 @@ func (b * Builder) scanSubSectors() {
 					neighborStart = last
 					add = false
 				} else {
+					//TEST
+					last.Tag = "APPENDED"
+
+
+					current.Neighbors = append(current.Neighbors, neighborEnd)
+
+
+					//idx := len(current.Neighbors) - 1
 					// la definizione last - neighborStart
 					// viene realizzata in fase di Setup
 					//TODO NEIGHBOR, TAG, UPPER, MIDDLE, LOWER
@@ -255,11 +253,19 @@ func (b * Builder) scanSubSectors() {
 			if wall {
 				neighborStart.Neighbor = "wall"
 			}
-			tag := "--" + neighborStart.Neighbor + "(" + lineDef.PrintBits() + ")" + "[" + sideDef.LowerTexture + sideDef.MiddleTexture + sideDef.UpperTexture + "]"
+
+			tag := "Id: " + neighborStart.Neighbor + "(" + lineDef.PrintBits() + " | "
+			if wall {
+				tag += "wall"
+			} else {
+				tag += sideDef.PrintTexture()
+			}
+			tag += ")"
 			neighborStart.Tag = tag
 			neighborStart.Upper = upper
 			neighborStart.Middle = middle
 			neighborStart.Lower = lower
+
 
 			if add {
 				current.Neighbors = append(current.Neighbors, neighborStart)

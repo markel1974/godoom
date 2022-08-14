@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultQueueLen = 128
+	defaultQueueLen = 32
 	hFov            = 0.73
 	vFov            = 0.2
 

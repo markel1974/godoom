@@ -5,7 +5,7 @@ import (
 )
 
 
-const subSectorBit = int(0x8000)
+const subSectorBit = uint16(0x8000)
 
 type Level struct {
 	Things     []*lumps.Thing
@@ -26,13 +26,10 @@ func abs(x int) int {
 	return x
 }
 
-func swap(a int, b int) (int, int) {
-	return b, a
-}
 
-func (l * Level) GetSectorFromSubSector(subSectorId int16) (int16, bool){
+func (l * Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool){
 	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
-		return  -1, false
+		return  0, false
 	}
 	sSector := l.SubSectors[subSectorId]
 	for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
@@ -43,7 +40,7 @@ func (l * Level) GetSectorFromSubSector(subSectorId int16) (int16, bool){
 			return sideDef.SectorRef, true
 		}
 	}
-	return -1, false
+	return 0, false
 }
 
 func (l *Level) SegmentSideDef(seg *lumps.Seg, lineDef *lumps.LineDef) (int16, *lumps.SideDef) {

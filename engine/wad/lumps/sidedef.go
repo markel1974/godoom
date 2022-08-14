@@ -12,9 +12,8 @@ type SideDef struct {
 	UpperTexture  string
 	LowerTexture  string
 	MiddleTexture string
-	SectorRef     int16
+	SectorRef     uint16
 }
-
 
 func NewSideDefs(f * os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
 	type PrivateSideDef struct {
@@ -23,7 +22,7 @@ func NewSideDefs(f * os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
 		UpperTexture  [8]byte
 		LowerTexture  [8]byte
 		MiddleTexture [8]byte
-		SectorRef     int16
+		SectorRef     uint16
 	}
 	var pSideDef PrivateSideDef
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSideDef))

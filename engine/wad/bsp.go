@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"github.com/markel1974/godoom/engine/wad/lumps"
 	"math"
+	"sort"
 )
 
 type BSP struct {
 	level      * Level
-	root       int
+	root       uint16
+}
+
+
+func swap(a int, b int) (int, int) {
+	return b, a
+}
+
+func swapF(a float64, b float64) (float64, float64) {
+	return b, a
 }
 
 
@@ -16,18 +26,17 @@ type BSP struct {
 func NewBsp(level * Level) *BSP {
 	return &BSP{
 		level: level,
-		root:  len(level.Nodes) - 1,
+		root:  uint16(len(level.Nodes) - 1),
 	}
 }
 
-func (bsp * BSP) FindSector(x int16, y int16) (int16, int, *lumps.Sector) {
+func (bsp * BSP) FindSector(x int16, y int16) (uint16, uint16, *lumps.Sector) {
 	return bsp.findSector(x, y, bsp.root)
 }
 
-func (bsp * BSP) findSector(x int16, y int16, idx int) (int16, int, *lumps.Sector) {
-	const subSectorBit = int(0x8000)
+func (bsp * BSP) findSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps.Sector) {
 	if idx & subSectorBit == subSectorBit {
-		idx = int(uint16(idx) & ^uint16(subSectorBit))
+		idx = idx & ^subSectorBit
 		sSector := bsp.level.SubSectors[idx]
 		for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
 			seg := bsp.level.Segments[segIdx]
@@ -44,151 +53,175 @@ func (bsp * BSP) findSector(x int16, y int16, idx int) (int16, int, *lumps.Secto
 	}
 	node := bsp.level.Nodes[idx]
 	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findSector(x, y, int(child))
+		return bsp.findSector(x, y, child)
 	}
-	return -1, -1, nil
+	return 0, 0, nil
 }
 
-func (bsp * BSP) FindSubSector(x int16, y int16) (int, int, bool) {
+func (bsp * BSP) FindSubSector(x int16, y int16) (uint16, uint16, bool) {
 	return bsp.findSubSector(x, y, bsp.root)
 }
 
-func (bsp * BSP) TraverseBsp(x int16, y int16, opposite bool) int {
+func (bsp * BSP) TraverseBsp(x int16, y int16, opposite bool) uint16 {
 	return bsp.traverseBsp(x, y, opposite, bsp.root)
 }
 
-func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx int) int {
+func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx uint16) uint16 {
 	if idx & subSectorBit == subSectorBit {
-		if idx == -1 {
-			return -1
-		} else {
-			subSectorId := int(uint16(idx) & ^uint16(subSectorBit))
-			return subSectorId
-		}
+		subSectorId := (idx) & ^subSectorBit
+		return subSectorId
 	}
 	node := bsp.level.Nodes[idx]
 	side := node.PointOnSide(x, y)
 
 	if !opposite {
-		sideIdx := int(node.Child[side])
+		sideIdx := node.Child[side]
 		return bsp.traverseBsp(x, y, opposite, sideIdx)
 	} else {
 		oppositeSide := side ^ 1
-		oppositeSideIdx := int(node.Child[oppositeSide])
+		oppositeSideIdx := node.Child[oppositeSide]
 		return bsp.traverseBsp(x, y, opposite, oppositeSideIdx)
 	}
 }
 
-func (bsp* BSP) findSubSector(x int16, y int16, subSectorId int) (int, int, bool) {
-	if subSectorId & subSectorBit == subSectorBit {
-		subSectorId = int(uint16(subSectorId) & ^uint16(subSectorBit))
-		sectorId, _ := bsp.level.GetSectorFromSubSector(int16(subSectorId))
-		return int(sectorId), subSectorId, true
+func (bsp* BSP) findSubSector(x int16, y int16, idx uint16) (uint16, uint16, bool) {
+	if idx & subSectorBit == subSectorBit {
+		subSectorId := idx & ^subSectorBit
+		sectorId, _ := bsp.level.GetSectorFromSubSector(subSectorId)
+		return sectorId, subSectorId, true
 	}
-	node := bsp.level.Nodes[subSectorId]
+	node := bsp.level.Nodes[idx]
 	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findSubSector(x, y, int(child))
+		return bsp.findSubSector(x, y, child)
 	}
-	return -1, -1, false
+	return 0, 0, false
 }
 
 
 
-func (bsp * BSP) FindOppositeSubSectorByPoints(subSector int16, x1 int, y1 int, x2 int, y2 int) int16 {
+func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, int) {
 	//TODO TROVARE LE LINEE PERPENDICOLARI AGLI ESTREMI DELLA RETTA
 	//Calcolare 2 px avanti e dietro su tutte e due le rette\
 	//bsp.Test(x1, y1, x2, y2, x1, x2)
 	//bsp.Test(x1, y1, x2, y2, x2, y2)
 
-	oppositeSubSector1 := bsp.findOppositeSubSectorByPoint(subSector, x1, y1)
-	oppositeSubSector2 := bsp.findOppositeSubSectorByPoint(subSector, x2, y2)
-	out := int16(-1)
-	for k, _ := range oppositeSubSector1 {
-		if _, ok := oppositeSubSector2[k]; ok {
-			out = k
-			break
+	radius := 2
+	//offset := 0
+	//rOffset := radius + offset
+
+	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
+	//if len(rl) < (radius * 2) + 2 {
+	//	return 0, -1
+	//}
+
+	//rl = rl[rOffset : len(rl) - rOffset]
+
+	out := make(map[uint16]int)
+
+	for _, p := range rl {
+		bsp.findSubSectorByPoint(int16(math.Round(p.X)), int16(math.Round(p.Y)), radius, out)
+	}
+
+	if len(out) == 0 {
+		return 0, -1
+	}
+
+	if _, ok := out[subSectorId]; ok {
+		delete(out, subSectorId)
+		if len(out) == 0 {
+			return subSectorId, -2
 		}
 	}
-	return out
+
+	if len(out) == 1 { for k := range out { return k, 0 } }
+
+	type result struct{ ss uint16; count int }
+	var r[] result
+	for k, v := range out { r = append(r, result{ss:k, count: v}) }
+	sort.SliceStable(r, func(i, j int) bool { return r[i].count > r[j].count })
+	return r[0].ss, 0
 }
 
-func (bsp * BSP) findOppositeSubSectorByPoint(subSector int16, cx int, cy int) map[int16]bool {
-	rt := bsp.describeCircle(cx, cy, 2)
-	out := map[int16]bool{}
+func (bsp * BSP) findSubSectorByPoint(cx int16, cy int16, radius int, out map[uint16]int) {
+	rt := bsp.describeCircle(float64(cx), float64(cy), float64(radius))
 	for _, c := range rt {
-		if _, ss, ok := bsp.findSubSector(int16(c.X), int16(c.Y), bsp.root); ok {
-			if int16(ss) != subSector {
-				out[int16(ss)] = true
+		if _, ss, ok := bsp.findSubSector(int16(math.Round(c.X)), int16(math.Round(c.Y)), bsp.root); ok {
+			if v, ok := out[ss]; ok {
+				out[ss] = v + 1
+			} else {
+				out[ss] = 1
 			}
 		}
 	}
-	return out
 }
 
-func (bsp * BSP) FindOppositeSubSectorByLine(subSector int16, x1 int, y1 int, x2 int, y2 int) (int16, int16, float64) {
-	length := math.Sqrt((float64(x2 - x1) * float64(x2 - x1)) + (float64(y2 - y1) * float64(y2 - y1)))
+func (bsp * BSP) FindOppositeSubSectorByLine(subSector uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, uint16, int) {
+	//length := math.Sqrt((float64(x2 - x1) * float64(x2 - x1)) + (float64(y2 - y1) * float64(y2 - y1)))
 	//cx := int(math.Round(float64(x1 + x2) / 2))
 	//cy := int(math.Round(float64(y1 + y2) / 2))
-	oppositeSector := int16(-1)
-	oppositeSubSector := int16(-1)
+	oppositeSector := uint16(0)
+	oppositeSubSector := uint16(0)
+	state := -1
 
 	//tests := []float64 {0.5, 0.6, 0.4, 0.7, 0.3}
 	tests := []float64 {0.5}
 	for _, k := range tests {
-		cx := int(math.Round(float64(x1) + k * (float64(x2) - float64(x1))))
-		cy := int(math.Round(float64(y1) + k * (float64(y2) - float64(y1))))
-		oppositeSector, oppositeSubSector = bsp.findOppositeSubSectorByLine(subSector, cx, cy)
-		if oppositeSubSector >= 0 {
+		cx := int16(math.Round(float64(x1) + k * (float64(x2) - float64(x1))))
+		cy := int16(math.Round(float64(y1) + k * (float64(y2) - float64(y1))))
+		oppositeSector, oppositeSubSector, state = bsp.findOppositeSubSectorByLine(subSector, cx, cy)
+		if state >= 0 {
 			break
 		}
 	}
-	return oppositeSector, oppositeSubSector, length
+	return oppositeSector, oppositeSubSector, state
 }
 
-func (bsp * BSP) findOppositeSubSectorByLine(subSector int16, cx int, cy int) (int16, int16) {
-	rt := bsp.describeCircle(cx, cy, 2)
-	resultSector := int16(-1)
-	resultSubSector := int16(-1)
+func (bsp * BSP) findOppositeSubSectorByLine(subSector uint16, cx int16, cy int16) (uint16, uint16, int) {
+	rt := bsp.describeCircle(float64(cx), float64(cy), 2)
+	resultSector := uint16(0)
+	resultSubSector := uint16(0)
+	state := -1
 	multi := 0
 	count := 0
 	for _, c := range rt {
 		if sector, ss, ok := bsp.findSubSector(int16(c.X), int16(c.Y), bsp.root); ok {
 			count ++
-			if ss != int(subSector) {
-				if resultSubSector == -1 {
-					resultSector = int16(sector)
-					resultSubSector = int16(ss)
+			if ss != subSector {
+				if state == -1 {
+					resultSector = sector
+					resultSubSector = ss
+					state = 0
 					continue
 				}
-				if resultSubSector != int16(ss) {
+				if resultSubSector != ss {
 					multi++
 				}
 			}
 		}
 	}
 	if multi > 0 {
-		resultSubSector = -3
-	} else if resultSubSector == - 1 && count > 0 {
-		resultSubSector = -2
+		state = -3
+	} else if state == - 1 && count > 0 {
+		state = -2
 	}
-	return resultSector, resultSubSector
+	return resultSector, resultSubSector, state
 }
 
-func (bsp* BSP) describeCircle(x0 int, y0 int, radius int) []XY {
+func (bsp* BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
 	var res []XY
 	x := radius
-	y := 0
-	radiusError := 1 - x
+	y := float64(0)
+	radiusError := 1.0 - x
 	for ;y <= x; {
-		res = append(res, XY{float64( x + x0),float64( y + y0) })
-		res = append(res, XY{float64( x + x0),float64( y + y0) })
-		res = append(res, XY{float64( y + x0),float64( x + y0) })
-		res = append(res, XY{float64(-x + x0),float64( y + y0) })
-		res = append(res, XY{float64(-y + x0),float64( x + y0) })
-		res = append(res, XY{float64(-x + x0),float64(-y + y0) })
-		res = append(res, XY{float64(-y + x0),float64(-x + y0) })
-		res = append(res, XY{float64( x + x0),float64(-y + y0) })
-		res = append(res, XY{float64( y + x0),float64(-x + y0) })
+		res = append(res, XY{ x + x0, y + y0 })
+		res = append(res, XY{ x + x0, y + y0 })
+		res = append(res, XY{ y + x0, x + y0 })
+		res = append(res, XY{-x + x0, y + y0 })
+		res = append(res, XY{-y + x0, x + y0 })
+		res = append(res, XY{-x + x0,-y + y0 })
+		res = append(res, XY{-y + x0,-x + y0 })
+		res = append(res, XY{ x + x0,-y + y0 })
+		res = append(res, XY{ y + x0,-x + y0 })
 		y++
 		if radiusError < 0 {
 			radiusError += 2 * y + 1
@@ -200,24 +233,24 @@ func (bsp* BSP) describeCircle(x0 int, y0 int, radius int) []XY {
 	return res
 }
 
-func (bsp * BSP) describeLine(x1 int, y1 int, x2 int, y2 int) []XY {
+func (bsp * BSP) describeLine(x1 float64, y1 float64, x2 float64, y2 float64) []XY {
 	var res []XY
-	steep := abs(y2-y1) > abs(x2-x1)
-	if steep { x1, y1 = swap(x1, y1); x2, y2 = swap(x2, y2) }
+	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
+	if steep { x1, y1 = swapF(x1, y1); x2, y2 = swapF(x2, y2) }
 
-	if x1 > x2 { x1, x2 = swap(x1, x2); y1, y2 = swap(y1, y2) }
+	if x1 > x2 { x1, x2 = swapF(x1, x2); y1, y2 = swapF(y1, y2) }
 	dx := x2 - x1
-	dy := abs(y2 - y1)
+	dy := math.Abs(y2 - y1)
 	errorDx := dx / 2.0
-	var yStep int
+	var yStep float64
 	if y1 < y2 { yStep = 1 } else { yStep = -1 }
 	y := y1
 	maxX := x2
 	for x := x1; x <= maxX; x++ {
 		if steep {
-			res = append(res, XY{ X: float64(y), Y: float64(x) })
+			res = append(res, XY{ X: y, Y: x })
 		} else {
-			res = append(res, XY{ X: float64(x), Y: float64(y) })
+			res = append(res, XY{ X: x, Y: y })
 		}
 		errorDx -= dy
 		if errorDx < 0 {

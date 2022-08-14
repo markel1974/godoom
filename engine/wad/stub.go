@@ -3,27 +3,28 @@ package wad
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 )
 
 type FooBspElement struct {
-	Sector    int16
-	SubSector int16
+	Sector    uint16
+	SubSector uint16
 	StartX    int16
 	StartY    int16
 	EndX      int16
 	EndY      int16
-	Result    int16
+	Result    uint16
 	Tag       string
 }
 
 
-func NewFooBspElement(sector string, subSector string, startX int16, startY int16, endX int16, endY int16, result int16, tag string) *FooBspElement {
+func NewFooBspElement(sector string, subSector string, startX int16, startY int16, endX int16, endY int16, result uint16, tag string) *FooBspElement {
 	sectorId, _ := strconv.Atoi(sector)
 	subSectorId, _ := strconv.Atoi(subSector)
 	return &FooBspElement{
-		Sector:    int16(sectorId),
-		SubSector: int16(subSectorId),
+		Sector:    uint16(sectorId),
+		SubSector: uint16(subSectorId),
 		StartX:    startX,
 		StartY:    startY,
 		EndX:      endX,
@@ -42,7 +43,7 @@ func NewFooBsp() * FooBsp{
 	return &FooBsp{}
 }
 
-func (f * FooBsp) Add(sector string, subSector string, startX int16, startY int16, endX int16, endY int16, result int16, tag string) {
+func (f * FooBsp) Add(sector string, subSector string, startX int16, startY int16, endX int16, endY int16, result uint16, tag string) {
 	f.Container = append(f.Container, NewFooBspElement(sector, subSector, startX, startY, endX, endY, result, tag))
 }
 
@@ -54,46 +55,45 @@ func (f * FooBsp) Print() {
 
 func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	_ = json.Unmarshal([]byte(FooBspStub), f)
-
-	printHeader := func(sector int16, subSector int16, tag string, result int16, length float64) {
+	printHeader := func(sector uint16, subSector uint16, tag string, result uint16, length float64) {
 		fmt.Println("--------------------------------", subSector, "(", sector, ")")
 		fmt.Println("TAG:", tag)
 		fmt.Println("LENGTH:", length)
 		fmt.Println("Expected:", result)
 	}
-
 	checkUnknownError := 0
 	checkSameError := 0
 	checkMultiError := 0
 	unexpected := 0
 	for _, c := range f.Container {
+		x1 := c.StartX; x2 := c.EndX; y1 := c.StartY; y2 := c.EndY
+		length := math.Sqrt((float64(x2 - x1) * float64(x2 - x1)) + (float64(y2 - y1) * float64(y2 - y1)))
 		//x := (c.StartX + c.EndX) / 2
 		//y := (c.StartY + c.EndY) / 2
 
+		checkSubSector, state := bsp.FindOppositeSubSectorByPoints(c.SubSector, x1, y1, x2, y2)
+		printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+		fmt.Println(checkSubSector, "==>", state)
 
-		if c.SubSector == c.Result {
-			continue
-		}
-
-		checkSubSector := bsp.FindOppositeSubSectorByPoints(c.SubSector, int(c.StartX), int(c.StartY), int(c.EndX), int(c.EndY))
+		/*
 		if c.Result == checkSubSector {
 			//printHeader(c.Sector, c.SubSector, c.Tag, c.Result)
 			//fmt.Println("Check Ok:", checkSubSector, "(", checkSector, ")")
 		} else {
-			if checkSubSector == -1 {
+			if state == -1 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR UNKNOWN Check (segment is unknown you have to remove)")
 				checkUnknownError++
-			} else if checkSubSector == - 2 {
+			} else if state == - 2 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR SAME Check (is inside the same sector you have to remove)")
 				checkSameError++
-			} else if checkSubSector == - 3 {
+			} else if state == - 3 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR MULTI Check")
 				checkMultiError++
 			} else {
-				printHeader(c.Sector, c.SubSector, c.Tag, c.Result, 0)
+				printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				out := bsp.TraverseBsp(c.StartX, c.StartY, false)
 				//outOpposite := bsp.TraverseBsp(c.StartX, c.StartY, true)
 				fmt.Println("----> Traverse", out)
@@ -102,6 +102,8 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 			}
 		}
 		//fmt.Println("Computed:", out, "Computed Opposite:", outOpposite)
+
+		 */
 	}
 	fmt.Println()
 	fmt.Println()
@@ -118,7 +120,7 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {
 	_ = json.Unmarshal([]byte(FooBspStub), f)
 
-	printHeader := func(sector int16, subSector int16, tag string, result int16, length float64) {
+	printHeader := func(sector uint16, subSector uint16, tag string, result uint16, length float64) {
 		fmt.Println("--------------------------------", subSector, "(", sector, ")")
 		fmt.Println("TAG:", tag)
 		fmt.Println("LENGTH:", length)
@@ -130,29 +132,30 @@ func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {
 	checkMultiError := 0
 	unexpected := 0
 	for _, c := range f.Container {
+		if c.SubSector == c.Result {
+			continue
+		}
+		x1 := c.StartX; x2 := c.EndX; y1 := c.StartY; y2 := c.EndY
+		length := math.Sqrt((float64(x2 - x1) * float64(x2 - x1)) + (float64(y2 - y1) * float64(y2 - y1)))
 		//x := (c.StartX + c.EndX) / 2
 		//y := (c.StartY + c.EndY) / 2
 		//out := bsp.TraverseBsp(x, y, false)
 		//outOpposite := bsp.TraverseBsp(x, y, true)
 
-		if c.SubSector == c.Result {
-			continue
-		}
-
-		_, checkSubSector, length := bsp.FindOppositeSubSectorByLine(c.SubSector, int(c.StartX), int(c.StartY), int(c.EndX), int(c.EndY))
+		_, checkSubSector, state := bsp.FindOppositeSubSectorByLine(c.SubSector, c.StartX, c.StartY, c.EndX, c.EndY)
 		if c.Result == checkSubSector {
 			//printHeader(c.Sector, c.SubSector, c.Tag, c.Result)
 			//fmt.Println("Check Ok:", checkSubSector, "(", checkSector, ")")
 		} else {
-			if checkSubSector == -1 {
+			if state == -1 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR UNKNOWN Check (segment is unknown you have to remove)")
 				checkUnknownError++
-			} else if checkSubSector == - 2 {
+			} else if state == - 2 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR SAME Check (is inside the same sector you have to remove)")
 				checkSameError++
-			} else if checkSubSector == - 3 {
+			} else if state == - 3 {
 				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 				//fmt.Println("ERROR MULTI Check")
 				checkMultiError++

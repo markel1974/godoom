@@ -48,7 +48,7 @@ func MakePoint3(x, y, z, u, v int16) Point3{
 
 type Builder struct {
 	w        *WAD
-	cfg      map[int16]*model.InputSector
+	cfg      map[uint16]*model.InputSector
 	textures map[string]bool
 	level * Level
 	bsp * BSP
@@ -101,47 +101,40 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	//os.Exit(-1)
 
 	//Rescan:
+	unknown := 0
 	for _, c := range b.cfg {
 		for idx := 0; idx < len(c.Neighbors); idx++ {
 			curr := c.Neighbors[idx]
 			var next *model.InputNeighbor
 			if idx < len(c.Neighbors)-1 {
-				next = c.Neighbors[idx+1]
+				next = c.Neighbors[idx + 1]
 			} else {
 				next = c.Neighbors[0]
 			}
-			if curr.Neighbor != "wall" {
+			if curr.Neighbor == "wall" {
+				//nothing to do...
+			} else {
 				id, _ := strconv.Atoi(c.Id)
-				_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
-				//_, oppositeSubSector, _ := b.bsp.FindOppositeSubSectorByLine(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
-				if oppositeSubSector >= 0 {
+				_, oppositeSubSector, state := b.bsp.FindOppositeSubSectorByLine(uint16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
+				if state >= 0 {
 					curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
-				} else if oppositeSubSector == -2 {
+				} else if state == -2 {
+					//Inside
 					curr.Neighbor = c.Id
-					//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-				 } else if oppositeSubSector == -1 {
-					oppositeSubSector := b.bsp.FindOppositeSubSectorByPoints(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
-					if oppositeSubSector >= 0 {
-						curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
+				} else if state == -1 || state == - 3 {
+					if oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(uint16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y)); state >= 0 || state == -2 {
+						curr.Neighbor = strconv.Itoa(int(oppositeSubSector))
 					} else {
+						unknown++
+						curr.Neighbor = "wall"
 						fmt.Println("UNKNOWN")
 					}
-					//c.Neighbors = append(c.Neighbors[:idx], c.Neighbors[idx+1:]...)
-					//goto Rescan
-				 } else if oppositeSubSector == -3 {
-					oppositeSubSector := b.bsp.FindOppositeSubSectorByPoints(int16(id), int(curr.X), int(curr.Y), int(next.X), int(next.Y))
-					if oppositeSubSector >= 0 {
-						curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
-					} else {
-						fmt.Println("TOO MUCH NEIGHBOR!!!!")
-					}
-					//TODO BETTER IMPLEMENTATION
-					//curr.Neighbor = b.getOppositeSubSectorByLine(int16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-					//fmt.Println("TOO MUCH NEIGHBOR!!!!")
-				}
+				 }
 			}
 		}
 	}
+
+	fmt.Println("TOTAL UNKNOWN", unknown)
 
 	//stubs.Print()
 
@@ -177,7 +170,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	position.X = math.Abs(position.X)
 	position.Y = math.Abs(position.Y)
 
-	out, _ := json.Marshal(b.cfg[int16(playerSSectorId)])
+	out, _ := json.Marshal(b.cfg[playerSSectorId])
 	//out, _ := json.Marshal(b.cfg[1])
 	fmt.Println(string(out))
 
@@ -189,7 +182,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 }
 
 func (b * Builder) scanSubSectors() {
-	b.cfg = make(map[int16]*model.InputSector)
+	b.cfg = make(map[uint16]*model.InputSector)
 	b.textures = make(map[string]bool)
 
 	//TODO e se end e last fossero il prosegumento della retta start?
@@ -197,7 +190,7 @@ func (b * Builder) scanSubSectors() {
 	//l'analisi della retta con getOppositeSubSectorByLine deve essere fatta necessariamente all'interno del ciclo....
 
 
-	for subSectorId := int16(0); subSectorId < int16(len(b.level.SubSectors)); subSectorId ++ {
+	for subSectorId := uint16(0); int(subSectorId) < len(b.level.SubSectors); subSectorId ++ {
 		subSector := b.level.SubSectors[subSectorId]
 		segment := b.level.Segments[subSector.StartSeg]
 		lineDef := b.level.LineDefs[int(segment.LineNum)]
@@ -281,7 +274,7 @@ func (b * Builder) scanSubSectors() {
 	//os.Exit(-1)
 }
 
-func (b * Builder) getConfigSector(sectorId int16, sector *lumps.Sector, subSectorId int16, ld *lumps.LineDef) * model.InputSector{
+func (b * Builder) getConfigSector(sectorId uint16, sector *lumps.Sector, subSectorId uint16, ld *lumps.LineDef) * model.InputSector{
 	c, ok := b.cfg[subSectorId]
 	if !ok {
 		c = &model.InputSector{

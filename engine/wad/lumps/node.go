@@ -12,7 +12,7 @@ type Node struct {
 	DX    int16
 	DY    int16
 	BBox  [2]BBox
-	Child [2]int16
+	Child [2]uint16
 }
 
 type BBox struct {
@@ -93,7 +93,7 @@ func (n *Node) PointOnSide(x int16, y int16) int {
 	return 1
 }
 
-func (n * Node) Intersect(x int16, y int16) (int16, bool) {
+func (n * Node) Intersect(x int16, y int16) (uint16, bool) {
 	if n.BBox[0].Intersect(x, y) {
 		return n.Child[0], true
 		//return bsp.findSubSector(x, y, int(node.Child[0]))
@@ -103,5 +103,5 @@ func (n * Node) Intersect(x int16, y int16) (int16, bool) {
 		return n.Child[1], true
 		//return bsp.findSubSector(x, y, int(node.Child[1]))
 	}
-	return -1, false
+	return 0, false
 }

@@ -152,6 +152,7 @@ Rescan:
 					}
 				} else {
 					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Can't fix setting unknown...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
+					sector.NeighborsRefs[np1] = wallDefinition
 					//sector.NeighborsRefs[np1] = unknownDefinition
 
 					//sector.Vertices = append(sector.Vertices[:np1], sector.Vertices[np1+1:]...)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad/lumps"
-	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 //http://www.gamers.org/dhs/helpdocs/dmsp1666.html
 //http://doomwiki.org/
 //https://github.com/penberg/godoom
+//https://github.com/mausimus/rtdoom/blob/master/rtdoom/Projection.cpp
 const scaleFactor = 10.0
 
 
@@ -139,13 +139,9 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	//os.Exit(-1)
 
+
 	var sectors []*model.InputSector
 	for _, c := range b.cfg {
-		for idx := 0; idx < len(c.Neighbors); idx++ {
-			curr := c.Neighbors[idx]
-			curr.X = math.Abs(curr.X)
-			curr.Y = math.Abs(curr.Y)
-		}
 		sectors = append(sectors, c)
 	}
 
@@ -155,19 +151,24 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 		return a < b
 	})
 
-	p1 := b.level.Things[1]
-	position := model.XY{
-		X : float64(p1.XPosition),
-		Y : float64(p1.YPosition),
+	for _, s := range sectors {
+		for _, n := range s.Neighbors {
+			n.Y = -n.Y
+		}
 	}
 
-	playerSectorId, playerSSectorId, playerSector := b.bsp.FindSector(p1.XPosition, p1.YPosition)
+	p1 := b.level.Things[1]
+	position := model.XY{
+		X : float64(p1.X),
+		Y : float64(p1.Y),
+	}
+
+	playerSectorId, playerSSectorId, playerSector := b.bsp.FindSector(p1.X, p1.Y)
 	//TEST
 	//playerSSectorId = 44
 	//position.X = 1520 + 5
 	//position.Y = -3168 + 5
-	position.X = math.Abs(position.X)
-	position.Y = math.Abs(position.Y)
+	position.Y = -position.Y
 
 	out, _ := json.Marshal(b.cfg[playerSSectorId])
 	//out, _ := json.Marshal(b.cfg[1])
@@ -192,18 +193,30 @@ func (b * Builder) scanSubSectors() {
 	for subSectorId := uint16(0); int(subSectorId) < len(b.level.SubSectors); subSectorId ++ {
 		subSector := b.level.SubSectors[subSectorId]
 		segment := b.level.Segments[subSector.StartSeg]
-		lineDef := b.level.LineDefs[int(segment.LineNum)]
+		lineDef := b.level.LineDefs[int(segment.LineDef)]
 		_, sideDef := b.level.SegmentSideDef(segment, lineDef)
 		if sideDef == nil { continue }
 		sectorId := sideDef.SectorRef
 		sector := b.level.Sectors[sectorId]
 
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
+		fmt.Println("------------")
 		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
 			segment := b.level.Segments[segmentId]
-			lineDef := b.level.LineDefs[int(segment.LineNum)]
+
+			fmt.Println("segmentId", segmentId)
+			//if segment.Offset != 0 {
+			//	fmt.Println("OFFSET:", subSectorId, segment.Offset)
+			//}
+			//if segment.BAM != 0 {
+			//	fmt.Println("Angle:", subSectorId, segment.BAM)
+			//}
+			lineDef := b.level.LineDefs[int(segment.LineDef)]
 			_, sideDef := b.level.SegmentSideDef(segment, lineDef)
-			if sideDef == nil { continue }
+			if sideDef == nil {
+				fmt.Println("NIL SIDEDEF")
+				continue
+			}
 
 			start := b.level.Vertexes[segment.VertexStart]
 			end := b.level.Vertexes[segment.VertexEnd]
@@ -236,10 +249,6 @@ func (b * Builder) scanSubSectors() {
 					//TEST
 					last.Tag = "APPENDED"
 
-
-					current.Neighbors = append(current.Neighbors, neighborEnd)
-
-
 					//idx := len(current.Neighbors) - 1
 					// la definizione last - neighborStart
 					// viene realizzata in fase di Setup
@@ -265,7 +274,6 @@ func (b * Builder) scanSubSectors() {
 			neighborStart.Upper = upper
 			neighborStart.Middle = middle
 			neighborStart.Lower = lower
-
 
 			if add {
 				current.Neighbors = append(current.Neighbors, neighborStart)

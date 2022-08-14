@@ -7,11 +7,11 @@ import (
 )
 
 type Thing struct {
-	XPosition int16
-	YPosition int16
-	Angle     int16
-	Type      int16
-	Options   int16
+	X       int16
+	Y       int16
+	Angle   int16
+	Type    int16
+	Options int16
 }
 
 
@@ -26,11 +26,11 @@ func NewThings(f * os.File, lumpInfo *LumpInfo) ([]*Thing, error) {
 	things := make([]*Thing, count, count)
 	for idx, t := range pThings {
 		things[idx] = &Thing{
-			XPosition: t.XPosition,
-			YPosition: t.YPosition,
-			Angle:     t.Angle,
-			Type:      t.Type,
-			Options:   t.Options,
+			X:       t.X,
+			Y:       t.Y,
+			Angle:   t.Angle,
+			Type:    t.Type,
+			Options: t.Options,
 		}
 	}
 	return things, nil

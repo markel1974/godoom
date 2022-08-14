@@ -34,7 +34,7 @@ func (l * Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool){
 	sSector := l.SubSectors[subSectorId]
 	for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
 		seg := l.Segments[segIdx]
-		lineDef := l.LineDefs[seg.LineNum]
+		lineDef := l.LineDefs[seg.LineDef]
 		_, sideDef := l.SegmentSideDef(seg, lineDef)
 		if sideDef != nil {
 			return sideDef.SectorRef, true
@@ -44,13 +44,13 @@ func (l * Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool){
 }
 
 func (l *Level) SegmentSideDef(seg *lumps.Seg, lineDef *lumps.LineDef) (int16, *lumps.SideDef) {
-	if seg.SegmentSide == 0 { return lineDef.SideDefRight, l.SideDefs[lineDef.SideDefRight] }
+	if seg.Direction == 0 { return lineDef.SideDefRight, l.SideDefs[lineDef.SideDefRight] }
 	if lineDef.SideDefLeft == -1 { return 0, nil }
 	return lineDef.SideDefLeft, l.SideDefs[lineDef.SideDefLeft]
 }
 
 func (l *Level) SegmentOppositeSideDef(seg *lumps.Seg, lineDef *lumps.LineDef) (int16, *lumps.SideDef) {
-	if seg.SegmentSide == 0 {
+	if seg.Direction == 0 {
 		if lineDef.SideDefLeft == -1 { return 0, nil }
 		return lineDef.SideDefLeft, l.SideDefs[lineDef.SideDefLeft]
 	}

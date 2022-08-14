@@ -12,16 +12,9 @@ type BSP struct {
 	root       uint16
 }
 
-
-func swap(a int, b int) (int, int) {
-	return b, a
-}
-
 func swapF(a float64, b float64) (float64, float64) {
 	return b, a
 }
-
-
 
 func NewBsp(level * Level) *BSP {
 	return &BSP{
@@ -40,7 +33,7 @@ func (bsp * BSP) findSector(x int16, y int16, idx uint16) (uint16, uint16, *lump
 		sSector := bsp.level.SubSectors[idx]
 		for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg + sSector.NumSegments; segIdx++ {
 			seg := bsp.level.Segments[segIdx]
-			lineDef := bsp.level.LineDefs[seg.LineNum]
+			lineDef := bsp.level.LineDefs[seg.LineDef]
 			_, sideDef := bsp.level.SegmentSideDef(seg, lineDef)
 			if sideDef != nil {
 				return sideDef.SectorRef, idx, bsp.level.Sectors[sideDef.SectorRef]

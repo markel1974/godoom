@@ -7,12 +7,12 @@ import (
 )
 
 type Seg struct {
-	VertexStart   int16
-	VertexEnd     int16
-	Bams          int16
-	LineNum       int16
-	SegmentSide   int16
-	SegmentOffset int16
+	VertexStart int16
+	VertexEnd   int16
+	BAM         int16 //Binary Angle Measurement
+	LineDef     int16
+	Direction   int16
+	Offset      int16
 }
 
 
@@ -26,12 +26,12 @@ func NewSegments(f * os.File, lumpInfo *LumpInfo) ([]*Seg, error) {
 	segments := make([]*Seg, count, count)
 	for idx, s := range pSegments {
 		segments[idx] = &Seg{
-			VertexStart:   s.VertexStart,
-			VertexEnd:     s.VertexEnd,
-			Bams:          s.Bams,
-			LineNum:       s.LineNum,
-			SegmentSide:   s.SegmentSide,
-			SegmentOffset: s.SegmentOffset,
+			VertexStart: s.VertexStart,
+			VertexEnd:   s.VertexEnd,
+			BAM:         s.BAM,
+			LineDef:     s.LineDef,
+			Direction:   s.Direction,
+			Offset:      s.Offset,
 		}
 	}
 	return segments, nil

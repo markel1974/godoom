@@ -249,8 +249,8 @@ func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 
 	for idx := uint64(0); idx < sector.NPoints; idx++ {
 		v := sector.Vertices[idx]
-		x := math.Abs(v.X) - maxX
-		y := math.Abs(v.Y) - maxY
+		x := v.X - maxX
+		y := v.Y - maxY
 		t[idx].X = x
 		t[idx].Y = y
 	}

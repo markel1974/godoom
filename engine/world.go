@@ -83,7 +83,6 @@ func (w *World) movePlayer(dx float64, dy float64) {
 					w.player.SetSector(neighbor)
 					if w.debug {
 						fmt.Println("New Sector", neighbor.Id)
-
 						if i, err := strconv.Atoi(neighbor.Id); err == nil {
 							w.debugIdx = i
 						}
@@ -213,6 +212,10 @@ func (w *World) DoZoom(zoom float64) {
 }
 
 func (w *World) DoDebug(next int) {
+	if next == 0 {
+		w.debug = !w.debug
+		return
+	}
 	w.debug = true
 	idx := w.debugIdx + next
 	if idx < 0 || idx >= len(w.tree.sectors) { return }
@@ -227,6 +230,42 @@ func (w *World) DoDebug(next int) {
 
 func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 	sector := w.tree.sectors[w.debugIdx]
+	w.drawSingleStub(surface, sector)
+	/*
+	x := 640.0 / 300.0
+	y := 640.0 / 300.0
+	for idx, s := range w.tree.sectors {
+		selected := false; if idx == w.debugIdx { selected = true }
+		w.drawSingleStubScale(surface, s, x, y, selected)
+	}
+	*/
+}
+
+
+func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * model.Sector, xFactor float64, yFactor float64, selected bool) {
+	t  := make([]model.XYZ, len(sector.Neighbors))
+
+	for idx := uint64(0); idx < sector.NPoints; idx++ {
+		v := sector.Vertices[idx]
+		x := v.X * xFactor
+		y := v.Y * yFactor - 300
+		t[idx].X = x
+		t[idx].Y = y
+	}
+	colorLine := 0x00ff00
+	colorPoint := 0xff0000
+	if !selected {
+		colorLine = 0xB0E0E6
+		colorPoint = 0x00BFFF
+	}
+	dp := NewDrawPolygon(640, 480)
+	dp.Setup(surface, t, len(t), colorLine, 1.0, 1.0)
+	dp.DrawPoints(10)
+	dp.color = colorPoint
+	dp.DrawLines()
+}
+
+func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sector) {
 	t  := make([]model.XYZ, len(sector.Neighbors))
 	maxX := 0.0
 	maxY := 0.0
@@ -238,24 +277,16 @@ func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 		if y > maxY { maxY = y }
 	}
 
-	maxX /= 2
-	maxY /= 2
-
-	if maxX > 300 { maxX = -(300 - maxX)}
-	if maxY > 400 { maxY = -(400 - maxY)}
-
-	if maxX < 30 { maxX -= 30}
-	if maxY < 30 { maxY -= 30}
+	xFactor := float64(w.screenWidth) / maxX
+	yFactor := float64(w.screenHeight) / maxY
 
 	for idx := uint64(0); idx < sector.NPoints; idx++ {
 		v := sector.Vertices[idx]
-		x := v.X - maxX
-		y := v.Y - maxY
+		x := (v.X * xFactor) - (float64(w.screenWidth) / 2)
+ 		y := (v.Y * yFactor) - (float64(w.screenHeight) / 2)
 		t[idx].X = x
 		t[idx].Y = y
 	}
-
-	//t = t[0:5]
 	dp := NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
 	dp.DrawPoints(10)

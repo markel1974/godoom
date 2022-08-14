@@ -196,6 +196,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		sectorYCeil := sector.Ceil - vi.where.Z
 		sectorYFloor := sector.Floor - vi.where.Z
 
+
+
 		vx1 := vertexCurr.X - vi.where.X
 		vy1 := vertexCurr.Y - vi.where.Y
 		vx2 := vertexNext.X - vi.where.X
@@ -241,7 +243,12 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
 		//TODO RIATTIVARE
-		if x1 > x2 || x2 < qi.x1 || x1 > qi.x2 { continue }
+		if x1 > x2 || x2 < qi.x1 || x1 > qi.x2 {
+			if sector.Id == "15" {
+				fmt.Println("Can't render", sector.Id, "child:", s)
+			}
+			continue
+		}
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 

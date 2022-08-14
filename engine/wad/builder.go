@@ -15,6 +15,8 @@ import (
 //http://doomwiki.org/
 //https://github.com/penberg/godoom
 //https://github.com/mausimus/rtdoom/blob/master/rtdoom/Projection.cpp
+
+//https://github.com/gamescomputersplay/wad2pic/blob/main/wad2pic.py
 const scaleFactor = 10.0
 
 
@@ -139,7 +141,6 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	//os.Exit(-1)
 
-
 	var sectors []*model.InputSector
 	for _, c := range b.cfg {
 		sectors = append(sectors, c)
@@ -200,26 +201,26 @@ func (b * Builder) scanSubSectors() {
 		sector := b.level.Sectors[sectorId]
 
 		endSegmentId := subSector.StartSeg + subSector.NumSegments
-		fmt.Println("------------")
+
 		for segmentId := subSector.StartSeg; segmentId < endSegmentId; segmentId++ {
 			segment := b.level.Segments[segmentId]
 
-			fmt.Println("segmentId", segmentId)
-			//if segment.Offset != 0 {
-			//	fmt.Println("OFFSET:", subSectorId, segment.Offset)
-			//}
-			//if segment.BAM != 0 {
-			//	fmt.Println("Angle:", subSectorId, segment.BAM)
-			//}
 			lineDef := b.level.LineDefs[int(segment.LineDef)]
 			_, sideDef := b.level.SegmentSideDef(segment, lineDef)
-			if sideDef == nil {
-				fmt.Println("NIL SIDEDEF")
-				continue
-			}
-
+			if sideDef == nil { continue }
 			start := b.level.Vertexes[segment.VertexStart]
 			end := b.level.Vertexes[segment.VertexEnd]
+
+			//if subSectorId == 15 {
+				fmt.Println("------------", subSectorId)
+				fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
+				fmt.Println("Segment Offset:", segment.Offset)
+				fmt.Println("Segment Angle:", segment.BAM)
+				fmt.Println("Start:", start)
+				fmt.Println("End:", end)
+
+				//fmt.Println(start.XCoord, ",", -start.YCoord)
+			//}
 
 			lower := sideDef.LowerTexture
 			middle := sideDef.MiddleTexture
@@ -246,16 +247,12 @@ func (b * Builder) scanSubSectors() {
 					neighborStart = last
 					add = false
 				} else {
-					//TEST
-					last.Tag = "APPENDED"
+					//last.Neighbor = "wall"
+					//TODO INTRODURRE UN NUOVO TIPO: VOID
+					//TODO QUANDO RAGGIUNGE IL BSPTREE LO DEVE "SALTARE"......
 
-					//idx := len(current.Neighbors) - 1
-					// la definizione last - neighborStart
-					// viene realizzata in fase di Setup
+					last.Tag = "APPENDED"
 					//TODO NEIGHBOR, TAG, UPPER, MIDDLE, LOWER
-					//neighborStart.Upper = upper
-					//neighborStart.Middle = middle
-					//neighborStart.Lower = lower
 				}
 			}
 
@@ -279,9 +276,6 @@ func (b * Builder) scanSubSectors() {
 				current.Neighbors = append(current.Neighbors, neighborStart)
 			}
 			current.Neighbors = append(current.Neighbors, neighborEnd)
-			//if segmentId < endSegmentId - 1 {
-				//neighborEnd.Tag = "last"
-			//}
 		}
 	}
 

@@ -120,15 +120,19 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			//TODO StubOld2 funziona solo se viene aggiunto in testa.....
 			//vLast := sect.Vertices[len(sect.Vertices)-1]
 			//sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-			//fmt.Printf("creating loop for sector %d\n", idx)
+
+			fmt.Printf("creating loop for sector %d\n", idx)
 			sect.Vertices = append(sect.Vertices, vFirst)
+			sect.NPoints = uint64(len(sect.Vertices) - 1)
 		} else {
+			//TODO
 			fmt.Println("Adding an extra vertex")
-			sect.Vertices = append(sect.Vertices, XY{})
-			//vLast := sect.Vertices[len(sect.Vertices) - 1]
+			//vLast := sect.Vertices[len(sect.Vertices)-1]
 			//sect.Vertices = append(sect.Vertices, vLast)
+			//sect.NPoints = uint64(len(sect.Vertices) - 1)
+			sect.NPoints = uint64(len(sect.Vertices) - 1)
 		}
-		sect.NPoints = uint64(len(sect.Vertices) - 1)
+
 	}
 
 Rescan:

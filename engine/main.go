@@ -154,6 +154,9 @@ func (g *Game) Run() {
 		if g.win.JustPressed(pixels.KeySpace) || g.win.Pressed(pixels.MouseButton1) {
 			g.world.DoPlayerJump()
 		}
+		if g.win.JustPressed(pixels.Key8) {
+			g.world.DoDebug(0)
+		}
 		if g.win.JustPressed(pixels.Key0) {
 			g.world.DoDebug(1)
 		}

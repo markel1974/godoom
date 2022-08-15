@@ -13,6 +13,7 @@ type XYZ struct {
 
 type InputNeighbor struct {
 	XY       `json:"id"`
+	Kind     int    `json:"neighbor"`
 	Neighbor string `json:"neighbor"`
 	Tag      string `json:"tag"`
 	Upper    string `json:"upper"`

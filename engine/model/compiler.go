@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	wallDefinition = -1
-	unknownDefinition = -2
+	DefinitionValid = 0
+	DefinitionWall = -1
+	DefinitionUnknown = -2
+	DefinitionVoid = -3
 )
 
 type lineDef struct { start XY; end XY; sectorId int; np int }
@@ -90,9 +92,9 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			//	for _, id := range sect.NeighborsIds {
 			switch strings.Trim(strings.ToLower(id), " \t\n") {
 			case "-1", "wall":
-				sect.NeighborsRefs = append(sect.NeighborsRefs, wallDefinition)
+				sect.NeighborsRefs = append(sect.NeighborsRefs, DefinitionWall)
 			case "", "-2", "unknown":
-				sect.NeighborsRefs = append(sect.NeighborsRefs, unknownDefinition)
+				sect.NeighborsRefs = append(sect.NeighborsRefs, DefinitionUnknown)
 			default:
 				idx, ok := r.cache[id]
 				if !ok {
@@ -147,7 +149,7 @@ Rescan:
 			np2 := np1 + 1
 			v1start := vert[np1]
 			v1end := vert[np2]
-			if sector.NeighborsRefs[np1] < wallDefinition {
+			if sector.NeighborsRefs[np1] < DefinitionWall {
 				if ld, ok := lineDefsCache[lineDefHash(v1end, v1start)]; ok {
 					if ld.sectorId != sector.NeighborsRefs[np1] {
 						fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y, ld.sectorId, sector.NeighborsRefs[np1])
@@ -156,7 +158,7 @@ Rescan:
 					}
 				} else {
 					fmt.Printf("p1 - sector %s (line: %d - %d): Neighbor behind line (%g, %g) - (%g, %g). Can't found, converting to wall...\n", sector.Id, np1, np2, v1start.X, v1start.Y, v1end.X, v1end.Y)
-					sector.NeighborsRefs[np1] = wallDefinition
+					sector.NeighborsRefs[np1] = DefinitionWall
 					//sector.NeighborsRefs[np1] = unknownDefinition
 
 					//sector.Vertices = append(sector.Vertices[:np1], sector.Vertices[np1+1:]...)
@@ -305,7 +307,7 @@ Rescan:
 		sect.Neighbors = make([]*Sector, sect.NPoints)
 		for s := uint64(0); s < sect.NPoints; s++ {
 			neighborIdx := sect.NeighborsRefs[s]
-			if neighborIdx > wallDefinition {
+			if neighborIdx > DefinitionWall {
 				sect.Neighbors[s] = r.sectors[neighborIdx]
 			}
 		}

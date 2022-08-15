@@ -113,7 +113,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 			} else {
 				next = c.Neighbors[0]
 			}
-			if curr.Neighbor == "wall" {
+			if curr.Kind == model.DefinitionWall {
 				//nothing to do...
 			} else {
 				id, _ := strconv.Atoi(c.Id)
@@ -247,7 +247,7 @@ func (b * Builder) scanSubSectors() {
 					neighborStart = last
 					add = false
 				} else {
-					//last.Neighbor = "wall"
+					last.Kind = model.DefinitionVoid
 					//TODO INTRODURRE UN NUOVO TIPO: VOID
 					//TODO QUANDO RAGGIUNGE IL BSPTREE LO DEVE "SALTARE"......
 
@@ -257,7 +257,10 @@ func (b * Builder) scanSubSectors() {
 			}
 
 			if wall {
+				neighborStart.Kind = model.DefinitionWall
 				neighborStart.Neighbor = "wall"
+			} else {
+				neighborStart.Kind = model.DefinitionValid
 			}
 
 			tag := "Id: " + neighborStart.Neighbor + "(" + lineDef.PrintBits() + " | "
@@ -275,6 +278,8 @@ func (b * Builder) scanSubSectors() {
 			if add {
 				current.Neighbors = append(current.Neighbors, neighborStart)
 			}
+
+			neighborEnd.Kind = model.DefinitionUnknown
 			current.Neighbors = append(current.Neighbors, neighborEnd)
 		}
 	}

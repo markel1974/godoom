@@ -265,20 +265,26 @@ func (b * Builder) SetNeighbor(subSectorId uint16, m *model.InputSegment)  {
 	x2 := int16(m.End.X)
 	y2 := int16(m.End.Y)
 
-	/*
 
-	m.Kind = model.DefinitionValid
+	/*
+	//m.Kind = model.DefinitionValid
 	_, oppositeSubSector, state := b.bsp.FindOppositeSubSectorByLine(subSectorId, x1, y1, x2, y2)
 	if state >= 0 {
+		m.Kind = model.DefinitionValid
 		m.Neighbor = strconv.Itoa(int(oppositeSubSector))
 	} else if state == -2 {
+		m.Kind = model.DefinitionVoid
 		m.Neighbor = strconv.Itoa(int(subSectorId))
 	} else if state == -1 {
-		if oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(subSectorId, x1, y1, x2, y2); state >= 0 || state == -2 {
+		oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(subSectorId, x1, y1, x2, y2)
+		if state >= 0 {
+			m.Kind = model.DefinitionValid
 			m.Neighbor = strconv.Itoa(int(oppositeSubSector))
+		} else if state == -2 {
+			m.Kind = model.DefinitionVoid
+			m.Neighbor = strconv.Itoa(int(subSectorId))
 		} else {
-			//m.Kind = model.DefinitionWall
-			//m.Neighbor = "wall"
+			//UNDEFINED!
 		}
 	}
 	*/

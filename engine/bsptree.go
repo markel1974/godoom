@@ -333,8 +333,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			} else {
 				__patch[neighbor] = 1
 			}
-
-			 */
+			*/
 
 			//TODO RIATTIVARE
 			if neighbor != sector { //circuit breaker
@@ -354,12 +353,9 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		for s := 0; s < len(sector.Segments); s++ {
 			segment := sector.Segments[s]
 			neighbor := segment.Sector
-			if neighbor != nil {
-				//TODO RIATTIVARE
-				if neighbor != sector {
-					r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
-					outIdx++
-				}
+			if neighbor != nil && neighbor != sector {
+				r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
+				outIdx++
 			}
 		}
 	}

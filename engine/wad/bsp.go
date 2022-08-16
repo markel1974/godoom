@@ -99,15 +99,15 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 
 	//bsp.Test(x1, y1, x2, y2, x2, y2)
 
 	radius := 2
-	//offset := 0
-	//rOffset := radius + offset
+	offset := 1
+	rOffset := radius + offset
 
 	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
-	//if len(rl) < (radius * 2) + 2 {
-	//	return 0, -1
-	//}
+	if len(rl) < (radius * 2) + offset {
+		return 0, -1
+	}
 
-	//rl = rl[rOffset : len(rl) - rOffset]
+	rl = rl[rOffset : len(rl) - rOffset]
 
 	out := make(map[uint16]int)
 

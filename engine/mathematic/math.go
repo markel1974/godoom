@@ -108,7 +108,7 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 }
 
 func PointSideF(px float64, py float64, x0 float64, y0 float64, x1 float64, y1 float64) float64 {
-	return VxsF(x1-x0, y1-y0, px-x0, py-y0)
+	return VxsF(x1 - x0, y1 - y0, px - x0, py - y0)
 }
 
 func IntersectF(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) (float64, float64) {

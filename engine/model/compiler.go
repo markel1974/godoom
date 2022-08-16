@@ -45,22 +45,16 @@ func NewCompiler() * Compiler{
 }
 
 func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
-	for idx := 0; idx < len(cfg.Sectors); idx++ {
-		cs := cfg.Sectors[idx]
+	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			start := XY{X: cn.Start.X, Y: cn.Start.Y}
-			end := XY{X: cn.End.X, Y: cn.End.Y}
-			segment := NewSegment(cn.Neighbor,nil, cn.Kind, start, end, cn.Tag)
-			segments = append(segments, segment)
+			segments = append(segments, NewSegment(cn.Neighbor,nil, cn.Kind, cn.Start, cn.End, cn.Tag))
 		}
 
 		if len(segments) == 0 {
 			fmt.Printf("sector %s (idx: %d): vertices as zero len, removing\n", cs.Id, idx)
-			//cfg.Sectors = append(cfg.Sectors[:idx], cfg.Sectors[idx+1:]...)
-			//idx--
 			continue
 		}
 
@@ -90,7 +84,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 				if s, ok := r.cache[segment.Ref]; ok {
 					segment.SetSector(s.Id, s)
 				} else {
-					fmt.Println("OUT", segment.Ref)
+					//fmt.Println("OUT", segment.Ref)
 					//os.Exit(-1)
 				}
 			}
@@ -121,25 +115,30 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 		}
 	}
 
-//Rescan:
-	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
-	lineDefsCache := r.makeLineDefsCache()
 	fixed := 0
+
+	lineDefsCache := r.makeLineDefsCache()
+
+Rescan:
+	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
+
 	undefined := 0
 	for _, sector := range r.sectors {
-		for np := 0; np < len(sector.Segments); np++ {
-			s := sector.Segments[np]
-			//if s.Kind != DefinitionWall {
-			if s.Kind == DefinitionUnknown {
+		for np, s := range sector.Segments {
+			if s.Kind != DefinitionWall {
+			//if s.Kind == DefinitionUnknown {
 				if ld, ok := lineDefsCache[lineDefHash(s.End, s.Start)]; ok {
 					if s.Ref != ld.sector.Id {
 						fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
-						if s.Kind == DefinitionUnknown { s.Kind = DefinitionValid }
+						//if s.Kind == DefinitionUnknown { s.Kind = DefinitionValid }
+						s.Kind = DefinitionValid
 						s.SetSector(ld.sector.Id, ld.sector)
 						fixed++
+						goto Rescan
 					}
 				} else {
-					fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Tag)
+					fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
+					//s.Kind = DefinitionVoid
 					//v1start.Update("wall", nil, DefinitionWall, v1start.XY)
 					undefined++
 				}
@@ -150,6 +149,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	fmt.Println("undefined:", undefined, "fixed:", fixed)
 
 	/*
+	//TODO SISTEMARE
 		// Verify that the vertexes form a convex hull.
 		for idx, sect := range r.sectors {
 			vert := sect.Vertices
@@ -338,7 +338,7 @@ func (r * Compiler) makeLineDefsCache() map[string]*lineDef2 {
 			ld := &lineDef2{sector: sect, np: np, start: s.Start, end: s.End }
 			if fld, ok := t[hash]; ok {
 				if sect.Id != fld.sector.Id {
-					fmt.Println("line segment already added", sect.Id, fld.sector.Id, hash, np)
+					//fmt.Println("line segment already added", sect.Id, fld.sector.Id, hash, np)
 				}
 			} else {
 				t[hash] = ld

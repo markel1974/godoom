@@ -11,8 +11,8 @@ import (
 )
 
 
-
-func pointInPolygonF(px float64, py float64, points []*model.XYKind2) bool {
+/*
+func pointInPolygonF(px float64, py float64, points []*model.Segment) bool {
 	nVert := len(points)
 	j := nVert - 1
 	c := false
@@ -24,6 +24,8 @@ func pointInPolygonF(px float64, py float64, points []*model.XYKind2) bool {
 	}
 	return c
 }
+
+ */
 
 
 type World struct {
@@ -72,19 +74,19 @@ func (w *World) movePlayer(dx float64, dy float64) {
 	py1 := py0 + dy
 	found := false
 	sector := w.player.GetSector()
-	vert := sector.Vertices
-	for s := uint64(0); s < sector.NPoints; s++ {
-		if neighbor := sector.Vertices[s]; neighbor != nil {
-			curr := vert[s]
-			next := vert[s+1]
+	//segments := sector.Segments
+	for s := 0; s < len(sector.Segments); s++ {
+		if segment := sector.Segments[s]; segment != nil {
+			curr := segment.Start
+			next := segment.End
 			if mathematic.IntersectBoxF(px0, py0, px1, py1, curr.X, curr.Y, next.X, next.Y) {
 				ps := mathematic.PointSideF(px1, py1, curr.X, curr.Y, next.X, next.Y)
 				if ps < 0 {
-					if neighbor.Sector != nil {
-						w.player.SetSector(neighbor.Sector)
+					if segment.Sector != nil {
+						w.player.SetSector(segment.Sector)
 						if w.debug {
-							fmt.Println("New Sector", neighbor.Ref)
-							if i, err := strconv.Atoi(neighbor.Ref); err == nil {
+							fmt.Println("New Sector", segment.Ref)
+							if i, err := strconv.Atoi(segment.Ref); err == nil {
 								w.debugIdx = i
 							}
 						}
@@ -98,9 +100,10 @@ func (w *World) movePlayer(dx float64, dy float64) {
 
 	if !w.debug {
 		if !found {
-			if !pointInPolygonF(px1, py1, sector.Vertices[:sector.NPoints]) {
-				return
-			}
+			//TODO COMPLETARE
+			//if !pointInPolygonF(px1, py1, sector.Segments) {
+			//	return
+			//}
 		}
 	}
 	w.player.AddCoords(dx, dy)
@@ -133,17 +136,16 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	p1 := px + dx
 	p2 := py + dy
 	sect := w.player.GetSector()
-	vert := sect.Vertices
 
 	// Check if the player is about to cross one of the sector's edges
-	for s := uint64(0); s < sect.NPoints; s++ {
-		curr := vert[s]
-		next := vert[s+1]
+	for s := 0; s < len(sect.Segments); s++ {
+		curr := sect.Segments[s].Start
+		next := sect.Segments[s].End
 
 		if mathematic.IntersectBoxF(px, py, p1, p2, curr.X, curr.Y, next.X, next.Y) &&
 			mathematic.PointSideF(p1, p2, curr.X, curr.Y, next.X, next.Y) < 0 {
 
-			neighbor := sect.Vertices[s].Sector
+			neighbor := sect.Segments[s].Sector
 
 			// Check where the hole is.
 			holeLow := 9e9
@@ -223,9 +225,9 @@ func (w *World) DoDebug(next int) {
 	if idx < 0 || idx >= len(w.tree.sectors) { return }
 	w.debugIdx = idx
 	sector := w.tree.sectors[idx]
-	x := sector.Vertices[0].X
-	y := sector.Vertices[0].Y
-	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total points:", sector.NPoints, "vertices:", len(sector.Vertices))
+	x := sector.Segments[0].Start.X
+	y := sector.Segments[0].Start.Y
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
 	w.player.SetSector(sector)
 	w.player.SetCoords(x + 5, y + 5)
 }
@@ -245,14 +247,18 @@ func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 
 
 func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * model.Sector, xFactor float64, yFactor float64, selected bool) {
-	t  := make([]model.XYZ, len(sector.Vertices))
+	t  := make([]model.XYZ, len(sector.Segments) * 2)
 
-	for idx := uint64(0); idx < sector.NPoints; idx++ {
-		v := sector.Vertices[idx]
-		x := v.X * xFactor
-		y := v.Y * yFactor - 300
-		t[idx].X = x
-		t[idx].Y = y
+	for idx := 0; idx < len(sector.Segments); idx++ {
+		v := sector.Segments[idx]
+		x1 := v.Start.X * xFactor
+		y1 := v.Start.Y * yFactor
+		x2 := v.End.X * xFactor
+		y2 := v.End.Y * yFactor
+		t[idx].X = x1
+		t[idx].Y = y1
+		t[idx+1].X = x2
+		t[idx+1].Y = y2
 	}
 	colorLine := 0x00ff00
 	colorPoint := 0xff0000
@@ -268,26 +274,38 @@ func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * mode
 }
 
 func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sector) {
-	t  := make([]model.XYZ, len(sector.Vertices))
 	maxX := 0.0
 	maxY := 0.0
-	for idx := uint64(0); idx < sector.NPoints; idx++ {
-		v := sector.Vertices[idx]
-		x := math.Abs(v.X)
-		y := math.Abs(v.Y)
-		if x > maxX { maxX = x }
-		if y > maxY { maxY = y }
+	for idx := 0; idx < len(sector.Segments); idx++ {
+		v := sector.Segments[idx]
+		x1 := math.Abs(v.Start.X)
+		y1 := math.Abs(v.Start.Y)
+		x2 := math.Abs(v.End.X)
+		y2 := math.Abs(v.End.Y)
+		if x1 > maxX { maxX = x1 }
+		if y1 > maxY { maxY = y1 }
+		if x2 > maxX { maxX = x2 }
+		if y2 > maxY { maxY = y2 }
 	}
 
-	xFactor := float64(w.screenWidth) / maxX
-	yFactor := float64(w.screenHeight) / maxY
+	xFactor := (float64(w.screenWidth) / 2) / maxX
+	yFactor := (float64(w.screenHeight) / 2) / maxY
 
-	for idx := uint64(0); idx < sector.NPoints; idx++ {
-		v := sector.Vertices[idx]
-		x := (v.X * xFactor) - (float64(w.screenWidth) / 2)
- 		y := (v.Y * yFactor) - (float64(w.screenHeight) / 2)
-		t[idx].X = x
-		t[idx].Y = y
+	var t []model.XYZ
+	for _, v := range sector.Segments {
+		if v.Kind == model.DefinitionVoid {
+			continue
+		}
+		x1 := v.Start.X; if x1 == 0 { x1 = 1 }; x1 *= xFactor
+		y1 := v.Start.Y; if y1 == 0 { y1 = 1 }; y1 *= yFactor
+		x2 := v.End.X; if x2 == 0 { x2 = 1 }; x2 *= xFactor
+		y2 := v.End.Y; if y2 == 0 { y2 = 1 }; y2 *= yFactor
+		t = append(t, model.XYZ{X: x1, Y: y1, Z: 0})
+		t = append(t, model.XYZ{X: x2, Y: y2, Z: 0})
+	}
+
+	if len(t) == 0 {
+		return
 	}
 	dp := NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)

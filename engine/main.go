@@ -36,9 +36,9 @@ func NewGame() *Game {
 
 func (g *Game) Setup() {
 	var err error
-	g.viewMode = -1
+	g.viewMode = 1
 	g.enableClear = true //true
-	m := 1
+	m := 2
 
 	switch m {
 	case 0:
@@ -48,7 +48,7 @@ func (g *Game) Setup() {
 	case 2:
 		wb := wad.NewBuilder()
 		wadFile := "resources" + string(os.PathSeparator) + "wad"+ string(os.PathSeparator) + "DOOM.WAD"
-		g.cfg, err = wb.Setup(wadFile, 1)
+		g.cfg, err = wb.Setup(wadFile, 2)
 	}
 	if err != nil {
 		fmt.Println(err)

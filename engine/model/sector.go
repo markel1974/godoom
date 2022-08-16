@@ -2,29 +2,44 @@ package model
 
 import "github.com/markel1974/godoom/engine/textures"
 
-type XYKind2 struct {
-	XY
+type Segment struct {
+	Start  XY
+	End    XY
 	Ref    string
 	Kind   int
 	Sector *Sector
+	Tag    string
 }
 
-func NewXYKind(ref string, sector * Sector, kind int, xy XY) *XYKind2{
-	k := &XYKind2{}
-	k.Update(ref, sector, kind, xy)
-	return k
+func NewSegment(ref string, sector * Sector, kind int, start XY, end XY, tag string) *Segment{
+	out := &Segment{
+		Start:  start,
+		End:    end,
+		Ref:    ref,
+		Kind:   kind,
+		Sector: sector,
+		Tag:    tag,
+	}
+	return out
 }
 
-func (k * XYKind2) Update(ref string, sector * Sector, kind int, xy XY) {
+func (k * Segment) Copy() * Segment {
+	out := &Segment{
+		Start:  k.Start,
+		End:    k.End,
+		Ref:    k.Ref,
+		Kind:   k.Kind,
+		Sector: k.Sector,
+		Tag:    k.Tag,
+	}
+	return out
+}
+
+func (k * Segment) SetSector(ref string, sector * Sector) {
 	k.Ref = ref
 	k.Sector = sector
-	k.Kind = kind
-	k.XY = xy
 }
 
-func (k * XYKind2) Clone() *XYKind2 {
-	return NewXYKind(k.Ref, k.Sector, k.Kind, k.XY)
-}
 
 
 
@@ -32,9 +47,7 @@ type Sector struct {
 	Id           string
 	Floor        float64
 	Ceil         float64
-	Vertices     []*XYKind2
-	NPoints      uint64
-	//Neighbors    []*Sector
+	Segments     []*Segment
 	Textures     bool
 	Tag          string
 	FloorTexture *textures.Texture
@@ -46,13 +59,12 @@ type Sector struct {
 	compileId    int
 }
 
-func NewSector(id string, nPoints uint64, vertices []*XYKind2) *Sector {
+func NewSector(id string, segments []*Segment) *Sector {
 	s := &Sector{
 		Id:            id,
 		Ceil:          0,
 		Floor:         0,
-		Vertices:      vertices,
-		NPoints:       nPoints,
+		Segments:      segments,
 		Textures:      false,
 		usage:         0,
 		compileId:     0,

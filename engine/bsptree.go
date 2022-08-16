@@ -189,12 +189,13 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 	//ceilPComplete := cs.Acquire( nil, IdCeilTest, 0, 0, 0, 0, 0, 0)
 	//floorPComplete := cs.Acquire(nil, IdFloorTest, 0, 0, 0, 0, 0, 0)
 
-	for s := uint64(0); s < sector.NPoints; s++ {
-		vertexCurr := sector.Vertices[s]
-		vertexNext := sector.Vertices[s + 1]
-		neighbor := sector.Vertices[s].Sector
+	for s := 0; s < len(sector.Segments); s++ {
+		segment := sector.Segments[s]
+		vertexCurr := sector.Segments[s].Start
+		vertexNext := sector.Segments[s].End
+		neighbor := sector.Segments[s].Sector
 
-		if vertexCurr.Kind == model.DefinitionVoid {
+		if segment.Kind == model.DefinitionVoid {
 			if neighbor != nil && neighbor != sector {
 				r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
 				outIdx++
@@ -350,8 +351,9 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 	//floorPComplete.Finalize()
 
 	if first && outIdx == 0 {
-		for s := uint64(0); s < sector.NPoints; s++ {
-			neighbor := sector.Vertices[s].Sector
+		for s := 0; s < len(sector.Segments); s++ {
+			segment := sector.Segments[s]
+			neighbor := segment.Sector
 			if neighbor != nil {
 				//TODO RIATTIVARE
 				if neighbor != sector {

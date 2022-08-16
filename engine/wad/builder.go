@@ -101,51 +101,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	//stubs := NewFooBsp()
 	//stubs.Verify(b.level, b.bsp)
 	//os.Exit(-1)
-
-	//Rescan:
-	unknown := 0
-	for _, c := range b.cfg {
-		for idx := 0; idx < len(c.Neighbors); idx++ {
-			curr := c.Neighbors[idx]
-			var next *model.InputNeighbor
-			if idx < len(c.Neighbors)-1 {
-				next = c.Neighbors[idx + 1]
-			} else {
-				next = c.Neighbors[0]
-			}
-			if curr.Kind == model.DefinitionWall {
-				//nothing to do...
-			} else {
-				id, _ := strconv.Atoi(c.Id)
-				_, oppositeSubSector, state := b.bsp.FindOppositeSubSectorByLine(uint16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y))
-				if state >= 0 {
-					curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
-				} else if state == -2 {
-					//Inside
-					curr.Kind = model.DefinitionVoid
-					curr.Neighbor = c.Id
-				} else if state == -1 || state == - 3 {
-					if oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(uint16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y)); state >= 0 || state == -2 {
-						if curr.Kind == model.DefinitionVoid {
-
-						} else {
-							curr.Kind = model.DefinitionValid
-						}
-						curr.Neighbor = strconv.Itoa(int(oppositeSubSector))
-					} else {
-						unknown++
-						curr.Kind = model.DefinitionWall
-						//curr.Neighbor = "wall"
-					}
-				 }
-			}
-		}
-	}
-
-	fmt.Println("TOTAL UNKNOWN", unknown)
-
 	//stubs.Print()
-
 	//os.Exit(-1)
 
 	var sectors []*model.InputSector
@@ -160,8 +116,9 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	})
 
 	for _, s := range sectors {
-		for _, n := range s.Neighbors {
-			n.Y = -n.Y
+		for _, n := range s.Segments {
+			n.Start.Y = -n.Start.Y
+			n.End.Y = -n.End.Y
 		}
 	}
 
@@ -184,19 +141,17 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	fmt.Println(playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.Input{DisableFix : true, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+	cfg := &model.Input{DisableFix : false, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
 
 	return cfg, nil
 }
 
+
+
+
 func (b * Builder) scanSubSectors() {
 	b.cfg = make(map[uint16]*model.InputSector)
 	b.textures = make(map[string]bool)
-
-	//TODO e se end e last fossero il prosegumento della retta start?
-	//provare a creare una nuova retta con le stessa caratteristiche della principale
-	//l'analisi della retta con getOppositeSubSectorByLine deve essere fatta necessariamente all'interno del ciclo....
-
 
 	for subSectorId := uint16(0); int(subSectorId) < len(b.level.SubSectors); subSectorId ++ {
 		subSector := b.level.SubSectors[subSectorId]
@@ -218,16 +173,19 @@ func (b * Builder) scanSubSectors() {
 			start := b.level.Vertexes[segment.VertexStart]
 			end := b.level.Vertexes[segment.VertexEnd]
 
-			//if subSectorId == 15 {
-			//	fmt.Println("------------", subSectorId)
-			//	fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
-			//	fmt.Println("Segment Offset:", segment.Offset)
-			//	fmt.Println("Segment Angle:", segment.BAM)
-			//	fmt.Println("Start:", start)
-			//	fmt.Println("End:", end)
-
-			//fmt.Println(start.XCoord, ",", -start.YCoord)
-			//}
+			/*
+			if subSectorId == 117 {
+				fmt.Println("------------", subSectorId)
+				fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
+				fmt.Println("Segment Offset:", segment.Offset)
+				fmt.Println("Segment Angle:", segment.BAM)
+				fmt.Println("Start:", start)
+				fmt.Println("End:", end)
+				fmt.Println(lineDef.Flags, "->", lineDef.PrintBits())
+				fmt.Println(sideDef.PrintTexture())
+				//fmt.Println(start.XCoord, ",", -start.YCoord)
+			}
+			*/
 
 			lower := sideDef.LowerTexture
 			middle := sideDef.MiddleTexture
@@ -237,57 +195,43 @@ func (b * Builder) scanSubSectors() {
 			if middle != "-" { b.textures[middle] = true }
 			if upper != "-" { b.textures[upper] = true }
 
+			startXY := model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}
+			endXY := model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}
+
+			modelSegment := &model.InputSegment{ Tag: "", Neighbor: "", Start: startXY, End: endXY}
+
 			wall := false
 			if !lineDef.HasFlag(lumps.TwoSided) {
 				wall = middle != "-"
 			}
 
-			neighborStart := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}}
-			neighborEnd := &model.InputNeighbor{ Tag: "", Neighbor: "", XY: model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}}
+			if wall {
+				modelSegment.Kind = model.DefinitionWall
+				modelSegment.Neighbor = "wall"
+			} else {
+				b.SetNeighbor(subSectorId, modelSegment)
+			}
 
+			tag := "Id: " + modelSegment.Neighbor + " (" + lineDef.PrintBits() + " | "
+			if wall { tag += "wall" } else { tag += sideDef.PrintTexture() }
+			tag += ")"
+			modelSegment.Tag = tag
+			modelSegment.Upper = upper
+			modelSegment.Middle = middle
+			modelSegment.Lower = lower
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 
-			add := true
-			if len(current.Neighbors) > 0 {
-				last := current.Neighbors[len(current.Neighbors) - 1]
-				if last.X == neighborStart.X && last.Y == neighborStart.Y {
-					neighborStart = last
-					add = false
-				} else {
-					//TODO INTRODURRE UN NUOVO TIPO: VOID
-					//TODO QUANDO RAGGIUNGE IL BSPTREE LO DEVE "SALTARE"......
-
-					last.Tag = "APPENDED"
-					last.Kind = model.DefinitionVoid
-					//TODO NEIGHBOR, TAG, UPPER, MIDDLE, LOWER
+			if len(current.Segments) > 0 {
+				prev := current.Segments[len(current.Segments) - 1]
+				if prev.End.X != modelSegment.Start.X && prev.End.Y != modelSegment.End.Y {
+					missingSegment := &model.InputSegment{ Tag: "Missing", Neighbor: prev.Neighbor, Start: prev.End, End: modelSegment.Start}
+					b.SetNeighbor(subSectorId, missingSegment)
+					//missingSegment.Kind = model.DefinitionVoid
+					current.Segments = append(current.Segments, missingSegment)
 				}
 			}
 
-			if wall {
-				neighborStart.Kind = model.DefinitionWall
-				neighborStart.Neighbor = "wall"
-			} else {
-				neighborStart.Kind = model.DefinitionValid
-			}
-
-			tag := "Id: " + neighborStart.Neighbor + "(" + lineDef.PrintBits() + " | "
-			if wall {
-				tag += "wall"
-			} else {
-				tag += sideDef.PrintTexture()
-			}
-			tag += ")"
-			neighborStart.Tag = tag
-			neighborStart.Upper = upper
-			neighborStart.Middle = middle
-			neighborStart.Lower = lower
-
-			if add {
-				current.Neighbors = append(current.Neighbors, neighborStart)
-			}
-
-			//neighborEnd.Kind = model.DefinitionVoid
-			current.Neighbors = append(current.Neighbors, neighborEnd)
+			current.Segments = append(current.Segments, modelSegment)
 		}
 	}
 
@@ -307,7 +251,7 @@ func (b * Builder) getConfigSector(sectorId uint16, sector *lumps.Sector, subSec
 			UpperTexture: "wall3.ppm",
 			FloorTexture: "floor.ppm",
 			CeilTexture:  "ceil.ppm",
-			Neighbors:    nil,
+			Segments:     nil,
 			Tag:          strconv.Itoa(int(sectorId)),
 		}
 		b.cfg[subSectorId] = c
@@ -315,23 +259,41 @@ func (b * Builder) getConfigSector(sectorId uint16, sector *lumps.Sector, subSec
 	return c
 }
 
+func (b * Builder) SetNeighbor(subSectorId uint16, m *model.InputSegment)  {
+	x1 := int16(m.Start.X)
+	y1 := int16(m.Start.Y)
+	x2 := int16(m.End.X)
+	y2 := int16(m.End.Y)
 
-/*
-func (b * Builder) getOppositeSubSectorByLine(subSectorId int16, x1 int16, y1 int16, x2 int16, y2 int16) string {
-	alpha, beta := b.bsp.FindSubSectorByLine(int(x1), int(y1), int(x2), int(y2))
-	out := int16(-1)
-	if alpha == subSectorId {
-		out = beta
-	} else if beta == subSectorId {
-		out = alpha
-	} else {
-		//TODO PATCH ASPETTANDO FindSubSectorByLine
-		//out = alpha
+	/*
+
+	m.Kind = model.DefinitionValid
+	_, oppositeSubSector, state := b.bsp.FindOppositeSubSectorByLine(subSectorId, x1, y1, x2, y2)
+	if state >= 0 {
+		m.Neighbor = strconv.Itoa(int(oppositeSubSector))
+	} else if state == -2 {
+		m.Neighbor = strconv.Itoa(int(subSectorId))
+	} else if state == -1 {
+		if oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(subSectorId, x1, y1, x2, y2); state >= 0 || state == -2 {
+			m.Neighbor = strconv.Itoa(int(oppositeSubSector))
+		} else {
+			//m.Kind = model.DefinitionWall
+			//m.Neighbor = "wall"
+		}
 	}
-	switch out {
-	case -1: return "unknown"
-	default: return strconv.Itoa(int(out))
+	*/
+
+	oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(subSectorId, x1, y1, x2, y2)
+	if state >= 0 {
+		m.Kind = model.DefinitionValid
+		m.Neighbor = strconv.Itoa(int(oppositeSubSector))
+	} else if state == -2 {
+		//VOID
+		m.Neighbor = strconv.Itoa(int(subSectorId))
+		m.Kind = model.DefinitionVoid
+	} else {
+		m.Kind = model.DefinitionUnknown
+		//m.Kind = model.DefinitionWall
+		//m.Neighbor = "wall"
 	}
 }
-
-*/

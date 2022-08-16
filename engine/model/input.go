@@ -11,9 +11,10 @@ type XYZ struct {
 	Z float64 `json:"z"`
 }
 
-type InputNeighbor struct {
-	XY       `json:"id"`
-	Kind     int    `json:"neighbor"`
+type InputSegment struct {
+	Start    XY     `json:"start"`
+	End      XY     `json:"end"`
+	Kind     int    `json:"kind"`
 	Neighbor string `json:"neighbor"`
 	Tag      string `json:"tag"`
 	Upper    string `json:"upper"`
@@ -31,7 +32,7 @@ type InputSector struct {
 	UpperTexture string           `json:"upperTexture"`
 	LowerTexture string           `json:"lowerTexture"`
 	WallTexture  string           `json:"wallTexture"`
-	Neighbors    []*InputNeighbor `json:"neighbors"`
+	Segments     []*InputSegment  `json:"segments"`
 	Tag          string           `json:"tag"`
 }
 

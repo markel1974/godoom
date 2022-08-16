@@ -12,7 +12,7 @@ import (
 
 
 
-func pointInPolygonF(px float64, py float64, points []model.XY) bool {
+func pointInPolygonF(px float64, py float64, points []*model.XYKind2) bool {
 	nVert := len(points)
 	j := nVert - 1
 	c := false
@@ -74,20 +74,22 @@ func (w *World) movePlayer(dx float64, dy float64) {
 	sector := w.player.GetSector()
 	vert := sector.Vertices
 	for s := uint64(0); s < sector.NPoints; s++ {
-		if neighbor := sector.Neighbors[s]; neighbor != nil {
+		if neighbor := sector.Vertices[s]; neighbor != nil {
 			curr := vert[s]
 			next := vert[s+1]
 			if mathematic.IntersectBoxF(px0, py0, px1, py1, curr.X, curr.Y, next.X, next.Y) {
 				ps := mathematic.PointSideF(px1, py1, curr.X, curr.Y, next.X, next.Y)
 				if ps < 0 {
-					w.player.SetSector(neighbor)
-					if w.debug {
-						fmt.Println("New Sector", neighbor.Id)
-						if i, err := strconv.Atoi(neighbor.Id); err == nil {
-							w.debugIdx = i
+					if neighbor.Sector != nil {
+						w.player.SetSector(neighbor.Sector)
+						if w.debug {
+							fmt.Println("New Sector", neighbor.Ref)
+							if i, err := strconv.Atoi(neighbor.Ref); err == nil {
+								w.debugIdx = i
+							}
 						}
+						found = true
 					}
-					found = true
 					break
 				}
 			}
@@ -141,7 +143,7 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 		if mathematic.IntersectBoxF(px, py, p1, p2, curr.X, curr.Y, next.X, next.Y) &&
 			mathematic.PointSideF(p1, p2, curr.X, curr.Y, next.X, next.Y) < 0 {
 
-			neighbor := sect.Neighbors[s]
+			neighbor := sect.Vertices[s].Sector
 
 			// Check where the hole is.
 			holeLow := 9e9
@@ -223,7 +225,7 @@ func (w *World) DoDebug(next int) {
 	sector := w.tree.sectors[idx]
 	x := sector.Vertices[0].X
 	y := sector.Vertices[0].Y
-	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total noints:", sector.NPoints, "vertices:", len(sector.Vertices))
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total points:", sector.NPoints, "vertices:", len(sector.Vertices))
 	w.player.SetSector(sector)
 	w.player.SetCoords(x + 5, y + 5)
 }
@@ -243,7 +245,7 @@ func  (w * World) drawStub(surface *pixels.PictureRGBA) {
 
 
 func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * model.Sector, xFactor float64, yFactor float64, selected bool) {
-	t  := make([]model.XYZ, len(sector.Neighbors))
+	t  := make([]model.XYZ, len(sector.Vertices))
 
 	for idx := uint64(0); idx < sector.NPoints; idx++ {
 		v := sector.Vertices[idx]
@@ -266,7 +268,7 @@ func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * mode
 }
 
 func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sector) {
-	t  := make([]model.XYZ, len(sector.Neighbors))
+	t  := make([]model.XYZ, len(sector.Vertices))
 	maxX := 0.0
 	maxY := 0.0
 	for idx := uint64(0); idx < sector.NPoints; idx++ {

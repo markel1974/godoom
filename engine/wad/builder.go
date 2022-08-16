@@ -122,13 +122,20 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 					curr.Neighbor= strconv.Itoa(int(oppositeSubSector))
 				} else if state == -2 {
 					//Inside
+					curr.Kind = model.DefinitionVoid
 					curr.Neighbor = c.Id
 				} else if state == -1 || state == - 3 {
 					if oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(uint16(id), int16(curr.X), int16(curr.Y), int16(next.X), int16(next.Y)); state >= 0 || state == -2 {
+						if curr.Kind == model.DefinitionVoid {
+
+						} else {
+							curr.Kind = model.DefinitionValid
+						}
 						curr.Neighbor = strconv.Itoa(int(oppositeSubSector))
 					} else {
 						unknown++
-						curr.Neighbor = "wall"
+						curr.Kind = model.DefinitionWall
+						//curr.Neighbor = "wall"
 					}
 				 }
 			}
@@ -177,7 +184,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 
 	fmt.Println(playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.Input{ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+	cfg := &model.Input{DisableFix : true, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
 
 	return cfg, nil
 }
@@ -212,14 +219,14 @@ func (b * Builder) scanSubSectors() {
 			end := b.level.Vertexes[segment.VertexEnd]
 
 			//if subSectorId == 15 {
-				fmt.Println("------------", subSectorId)
-				fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
-				fmt.Println("Segment Offset:", segment.Offset)
-				fmt.Println("Segment Angle:", segment.BAM)
-				fmt.Println("Start:", start)
-				fmt.Println("End:", end)
+			//	fmt.Println("------------", subSectorId)
+			//	fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
+			//	fmt.Println("Segment Offset:", segment.Offset)
+			//	fmt.Println("Segment Angle:", segment.BAM)
+			//	fmt.Println("Start:", start)
+			//	fmt.Println("End:", end)
 
-				//fmt.Println(start.XCoord, ",", -start.YCoord)
+			//fmt.Println(start.XCoord, ",", -start.YCoord)
 			//}
 
 			lower := sideDef.LowerTexture
@@ -247,11 +254,11 @@ func (b * Builder) scanSubSectors() {
 					neighborStart = last
 					add = false
 				} else {
-					last.Kind = model.DefinitionVoid
 					//TODO INTRODURRE UN NUOVO TIPO: VOID
 					//TODO QUANDO RAGGIUNGE IL BSPTREE LO DEVE "SALTARE"......
 
 					last.Tag = "APPENDED"
+					last.Kind = model.DefinitionVoid
 					//TODO NEIGHBOR, TAG, UPPER, MIDDLE, LOWER
 				}
 			}
@@ -279,7 +286,7 @@ func (b * Builder) scanSubSectors() {
 				current.Neighbors = append(current.Neighbors, neighborStart)
 			}
 
-			neighborEnd.Kind = model.DefinitionUnknown
+			//neighborEnd.Kind = model.DefinitionVoid
 			current.Neighbors = append(current.Neighbors, neighborEnd)
 		}
 	}

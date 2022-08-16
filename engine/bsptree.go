@@ -115,12 +115,12 @@ func (r *BSPTree) clear() {
 
 
 
-var __patch map[*model.Sector]int
+//var __patch map[*model.Sector]int
 
 func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 	r.clear()
 
-	 __patch = make(map[*model.Sector]int)
+	 //__patch = make(map[*model.Sector]int)
 
 	queueLen := len(r.queue)
 	headIdx := 0
@@ -192,11 +192,18 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 	for s := uint64(0); s < sector.NPoints; s++ {
 		vertexCurr := sector.Vertices[s]
 		vertexNext := sector.Vertices[s + 1]
-		neighbor := sector.Neighbors[s]
+		neighbor := sector.Vertices[s].Sector
+
+		if vertexCurr.Kind == model.DefinitionVoid {
+			if neighbor != nil && neighbor != sector {
+				r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
+				outIdx++
+			}
+			continue
+		}
+
 		sectorYCeil := sector.Ceil - vi.where.Z
 		sectorYFloor := sector.Floor - vi.where.Z
-
-
 
 		vx1 := vertexCurr.X - vi.where.X
 		vy1 := vertexCurr.Y - vi.where.Y
@@ -244,9 +251,6 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 
 		//TODO RIATTIVARE
 		if x1 > x2 || x2 < qi.x1 || x1 > qi.x2 {
-			if sector.Id == "15" {
-				fmt.Println("Can't render", sector.Id, "child:", s)
-			}
 			continue
 		}
 		x1Max := mathematic.MaxF(x1, qi.x1)
@@ -317,6 +321,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
 
+
+			/*
 			//TODO RIMUOVERE!!!!!!!!
 			if v, ok := __patch[neighbor]; ok {
 				if v >= 3 {
@@ -326,6 +332,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			} else {
 				__patch[neighbor] = 1
 			}
+
+			 */
 
 			//TODO RIATTIVARE
 			if neighbor != sector { //circuit breaker
@@ -343,7 +351,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 
 	if first && outIdx == 0 {
 		for s := uint64(0); s < sector.NPoints; s++ {
-			neighbor := sector.Neighbors[s]
+			neighbor := sector.Vertices[s].Sector
 			if neighbor != nil {
 				//TODO RIATTIVARE
 				if neighbor != sector {

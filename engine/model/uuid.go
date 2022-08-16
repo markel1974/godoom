@@ -1,4 +1,4 @@
-package world
+package model
 
 import (
 	"crypto/rand"

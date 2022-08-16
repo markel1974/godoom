@@ -38,7 +38,7 @@ func (g *Game) Setup() {
 	var err error
 	g.viewMode = -1
 	g.enableClear = true //true
-	m := 2
+	m := 1
 
 	switch m {
 	case 0:

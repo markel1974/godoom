@@ -78,8 +78,8 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem,
 				mode = 2
 			} else {
 				var neighbors []string
-				for _, z := range css[idx].sector.Neighbors {
-					id := ""; if z != nil { id = z.Id }
+				for _, z := range css[idx].sector.Vertices {
+					id := ""; if z != nil { id = z.Ref }
 					neighbors = append(neighbors, id)
 				}
 				fmt.Println("Current target Sector:", css[idx].sector.Id, strings.Join(neighbors, ","), css[idx].sector.Tag)

@@ -2,36 +2,56 @@ package model
 
 import "github.com/markel1974/godoom/engine/textures"
 
+type XYKind2 struct {
+	XY
+	Ref    string
+	Kind   int
+	Sector *Sector
+}
+
+func NewXYKind(ref string, sector * Sector, kind int, xy XY) *XYKind2{
+	k := &XYKind2{}
+	k.Update(ref, sector, kind, xy)
+	return k
+}
+
+func (k * XYKind2) Update(ref string, sector * Sector, kind int, xy XY) {
+	k.Ref = ref
+	k.Sector = sector
+	k.Kind = kind
+	k.XY = xy
+}
+
+func (k * XYKind2) Clone() *XYKind2 {
+	return NewXYKind(k.Ref, k.Sector, k.Kind, k.XY)
+}
+
+
+
 type Sector struct {
 	Id           string
 	Floor        float64
 	Ceil         float64
-	Vertices     []XY
+	Vertices     []*XYKind2
 	NPoints      uint64
-	NeighborsIds []string
-	//TODO REMOVE
-	NeighborsRefs []int
-	Neighbors     []*Sector
-	Textures      bool
-	Tag           string
-	FloorTexture  *textures.Texture
-	CeilTexture   *textures.Texture
-	UpperTexture  *textures.Texture
-	LowerTexture  *textures.Texture
-	WallTexture   *textures.Texture
-	usage         int
-	compileId     int
+	//Neighbors    []*Sector
+	Textures     bool
+	Tag          string
+	FloorTexture *textures.Texture
+	CeilTexture  *textures.Texture
+	UpperTexture *textures.Texture
+	LowerTexture *textures.Texture
+	WallTexture  *textures.Texture
+	usage        int
+	compileId    int
 }
 
-func NewSector(id string, nPoints uint64, vertices []XY, neighborsIds []string) *Sector {
+func NewSector(id string, nPoints uint64, vertices []*XYKind2) *Sector {
 	s := &Sector{
 		Id:            id,
 		Ceil:          0,
 		Floor:         0,
 		Vertices:      vertices,
-		NeighborsRefs: nil,
-		Neighbors:     nil,
-		NeighborsIds:  neighborsIds,
 		NPoints:       nPoints,
 		Textures:      false,
 		usage:         0,

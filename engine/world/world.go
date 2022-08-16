@@ -29,7 +29,7 @@ var availableLower = []string{"wall2.ppm"}
 var availableWall = []string{"wall2.ppm"}
 
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.InputSector {
-	sector := &model.InputSector{Id: NextUUId(), Floor: floor, Ceil: ceil}
+	sector := &model.InputSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
 	sector.Textures = true
 	sector.FloorTexture = availableFloor[random(0, len(availableFloor)-1)]
 	sector.CeilTexture = availableCeil[random(0, len(availableCeil)-1)]

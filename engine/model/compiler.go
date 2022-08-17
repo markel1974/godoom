@@ -118,7 +118,6 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 				//sect.NPoints = uint64(len(sect.Vertices) - 1)
 			}
 		}
-
 	}
 
 

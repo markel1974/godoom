@@ -173,24 +173,6 @@ func (b * Builder) scanSubSectors() {
 			start := b.level.Vertexes[segment.VertexStart]
 			end := b.level.Vertexes[segment.VertexEnd]
 
-			/*
-			if subSectorId == 117 {
-				fmt.Println("------------", subSectorId)
-				fmt.Println("segmentId", segmentId, segmentId - subSector.StartSeg)
-				fmt.Println("Segment Offset:", segment.Offset)
-				fmt.Println("Segment Angle:", segment.BAM)
-				fmt.Println("Start:", start)
-				fmt.Println("End:", end)
-				fmt.Println(lineDef.Flags, "->", lineDef.PrintBits())
-				fmt.Println(sideDef.PrintTexture())
-				//fmt.Println(start.XCoord, ",", -start.YCoord)
-			}
-			*/
-
-			//if subSectorId == 15 {
-			//	fmt.Println(start.XCoord, ",", -start.YCoord)
-			//}
-
 			lower := sideDef.LowerTexture
 			middle := sideDef.MiddleTexture
 			upper := sideDef.UpperTexture
@@ -225,15 +207,23 @@ func (b * Builder) scanSubSectors() {
 			current := b.getConfigSector(sectorId, sector, subSectorId, lineDef)
 			if len(current.Segments) > 0 {
 				//TODO NON PUO' ESSERE REALIZZATO IN QUESTO MODO......
+				//TODO DATI TUTTI I PUNTI DEVE ESSERE CREATO UN POLIGONO CONVESSO
+				//https://en.wikipedia.org/wiki/Convex_hull_algorithms
+				//es https://en.wikipedia.org/wiki/Quickhull
 				prev := current.Segments[len(current.Segments) - 1]
 				if prev.End.X != modelSegment.Start.X || prev.End.Y != modelSegment.Start.Y {
 					missingSegment := &model.InputSegment{ Tag: "Missing", Neighbor: prev.Neighbor, Start: prev.End, End: modelSegment.Start}
 					current.Segments = append(current.Segments, missingSegment)
 				}
 			}
-
 			current.Segments = append(current.Segments, modelSegment)
 		}
+
+
+		//TODO NON PUO' ESSERE REALIZZATO IN QUESTO MODO......
+		//TODO DATI TUTTI I PUNTI DEVE ESSERE CREATO UN POLIGONO CONVESSO
+		//https://en.wikipedia.org/wiki/Convex_hull_algorithms
+		//es https://en.wikipedia.org/wiki/Quickhull
 	}
 
 	for _, subSector := range b.cfg {

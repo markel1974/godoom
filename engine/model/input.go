@@ -53,5 +53,5 @@ type Input struct {
 	Lights            []*InputLight  `json:"lights"`
 	Player            *InputPlayer   `json:"player"`
 	ScaleFactor       float64        `json:"scaleFactor"`
-	DisableFix        bool           `json:"fix"`
+	DisableLoop       bool           `json:"disableLoop"`
 }

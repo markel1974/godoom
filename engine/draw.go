@@ -267,7 +267,7 @@ func (dp *DrawPolygon) DrawLines() {
 	if dp.surface == nil {
 		return
 	}
-	for c := 0; c < len(dp.points) - 1; c ++ {
+	for c := 0; c < len(dp.points) - 1; c += 2 {
 		from := dp.points[c]
 		to := dp.points[c+1]
 		dp.drawLine(from.X, from.Y, to.X, to.Y)

@@ -3,9 +3,10 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
+
 	//"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/textures"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -91,38 +92,43 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 		}
 	}
 
-	//Verify Loop
-	for idx := 0; idx < len(r.sectors); idx++ {
-		sect := r.sectors[idx]
-		vFirst := sect.Segments[0]
-		vLast := sect.Segments[len(sect.Segments)-1]
-		hasLoop := vFirst.Start.X == vLast.End.X && vFirst.Start.Y == vLast.End.Y
-		if !hasLoop {
-			//TODO StubOld2 funziona solo se viene aggiunto in testa.....
-			//vLast := sect.Vertices[len(sect.Vertices)-1]
-			//sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-			//fmt.Printf("creating loop for sector %d\n", idx)
-			k := vLast.Copy()
-			k.Start = k.End
-			k.End = vFirst.Start
-			sect.Segments = append(sect.Segments, k)
-		} else {
-			//TODO
-			//fmt.Println("Adding an extra vertex")
-			//vLast := sect.Segments[len(sect.Segments)-1]
-			//sect.Segments = append(sect.Segments, vLast.Clone())
-			//sect.NPoints = uint64(len(sect.Vertices) - 1)
+	if !cfg.DisableLoop {
+		//Verify Loop
+		for _, sector := range r.sectors {
+			if len(sector.Segments) == 1 {
+				continue
+			}
+			vFirst := sector.Segments[0]
+			vLast := sector.Segments[len(sector.Segments)-1]
+			hasLoop := vFirst.Start.X == vLast.End.X && vFirst.Start.Y == vLast.End.Y
+			if !hasLoop {
+				//TODO StubOld2 funziona solo se viene aggiunto in testa.....
+				//vLast := sect.Vertices[len(sect.Vertices)-1]
+				//sect.Vertices = append([]XY{vLast}, sect.Vertices...)
+				fmt.Printf("creating loop for sector %s\n", sector.Id)
+				k := vLast.Copy()
+				k.Start = k.End
+				k.End = vFirst.Start
+				sector.Segments = append(sector.Segments, k)
+			} else {
+				//TODO
+				//fmt.Println("Adding an extra vertex")
+				//vLast := sect.Segments[len(sect.Segments)-1]
+				//sect.Segments = append(sect.Segments, vLast.Clone())
+				//sect.NPoints = uint64(len(sect.Vertices) - 1)
+			}
 		}
+
 	}
 
-	fixed := 0
 
-	lineDefsCache := r.makeLineDefsCache()
 
-Rescan:
+
+	//Rescan:
 	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
-
+	fixed := 0
 	undefined := 0
+	lineDefsCache := r.makeLineDefsCache()
 	for _, sector := range r.sectors {
 		for np, s := range sector.Segments {
 			if s.Kind != DefinitionWall {
@@ -130,16 +136,20 @@ Rescan:
 				if ld, ok := lineDefsCache[lineDefHash(s.End, s.Start)]; ok {
 					if s.Ref != ld.sector.Id {
 						fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
-						//if s.Kind == DefinitionUnknown { s.Kind = DefinitionValid }
-						s.Kind = DefinitionValid
+						if s.Kind == DefinitionUnknown { s.Kind = DefinitionValid }
 						s.SetSector(ld.sector.Id, ld.sector)
 						fixed++
-						goto Rescan
+						//goto Rescan
 					}
 				} else {
 					fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
-					//s.Kind = DefinitionVoid
+					//s.Kind = DefinitionWall
+					//s.Sector = nil
 					//v1start.Update("wall", nil, DefinitionWall, v1start.XY)
+
+					//if s.Kind == DefinitionVoid  {
+					//	s.Kind = DefinitionWall
+					//}
 					undefined++
 				}
 				//}
@@ -147,6 +157,7 @@ Rescan:
 		}
 	}
 	fmt.Println("undefined:", undefined, "fixed:", fixed)
+
 
 	/*
 	//TODO SISTEMARE
@@ -290,6 +301,15 @@ Rescan:
 		}
 	*/
 
+	r.finalize(cfg)
+
+	fmt.Println("Scan complete")
+
+	return nil
+}
+
+
+func (r * Compiler) finalize(cfg *Input) {
 	scale := cfg.ScaleFactor
 	if scale < 1 { scale = 1 }
 
@@ -307,10 +327,6 @@ Rescan:
 			r.sectorsMaxHeight = h
 		}
 	}
-
-	fmt.Println("Scan complete")
-
-	return nil
 }
 
 func (r * Compiler) GetSectors() []*Sector {

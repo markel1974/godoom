@@ -195,8 +195,12 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		vertexNext := sector.Segments[s].End
 		neighbor := sector.Segments[s].Sector
 
+		if neighbor != nil && neighbor == sector {
+			continue
+		}
+
 		if segment.Kind == model.DefinitionVoid {
-			if neighbor != nil && neighbor != sector {
+			if neighbor != nil {
 				r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
 				outIdx++
 			}

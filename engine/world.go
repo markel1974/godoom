@@ -287,6 +287,10 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 		if y2 > maxY { maxY = y2 }
 	}
 
+	if sector.Id == "15" {
+		fmt.Println("TEST")
+	}
+
 	xFactor := (float64(w.screenWidth) / 2) / maxX
 	yFactor := (float64(w.screenHeight) / 2) / maxY
 

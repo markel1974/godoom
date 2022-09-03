@@ -12,9 +12,9 @@ type ConvexHull struct {
 func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 	//head := ch.getHead(sect.Segments)
 	head := ch.findLowest(sect.Segments)
-	curr := sect.Segments[head]
-	out := []*Segment{ curr }
-	var lower XY; if ch.isLower(curr.Start, curr.End) { lower = curr.Start } else { lower = curr.End }
+	headSeg := sect.Segments[head]
+	out := []*Segment{ headSeg }
+	var lower XY; if ch.isLower(headSeg.Start, headSeg.End) { lower = headSeg.Start } else { lower = headSeg.End }
 
 	var segments []*Segment
 	for x, seg := range sect.Segments {
@@ -34,6 +34,8 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 		return area > 0
 	})
 
+	curr := headSeg
+
 	for len(segments) > 0 {
 		target := -1
 		if len(segments) == 1 {
@@ -42,7 +44,7 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 			target = ch.getConvex(curr, segments)
 		}
 		curr = segments[target]
-		segments = append(segments[:target], segments[target + 1:]...)
+		segments = append(segments[:target], segments[target+1:]...)
 		out = append(out, curr)
 	}
 	//fmt.Println("------ Original")
@@ -81,6 +83,7 @@ func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
 			}
 		}
 	}
+	return 0
 
 	/*
 	for x, curr := range segments {
@@ -95,9 +98,8 @@ func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
 			}
 		}
 	}
-	*/
-
 	return 0
+	*/
 }
 
 func (ch * ConvexHull) findLowest(segments []*Segment) int {

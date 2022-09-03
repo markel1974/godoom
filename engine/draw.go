@@ -263,11 +263,16 @@ func (dp *DrawPolygon) DrawRectangle() {
 	}
 }
 
-func (dp *DrawPolygon) DrawLines() {
+func (dp *DrawPolygon) DrawLines(contiguous bool) {
 	if dp.surface == nil {
 		return
 	}
-	for c := 0; c < len(dp.points) - 1; c += 2 {
+	interval := 2
+	if contiguous {
+		interval = 1
+	}
+
+	for c := 0; c < len(dp.points) - 1; c += interval {
 		from := dp.points[c]
 		to := dp.points[c+1]
 		dp.drawLine(from.X, from.Y, to.X, to.Y)

@@ -56,33 +56,48 @@ type Sector struct {
 	LowerTexture *textures.Texture
 	WallTexture  *textures.Texture
 	usage        int
-	compileId    int
+	compileId    uint64
+	references   map[string]bool
 }
 
 func NewSector(id string, segments []*Segment) *Sector {
 	s := &Sector{
-		Id:            id,
-		Ceil:          0,
-		Floor:         0,
-		Segments:      segments,
-		Textures:      false,
-		usage:         0,
-		compileId:     0,
+		Id:         id,
+		Ceil:       0,
+		Floor:      0,
+		Segments:   segments,
+		Textures:   false,
+		usage:      0,
+		compileId:  0,
+		references: make(map[string]bool),
 	}
 	return s
 }
 
-func (s *Sector) Reference(compileId int) {
+func (s *Sector) Reference(compileId uint64) {
 	if compileId != s.compileId {
 		s.compileId = compileId
 		s.usage = 0
+		s.references = make(map[string]bool)
+	} else {
+		s.usage++
 	}
 }
 
-func (s *Sector) AddUsage() {
-	s.usage++
+func (s * Sector) GetCompileId() uint64{
+	return s.compileId
 }
 
 func (s *Sector) GetUsage() int {
 	return s.usage
+}
+
+
+func (s *Sector) Add(id string) {
+	s.references[id] = true
+}
+
+func (s *Sector) Has(id string) bool {
+	_, ok := s.references[id]
+	return ok
 }

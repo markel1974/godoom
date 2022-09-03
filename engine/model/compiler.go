@@ -3,10 +3,8 @@ package model
 import (
 	"errors"
 	"fmt"
-	"math"
-
-	//"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/textures"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -92,6 +90,22 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 		}
 	}
 
+
+	//TODO 39 - 54
+	//ch := &ConvexHull{}
+
+	//for _, sect := range r.sectors {
+	//	fmt.Println("-----------------------", sect.Id)
+	//	ch.Create(sect)
+	//}
+
+	//ch.Create(r.sectors[54])
+	//ch.Create(r.sectors[15])
+	//ch.Create(r.sectors[38])
+	//ch.Create(r.sectors[15])
+	//ch.Create(r.sectors[54])
+	//os.Exit(-1)
+
 	if !cfg.DisableLoop {
 		//Verify Loop
 		for _, sector := range r.sectors {
@@ -118,8 +132,6 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 				//sect.NPoints = uint64(len(sect.Vertices) - 1)
 			}
 		}
-	}
-
 
 
 
@@ -156,7 +168,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 		}
 	}
 	fmt.Println("undefined:", undefined, "fixed:", fixed)
-
+	}
 
 	/*
 	//TODO SISTEMARE
@@ -363,7 +375,255 @@ func (r * Compiler) makeLineDefsCache() map[string]*lineDef2 {
 	return t
 }
 
+/*
+func (r * Compiler) createConvexHull3(sect * Sector) {
+	var test []XY
+	for _, seg := range sect.Segments {
+		test = append(test, seg.End)
+		//fmt.Println(seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, seg.Tag)
+	}
+	target := 0
+	out := []*Segment{sect.Segments[target]}
 
+	fmt.Println("---------")
+
+	curr := map[int]bool{target: true}
+	for {
+		ret := GetClosestPoint(sect.Segments[target].Start, test, curr)
+		if ret < 0 {
+			break
+		}
+		target = ret
+		curr[target] = true
+		out = append(out, sect.Segments[target])
+	}
+
+	for idx, seg := range out {
+		fmt.Println(idx, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, seg.Tag)
+	}
+}
+
+ */
+
+
+
+
+
+/*
+func (r * Compiler) createConvexHull(sect * Sector) {
+	var pointCloud []quickhull.Vector
+
+	stub := `[{"start":{"x":1664,"y":-2368},"end":{"x":1664,"y":-2312},"kind":3,"neighbor":"1","tag":"Id:  (twoSided,upperUnpegged | COMPTALL - COMPSPAN)","upper":"COMPTALL","middle":"-","lower":"COMPSPAN"},{"start":{"x":1664,"y":-2552},"end":{"x":1664,"y":-2432},"kind":3,"neighbor":"0","tag":"Id:  (twoSided,upperUnpegged | STARGR1 - -)","upper":"STARGR1","middle":"-","lower":"-"},{"start":{"x":1664,"y":-2432},"end":{"x":1664,"y":-2392},"kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"STARGR1","lower":"-"},{"start":{"x":1664,"y":-2392},"end":{"x":1664,"y":-2368},"kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"SUPPORT2","lower":"-"},{"start":{"x":1992,"y":-2552},"end":{"x":1784,"y":-2552},"kind":3,"neighbor":"26","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"},{"start":{"x":1784,"y":-2312},"end":{"x":1992,"y":-2312},"kind":3,"neighbor":"21","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"}]`
+	_ = json.Unmarshal([]byte(stub), &sect.Segments)
+
+	segments := make(map[string]*Segment)
+	for _, segment := range sect.Segments {
+		id := fmt.Sprintf("%f|%f|%f|%f", segment.Start.X, -segment.Start.Y, segment.End.X, -segment.End.Y)
+		segments[id] = segment
+		pointCloud = append(pointCloud, quickhull.Vector{X: segment.Start.X, Y: -segment.Start.Y, Z: 1})
+		pointCloud = append(pointCloud, quickhull.Vector{X: segment.End.X, Y: -segment.End.Y, Z: 1})
+		fmt.Printf("Segment %.0f %.0f %.0f %.0f\n", segment.Start.X, -segment.Start.Y, segment.End.X, -segment.End.Y)
+	}
+
+	//ccw --> counterclockwise
+	hull := new(quickhull.QuickHull).ConvexHull(pointCloud, false, true, 0)
+	fmt.Println(len(pointCloud))
+	fmt.Println(len(hull.Vertices))
+
+	//for idx := 0; idx < len(hull.Vertices) - 1; idx++ {
+	//	curr := hull.Vertices[idx]
+	//	next := hull.Vertices[idx + 1]
+	//	id := fmt.Sprintf("%f|%f|%f|%f", curr.X, curr.Y, next.X, next.Y)
+	//	if s, ok := segments[id]; ok {
+	//		fmt.Println(idx, "FOUND", curr.X, curr.Y, next.X, next.Y, s.Tag)
+	//	} else {
+	//		fmt.Println(idx, "NOT FOUND", curr.X, curr.Y, next.X, next.Y)
+	//	}
+	//}
+
+	for x := 0; x < len(hull.Indices) - 1; x+=2{
+		currIdx := hull.Indices[x]
+		nextIdx := hull.Indices[x + 1]
+		curr := hull.Vertices[currIdx]
+		next := hull.Vertices[nextIdx]
+		id := fmt.Sprintf("%f|%f|%f|%f", curr.X, curr.Y, next.X, next.Y)
+		if s, ok := segments[id]; ok {
+			fmt.Println(x, "FOUND", curr.X, curr.Y, next.X, next.Y, s.Tag)
+		} else {
+			fmt.Println(x, "NOT FOUND", curr.X, curr.Y, next.X, next.Y)
+		}
+	}
+
+	//triangles := hull.Triangles()
+	//fmt.Println(len(triangles))
+	//for _, triangle := range triangles {
+	//	for idx := 0; idx < len(triangle)-1; idx++ {
+	//		curr := triangle[idx]
+	//		next := triangle[idx+1]
+	//		id := fmt.Sprintf("%f|%f|%f|%f", curr.X, curr.Y, next.X, next.Y)
+	//		if s, ok := segments[id]; ok {
+	//			fmt.Println(s)
+	//		} else {
+	//			fmt.Println("NOT FOUND", curr.X, curr.Y, next.X, next.Y)
+	//		}
+	//	}
+	//}
+
+	fmt.Println("--------")
+	os.Exit(-1)
+
+	//for _, t := range hull.Triangles() {
+	//	fmt.Println(t[0].X, t[0].Y, "|", t[1].X, t[1].Y, "|", t[2].X, t[2].Y)
+	//}
+	//fmt.Println(hull.Triangles()) // triangles that make up the convex hull - [][3]r3.Vector, where each vector is a corner of the triangle
+}
+*/
+
+/*
+func (r * Compiler) createConvexHullOld(sect * Sector) {
+	var vert []quickhull.Vector
+	segments := make(map[string]*Segment)
+	for _, segment := range sect.Segments {
+		id := fmt.Sprintf("%f|%f|%f|%f", segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y)
+		same := false
+		segments[id] = segment
+		if len(vert) > 0 {
+			prev := vert[len(vert)-1]
+			if prev.X == segment.Start.X && prev.Y == segment.Start.Y {
+				same = true
+			}
+		}
+		if !same {
+			vert = append(vert, quickhull.Vector{X: segment.Start.X, Y: segment.Start.Y, Z: 1})
+		}
+		vert = append(vert, quickhull.Vector{X: segment.End.X, Y: segment.End.Y, Z: 1})
+	}
+
+	if vert != nil {
+		nPoints := uint64(len(vert)) - 1
+		for b := uint64(0); b < nPoints; b++ {
+			c := (b + 1) % nPoints
+			d := (b + 2) % nPoints
+			x0 := vert[b].X; y0 := vert[b].Y; x1 := vert[c].X; y1 := vert[c].Y
+			switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
+			case 0:
+				continue
+				//Note: This used to be a problem for my engine, but is not anymore, so it is disabled.
+				//if you enable this change, you will not need the IntersectBox calls in some locations anymore.
+				//if sect.NeighborsRefs[b] == sect.NeighborsRefs[c] { continue }
+				//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
+			case -1:
+				fmt.Printf("Sector %s: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", sect.Id, b, c, c, d)
+			default:
+				continue
+			}
+
+			fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
+
+			// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
+			// e cannot be c, c-1 or c+1
+			// line (c)-(e) cannot intersect with any edge in this sector
+			nearestDist := 1e29
+			nearestPoint := ^uint64(0)
+			for n := (d + 1) % nPoints; n != b; n = (n + 1) % nPoints {
+				// Don't go through b, c, d
+				x2 := vert[n].X
+				y2 := vert[n].Y
+				distX := x2 - x1
+				distY := y2 - y1
+				dist := distX*distX + distY*distY
+				if dist >= nearestDist { continue }
+				if mathematic.PointSideF(x2, y2, x0, y0, x1, y1) != 1 { continue }
+				ok := true
+				x1 += distX * 1e-4; x2 -= distX * 1e-4; y1 += distY * 1e-4; y2 -= distY * 1e-4
+				for f := uint64(0); f < nPoints; f++ {
+					if mathematic.IntersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
+						ok = false
+						break
+					}
+				}
+				if !ok {
+					continue
+				}
+				// Check whether this split would resolve the original problem
+				if mathematic.PointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 { dist += 1e6 }
+				if dist >= nearestDist { continue }
+				nearestDist = dist
+				nearestPoint = n
+			}
+
+			if nearestPoint == ^uint64(0) {
+				fmt.Printf("  ERROR: Could not find a vertex to pair with\n")
+				continue
+			}
+			e := nearestPoint
+			fmt.Printf(" - and point %d - (%g,%g) as the far point\n", e, vert[e].X, vert[e].Y)
+
+			// Now that we have a chain: a b c d e f g h
+			// And we're supposed to split it at "c" and "e", the outcome should be two chains:
+			// c d e         (c)
+			// e f g h a b c (e)
+
+			var vert1 []*Segment
+			//var neigh1 []int
+			// Create chain 1: from c to e.
+			for n := uint64(0); n < nPoints; n++ {
+				m := (c + n) % nPoints
+				vert1 = append(vert1, sect.Segments[m].Copy())
+				//neigh1 = append(neigh1, sect.NeighborsRefs[m])
+				//vert1 = append(vert1, sect.Vertices[m])
+				if m == e {
+					vert1 = append(vert1, vert1[0])
+					break
+				}
+			}
+
+			//TODO ??????
+			//neigh1Idx := len(r.sectors)
+			//neigh1 = append(neigh1, neigh1Idx)
+
+			var vert2 []*Segment
+			//var neigh2 []int
+			// Create chain 2: from e to c.
+			for n := uint64(0); n < nPoints; n++ {
+				m := (e + n) % nPoints
+				//neigh2 = append(neigh2, sect.NeighborsRefs[m])
+				//vert2 = append(vert2, sect.Vertices[m])
+				vert2 = append(vert2, sect.Segments[m].Copy())
+				if m == c {
+					vert2 = append(vert2, vert2[0])
+					break
+				}
+			}
+			//neigh2 = append(neigh2, idx)
+
+			// using chain1
+			sect.Segments = vert1
+			//sect.NeighborsRefs = neigh1
+			//sect.NPoints = uint64(len(vert1) - 1)
+			//sect = r.sectors[idx]
+
+			ns := NewSector("AutoGenerated_" + NextUUId(), vert2)
+			//ns.NeighborsRefs = neigh2
+			ns.Floor = sect.Floor
+			ns.Ceil = sect.Ceil
+			ns.Textures = sect.Textures
+			ns.FloorTexture = sect.FloorTexture
+			ns.CeilTexture = sect.CeilTexture
+			ns.UpperTexture = sect.UpperTexture
+			ns.LowerTexture = sect.LowerTexture
+			ns.WallTexture = sect.WallTexture
+
+			r.sectors = append(r.sectors, ns)
+
+			r.cache[sect.Id] = sect
+
+			// We needs to rescan
+		}
+	}
+}
+
+ */
 
 
 /*

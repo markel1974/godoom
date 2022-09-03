@@ -267,13 +267,25 @@ func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * mode
 	dp.Setup(surface, t, len(t), colorLine, 1.0, 1.0)
 	dp.DrawPoints(10)
 	dp.color = colorPoint
-	dp.DrawLines()
+	dp.DrawLines(false)
 }
 
 func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sector) {
 	maxX := 0.0
 	maxY := 0.0
-	for _, v := range sector.Segments  {
+
+	useConvexHull := true
+
+	var segments[]*model.Segment
+
+	if useConvexHull {
+		ch := &model.ConvexHull{}
+		segments = ch.Create(sector)
+	} else {
+		segments = sector.Segments
+	}
+
+	for _, v := range segments  {
 		if v.Kind == model.DefinitionVoid || v.Kind == model.DefinitionUnknown{
 			continue
 		}
@@ -287,15 +299,11 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 		if y2 > maxY { maxY = y2 }
 	}
 
-	if sector.Id == "15" {
-		fmt.Println("TEST")
-	}
-
 	xFactor := (float64(w.screenWidth) / 2) / maxX
 	yFactor := (float64(w.screenHeight) / 2) / maxY
 
 	var t []model.XYZ
-	for _, v := range sector.Segments {
+	for _, v := range segments {
 		if v.Kind == model.DefinitionVoid {
 			continue
 		}
@@ -314,7 +322,7 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
 	dp.DrawPoints(10)
 	dp.color = 0xff0000
-	dp.DrawLines()
+	dp.DrawLines(useConvexHull)
 }
 
 /*

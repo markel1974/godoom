@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/markel1974/godoom/engine/legacy"
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/model/quickhull"
 	"github.com/markel1974/godoom/engine/wad"
 	"github.com/markel1974/godoom/engine/world"
 	"github.com/markel1974/godoom/pixels"
@@ -18,6 +19,22 @@ const (
 	_MaxQueue = 32
 	_scale    = 1
 )
+
+
+func test() {
+	pointCloud := []quickhull.Vector{
+		{X: 1, Y: 2, Z: 1},
+		{X: 4, Y: 7, Z: 1},
+		{X: 7, Y: 2, Z: 1},
+		{X: 4, Y: 4, Z: 1}, // This point is inside the hull
+	}
+
+	hull := new(quickhull.QuickHull).ConvexHull(pointCloud, true, false, 0)
+	fmt.Println(hull.Vertices) // does not contain (4,4,1)
+	fmt.Println(hull.Triangles()) // triangles that make up the convex hull - [][3]r3.Vector, where each vector is a corner of the triangle
+
+	os.Exit(-1)
+}
 
 type Game struct {
 	win        *pixels.GLWindow
@@ -36,7 +53,7 @@ func NewGame() *Game {
 
 func (g *Game) Setup() {
 	var err error
-	g.viewMode = -1
+	g.viewMode = 1
 	g.enableClear = true //true
 	m := 2
 
@@ -183,6 +200,9 @@ func (g *Game) Update(win *pixels.GLWindow) {
 }
 
 func main() {
+
+	//test()
+
 	g := NewGame()
 	pixels.GLRun(g.Run)
 }

@@ -115,8 +115,22 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 		return a < b
 	})
 
+
+	//res, _ :=json.Marshal(sectors[15].Segments)
+	//fmt.Println(string(res))
+
+	//for _, s := range sectors[15].Segments {
+	//	fmt.Printf("{X: %f, Y: %f, Z: 1},\n", s.Start.X, s.Start.Y)
+	//	fmt.Printf("{X: %f, Y: %f, Z: 1},\n", s.End.X, s.End.Y)
+	//}
+	//os.Exit(-1)
+
 	for _, s := range sectors {
 		for _, n := range s.Segments {
+			//n.Start.X = math.Abs(n.Start.X)
+			//n.End.X = math.Abs(n.End.X)
+			//n.Start.Y = math.Abs(n.Start.Y)
+			//n.End.Y = math.Abs(n.End.Y)
 			n.Start.Y = -n.Start.Y
 			n.End.Y = -n.End.Y
 		}
@@ -210,15 +224,16 @@ func (b * Builder) scanSubSectors() {
 				//TODO DATI TUTTI I PUNTI DEVE ESSERE CREATO UN POLIGONO CONVESSO
 				//https://en.wikipedia.org/wiki/Convex_hull_algorithms
 				//es https://en.wikipedia.org/wiki/Quickhull
+				/*
 				prev := current.Segments[len(current.Segments) - 1]
 				if prev.End.X != modelSegment.Start.X || prev.End.Y != modelSegment.Start.Y {
 					missingSegment := &model.InputSegment{ Tag: "Missing", Neighbor: prev.Neighbor, Start: prev.End, End: modelSegment.Start}
 					current.Segments = append(current.Segments, missingSegment)
 				}
+				*/
 			}
 			current.Segments = append(current.Segments, modelSegment)
 		}
-
 
 		//TODO NON PUO' ESSERE REALIZZATO IN QUESTO MODO......
 		//TODO DATI TUTTI I PUNTI DEVE ESSERE CREATO UN POLIGONO CONVESSO

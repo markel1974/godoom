@@ -17,6 +17,7 @@ type RenderSoftware struct {
 	targetIdx          int
 	targetLastCompiled int
 	targetEnabled      bool
+	targetId           string
 	dp                 *DrawPolygon
 }
 
@@ -77,12 +78,16 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem,
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2
 			} else {
-				var neighbors []string
-				for _, z := range css[idx].sector.Segments {
-					id := ""; if z != nil { id = z.Ref }
-					neighbors = append(neighbors, id)
+				if r.targetId != css[idx].sector.Id {
+					r.targetId = css[idx].sector.Id
+					var neighbors []string
+					for _, z := range css[idx].sector.Segments {
+						id := ""; if z != nil { id = z.Ref }
+						neighbors = append(neighbors, id)
+					}
+					fmt.Println("Current target Sector:", r.targetId, strings.Join(neighbors, ","), css[idx].sector.Tag)
+
 				}
-				fmt.Println("Current target Sector:", css[idx].sector.Id, strings.Join(neighbors, ","), css[idx].sector.Tag)
 			}
 		}
 		polygons := css[idx].Get()

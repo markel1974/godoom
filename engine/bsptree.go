@@ -38,6 +38,11 @@ type queueItem struct {
 	y2b    float64
 }
 
+func (qi * queueItem) Hash() string {
+	out := fmt.Sprintf("%p|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f", qi.sector, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
+	return out
+}
+
 func (qi *queueItem) Update(sector *model.Sector, x1 float64, x2 float64, y1t float64, y2t float64, y1b float64, y2b float64) {
 	qi.sector = sector
 	qi.x1 = x1
@@ -58,7 +63,7 @@ type BSPTree struct {
 	sectorQueue      []*queueItem
 	screenHFov       float64
 	screenVFov       float64
-	compileId        int
+	compileId        uint64
 	sectorsMaxHeight float64
 	textures         *textures.Textures
 	sectors          []*model.Sector
@@ -88,6 +93,7 @@ func NewBSPTree(width int, height int, maxQueue int, textures *textures.Textures
 		compileId:     0,
 		compiledCount: 0,
 	}
+	r.compileId--
 	for x := 0; x < len(r.queue); x++ {
 		r.queue[x] = &queueItem{}
 	}
@@ -114,13 +120,8 @@ func (r *BSPTree) clear() {
 }
 
 
-
-//var __patch map[*model.Sector]int
-
 func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 	r.clear()
-
-	 //__patch = make(map[*model.Sector]int)
 
 	queueLen := len(r.queue)
 	headIdx := 0
@@ -157,33 +158,50 @@ func (r *BSPTree) Compile(vi *viewItem) ([]*CompiledSector, int) {
 		sector := current.sector
 
 		sector.Reference(r.compileId)
-		if sector.GetUsage() & r.maxSectors != 0 { continue }
-		sector.AddUsage()
+
+		//if sector.GetUsage() > r.maxSectors {
+			//fmt.Println("MAX SECTORS REACHED!!")
+		//	continue
+		//}
+		//if (sector.GetUsage() & r.maxSectors) != 0 { continue }
 
 		sq, sqCount := r.compileSector(vi, sector, current)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
 			if q.x2 > q.x1 && (headIdx + queueLen + 1 - tailIdx) % queueLen != 0 {
-				head.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
-				headIdx++
-				if headIdx >= queueLen { headIdx = 0 }
-				head = r.queue[headIdx]
+				hash := q.Hash()
+				if !sector.Has(hash) {
+					sector.Add(hash)
+					head.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
+					headIdx++
+					if headIdx >= queueLen { headIdx = 0 }
+					head = r.queue[headIdx]
+				}
 			}
 		}
-		sector.AddUsage()
+		//sector.AddUsage()
 	}
 
 	return r.compiledSectors, r.compiledCount
 }
 
-
-//TODO MOVE TO SoftwareRender
-func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueItem) ([]*queueItem, int) {
+func (r * BSPTree) GetCS(sector *model.Sector) (*CompiledSector, bool){
 	first := r.compiledCount == 0
+	if r.compiledCount >= len(r.compiledSectors) {
+		fmt.Println("OUT OF COMPILED SECTORS!")
+		return nil, false
+	}
 	cs := r.compiledSectors[r.compiledCount]
 	r.compiledCount++
 	cs.Bind(sector)
+	return cs, first
+}
 
+
+//TODO MOVE TO SoftwareRender
+func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueItem) ([]*queueItem, int) {
+	var cs * CompiledSector = nil
+	first := false
 	outIdx := 0
 
 	//ceilPComplete := cs.Acquire( nil, IdCeilTest, 0, 0, 0, 0, 0, 0)
@@ -195,7 +213,7 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		vertexNext := sector.Segments[s].End
 		neighbor := sector.Segments[s].Sector
 
-		if neighbor != nil && neighbor == sector {
+		if neighbor == sector {
 			continue
 		}
 
@@ -254,10 +272,13 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		yScale2 := r.screenVFov / tz2
 		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
 
-		//TODO RIATTIVARE
-		if x1 > x2 || x2 < qi.x1 || x1 > qi.x2 {
+		if x1 > x2 {
 			continue
 		}
+		if x2 < qi.x1 || x1 > qi.x2 {
+			continue
+		}
+
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
@@ -290,6 +311,12 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 		if x2Min != qi.x2 {
 			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok { y2Ceil = i2 }
 			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok { y2Floor = i2 }
+		}
+
+		if cs == nil {
+			if cs, first = r.GetCS(sector); cs == nil {
+				return nil, 0
+			}
 		}
 
 		ceilP := cs.Acquire(neighbor, IdCeil, x1, x2, tz1, tz2, u0, u1)
@@ -325,25 +352,8 @@ func (r *BSPTree) compileSector(vi *viewItem, sector *model.Sector, qi *queueIte
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
-
-
-			/*
-			//TODO RIMUOVERE!!!!!!!!
-			if v, ok := __patch[neighbor]; ok {
-				if v >= 3 {
-					continue
-				}
-				__patch[neighbor] = v + 1
-			} else {
-				__patch[neighbor] = 1
-			}
-			*/
-
-			//TODO RIATTIVARE
-			if neighbor != sector { //circuit breaker
-				r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
-				outIdx++
-			}
+			r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
+			outIdx++
 		} else {
 			wallP := cs.Acquire(neighbor, IdWall, x1, x2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)

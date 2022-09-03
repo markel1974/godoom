@@ -12,21 +12,21 @@ type ConvexHull struct {
 func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 	//head := ch.getHead(sect.Segments)
 	head := ch.findLowest(sect.Segments)
-	lowest := sect.Segments[head]
-	curr := lowest
+	curr := sect.Segments[head]
 	out := []*Segment{ curr }
+	var lower XY; if ch.isLower(curr.Start, curr.End) { lower = curr.Start } else { lower = curr.End }
 
 	var segments []*Segment
-	for x := 0; x < len(sect.Segments); x++ {
+	for x, seg := range sect.Segments {
 		if x == head { continue }
-		segments = append(segments, sect.Segments[x])
+		segments = append(segments, seg)
 	}
 
 	sort.SliceStable(segments, func (i, j int) bool {
-		area := ch.area2(lowest.Start, segments[i].Start, segments[j].Start)
+		area := ch.area2(lower, segments[i].Start, segments[j].Start)
 		if area == 0 {
-			x := math.Abs(segments[i].Start.X - lowest.Start.X) - math.Abs(segments[j].Start.X - lowest.Start.X)
-			y := math.Abs(segments[i].Start.Y - lowest.Start.Y) - math.Abs(segments[j].Start.Y - lowest.Start.Y)
+			x := math.Abs(segments[i].Start.X - lower.X) - math.Abs(segments[j].Start.X - lower.X)
+			y := math.Abs(segments[i].Start.Y - lower.Y) - math.Abs(segments[j].Start.Y - lower.Y)
 			if x < 0 || y < 0 { return true }
 			if x > 0 || y > 0 { return false }
 			return false
@@ -39,7 +39,7 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 		if len(segments) == 1 {
 			target = 0
 		} else if target = ch.getConnect(curr, segments); target < 0 {
-			target = ch.getConvex(lowest, curr, segments)
+			target = ch.getConvex(curr, segments)
 		}
 		curr = segments[target]
 		segments = append(segments[:target], segments[target + 1:]...)
@@ -70,16 +70,7 @@ func (ch * ConvexHull) getConnect(curr *Segment, segments[]*Segment) int {
 	return -1
 }
 
-func (ch * ConvexHull) getConvex(_ *Segment, mainPoint *Segment, segments []*Segment) int {
-	/*
-	var test []XYId
-	for idx, p := range segments {
-		test = append(test, XYId{XY: p.Start, Id: idx})
-	}
-	gs := &GrahamScan{}
-	v := gs.Partial(XYId{XY:head.Start, Id: -3}, XYId{XY:mainPoint.Start, Id: -2}, XYId{XY:mainPoint.End, Id: -1}, test)
-	return v.Id
-	*/
+func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
 	for x, curr := range segments {
 		if ch.isLeft(mainPoint.Start, mainPoint.End, curr.Start) {
 			for y, next := range segments {
@@ -90,25 +81,40 @@ func (ch * ConvexHull) getConvex(_ *Segment, mainPoint *Segment, segments []*Seg
 			}
 		}
 	}
+
+	/*
+	for x, curr := range segments {
+		if ch.isLeft(mainPoint.Start, mainPoint.End, curr.Start) {
+			if ch.isLeft(mainPoint.End, curr.Start, curr.End) {
+				for y, next := range segments {
+					if x == y { continue }
+					if ch.isLeft(curr.Start, curr.End, next.Start) {
+						return x
+					}
+				}
+			}
+		}
+	}
+	*/
+
 	return 0
 }
 
 func (ch * ConvexHull) findLowest(segments []*Segment) int {
 	lowest := 0
 	for i := 1; i < len(segments); i++ {
-		start := segments[i].Start
-		end := segments[i].End
-		lowestStart := segments[lowest].Start
-		//If lowest points are on the same line, take the rightmost point
-		if (start.Y < lowestStart.Y) || ((start.Y == lowestStart.Y) && start.X > lowestStart.X) {
-			lowest = i
-		}
-		lowestEnd := segments[lowest].End
-		if (end.Y < lowestEnd.Y) || ((end.Y == lowestEnd.Y) && end.X > lowestEnd.X) {
-			lowest = i
-		}
+		if ch.isLower(segments[i].Start, segments[lowest].Start) { lowest = i }
+		if ch.isLower(segments[i].End, segments[lowest].End) { lowest = i }
 	}
 	return lowest
+}
+
+func (ch * ConvexHull) isLower(a XY, b XY) bool {
+	//If lowest points are on the same line, take the rightmost point
+	if (a.Y < b.Y) || ((a.Y == b.Y) && a.X > b.X) {
+		return true
+	}
+	return false
 }
 
 func (ch * ConvexHull) area2(a XY, b XY, c XY) float64 {

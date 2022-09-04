@@ -92,7 +92,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 
 
 	//TODO 207 - 225
-	ch := &ConvexHull{}
+	//ch := &ConvexHull{}
 
 	//for _, sect := range r.sectors {
 	//	fmt.Println("-----------------------", sect.Id)
@@ -105,9 +105,9 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	//ch.FromSector(r.sectors[15])
 	//ch.FromSector(r.sectors[54])
 
-	ch.FromSector(r.sectors[207])
-	fmt.Println("----")
-	ch.FromSector(r.sectors[225])
+	//ch.FromSector(r.sectors[207])
+	//fmt.Println("----")
+	//ch.FromSector(r.sectors[225])
 
 	//os.Exit(-1)
 

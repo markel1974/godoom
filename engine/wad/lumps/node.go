@@ -27,6 +27,9 @@ func (b * BBox) Intersect(x int16, y int16) bool {
 	return x >= b.Left && x <= b.Right && y >= b.Bottom && y <= b.Top
 }
 
+func (b * BBox) IntersectInside(x int16, y int16) bool {
+	return x > b.Left && x < b.Right && y > b.Bottom && y < b.Top
+}
 
 func NewNodes(f * os.File, lumpInfo *LumpInfo) ([]*Node, error) {
 	var pNode Node
@@ -100,6 +103,20 @@ func (n * Node) Intersect(x int16, y int16) (uint16, bool) {
 		//return 0
 	}
 	if n.BBox[1].Intersect(x, y) {
+		return n.Child[1], true
+		//return bsp.findSubSector(x, y, int(node.Child[1]))
+	}
+	return 0, false
+}
+
+
+func (n * Node) IntersectInside(x int16, y int16) (uint16, bool) {
+	if n.BBox[0].IntersectInside(x, y) {
+		return n.Child[0], true
+		//return bsp.findSubSector(x, y, int(node.Child[0]))
+		//return 0
+	}
+	if n.BBox[1].IntersectInside(x, y) {
 		return n.Child[1], true
 		//return bsp.findSubSector(x, y, int(node.Child[1]))
 	}

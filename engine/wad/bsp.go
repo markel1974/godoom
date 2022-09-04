@@ -51,15 +51,15 @@ func (bsp * BSP) findSector(x int16, y int16, idx uint16) (uint16, uint16, *lump
 	return 0, 0, nil
 }
 
-func (bsp * BSP) FindSubSector(x int16, y int16) (uint16, uint16, bool) {
-	return bsp.findSubSector(x, y, bsp.root)
+func (bsp * BSP) FindSubSector(x int16, y int16) (uint16, *lumps.Node) {
+	return bsp.findSubSector(nil, x, y, bsp.root)
 }
 
 func (bsp * BSP) TraverseBsp(x int16, y int16, opposite bool) uint16 {
 	return bsp.traverseBsp(x, y, opposite, bsp.root)
 }
 
-func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx uint16) uint16 {
+func (bsp* BSP) traverseBspOrig(x int16, y int16, opposite bool, idx uint16) uint16 {
 	if idx & subSectorBit == subSectorBit {
 		subSectorId := (idx) & ^subSectorBit
 		return subSectorId
@@ -77,42 +77,147 @@ func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx uint16) uint16 
 	}
 }
 
-func (bsp* BSP) findSubSector(x int16, y int16, idx uint16) (uint16, uint16, bool) {
+func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx uint16) uint16 {
 	if idx & subSectorBit == subSectorBit {
-		subSectorId := idx & ^subSectorBit
-		sectorId, _ := bsp.level.GetSectorFromSubSector(subSectorId)
-		return sectorId, subSectorId, true
+		subSectorId := (idx) & ^subSectorBit
+		return subSectorId
 	}
 	node := bsp.level.Nodes[idx]
-	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findSubSector(x, y, child)
+	side := node.PointOnSide(x, y)
+	if !opposite {
+		sideIdx := node.Child[side]
+		return bsp.traverseBsp(x, y, opposite, sideIdx)
+	} else {
+		oppositeSide := side ^ 1
+		oppositeSideIdx := node.Child[oppositeSide]
+		return bsp.traverseBsp(x, y, opposite, oppositeSideIdx)
 	}
-	return 0, 0, false
 }
 
 
+func (bsp* BSP) traverseBsp2(container *[]uint16, x int16, y int16, idx uint16, n * lumps.Node) {
+	if idx & subSectorBit == subSectorBit {
+		if idx == 0xffff {
+			if _, inside := n.IntersectInside(x, y); inside {
+				*(container) = append(*(container), 0)
+			}
+			return
+		} else {
+			if _, inside := n.IntersectInside(x, y); inside {
+				subSectorId := (idx) & ^subSectorBit
+				*(container) = append(*(container), subSectorId)
+			}
+			return
+		}
+	}
+	node := bsp.level.Nodes[idx]
+	side := node.PointOnSide(x, y)
+	sideIdx := node.Child[side]
+	bsp.traverseBsp2(container, x, y, sideIdx, node)
+
+
+	oppositeSide := side ^ 1
+	oppositeSideIdx := node.Child[oppositeSide]
+	bsp.traverseBsp2(container, x, y, oppositeSideIdx, node)
+}
+
+
+func (bsp* BSP) findSubSector(n * lumps.Node, x int16, y int16, idx uint16) (uint16, * lumps.Node) {
+	if idx & subSectorBit == subSectorBit {
+		subSectorId := idx & ^subSectorBit
+		//sectorId, _ := bsp.level.GetSectorFromSubSector(subSectorId)
+		return subSectorId, n
+	}
+	node := bsp.level.Nodes[idx]
+	if child, ok := node.Intersect(x, y); ok {
+		return bsp.findSubSector(node, x, y, child)
+	}
+	return 0, nil
+}
+
+func (bsp* BSP) findNodeSubSector(subSectorId uint16) *lumps.Node {
+	for _, n := range bsp.level.Nodes {
+		if n.Child[0] & subSectorBit == subSectorBit {
+			id := n.Child[0] & ^subSectorBit
+			if id == subSectorId {
+				return n
+			}
+		}
+		if n.Child[1] & subSectorBit == subSectorBit {
+			id := n.Child[1] & ^subSectorBit
+			if id == subSectorId {
+				return n
+			}
+		}
+	}
+	return nil
+}
+
+
+type SegmentData struct {
+	Start XY
+	End XY
+	Count int
+}
 
 func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, int) {
-	//TODO TROVARE LE LINEE PERPENDICOLARI AGLI ESTREMI DELLA RETTA
-	//Calcolare 2 px avanti e dietro su tutte e due le rette\
-	//bsp.Test(x1, y1, x2, y2, x1, x2)
-	//bsp.Test(x1, y1, x2, y2, x2, y2)
-
-	radius := 2
-	offset := 1
-	rOffset := radius + offset
-
 	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
-	if len(rl) < (radius * 2) + offset {
-		return 0, -1
+	xDif := float64(x2 - x1) / 2
+	yDif := float64(y2 - y1) / 2
+	out := make(map[uint16]*SegmentData)
+
+	add := func(susSector uint16, cx float64, cy float64) {
+		if v, ok := out[susSector]; ok {
+			v.End = XY{X: cx, Y: cy}
+			v.Count += 1
+		} else {
+			out[susSector] = &SegmentData{
+				Start: XY{X: cx, Y: cy },
+				End: XY{X: cx, Y: cy },
+				Count: 1,
+			}
+		}
 	}
 
-	rl = rl[rOffset : len(rl) - rOffset]
-
-	out := make(map[uint16]int)
-
-	for _, p := range rl {
-		bsp.findSubSectorByPoint(int16(math.Round(p.X)), int16(math.Round(p.Y)), radius, out)
+	for _, l := range rl {
+		a1 := l.X - yDif
+		b1 := l.Y + xDif
+		a2 := l.X + yDif
+		b2 := l.Y - xDif
+		il := bsp.describeLine(a1, b1, a2, b2)
+		center := len(il) / 2
+		d2 := center
+		for d1 := center; d1 < len(il); d1++  {
+			left := il[d1]
+			leftSS, leftNode := bsp.findSubSector(nil, int16(math.Round(left.X)), int16(math.Round(left.Y)), bsp.root)
+			if leftNode != nil {
+				if leftSS != subSectorId {
+					add(leftSS, left.X, left.Y)
+					break
+				}
+			}
+			right := il[d2]
+			rightSS, rightNode := bsp.findSubSector(nil, int16(math.Round(right.X)), int16(math.Round(right.Y)), bsp.root)
+			if rightNode != nil {
+				if rightSS != subSectorId {
+					add(rightSS, right.X, right.Y)
+					break
+				}
+			}
+			d2--
+			if d2 < 0 {
+				break
+			}
+		}
+		/*
+		for _, t := range il {
+			if ss, node := bsp.findSubSector(nil, int16(math.Round(t.X)), int16(math.Round(t.Y)), bsp.root); node != nil {
+				if ss != subSectorId {
+					fmt.Print(ss, " ")
+				}
+			}
+		}
+		*/
 	}
 
 	if len(out) == 0 {
@@ -130,24 +235,81 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 
 
 	type result struct{ ss uint16; count int }
 	var r[] result
-	for k, v := range out { r = append(r, result{ss:k, count: v}) }
+	for k, v := range out { r = append(r, result{ss:k, count: v.Count}) }
+	sort.SliceStable(r, func(i, j int) bool { return r[i].count > r[j].count })
+
+	//TODO DIVIDERE IL SEGMENTO IN TANTI SEGMENTI QUANTI SONO I NEIGHBOR......
+	return r[0].ss, 0
+}
+
+func (bsp * BSP) FindOppositeSubSectorByPointsOld(subSectorId uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, int) {
+	//TODO TROVARE LE LINEE PERPENDICOLARI AGLI ESTREMI DELLA RETTA
+	//Calcolare 2 px avanti e dietro su tutte e due le rette\
+	//bsp.Test(x1, y1, x2, y2, x1, x2)
+	//bsp.Test(x1, y1, x2, y2, x2, y2)
+
+	radius := 2
+	offset := 1
+	rOffset := radius + offset
+
+	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
+	if len(rl) < (radius * 2) + offset {
+		return 0, -1
+	}
+
+	rl = rl[rOffset : len(rl) - rOffset]
+
+	out := make(map[uint16]*SegmentData)
+
+	for _, p := range rl {
+		bsp.findSubSectorByPoint(subSectorId, int16(math.Round(p.X)), int16(math.Round(p.Y)), radius, out)
+	}
+
+    if len(out) == 0 {
+		return 0, -1
+	}
+
+	if _, ok := out[subSectorId]; ok {
+		delete(out, subSectorId)
+		if len(out) == 0 {
+			return subSectorId, -2
+		}
+	}
+
+	if len(out) == 1 { for k := range out { return k, 0 } }
+
+	type result struct{ ss uint16; count int }
+	var r[] result
+	for k, v := range out { r = append(r, result{ss:k, count: v.Count}) }
 	sort.SliceStable(r, func(i, j int) bool { return r[i].count > r[j].count })
 	return r[0].ss, 0
 }
 
-func (bsp * BSP) findSubSectorByPoint(cx int16, cy int16, radius int, out map[uint16]int) {
+
+func (bsp * BSP) findSubSectorByPoint(sourceSubSegment uint16, cx int16, cy int16, radius int, out map[uint16]*SegmentData) {
+	add := func(susSector uint16) {
+		if v, ok := out[susSector]; ok {
+			v.End = XY{X: float64(cx), Y: float64(cy)}
+			v.Count += 1
+		} else {
+			out[susSector] = &SegmentData{
+				Start: XY{X: float64(cx), Y: float64(cy)},
+				End: XY{X: float64(cx), Y: float64(cy)},
+				Count: 1,
+			}
+		}
+	}
+
 	rt := bsp.describeCircle(float64(cx), float64(cy), float64(radius))
 	for _, c := range rt {
-		if _, ss, ok := bsp.findSubSector(int16(math.Round(c.X)), int16(math.Round(c.Y)), bsp.root); ok {
-			if v, ok := out[ss]; ok {
-				out[ss] = v + 1
-			} else {
-				out[ss] = 1
-			}
+		if ss, node := bsp.findSubSector(nil, int16(math.Round(c.X)), int16(math.Round(c.Y)), bsp.root); node != nil {
+			add(ss)
 		}
 	}
 }
 
+
+/*
 func (bsp * BSP) FindOppositeSubSectorByLine(subSector uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, uint16, int) {
 	//length := math.Sqrt((float64(x2 - x1) * float64(x2 - x1)) + (float64(y2 - y1) * float64(y2 - y1)))
 	//cx := int(math.Round(float64(x1 + x2) / 2))
@@ -199,6 +361,8 @@ func (bsp * BSP) findOppositeSubSectorByLine(subSector uint16, cx int16, cy int1
 	}
 	return resultSector, resultSubSector, state
 }
+
+ */
 
 func (bsp* BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
 	var res []XY

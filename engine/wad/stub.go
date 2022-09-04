@@ -117,6 +117,7 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	fmt.Println("TOTAL ERROR:", totalError)
 }
 
+/*
 func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {
 	_ = json.Unmarshal([]byte(FooBspStub), f)
 
@@ -178,6 +179,8 @@ func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {
 	fmt.Println("TOTAL GOOD:", len( f.Container) - totalError)
 	fmt.Println("TOTAL ERROR:", totalError)
 }
+
+ */
 
 
 const FooBspStub = `

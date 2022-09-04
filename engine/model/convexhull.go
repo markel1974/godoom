@@ -54,23 +54,30 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 		curr = segments[target]
 		segments = append(segments[:target], segments[target+1:]...)
 
-		//TODO CREARE IL SEGMENTO MANCANTE....
+		last := out[len(out)-1]
+		if last.End.X != curr.Start.X || last.End.Y != curr.Start.Y {
+			ns := NewSegment("ADDED", sect, DefinitionWall, last.End, curr.Start, "TODO")
+			out = append(out, ns)
+		}
 		out = append(out, curr)
 	}
-	//fmt.Println("------ Original")
+
+	if len(out) > 1 {
+		first := out[0]
+		last := out[len(out)-1]
+		if first.Start.X != last.End.X || first.Start.Y != last.End.Y {
+			ns := NewSegment("ADDED", sect, DefinitionWall, last.End, first.Start, "TODO")
+			out = append(out, ns)
+		}
+	}
+	fmt.Println("------ Original")
 	for idx, seg := range sect.Segments {
 		fmt.Printf("%d: %.0f %.0f %.0f %.0f\n", idx, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y)
 	}
 	fmt.Println("------ Altered", sect.Id)
 	for _, seg := range out {
-		fmt.Printf("%.0f %.0f %.0f %.0f\n", seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y)
-	}
-	first := out[0]
-	last := out[len(out) -1]
-
-	if first.Start.X != last.End.X ||  first.Start.Y != last.End.Y {
-		ns := NewSegment("TEST", sect, DefinitionWall, last.End, first.Start, "VERIFICA")
-		out = append(out, ns)
+		created := false; if seg.Ref == "ADDED" { created = true }
+		fmt.Printf("%.0f %.0f %.0f %.0f: %v\n", seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, created)
 	}
 	return out
 }

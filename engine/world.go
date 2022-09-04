@@ -271,8 +271,8 @@ func  (w * World) drawSingleStubScale(surface *pixels.PictureRGBA, sector * mode
 }
 
 func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sector) {
-	maxX := 0.0
-	maxY := 0.0
+	maxX := float64(0)
+	maxY := float64(0)
 
 	useConvexHull := true
 
@@ -286,9 +286,6 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 	}
 
 	for _, v := range segments  {
-		if v.Kind == model.DefinitionVoid || v.Kind == model.DefinitionUnknown{
-			continue
-		}
 		x1 := math.Abs(v.Start.X)
 		y1 := math.Abs(v.Start.Y)
 		x2 := math.Abs(v.End.X)
@@ -304,9 +301,6 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 
 	var t []model.XYZ
 	for _, v := range segments {
-		if v.Kind == model.DefinitionVoid {
-			continue
-		}
 		x1 := v.Start.X; if x1 == 0 { x1 = 1 }; x1 *= xFactor
 		y1 := v.Start.Y; if y1 == 0 { y1 = 1 }; y1 *= yFactor
 		x2 := v.End.X; if x2 == 0 { x2 = 1 }; x2 *= xFactor
@@ -322,7 +316,7 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
 	dp.DrawPoints(10)
 	dp.color = 0xff0000
-	dp.DrawLines(useConvexHull)
+	dp.DrawLines(false)
 }
 
 /*

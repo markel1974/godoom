@@ -104,6 +104,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	//ch.Create(r.sectors[38])
 	//ch.Create(r.sectors[15])
 	//ch.Create(r.sectors[54])
+	//ch.Create(r.sectors[134])
 	//os.Exit(-1)
 
 	if !cfg.DisableLoop {

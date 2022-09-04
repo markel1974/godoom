@@ -280,7 +280,7 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 
 	if useConvexHull {
 		ch := &model.ConvexHull{}
-		segments = ch.Create(sector)
+		segments = ch.FromSector(sector)
 	} else {
 		segments = sector.Segments
 	}

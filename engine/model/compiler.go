@@ -96,15 +96,15 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 
 	//for _, sect := range r.sectors {
 	//	fmt.Println("-----------------------", sect.Id)
-	//	ch.Create(sect)
+	//	ch.FromSector(sect)
 	//}
 
-	//ch.Create(r.sectors[54])
-	//ch.Create(r.sectors[15])
-	//ch.Create(r.sectors[38])
-	//ch.Create(r.sectors[15])
-	//ch.Create(r.sectors[54])
-	//ch.Create(r.sectors[134])
+	//ch.FromSector(r.sectors[54])
+	//ch.FromSector(r.sectors[15])
+	//ch.FromSector(r.sectors[38])
+	//ch.FromSector(r.sectors[15])
+	//ch.FromSector(r.sectors[54])
+	//ch.FromSector(r.sectors[134])
 	//os.Exit(-1)
 
 	if !cfg.DisableLoop {

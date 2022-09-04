@@ -8,24 +8,35 @@ import (
 
 
 type CHSegment struct {
-	Begin XY
-	End   XY
-	Data  interface{}
+	Ref     string
+	Start   XY
+	End     XY
+	Data    interface{}
+}
+
+func NewCHSegment(ref string, data interface{}, start XY, end XY) * CHSegment {
+	chs := &CHSegment{
+		Ref:   ref,
+		Data:  data,
+		Start: start,
+		End:   end,
+	}
+	return chs
 }
 
 
 type ConvexHull struct {
 }
 
-func (ch * ConvexHull) Create(sect * Sector) []*Segment {
+func (ch * ConvexHull) Create(id string, inputSegments []*CHSegment) []*CHSegment {
 	//head := ch.getHead(sect.Segments)
-	head := ch.findLowest(sect.Segments)
-	headSeg := sect.Segments[head]
-	out := []*Segment{ headSeg }
+	head := ch.findLowest(inputSegments)
+	headSeg := inputSegments[head]
+	out := []*CHSegment{ headSeg }
 	var lower XY; if ch.isLower(headSeg.Start, headSeg.End) { lower = headSeg.Start } else { lower = headSeg.End }
 
-	var segments []*Segment
-	for x, seg := range sect.Segments {
+	var segments []*CHSegment
+	for x, seg := range inputSegments {
 		if x == head { continue }
 		segments = append(segments, seg)
 	}
@@ -56,8 +67,8 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 
 		last := out[len(out)-1]
 		if last.End.X != curr.Start.X || last.End.Y != curr.Start.Y {
-			ns := NewSegment("ADDED", sect, DefinitionWall, last.End, curr.Start, "TODO")
-			out = append(out, ns)
+			chs := NewCHSegment(id,nil, last.End, curr.Start)
+			out = append(out, chs)
 		}
 		out = append(out, curr)
 	}
@@ -66,30 +77,30 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 		first := out[0]
 		last := out[len(out)-1]
 		if first.Start.X != last.End.X || first.Start.Y != last.End.Y {
-			ns := NewSegment("ADDED", sect, DefinitionWall, last.End, first.Start, "TODO")
-			out = append(out, ns)
+			chs := NewCHSegment(id,nil, last.End, first.Start)
+			out = append(out, chs)
 		}
 	}
 	fmt.Println("------ Original")
-	for idx, seg := range sect.Segments {
+	for idx, seg := range inputSegments {
 		fmt.Printf("%d: %.0f %.0f %.0f %.0f\n", idx, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y)
 	}
-	fmt.Println("------ Altered", sect.Id)
+	fmt.Println("------ Altered", id)
 	for _, seg := range out {
-		created := false; if seg.Ref == "ADDED" { created = true }
+		created := false; if seg.Data == nil { created = true }
 		fmt.Printf("%.0f %.0f %.0f %.0f: %v\n", seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, created)
 	}
 	return out
 }
 
-func (ch * ConvexHull) getConnect(curr *Segment, segments[]*Segment) int {
+func (ch * ConvexHull) getConnect(curr *CHSegment, segments[]*CHSegment) int {
 	for idx, target := range segments {
 		if curr.End.X == target.Start.X && curr.End.Y == target.Start.Y { return idx }
 	}
 	return -1
 }
 
-func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
+func (ch * ConvexHull) getConvex(mainPoint *CHSegment, segments []*CHSegment) int {
 	for x, curr := range segments {
 		if ch.isLeft(mainPoint.Start, mainPoint.End, curr.Start) {
 			for y, next := range segments {
@@ -103,7 +114,7 @@ func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
 	return 0
 }
 
-func (ch * ConvexHull) findLowest(segments []*Segment) int {
+func (ch * ConvexHull) findLowest(segments []*CHSegment) int {
 	lowest := 0
 	for i := 1; i < len(segments); i++ {
 		if ch.isLower(segments[i].Start, segments[lowest].Start) { lowest = i }
@@ -144,6 +155,23 @@ func (ch * ConvexHull) sameLine(a XY, b XY, c XY) bool {
 	//dot product
 	d := (b.X - a.X) * (c.Y - a.Y) + (c.X - a.X) * (b.Y - a.Y)
 	return d <= 0
+}
+
+func (ch * ConvexHull) FromSector(sector * Sector) []*Segment {
+	var chs []*CHSegment
+	var out []*Segment
+	for _, s := range sector.Segments {
+		chs = append(chs, NewCHSegment(sector.Id, s, s.Start, s.End))
+	}
+	for _, s := range ch.Create(sector.Id, chs) {
+		if s.Data != nil {
+			out = append(out, s.Data.(*Segment))
+		} else {
+			ns := NewSegment(sector.Id, sector, DefinitionVoid, s.Start, s.End, "ADDED")
+			out = append(out, ns)
+		}
+	}
+	return out
 }
 
 /*

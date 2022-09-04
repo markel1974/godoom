@@ -274,7 +274,7 @@ func  (w * World) drawSingleStub(surface *pixels.PictureRGBA, sector * model.Sec
 	maxX := float64(0)
 	maxY := float64(0)
 
-	useConvexHull := true
+	useConvexHull := false
 
 	var segments[]*model.Segment
 

@@ -28,6 +28,10 @@ func NewCHSegment(ref string, data interface{}, start XY, end XY) * CHSegment {
 type ConvexHull struct {
 }
 
+func NewConvexHull() * ConvexHull {
+	return &ConvexHull{}
+}
+
 func (ch * ConvexHull) Create(id string, inputSegments []*CHSegment) []*CHSegment {
 	//head := ch.getHead(sect.Segments)
 	head := ch.findLowest(inputSegments)

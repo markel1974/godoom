@@ -116,6 +116,10 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	})
 
 
+	//a := sectors[207]
+	//b := sectors[225]
+
+
 	//res, _ :=json.Marshal(sectors[15].Segments)
 	//fmt.Println(string(res))
 
@@ -125,6 +129,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	//}
 	//os.Exit(-1)
 
+	/*
 	for _, s := range sectors {
 		for _, n := range s.Segments {
 			//n.Start.X = math.Abs(n.Start.X)
@@ -135,6 +140,8 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 			n.End.Y = -n.End.Y
 		}
 	}
+
+	 */
 
 	p1 := b.level.Things[1]
 	position := model.XY{
@@ -195,8 +202,8 @@ func (b * Builder) scanSubSectors() {
 			if middle != "-" { b.textures[middle] = true }
 			if upper != "-" { b.textures[upper] = true }
 
-			startXY := model.XY{X: float64(start.XCoord), Y: float64(start.YCoord)}
-			endXY := model.XY{X: float64(end.XCoord), Y: float64(end.YCoord)}
+			startXY := model.XY{X: float64(start.XCoord), Y: float64(-start.YCoord)}
+			endXY := model.XY{X: float64(end.XCoord), Y: float64(-end.YCoord)}
 
 			modelSegment := &model.InputSegment{ Tag: "", Neighbor: "", Start: startXY, End: endXY}
 
@@ -234,12 +241,34 @@ func (b * Builder) scanSubSectors() {
 			}
 			current.Segments = append(current.Segments, modelSegment)
 		}
-
 		//TODO NON PUO' ESSERE REALIZZATO IN QUESTO MODO......
 		//TODO DATI TUTTI I PUNTI DEVE ESSERE CREATO UN POLIGONO CONVESSO
 		//https://en.wikipedia.org/wiki/Convex_hull_algorithms
 		//es https://en.wikipedia.org/wiki/Quickhull
 	}
+
+
+
+	ch := model.NewConvexHull()
+	for _, subSector := range b.cfg {
+		var chs []*model.CHSegment
+		for _, s := range subSector.Segments {
+			c := model.NewCHSegment(subSector.Id, s, s.Start, s.End)
+			chs = append(chs, c)
+		}
+		subSector.Segments = nil
+		for _, s := range ch.Create(subSector.Id, chs) {
+			if s.Data != nil {
+				subSector.Segments = append(subSector.Segments, s.Data.(*model.InputSegment))
+			} else {
+				ns := &model.InputSegment{ Tag: "Missing", Neighbor: "", Start: s.Start, End: s.End, Kind: model.DefinitionVoid }
+				subSector.Segments = append(subSector.Segments, ns)
+			}
+		}
+	}
+
+
+
 
 	for _, subSector := range b.cfg {
 		for _, s := range subSector.Segments {
@@ -276,9 +305,9 @@ func (b * Builder) getConfigSector(sectorId uint16, sector *lumps.Sector, subSec
 
 func (b * Builder) SetNeighbor(subSectorId uint16, m *model.InputSegment)  {
 	x1 := int16(m.Start.X)
-	y1 := int16(m.Start.Y)
+	y1 := int16(-m.Start.Y)
 	x2 := int16(m.End.X)
-	y2 := int16(m.End.Y)
+	y2 := int16(-m.End.Y)
 
 	//m.Kind = model.DefinitionValid
 
@@ -301,6 +330,7 @@ func (b * Builder) SetNeighbor(subSectorId uint16, m *model.InputSegment)  {
 	}
 	*/
 
+	//TODO DIVIDERE IL SEGMENTO IN TANTI SOTTO SEGMENTI TANTI QUANTI NEIGHBOR VENGONO TROVATI.....
 
 	oppositeSubSector, state := b.bsp.FindOppositeSubSectorByPoints(subSectorId, x1, y1, x2, y2)
 	if state >= 0 {
@@ -315,4 +345,5 @@ func (b * Builder) SetNeighbor(subSectorId uint16, m *model.InputSegment)  {
 		//m.Kind = model.DefinitionWall
 		//m.Neighbor = "wall"
 	}
+
 }

@@ -6,6 +6,14 @@ import (
 	"sort"
 )
 
+
+type CHSegment struct {
+	Begin XY
+	End   XY
+	Data  interface{}
+}
+
+
 type ConvexHull struct {
 }
 
@@ -45,6 +53,8 @@ func (ch * ConvexHull) Create(sect * Sector) []*Segment {
 		}
 		curr = segments[target]
 		segments = append(segments[:target], segments[target+1:]...)
+
+		//TODO CREARE IL SEGMENTO MANCANTE....
 		out = append(out, curr)
 	}
 	//fmt.Println("------ Original")
@@ -84,22 +94,6 @@ func (ch * ConvexHull) getConvex(mainPoint *Segment, segments []*Segment) int {
 		}
 	}
 	return 0
-
-	/*
-	for x, curr := range segments {
-		if ch.isLeft(mainPoint.Start, mainPoint.End, curr.Start) {
-			if ch.isLeft(mainPoint.End, curr.Start, curr.End) {
-				for y, next := range segments {
-					if x == y { continue }
-					if ch.isLeft(curr.Start, curr.End, next.Start) {
-						return x
-					}
-				}
-			}
-		}
-	}
-	return 0
-	*/
 }
 
 func (ch * ConvexHull) findLowest(segments []*Segment) int {

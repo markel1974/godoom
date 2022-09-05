@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"math"
 	"sort"
 )
@@ -85,15 +84,15 @@ func (ch * ConvexHull) Create(id string, inputSegments []*CHSegment) []*CHSegmen
 			out = append(out, chs)
 		}
 	}
-	fmt.Println("------ Original")
-	for idx, seg := range inputSegments {
-		fmt.Printf("%d: %.0f %.0f %.0f %.0f\n", idx, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y)
-	}
-	fmt.Println("------ Altered", id)
-	for _, seg := range out {
-		created := false; if seg.Data == nil { created = true }
-		fmt.Printf("%.0f %.0f %.0f %.0f: %v\n", seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, created)
-	}
+	//fmt.Println("------ Original")
+	//for idx, seg := range inputSegments {
+	//	fmt.Printf("%d: %.0f %.0f %.0f %.0f\n", idx, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y)
+	//}
+	//fmt.Println("------ Altered", id)
+	//for _, seg := range out {
+	//	created := false; if seg.Data == nil { created = true }
+	//	fmt.Printf("%.0f %.0f %.0f %.0f: %v\n", seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, created)
+	//}
 	return out
 }
 

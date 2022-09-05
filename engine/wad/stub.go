@@ -3,7 +3,6 @@ package wad
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 )
 
@@ -52,7 +51,7 @@ func (f * FooBsp) Print() {
 	fmt.Println(string(out))
 }
 
-
+/*
 func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	_ = json.Unmarshal([]byte(FooBspStub), f)
 	printHeader := func(sector uint16, subSector uint16, tag string, result uint16, length float64) {
@@ -71,39 +70,37 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 		//x := (c.StartX + c.EndX) / 2
 		//y := (c.StartY + c.EndY) / 2
 
-		checkSubSector, state := bsp.FindOppositeSubSectorByPoints(c.SubSector, x1, y1, x2, y2)
+		checkSubSector, state, _ := bsp.FindOppositeSubSectorByPoints(c.SubSector, c)
 		printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
 		fmt.Println(checkSubSector, "==>", state)
 
-		/*
-		if c.Result == checkSubSector {
-			//printHeader(c.Sector, c.SubSector, c.Tag, c.Result)
-			//fmt.Println("Check Ok:", checkSubSector, "(", checkSector, ")")
-		} else {
-			if state == -1 {
-				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
-				//fmt.Println("ERROR UNKNOWN Check (segment is unknown you have to remove)")
-				checkUnknownError++
-			} else if state == - 2 {
-				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
-				//fmt.Println("ERROR SAME Check (is inside the same sector you have to remove)")
-				checkSameError++
-			} else if state == - 3 {
-				//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
-				//fmt.Println("ERROR MULTI Check")
-				checkMultiError++
-			} else {
-				printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
-				out := bsp.TraverseBsp(c.StartX, c.StartY, false)
-				//outOpposite := bsp.TraverseBsp(c.StartX, c.StartY, true)
-				fmt.Println("----> Traverse", out)
-				fmt.Println("ERROR Unexpected (may be correct...)", unexpected)
-				unexpected++
-			}
-		}
-		//fmt.Println("Computed:", out, "Computed Opposite:", outOpposite)
 
-		 */
+		//if c.Result == checkSubSector {
+		//	//printHeader(c.Sector, c.SubSector, c.Tag, c.Result)
+		//	//fmt.Println("Check Ok:", checkSubSector, "(", checkSector, ")")
+		//} else {
+		//	if state == -1 {
+		//		//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+		//		//fmt.Println("ERROR UNKNOWN Check (segment is unknown you have to remove)")
+		//		checkUnknownError++
+		//	} else if state == - 2 {
+		//		//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+		//		//fmt.Println("ERROR SAME Check (is inside the same sector you have to remove)")
+		//		checkSameError++
+		//	} else if state == - 3 {
+		//		//printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+		//		//fmt.Println("ERROR MULTI Check")
+		//		checkMultiError++
+		//	} else {
+		//		printHeader(c.Sector, c.SubSector, c.Tag, c.Result, length)
+		//		out := bsp.TraverseBsp(c.StartX, c.StartY, false)
+		//		//outOpposite := bsp.TraverseBsp(c.StartX, c.StartY, true)
+		//		fmt.Println("----> Traverse", out)
+		//		fmt.Println("ERROR Unexpected (may be correct...)", unexpected)
+		//		unexpected++
+		//	}
+		//}
+		// //fmt.Println("Computed:", out, "Computed Opposite:", outOpposite)
 	}
 	fmt.Println()
 	fmt.Println()
@@ -116,6 +113,8 @@ func (f * FooBsp) Verify(level * Level, bsp *BSP) {
 	fmt.Println("TOTAL GOOD:", len( f.Container) - totalError)
 	fmt.Println("TOTAL ERROR:", totalError)
 }
+
+ */
 
 /*
 func (f * FooBsp) VerifyOld(level * Level, bsp *BSP) {

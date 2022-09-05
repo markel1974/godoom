@@ -19,14 +19,6 @@ type Level struct {
 }
 
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-
 func (l * Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool){
 	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
 		return  0, false

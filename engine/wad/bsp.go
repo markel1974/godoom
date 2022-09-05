@@ -2,14 +2,27 @@ package wad
 
 import (
 	"fmt"
+	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad/lumps"
 	"math"
 	"sort"
+	"strconv"
 )
 
 type BSP struct {
 	level      * Level
 	root       uint16
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func swap(a int, b int) (int, int) {
+	return b, a
 }
 
 func swapF(a float64, b float64) (float64, float64) {
@@ -115,7 +128,6 @@ func (bsp* BSP) traverseBsp2(container *[]uint16, x int16, y int16, idx uint16, 
 	sideIdx := node.Child[side]
 	bsp.traverseBsp2(container, x, y, sideIdx, node)
 
-
 	oppositeSide := side ^ 1
 	oppositeSideIdx := node.Child[oppositeSide]
 	bsp.traverseBsp2(container, x, y, oppositeSideIdx, node)
@@ -160,46 +172,100 @@ type SegmentData struct {
 	Count int
 }
 
-func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, int) {
-	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
+func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.InputSegment) (uint16, int, []*model.InputSegment) {
+	const margin = 2
+	x1 := int16(is2.Start.X); y1 := int16(is2.Start.Y); x2 := int16(is2.End.X); y2 := int16(is2.End.Y)
 	xDif := float64(x2 - x1) / 2
 	yDif := float64(y2 - y1) / 2
 	out := make(map[uint16]*SegmentData)
+	debug := subSectorId == 15 && x1 == 1992  && y1 == 2552 && x2 == 1784 && y2 == 2552
+	//TODO describeLineF NON MANTIENE l'ordine!!!!
+	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
+
+	//rlStart := is2.Start//rl[0]
+	//rlEnd := is2.End//rl[len(rl) - 1]
+	rlStart := rl[0]
+	rlEnd := rl[len(rl) - 1]
+
+	rl = rl[margin: len(rl) - margin]
+
+
+	var ret []*model.InputSegment
+
+	addSegment := func(sId uint16, xy XY)  {
+		id := strconv.Itoa(int(sId))
+		update := 0
+		if len(ret) == 0 {
+			update = 1
+		} else if ret[len(ret) -1].Neighbor != id {
+			prevSegment := ret[len(ret)-1]
+			prevSegment.End.X = xy.X
+			prevSegment.End.Y = xy.Y
+			prevSegment.Tag += fmt.Sprintf(" - CREATED %0.f:%0.f", prevSegment.End.X - prevSegment.Start.X, prevSegment.End.Y - prevSegment.Start.Y)
+			update = 2
+		}
+		if update > 0 {
+			cloned := is2.Clone()
+			cloned.Neighbor = id
+			cloned.Kind = model.DefinitionValid
+			cloned.End = model.XY{}
+			if update == 1 {
+				cloned.Start.X = rlStart.X
+				cloned.Start.Y = rlStart.Y
+			} else if update == 2 {
+				cloned.Start.X = xy.X
+				cloned.Start.Y = xy.Y
+			}
+			ret = append(ret, cloned)
+		}
+	}
 
 	add := func(susSector uint16, cx float64, cy float64) {
 		if v, ok := out[susSector]; ok {
-			v.End = XY{X: cx, Y: cy}
+			v.End = XY{ X: cx, Y: cy }
 			v.Count += 1
 		} else {
 			out[susSector] = &SegmentData{
-				Start: XY{X: cx, Y: cy },
-				End: XY{X: cx, Y: cy },
+				Start: XY{ X: cx, Y: cy },
+				End: XY{ X: cx, Y: cy },
 				Count: 1,
 			}
 		}
 	}
 
-	for _, l := range rl {
-		a1 := l.X - yDif
-		b1 := l.Y + xDif
-		a2 := l.X + yDif
-		b2 := l.Y - xDif
-		il := bsp.describeLine(a1, b1, a2, b2)
-		center := len(il) / 2
-		d2 := center
-		for d1 := center; d1 < len(il); d1++  {
-			left := il[d1]
-			leftSS, leftNode := bsp.findSubSector(nil, int16(math.Round(left.X)), int16(math.Round(left.Y)), bsp.root)
-			if leftNode != nil {
+	for x := 0; x < len(rl); x++ {
+		src := rl[x]
+		a1 := src.X - yDif
+		b1 := src.Y + xDif
+		a2 := src.X + yDif
+		b2 := src.Y - xDif
+		if debug {
+			//fmt.Println("------ PERP -------", x, src)
+			//for _, test := range perp {
+			//	fmt.Println(test)
+			//}
+			//fmt.Println("IN DEBUG")
+		}
+
+		perp := bsp.describeLineF(a1, b1, a2, b2)
+		center := len(perp) / 2
+		d2 := center - 1
+
+
+
+		for d1 := center; d1 < len(perp); d1++  {
+			left := perp[d1]
+			right := perp[d2]
+			if leftSS, leftNode := bsp.findSubSector(nil, int16(left.X), int16(-left.Y), bsp.root);  leftNode != nil {
 				if leftSS != subSectorId {
+					addSegment(leftSS, src)
 					add(leftSS, left.X, left.Y)
 					break
 				}
 			}
-			right := il[d2]
-			rightSS, rightNode := bsp.findSubSector(nil, int16(math.Round(right.X)), int16(math.Round(right.Y)), bsp.root)
-			if rightNode != nil {
+			if rightSS, rightNode := bsp.findSubSector(nil, int16(right.X), int16(-right.Y), bsp.root); rightNode != nil {
 				if rightSS != subSectorId {
+					addSegment(rightSS, src)
 					add(rightSS, right.X, right.Y)
 					break
 				}
@@ -209,40 +275,52 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, x1 int16, y1 
 				break
 			}
 		}
-		/*
-		for _, t := range il {
-			if ss, node := bsp.findSubSector(nil, int16(math.Round(t.X)), int16(math.Round(t.Y)), bsp.root); node != nil {
-				if ss != subSectorId {
-					fmt.Print(ss, " ")
-				}
-			}
-		}
-		*/
 	}
 
+	//os.Exit(1)
+	if len(ret) > 0 {
+		lastSegment := ret[len(ret) -1]
+		if lastSegment.Start.X == rlEnd.X && lastSegment.Start.Y == rlEnd.Y {
+			ret = ret[:len(ret)-1]
+		} else {
+			lastSegment.End.X = rlEnd.X
+			lastSegment.End.Y = rlEnd.Y
+			lastSegment.Tag += fmt.Sprintf(" - CREATED %0.f:%0.f", lastSegment.End.X - lastSegment.Start.X, lastSegment.End.Y - lastSegment.Start.Y)
+		}
+	}
+
+	/*
+	//3024 4840 | 2992 4840
+	fmt.Println("--------------------------------- SubSectorId: ", subSectorId)
+	fmt.Println(x1, y1, "|", x2, y2)
+	for _, test := range ret {
+		fmt.Println(test)
+	}
+	*/
+
 	if len(out) == 0 {
-		return 0, -1
+		return 0, -1, ret
 	}
 
 	if _, ok := out[subSectorId]; ok {
 		delete(out, subSectorId)
 		if len(out) == 0 {
-			return subSectorId, -2
+			return subSectorId, -2, ret
 		}
 	}
 
-	if len(out) == 1 { for k := range out { return k, 0 } }
+	if len(out) == 1 { for k := range out { return k, 0, ret } }
 
 	type result struct{ ss uint16; count int }
 	var r[] result
 	for k, v := range out { r = append(r, result{ss:k, count: v.Count}) }
 	sort.SliceStable(r, func(i, j int) bool { return r[i].count > r[j].count })
-
-	//TODO DIVIDERE IL SEGMENTO IN TANTI SEGMENTI QUANTI SONO I NEIGHBOR......
-	return r[0].ss, 0
+	return r[0].ss, 0, ret
 }
 
-func (bsp * BSP) FindOppositeSubSectorByPointsOld(subSectorId uint16, x1 int16, y1 int16, x2 int16, y2 int16) (uint16, int) {
+func (bsp * BSP) FindOppositeSubSectorByPointsOld(subSectorId uint16, s * model.InputSegment) (uint16, int) {
+	x1 := int16(s.Start.X);	y1 := int16(-s.Start.Y); x2 := int16(s.End.X); y2 := int16(-s.End.Y)
+
 	//TODO TROVARE LE LINEE PERPENDICOLARI AGLI ESTREMI DELLA RETTA
 	//Calcolare 2 px avanti e dietro su tutte e due le rette\
 	//bsp.Test(x1, y1, x2, y2, x1, x2)
@@ -252,7 +330,7 @@ func (bsp * BSP) FindOppositeSubSectorByPointsOld(subSectorId uint16, x1 int16, 
 	offset := 1
 	rOffset := radius + offset
 
-	rl := bsp.describeLine(float64(x1), float64(y1), float64(x2), float64(y2))
+	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
 	if len(rl) < (radius * 2) + offset {
 		return 0, -1
 	}
@@ -390,12 +468,13 @@ func (bsp* BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
 	return res
 }
 
-func (bsp * BSP) describeLine(x1 float64, y1 float64, x2 float64, y2 float64) []XY {
+func (bsp * BSP) describeLine2F(x1 float64, y1 float64, x2 float64, y2 float64) []XY {
 	var res []XY
-	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
-	if steep { x1, y1 = swapF(x1, y1); x2, y2 = swapF(x2, y2) }
+	steep := math.Abs(y2 - y1) > math.Abs(x2 - x1)
 
+	if steep { x1, y1 = swapF(x1, y1); x2, y2 = swapF(x2, y2) }
 	if x1 > x2 { x1, x2 = swapF(x1, x2); y1, y2 = swapF(y1, y2) }
+
 	dx := x2 - x1
 	dy := math.Abs(y2 - y1)
 	errorDx := dx / 2.0
@@ -415,10 +494,33 @@ func (bsp * BSP) describeLine(x1 float64, y1 float64, x2 float64, y2 float64) []
 			errorDx += dx
 		}
 	}
+
 	return res
 }
 
 
+/*
+func (bsp * BSP) describeLine2F(x1 float64, y1 float64, x2 float64, y2 float64) []XY {
+	if x1 == x2 && y1 == y2 { return nil }
+	var res []XY
+	if y1 == y2 {
+		if x2 > x1 {
+			for x := x1; x <= x2; x++ { res = append(res, XY{ X: x, Y: y1 }) }
+			return res
+		}
+		for x := x1; x <= x2; x--{ res = append(res, XY{ X: x, Y: y1 }) }
+		return res
+	}
+	if x1 == x2 {
+		if y2 > y1 {
+			for y := y1; y<= y2; y++ { res = append(res, XY{ X: x1, Y: y }) }
+			return res
+		}
+		for y := y1; y<= y2; y-- { res = append(res, XY{ X: x1, Y: y }) }
+		return res
+	}
+}
+*/
 
 func (bsp * BSP) Test(x1 int, y1 int, x2 int, y2 int, cx int, cy int) int {
 	//TODO TROVARE LE LINEE PERPENDICOLARI AGLI ESTREMI DELLA RETTA
@@ -515,3 +617,85 @@ func (bsp * BSP) BruteForceLineDef(startX int16, startY int16, endX int16, endY 
 	return -1, nil
 }
 */
+
+
+
+//TODO https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+func (bsp * BSP) plotLineLow(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+	var res []XY
+    dx := x1 - x0
+    dy := y1 - y0
+    yi := float64(1)
+    if dy < 0 {
+		yi = -1
+		dy = -dy
+	}
+    D := (2 * dy) - dx
+    y := y0
+    for x := x0; x <= x1; x++ {
+        res = append(res, XY{X: x, Y: y})
+        if D > 0 {
+			y = y + yi
+			D = D + (2 * (dy - dx))
+		} else {
+			D = D + 2*dy
+		}
+    }
+	return res
+}
+
+func (bsp * BSP) plotLineHigh(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+	var res []XY
+    dx := x1 - x0
+    dy := y1 - y0
+    xi := float64(1)
+    if dx < 0 {
+		xi = -1
+		dx = -dx
+	}
+    D := (2 * dx) - dy
+    x := x0
+
+    for y := y0; y <= y1; y++ {
+		res = append(res, XY{X: x, Y: y})
+        if D > 0 {
+			x = x + xi
+			D = D + (2 * (dx - dy))
+		} else {
+			D = D + 2*dx
+		}
+    }
+	return res
+}
+
+func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+	var res []XY
+	reverse := false
+    if math.Abs(y1 - y0) < math.Abs(x1 - x0) {
+        if x0 > x1 {
+			reverse = true
+			res = bsp.plotLineLow(x1, y1, x0, y0)
+		} else {
+			res = bsp.plotLineLow(x0, y0, x1, y1)
+		}
+    } else {
+        if y0 > y1 {
+			reverse = true
+			res = bsp.plotLineHigh(x1, y1, x0, y0)
+		} else {
+			//TODO REVERSE FUNC
+			res = bsp.plotLineHigh(x0, y0, x1, y1)
+		}
+    }
+
+    if !reverse {
+		return res
+	}
+
+	var r []XY
+	for x := len(res) - 1; x >= 0; x-- {
+		r = append(r, res[x])
+	}
+	return r
+}
+

@@ -22,6 +22,31 @@ type InputSegment struct {
 	Lower    string `json:"lower"`
 }
 
+
+func NewInputSegment(kind int, s XY, e XY) * InputSegment {
+	is := &InputSegment{
+		Start:    s,
+		End:      e,
+		Kind:     kind,
+		Neighbor: "",
+		Tag:      "",
+		Upper:    "",
+		Middle:   "",
+		Lower:    "",
+	}
+	return is
+}
+
+func (is * InputSegment) Clone() * InputSegment {
+	out := NewInputSegment(is.Kind, is.Start, is.End)
+	out.Neighbor = is.Neighbor
+	out.Tag = is.Tag
+	out.Upper = is.Upper
+	out.Middle = is.Middle
+	out.Lower = is.Lower
+	return out
+}
+
 type InputSector struct {
 	Id           string           `json:"id"`
 	Ceil         float64          `json:"ceil"`

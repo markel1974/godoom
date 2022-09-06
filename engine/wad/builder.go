@@ -195,9 +195,12 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 
 	b.CompileNeighbors(miSectors)
 
+	for idx, _ := range miSectors {
+		b.describeSegment(idx, miSectors)
+	}
 
 	b.describeSegment(2, miSectors)
-
+	b.describeSegment(15, miSectors)
 
 	//os.Exit(-1)
 
@@ -206,22 +209,25 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 
 func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 	wallSectors := make(map[uint16]bool)
+
 	for idx, miSector := range miSectors {
 		if len(miSector.Segments) == 1 && miSector.Segments[0].Kind == model.DefinitionWall {
 			wallSectors[uint16(idx)] = true
 		}
 	}
-	for idx, miSector := range miSectors {
+
+	for _, miSector := range miSectors {
 		var segments []*model.InputSegment
 		for _, s := range miSector.Segments {
 			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
 				segments = append(segments, s)
 				continue
 			}
-			duplicates := map[string]bool{}
+			//duplicates := map[string]bool{}
 			id, _ := strconv.Atoi(miSector.Id)
 			_, _, res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
 
+			/*
 			for _, d := range res {
 				if _, ok := duplicates[d.Neighbor]; ok {
 					d.Kind = model.DefinitionUnknown
@@ -231,6 +237,7 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 				}
 				duplicates[d.Neighbor] = true
 			}
+			*/
 
 			switch len(res) {
 				case 0:	segments = append(segments, s)
@@ -287,6 +294,9 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 func (b * Builder) compileConvexHull(miSectors []*model.InputSector) {
 	ch := model.NewConvexHull()
 	for _, miSector := range miSectors {
+		if len(miSector.Segments) <= 1 {
+			continue
+		}
 		var chs []*model.CHSegment
 		for _, s := range miSector.Segments {
 			c := model.NewCHSegment(miSector.Id, s, s.Start, s.End)
@@ -445,16 +455,17 @@ func (b * Builder) printSegments(miSegments []*model.InputSegment) {
 }
 
 func (b * Builder) describeSegment(targetSector int, miSectors []*model.InputSector) {
-	fmt.Println(targetSector, "------------------", "DESCRIBE SECTOR", targetSector, "------------------")
+	fmt.Println("------------------", "DESCRIBE SECTOR", targetSector, "------------------")
 	var xy model.XY
-	for idx, tt := range miSectors[targetSector].Segments {
+	var neighbors [] string
+	for _, tt := range miSectors[targetSector].Segments {
 		xy = tt.Start
-		fmt.Println(idx, tt.Neighbor, tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y)
+		neighbors = append(neighbors, tt.Neighbor)
+		//fmt.Println(idx, tt.Neighbor, tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y)
 	}
 	nodeIdx := b.bsp.findNodeSubSector(uint16(targetSector))
-	var test2[]uint16
-	b.bsp.traverseBsp2(&test2, int16(xy.X), int16(xy.Y), nodeIdx)
-	fmt.Println("TRAVERSE:", test2)
-
-	//os.Exit(-1)
+	var traverse[]uint16
+	b.bsp.traverseBsp2(&traverse, int16(xy.X), int16(xy.Y), nodeIdx)
+	fmt.Println("NEIGHBORS:", neighbors)
+	fmt.Println("TRAVERSE:", traverse)
 }

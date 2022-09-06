@@ -144,15 +144,16 @@ func (bsp* BSP) findSubSector(n * lumps.Node, x int16, y int16, idx uint16) (uin
 }
 
 func (bsp* BSP) findNodeSubSector(subSectorId uint16) uint16 {
-	for idx, n := range bsp.level.Nodes {
-		if n.Child[0] & subSectorBit == subSectorBit {
-			id := n.Child[0] & ^subSectorBit
+	for idx := 0; idx < len(bsp.level.Nodes); idx++ {
+		node := bsp.level.Nodes[idx]
+		if node.Child[0] & subSectorBit == subSectorBit {
+			id := node.Child[0] & ^subSectorBit
 			if id == subSectorId {
 				return uint16(idx)
 			}
 		}
-		if n.Child[1] & subSectorBit == subSectorBit {
-			id := n.Child[1] & ^subSectorBit
+		if node.Child[1] & subSectorBit == subSectorBit {
+			id := node.Child[1] & ^subSectorBit
 			if id == subSectorId {
 				return uint16(idx)
 			}
@@ -179,17 +180,23 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 	yDif := float64(y2 - y1) / 2
 	out := make(map[uint16]*SegmentData)
 	//debug := subSectorId == 15 && x1 == 1992  && y1 == 2552 && x2 == 1784 && y2 == 2552
-	debug := subSectorId == 8
+	//debug := subSectorId == 31
+	debug := false
 	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
+	rlStart := is2.Start//rl[0]
+	rlEnd := is2.End//rl[len(rl) - 1]
+	//rlStart := rl[0]
+	//rlEnd := rl[len(rl) - 1]
 
-	node := bsp.root//bsp.findNodeSubSector(subSectorId)
+	factor := 1.0
 
-	//rlStart := is2.Start//rl[0]
-	//rlEnd := is2.End//rl[len(rl) - 1]
-	rlStart := rl[0]
-	rlEnd := rl[len(rl) - 1]
-
-	rl = rl[margin: len(rl) - margin]
+	if x1 == x2 || y1 == y2 {
+		rl = rl[margin: len(rl) - margin]
+	} else {
+		//TODO COSA FARE PER I SEGMENTI OBLIQUI?
+		rl = []XY{ rl[len(rl) / 2]}
+		factor = 30
+	}
 
 	var ret []*model.InputSegment
 
@@ -206,13 +213,14 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 			update = 2
 		}
 		if update > 0 {
-			kind := model.DefinitionValid
-			if _, ok := wallSectors[sId]; ok {
-				kind = model.DefinitionWall
-			}
 			cloned := is2.Clone()
-			cloned.Neighbor = id
-			cloned.Kind = kind
+			if _, ok := wallSectors[sId]; ok {
+				cloned.Neighbor = "wall"
+				cloned.Kind = model.DefinitionWall
+			} else {
+				cloned.Neighbor = id
+				cloned.Kind = model.DefinitionValid
+			}
 			cloned.End = model.XY{}
 			if update == 1 {
 				cloned.Start.X = rlStart.X
@@ -240,14 +248,15 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 
 	for x := 0; x < len(rl); x++ {
 		src := rl[x]
-		a1 := src.X - yDif
-		b1 := src.Y + xDif
-		a2 := src.X + yDif
-		b2 := src.Y - xDif
+		a1 := src.X - (yDif * factor)
+		b1 := src.Y + (xDif * factor)
+		a2 := src.X + (yDif * factor)
+		b2 := src.Y - (xDif * factor)
+
 		perp := bsp.describeLineF(a1, b1, a2, b2)
 
 		if debug {
-			fmt.Println("------ PERP -------", x, len(rl), "[", x1, y1, x2, y2, "]")
+			fmt.Println("------ PERP -------", x, len(rl), "[", x1, y1, x2, y2, "]", "[", perp[0].X, perp[0].Y, perp[len(perp)-1].X, perp[len(perp)-1].Y, "]")
 			//fmt.Println("------ PERP -------", x, src)
 			//for _, test := range perp {
 			//	fmt.Println(test)
@@ -260,7 +269,7 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 		for d1 := center; d1 < len(perp); d1++  {
 			left := perp[d1]
 			right := perp[d2]
-			if leftSS, leftNode := bsp.findSubSector(nil, int16(left.X), int16(-left.Y), node);  leftNode != nil {
+			if leftSS, leftNode := bsp.findSubSector(nil, int16(left.X), int16(-left.Y), bsp.root);  leftNode != nil {
 				if leftSS != subSectorId {
 					if debug {
 						fmt.Printf(" %0.f:%0.f %d - LEFT \n", left.X, left.Y, leftSS)
@@ -268,13 +277,9 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 					addSegment(leftSS, src)
 					add(leftSS, left.X, left.Y)
 					break
-				} else {
-					if debug {
-						//fmt.Printf("%0.f:%0.f - SAME LEFT\n", left.X, left.Y)
-					}
 				}
 			}
-			if rightSS, rightNode := bsp.findSubSector(nil, int16(right.X), int16(-right.Y), node); rightNode != nil {
+			if rightSS, rightNode := bsp.findSubSector(nil, int16(right.X), int16(-right.Y), bsp.root); rightNode != nil {
 				if rightSS != subSectorId {
 					if debug {
 						fmt.Printf("%0.f:%0.f %d - RIGHT\n", right.X, right.Y, rightSS)
@@ -282,10 +287,6 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 					addSegment(rightSS, src)
 					add(rightSS, right.X, right.Y)
 					break
-				} else {
-					if debug {
-						//fmt.Printf("%0.f:%0.f - SAME RIGHT\n", right.X, right.Y)
-					}
 				}
 			}
 			d2--
@@ -711,11 +712,11 @@ func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) [
 		for x := x0; x <= x1; x++ {
 			res = append(res, XY{X: x, Y: y})
 			if D > 0 {
-			y = y + yi; D = D + (2 * (dy - dx))
-		} else {
-			D = D + 2*dy
+				y = y + yi; D = D + (2 * (dy - dx))
+			} else {
+				D = D + 2 * dy
+			}
 		}
-	}
 		return res
 	}
 

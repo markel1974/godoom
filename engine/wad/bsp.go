@@ -5,6 +5,7 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad/lumps"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 )
@@ -108,29 +109,24 @@ func (bsp* BSP) traverseBsp(x int16, y int16, opposite bool, idx uint16) uint16 
 }
 
 
-func (bsp* BSP) traverseBsp2(container *[]uint16, x int16, y int16, idx uint16, n * lumps.Node) {
+func (bsp* BSP) traverseBsp2(container *[]uint16, x int16, y int16, idx uint16) {
 	if idx & subSectorBit == subSectorBit {
 		if idx == 0xffff {
-			if _, inside := n.IntersectInside(x, y); inside {
-				*(container) = append(*(container), 0)
-			}
 			return
 		} else {
-			if _, inside := n.IntersectInside(x, y); inside {
-				subSectorId := (idx) & ^subSectorBit
-				*(container) = append(*(container), subSectorId)
-			}
+			subSectorId := (idx) & ^subSectorBit
+			*(container) = append(*(container), subSectorId)
 			return
 		}
 	}
 	node := bsp.level.Nodes[idx]
 	side := node.PointOnSide(x, y)
 	sideIdx := node.Child[side]
-	bsp.traverseBsp2(container, x, y, sideIdx, node)
+	bsp.traverseBsp2(container, x, y, sideIdx)
 
 	oppositeSide := side ^ 1
 	oppositeSideIdx := node.Child[oppositeSide]
-	bsp.traverseBsp2(container, x, y, oppositeSideIdx, node)
+	bsp.traverseBsp2(container, x, y, oppositeSideIdx)
 }
 
 
@@ -147,23 +143,27 @@ func (bsp* BSP) findSubSector(n * lumps.Node, x int16, y int16, idx uint16) (uin
 	return 0, nil
 }
 
-func (bsp* BSP) findNodeSubSector(subSectorId uint16) *lumps.Node {
-	for _, n := range bsp.level.Nodes {
+func (bsp* BSP) findNodeSubSector(subSectorId uint16) uint16 {
+	for idx, n := range bsp.level.Nodes {
 		if n.Child[0] & subSectorBit == subSectorBit {
 			id := n.Child[0] & ^subSectorBit
 			if id == subSectorId {
-				return n
+				return uint16(idx)
 			}
 		}
 		if n.Child[1] & subSectorBit == subSectorBit {
 			id := n.Child[1] & ^subSectorBit
 			if id == subSectorId {
-				return n
+				return uint16(idx)
 			}
 		}
 	}
-	return nil
+	return 0
 }
+
+
+
+
 
 
 type SegmentData struct {
@@ -172,15 +172,17 @@ type SegmentData struct {
 	Count int
 }
 
-func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.InputSegment) (uint16, int, []*model.InputSegment) {
-	const margin = 2
+func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.InputSegment, wallSectors map[uint16]bool) (uint16, int, []*model.InputSegment) {
+	const margin = 1
 	x1 := int16(is2.Start.X); y1 := int16(is2.Start.Y); x2 := int16(is2.End.X); y2 := int16(is2.End.Y)
 	xDif := float64(x2 - x1) / 2
 	yDif := float64(y2 - y1) / 2
 	out := make(map[uint16]*SegmentData)
-	debug := subSectorId == 15 && x1 == 1992  && y1 == 2552 && x2 == 1784 && y2 == 2552
-	//TODO describeLineF NON MANTIENE l'ordine!!!!
+	//debug := subSectorId == 15 && x1 == 1992  && y1 == 2552 && x2 == 1784 && y2 == 2552
+	debug := subSectorId == 8
 	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
+
+	node := bsp.root//bsp.findNodeSubSector(subSectorId)
 
 	//rlStart := is2.Start//rl[0]
 	//rlEnd := is2.End//rl[len(rl) - 1]
@@ -188,7 +190,6 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 	rlEnd := rl[len(rl) - 1]
 
 	rl = rl[margin: len(rl) - margin]
-
 
 	var ret []*model.InputSegment
 
@@ -205,9 +206,13 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 			update = 2
 		}
 		if update > 0 {
+			kind := model.DefinitionValid
+			if _, ok := wallSectors[sId]; ok {
+				kind = model.DefinitionWall
+			}
 			cloned := is2.Clone()
 			cloned.Neighbor = id
-			cloned.Kind = model.DefinitionValid
+			cloned.Kind = kind
 			cloned.End = model.XY{}
 			if update == 1 {
 				cloned.Start.X = rlStart.X
@@ -239,35 +244,48 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 		b1 := src.Y + xDif
 		a2 := src.X + yDif
 		b2 := src.Y - xDif
+		perp := bsp.describeLineF(a1, b1, a2, b2)
+
 		if debug {
+			fmt.Println("------ PERP -------", x, len(rl), "[", x1, y1, x2, y2, "]")
 			//fmt.Println("------ PERP -------", x, src)
 			//for _, test := range perp {
 			//	fmt.Println(test)
 			//}
-			//fmt.Println("IN DEBUG")
 		}
 
-		perp := bsp.describeLineF(a1, b1, a2, b2)
 		center := len(perp) / 2
 		d2 := center - 1
-
-
 
 		for d1 := center; d1 < len(perp); d1++  {
 			left := perp[d1]
 			right := perp[d2]
-			if leftSS, leftNode := bsp.findSubSector(nil, int16(left.X), int16(-left.Y), bsp.root);  leftNode != nil {
+			if leftSS, leftNode := bsp.findSubSector(nil, int16(left.X), int16(-left.Y), node);  leftNode != nil {
 				if leftSS != subSectorId {
+					if debug {
+						fmt.Printf(" %0.f:%0.f %d - LEFT \n", left.X, left.Y, leftSS)
+					}
 					addSegment(leftSS, src)
 					add(leftSS, left.X, left.Y)
 					break
+				} else {
+					if debug {
+						//fmt.Printf("%0.f:%0.f - SAME LEFT\n", left.X, left.Y)
+					}
 				}
 			}
-			if rightSS, rightNode := bsp.findSubSector(nil, int16(right.X), int16(-right.Y), bsp.root); rightNode != nil {
+			if rightSS, rightNode := bsp.findSubSector(nil, int16(right.X), int16(-right.Y), node); rightNode != nil {
 				if rightSS != subSectorId {
+					if debug {
+						fmt.Printf("%0.f:%0.f %d - RIGHT\n", right.X, right.Y, rightSS)
+					}
 					addSegment(rightSS, src)
 					add(rightSS, right.X, right.Y)
 					break
+				} else {
+					if debug {
+						//fmt.Printf("%0.f:%0.f - SAME RIGHT\n", right.X, right.Y)
+					}
 				}
 			}
 			d2--
@@ -287,6 +305,10 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 			lastSegment.End.Y = rlEnd.Y
 			lastSegment.Tag += fmt.Sprintf(" - CREATED %0.f:%0.f", lastSegment.End.X - lastSegment.Start.X, lastSegment.End.Y - lastSegment.Start.Y)
 		}
+	}
+
+	if debug {
+		os.Exit(-1)
 	}
 
 	/*
@@ -621,22 +643,17 @@ func (bsp * BSP) BruteForceLineDef(startX int16, startY int16, endX int16, endY 
 
 
 //TODO https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+/*
 func (bsp * BSP) plotLineLow(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
 	var res []XY
-    dx := x1 - x0
-    dy := y1 - y0
+    dx := x1 - x0; dy := y1 - y0
     yi := float64(1)
-    if dy < 0 {
-		yi = -1
-		dy = -dy
-	}
-    D := (2 * dy) - dx
-    y := y0
+    if dy < 0 { yi = -1; dy = -dy }
+    D := (2 * dy) - dx; y := y0
     for x := x0; x <= x1; x++ {
         res = append(res, XY{X: x, Y: y})
         if D > 0 {
-			y = y + yi
-			D = D + (2 * (dy - dx))
+			y = y + yi; D = D + (2 * (dy - dx))
 		} else {
 			D = D + 2*dy
 		}
@@ -646,45 +663,77 @@ func (bsp * BSP) plotLineLow(x0 float64, y0 float64, x1 float64, y1 float64) []X
 
 func (bsp * BSP) plotLineHigh(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
 	var res []XY
-    dx := x1 - x0
-    dy := y1 - y0
+    dx := x1 - x0; dy := y1 - y0
     xi := float64(1)
-    if dx < 0 {
-		xi = -1
-		dx = -dx
-	}
+    if dx < 0 { xi = -1; dx = -dx }
     D := (2 * dx) - dy
     x := x0
-
     for y := y0; y <= y1; y++ {
 		res = append(res, XY{X: x, Y: y})
         if D > 0 {
 			x = x + xi
 			D = D + (2 * (dx - dy))
 		} else {
-			D = D + 2*dx
+			D = D + 2 * dx
 		}
     }
 	return res
 }
 
+
+ */
 func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+		var res []XY
+		dx := x1 - x0; dy := y1 - y0
+		xi := float64(1)
+		if dx < 0 { xi = -1; dx = -dx }
+		D := (2 * dx) - dy
+		x := x0
+		for y := y0; y <= y1; y++ {
+			res = append(res, XY{X: x, Y: y})
+			if D > 0 {
+				x = x + xi
+				D = D + (2 * (dx - dy))
+			} else {
+				D = D + 2 * dx
+			}
+		}
+		return res
+	}
+
+	low := func(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
+		var res []XY
+		dx := x1 - x0; dy := y1 - y0
+		yi := float64(1)
+		if dy < 0 { yi = -1; dy = -dy }
+		D := (2 * dy) - dx; y := y0
+		for x := x0; x <= x1; x++ {
+			res = append(res, XY{X: x, Y: y})
+			if D > 0 {
+			y = y + yi; D = D + (2 * (dy - dx))
+		} else {
+			D = D + 2*dy
+		}
+	}
+		return res
+	}
+
 	var res []XY
 	reverse := false
     if math.Abs(y1 - y0) < math.Abs(x1 - x0) {
         if x0 > x1 {
 			reverse = true
-			res = bsp.plotLineLow(x1, y1, x0, y0)
+			res = low(x1, y1, x0, y0)
 		} else {
-			res = bsp.plotLineLow(x0, y0, x1, y1)
+			res = low(x0, y0, x1, y1)
 		}
     } else {
         if y0 > y1 {
 			reverse = true
-			res = bsp.plotLineHigh(x1, y1, x0, y0)
+			res = high(x1, y1, x0, y0)
 		} else {
-			//TODO REVERSE FUNC
-			res = bsp.plotLineHigh(x0, y0, x1, y1)
+			res = high(x0, y0, x1, y1)
 		}
     }
 
@@ -699,3 +748,29 @@ func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) [
 	return r
 }
 
+
+
+
+
+
+func (bsp * BSP) traversePoint(x1 int16, y1 int16, idx uint16, exclude uint16, res map[uint16]bool) {
+	if idx & subSectorBit == subSectorBit {
+		subSectorId := idx & ^subSectorBit
+		if subSectorId != exclude {
+			res[subSectorId] = true
+		}
+		return
+	}
+	node := bsp.level.Nodes[idx]
+	if child, ok := node.Intersect(x1, y1); ok {
+		bsp.traversePoint(x1, y1, child, exclude, res)
+	}
+	return
+}
+func (bsp* BSP) findPointInSubSector(x1 int16, y1 int16, exclude uint16, res map[uint16]bool) {
+	for _, n := range bsp.level.Nodes {
+		if child, ok := n.Intersect(x1, y1); ok {
+			bsp.traversePoint(x1, y1, child, exclude, res)
+		}
+	}
+}

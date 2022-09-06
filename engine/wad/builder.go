@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad/lumps"
+	"math"
 	"os"
 	"strconv"
 )
@@ -127,6 +128,7 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 		_, sideDef := b.level.SegmentSideDef(segment, lineDef)
 		if sideDef == nil { continue }
 		sectorId := sideDef.SectorRef
+
 		miSector := b.getConfigSector(miSectors, sectorId, b.level.Sectors[sectorId], subSectorId)
 
 		for segmentId := subSector.StartSeg; segmentId < subSector.StartSeg + subSector.NumSegments; segmentId++ {
@@ -136,6 +138,21 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 			if sideDef == nil { continue }
 			start := b.level.Vertexes[segment.VertexStart]
 			end := b.level.Vertexes[segment.VertexEnd]
+
+			//if lineDef.HasFlag(lumps.TwoSided) {
+				//if lineDef.HasFlag(lumps.Impassible) {
+				//	continue
+				//}
+				//if lineDef.HasFlag(lumps.BlockMonsters) {
+				//	continue
+				//}
+				//if lineDef.HasFlag(lumps.AlreadyOnMap) {
+				//	continue
+				//}
+				//if lineDef.HasFlag(lumps.NotOnMap) {
+				//	continue
+				//}
+			//}
 
 			lower := sideDef.LowerTexture
 			middle := sideDef.MiddleTexture
@@ -148,8 +165,7 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 			startXY := model.XY{X: float64(start.XCoord), Y: float64(-start.YCoord)}
 			endXY := model.XY{X: float64(end.XCoord), Y: float64(-end.YCoord)}
 
-			modelSegment := &model.InputSegment{ Tag: "", Neighbor: "", Start: startXY, End: endXY}
-
+			modelSegment := model.NewInputSegment(model.DefinitionVoid, startXY, endXY)
 			wall := false
 			if !lineDef.HasFlag(lumps.TwoSided) {
 				wall = middle != "-"
@@ -165,30 +181,57 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 			modelSegment.Upper = upper
 			modelSegment.Middle = middle
 			modelSegment.Lower = lower
+
 			miSector.Segments = append(miSector.Segments, modelSegment)
 		}
 	}
 
-	fmt.Println("-------- ACQUIRED -----------")
-	b.printSegments(miSectors[15].Segments)
+	//fmt.Println("-------- ACQUIRED -----------")
+	//b.printSegments(miSectors[15].Segments)
 
 	b.compileConvexHull(miSectors)
 
+	b.compileSegmentCache(miSectors)
+
 	b.CompileNeighbors(miSectors)
+
+
+	b.describeSegment(2, miSectors)
+
+
+	//os.Exit(-1)
 
 	return miSectors
 }
 
 func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
+	wallSectors := make(map[uint16]bool)
+	for idx, miSector := range miSectors {
+		if len(miSector.Segments) == 1 && miSector.Segments[0].Kind == model.DefinitionWall {
+			wallSectors[uint16(idx)] = true
+		}
+	}
 	for idx, miSector := range miSectors {
 		var segments []*model.InputSegment
 		for _, s := range miSector.Segments {
-			if s.Kind == model.DefinitionWall {
+			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
 				segments = append(segments, s)
 				continue
 			}
+			duplicates := map[string]bool{}
 			id, _ := strconv.Atoi(miSector.Id)
-			_, _, res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s)
+			_, _, res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
+
+			for _, d := range res {
+				if _, ok := duplicates[d.Neighbor]; ok {
+					d.Kind = model.DefinitionUnknown
+					d.Neighbor = ""
+					fmt.Println(idx, s.Id, "DUPLICATES ARE NOT ALLOWED!!!!")
+					continue
+				}
+				duplicates[d.Neighbor] = true
+			}
+
 			switch len(res) {
 				case 0:	segments = append(segments, s)
 				case 1: segments = append(segments, res[0])
@@ -196,6 +239,7 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 			}
 		}
 
+		/*
 		if idx == 15 {
 			fmt.Println("----------------- BEFORE ------------------")
 			b.printSegments(miSectors[15].Segments)
@@ -203,6 +247,7 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 			b.printSegments(segments)
 			//os.Exit(1)
 		}
+		*/
 		miSector.Segments = segments
 	}
 
@@ -235,8 +280,7 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 			os.Exit(1)
 		}
 	}
-
-	 */
+	*/
 }
 
 
@@ -253,11 +297,124 @@ func (b * Builder) compileConvexHull(miSectors []*model.InputSector) {
 			if s.Data != nil {
 				miSector.Segments = append(miSector.Segments, s.Data.(*model.InputSegment))
 			} else {
-				ns := &model.InputSegment{ Tag: "Missing", Neighbor: "", Start: s.Start, End: s.End, Kind: model.DefinitionVoid }
+				ns := model.NewInputSegment(model.DefinitionVoid, s.Start, s.End)
+				ns.Tag = "missing"
 				miSector.Segments = append(miSector.Segments, ns)
 			}
 		}
 	}
+}
+
+
+func pointIsOnSegment(px float64, py float64, pz float64, x1 float64, y1 float64, z1 float64, x2 float64, y2 float64, z2 float64) bool {
+	ab := math.Sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) + (z2-z1)*(z2-z1))
+	ap := math.Sqrt((px-x1)*(px-x1) + (py-y1)*(py-y1) + (pz-z1)*(pz-z1))
+	pb := math.Sqrt((x2-px)*(x2-px) + (y2-py)*(y2-py) + (z2-pz)*(z2-pz))
+	if ab == ap + pb {
+		return true
+	}
+	return false
+}
+
+func (b * Builder) pointOnSegment(point model.XY, s1 model.XY, s2 model.XY) bool {
+	return pointIsOnSegment(point.X, point.Y, 1.0, s1.X, s1.Y, 1.0, s2.X, s2.Y, 1.0)
+}
+
+func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
+	notFound := map[string]*model.InputSegment{}
+	type relation struct { to string; from string; s *model.InputSegment }
+	relations := map[string][]*relation{}
+	addRelation := func(to string, from string, s *model.InputSegment) {
+		rel := &relation{ to: to, from: from, s: s }
+		if k, ok := relations[to]; !ok {
+			relations[to]=[]*relation{rel}
+		} else {
+			k = append(k, rel)
+		}
+	}
+	totalFound := 0
+	totalPartial := 0
+	totalNotFound := 0
+	for _, xSector := range miSectors {
+		for _, xSegment := range xSector.Segments {
+			if xSegment.Kind == model.DefinitionWall { continue	}
+			partial := 0
+			relation := 2
+			for _, ySector := range miSectors {
+				if ySector.Id == xSector.Id { continue }
+				for _, ySegment := range ySector.Segments {
+					relation = 0
+					if  xSegment.Start.X == ySegment.End.X   && xSegment.Start.Y == ySegment.End.Y &&
+						xSegment.End.X   == ySegment.Start.X && xSegment.End.Y   == ySegment.Start.Y {
+						relation = 2
+					}
+					if relation < 2 {
+						pStart := b.pointOnSegment(xSegment.Start, ySegment.End, ySegment.Start)
+						pEnd := b.pointOnSegment(xSegment.End, ySegment.End, ySegment.Start)
+						if pStart && pEnd {
+							relation = 2
+						} else if pStart || pEnd {
+							relation = 1
+							partial++
+						}
+					}
+
+					if relation > 0 {
+						addRelation(xSegment.Id, ySector.Id, ySegment)
+						if relation == 2 {
+							xSegment.Neighbor = ySector.Id
+							xSegment.Kind = model.DefinitionValid
+							partial = 0
+							break
+						}
+					}
+				}
+				if relation == 2 { break }
+			}
+			if relation == 2 {
+				totalFound++
+			} else {
+				test1 := make(map[uint16]bool)
+				id, _ := strconv.Atoi(xSector.Id)
+				b.bsp.findPointInSubSector(int16(xSegment.Start.X), int16(-xSegment.Start.Y), uint16(id), test1)
+				b.bsp.findPointInSubSector(int16(xSegment.End.X), int16(-xSegment.End.Y), uint16(id), test1)
+				//fmt.Println("-----------------------------")
+
+				//nodeIdx := b.bsp.findNodeSubSector(uint16(15))
+				//var test2[]uint16
+				//b.bsp.traverseBsp2(&test2, int16(xSegment.Start.X), int16(-xSegment.Start.Y), nodeIdx)
+
+
+				//fmt.Println("CURRENT SECTOR:", xSector.Id)
+				//fmt.Println("REFERENCES:", test1)
+				//fmt.Println("TRAVERSE:", test2)
+				if partial > 0 {
+					totalPartial ++
+				} else {
+					totalNotFound ++
+				}
+				notFound[xSegment.Id] = xSegment
+			}
+		}
+	}
+
+
+	notMissing := 0
+	for n, v := range notFound {
+		if v.Tag != "missing" {
+			notMissing++
+		}
+
+		if _, ok := relations[n]; ok {
+			//fmt.Println("-----------------------")
+			//fmt.Println(v)
+			//for _, xx := range r {
+			//	fmt.Println(xx.s)
+			//}
+			delete(notFound, n)
+		}
+	}
+	fmt.Println(totalFound, totalPartial, len(notFound), notMissing)
 }
 
 func (b * Builder) getConfigSector(cfg []*model.InputSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) * model.InputSector{
@@ -285,4 +442,19 @@ func (b * Builder) printSegments(miSegments []*model.InputSegment) {
 	for i, test := range miSegments{
 		fmt.Println(i, "[", test.Neighbor, "]", test.Start.X, test.Start.Y, test.End.X, test.End.Y, test.Tag)
 	}
+}
+
+func (b * Builder) describeSegment(targetSector int, miSectors []*model.InputSector) {
+	fmt.Println(targetSector, "------------------", "DESCRIBE SECTOR", targetSector, "------------------")
+	var xy model.XY
+	for idx, tt := range miSectors[targetSector].Segments {
+		xy = tt.Start
+		fmt.Println(idx, tt.Neighbor, tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y)
+	}
+	nodeIdx := b.bsp.findNodeSubSector(uint16(targetSector))
+	var test2[]uint16
+	b.bsp.traverseBsp2(&test2, int16(xy.X), int16(xy.Y), nodeIdx)
+	fmt.Println("TRAVERSE:", test2)
+
+	//os.Exit(-1)
 }

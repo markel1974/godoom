@@ -12,6 +12,7 @@ type XYZ struct {
 }
 
 type InputSegment struct {
+	Id       string `json:"id"`
 	Start    XY     `json:"start"`
 	End      XY     `json:"end"`
 	Kind     int    `json:"kind"`
@@ -23,8 +24,10 @@ type InputSegment struct {
 }
 
 
+
 func NewInputSegment(kind int, s XY, e XY) * InputSegment {
 	is := &InputSegment{
+		Id:       NextUUId(),
 		Start:    s,
 		End:      e,
 		Kind:     kind,

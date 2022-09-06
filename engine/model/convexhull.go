@@ -32,6 +32,9 @@ func NewConvexHull() * ConvexHull {
 }
 
 func (ch * ConvexHull) Create(id string, inputSegments []*CHSegment) []*CHSegment {
+	if len(inputSegments) == 0 {
+		return nil
+	}
 	//head := ch.getHead(sect.Segments)
 	head := ch.findLowest(inputSegments)
 	headSeg := inputSegments[head]

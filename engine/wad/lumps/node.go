@@ -109,6 +109,19 @@ func (n * Node) Intersect(x int16, y int16) (uint16, bool) {
 	return 0, false
 }
 
+func (n * Node) IntersectSegment(x1 int16, y1 int16, x2 int16, y2 int16) (uint16, bool) {
+	if n.BBox[0].Intersect(x1, y1) && n.BBox[0].Intersect(x2, y2) {
+		return n.Child[0], true
+		//return bsp.findSubSector(x, y, int(node.Child[0]))
+		//return 0
+	}
+	if n.BBox[1].Intersect(x1, y1) && n.BBox[1].Intersect(x2, y2) {
+		return n.Child[1], true
+		//return bsp.findSubSector(x, y, int(node.Child[1]))
+	}
+	return 0, false
+}
+
 
 func (n * Node) IntersectInside(x int16, y int16) (uint16, bool) {
 	if n.BBox[0].IntersectInside(x, y) {

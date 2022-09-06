@@ -69,7 +69,7 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			s.LowerTexture = text.Get(cs.LowerTexture)
 			s.WallTexture = text.Get(cs.WallTexture)
 			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil || s.WallTexture == nil {
-				fmt.Println("invalid textures configuration for sector", s.Id)
+				//fmt.Println("invalid textures configuration for sector", s.Id)
 				s.Textures = false
 			}
 		}

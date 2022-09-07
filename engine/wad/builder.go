@@ -191,7 +191,7 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 
 	b.compileConvexHull(miSectors)
 
-	b.compileSegmentCache(miSectors)
+	b.compileSegmentRelations(miSectors)
 
 	b.CompileNeighbors(miSectors)
 
@@ -200,7 +200,8 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 	//}
 	//b.describeSegment(38, miSectors)
 	//b.describeSegment(103, miSectors)
-	b.describeSegment(102, miSectors)
+	b.describeSegment(103, miSectors)
+	b.describeSegment(96, miSectors)
 	//b.describeSegment(103, miSectors)
 	//b.describeSegment(2, miSectors)
 	//b.describeSegment(8, miSectors)
@@ -303,10 +304,10 @@ func (b * Builder) pointOnSegment(point model.XY, s1 model.XY, s2 model.XY) bool
 	return pointIsOnSegment(point.X, point.Y, 1.0, s1.X, s1.Y, 1.0, s2.X, s2.Y, 1.0)
 }
 
-func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
-	notFound := map[string]*model.InputSegment{}
+func (b * Builder) compileSegmentRelations(miSectors []*model.InputSector) {
 	type relation struct { to string; from string; s *model.InputSegment }
 	relations := map[string][]*relation{}
+
 	addRelation := func(to string, from string, s *model.InputSegment) {
 		rel := &relation{ to: to, from: from, s: s }
 		if k, ok := relations[to]; !ok {
@@ -315,9 +316,7 @@ func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
 			k = append(k, rel)
 		}
 	}
-	totalFound := 0
-	totalPartial := 0
-	totalNotFound := 0
+
 	for _, xSector := range miSectors {
 		for _, xSegment := range xSector.Segments {
 			if xSegment.Kind == model.DefinitionWall { continue	}
@@ -341,7 +340,6 @@ func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
 							partial++
 						}
 					}
-
 					if relation > 0 {
 						addRelation(xSegment.Id, ySector.Id, ySegment)
 						if relation == 2 {
@@ -354,6 +352,7 @@ func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
 				}
 				if relation == 2 { break }
 			}
+			/*
 			if relation == 2 {
 				totalFound++
 			} else {
@@ -361,16 +360,7 @@ func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
 				id, _ := strconv.Atoi(xSector.Id)
 				b.bsp.findPointInSubSector(int16(xSegment.Start.X), int16(-xSegment.Start.Y), uint16(id), test1)
 				b.bsp.findPointInSubSector(int16(xSegment.End.X), int16(-xSegment.End.Y), uint16(id), test1)
-				//fmt.Println("-----------------------------")
 
-				//nodeIdx := b.bsp.findNodeSubSector(uint16(15))
-				//var test2[]uint16
-				//b.bsp.traverseBsp2(&test2, int16(xSegment.Start.X), int16(-xSegment.Start.Y), nodeIdx)
-
-
-				//fmt.Println("CURRENT SECTOR:", xSector.Id)
-				//fmt.Println("REFERENCES:", test1)
-				//fmt.Println("TRAVERSE:", test2)
 				if partial > 0 {
 					totalPartial ++
 				} else {
@@ -378,26 +368,9 @@ func (b * Builder) compileSegmentCache(miSectors []*model.InputSector) {
 				}
 				notFound[xSegment.Id] = xSegment
 			}
+			*/
 		}
 	}
-
-
-	notMissing := 0
-	for n, v := range notFound {
-		if v.Tag != "missing" {
-			notMissing++
-		}
-
-		if _, ok := relations[n]; ok {
-			//fmt.Println("-----------------------")
-			//fmt.Println(v)
-			//for _, xx := range r {
-			//	fmt.Println(xx.s)
-			//}
-			delete(notFound, n)
-		}
-	}
-	fmt.Println(totalFound, totalPartial, len(notFound), notMissing)
 }
 
 func (b * Builder) getConfigSector(cfg []*model.InputSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) * model.InputSector{

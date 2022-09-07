@@ -195,12 +195,15 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 
 	b.CompileNeighbors(miSectors)
 
-	for idx, _ := range miSectors {
-		b.describeSegment(idx, miSectors)
-	}
-
-	b.describeSegment(2, miSectors)
-	b.describeSegment(15, miSectors)
+	//for idx, _ := range miSectors {
+	//	b.describeSegment(idx, miSectors)
+	//}
+	//b.describeSegment(38, miSectors)
+	//b.describeSegment(103, miSectors)
+	b.describeSegment(102, miSectors)
+	//b.describeSegment(103, miSectors)
+	//b.describeSegment(2, miSectors)
+	//b.describeSegment(8, miSectors)
 
 	//os.Exit(-1)
 
@@ -219,13 +222,14 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 	for _, miSector := range miSectors {
 		var segments []*model.InputSegment
 		for _, s := range miSector.Segments {
-			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
+			//if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
+			if s.Kind == model.DefinitionWall {
 				segments = append(segments, s)
 				continue
 			}
 			//duplicates := map[string]bool{}
 			id, _ := strconv.Atoi(miSector.Id)
-			_, _, res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
+			res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
 
 			/*
 			for _, d := range res {
@@ -257,37 +261,6 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 		*/
 		miSector.Segments = segments
 	}
-
-	/*
-	for idx, miSector := range miSectors {
-		for _, s := range miSector.Segments {
-			if s.Kind != model.DefinitionWall {
-				id, _ := strconv.Atoi(miSector.Id)
-				oppositeSubSector, state, _ := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s)
-				if state >= 0 {
-					s.Kind = model.DefinitionValid
-					s.Neighbor = strconv.Itoa(int(oppositeSubSector))
-				} else if state == -2 {
-					//VOID
-					s.Neighbor = strconv.Itoa(int(oppositeSubSector))
-					s.Kind = model.DefinitionVoid
-				} else {
-					s.Kind = model.DefinitionUnknown
-					//m.Kind = model.DefinitionWall
-					//m.Neighbor = "wall"
-				}
-				//b.SetNeighbor(uint16(id), s)
-			}
-		}
-		if idx == 15 {
-			fmt.Println("--------------------------", "BEFORE", "--------------------------")
-			for i, test := range miSectors[idx].Segments{
-				fmt.Println(i, "[", test.Neighbor, "]", test.Start, test.End, test.Tag)
-			}
-			os.Exit(1)
-		}
-	}
-	*/
 }
 
 
@@ -456,16 +429,22 @@ func (b * Builder) printSegments(miSegments []*model.InputSegment) {
 
 func (b * Builder) describeSegment(targetSector int, miSectors []*model.InputSector) {
 	fmt.Println("------------------", "DESCRIBE SECTOR", targetSector, "------------------")
-	var xy model.XY
+	xy := miSectors[targetSector].Segments[0]
 	var neighbors [] string
-	for _, tt := range miSectors[targetSector].Segments {
-		xy = tt.Start
+	//nodeIdx := b.bsp.findNodeSubSector(uint16(targetSector))
+
+	for idx, tt := range miSectors[targetSector].Segments {
 		neighbors = append(neighbors, tt.Neighbor)
-		//fmt.Println(idx, tt.Neighbor, tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y)
+		fmt.Println("SEGMENT:", idx)
+		fmt.Println(idx, tt.Neighbor, "COORDS:", tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y, "TAG:", tt.Tag)
 	}
-	nodeIdx := b.bsp.findNodeSubSector(uint16(targetSector))
+
+	nodeIdx, _ := b.bsp.FindNode(int16(xy.Start.X), int16(-xy.Start.Y))
+
 	var traverse[]uint16
-	b.bsp.traverseBsp2(&traverse, int16(xy.X), int16(xy.Y), nodeIdx)
+
+	//b.bsp.describeLine2F()
+	b.bsp.TraverseBsp(&traverse, int16(xy.Start.X), int16(-xy.Start.Y), nodeIdx)
 	fmt.Println("NEIGHBORS:", neighbors)
 	fmt.Println("TRAVERSE:", traverse)
 }

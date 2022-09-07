@@ -146,32 +146,6 @@ func (bsp* BSP) findPointInSubSector(x1 int16, y1 int16, exclude uint16, res map
 	}
 }
 
-/*
-func (bsp* BSP) findNodeSubSector(subSectorId uint16) uint16 {
-	for idx := 0; idx < len(bsp.level.Nodes); idx++ {
-		node := bsp.level.Nodes[idx]
-		if node.Child[0] & subSectorBit == subSectorBit {
-			id := node.Child[0] & ^subSectorBit
-			if id == subSectorId {
-				return uint16(idx)
-			}
-		}
-		if node.Child[1] & subSectorBit == subSectorBit {
-			id := node.Child[1] & ^subSectorBit
-			if id == subSectorId {
-				return uint16(idx)
-			}
-		}
-	}
-	return 0
-}
-
- */
-
-
-
-
-
 
 type SegmentData struct {
 	Start XY
@@ -657,9 +631,8 @@ func (bsp * BSP) plotLineHigh(x0 float64, y0 float64, x1 float64, y1 float64) []
     }
 	return res
 }
+*/
 
-
- */
 func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
 	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
 		var res []XY
@@ -726,11 +699,24 @@ func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) [
 	return r
 }
 
-
-
-
-
 /*
+func (bsp* BSP) findNodeSubSector(subSectorId uint16) uint16 {
+	for idx := 0; idx < len(bsp.level.Nodes); idx++ {
+		node := bsp.level.Nodes[idx]
+		if node.Child[0] & subSectorBit == subSectorBit {
+			id := node.Child[0] & ^subSectorBit
+			if id == subSectorId {
+				return uint16(idx)
+			}
+		}
+		if node.Child[1] & subSectorBit == subSectorBit {
+			id := node.Child[1] & ^subSectorBit
+			if id == subSectorId {
+				return uint16(idx)
+			}
+		}
+	}
+	return 0
+}
+*/
 
-
- */

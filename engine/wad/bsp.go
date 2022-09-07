@@ -123,7 +123,8 @@ func (bsp* BSP) findSubSector(x int16, y int16, idx uint16) (uint16, bool) {
 
 
 func (bsp* BSP) FindSubSectorForced(x int16, y int16) (uint16, bool) {
-	//TODO WRONG IMPLEMENTATION!!!!!
+	//TODO WRONG IMPLEMENTATION - DEVE FUNZIONARE PER FORZA CON INSIDE!!!!!
+
 	for idx := 0; idx < len(bsp.leafNodes); idx++ {
 		node := bsp.leafNodes[idx]
 		if child, ok := node.Intersect(x, y); ok {
@@ -185,7 +186,7 @@ type SegmentData struct {
 }
 
 func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.InputSegment, wallSectors map[uint16]bool) []*model.InputSegment {
-	const margin = 1
+	const margin = 2
 	x1 := int16(is2.Start.X); y1 := int16(is2.Start.Y); x2 := int16(is2.End.X); y2 := int16(is2.End.Y)
 	xDif := float64(x2 - x1) / 2
 	yDif := float64(y2 - y1) / 2
@@ -263,6 +264,18 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 
 		perp := bsp.describeLineF(a1, b1, a2, b2)
 
+		center := -1
+		for idx, xy := range perp {
+			if xy.X == src.X && xy.Y == src.Y {
+				center = idx
+			}
+		}
+
+		if center == -1 {
+			center = len(perp) / 2
+			//fmt.Println("CAN'T FIND CENTER!!!!!!", src.X, src.Y, "|", perp[center].X, perp[center].Y)
+		}
+
 		if debug {
 			fmt.Println("------ PERP -------", x, "len:", len(rl), "[", x1, y1, x2, y2, "]", "[", perp[0].X, perp[0].Y, perp[len(perp)-1].X, perp[len(perp)-1].Y, "]")
 			//fmt.Println("------ PERP -------", x, src)
@@ -271,7 +284,7 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 			//}
 		}
 
-		center := len(perp) / 2
+		//center := len(perp) / 2
 		d2 := center - 1
 
 		for d1 := center; d1 < len(perp); d1++  {
@@ -292,8 +305,6 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 			} else {
 				if debug {
 					fmt.Println("CRITICAL ERROR, NOT FOUND ON LEFT", left.X, -left.Y)
-					t, _ := bsp.FindSubSectorForced(int16(left.X), int16(-left.Y))
-					fmt.Println(t)
 				}
 			}
 			if rightSS, ok := bsp.FindSubSectorForced(int16(right.X), int16(-right.Y)); ok {
@@ -374,7 +385,7 @@ func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) [
 		D := (2 * dx) - dy
 		x := x0
 		for y := y0; y <= y1; y++ {
-			res = append(res, XY{X: x, Y: y})
+			res = append(res, XY{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				x = x + xi
 				D = D + (2 * (dx - dy))
@@ -392,7 +403,7 @@ func (bsp * BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) [
 		if dy < 0 { yi = -1; dy = -dy }
 		D := (2 * dy) - dx; y := y0
 		for x := x0; x <= x1; x++ {
-			res = append(res, XY{X: x, Y: y})
+			res = append(res, XY{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				y = y + yi; D = D + (2 * (dy - dx))
 			} else {

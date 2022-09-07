@@ -165,7 +165,7 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 			startXY := model.XY{X: float64(start.XCoord), Y: float64(-start.YCoord)}
 			endXY := model.XY{X: float64(end.XCoord), Y: float64(-end.YCoord)}
 
-			modelSegment := model.NewInputSegment(model.DefinitionVoid, startXY, endXY)
+			modelSegment := model.NewInputSegment(model.DefinitionUnknown, startXY, endXY)
 			wall := false
 			if !lineDef.HasFlag(lumps.TwoSided) {
 				wall = middle != "-"
@@ -223,8 +223,8 @@ func (b * Builder) CompileNeighbors(miSectors []*model.InputSector)  {
 	for _, miSector := range miSectors {
 		var segments []*model.InputSegment
 		for _, s := range miSector.Segments {
-			//if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
-			if s.Kind == model.DefinitionWall {
+			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
+			//if s.Kind == model.DefinitionWall {
 				segments = append(segments, s)
 				continue
 			}
@@ -352,23 +352,6 @@ func (b * Builder) compileSegmentRelations(miSectors []*model.InputSector) {
 				}
 				if relation == 2 { break }
 			}
-			/*
-			if relation == 2 {
-				totalFound++
-			} else {
-				test1 := make(map[uint16]bool)
-				id, _ := strconv.Atoi(xSector.Id)
-				b.bsp.findPointInSubSector(int16(xSegment.Start.X), int16(-xSegment.Start.Y), uint16(id), test1)
-				b.bsp.findPointInSubSector(int16(xSegment.End.X), int16(-xSegment.End.Y), uint16(id), test1)
-
-				if partial > 0 {
-					totalPartial ++
-				} else {
-					totalNotFound ++
-				}
-				notFound[xSegment.Id] = xSegment
-			}
-			*/
 		}
 	}
 }

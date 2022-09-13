@@ -17,9 +17,13 @@ type Model struct {
 	Triangles [][4]int // Triangles store 3 index of Points and last for tag/material
 }
 
+func NewModel() *Model{
+	return &Model{}
+}
+
 // TagProperty return length of lines, area of triangles for each tag.
 // Arcs are ignored
-func (m Model) TagProperty() (length []float64, area []float64) {
+func (m *Model) TagProperty() (length []float64, area []float64) {
 	// prepare slices
 	max := 0
 	for i := range m.Lines {
@@ -52,7 +56,7 @@ func (m Model) TagProperty() (length []float64, area []float64) {
 }
 
 // Copy return copy of Model
-func (m Model) Copy() (dst Model) {
+func (m *Model) Copy() (dst Model) {
 	// Points
 	dst.Points = make([]Point, len(m.Points))
 	copy(dst.Points, m.Points)
@@ -69,7 +73,7 @@ func (m Model) Copy() (dst Model) {
 }
 
 // String return a standard model view
-func (m Model) String() string {
+func (m *Model) String() string {
 	var str string
 	if 0 < len(m.Points) {
 		str += "Points:\n"
@@ -100,7 +104,7 @@ func (m Model) String() string {
 
 // Dxf return string in dxf drawing format
 // https://images.autodesk.com/adsk/files/autocad_2012_pdf_dxf-reference_enu.pdf
-func (m Model) Dxf() string {
+func (m *Model) Dxf() string {
 	// create buffer
 	var buf bytes.Buffer
 
@@ -1053,7 +1057,7 @@ func (m *Model) Split(d float64) {
 }
 
 // MinPointDistance return minimal between 2 points
-func (m Model) MinPointDistance() (distance float64) {
+func (m *Model) MinPointDistance() (distance float64) {
 	distance = math.MaxFloat64 // default value of distance
 	for i := range m.Points {
 		for j := range m.Points {
@@ -1093,7 +1097,7 @@ func (m *Model) ConvexHullTriangles() {
 }
 
 // Write model into file with filename in JSON format
-func (m Model) Write(filename string) (err error) {
+func (m *Model) Write(filename string) (err error) {
 	out, err := m.JSON()
 	if err != nil {
 		return
@@ -1107,7 +1111,7 @@ func (m Model) Write(filename string) (err error) {
 }
 
 // JSON convert model in JSON format
-func (m Model) JSON() (_ string, err error) {
+func (m *Model) JSON() (_ string, err error) {
 	// convert into json
 	b, err := json.Marshal(m)
 	if err != nil {

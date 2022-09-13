@@ -12,7 +12,7 @@ import (
 
 // Mesh is based structure of triangulation.
 // Triangle is data structure "Nodes, ribs и triangles" created by
-// book "Algoritm building and analyse triangulation", A.B.Skvorcov
+// book "Algorithm building and analyse triangulation", A.B.Skvorcov
 //
 //	Scketch:
 //	+------------------------------------+
@@ -455,7 +455,7 @@ func (mesh *Mesh) Check() (err error) {
 }
 
 func (mesh *Mesh) Model() * Model{
-	m := &Model{}
+	m := NewModel()
 	if mesh.Log {
 		log.Printf("Get")
 	}
@@ -486,10 +486,8 @@ func (mesh *Mesh) Clockwise() {
 			mesh.model.Points[mesh.model.Triangles[i][2]],
 		) {
 		case CounterClockwisePoints:
-			mesh.Triangles[i][0], mesh.Triangles[i][2] =
-				mesh.Triangles[i][2], mesh.Triangles[i][0]
-			mesh.model.Triangles[i][1], mesh.model.Triangles[i][2] =
-				mesh.model.Triangles[i][2], mesh.model.Triangles[i][1]
+			mesh.Triangles[i][0], mesh.Triangles[i][2] = mesh.Triangles[i][2], mesh.Triangles[i][0]
+			mesh.model.Triangles[i][1], mesh.model.Triangles[i][2] = mesh.model.Triangles[i][2], mesh.model.Triangles[i][1]
 		case CollinearPoints:
 			panic(fmt.Errorf("collinear triangle: %#v", mesh.model))
 		}

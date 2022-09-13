@@ -8,185 +8,16 @@ import (
 	"sort"
 )
 
-// Point is store of point coordinates
-type Point struct {
-	X, Y float64
-}
-
-// String is implementation of Stringer implementation for formating output
-func (p Point) String() string {
-	return fmt.Sprintf("[%.5e,%.5e]", p.X, p.Y)
-}
-
-// State is result of intersection
-type State int64
-
-const (
-	empty State = 1 << iota
-
-	// VerticalSegment return if segment is vertical
-	VerticalSegment
-
-	// HorizontalSegment return if segment is horizontal
-	HorizontalSegment
-
-	// ZeroLengthSegment return for zero length segment
-	ZeroLengthSegment
-
-	// Segment A and segment B are parallel.
-	// Intersection point data is not valid.
-	Parallel
-
-	// Collinear return if:
-	// Segment A and segment B are collinear.
-	// Intersection point data is not valid.
-	Collinear
-
-	// OnSegment is intersection point on segment
-	OnSegment
-
-	// OnPoint0Segment intersection point on point 0 segment
-	OnPoint0Segment
-
-	// OnPoint1Segment intersection point on point 1 segment
-	OnPoint1Segment
-
-	// ArcIsLine return only if wrong arc is line
-	ArcIsLine
-
-	// ArcIsPoint return only if wrong arc is point
-	ArcIsPoint
-
-	// last unused type
-	endType
-)
-
-var stateList = [...]string{
-	"empty",
-	"VerticalSegment",
-	"HorizontalSegment",
-	"ZeroLengthSegment",
-	"Parallel",
-	"Collinear",
-	"OnSegment",
-	"OnPoint0Segment",
-	"OnPoint1Segment",
-	"ArcIsLine",
-	"ArcIsPoint",
-	"endtype",
-}
-
-// Has is mean s-State has si-State
-func (s State) Has(si State) bool {
-	return s&si != 0
-}
-
-// Not mean s-State have not si-State
-func (s State) Not(si State) bool {
-	return s&si == 0
-}
-
-// String is implementation of Stringer implementation for formating output
-func (s State) String() string {
-	var out string
-	var size int
-	for i := 0; i < 64; i++ {
-		if endType == 1<<i {
-			size = i
-			break
-		}
-	}
-	for i := 1; i < size; i++ {
-		si := State(1 << i)
-		out += fmt.Sprintf("%2d\t%30s\t", i, stateList[i])
-		if s.Has(si) {
-			out += "found"
-		} else {
-			out += "not found"
-		}
-		out += "\n"
-	}
-	return out
-}
-
-// Check - check input data
-func Check(pps ...Point) error {
-	et := errorstree.New("Check points")
-	for i := range pps {
-		if x, y := pps[i].X, pps[i].Y; math.IsNaN(x) || math.IsInf(x, 0) ||
-			math.IsNaN(y) || math.IsInf(y, 0) {
-			_ = et.Add(fmt.Errorf("Not valid point #%d: (%.5e,%.5e)", i, x, y))
-		}
-	}
-	if et.IsError() {
-		return et
-	}
-	return nil
-}
 
 var (
 	// Eps is epsilon - precision of intersection
 	Eps = 1e-10
 )
 
-// PointPoint return states between two points.
-func PointPoint(pt0 Point, pt1 Point) (pi []Point, stA State, stB State) {
-	stA |= ZeroLengthSegment | VerticalSegment | HorizontalSegment
-	if SamePoints(pt0, pt1) {
-		stA |= OnPoint0Segment | OnPoint1Segment
-	}
-	stB = stA
-	return
-}
 
-// PointLine return states between point and line.
-func PointLine(pt Point, pb0 Point, pb1 Point) (pi []Point, stA State, stB State) {
-	// Point - Point
-	if SamePoints(pb0, pb1) {
-		return PointPoint(pt, pb0)
-	}
-	// Point - Line
 
-	stA |= ZeroLengthSegment | VerticalSegment | HorizontalSegment
 
-	for _, c := range [...]struct { isTrue bool; tiA State; tiB State } {
-		{isTrue: SamePoints(pt, pb0), tiA: OnPoint0Segment | OnPoint1Segment, tiB: OnPoint0Segment},
-		{isTrue: SamePoints(pt, pb1), tiA: OnPoint0Segment | OnPoint1Segment, tiB: OnPoint1Segment},
-		{isTrue: math.Abs(pb0.X-pb1.X) < Eps, tiB: VerticalSegment},
-		{isTrue: math.Abs(pb0.Y-pb1.Y) < Eps, tiB: HorizontalSegment},
-	} {
-		if c.isTrue {
-			stA |= c.tiA
-			stB |= c.tiB
-		}
-	}
-
-	if stB.Has(OnPoint0Segment) || stB.Has(OnPoint1Segment) {
-		return
-	}
-
-	if stA.Has(OnPoint0Segment) || stA.Has(OnPoint1Segment) {
-		return
-	}
-
-	if orient := Orientation(pt, pb0, pb1); orient != CollinearPoints {
-		// points is not on line
-		return
-	}
-
-	// is point on line
-	if math.Min(pb0.X, pb1.X) <= pt.X && pt.X <= math.Max(pb0.X, pb1.X) &&
-		math.Min(pb0.Y, pb1.Y) <= pt.Y && pt.Y <= math.Max(pb0.Y, pb1.Y) {
-		stA |= OnPoint0Segment | OnPoint1Segment
-		stB |= OnSegment
-		pi = []Point{pt}
-		return
-	}
-
-	return
-}
-
-// LineLine return analisys of two segments
+// LineLine return analysis of two segments
 //
 // Design of segments:
 //	                                            //
@@ -309,27 +140,7 @@ func LineLine(pa0 Point, pa1 Point, pb0 Point, pb1 Point) (pi []Point, stA State
 
 // MiddlePoint calculate middle point precisely.
 func MiddlePoint(p0 Point, p1 Point) Point {
-	// const prec = 128
-	//
-	// var (
-	// 	half = new(big.Float).SetPrec(prec).SetFloat64(0.5)
-	// 	x0   = new(big.Float).SetPrec(prec).SetFloat64(p0.X)
-	// 	x1   = new(big.Float).SetPrec(prec).SetFloat64(p1.X)
-	// 	y0   = new(big.Float).SetPrec(prec).SetFloat64(p0.Y)
-	// 	y1   = new(big.Float).SetPrec(prec).SetFloat64(p1.Y)
-	// )
-	// x0.Mul(x0, half)
-	// x1.Mul(x1, half)
-	// y0.Mul(y0, half)
-	// y1.Mul(y1, half)
-	//
-	// x0.Add(x0, x1)
-	// y0.Add(y0, y1)
-	//
-	// x, _ := x0.Float64()
-	// y, _ := y0.Float64()
-
-	// Simple float64 algoritm:
+	// Simple float64 algorithm:
 	x, y := p0.X, p0.Y
 	if p0.X != p1.X {
 		// x = p0.X*0.5 + p1.X*0.5
@@ -486,10 +297,10 @@ func Orientation(p1 Point, p2 Point, p3 Point) OrientationPoints {
 	}
 
 	// check other orientations
-	// algoritm float64
+	// algorithm float64
 	// v := (p2.Y-p1.Y)*(p3.X-p2.X) - (p2.X-p1.X)*(p3.Y-p2.Y)
 
-	// algoritm FMA
+	// algorithm FMA
 	v := math.FMA(p2.Y-p1.Y, p3.X-p2.X, -(p2.X-p1.X)*(p3.Y-p2.Y))
 
 	if math.Abs(v) < 100*Eps {
@@ -1134,9 +945,7 @@ func Area(tr0 Point, tr1 Point, tr2 Point) float64 {
 // triangle or on triangle edge
 func TriangleSplitByPoint(pt Point, tr0 Point, tr1 Point, tr2 Point) (res [][3]Point, lineIntersect int, err error) {
 	// check valid triangle
-	for _, c := range [...]struct {
-		isTrue bool
-	}{
+	for _, c := range [...]struct { isTrue bool }{
 		{isTrue: SamePoints(tr0, tr1)},
 		{isTrue: SamePoints(tr1, tr2)},
 		{isTrue: SamePoints(tr0, tr2)},
@@ -1166,9 +975,7 @@ func TriangleSplitByPoint(pt Point, tr0 Point, tr1 Point, tr2 Point) (res [][3]P
 		}
 	}
 	// point on corner ?
-	for _, c := range [...]struct {
-		isTrue bool
-	}{
+	for _, c := range [...]struct { isTrue bool }{
 		{isTrue: SamePoints(tr0, pt)},
 		{isTrue: SamePoints(tr1, pt)},
 		{isTrue: SamePoints(tr2, pt)},

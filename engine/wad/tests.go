@@ -11,7 +11,7 @@ import (
 
 
 func (b * Builder) testsEntryPoint(miSectors []*model.InputSector) {
-	b.createMeshes(miSectors)
+	//b.createMeshes(miSectors)
 	b.compileSectorBySegment(miSectors)
 }
 
@@ -104,7 +104,7 @@ func (b * Builder) compileSectorBySegment(miSectors []*model.InputSector) {
 
 
 func (b * Builder) createMeshes(miSectors []*model.InputSector) {
-	m := &geometry.Model{}
+	m := geometry.NewModel()
 	//for idx, seg := range miSectors[2].Segments {
 	//	m.AddLine(geometry.Point{X: seg.Start.X, Y: seg.Start.Y}, geometry.Point{X: seg.End.X, Y: seg.End.Y}, idx)
 	//}
@@ -131,17 +131,17 @@ func (b * Builder) createMeshes(miSectors []*model.InputSector) {
 
 	err := mesh.Compile(m)
 	if err == nil {
-		err := mesh.Materials()
-		if err != nil {
-			fmt.Println(err)
-		}
+		//err := mesh.Materials()
+		//if err != nil {
+		//	fmt.Println(err)
+		//}
 
 		n := mesh.Model()
 
 		for _, t := range n.Triangles {
 			seg := converter[t[3]]
 
-			fmt.Println("------", seg.Parent, seg.Tag)
+			fmt.Println("------", seg.Parent, seg.Tag, seg.Start, seg.End)
 			for i := 0; i < len(t) -1; i++ {
 				p := n.Points[t[i]]
 				fmt.Print(p.X, p.Y, " - ")

@@ -98,11 +98,13 @@ func (n *Node) PointOnSide(x int16, y int16) int {
 
 func (n * Node) Intersect(x int16, y int16) (uint16, bool) {
 	if n.BBox[0].Intersect(x, y) {
+		//fmt.Println(n.BBox[0].Top, n.BBox[0].Left, n.BBox[0].Bottom, n.BBox[0].Right)
 		return n.Child[0], true
 		//return bsp.findSubSector(x, y, int(node.Child[0]))
 		//return 0
 	}
 	if n.BBox[1].Intersect(x, y) {
+		//fmt.Println(n.BBox[1].Top, n.BBox[1].Left, n.BBox[1].Bottom, n.BBox[1].Right)
 		return n.Child[1], true
 		//return bsp.findSubSector(x, y, int(node.Child[1]))
 	}

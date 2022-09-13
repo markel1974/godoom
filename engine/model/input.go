@@ -12,21 +12,23 @@ type XYZ struct {
 }
 
 type InputSegment struct {
-	Id       string `json:"id"`
-	Start    XY     `json:"start"`
-	End      XY     `json:"end"`
-	Kind     int    `json:"kind"`
-	Neighbor string `json:"neighbor"`
-	Tag      string `json:"tag"`
-	Upper    string `json:"upper"`
-	Middle   string `json:"middle"`
-	Lower    string `json:"lower"`
+	Parent   string      `json:"id"`
+	Id       string      `json:"id"`
+	Start    XY          `json:"start"`
+	End      XY          `json:"end"`
+	Kind     int         `json:"kind"`
+	Neighbor string      `json:"neighbor"`
+	Tag      string      `json:"tag"`
+	Upper    string      `json:"upper"`
+	Middle   string      `json:"middle"`
+	Lower    string      `json:"lower"`
 }
 
 
 
-func NewInputSegment(kind int, s XY, e XY) * InputSegment {
+func NewInputSegment(parent string, kind int, s XY, e XY) * InputSegment {
 	is := &InputSegment{
+		Parent:   parent,
 		Id:       NextUUId(),
 		Start:    s,
 		End:      e,
@@ -40,14 +42,20 @@ func NewInputSegment(kind int, s XY, e XY) * InputSegment {
 	return is
 }
 
+
 func (is * InputSegment) Clone() * InputSegment {
-	out := NewInputSegment(is.Kind, is.Start, is.End)
+	out := NewInputSegment(is.Parent, is.Kind, is.Start, is.End)
 	out.Neighbor = is.Neighbor
 	out.Tag = is.Tag
 	out.Upper = is.Upper
 	out.Middle = is.Middle
 	out.Lower = is.Lower
 	return out
+}
+
+func (is * InputSegment) EqualCoords(tst * InputSegment) bool {
+	ret := is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
+	return ret
 }
 
 type InputSector struct {

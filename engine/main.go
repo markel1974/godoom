@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/markel1974/godoom/engine/geometry"
 	"github.com/markel1974/godoom/engine/legacy"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad"
@@ -37,7 +38,7 @@ func NewGame() *Game {
 
 func (g *Game) Setup() {
 	var err error
-	g.viewMode = -1
+	g.viewMode = 1
 	g.enableClear = true //true
 	m := 2
 
@@ -185,8 +186,82 @@ func (g *Game) Update(win *pixels.GLWindow) {
 
 func main() {
 
-	//test()
+	//geometryTest()
 
 	g := NewGame()
 	pixels.GLRun(g.Run)
+}
+
+
+func geometryTest() (model.XY, model.XY, bool) {
+	//refStart := geometry.Point{X: 0, Y: 10}
+	//refEnd := geometry.Point{X: 20, Y: 10}
+	//currStart := geometry.Point{X: 5, Y: 10}
+	//currEnd := geometry.Point{X: 10, Y: 10}
+
+	/*
+	refStart := geometry.Point{X: 0, Y: 5}
+	refEnd := geometry.Point{X: 5, Y: 5}
+
+	currStart := geometry.Point{X: 1, Y: 5}
+	currEnd := geometry.Point{X: 2, Y: 5}
+	*/
+
+
+
+	//BASE: 1664 2552 1664 2432
+	refStart := geometry.Point{X: 1664, Y: 2552}
+	refEnd := geometry.Point{X: 1664, Y: 2432}
+
+	//0 - 1664 2552 1664 2432 real: 1664 2432 1664 2560
+	currStart := geometry.Point{X: 1664, Y: 2432}
+	currEnd := geometry.Point{X: 1664, Y: 2560}
+
+	//15 - 1664 2552 1664 2432 real: 1664 2552 1664 2312 [ERRORE]
+	//currStart := geometry.Point{X: 1664, Y: 2552}
+	//currEnd := geometry.Point{X: 1664, Y: 2312}
+
+	var p1[]model.XY
+	if _, sa0, _ := geometry.PointLine(refStart, currStart, currEnd);
+		sa0.Has(geometry.OnPoint0Segment) || sa0.Has(geometry.OnPoint1Segment) {
+		//TODO RESIZE
+		p1 = append(p1, model.XY{X: refStart.X, Y: refStart.Y})
+	}
+	if _, sb0, _ := geometry.PointLine(refEnd, currStart, currEnd);
+		sb0.Has(geometry.OnPoint0Segment) || sb0.Has(geometry.OnPoint1Segment) {
+		//TODO RESIZE
+		p1 = append(p1, model.XY{X: refStart.X, Y: refStart.Y})
+	}
+	if len(p1) == 2 {
+		fmt.Println("OK", p1[0], p1[1])
+		os.Exit(-1)
+		return p1[0], p1[1], true
+	}
+	var p2[]model.XY
+	if _, sc0, _ := geometry.PointLine(currStart, refStart, refEnd);
+		sc0.Has(geometry.OnPoint0Segment) || sc0.Has(geometry.OnPoint1Segment) {
+		//TODO RESIZE
+		p2 = append(p2, model.XY{X: currStart.X, Y: currStart.Y})
+	}
+	if _, sd0, _ := geometry.PointLine(currEnd, refStart, refEnd);
+		sd0.Has(geometry.OnPoint0Segment) || sd0.Has(geometry.OnPoint1Segment) {
+		//TODO RESIZE
+		p2 = append(p2, model.XY{X: currEnd.X, Y: currEnd.Y})
+	}
+	if len(p2) >= 2 {
+		fmt.Println("OK", p2[0], p2[1])
+		os.Exit(-1)
+		return p2[0], p2[1], true
+	}
+
+	if len(p1) > 0 && len(p2) > 0 {
+		fmt.Println("OK", p1[0], p2[0])
+		os.Exit(-1)
+		return p1[0], p2[0], true
+	}
+
+	fmt.Println("NOK")
+	os.Exit(-1)
+
+	return model.XY{}, model.XY{}, false
 }

@@ -155,6 +155,25 @@ func (bsp* BSP) findNode(x int16, y int16, parentNodeIdx uint16, nodeIdx uint16)
 	return 0, false
 }
 
+
+func (bsp * BSP) FindRect(x int16, y int16) (lumps.BBox, bool) {
+	return bsp.findRect(x, y, lumps.BBox{}, bsp.root)
+}
+
+func (bsp* BSP) findRect(x int16, y int16, b lumps.BBox, nodeIdx uint16) (lumps.BBox, bool) {
+	if nodeIdx & subSectorBit == subSectorBit {
+		return b, true
+	}
+	node := bsp.level.Nodes[nodeIdx]
+	if node.BBox[0].Intersect(x, y) {
+		return bsp.findRect(x, y, node.BBox[0], node.Child[0])
+	}
+	if node.BBox[1].Intersect(x, y) {
+		return bsp.findRect(x, y, node.BBox[1], node.Child[1])
+	}
+	return lumps.BBox{}, false
+}
+
 func (bsp * BSP) traversePoint(x1 int16, y1 int16, idx uint16, exclude uint16, res map[uint16]bool) {
 	if idx & subSectorBit == subSectorBit {
 		subSectorId := idx & ^subSectorBit
@@ -209,6 +228,9 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
  		factor = 5.0
 		rl = rl[margin: len(rl) - margin]
 	} else {
+
+		//la linea deve essere ortogonale, non perpendicolare!!!!!!
+		//funzionano anche le linee del rect del bbox...
 		factor = 5.0
 		//TODO COSA FARE PER I SEGMENTI OBLIQUI?
 		//rl = []XY{ rl[len(rl) / 2]}

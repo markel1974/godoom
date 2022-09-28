@@ -371,6 +371,83 @@ func (bsp * BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 * model.I
 	return ret
 }
 
+func (bsp * BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 * model.InputSegment, wallSectors map[uint16]bool) []*model.InputSegment {
+	const margin = 2
+	x1 := int16(is2.Start.X); y1 := int16(is2.Start.Y); x2 := int16(is2.End.X); y2 := int16(is2.End.Y)
+	debug := subSectorId == 96
+	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
+	rlStart := is2.Start
+	rlEnd := is2.End
+
+	if debug {
+		fmt.Println("DEBUG IS STARTING")
+	}
+
+	rl = rl[margin: len(rl) - margin]
+
+	var ret []*model.InputSegment
+
+	addSegment := func(sId uint16, xy XY)  {
+		id := strconv.Itoa(int(sId))
+		kind :=  model.DefinitionValid
+		if _, ok := wallSectors[sId]; ok {
+			id = "wall"
+			kind = model.DefinitionWall
+		}
+
+		update := 0
+		if len(ret) == 0 {
+			update = 1
+		} else if ret[len(ret) -1].Neighbor != id {
+			prevSegment := ret[len(ret)-1]
+			prevSegment.End.X = xy.X
+			prevSegment.End.Y = xy.Y
+			prevSegment.Tag += fmt.Sprintf(" - CREATED %0.f:%0.f", prevSegment.End.X - prevSegment.Start.X, prevSegment.End.Y - prevSegment.Start.Y)
+			update = 2
+		}
+		if update > 0 {
+			cloned := is2.Clone()
+			cloned.Neighbor = id
+			cloned.Kind = kind
+			cloned.End = model.XY{}
+			if update == 1 {
+				cloned.Start.X = rlStart.X
+				cloned.Start.Y = rlStart.Y
+			} else if update == 2 {
+				cloned.Start.X = xy.X
+				cloned.Start.Y = xy.Y
+			}
+			ret = append(ret, cloned)
+		}
+	}
+
+	for x := 0; x < len(rl); x++ {
+		src := rl[x]
+
+
+
+		addSegment(0, src)
+	}
+
+	if len(ret) > 0 {
+		lastSegment := ret[len(ret) -1]
+		if lastSegment.Start.X == rlEnd.X && lastSegment.Start.Y == rlEnd.Y {
+			ret = ret[:len(ret)-1]
+		} else {
+			lastSegment.End.X = rlEnd.X
+			lastSegment.End.Y = rlEnd.Y
+			lastSegment.Tag += fmt.Sprintf(" - CREATED %0.f:%0.f", lastSegment.End.X - lastSegment.Start.X, lastSegment.End.Y - lastSegment.Start.Y)
+		}
+	} else {
+		fmt.Println("NOT FOUND!!!!")
+	}
+
+	if debug {
+		//os.Exit(-1)
+	}
+	return ret
+}
+
 func (bsp* BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
 	var res []XY
 	x := radius

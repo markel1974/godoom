@@ -3,6 +3,7 @@ package wad
 import (
 	"errors"
 	"fmt"
+	"github.com/markel1974/godoom/engine/geometry"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/wad/lumps"
 	"math"
@@ -185,7 +186,13 @@ func (b * Builder) scanSubSectors() []*model.InputSector {
 	}
 
 	//TODO TESTS - REMOVE
-	b.testsEntryPoint(miSectors)
+	miSectors = b.testsEntryPoint3(miSectors)
+	return miSectors
+
+	b.testsEntryPoint2(miSectors)
+	return miSectors
+
+
 
 	b.compileConvexHull(miSectors)
 
@@ -426,5 +433,126 @@ func (b * Builder) describeSegments(targetSector int, miSectors []*model.InputSe
 
 
 
+func (b * Builder) segmentOnSegment(refSeg *model.InputSegment, currSeg * model.InputSegment) (model.XY, model.XY, bool) {
+	refStart := geometry.Point{X: refSeg.Start.X, Y: refSeg.Start.Y}
+	refEnd := geometry.Point{X: refSeg.End.X, Y: refSeg.End.Y}
+	currStart := geometry.Point{X: currSeg.Start.X, Y: currSeg.Start.Y}
+	currEnd := geometry.Point{X: currSeg.End.X, Y: currSeg.End.Y}
 
+	var p1[]model.XY
 
+	if _, sa0, _ := geometry.PointLine(refStart, currStart, currEnd);
+		sa0.Has(geometry.OnPoint0Segment) || sa0.Has(geometry.OnPoint1Segment) {
+		p1 = append(p1, model.XY{X: refStart.X, Y: refStart.Y})
+	}
+	if _, sb0, _ := geometry.PointLine(refEnd, currStart, currEnd);
+		sb0.Has(geometry.OnPoint0Segment) || sb0.Has(geometry.OnPoint1Segment) {
+		p1 = append(p1, model.XY{X: refEnd.X, Y: refEnd.Y})
+	}
+	if len(p1) == 2 {
+		return p1[0], p1[1], true
+	}
+	var p2[]model.XY
+	if _, sc0, _ := geometry.PointLine(currStart, refStart, refEnd);
+		sc0.Has(geometry.OnPoint0Segment) || sc0.Has(geometry.OnPoint1Segment) {
+		p2 = append(p2, model.XY{X: currStart.X, Y: currStart.Y})
+	}
+	if _, sd0, _ := geometry.PointLine(currEnd, refStart, refEnd);
+		sd0.Has(geometry.OnPoint0Segment) || sd0.Has(geometry.OnPoint1Segment) {
+		p2 = append(p2, model.XY{X: currEnd.X, Y: currEnd.Y})
+	}
+	if len(p2) >= 2 {
+		return p2[0], p2[1], true
+	}
+
+	if len(p1) > 0 && len(p2) > 0 {
+		//return p1[0], p2[0], true
+		if p1[0] != p2[0] {
+			return p1[0], p2[0], true
+		}
+	}
+
+	return model.XY{}, model.XY{}, false
+
+	/*
+		fmt.Println("sa0", sa0.String())
+		fmt.Println("sa1", sa1.String())
+		fmt.Println("sb0", sb0.String())
+		fmt.Println("sb1", sb1.String())
+		fmt.Println("sc0", sc0.String())
+		fmt.Println("sc1", sc1.String())
+		fmt.Println("sd0", sd0.String())
+		fmt.Println("sd1", sd1.String())
+
+		fmt.Println("-------")
+
+	*/
+
+}
+
+func (b * Builder) pointOnSegmentNew(xy model.XY, seg * model.InputSegment) bool {
+	p0 := geometry.Point{X: xy.X, Y: xy.Y}
+	l0 := geometry.Point{X: seg.Start.X, Y: seg.Start.Y}
+	l1 := geometry.Point{X: seg.End.X, Y: seg.End.Y}
+	_, sa0, sa1 := geometry.PointLine(p0, l0, l1)
+	if (sa0.Has(geometry.OnPoint0Segment) || sa0.Has(geometry.OnPoint1Segment)) && sa1.Has(geometry.OnPoint1Segment) {
+		return true
+	}
+	return false
+}
+
+func(b * Builder) createGeometryHull(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
+	targetSector := miSectors[targetIdx]
+
+	var hull []geometry.Point
+	for _, seg := range targetSector.Segments {
+		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
+		hull = append(hull, geometry.Point{X: seg.End.X, Y: seg.End.Y})
+	}
+
+	convexHull := geometry.ConvexHull(hull)
+	var reference []*model.InputSegment
+	for idx := 0; idx < len(convexHull) - 1; idx++{
+		v := convexHull[idx]
+		n := convexHull[idx+1]
+		reference = append(reference, model.NewInputSegment(targetSector.Id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y}))
+	}
+
+	if len(reference) == 0 {
+		for _, seg := range miSectors[targetIdx].Segments {
+			reference = append(reference, seg.Clone())
+		}
+	}
+
+	if reference != nil && len(reference) > 1 {
+		start := reference[0]
+		end := reference[len(reference)-1]
+		if end.End.X != start.Start.X ||  end.End.Y != start.Start.Y {
+			reference = append(reference, model.NewInputSegment(targetSector.Id, model.DefinitionUnknown, end.End, start.Start))
+		}
+	}
+
+	return reference
+}
+
+func (b * Builder) createReferenceHull2(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
+	ch := model.NewConvexHull()
+	miSector := miSectors[targetIdx]
+
+	var chs []*model.CHSegment
+	for _, s := range miSector.Segments {
+		c := model.NewCHSegment(miSector.Id, s.Clone(), s.Start, s.End)
+		chs = append(chs, c)
+	}
+	var out []*model.InputSegment
+	for _, s := range ch.Create(miSector.Id, chs) {
+		if s.Data != nil {
+			out = append(out, s.Data.(*model.InputSegment))
+		} else {
+			ns := model.NewInputSegment(miSector.Id, model.DefinitionVoid, s.Start, s.End)
+			ns.Tag = "missing"
+			out = append(out, ns)
+		}
+	}
+	return out
+}

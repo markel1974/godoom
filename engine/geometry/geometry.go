@@ -823,6 +823,7 @@ func Linear(a11 float64, a12 float64, b1 float64, a21 float64, a22 float64, b2 f
 	if math.Abs(div) < Eps {
 		// only for debugging
 		// err = fmt.Errorf("error div = %e", div)
+
 		err = ErrorDivZero
 		return
 	}

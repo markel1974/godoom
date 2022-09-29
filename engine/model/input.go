@@ -86,7 +86,7 @@ func (is * InputSegment) SameCoords(tst * InputSegment) bool {
 	return a || b
 }
 
-func (is * InputSegment) AnyCoord(tst * InputSegment) bool {
+func (is * InputSegment) AnyCoords(tst * InputSegment) bool {
 	return is.Start == tst.Start || is.End == tst.End || is.Start == tst.End || is.End == tst.Start
 }
 

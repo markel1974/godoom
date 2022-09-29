@@ -144,7 +144,7 @@ func (b * Builder) testsEntryPoint2(miSectors []*model.InputSector) {
 	var miHulls = make([][]*model.InputSegment, len(miSectors))
 
 	for idx, _ := range miSectors {
-		miHulls[idx] = b.createGeometryHull(idx, miSectors)
+		miHulls[idx] = b.createGeometryHull(miSectors[idx].Id, miSectors[idx].Segments)
 		miSegments = append(miSegments, miHulls[idx]...)
 	}
 

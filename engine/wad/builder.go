@@ -111,7 +111,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	//fmt.Println(string(out))
 	fmt.Println("PLAYER POSITION:", playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.Input{DisableLoop: true, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+	cfg := &model.Input{DisableLoop: false, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
 
 	return cfg, nil
 }
@@ -501,6 +501,52 @@ func (b * Builder) pointOnSegmentNew(xy model.XY, seg * model.InputSegment) bool
 	return false
 }
 
+func(b * Builder) createGeometryHull(id string, segments []*model.InputSegment) []*model.InputSegment {
+	var hull []geometry.Point
+	for _, seg := range segments {
+		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
+		hull = append(hull, geometry.Point{X: seg.End.X, Y: seg.End.Y})
+	}
+
+	convexHull := geometry.ConvexHull(hull)
+	var reference []*model.InputSegment
+	for idx := 0; idx < len(convexHull) - 1; idx++{
+		v := convexHull[idx]
+		n := convexHull[idx + 1]
+		is := model.NewInputSegment(id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y})
+		for _, seg := range segments {
+			if seg.SameCoords(is) {
+				is.Kind = seg.Kind
+				is.Neighbor = seg.Neighbor
+				is.Lower = seg.Lower
+				is.Middle = seg.Middle
+				is.Upper = seg.Upper
+				break
+			}
+		}
+		reference = append(reference, is)
+	}
+
+	if len(reference) == 0 {
+		for _, seg := range segments {
+			is := seg.Clone()
+			is.Parent = id
+			reference = append(reference, is)
+		}
+	}
+
+	if reference != nil && len(reference) > 1 {
+		start := reference[0]
+		end := reference[len(reference)-1]
+		if end.End.X != start.Start.X || end.End.Y != start.Start.Y {
+			reference = append(reference, model.NewInputSegment(id, model.DefinitionUnknown, end.End, start.Start))
+		}
+	}
+
+	return reference
+}
+
+/*
 func(b * Builder) createGeometryHull(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
 	targetSector := miSectors[targetIdx]
 
@@ -534,6 +580,8 @@ func(b * Builder) createGeometryHull(targetIdx int, miSectors []*model.InputSect
 
 	return reference
 }
+
+ */
 
 func (b * Builder) createReferenceHull2(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
 	ch := model.NewConvexHull()

@@ -77,8 +77,17 @@ func (is * InputSegment) Clone() * InputSegment {
 }
 
 func (is * InputSegment) EqualCoords(tst * InputSegment) bool {
-	ret := is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
-	return ret
+	return is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
+}
+
+func (is * InputSegment) SameCoords(tst * InputSegment) bool {
+	a := is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
+	b := is.Start.X == tst.End.X && is.Start.Y == tst.End.Y && is.End.X == tst.Start.X && is.End.Y == tst.Start.Y
+	return a || b
+}
+
+func (is * InputSegment) AnyCoord(tst * InputSegment) bool {
+	return is.Start == tst.Start || is.End == tst.End || is.Start == tst.End || is.End == tst.Start
 }
 
 

@@ -227,8 +227,11 @@ func (w *World) DoDebug(next int) {
 }
 
 func  (w * World) drawStub(surface *pixels.PictureRGBA) {
-	sector := w.tree.sectors[w.debugIdx]
-	w.drawSingleStub(surface, sector)
+	if w.debugIdx >= 0 && w.debugIdx < len(w.tree.sectors) {
+		sector := w.tree.sectors[w.debugIdx]
+		w.drawSingleStub(surface, sector)
+	}
+
 /*
 	x := 320.0 / 300.0
 	y := 320.0 / 300.0

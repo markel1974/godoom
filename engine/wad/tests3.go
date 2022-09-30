@@ -196,6 +196,7 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, hulls [][]*mod
 			}
 		}
 	}
+
 	result := b.rebuildSegment(ref, out)
 	return result
 }
@@ -229,17 +230,21 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 								z.Kind = model.DefinitionValid
 							} else {
 								if !segmentIntersect(z, miSectors) {
+									kkk, _ := strconv.Atoi(seg.Parent)
+									testSector := miSectors[kkk]
+
+
 									newSector := model.NewInputSector(testId)
 									newSector.Tag = "geometry"
 									newSector.Segments = hull
-									newSector.Ceil = miSector.Ceil
-									newSector.Floor = miSector.Floor
-									newSector.LowerTexture = miSector.LowerTexture
-									newSector.UpperTexture = miSector.UpperTexture
-									newSector.FloorTexture = miSector.FloorTexture
-									newSector.CeilTexture = miSector.CeilTexture
-									newSector.WallTexture = miSector.WallTexture
-									//newSector.Textures = miSector.Textures
+									newSector.Ceil = testSector.Ceil
+									newSector.Floor = testSector.Floor
+									newSector.LowerTexture = testSector.LowerTexture
+									newSector.UpperTexture = testSector.UpperTexture
+									newSector.FloorTexture = testSector.FloorTexture
+									newSector.CeilTexture = testSector.CeilTexture
+									newSector.WallTexture = testSector.WallTexture
+									//newSector.Textures = testSector.Textures
 									miSectors = append(miSectors, newSector)
 
 									refSeg.Neighbor = newSector.Id
@@ -266,9 +271,26 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 	var walls []*model.InputSegment
 	var textures []*model.InputSegment
 	var hulls = make([][]*model.InputSegment, len(miSectors))
+	//var test []*model.InputSegment
 
 	for idx, sec := range miSectors {
-		hulls[idx] = b.createGeometryHull(sec.Id, sec.Segments)
+		if len(sec.Segments) > 1 {
+			hulls[idx] = b.createGeometryHull(sec.Id, sec.Segments)
+		} else {
+			//if sec.Segments[0].Kind == model.DefinitionWall {
+			//	test = append(test, sec.Segments[0])
+			//}
+
+			//TODO E' NECESSARIO CONSERVARE I SETTORI CON NUMERO DI SEGMENTI PARI A 1
+
+			hulls[idx] = nil
+
+			//seg := sec.Segments[0]
+			//a := seg.Clone(); b := seg.Clone()
+			//b.Start = a.End; b.End = a.Start
+			//hull := []*model.InputSegment{a, b}
+			//hulls[idx] = hull
+		}
 
 		for _, seg := range sec.Segments {
 			if seg.Kind == model.DefinitionWall {
@@ -278,6 +300,22 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 			}
 		}
 	}
+
+
+	/*
+	found := 0
+	for _, hull := range hulls {
+		for _, seg := range hull {
+			for _, kkk := range test {
+				if _, _, ok := b.segmentOnSegment(seg, kkk); ok {
+					found++
+				}
+			}
+		}
+	}
+	fmt.Println(found, len(test))
+	os.Exit(-1)
+	*/
 
 	for idx, hull := range hulls {
 		var segments []*model.InputSegment
@@ -313,11 +351,11 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 	fmt.Println("NOT FOUND", notFound)
 
 	//TODO è NECESSARIO RIUMOVERE I SETTORI DA UN SOLO SEGMENTO
-	for _, sec := range miSectors {
-		if len(sec.Segments) <= 1 {
-			sec.Segments = []*model.InputSegment{ model.NewInputSegment("-1", model.DefinitionVoid, model.XY{X: -10e10, Y:-10e10}, model.XY{X: -10e10,Y: -10e10})}
-		}
-	}
+	//for _, sec := range miSectors {
+	//	if len(sec.Segments) <= 1 {
+	//		sec.Segments = []*model.InputSegment{ model.NewInputSegment("-1", model.DefinitionVoid, model.XY{X: -10e10, Y:-10e10}, model.XY{X: -10e10,Y: -10e10})}
+	//	}
+	//}
 	//os.Exit(-1)
 	return miSectors
 }

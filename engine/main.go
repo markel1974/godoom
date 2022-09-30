@@ -37,7 +37,7 @@ func NewGame() *Game {
 
 func (g *Game) Setup() {
 	var err error
-	g.viewMode = -1
+	g.viewMode = 1
 	g.enableClear = true//true //true
 	m := 2
 

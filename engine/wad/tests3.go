@@ -157,8 +157,10 @@ func (b * Builder) rebuildSegment(ref *model.InputSegment, in []*model.InputSegm
 	return emptySegments(ref)
 }
 
-func (b * Builder) compileRemoteSegment(ref * model.InputSegment, hulls [][]*model.InputSegment, walls []*model.InputSegment, textures []*model.InputSegment) []* model.InputSegment {
+func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*model.InputSector, walls []*model.InputSegment, textures []*model.InputSegment) ([]* model.InputSegment) {
 	var out[] * model.InputSegment
+
+	if ref.Kind != model.DefinitionUnknown { return nil }
 
 	for _, wall := range walls {
 		if start, end, ok := b.segmentOnSegment(ref, wall); ok {
@@ -174,8 +176,8 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, hulls [][]*mod
 		}
 	}
 
-	for _, hull := range hulls {
-		for _, tst := range hull {
+	for _, hull := range sectors {
+		for _, tst := range hull.Segments {
 			if ref.Parent == tst.Parent { continue }
 			if start, end, ok := b.segmentOnSegment(ref, tst); ok {
 				cs := ref.Clone()
@@ -201,7 +203,8 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, hulls [][]*mod
 	return result
 }
 
-func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []*model.InputSector) []*model.InputSector {
+func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []*model.InputSector) ([]*model.InputSector, bool) {
+	created := 0
 	for _, refSeg := range miSector.Segments {
 		if refSeg.Kind != model.DefinitionUnknown { continue }
 
@@ -216,7 +219,7 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 					seg.Kind = model.DefinitionValid
 					break
 				}
-				if miSector.Tag == "geometry" { continue }
+
 				if seg.Kind == model.DefinitionUnknown {
 					if refSeg.AnyCoords(seg) {
 						testId := strconv.Itoa(len(miSectors))
@@ -233,9 +236,7 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 									kkk, _ := strconv.Atoi(seg.Parent)
 									testSector := miSectors[kkk]
 
-
 									newSector := model.NewInputSector(testId)
-									newSector.Tag = "geometry"
 									newSector.Segments = hull
 									newSector.Ceil = testSector.Ceil
 									newSector.Floor = testSector.Floor
@@ -253,7 +254,8 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 									seg.Neighbor = newSector.Id
 									seg.Kind = model.DefinitionValid
 
-									//z.Kind = model.DefinitionValid
+									z.Kind = model.DefinitionUnknown
+									created++
 								}
 							}
 						}
@@ -263,19 +265,20 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 		}
 	}
 
-	return miSectors
+	return miSectors, created > 0
 }
 
 
 func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.InputSector {
 	var walls []*model.InputSegment
 	var textures []*model.InputSegment
-	var hulls = make([][]*model.InputSegment, len(miSectors))
-	//var test []*model.InputSegment
+	var hulls = make([]*model.InputSector, len(miSectors))
 
 	for idx, sec := range miSectors {
+		cloned := sec.Clone(false)
+		hulls[idx] = cloned
 		if len(sec.Segments) > 1 {
-			hulls[idx] = b.createGeometryHull(sec.Id, sec.Segments)
+			cloned.Segments = b.createGeometryHull(sec.Id, sec.Segments)
 		} else {
 			//if sec.Segments[0].Kind == model.DefinitionWall {
 			//	test = append(test, sec.Segments[0])
@@ -283,7 +286,7 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 
 			//TODO E' NECESSARIO CONSERVARE I SETTORI CON NUMERO DI SEGMENTI PARI A 1
 
-			hulls[idx] = nil
+			//hulls[idx] = nil
 
 			//seg := sec.Segments[0]
 			//a := seg.Clone(); b := seg.Clone()
@@ -319,18 +322,54 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 
 	for idx, hull := range hulls {
 		var segments []*model.InputSegment
-		for _, seg := range hull {
+		for _, seg := range hull.Segments {
 			cs := b.compileRemoteSegment(seg, hulls, walls, textures)
-			segments = append(segments, cs...)
+			if cs != nil {
+				segments = append(segments, cs...)
+			} else {
+				segments = append(segments, seg)
+			}
 		}
 		miSectors[idx].Segments = segments
 	}
 
 	l := len(miSectors)
 	for idx := 0; idx < l; idx++ {
-		miSectors = b.compileRemoteSector(miSectors[idx], miSectors)
+		var created bool
+		miSectors, created = b.compileRemoteSector(miSectors[idx], miSectors)
+		if created {
+			idx = 0
+
+			//TEST
+			for x, sec := range miSectors {
+				var segments []*model.InputSegment
+				for _, seg := range sec.Segments {
+					cs := b.compileRemoteSegment(seg, miSectors, walls, textures)
+					if cs != nil {
+						segments = append(segments, cs...)
+					} else {
+						segments = append(segments, seg)
+					}
+				}
+				miSectors[x].Segments = segments
+			}
+		}
 		l = len(miSectors)
 	}
+
+
+
+
+	/*
+	for idx, sec := range miSectors {
+		var segments []*model.InputSegment
+		for _, seg := range sec.Segments {
+			cs := b.compileRemoteSegment(seg, hulls, walls, textures)
+			segments = append(segments, cs...)
+		}
+		miSectors[idx].Segments = segments
+	}
+	*/
 
 	notFound := 0
 	for idx, sec := range miSectors {

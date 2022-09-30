@@ -279,6 +279,26 @@ func NewInputSector(id string) *InputSector {
 	return &InputSector{ Id: id }
 }
 
+func (is * InputSector) Clone(cloneSegments bool) * InputSector {
+	out := NewInputSector(is.Id)
+	out.Ceil = is.Ceil
+	out.Floor = is.Floor
+	out.Textures = is.Textures
+	out.FloorTexture = is.FloorTexture
+	out.CeilTexture = is.CeilTexture
+	out.UpperTexture = is.UpperTexture
+	out.LowerTexture = is.LowerTexture
+	out.WallTexture = is.WallTexture
+	out.Tag = is.Tag
+	out.Segments = nil
+	if cloneSegments {
+		out.Segments = make([]*InputSegment, len(is.Segments))
+		for idx, seg := range is.Segments {
+			out.Segments[idx] = seg.Clone()
+		}
+	}
+	return out
+}
 
 
 

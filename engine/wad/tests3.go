@@ -89,6 +89,7 @@ func (b * Builder) rebuildSegmentStraight(ref *model.InputSegment, in []*model.I
 	var out []*model.InputSegment
 	start := ref.Start
 	for len(in) > 0 {
+		fmt.Println("AAAAAAA")
 		found := false
 		for x := 0; x < len(in); x++ {
 			if in[x].Start == start || in[x].End == start {
@@ -118,6 +119,7 @@ func (b * Builder) rebuildSegmentReverse(ref *model.InputSegment, in []*model.In
 	var out []*model.InputSegment
 	end := ref.End
 	for len(in) > 0 {
+		fmt.Println("BBBBBBBB")
 		found := false
 		for x := 0; x < len(in); x++ {
 			if end == in[x].End || end == in[x].Start {
@@ -158,7 +160,10 @@ func (b * Builder) rebuildSegment(ref *model.InputSegment, in []*model.InputSegm
 }
 
 func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*model.InputSector, walls []*model.InputSegment, textures []*model.InputSegment) ([]* model.InputSegment) {
-	var out[] * model.InputSegment
+	cache := map[string]bool{}
+	var out[]*model.InputSegment
+
+	hash := func(a model.XY, b model.XY) string { return fmt.Sprintf("%f|%f|%f|%f", a.X, a.Y, b.X, b.Y)}
 
 	if ref.Kind != model.DefinitionUnknown { return nil }
 
@@ -172,7 +177,15 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 			cs.Upper = wall.Upper
 			cs.Lower = wall.Lower
 			cs.Middle = wall.Middle
-			out = append(out, cs)
+			_, ok1 := cache[hash(start, end)]
+			_, ok2 := cache[hash(end, start)]
+			if !ok1 && !ok2 {
+				cache[hash(start, end)] = true
+				cache[hash(end, start)] = true
+				out = append(out, cs)
+			}
+
+			//out = append(out, cs)
 		}
 	}
 
@@ -194,7 +207,13 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 						break
 					}
 				}
-				out = append(out, cs)
+				_, ok1 := cache[hash(start, end)]
+				_, ok2 := cache[hash(end, start)]
+				if !ok1 && !ok2 {
+					cache[hash(start, end)] = true
+					cache[hash(end, start)] = true
+					out = append(out, cs)
+				}
 			}
 		}
 	}
@@ -212,13 +231,16 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 			if miSector.Id == sec.Id { continue }
 
 			for _, seg := range sec.Segments {
+
 				if refSeg.SameCoords(seg) {
 					refSeg.Neighbor = seg.Parent
 					refSeg.Kind = model.DefinitionValid
+
 					seg.Neighbor = refSeg.Parent
 					seg.Kind = model.DefinitionValid
 					break
 				}
+
 
 				if seg.Kind == model.DefinitionUnknown {
 					if refSeg.AnyCoords(seg) {
@@ -275,26 +297,6 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 	var hulls = make([]*model.InputSector, len(miSectors))
 
 	for idx, sec := range miSectors {
-		cloned := sec.Clone(false)
-		hulls[idx] = cloned
-		if len(sec.Segments) > 1 {
-			cloned.Segments = b.createGeometryHull(sec.Id, sec.Segments)
-		} else {
-			//if sec.Segments[0].Kind == model.DefinitionWall {
-			//	test = append(test, sec.Segments[0])
-			//}
-
-			//TODO E' NECESSARIO CONSERVARE I SETTORI CON NUMERO DI SEGMENTI PARI A 1
-
-			//hulls[idx] = nil
-
-			//seg := sec.Segments[0]
-			//a := seg.Clone(); b := seg.Clone()
-			//b.Start = a.End; b.End = a.Start
-			//hull := []*model.InputSegment{a, b}
-			//hulls[idx] = hull
-		}
-
 		for _, seg := range sec.Segments {
 			if seg.Kind == model.DefinitionWall {
 				walls = append(walls, seg)
@@ -302,29 +304,21 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 				textures = append(textures, seg)
 			}
 		}
-	}
 
-
-	/*
-	found := 0
-	for _, hull := range hulls {
-		for _, seg := range hull {
-			for _, kkk := range test {
-				if _, _, ok := b.segmentOnSegment(seg, kkk); ok {
-					found++
-				}
-			}
+		cloned := sec.Clone(false)
+		hulls[idx] = cloned
+		if len(sec.Segments) > 1 {
+			cloned.Segments = b.createGeometryHull(sec.Id, sec.Segments)
+		} else {
+			sec.Segments = nil
+			cloned.Segments = nil
 		}
 	}
-	fmt.Println(found, len(test))
-	os.Exit(-1)
-	*/
 
 	for idx, hull := range hulls {
 		var segments []*model.InputSegment
 		for _, seg := range hull.Segments {
-			cs := b.compileRemoteSegment(seg, hulls, walls, textures)
-			if cs != nil {
+			if cs := b.compileRemoteSegment(seg, hulls, walls, textures); cs != nil {
 				segments = append(segments, cs...)
 			} else {
 				segments = append(segments, seg)
@@ -335,41 +329,37 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 
 	l := len(miSectors)
 	for idx := 0; idx < l; idx++ {
+		fmt.Println("ANALYZING", idx)
 		var created bool
 		miSectors, created = b.compileRemoteSector(miSectors[idx], miSectors)
 		if created {
+			if idx == 31 {
+				fmt.Println("TEST")
+			}
+			fmt.Println("RESETTING AT", idx)
 			idx = 0
 
 			//TEST
-			for x, sec := range miSectors {
+			fmt.Println("BEGIN")
+			for _, sec := range miSectors {
 				var segments []*model.InputSegment
 				for _, seg := range sec.Segments {
-					cs := b.compileRemoteSegment(seg, miSectors, walls, textures)
-					if cs != nil {
+					if cs := b.compileRemoteSegment(seg, miSectors, walls, textures); cs != nil {
 						segments = append(segments, cs...)
 					} else {
 						segments = append(segments, seg)
 					}
 				}
-				miSectors[x].Segments = segments
+				sec.Segments = segments
 			}
+			fmt.Println("END")
 		}
+
 		l = len(miSectors)
+		fmt.Println("COMPLETED", l)
 	}
 
 
-
-
-	/*
-	for idx, sec := range miSectors {
-		var segments []*model.InputSegment
-		for _, seg := range sec.Segments {
-			cs := b.compileRemoteSegment(seg, hulls, walls, textures)
-			segments = append(segments, cs...)
-		}
-		miSectors[idx].Segments = segments
-	}
-	*/
 
 	notFound := 0
 	for idx, sec := range miSectors {
@@ -389,12 +379,6 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 
 	fmt.Println("NOT FOUND", notFound)
 
-	//TODO è NECESSARIO RIUMOVERE I SETTORI DA UN SOLO SEGMENTO
-	//for _, sec := range miSectors {
-	//	if len(sec.Segments) <= 1 {
-	//		sec.Segments = []*model.InputSegment{ model.NewInputSegment("-1", model.DefinitionVoid, model.XY{X: -10e10, Y:-10e10}, model.XY{X: -10e10,Y: -10e10})}
-	//	}
-	//}
 	//os.Exit(-1)
 	return miSectors
 }

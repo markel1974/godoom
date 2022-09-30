@@ -7,56 +7,6 @@ import (
 	"strconv"
 )
 
-/*
-func (b * Builder) rebuildSegment(ref *model.InputSegment, in []*model.InputSegment) []*model.InputSegment {
-	var result []*model.InputSegment
-
-	start := ref.Start
-
-	for len(in) > 0 {
-		found := false
-		for x := 0; x < len(in); x++ {
-			if in[x].Start == start || in[x].End == start {
-				if in[x].End == start {
-					tmp := in[x].Start
-					in[x].Start = start
-					in[x].End = tmp
-				}
-				result = append(result, in[x])
-				start = in[x].End
-				in = append(in[:x], in[x+1:]...)
-				found = true
-				break
-			}
-		}
-		if !found {
-			break
-		}
-	}
-
-	var undefined * model.InputSegment
-	if len(result) == 0 {
-		undefined = ref.Clone()
-	} else {
-		last := result[len(result) - 1]
-		if last.End != ref.End {
-			undefined = ref.Clone()
-			undefined.Start = last.End
-			undefined.End = ref.End
-		}
-	}
-	if undefined != nil {
-		undefined.Tag = "UNDEFINED"
-		undefined.Neighbor = ""
-		undefined.Kind = model.DefinitionVoid
-		result = append(result, undefined)
-	}
-
-	return result
-}
-
-*/
-
 
 func emptySegments(r * model.InputSegment) []*model.InputSegment{
 	u := r.Clone()
@@ -89,7 +39,6 @@ func (b * Builder) rebuildSegmentStraight(ref *model.InputSegment, in []*model.I
 	var out []*model.InputSegment
 	start := ref.Start
 	for len(in) > 0 {
-		fmt.Println("AAAAAAA")
 		found := false
 		for x := 0; x < len(in); x++ {
 			if in[x].Start == start || in[x].End == start {
@@ -119,7 +68,6 @@ func (b * Builder) rebuildSegmentReverse(ref *model.InputSegment, in []*model.In
 	var out []*model.InputSegment
 	end := ref.End
 	for len(in) > 0 {
-		fmt.Println("BBBBBBBB")
 		found := false
 		for x := 0; x < len(in); x++ {
 			if end == in[x].End || end == in[x].Start {
@@ -159,14 +107,23 @@ func (b * Builder) rebuildSegment(ref *model.InputSegment, in []*model.InputSegm
 	return emptySegments(ref)
 }
 
-func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*model.InputSector, walls []*model.InputSegment, textures []*model.InputSegment) ([]* model.InputSegment) {
-	cache := map[string]bool{}
+func (b * Builder) compileRemoteSegment(filter bool, ref * model.InputSegment, sectors []*model.InputSector, walls []*model.InputSegment, textures []*model.InputSegment) []* model.InputSegment {
 	var out[]*model.InputSegment
 
-	hash := func(a model.XY, b model.XY) string { return fmt.Sprintf("%f|%f|%f|%f", a.X, a.Y, b.X, b.Y)}
+	cacheHas := func(cs * model.InputSegment) bool {
+		for _, s := range out {
+			if start, end, ok := b.segmentOnSegment(s, cs); ok {
+				if start == cs.Start && end == cs.End { return true }
+				if end == cs.Start && start == cs.End { return true }
+				return false
+			}
+		}
+		return false
+	}
 
-	if ref.Kind != model.DefinitionUnknown { return nil }
-
+	if filter {
+		if ref.Kind != model.DefinitionUnknown { return nil }
+	}
 	for _, wall := range walls {
 		if start, end, ok := b.segmentOnSegment(ref, wall); ok {
 			cs := ref.Clone()
@@ -177,15 +134,10 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 			cs.Upper = wall.Upper
 			cs.Lower = wall.Lower
 			cs.Middle = wall.Middle
-			_, ok1 := cache[hash(start, end)]
-			_, ok2 := cache[hash(end, start)]
-			if !ok1 && !ok2 {
-				cache[hash(start, end)] = true
-				cache[hash(end, start)] = true
+
+			if !cacheHas(cs) {
 				out = append(out, cs)
 			}
-
-			//out = append(out, cs)
 		}
 	}
 
@@ -207,11 +159,7 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 						break
 					}
 				}
-				_, ok1 := cache[hash(start, end)]
-				_, ok2 := cache[hash(end, start)]
-				if !ok1 && !ok2 {
-					cache[hash(start, end)] = true
-					cache[hash(end, start)] = true
+				if !cacheHas(cs) {
 					out = append(out, cs)
 				}
 			}
@@ -222,41 +170,32 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 	return result
 }
 
-func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []*model.InputSector) ([]*model.InputSector, bool) {
-	created := 0
+func (b * Builder) compileRemoteSector(miSector *model.InputSector, sectors []*model.InputSector) *model.InputSector {
+	//var newSectors []*model.InputSector
+
 	for _, refSeg := range miSector.Segments {
 		if refSeg.Kind != model.DefinitionUnknown { continue }
 
-		for _, sec := range miSectors {
+		for _, sec := range sectors {
 			if miSector.Id == sec.Id { continue }
 
 			for _, seg := range sec.Segments {
-
-				if refSeg.SameCoords(seg) {
-					refSeg.Neighbor = seg.Parent
-					refSeg.Kind = model.DefinitionValid
-
-					seg.Neighbor = refSeg.Parent
-					seg.Kind = model.DefinitionValid
-					break
-				}
-
-
 				if seg.Kind == model.DefinitionUnknown {
-					if refSeg.AnyCoords(seg) {
-						testId := strconv.Itoa(len(miSectors))
+					if ok := refSeg.OneCoords(seg); ok {
+						testId := strconv.Itoa(len(sectors))
+
 						hull := b.createGeometryHull(testId, []*model.InputSegment{refSeg, seg})
 						for _, z := range hull {
 							if z.SameCoords(refSeg) {
-								z.Neighbor = refSeg.Parent
-								z.Kind = model.DefinitionValid
+								//z.Neighbor = refSeg.Parent
+								//z.Kind = model.DefinitionValid
 							} else if z.SameCoords(seg) {
-								z.Neighbor = seg.Parent
-								z.Kind = model.DefinitionValid
+								//z.Neighbor = seg.Parent
+								//z.Kind = model.DefinitionValid
 							} else {
-								if !segmentIntersect(z, miSectors) {
+								if !segmentIntersect(z, sectors) {
 									kkk, _ := strconv.Atoi(seg.Parent)
-									testSector := miSectors[kkk]
+									testSector := sectors[kkk]
 
 									newSector := model.NewInputSector(testId)
 									newSector.Segments = hull
@@ -268,16 +207,9 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 									newSector.CeilTexture = testSector.CeilTexture
 									newSector.WallTexture = testSector.WallTexture
 									//newSector.Textures = testSector.Textures
-									miSectors = append(miSectors, newSector)
+									//sectors = append(sectors, newSector)
 
-									refSeg.Neighbor = newSector.Id
-									refSeg.Kind = model.DefinitionValid
-
-									seg.Neighbor = newSector.Id
-									seg.Kind = model.DefinitionValid
-
-									z.Kind = model.DefinitionUnknown
-									created++
+									return newSector
 								}
 							}
 						}
@@ -287,7 +219,7 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, miSectors []
 		}
 	}
 
-	return miSectors, created > 0
+	return nil
 }
 
 
@@ -318,7 +250,7 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 	for idx, hull := range hulls {
 		var segments []*model.InputSegment
 		for _, seg := range hull.Segments {
-			if cs := b.compileRemoteSegment(seg, hulls, walls, textures); cs != nil {
+			if cs := b.compileRemoteSegment(false, seg, hulls, walls, textures); cs != nil {
 				segments = append(segments, cs...)
 			} else {
 				segments = append(segments, seg)
@@ -329,22 +261,14 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 
 	l := len(miSectors)
 	for idx := 0; idx < l; idx++ {
-		fmt.Println("ANALYZING", idx)
-		var created bool
-		miSectors, created = b.compileRemoteSector(miSectors[idx], miSectors)
-		if created {
-			if idx == 31 {
-				fmt.Println("TEST")
-			}
-			fmt.Println("RESETTING AT", idx)
-			idx = 0
+		fmt.Println("CURRENT", idx)
+		if newSector := b.compileRemoteSector(miSectors[idx], miSectors); newSector != nil {
+			miSectors = append(miSectors, newSector)
 
-			//TEST
-			fmt.Println("BEGIN")
 			for _, sec := range miSectors {
 				var segments []*model.InputSegment
 				for _, seg := range sec.Segments {
-					if cs := b.compileRemoteSegment(seg, miSectors, walls, textures); cs != nil {
+					if cs := b.compileRemoteSegment(false, seg, miSectors, walls, textures); cs != nil {
 						segments = append(segments, cs...)
 					} else {
 						segments = append(segments, seg)
@@ -352,11 +276,9 @@ func (b * Builder) testsEntryPoint3(miSectors []*model.InputSector) []*model.Inp
 				}
 				sec.Segments = segments
 			}
-			fmt.Println("END")
+			idx = 0
+			l = len(miSectors)
 		}
-
-		l = len(miSectors)
-		fmt.Println("COMPLETED", l)
 	}
 
 

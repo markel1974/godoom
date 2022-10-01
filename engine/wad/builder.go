@@ -111,7 +111,7 @@ func (b * Builder) Setup(wadFile string, levelNumber int) (*model.Input, error) 
 	//fmt.Println(string(out))
 	fmt.Println("PLAYER POSITION:", playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.Input{DisableLoop: false, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
+	cfg := &model.Input{DisableLoop: true, ScaleFactor: scaleFactor, Sectors: sectors, Player: &model.InputPlayer{ Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId)) }}
 
 	return cfg, nil
 }
@@ -514,6 +514,7 @@ func(b * Builder) createGeometryHull(id string, segments []*model.InputSegment) 
 		v := convexHull[idx]
 		n := convexHull[idx + 1]
 		is := model.NewInputSegment(id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y})
+		/*
 		for _, seg := range segments {
 			if seg.SameCoords(is) {
 				is.Kind = seg.Kind
@@ -524,6 +525,7 @@ func(b * Builder) createGeometryHull(id string, segments []*model.InputSegment) 
 				break
 			}
 		}
+		*/
 		reference = append(reference, is)
 	}
 

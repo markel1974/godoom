@@ -585,21 +585,21 @@ func(b * Builder) createGeometryHull(targetIdx int, miSectors []*model.InputSect
 
  */
 
-func (b * Builder) createReferenceHull2(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
+func (b * Builder) createReferenceHull2(sector *model.InputSector) []*model.InputSegment {
 	ch := model.NewConvexHull()
-	miSector := miSectors[targetIdx]
+	//miSector := miSectors[targetIdx]
 
 	var chs []*model.CHSegment
-	for _, s := range miSector.Segments {
-		c := model.NewCHSegment(miSector.Id, s.Clone(), s.Start, s.End)
+	for _, s := range sector.Segments {
+		c := model.NewCHSegment(sector.Id, s.Clone(), s.Start, s.End)
 		chs = append(chs, c)
 	}
 	var out []*model.InputSegment
-	for _, s := range ch.Create(miSector.Id, chs) {
+	for _, s := range ch.Create(sector.Id, chs) {
 		if s.Data != nil {
 			out = append(out, s.Data.(*model.InputSegment))
 		} else {
-			ns := model.NewInputSegment(miSector.Id, model.DefinitionVoid, s.Start, s.End)
+			ns := model.NewInputSegment(sector.Id, model.DefinitionVoid, s.Start, s.End)
 			ns.Tag = "missing"
 			out = append(out, ns)
 		}

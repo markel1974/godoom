@@ -187,8 +187,8 @@ func (b * Builder) testsEntryPoint2(miSectors []*model.InputSector) {
 	//TODO POLIGONI MANCANTI.....
 
 
-	for idx, miSector := range miSectors {
-		reference := b.createReferenceHull2(idx, miSectors)
+	for _, miSector := range miSectors {
+		reference := b.createReferenceHull2(miSector)
 		var built []*model.InputSegment
 
 		//if len(miSector.Segments) == 1 {

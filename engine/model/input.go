@@ -87,6 +87,7 @@ func (is * InputSegment) SameCoords(tst * InputSegment) bool {
 }
 
 func (is * InputSegment) AnyCoords(tst * InputSegment) bool {
+	if is.SameCoords(tst) { return false }
 	return is.Start == tst.Start || is.End == tst.End || is.Start == tst.End || is.End == tst.Start
 }
 

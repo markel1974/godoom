@@ -184,6 +184,39 @@ func (g *Game) Update(win *pixels.GLWindow) {
 }
 
 func main() {
+	//queueTest()
 	g := NewGame()
 	pixels.GLRun(g.Run)
+}
+
+
+func queueTest() {
+	wait := make(chan bool)
+
+	q := make(chan bool, 1024)
+	q <- true
+	q <- false
+	q <- true
+	close(q)
+
+	go func() {
+		run := true
+		for run {
+			select {
+			case r, ok := <- q :
+				if ok {
+					fmt.Println("RECEIVED", r)
+				} else {
+					fmt.Println("EXITING")
+					run = false
+				}
+			}
+		}
+		wait <- true
+	}()
+
+	_ = <- wait
+	//time.Sleep(5 * time.Second)
+	os.Exit(-1)
+
 }

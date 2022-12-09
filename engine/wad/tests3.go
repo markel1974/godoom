@@ -110,7 +110,7 @@ func (b * Builder) rebuildSegment(ref *model.InputSegment, in []*model.InputSegm
 	return emptySegments(ref)
 }
 
-func (b * Builder) compileLocalSegment(ref * model.InputSegment, walls []*model.InputSegment, textures []*model.InputSegment) []* model.InputSegment {
+func (b * Builder) createWalls(ref * model.InputSegment, walls []*model.InputSegment) []* model.InputSegment {
 	var out[]*model.InputSegment
 
 	for _, wall := range walls {
@@ -128,11 +128,12 @@ func (b * Builder) compileLocalSegment(ref * model.InputSegment, walls []*model.
 		}
 	}
 
+	/*
 	for _, texture := range textures {
 		if start, end, ok := b.segmentOnSegment(ref, texture); ok {
 			cs := ref.Clone()
-			cs.Kind = texture.Kind
-			//cs.Neighbor = texture.Neighbor
+			cs.Kind = model.DefinitionUnknown//texture.Kind
+			cs.Neighbor = ""
 			cs.Start = start
 			cs.End = end
 			cs.Upper = texture.Upper
@@ -142,14 +143,19 @@ func (b * Builder) compileLocalSegment(ref * model.InputSegment, walls []*model.
 			out = append(out, cs)
 		}
 	}
+	*/
 
+	if out == nil {
+		return nil
+	}
 	result := b.rebuildSegment(ref, out)
 	return result
 }
 
-func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*model.InputSector, walls []*model.InputSegment, textures []*model.InputSegment) []* model.InputSegment {
+func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*model.InputSector) []* model.InputSegment {
 	var out[]*model.InputSegment
 
+	/*
 	cacheHas := func(cs * model.InputSegment) bool {
 		for _, s := range out {
 			if start, end, ok := b.segmentOnSegment(s, cs); ok {
@@ -159,26 +165,9 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 		}
 		return false
 	}
+	*/
 
 	if ref.Kind == model.DefinitionWall { return nil }
-
-	//TODO REMOVE WALLL!!!!!.....
-	for _, wall := range walls {
-		if start, end, ok := b.segmentOnSegment(ref, wall); ok {
-			cs := ref.Clone()
-			cs.Kind = model.DefinitionWall
-			cs.Neighbor = "wall"//wall.Parent
-			cs.Start = start
-			cs.End = end
-			cs.Upper = wall.Upper
-			cs.Lower = wall.Lower
-			cs.Middle = wall.Middle
-
-			if !cacheHas(cs) {
-				out = append(out, cs)
-			}
-		}
-	}
 
 	for _, hull := range sectors {
 		for _, tst := range hull.Segments {
@@ -190,19 +179,15 @@ func (b * Builder) compileRemoteSegment(ref * model.InputSegment, sectors []*mod
 				cs.Start = start
 				cs.End = end
 
-				for _, texture := range textures {
-					if _, _ , ok := b.segmentOnSegment(ref, texture); ok {
-						cs.Upper = texture.Upper
-						cs.Lower = texture.Lower
-						cs.Middle = texture.Middle
-						break
-					}
-				}
-				if !cacheHas(cs) {
+				//if !cacheHas(cs) {
 					out = append(out, cs)
-				}
+				//}
 			}
 		}
+	}
+
+	if out == nil {
+		return nil
 	}
 
 	result := b.rebuildSegment(ref, out)
@@ -263,48 +248,80 @@ func (b * Builder) compileRemoteSector(miSector *model.InputSector, sectors []*m
 
 
 func (b * Builder) testsEntryPoint3(miSectors2 []*model.InputSector) []*model.InputSector {
-	var walls []*model.InputSegment
+	//var walls []*model.InputSegment
 	var textures []*model.InputSegment
 	var hulls = make([]*model.InputSector, len(miSectors2))
 
-	for idx, sec := range miSectors2 {
-		for _, seg := range sec.Segments {
-			if seg.Kind == model.DefinitionWall {
-				walls = append(walls, seg)
-			} else {
-				textures = append(textures, seg)
+	var wallsAlone []*model.InputSegment
+
+	for _, sec := range miSectors2 {
+		if len(sec.Segments) == 1 {
+			if sec.Segments[0].Kind == model.DefinitionWall {
+				wallsAlone = append(wallsAlone, sec.Segments[0].Clone())
 			}
 		}
+		for _, seg := range sec.Segments {
+			cloned := seg.Clone()
+			//TODO SAVE sector reference!!!
+			if seg.Kind == model.DefinitionWall {
+				//walls = append(walls, cloned)
+			} else {
+				textures = append(textures, cloned)
+			}
+		}
+	}
 
+	for idx, sec := range miSectors2 {
 		cloned := sec.Clone(false)
 		hulls[idx] = cloned
 		if len(sec.Segments) > 1 {
-			cloned.Segments = b.createReferenceHull2(sec)
-
-			/*
-			//cloned.Segments = b.createGeometryHull(sec.Id, sec.Segments)
-
-			var segments []*model.InputSegment
-			var w []*model.InputSegment
-			var t []*model.InputSegment
-			for _, seg := range sec.Segments {
-				if seg.Kind == model.DefinitionWall { w = append(w, seg) } else { t = append(t, seg) }
-			}
-			for _, seg := range b.createGeometryHull(sec.Id, sec.Segments) {
-				if cs := b.compileLocalSegment(seg, w, t); cs != nil {
-					segments = append(segments, cs...)
-				} else {
-					segments = append(segments, seg)
-				}
-			}
-			cloned.Segments = segments
-
-			 */
+			cloned.Segments = b.createGeometryHull(sec.Id, sec.Segments)
 		} else {
-			sec.Segments = nil
+			//a := sec.Segments[0].Clone()
+			//b := sec.Segments[0].Clone()
+			//b.Start = a.End
+			//b.End = a.Start
+			//cloned.Segments = []*model.InputSegment{ a }
 			cloned.Segments = nil
 		}
 	}
+
+	for _, hull := range hulls {
+		var segments []*model.InputSegment
+		for _, seg := range hull.Segments {
+			if cs := b.compileRemoteSegment(seg, hulls); cs != nil {
+				segments = append(segments, cs...)
+			} else {
+				segments = append(segments, seg)
+			}
+		}
+		hull.Segments = segments
+	}
+
+	for idx, hull := range hulls {
+		if len(hull.Segments) <= 1 { continue }
+		var w []*model.InputSegment
+		for _, s := range wallsAlone { w = append(w, s) }
+
+		//TODO TUTTE LE TEXTURE DEVONO ESSERE APPLICATE ALLA FINE
+
+		for _, seg := range miSectors2[idx].Segments {
+			if seg.Kind == model.DefinitionWall { w = append(w, seg) }
+		}
+
+		var segments []*model.InputSegment
+		for _, seg := range hull.Segments {
+			if cs := b.createWalls(seg, w); cs != nil {
+				segments = append(segments, cs...)
+			} else {
+				segments = append(segments, seg)
+			}
+		}
+		hull.Segments = segments
+	}
+
+	b.printSector2(hulls)
+	//os.Exit(-1)
 
 	max := len(hulls)
 
@@ -315,7 +332,7 @@ func (b * Builder) testsEntryPoint3(miSectors2 []*model.InputSector) []*model.In
 			for _, hull := range hulls {
 				var segments []*model.InputSegment
 				for _, seg := range hull.Segments {
-					if cs := b.compileRemoteSegment(seg, hulls, walls, textures); cs != nil {
+					if cs := b.compileRemoteSegment(seg, hulls); cs != nil {
 						segments = append(segments, cs...)
 					} else {
 						segments = append(segments, seg)
@@ -332,7 +349,14 @@ func (b * Builder) testsEntryPoint3(miSectors2 []*model.InputSector) []*model.In
 	}
 
 
+	b.printSector2(hulls)
 
+	//os.Exit(-1)
+	return hulls
+}
+
+
+func (b * Builder) printSector2(hulls []*model.InputSector) {
 	notFound := 0
 	for idx, sec := range hulls {
 		fmt.Println("-----------------", idx)
@@ -350,11 +374,7 @@ func (b * Builder) testsEntryPoint3(miSectors2 []*model.InputSector) []*model.In
 	}
 
 	fmt.Println("NOT FOUND", notFound)
-
-	//os.Exit(-1)
-	return hulls
 }
-
 
 
 /*

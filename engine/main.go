@@ -37,8 +37,11 @@ func NewGame() *Game {
 
 func (g *Game) Setup() {
 	var err error
-	g.viewMode = 1
+
+	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
+	g.viewMode = -1
 	g.enableClear = true//true //true
+	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
 	m := 2
 
 	switch m {

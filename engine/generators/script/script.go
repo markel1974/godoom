@@ -84,7 +84,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 						d.Kind = model.DefinitionUnknown
 					} else {
 						d.Val = val
-						d.Kind = model.DefinitionValid
+						d.Kind = model.DefinitionJoin
 					}
 				}
 				numbers = append(numbers, d)

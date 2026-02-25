@@ -43,7 +43,7 @@ func (g *Game) Setup() {
 	g.viewMode = -1
 	g.enableClear = true //true //true
 	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
-	m := 1
+	m := 2
 
 	switch m {
 	case 0:
@@ -65,7 +65,7 @@ func (g *Game) Setup() {
 	}
 
 	g.world = portal.NewWorld(_W, _H, _MaxQueue, g.viewMode)
-	if err := g.world.Setup(g.cfg); err != nil {
+	if err = g.world.Setup(g.cfg); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

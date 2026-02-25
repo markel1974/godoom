@@ -196,7 +196,7 @@ func (b *Builder1) compileNeighbors(miSectors []*model.ConfigSector) {
 	for _, miSector := range miSectors {
 		var segments []*model.ConfigSegment
 		for _, s := range miSector.Segments {
-			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
+			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionJoin {
 				//if s.Kind == model.DefinitionWall {
 				segments = append(segments, s)
 				continue
@@ -354,7 +354,7 @@ func (b *Builder1) compileSegmentRelations(miSectors []*model.ConfigSector) {
 			for _, endSeg := range end {
 				for _, startSeg := range start {
 					if endSeg.Parent == startSeg.Parent {
-						xSegment.Kind = model.DefinitionValid
+						xSegment.Kind = model.DefinitionJoin
 						xSegment.Neighbor = endSeg.Parent
 						found = true
 						break

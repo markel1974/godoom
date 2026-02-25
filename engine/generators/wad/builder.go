@@ -46,16 +46,10 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
 	_, playerSSId, _ := b.bsp.FindSector(p1.X, p1.Y)
 
-	return &model.ConfigRoot{
-		DisableLoop: true,
-		ScaleFactor: ScaleFactor,
-		Sectors:     sectors,
-		Player: &model.ConfigPlayer{
-			Position: position,
-			Angle:    float64(p1.Angle),
-			Sector:   strconv.Itoa(int(playerSSId)),
-		},
-	}, nil
+	player := model.NewConfigPlayer(position, float64(p1.Angle), strconv.Itoa(int(playerSSId)))
+	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true)
+
+	return root, nil
 }
 
 func (b *Builder) scanSubSectors() []*model.ConfigSector {
@@ -297,26 +291,26 @@ func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
 				if line.Flags&0x0004 == 0 {
 					// È una linea opaca a singolo lato
 					seg.Kind = model.DefinitionWall // = 2
-					seg.Neighbor = "wall"
+					//seg.Neighbor = "wall"
 				} else if foundNeighbor {
 					// È una Two-Sided che connette ad un altro settore
-					seg.Kind = model.DefinitionValid // = 3
+					seg.Kind = model.DefinitionJoin // = 3
 				} else {
 					// Edge case: Two-Sided rivolto verso il vuoto esterno
 					seg.Kind = model.DefinitionWall
-					seg.Neighbor = "wall"
+					//seg.Neighbor = "wall"
 				}
 			} else {
 				// Il lato NON è nel WAD. È stato creato dal BSP per chiudere lo spazio.
 				if foundNeighbor {
 					// Portale implicito interno
-					seg.Kind = model.DefinitionValid // = 3
+					seg.Kind = model.DefinitionJoin // = 3
 					seg.Tag = "bsp_split"
 				} else {
 					// Il lato tocca l'esterno della mappa (il BBox virtuale).
 					// È un OPEN LOOP come richiesto in world.go!
 					seg.Kind = model.DefinitionUnknown // = 0 (Open)
-					seg.Neighbor = "unknown"
+					//seg.Neighbor = "unknown"
 					seg.Tag = "open"
 				}
 			}

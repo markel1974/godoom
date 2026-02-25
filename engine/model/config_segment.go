@@ -241,7 +241,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if neighbor == nil {
 			if data, d := createSegment(SegmentDataNeighbor, b.data); d != nil {
-				neighbor = NewConfigSegment(is.Parent, DefinitionValid, d.point, XY{})
+				neighbor = NewConfigSegment(is.Parent, DefinitionJoin, d.point, XY{})
 				neighbor.Id = d.id
 				neighbor.Neighbor = d.neighbor
 

@@ -258,7 +258,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 
 	addSegment := func(sId uint16, xy XY) {
 		id := strconv.Itoa(int(sId))
-		kind := model.DefinitionValid
+		kind := model.DefinitionJoin
 		if _, ok := wallSectors[sId]; ok {
 			id = "wall"
 			kind = model.DefinitionWall
@@ -411,7 +411,7 @@ func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.Conf
 
 	addSegment := func(sId uint16, xy XY) {
 		id := strconv.Itoa(int(sId))
-		kind := model.DefinitionValid
+		kind := model.DefinitionJoin
 		if _, ok := wallSectors[sId]; ok {
 			id = "wall"
 			kind = model.DefinitionWall

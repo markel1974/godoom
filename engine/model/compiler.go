@@ -10,12 +10,12 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-// DefinitionValid represents a valid definition state with a value of 3.
+// DefinitionJoin represents a valid definition state with a value of 3.
 // DefinitionVoid represents a void definition state with a value of 1.
 // DefinitionWall represents a wall definition state with a value of 2.
 // DefinitionUnknown represents an unknown definition state with a value of 0.
 const (
-	DefinitionValid   = 3
+	DefinitionJoin    = 3
 	DefinitionVoid    = 1
 	DefinitionWall    = 2
 	DefinitionUnknown = 0
@@ -166,7 +166,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 						if s.Ref != ld.sector.Id {
 							fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
 							if s.Kind == DefinitionUnknown {
-								s.Kind = DefinitionValid
+								s.Kind = DefinitionJoin
 							}
 							s.SetSector(ld.sector.Id, ld.sector)
 							fixed++

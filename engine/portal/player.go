@@ -164,9 +164,8 @@ func (p *Player) GetYaw() float64 {
 func (p *Player) EyeHeight() float64 {
 	if p.ducking {
 		return DuckHeight
-	} else {
-		return EyeHeight
 	}
+	return EyeHeight
 }
 
 // VerticalCollision handles vertical movement and collision detection for the player based on velocity and sector boundaries.

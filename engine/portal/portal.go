@@ -204,7 +204,7 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 		u0 := 0.0
 		u1 := float64(textures.TextureEnd)
 
-		// If partially in front of the player, clip it against player's view frustum
+		// If partially in front of the player, clip it against the player's view frustum
 		if tz1 <= 0 || tz2 <= 0 {
 			i1X, i1Y, _ := mathematic.IntersectFn(tx1, tz1, tx2, tz2, -renderers.NearSide, renderers.NearZ, -renderers.FarSide, renderers.FarZ)
 			i2X, i2Y, _ := mathematic.IntersectFn(tx1, tz1, tx2, tz2, renderers.NearSide, renderers.NearZ, renderers.FarSide, renderers.FarZ)

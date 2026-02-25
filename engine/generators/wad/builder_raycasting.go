@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/markel1974/godoom/engine/generator/wad/lumps"
+	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/polygons"
 	"github.com/markel1974/godoom/engine/polygons/geometry"

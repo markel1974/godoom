@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	lumps2 "github.com/markel1974/godoom/engine/generator/wad/lumps"
+	lumps2 "github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
 )
 

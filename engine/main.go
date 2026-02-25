@@ -5,9 +5,9 @@ import (
 	"image/color"
 	"os"
 
-	"github.com/markel1974/godoom/engine/generator/script"
-	"github.com/markel1974/godoom/engine/generator/wad"
-	"github.com/markel1974/godoom/engine/generator/world"
+	"github.com/markel1974/godoom/engine/generators/script"
+	"github.com/markel1974/godoom/engine/generators/wad"
+	"github.com/markel1974/godoom/engine/generators/world"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
 	"github.com/markel1974/godoom/pixels"

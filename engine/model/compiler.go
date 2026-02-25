@@ -21,7 +21,7 @@ const (
 	DefinitionUnknown = 0
 )
 
-// lineDef2 represents a line segment in a 2D space with start and end points, belonging to a specific sector.
+// lineDef2 represents a line segment in a 2D space with start and end Points, belonging to a specific sector.
 type lineDef2 struct {
 	start  XY
 	end    XY
@@ -29,7 +29,7 @@ type lineDef2 struct {
 	np     int
 }
 
-// lineDefHash generates a unique string representation of a line defined by its start and end XY points.
+// lineDefHash generates a unique string representation of a line defined by its start and end XY Points.
 func lineDefHash(start XY, end XY) string {
 	startX := strconv.FormatFloat(start.X, 'f', -1, 64)
 	startY := strconv.FormatFloat(start.Y, 'f', -1, 64)
@@ -55,7 +55,7 @@ func NewCompiler() *Compiler {
 }
 
 // Setup initializes and configures the Compiler object based on the provided configuration and texture data.
-// It processes the input sectors, creates segments, applies textures, resolves loops, and ensures sector consistency.
+// It processes the input sectors, creates segments, applies textures, resolves loops, and ensures Sector consistency.
 // Returns an error in case of configuration issues or invalid state encountered during the setup process.
 func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 	modelSectorId := uint16(0)
@@ -68,7 +68,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 		}
 
 		if len(segments) == 0 {
-			fmt.Printf("sector %s (idx: %d): vertices as zero len, removing\n", cs.Id, idx)
+			fmt.Printf("Sector %s (idx: %d): vertices as zero len, removing\n", cs.Id, idx)
 			continue
 		}
 
@@ -85,7 +85,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 			s.LowerTexture = text.Get(cs.LowerTexture)
 			s.WallTexture = text.Get(cs.WallTexture)
 			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil || s.WallTexture == nil {
-				//fmt.Println("invalid textures configuration for sector", s.Id)
+				//fmt.Println("invalid textures configuration for Sector", s.Id)
 				s.Textures = false
 			}
 		}
@@ -139,7 +139,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 				//TODO StubOld2 funziona solo se viene aggiunto in testa.....
 				//vLast := sect.Vertices[len(sect.Vertices)-1]
 				//sect.Vertices = append([]XY{vLast}, sect.Vertices...)
-				fmt.Printf("creating loop for sector %s\n", sector.Id)
+				fmt.Printf("creating loop for Sector %s\n", sector.Id)
 				k := vLast.Copy()
 				k.Start = k.End
 				k.End = vFirst.Start
@@ -164,7 +164,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 					//if s.Kind == DefinitionUnknown {
 					if ld, ok := lineDefsCache[lineDefHash(s.End, s.Start)]; ok {
 						if s.Ref != ld.sector.Id {
-							fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
+							fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
 							if s.Kind == DefinitionUnknown {
 								s.Kind = DefinitionValid
 							}
@@ -173,7 +173,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 							//goto Rescan
 						}
 					} else {
-						fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
+						fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
 						//s.Kind = DefinitionWall
 						//s.Sector = nil
 						//v1start.Update("wall", nil, DefinitionWall, v1start.XY)
@@ -200,48 +200,48 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 					d := (b + 2) % sect.NPoints
 					x0 := vert[b].X;
 					y0 := vert[b].Y;
-					x1 := vert[c].X;
+					X1 := vert[c].X;
 					y1 := vert[c].Y
-					switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
+					switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, X1, y1) {
 					case 0:
 						continue
 						//Note: This used to be a problem for my engine, but is not anymore, so it is disabled.
 						//if you enable this change, you will not need the IntersectBox calls in some locations anymore.
 						//if sect.NeighborsRefs[b] == sect.NeighborsRefs[c] { continue }
-						//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
+						//fmt.Printf("Sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
 					case -1:
 						fmt.Printf("Sector %d: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", idx, b, c, c, d)
 					default:
 						continue
 					}
 
-					fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
+					fmt.Printf("- splitting Sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
 
 					// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
 					// e cannot be c, c-1 or c+1
-					// line (c)-(e) cannot intersect with any edge in this sector
+					// line (c)-(e) cannot intersect with any edge in this Sector
 					nearestDist := 1e29
 					nearestPoint := ^uint64(0)
 					for n := (d + 1) % sect.NPoints; n != b; n = (n + 1) % sect.NPoints {
 						// Don't go through b, c, d
-						x2 := vert[n].X
+						X2 := vert[n].X
 						y2 := vert[n].Y
-						distX := x2 - x1
+						distX := X2 - X1
 						distY := y2 - y1
 						dist := distX*distX + distY*distY
 						if dist >= nearestDist {
 							continue
 						}
-						if mathematic.PointSideF(x2, y2, x0, y0, x1, y1) != 1 {
+						if mathematic.PointSideF(X2, y2, x0, y0, X1, y1) != 1 {
 							continue
 						}
 						ok := true
-						x1 += distX * 1e-4;
-						x2 -= distX * 1e-4;
+						X1 += distX * 1e-4;
+						X2 -= distX * 1e-4;
 						y1 += distY * 1e-4;
 						y2 -= distY * 1e-4
 						for f := 0; f < int(sect.NPoints); f++ {
-							if mathematic.IntersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
+							if mathematic.IntersectLineSegmentsF(X1, y1, X2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
 								ok = false
 								break
 							}
@@ -250,7 +250,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 							continue
 						}
 						// Check whether this split would resolve the original problem
-						if mathematic.PointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 {
+						if mathematic.PointSideF(X2, y2, vert[d].X, vert[d].Y, X1, y1) == 1 {
 							dist += 1e6
 						}
 						if dist >= nearestDist {
@@ -339,7 +339,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 	return nil
 }
 
-// finalize adjusts sector vertex coordinates by the configured scale factor and updates the maximum sector height.
+// finalize adjusts Sector vertex coordinates by the configured scale factor and updates the maximum Sector height.
 func (r *Compiler) finalize(cfg *ConfigRoot) {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
@@ -371,7 +371,7 @@ func (r *Compiler) GetSectors() []*Sector {
 func (r *Compiler) Get(sectorId string) (*Sector, error) {
 	s, ok := r.cache[sectorId]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("invalid sector: %s", sectorId))
+		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
 	}
 	return s, nil
 }
@@ -391,7 +391,7 @@ func (r *Compiler) makeLineDefsCache() map[string]*lineDef2 {
 			ld := &lineDef2{sector: sect, np: np, start: s.Start, end: s.End}
 			if fld, ok := t[hash]; ok {
 				if sect.Id != fld.sector.Id {
-					//fmt.Println("line segment already added", sect.Id, fld.sector.Id, hash, np)
+					//fmt.Println("line segment already added", sect.Id, fld.Sector.Id, hash, np)
 				}
 			} else {
 				t[hash] = ld
@@ -435,7 +435,7 @@ func (r * Compiler) createConvexHull3(sect * Sector) {
 func (r * Compiler) createConvexHull(sect * Sector) {
 	var pointCloud []quickhull.Vector
 
-	stub := `[{"start":{"x":1664,"y":-2368},"end":{"x":1664,"y":-2312},"kind":3,"neighbor":"1","tag":"Id:  (twoSided,upperUnpegged | COMPTALL - COMPSPAN)","upper":"COMPTALL","middle":"-","lower":"COMPSPAN"},{"start":{"x":1664,"y":-2552},"end":{"x":1664,"y":-2432},"kind":3,"neighbor":"0","tag":"Id:  (twoSided,upperUnpegged | STARGR1 - -)","upper":"STARGR1","middle":"-","lower":"-"},{"start":{"x":1664,"y":-2432},"end":{"x":1664,"y":-2392},"kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"STARGR1","lower":"-"},{"start":{"x":1664,"y":-2392},"end":{"x":1664,"y":-2368},"kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"SUPPORT2","lower":"-"},{"start":{"x":1992,"y":-2552},"end":{"x":1784,"y":-2552},"kind":3,"neighbor":"26","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"},{"start":{"x":1784,"y":-2312},"end":{"x":1992,"y":-2312},"kind":3,"neighbor":"21","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"}]`
+	stub := `[{"start":{"x":1664,"y":-2368},"end":{"x":1664,"y":-2312},"Kind":3,"neighbor":"1","tag":"Id:  (twoSided,upperUnpegged | COMPTALL - COMPSPAN)","upper":"COMPTALL","middle":"-","lower":"COMPSPAN"},{"start":{"x":1664,"y":-2552},"end":{"x":1664,"y":-2432},"Kind":3,"neighbor":"0","tag":"Id:  (twoSided,upperUnpegged | STARGR1 - -)","upper":"STARGR1","middle":"-","lower":"-"},{"start":{"x":1664,"y":-2432},"end":{"x":1664,"y":-2392},"Kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"STARGR1","lower":"-"},{"start":{"x":1664,"y":-2392},"end":{"x":1664,"y":-2368},"Kind":2,"neighbor":"wall","tag":"Id: wall (impassible | wall)","upper":"-","middle":"SUPPORT2","lower":"-"},{"start":{"x":1992,"y":-2552},"end":{"x":1784,"y":-2552},"Kind":3,"neighbor":"26","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"},{"start":{"x":1784,"y":-2312},"end":{"x":1992,"y":-2312},"Kind":3,"neighbor":"21","tag":"Id:  (twoSided,upperUnpegged,lowerUnpegged | PLANET1 - STARGR1)","upper":"PLANET1","middle":"-","lower":"STARGR1"}]`
 	_ = json.Unmarshal([]byte(stub), &sect.Segments)
 
 	segments := make(map[string]*Segment)
@@ -526,40 +526,40 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 		for b := uint64(0); b < nPoints; b++ {
 			c := (b + 1) % nPoints
 			d := (b + 2) % nPoints
-			x0 := vert[b].X; y0 := vert[b].Y; x1 := vert[c].X; y1 := vert[c].Y
-			switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
+			x0 := vert[b].X; y0 := vert[b].Y; X1 := vert[c].X; y1 := vert[c].Y
+			switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, X1, y1) {
 			case 0:
 				continue
 				//Note: This used to be a problem for my engine, but is not anymore, so it is disabled.
 				//if you enable this change, you will not need the IntersectBox calls in some locations anymore.
 				//if sect.NeighborsRefs[b] == sect.NeighborsRefs[c] { continue }
-				//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
+				//fmt.Printf("Sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
 			case -1:
 				fmt.Printf("Sector %s: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", sect.Id, b, c, c, d)
 			default:
 				continue
 			}
 
-			fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
+			fmt.Printf("- splitting Sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
 
 			// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
 			// e cannot be c, c-1 or c+1
-			// line (c)-(e) cannot intersect with any edge in this sector
+			// line (c)-(e) cannot intersect with any edge in this Sector
 			nearestDist := 1e29
 			nearestPoint := ^uint64(0)
 			for n := (d + 1) % nPoints; n != b; n = (n + 1) % nPoints {
 				// Don't go through b, c, d
-				x2 := vert[n].X
+				X2 := vert[n].X
 				y2 := vert[n].Y
-				distX := x2 - x1
+				distX := X2 - X1
 				distY := y2 - y1
 				dist := distX*distX + distY*distY
 				if dist >= nearestDist { continue }
-				if mathematic.PointSideF(x2, y2, x0, y0, x1, y1) != 1 { continue }
+				if mathematic.PointSideF(X2, y2, x0, y0, X1, y1) != 1 { continue }
 				ok := true
-				x1 += distX * 1e-4; x2 -= distX * 1e-4; y1 += distY * 1e-4; y2 -= distY * 1e-4
+				X1 += distX * 1e-4; X2 -= distX * 1e-4; y1 += distY * 1e-4; y2 -= distY * 1e-4
 				for f := uint64(0); f < nPoints; f++ {
-					if mathematic.IntersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
+					if mathematic.IntersectLineSegmentsF(X1, y1, X2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
 						ok = false
 						break
 					}
@@ -568,7 +568,7 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 					continue
 				}
 				// Check whether this split would resolve the original problem
-				if mathematic.PointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 { dist += 1e6 }
+				if mathematic.PointSideF(X2, y2, vert[d].X, vert[d].Y, X1, y1) == 1 { dist += 1e6 }
 				if dist >= nearestDist { continue }
 				nearestDist = dist
 				nearestPoint = n
@@ -662,12 +662,12 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 
 					if v2end.X == v1start.X && v2end.Y == v1start.Y && v2start.X == v1end.X && v2start.Y == v1end.Y {
 						if s1Idx != s2.NeighborsRefs[np2] {
-							fmt.Printf("[1] sector %s (idx: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", s1.Id, np2, v1end.X, v1end.Y, v1start.Y, v1start.Y, s1Idx, s2.NeighborsRefs[np2])
+							fmt.Printf("[1] Sector %s (idx: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", s1.Id, np2, v1end.X, v1end.Y, v1start.Y, v1start.Y, s1Idx, s2.NeighborsRefs[np2])
 							s2.NeighborsRefs[np2] = s1Idx
 							goto Rescan
 						}
 						if s2Idx != s1.NeighborsRefs[np1] {
-							fmt.Printf("[2] sector %s (idx: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", s1.Id, np1, v1start.X, v1start.Y, v1end.X, v1end.Y, s2Idx, s1.NeighborsRefs[np1])
+							fmt.Printf("[2] Sector %s (idx: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %d, %d found instead. Fixing...\n", s1.Id, np1, v1start.X, v1start.Y, v1end.X, v1end.Y, s2Idx, s1.NeighborsRefs[np1])
 							s1.NeighborsRefs[np1] = s2Idx
 							goto Rescan
 						} else {
@@ -677,7 +677,7 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 				}
 			}
 			if s1.NeighborsRefs[np1] >= 0 && s1.NeighborsRefs[np1] < len(r.sectors) && found != 1 {
-				fmt.Printf("sector %s (idx: %d) and its neighbor %d don't share line (%g, %g)-(%g, %g)\n", s1.Id, s1Idx, s1.NeighborsRefs[np1], v1start.X, v1start.Y, v1end.X, v1end.Y)
+				fmt.Printf("Sector %s (idx: %d) and its neighbor %d don't share line (%g, %g)-(%g, %g)\n", s1.Id, s1Idx, s1.NeighborsRefs[np1], v1start.X, v1start.Y, v1end.X, v1end.Y)
 			}
 		}
 	}

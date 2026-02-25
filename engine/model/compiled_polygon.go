@@ -1,6 +1,4 @@
-package portal
-
-import "github.com/markel1974/godoom/engine/model"
+package model
 
 // IdEmpty represents an empty identifier with a value of 0.
 // IdFloor represents the identifier for a floor with a hexadecimal value of 0xA9A9A9.
@@ -24,104 +22,103 @@ const (
 
 // CompiledPolygon represents a preprocessed polygon with metadata for rendering, lighting, and spatial organization.
 type CompiledPolygon struct {
+	Points   []XYZ
+	Sector   *Sector
+	Neighbor *Sector
+	Kind     int
 	id       float64
-	Sector   *model.Sector
-	Neighbor *model.Sector
-	kind     int
-	light1   float64
-	light2   float64
+	Light1   float64
+	Light2   float64
 	zIndex   float64
-	points   []model.XYZ
-	pLen     int
-
-	x1  float64
-	x2  float64
-	tz1 float64
-	tz2 float64
-	u0  float64
-	u1  float64
+	PLen     int
+	X1       float64
+	X2       float64
+	Tz1      float64
+	Tz2      float64
+	U0       float64
+	U1       float64
 }
 
-// NewCompiledPolygon creates and initializes a new instance of CompiledPolygon with default values and preallocated points.
+// NewCompiledPolygon creates and initializes a new instance of CompiledPolygon with default values and preallocated Points.
 func NewCompiledPolygon() *CompiledPolygon {
 	return &CompiledPolygon{
-		points: make([]model.XYZ, 32),
-		pLen:   0,
+		Points: make([]XYZ, 32),
+		PLen:   0,
 	}
 }
 
-// Init initializes the CompiledPolygon with the specified kind and resets its properties.
+// Init initializes the CompiledPolygon with the specified Kind and resets its properties.
 func (p *CompiledPolygon) Init(kind int) {
-	p.kind = kind
-	p.pLen = 0
-	p.light1 = 0
-	p.light2 = 0
+	p.Kind = kind
+	p.PLen = 0
+	p.Light1 = 0
+	p.Light2 = 0
 	p.zIndex = 0
 }
 
-// Triangle defines a triangle by setting three points, their respective coordinates, and light intensities.
+// Triangle defines a triangle by setting three Points, their respective coordinates, and light intensities.
 func (p *CompiledPolygon) Triangle(x1 float64, y1 float64, y2 float64, z1 float64, l1 float64, x2 float64, y3 float64, z2 float64, l2 float64) {
-	p.points[0].X = x1
-	p.points[0].Y = y1
-	p.points[0].Z = z1
+	p.Points[0].X = x1
+	p.Points[0].Y = y1
+	p.Points[0].Z = z1
 
-	p.points[1].X = x2
-	p.points[1].Y = y2
-	p.points[1].Z = z2
+	p.Points[1].X = x2
+	p.Points[1].Y = y2
+	p.Points[1].Z = z2
 
-	p.points[2].X = x2
-	p.points[2].Y = y3
-	p.points[2].Z = z2
+	p.Points[2].X = x2
+	p.Points[2].Y = y3
+	p.Points[2].Z = z2
 
-	p.light1 = l1
-	p.light2 = l2
-	p.pLen = 4
-	p.zIndex = (p.points[0].Z + p.points[1].Z + p.points[2].Z + p.points[3].Z) / float64(p.pLen)
+	p.Light1 = l1
+	p.Light2 = l2
+	p.PLen = 4
+	p.zIndex = (p.Points[0].Z + p.Points[1].Z + p.Points[2].Z + p.Points[3].Z) / float64(p.PLen)
 }
 
-// Rect defines a rectangular polygon by setting its four corner points, lighting values, and calculates its z-index.
+// Rect defines a rectangular polygon by setting its four corner Points, lighting values, and calculates its z-index.
 func (p *CompiledPolygon) Rect(x1 float64, y1 float64, y2 float64, z1 float64, l1 float64, x3 float64, y3 float64, y4 float64, z2 float64, l2 float64) {
-	p.points[0].X = x1
-	p.points[0].Y = y1
-	p.points[0].Z = z1
-	p.points[3].X = x1
-	p.points[3].Y = y2
-	p.points[3].Z = z1
-	p.points[1].X = x3
-	p.points[1].Y = y3
-	p.points[1].Z = z2
-	p.points[2].X = x3
-	p.points[2].Y = y4
-	p.points[2].Z = z2
-	p.light1 = l1
-	p.light2 = l2
-	p.pLen = 4
-	p.zIndex = (p.points[0].Z + p.points[1].Z + p.points[2].Z + p.points[3].Z) / float64(p.pLen)
+	p.Points[0].X = x1
+	p.Points[0].Y = y1
+	p.Points[0].Z = z1
+	p.Points[3].X = x1
+	p.Points[3].Y = y2
+	p.Points[3].Z = z1
+	p.Points[1].X = x3
+	p.Points[1].Y = y3
+	p.Points[1].Z = z2
+	p.Points[2].X = x3
+	p.Points[2].Y = y4
+	p.Points[2].Z = z2
+	p.Light1 = l1
+	p.Light2 = l2
+	p.PLen = 4
+	p.zIndex = (p.Points[0].Z + p.Points[1].Z + p.Points[2].Z + p.Points[3].Z) / float64(p.PLen)
 }
 
-// AddPoint adds two points with their coordinates and light values to the polygon and updates its zIndex and light properties.
+// AddPoint adds two Points with their coordinates and light values to the polygon and updates its zIndex and light properties.
 func (p *CompiledPolygon) AddPoint(x1 float64, y1 float64, z1 float64, l1 float64, x2 float64, y2 float64, z2 float64, l2 float64) {
 	p.zIndex += z1
 	p.zIndex += z2
 
-	p.light1 += l1
-	p.light2 += l2
+	p.Light1 += l1
+	p.Light2 += l2
 
-	p.points[p.pLen].X = x1
-	p.points[p.pLen].Y = y1
-	p.points[p.pLen].Z = z1
-	p.pLen++
-	p.points[p.pLen].X = x2
-	p.points[p.pLen].Y = y2
-	p.points[p.pLen].Z = z2
-	p.pLen++
+	p.Points[p.PLen].X = x1
+	p.Points[p.PLen].Y = y1
+	p.Points[p.PLen].Z = z1
+	p.PLen++
+	p.Points[p.PLen].X = x2
+	p.Points[p.PLen].Y = y2
+	p.Points[p.PLen].Z = z2
+	p.PLen++
 }
 
-// Finalize recalculates and normalizes zIndex, light1, and light2 by dividing them with respect to pLen.
+// Finalize recalculates and normalizes zIndex, Light1, and Light2 by dividing them with respect to PLen.
 func (p *CompiledPolygon) Finalize() {
-	p.zIndex /= float64(p.pLen)
-	p.light1 /= float64(p.pLen) / 2
-	p.light2 /= float64(p.pLen) / 2
+	p.zIndex /= float64(p.PLen)
+	p.Light1 /= float64(p.PLen) / 2
+	p.Light2 /= float64(p.PLen) / 2
 }
 
 // CompiledPolygons is a collection of CompiledPolygon objects used for efficient geometric operations and management.
@@ -150,19 +147,19 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire creates or reinitializes a CompiledPolygon with the given parameters, associating it with sectors and coordinates.
-func (cp *CompiledPolygons) Acquire(sector *model.Sector, neighbor *model.Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
 	p := cp.data[cp.idx]
 	p.id = float64(cp.idx)
 	cp.idx++
 
 	p.Sector = sector
 	p.Neighbor = neighbor
-	p.x1 = x1
-	p.x2 = x2
-	p.tz1 = tz1
-	p.tz2 = tz2
-	p.u0 = u0
-	p.u1 = u1
+	p.X1 = x1
+	p.X2 = x2
+	p.Tz1 = tz1
+	p.Tz2 = tz2
+	p.U0 = u0
+	p.U1 = u1
 	p.Init(kind)
 
 	return p

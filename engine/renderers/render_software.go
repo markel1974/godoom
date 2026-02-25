@@ -1,18 +1,20 @@
-package portal
+package renderers
 
 import (
 	"fmt"
 	"strings"
 	"sync"
 
-	textures2 "github.com/markel1974/godoom/engine/textures"
+	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
 
+// RenderSoftware represents a software-based renderer for managing and rendering 2D/3D scenes on a defined screen space.
 type RenderSoftware struct {
 	screenWidth        int
 	screenHeight       int
-	textures           *textures2.Textures
+	textures           *textures.Textures
 	sectorsMaxHeight   float64
 	targetSectors      map[int]bool
 	targetIdx          int
@@ -22,7 +24,9 @@ type RenderSoftware struct {
 	dp                 *DrawPolygon
 }
 
-func NewSoftwareRender(screenWidth int, screenHeight int, textures *textures2.Textures, sectorsMaxHeight float64) *RenderSoftware {
+// NewSoftwareRender initializes and returns a new instance of RenderSoftware for software-based rendering.
+// It sets the screen dimensions, textures, maximum Sector height, and initializes rendering utilities.
+func NewSoftwareRender(screenWidth int, screenHeight int, textures *textures.Textures, sectorsMaxHeight float64) *RenderSoftware {
 	return &RenderSoftware{
 		screenWidth:        screenWidth,
 		screenHeight:       screenHeight,
@@ -36,10 +40,12 @@ func NewSoftwareRender(screenWidth int, screenHeight int, textures *textures2.Te
 	}
 }
 
+// DebugMoveSectorToggle toggles the Sector targeting mode by enabling or disabling the targetEnabled flag.
 func (r *RenderSoftware) DebugMoveSectorToggle() {
 	r.targetEnabled = !r.targetEnabled
 }
 
+// DebugMoveSector updates the target Sector index based on the direction and adjusts the active state of Sectors accordingly.
 func (r *RenderSoftware) DebugMoveSector(forward bool) {
 	if forward {
 		if r.targetIdx < r.targetLastCompiled {
@@ -55,7 +61,8 @@ func (r *RenderSoftware) DebugMoveSector(forward bool) {
 	}
 }
 
-func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *viewItem, css []*CompiledSector, compiled int) {
+// Render processes the rendering pipeline for the provided surface, view item, and compiled Sectors.
+func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
 	//r.stub(surface, r.dp)
 	//return
 	r.targetLastCompiled = compiled
@@ -66,30 +73,31 @@ func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *viewItem, css [
 	//r.parallelRender(surface, vi, css, compiled)
 }
 
-func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem, css []*CompiledSector, compiled int) {
+// serialRender processes and renders a series of compiled Sectors and their polygons onto the provided surface.
+func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
 	//test := make(map[string]bool)
 	for idx := compiled - 1; idx >= 0; idx-- {
-		//if _, ok := test[css[idx].sector.Id]; ok {
+		//if _, ok := test[css[idx].Sector.Id]; ok {
 		//	fmt.Println("Already rendered")
 		//	continue
 		//}
-		//test[css[idx].sector.Id] = true
+		//test[css[idx].Sector.Id] = true
 		mode := r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2
 			} else {
-				if r.targetId != css[idx].sector.Id {
-					r.targetId = css[idx].sector.Id
+				if r.targetId != css[idx].Sector.Id {
+					r.targetId = css[idx].Sector.Id
 					var neighbors []string
-					for _, z := range css[idx].sector.Segments {
+					for _, z := range css[idx].Sector.Segments {
 						id := ""
 						if z != nil {
 							id = z.Ref
 						}
 						neighbors = append(neighbors, id)
 					}
-					fmt.Println("Current target Sector:", r.targetId, strings.Join(neighbors, ","), css[idx].sector.Tag)
+					fmt.Println("Current target Sector:", r.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
 
 				}
 			}
@@ -97,13 +105,14 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *viewItem,
 		polygons := css[idx].Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
-			r.dp.Setup(surface, cp.points, cp.pLen, cp.kind, cp.light1, cp.light2)
+			r.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind, cp.Light1, cp.Light2)
 			r.renderPolygon(vi, cp, r.dp, mode)
 		}
 	}
 }
 
-func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *viewItem, css []*CompiledSector, compiled int) {
+// parallelRender processes multiple Sectors concurrently using a worker pool to render polygons onto the given surface.
+func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
@@ -116,12 +125,12 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *viewIte
 			}
 		}
 		//TODO queue
-		go func(polygons []*CompiledPolygon) {
+		go func(polygons []*model.CompiledPolygon) {
 			//TODO each renderer must have a separate DrawPolygon
 			dp := NewDrawPolygon(r.screenWidth, r.screenHeight)
 			for k := len(polygons) - 1; k >= 0; k-- {
 				cp := polygons[k]
-				dp.Setup(surface, cp.points, cp.pLen, cp.kind, cp.light1, cp.light2)
+				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind, cp.Light1, cp.Light2)
 				r.renderPolygon(vi, cp, dp, mode)
 			}
 			wg.Done()
@@ -130,7 +139,8 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *viewIte
 	wg.Wait()
 }
 
-func (r *RenderSoftware) renderPolygon(vi *viewItem, cp *CompiledPolygon, dr *DrawPolygon, mode int) {
+// renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
+func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)
@@ -162,39 +172,39 @@ func (r *RenderSoftware) renderPolygon(vi *viewItem, cp *CompiledPolygon, dr *Dr
 		return
 	}
 
-	switch cp.kind {
-	case IdWall:
+	switch cp.Kind {
+	case model.IdWall:
 		target := cp.Sector.Ceil - cp.Sector.Floor
 		yRef := r.sectorsMaxHeight
 		if target > 1 {
 			yRef = r.sectorsMaxHeight / target
 		}
-		dr.DrawTexture(cp.Sector.WallTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, yRef)
-	case IdUpper:
+		dr.DrawTexture(cp.Sector.WallTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
+	case model.IdUpper:
 		target := cp.Sector.Ceil - cp.Neighbor.Ceil
 		yRef := r.sectorsMaxHeight
 		if target > 1 {
 			yRef = r.sectorsMaxHeight / target
 		}
-		dr.DrawTexture(cp.Sector.UpperTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, yRef)
-	case IdLower:
+		dr.DrawTexture(cp.Sector.UpperTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
+	case model.IdLower:
 		target := cp.Sector.Floor - cp.Neighbor.Floor
 		yRef := r.sectorsMaxHeight
 		if target > 1 {
 			yRef = r.sectorsMaxHeight / target
 		}
-		dr.DrawTexture(cp.Sector.LowerTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, yRef)
-	case IdCeil:
-		dr.DrawPerspectiveTexture(vi.where.X, vi.where.Y, vi.where.Z, vi.yaw, vi.angleSin, vi.angleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
+		dr.DrawTexture(cp.Sector.LowerTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
+	case model.IdCeil:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
 		//dr.DrawTexture(cp.Sector.CeilTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case IdFloor:
-		dr.DrawPerspectiveTexture(vi.where.X, vi.where.Y, vi.where.Z, vi.yaw, vi.angleSin, vi.angleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+	case model.IdFloor:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
 		//dr.DrawTexture(cp.Sector.FloorTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.where.X, vi.where.Y, vi.where.Z, vi.yaw, vi.angleSin, vi.angleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+	case model.IdFloorTest:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
 		//dr.DrawTexture(cp.Sector.FloorTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.where.X, vi.where.Y, vi.where.Z, vi.yaw, vi.angleSin, vi.angleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
+	case model.IdCeilTest:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
 		//dr.DrawTexture(p.Sector.CeilTexture, p.x1, p.x2, p.tz1, p.tz2, p.u0, p.u1, 1.0)
 	default:
 		dr.DrawWireFrame(true)

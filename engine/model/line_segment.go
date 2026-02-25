@@ -146,7 +146,7 @@ Coord findIntersection(LineSegment& one, LineSegment& two, bool extrapolate)
 Coord foundCoord = noCoord; // return variable, defaults to noCoord if cannot find
 
 // get point-slope information for each line
-// point-slope: form Y-y1 = m(X-x1)
+// point-slope: form Y-y1 = m(X-X1)
 one.normalize(); two.normalize();
 double m1 = one.slope();
 double m2 = two.slope();
@@ -182,7 +182,7 @@ if(isinf<double>(m2)) {
 foundCoord.x = (pt2.y - pt1.y + m1*pt1.x - m2*pt2.x) / (m1 - m2);
 foundCoord.y = m1*(foundCoord.x - pt1.x) + pt1.y;
 
-// if we are constraining this to the actual points within the segments, need to make sure it exists on both segments
+// if we are constraining this to the actual Points within the segments, need to make sure it exists on both segments
 if(!extrapolate) {
 if( !one.onSegment(foundCoord) || !two.onSegment(foundCoord) ) {
 foundCoord = noCoord; // cannot find this point on both segments
@@ -254,7 +254,7 @@ vector<LineSegment> polyToSegments(const CPoly& poly)
 {
 vector<LineSegment> ret;
 
-// NOTE: must check with Olaf about edges of this poly... how do we know which points to connect as edges?
+// NOTE: must check with Olaf about edges of this poly... how do we know which Points to connect as edges?
 size_t bound = poly.bdy.size()-1;
 for(size_t i = 0; i < bound; i++)
 {

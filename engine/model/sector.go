@@ -41,7 +41,7 @@ func NewSector(modelId uint16, id string, segments []*Segment) *Sector {
 	return s
 }
 
-// Reference updates the sector's compileId and resets usage and references if the given compileId is different.
+// Reference updates the Sector's compileId and resets usage and references if the given compileId is different.
 func (s *Sector) Reference(compileId uint64) {
 	if compileId != s.compileId {
 		s.compileId = compileId
@@ -62,12 +62,12 @@ func (s *Sector) GetUsage() int {
 	return s.usage
 }
 
-// Add adds the given ID to the sector's references map, marking it as referenced.
+// Add adds the given ID to the Sector's references map, marking it as referenced.
 func (s *Sector) Add(id uint64) {
 	s.references[id] = true
 }
 
-// Has checks if the given id exists in the sector's references map and returns true if it does, false otherwise.
+// Has checks if the given id exists in the Sector's references map and returns true if it does, false otherwise.
 func (s *Sector) Has(id uint64) bool {
 	_, ok := s.references[id]
 	return ok

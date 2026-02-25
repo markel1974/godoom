@@ -10,7 +10,7 @@ type Segment struct {
 	Tag    string
 }
 
-// NewSegment creates and returns a new Segment instance with specified start, end points, reference, kind, sector, and tag.
+// NewSegment creates and returns a new Segment instance with specified start, end Points, reference, Kind, Sector, and tag.
 func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string) *Segment {
 	out := &Segment{
 		Start:  start,
@@ -36,7 +36,7 @@ func (k *Segment) Copy() *Segment {
 	return out
 }
 
-// SetSector assigns a reference string and associates the segment with a specified sector.
+// SetSector assigns a reference string and associates the segment with a specified Sector.
 func (k *Segment) SetSector(ref string, sector *Sector) {
 	k.Ref = ref
 	k.Sector = sector

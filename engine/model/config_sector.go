@@ -2,7 +2,7 @@ package model
 
 import "encoding/json"
 
-// ConfigSector represents a sector configuration in a level, including geometric, texture, and tag information.
+// ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {
 	Id           string           `json:"id"`
 	Ceil         float64          `json:"ceil"`
@@ -17,14 +17,14 @@ type ConfigSector struct {
 	Tag          string           `json:"tag"`
 }
 
-// NewInputSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
-func NewInputSector(id string) *ConfigSector {
+// NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
+func NewConfigSector(id string) *ConfigSector {
 	return &ConfigSector{Id: id}
 }
 
 // Clone creates a deep copy of the ConfigSector, optionally cloning its segments based on the cloneSegments parameter.
 func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
-	out := NewInputSector(is.Id)
+	out := NewConfigSector(is.Id)
 	out.Ceil = is.Ceil
 	out.Floor = is.Floor
 	out.Textures = is.Textures

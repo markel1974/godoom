@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/polygons"
+	"github.com/markel1974/godoom/engine/renderers"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
@@ -28,31 +29,34 @@ func pointInPolygonF(px float64, py float64, points []*model.Segment) bool {
 
 */
 
+// World represents the game world, containing the environment, player, and rendering components.
 type World struct {
 	screenWidth  int
 	screenHeight int
 	textures     *textures.Textures
-	tree         *PortalRender
+	tree         *Render
 	render       IRender
 	player       *Player
-	vi           *viewItem
+	vi           *renderers.ViewItem
 	debug        bool
 	debugIdx     int
 }
 
+// NewWorld initializes a new World instance with the given screen dimensions, queue size, and view mode.
 func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *World {
 	t, _ := textures.NewTextures(viewMode)
 	w := &World{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 		textures:     t,
-		tree:         NewPortalRender(screenWidth, screenHeight, maxQueue, t),
+		tree:         NewPortal(screenWidth, screenHeight, maxQueue, t),
 		render:       nil,
-		vi:           &viewItem{},
+		vi:           &renderers.ViewItem{},
 	}
 	return w
 }
 
+// Setup initializes the World instance using the provided configuration and sets up its components like player and renderer.
 func (w *World) Setup(cfg *model.ConfigRoot) error {
 	compiler := model.NewCompiler()
 	err := compiler.Setup(cfg, w.textures)
@@ -67,10 +71,11 @@ func (w *World) Setup(cfg *model.ConfigRoot) error {
 		return err
 	}
 	w.player = NewPlayer(cfg.Player.Position.X, cfg.Player.Position.Y, playerSector.Floor, cfg.Player.Angle, playerSector)
-	w.render = NewSoftwareRender(w.screenWidth, w.screenHeight, w.textures, w.tree.sectorsMaxHeight)
+	w.render = renderers.NewSoftwareRender(w.screenWidth, w.screenHeight, w.textures, w.tree.SectorsMaxHeight)
 	return nil
 }
 
+// movePlayer updates the player's position based on the provided delta values dx and dy. Adjusts sector if needed.
 func (w *World) movePlayer(dx float64, dy float64) {
 	if dx == 0 && dy == 0 {
 		return
@@ -111,15 +116,16 @@ func (w *World) movePlayer(dx float64, dy float64) {
 	w.player.AddCoords(dx, dy)
 }
 
+// Update updates the state of the world, including the player and rendering, based on the current frame's conditions.
 func (w *World) Update(surface *pixels.PictureRGBA) {
 	_, sin, cos := w.player.GetAngle()
 	px, py := w.player.GetCoords()
 	pz := w.player.GetZ()
-	w.vi.sector = w.player.GetSector()
-	w.vi.where = model.XYZ{X: px, Y: py, Z: pz}
-	w.vi.angleCos = cos
-	w.vi.angleSin = sin
-	w.vi.yaw = w.player.GetYaw()
+	w.vi.Sector = w.player.GetSector()
+	w.vi.Where = model.XYZ{X: px, Y: py, Z: pz}
+	w.vi.AngleCos = cos
+	w.vi.AngleSin = sin
+	w.vi.Yaw = w.player.GetYaw()
 
 	cs, count := w.tree.Compile(w.vi)
 	w.render.Render(surface, w.vi, cs, count)
@@ -173,18 +179,22 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	w.movePlayer(dx, dy)
 }
 
+// DoPlayerDuckingToggle toggles the ducking state of the player.
 func (w *World) DoPlayerDuckingToggle() {
 	w.player.SetDucking()
 }
 
+// DoPlayerJump makes the player perform a jump by altering vertical velocity and setting the falling state.
 func (w *World) DoPlayerJump() {
 	w.player.SetJump()
 }
 
+// DoPlayerMoves processes the player's movement based on directional input (up, down, left, right) and movement speed (slow).
 func (w *World) DoPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
 	w.player.Move(up, down, left, right, slow)
 }
 
+// DoPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within a constrained range.
 func (w *World) DoPlayerMouseMove(mouseX float64, mouseY float64) {
 	if mouseX > 10 {
 		mouseX = 10
@@ -203,18 +213,22 @@ func (w *World) DoPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.movePlayer(0, 0)
 }
 
+// DebugMoveSector toggles debug movement of sectors in the given direction, controlled by the forward parameter.
 func (w *World) DebugMoveSector(forward bool) {
 	w.render.DebugMoveSector(forward)
 }
 
+// DebugMoveSectorToggle toggles the debug movement mode for sector navigation within the renderer.
 func (w *World) DebugMoveSectorToggle() {
 	w.render.DebugMoveSectorToggle()
 }
 
+// DoZoom adjusts the current zoom level of the view by adding the specified zoom value.
 func (w *World) DoZoom(zoom float64) {
-	w.vi.zoom += zoom
+	w.vi.Zoom += zoom
 }
 
+// DoDebug toggles the debug mode or switches the debug sector based on the provided index increment.
 func (w *World) DoDebug(next int) {
 	if next == 0 {
 		w.debug = !w.debug
@@ -222,11 +236,11 @@ func (w *World) DoDebug(next int) {
 	}
 	w.debug = true
 	idx := w.debugIdx + next
-	if idx < 0 || idx >= len(w.tree.sectors) {
+	if idx < 0 || idx >= len(w.tree.Sectors) {
 		return
 	}
 	w.debugIdx = idx
-	sector := w.tree.sectors[idx]
+	sector := w.tree.Sectors[idx]
 	x := sector.Segments[0].Start.X
 	y := sector.Segments[0].Start.Y
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
@@ -234,9 +248,10 @@ func (w *World) DoDebug(next int) {
 	w.player.SetCoords(x+5, y+5)
 }
 
+// drawStub renders a debug representation of the current sector onto the given surface if in debug mode.
 func (w *World) drawStub(surface *pixels.PictureRGBA) {
-	if w.debugIdx >= 0 && w.debugIdx < len(w.tree.sectors) {
-		sector := w.tree.sectors[w.debugIdx]
+	if w.debugIdx >= 0 && w.debugIdx < len(w.tree.Sectors) {
+		sector := w.tree.Sectors[w.debugIdx]
 		w.drawSingleStub(surface, sector)
 	}
 
@@ -251,6 +266,7 @@ func (w *World) drawStub(surface *pixels.PictureRGBA) {
 	*/
 }
 
+// drawSingleStubScale renders a scaled polygonal representation of a sector on a surface using provided scale factors and selection state.
 func (w *World) drawSingleStubScale(surface *pixels.PictureRGBA, sector *model.Sector, xFactor float64, yFactor float64, selected bool) {
 	var t []model.XYZ
 	for _, v := range sector.Segments {
@@ -289,13 +305,14 @@ func (w *World) drawSingleStubScale(surface *pixels.PictureRGBA, sector *model.S
 		colorLine = 0xB0E0E6
 		colorPoint = 0x00BFFF
 	}
-	dp := NewDrawPolygon(640, 480)
+	dp := renderers.NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), colorLine, 1.0, 1.0)
 	dp.DrawPoints(10)
-	dp.color = colorPoint
+	dp.Color = colorPoint
 	dp.DrawLines(false)
 }
 
+// drawSingleStub renders a single sector's geometry onto a given surface based on its segments and scaling factors.
 func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector) {
 	maxX := float64(0)
 	maxY := float64(0)
@@ -362,10 +379,10 @@ func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector
 	if len(t) == 0 {
 		return
 	}
-	dp := NewDrawPolygon(640, 480)
+	dp := renderers.NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
 	dp.DrawPoints(10)
-	dp.color = 0xff0000
+	dp.Color = 0xff0000
 	dp.DrawLines(false)
 }
 

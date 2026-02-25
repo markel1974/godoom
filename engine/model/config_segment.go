@@ -27,7 +27,7 @@ type ConfigSegment struct {
 	Id       string `json:"id"`
 	Start    XY     `json:"start"`
 	End      XY     `json:"end"`
-	Kind     int    `json:"kind"`
+	Kind     int    `json:"Kind"`
 	Neighbor string `json:"neighbor"`
 	Tag      string `json:"tag"`
 	Upper    string `json:"upper"`
@@ -37,7 +37,7 @@ type ConfigSegment struct {
 	builder map[float64][]*segmentData
 }
 
-// NewConfigSegment creates a new ConfigSegment instance with the specified parent, kind, start, and end coordinates.
+// NewConfigSegment creates a new ConfigSegment instance with the specified parent, Kind, start, and end coordinates.
 func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 	is := &ConfigSegment{
 		Parent:   parent,
@@ -100,14 +100,14 @@ func (is *ConfigSegment) Prepare() {
 	is.builder = map[float64][]*segmentData{}
 }
 
-// AddNeighbor adds two points with the specified neighbor identifier to the segment's builder as neighbor data.
+// AddNeighbor adds two Points with the specified neighbor identifier to the segment's builder as neighbor data.
 func (is *ConfigSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
 	id := NextUUId()
 	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, "", "", "")
 	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, "", "", "")
 }
 
-// AddProperty adds a property between two points with specified wall status, upper, middle, and lower textures.
+// AddProperty adds a property between two Points with specified wall status, upper, middle, and lower textures.
 func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, middle string, lower string) {
 	var kind int
 	if wall {

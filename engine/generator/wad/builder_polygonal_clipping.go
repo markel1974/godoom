@@ -181,7 +181,7 @@ func (b *Builder2) clipPolygon(poly Polygon, nx, ny, ndx, ndy float64, rightSide
 	return out
 }
 
-// buildPortalTopology generates a list of InputSectors based on the given hulls and the level's subsectors and sectors.
+// buildPortalTopology genera i settori garantendo la chiusura poligonale tramite la Hull clippata.
 func (b *Builder2) buildPortalTopology(hulls map[uint16]Polygon) []*model.ConfigSector {
 	var out []*model.ConfigSector
 
@@ -194,55 +194,60 @@ func (b *Builder2) buildPortalTopology(hulls map[uint16]Polygon) []*model.Config
 		doomSector := b.level.Sectors[sectorRef]
 
 		idStr := strconv.Itoa(int(ssId))
-		mSector := model.NewInputSector(idStr)
+		mSector := model.NewConfigSector(idStr)
 		mSector.Floor = float64(doomSector.FloorHeight) / ScaleFactor
 		mSector.Ceil = float64(doomSector.CeilingHeight) / ScaleFactor
 		mSector.FloorTexture = doomSector.FloorPic
 		mSector.CeilTexture = doomSector.CeilingPic
-
 		mSector.Tag = fmt.Sprintf("%f", float64(doomSector.LightLevel)/255.0)
 
+		// 1. Inseriamo i segmenti REALI definiti nel WAD per questo SubSector
+		for j := int16(0); j < subSector.NumSegments; j++ {
+			seg := b.level.Segments[subSector.StartSeg+j]
+			mSector.Segments = append(mSector.Segments, b.createInputSegmentFromSeg(idStr, seg))
+		}
+
+		// 2. Usiamo la Hull per chiudere il poligono con i portali mancanti
 		for i := 0; i < len(poly); i++ {
 			p1, p2 := poly[i], poly[(i+1)%len(poly)]
-			foundSeg := false
 
-			// Check se esiste un SEG fisico del WAD
-			for j := int16(0); j < subSector.NumSegments; j++ {
-				seg := b.level.Segments[subSector.StartSeg+j]
-				v1 := b.level.Vertexes[seg.VertexStart]
-				v2 := b.level.Vertexes[seg.VertexEnd]
-
-				// CORREZIONE 3: Confronto con tolleranza riscalata
-				if b.isPointEqualScaled(p1, v1) && b.isPointEqualScaled(p2, v2) {
-					mSeg := b.createInputSegmentFromSeg(idStr, seg)
-					mSector.Segments = append(mSector.Segments, mSeg)
-					foundSeg = true
-					break
-				}
-				/*
-					if b.isPointEqual(p1, v1) && b.isPointEqual(p2, v2) {
-						mSeg := b.createInputSegmentFromSeg(idStr, seg)
-						mSector.Segments = append(mSector.Segments, mSeg)
-						foundSeg = true
-						break
-					}
-
-				*/
+			// Calcolo midpoint del lato della Hull per il matching
+			midHull := model.XY{
+				X: (p1.X + p2.X) / 2.0,
+				Y: (p1.Y + p2.Y) / 2.0,
 			}
 
-			// Se è un bordo senza SEG, è un portale invisibile generato dai NODES
-			if !foundSeg {
-				// Probing per i portali invisibili (già riscalato)
-				mid := model.XY{X: (p1.X + p2.X) / 2, Y: (p1.Y + p2.Y) / 2}
+			foundInWad := false
+			// Cerchiamo se questo lato della Hull è già coperto da un segmento WAD
+			for _, existing := range mSector.Segments {
+				midSeg := model.XY{
+					X: (existing.Start.X + existing.End.X) / 2.0,
+					Y: (existing.Start.Y + existing.End.Y) / 2.0,
+				}
+
+				// Tolleranza: 0.5 unità Doom riscalate
+				dist := math.Sqrt(math.Pow(midHull.X-midSeg.X, 2) + math.Pow(midHull.Y-midSeg.Y, 2))
+				if dist < (0.5 / ScaleFactor) {
+					foundInWad = true
+					break
+				}
+			}
+
+			// 3. Se il lato della Hull non ha un corrispettivo nel WAD, è un portale BSP
+			if !foundInWad {
 				dx, dy := p2.X-p1.X, p2.Y-p1.Y
 				mag := math.Sqrt(dx*dx + dy*dy)
-				if mag > 1e-4 {
-					// Probe rimpicciolito coerentemente con ScaleFactor
-					probe := model.XY{X: mid.X + (dy/mag)*(0.1/ScaleFactor), Y: mid.Y - (dx/mag)*(0.1/ScaleFactor)}
-					// Riportiamo in unità Doom per FindSector
-					_, neighborSSId, _ := b.bsp.FindSector(int16(probe.X*ScaleFactor), int16(-probe.Y*ScaleFactor))
 
-					if neighborSSId != ssId {
+				if mag > 1e-4 {
+					// Probing: spostiamoci leggermente "fuori" dal settore per trovare il vicino
+					// Usiamo la normale al segmento (dy, -dx)
+					probeX := midHull.X + (dy/mag)*(0.1/ScaleFactor)
+					probeY := midHull.Y - (dx/mag)*(0.1/ScaleFactor)
+
+					// FindSector lavora in coordinate Doom originali (interi, Y invertita)
+					_, neighborSSId, _ := b.bsp.FindSector(int16(probeX*ScaleFactor), int16(-probeY*ScaleFactor))
+
+					if neighborSSId != ssId && neighborSSId < 32768 {
 						mSeg := model.NewConfigSegment(idStr, DefinitionVoid, p1, p2)
 						mSeg.Neighbor = strconv.Itoa(int(neighborSSId))
 						mSector.Segments = append(mSector.Segments, mSeg)

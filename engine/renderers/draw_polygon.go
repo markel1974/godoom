@@ -1,4 +1,4 @@
-package portal
+package renderers
 
 import (
 	"math"
@@ -10,14 +10,7 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
-const fullLightDistance = 0.0039 // 1 / distance == 1 / 255
-
-func toRGB(rgb int, light float64) (r uint8, g uint8, b uint8) {
-	fr := float64(uint8((rgb>>16)&255)) * light
-	fg := float64(uint8((rgb>>8)&255)) * light
-	fb := float64(uint8(rgb&255)) * light
-	return uint8(fr), uint8(fg), uint8(fb)
-}
+const FullLightDistance = 0.0039 // 1 / distance == 1 / 255
 
 type DrawPolygon struct {
 	maxW       int
@@ -30,7 +23,7 @@ type DrawPolygon struct {
 	nodeY      [1000]int
 
 	surface    *pixels.PictureRGBA
-	color      int
+	Color      int
 	points     []model.XYZ
 	pointsLen  int
 	top        int
@@ -42,20 +35,20 @@ type DrawPolygon struct {
 }
 
 func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
-	pHFov := (float64(maxH) / float64(maxW)) * hFov
+	pHFov := (float64(maxH) / float64(maxW)) * HFov
 	return &DrawPolygon{
 		maxW:       maxW,
 		maxH:       maxH,
 		halfH:      float64(maxH) / 2,
 		halfW:      float64(maxW) / 2,
 		lastH:      maxH - 1,
-		screenVFov: float64(maxH) * vFov,
+		screenVFov: float64(maxH) * VFov,
 		screenHFov: float64(maxW) * pHFov,
 	}
 }
 
 func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []model.XYZ, pointsLen1 int, color int, lightStart float64, lightStop float64) {
-	dp.color = color
+	dp.Color = color
 	dp.surface = surface
 	dp.points = points1
 	dp.pointsLen = pointsLen1
@@ -175,7 +168,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 					//TODO REMOVE
 					dp.lightStart = 1.0
 
-					r0, g0, b0 := toRGB(texture.Get(uint(txtX), uint(txtY)), dp.lightStart)
+					r0, g0, b0 := ToRGB(texture.Get(uint(txtX), uint(txtY)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
 				}
 			}
@@ -218,7 +211,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 					//TODO REMOVE
 					dp.lightStart = 1.0
 
-					red, green, blue := toRGB(texture.Get(uint(txtZ), uint(txtX)), dp.lightStart)
+					red, green, blue := ToRGB(texture.Get(uint(txtZ), uint(txtX)), dp.lightStart)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
 				}
 			}
@@ -239,8 +232,8 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 			//TODO REMOVE
 			dp.lightStart = 1.0
 
-			r0, g0, b0 := toRGB(dp.color, dp.lightStart)
-			r1, g1, b1 := toRGB(dp.color, dp.lightStart/2)
+			r0, g0, b0 := ToRGB(dp.Color, dp.lightStart)
+			r1, g1, b1 := ToRGB(dp.Color, dp.lightStart/2)
 			for i := 0; i < len(nodeY); i += 2 {
 				y1 := nodeY[i]
 				y2 := nodeY[i+1]
@@ -266,7 +259,7 @@ func (dp *DrawPolygon) DrawPoints(size int) {
 	if dp.surface == nil {
 		return
 	}
-	r0, g0, b0 := toRGB(dp.color, dp.lightStart)
+	r0, g0, b0 := ToRGB(dp.Color, dp.lightStart)
 	for _, k := range dp.points {
 		dp.surface.SetRGBASize(int(k.X), int(k.Y), r0, g0, b0, 255, size)
 	}
@@ -302,7 +295,7 @@ func (dp *DrawPolygon) DrawLines(contiguous bool) {
 
 func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) {
 	// Bresenham's line algorithm
-	r0, g0, b0 := toRGB(dp.color, dp.lightStart)
+	r0, g0, b0 := ToRGB(dp.Color, dp.lightStart)
 	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
 	if steep {
 		x1, y1 = mathematic.SwapF(x1, y1)

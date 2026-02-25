@@ -108,7 +108,7 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 }
 
 func PointSideF(px float64, py float64, x0 float64, y0 float64, x1 float64, y1 float64) float64 {
-	return VxsF(x1 - x0, y1 - y0, px - x0, py - y0)
+	return VxsF(x1-x0, y1-y0, px-x0, py-y0)
 }
 
 func IntersectF(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) (float64, float64) {
@@ -118,12 +118,14 @@ func IntersectF(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 f
 }
 
 func IntersectFn(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) (float64, float64, bool) {
-	d := (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-	if d == 0 { return 0, 0, false }
+	d := (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
+	if d == 0 {
+		return 0, 0, false
+	}
 	pre := (x1 * y2) - (y1 * x2)
 	post := (x3 * y4) - (y3 * x4)
-	x := (pre * (x3 - x4) - (x1 - x2) * post) / d
-	y := (pre * (y3 - y4) - (y1 - y2) * post) / d
+	x := (pre*(x3-x4) - (x1-x2)*post) / d
+	y := (pre*(y3-y4) - (y1-y2)*post) / d
 	//if x < minF(x1, x2) || x > maxF(x1, x2) || x < minF(x3, x4) || x > maxF(x3, x4) { return 0, 0, false }
 	//if y < minF(y1, y2) || y > maxF(y1, y2) || y < minF(y3, y4) || y > maxF(y3, y4) { return 0, 0, false }
 	return x, y, true
@@ -131,8 +133,8 @@ func IntersectFn(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 
 
 func IntersectLineSegmentsF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64) bool {
 	return IntersectBoxF(x0, y0, x1, y1, x2, y2, x3, y3) &&
-		math.Abs(PointSideF(x2, y2, x0, y0, x1, y1) + PointSideF(x3, y3, x0, y0, x1, y1)) != 2 &&
-		math.Abs(PointSideF(x0, y0, x2, y2, x3, y3) + PointSideF(x1, y1, x2, y2, x3, y3)) != 2
+		math.Abs(PointSideF(x2, y2, x0, y0, x1, y1)+PointSideF(x3, y3, x0, y0, x1, y1)) != 2 &&
+		math.Abs(PointSideF(x0, y0, x2, y2, x3, y3)+PointSideF(x1, y1, x2, y2, x3, y3)) != 2
 }
 
 func FindMinAndMaxF(a []float64) (float64, float64) {
@@ -152,4 +154,3 @@ func FindMinAndMaxF(a []float64) (float64, float64) {
 func SwapF(a float64, b float64) (float64, float64) {
 	return b, a
 }
-

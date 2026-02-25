@@ -32,9 +32,7 @@ type Render struct {
 	Sectors          []*model.Sector
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
-
-	// Tracker degli span per settore per il frame corrente
-	visibilityCache map[*model.Sector][]Span
+	visibilityCache  *VisibilityCache
 }
 
 // NewPortal initializes and returns a new Render object configured for rendering operations with the provided parameters.
@@ -52,7 +50,7 @@ func NewPortal(width int, height int, maxQueue int, textures *textures.Textures)
 		sectorQueue:      make([]*QueueItem, 256),
 		screenHFov:       renderers.HFov * float64(height),
 		screenVFov:       renderers.VFov * float64(height),
-		visibilityCache:  make(map[*model.Sector][]Span),
+		visibilityCache:  NewVisibilityCache(),
 	}
 	for x := 0; x < len(r.queue); x++ {
 		r.queue[x] = &QueueItem{}
@@ -85,25 +83,7 @@ func (r *Render) Setup(sectors []*model.Sector, maxHeight float64) error {
 func (r *Render) clear() {
 	r.compileId++
 	r.compiledCount = 0
-	// Reset della cache di visibilità per il nuovo frame
-	for k := range r.visibilityCache {
-		delete(r.visibilityCache, k)
-	}
-}
-
-// isVisible determines if a given range [x1, x2] in a sector is not fully covered by precomputed spans in visibilityCache.
-func (r *Render) isVisible(s *model.Sector, x1, x2 float64) bool {
-	spans, ok := r.visibilityCache[s]
-	if !ok {
-		return true
-	}
-	for _, span := range spans {
-		// Se il nuovo intervallo è completamente contenuto in uno esistente, non è visibile
-		if x1 >= span.X1 && x2 <= span.X2 {
-			return false
-		}
-	}
-	return true
+	r.visibilityCache.Clear()
 }
 
 // growSectorQueue dynamically increases the capacity of the sectorQueue by doubling its current size.
@@ -145,9 +125,9 @@ func (r *Render) Compile(vi *renderers.ViewItem) ([]*model.CompiledSector, int) 
 			q := sq[w]
 
 			// Controllo geometrico
-			if q.x2 > q.x1 && r.isVisible(q.sector, q.x1, q.x2) {
+			if q.x2 > q.x1 && r.visibilityCache.IsVisible(q.sector, q.x1, q.x2) {
 				// Memorizziamo lo span per questo settore
-				r.visibilityCache[q.sector] = append(r.visibilityCache[q.sector], Span{q.x1, q.x2})
+				r.visibilityCache.Add(q.sector, q.x1, q.x2)
 
 				// Verifica overflow coda
 				if (headIdx+1)%queueLen == tailIdx {

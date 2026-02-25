@@ -57,7 +57,7 @@ func NewCompiler() *Compiler {
 // Setup initializes and configures the Compiler object based on the provided configuration and texture data.
 // It processes the input sectors, creates segments, applies textures, resolves loops, and ensures sector consistency.
 // Returns an error in case of configuration issues or invalid state encountered during the setup process.
-func (r *Compiler) Setup(cfg *InputConfig, text *textures.Textures) error {
+func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 	modelSectorId := uint16(0)
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
@@ -340,7 +340,7 @@ func (r *Compiler) Setup(cfg *InputConfig, text *textures.Textures) error {
 }
 
 // finalize adjusts sector vertex coordinates by the configured scale factor and updates the maximum sector height.
-func (r *Compiler) finalize(cfg *InputConfig) {
+func (r *Compiler) finalize(cfg *ConfigRoot) {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
 		scale = 1

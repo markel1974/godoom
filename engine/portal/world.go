@@ -53,7 +53,7 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 	return w
 }
 
-func (w *World) Setup(cfg *model.InputConfig) error {
+func (w *World) Setup(cfg *model.ConfigRoot) error {
 	compiler := model.NewCompiler()
 	err := compiler.Setup(cfg, w.textures)
 	if err != nil {

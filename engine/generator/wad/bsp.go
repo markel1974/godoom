@@ -218,7 +218,7 @@ func (bsp *BSP) findPointInSubSector(x1 int16, y1 int16, exclude uint16, res map
 
 // FindOppositeSubSectorByPoints calculates opposite subsectors related to a given segment in the BSP tree structure.
 // It considers margin adjustments, segments alignment, and potential wall sectors to generate a list of new input segments.
-func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.InputSegment, wallSectors map[uint16]bool) []*model.InputSegment {
+func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.ConfigSegment, wallSectors map[uint16]bool) []*model.ConfigSegment {
 	const margin = 2
 	x1 := int16(is2.Start.X)
 	y1 := int16(is2.Start.Y)
@@ -254,7 +254,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Inp
 		rl = rl[margin : len(rl)-margin]
 	}
 
-	var ret []*model.InputSegment
+	var ret []*model.ConfigSegment
 
 	addSegment := func(sId uint16, xy XY) {
 		id := strconv.Itoa(int(sId))
@@ -390,7 +390,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Inp
 
 // FindOppositeSubSectorByHulls identifies opposite subsectors based on input segment hulls and specific wall sector mappings.
 // It processes segment lines to detect adjacency and connection, managing overlaps and intersections through margin adjustments.
-func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.InputSegment, wallSectors map[uint16]bool) []*model.InputSegment {
+func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.ConfigSegment, wallSectors map[uint16]bool) []*model.ConfigSegment {
 	const margin = 2
 	x1 := int16(is2.Start.X)
 	y1 := int16(is2.Start.Y)
@@ -407,7 +407,7 @@ func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.Inpu
 
 	rl = rl[margin : len(rl)-margin]
 
-	var ret []*model.InputSegment
+	var ret []*model.ConfigSegment
 
 	addSegment := func(sId uint16, xy XY) {
 		id := strconv.Itoa(int(sId))

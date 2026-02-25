@@ -10,11 +10,11 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-func ParseScriptData(id string) (*model.InputConfig, error) {
+func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	var cfgVertices []model.XY
-	cfg := &model.InputConfig{
+	cfg := &model.ConfigRoot{
 		Sectors: nil,
-		Player:  &model.InputPlayer{},
+		Player:  &model.ConfigPlayer{},
 	}
 
 	oldData := strings.Split(id, "\n")
@@ -58,7 +58,7 @@ func ParseScriptData(id string) (*model.InputConfig, error) {
 			if cfgVertices == nil {
 				return nil, errors.New(fmt.Sprintf("nil vertices"))
 			}
-			cs := &model.InputSector{}
+			cs := &model.ConfigSector{}
 			cs.Id = strconv.Itoa(configSectorIdx)
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.Floor, &cs.Ceil)
@@ -103,7 +103,7 @@ func ParseScriptData(id string) (*model.InputConfig, error) {
 
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
-					neighbor := &model.InputSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
+					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -111,7 +111,7 @@ func ParseScriptData(id string) (*model.InputConfig, error) {
 				} else {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
-					neighbor := &model.InputSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
@@ -125,7 +125,7 @@ func ParseScriptData(id string) (*model.InputConfig, error) {
 			cfg.Sectors = append(cfg.Sectors, cs)
 
 		case "light":
-			l := &model.InputLight{}
+			l := &model.ConfigLight{}
 			_, _ = fmt.Fscanf(r, "%f %f %f %s %f %f %f", &l.Where.X, &l.Where.Z, &l.Where.Y, &l.Sector, &l.Light.X, &l.Light.Y, &l.Light.Z)
 			cfg.Lights = append(cfg.Lights, l)
 

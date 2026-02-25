@@ -24,7 +24,7 @@ func NewBuilder() *Builder {
 	}
 }
 
-func (b *Builder) Setup(wadFile string, levelNumber int) (*model.InputConfig, error) {
+func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
 		return nil, err
@@ -54,11 +54,11 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.InputConfig, er
 	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
 	_, playerSSectorId, _ := b.bsp.FindSector(p1.X, p1.Y)
 
-	cfg := &model.InputConfig{
+	cfg := &model.ConfigRoot{
 		DisableLoop: true,
 		ScaleFactor: ScaleFactor,
 		Sectors:     sectors,
-		Player: &model.InputPlayer{
+		Player: &model.ConfigPlayer{
 			Position: position,
 			Angle:    float64(p1.Angle),
 			Sector:   strconv.Itoa(int(playerSSectorId)),
@@ -157,8 +157,8 @@ func (b *Builder) clipPolygon(poly Polygon, nx, ny, ndx, ndy float64, rightSide 
 	return out
 }
 
-func (b *Builder) buildPortalTopology(hulls map[uint16]Polygon) []*model.InputSector {
-	var out []*model.InputSector
+func (b *Builder) buildPortalTopology(hulls map[uint16]Polygon) []*model.ConfigSector {
+	var out []*model.ConfigSector
 
 	for ssId, poly := range hulls {
 		sectorRef, ok := b.level.GetSectorFromSubSector(ssId)
@@ -213,7 +213,7 @@ func (b *Builder) buildPortalTopology(hulls map[uint16]Polygon) []*model.InputSe
 				p1 := model.XY{X: uP1.X / ScaleFactor, Y: uP1.Y / ScaleFactor}
 				p2 := model.XY{X: uP2.X / ScaleFactor, Y: uP2.Y / ScaleFactor}
 
-				mSeg := model.NewInputSegment(idStr, DefinitionVoid, p1, p2)
+				mSeg := model.NewConfigSegment(idStr, DefinitionVoid, p1, p2)
 
 				// Calcolo del vicino tramite probe nel BSP
 				midX := (uP1.X + uP2.X) / 2
@@ -258,7 +258,7 @@ func (b *Builder) isPointEqual(p model.XY, v *lumps.Vertex) bool {
 	return math.Abs(p.X-float64(v.XCoord)) < 1e-1 && math.Abs(p.Y-float64(-v.YCoord)) < 1e-1
 }
 
-func (b *Builder) createInputSegmentFromSeg(parentId string, seg *lumps.Seg) *model.InputSegment {
+func (b *Builder) createInputSegmentFromSeg(parentId string, seg *lumps.Seg) *model.ConfigSegment {
 	lineDef := b.level.LineDefs[seg.LineDef]
 	v1, v2 := b.level.Vertexes[seg.VertexStart], b.level.Vertexes[seg.VertexEnd]
 
@@ -270,7 +270,7 @@ func (b *Builder) createInputSegmentFromSeg(parentId string, seg *lumps.Seg) *mo
 		kind = DefinitionVoid
 	}
 
-	is := model.NewInputSegment(parentId, kind, s, e)
+	is := model.NewConfigSegment(parentId, kind, s, e)
 	// ... (caricamento texture rimosso per brevità, mantieni il tuo originale)
 	return is
 }

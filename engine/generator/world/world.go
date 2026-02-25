@@ -15,8 +15,8 @@ func randomF(min float64, max float64) float64 {
 	return min + rnd.Float64()*(max-min)
 }
 
-func ParseJsonData(source []byte) (*model.InputConfig, error) {
-	cfg := &model.InputConfig{}
+func ParseJsonData(source []byte) (*model.ConfigRoot, error) {
+	cfg := &model.ConfigRoot{}
 	if err := json.Unmarshal(source, cfg); err != nil {
 		return nil, err
 	}
@@ -29,8 +29,8 @@ var availableUpper = []string{"wall2.ppm"}
 var availableLower = []string{"wall2.ppm"}
 var availableWall = []string{"wall2.ppm"}
 
-func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.InputSector {
-	sector := &model.InputSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
+func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
+	sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
 	sector.Textures = true
 	sector.FloorTexture = availableFloor[random(0, len(availableFloor)-1)]
 	sector.CeilTexture = availableCeil[random(0, len(availableCeil)-1)]
@@ -56,7 +56,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		}
 
 		if c == 0 {
-			neighbor := &model.InputSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
 			sector.Segments = append(sector.Segments, neighbor)
 		} else if c == SegmentMax-1 {
 			prev := sector.Segments[c-1]
@@ -64,15 +64,15 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		} else {
 			prev := sector.Segments[c-1]
 			prev.End = xy
-			neighbor := &model.InputSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
 			sector.Segments = append(sector.Segments, neighbor)
 		}
 	}
 	return sector
 }
 
-func Generate(maxX int, maxY int) (*model.InputConfig, error) {
-	cfg := &model.InputConfig{Sectors: nil, Player: &model.InputPlayer{}}
+func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
+	cfg := &model.ConfigRoot{Sectors: nil, Player: &model.ConfigPlayer{}}
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

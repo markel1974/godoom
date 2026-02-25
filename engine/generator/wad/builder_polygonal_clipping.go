@@ -22,7 +22,7 @@ type Builder2 struct {
 	bsp      *BSP
 }
 
-// NewBuilder initializes and returns a new instance of Builder with default values.
+// NewBuilder2 initializes and returns a new instance of Builder with default values.
 func NewBuilder2() *Builder2 {
 	return &Builder2{
 		textures: make(map[string]bool),
@@ -30,8 +30,8 @@ func NewBuilder2() *Builder2 {
 	}
 }
 
-// Setup initializes the Builder by loading a WAD file and preparing the data for a specific level. Returns model.InputConfig or an error.
-func (b *Builder2) Setup(wadFile string, levelNumber int) (*model.InputConfig, error) {
+// Setup initializes the Builder by loading a WAD file and preparing the data for a specific level. Returns model.ConfigRoot or an error.
+func (b *Builder2) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (b *Builder2) Setup(wadFile string, levelNumber int) (*model.InputConfig, e
 	// 1. Decostruzione top-down degli iperpiani dei NODES
 	hulls := b.ExtractSubSectorHulls()
 
-	// 2. Costruzione della topologia InputSector
+	// 2. Costruzione della topologia ConfigSector
 	sectors := b.buildPortalTopology(hulls)
 
 	for textureId := range b.textures {
@@ -76,11 +76,11 @@ func (b *Builder2) Setup(wadFile string, levelNumber int) (*model.InputConfig, e
 
 	fmt.Printf("PLAYER POSITION: SubSector %d\n", playerSSectorId)
 
-	cfg := &model.InputConfig{
+	cfg := &model.ConfigRoot{
 		DisableLoop: true,
 		ScaleFactor: ScaleFactor,
 		Sectors:     sectors,
-		Player: &model.InputPlayer{
+		Player: &model.ConfigPlayer{
 			Position: position,
 			Angle:    float64(p1.Angle),
 			Sector:   strconv.Itoa(int(playerSSectorId)),
@@ -182,8 +182,8 @@ func (b *Builder2) clipPolygon(poly Polygon, nx, ny, ndx, ndy float64, rightSide
 }
 
 // buildPortalTopology generates a list of InputSectors based on the given hulls and the level's subsectors and sectors.
-func (b *Builder2) buildPortalTopology(hulls map[uint16]Polygon) []*model.InputSector {
-	var out []*model.InputSector
+func (b *Builder2) buildPortalTopology(hulls map[uint16]Polygon) []*model.ConfigSector {
+	var out []*model.ConfigSector
 
 	for ssId, poly := range hulls {
 		subSector := b.level.SubSectors[ssId]
@@ -243,7 +243,7 @@ func (b *Builder2) buildPortalTopology(hulls map[uint16]Polygon) []*model.InputS
 					_, neighborSSId, _ := b.bsp.FindSector(int16(probe.X*ScaleFactor), int16(-probe.Y*ScaleFactor))
 
 					if neighborSSId != ssId {
-						mSeg := model.NewInputSegment(idStr, DefinitionVoid, p1, p2)
+						mSeg := model.NewConfigSegment(idStr, DefinitionVoid, p1, p2)
 						mSeg.Neighbor = strconv.Itoa(int(neighborSSId))
 						mSector.Segments = append(mSector.Segments, mSeg)
 					}
@@ -260,9 +260,9 @@ func (b *Builder2) isPointEqual(p model.XY, v *lumps2.Vertex) bool {
 	return math.Abs(p.X-float64(v.XCoord)) < 1e-2 && math.Abs(p.Y-float64(-v.YCoord)) < 1e-2
 }
 
-// createInputSegmentFromSeg creates an InputSegment from a given segment and associates it with a parent ID.
+// createInputSegmentFromSeg creates an ConfigSegment from a given segment and associates it with a parent ID.
 // It derives the segment's type, defines textures used, and updates the Builder's texture map.
-func (b *Builder2) createInputSegmentFromSeg(parentId string, seg *lumps2.Seg) *model.InputSegment {
+func (b *Builder2) createInputSegmentFromSeg(parentId string, seg *lumps2.Seg) *model.ConfigSegment {
 	lineDef := b.level.LineDefs[seg.LineDef]
 	v1 := b.level.Vertexes[seg.VertexStart]
 	v2 := b.level.Vertexes[seg.VertexEnd]
@@ -279,7 +279,7 @@ func (b *Builder2) createInputSegmentFromSeg(parentId string, seg *lumps2.Seg) *
 		kind = DefinitionVoid
 	}
 
-	is := model.NewInputSegment(parentId, kind, s, e)
+	is := model.NewConfigSegment(parentId, kind, s, e)
 
 	_, side := b.level.SegmentSideDef(seg, lineDef)
 	if side != nil {

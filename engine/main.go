@@ -29,7 +29,7 @@ type Game struct {
 	world       *portal.World
 	enableClear bool
 	viewMode    int
-	cfg         *model.InputConfig
+	cfg         *model.ConfigRoot
 }
 
 func NewGame() *Game {

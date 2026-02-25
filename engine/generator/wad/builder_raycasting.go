@@ -27,7 +27,7 @@ func NewBuilder1() *Builder {
 	}
 }
 
-func (b *Builder1) Setup(wadFile string, levelNumber int) (*model.InputConfig, error) {
+func (b *Builder1) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
 		return nil, err
@@ -76,13 +76,13 @@ func (b *Builder1) Setup(wadFile string, levelNumber int) (*model.InputConfig, e
 	//fmt.Println(string(out))
 	fmt.Println("PLAYER POSITION:", playerSector, playerSectorId, playerSSectorId)
 
-	cfg := &model.InputConfig{DisableLoop: true, ScaleFactor: ScaleFactor, Sectors: sectors, Player: &model.InputPlayer{Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId))}}
+	cfg := &model.ConfigRoot{DisableLoop: true, ScaleFactor: ScaleFactor, Sectors: sectors, Player: &model.ConfigPlayer{Position: position, Angle: float64(p1.Angle), Sector: strconv.Itoa(int(playerSSectorId))}}
 
 	return cfg, nil
 }
 
-func (b *Builder1) scanSubSectors() []*model.InputSector {
-	miSectors := make([]*model.InputSector, len(b.level.SubSectors))
+func (b *Builder1) scanSubSectors() []*model.ConfigSector {
+	miSectors := make([]*model.ConfigSector, len(b.level.SubSectors))
 	b.textures = make(map[string]bool)
 
 	for subSectorId := uint16(0); int(subSectorId) < len(b.level.SubSectors); subSectorId++ {
@@ -139,7 +139,7 @@ func (b *Builder1) scanSubSectors() []*model.InputSector {
 			startXY := model.XY{X: float64(start.XCoord), Y: float64(-start.YCoord)}
 			endXY := model.XY{X: float64(end.XCoord), Y: float64(-end.YCoord)}
 
-			modelSegment := model.NewInputSegment(miSector.Id, model.DefinitionUnknown, startXY, endXY)
+			modelSegment := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, startXY, endXY)
 			wall := false
 			if !lineDef.HasFlag(lumps.TwoSided) {
 				wall = middle != "-"
@@ -184,7 +184,7 @@ func (b *Builder1) scanSubSectors() []*model.InputSector {
 	return miSectors
 }
 
-func (b *Builder1) compileNeighbors(miSectors []*model.InputSector) {
+func (b *Builder1) compileNeighbors(miSectors []*model.ConfigSector) {
 	wallSectors := make(map[uint16]bool)
 
 	for idx, miSector := range miSectors {
@@ -194,7 +194,7 @@ func (b *Builder1) compileNeighbors(miSectors []*model.InputSector) {
 	}
 
 	for _, miSector := range miSectors {
-		var segments []*model.InputSegment
+		var segments []*model.ConfigSegment
 		for _, s := range miSector.Segments {
 			if s.Kind == model.DefinitionWall || s.Kind == model.DefinitionValid {
 				//if s.Kind == model.DefinitionWall {
@@ -240,7 +240,7 @@ func (b *Builder1) compileNeighbors(miSectors []*model.InputSector) {
 	}
 }
 
-func (b *Builder1) compileConvexHull(miSectors []*model.InputSector) {
+func (b *Builder1) compileConvexHull(miSectors []*model.ConfigSector) {
 	ch := polygons.NewConvexHull()
 	for _, miSector := range miSectors {
 		if len(miSector.Segments) <= 1 {
@@ -254,9 +254,9 @@ func (b *Builder1) compileConvexHull(miSectors []*model.InputSector) {
 		miSector.Segments = nil
 		for _, s := range ch.Create(miSector.Id, chs) {
 			if s.Data != nil {
-				miSector.Segments = append(miSector.Segments, s.Data.(*model.InputSegment))
+				miSector.Segments = append(miSector.Segments, s.Data.(*model.ConfigSegment))
 			} else {
-				ns := model.NewInputSegment(miSector.Id, model.DefinitionVoid, s.Start, s.End)
+				ns := model.NewConfigSegment(miSector.Id, model.DefinitionVoid, s.Start, s.End)
 				ns.Tag = "missing"
 				miSector.Segments = append(miSector.Segments, ns)
 			}
@@ -279,7 +279,7 @@ func (b *Builder1) pointOnSegment(point model.XY, s1 model.XY, s2 model.XY) bool
 }
 
 /*
-func (b * Builder) sectorFromSegment(testSegment * model.InputSegment, miSectors []*model.InputSector) *model.InputSector{
+func (b * Builder) sectorFromSegment(testSegment * model.ConfigSegment, miSectors []*model.ConfigSector) *model.ConfigSector{
 	for _, xSector := range miSectors {
 		if testSegment.Parent == xSector.Id { continue }
 		for _, seg := range xSector.Segments {
@@ -299,9 +299,9 @@ func (b * Builder) sectorFromSegment(testSegment * model.InputSegment, miSectors
 
 */
 
-func (b *Builder1) compileSegmentRelations(miSectors []*model.InputSector) {
-	cache := make(map[model.XY]map[*model.InputSegment]bool)
-	//notFound := map[*model.InputSegment]*model.InputSector{}
+func (b *Builder1) compileSegmentRelations(miSectors []*model.ConfigSector) {
+	cache := make(map[model.XY]map[*model.ConfigSegment]bool)
+	//notFound := map[*model.ConfigSegment]*model.ConfigSector{}
 
 	//TODO UTILIZZARE level.Segments
 	for _, xSector := range miSectors {
@@ -312,7 +312,7 @@ func (b *Builder1) compileSegmentRelations(miSectors []*model.InputSector) {
 				if t, ok := cache[v]; ok {
 					t[xSegment] = true
 				} else {
-					cache[v] = map[*model.InputSegment]bool{xSegment: true}
+					cache[v] = map[*model.ConfigSegment]bool{xSegment: true}
 				}
 			}
 		}
@@ -326,8 +326,8 @@ func (b *Builder1) compileSegmentRelations(miSectors []*model.InputSector) {
 			}
 
 			found := false
-			var end []*model.InputSegment
-			var start []*model.InputSegment
+			var end []*model.ConfigSegment
+			var start []*model.ConfigSegment
 
 			if endRef, ok := cache[xSegment.End]; ok {
 				for s := range endRef {
@@ -384,10 +384,10 @@ func (b *Builder1) compileSegmentRelations(miSectors []*model.InputSector) {
 	//os.Exit(-1)
 }
 
-func (b *Builder1) getConfigSector(cfg []*model.InputSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) *model.InputSector {
+func (b *Builder1) getConfigSector(cfg []*model.ConfigSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) *model.ConfigSector {
 	c := cfg[subSectorId]
 	if c == nil {
-		c = &model.InputSector{
+		c = &model.ConfigSector{
 			Id:           strconv.Itoa(int(subSectorId)),
 			Ceil:         float64(sector.CeilingHeight) / 5,
 			Floor:        float64(sector.FloorHeight) / 5,
@@ -405,7 +405,7 @@ func (b *Builder1) getConfigSector(cfg []*model.InputSector, sectorId uint16, se
 	return c
 }
 
-func (b *Builder1) describeSegments(targetSector int, miSectors []*model.InputSector) {
+func (b *Builder1) describeSegments(targetSector int, miSectors []*model.ConfigSector) {
 	fmt.Println("------------------", "DESCRIBE SECTOR", targetSector, "------------------")
 	xy := miSectors[targetSector].Segments[0]
 	var neighbors []string
@@ -426,7 +426,7 @@ func (b *Builder1) describeSegments(targetSector int, miSectors []*model.InputSe
 	fmt.Println("TRAVERSE:", traverse)
 }
 
-func (b *Builder1) segmentOnSegment(refSeg *model.InputSegment, currSeg *model.InputSegment) (model.XY, model.XY, bool) {
+func (b *Builder1) segmentOnSegment(refSeg *model.ConfigSegment, currSeg *model.ConfigSegment) (model.XY, model.XY, bool) {
 	refStart := geometry.Point{X: refSeg.Start.X, Y: refSeg.Start.Y}
 	refEnd := geometry.Point{X: refSeg.End.X, Y: refSeg.End.Y}
 	currStart := geometry.Point{X: currSeg.Start.X, Y: currSeg.Start.Y}
@@ -479,7 +479,7 @@ func (b *Builder1) segmentOnSegment(refSeg *model.InputSegment, currSeg *model.I
 
 }
 
-func (b *Builder1) pointOnSegmentNew(xy model.XY, seg *model.InputSegment) bool {
+func (b *Builder1) pointOnSegmentNew(xy model.XY, seg *model.ConfigSegment) bool {
 	p0 := geometry.Point{X: xy.X, Y: xy.Y}
 	l0 := geometry.Point{X: seg.Start.X, Y: seg.Start.Y}
 	l1 := geometry.Point{X: seg.End.X, Y: seg.End.Y}
@@ -490,7 +490,7 @@ func (b *Builder1) pointOnSegmentNew(xy model.XY, seg *model.InputSegment) bool 
 	return false
 }
 
-func (b *Builder1) createGeometryHull(id string, segments []*model.InputSegment) []*model.InputSegment {
+func (b *Builder1) createGeometryHull(id string, segments []*model.ConfigSegment) []*model.ConfigSegment {
 	var hull []geometry.Point
 	for _, seg := range segments {
 		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
@@ -498,11 +498,11 @@ func (b *Builder1) createGeometryHull(id string, segments []*model.InputSegment)
 	}
 
 	convexHull := geometry.ConvexHull(hull)
-	var reference []*model.InputSegment
+	var reference []*model.ConfigSegment
 	for idx := 0; idx < len(convexHull)-1; idx++ {
 		v := convexHull[idx]
 		n := convexHull[idx+1]
-		is := model.NewInputSegment(id, model.DefinitionUnknown, model.XY{X: v.X, Y: v.Y}, model.XY{X: n.X, Y: n.Y})
+		is := model.NewConfigSegment(id, model.DefinitionUnknown, model.XY{X: v.X, Y: v.Y}, model.XY{X: n.X, Y: n.Y})
 		/*
 			for _, seg := range segments {
 				if seg.SameCoords(is) {
@@ -530,19 +530,14 @@ func (b *Builder1) createGeometryHull(id string, segments []*model.InputSegment)
 		start := reference[0]
 		end := reference[len(reference)-1]
 		if end.End.X != start.Start.X || end.End.Y != start.Start.Y {
-			reference = append(reference, model.NewInputSegment(id, model.DefinitionUnknown, end.End, start.Start))
+			reference = append(reference, model.NewConfigSegment(id, model.DefinitionUnknown, end.End, start.Start))
 		}
 	}
 
 	return reference
 }
 
-/*
-
-
- */
-
-func (b *Builder1) createReferenceHull2(sector *model.InputSector) []*model.InputSegment {
+func (b *Builder1) createReferenceHull2(sector *model.ConfigSector) []*model.ConfigSegment {
 	ch := polygons.NewConvexHull()
 	//miSector := miSectors[targetIdx]
 
@@ -551,12 +546,12 @@ func (b *Builder1) createReferenceHull2(sector *model.InputSector) []*model.Inpu
 		c := polygons.NewCHSegment(sector.Id, s.Clone(), s.Start, s.End)
 		chs = append(chs, c)
 	}
-	var out []*model.InputSegment
+	var out []*model.ConfigSegment
 	for _, s := range ch.Create(sector.Id, chs) {
 		if s.Data != nil {
-			out = append(out, s.Data.(*model.InputSegment))
+			out = append(out, s.Data.(*model.ConfigSegment))
 		} else {
-			ns := model.NewInputSegment(sector.Id, model.DefinitionVoid, s.Start, s.End)
+			ns := model.NewConfigSegment(sector.Id, model.DefinitionVoid, s.Start, s.End)
 			ns.Tag = "missing"
 			out = append(out, ns)
 		}
@@ -565,7 +560,7 @@ func (b *Builder1) createReferenceHull2(sector *model.InputSector) []*model.Inpu
 }
 
 /*
-func(b * Builder1) createGeometryHull(targetIdx int, miSectors []*model.InputSector) []*model.InputSegment {
+func(b * Builder1) createGeometryHull(targetIdx int, miSectors []*model.ConfigSector) []*model.ConfigSegment {
 	targetSector := miSectors[targetIdx]
 
 	var hull []geometry.Point
@@ -575,11 +570,11 @@ func(b * Builder1) createGeometryHull(targetIdx int, miSectors []*model.InputSec
 	}
 
 	convexHull := geometry.ConvexHull(hull)
-	var reference []*model.InputSegment
+	var reference []*model.ConfigSegment
 	for idx := 0; idx < len(convexHull) - 1; idx++{
 		v := convexHull[idx]
 		n := convexHull[idx+1]
-		reference = append(reference, model.NewInputSegment(targetSector.Id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y}))
+		reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y}))
 	}
 
 	if len(reference) == 0 {
@@ -592,7 +587,7 @@ func(b * Builder1) createGeometryHull(targetIdx int, miSectors []*model.InputSec
 		start := reference[0]
 		end := reference[len(reference)-1]
 		if end.End.X != start.Start.X ||  end.End.Y != start.Start.Y {
-			reference = append(reference, model.NewInputSegment(targetSector.Id, model.DefinitionUnknown, end.End, start.Start))
+			reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, end.End, start.Start))
 		}
 	}
 

@@ -21,8 +21,8 @@ type segmentData struct {
 	high     bool
 }
 
-// InputSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
-type InputSegment struct {
+// ConfigSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
+type ConfigSegment struct {
 	Parent   string `json:"parent"`
 	Id       string `json:"id"`
 	Start    XY     `json:"start"`
@@ -37,9 +37,9 @@ type InputSegment struct {
 	builder map[float64][]*segmentData
 }
 
-// NewInputSegment creates a new InputSegment instance with the specified parent, kind, start, and end coordinates.
-func NewInputSegment(parent string, kind int, s XY, e XY) *InputSegment {
-	is := &InputSegment{
+// NewConfigSegment creates a new ConfigSegment instance with the specified parent, kind, start, and end coordinates.
+func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
+	is := &ConfigSegment{
 		Parent:   parent,
 		Id:       NextUUId(),
 		Start:    s,
@@ -54,9 +54,9 @@ func NewInputSegment(parent string, kind int, s XY, e XY) *InputSegment {
 	return is
 }
 
-// Clone creates a new instance of InputSegment with the same properties as the original and returns it.
-func (is *InputSegment) Clone() *InputSegment {
-	out := NewInputSegment(is.Parent, is.Kind, is.Start, is.End)
+// Clone creates a new instance of ConfigSegment with the same properties as the original and returns it.
+func (is *ConfigSegment) Clone() *ConfigSegment {
+	out := NewConfigSegment(is.Parent, is.Kind, is.Start, is.End)
 	out.Neighbor = is.Neighbor
 	out.Tag = is.Tag
 	out.Upper = is.Upper
@@ -67,19 +67,19 @@ func (is *InputSegment) Clone() *InputSegment {
 }
 
 // EqualCoords checks if the start and end coordinates of the current segment match those of the given segment exactly.
-func (is *InputSegment) EqualCoords(tst *InputSegment) bool {
+func (is *ConfigSegment) EqualCoords(tst *ConfigSegment) bool {
 	return is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
 }
 
-// SameCoords checks if the given InputSegment has the same start and end coordinates as the current segment, regardless of order.
-func (is *InputSegment) SameCoords(tst *InputSegment) bool {
+// SameCoords checks if the given ConfigSegment has the same start and end coordinates as the current segment, regardless of order.
+func (is *ConfigSegment) SameCoords(tst *ConfigSegment) bool {
 	a := is.Start.X == tst.Start.X && is.Start.Y == tst.Start.Y && is.End.X == tst.End.X && is.End.Y == tst.End.Y
 	b := is.Start.X == tst.End.X && is.Start.Y == tst.End.Y && is.End.X == tst.Start.X && is.End.Y == tst.Start.Y
 	return a || b
 }
 
 // AnyCoords checks if any coordinates of the current segment match those of the provided segment, excluding same segments.
-func (is *InputSegment) AnyCoords(tst *InputSegment) bool {
+func (is *ConfigSegment) AnyCoords(tst *ConfigSegment) bool {
 	if is.SameCoords(tst) {
 		return false
 	}
@@ -96,19 +96,19 @@ const (
 )
 
 // Prepare initializes the builder map to group segment data by their respective distances.
-func (is *InputSegment) Prepare() {
+func (is *ConfigSegment) Prepare() {
 	is.builder = map[float64][]*segmentData{}
 }
 
 // AddNeighbor adds two points with the specified neighbor identifier to the segment's builder as neighbor data.
-func (is *InputSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
+func (is *ConfigSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
 	id := NextUUId()
 	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, "", "", "")
 	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, "", "", "")
 }
 
 // AddProperty adds a property between two points with specified wall status, upper, middle, and lower textures.
-func (is *InputSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, middle string, lower string) {
+func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, middle string, lower string) {
 	var kind int
 	if wall {
 		kind = SegmentDataWall
@@ -121,7 +121,7 @@ func (is *InputSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, middl
 }
 
 // createPoint adds a new point to the builder map with specified metadata and computes its distance from the start point.
-func (is *InputSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper string, middle string, lower string) {
+func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper string, middle string, lower string) {
 	pb := geometry2.Point{X: is.Start.X, Y: is.Start.Y}
 
 	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, upper: upper, middle: middle, lower: lower}
@@ -134,8 +134,8 @@ func (is *InputSegment) createPoint(id string, p0 XY, kind int, neighbor string,
 	}
 }
 
-// Build processes and constructs a list of InputSegment objects from the current InputSegment instance.
-func (is *InputSegment) Build() []*InputSegment {
+// Build processes and constructs a list of ConfigSegment objects from the current ConfigSegment instance.
+func (is *ConfigSegment) Build() []*ConfigSegment {
 	x := is.Start.X - is.End.X
 	y := is.Start.Y - is.End.Y
 	builderNegative := false
@@ -161,12 +161,12 @@ func (is *InputSegment) Build() []*InputSegment {
 		}
 	})
 
-	var out []*InputSegment
-	var wall *InputSegment = nil
-	var texture *InputSegment = nil
-	var neighbor *InputSegment = nil
+	var out []*ConfigSegment
+	var wall *ConfigSegment = nil
+	var texture *ConfigSegment = nil
+	var neighbor *ConfigSegment = nil
 
-	closeSegment := func(is *InputSegment, kind int, data []*segmentData) ([]*segmentData, *segmentData) {
+	closeSegment := func(is *ConfigSegment, kind int, data []*segmentData) ([]*segmentData, *segmentData) {
 		for i, d := range data {
 			if d.kind == kind {
 				if is.Id == d.id {
@@ -205,7 +205,7 @@ func (is *InputSegment) Build() []*InputSegment {
 
 		if wall == nil {
 			if data, d := createSegment(SegmentDataWall, b.data); d != nil {
-				wall = NewInputSegment(is.Parent, DefinitionWall, d.point, XY{})
+				wall = NewConfigSegment(is.Parent, DefinitionWall, d.point, XY{})
 				wall.Id = d.id
 				b.data = data
 			}
@@ -220,7 +220,7 @@ func (is *InputSegment) Build() []*InputSegment {
 
 		if texture == nil {
 			if data, d := createSegment(SegmentDataTexture, b.data); d != nil {
-				texture = NewInputSegment(is.Parent, SegmentDataTexture, d.point, XY{})
+				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{})
 				texture.Id = d.id
 				texture.Upper = d.upper
 				texture.Middle = d.middle
@@ -241,7 +241,7 @@ func (is *InputSegment) Build() []*InputSegment {
 
 		if neighbor == nil {
 			if data, d := createSegment(SegmentDataNeighbor, b.data); d != nil {
-				neighbor = NewInputSegment(is.Parent, DefinitionValid, d.point, XY{})
+				neighbor = NewConfigSegment(is.Parent, DefinitionValid, d.point, XY{})
 				neighbor.Id = d.id
 				neighbor.Neighbor = d.neighbor
 

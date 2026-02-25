@@ -1,49 +1,14 @@
 package model
 
-import "github.com/markel1974/godoom/engine/textures"
+import (
+	"encoding/json"
 
-type Segment struct {
-	Start  XY
-	End    XY
-	Ref    string
-	Kind   int
-	Sector *Sector
-	Tag    string
-}
+	"github.com/markel1974/godoom/engine/textures"
+)
 
-func NewSegment(ref string, sector * Sector, kind int, start XY, end XY, tag string) *Segment{
-	out := &Segment{
-		Start:  start,
-		End:    end,
-		Ref:    ref,
-		Kind:   kind,
-		Sector: sector,
-		Tag:    tag,
-	}
-	return out
-}
-
-func (k * Segment) Copy() * Segment {
-	out := &Segment{
-		Start:  k.Start,
-		End:    k.End,
-		Ref:    k.Ref,
-		Kind:   k.Kind,
-		Sector: k.Sector,
-		Tag:    k.Tag,
-	}
-	return out
-}
-
-func (k * Segment) SetSector(ref string, sector * Sector) {
-	k.Ref = ref
-	k.Sector = sector
-}
-
-
-
-
+// Sector represents a 3D space in a model, defined by its boundaries, textures, and associated segments.
 type Sector struct {
+	ModelId      uint16
 	Id           string
 	Floor        float64
 	Ceil         float64
@@ -57,11 +22,13 @@ type Sector struct {
 	WallTexture  *textures.Texture
 	usage        int
 	compileId    uint64
-	references   map[string]bool
+	references   map[uint64]bool
 }
 
-func NewSector(id string, segments []*Segment) *Sector {
+// NewSector creates and initializes a new Sector instance with the given model ID, identifier, and segment list.
+func NewSector(modelId uint16, id string, segments []*Segment) *Sector {
 	s := &Sector{
+		ModelId:    modelId,
 		Id:         id,
 		Ceil:       0,
 		Floor:      0,
@@ -69,35 +36,70 @@ func NewSector(id string, segments []*Segment) *Sector {
 		Textures:   false,
 		usage:      0,
 		compileId:  0,
-		references: make(map[string]bool),
+		references: make(map[uint64]bool),
 	}
 	return s
 }
 
+// Reference updates the sector's compileId and resets usage and references if the given compileId is different.
 func (s *Sector) Reference(compileId uint64) {
 	if compileId != s.compileId {
 		s.compileId = compileId
 		s.usage = 0
-		s.references = make(map[string]bool)
+		s.references = make(map[uint64]bool)
 	} else {
 		s.usage++
 	}
 }
 
-func (s * Sector) GetCompileId() uint64{
+// GetCompileId retrieves the current compileId associated with the Sector.
+func (s *Sector) GetCompileId() uint64 {
 	return s.compileId
 }
 
+// GetUsage returns the current usage count of the Sector.
 func (s *Sector) GetUsage() int {
 	return s.usage
 }
 
-
-func (s *Sector) Add(id string) {
+// Add adds the given ID to the sector's references map, marking it as referenced.
+func (s *Sector) Add(id uint64) {
 	s.references[id] = true
 }
 
-func (s *Sector) Has(id string) bool {
+// Has checks if the given id exists in the sector's references map and returns true if it does, false otherwise.
+func (s *Sector) Has(id uint64) bool {
 	_, ok := s.references[id]
 	return ok
+}
+
+func (s *Sector) Print(indent bool) string {
+	type printerSegment struct {
+		Start XY
+		End   XY
+		Ref   string
+		Kind  int
+		Tag   string
+	}
+	type printerSector struct {
+		ModelId  uint16
+		Id       string
+		Floor    float64
+		Ceil     float64
+		Segments []*printerSegment
+		Textures bool
+	}
+
+	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.Floor, Ceil: s.Ceil}
+	for _, z := range s.Segments {
+		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
+		p.Segments = append(p.Segments, ps)
+	}
+	p.Textures = s.Textures
+	if indent {
+		d, _ := json.MarshalIndent(p, "", "  ")
+		return string(d)
+	}
+	d, _ := json.Marshal(p)
+	return string(d)
 }

@@ -3,39 +3,50 @@ package model
 import (
 	"errors"
 	"fmt"
-	"github.com/markel1974/godoom/engine/textures"
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/markel1974/godoom/engine/textures"
 )
 
+// DefinitionValid represents a valid definition state with a value of 3.
+// DefinitionVoid represents a void definition state with a value of 1.
+// DefinitionWall represents a wall definition state with a value of 2.
+// DefinitionUnknown represents an unknown definition state with a value of 0.
 const (
-	DefinitionValid = 3
-	DefinitionVoid = 1
-	DefinitionWall = 2
+	DefinitionValid   = 3
+	DefinitionVoid    = 1
+	DefinitionWall    = 2
 	DefinitionUnknown = 0
 )
 
-type lineDef2 struct { start XY; end XY; sector * Sector; np int }
+// lineDef2 represents a line segment in a 2D space with start and end points, belonging to a specific sector.
+type lineDef2 struct {
+	start  XY
+	end    XY
+	sector *Sector
+	np     int
+}
 
-
+// lineDefHash generates a unique string representation of a line defined by its start and end XY points.
 func lineDefHash(start XY, end XY) string {
 	startX := strconv.FormatFloat(start.X, 'f', -1, 64)
 	startY := strconv.FormatFloat(start.Y, 'f', -1, 64)
 	endX := strconv.FormatFloat(end.X, 'f', -1, 64)
 	endY := strconv.FormatFloat(end.Y, 'f', -1, 64)
-	return startX + "|" + startY + "=>" +  endX + "|" + endY
+	return startX + "|" + startY + "=>" + endX + "|" + endY
 }
 
-
-
+// Compiler represents a compiler entity responsible for managing and operating on a collection of 3D space sectors.
 type Compiler struct {
 	sectors          []*Sector
 	sectorsMaxHeight float64
 	cache            map[string]*Sector
 }
 
-func NewCompiler() * Compiler{
+// NewCompiler creates and returns a new Compiler instance initialized with default values.
+func NewCompiler() *Compiler {
 	return &Compiler{
 		sectors:          nil,
 		sectorsMaxHeight: 0,
@@ -43,13 +54,17 @@ func NewCompiler() * Compiler{
 	}
 }
 
-func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
+// Setup initializes and configures the Compiler object based on the provided configuration and texture data.
+// It processes the input sectors, creates segments, applies textures, resolves loops, and ensures sector consistency.
+// Returns an error in case of configuration issues or invalid state encountered during the setup process.
+func (r *Compiler) Setup(cfg *InputConfig, text *textures.Textures) error {
+	modelSectorId := uint16(0)
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			segments = append(segments, NewSegment(cn.Neighbor,nil, cn.Kind, cn.Start, cn.End, cn.Tag))
+			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag))
 		}
 
 		if len(segments) == 0 {
@@ -57,7 +72,8 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			continue
 		}
 
-		s := NewSector(cs.Id, segments)
+		s := NewSector(modelSectorId, cs.Id, segments)
+		modelSectorId++
 		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
 		s.Ceil = cs.Ceil
 		s.Floor = cs.Floor
@@ -89,7 +105,6 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			}
 		}
 	}
-
 
 	//TODO 207 - 225
 	//ch := &ConvexHull{}
@@ -138,183 +153,183 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 			}
 		}
 
+		//Rescan:
+		// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
+		fixed := 0
+		undefined := 0
+		lineDefsCache := r.makeLineDefsCache()
+		for _, sector := range r.sectors {
+			for np, s := range sector.Segments {
+				if s.Kind != DefinitionWall {
+					//if s.Kind == DefinitionUnknown {
+					if ld, ok := lineDefsCache[lineDefHash(s.End, s.Start)]; ok {
+						if s.Ref != ld.sector.Id {
+							fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
+							if s.Kind == DefinitionUnknown {
+								s.Kind = DefinitionValid
+							}
+							s.SetSector(ld.sector.Id, ld.sector)
+							fixed++
+							//goto Rescan
+						}
+					} else {
+						fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
+						//s.Kind = DefinitionWall
+						//s.Sector = nil
+						//v1start.Update("wall", nil, DefinitionWall, v1start.XY)
 
-
-	//Rescan:
-	// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
-	fixed := 0
-	undefined := 0
-	lineDefsCache := r.makeLineDefsCache()
-	for _, sector := range r.sectors {
-		for np, s := range sector.Segments {
-			if s.Kind != DefinitionWall {
-			//if s.Kind == DefinitionUnknown {
-				if ld, ok := lineDefsCache[lineDefHash(s.End, s.Start)]; ok {
-					if s.Ref != ld.sector.Id {
-						fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
-						if s.Kind == DefinitionUnknown { s.Kind = DefinitionValid }
-						s.SetSector(ld.sector.Id, ld.sector)
-						fixed++
-						//goto Rescan
+						//if s.Kind == DefinitionVoid  {
+						//	s.Kind = DefinitionWall
+						//}
+						undefined++
 					}
-				} else {
-					fmt.Printf("p1 - sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
-					//s.Kind = DefinitionWall
-					//s.Sector = nil
-					//v1start.Update("wall", nil, DefinitionWall, v1start.XY)
-
-					//if s.Kind == DefinitionVoid  {
-					//	s.Kind = DefinitionWall
 					//}
-					undefined++
 				}
-				//}
 			}
 		}
-	}
-	fmt.Println("undefined:", undefined, "fixed:", fixed)
+		fmt.Println("undefined:", undefined, "fixed:", fixed)
 	}
 
 	/*
-	//TODO SISTEMARE
-		// Verify that the vertexes form a convex hull.
-		for idx, sect := range r.sectors {
-			vert := sect.Vertices
-			for b := uint64(0); b < sect.NPoints; b++ {
-				c := (b + 1) % sect.NPoints
-				d := (b + 2) % sect.NPoints
-				x0 := vert[b].X;
-				y0 := vert[b].Y;
-				x1 := vert[c].X;
-				y1 := vert[c].Y
-				switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
-				case 0:
-					continue
-					//Note: This used to be a problem for my engine, but is not anymore, so it is disabled.
-					//if you enable this change, you will not need the IntersectBox calls in some locations anymore.
-					//if sect.NeighborsRefs[b] == sect.NeighborsRefs[c] { continue }
-					//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
-				case -1:
-					fmt.Printf("Sector %d: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", idx, b, c, c, d)
-				default:
-					continue
-				}
-
-				fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
-
-				// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
-				// e cannot be c, c-1 or c+1
-				// line (c)-(e) cannot intersect with any edge in this sector
-				nearestDist := 1e29
-				nearestPoint := ^uint64(0)
-				for n := (d + 1) % sect.NPoints; n != b; n = (n + 1) % sect.NPoints {
-					// Don't go through b, c, d
-					x2 := vert[n].X
-					y2 := vert[n].Y
-					distX := x2 - x1
-					distY := y2 - y1
-					dist := distX*distX + distY*distY
-					if dist >= nearestDist {
+		//TODO SISTEMARE
+			// Verify that the vertexes form a convex hull.
+			for idx, sect := range r.sectors {
+				vert := sect.Vertices
+				for b := uint64(0); b < sect.NPoints; b++ {
+					c := (b + 1) % sect.NPoints
+					d := (b + 2) % sect.NPoints
+					x0 := vert[b].X;
+					y0 := vert[b].Y;
+					x1 := vert[c].X;
+					y1 := vert[c].Y
+					switch mathematic.PointSideF(vert[d].X, vert[d].Y, x0, y0, x1, y1) {
+					case 0:
+						continue
+						//Note: This used to be a problem for my engine, but is not anymore, so it is disabled.
+						//if you enable this change, you will not need the IntersectBox calls in some locations anymore.
+						//if sect.NeighborsRefs[b] == sect.NeighborsRefs[c] { continue }
+						//fmt.Printf("sector %d: Edges %d-%d and %d-%d are parallel, but have different neighbors. This would pose problems for collision detection.\n", idx, b, c, c, d)
+					case -1:
+						fmt.Printf("Sector %d: Edges %d-%d and %d-%d create a concave turn. This would be rendered wrong.\n", idx, b, c, c, d)
+					default:
 						continue
 					}
-					if mathematic.PointSideF(x2, y2, x0, y0, x1, y1) != 1 {
+
+					fmt.Printf("- splitting sector, using (%g,%g) as anchor\n", vert[c].X, vert[c].Y)
+
+					// Insert an edge between (c) and (e), where e is the nearest point to (c), under the following rules:
+					// e cannot be c, c-1 or c+1
+					// line (c)-(e) cannot intersect with any edge in this sector
+					nearestDist := 1e29
+					nearestPoint := ^uint64(0)
+					for n := (d + 1) % sect.NPoints; n != b; n = (n + 1) % sect.NPoints {
+						// Don't go through b, c, d
+						x2 := vert[n].X
+						y2 := vert[n].Y
+						distX := x2 - x1
+						distY := y2 - y1
+						dist := distX*distX + distY*distY
+						if dist >= nearestDist {
+							continue
+						}
+						if mathematic.PointSideF(x2, y2, x0, y0, x1, y1) != 1 {
+							continue
+						}
+						ok := true
+						x1 += distX * 1e-4;
+						x2 -= distX * 1e-4;
+						y1 += distY * 1e-4;
+						y2 -= distY * 1e-4
+						for f := 0; f < int(sect.NPoints); f++ {
+							if mathematic.IntersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
+								ok = false
+								break
+							}
+						}
+						if !ok {
+							continue
+						}
+						// Check whether this split would resolve the original problem
+						if mathematic.PointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 {
+							dist += 1e6
+						}
+						if dist >= nearestDist {
+							continue
+						}
+						nearestDist = dist
+						nearestPoint = n
+					}
+
+					if nearestPoint == ^uint64(0) {
+						fmt.Printf("  ERROR: Could not find a vertex to pair with\n")
 						continue
 					}
-					ok := true
-					x1 += distX * 1e-4;
-					x2 -= distX * 1e-4;
-					y1 += distY * 1e-4;
-					y2 -= distY * 1e-4
-					for f := 0; f < int(sect.NPoints); f++ {
-						if mathematic.IntersectLineSegmentsF(x1, y1, x2, y2, vert[f].X, vert[f].Y, vert[f+1].X, vert[f+1].Y) {
-							ok = false
+					e := nearestPoint
+					fmt.Printf(" - and point %d - (%g,%g) as the far point\n", e, vert[e].X, vert[e].Y)
+
+					// Now that we have a chain: a b c d e f g h
+					// And we're supposed to split it at "c" and "e", the outcome should be two chains:
+					// c d e         (c)
+					// e f g h a b c (e)
+
+					var vert1 []*XYKind2
+					//var neigh1 []int
+					// Create chain 1: from c to e.
+					for n := uint64(0); n < sect.NPoints; n++ {
+						m := (c + n) % sect.NPoints
+						vert1 = append(vert1, sect.Vertices[m].Clone())
+						//neigh1 = append(neigh1, sect.NeighborsRefs[m])
+						//vert1 = append(vert1, sect.Vertices[m])
+						if m == e {
+							vert1 = append(vert1, vert1[0])
 							break
 						}
 					}
-					if !ok {
-						continue
+
+					//TODO ??????
+					//neigh1Idx := len(r.sectors)
+					//neigh1 = append(neigh1, neigh1Idx)
+
+					var vert2 []*XYKind2
+					//var neigh2 []int
+					// Create chain 2: from e to c.
+					for n := uint64(0); n < sect.NPoints; n++ {
+						m := (e + n) % sect.NPoints
+						//neigh2 = append(neigh2, sect.NeighborsRefs[m])
+						//vert2 = append(vert2, sect.Vertices[m])
+						vert2 = append(vert2, sect.Vertices[m].Clone())
+						if m == c {
+							vert2 = append(vert2, vert2[0])
+							break
+						}
 					}
-					// Check whether this split would resolve the original problem
-					if mathematic.PointSideF(x2, y2, vert[d].X, vert[d].Y, x1, y1) == 1 {
-						dist += 1e6
-					}
-					if dist >= nearestDist {
-						continue
-					}
-					nearestDist = dist
-					nearestPoint = n
+					//neigh2 = append(neigh2, idx)
+
+					// using chain1
+					sect.Vertices = vert1
+					//sect.NeighborsRefs = neigh1
+					sect.NPoints = uint64(len(vert1) - 1)
+					sect = r.sectors[idx]
+
+					ns := NewSector("AutoGenerated_"+NextUUId(), uint64(len(vert2)-1), vert2)
+					//ns.NeighborsRefs = neigh2
+					ns.Floor = sect.Floor
+					ns.Ceil = sect.Ceil
+					ns.Textures = sect.Textures
+					ns.FloorTexture = sect.FloorTexture
+					ns.CeilTexture = sect.CeilTexture
+					ns.UpperTexture = sect.UpperTexture
+					ns.LowerTexture = sect.LowerTexture
+					ns.WallTexture = sect.WallTexture
+
+					r.sectors = append(r.sectors, ns)
+
+					r.cache[sect.Id] = sect
+
+					// We needs to rescan
+					goto Rescan
 				}
-
-				if nearestPoint == ^uint64(0) {
-					fmt.Printf("  ERROR: Could not find a vertex to pair with\n")
-					continue
-				}
-				e := nearestPoint
-				fmt.Printf(" - and point %d - (%g,%g) as the far point\n", e, vert[e].X, vert[e].Y)
-
-				// Now that we have a chain: a b c d e f g h
-				// And we're supposed to split it at "c" and "e", the outcome should be two chains:
-				// c d e         (c)
-				// e f g h a b c (e)
-
-				var vert1 []*XYKind2
-				//var neigh1 []int
-				// Create chain 1: from c to e.
-				for n := uint64(0); n < sect.NPoints; n++ {
-					m := (c + n) % sect.NPoints
-					vert1 = append(vert1, sect.Vertices[m].Clone())
-					//neigh1 = append(neigh1, sect.NeighborsRefs[m])
-					//vert1 = append(vert1, sect.Vertices[m])
-					if m == e {
-						vert1 = append(vert1, vert1[0])
-						break
-					}
-				}
-
-				//TODO ??????
-				//neigh1Idx := len(r.sectors)
-				//neigh1 = append(neigh1, neigh1Idx)
-
-				var vert2 []*XYKind2
-				//var neigh2 []int
-				// Create chain 2: from e to c.
-				for n := uint64(0); n < sect.NPoints; n++ {
-					m := (e + n) % sect.NPoints
-					//neigh2 = append(neigh2, sect.NeighborsRefs[m])
-					//vert2 = append(vert2, sect.Vertices[m])
-					vert2 = append(vert2, sect.Vertices[m].Clone())
-					if m == c {
-						vert2 = append(vert2, vert2[0])
-						break
-					}
-				}
-				//neigh2 = append(neigh2, idx)
-
-				// using chain1
-				sect.Vertices = vert1
-				//sect.NeighborsRefs = neigh1
-				sect.NPoints = uint64(len(vert1) - 1)
-				sect = r.sectors[idx]
-
-				ns := NewSector("AutoGenerated_"+NextUUId(), uint64(len(vert2)-1), vert2)
-				//ns.NeighborsRefs = neigh2
-				ns.Floor = sect.Floor
-				ns.Ceil = sect.Ceil
-				ns.Textures = sect.Textures
-				ns.FloorTexture = sect.FloorTexture
-				ns.CeilTexture = sect.CeilTexture
-				ns.UpperTexture = sect.UpperTexture
-				ns.LowerTexture = sect.LowerTexture
-				ns.WallTexture = sect.WallTexture
-
-				r.sectors = append(r.sectors, ns)
-
-				r.cache[sect.Id] = sect
-
-				// We needs to rescan
-				goto Rescan
 			}
-		}
 	*/
 
 	r.finalize(cfg)
@@ -324,10 +339,12 @@ func (r *Compiler) Setup(cfg *Input, text * textures.Textures) error {
 	return nil
 }
 
-
-func (r * Compiler) finalize(cfg *Input) {
+// finalize adjusts sector vertex coordinates by the configured scale factor and updates the maximum sector height.
+func (r *Compiler) finalize(cfg *InputConfig) {
 	scale := cfg.ScaleFactor
-	if scale < 1 { scale = 1 }
+	if scale < 1 {
+		scale = 1
+	}
 
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
@@ -345,11 +362,13 @@ func (r * Compiler) finalize(cfg *Input) {
 	}
 }
 
-func (r * Compiler) GetSectors() []*Sector {
+// GetSectors returns a slice of pointers to Sector, representing all sectors in the Compiler instance.
+func (r *Compiler) GetSectors() []*Sector {
 	return r.sectors
 }
 
-func (r * Compiler) Get(sectorId string) (*Sector, error) {
+// Get retrieves a Sector from the cache using the provided sectorId. Returns an error if the sectorId is invalid.
+func (r *Compiler) Get(sectorId string) (*Sector, error) {
 	s, ok := r.cache[sectorId]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("invalid sector: %s", sectorId))
@@ -357,17 +376,19 @@ func (r * Compiler) Get(sectorId string) (*Sector, error) {
 	return s, nil
 }
 
-func (r * Compiler) GetMaxHeight() float64 {
+// GetMaxHeight returns the maximum height difference between the ceiling and floor among the sectors in the compiler.
+func (r *Compiler) GetMaxHeight() float64 {
 	return r.sectorsMaxHeight
 }
 
-func (r * Compiler) makeLineDefsCache() map[string]*lineDef2 {
-	t := make(map[string] *lineDef2)
+// makeLineDefsCache constructs a cache of line definitions mapped by a unique hash key generated from segment coordinates.
+func (r *Compiler) makeLineDefsCache() map[string]*lineDef2 {
+	t := make(map[string]*lineDef2)
 	for _, sect := range r.sectors {
 		for np := 0; np < len(sect.Segments); np++ {
 			s := sect.Segments[np]
 			hash := lineDefHash(s.Start, s.End)
-			ld := &lineDef2{sector: sect, np: np, start: s.Start, end: s.End }
+			ld := &lineDef2{sector: sect, np: np, start: s.Start, end: s.End}
 			if fld, ok := t[hash]; ok {
 				if sect.Id != fld.sector.Id {
 					//fmt.Println("line segment already added", sect.Id, fld.sector.Id, hash, np)
@@ -408,11 +429,7 @@ func (r * Compiler) createConvexHull3(sect * Sector) {
 	}
 }
 
- */
-
-
-
-
+*/
 
 /*
 func (r * Compiler) createConvexHull(sect * Sector) {
@@ -628,8 +645,7 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 	}
 }
 
- */
-
+*/
 
 /*
 	for s1Idx, s1 := range r.sectors {

@@ -10,12 +10,12 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-// defaultQueueLen defines the default length of the processing queue.
+// defaultQueueLen defines the default size of the queue used in rendering or processing operations.
 const (
 	defaultQueueLen = 32
 )
 
-// Render is responsible for rendering portals and managing Sectors, queues, and compiled Sector states.
+// Render defines a structure for managing rendering operations, including screen dimensions, queues, sectors, and visibility logic.
 type Render struct {
 	screenWidth      int
 	screenWidthHalf  int
@@ -32,12 +32,14 @@ type Render struct {
 	Sectors          []*model.Sector
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
+
+	// Tracker degli span per settore per il frame corrente
+	visibilityCache map[*model.Sector][]Span
 }
 
-// NewPortal creates and initializes a new PortalRender instance with the specified screen dimensions and queue size.
+// NewPortal initializes and returns a new Render object configured for rendering operations with the provided parameters.
 func NewPortal(width int, height int, maxQueue int, textures *textures.Textures) *Render {
-	if maxQueue != 0 && (maxQueue&(maxQueue-1)) != 0 {
-		fmt.Printf("maxQueue is not a power of two, using %d\n", defaultQueueLen)
+	if maxQueue == 0 {
 		maxQueue = defaultQueueLen
 	}
 	r := &Render{
@@ -46,18 +48,12 @@ func NewPortal(width int, height int, maxQueue int, textures *textures.Textures)
 		screenWidthHalf:  width / 2,
 		screenHeight:     height,
 		screenHeightHalf: height / 2,
-
-		SectorsMaxHeight: 0,
-
-		queue:         make([]*QueueItem, maxQueue),
-		sectorQueue:   make([]*QueueItem, 256),
-		maxSectors:    maxQueue + 1,
-		screenHFov:    renderers.HFov * float64(height),
-		screenVFov:    renderers.VFov * float64(height),
-		compileId:     0,
-		compiledCount: 0,
+		queue:            make([]*QueueItem, maxQueue),
+		sectorQueue:      make([]*QueueItem, 256),
+		screenHFov:       renderers.HFov * float64(height),
+		screenVFov:       renderers.VFov * float64(height),
+		visibilityCache:  make(map[*model.Sector][]Span),
 	}
-	r.compileId--
 	for x := 0; x < len(r.queue); x++ {
 		r.queue[x] = &QueueItem{}
 	}
@@ -67,7 +63,7 @@ func NewPortal(width int, height int, maxQueue int, textures *textures.Textures)
 	return r
 }
 
-// Setup initializes the PortalRender by setting up Sectors, maximum height, and allocating compiled Sector data.
+// Setup initializes the Render instance by configuring sectors, setting the maximum height, and preparing compiled sectors.
 func (r *Render) Setup(sectors []*model.Sector, maxHeight float64) error {
 	r.Sectors = sectors
 	r.SectorsMaxHeight = maxHeight
@@ -85,13 +81,32 @@ func (r *Render) Setup(sectors []*model.Sector, maxHeight float64) error {
 	return nil
 }
 
-// clear increments the compileId and resets the compiledCount to 0.
+// clear resets the render state by incrementing the compileId, clearing the compiledCount, and clearing visibilityCache.
 func (r *Render) clear() {
 	r.compileId++
 	r.compiledCount = 0
+	// Reset della cache di visibilità per il nuovo frame
+	for k := range r.visibilityCache {
+		delete(r.visibilityCache, k)
+	}
 }
 
-// growSectorQueue doubles the size of the sectorQueue and initializes new QueueItem instances for the added capacity.
+// isVisible determines if a given range [x1, x2] in a sector is not fully covered by precomputed spans in visibilityCache.
+func (r *Render) isVisible(s *model.Sector, x1, x2 float64) bool {
+	spans, ok := r.visibilityCache[s]
+	if !ok {
+		return true
+	}
+	for _, span := range spans {
+		// Se il nuovo intervallo è completamente contenuto in uno esistente, non è visibile
+		if x1 >= span.X1 && x2 <= span.X2 {
+			return false
+		}
+	}
+	return true
+}
+
+// growSectorQueue dynamically increases the capacity of the sectorQueue by doubling its current size.
 func (r *Render) growSectorQueue() {
 	oldLen := len(r.sectorQueue)
 	newLen := oldLen * 2
@@ -103,62 +118,44 @@ func (r *Render) growSectorQueue() {
 	r.sectorQueue = newQueue
 }
 
-// Compile processes a ViewItem, performing recursive Sector visibility computation and returns compiled Sectors and their count.
+// Compile processes the given view item and returns compiled sectors and the count of compiled sectors for rendering.
 func (r *Render) Compile(vi *renderers.ViewItem) ([]*model.CompiledSector, int) {
 	r.clear()
 
 	queueLen := len(r.queue)
 	headIdx := 0
 	tailIdx := 0
-	head := r.queue[headIdx]
-	tail := r.queue[tailIdx]
 
-	const wFactor = 1
-	const hFactor = 3
+	// Inizializzazione Root
+	wMax := float64(r.screenWidth - 1)
+	hMax := float64(r.screenHeight-1) * 3
 
-	wMax := (float64(r.screenWidth) - 1) * wFactor
-	hMax := (float64(r.screenHeight) - 1) * hFactor
-	head.sector = vi.Sector
-	head.x1 = 0
-	head.x2 = wMax
+	r.queue[headIdx].Update(vi.Sector, 0, wMax, -hMax, -hMax, hMax, hMax)
+	headIdx = (headIdx + 1) % queueLen
 
-	head.y1t = -hMax
-	head.y2t = -hMax
-	head.y1b = hMax
-	head.y2b = hMax
-
-	headIdx++
-	if headIdx == queueLen {
-		headIdx = 0
-	}
-	head = r.queue[headIdx]
-
-	for head != tail {
-		current := tail
-		tailIdx++
-		if tailIdx == queueLen {
-			tailIdx = 0
-		}
-		tail = r.queue[tailIdx]
+	for headIdx != tailIdx {
+		current := r.queue[tailIdx]
+		tailIdx = (tailIdx + 1) % queueLen
 
 		sector := current.sector
-
 		sector.Reference(r.compileId)
 
 		sq, sqCount := r.compileSector(vi, sector, current)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
-			if q.x2 > q.x1 && (headIdx+queueLen+1-tailIdx)%queueLen != 0 {
-				hash := q.Hash64()
-				if !sector.Has(hash) {
-					sector.Add(hash)
-					head.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
-					headIdx++
-					if headIdx >= queueLen {
-						headIdx = 0
-					}
-					head = r.queue[headIdx]
+
+			// Controllo geometrico
+			if q.x2 > q.x1 && r.isVisible(q.sector, q.x1, q.x2) {
+				// Memorizziamo lo span per questo settore
+				r.visibilityCache[q.sector] = append(r.visibilityCache[q.sector], Span{q.x1, q.x2})
+
+				// Verifica overflow coda
+				if (headIdx+1)%queueLen == tailIdx {
+					continue
 				}
+
+				r.queue[headIdx].Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
+				headIdx = (headIdx + 1) % queueLen
 			}
 		}
 	}
@@ -166,7 +163,7 @@ func (r *Render) Compile(vi *renderers.ViewItem) ([]*model.CompiledSector, int) 
 	return r.compiledSectors, r.compiledCount
 }
 
-// GetCS retrieves a compiled Sector for the given Sector and indicates if it is the first retrieval in the current cycle.
+// GetCS retrieves a CompiledSector from the pool, binds it to the given Sector, and returns if it's the first allocation.
 func (r *Render) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
@@ -179,7 +176,7 @@ func (r *Render) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 	return cs, first
 }
 
-// compileSector processes a Sector for rendering by partitioning segments and updating the render queue with adjacent Sectors.
+// compileSector processes a renderable sector, computes perspective transformations, and queues neighboring sectors.
 func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi *QueueItem) ([]*QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false

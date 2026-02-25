@@ -23,6 +23,9 @@ type Sector struct {
 	usage        int
 	compileId    uint64
 	references   map[uint64]bool
+
+	VisibleSpans  [][2]float64
+	LastCompileId uint64
 }
 
 // NewSector creates and initializes a new Sector instance with the given model ID, identifier, and segment list.
@@ -102,4 +105,17 @@ func (s *Sector) Print(indent bool) string {
 	}
 	d, _ := json.Marshal(p)
 	return string(d)
+}
+
+func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
+	if s.LastCompileId != id {
+		s.VisibleSpans = s.VisibleSpans[:0]
+		s.LastCompileId = id
+	}
+	for _, span := range s.VisibleSpans {
+		if x1 >= span[0] && x2 <= span[1] {
+			return false // Già coperto da un portale più grande
+		}
+	}
+	return true
 }

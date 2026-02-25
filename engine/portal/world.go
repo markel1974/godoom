@@ -13,29 +13,13 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
-/*
-func pointInPolygonF(px float64, py float64, points []*model.Segment) bool {
-	nVert := len(points)
-	j := nVert - 1
-	c := false
-	for i := 0; i < nVert; i++ {
-		if ((points[i].Y >= py) != (points[j].Y >= py)) && (px <= (points[j].X-points[i].X)*(py-points[i].Y)/(points[j].Y-points[i].Y)+points[i].X) {
-			c = !c
-		}
-		j = i
-	}
-	return c
-}
-
-*/
-
 // World represents the game world, containing the environment, player, and rendering components.
 type World struct {
 	screenWidth  int
 	screenHeight int
 	textures     *textures.Textures
 	tree         *Render
-	render       IRender
+	render       renderers.IRender
 	player       *Player
 	vi           *renderers.ViewItem
 	debug        bool
@@ -420,6 +404,22 @@ func (w * World) ComputePlayer(moves[4]bool, ducking bool, jumping bool,  mouseX
 
 	w.player.Velocity.X = w.player.Velocity.X * (1-acceleration) + moveVec[0] * acceleration
 	w.player.Velocity.Y = w.player.Velocity.Y * (1-acceleration) + moveVec[1] * acceleration
+}
+
+*/
+
+/*
+func pointInPolygonF(px float64, py float64, points []*model.Segment) bool {
+	nVert := len(points)
+	j := nVert - 1
+	c := false
+	for i := 0; i < nVert; i++ {
+		if ((points[i].Y >= py) != (points[j].Y >= py)) && (px <= (points[j].X-points[i].X)*(py-points[i].Y)/(points[j].Y-points[i].Y)+points[i].X) {
+			c = !c
+		}
+		j = i
+	}
+	return c
 }
 
 */

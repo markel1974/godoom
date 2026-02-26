@@ -18,8 +18,17 @@ type Level struct {
 
 // GetSectorFromSubSector determines the sector ID corresponding to a given subsector ID and returns it with a success flag.
 func (l *Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool) {
-	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
+	sideDef := l.GetSideDefFromSubSector(subSectorId)
+	if sideDef == nil {
 		return 0, false
+	}
+	return sideDef.SectorRef, true
+}
+
+// GetSideDefFromSubSector determines the sector ID corresponding to a given subsector ID and returns it with a success flag.
+func (l *Level) GetSideDefFromSubSector(subSectorId uint16) *lumps.SideDef {
+	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
+		return nil
 	}
 	sSector := l.SubSectors[subSectorId]
 	for segIdx := sSector.StartSeg; segIdx < sSector.StartSeg+sSector.NumSegments; segIdx++ {
@@ -27,10 +36,10 @@ func (l *Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool) {
 		lineDef := l.LineDefs[seg.LineDef]
 		_, sideDef := l.SegmentSideDef(seg, lineDef)
 		if sideDef != nil {
-			return sideDef.SectorRef, true
+			return sideDef
 		}
 	}
-	return 0, false
+	return nil
 }
 
 // SegmentSideDef identifies the correct SideDef for a segment based on its direction and the associated LineDef.

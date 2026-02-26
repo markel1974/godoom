@@ -16,7 +16,8 @@ const (
 	PrecisionScale = 10000.0
 )
 
-const ScaleFactor = 5.0
+// const ScaleFactor = 5.0
+const ScaleFactor = 10.0
 const Epsilon = 1e-4
 
 //const subSectorBit = uint16(0x8000)
@@ -31,8 +32,8 @@ type Plane struct {
 
 // SegmentData represents a line segment in 2D space, defined by its start and end points and an associated count value.
 //type SegmentData struct {
-//	Start XY
-//	End   XY
+//	Start PointFloat
+//	End   PointFloat
 //	Count int
 //}
 

@@ -86,7 +86,8 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 
 // Generate creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
-	cfg := &model.ConfigRoot{Sectors: nil, Player: &model.ConfigPlayer{}}
+	configPlayer := &model.ConfigPlayer{}
+	cfg := model.NewConfigRoot(nil, configPlayer, nil, 0, false)
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

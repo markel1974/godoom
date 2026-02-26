@@ -6,8 +6,8 @@ type Point struct {
 	Y int16
 }
 
-// XY represents a point in a 2D space with X and Y coordinates as floating-point numbers.
-type XY struct {
+// PointFloat represents a point in a 2D space with X and Y coordinates as floating-point numbers.
+type PointFloat struct {
 	X float64
 	Y float64
 }

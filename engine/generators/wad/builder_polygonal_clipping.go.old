@@ -1,5 +1,6 @@
 package wad
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -69,7 +70,7 @@ func (b *Builder2) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, er
 	}
 
 	p1 := b.level.Things[1]
-	//position := model.XY{X: float64(p1.X), Y: float64(-p1.Y)}
+	//position := model.PointFloat{X: float64(p1.X), Y: float64(-p1.Y)}
 	// CORREZIONE 1: Riscalatura posizione Player per il clipping engine
 	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
 	_, playerSSectorId, _ := b.bsp.FindSector(p1.X, p1.Y)
@@ -276,8 +277,8 @@ func (b *Builder2) createInputSegmentFromSeg(parentId string, seg *lumps2.Seg) *
 	s := model.XY{X: float64(v1.XCoord) / ScaleFactor, Y: float64(-v1.YCoord) / ScaleFactor}
 	e := model.XY{X: float64(v2.XCoord) / ScaleFactor, Y: float64(-v2.YCoord) / ScaleFactor}
 
-	//s := model.XY{X: float64(v1.XCoord), Y: float64(-v1.YCoord)}
-	//e := model.XY{X: float64(v2.XCoord), Y: float64(-v2.YCoord)}
+	//s := model.PointFloat{X: float64(v1.XCoord), Y: float64(-v1.YCoord)}
+	//e := model.PointFloat{X: float64(v2.XCoord), Y: float64(-v2.YCoord)}
 
 	kind := DefinitionWall
 	if lineDef.Flags&int16(lumps2.TwoSided) != 0 {
@@ -303,3 +304,4 @@ func (b *Builder2) isPointEqualScaled(p model.XY, v *lumps2.Vertex) bool {
 	return math.Abs(p.X-(float64(v.XCoord)/ScaleFactor)) < 1e-2 &&
 		math.Abs(p.Y-(float64(-v.YCoord)/ScaleFactor)) < 1e-2
 }
+*/

@@ -20,8 +20,8 @@ type Builder struct {
 }
 
 // NewBuilder creates and returns a new instance of Builder1 with initialized textures map.
-func NewBuilder() *Builder1 {
-	return &Builder1{textures: make(map[string]bool)}
+func NewBuilder() *Builder {
+	return &Builder{textures: make(map[string]bool)}
 }
 
 // Setup initializes the Builder by loading a WAD file and setting up the level configuration based on the provided level number.
@@ -44,6 +44,10 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 
 	b.bsp = NewBsp(b.level)
 	sectors := b.scanSubSectors()
+
+	for _, sector := range sectors {
+		b.forceWindingOrder(sector.Segments, false)
+	}
 
 	p1 := b.level.Things[1]
 	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
@@ -362,4 +366,35 @@ func (b *Builder) findOverlappingWadSeg(mid model.XY, ss *lumps.SubSector) *lump
 		}
 	}
 	return nil
+}
+
+func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
+	if len(segments) < 3 {
+		return
+	}
+
+	// 1. Calcolo dell'area con segno (Shoelace Formula)
+	area := 0.0
+	for _, seg := range segments {
+		area += (seg.End.X - seg.Start.X) * (seg.End.Y + seg.Start.Y)
+	}
+
+	// area > 0 indica senso Orario (Clockwise)
+	// area < 0 indica senso Antiorario (Counter-Clockwise)
+	isClockwise := area > 0
+
+	// 2. Se l'orientamento è già quello desiderato, non facciamo nulla
+	if isClockwise == wantClockwise {
+		return
+	}
+
+	// 3. Inversione dell'ordine: scambiamo le posizioni nell'array e invertiamo Start/End
+	for i, j := 0, len(segments)-1; i < j; i, j = i+1, j-1 {
+		segments[i], segments[j] = segments[j], segments[i]
+	}
+
+	// Invertiamo anche il verso dei singoli vettori per mantenere l'anello chiuso
+	for _, seg := range segments {
+		seg.Start, seg.End = seg.End, seg.Start
+	}
 }

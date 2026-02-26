@@ -225,13 +225,13 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 		//funzionano anche le linee del rect del bbox...
 		factor = 5.0
 		//TODO COSA FARE PER I SEGMENTI OBLIQUI?
-		//rl = []XY{ rl[len(rl) / 2]}
+		//rl = []PointFloat{ rl[len(rl) / 2]}
 		rl = rl[margin : len(rl)-margin]
 	}
 
 	var ret []*model.ConfigSegment
 
-	addSegment := func(sId uint16, xy XY) {
+	addSegment := func(sId uint16, xy PointFloat) {
 		id := strconv.Itoa(int(sId))
 		kind := model.DefinitionJoin
 		if _, ok := wallSectors[sId]; ok {
@@ -384,7 +384,7 @@ func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.Conf
 
 	var ret []*model.ConfigSegment
 
-	addSegment := func(sId uint16, xy XY) {
+	addSegment := func(sId uint16, xy PointFloat) {
 		id := strconv.Itoa(int(sId))
 		kind := model.DefinitionJoin
 		if _, ok := wallSectors[sId]; ok {
@@ -444,21 +444,21 @@ func (bsp *BSP) FindOppositeSubSectorByHulls(subSectorId uint16, is2 *model.Conf
 }
 
 // describeCircle generates the coordinates of points forming a circle centered at (x0, y0) with the given radius.
-func (bsp *BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
-	var res []XY
+func (bsp *BSP) describeCircle(x0 float64, y0 float64, radius float64) []PointFloat {
+	var res []PointFloat
 	x := radius
 	y := float64(0)
 	radiusError := 1.0 - x
 	for y <= x {
-		res = append(res, XY{x + x0, y + y0})
-		res = append(res, XY{x + x0, y + y0})
-		res = append(res, XY{y + x0, x + y0})
-		res = append(res, XY{-x + x0, y + y0})
-		res = append(res, XY{-y + x0, x + y0})
-		res = append(res, XY{-x + x0, -y + y0})
-		res = append(res, XY{-y + x0, -x + y0})
-		res = append(res, XY{x + x0, -y + y0})
-		res = append(res, XY{y + x0, -x + y0})
+		res = append(res, PointFloat{x + x0, y + y0})
+		res = append(res, PointFloat{x + x0, y + y0})
+		res = append(res, PointFloat{y + x0, x + y0})
+		res = append(res, PointFloat{-x + x0, y + y0})
+		res = append(res, PointFloat{-y + x0, x + y0})
+		res = append(res, PointFloat{-x + x0, -y + y0})
+		res = append(res, PointFloat{-y + x0, -x + y0})
+		res = append(res, PointFloat{x + x0, -y + y0})
+		res = append(res, PointFloat{y + x0, -x + y0})
 		y++
 		if radiusError < 0 {
 			radiusError += 2*y + 1
@@ -471,9 +471,9 @@ func (bsp *BSP) describeCircle(x0 float64, y0 float64, radius float64) []XY {
 }
 
 // describeLineF generates a list of points representing a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
-func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
-	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
-		var res []XY
+func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+		var res []PointFloat
 		dx := x1 - x0
 		dy := y1 - y0
 		xi := float64(1)
@@ -484,7 +484,7 @@ func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []
 		D := (2 * dx) - dy
 		x := x0
 		for y := y0; y <= y1; y++ {
-			res = append(res, XY{X: math.Round(x), Y: math.Round(y)})
+			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				x = x + xi
 				D = D + (2 * (dx - dy))
@@ -495,8 +495,8 @@ func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []
 		return res
 	}
 
-	low := func(x0 float64, y0 float64, x1 float64, y1 float64) []XY {
-		var res []XY
+	low := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+		var res []PointFloat
 		dx := x1 - x0
 		dy := y1 - y0
 		yi := float64(1)
@@ -507,7 +507,7 @@ func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []
 		D := (2 * dy) - dx
 		y := y0
 		for x := x0; x <= x1; x++ {
-			res = append(res, XY{X: math.Round(x), Y: math.Round(y)})
+			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				y = y + yi
 				D = D + (2 * (dy - dx))
@@ -518,7 +518,7 @@ func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []
 		return res
 	}
 
-	var res []XY
+	var res []PointFloat
 	reverse := false
 	if math.Abs(y1-y0) < math.Abs(x1-x0) {
 		if x0 > x1 {
@@ -540,7 +540,7 @@ func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []
 		return res
 	}
 
-	var r []XY
+	var r []PointFloat
 	for x := len(res) - 1; x >= 0; x-- {
 		r = append(r, res[x])
 	}

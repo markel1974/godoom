@@ -13,21 +13,21 @@ import (
 	"github.com/markel1974/godoom/engine/polygons/geometry"
 )
 
-type Builder1 struct {
+type BuilderRayCasting struct {
 	w        *WAD
 	textures map[string]bool
 	level    *Level
 	bsp      *BSP
 }
 
-func NewBuilder1() *Builder {
-	return &Builder{
+func NewBuilderRayCasting() *BuilderRayCasting {
+	return &BuilderRayCasting{
 		textures: nil,
 		level:    nil,
 	}
 }
 
-func (b *Builder1) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
+func (b *BuilderRayCasting) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (b *Builder1) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, er
 	return cfg, nil
 }
 
-func (b *Builder1) scanSubSectors() []*model.ConfigSector {
+func (b *BuilderRayCasting) scanSubSectors() []*model.ConfigSector {
 	miSectors := make([]*model.ConfigSector, len(b.level.SubSectors))
 	b.textures = make(map[string]bool)
 
@@ -184,7 +184,7 @@ func (b *Builder1) scanSubSectors() []*model.ConfigSector {
 	return miSectors
 }
 
-func (b *Builder1) compileNeighbors(miSectors []*model.ConfigSector) {
+func (b *BuilderRayCasting) compileNeighbors(miSectors []*model.ConfigSector) {
 	wallSectors := make(map[uint16]bool)
 
 	for idx, miSector := range miSectors {
@@ -205,17 +205,15 @@ func (b *Builder1) compileNeighbors(miSectors []*model.ConfigSector) {
 			id, _ := strconv.Atoi(miSector.Id)
 			res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
 
-			/*
-				for _, d := range res {
-					if _, ok := duplicates[d.Neighbor]; ok {
-						d.Kind = model.DefinitionUnknown
-						d.Neighbor = ""
-						fmt.Println(idx, s.Id, "DUPLICATES ARE NOT ALLOWED!!!!")
-						continue
-					}
-					duplicates[d.Neighbor] = true
-				}
-			*/
+			//	for _, d := range res {
+			//		if _, ok := duplicates[d.Neighbor]; ok {
+			//			d.Kind = model.DefinitionUnknown
+			//			d.Neighbor = ""
+			//			fmt.Println(idx, s.Id, "DUPLICATES ARE NOT ALLOWED!!!!")
+			//			continue
+			//		}
+			//		duplicates[d.Neighbor] = true
+			//	}
 
 			switch len(res) {
 			case 0:
@@ -227,20 +225,18 @@ func (b *Builder1) compileNeighbors(miSectors []*model.ConfigSector) {
 			}
 		}
 
-		/*
-			if idx == 15 {
-				fmt.Println("----------------- BEFORE ------------------")
-				b.printSegments(miSectors[15].Segments)
-				fmt.Println("----------------- AFTER ------------------")
-				b.printSegments(segments)
-				//os.Exit(1)
-			}
-		*/
+		//if idx == 15 {
+		//	fmt.Println("----------------- BEFORE ------------------")
+		//	b.printSegments(miSectors[15].Segments)
+		//	fmt.Println("----------------- AFTER ------------------")
+		//	b.printSegments(segments)
+		//	//os.Exit(1)
+		//}
 		miSector.Segments = segments
 	}
 }
 
-func (b *Builder1) compileConvexHull(miSectors []*model.ConfigSector) {
+func (b *BuilderRayCasting) compileConvexHull(miSectors []*model.ConfigSector) {
 	ch := polygons.NewConvexHull()
 	for _, miSector := range miSectors {
 		if len(miSector.Segments) <= 1 {
@@ -274,32 +270,29 @@ func pointIsOnSegment(px float64, py float64, pz float64, x1 float64, y1 float64
 	return false
 }
 
-func (b *Builder1) pointOnSegment(point model.XY, s1 model.XY, s2 model.XY) bool {
+func (b *BuilderRayCasting) pointOnSegment(point model.XY, s1 model.XY, s2 model.XY) bool {
 	return pointIsOnSegment(point.X, point.Y, 1.0, s1.X, s1.Y, 1.0, s2.X, s2.Y, 1.0)
 }
 
-/*
-func (b * Builder) sectorFromSegment(testSegment * model.ConfigSegment, miSectors []*model.ConfigSector) *model.ConfigSector{
-	for _, xSector := range miSectors {
-		if testSegment.Parent == xSector.Id { continue }
-		for _, seg := range xSector.Segments {
-			//equal or less seg
-			t1 := b.pointOnSegment(seg.Start, testSegment.Start, testSegment.End)
-			t2 := b.pointOnSegment(seg.End, testSegment.Start, testSegment.End)
-			//equal or less compiled
-			t3 := b.pointOnSegment(testSegment.Start, seg.Start, seg.End)
-			t4 := b.pointOnSegment(testSegment.Start, seg.Start, seg.End)
-			if t1 && t2 || t3 && t4 {
-				return xSector
-			}
-		}
-	}
-	return nil
-}
+//func (b * Builder) sectorFromSegment(testSegment * model.ConfigSegment, miSectors []*model.ConfigSector) *model.ConfigSector{
+//	for _, xSector := range miSectors {
+//		if testSegment.Parent == xSector.Id { continue }
+//		for _, seg := range xSector.Segments {
+//			//equal or less seg
+//			t1 := b.pointOnSegment(seg.Start, testSegment.Start, testSegment.End)
+//			t2 := b.pointOnSegment(seg.End, testSegment.Start, testSegment.End)
+//			//equal or less compiled
+//			t3 := b.pointOnSegment(testSegment.Start, seg.Start, seg.End)
+//			t4 := b.pointOnSegment(testSegment.Start, seg.Start, seg.End)
+//			if t1 && t2 || t3 && t4 {
+//				return xSector
+//			}
+//		}
+//	}
+//	return nil
+//}
 
-*/
-
-func (b *Builder1) compileSegmentRelations(miSectors []*model.ConfigSector) {
+func (b *BuilderRayCasting) compileSegmentRelations(miSectors []*model.ConfigSector) {
 	cache := make(map[model.XY]map[*model.ConfigSegment]bool)
 	//notFound := map[*model.ConfigSegment]*model.ConfigSector{}
 
@@ -384,7 +377,7 @@ func (b *Builder1) compileSegmentRelations(miSectors []*model.ConfigSector) {
 	//os.Exit(-1)
 }
 
-func (b *Builder1) getConfigSector(cfg []*model.ConfigSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) *model.ConfigSector {
+func (b *BuilderRayCasting) getConfigSector(cfg []*model.ConfigSector, sectorId uint16, sector *lumps.Sector, subSectorId uint16) *model.ConfigSector {
 	c := cfg[subSectorId]
 	if c == nil {
 		c = &model.ConfigSector{
@@ -405,7 +398,7 @@ func (b *Builder1) getConfigSector(cfg []*model.ConfigSector, sectorId uint16, s
 	return c
 }
 
-func (b *Builder1) describeSegments(targetSector int, miSectors []*model.ConfigSector) {
+func (b *BuilderRayCasting) describeSegments(targetSector int, miSectors []*model.ConfigSector) {
 	fmt.Println("------------------", "DESCRIBE SECTOR", targetSector, "------------------")
 	xy := miSectors[targetSector].Segments[0]
 	var neighbors []string
@@ -426,7 +419,7 @@ func (b *Builder1) describeSegments(targetSector int, miSectors []*model.ConfigS
 	fmt.Println("TRAVERSE:", traverse)
 }
 
-func (b *Builder1) segmentOnSegment(refSeg *model.ConfigSegment, currSeg *model.ConfigSegment) (model.XY, model.XY, bool) {
+func (b *BuilderRayCasting) segmentOnSegment(refSeg *model.ConfigSegment, currSeg *model.ConfigSegment) (model.XY, model.XY, bool) {
 	refStart := geometry.Point{X: refSeg.Start.X, Y: refSeg.Start.Y}
 	refEnd := geometry.Point{X: refSeg.End.X, Y: refSeg.End.Y}
 	currStart := geometry.Point{X: currSeg.Start.X, Y: currSeg.Start.Y}
@@ -463,23 +456,18 @@ func (b *Builder1) segmentOnSegment(refSeg *model.ConfigSegment, currSeg *model.
 
 	return model.XY{}, model.XY{}, false
 
-	/*
-		fmt.Println("sa0", sa0.String())
-		fmt.Println("sa1", sa1.String())
-		fmt.Println("sb0", sb0.String())
-		fmt.Println("sb1", sb1.String())
-		fmt.Println("sc0", sc0.String())
-		fmt.Println("sc1", sc1.String())
-		fmt.Println("sd0", sd0.String())
-		fmt.Println("sd1", sd1.String())
-
-		fmt.Println("-------")
-
-	*/
-
+	//	fmt.Println("sa0", sa0.String())
+	//	fmt.Println("sa1", sa1.String())
+	//	fmt.Println("sb0", sb0.String())
+	//	fmt.Println("sb1", sb1.String())
+	//	fmt.Println("sc0", sc0.String())
+	//	fmt.Println("sc1", sc1.String())
+	//	fmt.Println("sd0", sd0.String())
+	//	fmt.Println("sd1", sd1.String())
+	//	fmt.Println("-------")
 }
 
-func (b *Builder1) pointOnSegmentNew(xy model.XY, seg *model.ConfigSegment) bool {
+func (b *BuilderRayCasting) pointOnSegmentNew(xy model.XY, seg *model.ConfigSegment) bool {
 	p0 := geometry.Point{X: xy.X, Y: xy.Y}
 	l0 := geometry.Point{X: seg.Start.X, Y: seg.Start.Y}
 	l1 := geometry.Point{X: seg.End.X, Y: seg.End.Y}
@@ -490,7 +478,7 @@ func (b *Builder1) pointOnSegmentNew(xy model.XY, seg *model.ConfigSegment) bool
 	return false
 }
 
-func (b *Builder1) createGeometryHull(id string, segments []*model.ConfigSegment) []*model.ConfigSegment {
+func (b *BuilderRayCasting) createGeometryHull(id string, segments []*model.ConfigSegment) []*model.ConfigSegment {
 	var hull []geometry.Point
 	for _, seg := range segments {
 		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
@@ -503,18 +491,16 @@ func (b *Builder1) createGeometryHull(id string, segments []*model.ConfigSegment
 		v := convexHull[idx]
 		n := convexHull[idx+1]
 		is := model.NewConfigSegment(id, model.DefinitionUnknown, model.XY{X: v.X, Y: v.Y}, model.XY{X: n.X, Y: n.Y})
-		/*
-			for _, seg := range segments {
-				if seg.SameCoords(is) {
-					is.Kind = seg.Kind
-					is.Neighbor = seg.Neighbor
-					is.Lower = seg.Lower
-					is.Middle = seg.Middle
-					is.Upper = seg.Upper
-					break
-				}
-			}
-		*/
+		//	for _, seg := range segments {
+		//		if seg.SameCoords(is) {
+		//			is.Kind = seg.Kind
+		//			is.Neighbor = seg.Neighbor
+		//			is.Lower = seg.Lower
+		//			is.Middle = seg.Middle
+		//			is.Upper = seg.Upper
+		//			break
+		//		}
+		//	}
 		reference = append(reference, is)
 	}
 
@@ -537,7 +523,7 @@ func (b *Builder1) createGeometryHull(id string, segments []*model.ConfigSegment
 	return reference
 }
 
-func (b *Builder1) createReferenceHull2(sector *model.ConfigSector) []*model.ConfigSegment {
+func (b *BuilderRayCasting) createReferenceHull2(sector *model.ConfigSector) []*model.ConfigSegment {
 	ch := polygons.NewConvexHull()
 	//miSector := miSectors[targetIdx]
 
@@ -559,38 +545,31 @@ func (b *Builder1) createReferenceHull2(sector *model.ConfigSector) []*model.Con
 	return out
 }
 
-/*
-func(b * Builder1) createGeometryHull(targetIdx int, miSectors []*model.ConfigSector) []*model.ConfigSegment {
-	targetSector := miSectors[targetIdx]
-
-	var hull []geometry.Point
-	for _, seg := range targetSector.Segments {
-		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
-		hull = append(hull, geometry.Point{X: seg.End.X, Y: seg.End.Y})
-	}
-
-	convexHull := geometry.ConvexHull(hull)
-	var reference []*model.ConfigSegment
-	for idx := 0; idx < len(convexHull) - 1; idx++{
-		v := convexHull[idx]
-		n := convexHull[idx+1]
-		reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, model.XY{X:v.X, Y:v.Y}, model.XY{X:n.X, Y:n.Y}))
-	}
-
-	if len(reference) == 0 {
-		for _, seg := range miSectors[targetIdx].Segments {
-			reference = append(reference, seg.Clone())
-		}
-	}
-
-	if reference != nil && len(reference) > 1 {
-		start := reference[0]
-		end := reference[len(reference)-1]
-		if end.End.X != start.Start.X ||  end.End.Y != start.Start.Y {
-			reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, end.End, start.Start))
-		}
-	}
-
-	return reference
-}
-*/
+//func(b * BuilderRayCasting) createGeometryHull(targetIdx int, miSectors []*model.ConfigSector) []*model.ConfigSegment {
+//	targetSector := miSectors[targetIdx]
+//	var hull []geometry.Point
+//	for _, seg := range targetSector.Segments {
+//		hull = append(hull, geometry.Point{X: seg.Start.X, Y: seg.Start.Y})
+//		hull = append(hull, geometry.Point{X: seg.End.X, Y: seg.End.Y})
+//	}
+//	convexHull := geometry.ConvexHull(hull)
+//	var reference []*model.ConfigSegment
+//	for idx := 0; idx < len(convexHull) - 1; idx++{
+//		v := convexHull[idx]
+//		n := convexHull[idx+1]
+//		reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, model.PointFloat{X:v.X, Y:v.Y}, model.PointFloat{X:n.X, Y:n.Y}))
+//	}
+//	if len(reference) == 0 {
+//		for _, seg := range miSectors[targetIdx].Segments {
+//			reference = append(reference, seg.Clone())
+//		}
+//	}
+//	if reference != nil && len(reference) > 1 {
+//		start := reference[0]
+//		end := reference[len(reference)-1]
+//		if end.End.X != start.Start.X ||  end.End.Y != start.Start.Y {
+//			reference = append(reference, model.NewConfigSegment(targetSector.Id, model.DefinitionUnknown, end.End, start.Start))
+//		}
+//	}
+//	return reference
+//}

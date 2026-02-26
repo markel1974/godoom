@@ -317,7 +317,7 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 }
 
 // distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
-func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
+func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64 {
 	l2 := EuclideanDistance(v, w) * EuclideanDistance(v, w)
 	if l2 == 0 {
 		return EuclideanDistance(p, v)

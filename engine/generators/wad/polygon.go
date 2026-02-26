@@ -15,12 +15,12 @@ const ScaleFactor = 5.0
 type Polygon []model.XY
 
 // EuclideanDistance calculates the straight-line distance between two points in 2D space.
-func EuclideanDistance(p1, p2 model.XY) float64 {
+func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
 	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
 }
 
 // PolygonSplit splits a polygon into front and back parts using a plane defined by a point and a normal vector.
-func PolygonSplit(poly []model.XY, nx, ny, ndx, ndy float64) (front, back []model.XY) {
+func PolygonSplit(poly Polygon, nx float64, ny float64, ndx float64, ndy float64) (front, back Polygon) {
 	if len(poly) < 3 {
 		return nil, nil
 	}
@@ -60,11 +60,11 @@ func PolygonSplit(poly []model.XY, nx, ny, ndx, ndy float64) (front, back []mode
 }
 
 // PolygonClean removes duplicate or nearly identical consecutive points from a polygon and ensures the result has at least 3 points.
-func PolygonClean(poly []model.XY) []model.XY {
+func PolygonClean(poly Polygon) Polygon {
 	if len(poly) < 3 {
 		return nil
 	}
-	var res []model.XY
+	var res Polygon
 	for _, p := range poly {
 		if len(res) == 0 || EuclideanDistance(res[len(res)-1], p) > 0.01 {
 			res = append(res, p)

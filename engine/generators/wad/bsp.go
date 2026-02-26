@@ -66,7 +66,7 @@ func (bsp *BSP) FindSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps
 }
 
 // Traverse traverses a BSP tree, splits input polygons, and associates them with subsectors in the output map.
-func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
+func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly Polygon, out map[uint16]Polygon) {
 	if nodeIdx&0x8000 != 0 {
 		ssIdx := nodeIdx &^ 0x8000
 		out[ssIdx] = poly

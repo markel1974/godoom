@@ -132,6 +132,13 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		miSector := &model.ConfigSector{
 			Id: strconv.Itoa(i), Floor: floor, Ceil: ceil, Textures: true, Tag: strconv.Itoa(int(sectorRef)),
 		}
+		//TODO REAL TEXTURE
+		miSector.UpperTexture = "wall2.ppm"
+		miSector.LowerTexture = "floor2.ppm"
+		miSector.CeilTexture = "ceil.ppm"
+		miSector.WallTexture = "wall.ppm"
+		miSector.FloorTexture = "floor.ppm"
+		miSector.Textures = true
 
 		poly := subsectorPolys[uint16(i)]
 		for j := 0; j < len(poly); j++ {

@@ -6,8 +6,6 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-//const subSectorBit = uint16(0x8000)
-
 // Polygons represents a shape as a slice of 2D points in counter-clockwise order.
 type Polygons []model.XY
 

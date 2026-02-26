@@ -3,7 +3,6 @@ package wad
 import (
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strconv"
 
@@ -15,8 +14,6 @@ import (
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
-	level    *Level
-	bsp      *BSP
 }
 
 // NewBuilder creates and returns a new instance of Builder with initialized textures mapping.
@@ -35,31 +32,38 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 		return nil, fmt.Errorf("level index out of bounds: %d", levelNumber)
 	}
 
-	var err error
-	b.level, err = b.w.GetLevel(levelNames[levelNumber-1])
+	level, err := b.w.GetLevel(levelNames[levelNumber-1])
 	if err != nil {
-		fmt.Printf("error: %s\n", err)
-		os.Exit(1)
+		return nil, err
 	}
 
-	b.bsp = NewBsp(b.level)
-	sectors := b.scanSubSectors()
+	bsp := NewBsp(level)
+	sectors := b.scanSubSectors(level)
 
-	p1 := b.level.Things[1]
-	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
-	_, playerSSId, _ := b.bsp.FindSector(p1.X, p1.Y)
+	p1 := level.Things[0]
 
-	player := model.NewConfigPlayer(position, float64(p1.Angle), strconv.Itoa(int(playerSSId)))
+	for _, t := range level.Things {
+		if t.Type == 1 {
+			p1 = t
+			break
+		}
+	}
+
+	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y)
+	p1Pos := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
+	p1Angle := float64(p1.Angle)
+
+	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
 	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true)
 
 	return root, nil
 }
 
 // scanSubSectors generates and returns a slice of ConfigSector objects by analyzing subsectors and applying transformations.
-func (b *Builder) scanSubSectors() []*model.ConfigSector {
+func (b *Builder) scanSubSectors(level *Level) []*model.ConfigSector {
 	// 1. Definiamo il perimetro globale del livello (Coordinate Doom)
 	minX, minY, maxX, maxY := 32768.0, 32768.0, -32768.0, -32768.0
-	for _, v := range b.level.Vertexes {
+	for _, v := range level.Vertexes {
 		if float64(v.XCoord) < minX {
 			minX = float64(v.XCoord)
 		}
@@ -84,8 +88,8 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 
 	// 2. Traversa tutto l'albero BSP per generare i poligoni perfetti
 	subsectorPolys := make(map[uint16][]model.XY)
-	if len(b.level.Nodes) > 0 {
-		b.traverseBSP(uint16(len(b.level.Nodes)-1), rootBBox, subsectorPolys)
+	if len(level.Nodes) > 0 {
+		b.traverseBSP(level, uint16(len(level.Nodes)-1), rootBBox, subsectorPolys)
 	}
 
 	// 3. Convertiamo nel sistema di coordinate del motore (Y invertita e Scalata)
@@ -98,15 +102,15 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	}
 
 	// 4. Eliminazione T-Junctions: Spezziamo i lati grandi in modo che combacino tutti 1:1
-	b.eliminateTJunctions(subsectorPolys)
+	b.eliminateTJunctions(level, subsectorPolys)
 
 	// 5. Creazione ConfigSectors
-	numSS := len(b.level.SubSectors)
+	numSS := len(level.SubSectors)
 	miSectors := make([]*model.ConfigSector, numSS)
 	for i := 0; i < numSS; i++ {
 		//ss := b.level.SubSectors[i]
-		sectorRef, _ := b.level.GetSectorFromSubSector(uint16(i))
-		ds := b.level.Sectors[sectorRef]
+		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
+		ds := level.Sectors[sectorRef]
 
 		miSector := &model.ConfigSector{
 			Id:       strconv.Itoa(i),
@@ -127,7 +131,7 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	}
 
 	// 6. Applicazione Texture (da WAD) e Identificazione Topologica
-	b.applyWadAndLinks(miSectors)
+	b.applyWadAndLinks(level, miSectors)
 
 	for _, sector := range miSectors {
 		b.forceWindingOrder(sector.Segments, false)
@@ -137,23 +141,23 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 }
 
 // traverseBSP traverses a BSP tree, splits input polygons, and associates them with subsectors in the output map.
-func (b *Builder) traverseBSP(nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
+func (b *Builder) traverseBSP(level *Level, nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
 	if nodeIdx&0x8000 != 0 {
 		ssIdx := nodeIdx &^ 0x8000
 		out[ssIdx] = poly
 		return
 	}
 
-	node := b.level.Nodes[nodeIdx]
+	node := level.Nodes[nodeIdx]
 	nx, ny := float64(node.X), float64(node.Y)
 	ndx, ndy := float64(node.DX), float64(node.DY)
 
 	front, back := b.splitPolygon(poly, nx, ny, ndx, ndy)
 	if len(front) > 0 {
-		b.traverseBSP(node.Child[0], front, out)
+		b.traverseBSP(level, node.Child[0], front, out)
 	}
 	if len(back) > 0 {
-		b.traverseBSP(node.Child[1], back, out)
+		b.traverseBSP(level, node.Child[1], back, out)
 	}
 }
 
@@ -222,7 +226,7 @@ func (b *Builder) cleanPoly(poly []model.XY) []model.XY {
 }
 
 // eliminateTJunctions resolves T-junctions in a set of subsector polygons by splitting edges into smaller segments at overlap points.
-func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
+func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16][]model.XY) {
 	var allVerts []model.XY
 	for _, poly := range subsectorPolys {
 		allVerts = append(allVerts, poly...)
@@ -261,19 +265,77 @@ func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
 	}
 }
 
+/*
+
+func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16][]model.XY) {
+	var allVerts []model.XY
+
+	// 1. Raccogliamo i vertici generati dai tagli del BSP
+	for _, poly := range subsectorPolys {
+		allVerts = append(allVerts, poly...)
+	}
+
+	// 2. FIX FONDAMENTALE: Aggiungiamo i vertici fisici del livello
+	// Questo costringerà i lati lunghi del BSP a "spezzarsi" esattamente
+	// alle estremità dei segmenti fisici di Doom (WAD Segs)
+	for _, v := range level.Vertexes {
+		allVerts = append(allVerts, model.XY{
+			X: float64(v.XCoord) / ScaleFactor,
+			Y: float64(-v.YCoord) / ScaleFactor,
+		})
+	}
+
+	for ssIdx, poly := range subsectorPolys {
+		var newPoly []model.XY
+		for i := 0; i < len(poly); i++ {
+			p1 := poly[i]
+			p2 := poly[(i+1)%len(poly)]
+
+			var splits []model.XY
+			for _, v := range allVerts {
+				// Se il vertice giace strettamente DENTRO il segmento p1-p2
+				if b.distPointToSegment(v, p1, p2) < 0.01 {
+					dot := (v.X-p1.X)*(p2.X-p1.X) + (v.Y-p1.Y)*(p2.Y-p1.Y)
+					lenSq := (p2.X-p1.X)*(p2.X-p1.X) + (p2.Y-p1.Y)*(p2.Y-p1.Y)
+
+					// Ridotto il margine a 0.01 per catturare anche micro-muri
+					if dot > 0.01 && dot < lenSq-0.01 {
+						splits = append(splits, v)
+					}
+				}
+			}
+
+			sort.Slice(splits, func(i, j int) bool {
+				return b.dist(p1, splits[i]) < b.dist(p1, splits[j])
+			})
+
+			newPoly = append(newPoly, p1)
+			for _, sp := range splits {
+				// Filtro per evitare duplicati causati da float vicinissimi
+				if b.dist(newPoly[len(newPoly)-1], sp) > 0.005 {
+					newPoly = append(newPoly, sp)
+				}
+			}
+		}
+		subsectorPolys[ssIdx] = newPoly
+	}
+}
+
+*/
+
 // applyWadAndLinks processes map sectors, assigning textures, tags, and neighbor relationships based on WAD data and BSP output.
-func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
+func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector) {
 	for i, miSector := range miSectors {
 		if miSector == nil {
 			continue
 		}
-		ss := b.level.SubSectors[i]
+		ss := level.SubSectors[i]
 
 		for _, seg := range miSector.Segments {
 			mid := model.XY{X: (seg.Start.X + seg.End.X) / 2.0, Y: (seg.Start.Y + seg.End.Y) / 2.0}
 
 			// Trova se questo lato generato dal BSP è un vero muro del WAD
-			wadSeg := b.findOverlappingWadSeg(mid, ss)
+			wadSeg := b.findOverlappingWadSeg(level, mid, ss)
 
 			// 1. Identifica il vicino (se c'è un match inverso geometrico esatto)
 			foundNeighbor := false
@@ -295,8 +357,8 @@ func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
 
 			// 2. Classificazione basata su World.go e WAD
 			if wadSeg != nil {
-				line := b.level.LineDefs[wadSeg.LineDef]
-				_, side := b.level.SegmentSideDef(wadSeg, line)
+				line := level.LineDefs[wadSeg.LineDef]
+				_, side := level.SegmentSideDef(wadSeg, line)
 
 				if side != nil {
 					seg.Upper = side.UpperTexture
@@ -353,11 +415,11 @@ func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 }
 
 // findOverlappingWadSeg searches for a WAD segment in the given subsector whose centerline is within a close distance to the specified point.
-func (b *Builder) findOverlappingWadSeg(mid model.XY, ss *lumps.SubSector) *lumps.Seg {
+func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
-		wadSeg := b.level.Segments[ss.StartSeg+i]
-		v1 := b.level.Vertexes[wadSeg.VertexStart]
-		v2 := b.level.Vertexes[wadSeg.VertexEnd]
+		wadSeg := level.Segments[ss.StartSeg+i]
+		v1 := level.Vertexes[wadSeg.VertexStart]
+		v2 := level.Vertexes[wadSeg.VertexEnd]
 
 		w1 := model.XY{X: float64(v1.XCoord) / ScaleFactor, Y: float64(-v1.YCoord) / ScaleFactor}
 		w2 := model.XY{X: float64(v2.XCoord) / ScaleFactor, Y: float64(-v2.YCoord) / ScaleFactor}

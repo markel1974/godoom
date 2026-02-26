@@ -11,7 +11,7 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-// Builder is responsible for constructing and managing game levels and textures using WAD data structures.
+// Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
@@ -19,12 +19,12 @@ type Builder struct {
 	bsp      *BSP
 }
 
-// NewBuilder creates and returns a new instance of Builder1 with initialized textures map.
+// NewBuilder creates and returns a new instance of Builder with initialized textures mapping.
 func NewBuilder() *Builder {
 	return &Builder{textures: make(map[string]bool)}
 }
 
-// Setup initializes the Builder by loading a WAD file and setting up the level configuration based on the provided level number.
+// Setup initializes the Builder with the specified WAD file and level number, returning a ConfigRoot or an error.
 func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
@@ -45,10 +45,6 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	b.bsp = NewBsp(b.level)
 	sectors := b.scanSubSectors()
 
-	for _, sector := range sectors {
-		b.forceWindingOrder(sector.Segments, false)
-	}
-
 	p1 := b.level.Things[1]
 	position := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
 	_, playerSSId, _ := b.bsp.FindSector(p1.X, p1.Y)
@@ -59,7 +55,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
-// scanSubSectors generates and returns a list of ConfigSector objects by processing BSP data and subsector polygons.
+// scanSubSectors generates and returns a slice of ConfigSector objects by analyzing subsectors and applying transformations.
 func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	// 1. Definiamo il perimetro globale del livello (Coordinate Doom)
 	minX, minY, maxX, maxY := 32768.0, 32768.0, -32768.0, -32768.0
@@ -133,10 +129,14 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	// 6. Applicazione Texture (da WAD) e Identificazione Topologica
 	b.applyWadAndLinks(miSectors)
 
+	for _, sector := range miSectors {
+		b.forceWindingOrder(sector.Segments, false)
+	}
+
 	return miSectors
 }
 
-// traverseBSP recursively traverses the BSP tree, partitioning polygons and grouping by subsector indices.
+// traverseBSP traverses a BSP tree, splits input polygons, and associates them with subsectors in the output map.
 func (b *Builder) traverseBSP(nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
 	if nodeIdx&0x8000 != 0 {
 		ssIdx := nodeIdx &^ 0x8000
@@ -157,8 +157,11 @@ func (b *Builder) traverseBSP(nodeIdx uint16, poly []model.XY, out map[uint16][]
 	}
 }
 
-// splitPolygon splits a convex polygon into two sub-polygons based on a splitting line defined by nx, ny, ndx, and ndy.
-// It returns the points of the front and back sub-polygons after the split. Polygons with fewer than 3 vertices return nil.
+// splitPolygon splits a polygon into two parts based on a partition line described by its normal and point.
+// poly is the input polygon defined as a slice of points (model.XY).
+// nx, ny specify the base point of the partition line.
+// ndx, ndy define the direction vector perpendicular to the partition line.
+// Returns two slices of points (front and back) representing the two resulting polygons.
 func (b *Builder) splitPolygon(poly []model.XY, nx, ny, ndx, ndy float64) (front, back []model.XY) {
 	if len(poly) < 3 {
 		return nil, nil
@@ -198,7 +201,7 @@ func (b *Builder) splitPolygon(poly []model.XY, nx, ny, ndx, ndy float64) (front
 	return b.cleanPoly(front), b.cleanPoly(back)
 }
 
-// cleanPoly simplifies a polygon by removing consecutive points closer than a threshold and ensuring it remains closed.
+// cleanPoly removes duplicate or close points from the polygon and ensures it has at least 3 vertices for validity.
 func (b *Builder) cleanPoly(poly []model.XY) []model.XY {
 	if len(poly) < 3 {
 		return nil
@@ -218,7 +221,7 @@ func (b *Builder) cleanPoly(poly []model.XY) []model.XY {
 	return res
 }
 
-// eliminateTJunctions identifies and resolves T-junctions in the subsector polygons by splitting edges at intersection points.
+// eliminateTJunctions resolves T-junctions in a set of subsector polygons by splitting edges into smaller segments at overlap points.
 func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
 	var allVerts []model.XY
 	for _, poly := range subsectorPolys {
@@ -258,7 +261,7 @@ func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
 	}
 }
 
-// applyWadAndLinks associates map sectors with BSP sectors, resolving neighbors, textures, and classifications.
+// applyWadAndLinks processes map sectors, assigning textures, tags, and neighbor relationships based on WAD data and BSP output.
 func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
 	for i, miSector := range miSectors {
 		if miSector == nil {
@@ -337,7 +340,7 @@ func (b *Builder) dist(p1, p2 model.XY) float64 {
 	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
 }
 
-// distPointToSegment calculates the shortest distance between a point p and a line segment defined by endpoints v and w.
+// distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
 func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	l2 := b.dist(v, w) * b.dist(v, w)
 	if l2 == 0 {
@@ -349,7 +352,7 @@ func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	return b.dist(p, proj)
 }
 
-// findOverlappingWadSeg identifies and returns the WAD segment overlapping the given midpoint within the specified subsector.
+// findOverlappingWadSeg searches for a WAD segment in the given subsector whose centerline is within a close distance to the specified point.
 func (b *Builder) findOverlappingWadSeg(mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := b.level.Segments[ss.StartSeg+i]
@@ -368,6 +371,8 @@ func (b *Builder) findOverlappingWadSeg(mid model.XY, ss *lumps.SubSector) *lump
 	return nil
 }
 
+// forceWindingOrder modifies the orientation of a set of line segments to enforce a desired winding order.
+// The desired winding order is specified by the wantClockwise parameter (true for clockwise, false for counter-clockwise).
 func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
 	if len(segments) < 3 {
 		return

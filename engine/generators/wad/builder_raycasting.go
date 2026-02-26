@@ -64,7 +64,7 @@ func (b *BuilderRayCasting) Setup(wadFile string, levelNumber int) (*model.Confi
 	p1 := b.level.Things[1]
 	position := model.XY{X: float64(p1.X), Y: float64(p1.Y)}
 
-	playerSectorId, playerSSectorId, playerSector := b.bsp.FindSector(p1.X, p1.Y)
+	playerSectorId, playerSSectorId, playerSector := b.bsp.FindSector(p1.X, p1.Y, b.bsp.root)
 	//TEST
 	//playerSSectorId = 44
 	//position.X = 1520 + 5
@@ -203,7 +203,7 @@ func (b *BuilderRayCasting) compileNeighbors(miSectors []*model.ConfigSector) {
 			}
 			//duplicates := map[string]bool{}
 			id, _ := strconv.Atoi(miSector.Id)
-			res := b.bsp.FindOppositeSubSectorByPoints(uint16(id), s, wallSectors)
+			res := b.bsp.FindOppositeSubSectorByPointsOld(uint16(id), s, wallSectors)
 
 			//	for _, d := range res {
 			//		if _, ok := duplicates[d.Neighbor]; ok {
@@ -299,7 +299,7 @@ func (b *BuilderRayCasting) compileSegmentRelations(miSectors []*model.ConfigSec
 	//TODO UTILIZZARE level.Segments
 	for _, xSector := range miSectors {
 		for _, xSegment := range xSector.Segments {
-			ld := b.bsp.describeLineF(xSegment.Start.X, xSegment.Start.Y, xSegment.End.X, xSegment.End.Y)
+			ld := b.bsp.DescribeLineF(xSegment.Start.X, xSegment.Start.Y, xSegment.End.X, xSegment.End.Y)
 			for _, lp := range ld {
 				v := model.XY{X: lp.X, Y: lp.Y}
 				if t, ok := cache[v]; ok {
@@ -409,12 +409,12 @@ func (b *BuilderRayCasting) describeSegments(targetSector int, miSectors []*mode
 		fmt.Println("INDEX:", idx, "NEIGHBOR:", tt.Neighbor, "COORDS:", tt.Start.X, tt.Start.Y, tt.End.X, tt.End.Y, "TAG:", tt.Tag)
 	}
 
-	nodeIdx, _ := b.bsp.FindNode(int16(xy.Start.X), int16(-xy.Start.Y))
+	nodeIdx, _ := b.bsp.FindNodeOld(int16(xy.Start.X), int16(-xy.Start.Y), b.bsp.root, b.bsp.root)
 
 	var traverse []uint16
 
 	//b.bsp.describeLine2F()
-	b.bsp.Traverse(&traverse, int16(xy.Start.X), int16(-xy.Start.Y), nodeIdx)
+	b.bsp.TraverseOld(&traverse, int16(xy.Start.X), int16(-xy.Start.Y), nodeIdx, nodeIdx)
 	fmt.Println("NEIGHBORS:", neighbors)
 	fmt.Println("TRAVERSE:", traverse)
 }

@@ -36,12 +36,12 @@ func NewBsp(level *Level) *BSP {
 }
 
 // FindSector identifies the sector containing the given coordinates (x, y) and returns sector reference, node index, and sector data.
-func (bsp *BSP) FindSector(x int16, y int16) (uint16, uint16, *lumps2.Sector) {
-	return bsp.findSector(x, y, bsp.root)
-}
+//func (bsp *BSP) FindSector(x int16, y int16) (uint16, uint16, *lumps2.Sector) {
+//	return bsp.findSector(x, y, bsp.root)
+//}
 
-// findSector recursively traverses the BSP tree to identify the sector containing the given (x, y) coordinates.
-func (bsp *BSP) findSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps2.Sector) {
+// FindSector recursively traverses the BSP tree to identify the sector containing the given (x, y) coordinates.
+func (bsp *BSP) FindSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps2.Sector) {
 	if idx&subSectorBit == subSectorBit {
 		idx = idx & ^subSectorBit
 		sSector := bsp.level.SubSectors[idx]
@@ -60,23 +60,138 @@ func (bsp *BSP) findSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps
 	}
 	node := bsp.level.Nodes[idx]
 	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findSector(x, y, child)
+		return bsp.FindSector(x, y, child)
 	}
 	return 0, 0, nil
 }
 
-// FindSubSector locates the sub-sector containing the given (x, y) coordinates and returns its ID and a success flag.
-func (bsp *BSP) FindSubSector(x int16, y int16) (uint16, bool) {
-	return bsp.findSubSector(x, y, bsp.root)
+// Traverse traverses a BSP tree, splits input polygons, and associates them with subsectors in the output map.
+func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
+	if nodeIdx&0x8000 != 0 {
+		ssIdx := nodeIdx &^ 0x8000
+		out[ssIdx] = poly
+		return
+	}
+
+	node := level.Nodes[nodeIdx]
+	nx, ny := float64(node.X), float64(node.Y)
+	ndx, ndy := float64(node.DX), float64(node.DY)
+
+	front, back := PolygonSplit(poly, nx, ny, ndx, ndy)
+	if len(front) > 0 {
+		bsp.Traverse(level, node.Child[0], front, out)
+	}
+	if len(back) > 0 {
+		bsp.Traverse(level, node.Child[1], back, out)
+	}
 }
 
-// Traverse traverses the BSP structure starting from the root to collect sub-sector indices into the container slice.
-func (bsp *BSP) Traverse(container *[]uint16, x int16, y int16, root uint16) {
-	bsp.traverse(container, x, y, root, root)
+// DescribeLineF generates a list of points representing a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
+func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+		var res []PointFloat
+		dx := x1 - x0
+		dy := y1 - y0
+		xi := float64(1)
+		if dx < 0 {
+			xi = -1
+			dx = -dx
+		}
+		D := (2 * dx) - dy
+		x := x0
+		for y := y0; y <= y1; y++ {
+			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
+			if D > 0 {
+				x = x + xi
+				D = D + (2 * (dx - dy))
+			} else {
+				D = D + 2*dx
+			}
+		}
+		return res
+	}
+
+	low := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
+		var res []PointFloat
+		dx := x1 - x0
+		dy := y1 - y0
+		yi := float64(1)
+		if dy < 0 {
+			yi = -1
+			dy = -dy
+		}
+		D := (2 * dy) - dx
+		y := y0
+		for x := x0; x <= x1; x++ {
+			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
+			if D > 0 {
+				y = y + yi
+				D = D + (2 * (dy - dx))
+			} else {
+				D = D + 2*dy
+			}
+		}
+		return res
+	}
+
+	var res []PointFloat
+	reverse := false
+	if math.Abs(y1-y0) < math.Abs(x1-x0) {
+		if x0 > x1 {
+			reverse = true
+			res = low(x1, y1, x0, y0)
+		} else {
+			res = low(x0, y0, x1, y1)
+		}
+	} else {
+		if y0 > y1 {
+			reverse = true
+			res = high(x1, y1, x0, y0)
+		} else {
+			res = high(x0, y0, x1, y1)
+		}
+	}
+
+	if !reverse {
+		return res
+	}
+
+	var r []PointFloat
+	for x := len(res) - 1; x >= 0; x-- {
+		r = append(r, res[x])
+	}
+	return r
 }
 
-// traverseBsp recursively traverses the BSP tree to collect sub-sector IDs into the container, excluding the root ID.
-func (bsp *BSP) traverse(container *[]uint16, x int16, y int16, root uint16, idx uint16) {
+// FindSubSectorForcedOld attempts to locate a sub-sector containing the point (x, y) by iterating over all leaf nodes.
+// Returns the sub-sector index and a boolean indicating success.
+func (bsp *BSP) FindSubSectorForcedOld(x int16, y int16) (uint16, bool) {
+	//TODO WRONG IMPLEMENTATION - DEVE FUNZIONARE PER FORZA CON INSIDE!!!!!
+	for idx := 0; idx < len(bsp.leafNodes); idx++ {
+		node := bsp.leafNodes[idx]
+		if child, ok := node.Intersect(x, y); ok {
+			return child & ^subSectorBit, true
+		}
+
+	}
+	return 0, false
+}
+
+// FindNodeOld recursively searches for a node in the BSP tree based on the given coordinates and node indices.
+// Returns the parent node index and a boolean indicating if a valid node was found.
+func (bsp *BSP) FindNodeOld(x int16, y int16, parentNodeIdx uint16, nodeIdx uint16) (uint16, bool) {
+	if nodeIdx&subSectorBit == subSectorBit {
+		return parentNodeIdx, true
+	}
+	node := bsp.level.Nodes[nodeIdx]
+	if child, ok := node.Intersect(x, y); ok {
+		return bsp.FindNodeOld(x, y, nodeIdx, child)
+	}
+	return 0, false
+}
+
+// TraverseOld recursively traverses the BSP tree to collect sub-sector IDs into the container, excluding the root ID.
+func (bsp *BSP) TraverseOld(container *[]uint16, x int16, y int16, root uint16, idx uint16) {
 	if idx&subSectorBit == subSectorBit {
 		if idx == 0xffff {
 			return
@@ -91,109 +206,16 @@ func (bsp *BSP) traverse(container *[]uint16, x int16, y int16, root uint16, idx
 	node := bsp.level.Nodes[idx]
 	side := node.PointOnSide(x, y)
 	sideIdx := node.Child[side]
-	bsp.traverse(container, x, y, root, sideIdx)
+	bsp.TraverseOld(container, x, y, root, sideIdx)
 
 	oppositeSide := side ^ 1
 	oppositeSideIdx := node.Child[oppositeSide]
-	bsp.traverse(container, x, y, root, oppositeSideIdx)
+	bsp.TraverseOld(container, x, y, root, oppositeSideIdx)
 }
 
-// findSubSector traverses the BSP tree recursively to locate the sub-sector containing the given (x, y) coordinates.
-func (bsp *BSP) findSubSector(x int16, y int16, idx uint16) (uint16, bool) {
-	//TODO WRONG IMPLEMENTATION!!!!!
-	if idx&subSectorBit == subSectorBit {
-		subSectorId := idx & ^subSectorBit
-		return subSectorId, true
-	}
-	node := bsp.level.Nodes[idx]
-	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findSubSector(x, y, child)
-	}
-	return 0, false
-}
-
-// FindSubSectorForced attempts to locate a sub-sector containing the point (x, y) by iterating over all leaf nodes.
-// Returns the sub-sector index and a boolean indicating success.
-func (bsp *BSP) FindSubSectorForced(x int16, y int16) (uint16, bool) {
-	//TODO WRONG IMPLEMENTATION - DEVE FUNZIONARE PER FORZA CON INSIDE!!!!!
-
-	for idx := 0; idx < len(bsp.leafNodes); idx++ {
-		node := bsp.leafNodes[idx]
-		if child, ok := node.Intersect(x, y); ok {
-			return child & ^subSectorBit, true
-		}
-
-	}
-	return 0, false
-}
-
-// FindNode traverses the BSP tree to locate the parent node index containing the point (x, y) and returns it if found.
-func (bsp *BSP) FindNode(x int16, y int16) (uint16, bool) {
-	return bsp.findNode(x, y, bsp.root, bsp.root)
-}
-
-// findNode recursively searches for a node in the BSP tree based on the given coordinates and node indices.
-// Returns the parent node index and a boolean indicating if a valid node was found.
-func (bsp *BSP) findNode(x int16, y int16, parentNodeIdx uint16, nodeIdx uint16) (uint16, bool) {
-	if nodeIdx&subSectorBit == subSectorBit {
-		return parentNodeIdx, true
-	}
-	node := bsp.level.Nodes[nodeIdx]
-	if child, ok := node.Intersect(x, y); ok {
-		return bsp.findNode(x, y, nodeIdx, child)
-	}
-	return 0, false
-}
-
-// FindRect traverses the BSP tree to locate the bounding box containing the specified point (x, y).
-// Returns the found bounding box and a boolean indicating success.
-func (bsp *BSP) FindRect(x int16, y int16) (lumps2.BBox, bool) {
-	return bsp.findRect(x, y, lumps2.BBox{}, bsp.root)
-}
-
-// findRect traverses the BSP tree to locate the bounding box that contains the specified point (x, y).
-func (bsp *BSP) findRect(x int16, y int16, b lumps2.BBox, nodeIdx uint16) (lumps2.BBox, bool) {
-	if nodeIdx&subSectorBit == subSectorBit {
-		return b, true
-	}
-	node := bsp.level.Nodes[nodeIdx]
-	if node.BBox[0].Intersect(x, y) {
-		return bsp.findRect(x, y, node.BBox[0], node.Child[0])
-	}
-	if node.BBox[1].Intersect(x, y) {
-		return bsp.findRect(x, y, node.BBox[1], node.Child[1])
-	}
-	return lumps2.BBox{}, false
-}
-
-// traversePoint traverses the BSP tree to find sub-sectors based on a given point, excluding a specific sub-sector.
-func (bsp *BSP) traversePoint(x1 int16, y1 int16, idx uint16, exclude uint16, res map[uint16]bool) {
-	if idx&subSectorBit == subSectorBit {
-		subSectorId := idx & ^subSectorBit
-		if subSectorId != exclude {
-			res[subSectorId] = true
-		}
-		return
-	}
-	node := bsp.level.Nodes[idx]
-	if child, ok := node.Intersect(x1, y1); ok {
-		bsp.traversePoint(x1, y1, child, exclude, res)
-	}
-	return
-}
-
-// findPointInSubSector identifies sub-sectors containing the specified point while excluding a given sub-sector.
-func (bsp *BSP) findPointInSubSector(x1 int16, y1 int16, exclude uint16, res map[uint16]bool) {
-	for _, n := range bsp.level.Nodes {
-		if child, ok := n.Intersect(x1, y1); ok {
-			bsp.traversePoint(x1, y1, child, exclude, res)
-		}
-	}
-}
-
-// FindOppositeSubSectorByPoints calculates opposite subsectors related to a given segment in the BSP tree structure.
+// FindOppositeSubSectorByPointsOld calculates opposite subsectors related to a given segment in the BSP tree structure.
 // It considers margin adjustments, segments alignment, and potential wall sectors to generate a list of new input segments.
-func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.ConfigSegment, wallSectors map[uint16]bool) []*model.ConfigSegment {
+func (bsp *BSP) FindOppositeSubSectorByPointsOld(subSectorId uint16, is2 *model.ConfigSegment, wallSectors map[uint16]bool) []*model.ConfigSegment {
 	const margin = 2
 	x1 := int16(is2.Start.X)
 	y1 := int16(is2.Start.Y)
@@ -204,7 +226,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 	//debug := subSectorId == 15 && x1 == 1992  && y1 == 2552 && x2 == 1784 && y2 == 2552
 	//debug := subSectorId == 102
 	debug := subSectorId == 96
-	rl := bsp.describeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
+	rl := bsp.DescribeLineF(float64(x1), float64(y1), float64(x2), float64(y2))
 	rlStart := is2.Start //rl[0]
 	rlEnd := is2.End     //rl[len(rl) - 1]
 	//rlStart := rl[0]
@@ -276,7 +298,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 			fmt.Println("TEST")
 		}
 
-		perp := bsp.describeLineF(a1, b1, a2, b2)
+		perp := bsp.DescribeLineF(a1, b1, a2, b2)
 
 		center := -1
 		for idx, xy := range perp {
@@ -304,7 +326,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 		for d1 := center; d1 < len(perp); d1++ {
 			left := perp[d1]
 			right := perp[d2]
-			if leftSS, ok := bsp.FindSubSectorForced(int16(left.X), int16(-left.Y)); ok {
+			if leftSS, ok := bsp.FindSubSectorForcedOld(int16(left.X), int16(-left.Y)); ok {
 				if leftSS != subSectorId {
 					if debug {
 						fmt.Printf(" %0.f:%0.f %d - LEFT \n", left.X, left.Y, leftSS)
@@ -321,7 +343,7 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 					fmt.Println("CRITICAL ERROR, NOT FOUND ON LEFT", left.X, -left.Y)
 				}
 			}
-			if rightSS, ok := bsp.FindSubSectorForced(int16(right.X), int16(-right.Y)); ok {
+			if rightSS, ok := bsp.FindSubSectorForcedOld(int16(right.X), int16(-right.Y)); ok {
 				if rightSS != subSectorId {
 					if debug {
 						fmt.Printf("%0.f:%0.f %d - RIGHT\n", right.X, right.Y, rightSS)
@@ -361,6 +383,75 @@ func (bsp *BSP) FindOppositeSubSectorByPoints(subSectorId uint16, is2 *model.Con
 		//os.Exit(-1)
 	}
 	return ret
+}
+
+/*
+// FindSubSector locates the sub-sector containing the given (x, y) coordinates and returns its ID and a success flag.
+func (bsp *BSP) FindSubSector(x int16, y int16) (uint16, bool) {
+	return bsp.findSubSector(x, y, bsp.root)
+}
+
+// findSubSector traverses the BSP tree recursively to locate the sub-sector containing the given (x, y) coordinates.
+func (bsp *BSP) findSubSector(x int16, y int16, idx uint16) (uint16, bool) {
+	//TODO WRONG IMPLEMENTATION!!!!!
+	if idx&subSectorBit == subSectorBit {
+		subSectorId := idx & ^subSectorBit
+		return subSectorId, true
+	}
+	node := bsp.level.Nodes[idx]
+	if child, ok := node.Intersect(x, y); ok {
+		return bsp.findSubSector(x, y, child)
+	}
+	return 0, false
+}
+
+
+
+
+// FindRect traverses the BSP tree to locate the bounding box containing the specified point (x, y).
+// Returns the found bounding box and a boolean indicating success.
+func (bsp *BSP) FindRect(x int16, y int16) (lumps2.BBox, bool) {
+	return bsp.findRect(x, y, lumps2.BBox{}, bsp.root)
+}
+
+// findRect traverses the BSP tree to locate the bounding box that contains the specified point (x, y).
+func (bsp *BSP) findRect(x int16, y int16, b lumps2.BBox, nodeIdx uint16) (lumps2.BBox, bool) {
+	if nodeIdx&subSectorBit == subSectorBit {
+		return b, true
+	}
+	node := bsp.level.Nodes[nodeIdx]
+	if node.BBox[0].Intersect(x, y) {
+		return bsp.findRect(x, y, node.BBox[0], node.Child[0])
+	}
+	if node.BBox[1].Intersect(x, y) {
+		return bsp.findRect(x, y, node.BBox[1], node.Child[1])
+	}
+	return lumps2.BBox{}, false
+}
+
+// traversePoint traverses the BSP tree to find sub-sectors based on a given point, excluding a specific sub-sector.
+func (bsp *BSP) traversePoint(x1 int16, y1 int16, idx uint16, exclude uint16, res map[uint16]bool) {
+	if idx&subSectorBit == subSectorBit {
+		subSectorId := idx & ^subSectorBit
+		if subSectorId != exclude {
+			res[subSectorId] = true
+		}
+		return
+	}
+	node := bsp.level.Nodes[idx]
+	if child, ok := node.Intersect(x1, y1); ok {
+		bsp.traversePoint(x1, y1, child, exclude, res)
+	}
+	return
+}
+
+// findPointInSubSector identifies sub-sectors containing the specified point while excluding a given sub-sector.
+func (bsp *BSP) findPointInSubSector(x1 int16, y1 int16, exclude uint16, res map[uint16]bool) {
+	for _, n := range bsp.level.Nodes {
+		if child, ok := n.Intersect(x1, y1); ok {
+			bsp.traversePoint(x1, y1, child, exclude, res)
+		}
+	}
 }
 
 // FindOppositeSubSectorByHulls identifies opposite subsectors based on input segment hulls and specific wall sector mappings.
@@ -469,80 +560,4 @@ func (bsp *BSP) describeCircle(x0 float64, y0 float64, radius float64) []PointFl
 	}
 	return res
 }
-
-// describeLineF generates a list of points representing a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
-func (bsp *BSP) describeLineF(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
-	high := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
-		var res []PointFloat
-		dx := x1 - x0
-		dy := y1 - y0
-		xi := float64(1)
-		if dx < 0 {
-			xi = -1
-			dx = -dx
-		}
-		D := (2 * dx) - dy
-		x := x0
-		for y := y0; y <= y1; y++ {
-			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
-			if D > 0 {
-				x = x + xi
-				D = D + (2 * (dx - dy))
-			} else {
-				D = D + 2*dx
-			}
-		}
-		return res
-	}
-
-	low := func(x0 float64, y0 float64, x1 float64, y1 float64) []PointFloat {
-		var res []PointFloat
-		dx := x1 - x0
-		dy := y1 - y0
-		yi := float64(1)
-		if dy < 0 {
-			yi = -1
-			dy = -dy
-		}
-		D := (2 * dy) - dx
-		y := y0
-		for x := x0; x <= x1; x++ {
-			res = append(res, PointFloat{X: math.Round(x), Y: math.Round(y)})
-			if D > 0 {
-				y = y + yi
-				D = D + (2 * (dy - dx))
-			} else {
-				D = D + 2*dy
-			}
-		}
-		return res
-	}
-
-	var res []PointFloat
-	reverse := false
-	if math.Abs(y1-y0) < math.Abs(x1-x0) {
-		if x0 > x1 {
-			reverse = true
-			res = low(x1, y1, x0, y0)
-		} else {
-			res = low(x0, y0, x1, y1)
-		}
-	} else {
-		if y0 > y1 {
-			reverse = true
-			res = high(x1, y1, x0, y0)
-		} else {
-			res = high(x0, y0, x1, y1)
-		}
-	}
-
-	if !reverse {
-		return res
-	}
-
-	var r []PointFloat
-	for x := len(res) - 1; x >= 0; x-- {
-		r = append(r, res[x])
-	}
-	return r
-}
+*/

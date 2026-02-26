@@ -2,6 +2,7 @@ package renderers
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
+
+const scaleFactor = 10.0
 
 // RenderSoftware represents a software-based renderer for managing and rendering 2D/3D scenes on a defined screen space.
 type RenderSoftware struct {
@@ -141,6 +144,64 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewIte
 
 // renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
 func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+	switch mode {
+	case 0:
+		dr.DrawWireFrame(false)
+		return
+	case 1:
+		dr.DrawWireFrame(true)
+		return
+	case 2:
+		dr.DrawRectangle()
+		return
+	case 3:
+		dr.DrawPoints(5)
+		return
+	case 4:
+		dr.DrawWireFrame(false)
+		dr.DrawPoints(10)
+		return
+	case 5:
+		dr.DrawWireFrame(true)
+		dr.DrawPoints(10)
+		return
+	case 6:
+		dr.DrawRectangle()
+		dr.DrawPoints(10)
+		return
+	case 7:
+		dr.DrawWireFrame(true)
+		dr.DrawRectangle()
+		return
+	}
+
+	// Scala per mappare 1:1 le dimensioni reali del tuo spazio
+
+	switch cp.Kind {
+	case model.IdWall:
+		target := (cp.Sector.Ceil - cp.Sector.Floor) * scaleFactor
+		dr.DrawTexture(cp.Sector.WallTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, target)
+	case model.IdUpper:
+		target := (cp.Sector.Ceil - cp.Neighbor.Ceil) * scaleFactor
+		dr.DrawTexture(cp.Sector.UpperTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(target))
+	case model.IdLower:
+		target := (cp.Neighbor.Floor - cp.Sector.Floor) * scaleFactor
+		dr.DrawTexture(cp.Sector.LowerTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(target))
+	case model.IdCeil:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
+	case model.IdFloor:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+	case model.IdFloorTest:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+	case model.IdCeilTest:
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
+	default:
+		dr.DrawWireFrame(true)
+	}
+}
+
+// renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
+func (r *RenderSoftware) renderPolygon_OLD(vi *ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)

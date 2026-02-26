@@ -138,6 +138,79 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 		return
 	}
 
+	texWidth := textures.TextureEnd - textures.TextureBegin
+	texHeight := textures.TextureEnd - textures.TextureBegin
+	if texWidth <= 0 {
+		texWidth = 64
+	}
+	if texHeight <= 0 {
+		texHeight = 64
+	}
+
+	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
+		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
+
+			// Correzione prospettica 1D perfetta
+			txtX := int((u0*((x2-float64(pixelX))*tz2) + u1*((float64(pixelX)-x1)*tz1)) / ((x2-float64(pixelX))*tz2 + (float64(pixelX)-x1)*tz1))
+
+			// FIX BUG: Wrap modulo al posto del Valore Assoluto
+			safeTxtX := txtX % texWidth
+			if safeTxtX < 0 {
+				safeTxtX += texWidth
+			}
+			safeTxtX += textures.TextureBegin
+
+			for i := 0; i < len(nodeY); i += 2 {
+				y1 := nodeY[i]
+				y2 := nodeY[i+1]
+
+				div := float64(y2 - y1)
+				if div <= 0 {
+					continue
+				}
+
+				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
+					continue
+				}
+
+				cY1 := mathematic.Clamp(y1, 0, dp.lastH)
+				cY2 := mathematic.Clamp(y2, 0, dp.lastH)
+
+				for pixelY := cY1; pixelY <= cY2; pixelY++ {
+					// Estensione verticale assoluta basata su yRef mondo
+					rawTxtY := int(float64(pixelY-y1) * yRef / div)
+
+					// FIX BUG: Wrap verticale per muri giganti
+					safeTxtY := rawTxtY % texHeight
+					if safeTxtY < 0 {
+						safeTxtY += texHeight
+					}
+					safeTxtY += textures.TextureBegin
+
+					//TODO REMOVE
+					dp.lightStart = 1.0
+
+					r0, g0, b0 := ToRGB(texture.Get(uint(safeTxtX), uint(safeTxtY)), dp.lightStart)
+					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
+				}
+			}
+		}
+		dp.lightStart += dp.lightStep
+	}
+}
+
+func (dp *DrawPolygon) DrawTexture_OLD(texture *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64) {
+	if dp.surface == nil {
+		return
+	}
+	if texture == nil {
+		dp.DrawWireFrame(true)
+		return
+	}
+	if !dp.Verify() {
+		return
+	}
+
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
 			txtX := int((u0*((x2-float64(pixelX))*tz2) + u1*((float64(pixelX)-x1)*tz1)) / ((x2-float64(pixelX))*tz2 + (float64(pixelX)-x1)*tz1))
@@ -178,6 +251,86 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 }
 
 func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64) {
+	if dp.surface == nil {
+		return
+	}
+	if texture == nil {
+		dp.DrawWireFrame(true)
+		return
+	}
+	if !dp.Verify() {
+		return
+	}
+
+	p1 := (yMap - z) * dp.screenVFov
+	p2 := yaw * dp.screenVFov
+
+	texWidth := textures.TextureEnd - textures.TextureBegin
+	texHeight := textures.TextureEnd - textures.TextureBegin
+	if texWidth <= 0 {
+		texWidth = 64
+	} // Fallback per sicurezza
+	if texHeight <= 0 {
+		texHeight = 64
+	} // Fallback per sicurezza
+
+	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
+		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
+
+			p3 := (dp.halfW - float64(pixelX)) / dp.screenHFov
+
+			for i := 0; i < len(nodeY); i += 2 {
+				y1 := nodeY[i]
+				y2 := nodeY[i+1]
+				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
+					continue
+				}
+				cY1 := mathematic.Clamp(y1, 0, dp.lastH)
+				cY2 := mathematic.Clamp(y2, 0, dp.lastH)
+
+				for pixelY := cY1; pixelY <= cY2; pixelY++ {
+
+					// Previene una potenziale divisione per zero se si fissa esattamente la linea d'orizzonte
+					denom := (dp.halfH - float64(pixelY)) - p2
+					if denom == 0 {
+						denom = 0.0001
+					}
+
+					tz := p1 / denom
+					tx := tz * p3
+
+					// Calcolo posizioni mappate nel mondo e scalate
+					mapX := int((((tz * aCos) + (tx * aSin)) + x) * scaleFactor)
+					mapZ := int((((tz * aSin) - (tx * aCos)) + y) * scaleFactor)
+
+					// 2. WRAPPING SICURO SU ASSE X
+					safeTxtX := mapX % texWidth
+					if safeTxtX < 0 {
+						safeTxtX += texWidth
+					}
+					safeTxtX += textures.TextureBegin
+
+					// 3. WRAPPING SICURO SU ASSE Z
+					safeTxtZ := mapZ % texHeight
+					if safeTxtZ < 0 {
+						safeTxtZ += texHeight
+					}
+					safeTxtZ += textures.TextureBegin
+
+					//TODO REMOVE
+					dp.lightStart = 1.0
+
+					// Attenzione: mantengo il tuo ordine (Z, X) come nel codice originale per coerenza con la tua struct texture
+					red, green, blue := ToRGB(texture.Get(uint(safeTxtZ), uint(safeTxtX)), dp.lightStart)
+					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
+				}
+			}
+		}
+		dp.lightStart += dp.lightStep
+	}
+}
+
+func (dp *DrawPolygon) DrawPerspectiveTexture_OLD(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64) {
 	if dp.surface == nil {
 		return
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// ParseScriptData parses the provided script data string and generates a ConfigRoot object or returns an error.
 func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	var cfgVertices []model.XY
 	cfg := &model.ConfigRoot{

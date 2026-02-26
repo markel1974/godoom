@@ -4,8 +4,10 @@ import (
 	lumps2 "github.com/markel1974/godoom/engine/generators/wad/lumps"
 )
 
+// subSectorBit is a bitmask used to identify whether a node in the BSP tree represents a sub-sector.
 const subSectorBit = uint16(0x8000)
 
+// Level represents a game level structure containing elements such as things, linedefs, sidedefs, vertexes, segments, subsectors, sectors, and nodes.
 type Level struct {
 	Things     []*lumps2.Thing
 	LineDefs   []*lumps2.LineDef
@@ -17,6 +19,7 @@ type Level struct {
 	Nodes      []*lumps2.Node
 }
 
+// GetSectorFromSubSector determines the sector ID corresponding to a given subsector ID and returns it with a success flag.
 func (l *Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool) {
 	if subSectorId < 0 || int(subSectorId) > len(l.SubSectors) {
 		return 0, false
@@ -33,6 +36,7 @@ func (l *Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool) {
 	return 0, false
 }
 
+// SegmentSideDef identifies the correct SideDef for a segment based on its direction and the associated LineDef.
 func (l *Level) SegmentSideDef(seg *lumps2.Seg, lineDef *lumps2.LineDef) (int16, *lumps2.SideDef) {
 	if seg.Direction == 0 {
 		return lineDef.SideDefRight, l.SideDefs[lineDef.SideDefRight]
@@ -43,6 +47,7 @@ func (l *Level) SegmentSideDef(seg *lumps2.Seg, lineDef *lumps2.LineDef) (int16,
 	return lineDef.SideDefLeft, l.SideDefs[lineDef.SideDefLeft]
 }
 
+// SegmentOppositeSideDef determines the opposite side definition for a given segment based on its direction.
 func (l *Level) SegmentOppositeSideDef(seg *lumps2.Seg, lineDef *lumps2.LineDef) (int16, *lumps2.SideDef) {
 	if seg.Direction == 0 {
 		if lineDef.SideDefLeft == -1 {

@@ -421,7 +421,7 @@ func (b *Builder1) describeSegments(targetSector int, miSectors []*model.ConfigS
 	var traverse []uint16
 
 	//b.bsp.describeLine2F()
-	b.bsp.TraverseBsp(&traverse, int16(xy.Start.X), int16(-xy.Start.Y), nodeIdx)
+	b.bsp.Traverse(&traverse, int16(xy.Start.X), int16(-xy.Start.Y), nodeIdx)
 	fmt.Println("NEIGHBORS:", neighbors)
 	fmt.Println("TRAVERSE:", traverse)
 }

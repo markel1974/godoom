@@ -6,6 +6,7 @@ import (
 	"unsafe"
 )
 
+// SideDef represents a sidedef in a level, linking textures and offsets to a specific sector.
 type SideDef struct {
 	XOffset       int16
 	YOffset       int16
@@ -15,6 +16,7 @@ type SideDef struct {
 	SectorRef     uint16
 }
 
+// NewSideDefs reads SIDEDEFS lump data from the given file and parses it into a slice of SideDef structures.
 func NewSideDefs(f *os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
 	type PrivateSideDef struct {
 		XOffset       int16
@@ -44,6 +46,7 @@ func NewSideDefs(f *os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
 	return sideDef, nil
 }
 
+// PrintTexture returns a concatenated string of UpperTexture, MiddleTexture, and LowerTexture separated by spaces.
 func (s *SideDef) PrintTexture() string {
 	return s.UpperTexture + " " + s.MiddleTexture + " " + s.LowerTexture
 }

@@ -6,6 +6,7 @@ import (
 	"unsafe"
 )
 
+// Seg represents a segment in a level, defined by start and end vertices, direction, offset, and other spatial data.
 type Seg struct {
 	VertexStart int16
 	VertexEnd   int16
@@ -15,6 +16,7 @@ type Seg struct {
 	Offset      int16
 }
 
+// NewSegments reads segment data from the given file based on LumpInfo and returns a slice of Seg pointers or an error.
 func NewSegments(f *os.File, lumpInfo *LumpInfo) ([]*Seg, error) {
 	var pSeg Seg
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSeg))

@@ -6,6 +6,7 @@ import (
 	"unsafe"
 )
 
+// Thing represents an entity in the game level defined by its position, orientation, type, and associated options.
 type Thing struct {
 	X       int16
 	Y       int16
@@ -14,6 +15,7 @@ type Thing struct {
 	Options int16
 }
 
+// NewThings reads and parses Thing objects from the given file and lumpInfo, returning a slice of pointers to Things.
 func NewThings(f *os.File, lumpInfo *LumpInfo) ([]*Thing, error) {
 	var pThing Thing
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pThing))

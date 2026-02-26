@@ -6,18 +6,24 @@ import (
 	"os"
 )
 
+// Header represents the file header containing metadata for lump management in a binary format.
+// Magic is a 4-byte identifier used to validate the file type.
+// NumLumps specifies the total number of lumps in the file.
+// InfoTableOfs indicates the offset to the table containing lump information.
 type Header struct {
 	Magic        [4]byte
 	NumLumps     int32
 	InfoTableOfs int32
 }
 
+// LumpInfo represents metadata about a lump, including its file position, size, and name.
 type LumpInfo struct {
 	Filepos int64
 	Size    int32
 	Name    string
 }
 
+// NewLumpInfo creates and returns a new LumpInfo structure populated with the given file position, size, and name.
 func NewLumpInfo(pos int64, size int32, name string) *LumpInfo {
 	return &LumpInfo{
 		Filepos: pos,
@@ -26,6 +32,7 @@ func NewLumpInfo(pos int64, size int32, name string) *LumpInfo {
 	}
 }
 
+// NewLumpInfos reads lump information from a WAD file and returns a slice of LumpInfo or an error if parsing fails.
 func NewLumpInfos(f *os.File) ([]*LumpInfo, error) {
 	header := &Header{}
 	if err := binary.Read(f, binary.LittleEndian, header); err != nil {

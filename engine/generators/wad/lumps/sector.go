@@ -6,6 +6,7 @@ import (
 	"unsafe"
 )
 
+// Sector represents a specific area in a level, defined by floor and ceiling heights, textures, light, and special properties.
 type Sector struct {
 	FloorHeight   int16
 	CeilingHeight int16
@@ -16,6 +17,7 @@ type Sector struct {
 	Tag           int16
 }
 
+// NewSectors reads sector data from the provided file using lump metadata and returns a slice of Sector or an error.
 func NewSectors(f *os.File, lumpInfo *LumpInfo) ([]*Sector, error) {
 	type privateSector struct {
 		FloorHeight   int16

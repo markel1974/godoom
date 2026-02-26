@@ -9,36 +9,11 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-// SegmentData represents a line segment in 2D space, defined by its start and end points and an associated count value.
-//type SegmentData struct {
-//	Start XY
-//	End   XY
-//	Count int
-//}
-
 // BSP represents a Binary Space Partitioning data structure used for spatial management in level geometry.
 type BSP struct {
 	level     *Level
 	root      uint16
 	leafNodes []*lumps2.Node
-}
-
-// abs returns the absolute value of the given integer x.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-// swap takes two integers a and b as input and returns them swapped in order.
-func swap(a int, b int) (int, int) {
-	return b, a
-}
-
-// swapF swaps the values of two float64 variables and returns them in reverse order.
-func swapF(a float64, b float64) (float64, float64) {
-	return b, a
 }
 
 // NewBsp constructs and returns a new BSP instance initialized with the provided Level.
@@ -95,13 +70,13 @@ func (bsp *BSP) FindSubSector(x int16, y int16) (uint16, bool) {
 	return bsp.findSubSector(x, y, bsp.root)
 }
 
-// TraverseBsp traverses the BSP structure starting from the root to collect sub-sector indices into the container slice.
-func (bsp *BSP) TraverseBsp(container *[]uint16, x int16, y int16, root uint16) {
-	bsp.traverseBsp(container, x, y, root, root)
+// Traverse traverses the BSP structure starting from the root to collect sub-sector indices into the container slice.
+func (bsp *BSP) Traverse(container *[]uint16, x int16, y int16, root uint16) {
+	bsp.traverse(container, x, y, root, root)
 }
 
 // traverseBsp recursively traverses the BSP tree to collect sub-sector IDs into the container, excluding the root ID.
-func (bsp *BSP) traverseBsp(container *[]uint16, x int16, y int16, root uint16, idx uint16) {
+func (bsp *BSP) traverse(container *[]uint16, x int16, y int16, root uint16, idx uint16) {
 	if idx&subSectorBit == subSectorBit {
 		if idx == 0xffff {
 			return
@@ -116,11 +91,11 @@ func (bsp *BSP) traverseBsp(container *[]uint16, x int16, y int16, root uint16, 
 	node := bsp.level.Nodes[idx]
 	side := node.PointOnSide(x, y)
 	sideIdx := node.Child[side]
-	bsp.traverseBsp(container, x, y, root, sideIdx)
+	bsp.traverse(container, x, y, root, sideIdx)
 
 	oppositeSide := side ^ 1
 	oppositeSideIdx := node.Child[oppositeSide]
-	bsp.traverseBsp(container, x, y, root, oppositeSideIdx)
+	bsp.traverse(container, x, y, root, oppositeSideIdx)
 }
 
 // findSubSector traverses the BSP tree recursively to locate the sub-sector containing the given (x, y) coordinates.

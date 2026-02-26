@@ -7,14 +7,17 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// random generates a random integer between the specified min (inclusive) and max (inclusive) values.
 func random(min int, max int) int {
 	return rnd.Intn(max-min+1) + min
 }
 
+// randomF generates a random float64 value between the specified min and max bounds using a uniform distribution.
 func randomF(min float64, max float64) float64 {
 	return min + rnd.Float64()*(max-min)
 }
 
+// ParseJsonData parses a JSON-encoded byte array into a ConfigRoot struct and returns it or an error on failure.
 func ParseJsonData(source []byte) (*model.ConfigRoot, error) {
 	cfg := &model.ConfigRoot{}
 	if err := json.Unmarshal(source, cfg); err != nil {
@@ -23,12 +26,22 @@ func ParseJsonData(source []byte) (*model.ConfigRoot, error) {
 	return cfg, nil
 }
 
+// availableCeil contains a list of available ceiling texture file names in PPM format.
 var availableCeil = []string{"ceil.ppm", "ceil2.ppm", "ceil2_norm.ppm"}
+
+// availableFloor represents a list of texture filenames that can be used as floor textures in the game environment.
 var availableFloor = []string{"floor.ppm"}
+
+// availableUpper contains a list of file names for textures used as the upper surface in sectors.
 var availableUpper = []string{"wall2.ppm"}
+
+// availableLower stores a list of texture file names used for lower wall surfaces in the level configuration.
 var availableLower = []string{"wall2.ppm"}
+
+// availableWall holds a list of wall texture file names available for sector configurations.
 var availableWall = []string{"wall2.ppm"}
 
+// createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
 	sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
 	sector.Textures = true
@@ -71,6 +84,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	return sector
 }
 
+// Generate creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 	cfg := &model.ConfigRoot{Sectors: nil, Player: &model.ConfigPlayer{}}
 	s1 := createCube(0, 0, 8, 0, 20)

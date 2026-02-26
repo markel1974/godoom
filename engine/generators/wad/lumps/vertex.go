@@ -6,11 +6,15 @@ import (
 	"unsafe"
 )
 
+// Vertex represents a point in a 2D coordinate system with integer precision.
+// XCoord specifies the horizontal position.
+// YCoord specifies the vertical position.
 type Vertex struct {
 	XCoord int16
 	YCoord int16
 }
 
+// NewVertexes reads vertex data from the given file and lump information and returns an array of vertex pointers or an error.
 func NewVertexes(f *os.File, lumpInfo *LumpInfo) ([]*Vertex, error) {
 	var pVertex Vertex
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pVertex))

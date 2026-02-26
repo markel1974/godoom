@@ -11,6 +11,7 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// Builder is responsible for constructing and managing game levels and textures using WAD data structures.
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
@@ -18,10 +19,12 @@ type Builder struct {
 	bsp      *BSP
 }
 
+// NewBuilder creates and returns a new instance of Builder1 with initialized textures map.
 func NewBuilder() *Builder1 {
 	return &Builder1{textures: make(map[string]bool)}
 }
 
+// Setup initializes the Builder by loading a WAD file and setting up the level configuration based on the provided level number.
 func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
@@ -52,6 +55,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
+// scanSubSectors generates and returns a list of ConfigSector objects by processing BSP data and subsector polygons.
 func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	// 1. Definiamo il perimetro globale del livello (Coordinate Doom)
 	minX, minY, maxX, maxY := 32768.0, 32768.0, -32768.0, -32768.0
@@ -128,6 +132,7 @@ func (b *Builder) scanSubSectors() []*model.ConfigSector {
 	return miSectors
 }
 
+// traverseBSP recursively traverses the BSP tree, partitioning polygons and grouping by subsector indices.
 func (b *Builder) traverseBSP(nodeIdx uint16, poly []model.XY, out map[uint16][]model.XY) {
 	if nodeIdx&0x8000 != 0 {
 		ssIdx := nodeIdx &^ 0x8000
@@ -148,6 +153,8 @@ func (b *Builder) traverseBSP(nodeIdx uint16, poly []model.XY, out map[uint16][]
 	}
 }
 
+// splitPolygon splits a convex polygon into two sub-polygons based on a splitting line defined by nx, ny, ndx, and ndy.
+// It returns the points of the front and back sub-polygons after the split. Polygons with fewer than 3 vertices return nil.
 func (b *Builder) splitPolygon(poly []model.XY, nx, ny, ndx, ndy float64) (front, back []model.XY) {
 	if len(poly) < 3 {
 		return nil, nil
@@ -187,6 +194,7 @@ func (b *Builder) splitPolygon(poly []model.XY, nx, ny, ndx, ndy float64) (front
 	return b.cleanPoly(front), b.cleanPoly(back)
 }
 
+// cleanPoly simplifies a polygon by removing consecutive points closer than a threshold and ensuring it remains closed.
 func (b *Builder) cleanPoly(poly []model.XY) []model.XY {
 	if len(poly) < 3 {
 		return nil
@@ -206,6 +214,7 @@ func (b *Builder) cleanPoly(poly []model.XY) []model.XY {
 	return res
 }
 
+// eliminateTJunctions identifies and resolves T-junctions in the subsector polygons by splitting edges at intersection points.
 func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
 	var allVerts []model.XY
 	for _, poly := range subsectorPolys {
@@ -245,6 +254,7 @@ func (b *Builder) eliminateTJunctions(subsectorPolys map[uint16][]model.XY) {
 	}
 }
 
+// applyWadAndLinks associates map sectors with BSP sectors, resolving neighbors, textures, and classifications.
 func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
 	for i, miSector := range miSectors {
 		if miSector == nil {
@@ -318,10 +328,12 @@ func (b *Builder) applyWadAndLinks(miSectors []*model.ConfigSector) {
 	}
 }
 
+// dist calculates the Euclidean distance between two points p1 and p2 in 2D space.
 func (b *Builder) dist(p1, p2 model.XY) float64 {
 	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
 }
 
+// distPointToSegment calculates the shortest distance between a point p and a line segment defined by endpoints v and w.
 func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	l2 := b.dist(v, w) * b.dist(v, w)
 	if l2 == 0 {
@@ -333,6 +345,7 @@ func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	return b.dist(p, proj)
 }
 
+// findOverlappingWadSeg identifies and returns the WAD segment overlapping the given midpoint within the specified subsector.
 func (b *Builder) findOverlappingWadSeg(mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := b.level.Segments[ss.StartSeg+i]

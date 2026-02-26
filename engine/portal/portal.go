@@ -12,7 +12,7 @@ import (
 
 // defaultQueueLen defines the default size of the queue used in rendering or processing operations.
 const (
-	defaultQueueLen = 32
+	defaultQueueLen = 512
 )
 
 // Render defines a structure for managing rendering operations, including screen dimensions, queues, sectors, and visibility logic.

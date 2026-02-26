@@ -98,9 +98,10 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, subsectorPolys)
 	}
 
+	// 3. T-Junction elimination: Split large sides so they all match 1:1
 	b.eliminateTJunctions(level, subsectorPolys)
 
-	// 3. Convert to engine coordinate system (inverted Y and scaled)
+	// 4. Convert to engine coordinate system (inverted Y and scaled)
 	for ssIdx, poly := range subsectorPolys {
 		var scaled []model.XY
 		for _, p := range poly {
@@ -108,9 +109,6 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		}
 		subsectorPolys[ssIdx] = scaled
 	}
-
-	// 4. T-Junction elimination: Split large sides so they all match 1:1
-	//b.eliminateTJunctions(level, subsectorPolys)
 
 	// 5. ConfigSectors creation
 	numSS := len(level.SubSectors)

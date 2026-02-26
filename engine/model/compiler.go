@@ -349,11 +349,13 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
 		//vertex scale
-		for s := 0; s < len(sect.Segments); s++ {
-			sect.Segments[s].Start.X /= scale
-			sect.Segments[s].Start.Y /= scale
-			sect.Segments[s].End.X /= scale
-			sect.Segments[s].End.Y /= scale
+		if scale != 1 {
+			for s := 0; s < len(sect.Segments); s++ {
+				sect.Segments[s].Start.X /= scale
+				sect.Segments[s].Start.Y /= scale
+				sect.Segments[s].End.X /= scale
+				sect.Segments[s].End.Y /= scale
+			}
 		}
 		//maxHeight
 		if h := math.Abs(sect.Ceil - sect.Floor); h > r.sectorsMaxHeight {

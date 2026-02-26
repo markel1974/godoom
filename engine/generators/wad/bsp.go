@@ -72,12 +72,8 @@ func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly Polygon, out map[uin
 		out[ssIdx] = poly
 		return
 	}
-
 	node := level.Nodes[nodeIdx]
-	nx, ny := float64(node.X), float64(node.Y)
-	ndx, ndy := float64(node.DX), float64(node.DY)
-
-	front, back := PolygonSplit(poly, nx, ny, ndx, ndy)
+	front, back := PolygonSplit(poly, node.X, node.Y, node.DX, node.DY)
 	if len(front) > 0 {
 		bsp.Traverse(level, node.Child[0], front, out)
 	}

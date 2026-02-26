@@ -56,11 +56,13 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y, bsp.root)
-	p1Pos := model.XY{X: float64(p1.X) / ScaleFactor, Y: float64(-p1.Y) / ScaleFactor}
+	interX := SnapFloat(float64(p1.X) / ScaleFactor)
+	interY := SnapFloat(float64(-p1.Y) / ScaleFactor)
+	p1Pos := model.XY{X: interX, Y: interY}
 	p1Angle := float64(p1.Angle)
 
 	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
-	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true)
+	root := model.NewConfigRoot(sectors, player, nil, 1.0, true)
 
 	return root, nil
 }
@@ -105,7 +107,10 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	for ssIdx, poly := range subsectorPolys {
 		var scaled []model.XY
 		for _, p := range poly {
-			scaled = append(scaled, model.XY{X: p.X / ScaleFactor, Y: -p.Y / ScaleFactor})
+			interX := SnapFloat(p.X / ScaleFactor)
+			interY := SnapFloat(-p.Y / ScaleFactor)
+			//scaled = append(scaled, model.XY{X: p.X / ScaleFactor, Y: -p.Y / ScaleFactor})
+			scaled = append(scaled, model.XY{X: interX, Y: interY})
 		}
 		subsectorPolys[ssIdx] = scaled
 	}
@@ -117,13 +122,10 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		//ss := b.level.SubSectors[i]
 		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
 		ds := level.Sectors[sectorRef]
-
+		floorH := SnapFloat(float64(ds.FloorHeight) / ScaleFactorWall)
+		ceilH := SnapFloat(float64(ds.CeilingHeight) / ScaleFactorWall)
 		miSector := &model.ConfigSector{
-			Id:       strconv.Itoa(i),
-			Floor:    float64(ds.FloorHeight) / ScaleFactor,
-			Ceil:     float64(ds.CeilingHeight) / ScaleFactor,
-			Textures: true,
-			Tag:      strconv.Itoa(int(sectorRef)),
+			Id: strconv.Itoa(i), Floor: floorH, Ceil: ceilH, Textures: true, Tag: strconv.Itoa(int(sectorRef)),
 		}
 
 		poly := subsectorPolys[uint16(i)]
@@ -142,6 +144,15 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	for _, sector := range miSectors {
 		b.forceWindingOrder(sector.Segments, false)
 	}
+
+	//DEBUG
+	//for _, v := range miSectors {
+	//	fmt.Println(v.Id)
+	//	for _, z := range v.Segments {
+	//		fmt.Print("[", z.Start.X, z.Start.Y, z.End.X, z.End.Y, "]")
+	//	}
+	//	fmt.Println()
+	//}
 
 	return miSectors
 }
@@ -200,9 +211,11 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 	// This will force the long sides of the BSP to "split" exactly
 	// at the endpoints of the physical Doom segments (WAD Segs)
 	for _, v := range level.Vertexes {
+		interX := SnapFloat(float64(v.XCoord) / ScaleFactor)
+		interY := SnapFloat(float64(-v.YCoord) / ScaleFactor)
 		allVerts = append(allVerts, model.XY{
-			X: float64(v.XCoord) / ScaleFactor,
-			Y: float64(-v.YCoord) / ScaleFactor,
+			X: interX,
+			Y: interY,
 		})
 	}
 
@@ -334,9 +347,12 @@ func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.Su
 		wadSeg := level.Segments[ss.StartSeg+i]
 		v1 := level.Vertexes[wadSeg.VertexStart]
 		v2 := level.Vertexes[wadSeg.VertexEnd]
-
-		w1 := model.XY{X: float64(v1.XCoord) / ScaleFactor, Y: float64(-v1.YCoord) / ScaleFactor}
-		w2 := model.XY{X: float64(v2.XCoord) / ScaleFactor, Y: float64(-v2.YCoord) / ScaleFactor}
+		interX1 := SnapFloat(float64(v1.XCoord) / ScaleFactor)
+		interY1 := SnapFloat(float64(-v1.YCoord) / ScaleFactor)
+		interX2 := SnapFloat(float64(v2.XCoord) / ScaleFactor)
+		interY2 := SnapFloat(float64(-v2.YCoord) / ScaleFactor)
+		w1 := model.XY{X: interX1, Y: interY1}
+		w2 := model.XY{X: interX2, Y: interY2}
 
 		// Since the segments have been shortened by T-Junction resolution,
 		// we simply check the distance from their center to the original WAD line.

@@ -487,8 +487,14 @@ func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
 		t1, t2 = t2, t1
 	}
 
-	// Margine epsilon (0.001) per scartare segmenti collineari che si toccano solo su un vertice
-	return t1 < 0.999 && t2 > 0.001
+	// Calcolo del segmento di intersezione tra l'intervallo proiettato [t1, t2] e [0, 1]
+	overlapStart := math.Max(0.0, t1)
+	overlapEnd := math.Min(1.0, t2)
+
+	// Un overlap è topologicamente valido per un portal solo se la porzione condivisa
+	// supera una soglia dimensionale tangibile (es. 0.1% della lunghezza di s1-e1).
+	// Questo previene falsi collegamenti ("micro-portali") tra settori dovuti al drift FP64.
+	return (overlapEnd - overlapStart) > 0.001
 }
 
 func PolygonsSnap(level *Level, subsectorPolys map[uint16]Polygons) {

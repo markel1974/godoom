@@ -41,7 +41,7 @@ func (g *Game) Setup() {
 
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	g.viewMode = -1
-	g.enableClear = true //true //true
+	g.enableClear = false // true //true //true
 	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
 	m := 2
 

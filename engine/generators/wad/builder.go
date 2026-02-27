@@ -205,9 +205,9 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 		if miSector == nil {
 			continue
 		}
-		ss := level.SubSectors[idx]
+		//ss := level.SubSectors[idx]
 		for _, seg := range miSector.Segments {
-			wadSeg := b.findOverlappingWadSegFromSeg(level, seg.Start, seg.End, ss)
+			wadSeg := b.findOverlappingWadSegFromSeg(level, seg.Start, seg.End)
 			seg.Neighbor = b.findNeighbors(miSectors, seg.Start, seg.End, idx)
 			seg.Kind = model.DefinitionWall
 
@@ -261,22 +261,17 @@ func (b *Builder) findNeighbors(miSectors []*model.ConfigSector, p1 model.XY, p2
 			if IsCollinearOverlap(p1, p2, otherSeg.Start, otherSeg.End) {
 				return otherSector.Id
 			}
-			//if EuclideanDistance(p1, otherSeg.End) < tolerance && EuclideanDistance(p2, otherSeg.Start) < tolerance ||
-			//	EuclideanDistance(p1, otherSeg.Start) < tolerance && EuclideanDistance(p2, otherSeg.End) < tolerance {
-			//	return otherSector.Id
-			//}
 		}
 	}
 	return ""
 }
 
-// findOverlappingWadSegFromSeg searches for a WAD segment overlapping a given segment in a specified subsector.
-// It checks collinearity, intersection, and subset conditions using thresholds for numerical stability.
-func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 model.XY, ss *lumps.SubSector) *lumps.Seg {
+// findOverlappingWadSegFromSeg esegue una ricerca globale sull'intero set di segmenti del livello.
+func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 model.XY) *lumps.Seg {
 	const epsilonSq = 1.0 // Tolleranza al quadrato nello spazio nativo Doom
 
-	for i := int16(0); i < ss.NumSegments; i++ {
-		wadSeg := level.Segments[ss.StartSeg+i]
+	for i := 0; i < len(level.Segments); i++ {
+		wadSeg := level.Segments[i]
 		v1, v2 := level.Vertexes[wadSeg.VertexStart], level.Vertexes[wadSeg.VertexEnd]
 
 		w1 := model.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
@@ -309,14 +304,10 @@ func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 mod
 			t1, t2 = t2, t1
 		}
 
-		// Margine relativo basato sulla lunghezza del segmento WAD originario
 		margin := 1.0 / math.Sqrt(lenSq)
 
-		// Condizione di sottoinsieme (minore o uguale):
-		// t1 e t2 devono ricadere nel range [0, 1] di w1-w2, tollerando il margine.
-		// Viene richiesto anche un delta minimo (t2 - t1 > 0.001) per ignorare vertici coincidenti.
 		if t1 >= -margin && t2 <= 1.0+margin && (t2-t1) > 0.001 {
-			return level.Segments[ss.StartSeg+i]
+			return level.Segments[i]
 		}
 	}
 	return nil

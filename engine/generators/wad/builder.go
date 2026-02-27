@@ -16,6 +16,10 @@ const ScaleFactorFloor = 2.0
 // ScaleFactorCeil defines scale factor for ceiling heights
 const ScaleFactorCeil = 2.0
 
+// 0.1 è il minimo matematico per assorbire il drift CSG di bsp.Traverse
+// Tolleranza a 0.1 per il matching dei portali
+const tolerance = 0.1
+
 // Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
 type Builder struct {
 	w        *WAD
@@ -55,7 +59,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y, bsp.root)
-	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)}
+	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)} // Player position invertita per l'engine
 	p1Angle := float64(p1.Angle)
 
 	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
@@ -92,27 +96,16 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		{X: minX - doomMargin, Y: maxY + doomMargin},
 	}
 
-	// 2. Traverse the entire BSP tree to generate perfect polygons
+	// 2. Traverse the entire BSP tree to generate perfect polygons (Spazio Nativo)
 	subsectorPolys := make(map[uint16]Polygons)
 	if len(level.Nodes) > 0 {
 		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, subsectorPolys)
 	}
 
-	// 3. T-Junction elimination: Split large sides so they all match 1:1
+	// 3. T-Junction elimination: (Spazio Nativo)
 	b.eliminateTJunctions(level, subsectorPolys)
 
-	// 4. Convert to engine coordinate system (inverted Y and scaled)
-	for ssIdx, poly := range subsectorPolys {
-		var scaled Polygons
-		for _, p := range poly {
-			interX := SnapFloat(p.X)
-			interY := SnapFloat(-p.Y)
-			scaled = append(scaled, model.XY{X: interX, Y: interY})
-		}
-		subsectorPolys[ssIdx] = scaled
-	}
-
-	// 5. ConfigSectors creation
+	// 4. ConfigSectors creation (Spazio Nativo, nessuna alterazione Y)
 	numSS := len(level.SubSectors)
 	miSectors := make([]*model.ConfigSector, numSS)
 	for i := 0; i < numSS; i++ {
@@ -136,16 +129,28 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		for j := 0; j < len(poly); j++ {
 			p1 := poly[j]
 			p2 := poly[(j+1)%len(poly)]
+			// Inserimento con coordinate native DOOM
 			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1, p2)
 			miSector.Segments = append(miSector.Segments, seg)
 		}
 		miSectors[i] = miSector
 	}
 
-	// 6. Apply Textures (from WAD) and Topological Identification
+	// 5. Apply Textures and Topological Identification (Spazio Nativo)
 	b.applyWadAndLinks(level, miSectors)
 
+	// 6. ALTERAZIONE FINALE DEL MODELLO
+	// Solo dopo aver validato il BSP applichiamo la mutazione per l'engine
 	for _, sector := range miSectors {
+		if sector == nil {
+			continue
+		}
+		for _, seg := range sector.Segments {
+			// Inversione Y per il motore
+			seg.Start.Y = SnapFloat(-seg.Start.Y)
+			seg.End.Y = SnapFloat(-seg.End.Y)
+		}
+		// Il Winding Order viene calcolato sulla geometria finale invertita
 		b.forceWindingOrder(sector.Segments, false)
 	}
 
@@ -161,7 +166,8 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 	for _, v := range level.Vertexes {
 		interX := SnapFloat(float64(v.XCoord))
-		interY := SnapFloat(float64(v.YCoord)) // Spazio nativo Doom, niente inversione
+		// Coordinata nativa senza inversione
+		interY := SnapFloat(float64(v.YCoord))
 		allVerts = append(allVerts, model.XY{
 			X: interX,
 			Y: interY,
@@ -176,23 +182,12 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 			var splits Polygons
 			for _, v := range allVerts {
-				// Utilizziamo 2.0 unscaled come raggio sicuro per catturare il drift in virgola mobile
-				if b.distPointToSegment(v, p1, p2) < 2.0 {
-					dx := p2.X - p1.X
-					dy := p2.Y - p1.Y
-					lenSq := dx*dx + dy*dy
+				if b.distPointToSegment(v, p1, p2) < tolerance {
+					dot := (v.X-p1.X)*(p2.X-p1.X) + (v.Y-p1.Y)*(p2.Y-p1.Y)
+					lenSq := (p2.X-p1.X)*(p2.X-p1.X) + (p2.Y-p1.Y)*(p2.Y-p1.Y)
 
-					if lenSq > 0 {
-						length := math.Sqrt(lenSq)
-						dot := (v.X-p1.X)*dx + (v.Y-p1.Y)*dy
-
-						// Proiezione vettoriale reale lungo il segmento
-						distAlong := dot / length
-
-						// Inserisce il vertice solo se si trova internamente al segmento e non agli estremi
-						if distAlong > 0.5 && distAlong < length-0.5 {
-							splits = append(splits, v)
-						}
+					if dot > tolerance && dot < lenSq-tolerance {
+						splits = append(splits, v)
 					}
 				}
 			}
@@ -203,7 +198,7 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 			newPoly = append(newPoly, p1)
 			for _, sp := range splits {
-				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > 0.5 {
+				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > tolerance {
 					newPoly = append(newPoly, sp)
 				}
 			}
@@ -221,7 +216,12 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 		ss := level.SubSectors[i]
 
 		for _, seg := range miSector.Segments {
-			wadSeg := b.findOverlappingWadSeg(level, seg, ss)
+			mid := model.XY{
+				X: SnapFloat((seg.Start.X + seg.End.X) / 2.0),
+				Y: SnapFloat((seg.Start.Y + seg.End.Y) / 2.0),
+			}
+
+			wadSeg := b.findOverlappingWadSeg(level, mid, ss)
 
 			foundNeighbor := false
 			for j, otherSector := range miSectors {
@@ -229,10 +229,7 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 					continue
 				}
 				for _, otherSeg := range otherSector.Segments {
-					// 2.0 è stabile per coordinare sub-pixel match
-					match1 := EuclideanDistance(seg.Start, otherSeg.End) < 2.0 && EuclideanDistance(seg.End, otherSeg.Start) < 2.0
-					match2 := EuclideanDistance(seg.Start, otherSeg.Start) < 2.0 && EuclideanDistance(seg.End, otherSeg.End) < 2.0
-					if match1 || match2 {
+					if EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance {
 						seg.Neighbor = otherSector.Id
 						foundNeighbor = true
 						break
@@ -286,35 +283,24 @@ func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64
 	return EuclideanDistance(p, proj)
 }
 
-// findOverlappingWadSeg searches for a WAD segment using a Mutual Midpoint Overlay to prevent missed walls
-func (b *Builder) findOverlappingWadSeg(level *Level, seg *model.ConfigSegment, ss *lumps.SubSector) *lumps.Seg {
-	segMid := model.XY{
-		X: (seg.Start.X + seg.End.X) / 2.0,
-		Y: (seg.Start.Y + seg.End.Y) / 2.0,
-	}
-
+// findOverlappingWadSeg searches for a WAD segment in the given subsector whose centerline is within a close distance to the specified point.
+func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := level.Segments[ss.StartSeg+i]
 		v1 := level.Vertexes[wadSeg.VertexStart]
 		v2 := level.Vertexes[wadSeg.VertexEnd]
 
 		interX1 := SnapFloat(float64(v1.XCoord))
-		interY1 := SnapFloat(float64(-v1.YCoord))
+		// Coordinata nativa senza inversione
+		interY1 := SnapFloat(float64(v1.YCoord))
 		interX2 := SnapFloat(float64(v2.XCoord))
-		interY2 := SnapFloat(float64(-v2.YCoord))
+		interY2 := SnapFloat(float64(v2.YCoord))
+
 		w1 := model.XY{X: interX1, Y: interY1}
 		w2 := model.XY{X: interX2, Y: interY2}
 
-		wadMid := model.XY{
-			X: (w1.X + w2.X) / 2.0,
-			Y: (w1.Y + w2.Y) / 2.0,
-		}
-
-		// Se i punti medi sono mutuamente uno sull'asse dell'altro, abbiamo la parete corrispondente
-		if b.distPointToSegment(wadMid, seg.Start, seg.End) < 2.0 {
-			if b.distPointToSegment(segMid, w1, w2) < 2.0 {
-				return level.Segments[ss.StartSeg+i]
-			}
+		if b.distPointToSegment(mid, w1, w2) < tolerance {
+			return level.Segments[ss.StartSeg+i]
 		}
 	}
 	return nil

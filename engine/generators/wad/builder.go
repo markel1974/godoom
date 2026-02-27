@@ -16,8 +16,7 @@ const ScaleFactorFloor = 2.0
 // ScaleFactorCeil defines scale factor for ceiling heights
 const ScaleFactorCeil = 2.0
 
-// 0.1 è il minimo matematico per assorbire il drift CSG di bsp.Traverse
-// Tolleranza a 0.1 per il matching dei portali
+// tolerance unificata per lo spazio nativo Doom (unscaled)
 const tolerance = 0.1
 
 // Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
@@ -59,7 +58,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y, bsp.root)
-	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)} // Player position invertita per l'engine
+	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)}
 	p1Angle := float64(p1.Angle)
 
 	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
@@ -68,9 +67,8 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
-// scanSubSectors generates and returns a slice of ConfigSector objects by analyzing subsectors and applying transformations.
+// scanSubSectors generates and returns a slice of ConfigSector objects.
 func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
-	// 1. Define the global perimeter of the level (Doom Coordinates)
 	const doomMax = 32768.0
 	const doomMargin = 256.0
 	minX, minY, maxX, maxY := doomMax, doomMax, -doomMax, -doomMax
@@ -96,61 +94,51 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		{X: minX - doomMargin, Y: maxY + doomMargin},
 	}
 
-	// 2. Traverse the entire BSP tree to generate perfect polygons (Spazio Nativo)
+	// 2. Traverse BSP (Spazio Nativo)
 	subsectorPolys := make(map[uint16]Polygons)
 	if len(level.Nodes) > 0 {
 		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, subsectorPolys)
 	}
 
-	// 3. T-Junction elimination: (Spazio Nativo)
+	// 3. T-Junction elimination (Spazio Nativo)
 	b.eliminateTJunctions(level, subsectorPolys)
 
-	// 4. ConfigSectors creation (Spazio Nativo, nessuna alterazione Y)
+	// 4. ConfigSectors creation (Spazio Nativo)
 	numSS := len(level.SubSectors)
 	miSectors := make([]*model.ConfigSector, numSS)
 	for i := 0; i < numSS; i++ {
 		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
 		ds := level.Sectors[sectorRef]
-		floor := SnapFloat(float64(ds.FloorHeight) / ScaleFactorFloor)
-		ceil := SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeil)
 		miSector := &model.ConfigSector{
-			Id: strconv.Itoa(i), Floor: floor, Ceil: ceil, Textures: true, Tag: strconv.Itoa(int(sectorRef)),
+			Id:       strconv.Itoa(i),
+			Floor:    SnapFloat(float64(ds.FloorHeight) / ScaleFactorFloor),
+			Ceil:     SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeil),
+			Textures: true, Tag: strconv.Itoa(int(sectorRef)),
+			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
+			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
 		}
-
-		miSector.TextureUpper = "wall2.ppm"
-		miSector.TextureWall = "wall.ppm"
-		miSector.TextureLower = "floor2.ppm"
-		miSector.TextureCeil = "ceil.ppm"
-		miSector.TextureFloor = "floor.ppm"
-		miSector.TextureScaleFactor = 10.0
-		miSector.Textures = true
 
 		poly := subsectorPolys[uint16(i)]
 		for j := 0; j < len(poly); j++ {
-			p1 := poly[j]
-			p2 := poly[(j+1)%len(poly)]
-			// Inserimento con coordinate native DOOM
+			p1, p2 := poly[j], poly[(j+1)%len(poly)]
 			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1, p2)
 			miSector.Segments = append(miSector.Segments, seg)
 		}
 		miSectors[i] = miSector
 	}
 
-	// 5. Apply Textures and Topological Identification (Spazio Nativo)
+	// 5. Apply Textures and Links (Spazio Nativo)
 	b.applyWadAndLinks(level, miSectors)
 
-	// 6. ALTERAZIONE FINALE DEL MODELLO
-	// Solo dopo aver validato il BSP applichiamo la mutazione per l'engine
+	// 6. ALTERAZIONE FINALE: Trasformazione in coordinate Engine
 	for _, sector := range miSectors {
 		if sector == nil {
 			continue
 		}
 		for _, seg := range sector.Segments {
-			// Inversione Y per il motore post-validazione
 			seg.Start.Y = SnapFloat(-seg.Start.Y)
 			seg.End.Y = SnapFloat(-seg.End.Y)
 		}
-		// Il Winding Order viene calcolato sulla geometria finale invertita
 		b.forceWindingOrder(sector.Segments, false)
 	}
 
@@ -159,53 +147,34 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 
 func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Polygons) {
 	var allVerts Polygons
-
 	for _, poly := range subsectorPolys {
 		allVerts = append(allVerts, poly...)
 	}
-
 	for _, v := range level.Vertexes {
-		interX := SnapFloat(float64(v.XCoord))
-		// Coordinata nativa senza inversione
-		interY := SnapFloat(float64(v.YCoord))
-		allVerts = append(allVerts, model.XY{
-			X: interX,
-			Y: interY,
-		})
+		allVerts = append(allVerts, model.XY{X: SnapFloat(float64(v.XCoord)), Y: SnapFloat(float64(v.YCoord))})
 	}
 
 	for ssIdx, poly := range subsectorPolys {
 		var newPoly Polygons
 		for i := 0; i < len(poly); i++ {
-			p1 := poly[i]
-			p2 := poly[(i+1)%len(poly)]
-
+			p1, p2 := poly[i], poly[(i+1)%len(poly)]
 			var splits Polygons
-			for _, v := range allVerts {
-				if b.distPointToSegment(v, p1, p2) < tolerance {
-					dx := p2.X - p1.X
-					dy := p2.Y - p1.Y
-					lenSq := dx*dx + dy*dy
+			dx, dy := p2.X-p1.X, p2.Y-p1.Y
+			lenSq := dx*dx + dy*dy
 
-					if lenSq > 0 {
-						dot := (v.X-p1.X)*dx + (v.Y-p1.Y)*dy
-						t := dot / lenSq
-
-						// Verifica parametrica normalizzata (0..1)
+			if lenSq > 0 {
+				for _, v := range allVerts {
+					if b.distPointToSegment(v, p1, p2) < tolerance {
+						t := ((v.X-p1.X)*dx + (v.Y-p1.Y)*dy) / lenSq
 						if t > 0.001 && t < 0.999 {
 							splits = append(splits, v)
 						}
 					}
 				}
 			}
-
-			sort.Slice(splits, func(i, j int) bool {
-				return EuclideanDistance(p1, splits[i]) < EuclideanDistance(p1, splits[j])
-			})
-
+			sort.Slice(splits, func(i, j int) bool { return EuclideanDistance(p1, splits[i]) < EuclideanDistance(p1, splits[j]) })
 			newPoly = append(newPoly, p1)
 			for _, sp := range splits {
-				// Threshold abbassata per non inghiottire vertici ravvicinati
 				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > 0.001 {
 					newPoly = append(newPoly, sp)
 				}
@@ -215,20 +184,14 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 	}
 }
 
-// applyWadAndLinks processes map sectors, assigning textures, tags, and neighbor relationships based on WAD data and BSP output.
 func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector) {
 	for i, miSector := range miSectors {
 		if miSector == nil {
 			continue
 		}
 		ss := level.SubSectors[i]
-
 		for _, seg := range miSector.Segments {
-			mid := model.XY{
-				X: SnapFloat((seg.Start.X + seg.End.X) / 2.0),
-				Y: SnapFloat((seg.Start.Y + seg.End.Y) / 2.0),
-			}
-
+			mid := model.XY{X: SnapFloat((seg.Start.X + seg.End.X) / 2.0), Y: SnapFloat((seg.Start.Y + seg.End.Y) / 2.0)}
 			wadSeg := b.findOverlappingWadSeg(level, mid, ss)
 
 			foundNeighbor := false
@@ -237,11 +200,8 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 					continue
 				}
 				for _, otherSeg := range otherSector.Segments {
-					// Winding order non garantito: valutazione bidirezionale
-					match1 := EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance
-					match2 := EuclideanDistance(seg.Start, otherSeg.Start) < tolerance && EuclideanDistance(seg.End, otherSeg.End) < tolerance
-
-					if match1 || match2 {
+					if EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance ||
+						EuclideanDistance(seg.Start, otherSeg.Start) < tolerance && EuclideanDistance(seg.End, otherSeg.End) < tolerance {
 						seg.Neighbor = otherSector.Id
 						foundNeighbor = true
 						break
@@ -255,27 +215,23 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 			if wadSeg != nil {
 				line := level.LineDefs[wadSeg.LineDef]
 				_, side := level.SegmentSideDef(wadSeg, line)
-
 				if side != nil {
-					seg.Upper = side.UpperTexture
-					seg.Middle = side.MiddleTexture
-					seg.Lower = side.LowerTexture
+					seg.Upper, seg.Middle, seg.Lower = side.UpperTexture, side.MiddleTexture, side.LowerTexture
 				}
 				seg.Tag = strconv.Itoa(int(line.Flags))
-
 				if line.Flags&0x0004 == 0 {
-					seg.Kind = model.DefinitionWall // = 2
+					seg.Kind = model.DefinitionWall
 				} else if foundNeighbor {
-					seg.Kind = model.DefinitionJoin // = 3
+					seg.Kind = model.DefinitionJoin
 				} else {
 					seg.Kind = model.DefinitionWall
 				}
 			} else {
 				if foundNeighbor {
-					seg.Kind = model.DefinitionJoin // = 3
+					seg.Kind = model.DefinitionJoin
 					seg.Tag = "bsp_split"
 				} else {
-					seg.Kind = model.DefinitionUnknown // = 0 (Open)
+					seg.Kind = model.DefinitionUnknown
 					seg.Tag = "open"
 				}
 			}
@@ -283,63 +239,43 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 	}
 }
 
-// distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
-func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64 {
+func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	l2 := EuclideanDistance(v, w) * EuclideanDistance(v, w)
 	if l2 == 0 {
 		return EuclideanDistance(p, v)
 	}
-	t := ((p.X-v.X)*(w.X-v.X) + (p.Y-v.Y)*(w.Y-v.Y)) / l2
-	t = math.Max(0, math.Min(1, t))
-	proj := model.XY{X: v.X + t*(w.X-v.X), Y: v.Y + t*(w.Y-v.Y)}
-	return EuclideanDistance(p, proj)
+	t := math.Max(0, math.Min(1, ((p.X-v.X)*(w.X-v.X)+(p.Y-v.Y)*(w.Y-v.Y))/l2))
+	return EuclideanDistance(p, model.XY{X: v.X + t*(w.X-v.X), Y: v.Y + t*(w.Y-v.Y)})
 }
 
-// findOverlappingWadSeg searches for a WAD segment in the given subsector whose centerline is within a close distance to the specified point.
 func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := level.Segments[ss.StartSeg+i]
-		v1 := level.Vertexes[wadSeg.VertexStart]
-		v2 := level.Vertexes[wadSeg.VertexEnd]
-
-		interX1 := SnapFloat(float64(v1.XCoord))
-		// Coordinata nativa senza inversione
-		interY1 := SnapFloat(float64(v1.YCoord))
-		interX2 := SnapFloat(float64(v2.XCoord))
-		interY2 := SnapFloat(float64(v2.YCoord))
-
-		w1 := model.XY{X: interX1, Y: interY1}
-		w2 := model.XY{X: interX2, Y: interY2}
-
-		if b.distPointToSegment(mid, w1, w2) < tolerance {
+		v1, v2 := level.Vertexes[wadSeg.VertexStart], level.Vertexes[wadSeg.VertexEnd]
+		w1 := model.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
+		w2 := model.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
+		// Usiamo 1.0 come tolleranza sicura per lo spazio nativo Doom
+		if b.distPointToSegment(mid, w1, w2) < 1.0 {
 			return level.Segments[ss.StartSeg+i]
 		}
 	}
 	return nil
 }
 
-// forceWindingOrder modifies the orientation of a set of line segments to enforce a desired winding order.
 func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
 	if len(segments) < 3 {
 		return
 	}
-
 	area := 0.0
 	for _, seg := range segments {
 		area += (seg.End.X - seg.Start.X) * (seg.End.Y + seg.Start.Y)
 	}
-
-	isClockwise := area > 0
-
-	if isClockwise == wantClockwise {
-		return
-	}
-
-	for i, j := 0, len(segments)-1; i < j; i, j = i+1, j-1 {
-		segments[i], segments[j] = segments[j], segments[i]
-	}
-
-	for _, seg := range segments {
-		seg.Start, seg.End = seg.End, seg.Start
+	if (area > 0) != wantClockwise {
+		for i, j := 0, len(segments)-1; i < j; i, j = i+1, j-1 {
+			segments[i], segments[j] = segments[j], segments[i]
+		}
+		for _, seg := range segments {
+			seg.Start, seg.End = seg.End, seg.Start
+		}
 	}
 }

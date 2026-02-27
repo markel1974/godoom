@@ -146,7 +146,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 			continue
 		}
 		for _, seg := range sector.Segments {
-			// Inversione Y per il motore
+			// Inversione Y per il motore post-validazione
 			seg.Start.Y = SnapFloat(-seg.Start.Y)
 			seg.End.Y = SnapFloat(-seg.End.Y)
 		}
@@ -183,11 +183,18 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 			var splits Polygons
 			for _, v := range allVerts {
 				if b.distPointToSegment(v, p1, p2) < tolerance {
-					dot := (v.X-p1.X)*(p2.X-p1.X) + (v.Y-p1.Y)*(p2.Y-p1.Y)
-					lenSq := (p2.X-p1.X)*(p2.X-p1.X) + (p2.Y-p1.Y)*(p2.Y-p1.Y)
+					dx := p2.X - p1.X
+					dy := p2.Y - p1.Y
+					lenSq := dx*dx + dy*dy
 
-					if dot > tolerance && dot < lenSq-tolerance {
-						splits = append(splits, v)
+					if lenSq > 0 {
+						dot := (v.X-p1.X)*dx + (v.Y-p1.Y)*dy
+						t := dot / lenSq
+
+						// Verifica parametrica normalizzata (0..1)
+						if t > 0.001 && t < 0.999 {
+							splits = append(splits, v)
+						}
 					}
 				}
 			}
@@ -198,7 +205,8 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 			newPoly = append(newPoly, p1)
 			for _, sp := range splits {
-				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > tolerance {
+				// Threshold abbassata per non inghiottire vertici ravvicinati
+				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > 0.001 {
 					newPoly = append(newPoly, sp)
 				}
 			}
@@ -229,7 +237,11 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 					continue
 				}
 				for _, otherSeg := range otherSector.Segments {
-					if EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance {
+					// Winding order non garantito: valutazione bidirezionale
+					match1 := EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance
+					match2 := EuclideanDistance(seg.Start, otherSeg.Start) < tolerance && EuclideanDistance(seg.End, otherSeg.End) < tolerance
+
+					if match1 || match2 {
 						seg.Neighbor = otherSector.Id
 						foundNeighbor = true
 						break

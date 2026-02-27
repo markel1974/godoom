@@ -11,10 +11,10 @@ import (
 )
 
 // ScaleFactorFloor defines scale factor for floor heights
-const ScaleFactorFloor = 2.0
+const scaleFactorFloor = 2.0
 
 // ScaleFactorCeil defines scale factor for ceiling heights
-const ScaleFactorCeil = 2.0
+const scaleFactorCeil = 2.0
 
 // 0.1 è il minimo matematico per assorbire il drift CSG di bsp.Traverse
 // Tolleranza a 0.1 per il matching dei portali
@@ -122,8 +122,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	for i := 0; i < numSS; i++ {
 		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
 		ds := level.Sectors[sectorRef]
-		floor := SnapFloat(float64(ds.FloorHeight) / ScaleFactorFloor)
-		ceil := SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeil)
+		floor := SnapFloat(float64(ds.FloorHeight) / scaleFactorFloor)
+		ceil := SnapFloat(float64(ds.CeilingHeight) / scaleFactorCeil)
 		miSector := &model.ConfigSector{
 			Id: strconv.Itoa(i), Floor: floor, Ceil: ceil, Textures: true, Tag: strconv.Itoa(int(sectorRef)),
 		}

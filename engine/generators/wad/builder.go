@@ -10,31 +10,33 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// ScaleFactor defines the scaling ratio applied to level geometry during processing, adjusting dimensions for consistency.
 const ScaleFactor = 25.0
 
+// ScaleFactorCeilFloor represents the scalar value used for normalizing floor and ceiling height calculations.
 const ScaleFactorCeilFloor = 4.0
 
 // ScaleFactorCeil defines scale factor for ceiling heights
 
-// tolerance unificata per lo spazio nativo Doom (unscaled)
+// tolerance defines the allowable margin of error for geometric calculations, typically used for comparing distances.
 const tolerance = 0.1
 
-// Polygons represents a shape as a slice of 2D points in counter-clockwise order.
+// Polygons represents a slice of 2D points, each defined by X and Y coordinates, used for modeling geometric shapes.
 type Polygons []model.XY
 
-// EuclideanDistance calculates the Euclidean distance between two points in a 2D space represented as model.XY structs.
+// EuclideanDistance computes the Euclidean distance between two points in 2D space.
 func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
 	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
 }
 
-// SnapFloat rounds a float64 value to 4 decimal places to stabilize floating-point operations and reduce precision errors.
+// SnapFloat rounds a floating-point value to four decimal places for precision control in floating-point arithmetic.
 func SnapFloat(val float64) float64 {
 	return math.Round(val*10000.0) / 10000.0
 }
 
-// PolygonSplit separates a polygon into two parts (front and back) using a partition line defined by its parameters.
-// poly is the input polygon, nx and ny represent the line origin, and ndx and ndy define the line direction.
-// The function returns two slices: the points on the front side and the points on the back side of the partition.
+// PolygonSplit splits a polygon into two parts using a partition line defined by its normal and delta values.
+// The front polygon includes vertices on or in front of the line, and the back polygon includes vertices behind it.
+// Returns the cleaned front and back polygons, where cleaning removes redundant points based on a tolerance threshold.
 func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Polygons, Polygons) {
 	var front Polygons
 	var back Polygons
@@ -83,8 +85,7 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 	return PolygonClean(front), PolygonClean(back)
 }
 
-// PolygonClean removes duplicate consecutive points and collapses nearly identical edges in a polygon represented by XY points.
-// If the resulting polygon has fewer than 3 vertices, it returns nil.
+// PolygonClean removes duplicate points from the input polygon and eliminates redundant vertices based on a tolerance threshold.
 func PolygonClean(poly Polygons) Polygons {
 	if len(poly) < 3 {
 		return nil
@@ -105,18 +106,18 @@ func PolygonClean(poly Polygons) Polygons {
 	return res
 }
 
-// Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
+// Builder structures and initializes resources for WAD file processing, including levels, textures, and configuration data.
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
 }
 
-// NewBuilder creates and returns a new instance of Builder with initialized textures mapping.
+// NewBuilder creates a new Builder instance with an initialized texture map and returns a pointer to it.
 func NewBuilder() *Builder {
 	return &Builder{textures: make(map[string]bool)}
 }
 
-// Setup initializes the Builder with the specified WAD file and level number, returning a ConfigRoot or an error.
+// Setup initializes the Builder with the specified WAD file and level, returning a ConfigRoot or an error if setup fails.
 func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
@@ -153,7 +154,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
-// scanSubSectors generates and returns a slice of ConfigSector objects.
+// scanSubSectors processes BSP nodes to generate configuration sectors for the game engine based on level geometry details.
 func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	const doomMax = 32768.0
 	const doomMargin = 256.0
@@ -231,6 +232,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	return miSectors
 }
 
+// eliminateTJunctions processes polygon data to eliminate T-junctions by splitting edges at intersecting vertices.
 func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Polygons) {
 	var allVerts Polygons
 	for _, poly := range subsectorPolys {
@@ -270,6 +272,7 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 	}
 }
 
+// applyWadAndLinks processes segments in the given level and links them with WAD data and nearby sectors.
 func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector) {
 	for i, miSector := range miSectors {
 		if miSector == nil {
@@ -325,6 +328,7 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 	}
 }
 
+// distPointToSegment computes the shortest distance from a point `p` to a line segment defined by points `v` and `w`.
 func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	l2 := EuclideanDistance(v, w) * EuclideanDistance(v, w)
 	if l2 == 0 {
@@ -334,6 +338,7 @@ func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	return EuclideanDistance(p, model.XY{X: v.X + t*(w.X-v.X), Y: v.Y + t*(w.Y-v.Y)})
 }
 
+// findOverlappingWadSeg searches for a segment in the given SubSector that overlaps with the specified midpoint within a tolerance.
 func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := level.Segments[ss.StartSeg+i]
@@ -348,6 +353,7 @@ func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.Su
 	return nil
 }
 
+// forceWindingOrder ensures that the order of the given segments matches the specified winding order (clockwise or counter-clockwise).
 func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
 	if len(segments) < 3 {
 		return

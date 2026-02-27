@@ -10,112 +10,30 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-// ScaleFactor defines the scaling ratio applied to level geometry during processing, adjusting dimensions for consistency.
+// ScaleFactor defines a constant multiplier used to scale dimensions within the configuration system.
 const ScaleFactor = 25.0
 
-// ScaleFactorCeilFloor represents the scalar value used for normalizing floor and ceiling height calculations.
+// ScaleFactorCeilFloor is a constant used to scale ceiling and floor height calculations.
 const ScaleFactorCeilFloor = 4.0
 
-// tolerance defines the allowable margin of error for geometric calculations, typically used for comparing distances.
+// tolerance defines the permissible margin of error for geometric calculations, such as distance comparisons or alignment.
 const tolerance = 0.1
 
-// Polygons represents a slice of 2D points, each defined by X and Y coordinates, used for modeling geometric shapes.
+// Polygons represents a collection of XY points that define a closed or open polygon shape in 2D space.
 type Polygons []model.XY
 
-// EuclideanDistance computes the Euclidean distance between two points in 2D space.
-func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
-	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
-}
-
-// SnapFloat rounds a floating-point value to four decimal places for precision control in floating-point arithmetic.
-func SnapFloat(val float64) float64 {
-	return math.Round(val*10000.0) / 10000.0
-}
-
-// PolygonSplit splits a polygon into two parts using a partition line defined by its normal and delta values.
-// The front polygon includes vertices on or in front of the line, and the back polygon includes vertices behind it.
-// Returns the cleaned front and back polygons, where cleaning removes redundant points based on a tolerance threshold.
-func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Polygons, Polygons) {
-	var front Polygons
-	var back Polygons
-
-	if len(poly) < 3 {
-		return nil, nil
-	}
-
-	fnx, fny := float64(nx), float64(ny)
-	fndx, fndy := float64(ndx), float64(ndy)
-
-	isFront := make([]bool, len(poly))
-	for i, p := range poly {
-		// In Doom il lato "front" della partizione è definito da val <= 0
-		val := fndx*(p.Y-fny) - fndy*(p.X-fnx)
-		// Margine per la stabilità in virgola mobile sulle coordinate native
-		isFront[i] = val <= 1e-5
-	}
-
-	for i := 0; i < len(poly); i++ {
-		p1 := poly[i]
-		p2 := poly[(i+1)%len(poly)]
-		f1 := isFront[i]
-		f2 := isFront[(i+1)%len(poly)]
-
-		if f1 {
-			front = append(front, p1)
-		} else {
-			back = append(back, p1)
-		}
-
-		if f1 != f2 {
-			dx, dy := p2.X-p1.X, p2.Y-p1.Y
-			den := fndy*dx - fndx*dy
-			if math.Abs(den) > 1e-10 {
-				u := (fndx*(p1.Y-fny) - fndy*(p1.X-fnx)) / den
-				interX := SnapFloat(p1.X + u*dx)
-				interY := SnapFloat(p1.Y + u*dy)
-				inter := model.XY{X: interX, Y: interY}
-				//inter := model.XY{X: p1.X + u*dx, Y: p1.Y + u*dy}
-				front = append(front, inter)
-				back = append(back, inter)
-			}
-		}
-	}
-	return PolygonClean(front), PolygonClean(back)
-}
-
-// PolygonClean removes duplicate points from the input polygon and eliminates redundant vertices based on a tolerance threshold.
-func PolygonClean(poly Polygons) Polygons {
-	if len(poly) < 3 {
-		return nil
-	}
-	var res Polygons
-	for _, p := range poly {
-		// La tolleranza 0.01 è perfetta se lavori in scala originale Doom [-32768, 32768]
-		if len(res) == 0 || EuclideanDistance(res[len(res)-1], p) > tolerance {
-			res = append(res, p)
-		}
-	}
-	if len(res) > 1 && EuclideanDistance(res[0], res[len(res)-1]) <= tolerance {
-		res = res[:len(res)-1]
-	}
-	if len(res) < 3 {
-		return nil
-	}
-	return res
-}
-
-// Builder structures and initializes resources for WAD file processing, including levels, textures, and configuration data.
+// Builder is responsible for constructing configuration data from a WAD file and its levels.
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
 }
 
-// NewBuilder creates a new Builder instance with an initialized texture map and returns a pointer to it.
+// NewBuilder creates and returns a new Builder instance with initialized textures map.
 func NewBuilder() *Builder {
 	return &Builder{textures: make(map[string]bool)}
 }
 
-// Setup initializes the Builder with the specified WAD file and level, returning a ConfigRoot or an error if setup fails.
+// Setup initializes and configures the game level, including sectors, player position, and settings for the given WAD file.
 func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
@@ -152,7 +70,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
-// scanSubSectors processes BSP nodes to generate configuration sectors for the game engine based on level geometry details.
+// scanSubSectors processes the BSP tree to create configuration sectors from the level's subsectors and vertex data.
 func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	const doomMax = 32768.0
 	const doomMargin = 256.0
@@ -232,7 +150,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	return miSectors
 }
 
-// eliminateTJunctions processes polygon data to eliminate T-junctions by splitting edges at intersecting vertices.
+// eliminateTJunctions refines subsector polygons by splitting edges where vertices are close to eliminate T-junctions.
 func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Polygons) {
 	var allVerts Polygons
 	for _, poly := range subsectorPolys {
@@ -247,10 +165,9 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 		for i := 0; i < len(poly); i++ {
 			p1, p2 := poly[i], poly[(i+1)%len(poly)]
 			var splits Polygons
-			dx, dy := p2.X-p1.X, p2.Y-p1.Y
-			lenSq := dx*dx + dy*dy
-
-			if lenSq > 0 {
+			dx := p2.X - p1.X
+			dy := p2.Y - p1.Y
+			if lenSq := (dx * dx) + (dy * dy); lenSq > 0 {
 				for _, v := range allVerts {
 					if b.distPointToSegment(v, p1, p2) < tolerance {
 						t := ((v.X-p1.X)*dx + (v.Y-p1.Y)*dy) / lenSq
@@ -272,34 +189,17 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 	}
 }
 
-// applyWadAndLinks processes segments in the given level and links them with WAD data and nearby sectors.
+// applyWadAndLinks processes subsectors by associating them with WAD data, setting neighbor links, and defining segment kinds.
 func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector) {
-	for i, miSector := range miSectors {
+	for idx, miSector := range miSectors {
 		if miSector == nil {
 			continue
 		}
-		ss := level.SubSectors[i]
+		ss := level.SubSectors[idx]
 		for _, seg := range miSector.Segments {
-			mid := model.XY{X: SnapFloat((seg.Start.X + seg.End.X) / 2.0), Y: SnapFloat((seg.Start.Y + seg.End.Y) / 2.0)}
-			wadSeg := b.findOverlappingWadSeg(level, mid, ss)
-
-			foundNeighbor := false
-			for j, otherSector := range miSectors {
-				if i == j || otherSector == nil {
-					continue
-				}
-				for _, otherSeg := range otherSector.Segments {
-					if EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance ||
-						EuclideanDistance(seg.Start, otherSeg.Start) < tolerance && EuclideanDistance(seg.End, otherSeg.End) < tolerance {
-						seg.Neighbor = otherSector.Id
-						foundNeighbor = true
-						break
-					}
-				}
-				if foundNeighbor {
-					break
-				}
-			}
+			wadSeg := b.findOverlappingWadSegFromSeg(level, seg.Start, seg.End, ss)
+			seg.Neighbor = b.findNeighbors(miSectors, seg.Start, seg.End, idx)
+			seg.Kind = model.DefinitionWall
 
 			if wadSeg != nil {
 				line := level.LineDefs[wadSeg.LineDef]
@@ -308,15 +208,13 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 					seg.Upper, seg.Middle, seg.Lower = side.UpperTexture, side.MiddleTexture, side.LowerTexture
 				}
 				seg.Tag = strconv.Itoa(int(line.Flags))
-				if line.Flags&0x0004 == 0 {
+				if (line.Flags & 0x0004) == 0 {
 					seg.Kind = model.DefinitionWall
-				} else if foundNeighbor {
+				} else if len(seg.Neighbor) > 0 {
 					seg.Kind = model.DefinitionJoin
-				} else {
-					seg.Kind = model.DefinitionWall
 				}
 			} else {
-				if foundNeighbor {
+				if len(seg.Neighbor) > 0 {
 					seg.Kind = model.DefinitionJoin
 					seg.Tag = "bsp_split"
 				} else {
@@ -328,8 +226,8 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 	}
 }
 
-// distPointToSegment computes the shortest distance from a point `p` to a line segment defined by points `v` and `w`.
-func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
+// distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
+func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64 {
 	l2 := EuclideanDistance(v, w) * EuclideanDistance(v, w)
 	if l2 == 0 {
 		return EuclideanDistance(p, v)
@@ -338,22 +236,78 @@ func (b *Builder) distPointToSegment(p, v, w model.XY) float64 {
 	return EuclideanDistance(p, model.XY{X: v.X + t*(w.X-v.X), Y: v.Y + t*(w.Y-v.Y)})
 }
 
-// findOverlappingWadSeg searches for a segment in the given SubSector that overlaps with the specified midpoint within a tolerance.
-func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
+// findNeighbors identifies and returns the ID of a neighboring sector whose segment overlaps or aligns with the specified segment.
+func (b *Builder) findNeighbors(miSectors []*model.ConfigSector, p1 model.XY, p2 model.XY, segIdx int) string {
+	for j, otherSector := range miSectors {
+		if segIdx == j || otherSector == nil {
+			continue
+		}
+		for _, otherSeg := range otherSector.Segments {
+			if IsCollinearOverlap(p1, p2, otherSeg.Start, otherSeg.End) {
+				return otherSector.Id
+			}
+			//if EuclideanDistance(p1, otherSeg.End) < tolerance && EuclideanDistance(p2, otherSeg.Start) < tolerance ||
+			//	EuclideanDistance(p1, otherSeg.Start) < tolerance && EuclideanDistance(p2, otherSeg.End) < tolerance {
+			//	return otherSector.Id
+			//}
+		}
+	}
+	return ""
+}
+
+// findOverlappingWadSegFromSeg searches for a WAD segment overlapping a given segment in a specified subsector.
+// It checks collinearity, intersection, and subset conditions using thresholds for numerical stability.
+func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 model.XY, ss *lumps.SubSector) *lumps.Seg {
+	const epsilonSq = 1.0 // Tolleranza al quadrato nello spazio nativo Doom
+
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := level.Segments[ss.StartSeg+i]
 		v1, v2 := level.Vertexes[wadSeg.VertexStart], level.Vertexes[wadSeg.VertexEnd]
+
 		w1 := model.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
 		w2 := model.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
-		// Usiamo 1.0 come tolleranza sicura per lo spazio nativo Doom
-		if b.distPointToSegment(mid, w1, w2) < 1.0 {
+
+		dx := w2.X - w1.X
+		dy := w2.Y - w1.Y
+		lenSq := dx*dx + dy*dy
+
+		if lenSq == 0 {
+			continue
+		}
+
+		// 1. Collinearità: verifica la distanza quadratica di p1 e p2 dalla retta del wadSeg
+		cross1 := dx*(p1.Y-w1.Y) - dy*(p1.X-w1.X)
+		if (cross1*cross1)/lenSq > epsilonSq {
+			continue
+		}
+
+		cross2 := dx*(p2.Y-w1.Y) - dy*(p2.X-w1.X)
+		if (cross2*cross2)/lenSq > epsilonSq {
+			continue
+		}
+
+		// 2. Intersezione parametrica: proiezione di p1 e p2 su w1-w2
+		t1 := ((p1.X-w1.X)*dx + (p1.Y-w1.Y)*dy) / lenSq
+		t2 := ((p2.X-w1.X)*dx + (p2.Y-w1.Y)*dy) / lenSq
+
+		if t1 > t2 {
+			t1, t2 = t2, t1
+		}
+
+		// Margine relativo basato sulla lunghezza del segmento WAD originario
+		margin := 1.0 / math.Sqrt(lenSq)
+
+		// Condizione di sottoinsieme (minore o uguale):
+		// t1 e t2 devono ricadere nel range [0, 1] di w1-w2, tollerando il margine.
+		// Viene richiesto anche un delta minimo (t2 - t1 > 0.001) per ignorare vertici coincidenti.
+		if t1 >= -margin && t2 <= 1.0+margin && (t2-t1) > 0.001 {
 			return level.Segments[ss.StartSeg+i]
 		}
 	}
 	return nil
 }
 
-// forceWindingOrder ensures that the order of the given segments matches the specified winding order (clockwise or counter-clockwise).
+// forceWindingOrder adjusts the winding order of given segments to match the desired orientation (clockwise or counterclockwise).
 func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
 	if len(segments) < 3 {
 		return
@@ -370,4 +324,156 @@ func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwi
 			seg.Start, seg.End = seg.End, seg.Start
 		}
 	}
+}
+
+// EuclideanDistance calculates the Euclidean distance between two points in a 2D space.
+func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
+	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
+}
+
+// SnapFloat rounds a floating-point number to four decimal places, helping to reduce numerical inaccuracies.
+func SnapFloat(val float64) float64 {
+	return math.Round(val*10000.0) / 10000.0
+}
+
+// PolygonSplit splits a polygon into two sub-polygons based on a defined partition line specified by its normal and delta values.
+// Takes a polygon `poly` and partition line parameters `nx`, `ny`, `ndx`, `ndy`.
+// Returns two Polygons: one in front of the partition line and one behind it, or nil if no splitting occurs.
+func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Polygons, Polygons) {
+	if len(poly) < 3 {
+		return nil, nil
+	}
+
+	// Tolleranza quadra (es. 0.1 * 0.1) calibrata per lo spazio nativo Doom
+	const epsilonSq = 0.01
+
+	fnx, fny := float64(nx), float64(ny)
+	fndx, fndy := float64(ndx), float64(ndy)
+	lenSq := fndx*fndx + fndy*fndy
+
+	if lenSq == 0 {
+		return poly, nil // Fallback di sicurezza in caso di vettore partizione nullo
+	}
+
+	type vertexInfo struct {
+		p    model.XY
+		dist float64
+		side int // 1: Front, -1: Back, 0: On
+	}
+
+	vertices := make([]vertexInfo, 0, len(poly))
+	frontCount, backCount := 0, 0
+
+	for _, p := range poly {
+		// Prodotto vettoriale (distanza non scalata)
+		cross := fndx*(p.Y-fny) - fndy*(p.X-fnx)
+
+		// Verifica di appartenenza alla retta (On-plane)
+		distSq := (cross * cross) / lenSq
+		side := 0
+
+		if distSq > epsilonSq {
+			if cross <= 0 {
+				side = 1 // Front (Convenzione BSP: lato destro <= 0)
+				frontCount++
+			} else {
+				side = -1 // Back
+				backCount++
+			}
+		}
+		vertices = append(vertices, vertexInfo{p, cross, side})
+	}
+
+	// Fast path: nessuna intersezione necessaria se i punti giacciono tutti da una parte
+	if backCount == 0 {
+		return PolygonClean(poly), nil
+	}
+	if frontCount == 0 {
+		return nil, PolygonClean(poly)
+	}
+
+	var front, back Polygons
+
+	for i := 0; i < len(vertices); i++ {
+		v1 := vertices[i]
+		v2 := vertices[(i+1)%len(vertices)]
+
+		if v1.side >= 0 {
+			front = append(front, v1.p)
+		}
+		if v1.side <= 0 {
+			back = append(back, v1.p)
+		}
+
+		// Se il segmento attraversa la partizione (front <-> back), genera l'intersezione
+		if (v1.side > 0 && v2.side < 0) || (v1.side < 0 && v2.side > 0) {
+			// L'interpolazione u deriva dal rapporto delle distanze precalcolate
+			u := v1.dist / (v1.dist - v2.dist)
+
+			interX := SnapFloat(v1.p.X + u*(v2.p.X-v1.p.X))
+			interY := SnapFloat(v1.p.Y + u*(v2.p.Y-v1.p.Y))
+			inter := model.XY{X: interX, Y: interY}
+
+			front = append(front, inter)
+			back = append(back, inter)
+		}
+	}
+
+	return PolygonClean(front), PolygonClean(back)
+}
+
+// PolygonClean removes redundant points and ensures the polygon has at least three vertices or returns nil if invalid.
+func PolygonClean(poly Polygons) Polygons {
+	if len(poly) < 3 {
+		return nil
+	}
+	var res Polygons
+	for _, p := range poly {
+		// La tolleranza 0.01 è perfetta se lavori in scala originale Doom [-32768, 32768]
+		if len(res) == 0 || EuclideanDistance(res[len(res)-1], p) > tolerance {
+			res = append(res, p)
+		}
+	}
+	if len(res) > 1 && EuclideanDistance(res[0], res[len(res)-1]) <= tolerance {
+		res = res[:len(res)-1]
+	}
+	if len(res) < 3 {
+		return nil
+	}
+	return res
+}
+
+// IsCollinearOverlap determines if two line segments overlap collinearly in 2D space.
+// It checks for parallelism, collinearity, and overlapping projections on the shared line.
+func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
+	dx1, dy1 := e1.X-s1.X, e1.Y-s1.Y
+	dx2, dy2 := e2.X-s2.X, e2.Y-s2.Y
+
+	// 1. Parallelismo: il prodotto vettoriale delle direzioni deve essere ~0
+	if math.Abs(dx1*dy2-dy1*dx2) > 0.1 {
+		return false
+	}
+
+	len1Sq := dx1*dx1 + dy1*dy1
+	if len1Sq == 0 {
+		return false
+	}
+
+	// 2. Collinearità: la distanza al quadrato di s2 dalla retta (s1, e1) deve essere minima
+	crossLine := dx1*(s2.Y-s1.Y) - dy1*(s2.X-s1.X)
+	if (crossLine*crossLine)/len1Sq > tolerance {
+		return false
+	}
+
+	// 3. Sovrapposizione: le proiezioni parametriche t di s2 ed e2 su (s1, e1)
+	// devono intersecare l'intervallo [0, 1] del segmento originale.
+	t1 := ((s2.X-s1.X)*dx1 + (s2.Y-s1.Y)*dy1) / len1Sq
+	t2 := ((e2.X-s1.X)*dx1 + (e2.Y-s1.Y)*dy1) / len1Sq
+
+	if t1 > t2 {
+		t1, t2 = t2, t1
+	}
+
+	// Margine epsilon (0.001) per scartare segmenti collineari che si toccano solo su un vertice
+	return t1 < 0.999 && t2 > 0.001
 }

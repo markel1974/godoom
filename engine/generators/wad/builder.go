@@ -177,10 +177,17 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 					}
 				}
 			}
-			sort.Slice(splits, func(i, j int) bool { return EuclideanDistance(p1, splits[i]) < EuclideanDistance(p1, splits[j]) })
+			sort.Slice(splits, func(i, j int) bool {
+				dxi, dyi := splits[i].X-p1.X, splits[i].Y-p1.Y
+				dxj, dyj := splits[j].X-p1.X, splits[j].Y-p1.Y
+				return (dxi*dxi + dyi*dyi) < (dxj*dxj + dyj*dyj)
+			})
+
 			newPoly = append(newPoly, p1)
 			for _, sp := range splits {
-				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > 0.001 {
+				last := newPoly[len(newPoly)-1]
+				dxSp, dySp := sp.X-last.X, sp.Y-last.Y
+				if (dxSp*dxSp + dySp*dySp) > 0.000001 { // 0.001^2
 					newPoly = append(newPoly, sp)
 				}
 			}
@@ -228,12 +235,17 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 
 // distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
 func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64 {
-	l2 := EuclideanDistance(v, w) * EuclideanDistance(v, w)
+	dx, dy := w.X-v.X, w.Y-v.Y
+	l2 := dx*dx + dy*dy
 	if l2 == 0 {
-		return EuclideanDistance(p, v)
+		pdx, pdy := p.X-v.X, p.Y-v.Y
+		return math.Sqrt(pdx*pdx + pdy*pdy)
 	}
-	t := math.Max(0, math.Min(1, ((p.X-v.X)*(w.X-v.X)+(p.Y-v.Y)*(w.Y-v.Y))/l2))
-	return EuclideanDistance(p, model.XY{X: v.X + t*(w.X-v.X), Y: v.Y + t*(w.Y-v.Y)})
+	t := math.Max(0, math.Min(1, ((p.X-v.X)*dx+(p.Y-v.Y)*dy)/l2))
+	projX := v.X + t*dx
+	projY := v.Y + t*dy
+	pdx, pdy := p.X-projX, p.Y-projY
+	return math.Sqrt(pdx*pdx + pdy*pdy)
 }
 
 // findNeighbors identifies and returns the ID of a neighboring sector whose segment overlaps or aligns with the specified segment.
@@ -324,11 +336,6 @@ func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwi
 			seg.Start, seg.End = seg.End, seg.Start
 		}
 	}
-}
-
-// EuclideanDistance calculates the Euclidean distance between two points in a 2D space.
-func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
-	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
 }
 
 // SnapFloat rounds a floating-point number to four decimal places, helping to reduce numerical inaccuracies.
@@ -428,15 +435,28 @@ func PolygonClean(poly Polygons) Polygons {
 		return nil
 	}
 	var res Polygons
+	tolSq := tolerance * tolerance
+
 	for _, p := range poly {
-		// La tolleranza 0.01 è perfetta se lavori in scala originale Doom [-32768, 32768]
-		if len(res) == 0 || EuclideanDistance(res[len(res)-1], p) > tolerance {
+		if len(res) == 0 {
+			res = append(res, p)
+			continue
+		}
+		last := res[len(res)-1]
+		dx, dy := p.X-last.X, p.Y-last.Y
+		if (dx*dx + dy*dy) > tolSq {
 			res = append(res, p)
 		}
 	}
-	if len(res) > 1 && EuclideanDistance(res[0], res[len(res)-1]) <= tolerance {
-		res = res[:len(res)-1]
+
+	if len(res) > 1 {
+		first, last := res[0], res[len(res)-1]
+		dx, dy := last.X-first.X, last.Y-first.Y
+		if (dx*dx + dy*dy) <= tolSq {
+			res = res[:len(res)-1]
+		}
 	}
+
 	if len(res) < 3 {
 		return nil
 	}
@@ -477,3 +497,8 @@ func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
 	// Margine epsilon (0.001) per scartare segmenti collineari che si toccano solo su un vertice
 	return t1 < 0.999 && t2 > 0.001
 }
+
+// EuclideanDistance calculates the Euclidean distance between two points in a 2D space.
+//func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
+//	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
+//}

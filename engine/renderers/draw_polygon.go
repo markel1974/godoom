@@ -90,22 +90,28 @@ func (dp *DrawPolygon) Verify() bool {
 }
 
 // compileNodes processes the polygon's edges to compute intersection points on a vertical line at pixelX.
-// Returns a sorted list of Y-coordinates where the intersections occur.
 func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	nodes := 0
 	j := dp.pointsLen - 1
+	px := float64(pixelX)
+
 	for i := 0; i < dp.pointsLen; i++ {
-		piX := int(dp.points[i].X)
-		piY := int(dp.points[i].Y)
-		pjX := int(dp.points[j].X)
-		pjY := int(dp.points[j].Y)
-		if piX < pixelX && pjX >= pixelX || pjX < pixelX && piX >= pixelX {
-			val := piY + int(((float64(pixelX-piX))/float64(pjX-piX))*float64(pjY-piY))
-			dp.nodeY[nodes] = val
+		piX := dp.points[i].X
+		piY := dp.points[i].Y
+		pjX := dp.points[j].X
+		pjY := dp.points[j].Y
+
+		if (piX < px && pjX >= px) || (pjX < px && piX >= px) {
+			// Calcolo in float64 puro per preservare l'edge esatto
+			intersectY := piY + ((px-piX)/(pjX-piX))*(pjY-piY)
+
+			// Arrotondamento (evita il troncamento asimmetrico verso lo zero di int())
+			dp.nodeY[nodes] = int(math.Round(intersectY))
 			nodes++
 		}
 		j = i
 	}
+
 	var nodeY []int
 	switch nodes {
 	case 0, 1:
@@ -178,6 +184,11 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 				cY1 := mathematic.Clamp(y1, 0, dp.lastH)
 				cY2 := mathematic.Clamp(y2, 0, dp.lastH)
 
+				// Overlap di 1 pixel per sigillare i gap sub-pixel
+				if cY2 < dp.lastH {
+					cY2++
+				}
+
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					rawTxtY := int(float64(pixelY-y1) * yRef / div)
 
@@ -233,6 +244,11 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 				}
 				cY1 := mathematic.Clamp(y1, 0, dp.lastH)
 				cY2 := mathematic.Clamp(y2, 0, dp.lastH)
+
+				// Overlap di 1 pixel per sigillare i gap sub-pixel
+				if cY2 < dp.lastH {
+					cY2++
+				}
 
 				for pixelY := cY1; pixelY <= cY2; pixelY++ {
 					denom := (dp.halfH - float64(pixelY)) - p2

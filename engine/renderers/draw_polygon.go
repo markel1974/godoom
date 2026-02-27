@@ -411,7 +411,7 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 // computeLight calculates the light intensity based on the absolute depth value z and the given lightDistance.
 func computeLight(z float64, lightDistance float64) float64 {
 	const visibilityMax = 10.0
-	const visibility = visibilityMax - 7.0
+	const visibility = visibilityMax - 5.0
 	// Depth-shading per-pixel basato su Z assoluto (allineato alla scala calcolata in portal.go)
 	light := 1.0 - (math.Abs(z) * visibility * lightDistance)
 	if light < 0 {

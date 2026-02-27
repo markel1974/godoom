@@ -88,7 +88,7 @@ func (s *PictureRGBA) SetRGBA(x int, y int, r uint8, g uint8, b uint8, a uint8) 
 	//flip
 	//y = (int(s.rect.Max.Y) -1) - y
 	y = s.lastY - y
-	i := (y - int(s.rect.Min.Y)) * s.stride + (x - int(s.rect.Min.X)) * 4
+	i := (y-int(s.rect.Min.Y))*s.stride + (x-int(s.rect.Min.X))*4
 	if i >= 0 && i < s.length {
 		s.pixels[i] = r
 		s.pixels[i+1] = g
@@ -124,4 +124,78 @@ func (s *PictureRGBA) Image() *image.RGBA {
 	rgba := image.NewRGBA(bounds)
 	copy(rgba.Pix, s.pixels)
 	return rgba
+}
+
+// ApplyFastAA esegue una passata di anti-aliasing (edge-smoothing) in software.
+// lumaThreshold (es. 20-40) definisce il contrasto minimo per attivare il filtro.
+func (s *PictureRGBA) ApplyFastAA(lumaThreshold uint8) {
+	width := s.stride / 4
+	height := (len(s.pixels)) / s.stride
+	stride := s.stride
+	pixels := s.pixels
+	threshold := uint16(lumaThreshold)
+
+	// Saltiamo i bordi per evitare out-of-bounds
+	for y := 1; y < height-1; y++ {
+		rowOffset := y * stride
+		for x := 1; x < width-1; x++ {
+			i := rowOffset + (x << 2) // x * 4
+
+			r := uint16(pixels[i])
+			g := uint16(pixels[i+1])
+			b := uint16(pixels[i+2])
+
+			// Fast Luma (approssimazione pesata: R + 2G + B / 4)
+			lumaC := (r + (g << 1) + b) >> 2
+
+			iT := i - stride
+			lumaT := (uint16(pixels[iT]) + (uint16(pixels[iT+1]) << 1) + uint16(pixels[iT+2])) >> 2
+
+			iB := i + stride
+			lumaB := (uint16(pixels[iB]) + (uint16(pixels[iB+1]) << 1) + uint16(pixels[iB+2])) >> 2
+
+			iL := i - 4
+			lumaL := (uint16(pixels[iL]) + (uint16(pixels[iL+1]) << 1) + uint16(pixels[iL+2])) >> 2
+
+			iR := i + 4
+			lumaR := (uint16(pixels[iR]) + (uint16(pixels[iR+1]) << 1) + uint16(pixels[iR+2])) >> 2
+
+			// Trova il contrasto locale
+			minL := lumaC
+			if lumaT < minL {
+				minL = lumaT
+			}
+			if lumaB < minL {
+				minL = lumaB
+			}
+			if lumaL < minL {
+				minL = lumaL
+			}
+			if lumaR < minL {
+				minL = lumaR
+			}
+
+			maxL := lumaC
+			if lumaT > maxL {
+				maxL = lumaT
+			}
+			if lumaB > maxL {
+				maxL = lumaB
+			}
+			if lumaL > maxL {
+				maxL = lumaL
+			}
+			if lumaR > maxL {
+				maxL = lumaR
+			}
+
+			// Se c'è un gradino ad alto contrasto (aliasing)
+			if (maxL - minL) > threshold {
+				// Box-blur a croce ultra-veloce (divisione per 5 precalcolata o via lookup se necessario, qui usiamo div intera)
+				pixels[i] = uint8((r + uint16(pixels[iT]) + uint16(pixels[iB]) + uint16(pixels[iL]) + uint16(pixels[iR])) / 5)
+				pixels[i+1] = uint8((g + uint16(pixels[iT+1]) + uint16(pixels[iB+1]) + uint16(pixels[iL+1]) + uint16(pixels[iR+1])) / 5)
+				pixels[i+2] = uint8((b + uint16(pixels[iT+2]) + uint16(pixels[iB+2]) + uint16(pixels[iL+2]) + uint16(pixels[iR+2])) / 5)
+			}
+		}
+	}
 }

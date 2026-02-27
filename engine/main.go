@@ -43,7 +43,7 @@ func (g *Game) Setup() {
 	g.viewMode = -1
 	g.enableClear = true //true //true
 	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
-	m := 2
+	m := 1
 
 	switch m {
 	case 0:

@@ -72,6 +72,7 @@ func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *ViewItem, css [
 	}
 	r.serialRender(surface, vi, css, compiled)
 	//r.parallelRender(surface, vi, css, compiled)
+	surface.ApplyFastAA(20)
 }
 
 // serialRender processes and renders a series of compiled Sectors and their polygons onto the provided surface.

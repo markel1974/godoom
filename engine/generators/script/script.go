@@ -121,6 +121,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				cs.TextureUpper = "wall3.ppm"
 				cs.TextureFloor = "floor.ppm"
 				cs.TextureCeil = "ceil.ppm"
+				cs.TextureScaleFactor = 50.0
 				cs.Textures = true
 			}
 			cfg.Sectors = append(cfg.Sectors, cs)

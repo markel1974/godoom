@@ -16,8 +16,6 @@ const ScaleFactor = 25.0
 // ScaleFactorCeilFloor represents the scalar value used for normalizing floor and ceiling height calculations.
 const ScaleFactorCeilFloor = 4.0
 
-// ScaleFactorCeil defines scale factor for ceiling heights
-
 // tolerance defines the allowable margin of error for geometric calculations, typically used for comparing distances.
 const tolerance = 0.1
 
@@ -191,23 +189,25 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	b.eliminateTJunctions(level, subsectorPolys)
 
 	// 4. ConfigSectors creation (Spazio Nativo)
-	numSS := len(level.SubSectors)
+	numSS := uint16(len(level.SubSectors))
 	miSectors := make([]*model.ConfigSector, numSS)
-	for i := 0; i < numSS; i++ {
-		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
+	for i := uint16(0); i < numSS; i++ {
+		sectorRef, _ := level.GetSectorFromSubSector(i)
 		ds := level.Sectors[sectorRef]
 		miSector := &model.ConfigSector{
-			Id:       strconv.Itoa(i),
-			Floor:    SnapFloat(float64(ds.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:     SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeilFloor),
-			Textures: true, Tag: strconv.Itoa(int(sectorRef)),
+			Id:           strconv.Itoa(int(i)),
+			Floor:        SnapFloat(float64(ds.FloorHeight) / ScaleFactorCeilFloor),
+			Ceil:         SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeilFloor),
+			Tag:          strconv.Itoa(int(sectorRef)),
 			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
+			Textures: true,
 		}
 
-		poly := subsectorPolys[uint16(i)]
+		poly := subsectorPolys[i]
 		for j := 0; j < len(poly); j++ {
-			p1, p2 := poly[j], poly[(j+1)%len(poly)]
+			p1 := poly[j]
+			p2 := poly[(j+1)%len(poly)]
 			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1, p2)
 			miSector.Segments = append(miSector.Segments, seg)
 		}

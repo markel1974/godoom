@@ -4,17 +4,18 @@ import "encoding/json"
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {
-	Id           string           `json:"id"`
-	Ceil         float64          `json:"ceil"`
-	Floor        float64          `json:"floor"`
-	Textures     bool             `json:"textures"`
-	FloorTexture string           `json:"floorTexture"`
-	CeilTexture  string           `json:"ceilTexture"`
-	UpperTexture string           `json:"upperTexture"`
-	LowerTexture string           `json:"lowerTexture"`
-	WallTexture  string           `json:"wallTexture"`
-	Segments     []*ConfigSegment `json:"segments"`
-	Tag          string           `json:"tag"`
+	Id                 string           `json:"id"`
+	Ceil               float64          `json:"ceil"`
+	Floor              float64          `json:"floor"`
+	Textures           bool             `json:"textures"`
+	TextureFloor       string           `json:"textureFloor"`
+	TextureCeil        string           `json:"textureCeil"`
+	TextureUpper       string           `json:"textureUpper"`
+	TextureLower       string           `json:"textureLower"`
+	TextureWall        string           `json:"textureWall"`
+	TextureScaleFactor float64          `json:"textureScaleFactor"`
+	Segments           []*ConfigSegment `json:"segments"`
+	Tag                string           `json:"tag"`
 }
 
 // NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
@@ -28,11 +29,11 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	out.Ceil = is.Ceil
 	out.Floor = is.Floor
 	out.Textures = is.Textures
-	out.FloorTexture = is.FloorTexture
-	out.CeilTexture = is.CeilTexture
-	out.UpperTexture = is.UpperTexture
-	out.LowerTexture = is.LowerTexture
-	out.WallTexture = is.WallTexture
+	out.TextureFloor = is.TextureFloor
+	out.TextureCeil = is.TextureCeil
+	out.TextureUpper = is.TextureUpper
+	out.TextureLower = is.TextureLower
+	out.TextureWall = is.TextureWall
 	out.Tag = is.Tag
 	out.Segments = nil
 	if cloneSegments {

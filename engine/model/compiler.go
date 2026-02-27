@@ -79,14 +79,18 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 		s.Floor = cs.Floor
 		s.Textures = cs.Textures
 		if s.Textures {
-			s.FloorTexture = text.Get(cs.FloorTexture)
-			s.CeilTexture = text.Get(cs.CeilTexture)
-			s.UpperTexture = text.Get(cs.UpperTexture)
-			s.LowerTexture = text.Get(cs.LowerTexture)
-			s.WallTexture = text.Get(cs.WallTexture)
-			if s.FloorTexture == nil || s.CeilTexture == nil && s.UpperTexture == nil || s.LowerTexture == nil || s.WallTexture == nil {
+			s.TextureFloor = text.Get(cs.TextureFloor)
+			s.TextureCeil = text.Get(cs.TextureCeil)
+			s.TextureUpper = text.Get(cs.TextureUpper)
+			s.TextureLower = text.Get(cs.TextureLower)
+			s.TextureWall = text.Get(cs.TextureWall)
+			if s.TextureFloor == nil || s.TextureCeil == nil && s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
 				//fmt.Println("invalid textures configuration for Sector", s.Id)
 				s.Textures = false
+			}
+			s.TextureScaleFactor = cs.TextureScaleFactor
+			if s.TextureScaleFactor == 0 {
+				s.TextureScaleFactor = 1
 			}
 		}
 		r.sectors = append(r.sectors, s)
@@ -316,11 +320,11 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 					ns.Floor = sect.Floor
 					ns.Ceil = sect.Ceil
 					ns.Textures = sect.Textures
-					ns.FloorTexture = sect.FloorTexture
-					ns.CeilTexture = sect.CeilTexture
-					ns.UpperTexture = sect.UpperTexture
-					ns.LowerTexture = sect.LowerTexture
-					ns.WallTexture = sect.WallTexture
+					ns.TextureFloor = sect.TextureFloor
+					ns.TextureCeil = sect.TextureCeil
+					ns.TextureUpper = sect.TextureUpper
+					ns.TextureLower = sect.TextureLower
+					ns.TextureWall = sect.TextureWall
 
 					r.sectors = append(r.sectors, ns)
 
@@ -632,11 +636,11 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 			ns.Floor = sect.Floor
 			ns.Ceil = sect.Ceil
 			ns.Textures = sect.Textures
-			ns.FloorTexture = sect.FloorTexture
-			ns.CeilTexture = sect.CeilTexture
-			ns.UpperTexture = sect.UpperTexture
-			ns.LowerTexture = sect.LowerTexture
-			ns.WallTexture = sect.WallTexture
+			ns.TextureFloor = sect.TextureFloor
+			ns.TextureCeil = sect.TextureCeil
+			ns.TextureUpper = sect.TextureUpper
+			ns.TextureLower = sect.TextureLower
+			ns.TextureWall = sect.TextureWall
 
 			r.sectors = append(r.sectors, ns)
 

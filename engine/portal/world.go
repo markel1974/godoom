@@ -35,7 +35,7 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 		textures:     t,
 		tree:         NewPortal(screenWidth, screenHeight, maxQueue, t),
 		render:       nil,
-		vi:           &renderers.ViewItem{},
+		vi:           renderers.NewViewItem(),
 	}
 	return w
 }
@@ -102,14 +102,16 @@ func (w *World) movePlayer(dx float64, dy float64) {
 
 // Update updates the state of the world, including the player and rendering, based on the current frame's conditions.
 func (w *World) Update(surface *pixels.PictureRGBA) {
-	_, sin, cos := w.player.GetAngle()
-	px, py := w.player.GetCoords()
-	pz := w.player.GetZ()
+	_, w.vi.AngleSin, w.vi.AngleCos = w.player.GetAngle()
 	w.vi.Sector = w.player.GetSector()
-	w.vi.Where = model.XYZ{X: px, Y: py, Z: pz}
-	w.vi.AngleCos = cos
-	w.vi.AngleSin = sin
+	w.vi.Where.X, w.vi.Where.Y = w.player.GetCoords()
+	w.vi.Where.Z = w.player.GetZ()
 	w.vi.Yaw = w.player.GetYaw()
+	w.vi.LightDistance = w.player.GetLightDistance()
+	headPos := w.player.GetHeadPosition()
+	kneePos := w.player.GetKneePosition()
+	dx, dy := w.player.GetVelocity()
+	pSector := w.player.GetSector()
 
 	cs, count := w.tree.Compile(w.vi)
 	w.render.Render(surface, w.vi, cs, count)
@@ -121,16 +123,15 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 	if !w.player.IsMoving() {
 		return
 	}
-	head := w.player.Head()
-	knee := w.player.Knee()
+	px := w.vi.Where.X
+	py := w.vi.Where.Y
 	//px,	py := w.player.GetCoords()
-	dx, dy := w.player.GetVelocity()
+
 	p1 := px + dx
 	p2 := py + dy
-	sect := w.player.GetSector()
 
 	// Check if the player is about to cross one of the sector's edges
-	for _, segment := range w.player.GetSector().Segments {
+	for _, segment := range pSector.Segments {
 		start := segment.Start
 		end := segment.End
 
@@ -141,12 +142,12 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 			holeLow := 9e9
 			holeHigh := -9e9
 			if segment.Sector != nil {
-				holeLow = mathematic.MaxF(sect.Floor, segment.Sector.Floor)
-				holeHigh = mathematic.MinF(sect.Ceil, segment.Sector.Ceil)
+				holeLow = mathematic.MaxF(pSector.Floor, segment.Sector.Floor)
+				holeHigh = mathematic.MinF(pSector.Ceil, segment.Sector.Ceil)
 			}
 
 			// Check whether we're bumping into a wall
-			if holeHigh < head || holeLow > knee {
+			if holeHigh < headPos || holeLow > kneePos {
 				// Bumps into a wall! Slide along the wall
 				// This formula is from Wikipedia article "vector projection"
 				xd := end.X - start.X

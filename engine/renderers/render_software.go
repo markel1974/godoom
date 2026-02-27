@@ -11,8 +11,6 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
-const scaleFactor = 10.0
-
 // RenderSoftware represents a software-based renderer for managing and rendering 2D/3D scenes on a defined screen space.
 type RenderSoftware struct {
 	screenWidth        int
@@ -175,98 +173,24 @@ func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, 
 		return
 	}
 
-	// Scala per mappare 1:1 le dimensioni reali del tuo spazio
-
 	switch cp.Kind {
 	case model.IdWall:
-		target := (cp.Sector.Ceil - cp.Sector.Floor) * scaleFactor
-		dr.DrawTexture(cp.Sector.WallTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, target)
+		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
+		dr.DrawTexture(cp.Sector.TextureWall, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, vi.LightDistance)
 	case model.IdUpper:
-		target := (cp.Sector.Ceil - cp.Neighbor.Ceil) * scaleFactor
-		dr.DrawTexture(cp.Sector.UpperTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(target))
+		yRef := (cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor
+		dr.DrawTexture(cp.Sector.TextureUpper, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
 	case model.IdLower:
-		target := (cp.Neighbor.Floor - cp.Sector.Floor) * scaleFactor
-		dr.DrawTexture(cp.Sector.LowerTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(target))
+		yRef := (cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
+		dr.DrawTexture(cp.Sector.TextureLower, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
 	case model.IdCeil:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, vi.LightDistance)
 	case model.IdFloor:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, vi.LightDistance)
 	case model.IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, vi.LightDistance)
 	case model.IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
-	default:
-		dr.DrawWireFrame(true)
-	}
-}
-
-// renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
-func (r *RenderSoftware) renderPolygon_OLD(vi *ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
-	switch mode {
-	case 0:
-		dr.DrawWireFrame(false)
-		return
-	case 1:
-		dr.DrawWireFrame(true)
-		return
-	case 2:
-		dr.DrawRectangle()
-		return
-	case 3:
-		dr.DrawPoints(5)
-		return
-	case 4:
-		dr.DrawWireFrame(false)
-		dr.DrawPoints(10)
-		return
-	case 5:
-		dr.DrawWireFrame(true)
-		dr.DrawPoints(10)
-		return
-	case 6:
-		dr.DrawRectangle()
-		dr.DrawPoints(10)
-		return
-	case 7:
-		dr.DrawWireFrame(true)
-		dr.DrawRectangle()
-		return
-	}
-
-	switch cp.Kind {
-	case model.IdWall:
-		target := cp.Sector.Ceil - cp.Sector.Floor
-		yRef := r.sectorsMaxHeight
-		if target > 1 {
-			yRef = r.sectorsMaxHeight / target
-		}
-		dr.DrawTexture(cp.Sector.WallTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
-	case model.IdUpper:
-		target := cp.Sector.Ceil - cp.Neighbor.Ceil
-		yRef := r.sectorsMaxHeight
-		if target > 1 {
-			yRef = r.sectorsMaxHeight / target
-		}
-		dr.DrawTexture(cp.Sector.UpperTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
-	case model.IdLower:
-		target := cp.Sector.Floor - cp.Neighbor.Floor
-		yRef := r.sectorsMaxHeight
-		if target > 1 {
-			yRef = r.sectorsMaxHeight / target
-		}
-		dr.DrawTexture(cp.Sector.LowerTexture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef)
-	case model.IdCeil:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
-		//dr.DrawTexture(cp.Sector.CeilTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case model.IdFloor:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
-		//dr.DrawTexture(cp.Sector.FloorTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case model.IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.FloorTexture, cp.Sector.Floor)
-		//dr.DrawTexture(cp.Sector.FloorTexture, cp.x1, cp.x2, cp.tz1, cp.tz2, cp.u0, cp.u1, 1.0)
-	case model.IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.CeilTexture, cp.Sector.Ceil)
-		//dr.DrawTexture(p.Sector.CeilTexture, p.x1, p.x2, p.tz1, p.tz2, p.u0, p.u1, 1.0)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, vi.LightDistance)
 	default:
 		dr.DrawWireFrame(true)
 	}

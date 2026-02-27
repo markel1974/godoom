@@ -144,12 +144,13 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		//if err == nil {
 		//	fmt.Println(image)
 		//}
-		miSector.UpperTexture = "wall2.ppm"
-		miSector.WallTexture = "wall.ppm"
-		miSector.LowerTexture = "floor2.ppm"
+		miSector.TextureUpper = "wall2.ppm"
+		miSector.TextureWall = "wall.ppm"
+		miSector.TextureLower = "floor2.ppm"
 
-		miSector.CeilTexture = "ceil.ppm"
-		miSector.FloorTexture = "floor.ppm"
+		miSector.TextureCeil = "ceil.ppm"
+		miSector.TextureFloor = "floor.ppm"
+		miSector.TextureScaleFactor = 10.0
 
 		miSector.Textures = true
 

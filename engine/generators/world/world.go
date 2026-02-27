@@ -45,11 +45,11 @@ var availableWall = []string{"wall2.ppm"}
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
 	sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
 	sector.Textures = true
-	sector.FloorTexture = availableFloor[random(0, len(availableFloor)-1)]
-	sector.CeilTexture = availableCeil[random(0, len(availableCeil)-1)]
-	sector.UpperTexture = availableUpper[random(0, len(availableUpper)-1)]
-	sector.LowerTexture = availableLower[random(0, len(availableLower)-1)]
-	sector.WallTexture = availableWall[random(0, len(availableWall)-1)]
+	sector.TextureFloor = availableFloor[random(0, len(availableFloor)-1)]
+	sector.TextureCeil = availableCeil[random(0, len(availableCeil)-1)]
+	sector.TextureUpper = availableUpper[random(0, len(availableUpper)-1)]
+	sector.TextureLower = availableLower[random(0, len(availableLower)-1)]
+	sector.TextureWall = availableWall[random(0, len(availableWall)-1)]
 	const SegmentMax = 4
 	for c := 0; c < SegmentMax; c++ {
 		xy := model.XY{X: 0, Y: 0}

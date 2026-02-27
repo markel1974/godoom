@@ -116,11 +116,11 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.WallTexture = "wall2.ppm"
-				cs.LowerTexture = "wall.ppm"
-				cs.UpperTexture = "wall3.ppm"
-				cs.FloorTexture = "floor.ppm"
-				cs.CeilTexture = "ceil.ppm"
+				cs.TextureWall = "wall2.ppm"
+				cs.TextureLower = "wall.ppm"
+				cs.TextureUpper = "wall3.ppm"
+				cs.TextureFloor = "floor.ppm"
+				cs.TextureCeil = "ceil.ppm"
 				cs.Textures = true
 			}
 			cfg.Sectors = append(cfg.Sectors, cs)

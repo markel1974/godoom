@@ -20,26 +20,28 @@ const (
 
 // Player represents the state and properties of a player in the game, including position, velocity, angle, and interactions.
 type Player struct {
-	where    model.XYZ
-	velocity model.XYZ
-	angle    float64
-	angleSin float64
-	angleCos float64
-	yaw      float64
-	yawState float64
-	sector   *model.Sector
-	ducking  bool
-	falling  bool
+	where         model.XYZ
+	velocity      model.XYZ
+	angle         float64
+	angleSin      float64
+	angleCos      float64
+	yaw           float64
+	yawState      float64
+	sector        *model.Sector
+	ducking       bool
+	falling       bool
+	lightDistance float64
 }
 
 // NewPlayer initializes and returns a new Player instance at the specified position, angle, and sector.
 func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sector) *Player {
 	p := &Player{
-		where:    model.XYZ{X: x, Y: y, Z: z + EyeHeight},
-		velocity: model.XYZ{},
-		yaw:      0,
-		yawState: 0,
-		sector:   sector,
+		where:         model.XYZ{X: x, Y: y, Z: z + EyeHeight},
+		velocity:      model.XYZ{},
+		yaw:           0,
+		yawState:      0,
+		sector:        sector,
+		lightDistance: 0.0039, // 1 / distance == 1 / 255
 	}
 	p.SetAngle(angle)
 	return p
@@ -140,6 +142,16 @@ func (p *Player) GetZ() float64 {
 	return p.where.Z
 }
 
+// GetLightDistance returns the maximum distance the player can illuminate based on their current settings.
+func (p *Player) GetLightDistance() float64 {
+	return p.lightDistance
+}
+
+// SetLightDistance updates the player's maximum illumination distance to the specified value.
+func (p *Player) SetLightDistance(lightDistance float64) {
+	p.lightDistance = lightDistance
+}
+
 // GetVelocity returns the X and Y components of the player's velocity as two separate float64 values.
 func (p *Player) GetVelocity() (float64, float64) {
 	return p.velocity.X, p.velocity.Y
@@ -195,13 +207,13 @@ func (p *Player) IsMoving() bool {
 	return !(p.velocity.X == 0 && p.velocity.Y == 0)
 }
 
-// Head returns the player's head position (Z coordinate) by adding HeadMargin to the current Z position.
-func (p *Player) Head() float64 {
+// GetHeadPosition returns the player's head position (Z coordinate) by adding HeadMargin to the current Z position.
+func (p *Player) GetHeadPosition() float64 {
 	return p.where.Z + HeadMargin
 }
 
-// Knee calculates and returns the vertical position of the player's knees relative to the world coordinates.
-func (p *Player) Knee() float64 {
+// GetKneePosition calculates and returns the vertical position of the player's knees relative to the world coordinates.
+func (p *Player) GetKneePosition() float64 {
 	return p.where.Z - p.EyeHeight() + KneeHeight
 }
 

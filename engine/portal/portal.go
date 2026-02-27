@@ -270,8 +270,8 @@ func (r *Render) compileSector_OLD(vi *renderers.ViewItem, sector *model.Sector,
 		ybStop := (x2Min-x1)*(y2b-y1b)/(x2-x1) + y1b
 		zStart := ((x1Max-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
-		lightStart := 1 - (zStart * renderers.FullLightDistance)
-		lightStop := 1 - (zStop * renderers.FullLightDistance)
+		lightStart := 1 - (zStart * vi.LightDistance)
+		lightStop := 1 - (zStop * vi.LightDistance)
 
 		if zStart <= 0 {
 			zStart = 10e4
@@ -419,7 +419,7 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 		}
 
 		// Calcolo lunghezza reale per la ripetizione delle texture (UV mapping mondo)
-		// Moltiplica per ScaleFactor se le tue coordinate WAD sono state ridotte (es. * 100.0)
+		// Moltiplica per TextureScaleFactor se le tue coordinate WAD sono state ridotte (es. * 100.0)
 		segLength := math.Hypot(vx2-vx1, vy2-vy1) * 100.0 // Adegua questo moltiplicatore al tuo motore
 		u0 := 0.0
 		u1 := segLength
@@ -481,8 +481,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 		zStart := ((x1Max-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 
-		lightStart := 1 - (zStart * renderers.FullLightDistance)
-		lightStop := 1 - (zStop * renderers.FullLightDistance)
+		lightStart := 1 - (zStart * vi.LightDistance)
+		lightStop := 1 - (zStop * vi.LightDistance)
 
 		if zStart <= 0 {
 			zStart = 10e4

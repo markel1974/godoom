@@ -291,7 +291,7 @@ func (w *World) drawSingleStubScale(surface *pixels.PictureRGBA, sector *model.S
 		colorPoint = 0x00BFFF
 	}
 	dp := renderers.NewDrawPolygon(640, 480)
-	dp.Setup(surface, t, len(t), colorLine, 1.0, 1.0)
+	dp.Setup(surface, t, len(t), colorLine)
 	dp.DrawPoints(10)
 	dp.Color = colorPoint
 	dp.DrawLines(false)
@@ -365,7 +365,7 @@ func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector
 		return
 	}
 	dp := renderers.NewDrawPolygon(640, 480)
-	dp.Setup(surface, t, len(t), 0x00ff00, 1.0, 1.0)
+	dp.Setup(surface, t, len(t), 0x00ff00)
 	dp.DrawPoints(10)
 	dp.Color = 0xff0000
 	dp.DrawLines(false)

@@ -106,7 +106,7 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *ViewItem,
 		polygons := css[idx].Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
-			r.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind, cp.Light1, cp.Light2)
+			r.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
 			r.renderPolygon(vi, cp, r.dp, mode)
 		}
 	}
@@ -131,7 +131,7 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewIte
 			dp := NewDrawPolygon(r.screenWidth, r.screenHeight)
 			for k := len(polygons) - 1; k >= 0; k-- {
 				cp := polygons[k]
-				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind, cp.Light1, cp.Light2)
+				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
 				r.renderPolygon(vi, cp, dp, mode)
 			}
 			wg.Done()

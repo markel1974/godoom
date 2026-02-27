@@ -50,6 +50,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	bsp := NewBsp(level)
+
 	sectors := b.scanSubSectors(level, bsp)
 
 	p1 := level.Things[0]
@@ -106,6 +107,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	// 3. T-Junction elimination (Spazio Nativo)
 	b.eliminateTJunctions(level, subsectorPolys)
 
+	PolygonsSnap(level, subsectorPolys)
+
 	// 4. ConfigSectors creation (Spazio Nativo)
 	numSS := uint16(len(level.SubSectors))
 	miSectors := make([]*model.ConfigSector, numSS)
@@ -141,8 +144,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 			continue
 		}
 		for _, seg := range sector.Segments {
-			seg.Start.Y = SnapFloat(-seg.Start.Y)
-			seg.End.Y = SnapFloat(-seg.End.Y)
+			seg.Start.Y = -seg.Start.Y
+			seg.End.Y = -seg.End.Y
 		}
 		b.forceWindingOrder(sector.Segments, false)
 	}
@@ -157,7 +160,7 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 		allVerts = append(allVerts, poly...)
 	}
 	for _, v := range level.Vertexes {
-		allVerts = append(allVerts, model.XY{X: SnapFloat(float64(v.XCoord)), Y: SnapFloat(float64(v.YCoord))})
+		allVerts = append(allVerts, model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)})
 	}
 
 	for ssIdx, poly := range subsectorPolys {
@@ -414,13 +417,12 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 
 		// Se il segmento attraversa la partizione (front <-> back), genera l'intersezione
 		if (v1.side > 0 && v2.side < 0) || (v1.side < 0 && v2.side > 0) {
-			// L'interpolazione u deriva dal rapporto delle distanze precalcolate
 			u := v1.dist / (v1.dist - v2.dist)
-
-			interX := SnapFloat(v1.p.X + u*(v2.p.X-v1.p.X))
-			interY := SnapFloat(v1.p.Y + u*(v2.p.Y-v1.p.Y))
-			inter := model.XY{X: interX, Y: interY}
-
+			// FP64 puro, senza SnapFloat
+			inter := model.XY{
+				X: v1.p.X + u*(v2.p.X-v1.p.X),
+				Y: v1.p.Y + u*(v2.p.Y-v1.p.Y),
+			}
 			front = append(front, inter)
 			back = append(back, inter)
 		}
@@ -496,6 +498,35 @@ func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
 
 	// Margine epsilon (0.001) per scartare segmenti collineari che si toccano solo su un vertice
 	return t1 < 0.999 && t2 > 0.001
+}
+
+func PolygonsSnap(level *Level, subsectorPolys map[uint16]Polygons) {
+	// --- NUOVO STEP: Vertex Snapping Topologico ---
+	// Estraiamo tutti i vertici nativi del WAD per il matching
+	wadVerts := make([]model.XY, len(level.Vertexes))
+	for i, v := range level.Vertexes {
+		wadVerts[i] = model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)}
+	}
+
+	// Funzione di snap: se un vertice FP64 dista meno di 1.5 unità Doom
+	// da un vertice WAD nativo, lo collassa sulla coordinata esatta.
+	snapVertex := func(p model.XY) model.XY {
+		for _, wv := range wadVerts {
+			dx, dy := p.X-wv.X, p.Y-wv.Y
+			if (dx*dx + dy*dy) <= 2.25 { // 1.5 al quadrato
+				return wv
+			}
+		}
+		return p
+	}
+
+	// Applica lo snap a tutti i poligoni risultanti dal BSP
+	for i, poly := range subsectorPolys {
+		for j, p := range poly {
+			poly[j] = snapVertex(p)
+		}
+		subsectorPolys[i] = PolygonClean(poly) // Pulisce eventuali vertici collassati
+	}
 }
 
 // EuclideanDistance calculates the Euclidean distance between two points in a 2D space.

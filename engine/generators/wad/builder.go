@@ -16,10 +16,8 @@ import (
 //https://github.com/mausimus/rtdoom/blob/master/rtdoom/Projection.cpp
 //https://github.com/gamescomputersplay/wad2pic/blob/main/wad2pic.py
 
-// ScaleFactor is a constant used to scale coordinates, dimensions, or other values for calculations and transformations.
-const ScaleFactor = 15.0
-const ScaleFactorFloor = 10.0
-const ScaleFactorCeil = 3.0
+const ScaleFactorFloor = 2.0
+const ScaleFactorCeil = 2.0
 
 // Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
 type Builder struct {
@@ -61,13 +59,11 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y, bsp.root)
-	interX := SnapFloat(float64(p1.X) / ScaleFactor)
-	interY := SnapFloat(float64(-p1.Y) / ScaleFactor)
-	p1Pos := model.XY{X: interX, Y: interY}
+	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)}
 	p1Angle := float64(p1.Angle)
 
 	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
-	root := model.NewConfigRoot(sectors, player, nil, 1.0, true)
+	root := model.NewConfigRoot(sectors, player, nil, 8.0, true)
 
 	return root, nil
 }
@@ -112,8 +108,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	for ssIdx, poly := range subsectorPolys {
 		var scaled Polygons
 		for _, p := range poly {
-			interX := SnapFloat(p.X / ScaleFactor)
-			interY := SnapFloat(-p.Y / ScaleFactor)
+			interX := SnapFloat(p.X)  // / ScaleFactor)
+			interY := SnapFloat(-p.Y) // / ScaleFactor)
 			scaled = append(scaled, model.XY{X: interX, Y: interY})
 		}
 		subsectorPolys[ssIdx] = scaled
@@ -195,8 +191,8 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 	// This will force the long sides of the BSP to "split" exactly
 	// at the endpoints of the physical Doom segments (WAD Segs)
 	for _, v := range level.Vertexes {
-		interX := SnapFloat(float64(v.XCoord) / ScaleFactor)
-		interY := SnapFloat(float64(-v.YCoord) / ScaleFactor)
+		interX := SnapFloat(float64(v.XCoord))  // / ScaleFactor)
+		interY := SnapFloat(float64(-v.YCoord)) // / ScaleFactor)
 		allVerts = append(allVerts, model.XY{
 			X: interX,
 			Y: interY,
@@ -334,10 +330,10 @@ func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.Su
 		wadSeg := level.Segments[ss.StartSeg+i]
 		v1 := level.Vertexes[wadSeg.VertexStart]
 		v2 := level.Vertexes[wadSeg.VertexEnd]
-		interX1 := SnapFloat(float64(v1.XCoord) / ScaleFactor)
-		interY1 := SnapFloat(float64(-v1.YCoord) / ScaleFactor)
-		interX2 := SnapFloat(float64(v2.XCoord) / ScaleFactor)
-		interY2 := SnapFloat(float64(-v2.YCoord) / ScaleFactor)
+		interX1 := SnapFloat(float64(v1.XCoord))  // / ScaleFactor)
+		interY1 := SnapFloat(float64(-v1.YCoord)) // / ScaleFactor)
+		interX2 := SnapFloat(float64(v2.XCoord))  // / ScaleFactor)
+		interY2 := SnapFloat(float64(-v2.YCoord)) // / ScaleFactor)
 		w1 := model.XY{X: interX1, Y: interY1}
 		w2 := model.XY{X: interX2, Y: interY2}
 

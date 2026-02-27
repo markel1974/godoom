@@ -350,6 +350,9 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 		scale = 1
 	}
 
+	cfg.Player.Position.X /= scale
+	cfg.Player.Position.Y /= scale
+
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
 		//vertex scale

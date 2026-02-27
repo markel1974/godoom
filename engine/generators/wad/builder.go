@@ -11,14 +11,10 @@ import (
 )
 
 // ScaleFactorFloor defines scale factor for floor heights
-const scaleFactorFloor = 2.0
+const ScaleFactorFloor = 2.0
 
 // ScaleFactorCeil defines scale factor for ceiling heights
-const scaleFactorCeil = 2.0
-
-// 0.1 è il minimo matematico per assorbire il drift CSG di bsp.Traverse
-// Tolleranza a 0.1 per il matching dei portali
-const tolerance = 0.1
+const ScaleFactorCeil = 2.0
 
 // Builder is responsible for constructing and managing game levels, textures, and BSP trees from WAD data.
 type Builder struct {
@@ -122,8 +118,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	for i := 0; i < numSS; i++ {
 		sectorRef, _ := level.GetSectorFromSubSector(uint16(i))
 		ds := level.Sectors[sectorRef]
-		floor := SnapFloat(float64(ds.FloorHeight) / scaleFactorFloor)
-		ceil := SnapFloat(float64(ds.CeilingHeight) / scaleFactorCeil)
+		floor := SnapFloat(float64(ds.FloorHeight) / ScaleFactorFloor)
+		ceil := SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeil)
 		miSector := &model.ConfigSector{
 			Id: strconv.Itoa(i), Floor: floor, Ceil: ceil, Textures: true, Tag: strconv.Itoa(int(sectorRef)),
 		}
@@ -165,7 +161,7 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 	for _, v := range level.Vertexes {
 		interX := SnapFloat(float64(v.XCoord))
-		interY := SnapFloat(float64(v.YCoord))
+		interY := SnapFloat(float64(v.YCoord)) // Spazio nativo Doom, niente inversione
 		allVerts = append(allVerts, model.XY{
 			X: interX,
 			Y: interY,
@@ -180,15 +176,21 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 			var splits Polygons
 			for _, v := range allVerts {
-				if b.distPointToSegment(v, p1, p2) < tolerance {
-					dot := (v.X-p1.X)*(p2.X-p1.X) + (v.Y-p1.Y)*(p2.Y-p1.Y)
-					lenSq := (p2.X-p1.X)*(p2.X-p1.X) + (p2.Y-p1.Y)*(p2.Y-p1.Y)
+				// Utilizziamo 2.0 unscaled come raggio sicuro per catturare il drift in virgola mobile
+				if b.distPointToSegment(v, p1, p2) < 2.0 {
+					dx := p2.X - p1.X
+					dy := p2.Y - p1.Y
+					lenSq := dx*dx + dy*dy
 
 					if lenSq > 0 {
 						length := math.Sqrt(lenSq)
-						// Calcola la distanza effettiva sul segmento per non scartare i vertici delle colonne
+						dot := (v.X-p1.X)*dx + (v.Y-p1.Y)*dy
+
+						// Proiezione vettoriale reale lungo il segmento
 						distAlong := dot / length
-						if distAlong > tolerance && distAlong < length-tolerance {
+
+						// Inserisce il vertice solo se si trova internamente al segmento e non agli estremi
+						if distAlong > 0.5 && distAlong < length-0.5 {
 							splits = append(splits, v)
 						}
 					}
@@ -201,7 +203,7 @@ func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Po
 
 			newPoly = append(newPoly, p1)
 			for _, sp := range splits {
-				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > tolerance/2.0 {
+				if EuclideanDistance(newPoly[len(newPoly)-1], sp) > 0.5 {
 					newPoly = append(newPoly, sp)
 				}
 			}
@@ -219,12 +221,7 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 		ss := level.SubSectors[i]
 
 		for _, seg := range miSector.Segments {
-			mid := model.XY{
-				X: SnapFloat((seg.Start.X + seg.End.X) / 2.0),
-				Y: SnapFloat((seg.Start.Y + seg.End.Y) / 2.0),
-			}
-
-			wadSeg := b.findOverlappingWadSeg(level, mid, ss)
+			wadSeg := b.findOverlappingWadSeg(level, seg, ss)
 
 			foundNeighbor := false
 			for j, otherSector := range miSectors {
@@ -232,9 +229,9 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 					continue
 				}
 				for _, otherSeg := range otherSector.Segments {
-					// FIX: Controllo bidirezionale con la variabile tolerance unificata
-					match1 := EuclideanDistance(seg.Start, otherSeg.End) < tolerance && EuclideanDistance(seg.End, otherSeg.Start) < tolerance
-					match2 := EuclideanDistance(seg.Start, otherSeg.Start) < tolerance && EuclideanDistance(seg.End, otherSeg.End) < tolerance
+					// 2.0 è stabile per coordinare sub-pixel match
+					match1 := EuclideanDistance(seg.Start, otherSeg.End) < 2.0 && EuclideanDistance(seg.End, otherSeg.Start) < 2.0
+					match2 := EuclideanDistance(seg.Start, otherSeg.Start) < 2.0 && EuclideanDistance(seg.End, otherSeg.End) < 2.0
 					if match1 || match2 {
 						seg.Neighbor = otherSector.Id
 						foundNeighbor = true
@@ -289,8 +286,13 @@ func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64
 	return EuclideanDistance(p, proj)
 }
 
-// findOverlappingWadSeg searches for a WAD segment in the given subsector whose centerline is within a close distance to the specified point.
-func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.SubSector) *lumps.Seg {
+// findOverlappingWadSeg searches for a WAD segment using a Mutual Midpoint Overlay to prevent missed walls
+func (b *Builder) findOverlappingWadSeg(level *Level, seg *model.ConfigSegment, ss *lumps.SubSector) *lumps.Seg {
+	segMid := model.XY{
+		X: (seg.Start.X + seg.End.X) / 2.0,
+		Y: (seg.Start.Y + seg.End.Y) / 2.0,
+	}
+
 	for i := int16(0); i < ss.NumSegments; i++ {
 		wadSeg := level.Segments[ss.StartSeg+i]
 		v1 := level.Vertexes[wadSeg.VertexStart]
@@ -303,9 +305,16 @@ func (b *Builder) findOverlappingWadSeg(level *Level, mid model.XY, ss *lumps.Su
 		w1 := model.XY{X: interX1, Y: interY1}
 		w2 := model.XY{X: interX2, Y: interY2}
 
-		// Ritorna il puntatore all'array originale affinché le proprietà non vengano perse
-		if b.distPointToSegment(mid, w1, w2) < tolerance {
-			return level.Segments[ss.StartSeg+i]
+		wadMid := model.XY{
+			X: (w1.X + w2.X) / 2.0,
+			Y: (w1.Y + w2.Y) / 2.0,
+		}
+
+		// Se i punti medi sono mutuamente uno sull'asse dell'altro, abbiamo la parete corrispondente
+		if b.distPointToSegment(wadMid, seg.Start, seg.End) < 2.0 {
+			if b.distPointToSegment(segMid, w1, w2) < 2.0 {
+				return level.Segments[ss.StartSeg+i]
+			}
 		}
 	}
 	return nil
@@ -316,17 +325,22 @@ func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwi
 	if len(segments) < 3 {
 		return
 	}
+
 	area := 0.0
 	for _, seg := range segments {
 		area += (seg.End.X - seg.Start.X) * (seg.End.Y + seg.Start.Y)
 	}
+
 	isClockwise := area > 0
+
 	if isClockwise == wantClockwise {
 		return
 	}
+
 	for i, j := 0, len(segments)-1; i < j; i, j = i+1, j-1 {
 		segments[i], segments[j] = segments[j], segments[i]
 	}
+
 	for _, seg := range segments {
 		seg.Start, seg.End = seg.End, seg.Start
 	}

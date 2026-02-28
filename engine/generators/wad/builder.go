@@ -98,16 +98,28 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		{X: minX - doomMargin, Y: maxY + doomMargin},
 	}
 
-	// 2. Traverse BSP (Spazio Nativo)
-	subsectorPolys := make(map[uint16]Polygons)
-	if len(level.Nodes) > 0 {
-		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, subsectorPolys)
+	levelVerts := make(Polygons, len(level.Vertexes))
+	for i, v := range level.Vertexes {
+		levelVerts[i] = model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)}
 	}
 
-	// 3. T-Junction elimination (Spazio Nativo)
-	b.eliminateTJunctions(level, subsectorPolys)
+	// 2. Traverse BSP (Spazio Nativo)
+	traversedPolys := make(map[uint16]Polygons)
+	if len(level.Nodes) > 0 {
+		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, traversedPolys)
+	}
 
-	PolygonsSnap(level, subsectorPolys)
+	var allVerts Polygons
+	for _, poly := range traversedPolys {
+		allVerts = append(allVerts, poly...)
+	}
+	allVerts = append(allVerts, levelVerts...)
+
+	// 3. T-Junction elimination (Spazio Nativo)
+	b.eliminateTJunctions(allVerts, traversedPolys)
+
+	// 3.5 Vertex Snapping Topologico
+	PolygonsSnap(levelVerts, traversedPolys)
 
 	// 4. ConfigSectors creation (Spazio Nativo)
 	numSS := uint16(len(level.SubSectors))
@@ -125,7 +137,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 			Textures: true,
 		}
 
-		poly := subsectorPolys[i]
+		poly := traversedPolys[i]
 		for j := 0; j < len(poly); j++ {
 			p1 := poly[j]
 			p2 := poly[(j+1)%len(poly)]
@@ -154,15 +166,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 }
 
 // eliminateTJunctions refines subsector polygons by splitting edges where vertices are close to eliminate T-junctions.
-func (b *Builder) eliminateTJunctions(level *Level, subsectorPolys map[uint16]Polygons) {
-	var allVerts Polygons
-	for _, poly := range subsectorPolys {
-		allVerts = append(allVerts, poly...)
-	}
-	for _, v := range level.Vertexes {
-		allVerts = append(allVerts, model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)})
-	}
-
+func (b *Builder) eliminateTJunctions(allVerts Polygons, subsectorPolys map[uint16]Polygons) {
 	for ssIdx, poly := range subsectorPolys {
 		var newPoly Polygons
 		for i := 0; i < len(poly); i++ {
@@ -272,7 +276,8 @@ func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 mod
 
 	for i := 0; i < len(level.Segments); i++ {
 		wadSeg := level.Segments[i]
-		v1, v2 := level.Vertexes[wadSeg.VertexStart], level.Vertexes[wadSeg.VertexEnd]
+		v1 := level.Vertexes[wadSeg.VertexStart]
+		v2 := level.Vertexes[wadSeg.VertexEnd]
 
 		w1 := model.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
 		w2 := model.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
@@ -497,14 +502,7 @@ func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
 	return (overlapEnd - overlapStart) > 0.001
 }
 
-func PolygonsSnap(level *Level, subsectorPolys map[uint16]Polygons) {
-	// --- NUOVO STEP: Vertex Snapping Topologico ---
-	// Estraiamo tutti i vertici nativi del WAD per il matching
-	wadVerts := make([]model.XY, len(level.Vertexes))
-	for i, v := range level.Vertexes {
-		wadVerts[i] = model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)}
-	}
-
+func PolygonsSnap(wadVerts Polygons, subsectorPolys map[uint16]Polygons) {
 	// Funzione di snap: se un vertice FP64 dista meno di 1.5 unità Doom
 	// da un vertice WAD nativo, lo collassa sulla coordinata esatta.
 	snapVertex := func(p model.XY) model.XY {

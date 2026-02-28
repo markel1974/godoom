@@ -19,8 +19,27 @@ const ScaleFactorCeilFloor = 4.0
 // tolerance defines the permissible margin of error for geometric calculations, such as distance comparisons or alignment.
 const tolerance = 0.1
 
-// Polygons represents a collection of XY points that define a closed or open polygon shape in 2D space.
-type Polygons []model.XY
+type Point struct {
+	X                 float64
+	Y                 float64
+	OverlappedSegment *lumps.Seg
+}
+
+func (p Point) ToModelXY() model.XY {
+	return model.XY{X: p.X, Y: p.Y}
+}
+
+type Points []Point
+
+// Polygon represents a collection of XY points that define a closed or open polygon shape in 2D space.
+type Polygon struct {
+	Id        string
+	Sector    *lumps.Sector
+	SectorRef uint16
+	Points    Points
+}
+
+type Polygons []Polygon
 
 // Builder is responsible for constructing configuration data from a WAD file and its levels.
 type Builder struct {
@@ -91,27 +110,49 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		}
 	}
 
-	rootBBox := Polygons{
+	rootBBox := Points{
 		{X: minX - doomMargin, Y: minY - doomMargin},
 		{X: maxX + doomMargin, Y: minY - doomMargin},
 		{X: maxX + doomMargin, Y: maxY + doomMargin},
 		{X: minX - doomMargin, Y: maxY + doomMargin},
 	}
 
-	levelVerts := make(Polygons, len(level.Vertexes))
+	numSS := uint16(len(level.SubSectors))
+
+	levelVerts := make(Points, len(level.Vertexes))
+
 	for i, v := range level.Vertexes {
-		levelVerts[i] = model.XY{X: float64(v.XCoord), Y: float64(v.YCoord)}
+		levelVerts[i] = Point{X: float64(v.XCoord), Y: float64(v.YCoord)}
 	}
 
 	// 2. Traverse BSP (Spazio Nativo)
-	traversedPolys := make(map[uint16]Polygons)
+	traversedPoints := make(map[uint16]Points)
 	if len(level.Nodes) > 0 {
-		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, traversedPolys)
+		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, traversedPoints)
 	}
 
-	var allVerts Polygons
+	traversedPolys := make(map[uint16]Polygon)
+
+	for i := uint16(0); i < numSS; i++ {
+		sectorRef, _ := level.GetSectorFromSubSector(i)
+		ds := level.Sectors[sectorRef]
+		points := traversedPoints[i]
+		for j1 := range points {
+			j2 := (j1 + 1) % len(points)
+			p1 := points[j1]
+			p2 := points[j2]
+			wadSeg := b.findOverlappingWadSegFromSeg(level, p1.ToModelXY(), p2.ToModelXY())
+			p1.OverlappedSegment = wadSeg
+			//p2.OverlappedSegment = wadSeg
+			points[j1] = p1
+			points[j2] = p2
+		}
+		traversedPolys[i] = Polygon{Id: strconv.Itoa(int(i)), Sector: ds, SectorRef: sectorRef, Points: points}
+	}
+
+	var allVerts Points
 	for _, poly := range traversedPolys {
-		allVerts = append(allVerts, poly...)
+		allVerts = append(allVerts, poly.Points...)
 	}
 	allVerts = append(allVerts, levelVerts...)
 
@@ -121,27 +162,27 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	// 3.5 Vertex Snapping Topologico
 	PolygonsSnap(levelVerts, traversedPolys)
 
+	testPoly := traversedPolys[0]
+	fmt.Println(testPoly)
 	// 4. ConfigSectors creation (Spazio Nativo)
-	numSS := uint16(len(level.SubSectors))
+
 	miSectors := make([]*model.ConfigSector, numSS)
 	for i := uint16(0); i < numSS; i++ {
-		sectorRef, _ := level.GetSectorFromSubSector(i)
-		ds := level.Sectors[sectorRef]
+		poly := traversedPolys[i]
 		miSector := &model.ConfigSector{
 			Id:           strconv.Itoa(int(i)),
-			Floor:        SnapFloat(float64(ds.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:         SnapFloat(float64(ds.CeilingHeight) / ScaleFactorCeilFloor),
-			Tag:          strconv.Itoa(int(sectorRef)),
+			Floor:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
+			Ceil:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
+			Tag:          strconv.Itoa(int(poly.SectorRef)),
 			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
 			Textures: true,
 		}
 
-		poly := traversedPolys[i]
-		for j := 0; j < len(poly); j++ {
-			p1 := poly[j]
-			p2 := poly[(j+1)%len(poly)]
-			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1, p2)
+		for j := 0; j < len(poly.Points); j++ {
+			p1 := poly.Points[j]
+			p2 := poly.Points[(j+1)%len(poly.Points)]
+			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1.ToModelXY(), p2.ToModelXY())
 			miSector.Segments = append(miSector.Segments, seg)
 		}
 		miSectors[i] = miSector
@@ -166,36 +207,43 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 }
 
 // eliminateTJunctions refines subsector polygons by splitting edges where vertices are close to eliminate T-junctions.
-func (b *Builder) eliminateTJunctions(allVerts Polygons, subsectorPolys map[uint16]Polygons) {
+func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16]Polygon) {
 	for ssIdx, poly := range subsectorPolys {
-		var newPoly Polygons
-		for i := 0; i < len(poly); i++ {
-			p1, p2 := poly[i], poly[(i+1)%len(poly)]
-			var splits Polygons
-			dx := p2.X - p1.X
-			dy := p2.Y - p1.Y
+		var newPoly Polygon
+		newPoly.Id = poly.Id
+		newPoly.SectorRef = poly.SectorRef
+		newPoly.Sector = poly.Sector
+
+		for i1 := 0; i1 < len(poly.Points); i1++ {
+			i2 := (i1 + 1) % len(poly.Points)
+			start := poly.Points[i1]
+			end := poly.Points[i2]
+			var splits Points
+			dx := end.X - start.X
+			dy := end.Y - start.Y
 			if lenSq := (dx * dx) + (dy * dy); lenSq > 0 {
 				for _, v := range allVerts {
-					if b.distPointToSegment(v, p1, p2) < tolerance {
-						t := ((v.X-p1.X)*dx + (v.Y-p1.Y)*dy) / lenSq
+					if b.distPointToSegment(v, start, end) < tolerance {
+						t := ((v.X-start.X)*dx + (v.Y-start.Y)*dy) / lenSq
 						if t > 0.001 && t < 0.999 {
-							splits = append(splits, v)
+							out := Point{X: v.X, Y: v.Y, OverlappedSegment: start.OverlappedSegment}
+							splits = append(splits, out)
 						}
 					}
 				}
 			}
 			sort.Slice(splits, func(i, j int) bool {
-				dxi, dyi := splits[i].X-p1.X, splits[i].Y-p1.Y
-				dxj, dyj := splits[j].X-p1.X, splits[j].Y-p1.Y
+				dxi, dyi := splits[i].X-start.X, splits[i].Y-start.Y
+				dxj, dyj := splits[j].X-start.X, splits[j].Y-start.Y
 				return (dxi*dxi + dyi*dyi) < (dxj*dxj + dyj*dyj)
 			})
 
-			newPoly = append(newPoly, p1)
+			newPoly.Points = append(newPoly.Points, start)
 			for _, sp := range splits {
-				last := newPoly[len(newPoly)-1]
+				last := newPoly.Points[len(newPoly.Points)-1]
 				dxSp, dySp := sp.X-last.X, sp.Y-last.Y
 				if (dxSp*dxSp + dySp*dySp) > 0.000001 { // 0.001^2
-					newPoly = append(newPoly, sp)
+					newPoly.Points = append(newPoly.Points, sp)
 				}
 			}
 		}
@@ -241,7 +289,7 @@ func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector
 }
 
 // distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
-func (b *Builder) distPointToSegment(p model.XY, v model.XY, w model.XY) float64 {
+func (b *Builder) distPointToSegment(p Point, v Point, w Point) float64 {
 	dx, dy := w.X-v.X, w.Y-v.Y
 	l2 := dx*dx + dy*dy
 	if l2 == 0 {
@@ -345,7 +393,7 @@ func SnapFloat(val float64) float64 {
 // PolygonSplit splits a polygon into two sub-polygons based on a defined partition line specified by its normal and delta values.
 // Takes a polygon `poly` and partition line parameters `nx`, `ny`, `ndx`, `ndy`.
 // Returns two Polygons: one in front of the partition line and one behind it, or nil if no splitting occurs.
-func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Polygons, Polygons) {
+func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points, Points) {
 	if len(poly) < 3 {
 		return nil, nil
 	}
@@ -362,7 +410,7 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 	}
 
 	type vertexInfo struct {
-		p    model.XY
+		p    Point
 		dist float64
 		side int // 1: Front, -1: Back, 0: On
 	}
@@ -398,7 +446,7 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 		return nil, PolygonClean(poly)
 	}
 
-	var front, back Polygons
+	var front, back Points
 
 	for i := 0; i < len(vertices); i++ {
 		v1 := vertices[i]
@@ -415,7 +463,7 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 		if (v1.side > 0 && v2.side < 0) || (v1.side < 0 && v2.side > 0) {
 			u := v1.dist / (v1.dist - v2.dist)
 			// FP64 puro, senza SnapFloat
-			inter := model.XY{
+			inter := Point{
 				X: v1.p.X + u*(v2.p.X-v1.p.X),
 				Y: v1.p.Y + u*(v2.p.Y-v1.p.Y),
 			}
@@ -428,11 +476,11 @@ func PolygonSplit(poly Polygons, nx int16, ny int16, ndx int16, ndy int16) (Poly
 }
 
 // PolygonClean removes redundant points and ensures the polygon has at least three vertices or returns nil if invalid.
-func PolygonClean(poly Polygons) Polygons {
+func PolygonClean(poly Points) Points {
 	if len(poly) < 3 {
 		return nil
 	}
-	var res Polygons
+	var res Points
 	tolSq := tolerance * tolerance
 
 	for _, p := range poly {
@@ -502,14 +550,14 @@ func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
 	return (overlapEnd - overlapStart) > 0.001
 }
 
-func PolygonsSnap(wadVerts Polygons, subsectorPolys map[uint16]Polygons) {
+func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
 	// Funzione di snap: se un vertice FP64 dista meno di 1.5 unità Doom
 	// da un vertice WAD nativo, lo collassa sulla coordinata esatta.
-	snapVertex := func(p model.XY) model.XY {
-		for _, wv := range wadVerts {
+	snapVertex := func(p Point) Point {
+		for _, wv := range vertexes {
 			dx, dy := p.X-wv.X, p.Y-wv.Y
 			if (dx*dx + dy*dy) <= 2.25 { // 1.5 al quadrato
-				return wv
+				return Point{wv.X, wv.Y, p.OverlappedSegment}
 			}
 		}
 		return p
@@ -517,10 +565,14 @@ func PolygonsSnap(wadVerts Polygons, subsectorPolys map[uint16]Polygons) {
 
 	// Applica lo snap a tutti i poligoni risultanti dal BSP
 	for i, poly := range subsectorPolys {
-		for j, p := range poly {
-			poly[j] = snapVertex(p)
+		for j, p := range poly.Points {
+			poly.Points[j] = snapVertex(p)
 		}
-		subsectorPolys[i] = PolygonClean(poly) // Pulisce eventuali vertici collassati
+		points := PolygonClean(poly.Points)
+
+		z := subsectorPolys[i]
+		z.Points = points // Pulisce eventuali vertici collassati
+		subsectorPolys[i] = z
 	}
 }
 

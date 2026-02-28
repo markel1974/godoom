@@ -4,7 +4,6 @@ import (
 	"math"
 
 	lumps2 "github.com/markel1974/godoom/engine/generators/wad/lumps"
-	"github.com/markel1974/godoom/engine/model"
 )
 
 // subSectorBit is a bitmask used to identify whether a node in the BSP tree represents a sub-sector.
@@ -36,11 +35,6 @@ func NewBsp(level *Level) *BSP {
 	}
 }
 
-// FindSector identifies the sector containing the given coordinates (x, y) and returns sector reference, node index, and sector data.
-//func (bsp *BSP) FindSector(x int16, y int16) (uint16, uint16, *lumps2.Sector) {
-//	return bsp.findSector(x, y, bsp.root)
-//}
-
 // FindSector recursively traverses the BSP tree to identify the sector containing the given (x, y) coordinates.
 func (bsp *BSP) FindSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps2.Sector) {
 	if idx&subSectorBit == subSectorBit {
@@ -67,7 +61,7 @@ func (bsp *BSP) FindSector(x int16, y int16, idx uint16) (uint16, uint16, *lumps
 }
 
 // Traverse traverses a BSP tree, splits input polygons, and associates them with subsectors in the output map.
-func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly Polygons, out map[uint16]Polygons) {
+func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly Points, out map[uint16]Points) {
 	if nodeIdx&0x8000 != 0 {
 		ssIdx := nodeIdx &^ 0x8000
 		out[ssIdx] = poly
@@ -84,9 +78,9 @@ func (bsp *BSP) Traverse(level *Level, nodeIdx uint16, poly Polygons, out map[ui
 }
 
 // DescribeLineF generates a list of points representing a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
-func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Polygons {
-	high := func(x0 float64, y0 float64, x1 float64, y1 float64) Polygons {
-		var res Polygons
+func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Points {
+	high := func(x0 float64, y0 float64, x1 float64, y1 float64) Points {
+		var res Points
 		dx := x1 - x0
 		dy := y1 - y0
 		xi := float64(1)
@@ -97,7 +91,7 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 		D := (2 * dx) - dy
 		x := x0
 		for y := y0; y <= y1; y++ {
-			res = append(res, model.XY{X: math.Round(x), Y: math.Round(y)})
+			res = append(res, Point{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				x = x + xi
 				D = D + (2 * (dx - dy))
@@ -108,8 +102,8 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 		return res
 	}
 
-	low := func(x0 float64, y0 float64, x1 float64, y1 float64) Polygons {
-		var res Polygons
+	low := func(x0 float64, y0 float64, x1 float64, y1 float64) Points {
+		var res Points
 		dx := x1 - x0
 		dy := y1 - y0
 		yi := float64(1)
@@ -120,7 +114,7 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 		D := (2 * dy) - dx
 		y := y0
 		for x := x0; x <= x1; x++ {
-			res = append(res, model.XY{X: math.Round(x), Y: math.Round(y)})
+			res = append(res, Point{X: math.Round(x), Y: math.Round(y)})
 			if D > 0 {
 				y = y + yi
 				D = D + (2 * (dy - dx))
@@ -131,7 +125,7 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 		return res
 	}
 
-	var res Polygons
+	var res Points
 	reverse := false
 	if math.Abs(y1-y0) < math.Abs(x1-x0) {
 		if x0 > x1 {
@@ -153,7 +147,7 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 		return res
 	}
 
-	var r Polygons
+	var r Points
 	for x := len(res) - 1; x >= 0; x-- {
 		r = append(r, res[x])
 	}

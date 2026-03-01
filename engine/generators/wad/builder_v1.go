@@ -1,5 +1,6 @@
 package wad
 
+/*
 import (
 	"fmt"
 	"math"
@@ -10,21 +11,20 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+
 // ScaleFactor defines a constant multiplier used to scale dimensions within the configuration system.
 const ScaleFactor = 25.0
 
 // ScaleFactorCeilFloor is a constant used to scale ceiling and floor height calculations.
 const ScaleFactorCeilFloor = 4.0
 
-// tolerance defines the permissible margin of error for geometric calculations.
-const tolerance = 0.5
+// tolerance defines the permissible margin of error for geometric calculations, such as distance comparisons or alignment.
+const tolerance = 0.1
 
 type Point struct {
 	X                 float64
 	Y                 float64
 	OverlappedSegment *lumps.Seg
-	Sector            *lumps.Sector
-	SectorRef         uint16
 }
 
 func (p Point) ToModelXY() model.XY {
@@ -33,7 +33,7 @@ func (p Point) ToModelXY() model.XY {
 
 type Points []Point
 
-// Polygon represents a collection of points defining a shape in 2D space.
+// Polygon represents a collection of XY points that define a closed or open polygon shape in 2D space.
 type Polygon struct {
 	Id        string
 	Sector    *lumps.Sector
@@ -43,23 +43,18 @@ type Polygon struct {
 
 type Polygons []Polygon
 
-// EdgeKey is used for O(1) topological neighbor lookups (Half-Edge dictionary)
-type EdgeKey struct {
-	X1, Y1, X2, Y2 float64
-}
-
-// Builder is responsible for constructing configuration data from a WAD file.
+// Builder is responsible for constructing configuration data from a WAD file and its levels.
 type Builder struct {
 	w        *WAD
 	textures map[string]bool
 }
 
-// NewBuilder creates and returns a new Builder instance.
+// NewBuilder creates and returns a new Builder instance with initialized textures map.
 func NewBuilder() *Builder {
 	return &Builder{textures: make(map[string]bool)}
 }
 
-// Setup initializes and configures the game level.
+// Setup initializes and configures the game level, including sectors, player position, and settings for the given WAD file.
 func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
 	b.w = New()
 	if err := b.w.Load(wadFile); err != nil {
@@ -76,6 +71,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	}
 
 	bsp := NewBsp(level)
+
 	sectors := b.scanSubSectors(level, bsp)
 
 	p1 := level.Things[0]
@@ -96,7 +92,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	return root, nil
 }
 
-// scanSubSectors processes the BSP tree to create configuration sectors.
+// scanSubSectors processes the BSP tree to create configuration sectors from the level's subsectors and vertex data.
 func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	const doomMax = 32768.0
 	const doomMargin = 256.0
@@ -124,13 +120,14 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	}
 
 	numSS := uint16(len(level.SubSectors))
+
 	levelVerts := make(Points, len(level.Vertexes))
 
 	for i, v := range level.Vertexes {
 		levelVerts[i] = Point{X: float64(v.XCoord), Y: float64(v.YCoord)}
 	}
 
-	// 1. Traverse BSP (Spazio Nativo)
+	// 2. Traverse BSP (Spazio Nativo)
 	traversedPoints := make(map[uint16]Points)
 	if len(level.Nodes) > 0 {
 		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, traversedPoints)
@@ -138,24 +135,22 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 
 	traversedPolys := make(map[uint16]Polygon)
 
-	// 2. Ancoraggio Metadati di Superficie (Pre-Split)
 	for i := uint16(0); i < numSS; i++ {
 		sectorRef, _ := level.GetSectorFromSubSector(i)
 		ds := level.Sectors[sectorRef]
 		points := traversedPoints[i]
-
-		for j1 := 0; j1 < len(points); j1++ {
+		for j1 := range points {
+			j2 := (j1 + 1) % len(points)
 			p1 := points[j1]
-			p1.OverlappedSegment = nil
-			p1.Sector = ds
-			p1.SectorRef = sectorRef
+			p2 := points[j2]
+			wadSeg := b.findOverlappingWadSegFromSeg(level, p1.ToModelXY(), p2.ToModelXY())
+			p1.OverlappedSegment = wadSeg
+			//p2.OverlappedSegment = wadSeg
 			points[j1] = p1
+			points[j2] = p2
 		}
 		traversedPolys[i] = Polygon{Id: strconv.Itoa(int(i)), Sector: ds, SectorRef: sectorRef, Points: points}
 	}
-
-	// 3. Vertex Snapping Topologico (PRIMA DEL T-JUNCTION)
-	PolygonsSnap(levelVerts, traversedPolys)
 
 	var allVerts Points
 	for _, poly := range traversedPolys {
@@ -163,39 +158,42 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	}
 	allVerts = append(allVerts, levelVerts...)
 
-	// 4. T-Junction elimination
+	// 3. T-Junction elimination (Spazio Nativo)
 	b.eliminateTJunctions(allVerts, traversedPolys)
 
-	// 5. Ancoraggio Metadati di Bordo GLOBALE (Post-Split, Cardinalità 1:1)
+	// 3.5 Vertex Snapping Topologico
+	PolygonsSnap(levelVerts, traversedPolys)
+
+	testPoly := traversedPolys[0]
+	fmt.Println(testPoly)
+	// 4. ConfigSectors creation (Spazio Nativo)
+
+	miSectors := make([]*model.ConfigSector, numSS)
 	for i := uint16(0); i < numSS; i++ {
 		poly := traversedPolys[i]
-		for j1 := 0; j1 < len(poly.Points); j1++ {
-			p1 := poly.Points[j1]
-			p2 := poly.Points[(j1+1)%len(poly.Points)]
-
-			// Ricerca globale assoluta post-snapping per catturare le colonne
-			p1.OverlappedSegment = b.findGlobalWadSeg(level, p1.ToModelXY(), p2.ToModelXY())
-			poly.Points[j1] = p1
+		miSector := &model.ConfigSector{
+			Id:           strconv.Itoa(int(i)),
+			Floor:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
+			Ceil:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
+			Tag:          strconv.Itoa(int(poly.SectorRef)),
+			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
+			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
+			Textures: true,
 		}
-		traversedPolys[i] = poly
-	}
 
-	// 6. Generazione Half-Edge Map per lookup adiacenze O(1)
-	edgeToSector := make(map[EdgeKey]string)
-	for i := uint16(0); i < numSS; i++ {
-		poly := traversedPolys[i]
-		sectorId := strconv.Itoa(int(i))
 		for j := 0; j < len(poly.Points); j++ {
 			p1 := poly.Points[j]
 			p2 := poly.Points[(j+1)%len(poly.Points)]
-			edgeToSector[EdgeKey{p1.X, p1.Y, p2.X, p2.Y}] = sectorId
+			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1.ToModelXY(), p2.ToModelXY())
+			miSector.Segments = append(miSector.Segments, seg)
 		}
+		miSectors[i] = miSector
 	}
 
-	// 7. ConfigSectors Creation & Links
-	miSectors := b.buildEngineSectors(level, traversedPolys, numSS, edgeToSector)
+	// 5. Apply Textures and Links (Spazio Nativo)
+	b.applyWadAndLinks(level, miSectors)
 
-	// 8. ALTERAZIONE FINALE: Trasformazione coordinate Engine
+	// 6. ALTERAZIONE FINALE: Trasformazione in coordinate Engine
 	for _, sector := range miSectors {
 		if sector == nil {
 			continue
@@ -210,7 +208,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	return miSectors
 }
 
-// eliminateTJunctions refines subsector polygons by splitting edges to eliminate T-junctions.
+// eliminateTJunctions refines subsector polygons by splitting edges where vertices are close to eliminate T-junctions.
 func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16]Polygon) {
 	for ssIdx, poly := range subsectorPolys {
 		var newPoly Polygon
@@ -230,13 +228,7 @@ func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16
 					if b.distPointToSegment(v, start, end) < tolerance {
 						t := ((v.X-start.X)*dx + (v.Y-start.Y)*dy) / lenSq
 						if t > 0.001 && t < 0.999 {
-							out := Point{
-								X:                 v.X,
-								Y:                 v.Y,
-								OverlappedSegment: nil,
-								Sector:            start.Sector,
-								SectorRef:         start.SectorRef,
-							}
+							out := Point{X: v.X, Y: v.Y, OverlappedSegment: start.OverlappedSegment}
 							splits = append(splits, out)
 						}
 					}
@@ -252,7 +244,7 @@ func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16
 			for _, sp := range splits {
 				last := newPoly.Points[len(newPoly.Points)-1]
 				dxSp, dySp := sp.X-last.X, sp.Y-last.Y
-				if (dxSp*dxSp + dySp*dySp) > 0.000001 {
+				if (dxSp*dxSp + dySp*dySp) > 0.000001 { // 0.001^2
 					newPoly.Points = append(newPoly.Points, sp)
 				}
 			}
@@ -261,37 +253,16 @@ func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16
 	}
 }
 
-// buildEngineSectors risolve metadati e adiacenze operando sui poligoni nativi.
-func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Polygon, numSS uint16, edgeMap map[EdgeKey]string) []*model.ConfigSector {
-	miSectors := make([]*model.ConfigSector, numSS)
-
-	for i := uint16(0); i < numSS; i++ {
-		poly := traversedPolys[i]
-		sectorId := strconv.Itoa(int(i))
-
-		miSector := &model.ConfigSector{
-			Id:           sectorId,
-			Floor:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
-			Tag:          strconv.Itoa(int(poly.SectorRef)),
-			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
-			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
-			Textures: true,
+// applyWadAndLinks processes subsectors by associating them with WAD data, setting neighbor links, and defining segment kinds.
+func (b *Builder) applyWadAndLinks(level *Level, miSectors []*model.ConfigSector) {
+	for idx, miSector := range miSectors {
+		if miSector == nil {
+			continue
 		}
-
-		for j := 0; j < len(poly.Points); j++ {
-			p1 := poly.Points[j]
-			p2 := poly.Points[(j+1)%len(poly.Points)]
-
-			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1.ToModelXY(), p2.ToModelXY())
-			wadSeg := p1.OverlappedSegment
-
-			// O(1) Topological Lookup (vettore inverso P2 -> P1)
-			reverseKey := EdgeKey{p2.X, p2.Y, p1.X, p1.Y}
-			if neighborId, exists := edgeMap[reverseKey]; exists {
-				seg.Neighbor = neighborId
-			}
-
+		//ss := level.SubSectors[idx]
+		for _, seg := range miSector.Segments {
+			wadSeg := b.findOverlappingWadSegFromSeg(level, seg.Start, seg.End)
+			seg.Neighbor = b.findNeighbors(miSectors, seg.Start, seg.End, idx)
 			seg.Kind = model.DefinitionWall
 
 			if wadSeg != nil {
@@ -303,11 +274,11 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 				seg.Tag = strconv.Itoa(int(line.Flags))
 				if (line.Flags & 0x0004) == 0 {
 					seg.Kind = model.DefinitionWall
-				} else if seg.Neighbor != "" {
+				} else if len(seg.Neighbor) > 0 {
 					seg.Kind = model.DefinitionJoin
 				}
 			} else {
-				if seg.Neighbor != "" {
+				if len(seg.Neighbor) > 0 {
 					seg.Kind = model.DefinitionJoin
 					seg.Tag = "bsp_split"
 				} else {
@@ -315,16 +286,11 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 					seg.Tag = "open"
 				}
 			}
-
-			miSector.Segments = append(miSector.Segments, seg)
 		}
-		miSectors[i] = miSector
 	}
-
-	return miSectors
 }
 
-// distPointToSegment calculates the shortest distance from a point to a line segment.
+// distPointToSegment calculates the shortest distance from a point to a line segment in 2D space.
 func (b *Builder) distPointToSegment(p Point, v Point, w Point) float64 {
 	dx, dy := w.X-v.X, w.Y-v.Y
 	l2 := dx*dx + dy*dy
@@ -339,9 +305,24 @@ func (b *Builder) distPointToSegment(p Point, v Point, w Point) float64 {
 	return math.Sqrt(pdx*pdx + pdy*pdy)
 }
 
-// findGlobalWadSeg esegue la ricerca su tutti i segmenti del livello per mappare il bordo atomico post-split.
-func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lumps.Seg {
-	const epsilonSq = 1.0
+// findNeighbors identifies and returns the ID of a neighboring sector whose segment overlaps or aligns with the specified segment.
+func (b *Builder) findNeighbors(miSectors []*model.ConfigSector, p1 model.XY, p2 model.XY, segIdx int) string {
+	for j, otherSector := range miSectors {
+		if segIdx == j || otherSector == nil {
+			continue
+		}
+		for _, otherSeg := range otherSector.Segments {
+			if IsCollinearOverlap(p1, p2, otherSeg.Start, otherSeg.End) {
+				return otherSector.Id
+			}
+		}
+	}
+	return ""
+}
+
+// findOverlappingWadSegFromSeg esegue una ricerca globale sull'intero set di segmenti del livello.
+func (b *Builder) findOverlappingWadSegFromSeg(level *Level, p1 model.XY, p2 model.XY) *lumps.Seg {
+	const epsilonSq = 1.0 // Tolleranza al quadrato nello spazio nativo Doom
 
 	for i := 0; i < len(level.Segments); i++ {
 		wadSeg := level.Segments[i]
@@ -359,7 +340,7 @@ func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lump
 			continue
 		}
 
-		// 1. Check Collinearità
+		// 1. Collinearità: verifica la distanza quadratica di p1 e p2 dalla retta del wadSeg
 		cross1 := dx*(p1.Y-w1.Y) - dy*(p1.X-w1.X)
 		if (cross1*cross1)/lenSq > epsilonSq {
 			continue
@@ -370,7 +351,7 @@ func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lump
 			continue
 		}
 
-		// 2. Proiezione parametrica
+		// 2. Intersezione parametrica: proiezione di p1 e p2 su w1-w2
 		t1 := ((p1.X-w1.X)*dx + (p1.Y-w1.Y)*dy) / lenSq
 		t2 := ((p2.X-w1.X)*dx + (p2.Y-w1.Y)*dy) / lenSq
 
@@ -378,20 +359,16 @@ func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lump
 			t1, t2 = t2, t1
 		}
 
-		// 3. Verifica Sovrapposizione Assoluta
-		overlapStart := math.Max(0.0, t1)
-		overlapEnd := math.Min(1.0, t2)
-		overlapLength := (overlapEnd - overlapStart) * math.Sqrt(lenSq)
+		margin := 1.0 / math.Sqrt(lenSq)
 
-		// Cattura in maniera affidabile l'intersezione fisica reale
-		if overlapLength > 0.5 {
+		if t1 >= -margin && t2 <= 1.0+margin && (t2-t1) > 0.001 {
 			return level.Segments[i]
 		}
 	}
 	return nil
 }
 
-// forceWindingOrder adjusts the winding order of given segments.
+// forceWindingOrder adjusts the winding order of given segments to match the desired orientation (clockwise or counterclockwise).
 func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
 	if len(segments) < 3 {
 		return
@@ -410,17 +387,20 @@ func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwi
 	}
 }
 
-// SnapFloat rounds a floating-point number.
+// SnapFloat rounds a floating-point number to four decimal places, helping to reduce numerical inaccuracies.
 func SnapFloat(val float64) float64 {
 	return math.Round(val*10000.0) / 10000.0
 }
 
-// PolygonSplit splits a polygon into two sub-polygons based on a partition line.
+// PolygonSplit splits a polygon into two sub-polygons based on a defined partition line specified by its normal and delta values.
+// Takes a polygon `poly` and partition line parameters `nx`, `ny`, `ndx`, `ndy`.
+// Returns two Polygons: one in front of the partition line and one behind it, or nil if no splitting occurs.
 func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points, Points) {
 	if len(poly) < 3 {
 		return nil, nil
 	}
 
+	// Tolleranza quadra (es. 0.1 * 0.1) calibrata per lo spazio nativo Doom
 	const epsilonSq = 0.01
 
 	fnx, fny := float64(nx), float64(ny)
@@ -428,35 +408,39 @@ func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points
 	lenSq := fndx*fndx + fndy*fndy
 
 	if lenSq == 0 {
-		return poly, nil
+		return poly, nil // Fallback di sicurezza in caso di vettore partizione nullo
 	}
 
 	type vertexInfo struct {
 		p    Point
 		dist float64
-		side int
+		side int // 1: Front, -1: Back, 0: On
 	}
 
 	vertices := make([]vertexInfo, 0, len(poly))
 	frontCount, backCount := 0, 0
 
 	for _, p := range poly {
+		// Prodotto vettoriale (distanza non scalata)
 		cross := fndx*(p.Y-fny) - fndy*(p.X-fnx)
+
+		// Verifica di appartenenza alla retta (On-plane)
 		distSq := (cross * cross) / lenSq
 		side := 0
 
 		if distSq > epsilonSq {
 			if cross <= 0 {
-				side = 1
+				side = 1 // Front (Convenzione BSP: lato destro <= 0)
 				frontCount++
 			} else {
-				side = -1
+				side = -1 // Back
 				backCount++
 			}
 		}
 		vertices = append(vertices, vertexInfo{p, cross, side})
 	}
 
+	// Fast path: nessuna intersezione necessaria se i punti giacciono tutti da una parte
 	if backCount == 0 {
 		return PolygonClean(poly), nil
 	}
@@ -477,14 +461,13 @@ func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points
 			back = append(back, v1.p)
 		}
 
+		// Se il segmento attraversa la partizione (front <-> back), genera l'intersezione
 		if (v1.side > 0 && v2.side < 0) || (v1.side < 0 && v2.side > 0) {
 			u := v1.dist / (v1.dist - v2.dist)
+			// FP64 puro, senza SnapFloat
 			inter := Point{
-				X:                 v1.p.X + u*(v2.p.X-v1.p.X),
-				Y:                 v1.p.Y + u*(v2.p.Y-v1.p.Y),
-				OverlappedSegment: nil,
-				Sector:            v1.p.Sector,
-				SectorRef:         v1.p.SectorRef,
+				X: v1.p.X + u*(v2.p.X-v1.p.X),
+				Y: v1.p.Y + u*(v2.p.Y-v1.p.Y),
 			}
 			front = append(front, inter)
 			back = append(back, inter)
@@ -494,7 +477,7 @@ func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points
 	return PolygonClean(front), PolygonClean(back)
 }
 
-// PolygonClean removes redundant points.
+// PolygonClean removes redundant points and ensures the polygon has at least three vertices or returns nil if invalid.
 func PolygonClean(poly Points) Points {
 	if len(poly) < 3 {
 		return nil
@@ -528,24 +511,61 @@ func PolygonClean(poly Points) Points {
 	return res
 }
 
-// PolygonsSnap collassa i vertici approssimati sulle coordinate native esatte.
+// IsCollinearOverlap determines if two line segments overlap collinearly in 2D space.
+// It checks for parallelism, collinearity, and overlapping projections on the shared line.
+func IsCollinearOverlap(s1, e1, s2, e2 model.XY) bool {
+	dx1, dy1 := e1.X-s1.X, e1.Y-s1.Y
+	dx2, dy2 := e2.X-s2.X, e2.Y-s2.Y
+
+	// 1. Parallelismo: il prodotto vettoriale delle direzioni deve essere ~0
+	if math.Abs(dx1*dy2-dy1*dx2) > 0.1 {
+		return false
+	}
+
+	len1Sq := dx1*dx1 + dy1*dy1
+	if len1Sq == 0 {
+		return false
+	}
+
+	// 2. Collinearità: la distanza al quadrato di s2 dalla retta (s1, e1) deve essere minima
+	crossLine := dx1*(s2.Y-s1.Y) - dy1*(s2.X-s1.X)
+	if (crossLine*crossLine)/len1Sq > tolerance {
+		return false
+	}
+
+	// 3. Sovrapposizione: le proiezioni parametriche t di s2 ed e2 su (s1, e1)
+	// devono intersecare l'intervallo [0, 1] del segmento originale.
+	t1 := ((s2.X-s1.X)*dx1 + (s2.Y-s1.Y)*dy1) / len1Sq
+	t2 := ((e2.X-s1.X)*dx1 + (e2.Y-s1.Y)*dy1) / len1Sq
+
+	if t1 > t2 {
+		t1, t2 = t2, t1
+	}
+
+	// Calcolo del segmento di intersezione tra l'intervallo proiettato [t1, t2] e [0, 1]
+	overlapStart := math.Max(0.0, t1)
+	overlapEnd := math.Min(1.0, t2)
+
+	// Un overlap è topologicamente valido per un portal solo se la porzione condivisa
+	// supera una soglia dimensionale tangibile (es. 0.1% della lunghezza di s1-e1).
+	// Questo previene falsi collegamenti ("micro-portali") tra settori dovuti al drift FP64.
+	return (overlapEnd - overlapStart) > 0.001
+}
+
 func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
+	// Funzione di snap: se un vertice FP64 dista meno di 1.5 unità Doom
+	// da un vertice WAD nativo, lo collassa sulla coordinata esatta.
 	snapVertex := func(p Point) Point {
 		for _, wv := range vertexes {
 			dx, dy := p.X-wv.X, p.Y-wv.Y
-			if (dx*dx + dy*dy) <= 2.25 {
-				return Point{
-					X:                 wv.X,
-					Y:                 wv.Y,
-					OverlappedSegment: p.OverlappedSegment,
-					Sector:            p.Sector,
-					SectorRef:         p.SectorRef,
-				}
+			if (dx*dx + dy*dy) <= 2.25 { // 1.5 al quadrato
+				return Point{wv.X, wv.Y, p.OverlappedSegment}
 			}
 		}
 		return p
 	}
 
+	// Applica lo snap a tutti i poligoni risultanti dal BSP
 	for i, poly := range subsectorPolys {
 		for j, p := range poly.Points {
 			poly.Points[j] = snapVertex(p)
@@ -553,7 +573,13 @@ func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
 		points := PolygonClean(poly.Points)
 
 		z := subsectorPolys[i]
-		z.Points = points
+		z.Points = points // Pulisce eventuali vertici collassati
 		subsectorPolys[i] = z
 	}
 }
+
+// EuclideanDistance calculates the Euclidean distance between two points in a 2D space.
+//func EuclideanDistance(p1 model.XY, p2 model.XY) float64 {
+//	return math.Hypot(p2.X-p1.X, p2.Y-p1.Y)
+//}
+*/

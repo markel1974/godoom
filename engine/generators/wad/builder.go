@@ -16,9 +16,6 @@ const ScaleFactor = 25.0
 // ScaleFactorCeilFloor is a constant used to scale ceiling and floor height calculations.
 const ScaleFactorCeilFloor = 4.0
 
-// tolerance defines the permissible margin of error for geometric calculations.
-const tolerance = 0.5
-
 type Point struct {
 	X                 float64
 	Y                 float64
@@ -154,7 +151,7 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		traversedPolys[i] = Polygon{Id: strconv.Itoa(int(i)), Sector: ds, SectorRef: sectorRef, Points: points}
 	}
 
-	// 3. Vertex Snapping Topologico (PRIMA DEL T-JUNCTION)
+	// 3. Vertex Snapping Topologico (Elimina il drift FP64)
 	PolygonsSnap(levelVerts, traversedPolys)
 
 	var allVerts Points
@@ -163,24 +160,26 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 	}
 	allVerts = append(allVerts, levelVerts...)
 
-	// 4. T-Junction elimination
+	// 4. T-Junction elimination (Crea i sottomultipli esatti per le colonne)
 	b.eliminateTJunctions(allVerts, traversedPolys)
 
-	// 5. Ancoraggio Metadati di Bordo GLOBALE (Post-Split, Cardinalità 1:1)
+	// 5. Ancoraggio Metadati GLOBALE Sector-Aware (Post-Split)
 	for i := uint16(0); i < numSS; i++ {
 		poly := traversedPolys[i]
 		for j1 := 0; j1 < len(poly.Points); j1++ {
 			p1 := poly.Points[j1]
 			p2 := poly.Points[(j1+1)%len(poly.Points)]
 
-			// Ricerca globale assoluta post-snapping per catturare le colonne
-			p1.OverlappedSegment = b.findGlobalWadSeg(level, p1.ToModelXY(), p2.ToModelXY())
+			// Ricerca globale filtrata per appartenenza al settore corrente
+			p1.OverlappedSegment = b.findGlobalWadSeg(level, p1.ToModelXY(), p2.ToModelXY(), poly.SectorRef)
 			poly.Points[j1] = p1
 		}
 		traversedPolys[i] = poly
 	}
 
-	// 6. Generazione Half-Edge Map per lookup adiacenze O(1)
+	b.runDiagnostics(level, traversedPolys, numSS)
+
+	// 6. Generazione Half-Edge Map per adiacenze O(1)
 	edgeToSector := make(map[EdgeKey]string)
 	for i := uint16(0); i < numSS; i++ {
 		poly := traversedPolys[i]
@@ -192,10 +191,10 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		}
 	}
 
-	// 7. ConfigSectors Creation & Links
+	// 7. Export verso le strutture dell'Engine
 	miSectors := b.buildEngineSectors(level, traversedPolys, numSS, edgeToSector)
 
-	// 8. ALTERAZIONE FINALE: Trasformazione coordinate Engine
+	// 8. ALTERAZIONE FINALE: Trasformazione coordinate
 	for _, sector := range miSectors {
 		if sector == nil {
 			continue
@@ -227,13 +226,14 @@ func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16
 			dy := end.Y - start.Y
 			if lenSq := (dx * dx) + (dy * dy); lenSq > 0 {
 				for _, v := range allVerts {
-					if b.distPointToSegment(v, start, end) < tolerance {
+					// Tolleranza estesa a 1.5 per allinearsi al Vertex Snapping
+					if b.distPointToSegment(v, start, end) <= 1.5 {
 						t := ((v.X-start.X)*dx + (v.Y-start.Y)*dy) / lenSq
 						if t > 0.001 && t < 0.999 {
 							out := Point{
 								X:                 v.X,
 								Y:                 v.Y,
-								OverlappedSegment: nil,
+								OverlappedSegment: nil, // Risolto al mapping
 								Sector:            start.Sector,
 								SectorRef:         start.SectorRef,
 							}
@@ -339,9 +339,12 @@ func (b *Builder) distPointToSegment(p Point, v Point, w Point) float64 {
 	return math.Sqrt(pdx*pdx + pdy*pdy)
 }
 
-// findGlobalWadSeg esegue la ricerca su tutti i segmenti del livello per mappare il bordo atomico post-split.
-func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lumps.Seg {
+// findGlobalWadSeg esegue una ricerca globale limitando i match ai Seg pertinenti al Sector corrente.
+func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY, targetSectorRef uint16) *lumps.Seg {
 	const epsilonSq = 1.0
+
+	var bestMatch *lumps.Seg
+	var maxOverlap float64
 
 	for i := 0; i < len(level.Segments); i++ {
 		wadSeg := level.Segments[i]
@@ -383,12 +386,94 @@ func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY) *lump
 		overlapEnd := math.Min(1.0, t2)
 		overlapLength := (overlapEnd - overlapStart) * math.Sqrt(lenSq)
 
-		// Cattura in maniera affidabile l'intersezione fisica reale
+		// Cattura l'intersezione fisica reale
 		if overlapLength > 0.5 {
-			return level.Segments[i]
+			line := level.LineDefs[wadSeg.LineDef]
+			_, side := level.SegmentSideDef(wadSeg, line)
+
+			// Controlla che il Seg trovato faccia parte ESATTAMENTE del settore che stiamo analizzando
+			if side != nil && side.SectorRef == targetSectorRef {
+				return wadSeg // Match geometrico E semantico assoluto
+			}
+
+			// Salva per fallback se il Nodebuilder ha fatto un pasticcio semantico
+			if overlapLength > maxOverlap {
+				maxOverlap = overlapLength
+				bestMatch = wadSeg
+			}
 		}
 	}
-	return nil
+	return bestMatch // Ritorna il miglior match geometrico come fallback
+}
+
+// runDiagnostics calcola il delta tra i Seg nativi allocati nel SubSector e quelli catturati geometricamente.
+func (b *Builder) runDiagnostics(level *Level, traversedPolys map[uint16]Polygon, numSS uint16) {
+	missingTotal := 0
+	alienTotal := 0
+
+	for i := uint16(0); i < numSS; i++ {
+		ss := level.SubSectors[i]
+
+		// 1. Estrazione Segments attesi (Verità nativa del WAD)
+		expectedSegs := make(map[int]bool)
+		for j := int16(0); j < ss.NumSegments; j++ {
+			expectedSegs[int(ss.StartSeg+j)] = true
+		}
+
+		// 2. Estrazione Segments catturati dalla nostra pipeline spaziale
+		capturedSegs := make(map[int]bool)
+		poly := traversedPolys[i]
+		for _, p := range poly.Points {
+			if p.OverlappedSegment != nil {
+				// Risoluzione O(N) del puntatore all'indice reale nel WAD
+				for k := 0; k < len(level.Segments); k++ {
+					if level.Segments[k] == p.OverlappedSegment {
+						capturedSegs[k] = true
+						break
+					}
+				}
+			}
+		}
+
+		// 3. Calcolo dei Delta
+		var missing []int
+		for segIdx := range expectedSegs {
+			if !capturedSegs[segIdx] {
+				missing = append(missing, segIdx)
+			}
+		}
+
+		var alien []int
+		for segIdx := range capturedSegs {
+			if !expectedSegs[segIdx] {
+				alien = append(alien, segIdx)
+			}
+		}
+
+		// 4. Dump dell'anomalia
+		if len(missing) > 0 || len(alien) > 0 {
+			fmt.Printf("[DIAGNOSTIC] SubSector %d (SectorRef %d):\n", i, poly.SectorRef)
+			if len(missing) > 0 {
+				missingTotal += len(missing)
+				fmt.Printf("  -> MANCANTI (%d): %v\n", len(missing), missing)
+				for _, m := range missing {
+					s := level.Segments[m]
+					v1 := level.Vertexes[s.VertexStart]
+					v2 := level.Vertexes[s.VertexEnd]
+					fmt.Printf("     Seg %d: (%.0f, %.0f) -> (%.0f, %.0f) LineDef: %d\n",
+						m, float64(v1.XCoord), float64(v1.YCoord), float64(v2.XCoord), float64(v2.YCoord), s.LineDef)
+				}
+			}
+			if len(alien) > 0 {
+				alienTotal += len(alien)
+				fmt.Printf("  -> ALIENI (%d): %v (Catturati ma non assegnati dal Nodebuilder a questo SS)\n", len(alien), alien)
+			}
+		}
+	}
+
+	fmt.Printf("\n[DIAGNOSTIC SUMMARY] Totale Seg Nativi Persi: %d | Totale Seg Alieni Catturati: %d\n", missingTotal, alienTotal)
+
+	//os.Exit(1)
 }
 
 // forceWindingOrder adjusts the winding order of given segments.
@@ -500,7 +585,7 @@ func PolygonClean(poly Points) Points {
 		return nil
 	}
 	var res Points
-	tolSq := tolerance * tolerance
+	tolSq := 0.1 * 0.1
 
 	for _, p := range poly {
 		if len(res) == 0 {
@@ -528,13 +613,19 @@ func PolygonClean(poly Points) Points {
 	return res
 }
 
-// PolygonsSnap collassa i vertici approssimati sulle coordinate native esatte.
+// PolygonsSnap collassa i vertici approssimati sulle coordinate native esatte prendendo il più vicino.
 func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
 	snapVertex := func(p Point) Point {
+		best := p
+		minDistSq := 2.25 // Distanza max 1.5 unità
+
 		for _, wv := range vertexes {
 			dx, dy := p.X-wv.X, p.Y-wv.Y
-			if (dx*dx + dy*dy) <= 2.25 {
-				return Point{
+			distSq := dx*dx + dy*dy
+			if distSq <= minDistSq {
+				minDistSq = distSq
+				// Conserva i metadati di superficie
+				best = Point{
 					X:                 wv.X,
 					Y:                 wv.Y,
 					OverlappedSegment: p.OverlappedSegment,
@@ -543,7 +634,7 @@ func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
 				}
 			}
 		}
-		return p
+		return best
 	}
 
 	for i, poly := range subsectorPolys {

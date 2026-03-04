@@ -10,6 +10,22 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+/*
+TODO DOBBIAMO PASSARE NECESSARIAMENTE A FIXED POINT
+type FixedPoint int64
+
+func ToFixedPoint(f float64) FixedPoint    { return FixedPoint(f * 65536) }
+func (f FixedPoint) ToFloat() float64 { return float64(f) / 65536.0 }
+
+type Point struct {
+	X                 FixedPoint
+	Y                 FixedPoint
+	OverlappedSegment *lumps.Seg
+	Sector            *lumps.Sector
+	SectorRef         uint16
+}
+*/
+
 // ScaleFactor defines a constant multiplier used to scale dimensions within the configuration system.
 const ScaleFactor = 25.0
 

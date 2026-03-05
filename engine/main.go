@@ -41,30 +41,29 @@ func (g *Game) Setup() {
 
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	g.viewMode = -1
-	g.enableClear = true //true //true
+	g.enableClear = true
 	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
 	m := 2
-
 	switch m {
 	case 0:
 		g.cfg, err = script.ParseScriptData(script.StubOld2)
 	case 1:
 		g.cfg, err = world.Generate(16, 16)
 	case 2:
-		wb := wad.NewBuilder()
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
+		wb := wad.NewBuilderLineDef()
 		g.cfg, err = wb.Setup(wadFile, 1)
 	}
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(3)
+		os.Exit(1)
 	}
 
 	if g.enableClear {
 		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")
 	}
 
-	g.world = portal.NewWorld(_W, _H, _MaxQueue, g.viewMode)
+	g.world = portal.NewWorld(_W, _H, _MaxQueue)
 	if err = g.world.Setup(g.cfg); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

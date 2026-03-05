@@ -15,7 +15,7 @@ import (
 type RenderSoftware struct {
 	screenWidth        int
 	screenHeight       int
-	textures           *textures.Textures
+	textures           textures.ITextures
 	sectorsMaxHeight   float64
 	targetSectors      map[int]bool
 	targetIdx          int
@@ -27,7 +27,7 @@ type RenderSoftware struct {
 
 // NewSoftwareRender initializes and returns a new instance of RenderSoftware for software-based rendering.
 // It sets the screen dimensions, textures, maximum Sector height, and initializes rendering utilities.
-func NewSoftwareRender(screenWidth int, screenHeight int, textures *textures.Textures, sectorsMaxHeight float64) *RenderSoftware {
+func NewSoftwareRender(screenWidth int, screenHeight int, textures textures.ITextures, sectorsMaxHeight float64) *RenderSoftware {
 	return &RenderSoftware{
 		screenWidth:        screenWidth,
 		screenHeight:       screenHeight,
@@ -84,7 +84,7 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *ViewItem,
 		//	continue
 		//}
 		//test[css[idx].Sector.Id] = true
-		mode := r.textures.GetViewMode()
+		mode := -1 //r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2
@@ -120,7 +120,7 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewIte
 	wg.Add(compiled)
 
 	for idx := compiled - 1; idx >= 0; idx-- {
-		mode := r.textures.GetViewMode()
+		mode := -1 //r.textures.GetViewMode()
 		if r.targetEnabled {
 			if f, _ := r.targetSectors[idx]; !f {
 				mode = 2

@@ -3,11 +3,13 @@ package wad
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 /*
@@ -104,7 +106,11 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	p1Angle := float64(p1.Angle)
 
 	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
-	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true)
+
+	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
+	t, _ := textures.NewFileTextures(basePath)
+
+	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true, t)
 
 	return root, nil
 }
@@ -314,7 +320,7 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 				line := level.LineDefs[wadSeg.LineDef]
 				_, side := level.SegmentSideDef(wadSeg, line)
 				if side != nil {
-					seg.Upper, seg.Middle, seg.Lower = side.UpperTexture, side.MiddleTexture, side.LowerTexture
+					seg.TextureUpper, seg.TextureMiddle, seg.TextureLower = side.UpperTexture, side.MiddleTexture, side.LowerTexture
 				}
 				seg.Tag = strconv.Itoa(int(line.Flags))
 				if (line.Flags & 0x0004) == 0 {

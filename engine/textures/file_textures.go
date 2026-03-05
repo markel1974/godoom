@@ -3,43 +3,21 @@ package textures
 import (
 	"bufio"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
-const (
-	//TextureSize must be a power of two
-	TextureSize  = 1024
-	TextureBegin = 0
-	TextureEnd   = TextureSize - 1
-)
-
-type Texture struct {
-	data [TextureSize][TextureSize]int
-}
-
-func (t *Texture) Get(x uint, y uint) int {
-	//return t.data[x % TextureSize][y % TextureSize]
-	//TextureSize (1024) is a power of 2, we can use bitwise operator
-	return t.data[x &TextureEnd][y &TextureEnd]
-}
-
-
-type Textures struct {
+// FileTextures represents a collection of textures mapped by their unique identifiers as strings.
+type FileTextures struct {
 	resources map[string]*Texture
-	viewMode  int
 }
 
-func NewTextures(viewMode int) (*Textures, error) {
-	t := &Textures{
+// NewFileTextures initializes a new FileTextures instance by loading texture files from the given basePath directory.
+// Returns an error if the directory cannot be read or if an error occurs when loading texture data.
+func NewFileTextures(basePath string) (*FileTextures, error) {
+	t := &FileTextures{
 		resources: make(map[string]*Texture),
-		viewMode:  viewMode,
 	}
-	if viewMode != -1 {
-		return t, nil
-	}
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	files, err := ioutil.ReadDir(basePath)
+	files, err := os.ReadDir(basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -57,11 +35,8 @@ func NewTextures(viewMode int) (*Textures, error) {
 	return t, nil
 }
 
-func (t * Textures) GetViewMode() int {
-	return t.viewMode
-}
-
-func (t *Textures) load(filename string) (*Texture, error) {
+// load reads texture data from a file and returns a pointer to a Texture object or an error if the operation fails.
+func (t *FileTextures) load(filename string) (*Texture, error) {
 	var texture = &Texture{}
 	file, err := os.Open(filename)
 	if err != nil {
@@ -93,7 +68,8 @@ func (t *Textures) load(filename string) (*Texture, error) {
 	}
 }
 
-func (t *Textures) Get(id string) *Texture {
+// Get retrieves a texture from the resources map by its ID. If the ID does not exist, it returns nil.
+func (t *FileTextures) Get(id string) *Texture {
 	x, ok := t.resources[id]
 	if !ok {
 		return nil

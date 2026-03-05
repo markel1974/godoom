@@ -6,8 +6,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
-	"github.com/markel1974/godoom/engine/textures"
 )
 
 // DefinitionJoin represents a valid definition state with a value of 3.
@@ -57,7 +55,7 @@ func NewCompiler() *Compiler {
 // Setup initializes and configures the Compiler object based on the provided configuration and texture data.
 // It processes the input sectors, creates segments, applies textures, resolves loops, and ensures Sector consistency.
 // Returns an error in case of configuration issues or invalid state encountered during the setup process.
-func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
+func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	modelSectorId := uint16(0)
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
@@ -79,11 +77,11 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 		s.Floor = cs.Floor
 		s.Textures = cs.Textures
 		if s.Textures {
-			s.TextureFloor = text.Get(cs.TextureFloor)
-			s.TextureCeil = text.Get(cs.TextureCeil)
-			s.TextureUpper = text.Get(cs.TextureUpper)
-			s.TextureLower = text.Get(cs.TextureLower)
-			s.TextureWall = text.Get(cs.TextureWall)
+			s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
+			s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
+			s.TextureUpper = cfg.Textures.Get(cs.TextureUpper)
+			s.TextureLower = cfg.Textures.Get(cs.TextureLower)
+			s.TextureWall = cfg.Textures.Get(cs.TextureWall)
 			if s.TextureFloor == nil || s.TextureCeil == nil && s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
 				//fmt.Println("invalid textures configuration for Sector", s.Id)
 				s.Textures = false
@@ -319,7 +317,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot, text *textures.Textures) error {
 					//ns.NeighborsRefs = neigh2
 					ns.Floor = sect.Floor
 					ns.Ceil = sect.Ceil
-					ns.Textures = sect.Textures
+					ns.FileTextures = sect.FileTextures
 					ns.TextureFloor = sect.TextureFloor
 					ns.TextureCeil = sect.TextureCeil
 					ns.TextureUpper = sect.TextureUpper
@@ -638,7 +636,7 @@ func (r * Compiler) createConvexHullOld(sect * Sector) {
 			//ns.NeighborsRefs = neigh2
 			ns.Floor = sect.Floor
 			ns.Ceil = sect.Ceil
-			ns.Textures = sect.Textures
+			ns.FileTextures = sect.FileTextures
 			ns.TextureFloor = sect.TextureFloor
 			ns.TextureCeil = sect.TextureCeil
 			ns.TextureUpper = sect.TextureUpper

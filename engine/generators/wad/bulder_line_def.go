@@ -3,10 +3,12 @@ package wad
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 type Fixed int64
@@ -90,7 +92,10 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 		playerSectorId,
 	)
 
-	return model.NewConfigRoot(sectors, player, nil, ScaleFactorLineDef, true), nil
+	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
+	t, _ := textures.NewFileTextures(basePath)
+
+	return model.NewConfigRoot(sectors, player, nil, ScaleFactorLineDef, true, t), nil
 }
 
 func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector {
@@ -318,7 +323,9 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 			}
 
 			side := level.SideDefs[sideIdx]
-			seg.Middle, seg.Upper, seg.Lower = side.MiddleTexture, side.UpperTexture, side.LowerTexture
+			seg.TextureMiddle = side.MiddleTexture
+			seg.TextureUpper = side.UpperTexture
+			seg.TextureLower = side.LowerTexture
 			seg.Kind = model.DefinitionWall
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin

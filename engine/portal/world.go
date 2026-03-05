@@ -9,7 +9,6 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/polygons"
 	"github.com/markel1974/godoom/engine/renderers"
-	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
 
@@ -17,7 +16,7 @@ import (
 type World struct {
 	screenWidth  int
 	screenHeight int
-	textures     *textures.Textures
+	maxQueue     int
 	tree         *Render
 	render       renderers.IRender
 	player       *Player
@@ -27,13 +26,12 @@ type World struct {
 }
 
 // NewWorld initializes a new World instance with the given screen dimensions, queue size, and view mode.
-func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *World {
-	t, _ := textures.NewTextures(viewMode)
+func NewWorld(screenWidth int, screenHeight int, maxQueue int) *World {
 	w := &World{
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
-		textures:     t,
-		tree:         NewPortal(screenWidth, screenHeight, maxQueue, t),
+		maxQueue:     maxQueue,
+		tree:         nil, //NewPortal(screenWidth, screenHeight, maxQueue, t),
 		render:       nil,
 		vi:           renderers.NewViewItem(),
 	}
@@ -43,19 +41,20 @@ func NewWorld(screenWidth int, screenHeight int, maxQueue int, viewMode int) *Wo
 // Setup initializes the World instance using the provided configuration and sets up its components like player and renderer.
 func (w *World) Setup(cfg *model.ConfigRoot) error {
 	compiler := model.NewCompiler()
-	err := compiler.Setup(cfg, w.textures)
+	err := compiler.Setup(cfg)
 	if err != nil {
 		return err
 	}
+	w.tree = NewPortal(w.screenWidth, w.screenHeight, w.maxQueue)
 	playerSector, err := compiler.Get(cfg.Player.Sector)
 	if err != nil {
 		return err
 	}
-	if err := w.tree.Setup(compiler.GetSectors(), compiler.GetMaxHeight()); err != nil {
+	if err = w.tree.Setup(compiler.GetSectors(), compiler.GetMaxHeight()); err != nil {
 		return err
 	}
 	w.player = NewPlayer(cfg.Player.Position.X, cfg.Player.Position.Y, playerSector.Floor, cfg.Player.Angle, playerSector)
-	w.render = renderers.NewSoftwareRender(w.screenWidth, w.screenHeight, w.textures, w.tree.SectorsMaxHeight)
+	w.render = renderers.NewSoftwareRender(w.screenWidth, w.screenHeight, cfg.Textures, w.tree.SectorsMaxHeight)
 	return nil
 }
 

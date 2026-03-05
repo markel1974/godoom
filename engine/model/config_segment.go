@@ -10,46 +10,45 @@ import (
 
 // segmentData represents detailed information about a line segment in the system, including its coordinates and properties.
 type segmentData struct {
-	id       string
-	point    XY
-	kind     int
-	neighbor string
-	upper    string
-	middle   string
-	lower    string
-	distance float64
-	high     bool
+	id            string
+	point         XY
+	kind          int
+	neighbor      string
+	textureUpper  string
+	textureMiddle string
+	textureLower  string
+	distance      float64
+	high          bool
 }
 
 // ConfigSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
 type ConfigSegment struct {
-	Parent   string `json:"parent"`
-	Id       string `json:"id"`
-	Start    XY     `json:"start"`
-	End      XY     `json:"end"`
-	Kind     int    `json:"Kind"`
-	Neighbor string `json:"neighbor"`
-	Tag      string `json:"tag"`
-	Upper    string `json:"upper"`
-	Middle   string `json:"middle"`
-	Lower    string `json:"lower"`
-
-	builder map[float64][]*segmentData
+	Parent        string `json:"parent"`
+	Id            string `json:"id"`
+	Start         XY     `json:"start"`
+	End           XY     `json:"end"`
+	Kind          int    `json:"Kind"`
+	Neighbor      string `json:"neighbor"`
+	Tag           string `json:"tag"`
+	TextureUpper  string `json:"upper"`
+	TextureMiddle string `json:"middle"`
+	TextureLower  string `json:"lower"`
+	builder       map[float64][]*segmentData
 }
 
 // NewConfigSegment creates a new ConfigSegment instance with the specified parent, Kind, start, and end coordinates.
 func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 	is := &ConfigSegment{
-		Parent:   parent,
-		Id:       NextUUId(),
-		Start:    s,
-		End:      e,
-		Kind:     kind,
-		Neighbor: "",
-		Tag:      "",
-		Upper:    "",
-		Middle:   "",
-		Lower:    "",
+		Parent:        parent,
+		Id:            NextUUId(),
+		Start:         s,
+		End:           e,
+		Kind:          kind,
+		Neighbor:      "",
+		Tag:           "",
+		TextureUpper:  "",
+		TextureMiddle: "",
+		TextureLower:  "",
 	}
 	return is
 }
@@ -59,9 +58,9 @@ func (is *ConfigSegment) Clone() *ConfigSegment {
 	out := NewConfigSegment(is.Parent, is.Kind, is.Start, is.End)
 	out.Neighbor = is.Neighbor
 	out.Tag = is.Tag
-	out.Upper = is.Upper
-	out.Middle = is.Middle
-	out.Lower = is.Lower
+	out.TextureUpper = is.TextureUpper
+	out.TextureMiddle = is.TextureMiddle
+	out.TextureLower = is.TextureLower
 
 	return out
 }
@@ -124,7 +123,7 @@ func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, midd
 func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper string, middle string, lower string) {
 	pb := geometry2.Point{X: is.Start.X, Y: is.Start.Y}
 
-	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, upper: upper, middle: middle, lower: lower}
+	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, textureUpper: upper, textureMiddle: middle, textureLower: lower}
 	sd0.distance = geometry2.Distance(pb, geometry2.Point{X: p0.X, Y: p0.Y})
 	if c, ok := is.builder[sd0.distance]; ok {
 		c = append(c, sd0)
@@ -222,9 +221,9 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 			if data, d := createSegment(SegmentDataTexture, b.data); d != nil {
 				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{})
 				texture.Id = d.id
-				texture.Upper = d.upper
-				texture.Middle = d.middle
-				texture.Lower = d.lower
+				texture.TextureUpper = d.textureUpper
+				texture.TextureMiddle = d.textureMiddle
+				texture.TextureLower = d.textureLower
 				b.data = data
 			}
 		}
@@ -246,9 +245,9 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 				neighbor.Neighbor = d.neighbor
 
 				if texture != nil {
-					neighbor.Upper = texture.Upper
-					neighbor.Middle = texture.Middle
-					neighbor.Lower = texture.Lower
+					neighbor.TextureUpper = texture.TextureUpper
+					neighbor.TextureMiddle = texture.TextureMiddle
+					neighbor.TextureLower = texture.TextureLower
 				}
 				b.data = data
 			}
@@ -264,7 +263,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 		if r.Kind == DefinitionWall {
 			neighborP = "wall"
 		}
-		fmt.Println(neighborP, r.Start, r.End, r.Upper, r.Middle, r.Lower)
+		fmt.Println("DEBUG CS", neighborP, r.Start, r.End, r.TextureUpper, r.TextureMiddle, r.TextureLower)
 	}
 
 	return out

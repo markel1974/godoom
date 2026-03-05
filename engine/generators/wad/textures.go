@@ -7,18 +7,17 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/markel1974/godoom/engine/textures"
-	"golang.org/x/image/draw"
 )
 
-// Textures is a container for managing texture resources mapped by string identifiers.
+// Textures manages a collection of textures using a map with string identifiers as keys.
 type Textures struct {
 	resources map[string]*textures.Texture
 }
 
-// NewTextures initializes a Textures instance by loading texture files from the specified base path.
-// It returns the created Textures instance or an error if loading fails.
+// NewTextures initializes and returns a Textures object by loading texture data from the specified base path. Returns an error if loading fails.
 func NewTextures(basePath string) (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
@@ -41,7 +40,7 @@ func NewTextures(basePath string) (*Textures, error) {
 	return t, nil
 }
 
-// load reads a texture from the specified file, processes its RGB values, and populates a Texture object.
+// load reads texture data from the specified file and initializes a 1024x1024 texture with pixel color values.
 func (t *Textures) load(filename string) (*textures.Texture, error) {
 	var texture = textures.NewTexture(1024, 1024)
 	file, err := os.Open(filename)
@@ -90,31 +89,31 @@ func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
 	t.resources[id] = texture
 	return texture
 }
-
-
 */
 
-func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
-	size := img.Bounds().Size()
-	w := size.X
-	h := size.Y
+// Add inserts a new texture into the Textures map using the given id and image, returning a pointer to the created texture.
+func (t *Textures) Add(id string, src *image.RGBA) *textures.Texture {
+	size := src.Bounds().Size()
+	//dst := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
+	//draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	dst := src
 
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
-
-	texture := textures.NewTexture(w, h)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	texture := textures.NewTexture(size.X, size.Y)
+	for y := 0; y < size.Y; y++ {
+		for x := 0; x < size.X; x++ {
 			rgba := dst.At(x, y).(color.RGBA)
-			texture.Set(x, y, int(rgba.R)*65536+int(rgba.G)*256+int(rgba.B))
+			c := int(rgba.R)*65536 + int(rgba.G)*256 + int(rgba.B)
+			texture.Set(x, y, c)
 		}
 	}
+	id = cleanId(id)
 	t.resources[id] = texture
 	return texture
 }
 
-// Get retrieves a texture from the resources map using the given id. Returns nil if the id is not found.
+// Get retrieves a texture from the resources map by its cleaned identifier. Returns nil if not found or the ID is invalid.
 func (t *Textures) Get(id string) *textures.Texture {
+	id = cleanId(id)
 	if len(id) == 0 {
 		return nil
 	}
@@ -127,4 +126,9 @@ func (t *Textures) Get(id string) *textures.Texture {
 		return nil
 	}
 	return x
+}
+
+// cleanId normalizes the input string by trimming whitespace and converting it to uppercase.
+func cleanId(id string) string {
+	return strings.TrimSpace(strings.ToUpper(id))
 }

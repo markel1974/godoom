@@ -1,23 +1,13 @@
 package textures
 
-// TextureSize defines the size of the texture and must be a power of two.
-// TextureBegin represents the starting index of the texture.
-// TextureEnd represents the last index of the texture, calculated as TextureSize - 1.
-const (
-// TextureSize must be a power of two
-// textureWidth  = 1024
-// textureHeight = 1024
-// TextureBegin = 0
-// TextureEnd   = TextureSize - 1
-)
-
-// Texture represents a 2D grid of color data organized as a square with dimensions TextureSize x TextureSize.
+// Texture represents a 2D texture with a specified width, height, and pixel data stored as a 2D integer array.
 type Texture struct {
 	w    int
 	h    int
 	data [][]int
 }
 
+// NewTexture creates and initializes a new Texture with the specified width and height. Returns a pointer to the Texture.
 func NewTexture(w int, h int) *Texture {
 	texWidth := w - 1
 	texHeight := h - 1
@@ -39,25 +29,28 @@ func NewTexture(w int, h int) *Texture {
 	return z
 }
 
-// Get retrieves the color value at the specified coordinates (x, y) in the texture, using wrap-around behavior.
+// Get retrieves the color value at the given (x, y) coordinates in the texture, applying bitwise masking for wrapping.
 func (t *Texture) Get(x int, y int) int {
 	//TextureSize (1024) is a power of 2, we can use bitwise operator
 	return t.data[x&t.w][y&t.h]
 }
 
-// Set updates the color of a pixel at the specified x and y coordinates in the texture.
+// Set updates the color value at the specified (x, y) coordinates in the texture data. Coordinates are wrapped by texture dimensions.
 func (t *Texture) Set(x int, y int, color int) {
 	t.data[x&t.w][y&t.h] = color
 }
 
+// BeginX returns the X-coordinate offset for the texture. It is typically used for texture alignment and mapping.
 func (t *Texture) BeginX() int {
 	return 0
 }
 
+// BeginY returns the starting Y-coordinate for accessing texture data, typically used for offset-based texture mapping.
 func (t *Texture) BeginY() int {
 	return 0
 }
 
+// Size returns the width and height of the texture as a pair of integers.
 func (t *Texture) Size() (int, int) {
 	return t.w, t.h
 }

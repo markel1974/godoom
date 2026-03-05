@@ -52,7 +52,7 @@ func (g *Game) Setup() {
 	case 2:
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilderLineDef()
-		g.cfg, err = wb.Setup(wadFile, 10)
+		g.cfg, err = wb.Setup(wadFile, 1)
 	}
 	if err != nil {
 		fmt.Println(err)

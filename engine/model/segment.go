@@ -1,5 +1,7 @@
 package model
 
+import "github.com/markel1974/godoom/engine/textures"
+
 // Segment represents a line segment in 2D space, defined by its start and end coordinates, and associated metadata.
 type Segment struct {
 	Start  XY
@@ -8,17 +10,24 @@ type Segment struct {
 	Kind   int
 	Sector *Sector
 	Tag    string
+
+	TextureUpper  *textures.Texture
+	TextureMiddle *textures.Texture
+	TextureLower  *textures.Texture
 }
 
 // NewSegment creates and returns a new Segment instance with specified start, end Points, reference, Kind, Sector, and tag.
-func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string) *Segment {
+func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper *textures.Texture, tMiddle *textures.Texture, tLower *textures.Texture) *Segment {
 	out := &Segment{
-		Start:  start,
-		End:    end,
-		Ref:    ref,
-		Kind:   kind,
-		Sector: sector,
-		Tag:    tag,
+		Start:         start,
+		End:           end,
+		Ref:           ref,
+		Kind:          kind,
+		Sector:        sector,
+		Tag:           tag,
+		TextureUpper:  tUpper,
+		TextureMiddle: tMiddle,
+		TextureLower:  tLower,
 	}
 	return out
 }
@@ -26,12 +35,15 @@ func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag stri
 // Copy creates and returns a deep copy of the Segment instance.
 func (k *Segment) Copy() *Segment {
 	out := &Segment{
-		Start:  k.Start,
-		End:    k.End,
-		Ref:    k.Ref,
-		Kind:   k.Kind,
-		Sector: k.Sector,
-		Tag:    k.Tag,
+		Start:         k.Start,
+		End:           k.End,
+		Ref:           k.Ref,
+		Kind:          k.Kind,
+		Sector:        k.Sector,
+		Tag:           k.Tag,
+		TextureUpper:  k.TextureUpper,
+		TextureMiddle: k.TextureMiddle,
+		TextureLower:  k.TextureLower,
 	}
 	return out
 }

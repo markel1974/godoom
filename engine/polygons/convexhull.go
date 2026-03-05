@@ -192,7 +192,7 @@ func (ch *ConvexHull) FromSector(sector *model.Sector) []*model.Segment {
 		if s.Data != nil {
 			out = append(out, s.Data.(*model.Segment))
 		} else {
-			ns := model.NewSegment(sector.Id, sector, model.DefinitionVoid, s.Start, s.End, "ADDED")
+			ns := model.NewSegment(sector.Id, sector, model.DefinitionVoid, s.Start, s.End, "ADDED", nil, nil, nil)
 			out = append(out, ns)
 		}
 	}

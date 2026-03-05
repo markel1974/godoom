@@ -71,11 +71,12 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 			continue
 		}
 
+		//tX, tY := float64(t.X), float64(t.Y)
 		//tSectorId := bld.resolveSectorId(PointFixed{ToFixed(tX), ToFixed(tY)}, sectors)
 		//cfgThing := model.NewConfigThing(
 		//	fmt.Sprintf("t_%d", i),
-		//	model.XY{X: t.X, Y: -t.Y},
-		//	radAngle,
+		//	model.XY{X: tX, Y: -tY},
+		//	float64(t.Angle),
 		//	int(t.Type),
 		//	tSectorId,
 		//)
@@ -83,7 +84,11 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 	}
 
 	playerSectorId := bld.resolveSectorId(PointFixed{ToFixed(pX), ToFixed(pY)}, sectors)
-	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId)
+	player := model.NewConfigPlayer(
+		model.XY{X: pX, Y: -pY},
+		pAngle,
+		playerSectorId,
+	)
 
 	return model.NewConfigRoot(sectors, player, nil, ScaleFactorLineDef, true), nil
 }
@@ -103,12 +108,11 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 	var allConfigSectors []*model.ConfigSector
 
-	// Struttura di supporto per distinguere i muri WAD dalle "cuciture" della triangolazione
+	// Array di supporto per salvare i punti perfetti al bit per il linking dei portali
 	type exactSeg struct {
-		SectorID  string
-		Seg       *model.ConfigSegment
-		P1, P2    PointFixed
-		IsWadLine bool
+		SectorID string
+		Seg      *model.ConfigSegment
+		P1, P2   PointFixed
 	}
 	var allExactSegs []*exactSeg
 
@@ -121,10 +125,6 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 			triangles := bld.triangulate(mergedPoly)
 
 			for triIdx, tri := range triangles {
-				if bld.isDegenerate(tri[0], tri[1], tri[2]) {
-					continue
-				}
-
 				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 				miSector := &model.ConfigSector{
 					Id:           sectorId,
@@ -138,18 +138,18 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 				for k := 0; k < 3; k++ {
 					p1, p2 := tri[k], tri[(k+1)%3]
-					seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
 
-					isWadLine := bld.mapSegmentMetadata(seg, p1, p2, edges, level)
+					seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
+					bld.mapSegmentMetadata(seg, p1, p2, edges, level)
+
 					seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
 					miSector.Segments = append(miSector.Segments, seg)
 
 					allExactSegs = append(allExactSegs, &exactSeg{
-						SectorID:  sectorId,
-						Seg:       seg,
-						P1:        p1,
-						P2:        p2,
-						IsWadLine: isWadLine,
+						SectorID: sectorId,
+						Seg:      seg,
+						P1:       p1,
+						P2:       p2,
 					})
 				}
 				allConfigSectors = append(allConfigSectors, miSector)
@@ -157,6 +157,7 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 		}
 	}
 
+	// Costruzione Half-Edge Map per trovare le stanze adiacenti usando interi inviolati
 	edgeMap := make(map[EdgeKeyFixed]string)
 	for _, es := range allExactSegs {
 		k := EdgeKeyFixed{es.P1.X, es.P1.Y, es.P2.X, es.P2.Y}
@@ -166,18 +167,10 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 	for _, es := range allExactSegs {
 		if es.Seg.Kind == model.DefinitionJoin {
 			reverseKey := EdgeKeyFixed{es.P2.X, es.P2.Y, es.P1.X, es.P1.Y}
-
 			if neighborId, exists := edgeMap[reverseKey]; exists {
 				es.Seg.Neighbor = neighborId
 			} else {
-				if es.IsWadLine {
-					// È un portale reale del WAD, ma l'altra stanza manca. Diventa un muro solido visibile.
-					es.Seg.Kind = model.DefinitionWall
-				} else {
-					// FIX MURI FANTASMA: È una linea di triangolazione interna che ha perso il gemello.
-					// Non deve diventare un muro! Lo colleghiamo a sé stesso (auto-portale innocuo).
-					es.Seg.Neighbor = es.SectorID
-				}
+				es.Seg.Kind = model.DefinitionWall
 			}
 		}
 	}
@@ -190,9 +183,12 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 	working := make([]PointFixed, len(poly))
 	copy(working, poly)
 
-	// FIX WINDING: Non invertiamo più l'array! Calcoliamo se è Orario o Antiorario e ci adattiamo.
-	// Questo previene la rottura delle direzioni dei LineDef e garantisce l'allineamento dei portali.
-	isCW := bld.getWinding(working) > 0
+	// Forziamo il verso Orario (CW) necessario al tuo rasterizer dopo l'inversione della Y
+	if bld.getWinding(working) < 0 {
+		for i, j := 0, len(working)-1; i < j; i, j = i+1, j-1 {
+			working[i], working[j] = working[j], working[i]
+		}
+	}
 
 	for len(working) > 2 {
 		earFound := false
@@ -201,7 +197,7 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 			curr := working[i]
 			next := working[(i+1)%len(working)]
 
-			if bld.isEar(prev, curr, next, working, isCW) {
+			if bld.isEar(prev, curr, next, working) {
 				triangles = append(triangles, []PointFixed{prev, curr, next})
 				working = append(working[:i], working[i+1:]...)
 				earFound = true
@@ -211,13 +207,7 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 
 		if !earFound {
 			bestIdx := 0
-			var bestCp float64
-			if isCW {
-				bestCp = math.MaxFloat64
-			} else {
-				bestCp = -math.MaxFloat64
-			}
-
+			minCp := math.MaxFloat64
 			for i := 0; i < len(working); i++ {
 				prev := working[(i+len(working)-1)%len(working)]
 				curr := working[i]
@@ -225,17 +215,9 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 				abx, aby := float64(curr.X-prev.X), float64(curr.Y-prev.Y)
 				cbx, cby := float64(next.X-curr.X), float64(next.Y-curr.Y)
 				cp := abx*cby - aby*cbx
-
-				if isCW {
-					if cp < bestCp {
-						bestCp = cp
-						bestIdx = i
-					}
-				} else {
-					if cp > bestCp {
-						bestCp = cp
-						bestIdx = i
-					}
+				if cp < minCp {
+					minCp = cp
+					bestIdx = i
 				}
 			}
 			prev := working[(bestIdx+len(working)-1)%len(working)]
@@ -248,24 +230,19 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 	return triangles
 }
 
-func (bld *BuilderLineDef) isEar(a, b, c PointFixed, poly []PointFixed, isCW bool) bool {
+func (bld *BuilderLineDef) isEar(a, b, c PointFixed, poly []PointFixed) bool {
 	if a.X == c.X && a.Y == c.Y {
 		return true
 	}
 
 	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
 	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
+
 	cp := abx*cby - aby*cbx
 
-	// Applichiamo la regola di convessità dinamicamente
-	if isCW {
-		if cp >= 0 {
-			return false
-		} // In CW, l'angolo convesso ha CrossProduct negativo
-	} else {
-		if cp <= 0 {
-			return false
-		} // In CCW, l'angolo convesso ha CrossProduct positivo
+	// Essendo CW, il cross product convesso deve essere < 0
+	if cp >= 0 {
+		return false
 	}
 
 	for _, p := range poly {
@@ -301,8 +278,7 @@ func (bld *BuilderLineDef) getWinding(poly []PointFixed) int64 {
 	return 0
 }
 
-// Ritorna TRUE se il segmento corrisponde a un LineDef reale del WAD
-func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 PointFixed, sectorEdges []Edge, level *Level) bool {
+func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 PointFixed, sectorEdges []Edge, level *Level) {
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
 		w1 := PointFixed{ToFixed(float64(v1.XCoord)), ToFixed(float64(v1.YCoord))}
@@ -321,11 +297,10 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin
 			}
-			return true // Trovato, è un muro/portale del WAD originale
+			return
 		}
 	}
 	seg.Kind = model.DefinitionJoin
-	return false // Non trovato, è una diagonale creata dalla triangolazione
 }
 
 func (bld *BuilderLineDef) resolveSectorId(p PointFixed, sectors []*model.ConfigSector) string {
@@ -401,22 +376,6 @@ func (bld *BuilderLineDef) pointInTriangle(p, a, b, c PointFixed) bool {
 
 	const eps = 0.5
 	return (cp1 >= -eps && cp2 >= -eps && cp3 >= -eps) || (cp1 <= eps && cp2 <= eps && cp3 <= eps)
-}
-
-func (bld *BuilderLineDef) isDegenerate(a, b, c PointFixed) bool {
-	if a.X == b.X && a.Y == b.Y {
-		return true
-	}
-	if b.X == c.X && b.Y == c.Y {
-		return true
-	}
-	if c.X == a.X && c.Y == a.Y {
-		return true
-	}
-
-	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
-	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
-	return (abx*cby - aby*cbx) == 0
 }
 
 func (bld *BuilderLineDef) traceLoops(level *Level, edges []Edge) []PolygonDef {

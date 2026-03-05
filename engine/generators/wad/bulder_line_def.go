@@ -76,7 +76,7 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 		//cfgThing := model.NewConfigThing(
 		//	fmt.Sprintf("t_%d", i),
 		//	model.XY{X: tX, Y: -tY},
-		//	float64(t.Angle),
+		//	float64(t.Angle)*(math.Pi/180.0), // In caso l'engine richieda radianti per le Things
 		//	int(t.Type),
 		//	tSectorId,
 		//)
@@ -108,11 +108,12 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 	var allConfigSectors []*model.ConfigSector
 
-	// Array di supporto per salvare i punti perfetti al bit per il linking dei portali
+	// Struttura potenziata per tracciare se il segmento è un VERO muro o una diagonale interna
 	type exactSeg struct {
-		SectorID string
-		Seg      *model.ConfigSegment
-		P1, P2   PointFixed
+		SectorID  string
+		Seg       *model.ConfigSegment
+		P1, P2    PointFixed
+		IsWadLine bool
 	}
 	var allExactSegs []*exactSeg
 
@@ -125,6 +126,11 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 			triangles := bld.triangulate(mergedPoly)
 
 			for triIdx, tri := range triangles {
+				// PROTEZIONE 1: Scartiamo i triangoli degeneri (area nulla) che bucano il rasterizer
+				if bld.isDegenerate(tri[0], tri[1], tri[2]) {
+					continue
+				}
+
 				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 				miSector := &model.ConfigSector{
 					Id:           sectorId,
@@ -140,16 +146,17 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 					p1, p2 := tri[k], tri[(k+1)%3]
 
 					seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
-					bld.mapSegmentMetadata(seg, p1, p2, edges, level)
+					isWadLine := bld.mapSegmentMetadata(seg, p1, p2, edges, level)
 
 					seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
 					miSector.Segments = append(miSector.Segments, seg)
 
 					allExactSegs = append(allExactSegs, &exactSeg{
-						SectorID: sectorId,
-						Seg:      seg,
-						P1:       p1,
-						P2:       p2,
+						SectorID:  sectorId,
+						Seg:       seg,
+						P1:        p1,
+						P2:        p2,
+						IsWadLine: isWadLine,
 					})
 				}
 				allConfigSectors = append(allConfigSectors, miSector)
@@ -157,7 +164,6 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 		}
 	}
 
-	// Costruzione Half-Edge Map per trovare le stanze adiacenti usando interi inviolati
 	edgeMap := make(map[EdgeKeyFixed]string)
 	for _, es := range allExactSegs {
 		k := EdgeKeyFixed{es.P1.X, es.P1.Y, es.P2.X, es.P2.Y}
@@ -170,7 +176,12 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 			if neighborId, exists := edgeMap[reverseKey]; exists {
 				es.Seg.Neighbor = neighborId
 			} else {
-				es.Seg.Kind = model.DefinitionWall
+				// PROTEZIONE 2: Previene i Muri Fantasma!
+				if es.IsWadLine {
+					es.Seg.Kind = model.DefinitionWall // Muro originale con settore adiacente mancante (errore di mappa)
+				} else {
+					es.Seg.Neighbor = es.SectorID // Diagonale interna orfana: diventa un auto-portale invisibile!
+				}
 			}
 		}
 	}
@@ -183,7 +194,7 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 	working := make([]PointFixed, len(poly))
 	copy(working, poly)
 
-	// Forziamo il verso Orario (CW) necessario al tuo rasterizer dopo l'inversione della Y
+	// I poligoni nativi di Doom devono essere trattati in senso Orario (CW)
 	if bld.getWinding(working) < 0 {
 		for i, j := 0, len(working)-1; i < j; i, j = i+1, j-1 {
 			working[i], working[j] = working[j], working[i]
@@ -240,7 +251,6 @@ func (bld *BuilderLineDef) isEar(a, b, c PointFixed, poly []PointFixed) bool {
 
 	cp := abx*cby - aby*cbx
 
-	// Essendo CW, il cross product convesso deve essere < 0
 	if cp >= 0 {
 		return false
 	}
@@ -263,6 +273,22 @@ func (bld *BuilderLineDef) isEar(a, b, c PointFixed, poly []PointFixed) bool {
 	return true
 }
 
+func (bld *BuilderLineDef) isDegenerate(a, b, c PointFixed) bool {
+	if a.X == b.X && a.Y == b.Y {
+		return true
+	}
+	if b.X == c.X && b.Y == c.Y {
+		return true
+	}
+	if c.X == a.X && c.Y == a.Y {
+		return true
+	}
+
+	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
+	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
+	return (abx*cby - aby*cbx) == 0
+}
+
 func (bld *BuilderLineDef) getWinding(poly []PointFixed) int64 {
 	var area float64
 	for i := 0; i < len(poly); i++ {
@@ -278,7 +304,7 @@ func (bld *BuilderLineDef) getWinding(poly []PointFixed) int64 {
 	return 0
 }
 
-func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 PointFixed, sectorEdges []Edge, level *Level) {
+func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 PointFixed, sectorEdges []Edge, level *Level) bool {
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
 		w1 := PointFixed{ToFixed(float64(v1.XCoord)), ToFixed(float64(v1.YCoord))}
@@ -297,10 +323,11 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin
 			}
-			return
+			return true
 		}
 	}
 	seg.Kind = model.DefinitionJoin
+	return false
 }
 
 func (bld *BuilderLineDef) resolveSectorId(p PointFixed, sectors []*model.ConfigSector) string {

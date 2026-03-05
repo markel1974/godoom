@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	lumps2 "github.com/markel1974/godoom/engine/generators/wad/lumps"
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 // WAD represents a parsed Doom-engine WAD file containing lumps, levels, textures, flats, patches, and play palettes.
@@ -164,6 +165,17 @@ func (w *WAD) loadFlats() error {
 func (w *WAD) GetTexture(name string) (*lumps2.Texture, bool) {
 	texture, ok := w.textures[lumps2.FixName(name)]
 	return texture, ok
+}
+
+func (w *WAD) GetTextures() textures.ITextures {
+	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
+	t, _ := NewTextures(basePath)
+	for name := range w.textures {
+		if data, err := w.GetTextureImage(name); err == nil {
+			t.Add(name, data)
+		}
+	}
+	return t
 }
 
 // GetImage retrieves an image by its patch name index and returns the image and a boolean indicating success.

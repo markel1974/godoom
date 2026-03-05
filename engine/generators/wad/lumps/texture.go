@@ -61,7 +61,7 @@ func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
 	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
 		return nil, err
 	}
-	fmt.Printf("Loading %d textures ...\n", count)
+	fmt.Printf("Loading %s lump with %d textures ...\n", lumpInfo.Name, count)
 	offsets := make([]int32, count, count)
 	if err := binary.Read(f, binary.LittleEndian, offsets); err != nil {
 		return nil, err

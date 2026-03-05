@@ -37,7 +37,7 @@ func NewFileTextures(basePath string) (*FileTextures, error) {
 
 // load reads texture data from a file and returns a pointer to a Texture object or an error if the operation fails.
 func (t *FileTextures) load(filename string) (*Texture, error) {
-	var texture = &Texture{}
+	var texture = NewTexture()
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err

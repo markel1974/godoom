@@ -139,15 +139,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 	if !dp.Verify() {
 		return
 	}
-
-	texWidth := textures.TextureEnd - textures.TextureBegin
-	texHeight := textures.TextureEnd - textures.TextureBegin
-	if texWidth <= 0 {
-		texWidth = 64
-	}
-	if texHeight <= 0 {
-		texHeight = 64
-	}
+	texWidth, texHeight := texture.Size()
 
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
@@ -159,7 +151,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 			if safeTxtX < 0 {
 				safeTxtX += texWidth
 			}
-			safeTxtX += textures.TextureBegin
+			safeTxtX += texture.BeginX()
 
 			light := 1.0
 			if x2 != x1 {
@@ -196,9 +188,9 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 					if safeTxtY < 0 {
 						safeTxtY += texHeight
 					}
-					safeTxtY += textures.TextureBegin
+					safeTxtY += texture.BeginY()
 
-					r0, g0, b0 := ToRGB(texture.Get(uint(safeTxtX), uint(safeTxtY)), light)
+					r0, g0, b0 := ToRGB(texture.Get(safeTxtX, safeTxtY), light)
 					dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
 				}
 			}
@@ -222,14 +214,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 	p1 := (yMap - z) * dp.screenVFov
 	p2 := yaw * dp.screenVFov
 
-	texWidth := textures.TextureEnd - textures.TextureBegin
-	texHeight := textures.TextureEnd - textures.TextureBegin
-	if texWidth <= 0 {
-		texWidth = 64
-	}
-	if texHeight <= 0 {
-		texHeight = 64
-	}
+	texWidth, texHeight := texture.Size()
 
 	for pixelX := dp.left; pixelX <= dp.right; pixelX++ {
 		if nodeY := dp.compileNodes(pixelX); nodeY != nil {
@@ -266,15 +251,15 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 					if safeTxtX < 0 {
 						safeTxtX += texWidth
 					}
-					safeTxtX += textures.TextureBegin
+					safeTxtX += texture.BeginX()
 
 					safeTxtZ := mapZ % texHeight
 					if safeTxtZ < 0 {
 						safeTxtZ += texHeight
 					}
-					safeTxtZ += textures.TextureBegin
+					safeTxtZ += texture.BeginY()
 					light := computeLight(tz, lightDistance)
-					red, green, blue := ToRGB(texture.Get(uint(safeTxtZ), uint(safeTxtX)), light)
+					red, green, blue := ToRGB(texture.Get(safeTxtZ, safeTxtX), light)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
 				}
 			}

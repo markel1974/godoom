@@ -177,13 +177,13 @@ func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, 
 	switch cp.Kind {
 	case model.IdWall:
 		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Sector.TextureWall, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, vi.LightDistance)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, vi.LightDistance)
 	case model.IdUpper:
 		yRef := (cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Sector.TextureUpper, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
 	case model.IdLower:
 		yRef := (cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Sector.TextureLower, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
 	case model.IdCeil:
 		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, vi.LightDistance)
 	case model.IdFloor:

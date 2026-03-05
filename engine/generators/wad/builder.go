@@ -292,11 +292,11 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 		sectorId := strconv.Itoa(int(i))
 
 		miSector := &model.ConfigSector{
-			Id:           sectorId,
-			Floor:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
-			Tag:          strconv.Itoa(int(poly.SectorRef)),
-			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
+			Id:    sectorId,
+			Floor: SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
+			Ceil:  SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
+			Tag:   strconv.Itoa(int(poly.SectorRef)),
+			//TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
 			Textures: true,
 		}
@@ -320,7 +320,14 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 				line := level.LineDefs[wadSeg.LineDef]
 				_, side := level.SegmentSideDef(wadSeg, line)
 				if side != nil {
-					seg.TextureUpper, seg.TextureMiddle, seg.TextureLower = side.UpperTexture, side.MiddleTexture, side.LowerTexture
+					//TODO TEST
+					seg.TextureUpper = "wall2.ppm"
+					seg.TextureMiddle = "wall.ppm"
+					seg.TextureLower = "floor2.ppm"
+
+					//seg.TextureUpper = side.UpperTexture
+					//seg.TextureMiddle = side.MiddleTexture
+					//seg.TextureLower = side.LowerTexture
 				}
 				seg.Tag = strconv.Itoa(int(line.Flags))
 				if (line.Flags & 0x0004) == 0 {

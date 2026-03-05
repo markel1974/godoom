@@ -111,6 +111,10 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
+					neighbor.TextureMiddle = "wall2.ppm"
+					neighbor.TextureLower = "wall.ppm"
+					neighbor.TextureUpper = "wall3.ppm"
+
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -119,12 +123,12 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+					neighbor.TextureMiddle = "wall2.ppm"
+					neighbor.TextureLower = "wall.ppm"
+					neighbor.TextureUpper = "wall3.ppm"
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.TextureWall = "wall2.ppm"
-				cs.TextureLower = "wall.ppm"
-				cs.TextureUpper = "wall3.ppm"
 				cs.TextureFloor = "floor.ppm"
 				cs.TextureCeil = "ceil.ppm"
 				cs.TextureScaleFactor = 50.0

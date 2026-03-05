@@ -3,10 +3,12 @@ package wad
 import (
 	"bufio"
 	"image"
+	"image/color"
 	"io"
 	"os"
 
 	"github.com/markel1974/godoom/engine/textures"
+	"golang.org/x/image/draw"
 )
 
 // Textures is a container for managing texture resources mapped by string identifiers.
@@ -71,16 +73,46 @@ func (t *Textures) load(filename string) (*textures.Texture, error) {
 	}
 }
 
-func (t *Textures) Add(name string, data *image.RGBA) {
-	z := textures.NewTexture()
-	for k := range data.Pix {
-		z.Set(uint(k%1024), uint(k/1024), int(data.Pix[k]))
+/*
+func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
+	if img.Rect.Dx() > 1024 || img.Rect.Dy() > 1024 {
+		panic("Immagine deve essere 1024x1024")
 	}
-	t.resources[name] = z
+	texture := textures.NewTexture()
+	for y := 0; y < 1024; y++ {
+		for x := 0; x < 1024; x++ {
+			rgba := img.At(x, y).(color.RGBA)
+			texture.Set(uint(x), uint(y), int(rgba.R)*65536+int(rgba.G)*256+int(rgba.B))
+		}
+	}
+	t.resources[id] = texture
+	return texture
+}
+*/
+
+func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
+	dst := image.NewRGBA(image.Rect(0, 0, textures.TextureSize, textures.TextureSize))
+	draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+
+	texture := textures.NewTexture()
+	for y := 0; y < textures.TextureSize; y++ {
+		for x := 0; x < textures.TextureSize; x++ {
+			rgba := dst.At(x, y).(color.RGBA)
+			texture.Set(uint(x), uint(y), int(rgba.R)*65536+int(rgba.G)*256+int(rgba.B))
+		}
+	}
+	t.resources[id] = texture
+	return texture
 }
 
 // Get retrieves a texture from the resources map using the given id. Returns nil if the id is not found.
 func (t *Textures) Get(id string) *textures.Texture {
+	if len(id) == 0 {
+		return nil
+	}
+	if id == "-" {
+		return nil
+	}
 	x, ok := t.resources[id]
 	if !ok {
 		return nil

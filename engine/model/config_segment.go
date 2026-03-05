@@ -263,7 +263,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 		if r.Kind == DefinitionWall {
 			neighborP = "wall"
 		}
-		fmt.Println("DEBUG CS", neighborP, r.Start, r.End, r.TextureUpper, r.TextureMiddle, r.TextureLower)
+		fmt.Println("DEBUG", neighborP, r.Start, r.End, r.TextureUpper, r.TextureMiddle, r.TextureLower)
 	}
 
 	return out

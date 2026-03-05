@@ -30,3 +30,11 @@ func (t *Texture) Get(x uint, y uint) int {
 func (t *Texture) Set(x uint, y uint, color int) {
 	t.data[x&TextureEnd][y&TextureEnd] = color
 }
+
+func (t *Texture) Begin() int {
+	return TextureBegin
+}
+
+func (t *Texture) End() int {
+	return TextureEnd
+}

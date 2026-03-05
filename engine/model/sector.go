@@ -8,18 +8,18 @@ import (
 
 // Sector represents a 3D space in a model, defined by its boundaries, textures, and associated segments.
 type Sector struct {
-	ModelId            uint16
-	Id                 string
-	Floor              float64
-	Ceil               float64
-	Segments           []*Segment
-	Textures           bool
-	Tag                string
-	TextureFloor       *textures.Texture
-	TextureCeil        *textures.Texture
-	TextureUpper       *textures.Texture
-	TextureLower       *textures.Texture
-	TextureWall        *textures.Texture
+	ModelId      uint16
+	Id           string
+	Floor        float64
+	Ceil         float64
+	Segments     []*Segment
+	Textures     bool
+	Tag          string
+	TextureFloor *textures.Texture
+	TextureCeil  *textures.Texture
+	//TextureUpper *textures.Texture
+	//TextureLower *textures.Texture
+	//TextureWall *textures.Texture
 	TextureScaleFactor float64
 	usage              int
 	compileId          uint64

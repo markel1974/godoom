@@ -49,9 +49,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	sector.Textures = true
 	sector.TextureFloor = availableFloor[random(0, len(availableFloor)-1)]
 	sector.TextureCeil = availableCeil[random(0, len(availableCeil)-1)]
-	sector.TextureUpper = availableUpper[random(0, len(availableUpper)-1)]
-	sector.TextureLower = availableLower[random(0, len(availableLower)-1)]
-	sector.TextureWall = availableWall[random(0, len(availableWall)-1)]
+
 	sector.TextureScaleFactor = 50.0
 	const SegmentMax = 4
 	for c := 0; c < SegmentMax; c++ {
@@ -70,9 +68,11 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 			xy.X = x
 			xy.Y = y + max
 		}
-
 		if c == 0 {
 			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor.TextureUpper = availableUpper[random(0, len(availableUpper)-1)]
+			neighbor.TextureLower = availableLower[random(0, len(availableLower)-1)]
+			neighbor.TextureMiddle = availableWall[random(0, len(availableWall)-1)]
 			sector.Segments = append(sector.Segments, neighbor)
 		} else if c == SegmentMax-1 {
 			prev := sector.Segments[c-1]
@@ -81,6 +81,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 			prev := sector.Segments[c-1]
 			prev.End = xy
 			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor.TextureUpper = availableUpper[random(0, len(availableUpper)-1)]
+			neighbor.TextureLower = availableLower[random(0, len(availableLower)-1)]
+			neighbor.TextureMiddle = availableWall[random(0, len(availableWall)-1)]
 			sector.Segments = append(sector.Segments, neighbor)
 		}
 	}

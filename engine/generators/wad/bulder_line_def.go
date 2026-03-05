@@ -150,12 +150,11 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 				miSector := &model.ConfigSector{
-					Id:           sectorId,
-					Floor:        float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
-					Ceil:         float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
-					Tag:          strconv.Itoa(int(secIdx)),
-					Textures:     true,
-					TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
+					Id:          sectorId,
+					Floor:       float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
+					Ceil:        float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
+					Tag:         strconv.Itoa(int(secIdx)),
+					Textures:    true,
 					TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
 				}
 
@@ -163,6 +162,7 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 					p1, p2 := tri[k], tri[(k+1)%3]
 
 					seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
+
 					isWadLine := bld.mapSegmentMetadata(seg, p1, p2, edges, level)
 
 					seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
@@ -317,16 +317,21 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
 			ld := level.LineDefs[e.LDIdx]
+
 			sideIdx := ld.SideDefRight
 			if e.IsLeft {
 				sideIdx = ld.SideDefLeft
 			}
-
 			side := level.SideDefs[sideIdx]
-
 			seg.TextureMiddle = side.MiddleTexture
 			seg.TextureUpper = side.UpperTexture
 			seg.TextureLower = side.LowerTexture
+
+			//TODO TEST
+			//seg.TextureMiddle = "wall.ppm"
+			//seg.TextureUpper = "wall2.ppm"
+			//seg.TextureLower = "floor2.ppm"
+
 			seg.Kind = model.DefinitionWall
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin

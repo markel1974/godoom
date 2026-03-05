@@ -62,6 +62,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
+
 			tUpper := cfg.Textures.Get(cn.TextureUpper)
 			tMiddle := cfg.Textures.Get(cn.TextureMiddle)
 			tLower := cfg.Textures.Get(cn.TextureLower)
@@ -83,11 +84,11 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
 			s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
 
-			s.TextureUpper = cfg.Textures.Get(cs.TextureUpper)
-			s.TextureLower = cfg.Textures.Get(cs.TextureLower)
-			s.TextureWall = cfg.Textures.Get(cs.TextureWall)
+			//s.TextureUpper = cfg.Textures.Get(cs.TextureUpper)
+			//s.TextureLower = cfg.Textures.Get(cs.TextureLower)
+			//s.TextureWall = cfg.Textures.Get(cs.TextureWall)
 
-			if s.TextureFloor == nil || s.TextureCeil == nil && s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
+			if s.TextureFloor == nil || s.TextureCeil == nil { //&& s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
 				//fmt.Println("invalid textures configuration for Sector", s.Id)
 				s.Textures = false
 			}

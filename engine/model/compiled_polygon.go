@@ -1,5 +1,7 @@
 package model
 
+import "github.com/markel1974/godoom/engine/textures"
+
 // IdEmpty represents an empty identifier with a value of 0.
 // IdFloor represents the identifier for a floor with a hexadecimal value of 0xA9A9A9.
 // IdCeil represents the identifier for a ceiling with a hexadecimal value of 0xF5F5F5.
@@ -37,6 +39,7 @@ type CompiledPolygon struct {
 	Tz2      float64
 	U0       float64
 	U1       float64
+	Texture  *textures.Texture
 }
 
 // NewCompiledPolygon creates and initializes a new instance of CompiledPolygon with default values and preallocated Points.
@@ -147,7 +150,7 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire creates or reinitializes a CompiledPolygon with the given parameters, associating it with sectors and coordinates.
-func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, t *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
 	p := cp.data[cp.idx]
 	p.id = float64(cp.idx)
 	cp.idx++
@@ -160,6 +163,7 @@ func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, 
 	p.Tz2 = tz2
 	p.U0 = u0
 	p.U1 = u1
+	p.Texture = t
 	p.Init(kind)
 
 	return p

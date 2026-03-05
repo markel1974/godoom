@@ -1,5 +1,7 @@
 package model
 
+import "github.com/markel1974/godoom/engine/textures"
+
 // CompiledSector represents a data structure linking a Sector with its compiled polygons for optimized rendering workflows.
 type CompiledSector struct {
 	Sector           *Sector
@@ -31,8 +33,8 @@ func (cs *CompiledSector) Clear() {
 }
 
 // Acquire creates or retrieves a CompiledPolygon, initializing it with Sector, neighbor, type, and geometric parameters.
-func (cs *CompiledSector) Acquire(neighbor *Sector, kind int, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
-	return cs.compiledPolygons.Acquire(cs.Sector, neighbor, kind, x1, x2, tz1, tz2, u0, u1)
+func (cs *CompiledSector) Acquire(neighbor *Sector, kind int, t *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
+	return cs.compiledPolygons.Acquire(cs.Sector, neighbor, kind, t, x1, x2, tz1, tz2, u0, u1)
 }
 
 // Get retrieves a slice of active CompiledPolygon instances associated with the CompiledSector.

@@ -42,7 +42,7 @@ func NewTextures(basePath string) (*Textures, error) {
 
 // load reads a texture from the specified file, processes its RGB values, and populates a Texture object.
 func (t *Textures) load(filename string) (*textures.Texture, error) {
-	var texture = textures.NewTexture()
+	var texture = textures.NewTexture(1024, 1024)
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -74,6 +74,7 @@ func (t *Textures) load(filename string) (*textures.Texture, error) {
 }
 
 /*
+
 func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
 	if img.Rect.Dx() > 1024 || img.Rect.Dy() > 1024 {
 		panic("Immagine deve essere 1024x1024")
@@ -82,21 +83,25 @@ func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
 	for y := 0; y < 1024; y++ {
 		for x := 0; x < 1024; x++ {
 			rgba := img.At(x, y).(color.RGBA)
-			texture.Set(uint(x), uint(y), int(rgba.R)*65536+int(rgba.G)*256+int(rgba.B))
+			texture.Set(x, y, int(rgba.R)*65536+int(rgba.G)*256+int(rgba.B))
 		}
 	}
 	t.resources[id] = texture
 	return texture
 }
+
+
 */
 
 func (t *Textures) Add(id string, img *image.RGBA) *textures.Texture {
-	w := 1024
-	h := 1024
+	size := img.Bounds().Size()
+	w := size.X
+	h := size.Y
+
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 
-	texture := textures.NewTexture()
+	texture := textures.NewTexture(w, h)
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			rgba := dst.At(x, y).(color.RGBA)

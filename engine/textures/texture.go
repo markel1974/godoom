@@ -4,11 +4,11 @@ package textures
 // TextureBegin represents the starting index of the texture.
 // TextureEnd represents the last index of the texture, calculated as TextureSize - 1.
 const (
-	//TextureSize must be a power of two
-	textureWidth  = 1024
-	textureHeight = 1024
-	//TextureBegin = 0
-	//TextureEnd   = TextureSize - 1
+// TextureSize must be a power of two
+// textureWidth  = 1024
+// textureHeight = 1024
+// TextureBegin = 0
+// TextureEnd   = TextureSize - 1
 )
 
 // Texture represents a 2D grid of color data organized as a square with dimensions TextureSize x TextureSize.
@@ -18,9 +18,9 @@ type Texture struct {
 	data [][]int
 }
 
-func NewTexture() *Texture {
-	texWidth := textureWidth - 1
-	texHeight := textureHeight - 1
+func NewTexture(w int, h int) *Texture {
+	texWidth := w - 1
+	texHeight := h - 1
 	//if texWidth <= 0 {
 	//	texWidth = 64
 	//}
@@ -31,10 +31,10 @@ func NewTexture() *Texture {
 	z := &Texture{
 		w:    texWidth,
 		h:    texHeight,
-		data: make([][]int, textureWidth),
+		data: make([][]int, w),
 	}
 	for i := range z.data {
-		z.data[i] = make([]int, textureHeight)
+		z.data[i] = make([]int, h)
 	}
 	return z
 }

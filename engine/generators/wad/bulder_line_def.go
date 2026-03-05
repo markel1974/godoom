@@ -150,12 +150,14 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 				miSector := &model.ConfigSector{
-					Id:          sectorId,
-					Floor:       float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
-					Ceil:        float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
-					Tag:         strconv.Itoa(int(secIdx)),
-					Textures:    true,
-					TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
+					Id:                 sectorId,
+					Floor:              float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
+					Ceil:               float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
+					Tag:                strconv.Itoa(int(secIdx)),
+					Textures:           true,
+					TextureCeil:        wadSector.CeilingPic, //"ceil.ppm",
+					TextureFloor:       wadSector.FloorPic,   //"floor.ppm",
+					TextureScaleFactor: 10.0,
 				}
 
 				for k := 0; k < 3; k++ {

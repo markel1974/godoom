@@ -2,6 +2,7 @@ package wad
 
 import (
 	"bufio"
+	"fmt"
 	"image"
 	"image/color"
 	"io"
@@ -122,6 +123,7 @@ func (t *Textures) Get(id string) *textures.Texture {
 	}
 	x, ok := t.resources[id]
 	if !ok {
+		fmt.Println("CAN'T FIND TEXTURE", id)
 		return nil
 	}
 	return x

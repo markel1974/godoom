@@ -175,6 +175,11 @@ func (w *WAD) GetTextures() textures.ITextures {
 			t.Add(name, data)
 		}
 	}
+	for name := range w.flats {
+		if data, err := w.GetFlatImage(name); err == nil {
+			t.Add(name, data)
+		}
+	}
 	return t
 }
 
@@ -284,17 +289,32 @@ func (w *WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
 		}
 	}
 	return rgba, nil
+}
 
-	/*
-		var texId uint32
-		gl.GenTextures(1, &texId)
-		gl.ActiveTexture(gl.TEXTURE0)
-		gl.BindTexture(gl.TEXTURE_2D, texId)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(rgba.Rect.Size().X), int32(rgba.Rect.Size().Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(rgba.Pix))
-		return texId, nil
-	*/
+func (w *WAD) GetFlatImage(pName string) (*image.RGBA, error) {
+	z, ok := w.flats[pName]
+	if !ok {
+		return nil, fmt.Errorf("unknown patch %s", pName)
+	}
+	width := 64
+	height := 64
+	bounds := image.Rect(0, 0, width, height)
+	rgba := image.NewRGBA(bounds)
+	if rgba.Stride != rgba.Rect.Size().X*4 {
+		return nil, fmt.Errorf("unsupported stride " + pName)
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			pixel := z.Data[y*width+x]
+			var alpha uint8
+			if pixel == w.transparentPaletteIndex {
+				alpha = 0
+			} else {
+				alpha = 255
+			}
+			rgb := w.playPal.Palettes[0].Table[pixel]
+			rgba.Set(x, y, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: alpha})
+		}
+	}
+	return rgba, nil
 }

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
 )
 
@@ -34,6 +35,11 @@ type Edge struct {
 // EdgeKey is a unique key representation of an edge using floating-point coordinates.
 type EdgeKey struct {
 	X1, Y1, X2, Y2 float64
+}
+
+type ExactSeg struct {
+	Seg       *model.ConfigSegment
+	IsWadLine bool
 }
 
 // PolygonDef represents a polygon with an outer boundary and optionally multiple holes.
@@ -112,13 +118,10 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 	var allConfigSectors []*model.ConfigSector
 
-	type exactSeg struct {
-		SectorID  string
-		Seg       *model.ConfigSegment
-		P1, P2    Point
-		IsWadLine bool
-	}
-	var allExactSegments []*exactSeg
+	var allExactSegments []*ExactSeg
+	edgeMap := make(map[EdgeKey]string)
+
+	wadLines := make(map[*model.ConfigSegment]bool)
 
 	for secIdx, edges := range sectorToEdges {
 		wadSector := level.Sectors[secIdx]
@@ -134,50 +137,24 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 				// continue
 				//}
 
-				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-				miSector := &model.ConfigSector{
-					Id:                 sectorId,
-					Floor:              float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
-					Ceil:               float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
-					Tag:                strconv.Itoa(int(secIdx)),
-					TextureCeil:        flatId + wadSector.CeilingPic,
-					TextureFloor:       flatId + wadSector.FloorPic,
-					TextureScaleFactor: 10.0,
-					LightLevel:         float64(wadSector.LightLevel) / 255,
-				}
-
+				cSector := bld.buildConfigSector(wadSector, secIdx, loopIdx, triIdx)
 				for k := 0; k < 3; k++ {
 					p1, p2 := tri[k], tri[(k+1)%3]
-
-					seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
-
-					isWadLine := bld.mapSegmentMetadata(seg, p1, p2, edges, level)
-
-					seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-					miSector.Segments = append(miSector.Segments, seg)
-
-					allExactSegments = append(allExactSegments, &exactSeg{
-						SectorID:  sectorId,
-						Seg:       seg,
-						P1:        p1,
-						P2:        p2,
-						IsWadLine: isWadLine,
-					})
+					cSeg, isWadLine := bld.buildConfigSegment(level, cSector.Id, p1, p2, edges)
+					cSector.Segments = append(cSector.Segments, cSeg)
+					wadLines[cSeg] = isWadLine
+					allExactSegments = append(allExactSegments, &ExactSeg{Seg: cSeg, IsWadLine: isWadLine})
+					ek := EdgeKey{cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y}
+					edgeMap[ek] = cSeg.Parent
 				}
-				allConfigSectors = append(allConfigSectors, miSector)
+				allConfigSectors = append(allConfigSectors, cSector)
 			}
 		}
 	}
 
-	edgeMap := make(map[EdgeKey]string)
-	for _, es := range allExactSegments {
-		k := EdgeKey{es.P1.X, es.P1.Y, es.P2.X, es.P2.Y}
-		edgeMap[k] = es.SectorID
-	}
-
 	for _, es := range allExactSegments {
 		if es.Seg.Kind == model.DefinitionJoin {
-			reverseKey := EdgeKey{es.P2.X, es.P2.Y, es.P1.X, es.P1.Y}
+			reverseKey := EdgeKey{es.Seg.End.X, es.Seg.End.Y, es.Seg.Start.X, es.Seg.Start.Y}
 			if neighborId, exists := edgeMap[reverseKey]; exists {
 				es.Seg.Neighbor = neighborId
 			} else {
@@ -185,7 +162,7 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 				if es.IsWadLine {
 					es.Seg.Kind = model.DefinitionWall
 				} else {
-					es.Seg.Neighbor = es.SectorID
+					es.Seg.Neighbor = es.Seg.Parent
 				}
 			}
 		}
@@ -194,8 +171,22 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 	return allConfigSectors
 }
 
-// mapSegmentMetadata processes a given segment to update its metadata based on matching level geometry and properties.
-func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 Point, sectorEdges []Edge, level *Level) bool {
+func (bld *BuilderLineDef) buildConfigSector(wadSector *lumps.Sector, secIdx uint16, loopIdx int, triIdx int) *model.ConfigSector {
+	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
+	miSector := model.NewConfigSector(sectorId)
+	miSector.Floor = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
+	miSector.Ceil = float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef
+	miSector.Tag = strconv.Itoa(int(secIdx))
+	miSector.TextureCeil = flatId + wadSector.CeilingPic
+	miSector.TextureFloor = flatId + wadSector.FloorPic
+	miSector.TextureScaleFactor = 10.0
+	miSector.LightLevel = float64(wadSector.LightLevel) / 255
+	return miSector
+}
+
+// createConfigSegment processes a given segment to update its metadata based on matching level geometry and properties.
+func (bld *BuilderLineDef) buildConfigSegment(level *Level, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
+	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
 		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
@@ -215,17 +206,22 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin
 			}
-			return true
+			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+			return seg, true
 		}
 	}
 	seg.Kind = model.DefinitionJoin
-	return false
+	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+	return seg, false
 }
 
 // resolveSectorId determines the sector ID for a given point.
 func (bld *BuilderLineDef) resolveSectorId(p Point, sectors []*model.ConfigSector) string {
-	var closestSector string
+	if len(sectors) == 0 {
+		return ""
+	}
 	var minDist = math.MaxFloat64
+	closestSector := sectors[0].Id
 
 	for _, s := range sectors {
 		if len(s.Segments) != 3 {
@@ -249,11 +245,7 @@ func (bld *BuilderLineDef) resolveSectorId(p Point, sectors []*model.ConfigSecto
 			closestSector = s.Id
 		}
 	}
-
-	if closestSector != "" {
-		return closestSector
-	}
-	return "0"
+	return closestSector
 }
 
 // GEOMETRY
@@ -450,14 +442,22 @@ func isEar(a, b, c Point, poly []Point) bool {
 }
 
 // mergeHoles merges holes with the outer boundary of a polygon.
+// mergeHoles merges holes with the outer boundary of a polygon.
 func mergeHoles(def PolygonDef) []Point {
 	if len(def.Holes) == 0 {
 		return def.Outer
 	}
 
-	outer := make([]Point, len(def.Outer))
+	// Ottimizzazione 1: Calcolo esatto della capacità finale per azzerare le re-allocazioni dinamiche
+	totalLen := len(def.Outer)
+	for _, h := range def.Holes {
+		totalLen += len(h) + 2 // +2 per i vertici di bridge (andata e ritorno)
+	}
+
+	outer := make([]Point, len(def.Outer), totalLen)
 	copy(outer, def.Outer)
 
+	// Ordina i buchi da destra a sinistra per garantire coerenza topologica nel bridge
 	sort.Slice(def.Holes, func(i, j int) bool {
 		return maxX(def.Holes[i]) > maxX(def.Holes[j])
 	})
@@ -465,9 +465,9 @@ func mergeHoles(def PolygonDef) []Point {
 	for _, hole := range def.Holes {
 		holeIdx := 0
 		mX := hole[0].X
-		for i, p := range hole {
-			if p.X > mX {
-				mX = p.X
+		for i := 1; i < len(hole); i++ {
+			if hole[i].X > mX {
+				mX = hole[i].X
 				holeIdx = i
 			}
 		}
@@ -481,15 +481,18 @@ func mergeHoles(def PolygonDef) []Point {
 				continue
 			}
 
-			if isVisible(holePoint, op, hole, outer) {
-				dist := distanceSq(holePoint, op)
-				if dist < minDist {
+			// Ottimizzazione 2: Fast rejection. Calcolo la distanza in O(1) prima
+			// di lanciare isVisible (che è O(N) per ogni segmento).
+			dist := distanceSq(holePoint, op)
+			if dist < minDist {
+				if isVisible(holePoint, op, hole, outer) {
 					minDist = dist
 					bestOuterIdx = i
 				}
 			}
 		}
 
+		// Fallback topologico per settori non-manifold o intersezioni anomale
 		if bestOuterIdx == -1 {
 			bestOuterIdx = 0
 			for i, op := range outer {
@@ -501,19 +504,22 @@ func mergeHoles(def PolygonDef) []Point {
 			}
 		}
 
-		newPoly := make([]Point, 0, len(outer)+len(hole)+2)
-		newPoly = append(newPoly, outer[:bestOuterIdx+1]...)
+		// Ottimizzazione 3: In-place memory shifting sfruttando la capacity pre-allocata.
+		// Nessuna allocazione heap aggiuntiva per i nuovi bridge.
+		oldLen := len(outer)
+		spliceLen := len(hole) + 2
+		outer = append(outer, make([]Point, spliceLen)...)
 
+		// Shift in avanti degli elementi a destra del punto di inserimento
+		copy(outer[bestOuterIdx+1+spliceLen:], outer[bestOuterIdx+1:oldLen])
+
+		// Ricostruzione lineare del bridge
+		insertPos := bestOuterIdx + 1
 		for i := 0; i < len(hole); i++ {
-			newPoly = append(newPoly, hole[(holeIdx+i)%len(hole)])
+			outer[insertPos+i] = hole[(holeIdx+i)%len(hole)]
 		}
-		newPoly = append(newPoly, hole[holeIdx])
-		newPoly = append(newPoly, outer[bestOuterIdx])
-
-		if bestOuterIdx+1 < len(outer) {
-			newPoly = append(newPoly, outer[bestOuterIdx+1:]...)
-		}
-		outer = newPoly
+		outer[insertPos+len(hole)] = holePoint
+		outer[insertPos+len(hole)+1] = outer[bestOuterIdx]
 	}
 
 	return outer

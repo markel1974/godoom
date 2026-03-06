@@ -35,6 +35,8 @@ type CompiledPolygon struct {
 	PLen     int
 	X1       float64
 	X2       float64
+	Tx1      float64
+	Tx2      float64
 	Tz1      float64
 	Tz2      float64
 	U0       float64
@@ -150,7 +152,7 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire creates or reinitializes a CompiledPolygon with the given parameters, associating it with sectors and coordinates.
-func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, t *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, t *textures.Texture, x1 float64, x2 float64, tx1 float64, tx2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64) *CompiledPolygon {
 	p := cp.data[cp.idx]
 	p.id = float64(cp.idx)
 	cp.idx++
@@ -159,6 +161,8 @@ func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, 
 	p.Neighbor = neighbor
 	p.X1 = x1
 	p.X2 = x2
+	p.Tx1 = tx1
+	p.Tx2 = tx2
 	p.Tz1 = tz1
 	p.Tz2 = tz2
 	p.U0 = u0

@@ -207,60 +207,40 @@ func (w *RenderOpenGL) glCompileTextures() error {
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.UseProgram(w.shaderProgram)
 
-	// 1. PROJECTION (FOV 60° Verticale)
 	fov := float32(math.Pi / 3.0)
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
 	f := float32(1.0 / math.Tan(float64(fov)/2.0))
 
+	// L'asse visuale verticale di Doom si ottiene tramite Y-Shearing della matrice
+	// di proiezione, non con una reale rotazione Pitch (che altererebbe i vertici Near-Z)
+	pitchShear := float32(-vi.Yaw * 0.01)
+
 	proj := [16]float32{
 		f / aspect, 0, 0, 0,
 		0, f, 0, 0,
-		0, 0, (far + near) / (near - far), -1,
+		0, pitchShear, (far + near) / (near - far), -1,
 		0, 0, (2 * far * near) / (near - far), 0,
 	}
 
-	// 2. ANGOLI (Yaw e Pitch)
-	pitch := float64(-vi.Yaw * 0.01)
-	cosP, sinP := float32(math.Cos(pitch)), float32(math.Sin(pitch))
-	// In Doom: 0 = Est (+X), 90 = Nord (+Y).
-	// In GL: Nord (+Y Doom) deve essere Forward (-Z GL).
+	// La View Matrix diventa pura rotazione planare (Yaw 2D) e traslazione
 	cosA, sinA := float32(vi.AngleCos), float32(vi.AngleSin)
 
-	// 3. VETTORI BASE (Look-At Derivation)
-	// Forward: Se Angle=90 (Nord), deve essere [0, 0, -1]
-	fX := cosA * cosP
-	fY := sinP
-	fZ := -sinA * cosP
+	fX, fZ := cosA, -sinA
+	rX, rZ := sinA, cosA
 
-	// Right: Se Angle=90 (Nord), Right deve essere Est (+X) -> [1, 0, 0]
-	rX := sinA
-	rY := float32(0)
-	rZ := cosA
-
-	// Up: Cross(Right, Forward)
-	uX := rY*fZ - rZ*fY
-	uY := rZ*fX - rX*fZ
-	uZ := rX*fY - rY*fX
-
-	// 4. POSIZIONE CAMERA (Eye)
-	// Deve matchare buildWallQuad: X, Z(Up), -Y(Forward)
 	ex := float32(vi.Where.X)
 	ey := float32(vi.Where.Z)
 	ez := float32(-vi.Where.Y)
 
-	// 5. TRASLAZIONE (T = -R * Eye)
-	// Dot products tra i vettori base e la posizione dell'occhio
-	tx := -(rX*ex + rY*ey + rZ*ez)
-	ty := -(uX*ex + uY*ey + uZ*ez)
-	tz := (fX*ex + fY*ey + fZ*ez) // Nota: Segno positivo perché GL guarda verso -Forward
+	tx := -(rX*ex + rZ*ez)
+	ty := -ey
+	tz := (fX*ex + fZ*ez)
 
-	// Matrice View (Column-Major)
-	// Colonna 1: Right, Colonna 2: Up, Colonna 3: -Forward, Colonna 4: Translation
 	view := [16]float32{
-		rX, uX, -fX, 0,
-		rY, uY, -fY, 0,
-		rZ, uZ, -fZ, 0,
+		rX, 0, -fX, 0,
+		0, 1, 0, 0,
+		rZ, 0, -fZ, 0,
 		tx, ty, tz, 1,
 	}
 
@@ -355,54 +335,61 @@ func (w *RenderOpenGL) glStreamRender(batchMap map[uint32][]float32) {
 
 // buildWallQuad generates a vertex array for a wall based on its geometry, UV mapping, and lighting properties.
 func (w *RenderOpenGL) buildWallQuad(cp *model.CompiledPolygon, texW float32, texH float32, zBottom float32, zTop float32) []float32 {
-	// Dividiamo la progressione orizzontale U per la larghezza reale della texture
 	u0 := float32(cp.U0) / texW
 	u1 := float32(cp.U1) / texW
-
-	// L'asse V parte da 0 alla base del muro e sale in base all'altezza fisica
 	v0 := float32(0.0)
 	v1 := float32(zTop-zBottom) / texH
-
 	light := float32(cp.Sector.LightDistance)
 
-	if len(cp.Points) < 2 {
-		return nil
-	}
-	p1, p2 := cp.Points[0], cp.Points[1]
+	// Inverse Transform: prendiamo i vertici clippati e ruotati in Camera Space
+	// e li riportiamo nel World Space passandoli liberi alla GPU.
+	sin, cos := w.vi.AngleSin, w.vi.AngleCos
+	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
+	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)
+	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
+	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
 
-	// NOTA SULL'ORIENTAMENTO:
-	// Se i muri appaiono capovolti (sottosopra), significa che il tuo decoder di immagini
-	// ha V=0 in alto. In tal caso, scambia v0 e v1 qui sotto (metti v0 dove c'è v1 e viceversa).
 	return []float32{
-		float32(p1.X), zTop, float32(-p1.Y), u0, v1, light,
-		float32(p1.X), zBottom, float32(-p1.Y), u0, v0, light,
-		float32(p2.X), zBottom, float32(-p2.Y), u1, v0, light,
+		wx1, zTop, -wy1, u0, v1, light,
+		wx1, zBottom, -wy1, u0, v0, light,
+		wx2, zBottom, -wy2, u1, v0, light,
 
-		float32(p1.X), zTop, float32(-p1.Y), u0, v1, light,
-		float32(p2.X), zBottom, float32(-p2.Y), u1, v0, light,
-		float32(p2.X), zTop, float32(-p2.Y), u1, v1, light,
+		wx1, zTop, -wy1, u0, v1, light,
+		wx2, zBottom, -wy2, u1, v0, light,
+		wx2, zTop, -wy2, u1, v1, light,
 	}
 }
 
 // buildFlatPoly generates a flat polygon vertex stream for OpenGL rendering from the provided compiled polygon.
 // It calculates Z based on whether the polygon is a floor or ceiling, appends UV and light data, and returns a float32 slice.
 func (w *RenderOpenGL) buildFlatPoly(cp *model.CompiledPolygon, z float64, texW, texH float32) []float32 {
-	if len(cp.Points) < 3 {
+	segs := cp.Sector.Segments
+	if len(segs) < 3 {
 		return nil
 	}
 
 	light := float32(cp.Sector.LightDistance)
 	var stream []float32
 
-	for _, p := range cp.Points {
-		// Scaliamo le coordinate World per le dimensioni della texture dinamicamente
-		u := float32(p.X) / texW
-		v := float32(-p.Y) / texH
+	// Abbandoniamo cp.Points (che contiene trapezi con coordinate in pixel dello schermo!)
+	// Triangoliamo nativamente i segmenti del settore con un Triangle Fan.
+	v0 := segs[0].Start
+	u0 := float32(v0.X) / texW
+	v0_v := float32(-v0.Y) / texH
+
+	for i := 1; i < len(segs)-1; i++ {
+		v1 := segs[i].Start
+		u1 := float32(v1.X) / texW
+		v1_v := float32(-v1.Y) / texH
+
+		v2 := segs[i+1].Start
+		u2 := float32(v2.X) / texW
+		v2_v := float32(-v2.Y) / texH
 
 		stream = append(stream,
-			float32(p.X), float32(z), float32(-p.Y),
-			u, v,
-			light,
+			float32(v0.X), float32(z), float32(-v0.Y), u0, v0_v, light,
+			float32(v1.X), float32(z), float32(-v1.Y), u1, v1_v, light,
+			float32(v2.X), float32(z), float32(-v2.Y), u2, v2_v, light,
 		)
 	}
 

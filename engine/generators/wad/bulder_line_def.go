@@ -497,7 +497,6 @@ func mergeHoles(def PolygonDef) []Point {
 			}
 		}
 		holePoint := hole[holeIdx]
-
 		bestOuterIdx := -1
 		minDist := math.MaxFloat64
 
@@ -508,8 +507,7 @@ func mergeHoles(def PolygonDef) []Point {
 
 			// Ottimizzazione 2: Fast rejection. Calcolo la distanza in O(1) prima
 			// di lanciare isVisible (che è O(N) per ogni segmento).
-			dist := distanceSq(holePoint, op)
-			if dist < minDist {
+			if dist := distanceSq(holePoint, op); dist < minDist {
 				if isVisible(holePoint, op, hole, outer) {
 					minDist = dist
 					bestOuterIdx = i
@@ -521,8 +519,7 @@ func mergeHoles(def PolygonDef) []Point {
 		if bestOuterIdx == -1 {
 			bestOuterIdx = 0
 			for i, op := range outer {
-				dist := distanceSq(holePoint, op)
-				if dist < minDist {
+				if dist := distanceSq(holePoint, op); dist < minDist {
 					minDist = dist
 					bestOuterIdx = i
 				}

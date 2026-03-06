@@ -10,7 +10,7 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
-// DrawPolygon represents a drawable polygon with specific properties such as size, surface, color, and points for rendering.
+// DrawPolygon represents a structure for rendering polygons with texture, color, and perspective mapping features.
 type DrawPolygon struct {
 	maxW       int
 	maxH       int
@@ -31,7 +31,7 @@ type DrawPolygon struct {
 	right     int
 }
 
-// NewDrawPolygon initializes and returns a new instance of DrawPolygon with specified screen width and height.
+// NewDrawPolygon creates and initializes a new DrawPolygon instance with the given screen dimensions.
 func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
 	pHFov := (float64(maxH) / float64(maxW)) * HFov
 	return &DrawPolygon{
@@ -45,7 +45,7 @@ func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
 	}
 }
 
-// Setup initializes the DrawPolygon with surface, points, points length, and color, and calculates bounding box values.
+// Setup initializes the DrawPolygon instance with the given surface, points, color, and calculates bounding box constraints.
 func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []model.XYZ, pointsLen1 int, color int) {
 	dp.Color = color
 	dp.surface = surface
@@ -75,7 +75,7 @@ func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []model.XYZ, p
 	dp.bottom = mathematic.Clamp(dp.bottom, 0, dp.maxH-1)
 }
 
-// Verify verifies if the polygon's bounding box is within the defined screen bounds and has valid dimensions.
+// Verify checks if the polygon's bounding box intersects with the drawable area and verifies minimum dimensions.
 func (dp *DrawPolygon) Verify() bool {
 	if !mathematic.IntersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) {
 		return false
@@ -89,7 +89,7 @@ func (dp *DrawPolygon) Verify() bool {
 	return true
 }
 
-// compileNodes processes the polygon's edges to compute intersection points on a vertical line at pixelX.
+// compileNodes identifies and sorts intersection points of polygon edges with a vertical line at the given x-coordinate.
 func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	nodes := 0
 	j := dp.pointsLen - 1
@@ -127,7 +127,7 @@ func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	return nodeY
 }
 
-// DrawTexture renders a texture onto a polygon using perspective-correct texture mapping and lighting adjustments.
+// DrawTexture draws a textured polygon on the surface using perspective corrections and lighting adjustments.
 func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64, lightAmbientDist float64, lightDist float64) {
 	if dp.surface == nil {
 		return
@@ -157,7 +157,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 			if x2 != x1 {
 				t := (float64(pixelX) - x1) / (x2 - x1)
 				currentZ := 1.0 / (((1.0 - t) / tz1) + (t / tz2))
-				light = computeLight(currentZ, lightAmbientDist, lightDist)
+				light = dp.computeLight(currentZ, lightAmbientDist, lightDist)
 			}
 
 			for i := 0; i < len(nodeY); i += 2 {
@@ -198,7 +198,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 	}
 }
 
-// DrawPerspectiveTexture maps a texture onto a polygon in perspective-correct space, handling lighting and scaling factors.
+// DrawPerspectiveTexture renders a textured polygon in perspective projection based on position, orientation, and lighting.
 func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64, scaleFactor float64, lightDistance float64, lightDist float64) {
 	if dp.surface == nil {
 		return
@@ -252,13 +252,12 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 						safeTxtX += texWidth
 					}
 					safeTxtX += texture.BeginX()
-
 					safeTxtZ := mapZ % texHeight
 					if safeTxtZ < 0 {
 						safeTxtZ += texHeight
 					}
 					safeTxtZ += texture.BeginY()
-					light := computeLight(tz, lightDistance, lightDist)
+					light := dp.computeLight(tz, lightDistance, lightDist)
 					red, green, blue := ToRGB(texture.Get(safeTxtZ, safeTxtX), light)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
 				}
@@ -268,7 +267,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 	}
 }
 
-// DrawWireFrame renders the outline of a polygon as a wireframe, optionally filling it based on the filled parameter.
+// DrawWireFrame renders the polygon as a wireframe. If filled is true, it draws a filled wireframe with the polygon color.
 func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 	if dp.surface == nil {
 		return
@@ -303,7 +302,7 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 	}
 }
 
-// DrawPoints renders all points in the polygon to the surface with a specified size and the current color.
+// DrawPoints applies a specified color and size to each point in the DrawPolygon's points list on the target surface.
 func (dp *DrawPolygon) DrawPoints(size int) {
 	if dp.surface == nil {
 		return
@@ -315,7 +314,8 @@ func (dp *DrawPolygon) DrawPoints(size int) {
 	}
 }
 
-// DrawRectangle draws a rectangle using the first four points in the polygon's points list if they are available.
+// DrawRectangle draws a rectangle on the surface using the points stored in the DrawPolygon instance.
+// It connects the first and second, first and fourth, second and third, and third and fourth points to form the rectangle.
 func (dp *DrawPolygon) DrawRectangle() {
 	if dp.surface == nil {
 		return
@@ -328,7 +328,7 @@ func (dp *DrawPolygon) DrawRectangle() {
 	}
 }
 
-// DrawLines connects points in the polygon using lines. If contiguous is true, lines are drawn between consecutive points.
+// DrawLines draws lines connecting the points in the DrawPolygon instance based on the specified `contiguous` flag.
 func (dp *DrawPolygon) DrawLines(contiguous bool) {
 	if dp.surface == nil {
 		return
@@ -345,7 +345,7 @@ func (dp *DrawPolygon) DrawLines(contiguous bool) {
 	}
 }
 
-// drawLine renders a line between two points (x1, y1) and (x2, y2) using the Bresenham's line algorithm.
+// drawLine draws a straight line on the specified surface using Bresenham's algorithm with color and lighting effects.
 func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) {
 	// Bresenham's line algorithm
 	lightStart := 1.0
@@ -393,23 +393,9 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 	}
 }
 
-/*
-// computeLight calculates the light intensity based on the absolute depth value z and the given lightDistance.
-func computeLight(z float64, lightAmbientDistance float64, lightDistance float64) float64 {
-	const visibilityMax = 10.0
-	const visibility = visibilityMax - 5.0
-	// Depth-shading per-pixel basato su Z assoluto (allineato alla scala calcolata in portal.go)
-	light := 1.0 - (math.Abs(z) * visibility * lightAmbientDistance)
-	if light < 0 {
-		light = 0
-	} else if light > 1 {
-		light = 1
-	}
-	return light
-}
-*/
-
-func computeLight(z float64, lightAmbientDistance float64, lightDistance float64) float64 {
+// computeLight calculates the light intensity at a specific depth (z) based on ambient and direct light distances.
+// The function also handles attenuation and ensures the result is clamped between 0 and 1.
+func (dp *DrawPolygon) computeLight(z float64, lightAmbientDistance float64, lightDistance float64) float64 {
 	const visibilityMax = 10.0
 	const visibility = visibilityMax - 5.0
 

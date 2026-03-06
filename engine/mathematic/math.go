@@ -85,11 +85,6 @@ func IntersectBox(x0 int, y0 int, x1 int, y1 int, x2 int, y2 int, x3 int, y3 int
 	return Overlap(x0, x1, x2, x3) && Overlap(y0, y1, y2, y3)
 }
 
-// PointSide determines which side of a line segment a point lies on using vector cross product.
-func PointSide(px int, py int, x0 int, y0 int, x1 int, y1 int) int {
-	return Vxs(x1-x0, y1-y0, px-x0, py-y0)
-}
-
 // MinF returns the smaller of two float64 values, a and b.
 func MinF(a float64, b float64) float64 {
 	if a < b {
@@ -126,9 +121,30 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 	return OverlapF(x0, x1, x2, x3) && OverlapF(y0, y1, y2, y3)
 }
 
-// PointSideF returns a value indicating the direction of a point (px, py) relative to a line defined by (x0, y0) and (x1, y1).
+// PointSide determines which side of a line segment a point lies on.
+// Restituisce -1, 0, o 1.
+func PointSide(px int, py int, x0 int, y0 int, x1 int, y1 int) int {
+	v := Vxs(x1-x0, y1-y0, px-x0, py-y0)
+	if v == 0 {
+		return 0
+	}
+	if v < 0 {
+		return -1
+	}
+	return 1
+}
+
+// PointSideF returns a normalized value indicating the direction of a point.
+// Restituisce -1.0, 0.0, o 1.0.
 func PointSideF(px float64, py float64, x0 float64, y0 float64, x1 float64, y1 float64) float64 {
-	return VxsF(x1-x0, y1-y0, px-x0, py-y0)
+	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
+	if v == 0 {
+		return 0
+	}
+	if v < 0 {
+		return -1
+	}
+	return 1
 }
 
 // IntersectF calculates the intersection point of two lines defined by (x1, y1) to (x2, y2) and (x3, y3) to (x4, y4).

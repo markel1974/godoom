@@ -3,7 +3,6 @@ package portal
 import (
 	"fmt"
 	"math"
-	"strconv"
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
@@ -58,45 +57,74 @@ func (w *World) Setup(cfg *model.ConfigRoot) error {
 	return nil
 }
 
-// movePlayer updates the player's position based on the provided delta values dx and dy. Adjusts sector if needed.
+// in portal/world.go
+
 func (w *World) movePlayer(dx float64, dy float64) {
 	if dx == 0 && dy == 0 {
 		return
 	}
-	px0, py0 := w.player.GetCoords()
-	px1 := px0 + dx
-	py1 := py0 + dy
-	found := false
-	for _, segment := range w.player.GetSector().Segments {
-		start := segment.Start
-		end := segment.End
-		if mathematic.IntersectBoxF(px0, py0, px1, py1, start.X, start.Y, end.X, end.Y) {
-			ps := mathematic.PointSideF(px1, py1, start.X, start.Y, end.X, end.Y)
-			if ps < 0 {
-				if segment.Sector != nil {
-					w.player.SetSector(segment.Sector)
-					if w.debug {
-						fmt.Println("New Sector", segment.Ref)
-						if i, err := strconv.Atoi(segment.Ref); err == nil {
-							w.debugIdx = i
-						}
-					}
-					found = true
+
+	// 1. Applica atomico il vettore e ottieni le coordinate definitive
+	w.player.AddCoords(dx, dy)
+	px, py := w.player.GetCoords()
+
+	currentSector := w.player.GetSector()
+
+	// 2. Verifica di stabilità spaziale: siamo ancora dentro lo stesso settore?
+	if pointInPolygon(px, py, currentSector.Segments) {
+		return
+	}
+
+	// 3. Transizione Portale: Il punto è fisicamente uscito dal settore radice.
+	// Naviga il grafo topologico testando i settori adiacenti (neighbors).
+	for _, segment := range currentSector.Segments {
+		neighbor := segment.Sector
+		if neighbor != nil {
+			if pointInPolygon(px, py, neighbor.Segments) {
+				w.player.SetSector(neighbor)
+				if w.debug {
+					fmt.Println("New Sector crossed via PIP:", neighbor.Id)
 				}
-				break
+				return
 			}
 		}
 	}
 
-	if !w.debug {
-		if !found {
-			//TODO COMPLETARE
-			//if !pointInPolygonF(px1, py1, sector.Segments) {
-			//	return
-			//}
+	// 4. Fallback Architetturale (Edge Case Perimeter)
+	// Se il punto cade ESATTAMENTE sull'edge matematico di un portale,
+	// la precisione FP del ray-casting potrebbe restituire 'false' per entrambi i settori.
+	// In questo caso, forziamo l'aggiornamento se il punto si trova nel semipiano posteriore del portale.
+	for _, segment := range currentSector.Segments {
+		if segment.Sector != nil {
+			if mathematic.PointSideF(px, py, segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y) < 0 {
+				w.player.SetSector(segment.Sector)
+				if w.debug {
+					fmt.Println("New Sector crossed via Fallback:", segment.Sector.Id)
+				}
+				return
+			}
 		}
 	}
-	w.player.AddCoords(dx, dy)
+}
+
+// Algoritmo Ray-Casting (Odd-Even) per i settori del Portal Engine
+func pointInPolygon(px float64, py float64, segments []*model.Segment) bool {
+	nVert := len(segments)
+	if nVert == 0 {
+		return false
+	}
+	c := false
+	j := nVert - 1
+	for i := 0; i < nVert; i++ {
+		pi := segments[i].Start
+		pj := segments[j].Start
+		// Inverte lo stato logico se il raggio proiettato lungo X attraversa l'edge
+		if ((pi.Y > py) != (pj.Y > py)) && (px < (pj.X-pi.X)*(py-pi.Y)/(pj.Y-pi.Y)+pi.X) {
+			c = !c
+		}
+		j = i
+	}
+	return c
 }
 
 // Update updates the state of the world, including the player and rendering, based on the current frame's conditions.
@@ -134,9 +162,7 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 		start := segment.Start
 		end := segment.End
 
-		if mathematic.IntersectBoxF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) &&
-			mathematic.PointSideF(p1, p2, start.X, start.Y, end.X, end.Y) < 0 {
-
+		if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
 			// Check where the hole is.
 			holeLow := 9e9
 			holeHigh := -9e9
@@ -148,11 +174,24 @@ func (w *World) Update(surface *pixels.PictureRGBA) {
 			// Check whether we're bumping into a wall
 			if holeHigh < headPos || holeLow > kneePos {
 				// Bumps into a wall! Slide along the wall
-				// This formula is from Wikipedia article "vector projection"
 				xd := end.X - start.X
 				yd := end.Y - start.Y
-				dx = xd * (dx*xd + yd*dy) / (xd*xd + yd*yd)
-				dy = yd * (dx*xd + yd*dy) / (xd*xd + yd*yd)
+				lenSq := xd*xd + yd*yd
+
+				if lenSq > 0 {
+					dot := dx*xd + dy*yd
+					dx = (xd * dot) / lenSq
+					dy = (yd * dot) / lenSq
+
+					// Calcolo della normale interna (winding CCW) e applicazione dell'epsilon
+					invLen := 1.0 / math.Sqrt(lenSq)
+					nx := -yd * invLen
+					ny := xd * invLen
+
+					epsilon := 0.005
+					dx += nx * epsilon
+					dy += ny * epsilon
+				}
 			}
 			break
 		}
@@ -301,7 +340,7 @@ func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector
 	maxX := float64(0)
 	maxY := float64(0)
 
-	useConvexHull := false
+	const useConvexHull = false
 
 	var segments []*model.Segment
 

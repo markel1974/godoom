@@ -13,15 +13,10 @@ type Segment struct {
 	TextureUpper  *textures.Texture
 	TextureMiddle *textures.Texture
 	TextureLower  *textures.Texture
-	//TextureEnabled bool
 }
 
 // NewSegment creates and returns a new Segment instance with specified start, end Points, reference, Kind, Sector, and tag.
 func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper *textures.Texture, tMiddle *textures.Texture, tLower *textures.Texture) *Segment {
-	//textureEnabled := false
-	//if tUpper != nil || tMiddle != nil && tLower != nil {
-	//	textureEnabled = true
-	//}
 	out := &Segment{
 		Start:         start,
 		End:           end,
@@ -32,7 +27,6 @@ func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag stri
 		TextureUpper:  tUpper,
 		TextureMiddle: tMiddle,
 		TextureLower:  tLower,
-		//TextureEnabled: textureEnabled,
 	}
 	return out
 }
@@ -49,7 +43,6 @@ func (k *Segment) Copy() *Segment {
 		TextureUpper:  k.TextureUpper,
 		TextureMiddle: k.TextureMiddle,
 		TextureLower:  k.TextureLower,
-		//TextureEnabled: k.TextureEnabled,
 	}
 	return out
 }

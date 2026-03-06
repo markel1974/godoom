@@ -1,10 +1,6 @@
 package wad
 
-import (
-	"math"
-
-	lumps2 "github.com/markel1974/godoom/engine/generators/wad/lumps"
-)
+/*
 
 // subSectorBit is a bitmask used to identify whether a node in the BSP tree represents a sub-sector.
 const subSectorBit = uint16(0x8000)
@@ -153,3 +149,6 @@ func (bsp *BSP) DescribeLineF(x0 float64, y0 float64, x1 float64, y1 float64) Po
 	}
 	return r
 }
+
+
+*/

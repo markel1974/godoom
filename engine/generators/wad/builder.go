@@ -1,17 +1,5 @@
 package wad
 
-import (
-	"fmt"
-	"math"
-	"os"
-	"sort"
-	"strconv"
-
-	"github.com/markel1974/godoom/engine/generators/wad/lumps"
-	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/textures"
-)
-
 /*
 TODO DOBBIAMO PASSARE NECESSARIAMENTE A FIXED POINT
 type FixedPoint int64
@@ -28,6 +16,7 @@ type Point struct {
 }
 */
 
+/*
 // ScaleFactor defines a constant multiplier used to scale dimensions within the configuration system.
 const ScaleFactor = 25.0
 
@@ -677,3 +666,6 @@ func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
 		subsectorPolys[i] = z
 	}
 }
+
+
+*/

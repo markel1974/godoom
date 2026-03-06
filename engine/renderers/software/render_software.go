@@ -1,4 +1,4 @@
-package renderers
+package software
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/renderers"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
@@ -63,7 +64,7 @@ func (r *RenderSoftware) DebugMoveSector(forward bool) {
 }
 
 // Render processes the rendering pipeline for the provided surface, view item, and compiled Sectors.
-func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
+func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
 	//r.stub(surface, r.dp)
 	//return
 	r.targetLastCompiled = compiled
@@ -76,7 +77,7 @@ func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *ViewItem, css [
 }
 
 // serialRender processes and renders a series of compiled Sectors and their polygons onto the provided surface.
-func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
+func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
 	//test := make(map[string]bool)
 	for idx := compiled - 1; idx >= 0; idx-- {
 		//if _, ok := test[css[idx].Sector.Id]; ok {
@@ -114,7 +115,7 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *ViewItem,
 }
 
 // parallelRender processes multiple Sectors concurrently using a worker pool to render polygons onto the given surface.
-func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int) {
+func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
@@ -142,7 +143,7 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *ViewIte
 }
 
 // renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
-func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+func (r *RenderSoftware) renderPolygon(vi *renderers.ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)

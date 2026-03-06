@@ -6,6 +6,8 @@ import (
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/renderers/software"
+
 	//"github.com/markel1974/godoom/engine/polygons"
 	"github.com/markel1974/godoom/engine/renderers"
 	"github.com/markel1974/godoom/pixels"
@@ -53,7 +55,7 @@ func (w *World) Setup(cfg *model.ConfigRoot) error {
 		return err
 	}
 	w.player = NewPlayer(cfg.Player.Position.X, cfg.Player.Position.Y, playerSector.Floor, cfg.Player.Angle, playerSector)
-	w.render = renderers.NewSoftwareRender(w.screenWidth, w.screenHeight, cfg.Textures, w.tree.SectorsMaxHeight)
+	w.render = software.NewSoftwareRender(w.screenWidth, w.screenHeight, cfg.Textures, w.tree.SectorsMaxHeight)
 	return nil
 }
 
@@ -328,7 +330,7 @@ func (w *World) drawSingleStubScale(surface *pixels.PictureRGBA, sector *model.S
 		colorLine = 0xB0E0E6
 		colorPoint = 0x00BFFF
 	}
-	dp := renderers.NewDrawPolygon(640, 480)
+	dp := software.NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), colorLine)
 	dp.DrawPoints(10)
 	dp.Color = colorPoint
@@ -402,7 +404,7 @@ func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector
 	if len(t) == 0 {
 		return
 	}
-	dp := renderers.NewDrawPolygon(640, 480)
+	dp := software.NewDrawPolygon(640, 480)
 	dp.Setup(surface, t, len(t), 0x00ff00)
 	dp.DrawPoints(10)
 	dp.Color = 0xff0000

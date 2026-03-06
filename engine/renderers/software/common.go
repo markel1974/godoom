@@ -1,4 +1,4 @@
-package renderers
+package software
 
 const (
 	HFov = 0.73

@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/renderers"
+	"github.com/markel1974/godoom/engine/renderers/software"
 )
 
 // defaultQueueLen defines the default size of the queue used in rendering or processing operations.
@@ -45,8 +46,8 @@ func NewPortal(width int, height int, maxQueue int) *Render {
 		screenHeightHalf: height / 2,
 		queue:            make([]*QueueItem, maxQueue),
 		sectorQueue:      make([]*QueueItem, 256),
-		screenHFov:       renderers.HFov * float64(height),
-		screenVFov:       renderers.VFov * float64(height),
+		screenHFov:       software.HFov * float64(height),
+		screenVFov:       software.VFov * float64(height),
 		visibilityCache:  NewVisibilityCache(),
 	}
 	for x := 0; x < len(r.queue); x++ {
@@ -215,8 +216,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 		u1 := segLength
 
 		// CLIPPING LINEARE ESATTO CONTRO IL PIANO NEAR-Z
-		if tz1 <= renderers.NearZ || tz2 <= renderers.NearZ {
-			if tz1 <= renderers.NearZ && tz2 <= renderers.NearZ {
+		if tz1 <= software.NearZ || tz2 <= software.NearZ {
+			if tz1 <= software.NearZ && tz2 <= software.NearZ {
 				// FIX CRITICO: Il segmento è troppo vicino alla camera per generare geometria,
 				// ma se è un portale, stiamo fisicamente attraversando la soglia.
 				// Dobbiamo obbligatoriamente passare la visibilità al settore adiacente!
@@ -232,12 +233,12 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 			}
 
 			// Calcola il punto di intersezione esatto (t da 0.0 a 1.0)
-			t := (renderers.NearZ - tz1) / (tz2 - tz1)
+			t := (software.NearZ - tz1) / (tz2 - tz1)
 			ix := tx1 + t*(tx2-tx1)
-			iz := renderers.NearZ
+			iz := software.NearZ
 			iu := u0 + t*(u1-u0) // Interpola la UV esattamente sul taglio
 
-			if tz1 <= renderers.NearZ {
+			if tz1 <= software.NearZ {
 				tx1 = ix
 				tz1 = iz
 				u0 = iu
@@ -269,10 +270,10 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 
 		screenHeightHalf := float64(r.screenHeightHalf)
 
-		y1a := screenHeightHalf + (-renderers.Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
-		y2a := screenHeightHalf + (-renderers.Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
-		y1b := screenHeightHalf + (-renderers.Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
-		y2b := screenHeightHalf + (-renderers.Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
+		y1a := screenHeightHalf + (-software.Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
+		y2a := screenHeightHalf + (-software.Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
+		y1b := screenHeightHalf + (-software.Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
+		y2b := screenHeightHalf + (-software.Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -333,8 +334,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 
 		if neighbor != nil {
 			neighborYCeil := neighbor.Ceil - vi.Where.Z
-			ny1a := screenHeightHalf + (-renderers.Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
-			ny2a := screenHeightHalf + (-renderers.Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
+			ny1a := screenHeightHalf + (-software.Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
+			ny2a := screenHeightHalf + (-software.Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -345,8 +346,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := neighbor.Floor - vi.Where.Z
-			ny1b := screenHeightHalf + (-renderers.Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
-			ny2b := screenHeightHalf + (-renderers.Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
+			ny1b := screenHeightHalf + (-software.Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
+			ny2b := screenHeightHalf + (-software.Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {

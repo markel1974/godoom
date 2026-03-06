@@ -110,7 +110,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
 
-	root := model.NewConfigRoot(sectors, player, nil, nil, ScaleFactor, true, t)
+	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true, t)
 
 	return root, nil
 }

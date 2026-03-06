@@ -98,7 +98,7 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
 	configPlayer := &model.ConfigPlayer{}
-	cfg := model.NewConfigRoot(nil, configPlayer, nil, nil, 0, false, t)
+	cfg := model.NewConfigRoot(nil, configPlayer, nil, 0, false, t)
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

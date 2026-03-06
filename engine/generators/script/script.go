@@ -17,7 +17,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	var cfgVertices []model.XY
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
-	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, nil, 1.0, false, t)
+	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 1.0, false, t)
 	//cfg := &model.ConfigRoot{
 	//	Sectors: nil,
 	//	Player:  &model.ConfigPlayer{},
@@ -137,9 +137,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			cfg.Sectors = append(cfg.Sectors, cs)
 
 		case "light":
-			l := &model.ConfigLight{}
-			_, _ = fmt.Fscanf(r, "%f %f %f %s %f %f %f", &l.Where.X, &l.Where.Z, &l.Where.Y, &l.Sector, &l.Light.X, &l.Light.Y, &l.Light.Z)
-			cfg.Lights = append(cfg.Lights, l)
+			//l := &model.ConfigLight{}
+			//_, _ = fmt.Fscanf(r, "%f %f %f %s %f %f %f", &l.Where.X, &l.Where.Z, &l.Where.Y, &l.Sector, &l.Light.X, &l.Light.Y, &l.Light.Z)
+			//cfg.Lights = append(cfg.Lights, l)
 
 		case "player":
 			_, _ = fmt.Fscanf(r, "%f %f %f %s", &cfg.Player.Position.X, &cfg.Player.Position.Y, &cfg.Player.Angle, &cfg.Player.Sector)

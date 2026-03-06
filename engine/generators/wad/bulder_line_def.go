@@ -102,7 +102,7 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 	)
 
 	t := bld.w.GetTextures()
-	return model.NewConfigRoot(sectors, player, things, nil, ScaleFactorLineDef, true, t), nil
+	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, t), nil
 }
 
 // buildSectorsFromLineDefs processes level line definitions to build and return sectors with associated metadata.
@@ -204,59 +204,6 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 	return allConfigSectors
 }
 
-// triangulate decomposes a polygon into a set of triangles using an ear-clipping algorithm.
-func triangulate(poly []PointFixed) [][]PointFixed {
-	var triangles [][]PointFixed
-	working := make([]PointFixed, len(poly))
-	copy(working, poly)
-
-	// I poligoni nativi di Doom devono essere trattati in senso Orario (CW)
-	if getWinding(working) < 0 {
-		for i, j := 0, len(working)-1; i < j; i, j = i+1, j-1 {
-			working[i], working[j] = working[j], working[i]
-		}
-	}
-
-	for len(working) > 2 {
-		earFound := false
-		for i := 0; i < len(working); i++ {
-			prev := working[(i+len(working)-1)%len(working)]
-			curr := working[i]
-			next := working[(i+1)%len(working)]
-
-			if isEar(prev, curr, next, working) {
-				triangles = append(triangles, []PointFixed{prev, curr, next})
-				working = append(working[:i], working[i+1:]...)
-				earFound = true
-				break
-			}
-		}
-
-		if !earFound {
-			bestIdx := 0
-			minCp := math.MaxFloat64
-			for i := 0; i < len(working); i++ {
-				prev := working[(i+len(working)-1)%len(working)]
-				curr := working[i]
-				next := working[(i+1)%len(working)]
-				abx, aby := float64(curr.X-prev.X), float64(curr.Y-prev.Y)
-				cbx, cby := float64(next.X-curr.X), float64(next.Y-curr.Y)
-				cp := abx*cby - aby*cbx
-				if cp < minCp {
-					minCp = cp
-					bestIdx = i
-				}
-			}
-			prev := working[(bestIdx+len(working)-1)%len(working)]
-			curr := working[bestIdx]
-			next := working[(bestIdx+1)%len(working)]
-			triangles = append(triangles, []PointFixed{prev, curr, next})
-			working = append(working[:bestIdx], working[bestIdx+1:]...)
-		}
-	}
-	return triangles
-}
-
 // mapSegmentMetadata processes a given segment to update its metadata based on matching level geometry and properties.
 func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 PointFixed, sectorEdges []Edge, level *Level) bool {
 	for _, e := range sectorEdges {
@@ -266,21 +213,14 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
 			ld := level.LineDefs[e.LDIdx]
-
 			sideIdx := ld.SideDefRight
 			if e.IsLeft {
 				sideIdx = ld.SideDefLeft
 			}
 			side := level.SideDefs[sideIdx]
-			seg.TextureMiddle = textureId + side.MiddleTexture
-			seg.TextureUpper = textureId + side.UpperTexture
-			seg.TextureLower = textureId + side.LowerTexture
-
-			//TODO TEST
-			//seg.TextureMiddle = "wall.ppm"
-			//seg.TextureUpper = "wall2.ppm"
-			//seg.TextureLower = "floor2.ppm"
-
+			seg.TextureMiddle = textureId + side.MiddleTexture //"wall.ppm"
+			seg.TextureUpper = textureId + side.UpperTexture   // "wall2.ppm"
+			seg.TextureLower = textureId + side.LowerTexture   //"floor2.ppm"
 			seg.Kind = model.DefinitionWall
 			if ld.Flags&(1<<2) != 0 {
 				seg.Kind = model.DefinitionJoin
@@ -336,6 +276,59 @@ func (bld *BuilderLineDef) resolveSectorId(p PointFixed, sectors []*model.Config
 }
 
 //GEOMETRY
+
+// triangulate decomposes a polygon into a set of triangles using an ear-clipping algorithm.
+func triangulate(poly []PointFixed) [][]PointFixed {
+	var triangles [][]PointFixed
+	working := make([]PointFixed, len(poly))
+	copy(working, poly)
+
+	// I poligoni nativi di Doom devono essere trattati in senso Orario (CW)
+	if getWinding(working) < 0 {
+		for i, j := 0, len(working)-1; i < j; i, j = i+1, j-1 {
+			working[i], working[j] = working[j], working[i]
+		}
+	}
+
+	for len(working) > 2 {
+		earFound := false
+		for i := 0; i < len(working); i++ {
+			prev := working[(i+len(working)-1)%len(working)]
+			curr := working[i]
+			next := working[(i+1)%len(working)]
+
+			if isEar(prev, curr, next, working) {
+				triangles = append(triangles, []PointFixed{prev, curr, next})
+				working = append(working[:i], working[i+1:]...)
+				earFound = true
+				break
+			}
+		}
+
+		if !earFound {
+			bestIdx := 0
+			minCp := math.MaxFloat64
+			for i := 0; i < len(working); i++ {
+				prev := working[(i+len(working)-1)%len(working)]
+				curr := working[i]
+				next := working[(i+1)%len(working)]
+				abx, aby := float64(curr.X-prev.X), float64(curr.Y-prev.Y)
+				cbx, cby := float64(next.X-curr.X), float64(next.Y-curr.Y)
+				cp := abx*cby - aby*cbx
+				if cp < minCp {
+					minCp = cp
+					bestIdx = i
+				}
+			}
+			prev := working[(bestIdx+len(working)-1)%len(working)]
+			curr := working[bestIdx]
+			next := working[(bestIdx+1)%len(working)]
+			triangles = append(triangles, []PointFixed{prev, curr, next})
+			working = append(working[:bestIdx], working[bestIdx+1:]...)
+		}
+	}
+	return triangles
+}
 
 // traceLoops identifies closed loops (polygons) from a set of edges and classifies them into outer and hole polygons.
 func traceLoops(level *Level, edges []Edge) []PolygonDef {

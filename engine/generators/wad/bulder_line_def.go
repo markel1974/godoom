@@ -140,9 +140,9 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 			for triIdx, tri := range triangles {
 				// PROTEZIONE 1: Scartiamo i triangoli degeneri (area nulla) che bucano il rasterizer
-				if isDegenerate(tri[0], tri[1], tri[2]) {
-					continue
-				}
+				//if isDegenerate(tri[0], tri[1], tri[2]) {
+				//	continue
+				//}
 
 				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 				miSector := &model.ConfigSector{
@@ -455,22 +455,6 @@ func isEar(a, b, c PointFixed, poly []PointFixed) bool {
 	return true
 }
 
-// isDegenerate checks if three points form a degenerate triangle by verifying collinearity or if any points coincide.
-func isDegenerate(a, b, c PointFixed) bool {
-	if a.X == b.X && a.Y == b.Y {
-		return true
-	}
-	if b.X == c.X && b.Y == c.Y {
-		return true
-	}
-	if c.X == a.X && c.Y == a.Y {
-		return true
-	}
-	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
-	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
-	return (abx*cby - aby*cbx) == 0
-}
-
 // mergeHoles merges holes with the outer boundary of a polygon to create a single contiguous polygon outline.
 func mergeHoles(def PolygonDef) []PointFixed {
 	if len(def.Holes) == 0 {
@@ -681,3 +665,21 @@ func pointInTriangle(p, a, b, c PointFixed) bool {
 	const eps = 0.5
 	return (cp1 >= -eps && cp2 >= -eps && cp3 >= -eps) || (cp1 <= eps && cp2 <= eps && cp3 <= eps)
 }
+
+/*
+// isDegenerate checks if three points form a degenerate triangle by verifying collinearity or if any points coincide.
+func isDegenerate(a, b, c PointFixed) bool {
+	if a.X == b.X && a.Y == b.Y {
+		return true
+	}
+	if b.X == c.X && b.Y == c.Y {
+		return true
+	}
+	if c.X == a.X && c.Y == a.Y {
+		return true
+	}
+	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
+	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
+	return (abx*cby - aby*cbx) == 0
+}
+*/

@@ -2,9 +2,8 @@ package model
 
 import (
 	"fmt"
-
-	geometry2 "github.com/markel1974/godoom/engine/polygons/geometry"
-
+	"math"
+	"math/big"
 	"sort"
 )
 
@@ -121,10 +120,9 @@ func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, midd
 
 // createPoint adds a new point to the builder map with specified metadata and computes its distance from the start point.
 func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper string, middle string, lower string) {
-	pb := geometry2.Point{X: is.Start.X, Y: is.Start.Y}
-
+	//pb := XY{X: is.Start.X, Y: is.Start.Y}
 	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, textureUpper: upper, textureMiddle: middle, textureLower: lower}
-	sd0.distance = geometry2.Distance(pb, geometry2.Point{X: p0.X, Y: p0.Y})
+	sd0.distance = Distance(is.Start.X, is.Start.Y, p0.X, p0.Y)
 	if c, ok := is.builder[sd0.distance]; ok {
 		c = append(c, sd0)
 		is.builder[sd0.distance] = c
@@ -267,4 +265,38 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 	}
 
 	return out
+}
+
+// Distance between two points
+func Distance(p0X, p0Y, p1X, p1Y float64) float64 {
+	const Eps = 1e-10
+	v := math.Hypot(p0X-p1X, p0Y-p1Y)
+	if v < 100*Eps {
+		return Distance128(p0X, p0Y, p1X, p1Y)
+	}
+	return v
+}
+
+// Distance128 is distance between 2 points with 128-bit precisions
+func Distance128(p0X, p0Y, p1X, p1Y float64) float64 {
+	if p0X == p1X && p0Y == p1Y {
+		return 0
+	}
+	const prec = 128
+
+	var (
+		x0   = new(big.Float).SetPrec(prec).SetFloat64(p0X)
+		x1   = new(big.Float).SetPrec(prec).SetFloat64(p1X)
+		y0   = new(big.Float).SetPrec(prec).SetFloat64(p0Y)
+		y1   = new(big.Float).SetPrec(prec).SetFloat64(p1Y)
+		x    = new(big.Float).SetPrec(prec).Sub(x0, x1)
+		y    = new(big.Float).SetPrec(prec).Sub(y0, y1)
+		xx   = new(big.Float).SetPrec(prec).Mul(x, x)
+		yy   = new(big.Float).SetPrec(prec).Mul(y, y)
+		summ = new(big.Float).SetPrec(prec).Add(xx, yy)
+		s    = new(big.Float).SetPrec(prec).Sqrt(summ)
+	)
+
+	sf, _ := s.Float64()
+	return sf
 }

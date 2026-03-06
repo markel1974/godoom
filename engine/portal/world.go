@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/polygons"
+	//"github.com/markel1974/godoom/engine/polygons"
 	"github.com/markel1974/godoom/engine/renderers"
 	"github.com/markel1974/godoom/pixels"
 )
@@ -344,12 +344,12 @@ func (w *World) drawSingleStub(surface *pixels.PictureRGBA, sector *model.Sector
 
 	var segments []*model.Segment
 
-	if useConvexHull {
-		ch := &polygons.ConvexHull{}
-		segments = ch.FromSector(sector)
-	} else {
-		segments = sector.Segments
-	}
+	//	if useConvexHull {
+	//	ch := &polygons.ConvexHull{}
+	//	segments = ch.FromSector(sector)
+	//} else {
+	segments = sector.Segments
+	//}
 
 	for _, v := range segments {
 		x1 := math.Abs(v.Start.X)

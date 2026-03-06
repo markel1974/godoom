@@ -85,6 +85,9 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		return nil, err
 	}
 	levelNames := bld.w.GetLevels()
+	if levelNumber < 1 || levelNumber > len(levelNames) {
+		return nil, fmt.Errorf("invalid level number: %d", levelNumber)
+	}
 	level, err := bld.w.GetLevel(levelNames[levelNumber-1])
 	if err != nil {
 		return nil, err

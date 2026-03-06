@@ -405,6 +405,10 @@ func (w *GLWindow) CursorVisible() bool {
 	return w.cursorVisible
 }
 
+func (w *GLWindow) Begin() {
+	w.begin()
+}
+
 // Note: must be called inside the main thread.
 func (w *GLWindow) begin() {
 	if currWin != w {
@@ -620,6 +624,20 @@ func (w *GLWindow) initInput() {
 // UpdateInput polls window events. Call this function to poll window events without swapping buffers. Note that the Update method invokes UpdateInput.
 func (w *GLWindow) UpdateInput() {
 	executor.Thread.Call(func() { glfw.PollEvents() })
+	w.doUpdateInput()
+}
+
+func (w *GLWindow) UpdateInputAndSwap() {
+	executor.Thread.Call(func() {
+		w.begin()
+		if w.vsync {
+			glfw.SwapInterval(1)
+		} else {
+			glfw.SwapInterval(0)
+		}
+		w.window.SwapBuffers()
+		glfw.PollEvents()
+	})
 	w.doUpdateInput()
 }
 

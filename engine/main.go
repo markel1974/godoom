@@ -61,6 +61,7 @@ func main() {
 	player := model.NewPlayer(cfg.Player, playerSector, false)
 
 	render := software.NewSoftwareRender()
+	//render := open_gl.NewOpenGLRender()
 	if err = render.Setup(p, player, cfg.Textures); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

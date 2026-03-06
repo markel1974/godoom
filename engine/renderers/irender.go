@@ -2,12 +2,18 @@ package renderers
 
 import (
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/pixels"
+	"github.com/markel1974/godoom/engine/portal"
 )
 
-// IRender defines methods for rendering and debugging sectors within a graphical environment.
+// IRender defines the contract for rendering systems, including setup, rendering logic, and debug controls.
 type IRender interface {
-	Render(surface *pixels.PictureRGBA, vi *ViewItem, css []*model.CompiledSector, compiled int)
+	Setup(portal *portal.Portal, player *portal.Player) error
+
+	Start()
+
+	Render(vi *model.ViewItem, css []*model.CompiledSector, compiled int)
+
+	RenderSector(sector *model.Sector)
 
 	DebugMoveSector(forward bool)
 

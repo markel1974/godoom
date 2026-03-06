@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/engine/mathematic"
@@ -31,10 +32,11 @@ type Player struct {
 	ducking       bool
 	falling       bool
 	lightDistance float64
+	debug         bool
 }
 
 // NewPlayer initializes and returns a new Player instance at the specified position, angle, and sector.
-func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sector) *Player {
+func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sector, debug bool) *Player {
 	p := &Player{
 		where:         model.XYZ{X: x, Y: y, Z: z + EyeHeight},
 		velocity:      model.XYZ{},
@@ -42,6 +44,7 @@ func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sec
 		yawState:      0,
 		sector:        sector,
 		lightDistance: 0.0039, // 1 / distance == 1 / 255
+		debug:         debug,
 	}
 	p.SetAngle(angle)
 	return p
@@ -217,12 +220,116 @@ func (p *Player) GetKneePosition() float64 {
 	return p.where.Z - p.EyeHeight() + KneeHeight
 }
 
-// Update resets very small velocity values to zero to avoid unintended movement or floating-point precision issues.
-func (p *Player) Update() {
+func (p *Player) MoveApply(dx float64, dy float64) {
+	if dx == 0 && dy == 0 {
+		return
+	}
+
+	// 1. Applica atomico il vettore e ottieni le coordinate definitive
+	p.AddCoords(dx, dy)
+	px, py := p.GetCoords()
+
+	currentSector := p.GetSector()
+
+	// 2. Verifica di stabilità spaziale: siamo ancora dentro lo stesso settore?
+	if model.PointInSegments(px, py, currentSector.Segments) {
+		return
+	}
+
+	// 3. Transizione Portale: Il punto è fisicamente uscito dal settore radice.
+	// Naviga il grafo topologico testando i settori adiacenti (neighbors).
+	for _, segment := range currentSector.Segments {
+		neighbor := segment.Sector
+		if neighbor != nil {
+			if model.PointInSegments(px, py, neighbor.Segments) {
+				p.SetSector(neighbor)
+				if p.debug {
+					fmt.Println("New Sector crossed via PIP:", neighbor.Id)
+				}
+				return
+			}
+		}
+	}
+
+	// 4. Fallback Architetturale (Edge Case Perimeter)
+	// Se il punto cade ESATTAMENTE sull'edge matematico di un portale,
+	// la precisione FP del ray-casting potrebbe restituire 'false' per entrambi i settori.
+	// In questo caso, forziamo l'aggiornamento se il punto si trova nel semipiano posteriore del portale.
+	for _, segment := range currentSector.Segments {
+		if segment.Sector != nil {
+			if mathematic.PointSideF(px, py, segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y) < 0 {
+				p.SetSector(segment.Sector)
+				if p.debug {
+					fmt.Println("New Sector crossed via Fallback:", segment.Sector.Id)
+				}
+				return
+			}
+		}
+	}
+}
+
+func (p *Player) Compute(vi *model.ViewItem) {
+	p.VerticalCollision()
+	if !p.IsMoving() {
+		return
+	}
+
+	headPos := p.GetHeadPosition()
+	kneePos := p.GetKneePosition()
+	dx, dy := p.GetVelocity()
+	pSector := p.GetSector()
+
+	px := vi.Where.X
+	py := vi.Where.Y
+	p1 := px + dx
+	p2 := py + dy
+
+	// Check if the player is about to cross one of the sector's edges
+	for _, segment := range pSector.Segments {
+		start := segment.Start
+		end := segment.End
+
+		if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
+			// Check where the hole is.
+			holeLow := 9e9
+			holeHigh := -9e9
+			if segment.Sector != nil {
+				holeLow = mathematic.MaxF(pSector.Floor, segment.Sector.Floor)
+				holeHigh = mathematic.MinF(pSector.Ceil, segment.Sector.Ceil)
+			}
+
+			// Check whether we're bumping into a wall
+			if holeHigh < headPos || holeLow > kneePos {
+				// Bumps into a wall! Slide along the wall
+				xd := end.X - start.X
+				yd := end.Y - start.Y
+				lenSq := xd*xd + yd*yd
+
+				if lenSq > 0 {
+					dot := dx*xd + dy*yd
+					dx = (xd * dot) / lenSq
+					dy = (yd * dot) / lenSq
+
+					// Calcolo della normale interna (winding CCW) e applicazione dell'epsilon
+					invLen := 1.0 / math.Sqrt(lenSq)
+					nx := -yd * invLen
+					ny := xd * invLen
+
+					epsilon := 0.005
+					dx += nx * epsilon
+					dy += ny * epsilon
+				}
+			}
+			break
+		}
+	}
+
 	if math.Abs(p.velocity.X) < 0.001 {
 		p.velocity.X = 0
 	}
 	if math.Abs(p.velocity.Y) < 0.001 {
 		p.velocity.Y = 0
 	}
+
+	p.MoveApply(dx, dy)
 }

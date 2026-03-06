@@ -6,8 +6,6 @@ import (
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/renderers"
-	"github.com/markel1974/godoom/engine/renderers/software"
 )
 
 // defaultQueueLen defines the default size of the queue used in rendering or processing operations.
@@ -15,8 +13,12 @@ const (
 	defaultQueueLen = 512
 )
 
-// Render defines a structure for managing rendering operations, including screen dimensions, queues, sectors, and visibility logic.
-type Render struct {
+func Yaw(y float64, z float64, yaw float64) float64 {
+	return y + (z * yaw)
+}
+
+// Portal defines a structure for managing rendering operations, including screen dimensions, queues, sectors, and visibility logic.
+type Portal struct {
 	screenWidth      int
 	screenWidthHalf  int
 	screenHeight     int
@@ -35,19 +37,19 @@ type Render struct {
 }
 
 // NewPortal initializes and returns a new Render object configured for rendering operations with the provided parameters.
-func NewPortal(width int, height int, maxQueue int) *Render {
+func NewPortal(width int, height int, maxQueue int) *Portal {
 	if maxQueue == 0 {
 		maxQueue = defaultQueueLen
 	}
-	r := &Render{
+	r := &Portal{
 		screenWidth:      width,
 		screenWidthHalf:  width / 2,
 		screenHeight:     height,
 		screenHeightHalf: height / 2,
 		queue:            make([]*QueueItem, maxQueue),
 		sectorQueue:      make([]*QueueItem, 256),
-		screenHFov:       software.HFov * float64(height),
-		screenVFov:       software.VFov * float64(height),
+		screenHFov:       model.HFov * float64(height),
+		screenVFov:       model.VFov * float64(height),
 		visibilityCache:  NewVisibilityCache(),
 	}
 	for x := 0; x < len(r.queue); x++ {
@@ -60,7 +62,7 @@ func NewPortal(width int, height int, maxQueue int) *Render {
 }
 
 // Setup initializes the Render instance by configuring sectors, setting the maximum height, and preparing compiled sectors.
-func (r *Render) Setup(sectors []*model.Sector, maxHeight float64) error {
+func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
 	r.Sectors = sectors
 	r.SectorsMaxHeight = maxHeight
 	r.compiledSectors = make([]*model.CompiledSector, len(r.Sectors)*16)
@@ -78,14 +80,14 @@ func (r *Render) Setup(sectors []*model.Sector, maxHeight float64) error {
 }
 
 // clear resets the render state by incrementing the compileId, clearing the compiledCount, and clearing visibilityCache.
-func (r *Render) clear() {
+func (r *Portal) clear() {
 	r.compileId++
 	r.compiledCount = 0
 	r.visibilityCache.Clear()
 }
 
 // growSectorQueue dynamically increases the capacity of the sectorQueue by doubling its current size.
-func (r *Render) growSectorQueue() {
+func (r *Portal) growSectorQueue() {
 	oldLen := len(r.sectorQueue)
 	newLen := oldLen * 2
 	newQueue := make([]*QueueItem, newLen)
@@ -97,7 +99,7 @@ func (r *Render) growSectorQueue() {
 }
 
 // Compile processes the given view item and returns compiled sectors and the count of compiled sectors for rendering.
-func (r *Render) Compile(vi *renderers.ViewItem) ([]*model.CompiledSector, int) {
+func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 	r.clear()
 
 	queueLen := len(r.queue)
@@ -142,7 +144,7 @@ func (r *Render) Compile(vi *renderers.ViewItem) ([]*model.CompiledSector, int) 
 }
 
 // GetCS retrieves a CompiledSector from the pool, binds it to the given Sector, and returns if it's the first allocation.
-func (r *Render) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
+func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
 		fmt.Println("OUT OF COMPILED SECTORS!")
@@ -155,7 +157,7 @@ func (r *Render) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 }
 
 // compileSector processes a renderable sector, computes perspective transformations, and queues neighboring sectors.
-func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi *QueueItem) ([]*QueueItem, int) {
+func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *QueueItem) ([]*QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false
 	outIdx := 0
@@ -216,8 +218,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 		u1 := segLength
 
 		// CLIPPING LINEARE ESATTO CONTRO IL PIANO NEAR-Z
-		if tz1 <= software.NearZ || tz2 <= software.NearZ {
-			if tz1 <= software.NearZ && tz2 <= software.NearZ {
+		if tz1 <= model.NearZ || tz2 <= model.NearZ {
+			if tz1 <= model.NearZ && tz2 <= model.NearZ {
 				// FIX CRITICO: Il segmento è troppo vicino alla camera per generare geometria,
 				// ma se è un portale, stiamo fisicamente attraversando la soglia.
 				// Dobbiamo obbligatoriamente passare la visibilità al settore adiacente!
@@ -233,12 +235,12 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 			}
 
 			// Calcola il punto di intersezione esatto (t da 0.0 a 1.0)
-			t := (software.NearZ - tz1) / (tz2 - tz1)
+			t := (model.NearZ - tz1) / (tz2 - tz1)
 			ix := tx1 + t*(tx2-tx1)
-			iz := software.NearZ
+			iz := model.NearZ
 			iu := u0 + t*(u1-u0) // Interpola la UV esattamente sul taglio
 
-			if tz1 <= software.NearZ {
+			if tz1 <= model.NearZ {
 				tx1 = ix
 				tz1 = iz
 				u0 = iu
@@ -270,10 +272,10 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 
 		screenHeightHalf := float64(r.screenHeightHalf)
 
-		y1a := screenHeightHalf + (-software.Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
-		y2a := screenHeightHalf + (-software.Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
-		y1b := screenHeightHalf + (-software.Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
-		y2b := screenHeightHalf + (-software.Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
+		y1a := screenHeightHalf + (-Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
+		y2a := screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
+		y1b := screenHeightHalf + (-Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
+		y2b := screenHeightHalf + (-Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -334,8 +336,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 
 		if neighbor != nil {
 			neighborYCeil := neighbor.Ceil - vi.Where.Z
-			ny1a := screenHeightHalf + (-software.Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
-			ny2a := screenHeightHalf + (-software.Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
+			ny1a := screenHeightHalf + (-Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
+			ny2a := screenHeightHalf + (-Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -346,8 +348,8 @@ func (r *Render) compileSector(vi *renderers.ViewItem, sector *model.Sector, qi 
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := neighbor.Floor - vi.Where.Z
-			ny1b := screenHeightHalf + (-software.Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
-			ny2b := screenHeightHalf + (-software.Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
+			ny1b := screenHeightHalf + (-Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
+			ny2b := screenHeightHalf + (-Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {

@@ -2,6 +2,26 @@ package model
 
 import "github.com/markel1974/godoom/engine/textures"
 
+// PointInSegments Algoritmo Ray-Casting (Odd-Even) per i settori del Portal Engine
+func PointInSegments(px float64, py float64, segments []*Segment) bool {
+	nVert := len(segments)
+	if nVert == 0 {
+		return false
+	}
+	c := false
+	j := nVert - 1
+	for i := 0; i < nVert; i++ {
+		pi := segments[i].Start
+		pj := segments[j].Start
+		// Inverte lo stato logico se il raggio proiettato lungo X attraversa l'edge
+		if ((pi.Y > py) != (pj.Y > py)) && (px < (pj.X-pi.X)*(py-pi.Y)/(pj.Y-pi.Y)+pi.X) {
+			c = !c
+		}
+		j = i
+	}
+	return c
+}
+
 // Segment represents a line segment in 2D space, defined by its start and end coordinates, and associated metadata.
 type Segment struct {
 	Start         XY

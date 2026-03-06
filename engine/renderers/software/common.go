@@ -1,19 +1,5 @@
 package software
 
-const (
-	HFov = 0.73
-	VFov = 0.2
-
-	NearZ    = 1e-4
-	NearSide = 1e-5
-	FarZ     = 5.0
-	FarSide  = 20.0
-)
-
-func Yaw(y float64, z float64, yaw float64) float64 {
-	return y + (z * yaw)
-}
-
 func ToRGB(rgb int, light float64) (r uint8, g uint8, b uint8) {
 	fr := float64(uint8((rgb>>16)&255)) * light
 	fg := float64(uint8((rgb>>8)&255)) * light

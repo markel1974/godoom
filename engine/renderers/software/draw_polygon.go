@@ -33,14 +33,14 @@ type DrawPolygon struct {
 
 // NewDrawPolygon creates and initializes a new DrawPolygon instance with the given screen dimensions.
 func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
-	pHFov := (float64(maxH) / float64(maxW)) * HFov
+	pHFov := (float64(maxH) / float64(maxW)) * model.HFov
 	return &DrawPolygon{
 		maxW:       maxW,
 		maxH:       maxH,
 		halfH:      float64(maxH) / 2,
 		halfW:      float64(maxW) / 2,
 		lastH:      maxH - 1,
-		screenVFov: float64(maxH) * VFov,
+		screenVFov: float64(maxH) * model.VFov,
 		screenHFov: float64(maxW) * pHFov,
 	}
 }

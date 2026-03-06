@@ -2,18 +2,28 @@ package software
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"strings"
 	"sync"
 
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/renderers"
+	"github.com/markel1974/godoom/engine/portal"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 )
 
+const _scale = 1
+
 // RenderSoftware represents a software-based renderer for managing and rendering 2D/3D scenes on a defined screen space.
 type RenderSoftware struct {
+	win         *pixels.GLWindow
+	mainSurface *pixels.PictureRGBA
+	mainMatrix  pixels.Matrix
+	mainSprite  *pixels.Sprite
+	enableClear bool
+	viewMode    int
+
 	screenWidth        int
 	screenHeight       int
 	textures           textures.ITextures
@@ -24,6 +34,12 @@ type RenderSoftware struct {
 	targetEnabled      bool
 	targetId           string
 	dp                 *DrawPolygon
+
+	portal   *portal.Portal
+	vi       *model.ViewItem
+	player   *portal.Player
+	debug    bool
+	debugIdx int
 }
 
 // NewSoftwareRender initializes and returns a new instance of RenderSoftware for software-based rendering.
@@ -39,59 +55,350 @@ func NewSoftwareRender(screenWidth int, screenHeight int, textures textures.ITex
 		targetLastCompiled: 0,
 		targetEnabled:      false,
 		dp:                 NewDrawPolygon(screenWidth, screenHeight),
+		vi:                 model.NewViewItem(),
 	}
+}
+
+func (w *RenderSoftware) Setup(portal *portal.Portal, player *portal.Player) error {
+	w.portal = portal
+	w.player = player
+	w.viewMode = -1
+	w.enableClear = true
+
+	return nil
+}
+
+func (w *RenderSoftware) doInitialize() {
+	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
+	cfg := pixels.WindowConfig{
+		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
+		VSync:       true,
+		Undecorated: false,
+		Smooth:      false,
+	}
+	var err error
+	w.win, err = pixels.NewGLWindow(cfg)
+	if err != nil {
+		panic(err)
+	}
+	center := w.win.Bounds().Center()
+
+	w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+	w.mainSprite = pixels.NewSprite()
+	w.mainSprite.SetCached(pixels.CacheModeUpdate)
+	w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
+	w.mainMatrix = pixels.IM.Moved(center).Scaled(center, _scale)
+
+	if w.enableClear {
+		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")
+	}
+}
+
+func (w *RenderSoftware) Start() {
+	pixels.GLRun(w.doRun)
+}
+
+func (w *RenderSoftware) doRun() {
+	const framerate = 30
+	const frameInterval = 1.0 / framerate
+
+	w.doInitialize()
+
+	var currentTimer float64
+	var lastTimer float64
+	mouseConnected := true
+
+	for !w.win.Closed() {
+		currentTimer = pixels.GLGetTime()
+		if (currentTimer - lastTimer) >= frameInterval {
+			lastTimer = currentTimer
+			w.doRender()
+		}
+
+		if mouseConnected && w.win.MouseInsideWindow() {
+			mousePos := w.win.MousePosition()
+			mousePrevPos := w.win.MousePreviousPosition()
+			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
+				mouseX := mousePos.X - mousePrevPos.X
+				mouseY := mousePos.Y - mousePrevPos.Y
+				w.doPlayerMouseMove(mouseX, mouseY)
+			}
+		}
+
+		var up, down, left, right, slow bool
+
+		scroll := w.win.MouseScroll()
+		if scroll.Y != 0 {
+			if scroll.Y > 0 {
+				up = true
+			} else {
+				down = true
+			}
+		}
+
+		for v := range w.win.KeysPressed() {
+			switch v {
+			case pixels.KeyEscape:
+				return
+			case pixels.KeyUp:
+				up = true
+			case pixels.KeyW:
+				up = true
+				slow = true
+			case pixels.KeyDown:
+				down = true
+			case pixels.KeyS:
+				down = true
+				slow = true
+			case pixels.KeyLeft:
+				left = true
+			case pixels.KeyRight:
+				right = true
+			case pixels.KeyV:
+				w.doDebugMoveSector(true)
+			case pixels.KeyB:
+				w.doDebugMoveSector(false)
+			}
+		}
+
+		w.doPlayerMoves(up, down, left, right, slow)
+		if w.win.JustPressed(pixels.KeyC) {
+			w.enableClear = true
+			w.doDebugMoveSectorToggle()
+		}
+		if w.win.JustPressed(pixels.KeyZ) {
+			w.doDebugMoveSector(true)
+		}
+		if w.win.JustPressed(pixels.KeyX) {
+			w.doDebugMoveSector(false)
+		}
+		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
+			w.doPlayerDuckingToggle()
+		}
+		if w.win.JustPressed(pixels.KeySpace) || w.win.Pressed(pixels.MouseButton1) {
+			w.doPlayerJump()
+		}
+		if w.win.JustPressed(pixels.Key8) {
+			w.doDebug(0)
+		}
+		if w.win.JustPressed(pixels.Key0) {
+			w.doDebug(1)
+		}
+		if w.win.JustPressed(pixels.Key9) {
+			w.doDebug(-1)
+		}
+		if w.win.JustPressed(pixels.KeyM) {
+			mouseConnected = !mouseConnected
+		}
+		w.win.Update()
+		//text.Draw(win, g.mainMatrix)
+	}
+}
+
+// Update updates the state of the world, including the player and rendering, based on the current frame's conditions.
+func (w *RenderSoftware) doRender() {
+	if w.enableClear {
+		w.win.Clear(color.Black)
+		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
+	}
+
+	_, w.vi.AngleSin, w.vi.AngleCos = w.player.GetAngle()
+	w.vi.Sector = w.player.GetSector()
+	w.vi.Where.X, w.vi.Where.Y = w.player.GetCoords()
+	w.vi.Where.Z = w.player.GetZ()
+	w.vi.Yaw = w.player.GetYaw()
+	w.vi.LightDistance = w.player.GetLightDistance()
+
+	cs, count := w.portal.Compile(w.vi)
+	w.targetLastCompiled = count
+	//if count < 1 {
+	//	return
+	//}
+
+	w.doSerialRender(w.mainSurface, w.vi, cs, count)
+	//w.parallelRender(surface, vi, css, compiled)
+	w.mainSurface.ApplyFastAA(20)
+
+	if w.debug {
+		w.drawStub()
+	}
+
+	w.player.Compute(w.vi)
+
+	w.mainSprite.Draw(w.win, w.mainMatrix)
+}
+
+func (w *RenderSoftware) RenderSector(sector *model.Sector) {
+	maxX := float64(0)
+	maxY := float64(0)
+
+	var segments []*model.Segment
+
+	//	const useConvexHull = false
+	//	if useConvexHull {
+	//	ch := &polygons.ConvexHull{}
+	//	segments = ch.FromSector(sector)
+	//} else {
+	segments = sector.Segments
+	//}
+
+	for _, v := range segments {
+		x1 := math.Abs(v.Start.X)
+		y1 := math.Abs(v.Start.Y)
+		x2 := math.Abs(v.End.X)
+		y2 := math.Abs(v.End.Y)
+		if x1 > maxX {
+			maxX = x1
+		}
+		if y1 > maxY {
+			maxY = y1
+		}
+		if x2 > maxX {
+			maxX = x2
+		}
+		if y2 > maxY {
+			maxY = y2
+		}
+	}
+
+	xFactor := (float64(w.screenWidth) / 2) / maxX
+	yFactor := (float64(w.screenHeight) / 2) / maxY
+
+	var t []model.XYZ
+	for _, v := range segments {
+		x1 := v.Start.X
+		if x1 == 0 {
+			x1 = 1
+		}
+		x1 *= xFactor
+		y1 := v.Start.Y
+		if y1 == 0 {
+			y1 = 1
+		}
+		y1 *= yFactor
+		x2 := v.End.X
+		if x2 == 0 {
+			x2 = 1
+		}
+		x2 *= xFactor
+		y2 := v.End.Y
+		if y2 == 0 {
+			y2 = 1
+		}
+		y2 *= yFactor
+		t = append(t, model.XYZ{X: x1, Y: y1, Z: 0})
+		t = append(t, model.XYZ{X: x2, Y: y2, Z: 0})
+	}
+
+	if len(t) == 0 {
+		return
+	}
+	dp := NewDrawPolygon(640, 480)
+	dp.Setup(w.mainSurface, t, len(t), 0x00ff00)
+	dp.DrawPoints(10)
+	dp.Color = 0xff0000
+	dp.DrawLines(false)
+}
+
+// DoPlayerDuckingToggle toggles the ducking state of the player.
+func (w *RenderSoftware) doPlayerDuckingToggle() {
+	w.player.SetDucking()
+}
+
+// DoPlayerJump makes the player perform a jump by altering vertical velocity and setting the falling state.
+func (w *RenderSoftware) doPlayerJump() {
+	w.player.SetJump()
+}
+
+// DoPlayerMoves processes the player's movement based on directional input (up, down, left, right) and movement speed (slow).
+func (w *RenderSoftware) doPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
+	w.player.Move(up, down, left, right, slow)
+}
+
+// doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within a constrained range.
+func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
+	if mouseX > 10 {
+		mouseX = 10
+	} else if mouseX < -10 {
+		mouseX = -10
+	}
+	if mouseY > 10 {
+		mouseY = 10
+	} else if mouseY < -10 {
+		mouseY = -10
+	}
+
+	w.player.AddAngle(mouseX * 0.03)
+	w.player.SetYaw(mouseY)
+
+	w.player.MoveApply(0, 0)
+}
+
+// DoZoom adjusts the current zoom level of the view by adding the specified zoom value.
+func (w *RenderSoftware) doZoom(zoom float64) {
+	w.vi.Zoom += zoom
+}
+
+// DoDebug toggles the debug mode or switches the debug sector based on the provided index increment.
+func (w *RenderSoftware) doDebug(next int) {
+	if next == 0 {
+		w.debug = !w.debug
+		return
+	}
+	w.debug = true
+	idx := w.debugIdx + next
+	if idx < 0 || idx >= len(w.portal.Sectors) {
+		return
+	}
+	w.debugIdx = idx
+	sector := w.portal.Sectors[idx]
+	x := sector.Segments[0].Start.X
+	y := sector.Segments[0].Start.Y
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
+	w.player.SetSector(sector)
+	w.player.SetCoords(x+5, y+5)
 }
 
 // DebugMoveSectorToggle toggles the Sector targeting mode by enabling or disabling the targetEnabled flag.
-func (r *RenderSoftware) DebugMoveSectorToggle() {
-	r.targetEnabled = !r.targetEnabled
+func (w *RenderSoftware) doDebugMoveSectorToggle() {
+	w.targetEnabled = !w.targetEnabled
 }
 
 // DebugMoveSector updates the target Sector index based on the direction and adjusts the active state of Sectors accordingly.
-func (r *RenderSoftware) DebugMoveSector(forward bool) {
+func (w *RenderSoftware) doDebugMoveSector(forward bool) {
 	if forward {
-		if r.targetIdx < r.targetLastCompiled {
-			r.targetIdx++
+		if w.targetIdx < w.targetLastCompiled {
+			w.targetIdx++
 		}
 	} else {
-		if r.targetIdx > 0 {
-			r.targetIdx--
+		if w.targetIdx > 0 {
+			w.targetIdx--
 		}
 	}
-	for k := 0; k < r.targetLastCompiled; k++ {
-		r.targetSectors[k] = k == r.targetIdx
+	for k := 0; k < w.targetLastCompiled; k++ {
+		w.targetSectors[k] = k == w.targetIdx
 	}
 }
 
-// Render processes the rendering pipeline for the provided surface, view item, and compiled Sectors.
-func (r *RenderSoftware) Render(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
-	//r.stub(surface, r.dp)
-	//return
-	r.targetLastCompiled = compiled
-	if compiled < 1 {
-		return
+// drawStub renders a debug representation of the current sector onto the given surface if in debug mode.
+func (w *RenderSoftware) drawStub() {
+	if w.debugIdx >= 0 && w.debugIdx < len(w.portal.Sectors) {
+		sector := w.portal.Sectors[w.debugIdx]
+		w.RenderSector(sector)
 	}
-	r.serialRender(surface, vi, css, compiled)
-	//r.parallelRender(surface, vi, css, compiled)
-	surface.ApplyFastAA(20)
 }
 
 // serialRender processes and renders a series of compiled Sectors and their polygons onto the provided surface.
-func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
-	//test := make(map[string]bool)
+func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
-		//if _, ok := test[css[idx].Sector.Id]; ok {
-		//	fmt.Println("Already rendered")
-		//	continue
-		//}
-		//test[css[idx].Sector.Id] = true
-		mode := -1 //r.textures.GetViewMode()
-		if r.targetEnabled {
-			if f, _ := r.targetSectors[idx]; !f {
+		mode := -1 //w.textures.GetViewMode()
+		if w.targetEnabled {
+			if f, _ := w.targetSectors[idx]; !f {
 				mode = 2
 			} else {
-				if r.targetId != css[idx].Sector.Id {
-					r.targetId = css[idx].Sector.Id
+				if w.targetId != css[idx].Sector.Id {
+					w.targetId = css[idx].Sector.Id
 					var neighbors []string
 					for _, z := range css[idx].Sector.Segments {
 						id := ""
@@ -100,41 +407,40 @@ func (r *RenderSoftware) serialRender(surface *pixels.PictureRGBA, vi *renderers
 						}
 						neighbors = append(neighbors, id)
 					}
-					fmt.Println("Current target Sector:", r.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
-
+					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
 				}
 			}
 		}
 		polygons := css[idx].Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
-			r.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
-			r.renderPolygon(vi, cp, r.dp, mode)
+			w.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
+			w.doRenderPolygon(vi, cp, w.dp, mode)
 		}
 	}
 }
 
 // parallelRender processes multiple Sectors concurrently using a worker pool to render polygons onto the given surface.
-func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
+func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
 
 	for idx := compiled - 1; idx >= 0; idx-- {
-		mode := -1 //r.textures.GetViewMode()
-		if r.targetEnabled {
-			if f, _ := r.targetSectors[idx]; !f {
+		mode := -1 //w.textures.GetViewMode()
+		if w.targetEnabled {
+			if f, _ := w.targetSectors[idx]; !f {
 				mode = 2
 			}
 		}
 		//TODO queue
 		go func(polygons []*model.CompiledPolygon) {
 			//TODO each renderer must have a separate DrawPolygon
-			dp := NewDrawPolygon(r.screenWidth, r.screenHeight)
+			dp := NewDrawPolygon(w.screenWidth, w.screenHeight)
 			for k := len(polygons) - 1; k >= 0; k-- {
 				cp := polygons[k]
 				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
-				r.renderPolygon(vi, cp, dp, mode)
+				w.doRenderPolygon(vi, cp, dp, mode)
 			}
 			wg.Done()
 		}(css[idx].Get())
@@ -143,7 +449,7 @@ func (r *RenderSoftware) parallelRender(surface *pixels.PictureRGBA, vi *rendere
 }
 
 // renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
-func (r *RenderSoftware) renderPolygon(vi *renderers.ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)

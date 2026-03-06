@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/renderers"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	// "github.com/go-gl/gl/v4.1-core/gl" // Da decommentare per i binding nativi
@@ -77,7 +76,7 @@ func (r *RenderOpenGL) DebugMoveSector(forward bool) {
 }
 
 // Render processa il grafo di visibilità calcolato dal portal walker.
-func (r *RenderOpenGL) Render(surface *pixels.PictureRGBA, vi *renderers.ViewItem, css []*model.CompiledSector, compiled int) {
+func (r *RenderOpenGL) Render(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	r.targetLastCompiled = compiled
 	if compiled < 1 {
 		return
@@ -90,14 +89,14 @@ func (r *RenderOpenGL) Render(surface *pixels.PictureRGBA, vi *renderers.ViewIte
 	r.streamRender(css, compiled, vi)
 }
 
-func (r *RenderOpenGL) updateCameraUniforms(vi *renderers.ViewItem) {
+func (r *RenderOpenGL) updateCameraUniforms(vi *model.ViewItem) {
 	// Trasmissione al Vertex Shader della Posizione (vi.Where),
 	// Pitch (vi.Yaw), e Yaw (vi.AngleSin, vi.AngleCos) come matrici 4x4.
 }
 
 // streamRender mappa i poligoni logici su array di vertici, raggruppandoli
 // per texture ID per minimizzare le transizioni di stato (Context Switch) in OpenGL.
-func (r *RenderOpenGL) streamRender(css []*model.CompiledSector, compiled int, vi *renderers.ViewItem) {
+func (r *RenderOpenGL) streamRender(css []*model.CompiledSector, compiled int, vi *model.ViewItem) {
 	// batchMap := make(map[string][]float32)
 
 	for idx := compiled - 1; idx >= 0; idx-- {

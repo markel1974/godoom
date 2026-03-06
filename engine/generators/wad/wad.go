@@ -12,6 +12,11 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
+const (
+	textureId = "__TEXTURE__"
+	flatId    = "__FLAT__"
+)
+
 // WAD represents a parsed Doom-engine WAD file containing lumps, levels, textures, flats, patches, and play palettes.
 type WAD struct {
 	file                    *os.File
@@ -172,12 +177,12 @@ func (w *WAD) GetTextures() textures.ITextures {
 	t, _ := NewTextures(basePath)
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {
-			t.Add(name, data)
+			t.Add(textureId+name, data)
 		}
 	}
 	for name := range w.flats {
 		if data, err := w.GetFlatImage(name); err == nil {
-			t.Add(name, data)
+			t.Add(flatId+name, data)
 		}
 	}
 	return t

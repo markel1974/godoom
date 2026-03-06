@@ -173,25 +173,25 @@ func (r *RenderSoftware) renderPolygon(vi *ViewItem, cp *model.CompiledPolygon, 
 		dr.DrawRectangle()
 		return
 	}
-
+	light := vi.LightDistance * cp.Sector.LightLevel
 	switch cp.Kind {
 	case model.IdWall:
 		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, vi.LightDistance)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, light)
 	case model.IdUpper:
-		yRef := (cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
+		yRef := math.Abs((cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, light)
 	case model.IdLower:
-		yRef := (cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, math.Abs(yRef), vi.LightDistance)
+		yRef := math.Abs((cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, light)
 	case model.IdCeil:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, vi.LightDistance)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, light)
 	case model.IdFloor:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, vi.LightDistance)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, light)
 	case model.IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, vi.LightDistance)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, light)
 	case model.IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, vi.LightDistance)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, light)
 	default:
 		dr.DrawWireFrame(true)
 	}

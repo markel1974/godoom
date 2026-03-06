@@ -65,8 +65,8 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			if cfgVertices == nil {
 				return nil, errors.New(fmt.Sprintf("nil vertices"))
 			}
-			cs := &model.ConfigSector{}
-			cs.Id = strconv.Itoa(configSectorIdx)
+			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx))
+			cs.LightLevel = 1.0
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.Floor, &cs.Ceil)
 			if err != nil {

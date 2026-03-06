@@ -150,9 +150,10 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 					Floor:              float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
 					Ceil:               float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
 					Tag:                strconv.Itoa(int(secIdx)),
-					TextureCeil:        wadSector.CeilingPic, //"ceil.ppm",
-					TextureFloor:       wadSector.FloorPic,   //"floor.ppm",
-					TextureScaleFactor: 10.0,                 //10.0,
+					TextureCeil:        flatId + wadSector.CeilingPic,       //"ceil.ppm",
+					TextureFloor:       flatId + wadSector.FloorPic,         //"floor.ppm",
+					TextureScaleFactor: 10.0,                                //10.0,
+					LightLevel:         float64(wadSector.LightLevel) / 255, // 0-1 range
 				}
 
 				for k := 0; k < 3; k++ {
@@ -271,9 +272,9 @@ func (bld *BuilderLineDef) mapSegmentMetadata(seg *model.ConfigSegment, p1, p2 P
 				sideIdx = ld.SideDefLeft
 			}
 			side := level.SideDefs[sideIdx]
-			seg.TextureMiddle = side.MiddleTexture
-			seg.TextureUpper = side.UpperTexture
-			seg.TextureLower = side.LowerTexture
+			seg.TextureMiddle = textureId + side.MiddleTexture
+			seg.TextureUpper = textureId + side.UpperTexture
+			seg.TextureLower = textureId + side.LowerTexture
 
 			//TODO TEST
 			//seg.TextureMiddle = "wall.ppm"

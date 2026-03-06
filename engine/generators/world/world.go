@@ -45,11 +45,14 @@ var availableWall = []string{"wall2.ppm"}
 
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
-	sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
+	sector := model.NewConfigSector(model.NextUUId())
+	sector.Floor = floor
+	sector.Ceil = ceil
+	//sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
 	//sector.Textures = true
 	sector.TextureFloor = availableFloor[random(0, len(availableFloor)-1)]
 	sector.TextureCeil = availableCeil[random(0, len(availableCeil)-1)]
-
+	sector.LightLevel = 1.0
 	sector.TextureScaleFactor = 50.0
 	const SegmentMax = 4
 	for c := 0; c < SegmentMax; c++ {

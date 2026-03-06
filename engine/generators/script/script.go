@@ -17,7 +17,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	var cfgVertices []model.XY
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
-	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 1.0, false, t)
+	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, nil, 1.0, false, t)
 	//cfg := &model.ConfigRoot{
 	//	Sectors: nil,
 	//	Player:  &model.ConfigPlayer{},
@@ -132,7 +132,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				cs.TextureFloor = "floor.ppm"
 				cs.TextureCeil = "ceil.ppm"
 				cs.TextureScaleFactor = 50.0
-				cs.Textures = true
+				//cs.Textures = true
 			}
 			cfg.Sectors = append(cfg.Sectors, cs)
 

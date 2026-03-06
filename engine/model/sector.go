@@ -8,12 +8,12 @@ import (
 
 // Sector represents a 3D space in a model, defined by its boundaries, textures, and associated segments.
 type Sector struct {
-	ModelId      uint16
-	Id           string
-	Floor        float64
-	Ceil         float64
-	Segments     []*Segment
-	Textures     bool
+	ModelId  uint16
+	Id       string
+	Floor    float64
+	Ceil     float64
+	Segments []*Segment
+	//Textures     bool
 	Tag          string
 	TextureFloor *textures.Texture
 	TextureCeil  *textures.Texture
@@ -32,12 +32,12 @@ type Sector struct {
 // NewSector creates and initializes a new Sector instance with the given model ID, identifier, and segment list.
 func NewSector(modelId uint16, id string, segments []*Segment) *Sector {
 	s := &Sector{
-		ModelId:    modelId,
-		Id:         id,
-		Ceil:       0,
-		Floor:      0,
-		Segments:   segments,
-		Textures:   false,
+		ModelId:  modelId,
+		Id:       id,
+		Ceil:     0,
+		Floor:    0,
+		Segments: segments,
+		//Textures:   false,
 		usage:      0,
 		compileId:  0,
 		references: make(map[uint64]bool),
@@ -91,7 +91,7 @@ func (s *Sector) Print(indent bool) string {
 		Floor    float64
 		Ceil     float64
 		Segments []*printerSegment
-		Textures bool
+		//Textures bool
 	}
 
 	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.Floor, Ceil: s.Ceil}
@@ -99,7 +99,7 @@ func (s *Sector) Print(indent bool) string {
 		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
 		p.Segments = append(p.Segments, ps)
 	}
-	p.Textures = s.Textures
+	//p.Textures = s.Textures
 	if indent {
 		d, _ := json.MarshalIndent(p, "", "  ")
 		return string(d)

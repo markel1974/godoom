@@ -110,7 +110,7 @@ func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, err
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
 
-	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true, t)
+	root := model.NewConfigRoot(sectors, player, nil, nil, ScaleFactor, true, t)
 
 	return root, nil
 }
@@ -298,7 +298,7 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 			Tag:   strconv.Itoa(int(poly.SectorRef)),
 			//TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
-			Textures: true,
+			//Textures: true,
 		}
 
 		for j := 0; j < len(poly.Points); j++ {

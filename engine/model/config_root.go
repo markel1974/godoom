@@ -6,6 +6,7 @@ import "github.com/markel1974/godoom/engine/textures"
 type ConfigRoot struct {
 	Sectors     []*ConfigSector `json:"sectors"`
 	Lights      []*ConfigLight  `json:"lights"`
+	Things      []*ConfigThing  `json:"things"`
 	Player      *ConfigPlayer   `json:"player"`
 	ScaleFactor float64         `json:"scaleFactor"`
 	DisableLoop bool            `json:"disableLoop"`
@@ -13,11 +14,12 @@ type ConfigRoot struct {
 }
 
 // NewConfigRoot creates a new ConfigRoot instance with specified sectors, player, lights, scale factor, and loop status.
-func NewConfigRoot(sectors []*ConfigSector, player *ConfigPlayer, lights []*ConfigLight, scaleFactor float64, disableLoop bool, t textures.ITextures) *ConfigRoot {
+func NewConfigRoot(sectors []*ConfigSector, player *ConfigPlayer, things []*ConfigThing, lights []*ConfigLight, scaleFactor float64, disableLoop bool, t textures.ITextures) *ConfigRoot {
 	return &ConfigRoot{
 		Sectors:     sectors,
 		Player:      player,
 		Lights:      lights,
+		Things:      things,
 		ScaleFactor: scaleFactor,
 		DisableLoop: disableLoop,
 		Textures:    t,

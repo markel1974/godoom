@@ -4,7 +4,7 @@ package model
 type ConfigPlayer struct {
 	Position XY      `json:"position"`
 	Angle    float64 `json:"angle"`
-	Sector   string  `json:"Sector"`
+	Sector   string  `json:"sector"`
 }
 
 // NewConfigPlayer creates and returns a new instance of ConfigPlayer with the specified position, angle, and sector.

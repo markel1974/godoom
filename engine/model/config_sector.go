@@ -4,12 +4,12 @@ import "encoding/json"
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {
-	Id           string  `json:"id"`
-	Ceil         float64 `json:"ceil"`
-	Floor        float64 `json:"floor"`
-	Textures     bool    `json:"textures"`
-	TextureFloor string  `json:"textureFloor"`
-	TextureCeil  string  `json:"textureCeil"`
+	Id    string  `json:"id"`
+	Ceil  float64 `json:"ceil"`
+	Floor float64 `json:"floor"`
+	//Textures     bool    `json:"textures"`
+	TextureFloor string `json:"textureFloor"`
+	TextureCeil  string `json:"textureCeil"`
 	//TextureUpper       string           `json:"textureUpper"`
 	//TextureLower       string           `json:"textureLower"`
 	//TextureWall        string           `json:"textureWall"`
@@ -28,7 +28,7 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	out := NewConfigSector(is.Id)
 	out.Ceil = is.Ceil
 	out.Floor = is.Floor
-	out.Textures = is.Textures
+	//out.Textures = is.Textures
 	out.TextureFloor = is.TextureFloor
 	out.TextureCeil = is.TextureCeil
 	//out.TextureUpper = is.TextureUpper

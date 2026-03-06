@@ -46,7 +46,7 @@ var availableWall = []string{"wall2.ppm"}
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
 	sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
-	sector.Textures = true
+	//sector.Textures = true
 	sector.TextureFloor = availableFloor[random(0, len(availableFloor)-1)]
 	sector.TextureCeil = availableCeil[random(0, len(availableCeil)-1)]
 
@@ -95,7 +95,7 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := textures.NewFileTextures(basePath)
 	configPlayer := &model.ConfigPlayer{}
-	cfg := model.NewConfigRoot(nil, configPlayer, nil, 0, false, t)
+	cfg := model.NewConfigRoot(nil, configPlayer, nil, nil, 0, false, t)
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)

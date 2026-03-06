@@ -79,24 +79,24 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
 		s.Ceil = cs.Ceil
 		s.Floor = cs.Floor
-		s.Textures = cs.Textures
-		if s.Textures {
-			s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
-			s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
+		//s.Textures = cs.Textures
+		//if s.Textures {
+		s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
+		s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
 
-			//s.TextureUpper = cfg.Textures.Get(cs.TextureUpper)
-			//s.TextureLower = cfg.Textures.Get(cs.TextureLower)
-			//s.TextureWall = cfg.Textures.Get(cs.TextureWall)
+		//s.TextureUpper = cfg.Textures.Get(cs.TextureUpper)
+		//s.TextureLower = cfg.Textures.Get(cs.TextureLower)
+		//s.TextureWall = cfg.Textures.Get(cs.TextureWall)
 
-			if s.TextureFloor == nil || s.TextureCeil == nil { //&& s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
-				//fmt.Println("invalid textures configuration for Sector", s.Id)
-				s.Textures = false
-			}
-			s.TextureScaleFactor = cs.TextureScaleFactor
-			if s.TextureScaleFactor == 0 {
-				s.TextureScaleFactor = 1
-			}
+		//if s.TextureFloor == nil || s.TextureCeil == nil { //&& s.TextureUpper == nil || s.TextureLower == nil || s.TextureWall == nil {
+		//fmt.Println("invalid textures configuration for Sector", s.Id)
+		//	s.Textures = false
+		//}
+		s.TextureScaleFactor = cs.TextureScaleFactor
+		if s.TextureScaleFactor == 0 {
+			s.TextureScaleFactor = 1
 		}
+		//}
 		r.sectors = append(r.sectors, s)
 		r.cache[cs.Id] = s
 	}

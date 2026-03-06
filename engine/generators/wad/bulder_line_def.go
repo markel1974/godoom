@@ -76,26 +76,22 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 	sectors := bld.buildSectorsFromLineDefs(level)
 
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
-	//var things []model.ConfigThing
+	var things []*model.ConfigThing
 
-	for _, t := range level.Things {
+	for i, t := range level.Things {
+		tX := float64(t.X)
+		tY := float64(t.Y)
+		tAngle := float64(t.Angle) //radiant: float64(t.Angle)*(math.Pi/180.0)
 		if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
 			if t.Type == 1 {
-				pX, pY, pAngle = float64(t.X), float64(t.Y), float64(t.Angle)
+				pX, pY, pAngle = tX, tY, tAngle
 			}
 			continue
 		}
-
-		//tX, tY := float64(t.X), float64(t.Y)
-		//tSectorId := bld.resolveSectorId(PointFixed{ToFixed(tX), ToFixed(tY)}, sectors)
-		//cfgThing := model.NewConfigThing(
-		//	fmt.Sprintf("t_%d", i),
-		//	model.XY{X: tX, Y: -tY},
-		//	float64(t.Angle)*(math.Pi/180.0), // In caso l'engine richieda radianti per le Things
-		//	int(t.Type),
-		//	tSectorId,
-		//)
-		//things = append(things, cfgThing)
+		tSectorId := bld.resolveSectorId(PointFixed{ToFixed(tX), ToFixed(tY)}, sectors)
+		tId := fmt.Sprintf("t_%d", i)
+		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId)
+		things = append(things, cfgThing)
 	}
 
 	playerSectorId := bld.resolveSectorId(PointFixed{ToFixed(pX), ToFixed(pY)}, sectors)
@@ -106,7 +102,7 @@ func (bld *BuilderLineDef) Setup(wadFile string, levelNumber int) (*model.Config
 	)
 
 	t := bld.w.GetTextures()
-	return model.NewConfigRoot(sectors, player, nil, ScaleFactorLineDef, true, t), nil
+	return model.NewConfigRoot(sectors, player, things, nil, ScaleFactorLineDef, true, t), nil
 }
 
 // buildSectorsFromLineDefs processes level line definitions to build and return sectors with associated metadata.
@@ -136,11 +132,11 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 
 	for secIdx, edges := range sectorToEdges {
 		wadSector := level.Sectors[secIdx]
-		polygonDefs := bld.traceLoops(level, edges)
+		polygonDefs := traceLoops(level, edges)
 
 		for loopIdx, def := range polygonDefs {
-			mergedPoly := bld.mergeHoles(def)
-			triangles := bld.triangulate(mergedPoly)
+			mergedPoly := mergeHoles(def)
+			triangles := triangulate(mergedPoly)
 
 			for triIdx, tri := range triangles {
 				// PROTEZIONE 1: Scartiamo i triangoli degeneri (area nulla) che bucano il rasterizer
@@ -154,10 +150,9 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 					Floor:              float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef,
 					Ceil:               float64(wadSector.CeilingHeight) / ScaleFactorCeilFloorLineDef,
 					Tag:                strconv.Itoa(int(secIdx)),
-					Textures:           true,
 					TextureCeil:        wadSector.CeilingPic, //"ceil.ppm",
 					TextureFloor:       wadSector.FloorPic,   //"floor.ppm",
-					TextureScaleFactor: 10.0,
+					TextureScaleFactor: 10.0,                 //10.0,
 				}
 
 				for k := 0; k < 3; k++ {
@@ -209,7 +204,7 @@ func (bld *BuilderLineDef) buildSectorsFromLineDefs(level *Level) []*model.Confi
 }
 
 // triangulate decomposes a polygon into a set of triangles using an ear-clipping algorithm.
-func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
+func triangulate(poly []PointFixed) [][]PointFixed {
 	var triangles [][]PointFixed
 	working := make([]PointFixed, len(poly))
 	copy(working, poly)
@@ -228,7 +223,7 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 			curr := working[i]
 			next := working[(i+1)%len(working)]
 
-			if bld.isEar(prev, curr, next, working) {
+			if isEar(prev, curr, next, working) {
 				triangles = append(triangles, []PointFixed{prev, curr, next})
 				working = append(working[:i], working[i+1:]...)
 				earFound = true
@@ -259,55 +254,6 @@ func (bld *BuilderLineDef) triangulate(poly []PointFixed) [][]PointFixed {
 		}
 	}
 	return triangles
-}
-
-// isEar determines if the triangle defined by points a, b, and c is an "ear" in a polygon described by poly.
-func (bld *BuilderLineDef) isEar(a, b, c PointFixed, poly []PointFixed) bool {
-	if a.X == c.X && a.Y == c.Y {
-		return true
-	}
-
-	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
-	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
-
-	cp := abx*cby - aby*cbx
-
-	if cp >= 0 {
-		return false
-	}
-
-	for _, p := range poly {
-		if p.X == a.X && p.Y == a.Y {
-			continue
-		}
-		if p.X == b.X && p.Y == b.Y {
-			continue
-		}
-		if p.X == c.X && p.Y == c.Y {
-			continue
-		}
-
-		if pointInTriangleExact(p, a, b, c) {
-			return false
-		}
-	}
-	return true
-}
-
-// isDegenerate checks if three points form a degenerate triangle by verifying collinearity or if any points coincide.
-func isDegenerate(a, b, c PointFixed) bool {
-	if a.X == b.X && a.Y == b.Y {
-		return true
-	}
-	if b.X == c.X && b.Y == c.Y {
-		return true
-	}
-	if c.X == a.X && c.Y == a.Y {
-		return true
-	}
-	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
-	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
-	return (abx*cby - aby*cbx) == 0
 }
 
 // mapSegmentMetadata processes a given segment to update its metadata based on matching level geometry and properties.
@@ -388,8 +334,10 @@ func (bld *BuilderLineDef) resolveSectorId(p PointFixed, sectors []*model.Config
 	return "0"
 }
 
+//GEOMETRY
+
 // traceLoops identifies closed loops (polygons) from a set of edges and classifies them into outer and hole polygons.
-func (bld *BuilderLineDef) traceLoops(level *Level, edges []Edge) []PolygonDef {
+func traceLoops(level *Level, edges []Edge) []PolygonDef {
 	adj := make(map[uint16][]Edge)
 	for _, e := range edges {
 		adj[e.V1] = append(adj[e.V1], e)
@@ -480,8 +428,57 @@ func (bld *BuilderLineDef) traceLoops(level *Level, edges []Edge) []PolygonDef {
 	return defs
 }
 
+// isEar determines if the triangle defined by points a, b, and c is an "ear" in a polygon described by poly.
+func isEar(a, b, c PointFixed, poly []PointFixed) bool {
+	if a.X == c.X && a.Y == c.Y {
+		return true
+	}
+
+	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
+	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
+
+	cp := abx*cby - aby*cbx
+
+	if cp >= 0 {
+		return false
+	}
+
+	for _, p := range poly {
+		if p.X == a.X && p.Y == a.Y {
+			continue
+		}
+		if p.X == b.X && p.Y == b.Y {
+			continue
+		}
+		if p.X == c.X && p.Y == c.Y {
+			continue
+		}
+
+		if pointInTriangleExact(p, a, b, c) {
+			return false
+		}
+	}
+	return true
+}
+
+// isDegenerate checks if three points form a degenerate triangle by verifying collinearity or if any points coincide.
+func isDegenerate(a, b, c PointFixed) bool {
+	if a.X == b.X && a.Y == b.Y {
+		return true
+	}
+	if b.X == c.X && b.Y == c.Y {
+		return true
+	}
+	if c.X == a.X && c.Y == a.Y {
+		return true
+	}
+	abx, aby := float64(b.X-a.X), float64(b.Y-a.Y)
+	cbx, cby := float64(c.X-b.X), float64(c.Y-b.Y)
+	return (abx*cby - aby*cbx) == 0
+}
+
 // mergeHoles merges holes with the outer boundary of a polygon to create a single contiguous polygon outline.
-func (bld *BuilderLineDef) mergeHoles(def PolygonDef) []PointFixed {
+func mergeHoles(def PolygonDef) []PointFixed {
 	if len(def.Holes) == 0 {
 		return def.Outer
 	}
@@ -549,8 +546,6 @@ func (bld *BuilderLineDef) mergeHoles(def PolygonDef) []PointFixed {
 
 	return outer
 }
-
-//GEOMETRY
 
 // getWinding calculates the winding order of a polygon and returns 1 for CW, -1 for CCW, or 0 if the area is zero.
 func getWinding(poly []PointFixed) int64 {

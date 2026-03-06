@@ -1,671 +1,1005 @@
 package wad
 
-/*
-TODO DOBBIAMO PASSARE NECESSARIAMENTE A FIXED POINT
-type FixedPoint int64
+import (
+	"fmt"
+	"math"
+	"sort"
+	"strconv"
 
-func ToFixedPoint(f float64) FixedPoint    { return FixedPoint(f * 65536) }
-func (f FixedPoint) ToFloat() float64 { return float64(f) / 65536.0 }
+	"github.com/markel1974/godoom/engine/generators/wad/lumps"
+	"github.com/markel1974/godoom/engine/model"
+)
 
+// ScaleFactorLineDef defines the scale factor applied to line definitions for coordinate normalization in the configuration.
+const ScaleFactorLineDef = 25.0
+
+// ScaleFactorCeilFloorLineDef is a constant scaling factor used to convert floor and ceiling heights into game unit measurements.
+const ScaleFactorCeilFloorLineDef = 4.0
+
+// Point represents a 2D coordinate with X and Y as floating-point values.
 type Point struct {
-	X                 FixedPoint
-	Y                 FixedPoint
-	OverlappedSegment *lumps.Seg
-	Sector            *lumps.Sector
-	SectorRef         uint16
-}
-*/
-
-/*
-// ScaleFactor defines a constant multiplier used to scale dimensions within the configuration system.
-const ScaleFactor = 25.0
-
-// ScaleFactorCeilFloor is a constant used to scale ceiling and floor height calculations.
-const ScaleFactorCeilFloor = 4.0
-
-type Point struct {
-	X                 float64
-	Y                 float64
-	OverlappedSegment *lumps.Seg
-	Sector            *lumps.Sector
-	SectorRef         uint16
+	X float64
+	Y float64
 }
 
-func (p Point) ToModelXY() model.XY {
-	return model.XY{X: p.X, Y: p.Y}
+// ToModelXY converts a Point instance to a model.XY structure with identical X and Y coordinate values.
+func (p Point) ToModelXY() model.XY { return model.XY{X: p.X, Y: p.Y} }
+
+// Triangle represents a geometric shape consisting of three vertices defined by points in 2D space.
+type Triangle struct {
+	A, B, C Point
 }
 
-type Points []Point
-
-// Polygon represents a collection of points defining a shape in 2D space.
-type Polygon struct {
-	Id        string
-	Sector    *lumps.Sector
-	SectorRef uint16
-	Points    Points
+// HasVertex checks whether the given point is one of the vertices of the triangle.
+func (t Triangle) HasVertex(p Point) bool {
+	return t.A == p || t.B == p || t.C == p
 }
 
-type Polygons []Polygon
+// HasEdge checks if the given edge exists in the triangle, considering both possible orientations of the edge.
+func (t Triangle) HasEdge(e [2]Point) bool {
+	eRev := [2]Point{e[1], e[0]}
+	tEdges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
+	for _, te := range tEdges {
+		if te == e || te == eRev {
+			return true
+		}
+	}
+	return false
+}
 
-// EdgeKey is used for O(1) topological neighbor lookups (Half-Edge dictionary)
+// Edge represents a connection between two vertices in a graph or geometric structure.
+// V1 and V2 are the indices of the vertices connected by the edge.
+// LDIdx is an index associated with a line definition in the context of the level structure.
+// IsLeft indicates whether the edge corresponds to the left side of a line definition.
+type Edge struct {
+	V1, V2 uint16
+	LDIdx  int
+	IsLeft bool
+}
+
+// EdgeKey represents a unique key for an edge defined by its start and end points in 2D space.
 type EdgeKey struct {
 	X1, Y1, X2, Y2 float64
 }
 
-// Builder is responsible for constructing configuration data from a WAD file.
+// PolygonDef represents a polygon with an outer boundary and optional holes defined as collections of points.
+type PolygonDef struct {
+	Outer []Point
+	Holes [][]Point
+}
+
+// Builder provides utilities for constructing or processing line definitions within a WAD file.
 type Builder struct {
-	w        *WAD
-	textures map[string]bool
+	w *WAD
 }
 
-// NewBuilder creates and returns a new Builder instance.
+// NewBuilder initializes and returns a new instance of Builder.
 func NewBuilder() *Builder {
-	return &Builder{textures: make(map[string]bool)}
+	return &Builder{}
 }
 
-// Setup initializes and configures the game level.
-func (b *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
-	b.w = New()
-	if err := b.w.Load(wadFile); err != nil {
+// Setup initializes the level configuration by loading data from a WAD file and constructing sectors, player, and things.
+func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
+	bld.w = New()
+	if err := bld.w.Load(wadFile); err != nil {
 		return nil, err
 	}
-	levelNames := b.w.GetLevels()
-	if levelNumber-1 >= len(levelNames) {
-		return nil, fmt.Errorf("level index out of bounds: %d", levelNumber)
-	}
-
-	level, err := b.w.GetLevel(levelNames[levelNumber-1])
+	levelNames := bld.w.GetLevels()
+	level, err := bld.w.GetLevel(levelNames[levelNumber-1])
 	if err != nil {
 		return nil, err
 	}
 
-	bsp := NewBsp(level)
-	sectors := b.scanSubSectors(level, bsp)
+	sectors := bld.buildSectorsFromLineDefs(level)
 
-	p1 := level.Things[0]
-	for _, t := range level.Things {
-		if t.Type == 1 {
-			p1 = t
-			break
-		}
-	}
+	pX, pY, pAngle := float64(0), float64(0), float64(0)
+	var things []*model.ConfigThing
 
-	_, p1Sector, _ := bsp.FindSector(p1.X, p1.Y, bsp.root)
-	p1Pos := model.XY{X: float64(p1.X), Y: float64(-p1.Y)}
-	p1Angle := float64(p1.Angle)
-
-	player := model.NewConfigPlayer(p1Pos, p1Angle, strconv.Itoa(int(p1Sector)))
-
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := textures.NewFileTextures(basePath)
-
-	root := model.NewConfigRoot(sectors, player, nil, ScaleFactor, true, t)
-
-	return root, nil
-}
-
-// scanSubSectors processes the BSP tree to create configuration sectors.
-func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
-	const doomMax = 32768.0
-	const doomMargin = 256.0
-	minX, minY, maxX, maxY := doomMax, doomMax, -doomMax, -doomMax
-	for _, v := range level.Vertexes {
-		if float64(v.XCoord) < minX {
-			minX = float64(v.XCoord)
-		}
-		if float64(v.XCoord) > maxX {
-			maxX = float64(v.XCoord)
-		}
-		if float64(v.YCoord) < minY {
-			minY = float64(v.YCoord)
-		}
-		if float64(v.YCoord) > maxY {
-			maxY = float64(v.YCoord)
-		}
-	}
-
-	rootBBox := Points{
-		{X: minX - doomMargin, Y: minY - doomMargin},
-		{X: maxX + doomMargin, Y: minY - doomMargin},
-		{X: maxX + doomMargin, Y: maxY + doomMargin},
-		{X: minX - doomMargin, Y: maxY + doomMargin},
-	}
-
-	numSS := uint16(len(level.SubSectors))
-	levelVerts := make(Points, len(level.Vertexes))
-
-	for i, v := range level.Vertexes {
-		levelVerts[i] = Point{X: float64(v.XCoord), Y: float64(v.YCoord)}
-	}
-
-	// 1. Traverse BSP (Spazio Nativo)
-	traversedPoints := make(map[uint16]Points)
-	if len(level.Nodes) > 0 {
-		bsp.Traverse(level, uint16(len(level.Nodes)-1), rootBBox, traversedPoints)
-	}
-
-	traversedPolys := make(map[uint16]Polygon)
-
-	// 2. Ancoraggio Metadati di Superficie (Pre-Split)
-	for i := uint16(0); i < numSS; i++ {
-		sectorRef, _ := level.GetSectorFromSubSector(i)
-		ds := level.Sectors[sectorRef]
-		points := traversedPoints[i]
-
-		for j1 := 0; j1 < len(points); j1++ {
-			p1 := points[j1]
-			p1.OverlappedSegment = nil
-			p1.Sector = ds
-			p1.SectorRef = sectorRef
-			points[j1] = p1
-		}
-		traversedPolys[i] = Polygon{Id: strconv.Itoa(int(i)), Sector: ds, SectorRef: sectorRef, Points: points}
-	}
-
-	// 3. Vertex Snapping Topologico (Elimina il drift FP64)
-	PolygonsSnap(levelVerts, traversedPolys)
-
-	var allVerts Points
-	for _, poly := range traversedPolys {
-		allVerts = append(allVerts, poly.Points...)
-	}
-	allVerts = append(allVerts, levelVerts...)
-
-	// 4. T-Junction elimination (Crea i sottomultipli esatti per le colonne)
-	b.eliminateTJunctions(allVerts, traversedPolys)
-
-	// 5. Ancoraggio Metadati GLOBALE Sector-Aware (Post-Split)
-	for i := uint16(0); i < numSS; i++ {
-		poly := traversedPolys[i]
-		for j1 := 0; j1 < len(poly.Points); j1++ {
-			p1 := poly.Points[j1]
-			p2 := poly.Points[(j1+1)%len(poly.Points)]
-
-			// Ricerca globale filtrata per appartenenza al settore corrente
-			p1.OverlappedSegment = b.findGlobalWadSeg(level, p1.ToModelXY(), p2.ToModelXY(), poly.SectorRef)
-			poly.Points[j1] = p1
-		}
-		traversedPolys[i] = poly
-	}
-
-	b.runDiagnostics(level, traversedPolys, numSS)
-
-	// 6. Generazione Half-Edge Map per adiacenze O(1)
-	edgeToSector := make(map[EdgeKey]string)
-	for i := uint16(0); i < numSS; i++ {
-		poly := traversedPolys[i]
-		sectorId := strconv.Itoa(int(i))
-		for j := 0; j < len(poly.Points); j++ {
-			p1 := poly.Points[j]
-			p2 := poly.Points[(j+1)%len(poly.Points)]
-			edgeToSector[EdgeKey{p1.X, p1.Y, p2.X, p2.Y}] = sectorId
-		}
-	}
-
-	// 7. Export verso le strutture dell'Engine
-	miSectors := b.buildEngineSectors(level, traversedPolys, numSS, edgeToSector)
-
-	// 8. ALTERAZIONE FINALE: Trasformazione coordinate
-	for _, sector := range miSectors {
-		if sector == nil {
+	for i, t := range level.Things {
+		tX := float64(t.X)
+		tY := float64(t.Y)
+		tAngle := float64(t.Angle)
+		if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
+			if t.Type == 1 {
+				pX, pY, pAngle = tX, tY, tAngle
+			}
 			continue
 		}
-		for _, seg := range sector.Segments {
-			seg.Start.Y = -seg.Start.Y
-			seg.End.Y = -seg.End.Y
-		}
-		b.forceWindingOrder(sector.Segments, false)
+		tSectorId := bld.resolveSectorId(Point{tX, tY}, sectors)
+		tId := fmt.Sprintf("t_%d", i)
+		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId)
+		things = append(things, cfgThing)
 	}
 
-	return miSectors
+	playerSectorId := bld.resolveSectorId(Point{pX, pY}, sectors)
+	player := model.NewConfigPlayer(
+		model.XY{X: pX, Y: -pY},
+		pAngle,
+		playerSectorId,
+	)
+
+	t := bld.w.GetTextures()
+	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, t), nil
 }
 
-// eliminateTJunctions refines subsector polygons by splitting edges to eliminate T-junctions.
-func (b *Builder) eliminateTJunctions(allVerts Points, subsectorPolys map[uint16]Polygon) {
-	for ssIdx, poly := range subsectorPolys {
-		var newPoly Polygon
-		newPoly.Id = poly.Id
-		newPoly.SectorRef = poly.SectorRef
-		newPoly.Sector = poly.Sector
+// buildSectorsFromLineDefs processes linedefs in a level to build and return a list of ConfigSector objects.
+func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector {
+	sectorToEdges := make(map[uint16][]Edge)
+	for i, ld := range level.LineDefs {
+		if ld.SideDefRight != -1 {
+			s := level.SideDefs[ld.SideDefRight].SectorRef
+			sectorToEdges[s] = append(sectorToEdges[s], Edge{uint16(ld.VertexStart), uint16(ld.VertexEnd), i, false})
+		}
+		if ld.SideDefLeft != -1 {
+			s := level.SideDefs[ld.SideDefLeft].SectorRef
+			sectorToEdges[s] = append(sectorToEdges[s], Edge{uint16(ld.VertexEnd), uint16(ld.VertexStart), i, true})
+		}
+	}
 
-		for i1 := 0; i1 < len(poly.Points); i1++ {
-			i2 := (i1 + 1) % len(poly.Points)
-			start := poly.Points[i1]
-			end := poly.Points[i2]
-			var splits Points
-			dx := end.X - start.X
-			dy := end.Y - start.Y
-			if lenSq := (dx * dx) + (dy * dy); lenSq > 0 {
-				for _, v := range allVerts {
-					// Tolleranza estesa a 1.5 per allinearsi al Vertex Snapping
-					if b.distPointToSegment(v, start, end) <= 1.5 {
-						t := ((v.X-start.X)*dx + (v.Y-start.Y)*dy) / lenSq
-						if t > 0.001 && t < 0.999 {
-							out := Point{
-								X:                 v.X,
-								Y:                 v.Y,
-								OverlappedSegment: nil, // Risolto al mapping
-								Sector:            start.Sector,
-								SectorRef:         start.SectorRef,
-							}
-							splits = append(splits, out)
-						}
+	var cSectors []*model.ConfigSector
+	edgeMap := make(map[EdgeKey]string)
+	wadLines := make(map[*model.ConfigSegment]bool)
+
+	for secIdx, edges := range sectorToEdges {
+		wadSector := level.Sectors[secIdx]
+		polygonDefs := traceLoops(level, edges)
+
+		for loopIdx, def := range polygonDefs {
+			mergedPoly := mergeHoles(def)
+			triangles := triangulate(mergedPoly)
+
+			for triIdx, tri := range triangles {
+				cSector := bld.buildConfigSector(level, wadSector, secIdx, loopIdx, triIdx, edges)
+				for k := 0; k < 3; k++ {
+					p1 := tri[k]
+					p2 := tri[(k+1)%3]
+					cSeg, isWadLine := bld.buildConfigSegment(level, cSector.Id, p1, p2, edges)
+					cSector.Segments = append(cSector.Segments, cSeg)
+					wadLines[cSeg] = isWadLine
+					key := EdgeKey{cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y}
+					edgeMap[key] = cSeg.Parent
+				}
+				cSectors = append(cSectors, cSector)
+			}
+		}
+	}
+
+	for _, cf := range cSectors {
+		for _, cs := range cf.Segments {
+			if cs.Kind == model.DefinitionJoin {
+				reverseKey := EdgeKey{cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y}
+				if neighborId, exists := edgeMap[reverseKey]; exists {
+					cs.Neighbor = neighborId
+				} else {
+					// PROTECTION 2: Prevents Ghost Walls!
+					isWadLine := wadLines[cs]
+					if isWadLine {
+						cs.Kind = model.DefinitionWall
+					} else {
+						cs.Neighbor = cs.Parent
 					}
 				}
 			}
-			sort.Slice(splits, func(i, j int) bool {
-				dxi, dyi := splits[i].X-start.X, splits[i].Y-start.Y
-				dxj, dyj := splits[j].X-start.X, splits[j].Y-start.Y
-				return (dxi*dxi + dyi*dyi) < (dxj*dxj + dyj*dyj)
-			})
-
-			newPoly.Points = append(newPoly.Points, start)
-			for _, sp := range splits {
-				last := newPoly.Points[len(newPoly.Points)-1]
-				dxSp, dySp := sp.X-last.X, sp.Y-last.Y
-				if (dxSp*dxSp + dySp*dySp) > 0.000001 {
-					newPoly.Points = append(newPoly.Points, sp)
-				}
-			}
 		}
-		subsectorPolys[ssIdx] = newPoly
 	}
+
+	return cSectors
 }
 
-// buildEngineSectors risolve metadati e adiacenze operando sui poligoni nativi.
-func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Polygon, numSS uint16, edgeMap map[EdgeKey]string) []*model.ConfigSector {
-	miSectors := make([]*model.ConfigSector, numSS)
+// buildConfigSector converts a WAD sector to a ConfigSector, assigning texture, height, light level, and ID properties.
+func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *model.ConfigSector {
+	const openAllDoors = true
+	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
+	miSector := model.NewConfigSector(sectorId)
+	miSector.Floor = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
+	ceilHeight := float64(wadSector.CeilingHeight)
+	if openAllDoors {
+		ceilHeight = bld.calculateOpenDoorCeil(level, secIdx, wadSector, edges)
+	}
+	miSector.Ceil = ceilHeight / ScaleFactorCeilFloorLineDef
+	miSector.Tag = strconv.Itoa(int(secIdx))
+	miSector.TextureCeil = CreateFlatId(wadSector.CeilingPic)
+	miSector.TextureFloor = CreateFlatId(wadSector.FloorPic)
+	miSector.TextureScaleFactor = 10.0
+	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
+	return miSector
+}
 
-	for i := uint16(0); i < numSS; i++ {
-		poly := traversedPolys[i]
-		sectorId := strconv.Itoa(int(i))
+// ConvertLight trasforma il LightLevel di Doom in un parametro lightdistance.
+// Valori < 0 indicano luce ambientale, valori > 0 indicano luce di settore.
+func (bld *Builder) convertLight(lightLevel int16) float64 {
+	// Calcolo della LightDistance
+	rawLight := float64(lightLevel)
+	// 1. Invertiamo il valore:
+	// In Doom 255 è luce max, in LightDistance 0 è luce max.
+	// distance = (255 - rawLight)
+	distance := 255.0 - rawLight
+	// 2. Discriminante Ambientale vs Settore
+	// Se la luce è sotto una certa soglia (es. 16), la consideriamo ambientale
+	if rawLight < 16 {
+		return -1.0
+	}
+	// Valore positivo (0 = luce piena, >0 = luce più lontana/attenuata)
+	v := (distance / 255.0) / 40
+	return v
+}
 
-		miSector := &model.ConfigSector{
-			Id:    sectorId,
-			Floor: SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:  SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
-			Tag:   strconv.Itoa(int(poly.SectorRef)),
-			//TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
-			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,
-			//Textures: true,
+// buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
+// It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
+func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
+	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
+	for _, e := range sectorEdges {
+		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
+		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
+		w2 := Point{float64(v2.XCoord), float64(v2.YCoord)}
+
+		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
+			ld := level.LineDefs[e.LDIdx]
+			sideIdx := ld.SideDefRight
+			if e.IsLeft {
+				sideIdx = ld.SideDefLeft
+			}
+			side := level.SideDefs[sideIdx]
+			seg.TextureMiddle = CreateTextureId(side.MiddleTexture)
+			seg.TextureUpper = CreateTextureId(side.UpperTexture)
+			seg.TextureLower = CreateTextureId(side.LowerTexture)
+			if ld.Flags&(1<<2) != 0 {
+				seg.Kind = model.DefinitionJoin
+			}
+			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+			return seg, true
+		}
+	}
+	seg.Kind = model.DefinitionJoin
+	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+	return seg, false
+}
+
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {
+	isDoor := false
+	lowestAdjCeil := int16(math.MaxInt16)
+	hasAdjacent := false
+
+	for _, e := range edges {
+		ld := level.LineDefs[e.LDIdx]
+
+		// 1. Check if the segment has a typical Doom door Action Special
+		// Classic specials: 1 (DR), 26 (DR), 27, 28, 31 (D1), 32, 33, 34, 46, 117, 118
+		special := ld.Function
+		if special == 1 || special == 31 || special == 117 || special == 118 || special == 26 || special == 32 || special == 46 {
+			isDoor = true
 		}
 
-		for j := 0; j < len(poly.Points); j++ {
-			p1 := poly.Points[j]
-			p2 := poly.Points[(j+1)%len(poly.Points)]
-
-			seg := model.NewConfigSegment(miSector.Id, model.DefinitionUnknown, p1.ToModelXY(), p2.ToModelXY())
-			wadSeg := p1.OverlappedSegment
-
-			// O(1) Topological Lookup (vettore inverso P2 -> P1)
-			reverseKey := EdgeKey{p2.X, p2.Y, p1.X, p1.Y}
-			if neighborId, exists := edgeMap[reverseKey]; exists {
-				seg.Neighbor = neighborId
+		// 2. Navigate the segment sides to find the adjacent sector
+		if ld.SideDefRight != -1 && ld.SideDefLeft != -1 {
+			adjSideIdx := ld.SideDefRight
+			if level.SideDefs[adjSideIdx].SectorRef == secIdx {
+				adjSideIdx = ld.SideDefLeft
 			}
 
-			seg.Kind = model.DefinitionWall
+			adjSectorRef := level.SideDefs[adjSideIdx].SectorRef
+			adjSector := level.Sectors[adjSectorRef]
 
-			if wadSeg != nil {
-				line := level.LineDefs[wadSeg.LineDef]
-				_, side := level.SegmentSideDef(wadSeg, line)
-				if side != nil {
-					//TODO TEST
-					seg.TextureUpper = "wall2.ppm"
-					seg.TextureMiddle = "wall.ppm"
-					seg.TextureLower = "floor2.ppm"
+			if adjSector.CeilingHeight < lowestAdjCeil {
+				lowestAdjCeil = adjSector.CeilingHeight
+				hasAdjacent = true
+			}
+		}
+	}
 
-					//seg.TextureUpper = side.UpperTexture
-					//seg.TextureMiddle = side.MiddleTexture
-					//seg.TextureLower = side.LowerTexture
+	// If it's a confirmed door (or a collapsed sector with valid adjacencies) we calculate the elevation
+	if (isDoor && (wadSector.CeilingHeight <= wadSector.FloorHeight && hasAdjacent)) && lowestAdjCeil != math.MaxInt16 {
+		targetCeil := lowestAdjCeil - 4
+		if targetCeil < wadSector.FloorHeight {
+			targetCeil = lowestAdjCeil // Emergency fallback if -4 penetrates the floor
+		}
+		return float64(targetCeil)
+	}
+
+	// Return the original height if it's not a door
+	return float64(wadSector.CeilingHeight)
+}
+
+// resolveSectorId determines the sector ID for a given point by checking triangle containment or finding the nearest sector.
+func (bld *Builder) resolveSectorId(p Point, sectors []*model.ConfigSector) string {
+	if len(sectors) == 0 {
+		return ""
+	}
+	var minDist = math.MaxFloat64
+	closestSector := sectors[0].Id
+
+	for _, s := range sectors {
+		if len(s.Segments) != 3 {
+			continue
+		}
+
+		v1 := Point{s.Segments[0].Start.X, -s.Segments[0].Start.Y}
+		v2 := Point{s.Segments[1].Start.X, -s.Segments[1].Start.Y}
+		v3 := Point{s.Segments[2].Start.X, -s.Segments[2].Start.Y}
+
+		if pointInTriangle(p, v1, v2, v3) {
+			return s.Id
+		}
+
+		cx := (v1.X + v2.X + v3.X) / 3.0
+		cy := (v1.Y + v2.Y + v3.Y) / 3.0
+		distSq := (cx-p.X)*(cx-p.X) + (cy-p.Y)*(cy-p.Y)
+
+		if distSq < minDist {
+			minDist = distSq
+			closestSector = s.Id
+		}
+	}
+	return closestSector
+}
+
+// maxPointsX returns the maximum X coordinate value from a slice of Point objects.
+func maxPointsX(poly []Point) float64 {
+	max := poly[0].X
+	for _, p := range poly {
+		if p.X > max {
+			max = p.X
+		}
+	}
+	return max
+}
+
+// mergeHoles connects holes and outer boundaries in a polygon definition into a single ordered list of points.
+func mergeHoles(def PolygonDef) []Point {
+	if len(def.Holes) == 0 {
+		return def.Outer
+	}
+
+	// Optimization 1: Exact calculation of final capacity to eliminate dynamic reallocations
+	totalLen := len(def.Outer)
+	for _, h := range def.Holes {
+		totalLen += len(h) + 2 // +2 for bridge vertices (forward and return)
+	}
+
+	outer := make([]Point, len(def.Outer), totalLen)
+	copy(outer, def.Outer)
+
+	// Sort holes from right to left to ensure topological consistency in bridging
+	sort.Slice(def.Holes, func(i, j int) bool {
+		return maxPointsX(def.Holes[i]) > maxPointsX(def.Holes[j])
+	})
+
+	for _, hole := range def.Holes {
+		holeIdx := 0
+		mX := hole[0].X
+		for i := 1; i < len(hole); i++ {
+			if hole[i].X > mX {
+				mX = hole[i].X
+				holeIdx = i
+			}
+		}
+		holePoint := hole[holeIdx]
+		bestOuterIdx := -1
+		minDist := math.MaxFloat64
+
+		for i, op := range outer {
+			if op.X < holePoint.X {
+				continue
+			}
+
+			// Optimization 2: Fast rejection. Calculate distance in O(1) before
+			// launching isVisible (which is O(N) for each segment).
+			if dist := distanceSq(holePoint, op); dist < minDist {
+				if isVisible(holePoint, op, hole, outer) {
+					minDist = dist
+					bestOuterIdx = i
 				}
-				seg.Tag = strconv.Itoa(int(line.Flags))
-				if (line.Flags & 0x0004) == 0 {
-					seg.Kind = model.DefinitionWall
-				} else if seg.Neighbor != "" {
-					seg.Kind = model.DefinitionJoin
+			}
+		}
+
+		// Topological fallback for non-manifold sectors or anomalous intersections
+		if bestOuterIdx == -1 {
+			bestOuterIdx = 0
+			for i, op := range outer {
+				if dist := distanceSq(holePoint, op); dist < minDist {
+					minDist = dist
+					bestOuterIdx = i
+				}
+			}
+		}
+
+		// Optimization 3: In-place memory shifting leveraging pre-allocated capacity.
+		// No additional heap allocation for new bridges.
+		oldLen := len(outer)
+		spliceLen := len(hole) + 2
+		outer = append(outer, make([]Point, spliceLen)...)
+
+		// Forward shift of elements to the right of the insertion point
+		copy(outer[bestOuterIdx+1+spliceLen:], outer[bestOuterIdx+1:oldLen])
+
+		// Linear reconstruction of the bridge
+		insertPos := bestOuterIdx + 1
+		for i := 0; i < len(hole); i++ {
+			outer[insertPos+i] = hole[(holeIdx+i)%len(hole)]
+		}
+		outer[insertPos+len(hole)] = holePoint
+		outer[insertPos+len(hole)+1] = outer[bestOuterIdx]
+	}
+
+	return outer
+}
+
+// isVisible checks if the line segment between p1 and p2 does not intersect any edge from the hole or outer polygon.
+func isVisible(p1, p2 Point, hole, outer []Point) bool {
+	for i := 0; i < len(outer); i++ {
+		e1, e2 := outer[i], outer[(i+1)%len(outer)]
+		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
+			continue
+		}
+		if segmentsIntersect(p1, p2, e1, e2) {
+			return false
+		}
+	}
+	for i := 0; i < len(hole); i++ {
+		e1, e2 := hole[i], hole[(i+1)%len(hole)]
+		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
+			continue
+		}
+		if segmentsIntersect(p1, p2, e1, e2) {
+			return false
+		}
+	}
+	return true
+}
+
+// distanceSq calculates and returns the squared Euclidean distance between two points p1 and p2.
+func distanceSq(p1, p2 Point) float64 {
+	dx := p1.X - p2.X
+	dy := p1.Y - p2.Y
+	return dx*dx + dy*dy
+}
+
+// pointInTriangle determines if a point p lies inside or on the edges of a triangle formed by vertices a, b, and c.
+func pointInTriangle(p, a, b, c Point) bool {
+	cp1 := (b.X-a.X)*(p.Y-a.Y) - (b.Y-a.Y)*(p.X-a.X)
+	cp2 := (c.X-b.X)*(p.Y-b.Y) - (c.Y-b.Y)*(p.X-b.X)
+	cp3 := (a.X-c.X)*(p.Y-c.Y) - (a.Y-c.Y)*(p.X-c.X)
+
+	const eps = 0.5
+	return (cp1 >= -eps && cp2 >= -eps && cp3 >= -eps) || (cp1 <= eps && cp2 <= eps && cp3 <= eps)
+}
+
+// traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
+func traceLoops(level *Level, edges []Edge) []PolygonDef {
+	// Optimization: O(1) array access instead of map[uint16][]Edge
+	adj := make([][]Edge, len(level.Vertexes))
+	for _, e := range edges {
+		adj[e.V1] = append(adj[e.V1], e)
+	}
+
+	// Optimization: flat bitmask/boolean array (LDIdx << 1 | IsLeft) instead of map[Edge]bool
+	visited := make([]bool, len(level.LineDefs)*2)
+	getVisitedIdx := func(e Edge) int {
+		idx := e.LDIdx << 1
+		if e.IsLeft {
+			idx |= 1
+		}
+		return idx
+	}
+
+	var rawLoops [][]Point
+
+	for _, startEdge := range edges {
+		vIdx := getVisitedIdx(startEdge)
+		if visited[vIdx] {
+			continue
+		}
+
+		var currentLoop []Point
+		curr := startEdge
+		for {
+			visited[getVisitedIdx(curr)] = true
+			v := level.Vertexes[curr.V1]
+			currentLoop = append(currentLoop, Point{X: float64(v.XCoord), Y: float64(v.YCoord)})
+
+			nextOptions := adj[curr.V2]
+			var nextEdge Edge
+			found := false
+			for _, o := range nextOptions {
+				if !visited[getVisitedIdx(o)] {
+					nextEdge = o
+					found = true
+					break
+				}
+			}
+
+			if !found || nextEdge.V1 == startEdge.V1 {
+				break
+			}
+			curr = nextEdge
+		}
+		if len(currentLoop) >= 3 {
+			rawLoops = append(rawLoops, currentLoop)
+		}
+	}
+
+	if len(rawLoops) == 0 {
+		return nil
+	}
+
+	var outers [][]Point
+	var holes [][]Point
+
+	maxArea := 0.0
+	outerSign := 1.0
+
+	areas := make([]float64, len(rawLoops))
+	for i, loop := range rawLoops {
+		areas[i] = signedArea(loop)
+		absArea := math.Abs(areas[i])
+		if absArea > maxArea {
+			maxArea = absArea
+			if areas[i] < 0 {
+				outerSign = -1.0
+			} else {
+				outerSign = 1.0
+			}
+		}
+	}
+
+	for i, loop := range rawLoops {
+		if (areas[i] < 0 && outerSign < 0) || (areas[i] > 0 && outerSign > 0) {
+			outers = append(outers, loop)
+		} else {
+			holes = append(holes, loop)
+		}
+	}
+
+	defs := make([]PolygonDef, len(outers))
+	for i, o := range outers {
+		defs[i] = PolygonDef{Outer: o}
+	}
+
+	for _, h := range holes {
+		for i, def := range defs {
+			if pointInPolygon(h[0], def.Outer) {
+				defs[i].Holes = append(defs[i].Holes, h)
+				break
+			}
+		}
+	}
+
+	return defs
+}
+
+// GEOMETRY & CDT ENGINE
+
+// triangulate performs constrained Delaunay triangulation on a polygon with optional holes.
+// It returns a list of triangles, each represented by 3 counterclockwise points.
+func triangulate(poly []Point) [][]Point {
+	if len(poly) < 3 {
+		return nil
+	}
+
+	// 1. Deserialization: extract Outer and Holes from flat array separated by NaN
+	var outer []Point
+	var holes [][]Point
+	var current []Point
+
+	for _, p := range poly {
+		if math.IsNaN(p.X) || math.IsNaN(p.Y) {
+			if outer == nil {
+				outer = current
+			} else {
+				holes = append(holes, current)
+			}
+			current = nil
+		} else {
+			current = append(current, p)
+		}
+	}
+	if outer == nil {
+		outer = current
+	} else if len(current) > 0 {
+		holes = append(holes, current)
+	}
+
+	// 2. Collect all valid vertices
+	var points []Point
+	points = append(points, outer...)
+	for _, h := range holes {
+		points = append(points, h...)
+	}
+
+	if len(points) < 3 {
+		return nil
+	}
+
+	// 3. Unconstrained Delaunay Triangulation (Bowyer-Watson)
+	mesh := bowyerWatson(points)
+
+	// 4. Constraint Recovery (Lawson Edge Flipping)
+	var constraints [][2]Point
+	constraints = append(constraints, buildConstraints(outer)...)
+	for _, hole := range holes {
+		constraints = append(constraints, buildConstraints(hole)...)
+	}
+	mesh = recoverConstraints(mesh, constraints)
+
+	// 5. Domain Culling
+	var finalTriangles [][]Point
+	for _, t := range mesh {
+		// Calculate centroid for containment test
+		centroid := Point{
+			X: (t.A.X + t.B.X + t.C.X) / 3.0,
+			Y: (t.A.Y + t.B.Y + t.C.Y) / 3.0,
+		}
+
+		// The triangle is valid if it's inside the perimeter and outside all holes
+		if pointInPolygon(centroid, outer) {
+			inHole := false
+			for _, hole := range holes {
+				if pointInPolygon(centroid, hole) {
+					inHole = true
+					break
+				}
+			}
+			if !inHole {
+				// Ensure counterclockwise (CCW) winding required by renderer
+				if orientation(t.A, t.B, t.C) == 2 {
+					finalTriangles = append(finalTriangles, []Point{t.A, t.C, t.B})
+				} else {
+					finalTriangles = append(finalTriangles, []Point{t.A, t.B, t.C})
+				}
+			}
+		}
+	}
+
+	return finalTriangles
+}
+
+// buildConstraints generates edge constraints from a polygon by connecting consecutive vertices in cyclical order.
+func buildConstraints(poly []Point) [][2]Point {
+	var c [][2]Point
+	if len(poly) < 3 {
+		return c
+	}
+	for i := 0; i < len(poly); i++ {
+		c = append(c, [2]Point{poly[i], poly[(i+1)%len(poly)]})
+	}
+	return c
+}
+
+// bowyerWatson performs the Bowyer-Watson algorithm for constructing a Delaunay triangulation from a set of points.
+func bowyerWatson(points []Point) []Triangle {
+	minX, minY := math.MaxFloat64, math.MaxFloat64
+	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
+
+	for _, p := range points {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+	}
+
+	dx, dy := maxX-minX, maxY-minY
+	deltaMax := math.Max(dx, dy)
+	if deltaMax == 0 {
+		deltaMax = 1.0
+	}
+	midX, midY := (minX+maxX)/2.0, (minY+maxY)/2.0
+
+	// Bounding super-triangle that wraps the entire area
+	stA := Point{X: midX - 20*deltaMax, Y: midY - deltaMax}
+	stB := Point{X: midX, Y: midY + 20*deltaMax}
+	stC := Point{X: midX + 20*deltaMax, Y: midY - deltaMax}
+
+	triangles := []Triangle{{stA, stB, stC}}
+
+	for _, p := range points {
+		var badTriangles []Triangle
+		var polygon [][2]Point
+
+		for _, t := range triangles {
+			// Force CCW orientation for exact InCircle determinant
+			if orientation(t.A, t.B, t.C) == 2 {
+				if inCircle(t.A, t.B, t.C, p) {
+					badTriangles = append(badTriangles, t)
 				}
 			} else {
-				if seg.Neighbor != "" {
-					seg.Kind = model.DefinitionJoin
-					seg.Tag = "bsp_split"
-				} else {
-					seg.Kind = model.DefinitionUnknown
-					seg.Tag = "open"
+				if inCircle(t.A, t.C, t.B, p) {
+					badTriangles = append(badTriangles, t)
 				}
 			}
-
-			miSector.Segments = append(miSector.Segments, seg)
-		}
-		miSectors[i] = miSector
-	}
-
-	return miSectors
-}
-
-// distPointToSegment calculates the shortest distance from a point to a line segment.
-func (b *Builder) distPointToSegment(p Point, v Point, w Point) float64 {
-	dx, dy := w.X-v.X, w.Y-v.Y
-	l2 := dx*dx + dy*dy
-	if l2 == 0 {
-		pdx, pdy := p.X-v.X, p.Y-v.Y
-		return math.Sqrt(pdx*pdx + pdy*pdy)
-	}
-	t := math.Max(0, math.Min(1, ((p.X-v.X)*dx+(p.Y-v.Y)*dy)/l2))
-	projX := v.X + t*dx
-	projY := v.Y + t*dy
-	pdx, pdy := p.X-projX, p.Y-projY
-	return math.Sqrt(pdx*pdx + pdy*pdy)
-}
-
-// findGlobalWadSeg esegue una ricerca globale limitando i match ai Seg pertinenti al Sector corrente.
-func (b *Builder) findGlobalWadSeg(level *Level, p1 model.XY, p2 model.XY, targetSectorRef uint16) *lumps.Seg {
-	const epsilonSq = 1.0
-
-	var bestMatch *lumps.Seg
-	var maxOverlap float64
-
-	for i := 0; i < len(level.Segments); i++ {
-		wadSeg := level.Segments[i]
-		v1 := level.Vertexes[wadSeg.VertexStart]
-		v2 := level.Vertexes[wadSeg.VertexEnd]
-
-		w1 := model.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
-		w2 := model.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
-
-		dx := w2.X - w1.X
-		dy := w2.Y - w1.Y
-		lenSq := dx*dx + dy*dy
-
-		if lenSq == 0 {
-			continue
 		}
 
-		// 1. Check Collinearità
-		cross1 := dx*(p1.Y-w1.Y) - dy*(p1.X-w1.X)
-		if (cross1*cross1)/lenSq > epsilonSq {
-			continue
-		}
-
-		cross2 := dx*(p2.Y-w1.Y) - dy*(p2.X-w1.X)
-		if (cross2*cross2)/lenSq > epsilonSq {
-			continue
-		}
-
-		// 2. Proiezione parametrica
-		t1 := ((p1.X-w1.X)*dx + (p1.Y-w1.Y)*dy) / lenSq
-		t2 := ((p2.X-w1.X)*dx + (p2.Y-w1.Y)*dy) / lenSq
-
-		if t1 > t2 {
-			t1, t2 = t2, t1
-		}
-
-		// 3. Verifica Sovrapposizione Assoluta
-		overlapStart := math.Max(0.0, t1)
-		overlapEnd := math.Min(1.0, t2)
-		overlapLength := (overlapEnd - overlapStart) * math.Sqrt(lenSq)
-
-		// Cattura l'intersezione fisica reale
-		if overlapLength > 0.5 {
-			line := level.LineDefs[wadSeg.LineDef]
-			_, side := level.SegmentSideDef(wadSeg, line)
-
-			// Controlla che il Seg trovato faccia parte ESATTAMENTE del settore che stiamo analizzando
-			if side != nil && side.SectorRef == targetSectorRef {
-				return wadSeg // Match geometrico E semantico assoluto
-			}
-
-			// Salva per fallback se il Nodebuilder ha fatto un pasticcio semantico
-			if overlapLength > maxOverlap {
-				maxOverlap = overlapLength
-				bestMatch = wadSeg
-			}
-		}
-	}
-	return bestMatch // Ritorna il miglior match geometrico come fallback
-}
-
-// runDiagnostics calcola il delta tra i Seg nativi allocati nel SubSector e quelli catturati geometricamente.
-func (b *Builder) runDiagnostics(level *Level, traversedPolys map[uint16]Polygon, numSS uint16) {
-	missingTotal := 0
-	alienTotal := 0
-
-	for i := uint16(0); i < numSS; i++ {
-		ss := level.SubSectors[i]
-
-		// 1. Estrazione Segments attesi (Verità nativa del WAD)
-		expectedSegs := make(map[int]bool)
-		for j := int16(0); j < ss.NumSegments; j++ {
-			expectedSegs[int(ss.StartSeg+j)] = true
-		}
-
-		// 2. Estrazione Segments catturati dalla nostra pipeline spaziale
-		capturedSegs := make(map[int]bool)
-		poly := traversedPolys[i]
-		for _, p := range poly.Points {
-			if p.OverlappedSegment != nil {
-				// Risoluzione O(N) del puntatore all'indice reale nel WAD
-				for k := 0; k < len(level.Segments); k++ {
-					if level.Segments[k] == p.OverlappedSegment {
-						capturedSegs[k] = true
+		for _, bt := range badTriangles {
+			edges := [3][2]Point{{bt.A, bt.B}, {bt.B, bt.C}, {bt.C, bt.A}}
+			for _, edge := range edges {
+				shared := false
+				for _, other := range badTriangles {
+					if bt == other {
+						continue
+					}
+					if other.HasEdge(edge) {
+						shared = true
 						break
 					}
 				}
-			}
-		}
-
-		// 3. Calcolo dei Delta
-		var missing []int
-		for segIdx := range expectedSegs {
-			if !capturedSegs[segIdx] {
-				missing = append(missing, segIdx)
-			}
-		}
-
-		var alien []int
-		for segIdx := range capturedSegs {
-			if !expectedSegs[segIdx] {
-				alien = append(alien, segIdx)
-			}
-		}
-
-		// 4. Dump dell'anomalia
-		if len(missing) > 0 || len(alien) > 0 {
-			fmt.Printf("[DIAGNOSTIC] SubSector %d (SectorRef %d):\n", i, poly.SectorRef)
-			if len(missing) > 0 {
-				missingTotal += len(missing)
-				fmt.Printf("  -> MANCANTI (%d): %v\n", len(missing), missing)
-				for _, m := range missing {
-					s := level.Segments[m]
-					v1 := level.Vertexes[s.VertexStart]
-					v2 := level.Vertexes[s.VertexEnd]
-					fmt.Printf("     Seg %d: (%.0f, %.0f) -> (%.0f, %.0f) LineDef: %d\n",
-						m, float64(v1.XCoord), float64(v1.YCoord), float64(v2.XCoord), float64(v2.YCoord), s.LineDef)
+				if !shared {
+					polygon = append(polygon, edge)
 				}
 			}
-			if len(alien) > 0 {
-				alienTotal += len(alien)
-				fmt.Printf("  -> ALIENI (%d): %v (Catturati ma non assegnati dal Nodebuilder a questo SS)\n", len(alien), alien)
+		}
+
+		var nextTriangles []Triangle
+		for _, t := range triangles {
+			isBad := false
+			for _, bt := range badTriangles {
+				if t == bt {
+					isBad = true
+					break
+				}
+			}
+			if !isBad {
+				nextTriangles = append(nextTriangles, t)
+			}
+		}
+		triangles = nextTriangles
+
+		for _, edge := range polygon {
+			triangles = append(triangles, Triangle{edge[0], edge[1], p})
+		}
+	}
+
+	var finalTriangles []Triangle
+	for _, t := range triangles {
+		if !t.HasVertex(stA) && !t.HasVertex(stB) && !t.HasVertex(stC) {
+			finalTriangles = append(finalTriangles, t)
+		}
+	}
+
+	return finalTriangles
+}
+
+// recoverConstraints enforces WAD segments on the mesh through Edge Flipping,
+// preventing infinite loops on non-convex quadrilaterals.
+func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle {
+	const failsafeMax = 2000
+	for _, c := range constraints {
+		failsafe := 0
+		for {
+			failsafe++
+			if failsafe > failsafeMax {
+				break // Absolute failsafe: impossible/degenerate topology in the WAD
+			}
+
+			flipped := false
+
+			for i, t := range triangles {
+				edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
+				for _, e := range edges {
+					if e[0] == c[0] || e[0] == c[1] || e[1] == c[0] || e[1] == c[1] {
+						continue
+					}
+
+					if segmentsIntersect(e[0], e[1], c[0], c[1]) {
+						adjIdx := -1
+						for j, ot := range triangles {
+							if i == j {
+								continue
+							}
+							if ot.HasEdge(e) {
+								adjIdx = j
+								break
+							}
+						}
+
+						if adjIdx != -1 {
+							t1 := triangles[i]
+							t2 := triangles[adjIdx]
+
+							var pOpp1, pOpp2 Point
+							for _, v := range []Point{t1.A, t1.B, t1.C} {
+								if v != e[0] && v != e[1] {
+									pOpp1 = v
+									break
+								}
+							}
+							for _, v := range []Point{t2.A, t2.B, t2.C} {
+								if v != e[0] && v != e[1] {
+									pOpp2 = v
+									break
+								}
+							}
+
+							// CONVEXITY TEST: the new diagonal (pOpp1-pOpp2)
+							// must leave the old vertices (e[0], e[1]) on opposite sides.
+							o1 := orientation(pOpp1, pOpp2, e[0])
+							o2 := orientation(pOpp1, pOpp2, e[1])
+
+							if o1 != o2 && o1 != 0 && o2 != 0 {
+								// Convex quadrilateral: safe flip
+								triangles[i] = Triangle{pOpp1, pOpp2, e[0]}
+								triangles[adjIdx] = Triangle{pOpp1, pOpp2, e[1]}
+								flipped = true
+								break // Restart scanning with the new topology
+							}
+						}
+					}
+				}
+				if flipped {
+					break
+				}
+			}
+
+			// If we scanned all triangles without making valid flips,
+			// the constraint is resolved or blocked on unsolvable degeneracies.
+			if !flipped {
+				break
 			}
 		}
 	}
-
-	fmt.Printf("\n[DIAGNOSTIC SUMMARY] Totale Seg Nativi Persi: %d | Totale Seg Alieni Catturati: %d\n", missingTotal, alienTotal)
-
-	//os.Exit(1)
+	return triangles
 }
 
-// forceWindingOrder adjusts the winding order of given segments.
-func (b *Builder) forceWindingOrder(segments []*model.ConfigSegment, wantClockwise bool) {
-	if len(segments) < 3 {
-		return
+// inCircle determines if a point `d` lies within the circumcircle of triangle formed by points `a`, `b`, and `c`.
+func inCircle(a, b, c, d Point) bool {
+	adx, ady := a.X-d.X, a.Y-d.Y
+	bdx, bdy := b.X-d.X, b.Y-d.Y
+	cdx, cdy := c.X-d.X, c.Y-d.Y
+
+	abDet := adx*bdy - bdx*ady
+	bcDet := bdx*cdy - cdx*bdy
+	caDet := cdx*ady - adx*cdy
+
+	aLift := adx*adx + ady*ady
+	bLift := bdx*bdx + bdy*bdy
+	cLift := cdx*cdx + cdy*cdy
+
+	return aLift*bcDet+bLift*caDet+cLift*abDet > 0
+}
+
+// orientation calculates the orientation of three points (p, q, r).
+// Returns 0 if collinear, 1 if clockwise, and 2 if counterclockwise.
+func orientation(p, q, r Point) int {
+	val := (q.Y-p.Y)*(r.X-q.X) - (q.X-p.X)*(r.Y-q.Y)
+	if val == 0 {
+		return 0
 	}
-	area := 0.0
-	for _, seg := range segments {
-		area += (seg.End.X - seg.Start.X) * (seg.End.Y + seg.Start.Y)
+	if val > 0 {
+		return 1
 	}
-	if (area > 0) != wantClockwise {
-		for i, j := 0, len(segments)-1; i < j; i, j = i+1, j-1 {
-			segments[i], segments[j] = segments[j], segments[i]
+	return 2
+}
+
+// onSegment checks if point q lies on the line segment defined by points p and r.
+func onSegment(p, q, r Point) bool {
+	return q.X <= math.Max(p.X, r.X) && q.X >= math.Min(p.X, r.X) &&
+		q.Y <= math.Max(p.Y, r.Y) && q.Y >= math.Min(p.Y, r.Y)
+}
+
+// segmentsIntersect checks whether two line segments (p1-q1 and p2-q2) intersect. Uses orientation and colinearity checks.
+func segmentsIntersect(p1, q1, p2, q2 Point) bool {
+	o1 := orientation(p1, q1, p2)
+	o2 := orientation(p1, q1, q2)
+	o3 := orientation(p2, q2, p1)
+	o4 := orientation(p2, q2, q1)
+
+	if o1 != o2 && o3 != o4 {
+		return true
+	}
+	if o1 == 0 && onSegment(p1, p2, q1) {
+		return true
+	}
+	if o2 == 0 && onSegment(p1, q2, q1) {
+		return true
+	}
+	if o3 == 0 && onSegment(p2, p1, q2) {
+		return true
+	}
+	if o4 == 0 && onSegment(p2, q1, q2) {
+		return true
+	}
+
+	return false
+}
+
+// pointInPolygon determines whether a point is inside a given polygon using the ray-casting algorithm.
+// p represents the point to test.
+// poly is the array of Points defining the polygon, ordered either clockwise or counterclockwise.
+// Returns true if the point is inside the polygon; otherwise, returns false.
+func pointInPolygon(p Point, poly []Point) bool {
+	inside := false
+	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
+		xi, yi := poly[i].X, poly[i].Y
+		xj, yj := poly[j].X, poly[j].Y
+		if ((yi > p.Y) != (yj > p.Y)) && (p.X < (xj-xi)*(p.Y-yi)/(yj-yi)+xi) {
+			inside = !inside
 		}
-		for _, seg := range segments {
-			seg.Start, seg.End = seg.End, seg.Start
-		}
 	}
+	return inside
 }
 
-// SnapFloat rounds a floating-point number.
-func SnapFloat(val float64) float64 {
-	return math.Round(val*10000.0) / 10000.0
+// signedArea calculates the signed area of a polygon defined by a slice of Points, using the shoelace formula.
+func signedArea(poly []Point) float64 {
+	var area float64
+	for i := 0; i < len(poly); i++ {
+		p1, p2 := poly[i], poly[(i+1)%len(poly)]
+		area += p1.X*p2.Y - p2.X*p1.Y
+	}
+	return area / 2.0
 }
 
-// PolygonSplit splits a polygon into two sub-polygons based on a partition line.
-func PolygonSplit(poly Points, nx int16, ny int16, ndx int16, ndy int16) (Points, Points) {
-	if len(poly) < 3 {
-		return nil, nil
-	}
+/*
+// recoverConstraints modifies a set of triangles to ensure they satisfy given edge constraints using edge flipping.
+func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle {
+	for _, c := range constraints {
+		for {
+			intersectingIdx := -1
+			var intersectingEdge [2]Point
 
-	const epsilonSq = 0.01
+			for i, t := range triangles {
+				edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
+				for _, e := range edges {
+					if e[0] == c[0] || e[0] == c[1] || e[1] == c[0] || e[1] == c[1] {
+						continue
+					}
+					if segmentsIntersect(e[0], e[1], c[0], c[1]) {
+						intersectingIdx = i
+						intersectingEdge = e
+						break
+					}
+				}
+				if intersectingIdx != -1 {
+					break
+				}
+			}
 
-	fnx, fny := float64(nx), float64(ny)
-	fndx, fndy := float64(ndx), float64(ndy)
-	lenSq := fndx*fndx + fndy*fndy
+			if intersectingIdx == -1 {
+				break
+			}
 
-	if lenSq == 0 {
-		return poly, nil
-	}
+			adjIdx := -1
+			for i, t := range triangles {
+				if i == intersectingIdx {
+					continue
+				}
+				if t.HasEdge(intersectingEdge) {
+					adjIdx = i
+					break
+				}
+			}
 
-	type vertexInfo struct {
-		p    Point
-		dist float64
-		side int
-	}
+			if adjIdx != -1 {
+				t1 := triangles[intersectingIdx]
+				t2 := triangles[adjIdx]
 
-	vertices := make([]vertexInfo, 0, len(poly))
-	frontCount, backCount := 0, 0
+				var pOpp1, pOpp2 Point
+				for _, v := range []Point{t1.A, t1.B, t1.C} {
+					if v != intersectingEdge[0] && v != intersectingEdge[1] {
+						pOpp1 = v
+						break
+					}
+				}
+				for _, v := range []Point{t2.A, t2.B, t2.C} {
+					if v != intersectingEdge[0] && v != intersectingEdge[1] {
+						pOpp2 = v
+						break
+					}
+				}
 
-	for _, p := range poly {
-		cross := fndx*(p.Y-fny) - fndy*(p.X-fnx)
-		distSq := (cross * cross) / lenSq
-		side := 0
-
-		if distSq > epsilonSq {
-			if cross <= 0 {
-				side = 1
-				frontCount++
+				triangles[intersectingIdx] = Triangle{pOpp1, pOpp2, intersectingEdge[0]}
+				triangles[adjIdx] = Triangle{pOpp1, pOpp2, intersectingEdge[1]}
 			} else {
-				side = -1
-				backCount++
+				break
 			}
 		}
-		vertices = append(vertices, vertexInfo{p, cross, side})
 	}
-
-	if backCount == 0 {
-		return PolygonClean(poly), nil
-	}
-	if frontCount == 0 {
-		return nil, PolygonClean(poly)
-	}
-
-	var front, back Points
-
-	for i := 0; i < len(vertices); i++ {
-		v1 := vertices[i]
-		v2 := vertices[(i+1)%len(vertices)]
-
-		if v1.side >= 0 {
-			front = append(front, v1.p)
-		}
-		if v1.side <= 0 {
-			back = append(back, v1.p)
-		}
-
-		if (v1.side > 0 && v2.side < 0) || (v1.side < 0 && v2.side > 0) {
-			u := v1.dist / (v1.dist - v2.dist)
-			inter := Point{
-				X:                 v1.p.X + u*(v2.p.X-v1.p.X),
-				Y:                 v1.p.Y + u*(v2.p.Y-v1.p.Y),
-				OverlappedSegment: nil,
-				Sector:            v1.p.Sector,
-				SectorRef:         v1.p.SectorRef,
-			}
-			front = append(front, inter)
-			back = append(back, inter)
-		}
-	}
-
-	return PolygonClean(front), PolygonClean(back)
+	return triangles
 }
-
-// PolygonClean removes redundant points.
-func PolygonClean(poly Points) Points {
-	if len(poly) < 3 {
-		return nil
-	}
-	var res Points
-	tolSq := 0.1 * 0.1
-
-	for _, p := range poly {
-		if len(res) == 0 {
-			res = append(res, p)
-			continue
-		}
-		last := res[len(res)-1]
-		dx, dy := p.X-last.X, p.Y-last.Y
-		if (dx*dx + dy*dy) > tolSq {
-			res = append(res, p)
-		}
-	}
-
-	if len(res) > 1 {
-		first, last := res[0], res[len(res)-1]
-		dx, dy := last.X-first.X, last.Y-first.Y
-		if (dx*dx + dy*dy) <= tolSq {
-			res = res[:len(res)-1]
-		}
-	}
-
-	if len(res) < 3 {
-		return nil
-	}
-	return res
-}
-
-// PolygonsSnap collassa i vertici approssimati sulle coordinate native esatte prendendo il più vicino.
-func PolygonsSnap(vertexes Points, subsectorPolys map[uint16]Polygon) {
-	snapVertex := func(p Point) Point {
-		best := p
-		minDistSq := 2.25 // Distanza max 1.5 unità
-
-		for _, wv := range vertexes {
-			dx, dy := p.X-wv.X, p.Y-wv.Y
-			distSq := dx*dx + dy*dy
-			if distSq <= minDistSq {
-				minDistSq = distSq
-				// Conserva i metadati di superficie
-				best = Point{
-					X:                 wv.X,
-					Y:                 wv.Y,
-					OverlappedSegment: p.OverlappedSegment,
-					Sector:            p.Sector,
-					SectorRef:         p.SectorRef,
-				}
-			}
-		}
-		return best
-	}
-
-	for i, poly := range subsectorPolys {
-		for j, p := range poly.Points {
-			poly.Points[j] = snapVertex(p)
-		}
-		points := PolygonClean(poly.Points)
-
-		z := subsectorPolys[i]
-		z.Points = points
-		subsectorPolys[i] = z
-	}
-}
-
 
 */

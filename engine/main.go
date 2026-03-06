@@ -52,7 +52,7 @@ func (g *Game) Setup() {
 	case 2:
 		const levelNumber = 1
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
-		wb := wad.NewBuilderLineDef()
+		wb := wad.NewBuilder()
 		g.cfg, err = wb.Setup(wadFile, levelNumber)
 	}
 	if err != nil {

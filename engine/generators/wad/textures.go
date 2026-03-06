@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
+// CreateTextureId generates a valid texture ID by prepending a fixed prefix to a cleaned, non-empty input string.
 func CreateTextureId(id string) string {
 	const textureId = "__TEXTURE__"
 	id = cleanId(id)
@@ -18,6 +19,7 @@ func CreateTextureId(id string) string {
 	return textureId + id
 }
 
+// CreateFlatId generates a unique flat identifier by normalizing and appending a prefix to the input ID. Returns an empty string for invalid inputs.
 func CreateFlatId(id string) string {
 	const flatId = "__FLAT__"
 	id = cleanId(id)
@@ -27,12 +29,12 @@ func CreateFlatId(id string) string {
 	return flatId + id
 }
 
-// Textures manages a collection of textures using a map with string identifiers as keys.
+// Textures is a collection that maps string IDs to Texture objects, allowing storage and retrieval of texture resources.
 type Textures struct {
 	resources map[string]*textures.Texture
 }
 
-// NewTextures initializes and returns a Textures object by loading texture data from the specified base path. Returns an error if loading fails.
+// NewTextures creates and returns a new instance of Textures with an initialized resource map.
 func NewTextures() (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
@@ -40,14 +42,16 @@ func NewTextures() (*Textures, error) {
 	return t, nil
 }
 
-// Add inserts a new texture into the Textures map using the given id and image, returning a pointer to the created texture.
+// Add creates and adds a new texture to the Textures resource map using the provided ID and RGBA image data.
+// It converts the image's pixel data into texture-specific format and returns the newly created texture.
 func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	//dst := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 	//draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 	dst := src
+	id := len(t.resources)
 
-	texture := textures.NewTexture(size.X, size.Y)
+	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y)
 	for y := 0; y < size.Y; y++ {
 		for x := 0; x < size.X; x++ {
 			rgba := dst.At(x, y).(color.RGBA)
@@ -60,7 +64,7 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	return texture
 }
 
-// Get retrieves a texture from the resources map by its cleaned identifier. Returns nil if not found or the ID is invalid.
+// Get retrieves the texture associated with the given ID from the Textures' resources map. Returns nil if not found.
 func (t *Textures) Get(id string) *textures.Texture {
 	if len(id) == 0 {
 		return nil
@@ -73,7 +77,16 @@ func (t *Textures) Get(id string) *textures.Texture {
 	return x
 }
 
-// cleanId normalizes the input string by trimming whitespace and converting it to uppercase.
+// GetNames returns a slice of all texture names (IDs) stored in the Textures collection.
+func (t *Textures) GetNames() []string {
+	var out []string
+	for id := range t.resources {
+		out = append(out, id)
+	}
+	return out
+}
+
+// cleanId normalizes the input string by trimming spaces and converting it to uppercase.
 func cleanId(id string) string {
 	return strings.TrimSpace(strings.ToUpper(id))
 }

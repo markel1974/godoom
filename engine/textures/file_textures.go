@@ -22,11 +22,12 @@ func NewFileTextures(basePath string) (*FileTextures, error) {
 		return nil, err
 	}
 
-	for _, f := range files {
+	for idx, f := range files {
 		if !f.IsDir() {
-			data, err := t.load(basePath + f.Name())
+			tex := NewTexture(f.Name(), uint32(idx), 1024, 1024)
+			err = t.load(tex, basePath+f.Name())
 			if err == nil || err == io.EOF {
-				t.resources[f.Name()] = data
+				t.resources[f.Name()] = tex
 			} else {
 				return nil, err
 			}
@@ -36,15 +37,14 @@ func NewFileTextures(basePath string) (*FileTextures, error) {
 }
 
 // load reads texture data from a file and returns a pointer to a Texture object or an error if the operation fails.
-func (t *FileTextures) load(filename string) (*Texture, error) {
-	var texture = NewTexture(1024, 1024)
+func (t *FileTextures) load(tex *Texture, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 	if _, err := file.Seek(0x11, io.SeekStart); err != nil {
-		return nil, err
+		return err
 	}
 	br := bufio.NewReader(file)
 	var r byte
@@ -54,15 +54,15 @@ func (t *FileTextures) load(filename string) (*Texture, error) {
 		for y := 0; y < 1024; y++ {
 			for x := 0; x < 1024; x++ {
 				if r, err = br.ReadByte(); err != nil {
-					return texture, err
+					return err
 				}
 				if g, err = br.ReadByte(); err != nil {
-					return texture, err
+					return err
 				}
 				if b, err = br.ReadByte(); err != nil {
-					return texture, err
+					return err
 				}
-				texture.data[x][y] = int(r)*65536 + int(g)*256 + int(b)
+				tex.data[x][y] = int(r)*65536 + int(g)*256 + int(b)
 			}
 		}
 	}
@@ -75,4 +75,13 @@ func (t *FileTextures) Get(id string) *Texture {
 		return nil
 	}
 	return x
+}
+
+// GetNames returns a slice containing all the unique identifiers of the textures stored in the resources map.
+func (t *FileTextures) GetNames() []string {
+	var out []string
+	for id := range t.resources {
+		out = append(out, id)
+	}
+	return out
 }

@@ -81,13 +81,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
 		s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
-		s.LightLevel = cs.LightLevel
-		if s.LightLevel > 1 {
-			s.LightLevel = 1
-		}
-		if s.LightLevel < 0 {
-			s.LightLevel = 0
-		}
+		s.LightDistance = cs.LightDistance
 		r.sectors = append(r.sectors, s)
 		r.cache[cs.Id] = s
 	}

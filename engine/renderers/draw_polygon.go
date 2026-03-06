@@ -128,7 +128,7 @@ func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 }
 
 // DrawTexture renders a texture onto a polygon using perspective-correct texture mapping and lighting adjustments.
-func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64, lightDistance float64) {
+func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 float64, tz1 float64, tz2 float64, u0 float64, u1 float64, yRef float64, lightAmbientDist float64, lightDist float64) {
 	if dp.surface == nil {
 		return
 	}
@@ -157,7 +157,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 			if x2 != x1 {
 				t := (float64(pixelX) - x1) / (x2 - x1)
 				currentZ := 1.0 / (((1.0 - t) / tz1) + (t / tz2))
-				light = computeLight(currentZ, lightDistance)
+				light = computeLight(currentZ, lightAmbientDist, lightDist)
 			}
 
 			for i := 0; i < len(nodeY); i += 2 {
@@ -199,7 +199,7 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 }
 
 // DrawPerspectiveTexture maps a texture onto a polygon in perspective-correct space, handling lighting and scaling factors.
-func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64, scaleFactor float64, lightDistance float64) {
+func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, yaw float64, aSin float64, aCos float64, texture *textures.Texture, yMap float64, scaleFactor float64, lightDistance float64, lightDist float64) {
 	if dp.surface == nil {
 		return
 	}
@@ -258,7 +258,7 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 						safeTxtZ += texHeight
 					}
 					safeTxtZ += texture.BeginY()
-					light := computeLight(tz, lightDistance)
+					light := computeLight(tz, lightDistance, lightDist)
 					red, green, blue := ToRGB(texture.Get(safeTxtZ, safeTxtX), light)
 					dp.surface.SetRGBA(pixelX, pixelY, red, green, blue, 255)
 				}
@@ -393,16 +393,49 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 	}
 }
 
+/*
 // computeLight calculates the light intensity based on the absolute depth value z and the given lightDistance.
-func computeLight(z float64, lightDistance float64) float64 {
+func computeLight(z float64, lightAmbientDistance float64, lightDistance float64) float64 {
 	const visibilityMax = 10.0
 	const visibility = visibilityMax - 5.0
 	// Depth-shading per-pixel basato su Z assoluto (allineato alla scala calcolata in portal.go)
-	light := 1.0 - (math.Abs(z) * visibility * lightDistance)
+	light := 1.0 - (math.Abs(z) * visibility * lightAmbientDistance)
 	if light < 0 {
 		light = 0
 	} else if light > 1 {
 		light = 1
+	}
+	return light
+}
+*/
+
+func computeLight(z float64, lightAmbientDistance float64, lightDistance float64) float64 {
+	const visibilityMax = 10.0
+	const visibility = visibilityMax - 5.0
+
+	absZ := math.Abs(z)
+	light := 1.0
+
+	if lightDistance >= 0 {
+		// OVERRIDE EMISSIVO
+		// La luce del settore è sovrana. Se il settore è illuminato al massimo (rawLight = 255),
+		// la tua lightDistance è 0. Moltiplicando per absZ otteniamo 0.
+		// Risultato: light rimane 1.0 a qualsiasi distanza. Il settore buca l'oscurità!
+		attenuation := absZ * visibility * lightDistance
+		light -= attenuation
+	} else {
+		// LUCE AMBIENTALE
+		// Se il settore è un normale passaggio senza luce propria (lightDistance < 0),
+		// subisce il decadimento atmosferico globale della camera.
+		attenuation := absZ * visibility * lightAmbientDistance
+		light -= attenuation
+	}
+
+	if light < 0 {
+		return 0
+	}
+	if light > 1 {
+		return 1
 	}
 	return light
 }

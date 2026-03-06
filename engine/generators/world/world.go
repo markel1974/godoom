@@ -52,7 +52,6 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	//sector.Textures = true
 	sector.TextureFloor = availableFloor[random(0, len(availableFloor)-1)]
 	sector.TextureCeil = availableCeil[random(0, len(availableCeil)-1)]
-	sector.LightLevel = 1.0
 	sector.TextureScaleFactor = 50.0
 	const SegmentMax = 4
 	for c := 0; c < SegmentMax; c++ {

@@ -17,7 +17,7 @@ type Sector struct {
 	TextureFloor       *textures.Texture
 	TextureCeil        *textures.Texture
 	TextureScaleFactor float64
-	LightLevel         float64
+	LightDistance      float64
 	usage              int
 	compileId          uint64
 	references         map[uint64]bool

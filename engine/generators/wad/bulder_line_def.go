@@ -201,8 +201,27 @@ func (bld *BuilderLineDef) buildConfigSector(level *Level, wadSector *lumps.Sect
 	miSector.TextureCeil = CreateFlatId(wadSector.CeilingPic)
 	miSector.TextureFloor = CreateFlatId(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
-	miSector.LightLevel = float64(wadSector.LightLevel) / 255
+	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
+}
+
+// ConvertLight trasforma il LightLevel di Doom in un parametro lightdistance.
+// Valori < 0 indicano luce ambientale, valori > 0 indicano luce di settore.
+func (bld *BuilderLineDef) convertLight(lightLevel int16) float64 {
+	// Calcolo della LightDistance
+	rawLight := float64(lightLevel)
+	// 1. Invertiamo il valore:
+	// In Doom 255 è luce max, in LightDistance 0 è luce max.
+	// distance = (255 - rawLight)
+	distance := 255.0 - rawLight
+	// 2. Discriminante Ambientale vs Settore
+	// Se la luce è sotto una certa soglia (es. 16), la consideriamo ambientale
+	if rawLight < 16 {
+		return -1.0
+	}
+	// Valore positivo (0 = luce piena, >0 = luce più lontana/attenuata)
+	v := (distance / 255.0) / 40
+	return v
 }
 
 // buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.

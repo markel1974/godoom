@@ -37,34 +37,38 @@ type RenderSoftware struct {
 
 	portal   *portal.Portal
 	vi       *model.ViewItem
-	player   *portal.Player
+	player   *model.Player
 	debug    bool
 	debugIdx int
 }
 
 // NewSoftwareRender initializes and returns a new instance of RenderSoftware for software-based rendering.
 // It sets the screen dimensions, textures, maximum Sector height, and initializes rendering utilities.
-func NewSoftwareRender(screenWidth int, screenHeight int, textures textures.ITextures, sectorsMaxHeight float64) *RenderSoftware {
+func NewSoftwareRender() *RenderSoftware {
 	return &RenderSoftware{
-		screenWidth:        screenWidth,
-		screenHeight:       screenHeight,
-		textures:           textures,
-		sectorsMaxHeight:   sectorsMaxHeight,
+		screenWidth:        0,
+		screenHeight:       0,
+		textures:           nil,
+		sectorsMaxHeight:   0,
 		targetIdx:          0,
 		targetSectors:      map[int]bool{0: true},
 		targetLastCompiled: 0,
 		targetEnabled:      false,
-		dp:                 NewDrawPolygon(screenWidth, screenHeight),
+		dp:                 nil,
 		vi:                 model.NewViewItem(),
 	}
 }
 
-func (w *RenderSoftware) Setup(portal *portal.Portal, player *portal.Player) error {
+func (w *RenderSoftware) Setup(portal *portal.Portal, player *model.Player, t textures.ITextures) error {
 	w.portal = portal
+	w.screenWidth = portal.ScreenWidth()
+	w.screenHeight = portal.ScreenHeight()
+	w.sectorsMaxHeight = portal.SectorsMaxHeight()
+	w.dp = NewDrawPolygon(w.screenWidth, w.screenHeight)
 	w.player = player
+	w.textures = t
 	w.viewMode = -1
-	w.enableClear = true
-
+	w.enableClear = false
 	return nil
 }
 

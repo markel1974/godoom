@@ -1,11 +1,10 @@
-package portal
+package model
 
 import (
 	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/engine/mathematic"
-	"github.com/markel1974/godoom/engine/model"
 )
 
 // EyeHeight represents the height of the eye level in a given context.
@@ -21,14 +20,14 @@ const (
 
 // Player represents the state and properties of a player in the game, including position, velocity, angle, and interactions.
 type Player struct {
-	where         model.XYZ
-	velocity      model.XYZ
+	where         XYZ
+	velocity      XYZ
 	angle         float64
 	angleSin      float64
 	angleCos      float64
 	yaw           float64
 	yawState      float64
-	sector        *model.Sector
+	sector        *Sector
 	ducking       bool
 	falling       bool
 	lightDistance float64
@@ -36,17 +35,17 @@ type Player struct {
 }
 
 // NewPlayer initializes and returns a new Player instance at the specified position, angle, and sector.
-func NewPlayer(x float64, y float64, z float64, angle float64, sector *model.Sector, debug bool) *Player {
+func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
 	p := &Player{
-		where:         model.XYZ{X: x, Y: y, Z: z + EyeHeight},
-		velocity:      model.XYZ{},
+		where:         XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.Floor + EyeHeight},
+		velocity:      XYZ{},
 		yaw:           0,
 		yawState:      0,
 		sector:        sector,
 		lightDistance: 0.0039, // 1 / distance == 1 / 255
 		debug:         debug,
 	}
-	p.SetAngle(angle)
+	p.SetAngle(cfg.Angle)
 	return p
 }
 
@@ -161,12 +160,12 @@ func (p *Player) GetVelocity() (float64, float64) {
 }
 
 // GetSector retrieves the current sector associated with the player.
-func (p *Player) GetSector() *model.Sector {
+func (p *Player) GetSector() *Sector {
 	return p.sector
 }
 
 // SetSector updates the player's current sector to the specified sector model.
-func (p *Player) SetSector(sector *model.Sector) {
+func (p *Player) SetSector(sector *Sector) {
 	p.sector = sector
 }
 
@@ -232,7 +231,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	currentSector := p.GetSector()
 
 	// 2. Verifica di stabilità spaziale: siamo ancora dentro lo stesso settore?
-	if model.PointInSegments(px, py, currentSector.Segments) {
+	if PointInSegments(px, py, currentSector.Segments) {
 		return
 	}
 
@@ -241,7 +240,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	for _, segment := range currentSector.Segments {
 		neighbor := segment.Sector
 		if neighbor != nil {
-			if model.PointInSegments(px, py, neighbor.Segments) {
+			if PointInSegments(px, py, neighbor.Segments) {
 				p.SetSector(neighbor)
 				if p.debug {
 					fmt.Println("New Sector crossed via PIP:", neighbor.Id)
@@ -268,7 +267,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	}
 }
 
-func (p *Player) Compute(vi *model.ViewItem) {
+func (p *Player) Compute(vi *ViewItem) {
 	p.VerticalCollision()
 	if !p.IsMoving() {
 		return

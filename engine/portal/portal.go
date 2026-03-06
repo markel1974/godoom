@@ -8,16 +8,17 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
-// defaultQueueLen defines the default size of the queue used in rendering or processing operations.
+// defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.
 const (
 	defaultQueueLen = 512
 )
 
+// Yaw computes a transformed y-coordinate based on input y, z, and yaw values, returning the adjusted result.
 func Yaw(y float64, z float64, yaw float64) float64 {
 	return y + (z * yaw)
 }
 
-// Portal defines a structure for managing rendering operations, including screen dimensions, queues, sectors, and visibility logic.
+// Portal represents a rendering portal used for managing visibility, sectors, and screen dimensions in a 3D environment.
 type Portal struct {
 	screenWidth      int
 	screenWidthHalf  int
@@ -29,14 +30,15 @@ type Portal struct {
 	screenHFov       float64
 	screenVFov       float64
 	compileId        uint64
-	SectorsMaxHeight float64
+	sectorsMaxHeight float64
 	Sectors          []*model.Sector
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
 	visibilityCache  *VisibilityCache
 }
 
-// NewPortal initializes and returns a new Render object configured for rendering operations with the provided parameters.
+// NewPortal creates and initializes a new Portal instance with the specified screen dimensions and queue length.
+// If maxQueue is 0, it defaults to a predefined constant value.
 func NewPortal(width int, height int, maxQueue int) *Portal {
 	if maxQueue == 0 {
 		maxQueue = defaultQueueLen
@@ -61,10 +63,10 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 	return r
 }
 
-// Setup initializes the Render instance by configuring sectors, setting the maximum height, and preparing compiled sectors.
+// Setup configures the Portal by assigning sectors, setting the maximum height, and initializing compiled sectors.
 func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
 	r.Sectors = sectors
-	r.SectorsMaxHeight = maxHeight
+	r.sectorsMaxHeight = maxHeight
 	r.compiledSectors = make([]*model.CompiledSector, len(r.Sectors)*16)
 
 	//debug
@@ -79,14 +81,29 @@ func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
 	return nil
 }
 
-// clear resets the render state by incrementing the compileId, clearing the compiledCount, and clearing visibilityCache.
+// SectorsMaxHeight returns the maximum height of all sectors in the portal as a float64 value.
+func (r *Portal) SectorsMaxHeight() float64 {
+	return r.sectorsMaxHeight
+}
+
+// ScreenWidth returns the current width of the screen associated with the Portal instance.
+func (r *Portal) ScreenWidth() int {
+	return r.screenWidth
+}
+
+// ScreenHeight returns the height of the screen in pixels.
+func (r *Portal) ScreenHeight() int {
+	return r.screenHeight
+}
+
+// clear resets the Portal's state by incrementing the compile ID, setting compiled sector count to 0, and clearing the visibility cache.
 func (r *Portal) clear() {
 	r.compileId++
 	r.compiledCount = 0
 	r.visibilityCache.Clear()
 }
 
-// growSectorQueue dynamically increases the capacity of the sectorQueue by doubling its current size.
+// growSectorQueue doubles the size of the sectorQueue and initializes new QueueItem instances for the expanded slots.
 func (r *Portal) growSectorQueue() {
 	oldLen := len(r.sectorQueue)
 	newLen := oldLen * 2
@@ -98,7 +115,7 @@ func (r *Portal) growSectorQueue() {
 	r.sectorQueue = newQueue
 }
 
-// Compile processes the given view item and returns compiled sectors and the count of compiled sectors for rendering.
+// Compile processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
 func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 	r.clear()
 
@@ -124,12 +141,12 @@ func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
 
-			// Controllo geometrico
+			// Geometric check
 			if q.x2 > q.x1 && r.visibilityCache.IsVisible(q.sector, q.x1, q.x2) {
-				// Memorizziamo lo span per questo settore
+				// Store the span for this sector
 				r.visibilityCache.Add(q.sector, q.x1, q.x2)
 
-				// Verifica overflow coda
+				// Check queue overflow
 				if (headIdx+1)%queueLen == tailIdx {
 					continue
 				}
@@ -143,7 +160,7 @@ func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 	return r.compiledSectors, r.compiledCount
 }
 
-// GetCS retrieves a CompiledSector from the pool, binds it to the given Sector, and returns if it's the first allocation.
+// GetCS retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
 func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
@@ -156,7 +173,7 @@ func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 	return cs, first
 }
 
-// compileSector processes a renderable sector, computes perspective transformations, and queues neighboring sectors.
+// compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
 func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *QueueItem) ([]*QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false
@@ -197,10 +214,10 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		tx2 := (vx2 * vi.AngleSin) - (vy2 * vi.AngleCos)
 		tz2 := (vx2 * vi.AngleCos) + (vy2 * vi.AngleSin)
 
-		// Se l'intero segmento è dietro la telecamera, scartalo subito
+		// If the entire segment is behind the camera, discard it immediately
 		if tz1 <= 0 && tz2 <= 0 {
-			// Edge-case: se siamo ESATTAMENTE sulla linea del portale,
-			// l'imprecisione dei float potrebbe dare Z <= 0.
+			// Edge-case: if we are EXACTLY on the portal line,
+			// float imprecision could give Z <= 0.
 			if neighbor != nil && tz1 >= -0.1 && tz2 >= -0.1 {
 				if outIdx >= len(r.sectorQueue) {
 					r.growSectorQueue()
@@ -211,34 +228,34 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			continue
 		}
 
-		// Calcolo lunghezza reale per la ripetizione delle texture (UV mapping mondo)
-		// Moltiplica per TextureScaleFactor se le tue coordinate WAD sono state ridotte (es. * 100.0)
-		segLength := math.Hypot(vx2-vx1, vy2-vy1) * 100.0 // Adegua questo moltiplicatore al tuo motore
+		// Calculate real length for texture repetition (world UV mapping)
+		// Multiply by TextureScaleFactor if your WAD coordinates have been scaled (e.g. * 100.0)
+		segLength := math.Hypot(vx2-vx1, vy2-vy1) * 100.0 // Adjust this multiplier for your engine
 		u0 := 0.0
 		u1 := segLength
 
-		// CLIPPING LINEARE ESATTO CONTRO IL PIANO NEAR-Z
+		// EXACT LINEAR CLIPPING AGAINST THE NEAR-Z PLANE
 		if tz1 <= model.NearZ || tz2 <= model.NearZ {
 			if tz1 <= model.NearZ && tz2 <= model.NearZ {
-				// FIX CRITICO: Il segmento è troppo vicino alla camera per generare geometria,
-				// ma se è un portale, stiamo fisicamente attraversando la soglia.
-				// Dobbiamo obbligatoriamente passare la visibilità al settore adiacente!
+				// CRITICAL FIX: The segment is too close to the camera to generate geometry,
+				// but if it's a portal, we are physically crossing the threshold.
+				// We must necessarily pass visibility to the adjacent sector!
 				if neighbor != nil {
 					if outIdx >= len(r.sectorQueue) {
 						r.growSectorQueue()
 					}
-					// Propaghiamo l'apertura dello schermo corrente al nuovo settore
+					// Propagate the current screen opening to the new sector
 					r.sectorQueue[outIdx].Update(neighbor, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
 					outIdx++
 				}
 				continue
 			}
 
-			// Calcola il punto di intersezione esatto (t da 0.0 a 1.0)
+			// Calculate the exact intersection point (t from 0.0 to 1.0)
 			t := (model.NearZ - tz1) / (tz2 - tz1)
 			ix := tx1 + t*(tx2-tx1)
 			iz := model.NearZ
-			iu := u0 + t*(u1-u0) // Interpola la UV esattamente sul taglio
+			iu := u0 + t*(u1-u0) // Interpolate the UV exactly at the cut
 
 			if tz1 <= model.NearZ {
 				tx1 = ix

@@ -58,10 +58,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	player := portal.NewPlayer(cfg.Player.Position.X, cfg.Player.Position.Y, playerSector.Floor, cfg.Player.Angle, playerSector, false)
+	player := model.NewPlayer(cfg.Player, playerSector, false)
 
-	render := software.NewSoftwareRender(_W, _H, cfg.Textures, p.SectorsMaxHeight)
-	if err = render.Setup(p, player); err != nil {
+	render := software.NewSoftwareRender()
+	if err = render.Setup(p, player, cfg.Textures); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

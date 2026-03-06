@@ -5,7 +5,6 @@ import (
 
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/textures"
-	"github.com/markel1974/godoom/pixels"
 	// "github.com/go-gl/gl/v4.1-core/gl" // Da decommentare per i binding nativi
 )
 
@@ -56,27 +55,8 @@ func (r *RenderOpenGL) initGL() {
 	// Layout: Layout 0 (Pos 3D), Layout 1 (UV), Layout 2 (Light/Normals)
 }
 
-func (r *RenderOpenGL) DebugMoveSectorToggle() {
-	r.targetEnabled = !r.targetEnabled
-}
-
-func (r *RenderOpenGL) DebugMoveSector(forward bool) {
-	if forward {
-		if r.targetIdx < r.targetLastCompiled {
-			r.targetIdx++
-		}
-	} else {
-		if r.targetIdx > 0 {
-			r.targetIdx--
-		}
-	}
-	for k := 0; k < r.targetLastCompiled; k++ {
-		r.targetSectors[k] = k == r.targetIdx
-	}
-}
-
 // Render processa il grafo di visibilità calcolato dal portal walker.
-func (r *RenderOpenGL) Render(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
+func (r *RenderOpenGL) Render(vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	r.targetLastCompiled = compiled
 	if compiled < 1 {
 		return

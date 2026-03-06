@@ -88,11 +88,11 @@ func (l *LineDef) PrintBits() string {
 func NewLineDefs(f *os.File, lumpInfo *LumpInfo) ([]*LineDef, error) {
 	var pLineDef LineDef
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pLineDef))
-	pLineDefs := make([]LineDef, count, count)
+	pLineDefs := make([]LineDef, count)
 	if err := binary.Read(f, binary.LittleEndian, pLineDefs); err != nil {
 		return nil, err
 	}
-	lineDefs := make([]*LineDef, count, count)
+	lineDefs := make([]*LineDef, count)
 	for idx, ld := range pLineDefs {
 		lineDefs[idx] = &LineDef{
 			VertexStart:  ld.VertexStart,

@@ -558,7 +558,9 @@ func (w *RenderOpenGL) doRender() {
 
 	executor.Thread.Call(func() {
 		w.win.Begin()
-		gl.Viewport(0, 0, int32(w.screenWidth), int32(w.screenHeight))
+		fbW, fbH := w.win.GetFramebufferSize()
+		gl.Viewport(0, 0, int32(fbW), int32(fbH))
+		//gl.Viewport(0, 0, int32(w.screenWidth*2), int32(w.screenHeight*2))
 		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		w.glUpdateCameraUniforms(w.vi)

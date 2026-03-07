@@ -409,6 +409,11 @@ func (w *GLWindow) Begin() {
 	w.begin()
 }
 
+func (w *GLWindow) GetFramebufferSize() (int, int) {
+	framebufferWidth, framebufferHeight := w.window.GetFramebufferSize()
+	return framebufferWidth, framebufferHeight
+}
+
 // Note: must be called inside the main thread.
 func (w *GLWindow) begin() {
 	if currWin != w {

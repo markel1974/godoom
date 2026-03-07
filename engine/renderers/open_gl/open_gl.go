@@ -18,6 +18,11 @@ import (
 // _scale defines a scaling factor used for adjusting the rendering dimensions of the OpenGL window configuration.
 const _scale = 1
 
+type batchEntry struct {
+	texID    uint32
+	vertices []float32
+}
+
 // glTexture represents an OpenGL texture, containing the hardware ID for binding and management within the GPU.
 type glTexture struct {
 	hwId uint32
@@ -51,6 +56,7 @@ type RenderOpenGL struct {
 	shaderProgram uint32
 
 	glTextures map[*textures.Texture]*glTexture
+	batches    []*batchEntry
 }
 
 // NewOpenGLRender creates and initializes a new instance of RenderOpenGL for OpenGL-based rendering.
@@ -70,6 +76,13 @@ func NewOpenGLRender() *RenderOpenGL {
 		debug:            false,
 		debugIdx:         0,
 		shaderProgram:    0,
+		batches:          make([]*batchEntry, 4046),
+	}
+	for idx := range r.batches {
+		r.batches[idx] = &batchEntry{
+			texID:    0,
+			vertices: nil,
+		}
 	}
 	return r
 }
@@ -171,24 +184,9 @@ func (w *RenderOpenGL) glCompileTextures() error {
 			continue
 		}
 		glTex := &glTexture{hwId: 0}
-
-		width, height := tex.Size()
-		width = width + 1
-		height = height + 1
-		glPixels := make([]uint8, width*height*4)
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				c := tex.Get(x, y)
-				idx := (y*width + x) * 4
-				glPixels[idx] = uint8(c >> 16)           // R
-				glPixels[idx+1] = uint8((c >> 8) & 0xFF) // G
-				glPixels[idx+2] = uint8(c & 0xFF)        // B
-				glPixels[idx+3] = 255                    // A
-			}
-		}
+		width, height, glPixels := tex.RGBA()
 		gl.GenTextures(1, &glTex.hwId)
 		gl.BindTexture(gl.TEXTURE_2D, glTex.hwId)
-
 		w.glTextures[tex] = glTex
 
 		// Setup parametri di campionamento (GL_NEAREST preserva il look pixel-art nativo)
@@ -212,9 +210,9 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	near, far := float32(1.0), float32(100000.0)
 	f := float32(1.0 / math.Tan(float64(fov)/2.0))
 
-	// L'asse visuale verticale di Doom si ottiene tramite Y-Shearing della matrice
+	// L'asse visuale verticale si ottiene tramite Y-Shearing della matrice
 	// di proiezione, non con una reale rotazione Pitch (che altererebbe i vertici Near-Z)
-	pitchShear := float32(-vi.Yaw * 0.01)
+	pitchShear := float32(-vi.Yaw * 1)
 
 	proj := [16]float32{
 		f / aspect, 0, 0, 0,
@@ -235,7 +233,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 
 	tx := -(rX*ex + rZ*ez)
 	ty := -ey
-	tz := (fX*ex + fZ*ez)
+	tz := fX*ex + fZ*ez
 
 	view := [16]float32{
 		rX, 0, -fX, 0,
@@ -248,9 +246,8 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
 }
 
-func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) map[uint32][]float32 {
-	batchMap := make(map[uint32][]float32)
-
+func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) int {
+	counter := 0
 	for idx := compiled - 1; idx >= 0; idx-- {
 		if w.targetEnabled {
 			if f, _ := w.targetSectors[idx]; f && w.targetId != css[idx].Sector.Id {
@@ -280,7 +277,10 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) ma
 					zBottom, zTop = cp.Sector.Floor, cp.Neighbor.Floor
 				}
 				if vertices := w.buildWallQuad(cp, float32(tWidth), float32(tHeight), float32(zBottom), float32(zTop)); len(vertices) > 0 {
-					batchMap[glTex.hwId] = append(batchMap[glTex.hwId], vertices...)
+					batch := w.batches[counter]
+					batch.texID = glTex.hwId
+					batch.vertices = vertices
+					counter++
 				}
 			case model.IdCeil, model.IdCeilTest:
 				if cp.Sector.TextureCeil == nil {
@@ -292,43 +292,46 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) ma
 				}
 				tWidth, tHeight := cp.Sector.TextureCeil.Size()
 				if vertices := w.buildFlatPoly(cp, cp.Sector.Ceil, float32(tWidth), float32(tHeight)); len(vertices) > 0 {
-					batchMap[glTex.hwId] = append(batchMap[glTex.hwId], vertices...)
+					batch := w.batches[counter]
+					batch.texID = glTex.hwId
+					batch.vertices = vertices
+					counter++
 				}
 			case model.IdFloor, model.IdFloorTest:
 				if cp.Sector.TextureFloor == nil {
 					continue
 				}
-				texID := w.glTextures[cp.Sector.TextureFloor]
-				if texID == nil {
+				glTex := w.glTextures[cp.Sector.TextureFloor]
+				if glTex == nil {
 					continue
 				}
 				tWidth, tHeight := cp.Sector.TextureFloor.Size()
 				if vertices := w.buildFlatPoly(cp, cp.Sector.Floor, float32(tWidth), float32(tHeight)); len(vertices) > 0 {
-					batchMap[texID.hwId] = append(batchMap[texID.hwId], vertices...)
+					batch := w.batches[counter]
+					batch.texID = glTex.hwId
+					batch.vertices = vertices
+					counter++
 				}
 			}
 		}
 	}
-	return batchMap
+	return counter
 }
 
 // glStreamRender processes compiled sector data, prepares vertex buffers, and renders them using OpenGL.
-func (w *RenderOpenGL) glStreamRender(batchMap map[uint32][]float32) {
+func (w *RenderOpenGL) glStreamRender(counter int) {
 	gl.BindVertexArray(w.vao)
 
-	for hwTex, vertices := range batchMap {
-		if len(vertices) == 0 {
+	for x := 0; x < counter; x++ {
+		batch := w.batches[x]
+		if len(batch.vertices) == 0 {
 			continue
 		}
-
-		gl.BindTexture(gl.TEXTURE_2D, hwTex)
-
-		byteSize := len(vertices) * 4
-
+		gl.BindTexture(gl.TEXTURE_2D, batch.texID)
+		byteSize := len(batch.vertices) * 4
 		gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
-		gl.BufferSubData(gl.ARRAY_BUFFER, 0, byteSize, gl.Ptr(vertices))
-
-		vertexCount := int32(len(vertices) / 6)
+		gl.BufferSubData(gl.ARRAY_BUFFER, 0, byteSize, gl.Ptr(batch.vertices))
+		vertexCount := int32(len(batch.vertices) / 6)
 		gl.DrawArrays(gl.TRIANGLES, 0, vertexCount)
 	}
 }
@@ -362,7 +365,7 @@ func (w *RenderOpenGL) buildWallQuad(cp *model.CompiledPolygon, texW float32, te
 
 // buildFlatPoly generates a flat polygon vertex stream for OpenGL rendering from the provided compiled polygon.
 // It calculates Z based on whether the polygon is a floor or ceiling, appends UV and light data, and returns a float32 slice.
-func (w *RenderOpenGL) buildFlatPoly(cp *model.CompiledPolygon, z float64, texW, texH float32) []float32 {
+func (w *RenderOpenGL) buildFlatPoly(cp *model.CompiledPolygon, z float64, texW float32, texH float32) []float32 {
 	segs := cp.Sector.Segments
 	if len(segs) < 3 {
 		return nil
@@ -375,21 +378,21 @@ func (w *RenderOpenGL) buildFlatPoly(cp *model.CompiledPolygon, z float64, texW,
 	// Triangoliamo nativamente i segmenti del settore con un Triangle Fan.
 	v0 := segs[0].Start
 	u0 := float32(v0.X) / texW
-	v0_v := float32(-v0.Y) / texH
+	v0V := float32(-v0.Y) / texH
 
 	for i := 1; i < len(segs)-1; i++ {
 		v1 := segs[i].Start
 		u1 := float32(v1.X) / texW
-		v1_v := float32(-v1.Y) / texH
+		v1V := float32(-v1.Y) / texH
 
 		v2 := segs[i+1].Start
 		u2 := float32(v2.X) / texW
-		v2_v := float32(-v2.Y) / texH
+		v2V := float32(-v2.Y) / texH
 
 		stream = append(stream,
-			float32(v0.X), float32(z), float32(-v0.Y), u0, v0_v, light,
-			float32(v1.X), float32(z), float32(-v1.Y), u1, v1_v, light,
-			float32(v2.X), float32(z), float32(-v2.Y), u2, v2_v, light,
+			float32(v0.X), float32(z), float32(-v0.Y), u0, v0V, light,
+			float32(v1.X), float32(z), float32(-v1.Y), u1, v1V, light,
+			float32(v2.X), float32(z), float32(-v2.Y), u2, v2V, light,
 		)
 	}
 
@@ -548,7 +551,7 @@ func (w *RenderOpenGL) doRender() {
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count
-	batchMap := w.createBatch(cs, count)
+	batchCounter := w.createBatch(cs, count)
 
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
@@ -564,7 +567,7 @@ func (w *RenderOpenGL) doRender() {
 		// 1. Setup Uniforms (Matrici di View e Projection dal vi)
 		w.glUpdateCameraUniforms(w.vi)
 		// 2. Traversal e allocazione buffer
-		w.glStreamRender(batchMap)
+		w.glStreamRender(batchCounter)
 		return nil
 	})
 	if thErr != nil {

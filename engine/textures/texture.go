@@ -67,3 +67,21 @@ func (t *Texture) GetId() uint32 {
 func (t *Texture) GetName() string {
 	return t.name
 }
+
+func (t *Texture) RGBA() (int, int, []uint8) {
+	width, height := t.Size()
+	width = width + 1
+	height = height + 1
+	pixels := make([]uint8, width*height*4)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			c := t.Get(x, y)
+			idx := (y*width + x) * 4
+			pixels[idx] = uint8(c >> 16)           // R
+			pixels[idx+1] = uint8((c >> 8) & 0xFF) // G
+			pixels[idx+2] = uint8(c & 0xFF)        // B
+			pixels[idx+3] = 255                    // A
+		}
+	}
+	return width, height, pixels
+}

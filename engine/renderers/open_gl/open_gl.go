@@ -2,7 +2,6 @@ package open_gl
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/engine/model"
@@ -371,16 +370,19 @@ func (w *RenderOpenGL) glCompileTextures() error {
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.UseProgram(w.shaderProgram)
 
-	fov := float32(math.Pi / 3.0)
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
-	f := float32(1.0 / math.Tan(float64(fov)/2.0))
+
+	// Aggiungiamo il segno MENO a scaleX per invertire l'asse orizzontale
+	// ed emulare nativamente la logica di draw_polygon.go (halfW - pixelX)
+	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
+	scaleY := float32(2.0 * model.VFov)
 
 	pitchShear := float32(-vi.Yaw)
 
 	proj := [16]float32{
-		f / aspect, 0, 0, 0,
-		0, f, 0, 0,
+		scaleX, 0, 0, 0,
+		0, scaleY, 0, 0,
 		0, pitchShear, (far + near) / (near - far), -1,
 		0, 0, (2 * far * near) / (near - far), 0,
 	}
@@ -407,6 +409,9 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
+	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.LightDistance))
+	timeLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_time\x00"))
+	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
 }
 
 // doInitialize initializes the OpenGL renderer, sets up the window, compiles shaders, and loads textures.

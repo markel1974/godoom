@@ -9,6 +9,8 @@ layout (location = 2) in float aLightDist;
 
 out vec2 TexCoords;
 out float LightDist;
+out float FragDepth;
+out vec3 ViewPos;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
@@ -17,6 +19,11 @@ void main()
 {
     TexCoords = aTexCoords;
     LightDist = aLightDist;
-    gl_Position = u_projection * u_view * vec4(aPos, 1.0);
+    
+    vec4 viewPos = u_view * vec4(aPos, 1.0);
+    ViewPos = viewPos.xyz;
+    FragDepth = abs(viewPos.z); 
+    
+    gl_Position = u_projection * viewPos;
 }
 `

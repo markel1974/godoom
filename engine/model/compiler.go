@@ -92,10 +92,10 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	}
 
 	for _, sect := range r.sectors {
-		for _, segment := range sect.Segments {
-			if segment.Kind != DefinitionWall {
-				if s, ok := r.cache[segment.Ref]; ok {
-					segment.SetSector(s.Id, s)
+		for _, seg := range sect.Segments {
+			if seg.Kind != DefinitionWall {
+				if s, ok := r.cache[seg.Ref]; ok {
+					seg.SetSector(s.Id, s)
 				} else {
 					//fmt.Println("OUT", segment.Ref)
 					//os.Exit(-1)
@@ -173,6 +173,9 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 	for _, sect := range r.sectors {
 		//vertex scale
 		if scale != 1 {
+			sect.LightCenter.X /= scale
+			sect.LightCenter.Y /= scale
+
 			for s := 0; s < len(sect.Segments); s++ {
 				sect.Segments[s].Start.X /= scale
 				sect.Segments[s].Start.Y /= scale

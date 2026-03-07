@@ -85,6 +85,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
 		s.LightDistance = cs.LightDistance
+		lXY := cs.GetCentroid()
+		s.LightCenter = XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil}
 		r.sectors = append(r.sectors, s)
 		r.cache[cs.Id] = s
 	}

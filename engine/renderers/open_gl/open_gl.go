@@ -13,6 +13,19 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
+/*
+
+// TODO
+
+Utilizzare LightCenter del Settore
+
+Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping generando on-the-fly le normal map dalle texture dei WAD, per dare volume e riflessi dinamici ai mattoni sotto le point light.
+
+Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
+
+Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce del settore) e passare al rendering degli sprite/entità con billboarding istanziato.
+*/
+
 // _scale is a constant used as a multiplier to define scaling factors for rendering configurations.
 const _scale = 1
 

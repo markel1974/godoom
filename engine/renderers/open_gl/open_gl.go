@@ -12,23 +12,37 @@ import (
 	"github.com/markel1974/godoom/pixels/executor"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
-	// "github.com/go-gl/gl/v4.1-core/gl" // Da decommentare per i binding nativi
 )
 
-// _scale defines a scaling factor used for adjusting the rendering dimensions of the OpenGL window configuration.
+// _scale is a constant used as a multiplier to define scaling factors for rendering configurations.
 const _scale = 1
 
-type batchEntry struct {
-	texID    uint32
-	vertices []float32
+// maxBatchVertices defines the maximum number of vertices allowed in a single batch for rendering operations.
+const maxBatchVertices = 65536 * 2
+
+// drawCmd represents a single drawing command, storing texture ID and vertex range information for rendering.
+type drawCmd struct {
+	texID       uint32
+	firstVertex int32
+	vertexCount int32
 }
 
-// glTexture represents an OpenGL texture, containing the hardware ID for binding and management within the GPU.
+// batchEntry represents a single batch of rendering data with a texture ID, vertex buffer, and vertex count.
+// texID is the identifier for the texture associated with this batch.
+// vertices is a preallocated slice storing vertex data in a tightly packed format.
+// count tracks the current number of vertices added to the batch.
+type batchEntry struct {
+	texID    uint32
+	vertices []float32 // Slice preallocato
+	count    int       // Indice di riempimento attuale
+}
+
+// glTexture represents an OpenGL texture with a unique hardware ID for GPU resource management.
 type glTexture struct {
 	hwId uint32
 }
 
-// RenderOpenGL is responsible for managing OpenGL rendering, including textures, shaders, and rendering states.
+// RenderOpenGL represents a renderer using the OpenGL framework for rendering 3D sectors and managing rendering pipelines.
 type RenderOpenGL struct {
 	portal           *portal.Portal
 	vi               *model.ViewItem
@@ -45,10 +59,8 @@ type RenderOpenGL struct {
 	targetEnabled      bool
 	targetId           string
 
-	// Hardware Context
-	vao            uint32
-	vbo            uint32
-	bufferCapacity int
+	vao uint32
+	vbo uint32
 
 	enableClear   bool
 	debug         bool
@@ -56,10 +68,12 @@ type RenderOpenGL struct {
 	shaderProgram uint32
 
 	glTextures map[*textures.Texture]*glTexture
-	batches    []*batchEntry
+
+	frameVertices []float32
+	frameCmds     []*drawCmd
 }
 
-// NewOpenGLRender creates and initializes a new instance of RenderOpenGL for OpenGL-based rendering.
+// NewOpenGLRender initializes and returns a pointer to a new RenderOpenGL instance with default parameters.
 func NewOpenGLRender() *RenderOpenGL {
 	r := &RenderOpenGL{
 		portal:           nil,
@@ -71,23 +85,17 @@ func NewOpenGLRender() *RenderOpenGL {
 		screenHeight:     0,
 		sectorsMaxHeight: 0,
 		targetSectors:    map[int]bool{0: true},
-		bufferCapacity:   65536 * 32,
 		enableClear:      false,
 		debug:            false,
 		debugIdx:         0,
 		shaderProgram:    0,
-		batches:          make([]*batchEntry, 4046),
-	}
-	for idx := range r.batches {
-		r.batches[idx] = &batchEntry{
-			texID:    0,
-			vertices: nil,
-		}
+		frameVertices:    make([]float32, 0, 1024*1024),
+		frameCmds:        make([]*drawCmd, 0, 4096),
 	}
 	return r
 }
 
-// Setup initializes the RenderOpenGL instance with the given portal, player, and textures, and prepares it for rendering.
+// Setup initializes the RenderOpenGL instance with portal, player, and texture data for rendering.
 func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t textures.ITextures) error {
 	w.portal = portal
 	w.screenWidth = portal.ScreenWidth()
@@ -98,20 +106,180 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 	return nil
 }
 
-// glInit initializes OpenGL by setting up the VAO, VBO, vertex attributes, and enabling depth testing.
-func (w *RenderOpenGL) glInit() error {
-	if err := gl.Init(); err != nil {
-		return err
+// setDrawCommand assigns or creates a new drawCmd for the specified texture ID and appends it to the frame commands list.
+func (w *RenderOpenGL) setDrawCommand(texID uint32) *drawCmd {
+	n := len(w.frameCmds)
+	if n > 0 && w.frameCmds[n-1].texID == texID {
+		return w.frameCmds[n-1]
+	}
+	w.frameCmds = append(w.frameCmds, &drawCmd{
+		texID:       texID,
+		firstVertex: int32(len(w.frameVertices) / 6),
+		vertexCount: 0,
+	})
+	return w.frameCmds[len(w.frameCmds)-1]
+}
+
+// createBatch processes a list of compiled sectors and generates vertex and draw command data for rendering.
+func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
+	w.frameVertices = w.frameVertices[:0]
+	w.frameCmds = w.frameCmds[:0]
+
+	for idx := compiled - 1; idx >= 0; idx-- {
+		polygons := css[idx].Get()
+		for k := len(polygons) - 1; k >= 0; k-- {
+			cp := polygons[k]
+			var tex *textures.Texture
+			var isWall bool
+
+			switch cp.Kind {
+			case model.IdWall, model.IdUpper, model.IdLower:
+				tex = cp.Texture
+				isWall = true
+			case model.IdCeil, model.IdCeilTest:
+				tex = cp.Sector.TextureCeil
+			case model.IdFloor, model.IdFloorTest:
+				tex = cp.Sector.TextureFloor
+			default:
+				continue
+			}
+
+			if tex == nil || w.glTextures[tex] == nil {
+				continue
+			}
+
+			cmd := w.setDrawCommand(w.glTextures[tex].hwId)
+			startLen := len(w.frameVertices)
+			tW, tH := tex.Size()
+
+			if isWall {
+				var zB, zT float64
+				switch cp.Kind {
+				case model.IdWall:
+					zB, zT = cp.Sector.Floor, cp.Sector.Ceil
+				case model.IdUpper:
+					zB, zT = cp.Neighbor.Ceil, cp.Sector.Ceil
+				case model.IdLower:
+					zB, zT = cp.Sector.Floor, cp.Neighbor.Floor
+				}
+				w.pushWall(cp, float32(tW), float32(tH), float32(zB), float32(zT))
+			} else {
+				z := cp.Sector.Ceil
+				if cp.Kind == model.IdFloor || cp.Kind == model.IdFloorTest {
+					z = cp.Sector.Floor
+				}
+				w.pushFlat(cp, z, float32(tW), float32(tH))
+			}
+
+			cmd.vertexCount += int32((len(w.frameVertices) - startLen) / 6)
+		}
+	}
+}
+
+func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, zTop float32) {
+	scale := float32(cp.Sector.TextureScaleFactor)
+	if scale <= 0 {
+		scale = 1.0
 	}
 
+	// UV Orizzontali (Nessuna moltiplicazione: ereditano già la scala dai segmenti XY)
+	u0 := float32(cp.U0) / texW
+	u1 := float32(cp.U1) / texW
+
+	// UV Verticali (Moltiplicazione necessaria: Ceil e Floor sono quote assolute non scalate)
+	vTop := float32(0.0)
+	vBottom := ((zTop - zBottom) / texH) * scale
+
+	light := float32(cp.Sector.LightDistance)
+
+	sin, cos := w.vi.AngleSin, w.vi.AngleCos
+	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
+	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)
+	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
+	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
+
+	w.frameVertices = append(w.frameVertices,
+		wx1, zTop, -wy1, u0, vTop, light,
+		wx1, zBottom, -wy1, u0, vBottom, light,
+		wx2, zBottom, -wy2, u1, vBottom, light,
+
+		wx1, zTop, -wy1, u0, vTop, light,
+		wx2, zBottom, -wy2, u1, vBottom, light,
+		wx2, zTop, -wy2, u1, vTop, light,
+	)
+}
+
+func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH float32) {
+	segs := cp.Sector.Segments
+	if len(segs) < 3 {
+		return
+	}
+
+	// 1. Allinea il fattore di scala anche per pavimenti e soffitti
+	scale := float32(cp.Sector.TextureScaleFactor)
+	if scale <= 0 {
+		scale = 1.0
+	}
+
+	light := float32(cp.Sector.LightDistance)
+	zF := float32(z)
+	v0 := segs[0].Start
+
+	// 2. Applica la scala alle UV
+	u0 := (float32(v0.X) / texW) * scale
+	v0V := (float32(-v0.Y) / texH) * scale
+
+	for i := 1; i < len(segs)-1; i++ {
+		v1, v2 := segs[i].Start, segs[i+1].Start
+
+		u1 := (float32(v1.X) / texW) * scale
+		v1V := (float32(-v1.Y) / texH) * scale
+		u2 := (float32(v2.X) / texW) * scale
+		v2V := (float32(-v2.Y) / texH) * scale
+
+		w.frameVertices = append(w.frameVertices,
+			float32(v0.X), zF, float32(-v0.Y), u0, v0V, light,
+			float32(v1.X), zF, float32(-v1.Y), u1, v1V, light,
+			float32(v2.X), zF, float32(-v2.Y), u2, v2V, light,
+		)
+	}
+}
+
+// glStreamRender uploads vertex data dynamically to the GPU and renders frame commands using OpenGL.
+func (w *RenderOpenGL) glStreamRender() {
+	if len(w.frameVertices) == 0 {
+		return
+	}
+
+	gl.BindVertexArray(w.vao)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
+
+	// Single Upload DMA: Nessuna collisione, il driver non ha motivo di bloccare la CPU.
+	gl.BufferData(gl.ARRAY_BUFFER, len(w.frameVertices)*4, gl.Ptr(w.frameVertices), gl.DYNAMIC_DRAW)
+
+	for _, cmd := range w.frameCmds {
+		if cmd.vertexCount > 0 {
+			gl.BindTexture(gl.TEXTURE_2D, cmd.texID)
+			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
+		}
+	}
+}
+
+// vboMaxFloats defines the maximum number of float values allocated for the vertex buffer object (VBO) in the GPU memory.
+const vboMaxFloats = 1024 * 1024 * 4
+
+// glInit initializes OpenGL resources for rendering, including VAO, VBO, and buffer data, and sets up attribute pointers.
+func (w *RenderOpenGL) glInit() error {
 	gl.GenVertexArrays(1, &w.vao)
 	gl.BindVertexArray(w.vao)
 
 	gl.GenBuffers(1, &w.vbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, w.bufferCapacity, nil, gl.DYNAMIC_DRAW)
 
-	stride := int32(6 * 4) // X,Y,Z (3) + U,V (2) + Light (1)
+	// Alloca il mega-buffer in VRAM senza inizializzare i dati
+	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
+
+	stride := int32(6 * 4)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
 	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
@@ -124,7 +292,7 @@ func (w *RenderOpenGL) glInit() error {
 	return nil
 }
 
-// glCompileShaderProgram compiles and links vertex and fragment shaders to create an OpenGL shader program.
+// glCompileShaderProgram compiles vertex and fragment shaders, links them into a program, and makes it the active program.
 func (w *RenderOpenGL) glCompileShaderProgram() error {
 	vertexShaderSource := shaderVertex
 	fragmentShaderSource := shaderFragment
@@ -155,7 +323,7 @@ func (w *RenderOpenGL) glCompileShaderProgram() error {
 	return nil
 }
 
-// glCompileShader compiles a shader from the provided source code and shader type, returning its ID or an error.
+// glCompileShader compiles the given GLSL shader source code for the specified shader type and returns the shader object ID.
 func (w *RenderOpenGL) glCompileShader(source string, shaderType uint32) (uint32, error) {
 	shader := gl.CreateShader(shaderType)
 	cSources, free := gl.Strs(source + "\x00")
@@ -175,7 +343,7 @@ func (w *RenderOpenGL) glCompileShader(source string, shaderType uint32) (uint32
 	return shader, nil
 }
 
-// glCompileTextures compiles all textures in the internal texture manager into OpenGL textures and uploads them to the GPU.
+// glCompileTextures initializes and compiles textures from a texture manager, storing OpenGL texture metadata.
 func (w *RenderOpenGL) glCompileTextures() error {
 	w.glTextures = make(map[*textures.Texture]*glTexture)
 	for _, id := range w.textures.GetNames() {
@@ -189,19 +357,17 @@ func (w *RenderOpenGL) glCompileTextures() error {
 		gl.BindTexture(gl.TEXTURE_2D, glTex.hwId)
 		w.glTextures[tex] = glTex
 
-		// Setup parametri di campionamento (GL_NEAREST preserva il look pixel-art nativo)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
-		// Upload Host-To-Device
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glPixels))
 	}
 	return nil
 }
 
-// glUpdateCameraUniforms updates the camera's uniform matrices (view and projection) for the active shader program.
+// glUpdateCameraUniforms updates the camera's view and projection matrices for the current OpenGL shader program.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.UseProgram(w.shaderProgram)
 
@@ -210,9 +376,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	near, far := float32(1.0), float32(100000.0)
 	f := float32(1.0 / math.Tan(float64(fov)/2.0))
 
-	// L'asse visuale verticale si ottiene tramite Y-Shearing della matrice
-	// di proiezione, non con una reale rotazione Pitch (che altererebbe i vertici Near-Z)
-	pitchShear := float32(-vi.Yaw * 1)
+	pitchShear := float32(-vi.Yaw)
 
 	proj := [16]float32{
 		f / aspect, 0, 0, 0,
@@ -221,7 +385,6 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 		0, 0, (2 * far * near) / (near - far), 0,
 	}
 
-	// La View Matrix diventa pura rotazione planare (Yaw 2D) e traslazione
 	cosA, sinA := float32(vi.AngleCos), float32(vi.AngleSin)
 
 	fX, fZ := cosA, -sinA
@@ -246,160 +409,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
 }
 
-func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) int {
-	counter := 0
-	for idx := compiled - 1; idx >= 0; idx-- {
-		if w.targetEnabled {
-			if f, _ := w.targetSectors[idx]; f && w.targetId != css[idx].Sector.Id {
-				w.targetId = css[idx].Sector.Id
-			}
-		}
-		polygons := css[idx].Get()
-		for k := len(polygons) - 1; k >= 0; k-- {
-			cp := polygons[k]
-			switch cp.Kind {
-			case model.IdWall, model.IdUpper, model.IdLower:
-				if cp.Texture == nil {
-					continue
-				}
-				glTex := w.glTextures[cp.Texture]
-				if glTex == nil {
-					continue
-				}
-				tWidth, tHeight := cp.Texture.Size()
-				var zBottom, zTop float64
-				switch cp.Kind {
-				case model.IdWall:
-					zBottom, zTop = cp.Sector.Floor, cp.Sector.Ceil
-				case model.IdUpper:
-					zBottom, zTop = cp.Neighbor.Ceil, cp.Sector.Ceil
-				case model.IdLower:
-					zBottom, zTop = cp.Sector.Floor, cp.Neighbor.Floor
-				}
-				if vertices := w.buildWallQuad(cp, float32(tWidth), float32(tHeight), float32(zBottom), float32(zTop)); len(vertices) > 0 {
-					batch := w.batches[counter]
-					batch.texID = glTex.hwId
-					batch.vertices = vertices
-					counter++
-				}
-			case model.IdCeil, model.IdCeilTest:
-				if cp.Sector.TextureCeil == nil {
-					continue
-				}
-				glTex := w.glTextures[cp.Sector.TextureCeil]
-				if glTex == nil {
-					continue
-				}
-				tWidth, tHeight := cp.Sector.TextureCeil.Size()
-				if vertices := w.buildFlatPoly(cp, cp.Sector.Ceil, float32(tWidth), float32(tHeight)); len(vertices) > 0 {
-					batch := w.batches[counter]
-					batch.texID = glTex.hwId
-					batch.vertices = vertices
-					counter++
-				}
-			case model.IdFloor, model.IdFloorTest:
-				if cp.Sector.TextureFloor == nil {
-					continue
-				}
-				glTex := w.glTextures[cp.Sector.TextureFloor]
-				if glTex == nil {
-					continue
-				}
-				tWidth, tHeight := cp.Sector.TextureFloor.Size()
-				if vertices := w.buildFlatPoly(cp, cp.Sector.Floor, float32(tWidth), float32(tHeight)); len(vertices) > 0 {
-					batch := w.batches[counter]
-					batch.texID = glTex.hwId
-					batch.vertices = vertices
-					counter++
-				}
-			}
-		}
-	}
-	return counter
-}
-
-// glStreamRender processes compiled sector data, prepares vertex buffers, and renders them using OpenGL.
-func (w *RenderOpenGL) glStreamRender(counter int) {
-	gl.BindVertexArray(w.vao)
-
-	for x := 0; x < counter; x++ {
-		batch := w.batches[x]
-		if len(batch.vertices) == 0 {
-			continue
-		}
-		gl.BindTexture(gl.TEXTURE_2D, batch.texID)
-		byteSize := len(batch.vertices) * 4
-		gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
-		gl.BufferSubData(gl.ARRAY_BUFFER, 0, byteSize, gl.Ptr(batch.vertices))
-		vertexCount := int32(len(batch.vertices) / 6)
-		gl.DrawArrays(gl.TRIANGLES, 0, vertexCount)
-	}
-}
-
-// buildWallQuad generates a vertex array for a wall based on its geometry, UV mapping, and lighting properties.
-func (w *RenderOpenGL) buildWallQuad(cp *model.CompiledPolygon, texW float32, texH float32, zBottom float32, zTop float32) []float32 {
-	u0 := float32(cp.U0) / texW
-	u1 := float32(cp.U1) / texW
-	v0 := float32(0.0)
-	v1 := float32(zTop-zBottom) / texH
-	light := float32(cp.Sector.LightDistance)
-
-	// Inverse Transform: prendiamo i vertici clippati e ruotati in Camera Space
-	// e li riportiamo nel World Space passandoli liberi alla GPU.
-	sin, cos := w.vi.AngleSin, w.vi.AngleCos
-	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
-	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)
-	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
-	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
-
-	return []float32{
-		wx1, zTop, -wy1, u0, v1, light,
-		wx1, zBottom, -wy1, u0, v0, light,
-		wx2, zBottom, -wy2, u1, v0, light,
-
-		wx1, zTop, -wy1, u0, v1, light,
-		wx2, zBottom, -wy2, u1, v0, light,
-		wx2, zTop, -wy2, u1, v1, light,
-	}
-}
-
-// buildFlatPoly generates a flat polygon vertex stream for OpenGL rendering from the provided compiled polygon.
-// It calculates Z based on whether the polygon is a floor or ceiling, appends UV and light data, and returns a float32 slice.
-func (w *RenderOpenGL) buildFlatPoly(cp *model.CompiledPolygon, z float64, texW float32, texH float32) []float32 {
-	segs := cp.Sector.Segments
-	if len(segs) < 3 {
-		return nil
-	}
-
-	light := float32(cp.Sector.LightDistance)
-	var stream []float32
-
-	// Abbandoniamo cp.Points (che contiene trapezi con coordinate in pixel dello schermo!)
-	// Triangoliamo nativamente i segmenti del settore con un Triangle Fan.
-	v0 := segs[0].Start
-	u0 := float32(v0.X) / texW
-	v0V := float32(-v0.Y) / texH
-
-	for i := 1; i < len(segs)-1; i++ {
-		v1 := segs[i].Start
-		u1 := float32(v1.X) / texW
-		v1V := float32(-v1.Y) / texH
-
-		v2 := segs[i+1].Start
-		u2 := float32(v2.X) / texW
-		v2V := float32(-v2.Y) / texH
-
-		stream = append(stream,
-			float32(v0.X), float32(z), float32(-v0.Y), u0, v0V, light,
-			float32(v1.X), float32(z), float32(-v1.Y), u1, v1V, light,
-			float32(v2.X), float32(z), float32(-v2.Y), u2, v2V, light,
-		)
-	}
-
-	return stream
-}
-
-// doInitialize initializes the OpenGL rendering context, compiles shaders, and prepares textures. Returns an error on failure.
+// doInitialize initializes the OpenGL renderer, sets up the window, compiles shaders, and loads textures.
 func (w *RenderOpenGL) doInitialize() error {
 	cfg := pixels.WindowConfig{
 		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
@@ -430,34 +440,24 @@ func (w *RenderOpenGL) doInitialize() error {
 	if thErr != nil {
 		return thErr
 	}
-
 	return nil
 }
 
-// Start begins the OpenGL rendering process by initializing and running the main execution loop.
+// Start initializes and runs the OpenGL rendering workflow for the RenderOpenGL instance.
 func (w *RenderOpenGL) Start() {
 	pixels.GLRun(w.doRun)
 }
 
-// doRun starts the main rendering loop for the application, managing frame updates, input handling, and game logic execution.
+// doRun starts the main rendering and input handling loop for the OpenGL context and manages player interactions.
 func (w *RenderOpenGL) doRun() {
-	const framerate = 30
-	const frameInterval = 1.0 / framerate
-
 	if err := w.doInitialize(); err != nil {
 		panic(err)
 	}
 
-	var currentTimer float64
-	var lastTimer float64
 	mouseConnected := true
 
 	for !w.win.Closed() {
-		currentTimer = pixels.GLGetTime()
-		if (currentTimer - lastTimer) >= frameInterval {
-			lastTimer = currentTimer
-			w.doRender()
-		}
+		w.doRender()
 
 		if mouseConnected && w.win.MouseInsideWindow() {
 			mousePos := w.win.MousePosition()
@@ -470,7 +470,6 @@ func (w *RenderOpenGL) doRun() {
 		}
 
 		var up, down, left, right, slow bool
-
 		scroll := w.win.MouseScroll()
 		if scroll.Y != 0 {
 			if scroll.Y > 0 {
@@ -484,16 +483,16 @@ func (w *RenderOpenGL) doRun() {
 			switch v {
 			case pixels.KeyEscape:
 				return
-			case pixels.KeyUp:
+			case pixels.KeyUp, pixels.KeyW:
 				up = true
-			case pixels.KeyW:
-				up = true
-				slow = true
-			case pixels.KeyDown:
+				if v == pixels.KeyW {
+					slow = true
+				}
+			case pixels.KeyDown, pixels.KeyS:
 				down = true
-			case pixels.KeyS:
-				down = true
-				slow = true
+				if v == pixels.KeyS {
+					slow = true
+				}
 			case pixels.KeyLeft:
 				left = true
 			case pixels.KeyRight:
@@ -534,13 +533,12 @@ func (w *RenderOpenGL) doRun() {
 		if w.win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		//w.win.Update()
+
 		w.win.UpdateInputAndSwap()
-		//text.Draw(win, g.mainMatrix)
 	}
 }
 
-// doRender executes the primary rendering process, including clearing the screen, camera setup, and rendering traversal.
+// doRender performs the rendering process for the OpenGL context, updating visual components based on player state and view info.
 func (w *RenderOpenGL) doRender() {
 	_, w.vi.AngleSin, w.vi.AngleCos = w.player.GetAngle()
 	w.vi.Sector = w.player.GetSector()
@@ -551,48 +549,32 @@ func (w *RenderOpenGL) doRender() {
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count
-	batchCounter := w.createBatch(cs, count)
+	w.createBatch(cs, count)
 
-	thErr := executor.Thread.CallErr(func() error {
+	executor.Thread.Call(func() {
 		w.win.Begin()
-		//gl.Enable(gl.DEPTH_TEST)
-		//gl.DepthFunc(gl.LEQUAL)
-		//gl.Disable(gl.BLEND)
-		//gl.Disable(gl.CULL_FACE) // Tienilo disabilitato finché non confermiamo il winding dei triangoli
-
 		gl.Viewport(0, 0, int32(w.screenWidth), int32(w.screenHeight))
 		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-		// 1. Setup Uniforms (Matrici di View e Projection dal vi)
 		w.glUpdateCameraUniforms(w.vi)
-		// 2. Traversal e allocazione buffer
-		w.glStreamRender(batchCounter)
-		return nil
+		w.glStreamRender()
 	})
-	if thErr != nil {
-		panic(thErr)
-	}
 
 	w.player.Compute(w.vi)
 }
 
-// doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player object.
-func (w *RenderOpenGL) doPlayerDuckingToggle() {
-	w.player.SetDucking()
-}
+// doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.
+func (w *RenderOpenGL) doPlayerDuckingToggle() { w.player.SetDucking() }
 
-// doPlayerJump makes the player perform a jump action by invoking the player's SetJump method.
-func (w *RenderOpenGL) doPlayerJump() {
-	w.player.SetJump()
-}
+// doPlayerJump triggers the player's jump action by invoking the SetJump method on the player object.
+func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 
-// doPlayerMoves processes player movement based on directional inputs (up, down, left, right) and movement speed (slow).
+// doPlayerMoves processes player movement based on directional and speed modifiers provided as boolean parameters.
 func (w *RenderOpenGL) doPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
 	w.player.Move(up, down, left, right, slow)
 }
 
-// doPlayerMouseMove adjusts player orientation based on mouse movement values within defined limits.
+// doPlayerMouseMove adjusts the player's view angle and yaw based on mouse movement within clamped boundaries.
 func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	if mouseX > 10 {
 		mouseX = 10
@@ -607,16 +589,13 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 
 	w.player.AddAngle(mouseX * 0.03)
 	w.player.SetYaw(mouseY)
-
 	w.player.MoveApply(0, 0)
 }
 
-// doZoom adjusts the zoom level of the current view by the specified amount.
-func (w *RenderOpenGL) doZoom(zoom float64) {
-	w.vi.Zoom += zoom
-}
+// doZoom adjusts the current zoom level of the RenderOpenGL object by adding the given zoom value to it.
+func (w *RenderOpenGL) doZoom(zoom float64) { w.vi.Zoom += zoom }
 
-// doDebug toggles debug mode or navigates through debug sectors based on the `next` parameter.
+// doDebug toggles debug mode or navigates through sectors based on the provided next parameter.
 func (w *RenderOpenGL) doDebug(next int) {
 	if next == 0 {
 		w.debug = !w.debug
@@ -629,19 +608,14 @@ func (w *RenderOpenGL) doDebug(next int) {
 	}
 	w.debugIdx = idx
 	sector := w.portal.Sectors[idx]
-	x := sector.Segments[0].Start.X
-	y := sector.Segments[0].Start.Y
-	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
 	w.player.SetSector(sector)
-	w.player.SetCoords(x+5, y+5)
+	w.player.SetCoords(sector.Segments[0].Start.X+5, sector.Segments[0].Start.Y+5)
 }
 
-// doDebugMoveSectorToggle toggles the debug mode for rendering target sectors by enabling or disabling it.
-func (w *RenderOpenGL) doDebugMoveSectorToggle() {
-	w.targetEnabled = !w.targetEnabled
-}
+// doDebugMoveSectorToggle toggles the state of the targetEnabled field within the RenderOpenGL instance.
+func (w *RenderOpenGL) doDebugMoveSectorToggle() { w.targetEnabled = !w.targetEnabled }
 
-// doDebugMoveSector updates the target sector index based on the direction and updates the targetSectors map accordingly.
+// doDebugMoveSector updates the target sector index based on the movement direction and flag state for rendering debug.
 func (w *RenderOpenGL) doDebugMoveSector(forward bool) {
 	if forward {
 		if w.targetIdx < w.targetLastCompiled {

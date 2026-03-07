@@ -23,7 +23,7 @@ type Portal struct {
 	screenWidth      int
 	screenWidthHalf  int
 	screenHeight     int
-	screenHeightHalf int
+	screenHeightHalf float64
 	maxSectors       int
 	queue            []*QueueItem
 	sectorQueue      []*QueueItem
@@ -47,7 +47,7 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 		screenWidth:      width,
 		screenWidthHalf:  width / 2,
 		screenHeight:     height,
-		screenHeightHalf: height / 2,
+		screenHeightHalf: float64(height) / 2,
 		queue:            make([]*QueueItem, maxQueue),
 		sectorQueue:      make([]*QueueItem, 256),
 		screenHFov:       model.HFov * float64(height),
@@ -287,12 +287,12 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
-		screenHeightHalf := float64(r.screenHeightHalf)
+		//screenHeightHalf := float64(r.screenHeightHalf)
 
-		y1a := screenHeightHalf + (-Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
-		y2a := screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
-		y1b := screenHeightHalf + (-Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
-		y2b := screenHeightHalf + (-Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
+		y1a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
+		y2a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)
+		y1b := r.screenHeightHalf + (-Yaw(sectorYFloor, tz1, vi.Yaw) * yScale1)
+		y2b := r.screenHeightHalf + (-Yaw(sectorYFloor, tz2, vi.Yaw) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -353,8 +353,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 
 		if neighbor != nil {
 			neighborYCeil := neighbor.Ceil - vi.Where.Z
-			ny1a := screenHeightHalf + (-Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
-			ny2a := screenHeightHalf + (-Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
+			ny1a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz1, vi.Yaw) * yScale1)
+			ny2a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz2, vi.Yaw) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -365,8 +365,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := neighbor.Floor - vi.Where.Z
-			ny1b := screenHeightHalf + (-Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
-			ny2b := screenHeightHalf + (-Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
+			ny1b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz1, vi.Yaw) * yScale1)
+			ny2b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz2, vi.Yaw) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {

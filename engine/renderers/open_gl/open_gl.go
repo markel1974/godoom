@@ -362,6 +362,18 @@ func (w *RenderOpenGL) glCompileTextures() error {
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
 		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glPixels))
+
+		gl.GenerateMipmap(gl.TEXTURE_2D)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+		// 2. Tenta il filtro anisotropico via brute-force (valore 0x84FE)
+		// Questo rimuove il blur "fangoso" sulle texture dei muri viste radenti
+		gl.TexParameterf(gl.TEXTURE_2D, 0x84FE, 4.0)
+
+		//var maxAnisotropy float32
+		//gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAnisotropy)
+		//gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY_EXT, maxAnisotropy)
 	}
 	return nil
 }

@@ -497,13 +497,13 @@ func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledP
 		yRef := math.Abs((cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor)
 		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbientDist, lightDist)
 	case model.IdCeil:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
 	case model.IdFloor:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
 	case model.IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
 	case model.IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.Sector.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
 	default:
 		dr.DrawWireFrame(true)
 	}

@@ -36,7 +36,6 @@ func (cs *CompiledSector) Clear() {
 
 // Acquire returns a compiled polygon by reusing or creating it from the provided neighbor, textures, coordinates, and type.
 func (cs *CompiledSector) Acquire(neighbor *Sector, kind int, c, f, t *textures.Texture, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
-	//target := t[cs.tick%len(t)]
 	return cs.compiledPolygons.Acquire(cs.Sector, neighbor, kind, c, f, t, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 }
 

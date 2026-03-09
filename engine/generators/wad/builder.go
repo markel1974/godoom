@@ -202,7 +202,7 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	miSector.Ceil = ceilHeight / ScaleFactorCeilFloorLineDef
 	miSector.Tag = strconv.Itoa(int(secIdx))
 	if wadSector.CeilingPic == "F_SKY1" {
-		// Chiave di sistema per dire ai renderer: "Usa la proiezione cilindrica"
+		// System key to tell renderers: "Use cylindrical projection"
 		miSector.TextureCeil = []string{"__SKYBOX__"}
 	} else {
 		miSector.TextureCeil = []string{CreateFlatId(wadSector.CeilingPic)}

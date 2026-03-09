@@ -46,32 +46,19 @@ func NewTextures() (*Textures, error) {
 func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)
-
 	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y)
-
 	for y := 0; y < size.Y; y++ {
 		for x := 0; x < size.X; x++ {
-			// RGBAAt legge direttamente i byte bypassando le interfacce color.Color
 			c := src.RGBAAt(x, y)
-
 			if c.A == 0 {
-				// Pixel realmente trasparente
+				// Truly transparent pixel
 				texture.Set(x, y, -1)
 			} else {
-				// Codifica standard 24-bit per il tuo Software Renderer
 				rgb := int(c.R)*65536 + int(c.G)*256 + int(c.B)
-
-				// HACK VITALE: Se il pixel è nero puro (0,0,0), forziamo a 1.
-				// Se lasciamo 0, il software renderer lo interpreta come "buco invisibile".
-				if rgb == 0 {
-					rgb = 1
-				}
-
 				texture.Set(x, y, rgb)
 			}
 		}
 	}
-
 	t.resources[srcId] = texture
 	return texture
 }

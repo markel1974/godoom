@@ -114,10 +114,6 @@ func (w *WAD) loadPatches() error {
 		idx, found := w.lumps[pName]
 		if !found {
 			fmt.Println("patch not found", pName)
-			//for k := range w.lumps {
-			//	fmt.Println("-----------", k, "-----------")
-			//}
-
 			continue
 		}
 		if idx < 0 || idx >= len(w.lumpInfos) {

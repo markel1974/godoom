@@ -70,9 +70,9 @@ func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
 	r.compiledSectors = make([]*model.CompiledSector, len(r.Sectors)*16)
 
 	//debug
-	for _, s := range sectors {
-		fmt.Println(s.Print(false))
-	}
+	//for _, s := range sectors {
+	//	fmt.Println(s.Print(false))
+	//}
 
 	for cs := 0; cs < len(r.compiledSectors); cs++ {
 		r.compiledSectors[cs] = model.NewCompiledSector()

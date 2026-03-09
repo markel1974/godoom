@@ -14,7 +14,7 @@ import (
 const ScaleFactorLineDef = 25.0
 
 // ScaleFactorCeilFloorLineDef is a constant scaling factor used to convert floor and ceiling heights into game unit measurements.
-const ScaleFactorCeilFloorLineDef = 4.0
+const ScaleFactorCeilFloorLineDef = 8.0
 
 // Point represents a 2D coordinate with X and Y as floating-point values.
 type Point struct {

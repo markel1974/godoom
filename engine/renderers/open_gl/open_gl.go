@@ -189,21 +189,20 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 }
 
 func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, zTop float32) {
-	scale := float32(cp.Sector.TextureScaleFactor)
-	if scale <= 0 {
-		scale = 1.0
+	//todo capire perche le texture devono essere scalate di 4 dai WAD
+	scaleH := float32(4.0)
+	scaleV := float32(cp.Sector.TextureScaleFactor)
+	if scaleV <= 0 {
+		scaleV = 1.0
 	}
 
 	// UV Orizzontali (Nessuna moltiplicazione: ereditano già la scala dai segmenti XY)
-	u0 := float32(cp.U0) / texW
-	u1 := float32(cp.U1) / texW
+	u0 := float32(cp.U0) / (texW * scaleH)
+	u1 := float32(cp.U1) / (texW * scaleH)
 
-	// UV Verticali (Moltiplicazione necessaria: Ceil e Floor sono quote assolute non scalate)
 	vTop := float32(0.0)
-	vBottom := ((zTop - zBottom) / texH) * scale
-
+	vBottom := ((zTop - zBottom) / texH) * scaleV
 	light := float32(cp.Sector.LightDistance)
-
 	sin, cos := w.vi.AngleSin, w.vi.AngleCos
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
 	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)

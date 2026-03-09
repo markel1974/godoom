@@ -9,12 +9,12 @@ import (
 	"github.com/markel1974/godoom/engine/generators/world"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
-	"github.com/markel1974/godoom/engine/renderers/open_gl"
+	"github.com/markel1974/godoom/engine/renderers/software"
 )
 
 const (
-	_W        = 1024 //1980 / 2
-	_H        = 768  //1080 / 2
+	_W        = 640 //1024 //1980 / 2
+	_H        = 320 //768  //1080 / 2
 	_MaxQueue = 32
 )
 
@@ -60,8 +60,8 @@ func main() {
 
 	player := model.NewPlayer(cfg.Player, playerSector, false)
 
-	//render := software.NewSoftwareRender()
-	render := open_gl.NewOpenGLRender()
+	render := software.NewSoftwareRender()
+	//render := open_gl.NewOpenGLRender()
 	if err = render.Setup(p, player, cfg.Textures); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

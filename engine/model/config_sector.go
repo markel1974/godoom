@@ -44,16 +44,7 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	return out
 }
 
-// Print serializes the ConfigSector struct into JSON format; optionally indents the output if the indent parameter is true.
-func (is *ConfigSector) Print(indent bool) []byte {
-	if indent {
-		d, _ := json.MarshalIndent(is, "", "  ")
-		return d
-	}
-	d, _ := json.Marshal(is)
-	return d
-}
-
+// GetCentroid calculates the centroid of the polygon formed by the sector's segments based on their vertex coordinates.
 func (is *ConfigSector) GetCentroid() XY {
 	var signedArea, cx, cy float64
 
@@ -80,4 +71,14 @@ func (is *ConfigSector) GetCentroid() XY {
 		X: cx / (6.0 * signedArea),
 		Y: cy / (6.0 * signedArea),
 	}
+}
+
+// Print serializes the ConfigSector struct into JSON format; optionally indents the output if the indent parameter is true.
+func (is *ConfigSector) Print(indent bool) []byte {
+	if indent {
+		d, _ := json.MarshalIndent(is, "", "  ")
+		return d
+	}
+	d, _ := json.Marshal(is)
+	return d
 }

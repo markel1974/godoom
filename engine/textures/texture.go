@@ -11,19 +11,8 @@ type Texture struct {
 
 // NewTexture creates and initializes a new Texture with the specified name, ID, width, and height.
 func NewTexture(name string, id uint32, w int, h int) *Texture {
-	texWidth := w - 1
-	texHeight := h - 1
-	//if texWidth <= 0 {
-	//	texWidth = 64
-	//}
-	//if texHeight <= 0 {
-	//	texHeight = 64
-	//}
 	z := &Texture{
-		name: name,
-		id:   id,
-		w:    texWidth,
-		h:    texHeight,
+		name: name, id: id, w: w, h: h, // Nessun w-1 o h-1!
 		data: make([][]int, w),
 	}
 	for i := range z.data {
@@ -32,15 +21,16 @@ func NewTexture(name string, id uint32, w int, h int) *Texture {
 	return z
 }
 
-// Get retrieves the color value at the specified (x, y) coordinates, applying bitwise wrapping based on texture size.
 func (t *Texture) Get(x int, y int) int {
-	//TextureSize (1024) is a power of 2, we can use bitwise operator
-	return t.data[x&t.w][y&t.h]
+	wrapX := (x%t.w + t.w) % t.w
+	wrapY := (y%t.h + t.h) % t.h
+	return t.data[wrapX][wrapY]
 }
 
-// Set updates the color value of the pixel at the specified x and y coordinates in the texture data.
 func (t *Texture) Set(x int, y int, color int) {
-	t.data[x&t.w][y&t.h] = color
+	wrapX := (x%t.w + t.w) % t.w
+	wrapY := (y%t.h + t.h) % t.h
+	t.data[wrapX][wrapY] = color
 }
 
 // BeginX returns the starting X-coordinate offset for the texture. Used in texture rendering operations.
@@ -77,10 +67,18 @@ func (t *Texture) RGBA() (int, int, []uint8) {
 		for x := 0; x < width; x++ {
 			c := t.Get(x, y)
 			idx := (y*width + x) * 4
-			pixels[idx] = uint8(c >> 16)           // R
-			pixels[idx+1] = uint8((c >> 8) & 0xFF) // G
-			pixels[idx+2] = uint8(c & 0xFF)        // B
-			pixels[idx+3] = 255                    // A
+
+			if c == -1 {
+				pixels[idx] = 0
+				pixels[idx+1] = 0
+				pixels[idx+2] = 0
+				pixels[idx+3] = 0
+			} else {
+				pixels[idx] = uint8(c >> 16)
+				pixels[idx+1] = uint8(c >> 8)
+				pixels[idx+2] = uint8(c)
+				pixels[idx+3] = 255
+			}
 		}
 	}
 	return width, height, pixels

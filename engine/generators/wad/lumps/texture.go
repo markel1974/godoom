@@ -41,11 +41,11 @@ func NewPatchNames(f *os.File, info *LumpInfo) ([]string, error) {
 	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
 		return nil, err
 	}
-	p := make([][8]byte, count, count)
+	p := make([][8]byte, count)
 	if err := binary.Read(f, binary.LittleEndian, p); err != nil {
 		return nil, err
 	}
-	pNames := make([]string, count, count)
+	pNames := make([]string, count)
 	for idx, p := range p {
 		pNames[idx] = ToString(p)
 	}
@@ -62,7 +62,7 @@ func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
 		return nil, err
 	}
 	fmt.Printf("Loading %s lump with %d textures ...\n", lumpInfo.Name, count)
-	offsets := make([]int32, count, count)
+	offsets := make([]int32, count)
 	if err := binary.Read(f, binary.LittleEndian, offsets); err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
 			return nil, err
 		}
 		name := ToString(pHeader.TexName)
-		pPatches := make([]Patch, pHeader.NumPatches, pHeader.NumPatches)
+		pPatches := make([]Patch, pHeader.NumPatches)
 		if err := binary.Read(f, binary.LittleEndian, pPatches); err != nil {
 			return nil, err
 		}
@@ -98,7 +98,7 @@ func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
 			ColumnDirectory: pHeader.ColumnDirectory,
 			NumPatches:      pHeader.NumPatches,
 		}
-		patches := make([]*Patch, pHeader.NumPatches, pHeader.NumPatches)
+		patches := make([]*Patch, pHeader.NumPatches)
 		for idx, p := range pPatches {
 			patches[idx] = &Patch{
 				XOffset:     p.XOffset,
@@ -108,7 +108,9 @@ func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
 				ColorMap:    p.ColorMap,
 			}
 		}
-		textures = append(textures, &Texture{Header: header, Patches: patches})
+		tx := &Texture{Header: header, Patches: patches}
+		textures = append(textures, tx)
 	}
+
 	return textures, nil
 }

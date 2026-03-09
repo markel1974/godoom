@@ -5,7 +5,6 @@ import (
 	"math"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
@@ -236,9 +235,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			seg.TextureUpper = CreateTextureId(side.UpperTexture)
 			seg.TextureLower = CreateTextureId(side.LowerTexture)
 
+			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
-			// Se è una LineDef a due lati (TwoSided = 2)
-			if ld.HasFlag(2) {
+			if ld.HasFlag(lumps.TwoSided) {
 				backSideIdx := ld.SideDefLeft
 				if e.IsLeft {
 					backSideIdx = ld.SideDefRight
@@ -248,16 +247,14 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 					backSide := level.SideDefs[backSideIdx]
 					backSector := level.Sectors[backSide.SectorRef]
 
-					// Se il soffitto del settore adiacente è il cielo (F_SKY1),
-					// la parete superiore deve mostrare l'orizzonte infinito.
-					if backSector.CeilingPic == "F_SKY1" {
-						//if side.UpperTexture == "-" || side.UpperTexture == "" {
-						//TODO TROVARE LA LOGICA REALE
-						if strings.HasPrefix(side.UpperTexture, "STAR") {
-							//seg.TextureMiddle = CreateTextureId("SKY1")
-							//seg.TextureLower = CreateTextureId("SKY1")
-							seg.TextureUpper = "__SKYBOX__" //CreateTextureId("SKY1")
-						}
+					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
+					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
+						seg.TextureUpper = "__SKYBOX__"
+					}
+
+					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
+					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
+						seg.TextureLower = "__SKYBOX__"
 					}
 				}
 			}

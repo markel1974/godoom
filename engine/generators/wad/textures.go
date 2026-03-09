@@ -81,6 +81,10 @@ func (t *Textures) Get(id string) *textures.Texture {
 	if len(id) == 0 {
 		return nil
 	}
+	// TODO VERIFICA PER TEKWALL4 completamente ALFA
+	if strings.Contains(id, "TEKWALL4") {
+		id = "__TEXTURE__CEMENT6"
+	}
 	x, ok := t.resources[id]
 	if !ok {
 		fmt.Println("CAN'T FIND TEXTURE", id)

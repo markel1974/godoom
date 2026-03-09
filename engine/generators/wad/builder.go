@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
@@ -201,11 +202,76 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	}
 	miSector.Ceil = ceilHeight / ScaleFactorCeilFloorLineDef
 	miSector.Tag = strconv.Itoa(int(secIdx))
-	miSector.TextureCeil = CreateFlatId(wadSector.CeilingPic)
+	if wadSector.CeilingPic == "F_SKY1" {
+		// Chiave di sistema per dire ai renderer: "Usa la proiezione cilindrica"
+		miSector.TextureCeil = "__SKYBOX__"
+	} else {
+		miSector.TextureCeil = CreateFlatId(wadSector.CeilingPic)
+	}
 	miSector.TextureFloor = CreateFlatId(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
 	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
+}
+
+// buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
+// It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
+func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
+	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
+	for _, e := range sectorEdges {
+		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
+		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
+		w2 := Point{float64(v2.XCoord), float64(v2.YCoord)}
+
+		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
+			ld := level.LineDefs[e.LDIdx]
+
+			sideIdx := ld.SideDefRight
+			if e.IsLeft {
+				sideIdx = ld.SideDefLeft
+			}
+			side := level.SideDefs[sideIdx]
+
+			seg.TextureMiddle = CreateTextureId(side.MiddleTexture)
+			seg.TextureUpper = CreateTextureId(side.UpperTexture)
+			seg.TextureLower = CreateTextureId(side.LowerTexture)
+
+			// SKY HACK VERTICALE:
+			// Se è una LineDef a due lati (TwoSided = 2)
+			if ld.HasFlag(2) {
+				backSideIdx := ld.SideDefLeft
+				if e.IsLeft {
+					backSideIdx = ld.SideDefRight
+				}
+
+				if backSideIdx != -1 {
+					backSide := level.SideDefs[backSideIdx]
+					backSector := level.Sectors[backSide.SectorRef]
+
+					// Se il soffitto del settore adiacente è il cielo (F_SKY1),
+					// la parete superiore deve mostrare l'orizzonte infinito.
+					if backSector.CeilingPic == "F_SKY1" {
+						//if side.UpperTexture == "-" || side.UpperTexture == "" {
+						//TODO TROVARE LA LOGICA REALE
+						if strings.HasPrefix(side.UpperTexture, "STAR") {
+							//seg.TextureMiddle = CreateTextureId("SKY1")
+							//seg.TextureLower = CreateTextureId("SKY1")
+							seg.TextureUpper = "__SKYBOX__" //CreateTextureId("SKY1")
+						}
+					}
+				}
+			}
+
+			if ld.HasFlag(2) {
+				seg.Kind = model.DefinitionJoin
+			}
+			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+			return seg, true
+		}
+	}
+	seg.Kind = model.DefinitionJoin
+	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+	return seg, false
 }
 
 // ConvertLight trasforma il LightLevel di Doom in un parametro lightdistance.
@@ -225,37 +291,6 @@ func (bld *Builder) convertLight(lightLevel int16) float64 {
 	// Valore positivo (0 = luce piena, >0 = luce più lontana/attenuata)
 	v := (distance / 255.0) / 40
 	return v
-}
-
-// buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
-// It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
-func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
-	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
-	for _, e := range sectorEdges {
-		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
-		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
-		w2 := Point{float64(v2.XCoord), float64(v2.YCoord)}
-
-		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
-			ld := level.LineDefs[e.LDIdx]
-			sideIdx := ld.SideDefRight
-			if e.IsLeft {
-				sideIdx = ld.SideDefLeft
-			}
-			side := level.SideDefs[sideIdx]
-			seg.TextureMiddle = CreateTextureId(side.MiddleTexture)
-			seg.TextureUpper = CreateTextureId(side.UpperTexture)
-			seg.TextureLower = CreateTextureId(side.LowerTexture)
-			if ld.Flags&(1<<2) != 0 {
-				seg.Kind = model.DefinitionJoin
-			}
-			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-			return seg, true
-		}
-	}
-	seg.Kind = model.DefinitionJoin
-	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-	return seg, false
 }
 
 func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {

@@ -149,9 +149,9 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				tex = cp.Texture
 				isWall = true
 			case model.IdCeil, model.IdCeilTest:
-				tex = cp.Sector.TextureCeil
+				tex = cp.TextureCeil
 			case model.IdFloor, model.IdFloorTest:
-				tex = cp.Sector.TextureFloor
+				tex = cp.TextureFloor
 			default:
 				continue
 			}
@@ -358,10 +358,11 @@ func (w *RenderOpenGL) glCompileShader(source string, shaderType uint32) (uint32
 func (w *RenderOpenGL) glCompileTextures() error {
 	w.glTextures = make(map[*textures.Texture]*glTexture)
 	for _, id := range w.textures.GetNames() {
-		tex := w.textures.Get(id)
-		if tex == nil {
+		tn := w.textures.Get([]string{id})
+		if tn == nil {
 			continue
 		}
+		tex := tn[0]
 		glTex := &glTexture{hwId: 0}
 		width, height, glPixels := tex.RGBA()
 		gl.GenTextures(1, &glTex.hwId)

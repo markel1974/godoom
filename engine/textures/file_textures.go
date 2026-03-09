@@ -69,12 +69,16 @@ func (t *FileTextures) load(tex *Texture, filename string) error {
 }
 
 // Get retrieves a texture from the resources map by its ID. If the ID does not exist, it returns nil.
-func (t *FileTextures) Get(id string) *Texture {
-	x, ok := t.resources[id]
-	if !ok {
-		return nil
+func (t *FileTextures) Get(ids []string) []*Texture {
+	var out []*Texture
+	for _, id := range ids {
+		x, ok := t.resources[id]
+		if !ok {
+			return nil
+		}
+		out = append(out, x)
 	}
-	return x
+	return out
 }
 
 // GetNames returns a slice containing all the unique identifiers of the textures stored in the resources map.

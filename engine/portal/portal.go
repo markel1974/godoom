@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 // defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.
@@ -345,10 +346,15 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			}
 		}
 
-		ceilP := cs.Acquire(neighbor, model.IdCeil, cs.Sector.TextureCeil, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+		cs.Prepare()
+		textureIdx := cs.Tick()
+		ceilT := textureGet(textureIdx, cs.Sector.TextureCeil)
+		floorT := textureGet(textureIdx, cs.Sector.TextureFloor)
+
+		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, lightStart, x2Min, y2Ceil, yaStop, zStop, lightStop)
 
-		floorP := cs.Acquire(neighbor, model.IdFloor, cs.Sector.TextureFloor, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+		floorP := cs.Acquire(neighbor, model.IdFloor, ceilT, floorT, floorT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		floorP.Rect(x1Max, ybStart, y1Floor, zStart, lightStart, x2Min, ybStop, y2Floor, zStop, lightStop)
 
 		if neighbor != nil {
@@ -358,7 +364,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperP := cs.Acquire(neighbor, model.IdUpper, segment.TextureUpper, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+				upperT := textureGet(textureIdx, segment.TextureUpper)
+				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
 			}
 			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
@@ -370,7 +377,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {
-				lowerP := cs.Acquire(neighbor, model.IdLower, segment.TextureLower, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+				lowerT := textureGet(textureIdx, segment.TextureLower)
+				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)
 			}
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
@@ -382,7 +390,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 			outIdx++
 		} else {
-			wallP := cs.Acquire(neighbor, model.IdWall, segment.TextureMiddle, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+			middleT := textureGet(textureIdx, segment.TextureMiddle)
+			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)
 		}
 	}
@@ -402,4 +411,14 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 	}
 
 	return r.sectorQueue, outIdx
+}
+
+func textureGet(idx uint, t []*textures.Texture) *textures.Texture {
+	l := len(t)
+	if l == 0 {
+		return nil
+	} else if l == 1 {
+		return t[0]
+	}
+	return t[int(idx)%l]
 }

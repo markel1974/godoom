@@ -14,8 +14,8 @@ type Sector struct {
 	Ceil               float64
 	Segments           []*Segment
 	Tag                string
-	TextureFloor       *textures.Texture
-	TextureCeil        *textures.Texture
+	TextureFloor       []*textures.Texture
+	TextureCeil        []*textures.Texture
 	TextureScaleFactor float64
 	LightDistance      float64
 	LightCenter        XYZ

@@ -7,8 +7,8 @@ type ConfigSector struct {
 	Id                 string           `json:"id"`
 	Ceil               float64          `json:"ceil"`
 	Floor              float64          `json:"floor"`
-	TextureFloor       string           `json:"textureFloor"`
-	TextureCeil        string           `json:"textureCeil"`
+	TextureFloor       []string         `json:"textureFloor"`
+	TextureCeil        []string         `json:"textureCeil"`
 	TextureScaleFactor float64          `json:"textureScaleFactor"`
 	LightDistance      float64          `json:"lightDistance"`
 	Segments           []*ConfigSegment `json:"segments"`

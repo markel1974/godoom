@@ -77,16 +77,20 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 }
 
 // Get retrieves the texture associated with the given ID from the Textures' resources map. Returns nil if not found.
-func (t *Textures) Get(id string) *textures.Texture {
-	if len(id) == 0 {
+func (t *Textures) Get(ids []string) []*textures.Texture {
+	if len(ids) == 0 {
 		return nil
 	}
-	x, ok := t.resources[id]
-	if !ok {
-		fmt.Println("CAN'T FIND TEXTURE", id)
-		return nil
+	var out []*textures.Texture
+	for _, id := range ids {
+		x, ok := t.resources[id]
+		if !ok {
+			fmt.Println("CAN'T FIND TEXTURE", id)
+			return nil
+		}
+		out = append(out, x)
 	}
-	return x
+	return out
 }
 
 // GetNames returns a slice of all texture names (IDs) stored in the Textures collection.

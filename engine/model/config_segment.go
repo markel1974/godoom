@@ -13,25 +13,25 @@ type segmentData struct {
 	point         XY
 	kind          int
 	neighbor      string
-	textureUpper  string
-	textureMiddle string
-	textureLower  string
+	textureUpper  []string
+	textureMiddle []string
+	textureLower  []string
 	distance      float64
 	high          bool
 }
 
 // ConfigSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
 type ConfigSegment struct {
-	Parent        string `json:"parent"`
-	Id            string `json:"id"`
-	Start         XY     `json:"start"`
-	End           XY     `json:"end"`
-	Kind          int    `json:"Kind"`
-	Neighbor      string `json:"neighbor"`
-	Tag           string `json:"tag"`
-	TextureUpper  string `json:"upper"`
-	TextureMiddle string `json:"middle"`
-	TextureLower  string `json:"lower"`
+	Parent        string   `json:"parent"`
+	Id            string   `json:"id"`
+	Start         XY       `json:"start"`
+	End           XY       `json:"end"`
+	Kind          int      `json:"Kind"`
+	Neighbor      string   `json:"neighbor"`
+	Tag           string   `json:"tag"`
+	TextureUpper  []string `json:"upper"`
+	TextureMiddle []string `json:"middle"`
+	TextureLower  []string `json:"lower"`
 	builder       map[float64][]*segmentData
 }
 
@@ -45,9 +45,9 @@ func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 		Kind:          kind,
 		Neighbor:      "",
 		Tag:           "",
-		TextureUpper:  "",
-		TextureMiddle: "",
-		TextureLower:  "",
+		TextureUpper:  nil,
+		TextureMiddle: nil,
+		TextureLower:  nil,
 	}
 	return is
 }
@@ -101,12 +101,12 @@ func (is *ConfigSegment) Prepare() {
 // AddNeighbor adds two Points with the specified neighbor identifier to the segment's builder as neighbor data.
 func (is *ConfigSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
 	id := NextUUId()
-	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, "", "", "")
-	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, "", "", "")
+	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, nil, nil, nil)
+	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, nil, nil, nil)
 }
 
 // AddProperty adds a property between two Points with specified wall status, upper, middle, and lower textures.
-func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, middle string, lower string) {
+func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper []string, middle []string, lower []string) {
 	var kind int
 	if wall {
 		kind = SegmentDataWall
@@ -119,7 +119,7 @@ func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper string, midd
 }
 
 // createPoint adds a new point to the builder map with specified metadata and computes its distance from the start point.
-func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper string, middle string, lower string) {
+func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper []string, middle []string, lower []string) {
 	//pb := XY{X: is.Start.X, Y: is.Start.Y}
 	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, textureUpper: upper, textureMiddle: middle, textureLower: lower}
 	sd0.distance = Distance(is.Start.X, is.Start.Y, p0.X, p0.Y)
@@ -153,9 +153,8 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 	sort.SliceStable(builder, func(i, j int) bool {
 		if !builderNegative {
 			return builder[i].distance < builder[j].distance
-		} else {
-			return builder[i].distance > builder[j].distance
 		}
+		return builder[i].distance > builder[j].distance
 	})
 
 	var out []*ConfigSegment

@@ -110,9 +110,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
-					neighbor.TextureMiddle = "wall2.ppm"
-					neighbor.TextureLower = "wall.ppm"
-					neighbor.TextureUpper = "wall3.ppm"
+					neighbor.TextureMiddle = append(neighbor.TextureMiddle, "wall2.ppm")
+					neighbor.TextureLower = append(neighbor.TextureLower, "wall.ppm")
+					neighbor.TextureUpper = append(neighbor.TextureUpper, "wall3.ppm")
 
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
@@ -122,14 +122,14 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-					neighbor.TextureMiddle = "wall2.ppm"
-					neighbor.TextureLower = "wall.ppm"
-					neighbor.TextureUpper = "wall3.ppm"
+					neighbor.TextureMiddle = append(neighbor.TextureMiddle, "wall2.ppm")
+					neighbor.TextureLower = append(neighbor.TextureLower, "wall.ppm")
+					neighbor.TextureUpper = append(neighbor.TextureUpper, "wall3.ppm")
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.TextureFloor = "floor.ppm"
-				cs.TextureCeil = "ceil.ppm"
+				cs.TextureFloor = append(cs.TextureFloor, "floor.ppm")
+				cs.TextureCeil = append(cs.TextureCeil, "ceil.ppm")
 				cs.TextureScaleFactor = 50.0
 				//cs.Textures = true
 			}

@@ -203,11 +203,11 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	miSector.Tag = strconv.Itoa(int(secIdx))
 	if wadSector.CeilingPic == "F_SKY1" {
 		// Chiave di sistema per dire ai renderer: "Usa la proiezione cilindrica"
-		miSector.TextureCeil = "__SKYBOX__"
+		miSector.TextureCeil = append(miSector.TextureCeil, "__SKYBOX__")
 	} else {
-		miSector.TextureCeil = CreateFlatId(wadSector.CeilingPic)
+		miSector.TextureCeil = append(miSector.TextureCeil, CreateFlatId(wadSector.CeilingPic))
 	}
-	miSector.TextureFloor = CreateFlatId(wadSector.FloorPic)
+	miSector.TextureFloor = append(miSector.TextureFloor, CreateFlatId(wadSector.FloorPic))
 	miSector.TextureScaleFactor = 10.0
 	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
@@ -231,9 +231,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.TextureMiddle = CreateTextureId(side.MiddleTexture)
-			seg.TextureUpper = CreateTextureId(side.UpperTexture)
-			seg.TextureLower = CreateTextureId(side.LowerTexture)
+			seg.TextureMiddle = append(seg.TextureMiddle, CreateTextureId(side.MiddleTexture))
+			seg.TextureUpper = append(seg.TextureUpper, CreateTextureId(side.UpperTexture))
+			seg.TextureLower = append(seg.TextureLower, CreateTextureId(side.LowerTexture))
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -249,12 +249,12 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 
 					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
 					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
-						seg.TextureUpper = "__SKYBOX__"
+						seg.TextureUpper = append(seg.TextureUpper, "__SKYBOX__")
 					}
 
 					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
 					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
-						seg.TextureLower = "__SKYBOX__"
+						seg.TextureLower = append(seg.TextureLower, "__SKYBOX__")
 					}
 				}
 			}

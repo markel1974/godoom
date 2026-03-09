@@ -21,7 +21,7 @@ type WAD struct {
 	flats                   map[string]*lumps.Flat
 	levels                  map[string]int
 	lumps                   map[string]int
-	pNames                  []string
+	patchNames              []string
 	transparentPaletteIndex byte
 }
 
@@ -96,20 +96,33 @@ func (w *WAD) loadPlayPals() error {
 // loadPatches reads and loads patch images from the WAD file, using the patch names defined in the PNAMES lump.
 func (w *WAD) loadPatches() error {
 	var err error
-	pNamesLump, ok := w.lumps["PNAMES"]
+	pLumpIdx, ok := w.lumps["PNAMES"]
 	if !ok {
 		return fmt.Errorf("PNAMES not found")
 	}
-	lumpInfo := w.lumpInfos[pNamesLump]
-	w.pNames, err = lumps.NewPatchNames(w.file, lumpInfo)
+	if pLumpIdx < 0 || pLumpIdx >= len(w.lumpInfos) {
+		return fmt.Errorf("invalid PNAMES index")
+	}
+	pLumpInfo := w.lumpInfos[pLumpIdx]
+	w.patchNames, err = lumps.NewPatchNames(w.file, pLumpInfo)
 	if err != nil {
 		return err
 	}
-	for _, pName := range w.pNames {
-		var err error
-		pNamesLump := w.lumps[pName]
-		lumpInfo := w.lumpInfos[pNamesLump]
-		w.patches[pName], err = lumps.NewImage(w.file, lumpInfo, w.transparentPaletteIndex)
+	for _, pName := range w.patchNames {
+		idx, found := w.lumps[pName]
+		if !found {
+			fmt.Println("patch not found", pName)
+			//for k := range w.lumps {
+			//	fmt.Println("-----------", k, "-----------")
+			//}
+
+			continue
+		}
+		if idx < 0 || idx >= len(w.lumpInfos) {
+			return fmt.Errorf("invalid PNAMES index")
+		}
+		info := w.lumpInfos[idx]
+		w.patches[pName], err = lumps.NewImage(w.file, info, w.transparentPaletteIndex)
 		if err != nil {
 			return err
 		}
@@ -182,9 +195,16 @@ func (w *WAD) GetTextures() textures.ITextures {
 }
 
 // GetImage retrieves an image by its patch name index and returns the image and a boolean indicating success.
-func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, bool) {
-	img, ok := w.patches[w.pNames[pNameNumber]]
-	return img, ok
+func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, error) {
+	if pNameNumber < 0 || pNameNumber >= int16(len(w.patchNames)) {
+		return nil, fmt.Errorf("invalid patch name index %d", pNameNumber)
+	}
+	z := w.patchNames[pNameNumber]
+	img, ok := w.patches[z]
+	if !ok {
+		return nil, fmt.Errorf("can't find patch %s in patches", z)
+	}
+	return img, nil
 }
 
 // GetFlat retrieves a flat texture from the WAD by its name. Returns the flat and true if found, otherwise false.
@@ -264,9 +284,11 @@ func (w *WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
 	rgba := image.NewRGBA(image.Rect(0, 0, texW, texH))
 
 	for _, patch := range texture.Patches {
-		img, iOk := w.GetImage(patch.PNameNumber)
-		if !iOk {
-			return nil, fmt.Errorf("invalid patch %d", patch.PNameNumber)
+		img, err := w.GetImage(patch.PNameNumber)
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+			//return nil, fmt.Errorf("invalid patch %d", patch.PNameNumber)
 		}
 
 		for x, col := range img.Columns {

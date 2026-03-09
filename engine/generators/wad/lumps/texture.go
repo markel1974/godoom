@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Texture represents a texture structure containing header information and a list of patches.
@@ -41,13 +42,13 @@ func NewPatchNames(f *os.File, info *LumpInfo) ([]string, error) {
 	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
 		return nil, err
 	}
-	p := make([][8]byte, count)
-	if err := binary.Read(f, binary.LittleEndian, p); err != nil {
+	container := make([][8]byte, count)
+	if err := binary.Read(f, binary.LittleEndian, container); err != nil {
 		return nil, err
 	}
 	pNames := make([]string, count)
-	for idx, p := range p {
-		pNames[idx] = ToString(p)
+	for idx, p := range container {
+		pNames[idx] = strings.TrimSpace(strings.ToUpper(ToString(p)))
 	}
 	return pNames, nil
 }

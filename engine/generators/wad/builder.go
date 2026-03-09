@@ -203,11 +203,11 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	miSector.Tag = strconv.Itoa(int(secIdx))
 	if wadSector.CeilingPic == "F_SKY1" {
 		// Chiave di sistema per dire ai renderer: "Usa la proiezione cilindrica"
-		miSector.TextureCeil = append(miSector.TextureCeil, "__SKYBOX__")
+		miSector.TextureCeil = []string{"__SKYBOX__"}
 	} else {
-		miSector.TextureCeil = append(miSector.TextureCeil, CreateFlatId(wadSector.CeilingPic))
+		miSector.TextureCeil = []string{CreateFlatId(wadSector.CeilingPic)}
 	}
-	miSector.TextureFloor = append(miSector.TextureFloor, CreateFlatId(wadSector.FloorPic))
+	miSector.TextureFloor = []string{CreateFlatId(wadSector.FloorPic)}
 	miSector.TextureScaleFactor = 10.0
 	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
@@ -231,9 +231,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.TextureMiddle = append(seg.TextureMiddle, CreateTextureId(side.MiddleTexture))
-			seg.TextureUpper = append(seg.TextureUpper, CreateTextureId(side.UpperTexture))
-			seg.TextureLower = append(seg.TextureLower, CreateTextureId(side.LowerTexture))
+			seg.TextureMiddle = []string{CreateTextureId(side.MiddleTexture)}
+			seg.TextureUpper = []string{CreateTextureId(side.UpperTexture)}
+			seg.TextureLower = []string{CreateTextureId(side.LowerTexture)}
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -249,12 +249,12 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 
 					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
 					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
-						seg.TextureUpper = append(seg.TextureUpper, "__SKYBOX__")
+						seg.TextureUpper = []string{"__SKYBOX__"}
 					}
 
 					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
 					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
-						seg.TextureLower = append(seg.TextureLower, "__SKYBOX__")
+						seg.TextureLower = []string{"__SKYBOX__"}
 					}
 				}
 			}
@@ -968,73 +968,3 @@ func signedArea(poly []Point) float64 {
 	}
 	return area / 2.0
 }
-
-/*
-// recoverConstraints modifies a set of triangles to ensure they satisfy given edge constraints using edge flipping.
-func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle {
-	for _, c := range constraints {
-		for {
-			intersectingIdx := -1
-			var intersectingEdge [2]Point
-
-			for i, t := range triangles {
-				edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
-				for _, e := range edges {
-					if e[0] == c[0] || e[0] == c[1] || e[1] == c[0] || e[1] == c[1] {
-						continue
-					}
-					if segmentsIntersect(e[0], e[1], c[0], c[1]) {
-						intersectingIdx = i
-						intersectingEdge = e
-						break
-					}
-				}
-				if intersectingIdx != -1 {
-					break
-				}
-			}
-
-			if intersectingIdx == -1 {
-				break
-			}
-
-			adjIdx := -1
-			for i, t := range triangles {
-				if i == intersectingIdx {
-					continue
-				}
-				if t.HasEdge(intersectingEdge) {
-					adjIdx = i
-					break
-				}
-			}
-
-			if adjIdx != -1 {
-				t1 := triangles[intersectingIdx]
-				t2 := triangles[adjIdx]
-
-				var pOpp1, pOpp2 Point
-				for _, v := range []Point{t1.A, t1.B, t1.C} {
-					if v != intersectingEdge[0] && v != intersectingEdge[1] {
-						pOpp1 = v
-						break
-					}
-				}
-				for _, v := range []Point{t2.A, t2.B, t2.C} {
-					if v != intersectingEdge[0] && v != intersectingEdge[1] {
-						pOpp2 = v
-						break
-					}
-				}
-
-				triangles[intersectingIdx] = Triangle{pOpp1, pOpp2, intersectingEdge[0]}
-				triangles[adjIdx] = Triangle{pOpp1, pOpp2, intersectingEdge[1]}
-			} else {
-				break
-			}
-		}
-	}
-	return triangles
-}
-
-*/

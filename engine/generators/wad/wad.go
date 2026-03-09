@@ -11,7 +11,7 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-// WAD represents a parsed Doom-engine WAD file containing lumps, levels, textures, flats, patches, and play palettes.
+// WAD represents a data structure for manipulating Doom-engine WAD files, including textures, levels, and graphics.
 type WAD struct {
 	file                    *os.File
 	lumpInfos               []*lumps.LumpInfo
@@ -25,7 +25,7 @@ type WAD struct {
 	transparentPaletteIndex byte
 }
 
-// New initializes and returns a new WAD instance with preallocated maps and a default transparent palette index.
+// New creates a new instance of the WAD structure with initialized maps for lumps, levels, textures, flats, and patches.
 func New() *WAD {
 	return &WAD{
 		lumps:                   make(map[string]int),
@@ -37,7 +37,7 @@ func New() *WAD {
 	}
 }
 
-// Load initializes the WAD object by reading data from the specified file and loading necessary resources.
+// Load opens the WAD file, loads its internal structures, and initializes its resources.
 func (w *WAD) Load(filename string) error {
 	var err error
 	if w.file, err = os.Open(filename); err != nil {
@@ -61,7 +61,9 @@ func (w *WAD) Load(filename string) error {
 	return nil
 }
 
-// loadInfoTables parses information tables from a WAD file and populates lump and level maps for quick access.
+// loadInfoTables loads lump information from the WAD file and organizes it into levels and lumps for easier access.
+// It reads lump details using lumps.NewLumpInfos and maps level and lump names to their respective indices.
+// Returns an error if lump information parsing fails or if any discrepancies occur.
 func (w *WAD) loadInfoTables() error {
 	var err error
 	w.lumpInfos, err = lumps.NewLumpInfos(w.file)
@@ -79,7 +81,7 @@ func (w *WAD) loadInfoTables() error {
 	return nil
 }
 
-// loadPlayPals loads the PLAYPAL lump data from the WAD file into a PlayPal structure, returning an error if not found.
+// loadPlayPals loads the PLAYPAL lump from the WAD file and initializes the PlayPal structure. Returns an error if loading fails.
 func (w *WAD) loadPlayPals() error {
 	var err error
 	playPalLump, ok := w.lumps["PLAYPAL"]
@@ -93,7 +95,7 @@ func (w *WAD) loadPlayPals() error {
 	return nil
 }
 
-// loadPatches reads and loads patch images from the WAD file, using the patch names defined in the PNAMES lump.
+// loadPatches loads patch data from the WAD file by reading the PNAMES lump and mapping each patch to its graphic.
 func (w *WAD) loadPatches() error {
 	var err error
 	pLumpIdx, ok := w.lumps["PNAMES"]
@@ -130,7 +132,8 @@ func (w *WAD) loadPatches() error {
 	return nil
 }
 
-// loadTextures loads texture data from the WAD file and initializes the texture map with processed texture entries.
+// loadTextures loads the texture lumps from the WAD file and populates the textures map with parsed texture data.
+// It handles both TEXTURE1 and TEXTURE2 lumps if present and processes the associated texture data.
 func (w *WAD) loadTextures() error {
 	var textureLumps []int
 	if lump, ok := w.lumps["TEXTURE1"]; ok {
@@ -152,7 +155,7 @@ func (w *WAD) loadTextures() error {
 	return nil
 }
 
-// loadFlats loads flat texture data from the WAD file into the flats map by parsing lumps between F_START and F_END.
+// loadFlats loads all flat textures (floor/ceiling textures) from the F_START to F_END range into the WAD structure.
 func (w *WAD) loadFlats() error {
 	start, ok := w.lumps["F_START"]
 	if !ok {
@@ -173,12 +176,13 @@ func (w *WAD) loadFlats() error {
 	return nil
 }
 
-// GetTexture retrieves a texture by name from the WAD file, returning the texture and a boolean indicating success.
+// GetTexture retrieves a texture by its name from the WAD archive, returning the texture and a boolean indicating success.
 func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 	texture, ok := w.textures[lumps.FixName(name)]
 	return texture, ok
 }
 
+// GetTextures retrieves all textures and flats as an ITextures object with their corresponding data added.
 func (w *WAD) GetTextures() textures.ITextures {
 	t, _ := NewTextures()
 	for name := range w.textures {
@@ -194,7 +198,8 @@ func (w *WAD) GetTextures() textures.ITextures {
 	return t
 }
 
-// GetImage retrieves an image by its patch name index and returns the image and a boolean indicating success.
+// GetImage retrieves an image from the WAD by its patch name index (pNameNumber).
+// Returns the image object or an error if the index is invalid or the patch is not found.
 func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, error) {
 	if pNameNumber < 0 || pNameNumber >= int16(len(w.patchNames)) {
 		return nil, fmt.Errorf("invalid patch name index %d", pNameNumber)
@@ -207,13 +212,13 @@ func (w *WAD) GetImage(pNameNumber int16) (*lumps.Image, error) {
 	return img, nil
 }
 
-// GetFlat retrieves a flat texture from the WAD by its name. Returns the flat and true if found, otherwise false.
+// GetFlat retrieves a flat texture by its name from the WAD. It returns the flat and a boolean indicating success.
 func (w *WAD) GetFlat(flatName string) (*lumps.Flat, bool) {
 	flat, ok := w.flats[flatName]
 	return flat, ok
 }
 
-// GetLevels returns a sorted slice of level names extracted from the WAD file's internal data structures.
+// GetLevels returns a sorted list of all level names defined in the WAD file.
 func (w *WAD) GetLevels() []string {
 	var result []string
 	for name := range w.levels {
@@ -223,7 +228,7 @@ func (w *WAD) GetLevels() []string {
 	return result
 }
 
-// GetLevel retrieves a Level by its name, loading its component data from the WAD file, and returns the Level or an error.
+// GetLevel retrieves the specified level data by its name and parses its associated lumps into a Level structure.
 func (w *WAD) GetLevel(levelName string) (*Level, error) {
 	var err error
 	level := &Level{}
@@ -273,6 +278,8 @@ func (w *WAD) GetLevel(levelName string) (*Level, error) {
 	return level, nil
 }
 
+// GetTextureImage generates an RGBA image for the specified texture name by rendering patches and applying the palette.
+// Returns the resulting image or an error if the texture is invalid or cannot be processed.
 func (w *WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
 	texture, tOk := w.GetTexture(textureName)
 	if !tOk || texture.Header == nil {
@@ -314,6 +321,7 @@ func (w *WAD) GetTextureImage(textureName string) (*image.RGBA, error) {
 	return rgba, nil
 }
 
+// GetFlatImage retrieves a 64x64 flat image by name from the WAD's flat textures and returns it as an *image.RGBA.
 func (w *WAD) GetFlatImage(pName string) (*image.RGBA, error) {
 	z, ok := w.flats[pName]
 	if !ok {

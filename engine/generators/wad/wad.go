@@ -183,12 +183,12 @@ func (w *WAD) GetTextures() textures.ITextures {
 	t, _ := NewTextures()
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {
-			t.Add(CreateTextureId(name), data)
+			t.Add(TextureCreateId(name), data)
 		}
 	}
 	for name := range w.flats {
 		if data, err := w.GetFlatImage(name); err == nil {
-			t.Add(CreateFlatId(name), data)
+			t.Add(FlatCreateId(name), data)
 		}
 	}
 	return t

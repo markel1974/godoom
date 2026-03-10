@@ -8,8 +8,69 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-// CreateTextureId generates a valid texture ID by prepending a fixed prefix to a cleaned, non-empty input string.
-func CreateTextureId(id string) string {
+var _animationsBase = [][]string{
+	//flats
+	{"NUKAGE1", "NUKAGE2", "NUKAGE3"},
+	{"FWATER1", "FWATER2", "FWATER3", "FWATER4"},
+	{"SWATER1", "SWATER2", "SWATER3", "SWATER4"},
+	{"LAVA1", "LAVA2", "LAVA3", "LAVA4"},
+	{"BLOOD1", "BLOOD2", "BLOOD3"},
+	{"FIRELAVA", "FIRELAV2", "FIRELAV3"},
+	{"FIREWALA", "FIREWALB", "FIREWALL"},
+	//textures
+	{"BLODGR1", "BLODGR2", "BLODGR3", "BLODGR4"},
+	{"SLADRIP1", "SLADRIP2", "SLADRIP3"},
+	{"BLODRIP1", "BLODRIP2", "BLODRIP3", "BLODRIP4"},
+	{"FIREMAG1", "FIREMAG2", "FIREMAG3"},
+	{"FIREBLU1", "FIREBLU2"},
+	{"ROCKRED1", "ROCKRED2", "ROCKRED3"},
+	{"GSTFONT1", "GSTFONT2", "GSTFONT3"},
+}
+
+var _animations map[string][]string
+
+func init() {
+	_animations = make(map[string][]string)
+	for _, v := range _animationsBase {
+		for _, a := range v {
+			_animations[a] = v
+		}
+	}
+}
+
+func TextureCreateAnimation(id string) []string {
+	id = cleanId(id)
+	if animation, ok := _animations[id]; ok {
+		var out []string
+		for _, i := range animation {
+			out = append(out, TextureCreateId(i))
+		}
+		return out
+	}
+	targetId := TextureCreateId(id)
+	if len(targetId) == 0 {
+		return nil
+	}
+	return []string{targetId}
+}
+
+func FlatCreateAnimation(id string) []string {
+	id = cleanId(id)
+	if animation, ok := _animations[id]; ok {
+		var out []string
+		for _, i := range animation {
+			out = append(out, FlatCreateId(i))
+		}
+		return out
+	}
+	targetId := FlatCreateId(id)
+	if len(targetId) == 0 {
+		return nil
+	}
+	return []string{targetId}
+}
+
+func TextureCreateId(id string) string {
 	const textureId = "__TEXTURE__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
@@ -18,8 +79,7 @@ func CreateTextureId(id string) string {
 	return textureId + id
 }
 
-// CreateFlatId generates a unique flat identifier by normalizing and appending a prefix to the input ID. Returns an empty string for invalid inputs.
-func CreateFlatId(id string) string {
+func FlatCreateId(id string) string {
 	const flatId = "__FLAT__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {

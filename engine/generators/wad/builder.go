@@ -205,9 +205,9 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 		// System key to tell renderers: "Use cylindrical projection"
 		miSector.TextureCeil = []string{"__SKYBOX__"}
 	} else {
-		miSector.TextureCeil = []string{CreateFlatId(wadSector.CeilingPic)}
+		miSector.TextureCeil = FlatCreateAnimation(wadSector.CeilingPic)
 	}
-	miSector.TextureFloor = []string{CreateFlatId(wadSector.FloorPic)}
+	miSector.TextureFloor = FlatCreateAnimation(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
 	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
@@ -231,9 +231,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.TextureMiddle = []string{CreateTextureId(side.MiddleTexture)}
-			seg.TextureUpper = []string{CreateTextureId(side.UpperTexture)}
-			seg.TextureLower = []string{CreateTextureId(side.LowerTexture)}
+			seg.TextureMiddle = TextureCreateAnimation(side.MiddleTexture)
+			seg.TextureUpper = TextureCreateAnimation(side.UpperTexture)
+			seg.TextureLower = TextureCreateAnimation(side.LowerTexture)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:

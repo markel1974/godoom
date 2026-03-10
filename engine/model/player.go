@@ -237,8 +237,8 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 
 	// 3. Transizione Portale: Il punto è fisicamente uscito dal settore radice.
 	// Naviga il grafo topologico testando i settori adiacenti (neighbors).
-	for _, segment := range currentSector.Segments {
-		neighbor := segment.Sector
+	for _, seg := range currentSector.Segments {
+		neighbor := seg.Sector
 		if neighbor != nil {
 			if PointInSegments(px, py, neighbor.Segments) {
 				p.SetSector(neighbor)
@@ -254,12 +254,12 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	// Se il punto cade ESATTAMENTE sull'edge matematico di un portale,
 	// la precisione FP del ray-casting potrebbe restituire 'false' per entrambi i settori.
 	// In questo caso, forziamo l'aggiornamento se il punto si trova nel semipiano posteriore del portale.
-	for _, segment := range currentSector.Segments {
-		if segment.Sector != nil {
-			if mathematic.PointSideF(px, py, segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y) < 0 {
-				p.SetSector(segment.Sector)
+	for _, seg := range currentSector.Segments {
+		if seg.Sector != nil {
+			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
+				p.SetSector(seg.Sector)
 				if p.debug {
-					fmt.Println("New Sector crossed via Fallback:", segment.Sector.Id)
+					fmt.Println("New Sector crossed via Fallback:", seg.Sector.Id)
 				}
 				return
 			}

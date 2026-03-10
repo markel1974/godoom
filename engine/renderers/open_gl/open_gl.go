@@ -26,29 +26,22 @@ Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) p
 Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce del settore) e passare al rendering degli sprite/entità con billboarding istanziato.
 */
 
-// _scale is a constant used as a multiplier to define scaling factors for rendering configurations.
-const _scale = 1
+const (
+	scaleFactor = 1
 
-const vertexFloatsAlignment = 6
+	vertexFloatsAlignment = 6
 
-// maxBatchVertices defines the maximum number of vertices allowed in a single batch for rendering operations.
-const maxBatchVertices = 65536 * 2
+	// maxBatchVertices defines the maximum number of vertices allowed in a single batch for rendering operations.
+	maxBatchVertices = 65536 * 2
+
+	maxFrameCommands = 4096
+)
 
 // drawCmd represents a single drawing command, storing texture ID and vertex range information for rendering.
 type drawCmd struct {
 	texID       uint32
 	firstVertex int32
 	vertexCount int32
-}
-
-// batchEntry represents a single batch of rendering data with a texture ID, vertex buffer, and vertex count.
-// texID is the identifier for the texture associated with this batch.
-// vertices is a preallocated slice storing vertex data in a tightly packed format.
-// count tracks the current number of vertices added to the batch.
-type batchEntry struct {
-	texID    uint32
-	vertices []float32 // Slice preallocato
-	count    int       // Indice di riempimento attuale
 }
 
 // glTexture represents an OpenGL texture with a unique hardware ID for GPU resource management.
@@ -84,7 +77,7 @@ type RenderOpenGL struct {
 	glTextures map[*textures.Texture]*glTexture
 
 	frameVertices []float32
-	frameCmds     []*drawCmd
+	frameCommands []*drawCmd
 }
 
 // NewOpenGLRender initializes and returns a pointer to a new RenderOpenGL instance with default parameters.
@@ -103,8 +96,8 @@ func NewOpenGLRender() *RenderOpenGL {
 		debug:            false,
 		debugIdx:         0,
 		shaderProgram:    0,
-		frameVertices:    make([]float32, 0, 1024*1024),
-		frameCmds:        make([]*drawCmd, 0, 4096),
+		frameVertices:    make([]float32, 0, maxBatchVertices),
+		frameCommands:    make([]*drawCmd, 0, maxFrameCommands),
 	}
 	return r
 }
@@ -122,22 +115,22 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 
 // setDrawCommand assigns or creates a new drawCmd for the specified texture ID and appends it to the frame commands list.
 func (w *RenderOpenGL) setDrawCommand(texID uint32) *drawCmd {
-	n := len(w.frameCmds)
-	if n > 0 && w.frameCmds[n-1].texID == texID {
-		return w.frameCmds[n-1]
+	n := len(w.frameCommands)
+	if n > 0 && w.frameCommands[n-1].texID == texID {
+		return w.frameCommands[n-1]
 	}
-	w.frameCmds = append(w.frameCmds, &drawCmd{
+	w.frameCommands = append(w.frameCommands, &drawCmd{
 		texID:       texID,
 		firstVertex: int32(len(w.frameVertices) / vertexFloatsAlignment),
 		vertexCount: 0,
 	})
-	return w.frameCmds[len(w.frameCmds)-1]
+	return w.frameCommands[len(w.frameCommands)-1]
 }
 
 // createBatch processes a list of compiled sectors and generates vertex and draw command data for rendering.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 	w.frameVertices = w.frameVertices[:0]
-	w.frameCmds = w.frameCmds[:0]
+	w.frameCommands = w.frameCommands[:0]
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		polygons := css[idx].Get()
@@ -270,7 +263,7 @@ func (w *RenderOpenGL) glStreamRender() {
 	// Single Upload DMA: Nessuna collisione, il driver non ha motivo di bloccare la CPU.
 	gl.BufferData(gl.ARRAY_BUFFER, len(w.frameVertices)*4, gl.Ptr(w.frameVertices), gl.DYNAMIC_DRAW)
 
-	for _, cmd := range w.frameCmds {
+	for _, cmd := range w.frameCommands {
 		if cmd.vertexCount > 0 {
 			gl.BindTexture(gl.TEXTURE_2D, cmd.texID)
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
@@ -444,7 +437,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 // doInitialize initializes the OpenGL renderer, sets up the window, compiles shaders, and loads textures.
 func (w *RenderOpenGL) doInitialize() error {
 	cfg := pixels.WindowConfig{
-		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
+		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*scaleFactor, float64(w.screenHeight)*scaleFactor),
 		VSync:       true,
 		Undecorated: false,
 		Smooth:      false,

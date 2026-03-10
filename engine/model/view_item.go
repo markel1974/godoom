@@ -25,3 +25,16 @@ type ViewItem struct {
 func NewViewItem() *ViewItem {
 	return &ViewItem{}
 }
+
+func (vi *ViewItem) Translate(x float64, y float64, z float64) (float64, float64, float64, float64, float64) {
+	// 1. Traslazione rispetto al ViewItem
+	lx := x - vi.Where.X
+	ly := y - vi.Where.Y
+
+	// 2. Rotazione nel View Space
+	tx := (lx * vi.AngleSin) - (ly * vi.AngleCos)
+	ty := z - vi.Where.Z
+	tz := (lx * vi.AngleCos) + (ly * vi.AngleSin)
+
+	return lx, ly, tx, ty, tz
+}

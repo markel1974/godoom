@@ -1,45 +1,47 @@
 package textures
 
-const tickInterval = 32
+// _tickInterval defines the number of global ticks between frame updates in animations.
+var _tickInterval = uint64(32)
 
+// _globalTick is a monotonically increasing counter used to track global animation or system ticks within the application.
 var _globalTick uint64
 
+// SetTickInterval sets the tick interval duration in arbitrary units.
+func SetTickInterval(interval uint64) {
+	_tickInterval = interval
+}
+
+// Tick increments the global tick counter used for tracking application-wide progression or state updates.
 func Tick() {
 	_globalTick++
 }
 
-// Animation represents a sequence of textures that can be animated over time.
-// frame stores the current single texture when no animation sequence is used.
-// frames holds a list of textures to be used as frames in the animation sequence.
-// tick tracks the animation progress and determines the current frame based on time.
-// singleFrame indicates whether the animation consists of only a single static frame.
+// Animation represents a collection of 2D texture frames used for rendering animations.
 type Animation struct {
 	frame       *Texture
 	frames      []*Texture
-	singleFrame bool
+	totalFrames uint64
 }
 
-// NewAnimation creates a new Animation instance from a slice of Texture pointers, handling cases with zero or one frame.
+// NewAnimation creates a new Animation instance from a provided slice of Texture pointers.
+// If the slice contains only one Texture, it is set as the current frame.
 func NewAnimation(frames []*Texture) *Animation {
 	a := &Animation{
 		frames:      frames,
 		frame:       nil,
-		singleFrame: false,
+		totalFrames: uint64(len(frames)),
 	}
-	if len(frames) == 0 {
-		a.singleFrame = true
-	} else if len(frames) == 1 {
-		a.singleFrame = true
+	if a.totalFrames == 1 {
 		a.frame = frames[0]
 	}
 	return a
 }
 
-// Advance progresses the animation by one tick and returns the current frame's texture based on the animation state.
-func (a *Animation) Advance() *Texture {
-	if a.singleFrame {
-		return a.frame
+// CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
+func (a *Animation) CurrentFrame() *Texture {
+	if a.totalFrames > 1 {
+		frameIdx := (_globalTick / _tickInterval) % a.totalFrames
+		return a.frames[frameIdx]
 	}
-	frameIdx := (_globalTick / tickInterval) % uint64(len(a.frames))
-	return a.frames[frameIdx]
+	return a.frame
 }

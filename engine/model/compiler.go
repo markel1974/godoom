@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 /*
@@ -67,16 +69,26 @@ func NewCompiler() *Compiler {
 
 // Setup initializes the sectors and segments for the compiler based on the provided configuration.
 func (r *Compiler) Setup(cfg *ConfigRoot) error {
+	animationGet := func(cfg *ConfigRoot, animations map[string]*textures.Animation, src []string) *textures.Animation {
+		key := strings.Join(src, ";")
+		if a, ok := animations[key]; ok {
+			return a
+		}
+		a := textures.NewAnimation(cfg.Textures.Get(src))
+		animations[key] = a
+		return a
+	}
+	ax := make(map[string]*textures.Animation)
 	modelSectorId := uint16(0)
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			tUpper := cfg.Textures.Get(cn.TextureUpper)
-			tMiddle := cfg.Textures.Get(cn.TextureMiddle)
-			tLower := cfg.Textures.Get(cn.TextureLower)
-			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, tUpper, tMiddle, tLower))
+			aUpper := animationGet(cfg, ax, cn.TextureUpper)
+			aMiddle := animationGet(cfg, ax, cn.TextureMiddle)
+			aLower := animationGet(cfg, ax, cn.TextureLower)
+			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower))
 		}
 
 		if len(segments) == 0 {
@@ -89,8 +101,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
 		s.Ceil = cs.Ceil
 		s.Floor = cs.Floor
-		s.TextureFloor = cfg.Textures.Get(cs.TextureFloor)
-		s.TextureCeil = cfg.Textures.Get(cs.TextureCeil)
+		s.TextureFloor = animationGet(cfg, ax, cs.TextureFloor)
+		s.TextureCeil = animationGet(cfg, ax, cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
 		s.LightDistance = cs.LightDistance
 		lXY := cs.GetCentroid()

@@ -30,13 +30,13 @@ type Segment struct {
 	Kind          int
 	Sector        *Sector
 	Tag           string
-	TextureUpper  []*textures.Texture
-	TextureMiddle []*textures.Texture
-	TextureLower  []*textures.Texture
+	TextureUpper  *textures.Animation
+	TextureMiddle *textures.Animation
+	TextureLower  *textures.Animation
 }
 
 // NewSegment creates and returns a new Segment instance with specified start, end Points, reference, Kind, Sector, and tag.
-func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper []*textures.Texture, tMiddle []*textures.Texture, tLower []*textures.Texture) *Segment {
+func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Segment {
 	out := &Segment{
 		Start:         start,
 		End:           end,

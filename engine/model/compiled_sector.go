@@ -6,13 +6,11 @@ import "github.com/markel1974/godoom/engine/textures"
 type CompiledSector struct {
 	Sector           *Sector
 	compiledPolygons *CompiledPolygons
-	tick             uint
 }
 
 // NewCompiledSector creates and returns a pointer to a new initialized CompiledSector instance.
 func NewCompiledSector() *CompiledSector {
 	return &CompiledSector{
-		tick:             0,
 		Sector:           nil,
 		compiledPolygons: NewCompiledPolygons(),
 	}
@@ -37,17 +35,6 @@ func (cs *CompiledSector) Clear() {
 // Acquire returns a compiled polygon by reusing or creating it from the provided neighbor, textures, coordinates, and type.
 func (cs *CompiledSector) Acquire(neighbor *Sector, kind int, c, f, t *textures.Texture, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
 	return cs.compiledPolygons.Acquire(cs.Sector, neighbor, kind, c, f, t, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-}
-
-// Prepare increments the internal tick counter of the CompiledSector instance.
-func (cs *CompiledSector) Prepare() {
-	cs.tick++
-}
-
-// Tick returns the current tick count of the CompiledSector instance.
-func (cs *CompiledSector) Tick() uint {
-	const tickInterval = 64
-	return cs.tick / tickInterval
 }
 
 // Get retrieves the collection of currently active CompiledPolygon instances from the CompiledSector.

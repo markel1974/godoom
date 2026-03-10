@@ -11,7 +11,7 @@ import "github.com/markel1974/godoom/engine/textures"
 // IdFloorTest represents the identifier for testing floors with a hexadecimal value of 0xFF00FF.
 // IdCeilTest represents the identifier for testing ceilings with a hexadecimal value of 0xAA00AA.
 const (
-	IdEmpty = 0
+	//IdEmpty = 0
 	IdFloor = 0xA9A9A9
 	IdCeil  = 0xF5F5F5
 	IdUpper = 0xFFFF00

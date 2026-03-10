@@ -70,7 +70,8 @@ type PolygonDef struct {
 
 // Builder provides utilities for constructing or processing line definitions within a WAD file.
 type Builder struct {
-	w *WAD
+	w        *WAD
+	textures *Textures
 }
 
 // NewBuilder initializes and returns a new instance of Builder.
@@ -84,6 +85,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 	if err := bld.w.Load(wadFile); err != nil {
 		return nil, err
 	}
+	bld.textures = bld.w.GetTextures()
 	levelNames := bld.w.GetLevels()
 	if levelNumber < 1 || levelNumber > len(levelNames) {
 		return nil, fmt.Errorf("invalid level number: %d", levelNumber)
@@ -121,8 +123,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		playerSectorId,
 	)
 
-	t := bld.w.GetTextures()
-	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, t), nil
+	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, bld.textures), nil
 }
 
 // buildSectorsFromLineDefs processes linedefs in a level to build and return a list of ConfigSector objects.
@@ -205,9 +206,9 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 		// System key to tell renderers: "Use cylindrical projection"
 		miSector.TextureCeil = []string{"__SKYBOX__"}
 	} else {
-		miSector.TextureCeil = FlatCreateAnimation(wadSector.CeilingPic)
+		miSector.TextureCeil = bld.textures.FlatCreateAnimation(wadSector.CeilingPic)
 	}
-	miSector.TextureFloor = FlatCreateAnimation(wadSector.FloorPic)
+	miSector.TextureFloor = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
 	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
 	return miSector
@@ -231,9 +232,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.TextureMiddle = TextureCreateAnimation(side.MiddleTexture)
-			seg.TextureUpper = TextureCreateAnimation(side.UpperTexture)
-			seg.TextureLower = TextureCreateAnimation(side.LowerTexture)
+			seg.TextureMiddle = bld.textures.TextureCreateAnimation(side.MiddleTexture)
+			seg.TextureUpper = bld.textures.TextureCreateAnimation(side.UpperTexture)
+			seg.TextureLower = bld.textures.TextureCreateAnimation(side.LowerTexture)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:

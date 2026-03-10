@@ -46,7 +46,8 @@ func (cs *CompiledSector) Prepare() {
 
 // Tick returns the current tick count of the CompiledSector instance.
 func (cs *CompiledSector) Tick() uint {
-	return cs.tick
+	const tickInterval = 64
+	return cs.tick / tickInterval
 }
 
 // Get retrieves the collection of currently active CompiledPolygon instances from the CompiledSector.

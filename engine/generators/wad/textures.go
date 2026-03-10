@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
+// _animationsBase defines a 2D slice of strings representing grouped animation frames for flats and textures.
 var _animationsBase = [][]string{
 	//flats
 	{"NUKAGE1", "NUKAGE2", "NUKAGE3"},
@@ -27,82 +28,32 @@ var _animationsBase = [][]string{
 	{"GSTFONT1", "GSTFONT2", "GSTFONT3"},
 }
 
-var _animations map[string][]string
-
-func init() {
-	_animations = make(map[string][]string)
-	for _, v := range _animationsBase {
-		for _, a := range v {
-			_animations[a] = v
-		}
-	}
+// cleanId transforms the input string by trimming leading/trailing spaces and converting it to uppercase.
+func cleanId(id string) string {
+	return strings.TrimSpace(strings.ToUpper(id))
 }
 
-func TextureCreateAnimation(id string) []string {
-	id = cleanId(id)
-	if animation, ok := _animations[id]; ok {
-		var out []string
-		for _, i := range animation {
-			out = append(out, TextureCreateId(i))
-		}
-		return out
-	}
-	targetId := TextureCreateId(id)
-	if len(targetId) == 0 {
-		return nil
-	}
-	return []string{targetId}
-}
-
-func FlatCreateAnimation(id string) []string {
-	id = cleanId(id)
-	if animation, ok := _animations[id]; ok {
-		var out []string
-		for _, i := range animation {
-			out = append(out, FlatCreateId(i))
-		}
-		return out
-	}
-	targetId := FlatCreateId(id)
-	if len(targetId) == 0 {
-		return nil
-	}
-	return []string{targetId}
-}
-
-func TextureCreateId(id string) string {
-	const textureId = "__TEXTURE__"
-	id = cleanId(id)
-	if len(id) == 0 || id == "-" {
-		return ""
-	}
-	return textureId + id
-}
-
-func FlatCreateId(id string) string {
-	const flatId = "__FLAT__"
-	id = cleanId(id)
-	if len(id) == 0 || id == "-" {
-		return ""
-	}
-	return flatId + id
-}
-
-// Textures is a collection that maps string IDs to Texture objects, allowing storage and retrieval of texture resources.
+// Textures maintain a collection of textures and their associated animations.
 type Textures struct {
-	resources map[string]*textures.Texture
+	resources  map[string]*textures.Texture
+	animations map[string][]string
 }
 
-// NewTextures creates and returns a new instance of Textures with an initialized resource map.
+// NewTextures initializes and returns a new instance of Textures with preloaded animations and an empty resources map.
 func NewTextures() (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}
+	t.animations = make(map[string][]string)
+	for _, v := range _animationsBase {
+		for _, a := range v {
+			t.animations[a] = v
+		}
+	}
 	return t, nil
 }
 
-// Add creates and adds a new texture to the Textures resource map using the provided ID and RGBA image data.
-// It converts the image's pixel data into texture-specific format and returns the newly created texture.
+// Add adds a new texture to the Textures collection using the provided source ID and RGBA image, and returns the created Texture.
 func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)
@@ -123,7 +74,7 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	return texture
 }
 
-// Get retrieves the texture associated with the given ID from the Textures' resources map. Returns nil if not found.
+// Get retrieves a list of textures by their identifiers. Returns nil if the list is empty or contains invalid IDs.
 func (t *Textures) Get(ids []string) []*textures.Texture {
 	l := len(ids)
 	if l == 0 {
@@ -146,7 +97,7 @@ func (t *Textures) Get(ids []string) []*textures.Texture {
 	return out
 }
 
-// GetNames returns a slice of all texture names (IDs) stored in the Textures collection.
+// GetNames returns a slice of all texture IDs currently stored in the Textures instance.
 func (t *Textures) GetNames() []string {
 	var out []string
 	for id := range t.resources {
@@ -155,7 +106,56 @@ func (t *Textures) GetNames() []string {
 	return out
 }
 
-// cleanId normalizes the input string by trimming spaces and converting it to uppercase.
-func cleanId(id string) string {
-	return strings.TrimSpace(strings.ToUpper(id))
+// TextureCreateAnimation generates a list of texture IDs based on an input identifier and existing animations.
+func (t *Textures) TextureCreateAnimation(id string) []string {
+	id = cleanId(id)
+	if animation, ok := t.animations[id]; ok {
+		var out []string
+		for _, i := range animation {
+			out = append(out, t.TextureCreateId(i))
+		}
+		return out
+	}
+	targetId := t.TextureCreateId(id)
+	if len(targetId) == 0 {
+		return nil
+	}
+	return []string{targetId}
+}
+
+// FlatCreateAnimation generates a list of flattened animation IDs for a given texture ID, resolving nested animations recursively.
+func (t *Textures) FlatCreateAnimation(id string) []string {
+	id = cleanId(id)
+	if animation, ok := t.animations[id]; ok {
+		var out []string
+		for _, i := range animation {
+			out = append(out, t.FlatCreateId(i))
+		}
+		return out
+	}
+	targetId := t.FlatCreateId(id)
+	if len(targetId) == 0 {
+		return nil
+	}
+	return []string{targetId}
+}
+
+// TextureCreateId generates a unique texture identifier by appending a fixed prefix to a sanitized version of the input id.
+func (t *Textures) TextureCreateId(id string) string {
+	const textureId = "__TEXTURE__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return textureId + id
+}
+
+// FlatCreateId generates a flat identifier by appending a predefined prefix to a cleaned version of the given id.
+func (t *Textures) FlatCreateId(id string) string {
+	const flatId = "__FLAT__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return flatId + id
 }

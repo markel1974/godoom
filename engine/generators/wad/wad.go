@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
-	"github.com/markel1974/godoom/engine/textures"
 )
 
 // WAD represents a data structure for manipulating Doom-engine WAD files, including textures, levels, and graphics.
@@ -179,16 +178,16 @@ func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 }
 
 // GetTextures retrieves all textures and flats as an ITextures object with their corresponding data added.
-func (w *WAD) GetTextures() textures.ITextures {
+func (w *WAD) GetTextures() *Textures {
 	t, _ := NewTextures()
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {
-			t.Add(TextureCreateId(name), data)
+			t.Add(t.TextureCreateId(name), data)
 		}
 	}
 	for name := range w.flats {
 		if data, err := w.GetFlatImage(name); err == nil {
-			t.Add(FlatCreateId(name), data)
+			t.Add(t.FlatCreateId(name), data)
 		}
 	}
 	return t

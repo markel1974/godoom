@@ -20,30 +20,30 @@ const (
 
 // Player represents the state and properties of a player in the game, including position, velocity, angle, and interactions.
 type Player struct {
-	where         XYZ
-	velocity      XYZ
-	angle         float64
-	angleSin      float64
-	angleCos      float64
-	yaw           float64
-	yawState      float64
-	sector        *Sector
-	ducking       bool
-	falling       bool
-	lightDistance float64
-	debug         bool
+	where          XYZ
+	velocity       XYZ
+	angle          float64
+	angleSin       float64
+	angleCos       float64
+	yaw            float64
+	yawState       float64
+	sector         *Sector
+	ducking        bool
+	falling        bool
+	lightIntensity float64
+	debug          bool
 }
 
 // NewPlayer initializes and returns a new Player instance at the specified position, angle, and sector.
 func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
 	p := &Player{
-		where:         XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.Floor + EyeHeight},
-		velocity:      XYZ{},
-		yaw:           0,
-		yawState:      0,
-		sector:        sector,
-		lightDistance: 0.0039, // 1 / distance == 1 / 255
-		debug:         debug,
+		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.Floor + EyeHeight},
+		velocity:       XYZ{},
+		yaw:            0,
+		yawState:       0,
+		sector:         sector,
+		lightIntensity: 0.0039, // 1 / distance == 1 / 255
+		debug:          debug,
 	}
 	p.SetAngle(cfg.Angle)
 	return p
@@ -144,14 +144,14 @@ func (p *Player) GetZ() float64 {
 	return p.where.Z
 }
 
-// GetLightDistance returns the maximum distance the player can illuminate based on their current settings.
-func (p *Player) GetLightDistance() float64 {
-	return p.lightDistance
+// GetLightIntensity returns the maximum distance the player can illuminate based on their current settings.
+func (p *Player) GetLightIntensity() float64 {
+	return p.lightIntensity
 }
 
-// SetLightDistance updates the player's maximum illumination distance to the specified value.
-func (p *Player) SetLightDistance(lightDistance float64) {
-	p.lightDistance = lightDistance
+// SetLightIntensity updates the player's maximum illumination distance to the specified value.
+func (p *Player) SetLightIntensity(lightIntensity float64) {
+	p.lightIntensity = lightIntensity
 }
 
 // GetVelocity returns the X and Y components of the player's velocity as two separate float64 values.

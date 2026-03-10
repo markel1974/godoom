@@ -12,13 +12,13 @@ const (
 
 // ViewItem represents the state of the current viewing perspective, including position, angles, and rendering parameters.
 type ViewItem struct {
-	Where         XYZ
-	AngleSin      float64
-	AngleCos      float64
-	Yaw           float64
-	Sector        *Sector
-	Zoom          float64
-	LightDistance float64
+	Where          XYZ
+	AngleSin       float64
+	AngleCos       float64
+	Yaw            float64
+	Sector         *Sector
+	Zoom           float64
+	LightIntensity float64
 }
 
 // NewViewItem creates and returns a new instance of ViewItem with default values.

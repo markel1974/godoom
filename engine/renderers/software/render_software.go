@@ -13,9 +13,10 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
+// _scale is a constant scaling factor used for adjusting dimensions and transformations in rendering operations.
 const _scale = 1
 
-// RenderSoftware represents a software-based renderer for managing and rendering 2D/3D scenes on a defined screen space.
+// RenderSoftware is a struct responsible for handling software-based 2D rendering functionality.
 type RenderSoftware struct {
 	win         *pixels.GLWindow
 	mainSurface *pixels.PictureRGBA
@@ -42,8 +43,7 @@ type RenderSoftware struct {
 	debugIdx int
 }
 
-// NewSoftwareRender initializes and returns a new instance of RenderSoftware for software-based rendering.
-// It sets the screen dimensions, textures, maximum Sector height, and initializes rendering utilities.
+// NewSoftwareRender initializes and returns a new instance of RenderSoftware with default values.
 func NewSoftwareRender() *RenderSoftware {
 	return &RenderSoftware{
 		screenWidth:        0,
@@ -59,6 +59,7 @@ func NewSoftwareRender() *RenderSoftware {
 	}
 }
 
+// Setup initializes the RenderSoftware instance with the specified portal, player, and textures.
 func (w *RenderSoftware) Setup(portal *portal.Portal, player *model.Player, t textures.ITextures) error {
 	w.portal = portal
 	w.screenWidth = portal.ScreenWidth()
@@ -72,6 +73,10 @@ func (w *RenderSoftware) Setup(portal *portal.Portal, player *model.Player, t te
 	return nil
 }
 
+// doInitialize initializes the rendering software window, surfaces, and matrices required for rendering.
+// Configures the pixel window with predefined settings and handles any initialization errors.
+// Sets up the main rendering surface, sprite, and transformation matrix for rendering.
+// Logs a message if the window clear feature is enabled.
 func (w *RenderSoftware) doInitialize() {
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	cfg := pixels.WindowConfig{
@@ -98,10 +103,12 @@ func (w *RenderSoftware) doInitialize() {
 	}
 }
 
+// Start initializes and begins the main rendering loop for the RenderSoftware instance.
 func (w *RenderSoftware) Start() {
 	pixels.GLRun(w.doRun)
 }
 
+// doRun executes the main rendering and game loop, handling initialization, input processing, rendering, and game logic updates.
 func (w *RenderSoftware) doRun() {
 	const framerate = 30
 	const frameInterval = 1.0 / framerate
@@ -199,7 +206,7 @@ func (w *RenderSoftware) doRun() {
 	}
 }
 
-// Update updates the state of the world, including the player and rendering, based on the current frame's conditions.
+// doRender performs the main rendering process, updating the frame buffer and drawing visible game elements on the screen.
 func (w *RenderSoftware) doRender() {
 	if w.enableClear {
 		w.win.Clear(color.Black)
@@ -212,7 +219,7 @@ func (w *RenderSoftware) doRender() {
 	w.vi.Where.X, w.vi.Where.Y = w.player.GetCoords()
 	w.vi.Where.Z = w.player.GetZ()
 	w.vi.Yaw = w.player.GetYaw()
-	w.vi.LightDistance = w.player.GetLightDistance()
+	w.vi.LightIntensity = w.player.GetLightIntensity()
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count
@@ -233,6 +240,7 @@ func (w *RenderSoftware) doRender() {
 	w.mainSprite.Draw(w.win, w.mainMatrix)
 }
 
+// RenderSector renders a given sector by processing its segments and drawing polygons on the main surface.
 func (w *RenderSoftware) RenderSector(sector *model.Sector) {
 	maxX := float64(0)
 	maxY := float64(0)
@@ -305,22 +313,22 @@ func (w *RenderSoftware) RenderSector(sector *model.Sector) {
 	dp.DrawLines(false)
 }
 
-// DoPlayerDuckingToggle toggles the ducking state of the player.
+// doPlayerDuckingToggle toggles the ducking state of the player by invoking the player's SetDucking method.
 func (w *RenderSoftware) doPlayerDuckingToggle() {
 	w.player.SetDucking()
 }
 
-// DoPlayerJump makes the player perform a jump by altering vertical velocity and setting the falling state.
+// doPlayerJump triggers the player's jump behavior by calling the appropriate method on the player instance.
 func (w *RenderSoftware) doPlayerJump() {
 	w.player.SetJump()
 }
 
-// DoPlayerMoves processes the player's movement based on directional input (up, down, left, right) and movement speed (slow).
+// doPlayerMoves handles movement for the player based on the directional and speed inputs provided.
 func (w *RenderSoftware) doPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
 	w.player.Move(up, down, left, right, slow)
 }
 
-// doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within a constrained range.
+// doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within predefined constraints.
 func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	if mouseX > 10 {
 		mouseX = 10
@@ -339,12 +347,12 @@ func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.MoveApply(0, 0)
 }
 
-// DoZoom adjusts the current zoom level of the view by adding the specified zoom value.
+// doZoom adjusts the zoom level of the current view by the specified amount.
 func (w *RenderSoftware) doZoom(zoom float64) {
 	w.vi.Zoom += zoom
 }
 
-// DoDebug toggles the debug mode or switches the debug sector based on the provided index increment.
+// doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
 func (w *RenderSoftware) doDebug(next int) {
 	if next == 0 {
 		w.debug = !w.debug
@@ -364,12 +372,12 @@ func (w *RenderSoftware) doDebug(next int) {
 	w.player.SetCoords(x+5, y+5)
 }
 
-// DebugMoveSectorToggle toggles the Sector targeting mode by enabling or disabling the targetEnabled flag.
+// doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.
 func (w *RenderSoftware) doDebugMoveSectorToggle() {
 	w.targetEnabled = !w.targetEnabled
 }
 
-// DebugMoveSector updates the target Sector index based on the direction and adjusts the active state of Sectors accordingly.
+// doDebugMoveSector updates the target index for debugging sectors and refreshes the active target states.
 func (w *RenderSoftware) doDebugMoveSector(forward bool) {
 	if forward {
 		if w.targetIdx < w.targetLastCompiled {
@@ -385,7 +393,7 @@ func (w *RenderSoftware) doDebugMoveSector(forward bool) {
 	}
 }
 
-// drawStub renders a debug representation of the current sector onto the given surface if in debug mode.
+// drawStub renders the debug sector if the current debug index is within the range of available sectors.
 func (w *RenderSoftware) drawStub() {
 	if w.debugIdx >= 0 && w.debugIdx < len(w.portal.Sectors) {
 		sector := w.portal.Sectors[w.debugIdx]
@@ -393,7 +401,11 @@ func (w *RenderSoftware) drawStub() {
 	}
 }
 
-// serialRender processes and renders a series of compiled Sectors and their polygons onto the provided surface.
+// doSerialRender renders compiled sectors to the provided surface in a serial manner, processing from back to front.
+// surface: The target rendering surface.
+// vi: ViewItem data containing camera position, angle, and other view parameters.
+// css: A slice of CompiledSector objects representing visible sectors for rendering.
+// compiled: The number of sectors available to render, processed in reverse order.
 func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
 		mode := -1 //w.textures.GetViewMode()
@@ -424,7 +436,7 @@ func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.V
 	}
 }
 
-// parallelRender processes multiple Sectors concurrently using a worker pool to render polygons onto the given surface.
+// doParallelRender performs parallel rendering of compiled sectors using goroutines to improve rendering performance.
 func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
@@ -452,7 +464,7 @@ func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model
 	wg.Wait()
 }
 
-// renderPolygon processes and renders a polygon based on its type, rendering mode, and associated view and draw context.
+// doRenderPolygon renders a polygon based on its type, mode, and lighting parameters, utilizing various drawing methods.
 func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
@@ -484,26 +496,26 @@ func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledP
 		dr.DrawRectangle()
 		return
 	}
-	lightAmbientDist := vi.LightDistance
-	lightDist := cp.Sector.LightDistance
+	lightAmbient := vi.LightIntensity
+	lightArtificial := cp.Sector.LightIntensity
 	switch cp.Kind {
 	case model.IdWall:
 		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbientDist, lightDist)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdUpper:
 		yRef := math.Abs((cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor)
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbientDist, lightDist)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdLower:
 		yRef := math.Abs((cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor)
-		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbientDist, lightDist)
+		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
 	case model.IdFloor:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
-		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbientDist, lightDist)
+		dr.DrawPerspectiveTexture(vi.Where.X, vi.Where.Y, vi.Where.Z, vi.Yaw, vi.AngleSin, vi.AngleCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
 	default:
 		dr.DrawWireFrame(true)
 	}

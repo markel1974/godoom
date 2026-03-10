@@ -17,7 +17,7 @@ type Sector struct {
 	TextureFloor       *textures.Animation
 	TextureCeil        *textures.Animation
 	TextureScaleFactor float64
-	LightDistance      float64
+	LightIntensity     float64
 	LightCenter        XYZ
 	usage              int
 	compileId          uint64

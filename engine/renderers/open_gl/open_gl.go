@@ -202,7 +202,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, 
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / texH) * scaleV
-	light := float32(cp.Sector.LightDistance)
+	light := float32(cp.Sector.LightIntensity)
 	sin, cos := w.vi.AngleSin, w.vi.AngleCos
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
 	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)
@@ -232,7 +232,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH
 		scale = 1.0
 	}
 
-	light := float32(cp.Sector.LightDistance)
+	light := float32(cp.Sector.LightIntensity)
 	zF := float32(z)
 	v0 := segs[0].Start
 
@@ -434,7 +434,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
-	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.LightDistance))
+	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.LightIntensity))
 	timeLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_time\x00"))
 	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
 }
@@ -575,7 +575,7 @@ func (w *RenderOpenGL) doRender() {
 	w.vi.Where.X, w.vi.Where.Y = w.player.GetCoords()
 	w.vi.Where.Z = w.player.GetZ()
 	w.vi.Yaw = w.player.GetYaw()
-	w.vi.LightDistance = w.player.GetLightDistance()
+	w.vi.LightIntensity = w.player.GetLightIntensity()
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count

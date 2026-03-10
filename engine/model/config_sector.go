@@ -10,7 +10,7 @@ type ConfigSector struct {
 	TextureFloor       []string         `json:"textureFloor"`
 	TextureCeil        []string         `json:"textureCeil"`
 	TextureScaleFactor float64          `json:"textureScaleFactor"`
-	LightDistance      float64          `json:"lightDistance"`
+	LightIntensity     float64          `json:"lightIntensity"`
 	Segments           []*ConfigSegment `json:"segments"`
 	Tag                string           `json:"tag"`
 }
@@ -20,7 +20,7 @@ func NewConfigSector(id string) *ConfigSector {
 	return &ConfigSector{
 		Id:                 id,
 		TextureScaleFactor: 1.0,
-		LightDistance:      -1.0,
+		LightIntensity:     -1.0,
 	}
 }
 
@@ -32,7 +32,7 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	out.TextureFloor = is.TextureFloor
 	out.TextureCeil = is.TextureCeil
 	out.TextureScaleFactor = is.TextureScaleFactor
-	out.LightDistance = is.LightDistance
+	out.LightIntensity = is.LightIntensity
 	out.Tag = is.Tag
 	out.Segments = nil
 	if cloneSegments {

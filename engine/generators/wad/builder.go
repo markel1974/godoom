@@ -210,7 +210,7 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	}
 	miSector.TextureFloor = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
-	miSector.LightDistance = bld.convertLight(wadSector.LightLevel)
+	miSector.LightIntensity = bld.convertLight(wadSector.LightLevel)
 	return miSector
 }
 
@@ -275,10 +275,10 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 // ConvertLight trasforma il LightLevel di Doom in un parametro lightdistance.
 // Valori < 0 indicano luce ambientale, valori > 0 indicano luce di settore.
 func (bld *Builder) convertLight(lightLevel int16) float64 {
-	// Calcolo della LightDistance
+	// Calcolo della LightIntensity
 	rawLight := float64(lightLevel)
 	// 1. Invertiamo il valore:
-	// In Doom 255 è luce max, in LightDistance 0 è luce max.
+	// In Doom 255 è luce max, in LightIntensity 0 è luce max.
 	// distance = (255 - rawLight)
 	distance := 255.0 - rawLight
 	// 2. Discriminante Ambientale vs Settore

@@ -29,20 +29,11 @@ Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce
 const (
 	scaleFactor = 1
 
-	vertexFloatsAlignment = 6
-
 	// maxBatchVertices defines the maximum number of vertices allowed in a single batch for rendering operations.
 	maxBatchVertices = 65536 * 2
 
 	maxFrameCommands = 4096
 )
-
-// drawCmd represents a single drawing command, storing texture ID and vertex range information for rendering.
-type drawCmd struct {
-	texID       uint32
-	firstVertex int32
-	vertexCount int32
-}
 
 // glTexture represents an OpenGL texture with a unique hardware ID for GPU resource management.
 type glTexture struct {
@@ -76,7 +67,7 @@ type RenderOpenGL struct {
 
 	glTextures map[*textures.Texture]*glTexture
 
-	frameVertices []float32
+	frameVertices *FrameVertices
 	frameCommands *DrawCommands
 }
 
@@ -96,8 +87,8 @@ func NewOpenGLRender() *RenderOpenGL {
 		debug:            false,
 		debugIdx:         0,
 		shaderProgram:    0,
-		frameVertices:    make([]float32, 0, maxBatchVertices),
-		frameCommands:    NewDrawCommands(maxFrameCommands), //make([]*drawCmd, 0, maxFrameCommands),
+		frameVertices:    NewFrameVertices(maxBatchVertices),
+		frameCommands:    NewDrawCommands(maxFrameCommands),
 	}
 	return r
 }
@@ -115,7 +106,7 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 
 // createBatch processes a list of compiled sectors and generates vertex and draw command data for rendering.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
-	w.frameVertices = w.frameVertices[:0]
+	w.frameVertices.Reset()
 	w.frameCommands.Reset()
 
 	for idx := compiled - 1; idx >= 0; idx-- {
@@ -141,7 +132,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				continue
 			}
 
-			startLen := len(w.frameVertices)
+			startLen := w.frameVertices.Len()
 			tW, tH := tex.Size()
 
 			if isWall {
@@ -162,15 +153,10 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				}
 				w.pushFlat(cp, z, float32(tW), float32(tH))
 			}
-			currentLen := len(w.frameVertices)
-			w.frameCommands.Bind(w.glTextures[tex].hwId, int32(startLen), int32(currentLen))
+			currentLen := w.frameVertices.Len()
+			w.frameCommands.Compute(w.glTextures[tex].hwId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 		}
 	}
-}
-
-func (w *RenderOpenGL) addVertex(x, y, z, u, v, light float32) {
-	//remember to modify vertexFloatsAlignment if you change de signature
-	w.frameVertices = append(w.frameVertices, x, y, z, u, v, light)
 }
 
 func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, zTop float32) {
@@ -194,13 +180,13 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, 
 	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
 	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
 
-	w.addVertex(wx1, zTop, -wy1, u0, vTop, light)
-	w.addVertex(wx1, zBottom, -wy1, u0, vBottom, light)
-	w.addVertex(wx2, zBottom, -wy2, u1, vBottom, light)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light)
+	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light)
 
-	w.addVertex(wx1, zTop, -wy1, u0, vTop, light)
-	w.addVertex(wx2, zBottom, -wy2, u1, vBottom, light)
-	w.addVertex(wx2, zTop, -wy2, u1, vTop, light)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light)
+	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light)
 }
 
 func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH float32) {
@@ -230,15 +216,16 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH
 		v1V := (float32(-v1.Y) / texH) * scale
 		u2 := (float32(v2.X) / texW) * scale
 		v2V := (float32(-v2.Y) / texH) * scale
-		w.addVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light)
-		w.addVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light)
-		w.addVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light)
+		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light)
+		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light)
+		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light)
 	}
 }
 
 // glStreamRender uploads vertex data dynamically to the GPU and renders frame commands using OpenGL.
 func (w *RenderOpenGL) glStreamRender() {
-	if len(w.frameVertices) == 0 {
+	vertices := w.frameVertices.Len()
+	if vertices == 0 {
 		return
 	}
 
@@ -246,7 +233,7 @@ func (w *RenderOpenGL) glStreamRender() {
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
 
 	// Single Upload DMA: Nessuna collisione, il driver non ha motivo di bloccare la CPU.
-	gl.BufferData(gl.ARRAY_BUFFER, len(w.frameVertices)*4, gl.Ptr(w.frameVertices), gl.DYNAMIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, vertices*4, gl.Ptr(w.frameVertices.vertices), gl.DYNAMIC_DRAW)
 
 	for _, cmd := range w.frameCommands.commands {
 		if cmd.vertexCount > 0 {
@@ -270,7 +257,7 @@ func (w *RenderOpenGL) glInit() error {
 	// Alloca il mega-buffer in VRAM senza inizializzare i dati
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 
-	stride := int32(vertexFloatsAlignment * 4)
+	stride := int32(w.frameVertices.Alignment() * 4)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
 	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))

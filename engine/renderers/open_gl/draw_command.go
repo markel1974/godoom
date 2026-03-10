@@ -1,34 +1,33 @@
 package open_gl
 
+// DrawCommand represents a rendering command consisting of texture ID, starting vertex index, and vertex count.
 type DrawCommand struct {
 	texId       uint32
 	firstVertex int32
 	vertexCount int32
 }
 
+// DrawCommands manages a collection of draw commands, each representing rendering instructions for a specific texture or geometry.
 type DrawCommands struct {
 	commands []*DrawCommand
 }
 
+// NewDrawCommands initializes and returns a new DrawCommands instance with a preallocated capacity for the command slice.
 func NewDrawCommands(s int) *DrawCommands {
 	return &DrawCommands{
 		commands: make([]*DrawCommand, 0, s),
 	}
 }
 
-//func (w *DrawCommands) Bind(texId uint32, vertices int32) {
-//	cmd := w.Retrieve(texId)
-//	cmd.vertexCount += vertices
-//}
-
-func (w *DrawCommands) Bind(id uint32, startLen int32, currentLen int32) {
-	cmd := w.setDrawCommand(id, startLen/vertexFloatsAlignment)
+// Compute updates the vertex count of a draw command by calculating the difference between lengths and aligning it.
+func (w *DrawCommands) Compute(id uint32, startLen int32, currentLen int32, alignment int32) {
+	cmd := w.assign(id, startLen/alignment)
 	total := currentLen - startLen
-	cmd.vertexCount += total / vertexFloatsAlignment
+	cmd.vertexCount += total / alignment
 }
 
-// setDrawCommand assigns or creates a new drawCmd for the specified texture ID and appends it to the frame commands list.
-func (w *DrawCommands) setDrawCommand(texID uint32, firstVertex int32) *DrawCommand {
+// assign assigns or creates a new DrawCommand with the specified texture ID and first vertex, returning the applicable command.
+func (w *DrawCommands) assign(texID uint32, firstVertex int32) *DrawCommand {
 	n := len(w.commands)
 	if n > 0 && w.commands[n-1].texId == texID {
 		return w.commands[n-1]
@@ -41,6 +40,7 @@ func (w *DrawCommands) setDrawCommand(texID uint32, firstVertex int32) *DrawComm
 	return w.commands[len(w.commands)-1]
 }
 
+// Reset clears all draw commands by resetting the slice to an empty state without deallocating its memory.
 func (w *DrawCommands) Reset() {
 	w.commands = w.commands[:0]
 }

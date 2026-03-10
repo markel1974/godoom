@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/engine/model"
@@ -156,15 +157,14 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 		scaleV = 1.0
 	}
 
-	// UV Orizzontali (Nessuna moltiplicazione: ereditano già la scala dai segmenti XY)
 	u0 := float32(cp.U0) / (float32(texW) * scaleH)
 	u1 := float32(cp.U1) / (float32(texW) * scaleH)
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
-	light := float32(cp.Sector.LightIntensity)
+	light := float32(cp.Sector.LightIntensity * 60)
 
-	//_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
+	_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
 
 	sin, cos := w.vi.AngleSin, w.vi.AngleCos
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
@@ -172,13 +172,25 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
 	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light)
-	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light)
+	dx := float64(wx2 - wx1)
+	dz := float64((-wy2) - (-wy1))
+	length := math.Hypot(dx, dz)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light)
-	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light)
+	nX := float32(-dz / length)
+	nY := float32(0.0)
+	nZ := float32(dx / length)
+
+	vLcX := float32(lcX)
+	vLcY := float32(lcY)
+	vLcZ := float32(-lcZ)
+
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 
 	//apply
 	currentLen := w.frameVertices.Len()
@@ -209,13 +221,22 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 	}
 
 	light := float32(cp.Sector.LightIntensity)
-	//_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
+	_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
+
+	vLcX := float32(lcX)
+	vLcY := float32(lcY)
+	vLcZ := float32(-lcZ)
+
 	zF := float32(z)
 	v0 := segments[0].Start
 
-	// 2. Applica la scala alle UV
 	u0 := (float32(v0.X) / float32(texW)) * scale
 	v0V := (float32(-v0.Y) / float32(texH)) * scale
+
+	nY := float32(1.0)
+	if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
+		nY = -1.0
+	}
 
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
@@ -224,9 +245,10 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 		v1V := (float32(-v1.Y) / float32(texH)) * scale
 		u2 := (float32(v2.X) / float32(texW)) * scale
 		v2V := (float32(-v2.Y) / float32(texH)) * scale
-		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light)
-		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light)
-		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light)
+
+		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
 	}
 
 	//apply
@@ -236,18 +258,18 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 
 // glStreamRender uploads vertex data to the GPU and executes draw commands for rendering using OpenGL APIs.
 func (w *RenderOpenGL) glStreamRender() {
-	vertices := w.frameVertices.Len()
-	if vertices == 0 {
+	if w.frameVertices.Len() == 0 {
 		return
 	}
 
 	gl.BindVertexArray(w.vao)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()), gl.DYNAMIC_DRAW)
 
-	// Single Upload DMA: Nessuna collisione, il driver non ha motivo di bloccare la CPU.
-	gl.BufferData(gl.ARRAY_BUFFER, vertices*4, gl.Ptr(w.frameVertices.vertices), gl.DYNAMIC_DRAW)
+	gl.ActiveTexture(gl.TEXTURE0)
 
-	for _, cmd := range w.frameCommands.commands {
+	// Itera sulla struttura astratta dal tuo draw_command.go
+	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
 			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
@@ -262,20 +284,41 @@ func (w *RenderOpenGL) glInit() error {
 
 	gl.GenBuffers(1, &w.vbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
-
-	// Alloca il mega-buffer in VRAM senza inizializzare i dati
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 
-	stride := w.frameVertices.Alignment() * 4
+	stride := int32(w.frameVertices.Alignment() * 4)
+
+	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
+
+	// Location 1: aTexCoords (vec2)
 	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
 	gl.EnableVertexAttribArray(1)
+
+	// Location 2: aLightIntensity (float)
 	gl.VertexAttribPointer(2, 1, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
 	gl.EnableVertexAttribArray(2)
 
+	// Location 3: aLightCenterView (vec3)
+	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
+	gl.EnableVertexAttribArray(3)
+
+	// Location 4: aNormal (vec3)
+	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
+	gl.EnableVertexAttribArray(4)
+
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
+
+	gl.UseProgram(w.shaderProgram)
+	texLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_texture\x00"))
+	gl.Uniform1i(texLoc, 0)
+
+	// Binding sampler Normal Map
+	normLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_normalMap\x00"))
+	gl.Uniform1i(normLoc, 1)
+
 	return nil
 }
 

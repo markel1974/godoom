@@ -1,6 +1,3 @@
-package open_gl
-
-const shaderFragment = `
 #version 330 core
 
 out vec4 FragColor;
@@ -25,11 +22,11 @@ void main()
 
     // Fattore di scala globale del tuo mondo (prima era 5.0)
     // Se la scena è troppo scura, riduci questo valore (es. 1.0 o 0.5)
-    float visibilityMultiplier = 5.0; 
+    float visibilityMultiplier = 5.0;
 
     // Legge di Beer-Lambert: 1.0 a distanza 0, scende asintoticamente a 0.0 (buio)
     float falloff = exp(-FragDepth * decayRate * visibilityMultiplier);
-    
+
     // Attenuazione
     vec3 litColor = texColor.rgb * falloff;
 
@@ -38,4 +35,3 @@ void main()
 
     FragColor = vec4(finalColor, texColor.a);
 }
-`

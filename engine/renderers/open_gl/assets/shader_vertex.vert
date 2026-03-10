@@ -1,6 +1,4 @@
-package open_gl
 
-const shaderVertex = `
 #version 330 core
 
 layout (location = 0) in vec3 aPos;
@@ -19,11 +17,11 @@ void main()
 {
     TexCoords = aTexCoords;
     LightDist = aLightDist;
-    
+
     vec4 viewPos = u_view * vec4(aPos, 1.0);
     ViewPos = viewPos.xyz;
-    FragDepth = abs(viewPos.z); 
-    
+    FragDepth = abs(viewPos.z);
+
     gl_Position = u_projection * viewPos;
 }
-`
+

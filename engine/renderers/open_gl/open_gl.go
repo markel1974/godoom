@@ -1,11 +1,14 @@
 package open_gl
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
+	//"github.com/markel1974/godoom/engine/renderers/open_gl/assets"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	"github.com/markel1974/godoom/pixels/executor"
@@ -40,10 +43,8 @@ const (
 	vboMaxFloats = 1024 * 1024 * 4
 )
 
-// glTexture represents an OpenGL texture with its associated hardware ID.
-type glTexture struct {
-	hwId uint32
-}
+//go:embed assets
+var assets embed.FS
 
 // RenderOpenGL represents an OpenGL renderer responsible for drawing 3D scenes, handling textures, and managing rendering states.
 type RenderOpenGL struct {
@@ -70,7 +71,7 @@ type RenderOpenGL struct {
 	debugIdx      int
 	shaderProgram uint32
 
-	glTextures map[*textures.Texture]*glTexture
+	glTextures map[*textures.Texture]uint32
 
 	frameVertices *FrameVertices
 	frameCommands *DrawCommands
@@ -133,7 +134,11 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				continue
 			}
 
-			if tex == nil || w.glTextures[tex] == nil {
+			if tex == nil {
+				continue
+			}
+			texId, ok := w.glTextures[tex]
+			if !ok {
 				continue
 			}
 
@@ -159,7 +164,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				w.pushFlat(cp, z, float32(tW), float32(tH))
 			}
 			currentLen := w.frameVertices.Len()
-			w.frameCommands.Compute(w.glTextures[tex].hwId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+			w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 		}
 	}
 }
@@ -280,15 +285,21 @@ func (w *RenderOpenGL) glInit() error {
 
 // glCompileShaderProgram compiles and links the vertex and fragment shaders into a shader program and sets it as active.
 func (w *RenderOpenGL) glCompileShaderProgram() error {
-	vertexShaderSource := shaderVertex
-	fragmentShaderSource := shaderFragment
-	vertexShader, err := w.glCompileShader(vertexShaderSource, gl.VERTEX_SHADER)
+	vertexSrc, err := fs.ReadFile(assets, "assets/shader_vertex.vert")
+	if err != nil {
+		return err
+	}
+	fragmentSrc, err := fs.ReadFile(assets, "assets/shader_fragment.vert")
+	if err != nil {
+		return err
+	}
+	vertexShader, err := w.glCompileShader(string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
 	defer gl.DeleteShader(vertexShader)
 
-	fragmentShader, err := w.glCompileShader(fragmentShaderSource, gl.FRAGMENT_SHADER)
+	fragmentShader, err := w.glCompileShader(string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		return err
 	}
@@ -331,17 +342,17 @@ func (w *RenderOpenGL) glCompileShader(source string, shaderType uint32) (uint32
 
 // glCompileTextures initializes and compiles textures for OpenGL rendering, applying filtering and anisotropic settings.
 func (w *RenderOpenGL) glCompileTextures() error {
-	w.glTextures = make(map[*textures.Texture]*glTexture)
+	w.glTextures = make(map[*textures.Texture]uint32)
 	for _, id := range w.textures.GetNames() {
 		tn := w.textures.Get([]string{id})
 		if tn == nil {
 			continue
 		}
 		tex := tn[0]
-		glTex := &glTexture{hwId: 0}
+		glTex := uint32(0)
 		width, height, glPixels := tex.RGBA()
-		gl.GenTextures(1, &glTex.hwId)
-		gl.BindTexture(gl.TEXTURE_2D, glTex.hwId)
+		gl.GenTextures(1, &glTex)
+		gl.BindTexture(gl.TEXTURE_2D, glTex)
 		w.glTextures[tex] = glTex
 
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)

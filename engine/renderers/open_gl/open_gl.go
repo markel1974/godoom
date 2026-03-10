@@ -77,7 +77,7 @@ type RenderOpenGL struct {
 	glTextures map[*textures.Texture]*glTexture
 
 	frameVertices []float32
-	frameCommands []*drawCmd
+	frameCommands *DrawCommands
 }
 
 // NewOpenGLRender initializes and returns a pointer to a new RenderOpenGL instance with default parameters.
@@ -97,7 +97,7 @@ func NewOpenGLRender() *RenderOpenGL {
 		debugIdx:         0,
 		shaderProgram:    0,
 		frameVertices:    make([]float32, 0, maxBatchVertices),
-		frameCommands:    make([]*drawCmd, 0, maxFrameCommands),
+		frameCommands:    NewDrawCommands(maxFrameCommands), //make([]*drawCmd, 0, maxFrameCommands),
 	}
 	return r
 }
@@ -113,24 +113,10 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 	return nil
 }
 
-// setDrawCommand assigns or creates a new drawCmd for the specified texture ID and appends it to the frame commands list.
-func (w *RenderOpenGL) setDrawCommand(texID uint32) *drawCmd {
-	n := len(w.frameCommands)
-	if n > 0 && w.frameCommands[n-1].texID == texID {
-		return w.frameCommands[n-1]
-	}
-	w.frameCommands = append(w.frameCommands, &drawCmd{
-		texID:       texID,
-		firstVertex: int32(len(w.frameVertices) / vertexFloatsAlignment),
-		vertexCount: 0,
-	})
-	return w.frameCommands[len(w.frameCommands)-1]
-}
-
 // createBatch processes a list of compiled sectors and generates vertex and draw command data for rendering.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 	w.frameVertices = w.frameVertices[:0]
-	w.frameCommands = w.frameCommands[:0]
+	w.frameCommands.Reset()
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		polygons := css[idx].Get()
@@ -155,7 +141,6 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				continue
 			}
 
-			cmd := w.setDrawCommand(w.glTextures[tex].hwId)
 			startLen := len(w.frameVertices)
 			tW, tH := tex.Size()
 
@@ -177,8 +162,8 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				}
 				w.pushFlat(cp, z, float32(tW), float32(tH))
 			}
-
-			cmd.vertexCount += int32((len(w.frameVertices) - startLen) / vertexFloatsAlignment)
+			currentLen := len(w.frameVertices)
+			w.frameCommands.Bind(w.glTextures[tex].hwId, int32(startLen), int32(currentLen))
 		}
 	}
 }
@@ -263,9 +248,9 @@ func (w *RenderOpenGL) glStreamRender() {
 	// Single Upload DMA: Nessuna collisione, il driver non ha motivo di bloccare la CPU.
 	gl.BufferData(gl.ARRAY_BUFFER, len(w.frameVertices)*4, gl.Ptr(w.frameVertices), gl.DYNAMIC_DRAW)
 
-	for _, cmd := range w.frameCommands {
+	for _, cmd := range w.frameCommands.commands {
 		if cmd.vertexCount > 0 {
-			gl.BindTexture(gl.TEXTURE_2D, cmd.texID)
+			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}
 	}

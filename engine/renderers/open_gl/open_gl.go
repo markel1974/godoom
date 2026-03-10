@@ -191,6 +191,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 }
 
 func (w *RenderOpenGL) addVertex(x, y, z, u, v, light float32) {
+	//remember to modify vertexFloatsAlignment if you change de signature
 	w.frameVertices = append(w.frameVertices, x, y, z, u, v, light)
 }
 

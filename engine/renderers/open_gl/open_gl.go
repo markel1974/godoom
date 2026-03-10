@@ -119,58 +119,36 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 		polygons := css[idx].Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
-			var tex *textures.Texture
-			var isWall bool
 
 			switch cp.Kind {
-			case model.IdWall, model.IdUpper, model.IdLower:
-				tex = cp.Texture
-				isWall = true
+			case model.IdWall:
+				w.pushWall(cp, cp.Texture, float32(cp.Sector.Floor), float32(cp.Sector.Ceil))
+			case model.IdUpper:
+				w.pushWall(cp, cp.Texture, float32(cp.Neighbor.Ceil), float32(cp.Sector.Ceil))
+			case model.IdLower:
+				w.pushWall(cp, cp.Texture, float32(cp.Sector.Floor), float32(cp.Neighbor.Floor))
 			case model.IdCeil, model.IdCeilTest:
-				tex = cp.TextureCeil
+				w.pushFlat(cp, cp.TextureCeil, cp.Sector.Ceil)
 			case model.IdFloor, model.IdFloorTest:
-				tex = cp.TextureFloor
-			default:
-				continue
+				w.pushFlat(cp, cp.TextureFloor, cp.Sector.Floor)
 			}
-
-			if tex == nil {
-				continue
-			}
-			texId, ok := w.glTextures[tex]
-			if !ok {
-				continue
-			}
-
-			startLen := w.frameVertices.Len()
-			tW, tH := tex.Size()
-
-			if isWall {
-				var zB, zT float64
-				switch cp.Kind {
-				case model.IdWall:
-					zB, zT = cp.Sector.Floor, cp.Sector.Ceil
-				case model.IdUpper:
-					zB, zT = cp.Neighbor.Ceil, cp.Sector.Ceil
-				case model.IdLower:
-					zB, zT = cp.Sector.Floor, cp.Neighbor.Floor
-				}
-				w.pushWall(cp, float32(tW), float32(tH), float32(zB), float32(zT))
-			} else {
-				z := cp.Sector.Ceil
-				if cp.Kind == model.IdFloor || cp.Kind == model.IdFloorTest {
-					z = cp.Sector.Floor
-				}
-				w.pushFlat(cp, z, float32(tW), float32(tH))
-			}
-			currentLen := w.frameVertices.Len()
-			w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 		}
 	}
 }
 
 // pushWall adds vertices for rendering a textured wall segment based on its geometry, texture, and lighting properties.
-func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, zTop float32) {
+func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture, zBottom, zTop float32) {
+	//prepare
+	if tex == nil {
+		return
+	}
+	texId, ok := w.glTextures[tex]
+	if !ok {
+		return
+	}
+	texW, texH := tex.Size()
+	startLen := w.frameVertices.Len()
+
 	//todo capire perche le texture devono essere scalate di 4 dai WAD
 	scaleH := float32(4.0)
 	scaleV := float32(cp.Sector.TextureScaleFactor)
@@ -179,11 +157,11 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, 
 	}
 
 	// UV Orizzontali (Nessuna moltiplicazione: ereditano già la scala dai segmenti XY)
-	u0 := float32(cp.U0) / (texW * scaleH)
-	u1 := float32(cp.U1) / (texW * scaleH)
+	u0 := float32(cp.U0) / (float32(texW) * scaleH)
+	u1 := float32(cp.U1) / (float32(texW) * scaleH)
 
 	vTop := float32(0.0)
-	vBottom := ((zTop - zBottom) / texH) * scaleV
+	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
 	light := float32(cp.Sector.LightIntensity)
 
 	//_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
@@ -201,14 +179,28 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, 
 	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light)
 	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light)
 	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light)
+
+	//apply
+	currentLen := w.frameVertices.Len()
+	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
 // pushFlat pushes a flat-surfaced polygon's vertices to the frame buffer with proper scaling and texture UV mapping.
-func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH float32) {
+func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture, z float64) {
+	if tex == nil {
+		return
+	}
 	segments := cp.Sector.Segments
 	if len(segments) < 3 {
 		return
 	}
+	//prepare
+	texId, ok := w.glTextures[tex]
+	if !ok {
+		return
+	}
+	texW, texH := tex.Size()
+	startLen := w.frameVertices.Len()
 
 	// 1. Allinea il fattore di scala anche per pavimenti e soffitti
 	scale := float32(cp.Sector.TextureScaleFactor)
@@ -222,20 +214,24 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH
 	v0 := segments[0].Start
 
 	// 2. Applica la scala alle UV
-	u0 := (float32(v0.X) / texW) * scale
-	v0V := (float32(-v0.Y) / texH) * scale
+	u0 := (float32(v0.X) / float32(texW)) * scale
+	v0V := (float32(-v0.Y) / float32(texH)) * scale
 
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
 
-		u1 := (float32(v1.X) / texW) * scale
-		v1V := (float32(-v1.Y) / texH) * scale
-		u2 := (float32(v2.X) / texW) * scale
-		v2V := (float32(-v2.Y) / texH) * scale
+		u1 := (float32(v1.X) / float32(texW)) * scale
+		v1V := (float32(-v1.Y) / float32(texH)) * scale
+		u2 := (float32(v2.X) / float32(texW)) * scale
+		v2V := (float32(-v2.Y) / float32(texH)) * scale
 		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light)
 		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light)
 		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light)
 	}
+
+	//apply
+	currentLen := w.frameVertices.Len()
+	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
 // glStreamRender uploads vertex data to the GPU and executes draw commands for rendering using OpenGL APIs.

@@ -29,6 +29,8 @@ Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce
 // _scale is a constant used as a multiplier to define scaling factors for rendering configurations.
 const _scale = 1
 
+const vertexFloatsAlignment = 6
+
 // maxBatchVertices defines the maximum number of vertices allowed in a single batch for rendering operations.
 const maxBatchVertices = 65536 * 2
 
@@ -126,7 +128,7 @@ func (w *RenderOpenGL) setDrawCommand(texID uint32) *drawCmd {
 	}
 	w.frameCmds = append(w.frameCmds, &drawCmd{
 		texID:       texID,
-		firstVertex: int32(len(w.frameVertices) / 6),
+		firstVertex: int32(len(w.frameVertices) / vertexFloatsAlignment),
 		vertexCount: 0,
 	})
 	return w.frameCmds[len(w.frameCmds)-1]
@@ -183,9 +185,13 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 				w.pushFlat(cp, z, float32(tW), float32(tH))
 			}
 
-			cmd.vertexCount += int32((len(w.frameVertices) - startLen) / 6)
+			cmd.vertexCount += int32((len(w.frameVertices) - startLen) / vertexFloatsAlignment)
 		}
 	}
+}
+
+func (w *RenderOpenGL) addVertex(x, y, z, u, v, light float32) {
+	w.frameVertices = append(w.frameVertices, x, y, z, u, v, light)
 }
 
 func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, zTop float32) {
@@ -209,15 +215,13 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, texW, texH, zBottom, 
 	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
 	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
 
-	w.frameVertices = append(w.frameVertices,
-		wx1, zTop, -wy1, u0, vTop, light,
-		wx1, zBottom, -wy1, u0, vBottom, light,
-		wx2, zBottom, -wy2, u1, vBottom, light,
+	w.addVertex(wx1, zTop, -wy1, u0, vTop, light)
+	w.addVertex(wx1, zBottom, -wy1, u0, vBottom, light)
+	w.addVertex(wx2, zBottom, -wy2, u1, vBottom, light)
 
-		wx1, zTop, -wy1, u0, vTop, light,
-		wx2, zBottom, -wy2, u1, vBottom, light,
-		wx2, zTop, -wy2, u1, vTop, light,
-	)
+	w.addVertex(wx1, zTop, -wy1, u0, vTop, light)
+	w.addVertex(wx2, zBottom, -wy2, u1, vBottom, light)
+	w.addVertex(wx2, zTop, -wy2, u1, vTop, light)
 }
 
 func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH float32) {
@@ -247,12 +251,9 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, z float64, texW, texH
 		v1V := (float32(-v1.Y) / texH) * scale
 		u2 := (float32(v2.X) / texW) * scale
 		v2V := (float32(-v2.Y) / texH) * scale
-
-		w.frameVertices = append(w.frameVertices,
-			float32(v0.X), zF, float32(-v0.Y), u0, v0V, light,
-			float32(v1.X), zF, float32(-v1.Y), u1, v1V, light,
-			float32(v2.X), zF, float32(-v2.Y), u2, v2V, light,
-		)
+		w.addVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light)
+		w.addVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light)
+		w.addVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light)
 	}
 }
 
@@ -290,7 +291,7 @@ func (w *RenderOpenGL) glInit() error {
 	// Alloca il mega-buffer in VRAM senza inizializzare i dati
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 
-	stride := int32(6 * 4)
+	stride := int32(vertexFloatsAlignment * 4)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
 	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))

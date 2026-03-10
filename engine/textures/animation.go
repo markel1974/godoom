@@ -1,5 +1,13 @@
 package textures
 
+const tickInterval = 32
+
+var _globalTick uint64
+
+func Tick() {
+	_globalTick++
+}
+
 // Animation represents a sequence of textures that can be animated over time.
 // frame stores the current single texture when no animation sequence is used.
 // frames holds a list of textures to be used as frames in the animation sequence.
@@ -8,7 +16,6 @@ package textures
 type Animation struct {
 	frame       *Texture
 	frames      []*Texture
-	tick        uint
 	singleFrame bool
 }
 
@@ -16,7 +23,6 @@ type Animation struct {
 func NewAnimation(frames []*Texture) *Animation {
 	a := &Animation{
 		frames:      frames,
-		tick:        0,
 		frame:       nil,
 		singleFrame: false,
 	}
@@ -34,8 +40,6 @@ func (a *Animation) Advance() *Texture {
 	if a.singleFrame {
 		return a.frame
 	}
-	a.tick++
-	const tickInterval = 32
-	frame := a.tick / tickInterval
-	return a.frames[int(frame)%len(a.frames)]
+	frameIdx := (_globalTick / tickInterval) % uint64(len(a.frames))
+	return a.frames[frameIdx]
 }

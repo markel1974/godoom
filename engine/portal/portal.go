@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/engine/mathematic"
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/textures"
 )
 
 // defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.
@@ -129,6 +130,8 @@ func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 
 	r.queue[headIdx].Update(vi.Sector, 0, wMax, -hMax, -hMax, hMax, hMax)
 	headIdx = (headIdx + 1) % queueLen
+
+	textures.Tick()
 
 	for headIdx != tailIdx {
 		current := r.queue[tailIdx]

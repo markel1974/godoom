@@ -8,34 +8,33 @@ import (
 
 // Sector represents a 3D environment component, defined by its boundaries, textures, lighting, and associated segments.
 type Sector struct {
-	ModelId            uint16
-	Id                 string
-	Floor              float64
-	Ceil               float64
-	Segments           []*Segment
-	Tag                string
-	TextureFloor       *textures.Animation
-	TextureCeil        *textures.Animation
-	TextureScaleFactor float64
-	Light              *Light
-	usage              int
-	compileId          uint64
-	references         map[uint64]bool
-	VisibleSpans       [][2]float64
-	LastCompileId      uint64
+	ModelId       uint16
+	Id            string
+	Segments      []*Segment
+	Tag           string
+	FloorY        float64
+	CeilY         float64
+	Animations    *SectorAnimations
+	Light         *Light
+	usage         int
+	compileId     uint64
+	references    map[uint64]bool
+	VisibleSpans  [][2]float64
+	LastCompileId uint64
 }
 
 // NewSector initializes and returns a new Sector instance with the given modelId, id, and segments.
-func NewSector(modelId uint16, id string, segments []*Segment) *Sector {
+func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.Animation, ceil *textures.Animation, scaleFactor float64) *Sector {
 	s := &Sector{
 		ModelId:    modelId,
 		Id:         id,
-		Ceil:       0,
-		Floor:      0,
+		CeilY:      0,
+		FloorY:     0,
 		Segments:   segments,
 		usage:      0,
 		compileId:  0,
 		references: make(map[uint64]bool),
+		Animations: NewSectorAnimations(floor, ceil, scaleFactor),
 	}
 	return s
 }
@@ -103,7 +102,7 @@ func (s *Sector) Print(indent bool) string {
 		Segments []*printerSegment
 	}
 
-	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.Floor, Ceil: s.Ceil}
+	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.FloorY, Ceil: s.CeilY}
 	for _, z := range s.Segments {
 		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
 		p.Segments = append(p.Segments, ps)

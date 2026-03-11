@@ -37,7 +37,7 @@ type Player struct {
 // NewPlayer initializes and returns a new Player instance at the specified position, angle, and sector.
 func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
 	p := &Player{
-		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.Floor + EyeHeight},
+		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
 		velocity:       XYZ{},
 		yaw:            0,
 		yawState:       0,
@@ -193,12 +193,12 @@ func (p *Player) VerticalCollision() {
 		eyeHeight := p.EyeHeight()
 		p.velocity.Z -= 0.05
 		nextZ := p.where.Z + p.velocity.Z
-		if p.velocity.Z < 0 && nextZ < p.sector.Floor+eyeHeight {
+		if p.velocity.Z < 0 && nextZ < p.sector.FloorY+eyeHeight {
 			// down
-			p.where.Z = p.sector.Floor + eyeHeight
+			p.where.Z = p.sector.FloorY + eyeHeight
 			p.velocity.Z = 0
 			p.falling = false
-		} else if p.velocity.Z > 0 && nextZ > p.sector.Ceil {
+		} else if p.velocity.Z > 0 && nextZ > p.sector.CeilY {
 			// up
 			p.velocity.Z = 0
 			p.falling = true
@@ -297,8 +297,8 @@ func (p *Player) Compute2(vi *ViewItem) {
 			holeLow := 9e9
 			holeHigh := -9e9
 			if seg.Sector != nil {
-				holeLow = mathematic.MaxF(pSector.Floor, seg.Sector.Floor)
-				holeHigh = mathematic.MinF(pSector.Ceil, seg.Sector.Ceil)
+				holeLow = mathematic.MaxF(pSector.FloorY, seg.Sector.FloorY)
+				holeHigh = mathematic.MinF(pSector.CeilY, seg.Sector.CeilY)
 			}
 
 			// Check whether we're bumping into a wall

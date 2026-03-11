@@ -45,13 +45,13 @@ var availableWall = []string{"wall2.ppm"}
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
 	sector := model.NewConfigSector(model.NextUUId())
-	sector.Floor = floor
-	sector.Ceil = ceil
-	//sector := &model.ConfigSector{Id: model.NextUUId(), Floor: floor, Ceil: ceil}
+	sector.FloorY = floor
+	sector.CeilY = ceil
+	//sector := &model.ConfigSector{Id: model.NextUUId(), FloorY: floor, CeilY: ceil}
 	//sector.Textures = true
-	sector.TextureFloor = append(sector.TextureFloor, availableFloor[random(0, len(availableFloor)-1)])
-	sector.TextureCeil = append(sector.TextureCeil, availableCeil[random(0, len(availableCeil)-1)])
-	sector.TextureScaleFactor = 50.0
+	sector.Animations.Floors = []string{availableFloor[random(0, len(availableFloor)-1)]}
+	sector.Animations.Ceils = []string{availableCeil[random(0, len(availableCeil)-1)]}
+	sector.Animations.ScaleFactor = 50.0
 	sector.Light.Intensity = rnd.Float64()
 	sector.Light.Kind = "spot"
 	const SegmentMax = 4
@@ -73,9 +73,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		}
 		if c == 0 {
 			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-			neighbor.TextureUpper = append(neighbor.TextureUpper, availableUpper[random(0, len(availableUpper)-1)])
-			neighbor.TextureLower = append(neighbor.TextureLower, availableLower[random(0, len(availableLower)-1)])
-			neighbor.TextureMiddle = append(neighbor.TextureMiddle, availableWall[random(0, len(availableWall)-1)])
+			neighbor.Animations.Upper = append(neighbor.Animations.Upper, availableUpper[random(0, len(availableUpper)-1)])
+			neighbor.Animations.Lower = append(neighbor.Animations.Lower, availableLower[random(0, len(availableLower)-1)])
+			neighbor.Animations.Middle = append(neighbor.Animations.Middle, availableWall[random(0, len(availableWall)-1)])
 			sector.Segments = append(sector.Segments, neighbor)
 		} else if c == SegmentMax-1 {
 			prev := sector.Segments[c-1]
@@ -84,9 +84,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 			prev := sector.Segments[c-1]
 			prev.End = xy
 			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-			neighbor.TextureUpper = append(neighbor.TextureUpper, availableUpper[random(0, len(availableUpper)-1)])
-			neighbor.TextureLower = append(neighbor.TextureLower, availableLower[random(0, len(availableLower)-1)])
-			neighbor.TextureMiddle = append(neighbor.TextureMiddle, availableWall[random(0, len(availableWall)-1)])
+			neighbor.Animations.Upper = append(neighbor.Animations.Upper, availableUpper[random(0, len(availableUpper)-1)])
+			neighbor.Animations.Lower = append(neighbor.Animations.Lower, availableLower[random(0, len(availableLower)-1)])
+			neighbor.Animations.Middle = append(neighbor.Animations.Middle, availableWall[random(0, len(availableWall)-1)])
 			sector.Segments = append(sector.Segments, neighbor)
 		}
 	}

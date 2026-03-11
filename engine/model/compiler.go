@@ -77,9 +77,9 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			aUpper := animationGet(cfg, ax, cn.TextureUpper)
-			aMiddle := animationGet(cfg, ax, cn.TextureMiddle)
-			aLower := animationGet(cfg, ax, cn.TextureLower)
+			aUpper := animationGet(cfg, ax, cn.Animations.Upper)
+			aMiddle := animationGet(cfg, ax, cn.Animations.Middle)
+			aLower := animationGet(cfg, ax, cn.Animations.Lower)
 			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower))
 		}
 
@@ -88,18 +88,19 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			continue
 		}
 
-		s := NewSector(modelSectorId, cs.Id, segments)
+		texFloor := animationGet(cfg, ax, cs.Animations.Floors)
+		texCeil := animationGet(cfg, ax, cs.Animations.Ceils)
+		texScaleFactor := cs.Animations.ScaleFactor
+
+		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil, texScaleFactor)
 		modelSectorId++
 		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
-		s.Ceil = cs.Ceil
-		s.Floor = cs.Floor
-		s.TextureFloor = animationGet(cfg, ax, cs.TextureFloor)
-		s.TextureCeil = animationGet(cfg, ax, cs.TextureCeil)
-		s.TextureScaleFactor = cs.TextureScaleFactor
+		s.CeilY = cs.CeilY
+		s.FloorY = cs.FloorY
 		s.Light = NewLight()
 		if cs.Light != nil {
 			lXY := cs.GetCentroid()
-			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil})
+			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: s.CeilY})
 		}
 		r.sectors = append(r.sectors, s)
 		r.cache[cs.Id] = s
@@ -190,7 +191,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 					if n, ok := r.cache[seg.Ref]; ok {
 						if !visited[n.Id] {
 							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
-							if n.Ceil == curr.Ceil && n.Floor == curr.Floor && n.Light.intensity == curr.Light.intensity {
+							if n.CeilY == curr.CeilY && n.FloorY == curr.FloorY && n.Light.intensity == curr.Light.intensity {
 								visited[n.Id] = true
 								queue = append(queue, n)
 							}
@@ -252,7 +253,7 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 			}
 		}
 		//maxHeight
-		if h := math.Abs(sect.Ceil - sect.Floor); h > r.sectorsMaxHeight {
+		if h := math.Abs(sect.CeilY - sect.FloorY); h > r.sectorsMaxHeight {
 			r.sectorsMaxHeight = h
 		}
 	}

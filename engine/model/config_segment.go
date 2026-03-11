@@ -22,32 +22,28 @@ type segmentData struct {
 
 // ConfigSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
 type ConfigSegment struct {
-	Parent        string   `json:"parent"`
-	Id            string   `json:"id"`
-	Start         XY       `json:"start"`
-	End           XY       `json:"end"`
-	Kind          int      `json:"Kind"`
-	Neighbor      string   `json:"neighbor"`
-	Tag           string   `json:"tag"`
-	TextureUpper  []string `json:"upper"`
-	TextureMiddle []string `json:"middle"`
-	TextureLower  []string `json:"lower"`
-	builder       map[float64][]*segmentData
+	Parent     string                   `json:"parent"`
+	Id         string                   `json:"id"`
+	Start      XY                       `json:"start"`
+	End        XY                       `json:"end"`
+	Kind       int                      `json:"Kind"`
+	Neighbor   string                   `json:"neighbor"`
+	Tag        string                   `json:"tag"`
+	Animations *ConfigSegmentAnimations `json:"animations"`
+	builder    map[float64][]*segmentData
 }
 
 // NewConfigSegment creates a new ConfigSegment instance with the specified parent, Kind, start, and end coordinates.
 func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 	is := &ConfigSegment{
-		Parent:        parent,
-		Id:            NextUUId(),
-		Start:         s,
-		End:           e,
-		Kind:          kind,
-		Neighbor:      "",
-		Tag:           "",
-		TextureUpper:  nil,
-		TextureMiddle: nil,
-		TextureLower:  nil,
+		Parent:     parent,
+		Id:         NextUUId(),
+		Start:      s,
+		End:        e,
+		Kind:       kind,
+		Neighbor:   "",
+		Tag:        "",
+		Animations: NewConfigSegmentAnimations(),
 	}
 	return is
 }
@@ -57,10 +53,7 @@ func (is *ConfigSegment) Clone() *ConfigSegment {
 	out := NewConfigSegment(is.Parent, is.Kind, is.Start, is.End)
 	out.Neighbor = is.Neighbor
 	out.Tag = is.Tag
-	out.TextureUpper = is.TextureUpper
-	out.TextureMiddle = is.TextureMiddle
-	out.TextureLower = is.TextureLower
-
+	out.Animations = is.Animations.Clone()
 	return out
 }
 
@@ -218,9 +211,9 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 			if data, d := createSegment(SegmentDataTexture, b.data); d != nil {
 				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{})
 				texture.Id = d.id
-				texture.TextureUpper = d.textureUpper
-				texture.TextureMiddle = d.textureMiddle
-				texture.TextureLower = d.textureLower
+				texture.Animations.Upper = d.textureUpper
+				texture.Animations.Middle = d.textureMiddle
+				texture.Animations.Lower = d.textureLower
 				b.data = data
 			}
 		}
@@ -242,9 +235,9 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 				neighbor.Neighbor = d.neighbor
 
 				if texture != nil {
-					neighbor.TextureUpper = texture.TextureUpper
-					neighbor.TextureMiddle = texture.TextureMiddle
-					neighbor.TextureLower = texture.TextureLower
+					neighbor.Animations.Upper = texture.Animations.Upper
+					neighbor.Animations.Middle = texture.Animations.Middle
+					neighbor.Animations.Lower = texture.Animations.Lower
 				}
 				b.data = data
 			}
@@ -260,7 +253,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 		if r.Kind == DefinitionWall {
 			neighborP = "wall"
 		}
-		fmt.Println("DEBUG", neighborP, r.Start, r.End, r.TextureUpper, r.TextureMiddle, r.TextureLower)
+		fmt.Println("DEBUG", neighborP, r.Start, r.End, r.Animations.Upper, r.Animations.Middle, r.Animations.Lower)
 	}
 
 	return out

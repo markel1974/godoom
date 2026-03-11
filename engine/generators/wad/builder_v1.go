@@ -282,8 +282,8 @@ func (b *Builder) buildEngineSectors(level *Level, traversedPolys map[uint16]Pol
 
 		miSector := &model.ConfigSector{
 			Id:    sectorId,
-			Floor: SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:  SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
+			FloorY: SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
+			CeilY:  SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
 			Tag:   strconv.Itoa(int(poly.SectorRef)),
 			//TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,

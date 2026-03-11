@@ -195,21 +195,21 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := model.NewConfigSector(sectorId)
-	miSector.Floor = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
+	miSector.FloorY = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	ceilHeight := float64(wadSector.CeilingHeight)
 	if openAllDoors {
 		ceilHeight = bld.calculateOpenDoorCeil(level, secIdx, wadSector, edges)
 	}
-	miSector.Ceil = ceilHeight / ScaleFactorCeilFloorLineDef
+	miSector.CeilY = ceilHeight / ScaleFactorCeilFloorLineDef
 	miSector.Tag = strconv.Itoa(int(secIdx))
 	if wadSector.CeilingPic == "F_SKY1" {
 		// System key to tell renderers: "Use cylindrical projection"
-		miSector.TextureCeil = []string{"__SKYBOX__"}
+		miSector.Animations.Ceils = []string{"__SKYBOX__"}
 	} else {
-		miSector.TextureCeil = bld.textures.FlatCreateAnimation(wadSector.CeilingPic)
+		miSector.Animations.Ceils = bld.textures.FlatCreateAnimation(wadSector.CeilingPic)
 	}
-	miSector.TextureFloor = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
-	miSector.TextureScaleFactor = 10.0
+	miSector.Animations.Floors = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
+	miSector.Animations.ScaleFactor = 10.0
 	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
 	miSector.Light.Kind = "spot"
 	return miSector
@@ -233,9 +233,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.TextureMiddle = bld.textures.TextureCreateAnimation(side.MiddleTexture)
-			seg.TextureUpper = bld.textures.TextureCreateAnimation(side.UpperTexture)
-			seg.TextureLower = bld.textures.TextureCreateAnimation(side.LowerTexture)
+			seg.Animations.Middle = bld.textures.TextureCreateAnimation(side.MiddleTexture)
+			seg.Animations.Upper = bld.textures.TextureCreateAnimation(side.UpperTexture)
+			seg.Animations.Lower = bld.textures.TextureCreateAnimation(side.LowerTexture)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -251,12 +251,12 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 
 					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
 					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
-						seg.TextureUpper = []string{"__SKYBOX__"}
+						seg.Animations.Upper = []string{"__SKYBOX__"}
 					}
 
 					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
 					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
-						seg.TextureLower = []string{"__SKYBOX__"}
+						seg.Animations.Lower = []string{"__SKYBOX__"}
 					}
 				}
 			}

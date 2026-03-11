@@ -209,8 +209,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 
 		viYaw := vi.GetYaw()
 		viZ := vi.GetZ()
-		sectorYCeil := sector.Ceil - viZ
-		sectorYFloor := sector.Floor - viZ
+		sectorYCeil := sector.CeilY - viZ
+		sectorYFloor := sector.FloorY - viZ
 
 		// Rotate around the player's view
 		vx1, vy1, tx1, tz1 := vi.TranslateXY(vertexCurr.X, vertexCurr.Y)
@@ -345,8 +345,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			}
 		}
 
-		ceilT := cs.Sector.TextureCeil.CurrentFrame()
-		floorT := cs.Sector.TextureFloor.CurrentFrame()
+		ceilT := cs.Sector.Animations.Ceil().CurrentFrame()
+		floorT := cs.Sector.Animations.Floor().CurrentFrame()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, lightStart, x2Min, y2Ceil, yaStop, zStop, lightStop)
@@ -355,26 +355,26 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		floorP.Rect(x1Max, ybStart, y1Floor, zStart, lightStart, x2Min, ybStop, y2Floor, zStop, lightStop)
 
 		if neighbor != nil {
-			neighborYCeil := neighbor.Ceil - viZ //vi.Where.Z
+			neighborYCeil := neighbor.CeilY - viZ //vi.Where.Z
 			ny1a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz1, viYaw) * yScale1)
 			ny2a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz2, viYaw) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperT := segment.TextureUpper.CurrentFrame()
+				upperT := segment.Animations.Upper().CurrentFrame()
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
 			}
 			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
-			neighborYFloor := neighbor.Floor - viZ //vi.Where.Z
+			neighborYFloor := neighbor.FloorY - viZ //vi.Where.Z
 			ny1b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz1, viYaw) * yScale1)
 			ny2b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz2, viYaw) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {
-				lowerT := segment.TextureLower.CurrentFrame()
+				lowerT := segment.Animations.Lower().CurrentFrame()
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)
 			}
@@ -387,7 +387,7 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			r.sectorQueue[outIdx].Update(neighbor, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 			outIdx++
 		} else {
-			middleT := segment.TextureMiddle.CurrentFrame()
+			middleT := segment.Animations.Middle().CurrentFrame()
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)
 		}

@@ -71,7 +71,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			cs.Light.Intensity = rnd.Float64()
 			cs.Light.Kind = "spot"
 			configSectorIdx++
-			_, err := fmt.Fscanf(r, "%f%f", &cs.Floor, &cs.Ceil)
+			_, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY)
 			if err != nil {
 				return nil, err
 			}
@@ -114,10 +114,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
-					neighbor.TextureMiddle = append(neighbor.TextureMiddle, "wall2.ppm")
-					neighbor.TextureLower = append(neighbor.TextureLower, "wall.ppm")
-					neighbor.TextureUpper = append(neighbor.TextureUpper, "wall3.ppm")
-
+					neighbor.Animations.Middle = []string{"wall2.ppm"}
+					neighbor.Animations.Lower = []string{"wall.ppm"}
+					neighbor.Animations.Upper = []string{"wall3.ppm"}
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -126,15 +125,15 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-					neighbor.TextureMiddle = append(neighbor.TextureMiddle, "wall2.ppm")
-					neighbor.TextureLower = append(neighbor.TextureLower, "wall.ppm")
-					neighbor.TextureUpper = append(neighbor.TextureUpper, "wall3.ppm")
+					neighbor.Animations.Middle = []string{"wall2.ppm"}
+					neighbor.Animations.Lower = []string{"wall.ppm"}
+					neighbor.Animations.Upper = []string{"wall3.ppm"}
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.TextureFloor = append(cs.TextureFloor, "floor.ppm")
-				cs.TextureCeil = append(cs.TextureCeil, "ceil.ppm")
-				cs.TextureScaleFactor = 50.0
+				cs.Animations.Floors = []string{"floor.ppm"}
+				cs.Animations.Ceils = []string{"ceil.ppm"}
+				cs.Animations.ScaleFactor = 50.0
 				//cs.Textures = true
 			}
 			cfg.Sectors = append(cfg.Sectors, cs)

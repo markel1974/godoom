@@ -37,7 +37,7 @@ func NewTextures(basePath string) (*Textures, error) {
 	return t, nil
 }
 
-// load reads texture data from the specified file and populates the given Texture instance with pixel values.
+// load reads texture data from the specified file and populates the given Animations instance with pixel values.
 func (t *Textures) load(tex *textures.Texture, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {

@@ -490,34 +490,34 @@ func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledP
 	lightArtificial := cp.Sector.Light.GetIntensity()
 	switch cp.Kind {
 	case model.IdWall:
-		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor
+		yRef := (cp.Sector.CeilY - cp.Sector.FloorY) * cp.Sector.Animations.ScaleFactor()
 		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdUpper:
-		yRef := math.Abs((cp.Sector.Ceil - cp.Neighbor.Ceil) * cp.Sector.TextureScaleFactor)
+		yRef := math.Abs((cp.Sector.CeilY - cp.Neighbor.CeilY) * cp.Sector.Animations.ScaleFactor())
 		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdLower:
-		yRef := math.Abs((cp.Neighbor.Floor - cp.Sector.Floor) * cp.Sector.TextureScaleFactor)
+		yRef := math.Abs((cp.Neighbor.FloorY - cp.Sector.FloorY) * cp.Sector.Animations.ScaleFactor())
 		dr.DrawTexture(cp.Texture, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureCeil, cp.Sector.CeilY, cp.Sector.Animations.ScaleFactor(), lightAmbient, lightArtificial)
 	case model.IdFloor:
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureFloor, cp.Sector.FloorY, cp.Sector.Animations.ScaleFactor(), lightAmbient, lightArtificial)
 	case model.IdFloorTest:
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureFloor, cp.Sector.Floor, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureFloor, cp.Sector.FloorY, cp.Sector.Animations.ScaleFactor(), lightAmbient, lightArtificial)
 	case model.IdCeilTest:
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureCeil, cp.Sector.Ceil, cp.Sector.TextureScaleFactor, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.TextureCeil, cp.Sector.CeilY, cp.Sector.Animations.ScaleFactor(), lightAmbient, lightArtificial)
 	default:
 		dr.DrawWireFrame(true)
 	}

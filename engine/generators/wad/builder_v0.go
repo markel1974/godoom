@@ -173,8 +173,8 @@ func (b *Builder) scanSubSectors(level *Level, bsp *BSP) []*model.ConfigSector {
 		poly := traversedPolys[i]
 		miSector := &model.ConfigSector{
 			Id:           strconv.Itoa(int(i)),
-			Floor:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
-			Ceil:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
+			FloorY:        SnapFloat(float64(poly.Sector.FloorHeight) / ScaleFactorCeilFloor),
+			CeilY:         SnapFloat(float64(poly.Sector.CeilingHeight) / ScaleFactorCeilFloor),
 			Tag:          strconv.Itoa(int(poly.SectorRef)),
 			TextureUpper: "wall2.ppm", TextureWall: "wall.ppm", TextureLower: "floor2.ppm",
 			TextureCeil: "ceil.ppm", TextureFloor: "floor.ppm", TextureScaleFactor: 10.0,

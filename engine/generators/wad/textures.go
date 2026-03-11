@@ -53,7 +53,7 @@ func NewTextures() (*Textures, error) {
 	return t, nil
 }
 
-// Add adds a new texture to the Textures collection using the provided source ID and RGBA image, and returns the created Texture.
+// Add adds a new texture to the Textures collection using the provided source ID and RGBA image, and returns the created Animations.
 func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)

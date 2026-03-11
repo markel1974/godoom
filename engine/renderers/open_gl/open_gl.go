@@ -121,15 +121,15 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 
 			switch cp.Kind {
 			case model.IdWall:
-				w.pushWall(cp, cp.Texture, float32(cp.Sector.Floor), float32(cp.Sector.Ceil))
+				w.pushWall(cp, cp.Texture, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 			case model.IdUpper:
-				w.pushWall(cp, cp.Texture, float32(cp.Neighbor.Ceil), float32(cp.Sector.Ceil))
+				w.pushWall(cp, cp.Texture, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
 			case model.IdLower:
-				w.pushWall(cp, cp.Texture, float32(cp.Sector.Floor), float32(cp.Neighbor.Floor))
+				w.pushWall(cp, cp.Texture, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 			case model.IdCeil, model.IdCeilTest:
-				w.pushFlat(cp, cp.TextureCeil, cp.Sector.Ceil)
+				w.pushFlat(cp, cp.TextureCeil, cp.Sector.CeilY)
 			case model.IdFloor, model.IdFloorTest:
-				w.pushFlat(cp, cp.TextureFloor, cp.Sector.Floor)
+				w.pushFlat(cp, cp.TextureFloor, cp.Sector.FloorY)
 			}
 		}
 	}
@@ -150,7 +150,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 
 	//todo capire perche le texture devono essere scalate di 4 dai WAD
 	scaleH := float32(4.0)
-	scaleV := float32(cp.Sector.TextureScaleFactor)
+	scaleV := float32(cp.Sector.Animations.ScaleFactor())
 	if scaleV <= 0 {
 		scaleV = 1.0
 	}
@@ -217,7 +217,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 	startLen := w.frameVertices.Len()
 
 	// 1. Allinea il fattore di scala anche per pavimenti e soffitti
-	scale := float32(cp.Sector.TextureScaleFactor)
+	scale := float32(cp.Sector.Animations.ScaleFactor())
 	if scale <= 0 {
 		scale = 1.0
 	}

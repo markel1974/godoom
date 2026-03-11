@@ -26,7 +26,6 @@ Utilizzare LightCenter del Settore
 Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping generando on-the-fly le normal map dalle texture dei WAD, per dare volume e riflessi dinamici ai mattoni sotto le point light.
 
 Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
-
 */
 
 // scaleFactor represents the scaling factor used for transformations in rendering calculations.
@@ -161,7 +160,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
-	light := float32(cp.Sector.LightIntensity * 60)
+	light := float32((1.0 - cp.Sector.LightIntensity) * 5.0)
 
 	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
 	viZ := w.vi.GetZ()
@@ -222,8 +221,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 		scale = 1.0
 	}
 
-	light := float32(cp.Sector.LightIntensity)
-
+	light := float32((1.0 - cp.Sector.LightIntensity) * 5.0)
 	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
 	lcY := cp.Sector.LightCenter.Z - w.vi.GetZ()
 

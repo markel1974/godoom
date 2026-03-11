@@ -272,23 +272,15 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 	return seg, false
 }
 
-// ConvertLight trasforma il LightLevel di Doom in un parametro lightdistance.
-// Valori < 0 indicano luce ambientale, valori > 0 indicano luce di settore.
+// convertLight normalizes a light level from the WAD file to a float between 0.0 and 1.0, or returns -1.0 for dim levels below 16.
 func (bld *Builder) convertLight(lightLevel int16) float64 {
-	// Calcolo della LightIntensity
 	rawLight := float64(lightLevel)
-	// 1. Invertiamo il valore:
-	// In Doom 255 è luce max, in LightIntensity 0 è luce max.
-	// distance = (255 - rawLight)
-	distance := 255.0 - rawLight
-	// 2. Discriminante Ambientale vs Settore
-	// Se la luce è sotto una certa soglia (es. 16), la consideriamo ambientale
+	// Soglia ambientale
 	if rawLight < 16 {
 		return -1.0
 	}
-	// Valore positivo (0 = luce piena, >0 = luce più lontana/attenuata)
-	v := (distance / 255.0) / 40
-	return v
+	// Ritorna l'intensità lineare normalizzata
+	return rawLight / 255.0
 }
 
 func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {

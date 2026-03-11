@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	rnd "math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -65,6 +66,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				return nil, errors.New(fmt.Sprintf("nil vertices"))
 			}
 			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx))
+
+			//todo light entry
+			cs.LightIntensity = rnd.Float64()
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.Floor, &cs.Ceil)
 			if err != nil {

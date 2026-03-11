@@ -9,14 +9,6 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-/*
-Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping generando on-the-fly le normal map dalle texture dei WAD, per dare volume e riflessi dinamici ai mattoni sotto le point light.
-
-Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
-
-Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce del settore) e passare al rendering degli sprite/entità con billboarding istanziato.
-*/
-
 // DefinitionJoin represents the join type with an assigned value of 3.
 // DefinitionVoid represents the void type with an assigned value of 1.
 // DefinitionWall represents the wall type with an assigned value of 2.
@@ -104,7 +96,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.TextureFloor = animationGet(cfg, ax, cs.TextureFloor)
 		s.TextureCeil = animationGet(cfg, ax, cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
-		s.LightIntensity = cs.LightIntensity
+		s.LightIntensity = math.Max(0.0, math.Min(1.0, cs.LightIntensity)) //cs.LightIntensity
 		lXY := cs.GetCentroid()
 		s.LightCenter = XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil}
 		r.sectors = append(r.sectors, s)
@@ -170,6 +162,60 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			}
 		}
 		fmt.Println("undefined:", undefined, "fixed:", fixed)
+	}
+
+	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
+	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
+	visited := make(map[string]bool)
+	for _, sect := range r.sectors {
+		if visited[sect.Id] {
+			continue
+		}
+
+		// Utilizziamo un algoritmo di Flood Fill per trovare tutti i settori connessi
+		var areaSectors []*Sector
+		queue := []*Sector{sect}
+		visited[sect.Id] = true
+
+		for len(queue) > 0 {
+			curr := queue[0]
+			queue = queue[1:]
+			areaSectors = append(areaSectors, curr)
+
+			// Controlla i vicini di questo settore
+			for _, seg := range curr.Segments {
+				if seg.Kind != DefinitionWall && seg.Ref != "" {
+					if n, ok := r.cache[seg.Ref]; ok {
+						if !visited[n.Id] {
+							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
+							if n.Ceil == curr.Ceil && n.Floor == curr.Floor && n.LightIntensity == curr.LightIntensity {
+								visited[n.Id] = true
+								queue = append(queue, n)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Se l'area è composta da più poligoni, calcoliamo un baricentro globale
+		if len(areaSectors) > 1 {
+			var sumX, sumY float64
+			for _, s := range areaSectors {
+				// Sommiamo i baricentri dei singoli triangoli calcolati in precedenza
+				sumX += s.LightCenter.X
+				sumY += s.LightCenter.Y
+			}
+
+			globalCenterX := sumX / float64(len(areaSectors))
+			globalCenterY := sumY / float64(len(areaSectors))
+
+			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
+			for _, s := range areaSectors {
+				s.LightCenter.X = globalCenterX
+				s.LightCenter.Y = globalCenterY
+			}
+		}
 	}
 
 	r.finalize(cfg)

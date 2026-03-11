@@ -73,14 +73,14 @@ func (p *Player) SetYaw(y float64) {
 }
 
 // Move adjusts the player's velocity based on directional input, considering speed and acceleration factors.
-func (p *Player) Move(up bool, down bool, left bool, right bool, slow bool) {
+func (p *Player) Move(impulse float64, up bool, down bool, left bool, right bool) {
 	var moveX float64
 	var moveY float64
 	var acceleration float64
-	impulse := 0.2
-	if slow {
-		impulse = 0.01
-	}
+	//impulse := impulseNormal
+	//if slow {
+	//	impulse = impulseSlow
+	//}
 	if up || down || left || right {
 		if up {
 			moveX += p.angleCos * impulse

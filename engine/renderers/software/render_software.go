@@ -136,7 +136,9 @@ func (w *RenderSoftware) doRun() {
 			}
 		}
 
-		var up, down, left, right, slow bool
+		var up, down, left, right bool
+
+		impulse := 0.2
 
 		scroll := w.win.MouseScroll()
 		if scroll.Y != 0 {
@@ -155,12 +157,12 @@ func (w *RenderSoftware) doRun() {
 				up = true
 			case pixels.KeyW:
 				up = true
-				slow = true
+				impulse = 0.01
 			case pixels.KeyDown:
 				down = true
 			case pixels.KeyS:
 				down = true
-				slow = true
+				impulse = 0.01
 			case pixels.KeyLeft:
 				left = true
 			case pixels.KeyRight:
@@ -172,7 +174,7 @@ func (w *RenderSoftware) doRun() {
 			}
 		}
 
-		w.doPlayerMoves(up, down, left, right, slow)
+		w.doPlayerMoves(impulse, up, down, left, right)
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
 			w.doDebugMoveSectorToggle()
@@ -317,8 +319,8 @@ func (w *RenderSoftware) doPlayerJump() {
 }
 
 // doPlayerMoves handles movement for the player based on the directional and speed inputs provided.
-func (w *RenderSoftware) doPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
-	w.player.Move(up, down, left, right, slow)
+func (w *RenderSoftware) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
+	w.player.Move(impulse, up, down, left, right)
 }
 
 // doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within predefined constraints.

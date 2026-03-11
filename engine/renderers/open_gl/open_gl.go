@@ -533,7 +533,7 @@ func (w *RenderOpenGL) doRun() {
 			}
 		}
 
-		var up, down, left, right, slow bool
+		var up, down, left, right bool
 		scroll := w.win.MouseScroll()
 		if scroll.Y != 0 {
 			if scroll.Y > 0 {
@@ -543,6 +543,8 @@ func (w *RenderOpenGL) doRun() {
 			}
 		}
 
+		var impulse = 0.06
+
 		for v := range w.win.KeysPressed() {
 			switch v {
 			case pixels.KeyEscape:
@@ -550,12 +552,12 @@ func (w *RenderOpenGL) doRun() {
 			case pixels.KeyUp, pixels.KeyW:
 				up = true
 				if v == pixels.KeyW {
-					slow = true
+					impulse = 0.01
 				}
 			case pixels.KeyDown, pixels.KeyS:
 				down = true
 				if v == pixels.KeyS {
-					slow = true
+					impulse = 0.01
 				}
 			case pixels.KeyLeft:
 				left = true
@@ -568,7 +570,7 @@ func (w *RenderOpenGL) doRun() {
 			}
 		}
 
-		w.doPlayerMoves(up, down, left, right, slow)
+		w.doPlayerMoves(impulse, up, down, left, right)
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
 			w.doDebugMoveSectorToggle()
@@ -626,8 +628,8 @@ func (w *RenderOpenGL) doPlayerDuckingToggle() { w.player.SetDucking() }
 func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 
 // doPlayerMoves processes player movement based on directional inputs and a slow movement modifier.
-func (w *RenderOpenGL) doPlayerMoves(up bool, down bool, left bool, right bool, slow bool) {
-	w.player.Move(up, down, left, right, slow)
+func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
+	w.player.Move(impulse, up, down, left, right)
 }
 
 // doPlayerMouseMove adjusts the player's view and movement based on mouse movement within defined bounds.

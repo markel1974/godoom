@@ -227,22 +227,16 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 		scale = 1
 	}
 
-	cfg.Player.Position.X /= scale
-	cfg.Player.Position.Y /= scale
+	cfg.Player.Position.Scale(scale)
 
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
+		//lights scale
+		sect.Light.pos.ScaleXY(scale)
 		//vertex scale
-		if scale != 1 {
-			sect.Light.pos.X /= scale
-			sect.Light.pos.Y /= scale
-
-			for s := 0; s < len(sect.Segments); s++ {
-				sect.Segments[s].Start.X /= scale
-				sect.Segments[s].Start.Y /= scale
-				sect.Segments[s].End.X /= scale
-				sect.Segments[s].End.Y /= scale
-			}
+		for s := 0; s < len(sect.Segments); s++ {
+			sect.Segments[s].Start.Scale(scale)
+			sect.Segments[s].End.Scale(scale)
 		}
 		//maxHeight
 		if h := math.Abs(sect.CeilY - sect.FloorY); h > r.sectorsMaxHeight {

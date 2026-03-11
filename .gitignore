@@ -9,3 +9,4 @@
 build/godoom*
 build/resources/wad/
 game/
+/build/polygons.zip

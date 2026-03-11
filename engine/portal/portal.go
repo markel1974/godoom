@@ -128,7 +128,7 @@ func (r *Portal) Compile(vi *model.ViewItem) ([]*model.CompiledSector, int) {
 	wMax := float64(r.screenWidth - 1)
 	hMax := float64(r.screenHeight-1) * 3
 
-	r.queue[headIdx].Update(vi.Sector, 0, wMax, -hMax, -hMax, hMax, hMax)
+	r.queue[headIdx].Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
 	headIdx = (headIdx + 1) % queueLen
 
 	textures.Tick()
@@ -298,8 +298,8 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		zStart := ((x1Max-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 
-		lightStart := 1 - (zStart * vi.LightIntensity)
-		lightStop := 1 - (zStop * vi.LightIntensity)
+		lightStart := 1 - (zStart * vi.GetLightIntensity())
+		lightStop := 1 - (zStop * vi.GetLightIntensity())
 
 		if zStart <= 0 {
 			zStart = 10e4

@@ -61,9 +61,9 @@ func (p *Player) SetAngle(angle float64) {
 	p.angleCos = math.Cos(p.angle)
 }
 
-// GetAngle returns the player's current angle, as well as its sine and cosine values.
-func (p *Player) GetAngle() (float64, float64, float64) {
-	return p.angle, p.angleSin, p.angleCos
+// GetAngle returns the sine and cosine values of the player's current angle as two float64 values.
+func (p *Player) GetAngle() (float64, float64) {
+	return p.angleSin, p.angleCos
 }
 
 // SetYaw adjusts the player's yaw and yawState within a constrained range, also factoring in the Z velocity component.

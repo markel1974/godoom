@@ -22,9 +22,8 @@ type ViewItem struct {
 	angleSin       float64
 	angleCos       float64
 	yaw            float64
-	Zoom           float64
-	LightIntensity float64
-	Sector         *Sector
+	lightIntensity float64
+	sector         *Sector
 }
 
 // NewViewItem creates and returns a new instance of ViewItem with default values.
@@ -74,19 +73,43 @@ func (vi *ViewItem) SetZ(z float64) {
 	vi.where.Z = z
 }
 
+// GetAngle returns the sine and cosine of the ViewItem's rotation angle for transformations and calculations.
 func (vi *ViewItem) GetAngle() (float64, float64) {
 	return vi.angleSin, vi.angleCos
 }
 
+// SetAngle updates the sine and cosine values of the ViewItem's angle for orientation calculations.
 func (vi *ViewItem) SetAngle(sin float64, cos float64) {
 	vi.angleSin = sin
 	vi.angleCos = cos
 }
 
+// GetYaw returns the yaw angle of the ViewItem as a float64 value.
 func (vi *ViewItem) GetYaw() float64 {
 	return vi.yaw
 }
 
+// SetYaw sets the yaw (rotation around the vertical axis) of the ViewItem to the specified value.
 func (vi *ViewItem) SetYaw(yaw float64) {
 	vi.yaw = yaw
+}
+
+// GetLightIntensity retrieves the light intensity property of the ViewItem as a float64 value.
+func (vi *ViewItem) GetLightIntensity() float64 {
+	return vi.lightIntensity
+}
+
+// SetLightIntensity sets the intensity of the light for the ViewItem to the specified value.
+func (vi *ViewItem) SetLightIntensity(l float64) {
+	vi.lightIntensity = l
+}
+
+// GetSector retrieves the Sector instance associated with the ViewItem.
+func (vi *ViewItem) GetSector() *Sector {
+	return vi.sector
+}
+
+// SetSector assigns a Sector instance to the ViewItem, updating its associated sector property.
+func (vi *ViewItem) SetSector(s *Sector) {
+	vi.sector = s
 }

@@ -214,12 +214,11 @@ func (w *RenderSoftware) doRender() {
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
 
-	_, viSin, viCos := w.player.GetAngle()
-	w.vi.SetAngle(viSin, viCos)
-	w.vi.Sector = w.player.GetSector()
+	w.vi.SetAngle(w.player.GetAngle())
+	w.vi.SetSector(w.player.GetSector())
 	w.vi.SetXYZ(w.player.GetXYZ())
 	w.vi.SetYaw(w.player.GetYaw())
-	w.vi.LightIntensity = w.player.GetLightIntensity()
+	w.vi.SetLightIntensity(w.player.GetLightIntensity())
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count
@@ -345,11 +344,6 @@ func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.SetYaw(mouseY)
 
 	w.player.MoveApply(0, 0)
-}
-
-// doZoom adjusts the zoom level of the current view by the specified amount.
-func (w *RenderSoftware) doZoom(zoom float64) {
-	w.vi.Zoom += zoom
 }
 
 // doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
@@ -496,7 +490,7 @@ func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledP
 		dr.DrawRectangle()
 		return
 	}
-	lightAmbient := vi.LightIntensity
+	lightAmbient := vi.GetLightIntensity()
 	lightArtificial := cp.Sector.LightIntensity
 	switch cp.Kind {
 	case model.IdWall:

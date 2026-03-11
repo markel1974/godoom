@@ -290,7 +290,7 @@ func (w *RenderOpenGL) glInit() error {
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 
-	stride := int32(w.frameVertices.Alignment() * 4)
+	stride := w.frameVertices.Alignment() * 4
 
 	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
@@ -468,7 +468,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
 	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
-	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.LightIntensity))
+	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
 	timeLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_time\x00"))
 	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
 }
@@ -604,12 +604,11 @@ func (w *RenderOpenGL) doRun() {
 
 // doRender performs the rendering process using OpenGL, updating viewport, clearing buffers, and handling camera uniforms.
 func (w *RenderOpenGL) doRender() {
-	_, pSin, pCos := w.player.GetAngle()
-	w.vi.SetAngle(pSin, pCos)
-	w.vi.Sector = w.player.GetSector()
+	w.vi.SetAngle(w.player.GetAngle())
+	w.vi.SetSector(w.player.GetSector())
 	w.vi.SetXYZ(w.player.GetXYZ())
 	w.vi.SetYaw(w.player.GetYaw())
-	w.vi.LightIntensity = w.player.GetLightIntensity()
+	w.vi.SetLightIntensity(w.player.GetLightIntensity())
 
 	cs, count := w.portal.Compile(w.vi)
 	w.targetLastCompiled = count
@@ -657,9 +656,6 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.SetYaw(mouseY)
 	w.player.MoveApply(0, 0)
 }
-
-// doZoom adjusts the current zoom level by adding the specified zoom value to the existing zoom factor.
-func (w *RenderOpenGL) doZoom(zoom float64) { w.vi.Zoom += zoom }
 
 // doDebug toggles debugging mode or enables it while adjusting the debug index and updating the player's sector and position.
 func (w *RenderOpenGL) doDebug(next int) {

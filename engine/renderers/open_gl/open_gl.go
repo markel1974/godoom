@@ -542,23 +542,21 @@ func (w *RenderOpenGL) doRun() {
 				down = true
 			}
 		}
-
 		var impulse = 0.06
-
 		for v := range w.win.KeysPressed() {
 			switch v {
 			case pixels.KeyEscape:
 				return
-			case pixels.KeyUp, pixels.KeyW:
+			case pixels.KeyW:
 				up = true
-				if v == pixels.KeyW {
-					impulse = 0.01
-				}
-			case pixels.KeyDown, pixels.KeyS:
+				impulse = 0.01
+			case pixels.KeyUp:
+				up = true
+			case pixels.KeyS:
 				down = true
-				if v == pixels.KeyS {
-					impulse = 0.01
-				}
+				impulse = 0.01
+			case pixels.KeyDown:
+				down = true
 			case pixels.KeyLeft:
 				left = true
 			case pixels.KeyRight:
@@ -571,6 +569,7 @@ func (w *RenderOpenGL) doRun() {
 		}
 
 		w.doPlayerMoves(impulse, up, down, left, right)
+
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
 			w.doDebugMoveSectorToggle()

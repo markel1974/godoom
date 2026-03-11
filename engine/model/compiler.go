@@ -96,9 +96,11 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.TextureFloor = animationGet(cfg, ax, cs.TextureFloor)
 		s.TextureCeil = animationGet(cfg, ax, cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
-		s.LightIntensity = math.Max(0.0, math.Min(1.0, cs.LightIntensity))
-		lXY := cs.GetCentroid()
-		s.LightCenter = XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil}
+		s.Light = NewLight()
+		if cs.Light != nil {
+			lXY := cs.GetCentroid()
+			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil})
+		}
 		r.sectors = append(r.sectors, s)
 		r.cache[cs.Id] = s
 	}
@@ -188,7 +190,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 					if n, ok := r.cache[seg.Ref]; ok {
 						if !visited[n.Id] {
 							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
-							if n.Ceil == curr.Ceil && n.Floor == curr.Floor && n.LightIntensity == curr.LightIntensity {
+							if n.Ceil == curr.Ceil && n.Floor == curr.Floor && n.Light.intensity == curr.Light.intensity {
 								visited[n.Id] = true
 								queue = append(queue, n)
 							}
@@ -203,8 +205,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			var sumX, sumY float64
 			for _, s := range areaSectors {
 				// Sommiamo i baricentri dei singoli triangoli calcolati in precedenza
-				sumX += s.LightCenter.X
-				sumY += s.LightCenter.Y
+				sumX += s.Light.pos.X
+				sumY += s.Light.pos.Y
 			}
 
 			globalCenterX := sumX / float64(len(areaSectors))
@@ -212,8 +214,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {
-				s.LightCenter.X = globalCenterX
-				s.LightCenter.Y = globalCenterY
+				s.Light.pos.X = globalCenterX
+				s.Light.pos.Y = globalCenterY
 			}
 		}
 	}
@@ -239,8 +241,8 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 	for _, sect := range r.sectors {
 		//vertex scale
 		if scale != 1 {
-			sect.LightCenter.X /= scale
-			sect.LightCenter.Y /= scale
+			sect.Light.pos.X /= scale
+			sect.Light.pos.Y /= scale
 
 			for s := 0; s < len(sect.Segments); s++ {
 				sect.Segments[s].Start.X /= scale

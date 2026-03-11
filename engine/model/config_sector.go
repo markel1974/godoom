@@ -4,15 +4,16 @@ import "encoding/json"
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {
-	Id                 string           `json:"id"`
-	Ceil               float64          `json:"ceil"`
-	Floor              float64          `json:"floor"`
-	TextureFloor       []string         `json:"textureFloor"`
-	TextureCeil        []string         `json:"textureCeil"`
-	TextureScaleFactor float64          `json:"textureScaleFactor"`
-	LightIntensity     float64          `json:"lightIntensity"`
-	Segments           []*ConfigSegment `json:"segments"`
-	Tag                string           `json:"tag"`
+	Id                 string   `json:"id"`
+	Ceil               float64  `json:"ceil"`
+	Floor              float64  `json:"floor"`
+	TextureFloor       []string `json:"textureFloor"`
+	TextureCeil        []string `json:"textureCeil"`
+	TextureScaleFactor float64  `json:"textureScaleFactor"`
+	//LightIntensity     float64          `json:"lightIntensity"`
+	Light    *ConfigLight     `json:"light"`
+	Segments []*ConfigSegment `json:"segments"`
+	Tag      string           `json:"tag"`
 }
 
 // NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
@@ -20,7 +21,7 @@ func NewConfigSector(id string) *ConfigSector {
 	return &ConfigSector{
 		Id:                 id,
 		TextureScaleFactor: 1.0,
-		LightIntensity:     -1.0,
+		Light:              NewConfigLight(),
 	}
 }
 
@@ -32,7 +33,7 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	out.TextureFloor = is.TextureFloor
 	out.TextureCeil = is.TextureCeil
 	out.TextureScaleFactor = is.TextureScaleFactor
-	out.LightIntensity = is.LightIntensity
+	out.Light = is.Light.Clone()
 	out.Tag = is.Tag
 	out.Segments = nil
 	if cloneSegments {

@@ -68,7 +68,8 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx))
 
 			//todo light entry
-			cs.LightIntensity = rnd.Float64()
+			cs.Light.Intensity = rnd.Float64()
+			cs.Light.Kind = "spot"
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.Floor, &cs.Ceil)
 			if err != nil {

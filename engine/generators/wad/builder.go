@@ -210,7 +210,8 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	}
 	miSector.TextureFloor = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
 	miSector.TextureScaleFactor = 10.0
-	miSector.LightIntensity = bld.convertLight(wadSector.LightLevel)
+	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
+	miSector.Light.Kind = "spot"
 	return miSector
 }
 

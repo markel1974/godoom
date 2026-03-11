@@ -160,12 +160,13 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
-	light := float32((1.0 - cp.Sector.LightIntensity) * 5.0)
+	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
+	lightPos := cp.Sector.Light.GetPos()
 
-	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
+	_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
 	viZ := w.vi.GetZ()
 	viX, vizY := w.vi.GetXY()
-	lcY := cp.Sector.LightCenter.Z - viZ
+	lcY := lightPos.Z - viZ
 
 	sin, cos := w.vi.GetAngle()
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + viX)
@@ -221,9 +222,10 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 		scale = 1.0
 	}
 
-	light := float32((1.0 - cp.Sector.LightIntensity) * 5.0)
-	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
-	lcY := cp.Sector.LightCenter.Z - w.vi.GetZ()
+	lightPos := cp.Sector.Light.GetPos()
+	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
+	_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
+	lcY := lightPos.Z - w.vi.GetZ()
 
 	vLcX := float32(lcX)
 	vLcY := float32(lcY)

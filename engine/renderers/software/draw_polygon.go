@@ -399,20 +399,16 @@ func (dp *DrawPolygon) computeLight(z float64, lightAmbient float64, lightArtifi
 	const visibilityMax = 10.0
 	const visibility = visibilityMax - 5.0
 
-	absZ := math.Abs(z)
 	light := 1.0
-
-	if lightArtificial >= 0 {
+	if lightArtificial > 0 {
 		// OVERRIDE EMISSIVO
-		// La luce del settore è sovrana. Se il settore è illuminato al massimo (rawLight = 255),
-		// la tua lightArtificial è 0. Moltiplicando per absZ otteniamo 0.
-		// Risultato: light rimane 1.0 a qualsiasi distanza. Il settore buca l'oscurità!
-		attenuation := absZ * visibility * lightArtificial
-		light -= attenuation
+		// La luce del settore è sovrana. Se il settore è illuminato al massimo,
+		light = lightArtificial
 	} else {
 		// LUCE AMBIENTALE
 		// Se il settore è un normale passaggio senza luce propria (lightArtificial < 0),
 		// subisce il decadimento atmosferico globale della camera.
+		absZ := math.Abs(z)
 		attenuation := absZ * visibility * lightAmbient
 		light -= attenuation
 	}

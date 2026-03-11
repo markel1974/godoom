@@ -487,7 +487,7 @@ func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledP
 		return
 	}
 	lightAmbient := vi.GetLightIntensity()
-	lightArtificial := cp.Sector.LightIntensity
+	lightArtificial := cp.Sector.Light.GetIntensity()
 	switch cp.Kind {
 	case model.IdWall:
 		yRef := (cp.Sector.Ceil - cp.Sector.Floor) * cp.Sector.TextureScaleFactor

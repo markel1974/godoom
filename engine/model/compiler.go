@@ -48,6 +48,7 @@ type Compiler struct {
 	sectors          []*Sector
 	sectorsMaxHeight float64
 	cache            map[string]*Sector
+	textures         textures.ITextures
 }
 
 // NewCompiler initializes and returns a new instance of the Compiler type with default values.
@@ -61,25 +62,16 @@ func NewCompiler() *Compiler {
 
 // Setup initializes the sectors and segments for the compiler based on the provided configuration.
 func (r *Compiler) Setup(cfg *ConfigRoot) error {
-	animationGet := func(cfg *ConfigRoot, animations map[string]*textures.Animation, src []string) *textures.Animation {
-		key := strings.Join(src, ";")
-		if a, ok := animations[key]; ok {
-			return a
-		}
-		a := textures.NewAnimation(cfg.Textures.Get(src))
-		animations[key] = a
-		return a
-	}
-	ax := make(map[string]*textures.Animation)
+	r.textures = cfg.Textures
 	modelSectorId := uint16(0)
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			aUpper := animationGet(cfg, ax, cn.Animations.Upper)
-			aMiddle := animationGet(cfg, ax, cn.Animations.Middle)
-			aLower := animationGet(cfg, ax, cn.Animations.Lower)
+			aUpper := cfg.GetAnimation(cn.Animations.Upper)
+			aMiddle := cfg.GetAnimation(cn.Animations.Middle)
+			aLower := cfg.GetAnimation(cn.Animations.Lower)
 			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower))
 		}
 
@@ -88,8 +80,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			continue
 		}
 
-		texFloor := animationGet(cfg, ax, cs.Animations.Floors)
-		texCeil := animationGet(cfg, ax, cs.Animations.Ceils)
+		texFloor := cfg.GetAnimation(cs.Animations.Floors)
+		texCeil := cfg.GetAnimation(cs.Animations.Ceils)
 		texScaleFactor := cs.Animations.ScaleFactor
 
 		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil, texScaleFactor)

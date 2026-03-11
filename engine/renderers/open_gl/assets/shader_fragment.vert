@@ -5,13 +5,17 @@ out vec4 FragColor;
 in vec2 TexCoords;
 in float LightDist;
 in float FragDepth;
-in vec3 ViewPos;
-in vec3 LightCenterView;
-in vec3 NormalView;
+in vec3 ViewPos;           // Posizione del frammento (World Space)
+in vec3 LightCenterView;    // Centro della luce del settore (World Space)
+in vec3 NormalView;         // Normale geometrica (World Space)
 
 uniform sampler2D u_texture;
 uniform sampler2D u_normalMap;
 uniform float u_ambient_light;
+
+// Uniform per la torcia e il calcolo speculare corretto
+uniform vec3 u_cameraPos;
+uniform vec3 u_cameraFront;
 
 void main()
 {
@@ -21,18 +25,22 @@ void main()
         discard;
     }
 
-    // --- 1. SPOTLIGHT ---
-    vec3 lightVector = LightCenterView - ViewPos;
-    vec3 L = normalize(lightVector);
-    vec3 spotDir = vec3(0.0, -1.0, 0.0);
-    float cosTheta = dot(-L, spotDir);
+    // --- 1. VETTORI DI ILLUMINAZIONE ---
 
-    // 0.50 = cos(60°), apertura totale della luce piena a 120 gradi
-    // 0.30 = cos(72.5°), penombra esterna che sfuma fino a 145 gradi totali
-    float spotIntensity = smoothstep(0.30, 0.50, cosTheta);
-    //float spotIntensity = smoothstep(0.70, 0.85, cosTheta);
+    // A. Luce del Settore (Faretto zenitale dall'alto)
+    vec3 lightVectorRoom = LightCenterView - ViewPos;
+    vec3 L_room = normalize(lightVectorRoom);
+    vec3 spotDirRoom = vec3(0.0, -1.0, 0.0); // Punta verso il basso
+    float cosThetaRoom = dot(-L_room, spotDirRoom);
+    float roomSpotIntensity = smoothstep(0.30, 0.50, cosThetaRoom);
 
-    // --- 2. NORMALE BASE E BUMP ---
+    // B. Torcia (Inseguimento Camera)
+    vec3 L_flash = normalize(u_cameraPos - ViewPos);
+    float cosThetaFlash = dot(-L_flash, normalize(u_cameraFront));
+    // Cono della torcia: 0.85 (bordo) -> 0.95 (centro)
+    float flashIntensity = smoothstep(0.85, 0.95, cosThetaFlash);
+
+    // --- 2. NORMALE E BUMP MAPPING (TBN) ---
     vec3 N = NormalView;
     if (dot(N, N) < 0.01) {
         N = vec3(0.0, 1.0, 0.0);
@@ -41,13 +49,11 @@ void main()
     }
 
     vec3 finalNormal = N;
-    float bumpFactor = 1.0;
     vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
 
-    // Applica TBN solo se c'è una normal map
+    // Generazione TBN on-the-fly tramite derivate parziali per Normal Mapping
     if (length(mapColor) > 0.1) {
         vec3 mapNormal = mapColor * 2.0 - 1.0;
-
         vec3 dp1 = dFdx(ViewPos);
         vec3 dp2 = dFdy(ViewPos);
         vec2 duv1 = dFdx(TexCoords);
@@ -65,45 +71,46 @@ void main()
         finalNormal = normalize(TBN * mapNormal);
     }
 
-    // Il bumpFactor influisce sulla luce diffusa, indipendentemente dalla normal map
-    bumpFactor = (max(dot(finalNormal, L), 0.0) * 0.2) + 1.0;
+    // --- 3. COMPONENTE DIFFUSA ---
+    float bumpRoom = (max(dot(finalNormal, L_room), 0.0) * 0.2) + 1.0;
+    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
-    // --- 3. RIFLESSO SPECULARE (BLINN-PHONG BILANCIATO) ---
-    vec3 V = normalize(-ViewPos);
-    vec3 H = normalize(L + V);
+    // --- 4. RIFLESSO SPECULARE BLINN-PHONG ---
+    vec3 V = normalize(u_cameraPos - ViewPos);
 
-    float NdotH = max(dot(finalNormal, H), 0.0);
+    float NdotH_room = max(dot(finalNormal, normalize(L_room + V)), 0.0);
+    float NdotH_flash = max(dot(finalNormal, normalize(L_flash + V)), 0.0);
 
-    // Identifica piani orizzontali in View Space
+    // Gestione differenziata per Pavimento (Horizontal) vs Muri
     float isHorizontal = step(0.8, abs(finalNormal.y));
-
-    // Muri: shininess 16.0 (riflesso più concentrato)
-    // Pavimento: shininess 4.0 (lobo allargato per intercettare la camera radente)
-    float shininess = mix(1.0, 4.0, isHorizontal);
-
-    // Moltiplicatore contenuto, senza luma della texture base
+    float shininess = mix(16.0, 4.0, isHorizontal);
     float specBoost = mix(0.5, 1.5, isHorizontal);
 
-    // Il clamp impedisce categoricamente l'over-saturazione (valori > 1.0)
-    float specular = clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0);
+    float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
+    float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);
 
-    // --- 4. DECADIMENTO ---
+    // --- 5. DECADIMENTI ED EFFETTO BUIO ---
+
+    // Decadimento Stanza (Inversamente proporzionale a LightIntensity)
+    // Se LightIntensity tende a 0, il decadimento è massimo.
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
-    float visibilityMultiplier = 0.1;
-    float falloff = exp(-FragDepth * decayRate * visibilityMultiplier);
+    float roomFalloff = exp(-FragDepth * decayRate * 0.1);
 
-    // --- 5. COMPOSIZIONE ---
-    float lightMix = 0.3 + (spotIntensity * 1.7);
+    // Attenuazione quadratica della torcia per non illuminare a distanza infinita
+    float flashFalloff = 1.0 / (1.0 + 0.05 * FragDepth + 0.005 * (FragDepth * FragDepth));
+    flashIntensity = flashFalloff * flashFalloff;
 
-    // Highlight speculare modulato ESCLUSIVAMENTE dal cono di luce
-    vec3 specularHighlight = vec3(specular * spotIntensity);
+    // --- 6. FINAL MIX ---
 
-    vec3 baseColor = texColor.rgb * bumpFactor;
+    // Contributo Luce Settore
+    vec3 litRoom = (texColor.rgb * bumpRoom * (0.3 + roomSpotIntensity * 1.7) + vec3(specularRoom * roomSpotIntensity)) * roomFalloff;
 
-    // Aggiunta lineare del riflesso post-calcolo diffusivo, scalata per il decadimento
-    vec3 litColor = (baseColor * lightMix + specularHighlight) * falloff;
+    // Contributo Torcia (Luce leggermente calda)
+    vec3 flashColor = vec3(1.0, 0.98, 0.9);
+    vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashColor;
 
-    vec3 finalColor = pow(max(litColor, 0.0), vec3(0.8));
+    // Somma delle luci e correzione Gamma
+    vec3 finalColor = pow(max(litRoom + litFlash, 0.0), vec3(0.8));
 
     FragColor = vec4(finalColor, texColor.a);
 }

@@ -164,13 +164,15 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 	light := float32(cp.Sector.LightIntensity * 60)
 
 	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
-	lcY := cp.Sector.LightCenter.Z - w.vi.Where.Z
+	viZ := w.vi.GetZ()
+	viX, vizY := w.vi.GetXY()
+	lcY := cp.Sector.LightCenter.Z - viZ
 
-	sin, cos := w.vi.AngleSin, w.vi.AngleCos
-	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
-	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + w.vi.Where.Y)
-	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + w.vi.Where.X)
-	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + w.vi.Where.Y)
+	sin, cos := w.vi.GetAngle()
+	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + viX)
+	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + vizY)
+	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + viX)
+	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + vizY)
 
 	dx := float64(wx2 - wx1)
 	dz := float64((-wy2) - (-wy1))
@@ -223,7 +225,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 	light := float32(cp.Sector.LightIntensity)
 
 	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
-	lcY := cp.Sector.LightCenter.Z - w.vi.Where.Z
+	lcY := cp.Sector.LightCenter.Z - w.vi.GetZ()
 
 	vLcX := float32(lcX)
 	vLcY := float32(lcY)
@@ -432,7 +434,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
 	scaleY := float32(2.0 * model.VFov)
 
-	pitchShear := float32(-vi.Yaw)
+	pitchShear := float32(-vi.GetYaw())
 
 	proj := [16]float32{
 		scaleX, 0, 0, 0,
@@ -441,14 +443,17 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 		0, 0, (2 * far * near) / (near - far), 0,
 	}
 
-	cosA, sinA := float32(vi.AngleCos), float32(vi.AngleSin)
+	sinA, cosA := vi.GetAngle()
 
-	fX, fZ := cosA, -sinA
-	rX, rZ := sinA, cosA
+	fX, fZ := float32(cosA), float32(-sinA)
+	rX, rZ := float32(sinA), float32(cosA)
 
-	ex := float32(vi.Where.X)
-	ey := float32(vi.Where.Z)
-	ez := float32(-vi.Where.Y)
+	viX, viY := vi.GetXY()
+	viZ := vi.GetZ()
+
+	ex := float32(viX)
+	ey := float32(viZ)
+	ez := float32(-viY)
 
 	tx := -(rX*ex + rZ*ez)
 	ty := -ey
@@ -599,11 +604,11 @@ func (w *RenderOpenGL) doRun() {
 
 // doRender performs the rendering process using OpenGL, updating viewport, clearing buffers, and handling camera uniforms.
 func (w *RenderOpenGL) doRender() {
-	_, w.vi.AngleSin, w.vi.AngleCos = w.player.GetAngle()
+	_, pSin, pCos := w.player.GetAngle()
+	w.vi.SetAngle(pSin, pCos)
 	w.vi.Sector = w.player.GetSector()
-	w.vi.Where.X, w.vi.Where.Y = w.player.GetCoords()
-	w.vi.Where.Z = w.player.GetZ()
-	w.vi.Yaw = w.player.GetYaw()
+	w.vi.SetXYZ(w.player.GetXYZ())
+	w.vi.SetYaw(w.player.GetYaw())
 	w.vi.LightIntensity = w.player.GetLightIntensity()
 
 	cs, count := w.portal.Compile(w.vi)

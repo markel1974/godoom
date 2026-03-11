@@ -120,9 +120,14 @@ func (p *Player) SetDucking() {
 	}
 }
 
-// GetCoords retrieves the current X and Y coordinates of the player.
-func (p *Player) GetCoords() (float64, float64) {
+// GetXY retrieves the current X and Y coordinates of the player.
+func (p *Player) GetXY() (float64, float64) {
 	return p.where.X, p.where.Y
+}
+
+// GetXYZ retrieves the current X, Y, and Z coordinates of the player as three float64 values.
+func (p *Player) GetXYZ() (float64, float64, float64) {
+	return p.where.X, p.where.Y, p.where.Z
 }
 
 // SetCoords updates the player's X and Y coordinates and marks the player as falling.
@@ -226,7 +231,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 
 	// 1. Applica atomico il vettore e ottieni le coordinate definitive
 	p.AddCoords(dx, dy)
-	px, py := p.GetCoords()
+	px, py := p.GetXY()
 
 	currentSector := p.GetSector()
 
@@ -278,8 +283,7 @@ func (p *Player) Compute(vi *ViewItem) {
 	dx, dy := p.GetVelocity()
 	pSector := p.GetSector()
 
-	px := vi.Where.X
-	py := vi.Where.Y
+	px, py := vi.GetXY()
 	p1 := px + dx
 	p2 := py + dy
 

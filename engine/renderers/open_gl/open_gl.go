@@ -604,13 +604,7 @@ func (w *RenderOpenGL) doRun() {
 
 // doRender performs the rendering process using OpenGL, updating viewport, clearing buffers, and handling camera uniforms.
 func (w *RenderOpenGL) doRender() {
-	w.vi.SetAngle(w.player.GetAngle())
-	w.vi.SetSector(w.player.GetSector())
-	w.vi.SetXYZ(w.player.GetXYZ())
-	w.vi.SetYaw(w.player.GetYaw())
-	w.vi.SetLightIntensity(w.player.GetLightIntensity())
-
-	cs, count := w.portal.Compile(w.vi)
+	cs, count := w.portal.Compile(w.player, w.vi)
 	w.targetLastCompiled = count
 	w.createBatch(cs, count)
 

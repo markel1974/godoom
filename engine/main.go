@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/engine/generators/world"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
-	"github.com/markel1974/godoom/engine/renderers/open_gl"
+	"github.com/markel1974/godoom/engine/renderers/software"
 )
 
 const (
@@ -46,12 +46,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := portal.NewPortal(_W, _H, _MaxQueue)
-	if err = p.Setup(compiler.GetSectors(), compiler.GetMaxHeight()); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
 	playerSector, err := compiler.Get(cfg.Player.Sector)
 	if err != nil {
 		fmt.Println(err)
@@ -60,8 +54,14 @@ func main() {
 
 	player := model.NewPlayer(cfg.Player, playerSector, false)
 
-	//render := software.NewSoftwareRender()
-	render := open_gl.NewOpenGLRender()
+	p := portal.NewPortal(_W, _H, _MaxQueue)
+	if err = p.Setup(compiler.GetSectors(), compiler.GetMaxHeight()); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	render := software.NewSoftwareRender()
+	//render := open_gl.NewOpenGLRender()
 	if err = render.Setup(p, player, cfg.Textures); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

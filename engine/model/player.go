@@ -288,17 +288,17 @@ func (p *Player) Compute(vi *ViewItem) {
 	p2 := py + dy
 
 	// Check if the player is about to cross one of the sector's edges
-	for _, segment := range pSector.Segments {
-		start := segment.Start
-		end := segment.End
+	for _, seg := range pSector.Segments {
+		start := seg.Start
+		end := seg.End
 
 		if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
 			// Check where the hole is.
 			holeLow := 9e9
 			holeHigh := -9e9
-			if segment.Sector != nil {
-				holeLow = mathematic.MaxF(pSector.Floor, segment.Sector.Floor)
-				holeHigh = mathematic.MinF(pSector.Ceil, segment.Sector.Ceil)
+			if seg.Sector != nil {
+				holeLow = mathematic.MaxF(pSector.Floor, seg.Sector.Floor)
+				holeHigh = mathematic.MinF(pSector.Ceil, seg.Sector.Ceil)
 			}
 
 			// Check whether we're bumping into a wall

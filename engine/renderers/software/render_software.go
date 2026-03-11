@@ -214,13 +214,7 @@ func (w *RenderSoftware) doRender() {
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
 
-	w.vi.SetAngle(w.player.GetAngle())
-	w.vi.SetSector(w.player.GetSector())
-	w.vi.SetXYZ(w.player.GetXYZ())
-	w.vi.SetYaw(w.player.GetYaw())
-	w.vi.SetLightIntensity(w.player.GetLightIntensity())
-
-	cs, count := w.portal.Compile(w.vi)
+	cs, count := w.portal.Compile(w.player, w.vi)
 	w.targetLastCompiled = count
 	//if count < 1 {
 	//	return

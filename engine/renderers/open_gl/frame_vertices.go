@@ -1,40 +1,55 @@
 package open_gl
 
+const vertexAlignment = 12
+
 // FrameVertices represents a structure for storing 3D vertex data, including positions, UV coordinates, and light values.
 type FrameVertices struct {
 	vertices []float32
+	len      int
 }
 
 // NewFrameVertices creates and returns a pointer to a new FrameVertices instance with an initial capacity for vertices.
 func NewFrameVertices(s int) *FrameVertices {
 	return &FrameVertices{
-		vertices: make([]float32, 0, s),
+		vertices: make([]float32, s),
+		len:      0,
 	}
 }
 
 // Reset clears all vertices from the FrameVertices, preparing it for reuse without allocating new memory.
 func (w *FrameVertices) Reset() {
-	w.vertices = w.vertices[:0]
+	w.len = 0
 }
 
 // Len returns the number of vertices currently stored in the FrameVertices struct.
 func (w *FrameVertices) Len() int {
-	return len(w.vertices)
+	return w.len
 }
 
 // Alignment returns the alignment value of the vertices in the FrameVertices struct as an int32.
 func (w *FrameVertices) Alignment() int32 {
-	const vertexAlignment = 12
 	return vertexAlignment
 }
 
 // AddVertex appends a new vertex defined by position (x, y, z), texture coordinates (u, v), and lighting intensity.
 func (w *FrameVertices) AddVertex(x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, nZ float32) {
-	//remember to modify vertexAlignment if you change de signature
-	w.vertices = append(w.vertices, x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, nZ)
+	idx := w.len
+	w.vertices[idx] = x
+	w.vertices[idx+1] = y
+	w.vertices[idx+2] = z
+	w.vertices[idx+3] = u
+	w.vertices[idx+4] = v
+	w.vertices[idx+5] = light
+	w.vertices[idx+6] = lcX
+	w.vertices[idx+7] = lcY
+	w.vertices[idx+8] = lcZ
+	w.vertices[idx+9] = nX
+	w.vertices[idx+10] = nY
+	w.vertices[idx+11] = nZ
+	w.len += vertexAlignment
 }
 
 // Get returns the slice of float32 vertices stored in the FrameVertices instance.
 func (w *FrameVertices) Get() []float32 {
-	return w.vertices
+	return w.vertices[:w.len]
 }

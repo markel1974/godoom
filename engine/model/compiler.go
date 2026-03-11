@@ -96,7 +96,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.TextureFloor = animationGet(cfg, ax, cs.TextureFloor)
 		s.TextureCeil = animationGet(cfg, ax, cs.TextureCeil)
 		s.TextureScaleFactor = cs.TextureScaleFactor
-		s.LightIntensity = math.Max(0.0, math.Min(1.0, cs.LightIntensity)) //cs.LightIntensity
+		s.LightIntensity = math.Max(0.0, math.Min(1.0, cs.LightIntensity))
 		lXY := cs.GetCentroid()
 		s.LightCenter = XYZ{X: lXY.X, Y: lXY.Y, Z: s.Ceil}
 		r.sectors = append(r.sectors, s)

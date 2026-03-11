@@ -1,16 +1,26 @@
 package model
 
+type LightKind int
+
+const (
+	LightKindNone LightKind = iota
+	LightKindSpot
+	LightKindDiffuse
+	LightKindDirectional
+	LightKindParticle
+)
+
 // ConfigLight defines a light configuration with intensity and type attributes.
 type ConfigLight struct {
-	Intensity float64 `json:"Intensity"`
-	Kind      string  `json:"kind"`
+	Intensity float64   `json:"Intensity"`
+	Kind      LightKind `json:"kind"`
 }
 
 // NewConfigLight creates a new instance of ConfigLight with default values for Intensity and Kind.
 func NewConfigLight() *ConfigLight {
 	return &ConfigLight{
 		Intensity: 0.0,
-		Kind:      "none",
+		Kind:      LightKindNone,
 	}
 }
 

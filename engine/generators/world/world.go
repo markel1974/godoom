@@ -53,7 +53,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	sector.Animations.Ceils = []string{availableCeil[random(0, len(availableCeil)-1)]}
 	sector.Animations.ScaleFactor = 50.0
 	sector.Light.Intensity = rnd.Float64()
-	sector.Light.Kind = "spot"
+	sector.Light.Kind = model.LightKindSpot
 	const SegmentMax = 4
 	for c := 0; c < SegmentMax; c++ {
 		xy := model.XY{X: 0, Y: 0}

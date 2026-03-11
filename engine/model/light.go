@@ -5,7 +5,7 @@ import "math"
 // Light represents a light source with an intensity, type, and position in 3D space.
 type Light struct {
 	intensity float64
-	kind      string
+	kind      LightKind
 	pos       XYZ
 }
 
@@ -13,12 +13,12 @@ type Light struct {
 func NewLight() *Light {
 	return &Light{
 		intensity: 0.0,
-		kind:      "none",
+		kind:      LightKindNone,
 	}
 }
 
 // Setup configures the Light object by setting its intensity, kind, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(intensity float64, kind string, pos XYZ) {
+func (cl *Light) Setup(intensity float64, kind LightKind, pos XYZ) {
 	cl.intensity = math.Max(0.0, math.Min(1.0, intensity))
 	cl.kind = kind
 	cl.pos = pos

@@ -69,7 +69,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 
 			//todo light entry
 			cs.Light.Intensity = rnd.Float64()
-			cs.Light.Kind = "spot"
+			cs.Light.Kind = model.LightKindSpot
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY)
 			if err != nil {

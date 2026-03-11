@@ -32,16 +32,14 @@ func NewViewItem() *ViewItem {
 	return &ViewItem{}
 }
 
-// Translate applies translation and rotation transformations to the provided coordinates relative to the ViewItem.
-func (vi *ViewItem) Translate(x float64, y float64, z float64) (float64, float64, float64, float64, float64) {
-	// 1. Traslazione rispetto al ViewItem
+// TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewItem's position and orientation.
+// It returns the translated local coordinates (lx, ly) and the transformed coordinates (tx, tz) in the view space.
+func (vi *ViewItem) TranslateXY(x float64, y float64) (float64, float64, float64, float64) {
+	// 1. Translation relative to the ViewItem
 	lx := x - vi.Where.X
 	ly := y - vi.Where.Y
-
-	// 2. Rotazione nel View Space
+	// 2. Rotation in View Space
 	tx := (lx * vi.AngleSin) - (ly * vi.AngleCos)
-	ty := z - vi.Where.Z
 	tz := (lx * vi.AngleCos) + (ly * vi.AngleSin)
-
-	return lx, ly, tx, ty, tz
+	return lx, ly, tx, tz
 }

@@ -206,16 +206,9 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		sectorYCeil := sector.Ceil - vi.Where.Z
 		sectorYFloor := sector.Floor - vi.Where.Z
 
-		vx1 := vertexCurr.X - vi.Where.X
-		vy1 := vertexCurr.Y - vi.Where.Y
-		vx2 := vertexNext.X - vi.Where.X
-		vy2 := vertexNext.Y - vi.Where.Y
-
 		// Rotate around the player's view
-		tx1 := (vx1 * vi.AngleSin) - (vy1 * vi.AngleCos)
-		tz1 := (vx1 * vi.AngleCos) + (vy1 * vi.AngleSin)
-		tx2 := (vx2 * vi.AngleSin) - (vy2 * vi.AngleCos)
-		tz2 := (vx2 * vi.AngleCos) + (vy2 * vi.AngleSin)
+		vx1, vy1, tx1, tz1 := vi.TranslateXY(vertexCurr.X, vertexCurr.Y)
+		vx2, vy2, tx2, tz2 := vi.TranslateXY(vertexNext.X, vertexNext.Y)
 
 		// If the entire segment is behind the camera, discard it immediately
 		if tz1 <= 0 && tz2 <= 0 {
@@ -289,8 +282,6 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
-
-		//screenHeightHalf := float64(r.screenHeightHalf)
 
 		y1a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz1, vi.Yaw) * yScale1)
 		y2a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz2, vi.Yaw) * yScale2)

@@ -27,7 +27,6 @@ Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping g
 
 Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
 
-Completamento Engine: Adattare pushFlat per ricevere i 12 float (inclusa la luce del settore) e passare al rendering degli sprite/entità con billboarding istanziato.
 */
 
 // scaleFactor represents the scaling factor used for transformations in rendering calculations.
@@ -164,7 +163,8 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
 	light := float32(cp.Sector.LightIntensity * 60)
 
-	_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
+	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
+	lcY := cp.Sector.LightCenter.Z - w.vi.Where.Z
 
 	sin, cos := w.vi.AngleSin, w.vi.AngleCos
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + w.vi.Where.X)
@@ -221,7 +221,9 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 	}
 
 	light := float32(cp.Sector.LightIntensity)
-	_, _, lcX, lcY, lcZ := w.vi.Translate(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y, cp.Sector.LightCenter.Z)
+
+	_, _, lcX, lcZ := w.vi.TranslateXY(cp.Sector.LightCenter.X, cp.Sector.LightCenter.Y)
+	lcY := cp.Sector.LightCenter.Z - w.vi.Where.Z
 
 	vLcX := float32(lcX)
 	vLcY := float32(lcY)

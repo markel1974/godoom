@@ -31,6 +31,15 @@ func NewViewItem() *ViewItem {
 	return &ViewItem{}
 }
 
+// Compute updates the ViewItem's position, orientation, sector, and lighting based on the given Player's state.
+func (vi *ViewItem) Compute(player *Player) {
+	vi.angleSin, vi.angleCos = player.GetAngle()
+	vi.sector = player.GetSector()
+	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
+	vi.yaw = player.GetYaw()
+	vi.lightIntensity = player.GetLightIntensity()
+}
+
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewItem's position and orientation.
 // It returns the translated local coordinates (lx, ly) and the transformed coordinates (tx, tz) in the view space.
 func (vi *ViewItem) TranslateXY(x float64, y float64) (float64, float64, float64, float64) {
@@ -53,24 +62,9 @@ func (vi *ViewItem) GetXYZ() (float64, float64, float64) {
 	return vi.where.X, vi.where.Y, vi.where.Z
 }
 
-// SetXY updates the X and Y coordinates of the ViewItem's position.
-func (vi *ViewItem) SetXY(x float64, y float64) {
-	vi.where.X, vi.where.Y = x, y
-}
-
-// SetXYZ updates the x, y, and z coordinates of the ViewItem's position in the 3D space.
-func (vi *ViewItem) SetXYZ(x float64, y float64, z float64) {
-	vi.where.X, vi.where.Y, vi.where.Z = x, y, z
-}
-
 // GetZ retrieves the Z-coordinate of the ViewItem's position.
 func (vi *ViewItem) GetZ() float64 {
 	return vi.where.Z
-}
-
-// SetZ updates the Z-coordinate of the ViewItem's position to the specified value.
-func (vi *ViewItem) SetZ(z float64) {
-	vi.where.Z = z
 }
 
 // GetAngle returns the sine and cosine of the ViewItem's rotation angle for transformations and calculations.
@@ -78,20 +72,9 @@ func (vi *ViewItem) GetAngle() (float64, float64) {
 	return vi.angleSin, vi.angleCos
 }
 
-// SetAngle updates the sine and cosine values of the ViewItem's angle for orientation calculations.
-func (vi *ViewItem) SetAngle(sin float64, cos float64) {
-	vi.angleSin = sin
-	vi.angleCos = cos
-}
-
 // GetYaw returns the yaw angle of the ViewItem as a float64 value.
 func (vi *ViewItem) GetYaw() float64 {
 	return vi.yaw
-}
-
-// SetYaw sets the yaw (rotation around the vertical axis) of the ViewItem to the specified value.
-func (vi *ViewItem) SetYaw(yaw float64) {
-	vi.yaw = yaw
 }
 
 // GetLightIntensity retrieves the light intensity property of the ViewItem as a float64 value.
@@ -99,17 +82,7 @@ func (vi *ViewItem) GetLightIntensity() float64 {
 	return vi.lightIntensity
 }
 
-// SetLightIntensity sets the intensity of the light for the ViewItem to the specified value.
-func (vi *ViewItem) SetLightIntensity(l float64) {
-	vi.lightIntensity = l
-}
-
 // GetSector retrieves the Sector instance associated with the ViewItem.
 func (vi *ViewItem) GetSector() *Sector {
 	return vi.sector
-}
-
-// SetSector assigns a Sector instance to the ViewItem, updating its associated sector property.
-func (vi *ViewItem) SetSector(s *Sector) {
-	vi.sector = s
 }

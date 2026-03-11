@@ -130,15 +130,15 @@ func (p *Player) GetXYZ() (float64, float64, float64) {
 	return p.where.X, p.where.Y, p.where.Z
 }
 
-// SetCoords updates the player's X and Y coordinates and marks the player as falling.
-func (p *Player) SetCoords(x float64, y float64) {
+// SetXY updates the player's X and Y coordinates and marks the player as falling.
+func (p *Player) SetXY(x float64, y float64) {
 	p.where.X = x
 	p.where.Y = y
 	p.falling = true
 }
 
-// AddCoords increments the Player's position by the specified x and y values and sets the falling state to true.
-func (p *Player) AddCoords(x float64, y float64) {
+// AddXY increments the Player's position by the specified x and y values and sets the falling state to true.
+func (p *Player) AddXY(x float64, y float64) {
 	p.where.X += x
 	p.where.Y += y
 	p.falling = true
@@ -229,19 +229,19 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 		return
 	}
 
-	// 1. Applica atomico il vettore e ottieni le coordinate definitive
-	p.AddCoords(dx, dy)
+	// 1. Apply the atomic vector and obtain the final coordinates
+	p.AddXY(dx, dy)
 	px, py := p.GetXY()
 
 	currentSector := p.GetSector()
 
-	// 2. Verifica di stabilità spaziale: siamo ancora dentro lo stesso settore?
+	// 2. Spatial stability check: are we still inside the same sector?
 	if PointInSegments(px, py, currentSector.Segments) {
 		return
 	}
 
-	// 3. Transizione Portale: Il punto è fisicamente uscito dal settore radice.
-	// Naviga il grafo topologico testando i settori adiacenti (neighbors).
+	// 3. Portal Transition: The point has physically exited the root sector.
+	// Navigate the topological graph by testing adjacent sectors (neighbors).
 	for _, seg := range currentSector.Segments {
 		neighbor := seg.Sector
 		if neighbor != nil {
@@ -255,10 +255,10 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 		}
 	}
 
-	// 4. Fallback Architetturale (Edge Case Perimeter)
-	// Se il punto cade ESATTAMENTE sull'edge matematico di un portale,
-	// la precisione FP del ray-casting potrebbe restituire 'false' per entrambi i settori.
-	// In questo caso, forziamo l'aggiornamento se il punto si trova nel semipiano posteriore del portale.
+	// 4. Architectural Fallback (Edge Case Perimeter)
+	// If the point falls EXACTLY on the mathematical edge of a portal,
+	// the FP precision of ray-casting might return 'false' for both sectors.
+	// In this case, we force the update if the point is in the back half-plane of the portal.
 	for _, seg := range currentSector.Segments {
 		if seg.Sector != nil {
 			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
@@ -272,7 +272,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	}
 }
 
-func (p *Player) Compute(vi *ViewItem) {
+func (p *Player) Compute2(vi *ViewItem) {
 	p.VerticalCollision()
 	if !p.IsMoving() {
 		return

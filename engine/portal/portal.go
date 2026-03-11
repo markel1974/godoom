@@ -118,11 +118,7 @@ func (r *Portal) growSectorQueue() {
 
 // Compile processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
 func (r *Portal) Compile(player *model.Player, vi *model.ViewItem) ([]*model.CompiledSector, int) {
-	vi.SetAngle(player.GetAngle())
-	vi.SetSector(player.GetSector())
-	vi.SetXYZ(player.GetXYZ())
-	vi.SetYaw(player.GetYaw())
-	vi.SetLightIntensity(player.GetLightIntensity())
+	vi.Compute(player)
 
 	r.clear()
 
@@ -165,6 +161,8 @@ func (r *Portal) Compile(player *model.Player, vi *model.ViewItem) ([]*model.Com
 			}
 		}
 	}
+
+	player.Compute2(vi)
 
 	return r.compiledSectors, r.compiledCount
 }

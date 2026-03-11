@@ -228,7 +228,7 @@ func (w *RenderSoftware) doRender() {
 		w.drawStub()
 	}
 
-	w.player.Compute(w.vi)
+	//w.player.Compute(w.vi)
 
 	w.mainSprite.Draw(w.win, w.mainMatrix)
 }
@@ -323,15 +323,16 @@ func (w *RenderSoftware) doPlayerMoves(up bool, down bool, left bool, right bool
 
 // doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within predefined constraints.
 func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
-	if mouseX > 10 {
-		mouseX = 10
-	} else if mouseX < -10 {
-		mouseX = -10
+	const offset = 10
+	if mouseX > offset {
+		mouseX = offset
+	} else if mouseX < -offset {
+		mouseX = -offset
 	}
-	if mouseY > 10 {
-		mouseY = 10
-	} else if mouseY < -10 {
-		mouseY = -10
+	if mouseY > offset {
+		mouseY = offset
+	} else if mouseY < -offset {
+		mouseY = -offset
 	}
 
 	w.player.AddAngle(mouseX * 0.03)
@@ -342,6 +343,7 @@ func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
 
 // doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
 func (w *RenderSoftware) doDebug(next int) {
+	const offset = 5
 	if next == 0 {
 		w.debug = !w.debug
 		return
@@ -353,11 +355,11 @@ func (w *RenderSoftware) doDebug(next int) {
 	}
 	w.debugIdx = idx
 	sector := w.portal.Sectors[idx]
-	x := sector.Segments[0].Start.X
-	y := sector.Segments[0].Start.Y
+	x := sector.Segments[0].Start.X + offset
+	y := sector.Segments[0].Start.Y + offset
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
 	w.player.SetSector(sector)
-	w.player.SetCoords(x+5, y+5)
+	w.player.SetXY(x, y)
 }
 
 // doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.

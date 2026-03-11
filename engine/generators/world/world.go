@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/textures"
 )
 
 // random generates a random integer between the specified min (inclusive) and max (inclusive) values.
@@ -95,7 +94,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 // Generate creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := textures.NewFileTextures(basePath)
+	t, _ := NewTextures(basePath)
 	configPlayer := &model.ConfigPlayer{}
 	cfg := model.NewConfigRoot(nil, configPlayer, nil, 0, false, t)
 	s1 := createCube(0, 0, 8, 0, 20)

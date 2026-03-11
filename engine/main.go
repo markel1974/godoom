@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/engine/generators/world"
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
-	"github.com/markel1974/godoom/engine/renderers/software"
+	"github.com/markel1974/godoom/engine/renderers/open_gl"
 )
 
 const (
@@ -30,7 +30,7 @@ func main() {
 	case 1:
 		cfg, err = world.Generate(16, 16)
 	case 2:
-		const levelNumber = 2
+		const levelNumber = 1
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilder()
 		cfg, err = wb.Setup(wadFile, levelNumber)
@@ -60,8 +60,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	render := software.NewSoftwareRender()
-	//render := open_gl.NewOpenGLRender()
+	//render := software.NewSoftwareRender()
+	render := open_gl.NewOpenGLRender()
 	if err = render.Setup(p, player, cfg.Textures); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

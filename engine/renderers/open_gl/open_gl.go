@@ -612,14 +612,11 @@ func (w *RenderOpenGL) doRender() {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
 		gl.Viewport(0, 0, int32(fbW), int32(fbH))
-		//gl.Viewport(0, 0, int32(w.screenWidth*2), int32(w.screenHeight*2))
 		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		w.glUpdateCameraUniforms(w.vi)
 		w.glStreamRender()
 	})
-
-	w.player.Compute(w.vi)
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.
@@ -635,17 +632,17 @@ func (w *RenderOpenGL) doPlayerMoves(up bool, down bool, left bool, right bool, 
 
 // doPlayerMouseMove adjusts the player's view and movement based on mouse movement within defined bounds.
 func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
-	if mouseX > 10 {
-		mouseX = 10
-	} else if mouseX < -10 {
-		mouseX = -10
+	const offset = 10
+	if mouseX > offset {
+		mouseX = offset
+	} else if mouseX < -offset {
+		mouseX = -offset
 	}
-	if mouseY > 10 {
-		mouseY = 10
-	} else if mouseY < -10 {
-		mouseY = -10
+	if mouseY > offset {
+		mouseY = offset
+	} else if mouseY < -offset {
+		mouseY = -offset
 	}
-
 	w.player.AddAngle(mouseX * 0.03)
 	w.player.SetYaw(mouseY)
 	w.player.MoveApply(0, 0)
@@ -664,8 +661,11 @@ func (w *RenderOpenGL) doDebug(next int) {
 	}
 	w.debugIdx = idx
 	sector := w.portal.Sectors[idx]
+	const offset = 5
+	x := sector.Segments[0].Start.X + offset
+	y := sector.Segments[0].Start.Y + offset
 	w.player.SetSector(sector)
-	w.player.SetCoords(sector.Segments[0].Start.X+5, sector.Segments[0].Start.Y+5)
+	w.player.SetXY(x, y)
 }
 
 // doDebugMoveSectorToggle toggles the state of the targetEnabled flag for debugging sector movement.

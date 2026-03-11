@@ -9,14 +9,13 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/engine/model"
-	"github.com/markel1974/godoom/engine/textures"
 )
 
 // ParseScriptData parses the provided script data string and generates a ConfigRoot object or returns an error.
 func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	var cfgVertices []model.XY
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := textures.NewFileTextures(basePath)
+	t, _ := NewTextures(basePath)
 	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 1.0, false, t)
 	//cfg := &model.ConfigRoot{
 	//	Sectors: nil,

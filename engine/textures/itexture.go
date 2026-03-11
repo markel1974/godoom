@@ -1,7 +1,8 @@
 package textures
 
-// ITextures represents an interface for managing and retrieving texture resources by name.
+// ITextures provides methods to retrieve texture names and access textures by their names.
 type ITextures interface {
 	GetNames() []string
+
 	Get(name []string) []*Texture
 }

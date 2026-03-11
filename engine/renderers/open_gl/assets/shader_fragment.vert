@@ -53,7 +53,8 @@ void main()
 
     // Generazione TBN on-the-fly tramite derivate parziali per Normal Mapping
     if (length(mapColor) > 0.1) {
-        vec3 mapNormal = mapColor * 2.0 - 1.0;
+        float factorNormal = 1.3;
+        vec3 mapNormal = (mapColor * factorNormal) - 1.0;
         vec3 dp1 = dFdx(ViewPos);
         vec3 dp2 = dFdy(ViewPos);
         vec2 duv1 = dFdx(TexCoords);
@@ -97,7 +98,7 @@ void main()
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
 
     // Attenuazione quadratica della torcia per non illuminare a distanza infinita
-    float flashFalloff = 1.0 / (1.0 + 0.05 * FragDepth + 0.005 * (FragDepth * FragDepth));
+    float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
     flashIntensity = flashFalloff * flashFalloff;
 
     // --- 6. FINAL MIX ---

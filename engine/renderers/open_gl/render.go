@@ -23,10 +23,10 @@ Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping g
 Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
 */
 
-// scaleFactor represents the scaling factor used for transformations in rendering calculations.
-// maxBatchVertices defines the maximum number of vertices per batch in rendering operations.
-// maxFrameCommands specifies the maximum number of commands that can be processed per frame.
-// vboMaxFloats defines the maximum number of floats allocated for the vertex buffer object (VBO) in OpenGL.
+// scaleFactor defines the multiplier for scaling operations.
+// maxBatchVertices specifies the maximum number of vertices for a batch operation.
+// maxFrameCommands indicates the maximum number of commands processed per frame.
+// vboMaxFloats sets the maximum number of float values allowed in the vertex buffer object.
 const (
 	scaleFactor = 1
 
@@ -37,7 +37,7 @@ const (
 	vboMaxFloats = 1024 * 1024 * 4
 )
 
-// RenderOpenGL represents an OpenGL renderer responsible for drawing 3D scenes, handling textures, and managing rendering states.
+// RenderOpenGL represents the main rendering engine using OpenGL for handling scene rendering and custom debug features.
 type RenderOpenGL struct {
 	portal           *portal.Portal
 	vi               *model.ViewItem
@@ -70,7 +70,7 @@ type RenderOpenGL struct {
 	compiler *Compiler
 }
 
-// NewOpenGLRender initializes and returns a new instance of RenderOpenGL with default settings.
+// NewOpenGLRender initializes and returns a new RenderOpenGL instance with default configurations and settings.
 func NewOpenGLRender() *RenderOpenGL {
 	r := &RenderOpenGL{
 		portal:           nil,
@@ -94,7 +94,7 @@ func NewOpenGLRender() *RenderOpenGL {
 	return r
 }
 
-// Setup initializes the RenderOpenGL instance with the provided portal, player, and texture data.
+// Setup initializes the RenderOpenGL instance with the provided portal, player, and textures. Returns an error if any setup fails.
 func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t textures.ITextures) error {
 	w.portal = portal
 	w.screenWidth = portal.ScreenWidth()
@@ -105,7 +105,7 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 	return nil
 }
 
-// createBatch processes compiled sector data and generates renderable batches by populating vertex and command buffers.
+// createBatch processes and batches compiled sector polygons for rendering based on their type and attributes.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 	w.frameVertices.Reset()
 	w.frameCommands.Reset()
@@ -131,7 +131,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 	}
 }
 
-// pushWall adds vertices for rendering a textured wall segment based on its geometry, texture, and lighting properties.
+// pushWall appends a textured wall's vertices and lighting properties into the frame for rendering using OpenGL.
 func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture, zBottom, zTop float32) {
 	//prepare
 	if tex == nil {
@@ -195,7 +195,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
-// pushFlat pushes a flat-surfaced polygon's vertices to the frame buffer with proper scaling and texture UV mapping.
+// pushFlat renders a flat surface using vertices from a compiled polygon and texture, applying lighting and transformations.
 func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture, z float64) {
 	if tex == nil {
 		return
@@ -256,7 +256,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
-// glStreamRender uploads vertex data to the GPU and executes draw commands for rendering using OpenGL APIs.
+// glStreamRender streams vertex and command data to the GPU and executes rendering of frame vertices and textures.
 func (w *RenderOpenGL) glStreamRender() {
 	if w.frameVertices.Len() == 0 {
 		return
@@ -276,7 +276,7 @@ func (w *RenderOpenGL) glStreamRender() {
 	}
 }
 
-// glInit initializes OpenGL resources such as VAO, VBO, shaders, and sets up vertex attributes and depth testing.
+// glInit initializes OpenGL resources, including VAOs, VBOs, shaders, and vertex attributes for rendering.
 func (w *RenderOpenGL) glInit() error {
 	stride := w.frameVertices.Alignment() * 4
 	gl.GenVertexArrays(1, &w.mainVao)
@@ -326,6 +326,7 @@ func (w *RenderOpenGL) glInit() error {
 	return nil
 }
 
+// glUpdateCameraUniforms updates the camera's projection and view uniform matrices in the shader and returns them.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) ([16]float32, [16]float32) {
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(shaderProgram)
@@ -378,6 +379,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) ([16]float32, 
 
 }
 
+// glRenderSky renders the skybox using the provided projection and view matrices.
 func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32) {
 	skyProg := w.compiler.GetShaderProgram(shaderSky)
 	gl.UseProgram(skyProg)
@@ -408,7 +410,7 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32) {
 	gl.DepthFunc(gl.LESS)
 }
 
-// doInitialize sets up the OpenGL rendering environment and initializes the necessary resources for the render window.
+// doInitialize initializes the OpenGL rendering environment, window, and related resources. Returns an error if the setup fails.
 func (w *RenderOpenGL) doInitialize() error {
 	cfg := pixels.WindowConfig{
 		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*scaleFactor, float64(w.screenHeight)*scaleFactor),
@@ -439,12 +441,12 @@ func (w *RenderOpenGL) doInitialize() error {
 	return nil
 }
 
-// Start initializes the OpenGL rendering process by executing the specified run function.
+// Start initializes and runs the primary rendering loop using the OpenGL context prepared by pixels.GLRun.
 func (w *RenderOpenGL) Start() {
 	pixels.GLRun(w.doRun)
 }
 
-// doRun manages the main rendering and input handling loop for the OpenGL renderer until the window is closed or interrupted.
+// doRun manages the main rendering loop, player input handling, and game state updates for the OpenGL renderer.
 func (w *RenderOpenGL) doRun() {
 	if err := w.doInitialize(); err != nil {
 		panic(err)
@@ -536,7 +538,7 @@ func (w *RenderOpenGL) doRun() {
 	}
 }
 
-// doRender performs the rendering process using OpenGL, updating viewport, clearing buffers, and handling camera uniforms.
+// doRender executes the rendering process, updating the framebuffer and rendering the scene using OpenGL commands.
 func (w *RenderOpenGL) doRender() {
 	cs, count := w.portal.Compile(w.player, w.vi)
 	w.targetLastCompiled = count
@@ -555,18 +557,18 @@ func (w *RenderOpenGL) doRender() {
 	})
 }
 
-// doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.
+// doPlayerDuckingToggle toggles the ducking state of the player by invoking the SetDucking method on the player instance.
 func (w *RenderOpenGL) doPlayerDuckingToggle() { w.player.SetDucking() }
 
-// doPlayerJump triggers the jump action for the player by setting the jump state in the player object.
+// doPlayerJump triggers the player jump action by setting the appropriate state in the player object.
 func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 
-// doPlayerMoves processes player movement based on directional inputs and a slow movement modifier.
+// doPlayerMoves processes the player's movement based on the given impulse and directional inputs.
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
 	w.player.Move(impulse, up, down, left, right)
 }
 
-// doPlayerMouseMove adjusts the player's view and movement based on mouse movement within defined bounds.
+// doPlayerMouseMove updates the player's viewing angle and yaw based on mouse movement, with clamped input values.
 func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	const offset = 10
 	if mouseX > offset {
@@ -584,7 +586,7 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.MoveApply(0, 0)
 }
 
-// doDebug toggles debugging mode or enables it while adjusting the debug index and updating the player's sector and position.
+// doDebug toggles debug mode or enables it and navigates through sectors based on the provided index delta.
 func (w *RenderOpenGL) doDebug(next int) {
 	if next == 0 {
 		w.debug = !w.debug
@@ -604,10 +606,10 @@ func (w *RenderOpenGL) doDebug(next int) {
 	w.player.SetXY(x, y)
 }
 
-// doDebugMoveSectorToggle toggles the state of the targetEnabled flag for debugging sector movement.
+// doDebugMoveSectorToggle toggles the debug mode for moving between sectors by flipping the targetEnabled flag.
 func (w *RenderOpenGL) doDebugMoveSectorToggle() { w.targetEnabled = !w.targetEnabled }
 
-// doDebugMoveSector updates the current target sector index and flags sectors for debugging visualization.
+// doDebugMoveSector adjusts the currently selected sector for debugging purposes, moving forward or backward as specified.
 func (w *RenderOpenGL) doDebugMoveSector(forward bool) {
 	if forward {
 		if w.targetIdx < w.targetLastCompiled {

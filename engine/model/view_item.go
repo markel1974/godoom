@@ -38,6 +38,7 @@ func (vi *ViewItem) Compute(player *Player) {
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()
+
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewItem's position and orientation.
@@ -80,6 +81,15 @@ func (vi *ViewItem) GetYaw() float64 {
 // GetLightIntensity retrieves the light intensity property of the ViewItem as a float64 value.
 func (vi *ViewItem) GetLightIntensity() float64 {
 	return vi.lightIntensity
+}
+
+// GetLightIntensityFactor computes the adjusted light intensity factor by reducing 1 with the product of input factor and light intensity.
+func (vi *ViewItem) GetLightIntensityFactor(factor float64) float64 {
+	l := 1 - (factor * vi.lightIntensity)
+	if l < 0 {
+		return 0
+	}
+	return l
 }
 
 // GetSector retrieves the Sector instance associated with the ViewItem.

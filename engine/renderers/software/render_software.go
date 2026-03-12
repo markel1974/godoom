@@ -140,8 +140,7 @@ func (w *RenderSoftware) doRun() {
 
 		impulse := 0.2
 
-		scroll := w.win.MouseScroll()
-		if scroll.Y != 0 {
+		if scroll := w.win.MouseScroll(); scroll.Y != 0 {
 			if scroll.Y > 0 {
 				up = true
 			} else {

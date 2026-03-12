@@ -534,14 +534,15 @@ func (w *RenderOpenGL) doRun() {
 		}
 
 		var up, down, left, right bool
-		scroll := w.win.MouseScroll()
-		if scroll.Y != 0 {
+
+		if scroll := w.win.MouseScroll(); scroll.Y != 0 {
 			if scroll.Y > 0 {
 				up = true
 			} else {
 				down = true
 			}
 		}
+
 		var impulse = 0.06
 		for v := range w.win.KeysPressed() {
 			switch v {

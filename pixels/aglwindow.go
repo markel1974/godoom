@@ -604,6 +604,12 @@ func (w *GLWindow) initInput() {
 			}
 		})
 
+		//TODO cursorInsideWindow
+		//w.cursorInsideWindow
+		//x, y := w.window.GetCursorPos()
+		//w.window.GetPos()
+		//w.window.GetSize()
+
 		w.window.SetCursorEnterCallback(func(_ *glfw.Window, entered bool) {
 			w.cursorInsideWindow = entered
 		})

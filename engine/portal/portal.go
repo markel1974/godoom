@@ -14,10 +14,12 @@ const (
 	defaultQueueLen = 512
 )
 
+//TODO culling gerarchico spaziale
+
 // Yaw computes a transformed y-coordinate based on input y, z, and yaw values, returning the adjusted result.
-func Yaw(y float64, z float64, yaw float64) float64 {
-	return y + (z * yaw)
-}
+//func Yaw(y float64, z float64, yaw float64) float64 {
+//	return y + (z * yaw)
+//}
 
 // Portal represents a rendering portal used for managing visibility, sectors, and screen dimensions in a 3D environment.
 type Portal struct {
@@ -207,11 +209,6 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			continue
 		}
 
-		viYaw := vi.GetYaw()
-		viZ := vi.GetZ()
-		sectorYCeil := sector.CeilY - viZ
-		sectorYFloor := sector.FloorY - viZ
-
 		// Rotate around the player's view
 		vx1, vy1, tx1, tz1 := vi.TranslateXY(vertexCurr.X, vertexCurr.Y)
 		vx2, vy2, tx2, tz2 := vi.TranslateXY(vertexNext.X, vertexNext.Y)
@@ -286,13 +283,16 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			continue
 		}
 
+		sectorYCeil := vi.ZDistance(sector.CeilY)
+		sectorYFloor := vi.ZDistance(sector.FloorY)
+
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
-		y1a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz1, viYaw) * yScale1)
-		y2a := r.screenHeightHalf + (-Yaw(sectorYCeil, tz2, viYaw) * yScale2)
-		y1b := r.screenHeightHalf + (-Yaw(sectorYFloor, tz1, viYaw) * yScale1)
-		y2b := r.screenHeightHalf + (-Yaw(sectorYFloor, tz2, viYaw) * yScale2)
+		y1a := r.screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz1) * yScale1)
+		y2a := r.screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz2) * yScale2)
+		y1b := r.screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz1) * yScale1)
+		y2b := r.screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz2) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -355,9 +355,9 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		floorP.Rect(x1Max, ybStart, y1Floor, zStart, lightStart, x2Min, ybStop, y2Floor, zStop, lightStop)
 
 		if neighbor != nil {
-			neighborYCeil := neighbor.CeilY - viZ //vi.Where.Z
-			ny1a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz1, viYaw) * yScale1)
-			ny2a := r.screenHeightHalf + (-Yaw(neighborYCeil, tz2, viYaw) * yScale2)
+			neighborYCeil := vi.ZDistance(neighbor.CeilY)
+			ny1a := r.screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz1) * yScale1)
+			ny2a := r.screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz2) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -368,9 +368,9 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
-			neighborYFloor := neighbor.FloorY - viZ //vi.Where.Z
-			ny1b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz1, viYaw) * yScale1)
-			ny2b := r.screenHeightHalf + (-Yaw(neighborYFloor, tz2, viYaw) * yScale2)
+			neighborYFloor := vi.ZDistance(neighbor.FloorY)
+			ny1b := r.screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz1) * yScale1)
+			ny2b := r.screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz2) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if ybStart-nYbStart != 0 || nYbStop-ybStop != 0 {

@@ -86,3 +86,13 @@ func (vi *ViewItem) GetLightIntensity() float64 {
 func (vi *ViewItem) GetSector() *Sector {
 	return vi.sector
 }
+
+// ComputeYaw calculates a new yaw value based on the input parameters and the ViewItem's current yaw attribute.
+func (vi *ViewItem) ComputeYaw(y float64, z float64) float64 {
+	return y + (z * vi.yaw)
+}
+
+// ZDistance calculates the distance between the given value and the Z-coordinate of the ViewItem's position.
+func (vi *ViewItem) ZDistance(v float64) float64 {
+	return v - vi.where.Z
+}

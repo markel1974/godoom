@@ -177,6 +177,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector
 				if neighborId, exists := edgeMap[reverseKey]; exists {
 					cs.Neighbor = neighborId
 				} else {
+					fmt.Println("WARNING: Missing edge for join segment: ", cs.Parent)
 					// PROTECTION 2: Prevents Ghost Walls!
 					isWadLine := wadLines[cs]
 					if isWadLine {
@@ -255,11 +256,11 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 					backSector := level.Sectors[backSide.SectorRef]
 					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
-						seg.Animations.Upper = model.NewConfigAnimation([]string{frontSector.CeilingPic}, model.AnimationKindSky)
+						seg.Animations.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone)
 					}
 					// Extension for floors (e.g. moats that show sky at the bottom)
 					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
-						seg.Animations.Lower = model.NewConfigAnimation([]string{frontSector.FloorPic}, model.AnimationKindSky)
+						seg.Animations.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone)
 					}
 				}
 			}

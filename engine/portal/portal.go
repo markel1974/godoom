@@ -23,8 +23,8 @@ type Portal struct {
 	screenHeight     int
 	screenHeightHalf float64
 	maxSectors       int
-	queue            []*QueueItem
-	sectorQueue      []*QueueItem
+	queue            *RingQueue   //[]*QueueItem
+	sectorQueue      *LinearBatch //[]*QueueItem
 	screenHFov       float64
 	screenVFov       float64
 	compileId        uint64
@@ -46,17 +46,11 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 		screenWidthHalf:  width / 2,
 		screenHeight:     height,
 		screenHeightHalf: float64(height) / 2,
-		queue:            make([]*QueueItem, maxQueue),
-		sectorQueue:      make([]*QueueItem, 256),
+		queue:            NewRingQueue(maxQueue),
+		sectorQueue:      NewLinearBatch(256),
 		screenHFov:       model.HFov * float64(height),
 		screenVFov:       model.VFov * float64(height),
 		visibilityCache:  NewVisibilityCache(),
-	}
-	for x := 0; x < len(r.queue); x++ {
-		r.queue[x] = &QueueItem{}
-	}
-	for x := 0; x < len(r.sectorQueue); x++ {
-		r.sectorQueue[x] = &QueueItem{}
 	}
 	return r
 }
@@ -107,47 +101,40 @@ func (r *Portal) Compile(player *model.Player, vi *model.ViewItem) ([]*model.Com
 
 	r.clear()
 
-	queueLen := len(r.queue)
-	headIdx := 0
-	tailIdx := 0
+	r.queue.Reset()
 
 	// Inizializzazione Root
 	wMax := float64(r.screenWidth - 1)
 	hMax := float64(r.screenHeight-1) * 3
 
-	r.queue[headIdx].Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
-	headIdx = (headIdx + 1) % queueLen
+	qHead := r.queue.GetHead()
+	qHead.Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
+
+	var qTail *QueueItem
 
 	textures.Tick()
 
-	for headIdx != tailIdx {
-		current := r.queue[tailIdx]
-		tailIdx = (tailIdx + 1) % queueLen
+	for !r.queue.IsEmpty() {
+		qTail = r.queue.GetTail()
+		qTail.sector.Reference(r.compileId)
 
-		sector := current.sector
-		sector.Reference(r.compileId)
-
-		sq, sqCount := r.compileSector(vi, sector, current)
+		sq, sqCount := r.compileSector(vi, qTail.sector, qTail)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
-
 			// Geometric check
 			if q.x2 > q.x1 && r.visibilityCache.IsVisible(q.sector, q.x1, q.x2) {
 				// Store the span for this sector
 				r.visibilityCache.Add(q.sector, q.x1, q.x2)
-
-				// Check queue overflow
-				if (headIdx+1)%queueLen == tailIdx {
+				if r.queue.IsFull() {
 					continue
 				}
-
-				r.queue[headIdx].Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
-				headIdx = (headIdx + 1) % queueLen
+				qHead = r.queue.GetHead()
+				qHead.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
 			}
 		}
 	}
 
-	player.Compute2(vi)
+	player.Compute(vi)
 
 	return r.compiledSectors, r.compiledCount
 }
@@ -180,7 +167,7 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 
 		if segment.Kind == model.DefinitionVoid {
 			if neighbor != nil {
-				outIdx = r.checkSectorQueueItem(neighbor, outIdx, qi)
+				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}
 			continue
 		}
@@ -194,7 +181,7 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			// Edge-case: if we are EXACTLY on the portal line,
 			// float imprecision could give Z <= 0.
 			if neighbor != nil && tz1 >= -0.1 && tz2 >= -0.1 {
-				outIdx = r.checkSectorQueueItem(neighbor, outIdx, qi)
+				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}
 			continue
 		}
@@ -211,7 +198,7 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 				// but if it's a portal, we are physically crossing the threshold.
 				// We must necessarily pass visibility to the adjacent sector
 				if neighbor != nil {
-					outIdx = r.checkSectorQueueItem(neighbor, outIdx, qi)
+					outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 				}
 				continue
 			}
@@ -340,7 +327,7 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
 
-			outIdx = r.checkSectorQueue(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
+			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {
 			middleT := segment.Animations.Middle().CurrentFrame()
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
@@ -351,38 +338,10 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 	if first && outIdx == 0 {
 		for _, s := range sector.Segments {
 			if s.Sector != nil && s.Sector != sector {
-				outIdx = r.checkSectorQueueItem(s.Sector, outIdx, qi)
+				outIdx = r.sectorQueue.UpdateItem(s.Sector, outIdx, qi)
 			}
 		}
 	}
 
-	return r.sectorQueue, outIdx
-}
-
-// checkSectorQueueItem adds a neighbor sector to the render queue if it satisfies specified conditions. Returns the updated queue index.
-func (r *Portal) checkSectorQueueItem(neighbor *model.Sector, outIdx int, qi *QueueItem) int {
-	return r.checkSectorQueue(neighbor, outIdx, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
-}
-
-// checkSectorQueue updates the sector queue with the specified sector data and increments the output index.
-// If the output index exceeds the current queue capacity, the queue is expanded.
-func (r *Portal) checkSectorQueue(neighbor *model.Sector, outIdx int, x1, x2, y1t, y2t, y1b, y2b float64) int {
-	if outIdx >= len(r.sectorQueue) {
-		r.growSectorQueue()
-	}
-	r.sectorQueue[outIdx].Update(neighbor, x1, x2, y1t, y2t, y1b, y2b)
-	outIdx++
-	return outIdx
-}
-
-// growSectorQueue doubles the size of the sectorQueue and initializes new QueueItem instances for the expanded slots.
-func (r *Portal) growSectorQueue() {
-	oldLen := len(r.sectorQueue)
-	newLen := oldLen * 2
-	newQueue := make([]*QueueItem, newLen)
-	copy(newQueue, r.sectorQueue)
-	for i := oldLen; i < newLen; i++ {
-		newQueue[i] = &QueueItem{}
-	}
-	r.sectorQueue = newQueue
+	return r.sectorQueue.Items(), outIdx
 }

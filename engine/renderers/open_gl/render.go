@@ -117,23 +117,24 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 
 			switch cp.Kind {
 			case model.IdWall:
-				w.pushWall(cp, cp.Texture, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+				w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 			case model.IdUpper:
-				w.pushWall(cp, cp.Texture, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+				w.pushWall(cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
 			case model.IdLower:
-				w.pushWall(cp, cp.Texture, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+				w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 			case model.IdCeil, model.IdCeilTest:
-				w.pushFlat(cp, cp.TextureCeil, cp.Sector.CeilY)
+				w.pushFlat(cp, cp.AnimationCeil, cp.Sector.CeilY)
 			case model.IdFloor, model.IdFloorTest:
-				w.pushFlat(cp, cp.TextureFloor, cp.Sector.FloorY)
+				w.pushFlat(cp, cp.AnimationFloor, cp.Sector.FloorY)
 			}
 		}
 	}
 }
 
 // pushWall appends a textured wall's vertices and lighting properties into the frame for rendering using OpenGL.
-func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture, zBottom, zTop float32) {
+func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
 	//prepare
+	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
 	}
@@ -196,7 +197,8 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 }
 
 // pushFlat renders a flat surface using vertices from a compiled polygon and texture, applying lighting and transformations.
-func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture, z float64) {
+func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, z float64) {
+	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
 	}

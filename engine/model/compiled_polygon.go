@@ -24,26 +24,26 @@ const (
 
 // CompiledPolygon represents a preprocessed polygon with metadata for rendering, lighting, and spatial organization.
 type CompiledPolygon struct {
-	Points       []XYZ
-	Sector       *Sector
-	Neighbor     *Sector
-	Kind         int
-	id           float64
-	Light1       float64
-	Light2       float64
-	zIndex       float64
-	PLen         int
-	X1           float64
-	X2           float64
-	Tx1          float64
-	Tx2          float64
-	Tz1          float64
-	Tz2          float64
-	U0           float64
-	U1           float64
-	Texture      *textures.Texture
-	TextureCeil  *textures.Texture
-	TextureFloor *textures.Texture
+	Points         []XYZ
+	Sector         *Sector
+	Neighbor       *Sector
+	Kind           int
+	id             float64
+	Light1         float64
+	Light2         float64
+	zIndex         float64
+	PLen           int
+	X1             float64
+	X2             float64
+	Tx1            float64
+	Tx2            float64
+	Tz1            float64
+	Tz2            float64
+	U0             float64
+	U1             float64
+	Animation      *textures.Animation
+	AnimationCeil  *textures.Animation
+	AnimationFloor *textures.Animation
 }
 
 // NewCompiledPolygon creates and initializes a new instance of CompiledPolygon with default values and preallocated Points.
@@ -154,7 +154,7 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire creates or reinitializes a CompiledPolygon with the given parameters, associating it with sectors and coordinates.
-func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, c, f, t *textures.Texture, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, c, f, t *textures.Animation, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
 	p := cp.data[cp.idx]
 	p.id = float64(cp.idx)
 	cp.idx++
@@ -169,9 +169,9 @@ func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, 
 	p.Tz2 = tz2
 	p.U0 = u0
 	p.U1 = u1
-	p.Texture = t
-	p.TextureCeil = c
-	p.TextureFloor = f
+	p.Animation = t
+	p.AnimationCeil = c
+	p.AnimationFloor = f
 	p.Init(kind)
 
 	return p

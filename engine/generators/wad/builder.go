@@ -204,11 +204,11 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	miSector.Tag = strconv.Itoa(int(secIdx))
 	if wadSector.CeilingPic == "F_SKY1" {
 		// System key to tell renderers: "Use cylindrical projection"
-		miSector.Animations.Ceils = []string{"__SKYBOX__"}
+		miSector.Animations.Ceil = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
 	} else {
-		miSector.Animations.Ceils = bld.textures.FlatCreateAnimation(wadSector.CeilingPic)
+		miSector.Animations.Ceil = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.CeilingPic), model.AnimationKindLoop)
 	}
-	miSector.Animations.Floors = bld.textures.FlatCreateAnimation(wadSector.FloorPic)
+	miSector.Animations.Floor = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.FloorPic), model.AnimationKindLoop)
 	miSector.Animations.ScaleFactor = 10.0
 	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
 	miSector.Light.Kind = model.LightKindSpot
@@ -233,9 +233,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.Animations.Middle = bld.textures.TextureCreateAnimation(side.MiddleTexture)
-			seg.Animations.Upper = bld.textures.TextureCreateAnimation(side.UpperTexture)
-			seg.Animations.Lower = bld.textures.TextureCreateAnimation(side.LowerTexture)
+			seg.Animations.Middle = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop)
+			seg.Animations.Upper = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop)
+			seg.Animations.Lower = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -251,12 +251,12 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 
 					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
 					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
-						seg.Animations.Upper = []string{"__SKYBOX__"}
+						seg.Animations.Upper = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
 					}
 
 					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
 					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
-						seg.Animations.Lower = []string{"__SKYBOX__"}
+						seg.Animations.Lower = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
 					}
 				}
 			}

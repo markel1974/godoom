@@ -21,20 +21,27 @@ type Animation struct {
 	frame       *Texture
 	frames      []*Texture
 	totalFrames uint64
+	kind        int
 }
 
 // NewAnimation creates a new Animation instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewAnimation(frames []*Texture) *Animation {
+func NewAnimation(frames []*Texture, kind int) *Animation {
 	a := &Animation{
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
+		kind:        kind,
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]
 	}
 	return a
+}
+
+// Kind returns the type of the animation as an integer value.
+func (a *Animation) Kind() int {
+	return a.kind
 }
 
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.

@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"sort"
 )
@@ -13,9 +12,9 @@ type segmentData struct {
 	point         XY
 	kind          int
 	neighbor      string
-	textureUpper  []string
-	textureMiddle []string
-	textureLower  []string
+	textureUpper  *ConfigAnimation
+	textureMiddle *ConfigAnimation
+	textureLower  *ConfigAnimation
 	distance      float64
 	high          bool
 }
@@ -89,39 +88,6 @@ const (
 // Prepare initializes the builder map to group segment data by their respective distances.
 func (is *ConfigSegment) Prepare() {
 	is.builder = map[float64][]*segmentData{}
-}
-
-// AddNeighbor adds two Points with the specified neighbor identifier to the segment's builder as neighbor data.
-func (is *ConfigSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
-	id := NextUUId()
-	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, nil, nil, nil)
-	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, nil, nil, nil)
-}
-
-// AddProperty adds a property between two Points with specified wall status, upper, middle, and lower textures.
-func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper []string, middle []string, lower []string) {
-	var kind int
-	if wall {
-		kind = SegmentDataWall
-	} else {
-		kind = SegmentDataTexture
-	}
-	id := NextUUId()
-	is.createPoint(id, p0, kind, "", upper, middle, lower)
-	is.createPoint(id, p1, kind, "", upper, middle, lower)
-}
-
-// createPoint adds a new point to the builder map with specified metadata and computes its distance from the start point.
-func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper []string, middle []string, lower []string) {
-	//pb := XY{X: is.Start.X, Y: is.Start.Y}
-	sd0 := &segmentData{id: id, point: p0, kind: kind, neighbor: neighbor, textureUpper: upper, textureMiddle: middle, textureLower: lower}
-	sd0.distance = Distance(is.Start.X, is.Start.Y, p0.X, p0.Y)
-	if c, ok := is.builder[sd0.distance]; ok {
-		c = append(c, sd0)
-		is.builder[sd0.distance] = c
-	} else {
-		is.builder[sd0.distance] = []*segmentData{sd0}
-	}
 }
 
 // Build processes and constructs a list of ConfigSegment objects from the current ConfigSegment instance.
@@ -259,16 +225,6 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 	return out
 }
 
-// Distance between two points
-func Distance(p0X, p0Y, p1X, p1Y float64) float64 {
-	const Eps = 1e-10
-	v := math.Hypot(p0X-p1X, p0Y-p1Y)
-	if v < 100*Eps {
-		return Distance128(p0X, p0Y, p1X, p1Y)
-	}
-	return v
-}
-
 // Distance128 is distance between 2 points with 128-bit precisions
 func Distance128(p0X, p0Y, p1X, p1Y float64) float64 {
 	if p0X == p1X && p0Y == p1Y {
@@ -292,3 +248,48 @@ func Distance128(p0X, p0Y, p1X, p1Y float64) float64 {
 	sf, _ := s.Float64()
 	return sf
 }
+
+// AddNeighbor adds two Points with the specified neighbor identifier to the segment's builder as neighbor data.
+//func (is *ConfigSegment) AddNeighbor(p0 XY, p1 XY, neighbor string) {
+//	id := NextUUId()
+//	is.createPoint(id, p0, SegmentDataNeighbor, neighbor, nil, nil, nil)
+//	is.createPoint(id, p1, SegmentDataNeighbor, neighbor, nil, nil, nil)
+//}
+
+// AddProperty adds a property between two Points with specified wall status, upper, middle, and lower textures.
+//func (is *ConfigSegment) AddProperty(p0 XY, p1 XY, wall bool, upper []string, middle []string, lower []string) {
+//	var kind int
+//	if wall {
+//		kind = SegmentDataWall
+//	} else {
+//		kind = SegmentDataTexture
+//	}
+//	id := NextUUId()
+//	is.createPoint(id, p0, kind, "", upper, middle, lower)
+//	is.createPoint(id, p1, kind, "", upper, middle, lower)
+//}
+
+// createPoint adds a new point to the builder map with specified metadata and computes its distance from the start point.
+//func (is *ConfigSegment) createPoint(id string, p0 XY, kind int, neighbor string, upper []string, middle []string, lower []string) {
+//	//pb := XY{X: is.Start.X, Y: is.Start.Y}
+//	sd0 := &segmentData{
+//		id: id, point: p0, kind: kind, neighbor: neighbor, textureUpper: upper, textureMiddle: middle, textureLower: lower
+//	}
+//	sd0.distance = Distance(is.Start.X, is.Start.Y, p0.X, p0.Y)
+//	if c, ok := is.builder[sd0.distance]; ok {
+//		c = append(c, sd0)
+//		is.builder[sd0.distance] = c
+//	} else {
+//		is.builder[sd0.distance] = []*segmentData{sd0}
+//	}
+//}
+
+// Distance between two points
+//func Distance(p0X, p0Y, p1X, p1Y float64) float64 {
+//	const Eps = 1e-10
+//	v := math.Hypot(p0X-p1X, p0Y-p1Y)
+//	if v < 100*Eps {
+//		return Distance128(p0X, p0Y, p1X, p1Y)
+//	}
+//	return v
+//}

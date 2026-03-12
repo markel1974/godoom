@@ -72,7 +72,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			aUpper := cfg.GetAnimation(cn.Animations.Upper)
 			aMiddle := cfg.GetAnimation(cn.Animations.Middle)
 			aLower := cfg.GetAnimation(cn.Animations.Lower)
-			segments = append(segments, NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower))
+			seg := NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
+			segments = append(segments, seg)
 		}
 
 		if len(segments) == 0 {
@@ -80,8 +81,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			continue
 		}
 
-		texFloor := cfg.GetAnimation(cs.Animations.Floors)
-		texCeil := cfg.GetAnimation(cs.Animations.Ceils)
+		texFloor := cfg.GetAnimation(cs.Animations.Floor)
+		texCeil := cfg.GetAnimation(cs.Animations.Ceil)
 		texScaleFactor := cs.Animations.ScaleFactor
 
 		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil, texScaleFactor)

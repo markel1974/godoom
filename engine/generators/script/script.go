@@ -114,9 +114,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: strconv.Itoa(neighborId.Val), Kind: neighborId.Kind}
-					neighbor.Animations.Middle = []string{"wall2.ppm"}
-					neighbor.Animations.Lower = []string{"wall.ppm"}
-					neighbor.Animations.Upper = []string{"wall3.ppm"}
+					neighbor.Animations.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop)
+					neighbor.Animations.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop)
+					neighbor.Animations.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop)
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -125,14 +125,14 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
 					neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-					neighbor.Animations.Middle = []string{"wall2.ppm"}
-					neighbor.Animations.Lower = []string{"wall.ppm"}
-					neighbor.Animations.Upper = []string{"wall3.ppm"}
+					neighbor.Animations.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop)
+					neighbor.Animations.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop)
+					neighbor.Animations.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop)
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.Animations.Floors = []string{"floor.ppm"}
-				cs.Animations.Ceils = []string{"ceil.ppm"}
+				cs.Animations.Floor = model.NewConfigAnimation([]string{"floor.ppm"}, model.AnimationKindLoop)
+				cs.Animations.Ceil = model.NewConfigAnimation([]string{"ceil.ppm"}, model.AnimationKindLoop)
 				cs.Animations.ScaleFactor = 50.0
 				//cs.Textures = true
 			}

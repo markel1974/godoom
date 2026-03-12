@@ -177,7 +177,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector
 				if neighborId, exists := edgeMap[reverseKey]; exists {
 					cs.Neighbor = neighborId
 				} else {
-					fmt.Println("WARNING: Missing edge for join segment: ", cs.Parent)
+					fmt.Printf("WARNING: Missing edge for join segment: %s - %s (%v)\n", cs.Id, cs.Tag, reverseKey)
 					// PROTECTION 2: Prevents Ghost Walls!
 					isWadLine := wadLines[cs]
 					if isWadLine {

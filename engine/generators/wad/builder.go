@@ -801,12 +801,13 @@ func bowyerWatson(points []Point) []Triangle {
 // recoverConstraints enforces WAD segments on the mesh through Edge Flipping,
 // preventing infinite loops on non-convex quadrilaterals.
 func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle {
-	const failsafeMax = 2000
+	const failsafeMax = 10000
 	for _, c := range constraints {
 		failsafe := 0
 		for {
 			failsafe++
 			if failsafe > failsafeMax {
+				fmt.Println("Edge flipping failed, topology is degenerate")
 				break // Absolute failsafe: impossible/degenerate topology in the WAD
 			}
 
@@ -868,7 +869,6 @@ func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle
 					break
 				}
 			}
-
 			// If we scanned all triangles without making valid flips,
 			// the constraint is resolved or blocked on unsolvable degeneracies.
 			if !flipped {

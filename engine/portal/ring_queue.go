@@ -1,56 +1,62 @@
 package portal
 
-// RingQueue represents a circular queue of QueueItem objects with head and tail indices for tracking elements.
+import "math/bits"
+
+func nextPowerOf2(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return 1 << (64 - bits.LeadingZeros64(uint64(n-1)))
+}
+
+// RingQueue is a circular queue implementation that utilizes a fixed-size buffer for efficient enqueue and dequeue operations.
 type RingQueue struct {
-	items   []*QueueItem
+	items   []QueueItem
 	headIdx int
 	tailIdx int
+	mask    int
 }
 
-// NewRingQueue initializes and returns a new RingQueue with the specified size, preallocating all QueueItem elements.
+// NewRingQueue creates a new RingQueue with a fixed size and initializes its internal storage and mask value.
 func NewRingQueue(size int) *RingQueue {
-	q := &RingQueue{
-		headIdx: 0,
-		tailIdx: 0,
-		items:   make([]*QueueItem, size),
+	size = nextPowerOf2(size)
+	return &RingQueue{
+		items: make([]QueueItem, size),
+		mask:  size - 1,
 	}
-	for x := 0; x < len(q.items); x++ {
-		q.items[x] = NewQueueItem()
-	}
-	return q
 }
 
-// Reset resets the queue by resetting the head and tail indices to their initial positions.
+// Reset clears the queue by resetting both headIdx and tailIdx to 0, effectively emptying the RingQueue.
 func (q *RingQueue) Reset() {
 	q.headIdx = 0
 	q.tailIdx = 0
 }
 
-// Len returns the number of items currently stored in the queue.
+// Len returns the current number of items in the RingQueue.
 func (q *RingQueue) Len() int {
 	return len(q.items)
 }
 
-// GetHead retrieves the queue item at the current head index and updates the head index to the next position in the queue.
+// GetHead retrieves the current head item from the queue and advances the head index, wrapping around if necessary.
 func (q *RingQueue) GetHead() *QueueItem {
-	qi := q.items[q.headIdx]
-	q.headIdx = (q.headIdx + 1) % len(q.items)
+	qi := &q.items[q.headIdx]
+	q.headIdx = (q.headIdx + 1) & q.mask // 1 ciclo di clock
 	return qi
 }
 
-// GetTail retrieves the next item from the tail of the queue and increments the tail index cyclically.
+// GetTail retrieves the current tail item from the queue and advances the tail index using a wrap-around mechanism.
 func (q *RingQueue) GetTail() *QueueItem {
-	qi := q.items[q.tailIdx]
-	q.tailIdx = (q.tailIdx + 1) % len(q.items)
+	qi := &q.items[q.tailIdx]
+	q.tailIdx = (q.tailIdx + 1) & q.mask // 1 ciclo di clock
 	return qi
 }
 
-// IsEmpty checks if the queue is empty by comparing the head and tail indices and returns true if they are equal.
+// IsFull checks if the RingQueue has reached its capacity, indicating no more items can be enqueued without removal.
+func (q *RingQueue) IsFull() bool {
+	return ((q.headIdx + 1) & q.mask) == q.tailIdx
+}
+
+// IsEmpty checks if the RingQueue is empty by comparing the head and tail indices. Returns true if empty, false otherwise.
 func (q *RingQueue) IsEmpty() bool {
 	return q.headIdx == q.tailIdx
-}
-
-// IsFull checks if the queue is full by verifying if incrementing headIdx wraps around to tailIdx.
-func (q *RingQueue) IsFull() bool {
-	return (q.headIdx+1)%len(q.items) == q.tailIdx
 }

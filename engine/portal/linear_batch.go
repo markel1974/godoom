@@ -4,16 +4,13 @@ import "github.com/markel1974/godoom/engine/model"
 
 // LinearBatch is a structure managing a slice of QueueItem pointers for batching and updating operations in a 3D environment.
 type LinearBatch struct {
-	items []*QueueItem
+	items []QueueItem
 }
 
 // NewLinearBatch initializes and returns a new LinearBatch with a specified number of pre-allocated QueueItem instances.
 func NewLinearBatch(size int) *LinearBatch {
 	q := &LinearBatch{
-		items: make([]*QueueItem, size),
-	}
-	for x := 0; x < len(q.items); x++ {
-		q.items[x] = NewQueueItem()
+		items: make([]QueueItem, size),
 	}
 	return q
 }
@@ -24,7 +21,7 @@ func (q *LinearBatch) Len() int {
 }
 
 // Items return the slice of QueueItem pointers managed by the LinearBatch.
-func (q *LinearBatch) Items() []*QueueItem {
+func (q *LinearBatch) Items() []QueueItem {
 	return q.items
 }
 
@@ -32,11 +29,8 @@ func (q *LinearBatch) Items() []*QueueItem {
 func (q *LinearBatch) Grow() {
 	oldLen := len(q.items)
 	newLen := oldLen * 2
-	newQueue := make([]*QueueItem, newLen)
+	newQueue := make([]QueueItem, newLen)
 	copy(newQueue, q.items)
-	for i := oldLen; i < newLen; i++ {
-		newQueue[i] = &QueueItem{}
-	}
 	q.items = newQueue
 }
 
@@ -50,7 +44,8 @@ func (q *LinearBatch) Update(neighbor *model.Sector, outIdx int, x1, x2, y1t, y2
 	if outIdx >= len(q.items) {
 		q.Grow()
 	}
-	q.items[outIdx].Update(neighbor, x1, x2, y1t, y2t, y1b, y2b)
+	target := &q.items[outIdx]
+	target.Update(neighbor, x1, x2, y1t, y2t, y1b, y2b)
 	outIdx++
 	return outIdx
 }

@@ -153,7 +153,7 @@ func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 }
 
 // compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
-func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *QueueItem) ([]*QueueItem, int) {
+func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false
 	outIdx := 0

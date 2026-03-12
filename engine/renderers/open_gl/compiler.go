@@ -66,9 +66,12 @@ func (w *Compiler) Compile(t textures.ITextures) error {
 
 // compileShaders compiles and links vertex and fragment shaders, storing the resulting programs in shaderPrograms.
 func (w *Compiler) compileShaders() error {
+	bp := func(s string) string {
+		return "assets/" + s
+	}
 	programs := map[int]ShaderProgram{
-		shaderMain: {vPath: "assets/shader_vertex.vert", fPath: "assets/shader_fragment.vert"},
-		shaderSky:  {vPath: "assets/sky_vertex.vert", fPath: "assets/sky_fragment.vert"},
+		shaderMain: {vPath: bp("shader_vertex.vert"), fPath: bp("shader_fragment.vert")},
+		shaderSky:  {vPath: bp("sky_vertex.vert"), fPath: bp("sky_fragment.vert")},
 	}
 
 	for shaderId, data := range programs {

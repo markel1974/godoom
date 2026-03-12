@@ -54,8 +54,11 @@ type RenderOpenGL struct {
 	targetEnabled      bool
 	targetId           string
 
-	vao uint32
-	vbo uint32
+	mainVao uint32
+	mainVbo uint32
+
+	skyVao uint32
+	skyVbo uint32
 
 	enableClear bool
 	debug       bool
@@ -259,8 +262,8 @@ func (w *RenderOpenGL) glStreamRender() {
 		return
 	}
 
-	gl.BindVertexArray(w.vao)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
+	gl.BindVertexArray(w.mainVao)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
 	gl.BufferData(gl.ARRAY_BUFFER, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()), gl.DYNAMIC_DRAW)
 
 	gl.ActiveTexture(gl.TEXTURE0)
@@ -275,35 +278,41 @@ func (w *RenderOpenGL) glStreamRender() {
 
 // glInit initializes OpenGL resources such as VAO, VBO, shaders, and sets up vertex attributes and depth testing.
 func (w *RenderOpenGL) glInit() error {
-	gl.GenVertexArrays(1, &w.vao)
-	gl.BindVertexArray(w.vao)
-
-	gl.GenBuffers(1, &w.vbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
-
 	stride := w.frameVertices.Alignment() * 4
-
+	gl.GenVertexArrays(1, &w.mainVao)
+	gl.BindVertexArray(w.mainVao)
+	gl.GenBuffers(1, &w.mainVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
+	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
-
 	// Location 1: aTexCoords (vec2)
 	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
 	gl.EnableVertexAttribArray(1)
-
 	// Location 2: aLightIntensity (float)
 	gl.VertexAttribPointer(2, 1, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
 	gl.EnableVertexAttribArray(2)
-
 	// Location 3: aLightCenterView (vec3)
 	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
 	gl.EnableVertexAttribArray(3)
-
 	// Location 4: aNormal (vec3)
 	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
 	gl.EnableVertexAttribArray(4)
+	// Restore default state
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
 
+	//sky
+	gl.GenVertexArrays(1, &w.skyVao)
+	gl.BindVertexArray(w.skyVao)
+	gl.GenBuffers(1, &w.skyVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.skyVbo)
+	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
+	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
+	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
+	gl.EnableVertexAttribArray(0)
+	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
@@ -317,23 +326,14 @@ func (w *RenderOpenGL) glInit() error {
 	return nil
 }
 
-// glUpdateCameraUniforms updates the camera-related uniforms for the current OpenGL shader program.
-// Parameters:
-// - vi: The ViewItem containing position, orientation, and light intensity data for the camera.
-func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
+func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) ([16]float32, [16]float32) {
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(shaderProgram)
-
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
-
-	// Aggiungiamo il segno MENO a scaleX per invertire l'asse orizzontale
-	// ed emulare nativamente la logica di draw_polygon.go (halfW - pixelX)
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
 	scaleY := float32(2.0 * model.VFov)
-
 	pitchShear := float32(-vi.GetYaw())
-
 	proj := [16]float32{
 		scaleX, 0, 0, 0,
 		0, scaleY, 0, 0,
@@ -369,29 +369,43 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 	gl.Uniform1f(gl.GetUniformLocation(shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
 	timeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_time\x00"))
 	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
+
+	// --- NUOVI UNIFORM PER LA LUCE/TORCIA ---
+	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraPos\x00")), ex, ey, ez)
+	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraFront\x00")), fX, 0.0, fZ)
+
+	return proj, view
+
 }
 
-func (w *RenderOpenGL) glRenderSky(invProjView [16]float32) {
+func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32) {
+	skyProg := w.compiler.GetShaderProgram(shaderSky)
+	gl.UseProgram(skyProg)
 
-	/*
-		shaderProgram := w.shaderPrograms[shaderSky]
-		gl.UseProgram(shaderProgram)
+	// Z_Quad == Z_Clear: viene eseguito SOLO dove non c'è geometria solida!
+	gl.DepthFunc(gl.LEQUAL)
+	gl.DepthMask(false) // Read-only
 
-		// Fondamentale: Z_Quad == Z_Clear
-		gl.DepthFunc(gl.LEQUAL)
-		gl.DepthMask(false) // Read-only
+	gl.UniformMatrix4fv(gl.GetUniformLocation(skyProg, gl.Str("u_projection\x00")), 1, false, &proj[0])
+	gl.UniformMatrix4fv(gl.GetUniformLocation(skyProg, gl.Str("u_view\x00")), 1, false, &view[0])
 
-		loc := gl.GetUniformLocation(shaderProgram, gl.Str("u_inv_proj_view\x00"))
-		gl.UniformMatrix4fv(loc, 1, false, &invProjView[0])
+	gl.BindVertexArray(w.skyVao)
 
-		gl.BindVertexArray(w.skyVao) // Screen quad (4 vertici: [-1,-1] a [1,1])
-		gl.BindTexture(gl.TEXTURE_2D, w.skyTextureId)
-		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	// Carichiamo dinamicamente il cielo (es. F_SKY1).
+	skyTexs := w.textures.Get([]string{"__FLAT__F_SKY1"})
+	if len(skyTexs) > 0 {
+		if texId, ok := w.compiler.GetTexture(skyTexs[0]); ok {
+			gl.ActiveTexture(gl.TEXTURE0)
+			gl.BindTexture(gl.TEXTURE_2D, texId)
+			gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
+		}
+	}
 
-		gl.DepthMask(true)
-		gl.DepthFunc(gl.LESS)
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-	*/
+	// Ripristina lo stato standard per il frame successivo
+	gl.DepthMask(true)
+	gl.DepthFunc(gl.LESS)
 }
 
 // doInitialize sets up the OpenGL rendering environment and initializes the necessary resources for the render window.
@@ -534,8 +548,10 @@ func (w *RenderOpenGL) doRender() {
 		gl.Viewport(0, 0, int32(fbW), int32(fbH))
 		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		w.glUpdateCameraUniforms(w.vi)
+		proj, view := w.glUpdateCameraUniforms(w.vi)
 		w.glStreamRender()
+
+		w.glRenderSky(proj, view)
 	})
 }
 

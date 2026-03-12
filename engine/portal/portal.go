@@ -266,17 +266,16 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		ybStop := (x2Min-x1)*(y2b-y1b)/(x2-x1) + y1b
 
 		zStart := ((x1Max-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
-		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
-
-		lightStart := vi.GetLightIntensityFactor(zStart)
-		lightStop := vi.GetLightIntensityFactor(zStop)
-
 		if zStart <= 0 {
 			zStart = 10e4
 		}
+		zStop := ((x2Min-x1)*(tz2-tz1)/(x2-x1) + tz1) * 8
 		if zStop <= 0 {
 			zStop = 10e4
 		}
+
+		lightStart := vi.GetLightIntensityFactor(zStart)
+		lightStop := vi.GetLightIntensityFactor(zStop)
 
 		y1Ceil := qi.y1t
 		y2Ceil := qi.y2t

@@ -1,15 +1,10 @@
 package open_gl
 
 import (
-	"embed"
-	"fmt"
-	"io/fs"
 	"math"
-	"strings"
 
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
-	//"github.com/markel1974/godoom/engine/renderers/open_gl/assets"
 	"github.com/markel1974/godoom/engine/textures"
 	"github.com/markel1974/godoom/pixels"
 	"github.com/markel1974/godoom/pixels/executor"
@@ -42,9 +37,6 @@ const (
 	vboMaxFloats = 1024 * 1024 * 4
 )
 
-//go:embed assets
-var assets embed.FS
-
 // RenderOpenGL represents an OpenGL renderer responsible for drawing 3D scenes, handling textures, and managing rendering states.
 type RenderOpenGL struct {
 	portal           *portal.Portal
@@ -65,15 +57,14 @@ type RenderOpenGL struct {
 	vao uint32
 	vbo uint32
 
-	enableClear   bool
-	debug         bool
-	debugIdx      int
-	shaderProgram uint32
-
-	glTextures map[*textures.Texture]uint32
+	enableClear bool
+	debug       bool
+	debugIdx    int
 
 	frameVertices *FrameVertices
 	frameCommands *DrawCommands
+
+	compiler *Compiler
 }
 
 // NewOpenGLRender initializes and returns a new instance of RenderOpenGL with default settings.
@@ -91,9 +82,11 @@ func NewOpenGLRender() *RenderOpenGL {
 		enableClear:      false,
 		debug:            false,
 		debugIdx:         0,
-		shaderProgram:    0,
-		frameVertices:    NewFrameVertices(maxBatchVertices),
-		frameCommands:    NewDrawCommands(maxFrameCommands),
+
+		frameVertices: NewFrameVertices(maxBatchVertices),
+		frameCommands: NewDrawCommands(maxFrameCommands),
+
+		compiler: NewCompiler(),
 	}
 	return r
 }
@@ -141,7 +134,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, tex *textures.Texture
 	if tex == nil {
 		return
 	}
-	texId, ok := w.glTextures[tex]
+	texId, ok := w.compiler.GetTexture(tex)
 	if !ok {
 		return
 	}
@@ -209,7 +202,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, tex *textures.Texture
 		return
 	}
 	//prepare
-	texId, ok := w.glTextures[tex]
+	texId, ok := w.compiler.GetTexture(tex)
 	if !ok {
 		return
 	}
@@ -272,7 +265,6 @@ func (w *RenderOpenGL) glStreamRender() {
 
 	gl.ActiveTexture(gl.TEXTURE0)
 
-	// Itera sulla struttura astratta dal tuo draw_command.go
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
 			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
@@ -315,108 +307,13 @@ func (w *RenderOpenGL) glInit() error {
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
-	gl.UseProgram(w.shaderProgram)
-	texLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_texture\x00"))
+	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(shaderProgram)
+	texLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_texture\x00"))
 	gl.Uniform1i(texLoc, 0)
-
 	// Binding sampler Normal Map
-	normLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_normalMap\x00"))
+	normLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_normalMap\x00"))
 	gl.Uniform1i(normLoc, 1)
-
-	return nil
-}
-
-// glCompileShaderProgram compiles and links the vertex and fragment shaders into a shader program and sets it as active.
-func (w *RenderOpenGL) glCompileShaderProgram() error {
-	vertexSrc, err := fs.ReadFile(assets, "assets/shader_vertex.vert")
-	if err != nil {
-		return err
-	}
-	fragmentSrc, err := fs.ReadFile(assets, "assets/shader_fragment.vert")
-	if err != nil {
-		return err
-	}
-	vertexShader, err := w.glCompileShader(string(vertexSrc), gl.VERTEX_SHADER)
-	if err != nil {
-		return err
-	}
-	defer gl.DeleteShader(vertexShader)
-
-	fragmentShader, err := w.glCompileShader(string(fragmentSrc), gl.FRAGMENT_SHADER)
-	if err != nil {
-		return err
-	}
-	defer gl.DeleteShader(fragmentShader)
-
-	w.shaderProgram = gl.CreateProgram()
-	gl.AttachShader(w.shaderProgram, vertexShader)
-	gl.AttachShader(w.shaderProgram, fragmentShader)
-	gl.LinkProgram(w.shaderProgram)
-
-	var status int32
-	gl.GetProgramiv(w.shaderProgram, gl.LINK_STATUS, &status)
-	if status == gl.FALSE {
-		panic("Failed to link shader program")
-	}
-
-	gl.UseProgram(w.shaderProgram)
-	return nil
-}
-
-// glCompileShader compiles an OpenGL shader from the provided source code for the specified shader type.
-func (w *RenderOpenGL) glCompileShader(source string, shaderType uint32) (uint32, error) {
-	shader := gl.CreateShader(shaderType)
-	cSources, free := gl.Strs(source + "\x00")
-	gl.ShaderSource(shader, 1, cSources, nil)
-	free()
-	gl.CompileShader(shader)
-
-	var status int32
-	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
-	if status == gl.FALSE {
-		var logLength int32
-		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &logLength)
-		log := strings.Repeat("\x00", int(logLength+1))
-		gl.GetShaderInfoLog(shader, logLength, nil, gl.Str(log))
-		return 0, fmt.Errorf("failed to compile shader: %v", log)
-	}
-	return shader, nil
-}
-
-// glCompileTextures initializes and compiles textures for OpenGL rendering, applying filtering and anisotropic settings.
-func (w *RenderOpenGL) glCompileTextures() error {
-	w.glTextures = make(map[*textures.Texture]uint32)
-	for _, id := range w.textures.GetNames() {
-		tn := w.textures.Get([]string{id})
-		if tn == nil {
-			continue
-		}
-		tex := tn[0]
-		glTex := uint32(0)
-		width, height, glPixels := tex.RGBA()
-		gl.GenTextures(1, &glTex)
-		gl.BindTexture(gl.TEXTURE_2D, glTex)
-		w.glTextures[tex] = glTex
-
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glPixels))
-
-		gl.GenerateMipmap(gl.TEXTURE_2D)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-
-		// 2. Tenta il filtro anisotropico via brute-force (valore 0x84FE)
-		// Questo rimuove il blur "fangoso" sulle texture dei muri viste radenti
-		gl.TexParameterf(gl.TEXTURE_2D, 0x84FE, 4.0)
-
-		//var maxAnisotropy float32
-		//gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAnisotropy)
-		//gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY_EXT, maxAnisotropy)
-	}
 	return nil
 }
 
@@ -424,7 +321,8 @@ func (w *RenderOpenGL) glCompileTextures() error {
 // Parameters:
 // - vi: The ViewItem containing position, orientation, and light intensity data for the camera.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
-	gl.UseProgram(w.shaderProgram)
+	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(shaderProgram)
 
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
@@ -466,11 +364,34 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) {
 		tx, ty, tz, 1,
 	}
 
-	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
-	gl.UniformMatrix4fv(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
-	gl.Uniform1f(gl.GetUniformLocation(w.shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
-	timeLoc := gl.GetUniformLocation(w.shaderProgram, gl.Str("u_time\x00"))
+	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
+	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
+	gl.Uniform1f(gl.GetUniformLocation(shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
+	timeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_time\x00"))
 	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
+}
+
+func (w *RenderOpenGL) glRenderSky(invProjView [16]float32) {
+
+	/*
+		shaderProgram := w.shaderPrograms[shaderSky]
+		gl.UseProgram(shaderProgram)
+
+		// Fondamentale: Z_Quad == Z_Clear
+		gl.DepthFunc(gl.LEQUAL)
+		gl.DepthMask(false) // Read-only
+
+		loc := gl.GetUniformLocation(shaderProgram, gl.Str("u_inv_proj_view\x00"))
+		gl.UniformMatrix4fv(loc, 1, false, &invProjView[0])
+
+		gl.BindVertexArray(w.skyVao) // Screen quad (4 vertici: [-1,-1] a [1,1])
+		gl.BindTexture(gl.TEXTURE_2D, w.skyTextureId)
+		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+		gl.DepthMask(true)
+		gl.DepthFunc(gl.LESS)
+
+	*/
 }
 
 // doInitialize sets up the OpenGL rendering environment and initializes the necessary resources for the render window.
@@ -492,10 +413,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		if err := w.glInit(); err != nil {
 			return err
 		}
-		if err := w.glCompileShaderProgram(); err != nil {
-			return err
-		}
-		if err := w.glCompileTextures(); err != nil {
+		if err := w.compiler.Compile(w.textures); err != nil {
 			return err
 		}
 		return nil

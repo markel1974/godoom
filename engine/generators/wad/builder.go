@@ -16,6 +16,8 @@ const ScaleFactorLineDef = 25.0
 // ScaleFactorCeilFloorLineDef is a constant scaling factor used to convert floor and ceiling heights into game unit measurements.
 const ScaleFactorCeilFloorLineDef = 8.0
 
+const SkyPicture = "F_SKY1"
+
 // Point represents a 2D coordinate with X and Y as floating-point values.
 type Point struct {
 	X float64
@@ -202,13 +204,16 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	}
 	miSector.CeilY = ceilHeight / ScaleFactorCeilFloorLineDef
 	miSector.Tag = strconv.Itoa(int(secIdx))
-	if wadSector.CeilingPic == "F_SKY1" {
-		// System key to tell renderers: "Use cylindrical projection"
-		miSector.Animations.Ceil = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
-	} else {
-		miSector.Animations.Ceil = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.CeilingPic), model.AnimationKindLoop)
+	ceilingType := model.AnimationKindLoop
+	floorType := model.AnimationKindLoop
+	if wadSector.CeilingPic == SkyPicture {
+		ceilingType = model.AnimationKindSky
 	}
-	miSector.Animations.Floor = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.FloorPic), model.AnimationKindLoop)
+	if wadSector.FloorPic == SkyPicture {
+		floorType = model.AnimationKindSky
+	}
+	miSector.Animations.Ceil = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.CeilingPic), ceilingType)
+	miSector.Animations.Floor = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.FloorPic), floorType)
 	miSector.Animations.ScaleFactor = 10.0
 	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
 	miSector.Light.Kind = model.LightKindSpot
@@ -248,15 +253,13 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 				if backSideIdx != -1 {
 					backSide := level.SideDefs[backSideIdx]
 					backSector := level.Sectors[backSide.SectorRef]
-
-					// Se ENTRAMBI i settori hanno il soffitto a cielo, la parete superiore è invisibile/cielo.
-					if frontSector.CeilingPic == "F_SKY1" && backSector.CeilingPic == "F_SKY1" {
-						seg.Animations.Upper = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
+					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
+					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
+						seg.Animations.Upper = model.NewConfigAnimation([]string{frontSector.CeilingPic}, model.AnimationKindSky)
 					}
-
-					// Estensione per i pavimenti (es. fossati che mostrano il cielo in basso)
-					if frontSector.FloorPic == "F_SKY1" && backSector.FloorPic == "F_SKY1" {
-						seg.Animations.Lower = model.NewConfigAnimation([]string{"__SKYBOX__"}, model.AnimationKindSky)
+					// Extension for floors (e.g. moats that show sky at the bottom)
+					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
+						seg.Animations.Lower = model.NewConfigAnimation([]string{frontSector.FloorPic}, model.AnimationKindSky)
 					}
 				}
 			}

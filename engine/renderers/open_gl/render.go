@@ -106,9 +106,10 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 }
 
 // createBatch processes and batches compiled sector polygons for rendering based on their type and attributes.
-func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
+func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) *textures.Texture {
 	w.frameVertices.Reset()
 	w.frameCommands.Reset()
+	var cSky *textures.Texture = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		polygons := css[idx].Get()
@@ -123,12 +124,17 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) {
 			case model.IdLower:
 				w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 			case model.IdCeil, model.IdCeilTest:
-				w.pushFlat(cp, cp.AnimationCeil, cp.Sector.CeilY)
+				if sky := w.pushFlat(cp, cp.AnimationCeil, cp.Sector.CeilY); sky != nil {
+					cSky = sky
+				}
 			case model.IdFloor, model.IdFloorTest:
-				w.pushFlat(cp, cp.AnimationFloor, cp.Sector.FloorY)
+				if sky := w.pushFlat(cp, cp.AnimationFloor, cp.Sector.FloorY); sky != nil {
+					cSky = sky
+				}
 			}
 		}
 	}
+	return cSky
 }
 
 // pushWall appends a textured wall's vertices and lighting properties into the frame for rendering using OpenGL.
@@ -197,19 +203,23 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 }
 
 // pushFlat renders a flat surface using vertices from a compiled polygon and texture, applying lighting and transformations.
-func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, z float64) {
+func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, z float64) *textures.Texture {
+	if anim.Kind() == int(model.AnimationKindSky) {
+		return anim.CurrentFrame()
+	}
+
 	tex := anim.CurrentFrame()
 	if tex == nil {
-		return
+		return nil
 	}
 	segments := cp.Sector.Segments
 	if len(segments) < 3 {
-		return
+		return nil
 	}
 	//prepare
 	texId, ok := w.compiler.GetTexture(tex)
 	if !ok {
-		return
+		return nil
 	}
 	texW, texH := tex.Size()
 	startLen := w.frameVertices.Len()
@@ -256,6 +266,8 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	//apply
 	currentLen := w.frameVertices.Len()
 	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+
+	return nil
 }
 
 // glStreamRender streams vertex and command data to the GPU and executes rendering of frame vertices and textures.
@@ -382,7 +394,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) ([16]float32, 
 }
 
 // glRenderSky renders the skybox using the provided projection and view matrices.
-func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32) {
+func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *textures.Texture) {
 	skyProg := w.compiler.GetShaderProgram(shaderSky)
 	gl.UseProgram(skyProg)
 
@@ -395,14 +407,10 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32) {
 
 	gl.BindVertexArray(w.skyVao)
 
-	// Carichiamo dinamicamente il cielo (es. F_SKY1).
-	skyTexs := w.textures.Get([]string{"__FLAT__F_SKY1"})
-	if len(skyTexs) > 0 {
-		if texId, ok := w.compiler.GetTexture(skyTexs[0]); ok {
-			gl.ActiveTexture(gl.TEXTURE0)
-			gl.BindTexture(gl.TEXTURE_2D, texId)
-			gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
-		}
+	if texId, ok := w.compiler.GetTexture(cSky); ok {
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, texId)
+		gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
 	}
 
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
@@ -544,7 +552,7 @@ func (w *RenderOpenGL) doRun() {
 func (w *RenderOpenGL) doRender() {
 	cs, count := w.portal.Compile(w.player, w.vi)
 	w.targetLastCompiled = count
-	w.createBatch(cs, count)
+	cSky := w.createBatch(cs, count)
 
 	executor.Thread.Call(func() {
 		w.win.Begin()
@@ -554,8 +562,9 @@ func (w *RenderOpenGL) doRender() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		proj, view := w.glUpdateCameraUniforms(w.vi)
 		w.glStreamRender()
-
-		w.glRenderSky(proj, view)
+		if cSky != nil {
+			w.glRenderSky(proj, view, cSky)
+		}
 	})
 }
 

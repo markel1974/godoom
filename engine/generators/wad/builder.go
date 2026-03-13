@@ -34,8 +34,6 @@ type EdgeKey struct {
 
 // Builder provides utilities for constructing or processing line definitions within a WAD file.
 type Builder struct {
-	w        *WAD
-	textures *Textures
 }
 
 // NewBuilder initializes and returns a new instance of Builder.
@@ -45,21 +43,23 @@ func NewBuilder() *Builder {
 
 // Setup initializes the level configuration by loading data from a WAD file and constructing sectors, player, and things.
 func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
-	bld.w = New()
-	if err := bld.w.Load(wadFile); err != nil {
+	wad := New()
+	if err := wad.Load(wadFile); err != nil {
 		return nil, err
 	}
-	bld.textures = bld.w.GetTextures()
-	levelNames := bld.w.GetLevels()
+	texHandler := wad.GetTextures()
+	levelNames := wad.GetLevels()
 	if levelNumber < 1 || levelNumber > len(levelNames) {
 		return nil, fmt.Errorf("invalid level number: %d", levelNumber)
 	}
-	level, err := bld.w.GetLevel(levelNames[levelNumber-1])
+	level, err := wad.GetLevel(levelNames[levelNumber-1])
 	if err != nil {
 		return nil, err
 	}
 
-	sectors := bld.buildSectorsFromLineDefs(level)
+	sectors := bld.buildSectorsFromLineDefs(level, texHandler)
+
+	grid := NewSpatialGrid(sectors, 256.0)
 
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	var things []*model.ConfigThing
@@ -74,24 +74,20 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 			}
 			continue
 		}
-		tSectorId := bld.resolveSectorId(Point{tX, tY}, sectors)
+		tSectorId := grid.ResolveSectorId(Point{tX, tY})
 		tId := fmt.Sprintf("t_%d", i)
 		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId)
 		things = append(things, cfgThing)
 	}
 
-	playerSectorId := bld.resolveSectorId(Point{pX, pY}, sectors)
-	player := model.NewConfigPlayer(
-		model.XY{X: pX, Y: -pY},
-		pAngle,
-		playerSectorId,
-	)
+	playerSectorId := grid.ResolveSectorId(Point{pX, pY})
+	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId)
 
-	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, bld.textures), nil
+	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, texHandler), nil
 }
 
 // buildSectorsFromLineDefs processes linedefs in a level to build and return a list of ConfigSector objects.
-func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector {
+func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures) []*model.ConfigSector {
 	sectorToEdges := make(map[uint16][]Edge)
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
@@ -122,11 +118,11 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector
 			triangles := mergedPoly.Triangulate(int(secIdx))
 
 			for triIdx, tri := range triangles {
-				cSector := bld.buildConfigSector(level, wadSector, secIdx, loopIdx, triIdx, edges)
+				cSector := bld.buildConfigSector(level, wadSector, texHandler, secIdx, loopIdx, triIdx, edges)
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
 					p2 := tri[(k+1)%3]
-					cSeg, isWadLine := bld.buildConfigSegment(level, cSector.Id, p1, p2, edges)
+					cSeg, isWadLine := bld.buildConfigSegment(level, texHandler, cSector.Id, p1, p2, edges)
 					cSector.Segments = append(cSector.Segments, cSeg)
 					wadLines[cSeg] = isWadLine
 					key := EdgeKey{cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y}
@@ -161,7 +157,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector
 }
 
 // buildConfigSector converts a WAD sector to a ConfigSector, assigning texture, height, light level, and ID properties.
-func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *model.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *model.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := model.NewConfigSector(sectorId)
@@ -180,8 +176,8 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 	if wadSector.FloorPic == SkyPicture {
 		floorType = model.AnimationKindSky
 	}
-	miSector.Animations.Ceil = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.CeilingPic), ceilingType)
-	miSector.Animations.Floor = model.NewConfigAnimation(bld.textures.FlatCreateAnimation(wadSector.FloorPic), floorType)
+	miSector.Animations.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType)
+	miSector.Animations.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType)
 	miSector.Animations.ScaleFactor = 10.0
 	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
 	miSector.Light.Kind = model.LightKindSpot
@@ -190,7 +186,7 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, sec
 
 // buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
 // It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
-func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
+func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
 	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
@@ -206,9 +202,9 @@ func (bld *Builder) buildConfigSegment(level *Level, sectorId string, p1, p2 Poi
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.Animations.Middle = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop)
-			seg.Animations.Upper = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop)
-			seg.Animations.Lower = model.NewConfigAnimation(bld.textures.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop)
+			seg.Animations.Middle = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop)
+			seg.Animations.Upper = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop)
+			seg.Animations.Lower = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -300,40 +296,9 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 	return float64(wadSector.CeilingHeight)
 }
 
-// resolveSectorId determines the sector ID for a given point by checking triangle containment or finding the nearest sector.
-func (bld *Builder) resolveSectorId(p Point, sectors []*model.ConfigSector) string {
-	if len(sectors) == 0 {
-		return ""
-	}
-	var minDist = math.MaxFloat64
-	closestSector := sectors[0].Id
-
-	for _, s := range sectors {
-		if len(s.Segments) != 3 {
-			continue
-		}
-
-		v1 := Point{s.Segments[0].Start.X, -s.Segments[0].Start.Y}
-		v2 := Point{s.Segments[1].Start.X, -s.Segments[1].Start.Y}
-		v3 := Point{s.Segments[2].Start.X, -s.Segments[2].Start.Y}
-
-		if PointInTriangle(p, v1, v2, v3) {
-			return s.Id
-		}
-
-		cx := (v1.X + v2.X + v3.X) / 3.0
-		cy := (v1.Y + v2.Y + v3.Y) / 3.0
-		distSq := (cx-p.X)*(cx-p.X) + (cy-p.Y)*(cy-p.Y)
-
-		if distSq < minDist {
-			minDist = distSq
-			closestSector = s.Id
-		}
-	}
-	return closestSector
-}
-
 // traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
+// traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
+// Handles self-intersecting topologies and shared vertices by enforcing maximum-angle left turns.
 func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 	// Optimization: O(1) array access instead of map[uint16][]Edge
 	adj := make([][]Edge, len(level.Vertexes))
@@ -341,7 +306,7 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 		adj[e.V1] = append(adj[e.V1], e)
 	}
 
-	// Optimization: flat bitmask/boolean array (LDIdx << 1 | IsLeft) instead of map[Edge]bool
+	// Bitmask for visited edges: (LDIdx << 1) | IsLeft
 	visited := make([]bool, len(level.LineDefs)*2)
 
 	getVisitedIdx := func(e Edge) int {
@@ -362,6 +327,7 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 
 		var currentLoop Polygon
 		curr := startEdge
+
 		for {
 			visited[getVisitedIdx(curr)] = true
 			v := level.Vertexes[curr.V1]
@@ -370,11 +336,55 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 			nextOptions := adj[curr.V2]
 			var nextEdge Edge
 			found := false
-			for _, o := range nextOptions {
-				if !visited[getVisitedIdx(o)] {
-					nextEdge = o
+
+			if len(nextOptions) == 1 {
+				if !visited[getVisitedIdx(nextOptions[0])] {
+					nextEdge = nextOptions[0]
 					found = true
-					break
+				}
+			} else if len(nextOptions) > 1 {
+				// Multiple outgoing edges: Calculate angles to perform the tightest possible turn.
+				// We need the incoming vector to compute the relative deviation.
+				inV1 := level.Vertexes[curr.V1]
+				inV2 := level.Vertexes[curr.V2]
+				inDx := float64(inV2.XCoord - inV1.XCoord)
+				inDy := float64(inV2.YCoord - inV1.YCoord)
+				inAngle := math.Atan2(inDy, inDx)
+
+				minAngleDiff := math.MaxFloat64
+				bestIdx := -1
+
+				for i, o := range nextOptions {
+					if visited[getVisitedIdx(o)] {
+						continue
+					}
+					outV1 := level.Vertexes[o.V1]
+					outV2 := level.Vertexes[o.V2]
+					outDx := float64(outV2.XCoord - outV1.XCoord)
+					outDy := float64(outV2.YCoord - outV1.YCoord)
+					outAngle := math.Atan2(outDy, outDx)
+
+					// Calcolo della deviazione angolare relativa (orientamento CCW standard)
+					// L'angolo in ingresso va invertito (come se guardassimo all'indietro dal vertice)
+					diff := outAngle - (inAngle + math.Pi)
+					for diff < 0 {
+						diff += 2 * math.Pi
+					}
+					for diff >= 2*math.Pi {
+						diff -= 2 * math.Pi
+					}
+
+					// Cerchiamo l'angolo minore (svolta a destra più stretta)
+					// per chiudere l'involucro locale coerentemente
+					if diff < minAngleDiff {
+						minAngleDiff = diff
+						bestIdx = i
+					}
+				}
+
+				if bestIdx != -1 {
+					nextEdge = nextOptions[bestIdx]
+					found = true
 				}
 			}
 
@@ -383,6 +393,7 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 			}
 			curr = nextEdge
 		}
+
 		if len(currentLoop) >= 3 {
 			rawLoops = append(rawLoops, currentLoop)
 		}
@@ -392,6 +403,7 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 		return nil
 	}
 
+	// ... [Il resto della logica di SignedArea e classificazione Outer/Holes rimane invariato] ...
 	var outers []Polygon
 	var holes []Polygon
 
@@ -436,5 +448,3 @@ func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 
 	return defs
 }
-
-// GEOMETRY & CDT ENGINE

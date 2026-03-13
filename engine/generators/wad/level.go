@@ -16,6 +16,10 @@ type Level struct {
 	Nodes      []*lumps.Node
 }
 
+func NewLevel() *Level {
+	return &Level{}
+}
+
 // GetSectorFromSubSector determines the sector ID corresponding to a given subsector ID and returns it with a success flag.
 func (l *Level) GetSectorFromSubSector(subSectorId uint16) (uint16, bool) {
 	sideDef := l.GetSideDefFromSubSector(subSectorId)

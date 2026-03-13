@@ -99,8 +99,10 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		r.cache[cs.Id] = s
 	}
 
+	totalSegments := 0
 	for _, sect := range r.sectors {
 		for _, seg := range sect.Segments {
+			totalSegments++
 			if seg.Kind != DefinitionWall {
 				if s, ok := r.cache[seg.Ref]; ok {
 					seg.SetSector(s.Id, s)
@@ -216,7 +218,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.finalize(cfg)
 
-	fmt.Println("Scan complete")
+	fmt.Printf("Scan complete sectors: %d, segments: %d\n", len(r.sectors), totalSegments)
 
 	return nil
 }

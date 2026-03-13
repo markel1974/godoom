@@ -226,11 +226,11 @@ func (w *WAD) GetLevels() []string {
 // GetLevel retrieves the specified level data by its name and parses its associated lumps into a Level structure.
 func (w *WAD) GetLevel(levelName string) (*Level, error) {
 	var err error
-	level := &Level{}
+	level := NewLevel()
 	levelIdx := w.levels[levelName]
 	for i := levelIdx + 1; i < levelIdx+11; i++ {
 		lumpInfo := w.lumpInfos[i]
-		if err := lumps.Seek(w.file, lumpInfo.Filepos); err != nil {
+		if err = lumps.Seek(w.file, lumpInfo.Filepos); err != nil {
 			return nil, err
 		}
 		switch lumpInfo.Name {

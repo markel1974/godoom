@@ -452,127 +452,6 @@ func (cp *ComplexPolygon) BridgeHoles() Polygon {
 	return outer
 }
 
-func DistanceSq(p1 Point, p2 Point) float64 {
-	dx := p1.X - p2.X
-	dy := p1.Y - p2.Y
-	return dx*dx + dy*dy
-}
-
-func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
-	for i := 0; i < len(outer); i++ {
-		e1, e2 := outer[i], outer[(i+1)%len(outer)]
-		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
-			continue
-		}
-		if SegmentsIntersect(p1, p2, e1, e2) {
-			return false
-		}
-	}
-	for i := 0; i < len(hole); i++ {
-		e1, e2 := hole[i], hole[(i+1)%len(hole)]
-		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
-			continue
-		}
-		if SegmentsIntersect(p1, p2, e1, e2) {
-			return false
-		}
-	}
-	return true
-}
-
-func Orientation(p, q, r Point) int {
-	det := Orient2D(p, q, r)
-	if det > 0 {
-		return 2
-	}
-	if det < 0 {
-		return 1
-	}
-	return 0
-}
-
-func Orient2D(pa, pb, pc Point) float64 {
-	detLeft := (pa.X - pc.X) * (pb.Y - pc.Y)
-	detRight := (pa.Y - pc.Y) * (pb.X - pc.X)
-	det := detLeft - detRight
-
-	detSum := math.Abs(detLeft) + math.Abs(detRight)
-	if math.Abs(det) >= errBoundOri*detSum {
-		return det
-	}
-	return Orient2DExact(pa, pb, pc)
-}
-
-func Orient2DExact(pa, pb, pc Point) float64 {
-	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
-	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
-	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)
-
-	acx := new(big.Float).Sub(ax, cx)
-	bcy := new(big.Float).Sub(by, cy)
-	acy := new(big.Float).Sub(ay, cy)
-	bcx := new(big.Float).Sub(bx, cx)
-
-	left := new(big.Float).Mul(acx, bcy)
-	right := new(big.Float).Mul(acy, bcx)
-
-	det := new(big.Float).Sub(left, right)
-	res, _ := det.Float64()
-	return res
-}
-
-func InCircle2D(pa, pb, pc, pd Point) float64 {
-	adx, ady := pa.X-pd.X, pa.Y-pd.Y
-	bdx, bdy := pb.X-pd.X, pb.Y-pd.Y
-	cdx, cdy := pc.X-pd.X, pc.Y-pd.Y
-
-	abDet := adx*bdy - bdx*ady
-	bcDet := bdx*cdy - cdx*bdy
-	caDet := cdx*ady - adx*cdy
-
-	aLift := adx*adx + ady*ady
-	bLift := bdx*bdx + bdy*bdy
-	cLift := cdx*cdx + cdy*cdy
-
-	det := aLift*bcDet + bLift*caDet + cLift*abDet
-
-	perman := (math.Abs(adx*bdy)+math.Abs(bdx*ady))*cLift +
-		(math.Abs(bdx*cdy)+math.Abs(cdx*bdy))*aLift +
-		(math.Abs(cdx*ady)+math.Abs(adx*cdy))*bLift
-
-	if math.Abs(det) >= errBoundInc*perman {
-		return det
-	}
-	return InCircle2DExact(pa, pb, pc, pd)
-}
-
-func InCircle2DExact(pa, pb, pc, pd Point) float64 {
-	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
-	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
-	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)
-	dx, dy := BigFloat(pd.X), BigFloat(pd.Y)
-
-	adx, ady := new(big.Float).Sub(ax, dx), new(big.Float).Sub(ay, dy)
-	bdx, bdy := new(big.Float).Sub(bx, dx), new(big.Float).Sub(by, dy)
-	cdx, cdy := new(big.Float).Sub(cx, dx), new(big.Float).Sub(cy, dy)
-
-	abDet := new(big.Float).Sub(new(big.Float).Mul(adx, bdy), new(big.Float).Mul(bdx, ady))
-	bcDet := new(big.Float).Sub(new(big.Float).Mul(bdx, cdy), new(big.Float).Mul(cdx, bdy))
-	caDet := new(big.Float).Sub(new(big.Float).Mul(cdx, ady), new(big.Float).Mul(adx, cdy))
-
-	aLift := new(big.Float).Add(new(big.Float).Mul(adx, adx), new(big.Float).Mul(ady, ady))
-	bLift := new(big.Float).Add(new(big.Float).Mul(bdx, bdx), new(big.Float).Mul(bdy, bdy))
-	cLift := new(big.Float).Add(new(big.Float).Mul(cdx, cdx), new(big.Float).Mul(cdy, cdy))
-
-	term1 := new(big.Float).Mul(aLift, bcDet)
-	term2 := new(big.Float).Mul(bLift, caDet)
-	term3 := new(big.Float).Mul(cLift, abDet)
-
-	det := new(big.Float).Add(new(big.Float).Add(term1, term2), term3)
-	res, _ := det.Float64()
-	return res
-}
-
 // RecoverConstraints deterministico. Richiede in input un PSLG puro.
 // Elimina i loop infiniti processando le intersezioni tramite coda FIFO con failsafe per degenerazioni.
 func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int) []Triangle {
@@ -636,6 +515,34 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 		}
 	}
 	return triangles
+}
+
+func DistanceSq(p1 Point, p2 Point) float64 {
+	dx := p1.X - p2.X
+	dy := p1.Y - p2.Y
+	return dx*dx + dy*dy
+}
+
+func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
+	for i := 0; i < len(outer); i++ {
+		e1, e2 := outer[i], outer[(i+1)%len(outer)]
+		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
+			continue
+		}
+		if SegmentsIntersect(p1, p2, e1, e2) {
+			return false
+		}
+	}
+	for i := 0; i < len(hole); i++ {
+		e1, e2 := hole[i], hole[(i+1)%len(hole)]
+		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
+			continue
+		}
+		if SegmentsIntersect(p1, p2, e1, e2) {
+			return false
+		}
+	}
+	return true
 }
 
 func AppendUniqueEdge(queue [][2]Point, edge [2]Point) [][2]Point {
@@ -755,12 +662,95 @@ func SegmentsIntersect(p1, q1, p2, q2 Point) bool {
 	return false
 }
 
-// PointInTriangle determines if a point p lies inside or on the edges of a triangle formed by vertices a, b, and c.
-func PointInTriangle(p Point, a Point, b Point, c Point) bool {
-	cp1 := (b.X-a.X)*(p.Y-a.Y) - (b.Y-a.Y)*(p.X-a.X)
-	cp2 := (c.X-b.X)*(p.Y-b.Y) - (c.Y-b.Y)*(p.X-b.X)
-	cp3 := (a.X-c.X)*(p.Y-c.Y) - (a.Y-c.Y)*(p.X-c.X)
+func Orientation(p, q, r Point) int {
+	det := Orient2D(p, q, r)
+	if det > 0 {
+		return 2
+	}
+	if det < 0 {
+		return 1
+	}
+	return 0
+}
 
-	const eps = 0.5
-	return (cp1 >= -eps && cp2 >= -eps && cp3 >= -eps) || (cp1 <= eps && cp2 <= eps && cp3 <= eps)
+func Orient2D(pa, pb, pc Point) float64 {
+	detLeft := (pa.X - pc.X) * (pb.Y - pc.Y)
+	detRight := (pa.Y - pc.Y) * (pb.X - pc.X)
+	det := detLeft - detRight
+
+	detSum := math.Abs(detLeft) + math.Abs(detRight)
+	if math.Abs(det) >= errBoundOri*detSum {
+		return det
+	}
+	return Orient2DExact(pa, pb, pc)
+}
+
+func Orient2DExact(pa, pb, pc Point) float64 {
+	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
+	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
+	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)
+
+	acx := new(big.Float).Sub(ax, cx)
+	bcy := new(big.Float).Sub(by, cy)
+	acy := new(big.Float).Sub(ay, cy)
+	bcx := new(big.Float).Sub(bx, cx)
+
+	left := new(big.Float).Mul(acx, bcy)
+	right := new(big.Float).Mul(acy, bcx)
+
+	det := new(big.Float).Sub(left, right)
+	res, _ := det.Float64()
+	return res
+}
+
+func InCircle2D(pa, pb, pc, pd Point) float64 {
+	adx, ady := pa.X-pd.X, pa.Y-pd.Y
+	bdx, bdy := pb.X-pd.X, pb.Y-pd.Y
+	cdx, cdy := pc.X-pd.X, pc.Y-pd.Y
+
+	abDet := adx*bdy - bdx*ady
+	bcDet := bdx*cdy - cdx*bdy
+	caDet := cdx*ady - adx*cdy
+
+	aLift := adx*adx + ady*ady
+	bLift := bdx*bdx + bdy*bdy
+	cLift := cdx*cdx + cdy*cdy
+
+	det := aLift*bcDet + bLift*caDet + cLift*abDet
+
+	perman := (math.Abs(adx*bdy)+math.Abs(bdx*ady))*cLift +
+		(math.Abs(bdx*cdy)+math.Abs(cdx*bdy))*aLift +
+		(math.Abs(cdx*ady)+math.Abs(adx*cdy))*bLift
+
+	if math.Abs(det) >= errBoundInc*perman {
+		return det
+	}
+	return InCircle2DExact(pa, pb, pc, pd)
+}
+
+func InCircle2DExact(pa, pb, pc, pd Point) float64 {
+	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
+	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
+	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)
+	dx, dy := BigFloat(pd.X), BigFloat(pd.Y)
+
+	adx, ady := new(big.Float).Sub(ax, dx), new(big.Float).Sub(ay, dy)
+	bdx, bdy := new(big.Float).Sub(bx, dx), new(big.Float).Sub(by, dy)
+	cdx, cdy := new(big.Float).Sub(cx, dx), new(big.Float).Sub(cy, dy)
+
+	abDet := new(big.Float).Sub(new(big.Float).Mul(adx, bdy), new(big.Float).Mul(bdx, ady))
+	bcDet := new(big.Float).Sub(new(big.Float).Mul(bdx, cdy), new(big.Float).Mul(cdx, bdy))
+	caDet := new(big.Float).Sub(new(big.Float).Mul(cdx, ady), new(big.Float).Mul(adx, cdy))
+
+	aLift := new(big.Float).Add(new(big.Float).Mul(adx, adx), new(big.Float).Mul(ady, ady))
+	bLift := new(big.Float).Add(new(big.Float).Mul(bdx, bdx), new(big.Float).Mul(bdy, bdy))
+	cLift := new(big.Float).Add(new(big.Float).Mul(cdx, cdx), new(big.Float).Mul(cdy, cdy))
+
+	term1 := new(big.Float).Mul(aLift, bcDet)
+	term2 := new(big.Float).Mul(bLift, caDet)
+	term3 := new(big.Float).Mul(cLift, abDet)
+
+	det := new(big.Float).Add(new(big.Float).Add(term1, term2), term3)
+	res, _ := det.Float64()
+	return res
 }

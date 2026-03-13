@@ -278,7 +278,9 @@ func (w *RenderOpenGL) glStreamRender() {
 
 	gl.BindVertexArray(w.mainVao)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
-	gl.BufferData(gl.ARRAY_BUFFER, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()), gl.DYNAMIC_DRAW)
+
+	// Aggiornamento parziale in-place, zero allocazioni
+	gl.BufferSubData(gl.ARRAY_BUFFER, 0, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()))
 
 	gl.ActiveTexture(gl.TEXTURE0)
 

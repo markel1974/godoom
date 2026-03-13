@@ -71,18 +71,56 @@ func (s *Sector) Has(id uint64) bool {
 	return ok
 }
 
-// IsVisible determines if a span [x1, x2] is visible for the current sector based on the given id.
 func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
 	if s.LastCompileId != id {
 		s.VisibleSpans = s.VisibleSpans[:0]
 		s.LastCompileId = id
 	}
 	for _, span := range s.VisibleSpans {
+		// Se lo span da testare è interamente contenuto in uno span fuso, è occluso.
 		if x1 >= span[0] && x2 <= span[1] {
-			return false // Già coperto da un portale più grande
+			return false
 		}
 	}
 	return true
+}
+
+// AddSpan inserisce un nuovo segmento di occlusione (es. muro solido disegnato)
+// fondendolo con eventuali span adiacenti o sovrapposti in tempo reale.
+func (s *Sector) AddSpan(x1 float64, x2 float64) {
+	var merged [][2]float64
+	inserted := false
+
+	for _, span := range s.VisibleSpans {
+		if inserted {
+			merged = append(merged, span)
+			continue
+		}
+
+		if x2 < span[0] {
+			// Inserimento a sinistra (mantiene l'ordinamento)
+			merged = append(merged, [2]float64{x1, x2})
+			merged = append(merged, span)
+			inserted = true
+		} else if x1 > span[1] {
+			// Nessuna sovrapposizione
+			merged = append(merged, span)
+		} else {
+			// Sovrapposizione: fusione dei limiti
+			if span[0] < x1 {
+				x1 = span[0]
+			}
+			if span[1] > x2 {
+				x2 = span[1]
+			}
+		}
+	}
+
+	if !inserted {
+		merged = append(merged, [2]float64{x1, x2})
+	}
+
+	s.VisibleSpans = merged
 }
 
 // Print converts the Sector instance into a JSON-formatted string, optionally indented for readability.

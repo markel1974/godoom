@@ -28,18 +28,17 @@ type segment struct {
 	np     int
 }
 
-// edgeKey represents a unique key for an edge in 2D space, defined by the coordinates of its start and end points.
 type edgeKey struct {
-	x1, y1, x2, y2 float64
+	x1, y1, x2, y2 int64
 }
 
-// makeEdgeKey generates a unique edgeKey for an edge defined by two points, used for identifying edges in a 2D space.
 func makeEdgeKey(start XY, end XY) edgeKey {
+	const precision = 1000.0
 	return edgeKey{
-		x1: start.X,
-		y1: start.Y,
-		x2: end.X,
-		y2: end.Y,
+		x1: int64(math.Round(start.X * precision)),
+		y1: int64(math.Round(start.Y * precision)),
+		x2: int64(math.Round(end.X * precision)),
+		y2: int64(math.Round(end.Y * precision)),
 	}
 }
 

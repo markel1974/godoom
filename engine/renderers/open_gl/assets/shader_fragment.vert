@@ -34,10 +34,11 @@ void main()
     float cosThetaRoom = dot(-L_room, spotDirRoom);
     float roomSpotIntensity = smoothstep(0.30, 0.50, cosThetaRoom);
 
-    // B. Torcia (Inseguimento Camera)
-    vec3 L_flash = normalize(u_cameraPos - ViewPos);
-    float cosThetaFlash = dot(-L_flash, normalize(u_cameraFront));
-    // Cono della torcia: 0.85 (bordo) -> 0.95 (centro)
+    // B. Torcia (In View Space la camera è all'origine 0,0,0)
+    vec3 L_flash = normalize(-ViewPos);
+    // In View Space la camera punta sempre verso -Z
+    vec3 viewFront = vec3(0.0, 0.0, -1.0);
+    float cosThetaFlash = dot(-L_flash, viewFront); // Equivalente a L_flash.z
     float flashIntensity = smoothstep(0.85, 0.95, cosThetaFlash);
 
     // --- 2. NORMALE E BUMP MAPPING (TBN) ---
@@ -77,8 +78,8 @@ void main()
     float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
     // --- 4. RIFLESSO SPECULARE BLINN-PHONG ---
-    vec3 V = normalize(u_cameraPos - ViewPos);
-
+    // Il vettore di vista V punta dal frammento alla camera (origine)
+    vec3 V = normalize(-ViewPos);
     float NdotH_room = max(dot(finalNormal, normalize(L_room + V)), 0.0);
     float NdotH_flash = max(dot(finalNormal, normalize(L_flash + V)), 0.0);
 

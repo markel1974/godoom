@@ -194,14 +194,20 @@ func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *Que
 		// EXACT LINEAR CLIPPING AGAINST THE NEAR-Z PLANE
 		if tz1 <= model.NearZ || tz2 <= model.NearZ {
 			if tz1 <= model.NearZ && tz2 <= model.NearZ {
-				// The segment is too close to the camera to generate geometry,
-				// but if it's a portal, we are physically crossing the threshold.
-				// We must necessarily pass visibility to the adjacent sector
-				if neighbor != nil {
-					outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
-				}
-				continue
+				continue // Nessun attraversamento, il portale è alle spalle.
 			}
+
+			/*
+				if tz1 <= model.NearZ && tz2 <= model.NearZ {
+					// The segment is too close to the camera to generate geometry,
+					// but if it's a portal, we are physically crossing the threshold.
+					// We must necessarily pass visibility to the adjacent sector
+					if neighbor != nil {
+						outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
+					}
+					continue
+				}
+			*/
 
 			// Calculate the exact intersection point (t from 0.0 to 1.0)
 			t := (model.NearZ - tz1) / (tz2 - tz1)

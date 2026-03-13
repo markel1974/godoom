@@ -275,6 +275,8 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 
 // Compute updates the player's position and velocity based on collision detection and sector constraints.
 func (p *Player) Compute(vi *ViewItem) {
+	const maxIter = 3
+
 	p.VerticalCollision()
 	if !p.IsMoving() {
 		return
@@ -283,49 +285,52 @@ func (p *Player) Compute(vi *ViewItem) {
 	headPos := p.GetHeadPosition()
 	kneePos := p.GetKneePosition()
 	dx, dy := p.GetVelocity()
-	pSector := p.GetSector()
 
-	px, py := vi.GetXY()
-	p1 := px + dx
-	p2 := py + dy
+	// Micro-loop per predizione collisioni multiple
+	for iter := 0; iter < maxIter; iter++ {
+		hit := false
+		pSector := p.GetSector()
+		px, py := vi.GetXY()
+		p1 := px + dx
+		p2 := py + dy
 
-	// Check if the player is about to cross one of the sector's edges
-	for _, seg := range pSector.Segments {
-		start := seg.Start
-		end := seg.End
+		for _, seg := range pSector.Segments {
+			start := seg.Start
+			end := seg.End
 
-		if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
-			// Check where the hole is.
-			holeLow := 9e9
-			holeHigh := -9e9
-			if seg.Sector != nil {
-				holeLow = mathematic.MaxF(pSector.FloorY, seg.Sector.FloorY)
-				holeHigh = mathematic.MinF(pSector.CeilY, seg.Sector.CeilY)
-			}
+			if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
+				holeLow := 9e9
+				holeHigh := -9e9
+				if seg.Sector != nil {
+					holeLow = mathematic.MaxF(pSector.FloorY, seg.Sector.FloorY)
+					holeHigh = mathematic.MinF(pSector.CeilY, seg.Sector.CeilY)
+				}
 
-			// Check whether we're bumping into a wall
-			if holeHigh < headPos || holeLow > kneePos {
-				// Bumps into a wall! Slide along the wall
-				xd := end.X - start.X
-				yd := end.Y - start.Y
-				lenSq := xd*xd + yd*yd
+				if holeHigh < headPos || holeLow > kneePos {
+					xd := end.X - start.X
+					yd := end.Y - start.Y
+					lenSq := xd*xd + yd*yd
 
-				if lenSq > 0 {
-					dot := dx*xd + dy*yd
-					dx = (xd * dot) / lenSq
-					dy = (yd * dot) / lenSq
+					if lenSq > 0 {
+						dot := dx*xd + dy*yd
+						dx = (xd * dot) / lenSq
+						dy = (yd * dot) / lenSq
 
-					// Calcolo della normale interna (winding CCW) e applicazione dell'epsilon
-					invLen := 1.0 / math.Sqrt(lenSq)
-					nx := -yd * invLen
-					ny := xd * invLen
+						invLen := 1.0 / math.Sqrt(lenSq)
+						nx := -yd * invLen
+						ny := xd * invLen
 
-					epsilon := 0.005
-					dx += nx * epsilon
-					dy += ny * epsilon
+						epsilon := 0.005
+						dx += nx * epsilon
+						dy += ny * epsilon
+					}
+					hit = true
+					break // Vettore modificato, ri-valuta contro la geometria
 				}
 			}
-			break
+		}
+		if !hit {
+			break // Traiettoria stabilizzata
 		}
 	}
 

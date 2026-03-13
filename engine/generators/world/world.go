@@ -72,7 +72,8 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 			xy.Y = y + max
 		}
 		if c == 0 {
-			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor := model.NewConfigSegment("unknown", model.DefinitionUnknown, xy, xy)
+			//neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
 			neighbor.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
 			neighbor.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
 			neighbor.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
@@ -83,7 +84,8 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		} else {
 			prev := sector.Segments[c-1]
 			prev.End = xy
-			neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
+			neighbor := model.NewConfigSegment("unknown", model.DefinitionUnknown, xy, xy)
+			//neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
 			neighbor.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
 			neighbor.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
 			neighbor.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)

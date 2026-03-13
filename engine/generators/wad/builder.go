@@ -3,7 +3,6 @@ package wad
 import (
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
@@ -18,37 +17,6 @@ const ScaleFactorCeilFloorLineDef = 8.0
 
 const SkyPicture = "F_SKY1"
 
-// Point represents a 2D coordinate with X and Y as floating-point values.
-type Point struct {
-	X float64
-	Y float64
-}
-
-// ToModelXY converts a Point instance to a model.XY structure with identical X and Y coordinate values.
-func (p Point) ToModelXY() model.XY { return model.XY{X: p.X, Y: p.Y} }
-
-// Triangle represents a geometric shape consisting of three vertices defined by points in 2D space.
-type Triangle struct {
-	A, B, C Point
-}
-
-// HasVertex checks whether the given point is one of the vertices of the triangle.
-func (t Triangle) HasVertex(p Point) bool {
-	return t.A == p || t.B == p || t.C == p
-}
-
-// HasEdge checks if the given edge exists in the triangle, considering both possible orientations of the edge.
-func (t Triangle) HasEdge(e [2]Point) bool {
-	eRev := [2]Point{e[1], e[0]}
-	tEdges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
-	for _, te := range tEdges {
-		if te == e || te == eRev {
-			return true
-		}
-	}
-	return false
-}
-
 // Edge represents a connection between two vertices in a graph or geometric structure.
 // V1 and V2 are the indices of the vertices connected by the edge.
 // LDIdx is an index associated with a line definition in the context of the level structure.
@@ -62,12 +30,6 @@ type Edge struct {
 // EdgeKey represents a unique key for an edge defined by its start and end points in 2D space.
 type EdgeKey struct {
 	X1, Y1, X2, Y2 float64
-}
-
-// PolygonDef represents a polygon with an outer boundary and optional holes defined as collections of points.
-type PolygonDef struct {
-	Outer []Point
-	Holes [][]Point
 }
 
 // Builder provides utilities for constructing or processing line definitions within a WAD file.
@@ -148,11 +110,16 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level) []*model.ConfigSector
 
 	for secIdx, edges := range sectorToEdges {
 		wadSector := level.Sectors[secIdx]
-		polygonDefs := traceLoops(level, edges)
+		polygonDefs := bld.traceLoops(level, edges)
+
+		if secIdx == 7 {
+			fmt.Printf("Polygon: %v\n", edges)
+		}
 
 		for loopIdx, def := range polygonDefs {
-			mergedPoly := mergeHoles(def)
-			triangles := triangulate(mergedPoly)
+			mergedPoly := def.BridgeHoles()
+
+			triangles := mergedPoly.Triangulate(int(secIdx))
 
 			for triIdx, tri := range triangles {
 				cSector := bld.buildConfigSector(level, wadSector, secIdx, loopIdx, triIdx, edges)
@@ -350,7 +317,7 @@ func (bld *Builder) resolveSectorId(p Point, sectors []*model.ConfigSector) stri
 		v2 := Point{s.Segments[1].Start.X, -s.Segments[1].Start.Y}
 		v3 := Point{s.Segments[2].Start.X, -s.Segments[2].Start.Y}
 
-		if pointInTriangle(p, v1, v2, v3) {
+		if PointInTriangle(p, v1, v2, v3) {
 			return s.Id
 		}
 
@@ -366,139 +333,8 @@ func (bld *Builder) resolveSectorId(p Point, sectors []*model.ConfigSector) stri
 	return closestSector
 }
 
-// maxPointsX returns the maximum X coordinate value from a slice of Point objects.
-func maxPointsX(poly []Point) float64 {
-	max := poly[0].X
-	for _, p := range poly {
-		if p.X > max {
-			max = p.X
-		}
-	}
-	return max
-}
-
-// mergeHoles connects holes and outer boundaries in a polygon definition into a single ordered list of points.
-func mergeHoles(def PolygonDef) []Point {
-	if len(def.Holes) == 0 {
-		return def.Outer
-	}
-
-	// Optimization 1: Exact calculation of final capacity to eliminate dynamic reallocations
-	totalLen := len(def.Outer)
-	for _, h := range def.Holes {
-		totalLen += len(h) + 2 // +2 for bridge vertices (forward and return)
-	}
-
-	outer := make([]Point, len(def.Outer), totalLen)
-	copy(outer, def.Outer)
-
-	// Sort holes from right to left to ensure topological consistency in bridging
-	sort.Slice(def.Holes, func(i, j int) bool {
-		return maxPointsX(def.Holes[i]) > maxPointsX(def.Holes[j])
-	})
-
-	for _, hole := range def.Holes {
-		holeIdx := 0
-		mX := hole[0].X
-		for i := 1; i < len(hole); i++ {
-			if hole[i].X > mX {
-				mX = hole[i].X
-				holeIdx = i
-			}
-		}
-		holePoint := hole[holeIdx]
-		bestOuterIdx := -1
-		minDist := math.MaxFloat64
-
-		for i, op := range outer {
-			if op.X < holePoint.X {
-				continue
-			}
-
-			// Optimization 2: Fast rejection. Calculate distance in O(1) before
-			// launching isVisible (which is O(N) for each segment).
-			if dist := distanceSq(holePoint, op); dist < minDist {
-				if isVisible(holePoint, op, hole, outer) {
-					minDist = dist
-					bestOuterIdx = i
-				}
-			}
-		}
-
-		// Topological fallback for non-manifold sectors or anomalous intersections
-		if bestOuterIdx == -1 {
-			bestOuterIdx = 0
-			for i, op := range outer {
-				if dist := distanceSq(holePoint, op); dist < minDist {
-					minDist = dist
-					bestOuterIdx = i
-				}
-			}
-		}
-
-		// Optimization 3: In-place memory shifting leveraging pre-allocated capacity.
-		// No additional heap allocation for new bridges.
-		oldLen := len(outer)
-		spliceLen := len(hole) + 2
-		outer = append(outer, make([]Point, spliceLen)...)
-
-		// Forward shift of elements to the right of the insertion point
-		copy(outer[bestOuterIdx+1+spliceLen:], outer[bestOuterIdx+1:oldLen])
-
-		// Linear reconstruction of the bridge
-		insertPos := bestOuterIdx + 1
-		for i := 0; i < len(hole); i++ {
-			outer[insertPos+i] = hole[(holeIdx+i)%len(hole)]
-		}
-		outer[insertPos+len(hole)] = holePoint
-		outer[insertPos+len(hole)+1] = outer[bestOuterIdx]
-	}
-
-	return outer
-}
-
-// isVisible checks if the line segment between p1 and p2 does not intersect any edge from the hole or outer polygon.
-func isVisible(p1, p2 Point, hole, outer []Point) bool {
-	for i := 0; i < len(outer); i++ {
-		e1, e2 := outer[i], outer[(i+1)%len(outer)]
-		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
-			continue
-		}
-		if segmentsIntersect(p1, p2, e1, e2) {
-			return false
-		}
-	}
-	for i := 0; i < len(hole); i++ {
-		e1, e2 := hole[i], hole[(i+1)%len(hole)]
-		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
-			continue
-		}
-		if segmentsIntersect(p1, p2, e1, e2) {
-			return false
-		}
-	}
-	return true
-}
-
-// distanceSq calculates and returns the squared Euclidean distance between two points p1 and p2.
-func distanceSq(p1, p2 Point) float64 {
-	dx := p1.X - p2.X
-	dy := p1.Y - p2.Y
-	return dx*dx + dy*dy
-}
-
-// pointInTriangle determines if a point p lies inside or on the edges of a triangle formed by vertices a, b, and c.
-func pointInTriangle(p, a, b, c Point) bool {
-	cp1 := (b.X-a.X)*(p.Y-a.Y) - (b.Y-a.Y)*(p.X-a.X)
-	cp2 := (c.X-b.X)*(p.Y-b.Y) - (c.Y-b.Y)*(p.X-b.X)
-	cp3 := (a.X-c.X)*(p.Y-c.Y) - (a.Y-c.Y)*(p.X-c.X)
-
-	const eps = 0.5
-	return (cp1 >= -eps && cp2 >= -eps && cp3 >= -eps) || (cp1 <= eps && cp2 <= eps && cp3 <= eps)
-}
-
 // traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
-func traceLoops(level *Level, edges []Edge) []PolygonDef {
+func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
 	// Optimization: O(1) array access instead of map[uint16][]Edge
 	adj := make([][]Edge, len(level.Vertexes))
 	for _, e := range edges {
@@ -507,6 +343,7 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 
 	// Optimization: flat bitmask/boolean array (LDIdx << 1 | IsLeft) instead of map[Edge]bool
 	visited := make([]bool, len(level.LineDefs)*2)
+
 	getVisitedIdx := func(e Edge) int {
 		idx := e.LDIdx << 1
 		if e.IsLeft {
@@ -515,7 +352,7 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 		return idx
 	}
 
-	var rawLoops [][]Point
+	var rawLoops []Polygon
 
 	for _, startEdge := range edges {
 		vIdx := getVisitedIdx(startEdge)
@@ -523,7 +360,7 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 			continue
 		}
 
-		var currentLoop []Point
+		var currentLoop Polygon
 		curr := startEdge
 		for {
 			visited[getVisitedIdx(curr)] = true
@@ -555,15 +392,15 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 		return nil
 	}
 
-	var outers [][]Point
-	var holes [][]Point
+	var outers []Polygon
+	var holes []Polygon
 
 	maxArea := 0.0
 	outerSign := 1.0
 
 	areas := make([]float64, len(rawLoops))
 	for i, loop := range rawLoops {
-		areas[i] = signedArea(loop)
+		areas[i] = loop.SignedArea()
 		absArea := math.Abs(areas[i])
 		if absArea > maxArea {
 			maxArea = absArea
@@ -583,14 +420,14 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 		}
 	}
 
-	defs := make([]PolygonDef, len(outers))
+	defs := make([]ComplexPolygon, len(outers))
 	for i, o := range outers {
-		defs[i] = PolygonDef{Outer: o}
+		defs[i] = ComplexPolygon{Outer: o}
 	}
 
 	for _, h := range holes {
 		for i, def := range defs {
-			if pointInPolygon(h[0], def.Outer) {
+			if def.Outer.PointInPolygon(h[0]) {
 				defs[i].Holes = append(defs[i].Holes, h)
 				break
 			}
@@ -601,368 +438,3 @@ func traceLoops(level *Level, edges []Edge) []PolygonDef {
 }
 
 // GEOMETRY & CDT ENGINE
-
-// triangulate performs constrained Delaunay triangulation on a polygon with optional holes.
-// It returns a list of triangles, each represented by 3 counterclockwise points.
-func triangulate(poly []Point) [][]Point {
-	if len(poly) < 3 {
-		return nil
-	}
-
-	// 1. Deserialization: extract Outer and Holes from flat array separated by NaN
-	var outer []Point
-	var holes [][]Point
-	var current []Point
-
-	for _, p := range poly {
-		if math.IsNaN(p.X) || math.IsNaN(p.Y) {
-			if outer == nil {
-				outer = current
-			} else {
-				holes = append(holes, current)
-			}
-			current = nil
-		} else {
-			current = append(current, p)
-		}
-	}
-	if outer == nil {
-		outer = current
-	} else if len(current) > 0 {
-		holes = append(holes, current)
-	}
-
-	// 2. Collect all valid vertices
-	var points []Point
-	points = append(points, outer...)
-	for _, h := range holes {
-		points = append(points, h...)
-	}
-
-	if len(points) < 3 {
-		return nil
-	}
-
-	// 3. Unconstrained Delaunay Triangulation (Bowyer-Watson)
-	mesh := bowyerWatson(points)
-
-	// 4. Constraint Recovery (Lawson Edge Flipping)
-	var constraints [][2]Point
-	constraints = append(constraints, buildConstraints(outer)...)
-	for _, hole := range holes {
-		constraints = append(constraints, buildConstraints(hole)...)
-	}
-	mesh = recoverConstraints(mesh, constraints)
-
-	// 5. Domain Culling
-	var finalTriangles [][]Point
-	for _, t := range mesh {
-		// Calculate centroid for containment test
-		centroid := Point{
-			X: (t.A.X + t.B.X + t.C.X) / 3.0,
-			Y: (t.A.Y + t.B.Y + t.C.Y) / 3.0,
-		}
-
-		// The triangle is valid if it's inside the perimeter and outside all holes
-		if pointInPolygon(centroid, outer) {
-			inHole := false
-			for _, hole := range holes {
-				if pointInPolygon(centroid, hole) {
-					inHole = true
-					break
-				}
-			}
-			if !inHole {
-				// Ensure counterclockwise (CCW) winding required by renderer
-				if orientation(t.A, t.B, t.C) == 2 {
-					finalTriangles = append(finalTriangles, []Point{t.A, t.C, t.B})
-				} else {
-					finalTriangles = append(finalTriangles, []Point{t.A, t.B, t.C})
-				}
-			}
-		}
-	}
-
-	return finalTriangles
-}
-
-// buildConstraints generates edge constraints from a polygon by connecting consecutive vertices in cyclical order.
-func buildConstraints(poly []Point) [][2]Point {
-	var c [][2]Point
-	if len(poly) < 3 {
-		return c
-	}
-	for i := 0; i < len(poly); i++ {
-		c = append(c, [2]Point{poly[i], poly[(i+1)%len(poly)]})
-	}
-	return c
-}
-
-// bowyerWatson performs the Bowyer-Watson algorithm for constructing a Delaunay triangulation from a set of points.
-func bowyerWatson(points []Point) []Triangle {
-	minX, minY := math.MaxFloat64, math.MaxFloat64
-	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
-
-	for _, p := range points {
-		if p.X < minX {
-			minX = p.X
-		}
-		if p.X > maxX {
-			maxX = p.X
-		}
-		if p.Y < minY {
-			minY = p.Y
-		}
-		if p.Y > maxY {
-			maxY = p.Y
-		}
-	}
-
-	dx, dy := maxX-minX, maxY-minY
-	deltaMax := math.Max(dx, dy)
-	if deltaMax == 0 {
-		deltaMax = 1.0
-	}
-	midX, midY := (minX+maxX)/2.0, (minY+maxY)/2.0
-
-	// Bounding super-triangle that wraps the entire area
-	stA := Point{X: midX - 20*deltaMax, Y: midY - deltaMax}
-	stB := Point{X: midX, Y: midY + 20*deltaMax}
-	stC := Point{X: midX + 20*deltaMax, Y: midY - deltaMax}
-
-	triangles := []Triangle{{stA, stB, stC}}
-
-	for _, p := range points {
-		var badTriangles []Triangle
-		var polygon [][2]Point
-
-		for _, t := range triangles {
-			// Force CCW orientation for exact InCircle determinant
-			if orientation(t.A, t.B, t.C) == 2 {
-				if inCircle(t.A, t.B, t.C, p) {
-					badTriangles = append(badTriangles, t)
-				}
-			} else {
-				if inCircle(t.A, t.C, t.B, p) {
-					badTriangles = append(badTriangles, t)
-				}
-			}
-		}
-
-		for _, bt := range badTriangles {
-			edges := [3][2]Point{{bt.A, bt.B}, {bt.B, bt.C}, {bt.C, bt.A}}
-			for _, edge := range edges {
-				shared := false
-				for _, other := range badTriangles {
-					if bt == other {
-						continue
-					}
-					if other.HasEdge(edge) {
-						shared = true
-						break
-					}
-				}
-				if !shared {
-					polygon = append(polygon, edge)
-				}
-			}
-		}
-
-		var nextTriangles []Triangle
-		for _, t := range triangles {
-			isBad := false
-			for _, bt := range badTriangles {
-				if t == bt {
-					isBad = true
-					break
-				}
-			}
-			if !isBad {
-				nextTriangles = append(nextTriangles, t)
-			}
-		}
-		triangles = nextTriangles
-
-		for _, edge := range polygon {
-			triangles = append(triangles, Triangle{edge[0], edge[1], p})
-		}
-	}
-
-	var finalTriangles []Triangle
-	for _, t := range triangles {
-		if !t.HasVertex(stA) && !t.HasVertex(stB) && !t.HasVertex(stC) {
-			finalTriangles = append(finalTriangles, t)
-		}
-	}
-
-	return finalTriangles
-}
-
-// recoverConstraints enforces WAD segments on the mesh through Edge Flipping,
-// preventing infinite loops on non-convex quadrilaterals.
-func recoverConstraints(triangles []Triangle, constraints [][2]Point) []Triangle {
-	const failsafeMax = 10000
-	for _, c := range constraints {
-		failsafe := 0
-		for {
-			failsafe++
-			if failsafe > failsafeMax {
-				fmt.Println("Edge flipping failed, topology is degenerate")
-				break // Absolute failsafe: impossible/degenerate topology in the WAD
-			}
-
-			flipped := false
-
-			for i, t := range triangles {
-				edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
-				for _, e := range edges {
-					if e[0] == c[0] || e[0] == c[1] || e[1] == c[0] || e[1] == c[1] {
-						continue
-					}
-
-					if segmentsIntersect(e[0], e[1], c[0], c[1]) {
-						adjIdx := -1
-						for j, ot := range triangles {
-							if i == j {
-								continue
-							}
-							if ot.HasEdge(e) {
-								adjIdx = j
-								break
-							}
-						}
-
-						if adjIdx != -1 {
-							t1 := triangles[i]
-							t2 := triangles[adjIdx]
-
-							var pOpp1, pOpp2 Point
-							for _, v := range []Point{t1.A, t1.B, t1.C} {
-								if v != e[0] && v != e[1] {
-									pOpp1 = v
-									break
-								}
-							}
-							for _, v := range []Point{t2.A, t2.B, t2.C} {
-								if v != e[0] && v != e[1] {
-									pOpp2 = v
-									break
-								}
-							}
-
-							// CONVEXITY TEST: the new diagonal (pOpp1-pOpp2)
-							// must leave the old vertices (e[0], e[1]) on opposite sides.
-							o1 := orientation(pOpp1, pOpp2, e[0])
-							o2 := orientation(pOpp1, pOpp2, e[1])
-
-							if o1 != o2 && o1 != 0 && o2 != 0 {
-								// Convex quadrilateral: safe flip
-								triangles[i] = Triangle{pOpp1, pOpp2, e[0]}
-								triangles[adjIdx] = Triangle{pOpp1, pOpp2, e[1]}
-								flipped = true
-								break // Restart scanning with the new topology
-							}
-						}
-					}
-				}
-				if flipped {
-					break
-				}
-			}
-			// If we scanned all triangles without making valid flips,
-			// the constraint is resolved or blocked on unsolvable degeneracies.
-			if !flipped {
-				break
-			}
-		}
-	}
-	return triangles
-}
-
-// inCircle determines if a point `d` lies within the circumcircle of triangle formed by points `a`, `b`, and `c`.
-func inCircle(a, b, c, d Point) bool {
-	adx, ady := a.X-d.X, a.Y-d.Y
-	bdx, bdy := b.X-d.X, b.Y-d.Y
-	cdx, cdy := c.X-d.X, c.Y-d.Y
-
-	abDet := adx*bdy - bdx*ady
-	bcDet := bdx*cdy - cdx*bdy
-	caDet := cdx*ady - adx*cdy
-
-	aLift := adx*adx + ady*ady
-	bLift := bdx*bdx + bdy*bdy
-	cLift := cdx*cdx + cdy*cdy
-
-	return aLift*bcDet+bLift*caDet+cLift*abDet > 0
-}
-
-// orientation calculates the orientation of three points (p, q, r).
-// Returns 0 if collinear, 1 if clockwise, and 2 if counterclockwise.
-func orientation(p, q, r Point) int {
-	val := (q.Y-p.Y)*(r.X-q.X) - (q.X-p.X)*(r.Y-q.Y)
-	if val == 0 {
-		return 0
-	}
-	if val > 0 {
-		return 1
-	}
-	return 2
-}
-
-// onSegment checks if point q lies on the line segment defined by points p and r.
-func onSegment(p, q, r Point) bool {
-	return q.X <= math.Max(p.X, r.X) && q.X >= math.Min(p.X, r.X) &&
-		q.Y <= math.Max(p.Y, r.Y) && q.Y >= math.Min(p.Y, r.Y)
-}
-
-// segmentsIntersect checks whether two line segments (p1-q1 and p2-q2) intersect. Uses orientation and colinearity checks.
-func segmentsIntersect(p1, q1, p2, q2 Point) bool {
-	o1 := orientation(p1, q1, p2)
-	o2 := orientation(p1, q1, q2)
-	o3 := orientation(p2, q2, p1)
-	o4 := orientation(p2, q2, q1)
-
-	if o1 != o2 && o3 != o4 {
-		return true
-	}
-	if o1 == 0 && onSegment(p1, p2, q1) {
-		return true
-	}
-	if o2 == 0 && onSegment(p1, q2, q1) {
-		return true
-	}
-	if o3 == 0 && onSegment(p2, p1, q2) {
-		return true
-	}
-	if o4 == 0 && onSegment(p2, q1, q2) {
-		return true
-	}
-
-	return false
-}
-
-// pointInPolygon determines whether a point is inside a given polygon using the ray-casting algorithm.
-// p represents the point to test.
-// poly is the array of Points defining the polygon, ordered either clockwise or counterclockwise.
-// Returns true if the point is inside the polygon; otherwise, returns false.
-func pointInPolygon(p Point, poly []Point) bool {
-	inside := false
-	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
-		xi, yi := poly[i].X, poly[i].Y
-		xj, yj := poly[j].X, poly[j].Y
-		if ((yi > p.Y) != (yj > p.Y)) && (p.X < (xj-xi)*(p.Y-yi)/(yj-yi)+xi) {
-			inside = !inside
-		}
-	}
-	return inside
-}
-
-// signedArea calculates the signed area of a polygon defined by a slice of Points, using the shoelace formula.
-func signedArea(poly []Point) float64 {
-	var area float64
-	for i := 0; i < len(poly); i++ {
-		p1, p2 := poly[i], poly[(i+1)%len(poly)]
-		area += p1.X*p2.Y - p2.X*p1.Y
-	}
-	return area / 2.0
-}

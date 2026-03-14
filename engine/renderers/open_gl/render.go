@@ -153,7 +153,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 	if tex == nil {
 		return
 	}
-	texId, ok := w.compiler.GetTexture(tex)
+	texId, normTexId, ok := w.compiler.GetTexture(tex)
 	if !ok {
 		return
 	}
@@ -202,7 +202,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 
 	//apply
 	currentLen := w.frameVertices.Len()
-	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+	w.frameCommands.Compute(texId, normTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
 // pushFlat renders a flat surface using vertices from a compiled polygon and texture, applying lighting and transformations.
@@ -220,18 +220,12 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 		return nil
 	}
 	//prepare
-	texId, ok := w.compiler.GetTexture(tex)
+	texId, normTexId, ok := w.compiler.GetTexture(tex)
 	if !ok {
 		return nil
 	}
 	texW, texH := tex.Size()
 	startLen := w.frameVertices.Len()
-
-	// 1. Allinea il fattore di scala anche per pavimenti e soffitti
-	//scale := float32(cp.Sector.Animations.ScaleFactor())
-	//if scale <= 0 {
-	//	scale = 1.0
-	//}
 	_, scaleH := anim.ScaleFactor()
 
 	lightPos := cp.Sector.Light.GetPos()
@@ -269,7 +263,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 
 	//apply
 	currentLen := w.frameVertices.Len()
-	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+	w.frameCommands.Compute(texId, normTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 
 	return nil
 }
@@ -312,7 +306,7 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 		if tex == nil {
 			continue
 		}
-		texId, ok := w.compiler.GetTexture(tex)
+		texId, normTexId, ok := w.compiler.GetTexture(tex)
 		if !ok {
 			continue
 		}
@@ -379,7 +373,7 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 
-		w.frameCommands.Compute(texId, startLen, int32(fv.Len()), fv.Alignment())
+		w.frameCommands.Compute(texId, normTexId, startLen, int32(fv.Len()), fv.Alignment())
 	}
 }
 
@@ -395,11 +389,16 @@ func (w *RenderOpenGL) glStreamRender() {
 	// Aggiornamento parziale in-place, zero allocazioni
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()))
 
-	gl.ActiveTexture(gl.TEXTURE0)
+	gl.ActiveTexture(gl.TEXTURE1)
 
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
+			gl.ActiveTexture(gl.TEXTURE0)
 			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+
+			gl.ActiveTexture(gl.TEXTURE1)
+			gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
+
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}
 	}
@@ -543,9 +542,12 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 
 	gl.BindVertexArray(w.skyVao)
 
-	if texId, ok := w.compiler.GetTexture(cSky); ok {
+	if texId, normTextId, ok := w.compiler.GetTexture(cSky); ok {
 		gl.ActiveTexture(gl.TEXTURE0)
 		gl.BindTexture(gl.TEXTURE_2D, texId)
+		gl.ActiveTexture(gl.TEXTURE1)
+		gl.BindTexture(gl.TEXTURE_2D, normTextId)
+
 		gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
 	}
 

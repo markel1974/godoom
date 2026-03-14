@@ -3,6 +3,7 @@ package open_gl
 // DrawCommand represents a rendering command consisting of texture ID, starting vertex index, and vertex count.
 type DrawCommand struct {
 	texId       uint32
+	normTexId   uint32
 	firstVertex int32
 	vertexCount int32
 }
@@ -25,7 +26,7 @@ func NewDrawCommands(s int) *DrawCommands {
 }
 
 // Compute updates the vertex count of a draw command by calculating the difference between lengths and aligning it.
-func (w *DrawCommands) Compute(texId uint32, startLen int32, currentLen int32, alignment int32) {
+func (w *DrawCommands) Compute(texId uint32, normTexId uint32, startLen int32, currentLen int32, alignment int32) {
 	var cmd *DrawCommand
 	if w.len > 0 && w.commands[w.len-1].texId == texId {
 		cmd = w.commands[w.len-1]
@@ -36,6 +37,7 @@ func (w *DrawCommands) Compute(texId uint32, startLen int32, currentLen int32, a
 
 		cmd = w.commands[w.len]
 		cmd.texId = texId
+		cmd.normTexId = normTexId
 		cmd.firstVertex = startLen / alignment
 		cmd.vertexCount = 0
 		w.len++

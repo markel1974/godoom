@@ -46,7 +46,7 @@ type SpriteNode struct {
 // RenderOpenGL represents the main rendering engine using OpenGL for handling scene rendering and custom debug features.
 type RenderOpenGL struct {
 	portal           *portal.Portal
-	vi               *model.ViewItem
+	vi               *model.ViewMatrix
 	player           *model.Player
 	textures         textures.ITextures
 	win              *pixels.GLWindow
@@ -80,7 +80,7 @@ type RenderOpenGL struct {
 func NewOpenGLRender() *RenderOpenGL {
 	r := &RenderOpenGL{
 		portal:           nil,
-		vi:               model.NewViewItem(),
+		vi:               model.NewViewMatrix(),
 		textures:         nil,
 		player:           nil,
 		win:              nil,
@@ -431,7 +431,7 @@ func (w *RenderOpenGL) glInit() error {
 }
 
 // glUpdateCameraUniforms updates the camera's projection and view uniform matrices in the shader and returns them.
-func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewItem) ([16]float32, [16]float32) {
+func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(shaderProgram)
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)

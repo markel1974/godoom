@@ -106,7 +106,7 @@ func (r *Portal) clear() {
 }
 
 // Compile processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Compile(player *model.Player, vi *model.ViewItem) ([]*model.CompiledSector, int) {
+func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	vi.Compute(player)
 
 	r.clear()
@@ -163,7 +163,7 @@ func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
 }
 
 // compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
-func (r *Portal) compileSector(vi *model.ViewItem, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
+func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false
 	outIdx := 0

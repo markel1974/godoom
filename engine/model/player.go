@@ -274,7 +274,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 }
 
 // Compute updates the player's position and velocity based on collision detection and sector constraints.
-func (p *Player) Compute(vi *ViewItem) {
+func (p *Player) Compute(vi *ViewMatrix) {
 	const maxIter = 3
 
 	p.VerticalCollision()

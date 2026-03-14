@@ -37,7 +37,7 @@ type RenderSoftware struct {
 	dp                 *DrawPolygon
 
 	portal   *portal.Portal
-	vi       *model.ViewItem
+	vi       *model.ViewMatrix
 	player   *model.Player
 	debug    bool
 	debugIdx int
@@ -55,7 +55,7 @@ func NewSoftwareRender() *RenderSoftware {
 		targetLastCompiled: 0,
 		targetEnabled:      false,
 		dp:                 nil,
-		vi:                 model.NewViewItem(),
+		vi:                 model.NewViewMatrix(),
 	}
 }
 
@@ -394,10 +394,10 @@ func (w *RenderSoftware) drawStub() {
 
 // doSerialRender renders compiled sectors to the provided surface in a serial manner, processing from back to front.
 // surface: The target rendering surface.
-// vi: ViewItem data containing camera position, angle, and other view parameters.
+// vi: ViewMatrix data containing camera position, angle, and other view parameters.
 // css: A slice of CompiledSector objects representing visible sectors for rendering.
 // compiled: The number of sectors available to render, processed in reverse order.
-func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
+func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
 		mode := -1 //w.textures.GetViewMode()
 		if w.targetEnabled {
@@ -428,7 +428,7 @@ func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.V
 }
 
 // doParallelRender performs parallel rendering of compiled sectors using goroutines to improve rendering performance.
-func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewItem, css []*model.CompiledSector, compiled int) {
+func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
@@ -456,7 +456,7 @@ func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model
 }
 
 // doRenderPolygon renders a polygon based on its type, mode, and lighting parameters, utilizing various drawing methods.
-func (w *RenderSoftware) doRenderPolygon(vi *model.ViewItem, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+func (w *RenderSoftware) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)

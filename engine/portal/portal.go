@@ -33,6 +33,7 @@ type Portal struct {
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
 	visibilityCache  *VisibilityCache
+	things           []*model.Thing
 }
 
 // NewPortal creates and initializes a new Portal instance with the specified screen dimensions and queue length.
@@ -56,9 +57,10 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 }
 
 // Setup configures the Portal by assigning sectors, setting the maximum height, and initializing compiled sectors.
-func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
+func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64, things []*model.Thing) error {
 	r.sectors = sectors
 	r.sectorsMaxHeight = maxHeight
+	r.things = things
 	r.compiledSectors = make([]*model.CompiledSector, len(r.sectors)*16)
 
 	//debug
@@ -106,7 +108,7 @@ func (r *Portal) clear() {
 }
 
 // Compile processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
 	vi.Compute(player)
 
 	r.clear()
@@ -146,7 +148,7 @@ func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 
 	player.Compute(vi)
 
-	return r.compiledSectors, r.compiledCount
+	return r.compiledSectors, r.compiledCount, r.things
 }
 
 // GetCS retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.

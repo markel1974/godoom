@@ -112,7 +112,7 @@ func (w *RenderOpenGL) Setup(portal *portal.Portal, player *model.Player, t text
 }
 
 // createBatch processes and batches compiled sector polygons for rendering based on their type and attributes.
-func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) *textures.Texture {
+func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, thing []*model.Thing) *textures.Texture {
 	w.frameVertices.Reset()
 	w.frameCommands.Reset()
 	var cSky *textures.Texture = nil
@@ -142,8 +142,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) *t
 	}
 
 	//TODO
-	x, y := w.vi.GetXY()
-	w.pushThings(nil, x, y)
+	w.pushThings(thing)
 	return cSky
 }
 
@@ -275,13 +274,13 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	return nil
 }
 
-// RenderSprites processa la geometria billbordata degli sprite con back-to-front depth sorting.
-// Da invocare nel render loop subito dopo aver sottomesso la geometria statica BSP.
-func (w *RenderOpenGL) pushThings(things []*model.Thing, camX, camY float64) {
+// pushThings processes a list of things, applies culling, depth sorting, and billboarding, then batches them for rendering.
+func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 	if len(things) == 0 {
 		return
 	}
 
+	camX, camY := w.vi.GetXY()
 	queue := make([]SpriteNode, 0, len(things))
 
 	// 1. Culling e calcolo distanza quadrica
@@ -317,37 +316,68 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing, camX, camY float64) {
 		if !ok {
 			continue
 		}
-		width, height := tex.Size()
+
+		texW, texH := tex.Size()
+		scaleW, scaleH := t.Animation.ScaleFactor()
+		width := (float64(texW) * scaleW) / 70
+		height := (float64(texH) * scaleH) / 70
+
 		dist := math.Sqrt(node.DistSq)
 		if dist < 0.0001 {
 			dist = 0.0001
 		}
 
 		// Vettore Right normalizzato e scalato per l'estensione del quad
-		halfW := float64(width) / 2.0
+		halfW := width / 2.0
 		rX := -((camY - t.Position.Y) / dist) * halfW
 		rY := ((camX - t.Position.X) / dist) * halfW
 
-		zBottom := t.Sector.FloorY
-		zTop := zBottom + float64(height)
+		// Coordinate planari dei due spigoli
+		v1x := float32(t.Position.X - rX)
+		v1y := float32(t.Position.Y - rY)
+		v2x := float32(t.Position.X + rX)
+		v2y := float32(t.Position.Y + rY)
 
-		v1x, v1y := float32(t.Position.X-rX), float32(t.Position.Y-rY) // Bottom-Left
-		v2x, v2y := float32(t.Position.X+rX), float32(t.Position.Y+rY) // Bottom-Right
-		zB, zT := float32(zBottom), float32(zTop)
+		// Quota verticale
+		zBottom := float32(t.Sector.FloorY)
+		zTop := zBottom + float32(height)
 
-		light := float32(t.Sector.Light.GetIntensity())
+		// --- LUCE IDENTICA A PUSH WALL ---
+		light := float32((1.0 - t.Sector.Light.GetIntensity()) * 5.0)
+		lightPos := t.Sector.Light.GetPos()
+		_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
+		viZ := w.vi.GetZ()
+		lcY := lightPos.Z - viZ
+
+		vLcX := float32(lcX)
+		vLcY := float32(lcY)
+		vLcZ := float32(-lcZ)
+
+		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
+		dxNorm := float64(v2x - v1x)
+		dzNorm := float64((-v2y) - (-v1y))
+		length := math.Hypot(dxNorm, dzNorm)
+
+		nX := float32(-dzNorm / length)
+		nY := float32(0.0)
+		nZ := float32(dxNorm / length)
 
 		startLen := int32(fv.Len())
 
-		// Triangolo 1 (V1, V2, V3)
-		fv.AddVertex(v1x, v1y, zB, 0.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Left
-		fv.AddVertex(v2x, v2y, zB, 1.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Right
-		fv.AddVertex(v1x, v1y, zT, 0.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Left
+		// --- BATCHING NEL VBO ---
+		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
+		u0, u1 := float32(0.0), float32(1.0)
+		vTop, vBottom := float32(0.0), float32(1.0)
 
-		// Triangolo 2 (V2, V4, V3)
-		fv.AddVertex(v2x, v2y, zB, 1.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Right
-		fv.AddVertex(v2x, v2y, zT, 1.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Right
-		fv.AddVertex(v1x, v1y, zT, 0.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Left
+		// Triangolo 1 (Top-Left -> Bottom-Left -> Bottom-Right)
+		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+
+		// Triangolo 2 (Top-Left -> Bottom-Right -> Top-Right)
+		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 
 		w.frameCommands.Compute(texId, startLen, int32(fv.Len()), fv.Alignment())
 	}
@@ -635,9 +665,9 @@ func (w *RenderOpenGL) doRun() {
 
 // doRender executes the rendering process, updating the framebuffer and rendering the scene using OpenGL commands.
 func (w *RenderOpenGL) doRender() {
-	cs, count := w.portal.Compile(w.player, w.vi)
+	cs, count, things := w.portal.Compile(w.player, w.vi)
 	w.targetLastCompiled = count
-	cSky := w.createBatch(cs, count)
+	cSky := w.createBatch(cs, count, things)
 
 	executor.Thread.Call(func() {
 		w.win.Begin()

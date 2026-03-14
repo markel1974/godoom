@@ -117,5 +117,6 @@ var _spriteDictionary = map[int][]string{
 	37: {"COL6A0"},           // Red skull column
 	52: {"GOR4A0"},           // Hanging pair of legs
 
-	14: {""}, // Teleport Destination (invisible marker)
+	60: {"GOR2A0"}, // Hanging victim, brains removed (Non-blocking)
+	14: {""},       // Teleport Destination (invisible marker)
 }

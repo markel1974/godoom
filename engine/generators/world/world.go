@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/markel1974/godoom/engine/model"
+	"github.com/markel1974/godoom/engine/utils"
 )
 
 // random generates a random integer between the specified min (inclusive) and max (inclusive) values.
@@ -46,7 +47,7 @@ var availableWall = []string{"wall2.ppm"}
 
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
-	sector := model.NewConfigSector(model.NextUUId())
+	sector := model.NewConfigSector(utils.NextUUId())
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
@@ -82,10 +83,16 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	return sector
 }
 
-// Generate creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
-func Generate_OLD(maxX int, maxY int) (*model.ConfigRoot, error) {
+func Generate() (*model.ConfigRoot, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(basePath)
+
+	//return generateSimple(t, 16, 16)
+	return generateDungeon(t, 300, 300, 8.0)
+}
+
+// GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
+func generateSimple(t *Textures, maxX int, maxY int) (*model.ConfigRoot, error) {
 	configPlayer := &model.ConfigPlayer{}
 	cfg := model.NewConfigRoot(nil, configPlayer, nil, 0, false, t)
 	s1 := createCube(0, 0, 8, 0, 20)
@@ -114,15 +121,7 @@ func Generate_OLD(maxX int, maxY int) (*model.ConfigRoot, error) {
 
 	return cfg, nil
 }
-func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
-	// GenerateDungeon crea un labirinto procedurale completamente interconnesso tramite portali.
-	//func Generate(gridWidth int, gridHeight int, cellSize float64) (*model.ConfigRoot, error) {
-	gridWidth := 100
-	gridHeight := 100
-	cellSize := 8.0
-
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := NewTextures(basePath)
+func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*model.ConfigRoot, error) {
 	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 0, false, t)
 
 	// 1. Generazione Logica (Drunkard's Walk)
@@ -170,8 +169,8 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 
 			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline
 			distFromCenter := math.Abs(float64(x-gridWidth/2)) + math.Abs(float64(y-gridHeight/2))
-			sector.FloorY = distFromCenter * 2.5 // Altezza gradino
-			sector.CeilY = sector.FloorY + randomF(20.0, 35.0)
+			sector.FloorY = distFromCenter * 1.5 // Altezza gradino
+			sector.CeilY = sector.FloorY + randomF(20.0, 100.0)
 
 			sector.Animations.Floor = model.NewConfigAnimation([]string{availableFloor[random(0, len(availableFloor)-1)]}, model.AnimationKindLoop)
 			sector.Animations.Ceil = model.NewConfigAnimation([]string{availableCeil[random(0, len(availableCeil)-1)]}, model.AnimationKindLoop)
@@ -208,7 +207,7 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 
 			for _, e := range edges {
 				neighborId := "unknown"
-				kind := model.DefinitionUnknown // Assume sia un muro solido
+				kind := model.DefinitionWall // Assume sia un muro solido
 
 				// Controllo adiacenze per aprire il portale
 				if e.nx >= 0 && e.nx < gridWidth && e.ny >= 0 && e.ny < gridHeight {
@@ -218,7 +217,8 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 					}
 				}
 
-				seg := model.NewConfigSegment(neighborId, kind, e.p1, e.p2)
+				seg := model.NewConfigSegment("", kind, e.p1, e.p2)
+				seg.Neighbor = neighborId
 				seg.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
 				seg.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
 				seg.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)

@@ -32,7 +32,12 @@ func (w *FrameVertices) Alignment() int32 {
 }
 
 // AddVertex appends a new vertex defined by position (x, y, z), texture coordinates (u, v), and lighting intensity.
+// AddVertex appends a new vertex defined by position (x, y, z), texture coordinates (u, v), and lighting intensity.
 func (w *FrameVertices) AddVertex(x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, nZ float32) {
+	if w.len+vertexAlignment > len(w.vertices) {
+		w.Grow()
+	}
+
 	idx := w.len
 	w.vertices[idx] = x
 	w.vertices[idx+1] = y
@@ -52,4 +57,15 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, n
 // Get returns the slice of float32 vertices stored in the FrameVertices instance.
 func (w *FrameVertices) Get() []float32 {
 	return w.vertices[:w.len]
+}
+
+// Grow increases the capacity of the vertices slice to accommodate additional vertex data.
+func (w *FrameVertices) Grow() {
+	newSize := len(w.vertices) * 2
+	if newSize == 0 {
+		newSize = vertexAlignment * 128
+	}
+	newVertices := make([]float32, newSize)
+	copy(newVertices, w.vertices)
+	w.vertices = newVertices
 }

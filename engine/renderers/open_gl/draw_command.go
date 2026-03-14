@@ -30,6 +30,10 @@ func (w *DrawCommands) Compute(texId uint32, startLen int32, currentLen int32, a
 	if w.len > 0 && w.commands[w.len-1].texId == texId {
 		cmd = w.commands[w.len-1]
 	} else {
+		if w.len >= len(w.commands) {
+			w.Grow()
+		}
+
 		cmd = w.commands[w.len]
 		cmd.texId = texId
 		cmd.firstVertex = startLen / alignment
@@ -47,4 +51,19 @@ func (w *DrawCommands) Reset() {
 // Get retrieves all draw commands stored in the DrawCommands structure.
 func (w *DrawCommands) Get() []*DrawCommand {
 	return w.commands[0:w.len]
+}
+
+// Grow increases the capacity of the commands slice, doubling its size or setting an initial size if empty.
+func (w *DrawCommands) Grow() {
+	oldLen := len(w.commands)
+	newSize := oldLen * 2
+	if newSize == 0 {
+		newSize = 128 // Rimossa la dipendenza da vertexAlignment (qui non c'entra)
+	}
+	newCommands := make([]*DrawCommand, newSize)
+	copy(newCommands, w.commands)
+	for i := oldLen; i < newSize; i++ {
+		newCommands[i] = &DrawCommand{}
+	}
+	w.commands = newCommands
 }

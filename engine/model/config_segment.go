@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+
+	"github.com/markel1974/godoom/engine/utils"
 )
 
 // segmentData represents detailed information about a line segment in the system, including its coordinates and properties.
@@ -36,7 +38,7 @@ type ConfigSegment struct {
 func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 	is := &ConfigSegment{
 		Parent:     parent,
-		Id:         NextUUId(),
+		Id:         utils.NextUUId(),
 		Start:      s,
 		End:        e,
 		Kind:       kind,

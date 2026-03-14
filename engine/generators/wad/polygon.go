@@ -14,6 +14,9 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// epsilon represents the machine epsilon for float64 based on IEEE 754.
+// errBoundOri is the precomputed error bound for orientation-based determinant calculations.
+// errBoundInc is the precomputed error bound for incircle determinant calculations.
 const (
 	// Machine epsilon per float64 IEEE 754
 	epsilon = 1.1102230246251565e-16
@@ -22,25 +25,31 @@ const (
 	errBoundInc = (10.0 + 96.0*epsilon) * epsilon
 )
 
+// BigFloat creates a new *big.Float with 256 bits of precision and sets its value to the given float64.
 func BigFloat(f float64) *big.Float {
 	return new(big.Float).SetPrec(256).SetFloat64(f)
 }
 
+// Point represents a coordinate in a 2D space with X and Y as floating-point values.
 type Point struct {
 	X float64
 	Y float64
 }
 
+// ToModelXY converts a Point instance to a model.XY struct, preserving its X and Y coordinate values.
 func (p Point) ToModelXY() model.XY { return model.XY{X: p.X, Y: p.Y} }
 
+// Triangle represents a geometric figure defined by three vertices A, B, and C represented as Point.
 type Triangle struct {
 	A, B, C Point
 }
 
+// HasVertex checks if a given point p is one of the vertices of the triangle t.
 func (t Triangle) HasVertex(p Point) bool {
 	return t.A == p || t.B == p || t.C == p
 }
 
+// HasEdge checks if the given edge, in either direction, exists in the triangle.
 func (t Triangle) HasEdge(e [2]Point) bool {
 	// Check both directions of the edge
 	eRev := [2]Point{e[1], e[0]}
@@ -53,6 +62,7 @@ func (t Triangle) HasEdge(e [2]Point) bool {
 	return false
 }
 
+// GetOppositeVertex returns the vertex of the triangle that is not part of the specified edge.
 func (t Triangle) GetOppositeVertex(e [2]Point) Point {
 	for _, p := range []Point{t.A, t.B, t.C} {
 		if p != e[0] && p != e[1] {
@@ -62,8 +72,10 @@ func (t Triangle) GetOppositeVertex(e [2]Point) Point {
 	return Point{}
 }
 
+// Polygon represents a slice of points defining a closed geometric shape in 2D space.
 type Polygon []Point
 
+// Triangulate decomposes a polygon with possible holes into a set of non-overlapping triangles using PSLG processing.
 func (poly Polygon) Triangulate(secIdx int) []Polygon {
 	if len(poly) < 3 {
 		return nil
@@ -152,6 +164,7 @@ func (poly Polygon) Triangulate(secIdx int) []Polygon {
 	return finalTriangles
 }
 
+// SanitizePSLG ensures a planar straight-line graph (PSLG) is valid by resolving T-junctions and edge-to-edge intersections.
 func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 	var orderedPoints []Point
 	seenPoints := make(map[Point]bool)
@@ -223,6 +236,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 	return orderedPoints, constraints
 }
 
+// MaxPointsX returns the maximum X-coordinate among all points in the polygon.
 func (poly Polygon) MaxPointsX() float64 {
 	max := poly[0].X
 	for _, p := range poly {
@@ -233,6 +247,7 @@ func (poly Polygon) MaxPointsX() float64 {
 	return max
 }
 
+// buildConstraints generates a list of line segments representing the edges of the polygon in a cyclic order.
 func (poly Polygon) buildConstraints() [][2]Point {
 	var c [][2]Point
 	if len(poly) < 3 {
@@ -244,6 +259,7 @@ func (poly Polygon) buildConstraints() [][2]Point {
 	return c
 }
 
+// BowyerWatson performs unconstrained Delaunay triangulation of the polygon's vertices using the Bowyer-Watson algorithm.
 func (poly Polygon) BowyerWatson() []Triangle {
 	minX, minY := math.MaxFloat64, math.MaxFloat64
 	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
@@ -336,6 +352,7 @@ func (poly Polygon) BowyerWatson() []Triangle {
 	return triangles
 }
 
+// PointInPolygon determines if a given point lies inside the polygon using the ray-casting algorithm.
 func (poly Polygon) PointInPolygon(p Point) bool {
 	inside := false
 	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
@@ -359,6 +376,7 @@ func (poly Polygon) PointInPolygon(p Point) bool {
 	return inside
 }
 
+// SignedArea calculates the signed area of the polygon. Positive value indicates counterclockwise orientation.
 func (poly Polygon) SignedArea() float64 {
 	var area float64
 	for i := 0; i < len(poly); i++ {
@@ -368,11 +386,14 @@ func (poly Polygon) SignedArea() float64 {
 	return area / 2.0
 }
 
+// ComplexPolygon represents a polygon with an outer boundary and optional inner holes.
+// The outer boundary is defined by the Outer field, while the holes are defined by the Holes field.
 type ComplexPolygon struct {
 	Outer Polygon
 	Holes []Polygon
 }
 
+// BridgeHoles bridges interior polygon holes to form a single, contiguous outer boundary, preserving topology.
 func (cp *ComplexPolygon) BridgeHoles() Polygon {
 	if len(cp.Holes) == 0 {
 		return cp.Outer
@@ -452,8 +473,7 @@ func (cp *ComplexPolygon) BridgeHoles() Polygon {
 	return outer
 }
 
-// RecoverConstraints deterministico. Richiede in input un PSLG puro.
-// Elimina i loop infiniti processando le intersezioni tramite coda FIFO con failsafe per degenerazioni.
+// RecoverConstraints ensures that a set of constraints is respected in a Delaunay triangulated mesh by edge flipping.
 func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int) []Triangle {
 	for _, c := range constraints {
 		var queue [][2]Point
@@ -517,12 +537,14 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 	return triangles
 }
 
+// DistanceSq calculates the squared distance between two points p1 and p2 in a 2D Cartesian plane.
 func DistanceSq(p1 Point, p2 Point) float64 {
 	dx := p1.X - p2.X
 	dy := p1.Y - p2.Y
 	return dx*dx + dy*dy
 }
 
+// HasLineOfSight determines if two points have a clear line of sight, considering obstacles in the form of polygons.
 func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
 	for i := 0; i < len(outer); i++ {
 		e1, e2 := outer[i], outer[(i+1)%len(outer)]
@@ -545,6 +567,7 @@ func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
 	return true
 }
 
+// AppendUniqueEdge appends the given edge to the queue if it is not already present, considering both orientations of the edge.
 func AppendUniqueEdge(queue [][2]Point, edge [2]Point) [][2]Point {
 	eRev := [2]Point{edge[1], edge[0]}
 	for _, qe := range queue {
@@ -555,6 +578,8 @@ func AppendUniqueEdge(queue [][2]Point, edge [2]Point) [][2]Point {
 	return append(queue, edge)
 }
 
+// FindAdjacentTriangles finds the indices of two triangles sharing the specified edge in a given list of triangles.
+// Returns -1 for an index if no triangle with the edge is found.
 func FindAdjacentTriangles(triangles []Triangle, e [2]Point) (int, int) {
 	idx1, idx2 := -1, -1
 	for i, t := range triangles {
@@ -570,6 +595,7 @@ func FindAdjacentTriangles(triangles []Triangle, e [2]Point) (int, int) {
 	return idx1, idx2
 }
 
+// IsConvexQuadrilateral determines if four points form a strictly convex quadrilateral using orientation checks.
 func IsConvexQuadrilateral(p1, p2, p3, p4 Point) bool {
 	o1 := Orientation(p3, p4, p1)
 	o2 := Orientation(p3, p4, p2)
@@ -578,6 +604,8 @@ func IsConvexQuadrilateral(p1, p2, p3, p4 Point) bool {
 	return o1 != o2 && o3 != o4 && o1 != 0 && o2 != 0 && o3 != 0 && o4 != 0
 }
 
+// LineIntersection calculates the intersection point of two lines defined by points (p1, q1) and (p2, q2).
+// Returns NaN, NaN if the lines are parallel or overlapping.
 func LineIntersection(p1, q1, p2, q2 Point) (float64, float64) {
 	a1 := new(big.Float).Sub(BigFloat(q1.Y), BigFloat(p1.Y))
 	b1 := new(big.Float).Sub(BigFloat(p1.X), BigFloat(q1.X))
@@ -618,17 +646,21 @@ func LineIntersection(p1, q1, p2, q2 Point) (float64, float64) {
 	return xRes, yRes
 }
 
+// OnSegment checks if point q lies on the line segment defined by points p and r, assuming p, q, and r are collinear.
 func OnSegment(p, q, r Point) bool {
 	return q.X <= math.Max(p.X, r.X) && q.X >= math.Min(p.X, r.X) &&
 		q.Y <= math.Max(p.Y, r.Y) && q.Y >= math.Min(p.Y, r.Y)
 }
 
+// OnSegmentStrict checks if point q lies strictly on the line segment formed by points p and r.
+// This function ensures q is collinear with p and r and lies within the bounded box formed by p and r.
 func OnSegmentStrict(p, q, r Point) bool {
 	return Orientation(p, q, r) == 0 &&
 		q.X >= math.Min(p.X, r.X) && q.X <= math.Max(p.X, r.X) &&
 		q.Y >= math.Min(p.Y, r.Y) && q.Y <= math.Max(p.Y, r.Y)
 }
 
+// SegmentsCross determines if two line segments, defined by points (p1, q1) and (p2, q2), intersect each other strictly.
 func SegmentsCross(p1, q1, p2, q2 Point) bool {
 	o1 := Orientation(p1, q1, p2)
 	o2 := Orientation(p1, q1, q2)
@@ -637,6 +669,7 @@ func SegmentsCross(p1, q1, p2, q2 Point) bool {
 	return o1 != o2 && o3 != o4 && o1 != 0 && o2 != 0 && o3 != 0 && o4 != 0
 }
 
+// SegmentsIntersect determines if two line segments, defined by points p1-q1 and p2-q2, intersect in 2D space.
 func SegmentsIntersect(p1, q1, p2, q2 Point) bool {
 	o1 := Orientation(p1, q1, p2)
 	o2 := Orientation(p1, q1, q2)
@@ -662,6 +695,7 @@ func SegmentsIntersect(p1, q1, p2, q2 Point) bool {
 	return false
 }
 
+// Orientation determines the orientation of the triplet (p, q, r): 0 = collinear, 1 = clockwise, 2 = counterclockwise.
 func Orientation(p, q, r Point) int {
 	det := Orient2D(p, q, r)
 	if det > 0 {
@@ -673,6 +707,7 @@ func Orientation(p, q, r Point) int {
 	return 0
 }
 
+// Orient2D calculates the 2D orientation determinant for three points to determine their relative orientation in a plane.
 func Orient2D(pa, pb, pc Point) float64 {
 	detLeft := (pa.X - pc.X) * (pb.Y - pc.Y)
 	detRight := (pa.Y - pc.Y) * (pb.X - pc.X)
@@ -685,6 +720,7 @@ func Orient2D(pa, pb, pc Point) float64 {
 	return Orient2DExact(pa, pb, pc)
 }
 
+// Orient2DExact computes the determinant to exactly determine the orientation of three 2D points (pa, pb, pc).
 func Orient2DExact(pa, pb, pc Point) float64 {
 	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
 	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
@@ -703,6 +739,7 @@ func Orient2DExact(pa, pb, pc Point) float64 {
 	return res
 }
 
+// InCircle2D computes the determinant to determine if point `pd` lies inside the circumcircle of triangle formed by `pa`, `pb`, `pc`.
 func InCircle2D(pa, pb, pc, pd Point) float64 {
 	adx, ady := pa.X-pd.X, pa.Y-pd.Y
 	bdx, bdy := pb.X-pd.X, pb.Y-pd.Y
@@ -728,6 +765,10 @@ func InCircle2D(pa, pb, pc, pd Point) float64 {
 	return InCircle2DExact(pa, pb, pc, pd)
 }
 
+// InCircle2DExact computes the determinant to determine if a point lies inside, on, or outside the circumcircle of three other points.
+// Uses exact arithmetic based on arbitrary-precision floating-point computations to ensure robustness.
+// The input points pa, pb, pc, pd are expected in a 2D plane with their coordinates provided as float64 values.
+// Returns a positive value if pd is inside, zero if on, and negative if outside the circumcircle of pa, pb, and pc.
 func InCircle2DExact(pa, pb, pc, pd Point) float64 {
 	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
 	bx, by := BigFloat(pb.X), BigFloat(pb.Y)

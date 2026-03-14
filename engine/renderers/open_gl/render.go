@@ -413,6 +413,7 @@ func (w *RenderOpenGL) glInit() error {
 	gl.GenBuffers(1, &w.mainVbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
+
 	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
@@ -425,15 +426,15 @@ func (w *RenderOpenGL) glInit() error {
 	// Location 3: aLightCenterView (vec3)
 	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
 	gl.EnableVertexAttribArray(3)
-
 	// Location 4: aNormal (vec3)
 	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
 	gl.EnableVertexAttribArray(4)
+
 	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
-	//sky
+	// sky
 	gl.GenVertexArrays(1, &w.skyVao)
 	gl.BindVertexArray(w.skyVao)
 	gl.GenBuffers(1, &w.skyVbo)
@@ -442,18 +443,33 @@ func (w *RenderOpenGL) glInit() error {
 	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
-	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(shaderProgram)
+
+	// Configurazione Sampler Uniforms
 	texLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_texture\x00"))
 	gl.Uniform1i(texLoc, 0)
-	// Binding sampler Normal Map
 	normLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_normalMap\x00"))
 	gl.Uniform1i(normLoc, 1)
 
+	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
+	var defaultNormalMap uint32
+	gl.GenTextures(1, &defaultNormalMap)
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, defaultNormalMap)
+
+	// Creazione pixel indaco piatto (Z-Up) per annullare perturbazioni vettoriali
+	flatNormalPixel := []uint8{128, 128, 255, 255}
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(flatNormalPixel))
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+	// --- RIPRISTINO FLUSSO STANDARD (TEXTURE0) ---
+	gl.ActiveTexture(gl.TEXTURE0)
+	// I parametri qui sotto ora si applicano correttamente alla TEXTURE0 di default
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 

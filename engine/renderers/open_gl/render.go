@@ -319,8 +319,8 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 
 		texW, texH := tex.Size()
 		scaleW, scaleH := t.Animation.ScaleFactor()
-		width := (float64(texW) * scaleW) / 70
-		height := (float64(texH) * scaleH) / 70
+		width := float64(texW) * scaleW
+		height := float64(texH) * scaleH
 
 		dist := math.Sqrt(node.DistSq)
 		if dist < 0.0001 {

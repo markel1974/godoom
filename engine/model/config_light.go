@@ -17,17 +17,15 @@ type ConfigLight struct {
 }
 
 // NewConfigLight creates a new instance of ConfigLight with default values for Intensity and Kind.
-func NewConfigLight() *ConfigLight {
+func NewConfigLight(intensity float64, kind LightKind) *ConfigLight {
 	return &ConfigLight{
-		Intensity: 0.0,
-		Kind:      LightKindNone,
+		Intensity: intensity,
+		Kind:      kind,
 	}
 }
 
 // Clone creates a deep copy of the ConfigLight instance, duplicating its fields into a new object.
 func (cl *ConfigLight) Clone() *ConfigLight {
-	out := NewConfigLight()
-	out.Intensity = cl.Intensity
-	out.Kind = cl.Kind
+	out := NewConfigLight(cl.Intensity, cl.Kind)
 	return out
 }

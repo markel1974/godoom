@@ -15,18 +15,18 @@ type ConfigSector struct {
 }
 
 // NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
-func NewConfigSector(id string) *ConfigSector {
+func NewConfigSector(id string, lightIntensity float64, kind LightKind) *ConfigSector {
 	return &ConfigSector{
 		Id:    id,
 		Ceil:  nil,
 		Floor: nil,
-		Light: NewConfigLight(),
+		Light: NewConfigLight(lightIntensity, kind),
 	}
 }
 
 // Clone creates a deep copy of the ConfigSector, optionally cloning its segments based on the cloneSegments parameter.
 func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
-	out := NewConfigSector(is.Id)
+	out := NewConfigSector(is.Id, is.Light.Intensity, is.Light.Kind)
 	out.CeilY = is.CeilY
 	out.FloorY = is.FloorY
 	if is.Ceil != nil {
@@ -35,7 +35,6 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	if is.Floor != nil {
 		out.Floor = is.Floor.Clone()
 	}
-	out.Light = is.Light.Clone()
 	out.Tag = is.Tag
 	out.Segments = nil
 	if cloneSegments {

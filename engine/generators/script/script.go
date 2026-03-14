@@ -70,11 +70,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			if cfgVertices == nil {
 				return nil, errors.New(fmt.Sprintf("nil vertices"))
 			}
-			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx))
-
-			//todo light entry
-			cs.Light.Intensity = rnd.Float64()
-			cs.Light.Kind = model.LightKindSpot
+			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), model.LightKindSpot)
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY)
 			if err != nil {

@@ -207,7 +207,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures)
 func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *model.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-	miSector := model.NewConfigSector(sectorId)
+	miSector := model.NewConfigSector(sectorId, bld.convertLight(wadSector.LightLevel), model.LightKindSpot)
 	miSector.FloorY = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	ceilHeight := float64(wadSector.CeilingHeight)
 	if openAllDoors {
@@ -225,9 +225,6 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 	}
 	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType, 4.0, 10.0)
 	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType, 4.0, 10.0)
-
-	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
-	miSector.Light.Kind = model.LightKindSpot
 	return miSector
 }
 

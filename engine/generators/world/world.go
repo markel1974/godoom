@@ -52,7 +52,7 @@ var availableWall = []string{"wall2.ppm"}
 
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *model.ConfigSector {
-	sector := model.NewConfigSector(utils.NextUUId())
+	sector := model.NewConfigSector(utils.NextUUId(), rnd.Float64(), model.LightKindSpot)
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
@@ -60,9 +60,6 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
 	sector.Floor = model.NewConfigAnimation(floorT, model.AnimationKindLoop, scaleW, scaleH)
 	sector.Ceil = model.NewConfigAnimation(ceilT, model.AnimationKindLoop, scaleW, scaleH)
-
-	sector.Light.Intensity = rnd.Float64()
-	sector.Light.Kind = model.LightKindSpot
 
 	pts := [4]model.XY{
 		{X: x, Y: y},
@@ -173,7 +170,7 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			}
 
 			id := fmt.Sprintf("cell_%d_%d", x, y)
-			sector := model.NewConfigSector(id)
+			sector := model.NewConfigSector(id, randomF(0.2, 1.0), model.LightKindSpot)
 
 			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline
 			distFromCenter := math.Abs(float64(x-gridWidth/2)) + math.Abs(float64(y-gridHeight/2))
@@ -184,9 +181,6 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
 			sector.Floor = model.NewConfigAnimation(floorT, model.AnimationKindLoop, scaleW, scaleH)
 			sector.Ceil = model.NewConfigAnimation(ceilT, model.AnimationKindLoop, scaleW, scaleH)
-
-			sector.Light.Intensity = randomF(0.2, 1.0)
-			sector.Light.Kind = model.LightKindSpot
 
 			sectorGrid[x][y] = sector
 			cfg.Sectors = append(cfg.Sectors, sector)

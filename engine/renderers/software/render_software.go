@@ -351,11 +351,11 @@ func (w *RenderSoftware) doDebug(next int) {
 	}
 	w.debug = true
 	idx := w.debugIdx + next
-	if idx < 0 || idx >= len(w.portal.Sectors) {
+	if idx < 0 || idx >= w.portal.Len() {
 		return
 	}
 	w.debugIdx = idx
-	sector := w.portal.Sectors[idx]
+	sector := w.portal.SectorAt(idx)
 	x := sector.Segments[0].Start.X + offset
 	y := sector.Segments[0].Start.Y + offset
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
@@ -386,8 +386,8 @@ func (w *RenderSoftware) doDebugMoveSector(forward bool) {
 
 // drawStub renders the debug sector if the current debug index is within the range of available sectors.
 func (w *RenderSoftware) drawStub() {
-	if w.debugIdx >= 0 && w.debugIdx < len(w.portal.Sectors) {
-		sector := w.portal.Sectors[w.debugIdx]
+	if w.debugIdx >= 0 && w.debugIdx < w.portal.Len() {
+		sector := w.portal.SectorAt(w.debugIdx)
 		w.RenderSector(sector)
 	}
 }

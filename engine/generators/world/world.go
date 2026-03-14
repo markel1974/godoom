@@ -2,6 +2,8 @@ package world
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	rnd "math/rand"
 	"os"
 
@@ -47,56 +49,41 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	sector := model.NewConfigSector(model.NextUUId())
 	sector.FloorY = floor
 	sector.CeilY = ceil
-	//sector := &model.ConfigSector{Id: model.NextUUId(), FloorY: floor, CeilY: ceil}
-	//sector.Textures = true
+
 	sector.Animations.Floor = model.NewConfigAnimation([]string{availableFloor[random(0, len(availableFloor)-1)]}, model.AnimationKindLoop)
 	sector.Animations.Ceil = model.NewConfigAnimation([]string{availableCeil[random(0, len(availableCeil)-1)]}, model.AnimationKindLoop)
 	sector.Animations.ScaleFactor = 50.0
+
 	sector.Light.Intensity = rnd.Float64()
 	sector.Light.Kind = model.LightKindSpot
-	const SegmentMax = 4
-	for c := 0; c < SegmentMax; c++ {
-		xy := model.XY{X: 0, Y: 0}
-		switch c {
-		case 0:
-			xy.X = x
-			xy.Y = y
-		case 1:
-			xy.X = x + max
-			xy.Y = y
-		case 2:
-			xy.X = x + max
-			xy.Y = y + max
-		case 3:
-			xy.X = x
-			xy.Y = y + max
-		}
-		if c == 0 {
-			neighbor := model.NewConfigSegment("unknown", model.DefinitionUnknown, xy, xy)
-			//neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-			neighbor.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
-			neighbor.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
-			neighbor.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
-			sector.Segments = append(sector.Segments, neighbor)
-		} else if c == SegmentMax-1 {
-			prev := sector.Segments[c-1]
-			prev.End = xy
-		} else {
-			prev := sector.Segments[c-1]
-			prev.End = xy
-			neighbor := model.NewConfigSegment("unknown", model.DefinitionUnknown, xy, xy)
-			//neighbor := &model.ConfigSegment{Start: xy, End: xy, Neighbor: "unknown", Kind: model.DefinitionUnknown}
-			neighbor.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
-			neighbor.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
-			neighbor.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
-			sector.Segments = append(sector.Segments, neighbor)
-		}
+
+	pts := [4]model.XY{
+		{X: x, Y: y},
+		{X: x + max, Y: y},
+		{X: x + max, Y: y + max},
+		{X: x, Y: y + max},
 	}
+
+	for i := 0; i < 4; i++ {
+		start := pts[i]
+		end := pts[(i+1)%4]
+
+		// Allocazione corretta tramite costruttore
+		seg := model.NewConfigSegment("", model.DefinitionUnknown, start, end)
+		seg.Neighbor = "unknown"
+
+		seg.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
+		seg.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
+		seg.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
+
+		sector.Segments = append(sector.Segments, seg)
+	}
+
 	return sector
 }
 
 // Generate creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
-func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
+func Generate_OLD(maxX int, maxY int) (*model.ConfigRoot, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(basePath)
 	configPlayer := &model.ConfigPlayer{}
@@ -124,6 +111,127 @@ func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
 	cfg.Player.Position.X = 1
 	cfg.Player.Position.Y = 1
 	cfg.Player.Sector = s1.Id
+
+	return cfg, nil
+}
+func Generate(maxX int, maxY int) (*model.ConfigRoot, error) {
+	// GenerateDungeon crea un labirinto procedurale completamente interconnesso tramite portali.
+	//func Generate(gridWidth int, gridHeight int, cellSize float64) (*model.ConfigRoot, error) {
+	gridWidth := 100
+	gridHeight := 100
+	cellSize := 8.0
+
+	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
+	t, _ := NewTextures(basePath)
+	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 0, false, t)
+
+	// 1. Generazione Logica (Drunkard's Walk)
+	grid := make([][]bool, gridWidth)
+	for i := range grid {
+		grid[i] = make([]bool, gridHeight)
+	}
+
+	cx, cy := gridWidth/2, gridHeight/2
+	roomsCount := (gridWidth * gridHeight) / 3 // Densità del dungeon
+	dirs := []struct{ dx, dy int }{{0, -1}, {1, 0}, {0, 1}, {-1, 0}}
+
+	for i := 0; i < roomsCount; i++ {
+		grid[cx][cy] = true
+		d := dirs[random(0, 3)]
+		cx += d.dx
+		cy += d.dy
+		// Clamp per non uscire dalla mappa
+		if cx < 1 {
+			cx = 1
+		} else if cx >= gridWidth-1 {
+			cx = gridWidth - 2
+		}
+		if cy < 1 {
+			cy = 1
+		} else if cy >= gridHeight-1 {
+			cy = gridHeight - 2
+		}
+	}
+
+	// 2. Creazione Settori e Altitudini
+	sectorGrid := make([][]*model.ConfigSector, gridWidth)
+	for i := range sectorGrid {
+		sectorGrid[i] = make([]*model.ConfigSector, gridHeight)
+	}
+
+	for x := 0; x < gridWidth; x++ {
+		for y := 0; y < gridHeight; y++ {
+			if !grid[x][y] {
+				continue
+			}
+
+			id := fmt.Sprintf("cell_%d_%d", x, y)
+			sector := model.NewConfigSector(id)
+
+			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline
+			distFromCenter := math.Abs(float64(x-gridWidth/2)) + math.Abs(float64(y-gridHeight/2))
+			sector.FloorY = distFromCenter * 2.5 // Altezza gradino
+			sector.CeilY = sector.FloorY + randomF(20.0, 35.0)
+
+			sector.Animations.Floor = model.NewConfigAnimation([]string{availableFloor[random(0, len(availableFloor)-1)]}, model.AnimationKindLoop)
+			sector.Animations.Ceil = model.NewConfigAnimation([]string{availableCeil[random(0, len(availableCeil)-1)]}, model.AnimationKindLoop)
+			sector.Animations.ScaleFactor = 50.0
+
+			sector.Light.Intensity = randomF(0.2, 1.0)
+			sector.Light.Kind = model.LightKindSpot
+
+			sectorGrid[x][y] = sector
+			cfg.Sectors = append(cfg.Sectors, sector)
+		}
+	}
+
+	// 3. Generazione Topologica (Edge e Portali)
+	for x := 0; x < gridWidth; x++ {
+		for y := 0; y < gridHeight; y++ {
+			sector := sectorGrid[x][y]
+			if sector == nil {
+				continue
+			}
+
+			px, py := float64(x)*cellSize, float64(y)*cellSize
+
+			// Definiamo i 4 bordi (Nord, Est, Sud, Ovest)
+			edges := []struct {
+				nx, ny int
+				p1, p2 model.XY
+			}{
+				{x, y - 1, model.XY{X: px, Y: py}, model.XY{X: px + cellSize, Y: py}},                       // Nord
+				{x + 1, y, model.XY{X: px + cellSize, Y: py}, model.XY{X: px + cellSize, Y: py + cellSize}}, // Est
+				{x, y + 1, model.XY{X: px + cellSize, Y: py + cellSize}, model.XY{X: px, Y: py + cellSize}}, // Sud
+				{x - 1, y, model.XY{X: px, Y: py + cellSize}, model.XY{X: px, Y: py}},                       // Ovest
+			}
+
+			for _, e := range edges {
+				neighborId := "unknown"
+				kind := model.DefinitionUnknown // Assume sia un muro solido
+
+				// Controllo adiacenze per aprire il portale
+				if e.nx >= 0 && e.nx < gridWidth && e.ny >= 0 && e.ny < gridHeight {
+					if neighbor := sectorGrid[e.nx][e.ny]; neighbor != nil {
+						neighborId = neighbor.Id
+						kind = model.DefinitionJoin // Il bordo diventa un portale
+					}
+				}
+
+				seg := model.NewConfigSegment(neighborId, kind, e.p1, e.p2)
+				seg.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
+				seg.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
+				seg.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
+
+				sector.Segments = append(sector.Segments, seg)
+			}
+		}
+	}
+
+	// 4. Spawn del Giocatore al centro esatto
+	cfg.Player.Sector = fmt.Sprintf("cell_%d_%d", gridWidth/2, gridHeight/2)
+	cfg.Player.Position = model.XY{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2}
+	cfg.Player.Angle = 0.0
 
 	return cfg, nil
 }

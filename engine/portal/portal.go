@@ -23,13 +23,13 @@ type Portal struct {
 	screenHeight     int
 	screenHeightHalf float64
 	maxSectors       int
-	queue            *RingQueue   //[]*QueueItem
-	sectorQueue      *LinearBatch //[]*QueueItem
+	queue            *RingQueue
+	sectorQueue      *LinearBatch
 	screenHFov       float64
 	screenVFov       float64
 	compileId        uint64
 	sectorsMaxHeight float64
-	Sectors          []*model.Sector
+	sectors          []*model.Sector
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
 	visibilityCache  *VisibilityCache
@@ -57,9 +57,9 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 
 // Setup configures the Portal by assigning sectors, setting the maximum height, and initializing compiled sectors.
 func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
-	r.Sectors = sectors
+	r.sectors = sectors
 	r.sectorsMaxHeight = maxHeight
-	r.compiledSectors = make([]*model.CompiledSector, len(r.Sectors)*16)
+	r.compiledSectors = make([]*model.CompiledSector, len(r.sectors)*16)
 
 	//debug
 	//for _, s := range sectors {
@@ -71,6 +71,16 @@ func (r *Portal) Setup(sectors []*model.Sector, maxHeight float64) error {
 		r.compiledSectors[cs].Setup(512)
 	}
 	return nil
+}
+
+// Len returns the number of sectors currently managed by the Portal.
+func (r *Portal) Len() int {
+	return len(r.sectors)
+}
+
+// SectorAt retrieves the Sector at the specified index within the Portal's sector list. Returns nil if the index is invalid.
+func (r *Portal) SectorAt(idx int) *model.Sector {
+	return r.sectors[idx]
 }
 
 // SectorsMaxHeight returns the maximum height of all sectors in the portal as a float64 value.

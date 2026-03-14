@@ -607,11 +607,11 @@ func (w *RenderOpenGL) doDebug(next int) {
 	}
 	w.debug = true
 	idx := w.debugIdx + next
-	if idx < 0 || idx >= len(w.portal.Sectors) {
+	if idx < 0 || idx >= w.portal.Len() {
 		return
 	}
 	w.debugIdx = idx
-	sector := w.portal.Sectors[idx]
+	sector := w.portal.SectorAt(idx)
 	const offset = 5
 	x := sector.Segments[0].Start.X + offset
 	y := sector.Segments[0].Start.Y + offset

@@ -1,14 +1,5 @@
 package portal
 
-import "math/bits"
-
-func nextPowerOf2(n int) int {
-	if n <= 1 {
-		return 1
-	}
-	return 1 << (64 - bits.LeadingZeros64(uint64(n-1)))
-}
-
 // RingQueue is a circular queue implementation that utilizes a fixed-size buffer for efficient enqueue and dequeue operations.
 type RingQueue struct {
 	items   []QueueItem
@@ -19,7 +10,7 @@ type RingQueue struct {
 
 // NewRingQueue creates a new RingQueue with a fixed size and initializes its internal storage and mask value.
 func NewRingQueue(size int) *RingQueue {
-	size = nextPowerOf2(size)
+	size = NextPowerOf2(size)
 	return &RingQueue{
 		items: make([]QueueItem, size),
 		mask:  size - 1,

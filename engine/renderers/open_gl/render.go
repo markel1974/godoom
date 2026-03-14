@@ -425,6 +425,7 @@ func (w *RenderOpenGL) glInit() error {
 	// Location 3: aLightCenterView (vec3)
 	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
 	gl.EnableVertexAttribArray(3)
+
 	// Location 4: aNormal (vec3)
 	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
 	gl.EnableVertexAttribArray(4)
@@ -452,6 +453,10 @@ func (w *RenderOpenGL) glInit() error {
 	// Binding sampler Normal Map
 	normLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_normalMap\x00"))
 	gl.Uniform1i(normLoc, 1)
+
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
 	return nil
 }
 

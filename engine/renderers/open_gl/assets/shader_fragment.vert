@@ -21,7 +21,7 @@ void main()
 {
     vec4 texColor = texture(u_texture, TexCoords, -0.5);
 
-    if(texColor.a < 0.1) {
+    if(texColor.a < 0.5) {
         discard;
     }
 

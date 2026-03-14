@@ -413,8 +413,11 @@ func (w *WAD) GetSpriteImage(spriteName string) (*image.RGBA, error) {
 					continue
 				}
 				rgb := w.playPal.Palettes[0].Table[pixel]
-				// A = 255 rende il pixel disegnato dal WAD completamente opaco
-				rgba.SetRGBA(x, drawY, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: 255})
+				alpha := uint8(255)
+				if pixel == w.transparentPaletteIndex {
+					alpha = 0
+				}
+				rgba.SetRGBA(x, drawY, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: alpha})
 			}
 		}
 	}

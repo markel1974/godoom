@@ -2,6 +2,7 @@ package open_gl
 
 import (
 	"math"
+	"sort"
 
 	"github.com/markel1974/godoom/engine/model"
 	"github.com/markel1974/godoom/engine/portal"
@@ -36,6 +37,11 @@ const (
 
 	vboMaxFloats = 1024 * 1024 * 4
 )
+
+type SpriteNode struct {
+	Thing  *model.Thing
+	DistSq float64
+}
 
 // RenderOpenGL represents the main rendering engine using OpenGL for handling scene rendering and custom debug features.
 type RenderOpenGL struct {
@@ -134,6 +140,10 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int) *t
 			}
 		}
 	}
+
+	//TODO
+	x, y := w.vi.GetXY()
+	w.pushThings(nil, x, y)
 	return cSky
 }
 
@@ -268,6 +278,84 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	w.frameCommands.Compute(texId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 
 	return nil
+}
+
+// RenderSprites processa la geometria billbordata degli sprite con back-to-front depth sorting.
+// Da invocare nel render loop subito dopo aver sottomesso la geometria statica BSP.
+func (w *RenderOpenGL) pushThings(things []*model.Thing, camX, camY float64) {
+	if len(things) == 0 {
+		return
+	}
+
+	queue := make([]SpriteNode, 0, len(things))
+
+	// 1. Culling e calcolo distanza quadrica
+	for _, t := range things {
+		if t.Animation == nil {
+			continue
+		}
+
+		dx := t.Position.X - camX
+		dy := t.Position.Y - camY
+
+		queue = append(queue, SpriteNode{
+			Thing:  t,
+			DistSq: dx*dx + dy*dy,
+		})
+	}
+
+	// 2. Depth Sort (Painter's Algorithm)
+	sort.Slice(queue, func(i, j int) bool {
+		return queue[i].DistSq > queue[j].DistSq
+	})
+
+	fv := w.frameVertices
+
+	// 3. Billboarding Cilindrico e Batching VBO
+	for _, node := range queue {
+		t := node.Thing
+		tex := t.Animation.CurrentFrame()
+		if tex == nil {
+			continue
+		}
+		texId, ok := w.compiler.GetTexture(tex)
+		if !ok {
+			continue
+		}
+		width, height := tex.Size()
+		dist := math.Sqrt(node.DistSq)
+		if dist < 0.0001 {
+			dist = 0.0001
+		}
+
+		// Vettore Right normalizzato e scalato per l'estensione del quad
+		halfW := float64(width) / 2.0
+		rX := -((camY - t.Position.Y) / dist) * halfW
+		rY := ((camX - t.Position.X) / dist) * halfW
+
+		zBottom := t.Sector.FloorY
+		zTop := zBottom + float64(height)
+
+		v1x, v1y := float32(t.Position.X-rX), float32(t.Position.Y-rY) // Bottom-Left
+		v2x, v2y := float32(t.Position.X+rX), float32(t.Position.Y+rY) // Bottom-Right
+		zB, zT := float32(zBottom), float32(zTop)
+
+		light := float32(t.Sector.Light.GetIntensity())
+
+		startLen := int32(fv.Len())
+
+		// Triangolo 1 (V1, V2, V3)
+		fv.AddVertex(v1x, v1y, zB, 0.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Left
+		fv.AddVertex(v2x, v2y, zB, 1.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Right
+		fv.AddVertex(v1x, v1y, zT, 0.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Left
+
+		// Triangolo 2 (V2, V4, V3)
+		fv.AddVertex(v2x, v2y, zB, 1.0, 1.0, light, 0, 0, 0, 0, 0, 0) // Bottom-Right
+		fv.AddVertex(v2x, v2y, zT, 1.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Right
+		fv.AddVertex(v1x, v1y, zT, 0.0, 0.0, light, 0, 0, 0, 0, 0, 0) // Top-Left
+
+		w.frameCommands.Compute(texId, startLen, int32(fv.Len()), fv.Alignment())
+	}
 }
 
 // glStreamRender streams vertex and command data to the GPU and executes rendering of frame vertices and textures.

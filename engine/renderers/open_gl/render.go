@@ -160,19 +160,13 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 	}
 	texW, texH := tex.Size()
 	startLen := w.frameVertices.Len()
+	scaleW, scaleH := anim.ScaleFactor()
 
-	//todo capire perche le texture devono essere scalate di 4 dai WAD
-	scaleH := float32(4.0)
-	scaleV := float32(cp.Sector.Animations.ScaleFactor())
-	if scaleV <= 0 {
-		scaleV = 1.0
-	}
-
-	u0 := float32(cp.U0) / (float32(texW) * scaleH)
-	u1 := float32(cp.U1) / (float32(texW) * scaleH)
+	u0 := float32(cp.U0) / (float32(texW) * float32(scaleW))
+	u1 := float32(cp.U1) / (float32(texW) * float32(scaleW))
 
 	vTop := float32(0.0)
-	vBottom := ((zTop - zBottom) / float32(texH)) * scaleV
+	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
 	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
 	lightPos := cp.Sector.Light.GetPos()
 
@@ -235,10 +229,11 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	startLen := w.frameVertices.Len()
 
 	// 1. Allinea il fattore di scala anche per pavimenti e soffitti
-	scale := float32(cp.Sector.Animations.ScaleFactor())
-	if scale <= 0 {
-		scale = 1.0
-	}
+	//scale := float32(cp.Sector.Animations.ScaleFactor())
+	//if scale <= 0 {
+	//	scale = 1.0
+	//}
+	_, scaleH := anim.ScaleFactor()
 
 	lightPos := cp.Sector.Light.GetPos()
 	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
@@ -252,8 +247,8 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	zF := float32(z)
 	v0 := segments[0].Start
 
-	u0 := (float32(v0.X) / float32(texW)) * scale
-	v0V := (float32(-v0.Y) / float32(texH)) * scale
+	u0 := (float32(v0.X) / float32(texW)) * float32(scaleH)
+	v0V := (float32(-v0.Y) / float32(texH)) * float32(scaleH)
 
 	nY := float32(1.0)
 	if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
@@ -263,10 +258,10 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
 
-		u1 := (float32(v1.X) / float32(texW)) * scale
-		v1V := (float32(-v1.Y) / float32(texH)) * scale
-		u2 := (float32(v2.X) / float32(texW)) * scale
-		v2V := (float32(-v2.Y) / float32(texH)) * scale
+		u1 := (float32(v1.X) / float32(texW)) * float32(scaleH)
+		v1V := (float32(-v1.Y) / float32(texH)) * float32(scaleH)
+		u2 := (float32(v2.X) / float32(texW)) * float32(scaleH)
+		v2V := (float32(-v2.Y) / float32(texH)) * float32(scaleH)
 
 		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
 		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light, vLcX, vLcY, vLcZ, 0, nY, 0)

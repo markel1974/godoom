@@ -4,21 +4,23 @@ import "encoding/json"
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {
-	Id         string                  `json:"id"`
-	CeilY      float64                 `json:"ceilY"`
-	FloorY     float64                 `json:"floorY"`
-	Animations *ConfigSectorAnimations `json:"animations"`
-	Light      *ConfigLight            `json:"light"`
-	Segments   []*ConfigSegment        `json:"segments"`
-	Tag        string                  `json:"tag"`
+	Id       string           `json:"id"`
+	CeilY    float64          `json:"ceilY"`
+	FloorY   float64          `json:"floorY"`
+	Ceil     *ConfigAnimation `json:"ceil"`
+	Floor    *ConfigAnimation `json:"floor"`
+	Light    *ConfigLight     `json:"light"`
+	Segments []*ConfigSegment `json:"segments"`
+	Tag      string           `json:"tag"`
 }
 
 // NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
 func NewConfigSector(id string) *ConfigSector {
 	return &ConfigSector{
-		Id:         id,
-		Animations: NewConfigSectorAnimations(),
-		Light:      NewConfigLight(),
+		Id:    id,
+		Ceil:  nil,
+		Floor: nil,
+		Light: NewConfigLight(),
 	}
 }
 
@@ -27,7 +29,12 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	out := NewConfigSector(is.Id)
 	out.CeilY = is.CeilY
 	out.FloorY = is.FloorY
-	out.Animations = is.Animations.Clone()
+	if is.Ceil != nil {
+		out.Ceil = is.Ceil.Clone()
+	}
+	if is.Floor != nil {
+		out.Floor = is.Floor.Clone()
+	}
 	out.Light = is.Light.Clone()
 	out.Tag = is.Tag
 	out.Segments = nil

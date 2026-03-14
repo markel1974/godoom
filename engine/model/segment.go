@@ -24,25 +24,29 @@ func PointInSegments(px float64, py float64, segments []*Segment) bool {
 
 // Segment represents a line segment in 2D space, defined by its start and end coordinates, and associated metadata.
 type Segment struct {
-	Start      XY
-	End        XY
-	Ref        string
-	Kind       int
-	Sector     *Sector
-	Tag        string
-	Animations *SegmentAnimations
+	Start  XY
+	End    XY
+	Ref    string
+	Kind   int
+	Sector *Sector
+	Tag    string
+	Upper  *textures.Animation
+	Middle *textures.Animation
+	Lower  *textures.Animation
 }
 
 // NewSegment creates and returns a new Segment instance with specified start, end Points, reference, Kind, Sector, and tag.
 func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Segment {
 	out := &Segment{
-		Start:      start,
-		End:        end,
-		Ref:        ref,
-		Kind:       kind,
-		Sector:     sector,
-		Tag:        tag,
-		Animations: NewSegmentAnimation(tUpper, tMiddle, tLower),
+		Start:  start,
+		End:    end,
+		Ref:    ref,
+		Kind:   kind,
+		Sector: sector,
+		Tag:    tag,
+		Upper:  tUpper,
+		Middle: tMiddle,
+		Lower:  tLower,
 	}
 	return out
 }
@@ -50,13 +54,15 @@ func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag stri
 // Copy creates and returns a deep copy of the Segment instance.
 func (k *Segment) Copy() *Segment {
 	out := &Segment{
-		Start:      k.Start,
-		End:        k.End,
-		Ref:        k.Ref,
-		Kind:       k.Kind,
-		Sector:     k.Sector,
-		Tag:        k.Tag,
-		Animations: k.Animations.Clone(),
+		Start:  k.Start,
+		End:    k.End,
+		Ref:    k.Ref,
+		Kind:   k.Kind,
+		Sector: k.Sector,
+		Tag:    k.Tag,
+		Upper:  k.Upper,
+		Middle: k.Middle,
+		Lower:  k.Lower,
 	}
 	return out
 }

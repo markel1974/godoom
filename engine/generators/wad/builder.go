@@ -122,7 +122,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		}
 		tSectorId := grid.ResolveSectorId(Point{tX, tY})
 		tId := fmt.Sprintf("t_%d", i)
-		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop)
+		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, 4.0, 10.0)
 		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, anim)
 		things = append(things, cfgThing)
 	}
@@ -223,9 +223,9 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 	if wadSector.FloorPic == SkyPicture {
 		floorType = model.AnimationKindSky
 	}
-	miSector.Animations.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType)
-	miSector.Animations.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType)
-	miSector.Animations.ScaleFactor = 10.0
+	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType, 4.0, 10.0)
+	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType, 4.0, 10.0)
+
 	miSector.Light.Intensity = bld.convertLight(wadSector.LightLevel)
 	miSector.Light.Kind = model.LightKindSpot
 	return miSector
@@ -234,7 +234,7 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 // buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
 // It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
 func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
-	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY())
+	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY(), "")
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
 		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
@@ -249,9 +249,9 @@ func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, secto
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.Animations.Middle = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop)
-			seg.Animations.Upper = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop)
-			seg.Animations.Lower = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop)
+			seg.Animations.Middle = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop, 4.0, 10.0)
+			seg.Animations.Upper = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop, 4.0, 10.0)
+			seg.Animations.Lower = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop, 4.0, 10.0)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -266,11 +266,11 @@ func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, secto
 					backSector := level.Sectors[backSide.SectorRef]
 					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
-						seg.Animations.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone)
+						seg.Animations.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone, 4.0, 10.0)
 					}
 					// Extension for floors (e.g. moats that show sky at the bottom)
 					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
-						seg.Animations.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone)
+						seg.Animations.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone, 4.0, 10.0)
 					}
 				}
 			}

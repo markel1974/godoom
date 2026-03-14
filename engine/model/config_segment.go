@@ -35,14 +35,14 @@ type ConfigSegment struct {
 }
 
 // NewConfigSegment creates a new ConfigSegment instance with the specified parent, Kind, start, and end coordinates.
-func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
+func NewConfigSegment(parent string, kind int, s XY, e XY, neighbor string) *ConfigSegment {
 	is := &ConfigSegment{
 		Parent:     parent,
 		Id:         utils.NextUUId(),
 		Start:      s,
 		End:        e,
 		Kind:       kind,
-		Neighbor:   "",
+		Neighbor:   neighbor,
 		Tag:        "",
 		Animations: NewConfigSegmentAnimations(),
 	}
@@ -51,8 +51,7 @@ func NewConfigSegment(parent string, kind int, s XY, e XY) *ConfigSegment {
 
 // Clone creates a new instance of ConfigSegment with the same properties as the original and returns it.
 func (is *ConfigSegment) Clone() *ConfigSegment {
-	out := NewConfigSegment(is.Parent, is.Kind, is.Start, is.End)
-	out.Neighbor = is.Neighbor
+	out := NewConfigSegment(is.Parent, is.Kind, is.Start, is.End, is.Neighbor)
 	out.Tag = is.Tag
 	out.Animations = is.Animations.Clone()
 	return out
@@ -162,7 +161,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if wall == nil {
 			if data, d := createSegment(SegmentDataWall, b.data); d != nil {
-				wall = NewConfigSegment(is.Parent, DefinitionWall, d.point, XY{})
+				wall = NewConfigSegment(is.Parent, DefinitionWall, d.point, XY{}, "")
 				wall.Id = d.id
 				b.data = data
 			}
@@ -177,7 +176,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if texture == nil {
 			if data, d := createSegment(SegmentDataTexture, b.data); d != nil {
-				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{})
+				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{}, "")
 				texture.Id = d.id
 				texture.Animations.Upper = d.textureUpper
 				texture.Animations.Middle = d.textureMiddle
@@ -198,10 +197,8 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if neighbor == nil {
 			if data, d := createSegment(SegmentDataNeighbor, b.data); d != nil {
-				neighbor = NewConfigSegment(is.Parent, DefinitionJoin, d.point, XY{})
+				neighbor = NewConfigSegment(is.Parent, DefinitionJoin, d.point, XY{}, d.neighbor)
 				neighbor.Id = d.id
-				neighbor.Neighbor = d.neighbor
-
 				if texture != nil {
 					neighbor.Animations.Upper = texture.Animations.Upper
 					neighbor.Animations.Middle = texture.Animations.Middle

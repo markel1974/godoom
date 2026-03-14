@@ -14,7 +14,8 @@ type Sector struct {
 	Tag           string
 	FloorY        float64
 	CeilY         float64
-	Animations    *SectorAnimations
+	Ceil          *textures.Animation
+	Floor         *textures.Animation
 	Light         *Light
 	usage         int
 	compileId     uint64
@@ -24,7 +25,7 @@ type Sector struct {
 }
 
 // NewSector initializes and returns a new Sector instance with the given modelId, id, and segments.
-func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.Animation, ceil *textures.Animation, scaleFactor float64) *Sector {
+func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.Animation, ceil *textures.Animation) *Sector {
 	s := &Sector{
 		ModelId:    modelId,
 		Id:         id,
@@ -34,7 +35,8 @@ func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.A
 		usage:      0,
 		compileId:  0,
 		references: make(map[uint64]bool),
-		Animations: NewSectorAnimations(floor, ceil, scaleFactor),
+		Ceil:       ceil,
+		Floor:      floor,
 	}
 	return s
 }

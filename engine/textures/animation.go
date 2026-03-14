@@ -22,33 +22,24 @@ type Animation struct {
 	frames      []*Texture
 	totalFrames uint64
 	kind        int
-	//w           float64
-	//h           float64
+	scaleW      float64
+	scaleH      float64
 }
 
 // NewAnimation creates a new Animation instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewAnimation(frames []*Texture, kind int) *Animation {
+func NewAnimation(frames []*Texture, kind int, scaleW float64, scaleH float64) *Animation {
 	a := &Animation{
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
 		kind:        kind,
-		//w:           0,
-		//h:           0,
+		scaleW:      scaleW,
+		scaleH:      scaleH,
 	}
-	//var rootFrame *Texture = nil
 	if a.totalFrames == 1 {
 		a.frame = frames[0]
-		//rootFrame = a.frame
-	} else if a.totalFrames > 0 {
-		//rootFrame = frames[0]
 	}
-	//if rootFrame != nil {
-	//	w, h := rootFrame.Size()
-	//a.w = float64(w) * scaleFactor
-	//a.h = float64(h) * scaleFactor
-	//}
 	return a
 }
 
@@ -66,7 +57,7 @@ func (a *Animation) CurrentFrame() *Texture {
 	return a.frame
 }
 
-// Size returns the width and height of the animation as two integer values.
-//func (a *Animation) Size() (float64, float64) {
-//	return a.w, a.h
-//}
+// ScaleFactor returns the scaling factors for width and height of the animation as two float64 values.
+func (a *Animation) ScaleFactor() (float64, float64) {
+	return a.scaleW, a.scaleH
+}

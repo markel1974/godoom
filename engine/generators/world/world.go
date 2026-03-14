@@ -11,6 +11,11 @@ import (
 	"github.com/markel1974/godoom/engine/utils"
 )
 
+const (
+	scaleW = 10.0
+	scaleH = 50.0
+)
+
 // random generates a random integer between the specified min (inclusive) and max (inclusive) values.
 func random(min int, max int) int {
 	return rnd.Intn(max-min+1) + min
@@ -51,9 +56,10 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
-	sector.Animations.Floor = model.NewConfigAnimation([]string{availableFloor[random(0, len(availableFloor)-1)]}, model.AnimationKindLoop)
-	sector.Animations.Ceil = model.NewConfigAnimation([]string{availableCeil[random(0, len(availableCeil)-1)]}, model.AnimationKindLoop)
-	sector.Animations.ScaleFactor = 50.0
+	floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
+	ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
+	sector.Floor = model.NewConfigAnimation(floorT, model.AnimationKindLoop, scaleW, scaleH)
+	sector.Ceil = model.NewConfigAnimation(ceilT, model.AnimationKindLoop, scaleW, scaleH)
 
 	sector.Light.Intensity = rnd.Float64()
 	sector.Light.Kind = model.LightKindSpot
@@ -70,12 +76,14 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		end := pts[(i+1)%4]
 
 		// Allocazione corretta tramite costruttore
-		seg := model.NewConfigSegment("", model.DefinitionUnknown, start, end)
-		seg.Neighbor = "unknown"
+		seg := model.NewConfigSegment("", model.DefinitionUnknown, start, end, "unknown")
 
-		seg.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
-		seg.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
-		seg.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
+		upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
+		lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
+		middleT := []string{availableWall[random(0, len(availableWall)-1)]}
+		seg.Animations.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
+		seg.Animations.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
+		seg.Animations.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -172,9 +180,10 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			sector.FloorY = distFromCenter * 1.5 // Altezza gradino
 			sector.CeilY = sector.FloorY + randomF(20.0, 100.0)
 
-			sector.Animations.Floor = model.NewConfigAnimation([]string{availableFloor[random(0, len(availableFloor)-1)]}, model.AnimationKindLoop)
-			sector.Animations.Ceil = model.NewConfigAnimation([]string{availableCeil[random(0, len(availableCeil)-1)]}, model.AnimationKindLoop)
-			sector.Animations.ScaleFactor = 50.0
+			floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
+			ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
+			sector.Floor = model.NewConfigAnimation(floorT, model.AnimationKindLoop, scaleW, scaleH)
+			sector.Ceil = model.NewConfigAnimation(ceilT, model.AnimationKindLoop, scaleW, scaleH)
 
 			sector.Light.Intensity = randomF(0.2, 1.0)
 			sector.Light.Kind = model.LightKindSpot
@@ -217,11 +226,13 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 					}
 				}
 
-				seg := model.NewConfigSegment("", kind, e.p1, e.p2)
-				seg.Neighbor = neighborId
-				seg.Animations.Upper = model.NewConfigAnimation([]string{availableUpper[random(0, len(availableUpper)-1)]}, model.AnimationKindLoop)
-				seg.Animations.Lower = model.NewConfigAnimation([]string{availableLower[random(0, len(availableLower)-1)]}, model.AnimationKindLoop)
-				seg.Animations.Middle = model.NewConfigAnimation([]string{availableWall[random(0, len(availableWall)-1)]}, model.AnimationKindLoop)
+				seg := model.NewConfigSegment("", kind, e.p1, e.p2, neighborId)
+				upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
+				lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
+				middleT := []string{availableWall[random(0, len(availableWall)-1)]}
+				seg.Animations.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
+				seg.Animations.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
+				seg.Animations.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
 
 				sector.Segments = append(sector.Segments, seg)
 			}

@@ -82,11 +82,10 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			continue
 		}
 
-		texFloor := cfg.GetAnimation(cs.Animations.Floor)
-		texCeil := cfg.GetAnimation(cs.Animations.Ceil)
-		texScaleFactor := cs.Animations.ScaleFactor
+		texFloor := cfg.GetAnimation(cs.Floor)
+		texCeil := cfg.GetAnimation(cs.Ceil)
 
-		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil, texScaleFactor)
+		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil)
 		modelSectorId++
 		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
 		s.CeilY = cs.CeilY

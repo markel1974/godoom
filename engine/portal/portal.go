@@ -307,8 +307,8 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			}
 		}
 
-		ceilT := cs.Sector.Animations.Ceil()
-		floorT := cs.Sector.Animations.Floor()
+		ceilT := cs.Sector.Ceil
+		floorT := cs.Sector.Floor
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, lightStart, x2Min, y2Ceil, yaStop, zStop, lightStop)
@@ -323,7 +323,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperT := segment.Animations.Upper()
+				upperT := segment.Upper
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
 			}
@@ -336,7 +336,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {
-				lowerT := segment.Animations.Lower()
+				lowerT := segment.Lower
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)
 			}
@@ -345,7 +345,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 
 			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {
-			middleT := segment.Animations.Middle()
+			middleT := segment.Middle
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)
 		}

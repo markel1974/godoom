@@ -33,7 +33,7 @@ func NewConfigRoot(sectors []*ConfigSector, player *ConfigPlayer, things []*Conf
 // GetAnimation retrieves an animation from the cache or creates a new one using the provided texture sources.
 func (r *ConfigRoot) GetAnimation(ca *ConfigAnimation) *textures.Animation {
 	if ca == nil {
-		return textures.NewAnimation(nil, int(AnimationKindNone))
+		return textures.NewAnimation(nil, int(AnimationKindNone), 1, 1)
 	}
 	key := strings.Join(ca.Frames, ";")
 	animation, ok := r.animations[key]
@@ -41,7 +41,7 @@ func (r *ConfigRoot) GetAnimation(ca *ConfigAnimation) *textures.Animation {
 		return animation
 	}
 	tex := r.Textures.Get(ca.Frames)
-	animation = textures.NewAnimation(tex, int(ca.Kind))
+	animation = textures.NewAnimation(tex, int(ca.Kind), ca.ScaleW, ca.ScaleH)
 	r.animations[key] = animation
 	return animation
 }

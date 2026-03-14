@@ -28,7 +28,7 @@ func main() {
 	case 0:
 		cfg, err = script.ParseScriptData(script.StubOld2)
 	case 1:
-		cfg, err = world.Generate(16, 16)
+		cfg, err = world.Generate()
 	case 2:
 		const levelNumber = 1
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"

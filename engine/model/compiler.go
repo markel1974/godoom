@@ -45,6 +45,7 @@ func makeEdgeKey(start XY, end XY) edgeKey {
 // Compiler represents a 3D map compiler that manages sectors, their heights, and an internal cache for fast lookups.
 type Compiler struct {
 	sectors          []*Sector
+	things           []*Thing
 	sectorsMaxHeight float64
 	cache            map[string]*Sector
 	textures         textures.ITextures
@@ -54,6 +55,7 @@ type Compiler struct {
 func NewCompiler() *Compiler {
 	return &Compiler{
 		sectors:          nil,
+		things:           nil,
 		sectorsMaxHeight: 0,
 		cache:            make(map[string]*Sector),
 	}
@@ -161,6 +163,18 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		fmt.Println("undefined:", undefined, "fixed:", fixed)
 	}
 
+	r.compileLights()
+
+	r.compileThings(cfg)
+
+	r.finalize(cfg)
+
+	fmt.Printf("Scan complete sectors: %d, segments: %d\n", len(r.sectors), totalSegments)
+
+	return nil
+}
+
+func (r *Compiler) compileLights() {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
@@ -214,12 +228,27 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			}
 		}
 	}
+}
 
-	r.finalize(cfg)
+// compileThings processes raw ConfigThing entities, resolving their sector references and storing them in the compiler.
+func (r *Compiler) compileThings(cfg *ConfigRoot) {
+	for _, ct := range cfg.Things {
+		sector, ok := r.cache[ct.Sector]
+		if !ok {
+			continue
+		}
 
-	fmt.Printf("Scan complete sectors: %d, segments: %d\n", len(r.sectors), totalSegments)
+		thing := &Thing{
+			Id:        ct.Id,
+			Position:  ct.Position,
+			Angle:     ct.Angle,
+			Type:      ct.Type,
+			Sector:    sector,
+			Animation: cfg.GetAnimation(ct.Animation),
+		}
 
-	return nil
+		r.things = append(r.things, thing)
+	}
 }
 
 // finalize adjusts player position and sector dimensions based on the scale factor and calculates the maximum sector height.
@@ -230,6 +259,10 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 	}
 
 	cfg.Player.Position.Scale(scale)
+
+	for _, t := range r.things {
+		t.Position.Scale(scale)
+	}
 
 	r.sectorsMaxHeight = 0
 	for _, sect := range r.sectors {
@@ -250,6 +283,11 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 // GetSectors retrieves the list of sectors associated with the Compiler instance.
 func (r *Compiler) GetSectors() []*Sector {
 	return r.sectors
+}
+
+// GetThings retrieves the list of compiled things associated with the Compiler instance.
+func (r *Compiler) GetThings() []*Thing {
+	return r.things
 }
 
 // Get retrieves a Sector from the cache using the provided sectorId. Returns an error if the sectorId is invalid.

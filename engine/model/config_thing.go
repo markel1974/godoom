@@ -1,21 +1,21 @@
 package model
 
-// ConfigThing represents a non-player object (thing) in the game world.
 type ConfigThing struct {
-	Id       string  `json:"id"`
-	Position XY      `json:"position"`
-	Angle    float64 `json:"angle"`
-	Type     int     `json:"type"`
-	Sector   string  `json:"sector"`
+	Id        string
+	Position  XY
+	Angle     float64
+	Type      int
+	Sector    string
+	Animation *ConfigAnimation // Configurazione RAW dei frame
 }
 
-// NewConfigThing creates and returns a new instance of ConfigThing.
-func NewConfigThing(id string, position XY, angle float64, thingType int, sector string) *ConfigThing {
+func NewConfigThing(id string, pos XY, angle float64, t int, sector string, anim *ConfigAnimation) *ConfigThing {
 	return &ConfigThing{
-		Id:       id,
-		Position: position,
-		Angle:    angle,
-		Type:     thingType,
-		Sector:   sector,
+		Id:        id,
+		Position:  pos,
+		Angle:     angle,
+		Type:      t,
+		Sector:    sector,
+		Animation: anim,
 	}
 }

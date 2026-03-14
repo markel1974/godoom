@@ -88,7 +88,7 @@ func Generate() (*model.ConfigRoot, error) {
 	t, _ := NewTextures(basePath)
 
 	//return generateSimple(t, 16, 16)
-	return generateDungeon(t, 300, 300, 8.0)
+	return generateDungeon(t, 80, 80, 8.0)
 }
 
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.

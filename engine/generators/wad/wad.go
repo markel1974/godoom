@@ -20,6 +20,7 @@ type WAD struct {
 	flats                   map[string]*lumps.Flat
 	levels                  map[string]int
 	lumps                   map[string]int
+	sprites                 map[string]int
 	patchNames              []string
 	transparentPaletteIndex byte
 }
@@ -32,6 +33,7 @@ func New() *WAD {
 		textures:                make(map[string]*lumps.Texture),
 		flats:                   make(map[string]*lumps.Flat),
 		patches:                 make(map[string]*lumps.Image),
+		sprites:                 make(map[string]int),
 		transparentPaletteIndex: 255,
 	}
 }
@@ -55,6 +57,9 @@ func (w *WAD) Load(filename string) error {
 		return err
 	}
 	if err = w.loadFlats(); err != nil {
+		return err
+	}
+	if err = w.loadSprites(); err != nil {
 		return err
 	}
 	return nil
@@ -171,6 +176,33 @@ func (w *WAD) loadFlats() error {
 	return nil
 }
 
+// loadSprites loads all sprite patches traversing all S_START/S_END or SS_START/SS_END blocks.
+func (w *WAD) loadSprites() error {
+	inSpriteBlock := false
+
+	for i, lumpInfo := range w.lumpInfos {
+		name := lumps.FixName(lumpInfo.Name)
+
+		// Entriamo in un blocco sprite
+		if name == "S_START" || name == "SS_START" {
+			inSpriteBlock = true
+			continue
+		}
+		// Usciamo da un blocco sprite
+		if name == "S_END" || name == "SS_END" {
+			inSpriteBlock = false
+			continue
+		}
+
+		// Se siamo nel blocco ed è un lump valido (non un marker vuoto)
+		if inSpriteBlock && lumpInfo.Size > 0 {
+			w.sprites[name] = i
+		}
+	}
+
+	return nil
+}
+
 // GetTexture retrieves a texture by its name from the WAD archive, returning the texture and a boolean indicating success.
 func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 	texture, ok := w.textures[lumps.FixName(name)]
@@ -182,12 +214,23 @@ func (w *WAD) GetTextures() *Textures {
 	t, _ := NewTextures()
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {
-			t.Add(t.TextureCreateId(name), data)
+			t.Add(TextureCreateId(name), data)
+		} else {
+			fmt.Printf("WARNING Can't load texture %s: %s\n", name, err.Error())
 		}
 	}
 	for name := range w.flats {
 		if data, err := w.GetFlatImage(name); err == nil {
-			t.Add(t.FlatCreateId(name), data)
+			t.Add(FlatCreateId(name), data)
+		} else {
+			fmt.Printf("WARNING Can't load flat %s: %s\n", name, err.Error())
+		}
+	}
+	for name := range w.sprites {
+		if data, err := w.GetSpriteImage(name); err == nil {
+			t.Add(SpriteCreateId(name), data)
+		} else {
+			fmt.Printf("WARNING Can't load sprite %s: %s\n", name, err.Error())
 		}
 	}
 	return t
@@ -337,5 +380,44 @@ func (w *WAD) GetFlatImage(pName string) (*image.RGBA, error) {
 			rgba.SetRGBA(x, y, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: 255})
 		}
 	}
+	return rgba, nil
+}
+
+// GetSpriteImage retrieves a sprite image by name from the WAD and returns it as an *image.RGBA.
+// It maintains transparency for pixels not defined in the sprite's column posts.
+func (w *WAD) GetSpriteImage(spriteName string) (*image.RGBA, error) {
+	idx, ok := w.sprites[spriteName]
+	if !ok {
+		return nil, fmt.Errorf("unknown sprite %s", spriteName)
+	}
+
+	lumpInfo := w.lumpInfos[idx]
+	img, err := lumps.NewImage(w.file, lumpInfo, w.transparentPaletteIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	if img.Width <= 0 || img.Height <= 0 {
+		return nil, fmt.Errorf("invalid sprite dimensions for %s", spriteName)
+	}
+
+	// Creiamo un'immagine RGBA pre-inizializzata (che in Go ha già tutti i pixel a {0,0,0,0} trasparente)
+	bounds := image.Rect(0, 0, img.Width, img.Height)
+	rgba := image.NewRGBA(bounds)
+
+	for x, col := range img.Columns {
+		for _, post := range col.Posts {
+			for y, pixel := range post.Pixels {
+				drawY := post.RowStart + y
+				if drawY < 0 || drawY >= img.Height {
+					continue
+				}
+				rgb := w.playPal.Palettes[0].Table[pixel]
+				// A = 255 rende il pixel disegnato dal WAD completamente opaco
+				rgba.SetRGBA(x, drawY, color.RGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: 255})
+			}
+		}
+	}
+
 	return rgba, nil
 }

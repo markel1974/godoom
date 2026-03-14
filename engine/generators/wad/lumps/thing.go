@@ -19,11 +19,11 @@ type Thing struct {
 func NewThings(f *os.File, lumpInfo *LumpInfo) ([]*Thing, error) {
 	var pThing Thing
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pThing))
-	pThings := make([]Thing, count, count)
+	pThings := make([]Thing, count)
 	if err := binary.Read(f, binary.LittleEndian, pThings); err != nil {
 		return nil, err
 	}
-	things := make([]*Thing, count, count)
+	things := make([]*Thing, count)
 	for idx, t := range pThings {
 		things[idx] = &Thing{
 			X:       t.X,

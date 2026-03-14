@@ -17,6 +17,46 @@ const ScaleFactorCeilFloorLineDef = 8.0
 
 const SkyPicture = "F_SKY1"
 
+// Dizionario di mapping: Doom Type -> Sprite Frames
+var doomTypeToSprite = map[int][]string{
+	// --- MOSTRI (Walk cycle frontale) ---
+	3004: {"POSSA1", "POSSB1", "POSSC1", "POSSD1"}, // Zombieman
+	9:    {"SPOSA1", "SPOSB1", "SPOSC1", "SPOSD1"}, // Shotgun Guy
+	3001: {"TROOA1", "TROOB1", "TROOC1", "TROOD1"}, // Imp
+	3002: {"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, // Demon
+	58:   {"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, // Spectre (Usa i frame del Demon correnti)
+
+	// --- ARMI E MUNIZIONI ---
+	2001: {"SHOTA0"}, // Shotgun
+	2002: {"MGUNA0"}, // Chaingun
+	2003: {"LAUNA0"}, // Rocket Launcher
+	2007: {"CLIPA0"}, // Ammo clip
+	2008: {"SHELA0"}, // 4 Shells <-- IL COLPEVOLE FISSATO
+	2046: {"BROKA0"}, // Box of Rockets
+	2048: {"AMMOA0"}, // Ammo Box (50 bullets)
+	2049: {"SBOXA0"}, // Shell Box (20 shells)
+
+	// --- CURE E ARMATURE ---
+	2011: {"STIMA0"},                               // Stimpack
+	2012: {"MEDIA0"},                               // Medikit
+	2014: {"BON1A0", "BON1B0", "BON1C0", "BON1D0"}, // Health Bonus (Animato)
+	2015: {"BON2A0", "BON2B0", "BON2C0", "BON2D0"}, // Armor Bonus (Animato)
+	2018: {"ARM1A0", "ARM1B0"},                     // Green Armor (Animato)
+	2019: {"ARM2A0", "ARM2B0"},                     // Blue Armor (Animato)
+
+	// --- OSTACOLI E DECORAZIONI ---
+	35:   {"CBRAA0"},           // Candelabra
+	48:   {"ELECA0"},           // Tall techno pillar
+	2028: {"COLUA0"},           // Floor lamp (Yellow)
+	2035: {"BAR1A0", "BAR1B0"}, // Explosive Barrel (Animato)
+
+	// --- GORE E CADAVERI ---
+	10: {"PLAYW0"}, // Bloody mess
+	12: {"PLAYW0"}, // Bloody mess 2
+	15: {"PLAYN0"}, // Dead player
+	24: {"POL5A0"}, // Pool of blood
+}
+
 // Edge represents a connection between two vertices in a graph or geometric structure.
 // V1 and V2 are the indices of the vertices connected by the edge.
 // LDIdx is an index associated with a line definition in the context of the level structure.
@@ -74,9 +114,16 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 			}
 			continue
 		}
+		// Risoluzione dei fotogrammi (Fallback su frame mancante)
+		frames, hasAnim := doomTypeToSprite[int(t.Type)]
+		if !hasAnim {
+			fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
+			frames = []string{"UNKNOWN"}
+		}
 		tSectorId := grid.ResolveSectorId(Point{tX, tY})
 		tId := fmt.Sprintf("t_%d", i)
-		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId)
+		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop)
+		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, anim)
 		things = append(things, cfgThing)
 	}
 

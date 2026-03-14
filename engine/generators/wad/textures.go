@@ -112,11 +112,11 @@ func (t *Textures) TextureCreateAnimation(id string) []string {
 	if animation, ok := t.animations[id]; ok {
 		var out []string
 		for _, i := range animation {
-			out = append(out, t.TextureCreateId(i))
+			out = append(out, TextureCreateId(i))
 		}
 		return out
 	}
-	targetId := t.TextureCreateId(id)
+	targetId := TextureCreateId(id)
 	if len(targetId) == 0 {
 		return nil
 	}
@@ -129,19 +129,29 @@ func (t *Textures) FlatCreateAnimation(id string) []string {
 	if animation, ok := t.animations[id]; ok {
 		var out []string
 		for _, i := range animation {
-			out = append(out, t.FlatCreateId(i))
+			out = append(out, FlatCreateId(i))
 		}
 		return out
 	}
-	targetId := t.FlatCreateId(id)
+	targetId := FlatCreateId(id)
 	if len(targetId) == 0 {
 		return nil
 	}
 	return []string{targetId}
 }
 
+// SpriteCreateAnimation generates a list of sprite animation IDs for a given texture ID, resolving nested animations recursively.
+func (t *Textures) SpriteCreateAnimation(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		id = cleanId(id)
+		out = append(out, SpriteCreateId(id))
+	}
+	return out
+}
+
 // TextureCreateId generates a unique texture identifier by appending a fixed prefix to a sanitized version of the input id.
-func (t *Textures) TextureCreateId(id string) string {
+func TextureCreateId(id string) string {
 	const textureId = "__TEXTURE__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
@@ -151,8 +161,18 @@ func (t *Textures) TextureCreateId(id string) string {
 }
 
 // FlatCreateId generates a flat identifier by appending a predefined prefix to a cleaned version of the given id.
-func (t *Textures) FlatCreateId(id string) string {
+func FlatCreateId(id string) string {
 	const flatId = "__FLAT__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return flatId + id
+}
+
+// SpriteCreateId generates a unique sprite identifier by appending a prefix to a cleaned version of the input string.
+func SpriteCreateId(id string) string {
+	const flatId = "__SPRITE__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
 		return ""

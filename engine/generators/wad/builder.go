@@ -9,6 +9,9 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+const TextureScaleW = 4.0
+const TextureScaleH = 10.0
+
 // ScaleFactorLineDef defines the scale factor applied to line definitions for coordinate normalization in the configuration.
 const ScaleFactorLineDef = 25.0
 
@@ -122,7 +125,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		}
 		tSectorId := grid.ResolveSectorId(Point{tX, tY})
 		tId := fmt.Sprintf("t_%d", i)
-		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, 4.0, 10.0)
+		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW, TextureScaleH)
 		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, anim)
 		things = append(things, cfgThing)
 	}
@@ -223,8 +226,8 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 	if wadSector.FloorPic == SkyPicture {
 		floorType = model.AnimationKindSky
 	}
-	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType, 4.0, 10.0)
-	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType, 4.0, 10.0)
+	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType, TextureScaleW, TextureScaleH)
+	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType, TextureScaleW, TextureScaleH)
 	return miSector
 }
 
@@ -246,9 +249,12 @@ func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, secto
 			}
 			side := level.SideDefs[sideIdx]
 
-			seg.Animations.Middle = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.MiddleTexture), model.AnimationKindLoop, 4.0, 10.0)
-			seg.Animations.Upper = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.UpperTexture), model.AnimationKindLoop, 4.0, 10.0)
-			seg.Animations.Lower = model.NewConfigAnimation(texHandler.TextureCreateAnimation(side.LowerTexture), model.AnimationKindLoop, 4.0, 10.0)
+			middleT := texHandler.TextureCreateAnimation(side.MiddleTexture)
+			upperT := texHandler.TextureCreateAnimation(side.UpperTexture)
+			lowerT := texHandler.TextureCreateAnimation(side.LowerTexture)
+			seg.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
+			seg.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
+			seg.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// SKY HACK VERTICALE:
@@ -263,11 +269,11 @@ func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, secto
 					backSector := level.Sectors[backSide.SectorRef]
 					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
-						seg.Animations.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone, 4.0, 10.0)
+						seg.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone, TextureScaleW, TextureScaleH)
 					}
 					// Extension for floors (e.g. moats that show sky at the bottom)
 					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
-						seg.Animations.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone, 4.0, 10.0)
+						seg.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone, TextureScaleW, TextureScaleH)
 					}
 				}
 			}

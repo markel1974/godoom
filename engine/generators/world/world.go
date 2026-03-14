@@ -78,9 +78,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
 		lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
 		middleT := []string{availableWall[random(0, len(availableWall)-1)]}
-		seg.Animations.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
-		seg.Animations.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
-		seg.Animations.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
+		seg.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
+		seg.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
+		seg.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -224,9 +224,9 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 				upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
 				lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
 				middleT := []string{availableWall[random(0, len(availableWall)-1)]}
-				seg.Animations.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
-				seg.Animations.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
-				seg.Animations.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
+				seg.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, scaleW, scaleH)
+				seg.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, scaleW, scaleH)
+				seg.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, scaleW, scaleH)
 
 				sector.Segments = append(sector.Segments, seg)
 			}

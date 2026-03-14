@@ -70,9 +70,9 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			aUpper := cfg.GetAnimation(cn.Animations.Upper)
-			aMiddle := cfg.GetAnimation(cn.Animations.Middle)
-			aLower := cfg.GetAnimation(cn.Animations.Lower)
+			aUpper := cfg.GetAnimation(cn.Upper)
+			aMiddle := cfg.GetAnimation(cn.Middle)
+			aLower := cfg.GetAnimation(cn.Lower)
 			seg := NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
 			segments = append(segments, seg)
 		}

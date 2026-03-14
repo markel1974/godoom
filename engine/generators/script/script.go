@@ -115,9 +115,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
 					neighbor := model.NewConfigSegment("", neighborId.Kind, xy, xy, strconv.Itoa(neighborId.Val))
-					neighbor.Animations.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Animations.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Animations.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -126,9 +126,9 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
 					neighbor := model.NewConfigSegment("", model.DefinitionUnknown, xy, xy, "unknown")
-					neighbor.Animations.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Animations.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Animations.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 

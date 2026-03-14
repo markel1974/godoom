@@ -78,10 +78,13 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 			continue
 		}
 		// Risoluzione dei fotogrammi (Fallback su frame mancante)
-		frames, hasAnim := _spriteDictionary[int(t.Type)]
+		sd, hasAnim := _spriteDictionary[int(t.Type)]
+		var frames []string
 		if !hasAnim {
 			fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
 			frames = []string{"UNKNOWN"}
+		} else {
+			frames = sd.Sprites
 		}
 		tSectorId := grid.ResolveSectorId(Point{tX, tY})
 		tId := fmt.Sprintf("t_%d", i)

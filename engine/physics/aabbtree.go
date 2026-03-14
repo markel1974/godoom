@@ -415,17 +415,16 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 	leafNode.parentNodeIndex = AABBNullNode
 }
 
-// updateLeaf updates the AABB of the specified leaf node and repositions it within the tree if necessary.
+// updateLeaf updates the position of a leaf node in the AABB tree when its bounding box changes significantly.
 func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	node := a.nodes[leafNodeIndex]
 
-	// if the node contains the new aabb then we just leave things
-	// TODO: when we add velocity this check should kick in as often an update will lie within the velocity fattened initial aabb
-	// to support this we might need to differentiate between velocity fattened aabb and actual aabb
-
-	//if node.aabb.contains(newAABB) {
-	//	return
-	//}
+	// Ora che abbiamo un Fat Margin, se l'entità si è mossa di poco
+	// rimarrà racchiusa nel suo vecchio "Fat AABB".
+	// Questo skippa rimuovi/inserisci e risparmia CPU!
+	if node.aabb.contains(newAABB) {
+		return
+	}
 
 	a.removeLeaf(leafNodeIndex)
 	node.aabb = newAABB

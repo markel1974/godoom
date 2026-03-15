@@ -216,11 +216,69 @@ func OnSegmentStrict(p, q, r Point) bool {
 
 // SegmentsCross determines if two line segments, defined by points (p1, q1) and (p2, q2), intersect each other strictly.
 func SegmentsCross(p1, q1, p2, q2 Point) bool {
+	// 1. AABB Fast Rejection (inline branching per branch-predictor)
+	if p1.X < q1.X {
+		if p2.X < q2.X {
+			if q1.X < p2.X || q2.X < p1.X {
+				return false
+			}
+		} else {
+			if q1.X < q2.X || p2.X < p1.X {
+				return false
+			}
+		}
+	} else {
+		if p2.X < q2.X {
+			if p1.X < p2.X || q2.X < q1.X {
+				return false
+			}
+		} else {
+			if p1.X < q2.X || p2.X < q1.X {
+				return false
+			}
+		}
+	}
+
+	if p1.Y < q1.Y {
+		if p2.Y < q2.Y {
+			if q1.Y < p2.Y || q2.Y < p1.Y {
+				return false
+			}
+		} else {
+			if q1.Y < q2.Y || p2.Y < p1.Y {
+				return false
+			}
+		}
+	} else {
+		if p2.Y < q2.Y {
+			if p1.Y < p2.Y || q2.Y < q1.Y {
+				return false
+			}
+		} else {
+			if p1.Y < q2.Y || p2.Y < q1.Y {
+				return false
+			}
+		}
+	}
+
+	// 2. Short-circuiting evaluation
 	o1 := Orientation(p1, q1, p2)
+	if o1 == 0 {
+		return false
+	}
+
 	o2 := Orientation(p1, q1, q2)
+	if o2 == 0 || o1 == o2 {
+		return false
+	}
+
 	o3 := Orientation(p2, q2, p1)
+	if o3 == 0 {
+		return false
+	}
+
 	o4 := Orientation(p2, q2, q1)
-	return o1 != o2 && o3 != o4 && o1 != 0 && o2 != 0 && o3 != 0 && o4 != 0
+	return o4 != 0 && o3 != o4
 }
 
 // SegmentsIntersect determines if two line segments, defined by points p1-q1 and p2-q2, intersect in 2D space.

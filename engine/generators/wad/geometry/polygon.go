@@ -338,6 +338,11 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 	for _, c := range constraints {
 		var k EdgeKey
 
+		// Discard degenerate zero-length segments resulting from FP truncation
+		if c[0] == c[1] {
+			continue
+		}
+
 		// Lexicographic normalization of the segment to identify the edge
 		// uniquely regardless of its vectorial orientation.
 		if c[0].X < c[1].X || (c[0].X == c[1].X && c[0].Y < c[1].Y) {

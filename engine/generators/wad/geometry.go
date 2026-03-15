@@ -18,9 +18,9 @@ import (
 // errBoundOri is the precomputed error bound for orientation-based determinant calculations.
 // errBoundInc is the precomputed error bound for incircle determinant calculations.
 const (
-	// Machine epsilon per float64 IEEE 754
+	// Machine epsilon for float64 IEEE 754
 	epsilon = 1.1102230246251565e-16
-	// Bound di errore precalcolati per i determinanti
+	// Precomputed error bounds for determinants
 	errBoundOri = (3.0 + 16.0*epsilon) * epsilon
 	errBoundInc = (10.0 + 96.0*epsilon) * epsilon
 )
@@ -141,8 +141,8 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 					outDy := outV2.Y - outV1.Y
 					outAngle := math.Atan2(outDy, outDx)
 
-					// Calcolo della deviazione angolare relativa (orientamento CCW standard)
-					// L'angolo in ingresso va invertito (come se guardassimo all'indietro dal vertice)
+					// Calculation of relative angular deviation (standard CCW orientation)
+					// The incoming angle must be inverted (as if looking backward from the vertex)
 					diff := outAngle - (inAngle + math.Pi)
 					for diff < 0 {
 						diff += 2 * math.Pi
@@ -151,8 +151,8 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 						diff -= 2 * math.Pi
 					}
 
-					// Cerchiamo l'angolo minore (svolta a destra più stretta)
-					// per chiudere l'involucro locale coerentemente
+					// We look for the smallest angle (tightest right turn)
+					// to close the local envelope consistently
 					if diff < minAngleDiff {
 						minAngleDiff = diff
 						bestIdx = i
@@ -261,7 +261,7 @@ func (poly Polygon) Triangulate(secIdx int) []Polygon {
 		points = append(points, h...)
 	}
 
-	// PRE-PROCESSING TOPOLOGICO (Vertex Injection per T-Junctions e Intersezioni)
+	// TOPOLOGICAL PRE-PROCESSING (Vertex Injection for T-Junctions and Intersections)
 	var rawConstraints [][2]Point
 	rawConstraints = append(rawConstraints, outer.BuildConstraints()...)
 	for _, hole := range holes {
@@ -275,11 +275,11 @@ func (poly Polygon) Triangulate(secIdx int) []Polygon {
 	}
 
 	// 3. Unconstrained Delaunay Triangulation (Bowyer-Watson)
-	// Passiamo il superset di vertici che ora include i nodi iniettati
+	// We pass the superset of vertices which now includes the injected nodes
 	mesh := sanitizedPoints.BowyerWatson()
 
-	// 4. Constraint Recovery (Lawson FIFO deterministico)
-	// Usiamo il set di vincoli frammentato per garantire adiacenze esatte
+	// 4. Constraint Recovery (deterministic FIFO Lawson)
+	// We use the fragmented constraint set to guarantee exact adjacencies
 	mesh = RecoverConstraints(sanitizedConstraints, mesh, secIdx)
 
 	// 5. Domain Culling
@@ -319,7 +319,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 	var orderedPoints []Point
 	seenPoints := make(map[Point]bool)
 
-	// Inizializzazione deterministica dei vertici
+	// Deterministic vertex initialization
 	for _, p := range poly {
 		if !seenPoints[p] {
 			seenPoints[p] = true
@@ -335,7 +335,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 		for i, c1 := range constraints {
 			wasSplit := false
 
-			// 1. Risoluzione T-Junctions: iterazione deterministica sullo slice
+			// 1. T-Junction Resolution: deterministic iteration over the slice
 			for _, p := range orderedPoints {
 				if p != c1[0] && p != c1[1] && OnSegmentStrict(c1[0], p, c1[1]) {
 					nextConstraints = append(nextConstraints, [2]Point{c1[0], p}, [2]Point{p, c1[1]})
@@ -348,7 +348,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 				continue
 			}
 
-			// 2. Risoluzione Intersezioni Edge-to-Edge
+			// 2. Edge-to-Edge Intersection Resolution
 			for j := i + 1; j < len(constraints); j++ {
 				c2 := constraints[j]
 				if c1[0] == c2[0] || c1[0] == c2[1] || c1[1] == c2[0] || c1[1] == c2[1] {
@@ -359,7 +359,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]Point) (Polygon, [][2]Point) {
 					ix, iy := LineIntersection(c1[0], c1[1], c2[0], c2[1])
 
 					if math.IsNaN(ix) || math.IsNaN(iy) {
-						continue // Bypass della singolarità, nessuna iniezione
+						continue // Singularity bypass, no injection
 					}
 
 					ip := Point{X: ix, Y: iy}
@@ -507,11 +507,11 @@ func (poly Polygon) PointInPolygon(p Point) bool {
 	inside := false
 	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
 		vi, vj := poly[i], poly[j]
-		// Il raggio orizzontale interseca l'asse Y del segmento?
+		// Does the horizontal ray intersect the Y-axis of the segment?
 		if (vi.Y > p.Y) != (vj.Y > p.Y) {
 			o := Orientation(vi, vj, p)
-			// Se il segmento è ascendente, l'intersezione avviene se p è a sinistra (CCW).
-			// Se discendente, l'intersezione avviene se p è a destra (CW).
+			// If the segment is ascending, intersection occurs if p is to the left (CCW).
+			// If descending, intersection occurs if p is to the right (CW).
 			if vi.Y < vj.Y {
 				if o == 2 {
 					inside = !inside
@@ -628,7 +628,7 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 	for _, c := range constraints {
 		var queue [][2]Point
 
-		// 1. Accoda gli edge che intersecano il vincolo in modo stretto
+		// 1. Enqueue edges that strictly intersect the constraint
 		for _, t := range triangles {
 			edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
 			for _, e := range edges {
@@ -638,12 +638,12 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 			}
 		}
 
-		// 2. Risoluzione topologica garantita con failsafe
+		// 2. Guaranteed topological resolution with failsafe
 		consecutiveFailures := 0
 
 		for len(queue) > 0 {
 			if consecutiveFailures >= len(queue) {
-				// Rompiamo il ciclo per preservare l'esecuzione.
+				// Break the loop to preserve execution.
 				fmt.Println("WARNING Topological deadlock: queue contains only non-flippable edges")
 				break
 			}
@@ -660,9 +660,9 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 			pOpp1 := t1.GetOppositeVertex(e)
 			pOpp2 := t2.GetOppositeVertex(e)
 
-			// Solo le diagonali dei quadrilateri strettamente convessi possono essere flippate
+			// Only diagonals of strictly convex quadrilaterals can be flipped
 			if IsConvexQuadrilateral(e[0], e[1], pOpp1, pOpp2) {
-				consecutiveFailures = 0 // Reset in caso di successo
+				consecutiveFailures = 0 // Reset on success
 				triangles[t1Idx] = Triangle{pOpp1, pOpp2, e[0]}
 				triangles[t2Idx] = Triangle{pOpp1, pOpp2, e[1]}
 
@@ -670,7 +670,7 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 				if SegmentsCross(newEdge[0], newEdge[1], c[0], c[1]) {
 					queue = append(queue, newEdge)
 				} else {
-					// Valuta se i nuovi bordi del quadrilatero intersecano il vincolo
+					// Evaluate if the new quadrilateral edges intersect the constraint
 					for _, newBoundary := range [][2]Point{{pOpp1, e[0]}, {e[0], pOpp2}, {pOpp2, e[1]}, {e[1], pOpp1}} {
 						if SegmentsCross(newBoundary[0], newBoundary[1], c[0], c[1]) {
 							queue = AppendUniqueEdge(queue, newBoundary)
@@ -678,7 +678,7 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int
 					}
 				}
 			} else {
-				// Il quadrilatero non è convesso. Lo reinseriamo in coda.
+				// The quadrilateral is not convex. Reinsert it at the back of the queue.
 				consecutiveFailures++
 				queue = append(queue, e)
 			}
@@ -776,7 +776,7 @@ func LineIntersection(p1, q1, p2, q2 Point) (float64, float64) {
 		new(big.Float).Mul(a2, b1),
 	)
 
-	// Fallback in caso di segmenti perfettamente paralleli (collinearità)
+	// Fallback in case of perfectly parallel segments (collinearity)
 	if det.Sign() == 0 {
 		return math.NaN(), math.NaN()
 	}

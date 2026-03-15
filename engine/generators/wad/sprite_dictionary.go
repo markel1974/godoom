@@ -1,5 +1,6 @@
 package wad
 
+// ThingDef represents the definition of a physical or graphical object with its associated properties.
 type ThingDef struct {
 	Sprites []string
 	Radius  float64
@@ -7,6 +8,7 @@ type ThingDef struct {
 	Mass    float64
 }
 
+// _spriteDictionary is a map that associates integer keys with ThingDef structures, defining game objects and their properties.
 var _spriteDictionary = map[int]ThingDef{
 	// --- MOSTRI ---
 	3004: {Sprites: []string{"POSSA1", "POSSB1", "POSSC1", "POSSD1"}, Radius: 20.0, Height: 56.0, Mass: 100.0},   // Zombieman
@@ -120,4 +122,24 @@ var _spriteDictionary = map[int]ThingDef{
 	74: {Sprites: []string{"GOR2A0"}, Radius: 16.0, Height: 84.0, Mass: 80.0},  // Hanging victim, guts and brain removed
 	52: {Sprites: []string{"GOR4A0"}, Radius: 16.0, Height: 68.0, Mass: 80.0},  // Hanging pair of legs
 	60: {Sprites: []string{"GOR2A0"}, Radius: 16.0, Height: 68.0, Mass: 80.0},  // Hanging victim (Non-blocking originale)
+}
+
+// _animationsBase defines a collection of grouped texture and flat animation sequences used for visual transitions.
+var _animationsBase = [][]string{
+	//flats
+	{"NUKAGE1", "NUKAGE2", "NUKAGE3"},
+	{"FWATER1", "FWATER2", "FWATER3", "FWATER4"},
+	{"SWATER1", "SWATER2", "SWATER3", "SWATER4"},
+	{"LAVA1", "LAVA2", "LAVA3", "LAVA4"},
+	{"BLOOD1", "BLOOD2", "BLOOD3"},
+	{"FIRELAVA", "FIRELAV2", "FIRELAV3"},
+	{"FIREWALA", "FIREWALB", "FIREWALL"},
+	//textures
+	{"BLODGR1", "BLODGR2", "BLODGR3", "BLODGR4"},
+	{"SLADRIP1", "SLADRIP2", "SLADRIP3"},
+	{"BLODRIP1", "BLODRIP2", "BLODRIP3", "BLODRIP4"},
+	{"FIREMAG1", "FIREMAG2", "FIREMAG3"},
+	{"FIREBLU1", "FIREBLU2"},
+	{"ROCKRED1", "ROCKRED2", "ROCKRED3"},
+	{"GSTFONT1", "GSTFONT2", "GSTFONT3"},
 }

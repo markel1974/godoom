@@ -119,11 +119,15 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures)
 
 	for secIdx, edges := range sectorToEdges {
 		wadSector := level.Sectors[secIdx]
-		polygonDefs := bld.traceLoops(level, edges)
-
-		if secIdx == 7 {
-			fmt.Printf("Polygon: %v\n", edges)
+		vertexes := make(Polygon, len(level.Vertexes))
+		for idx, l := range level.Vertexes {
+			vertexes[idx] = Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
 		}
+		polygonDefs := vertexes.TraceLoops(edges, len(level.LineDefs))
+
+		//if secIdx == 7 {
+		//	fmt.Printf("Polygon: %v\n", edges)
+		//}
 
 		for loopIdx, def := range polygonDefs {
 			mergedPoly := def.BridgeHoles()
@@ -307,157 +311,4 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 
 	// Return the original height if it's not a door
 	return float64(wadSector.CeilingHeight)
-}
-
-// traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
-// traceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
-// Handles self-intersecting topologies and shared vertices by enforcing maximum-angle left turns.
-func (bld *Builder) traceLoops(level *Level, edges []Edge) []ComplexPolygon {
-	// Optimization: O(1) array access instead of map[uint16][]Edge
-	adj := make([][]Edge, len(level.Vertexes))
-	for _, e := range edges {
-		adj[e.V1] = append(adj[e.V1], e)
-	}
-
-	// Bitmask for visited edges: (LDIdx << 1) | IsLeft
-	visited := make([]bool, len(level.LineDefs)*2)
-
-	getVisitedIdx := func(e Edge) int {
-		idx := e.LDIdx << 1
-		if e.IsLeft {
-			idx |= 1
-		}
-		return idx
-	}
-
-	var rawLoops []Polygon
-
-	for _, startEdge := range edges {
-		vIdx := getVisitedIdx(startEdge)
-		if visited[vIdx] {
-			continue
-		}
-
-		var currentLoop Polygon
-		curr := startEdge
-
-		for {
-			visited[getVisitedIdx(curr)] = true
-			v := level.Vertexes[curr.V1]
-			currentLoop = append(currentLoop, Point{X: float64(v.XCoord), Y: float64(v.YCoord)})
-
-			nextOptions := adj[curr.V2]
-			var nextEdge Edge
-			found := false
-
-			if len(nextOptions) == 1 {
-				if !visited[getVisitedIdx(nextOptions[0])] {
-					nextEdge = nextOptions[0]
-					found = true
-				}
-			} else if len(nextOptions) > 1 {
-				// Multiple outgoing edges: Calculate angles to perform the tightest possible turn.
-				// We need the incoming vector to compute the relative deviation.
-				inV1 := level.Vertexes[curr.V1]
-				inV2 := level.Vertexes[curr.V2]
-				inDx := float64(inV2.XCoord - inV1.XCoord)
-				inDy := float64(inV2.YCoord - inV1.YCoord)
-				inAngle := math.Atan2(inDy, inDx)
-
-				minAngleDiff := math.MaxFloat64
-				bestIdx := -1
-
-				for i, o := range nextOptions {
-					if visited[getVisitedIdx(o)] {
-						continue
-					}
-					outV1 := level.Vertexes[o.V1]
-					outV2 := level.Vertexes[o.V2]
-					outDx := float64(outV2.XCoord - outV1.XCoord)
-					outDy := float64(outV2.YCoord - outV1.YCoord)
-					outAngle := math.Atan2(outDy, outDx)
-
-					// Calcolo della deviazione angolare relativa (orientamento CCW standard)
-					// L'angolo in ingresso va invertito (come se guardassimo all'indietro dal vertice)
-					diff := outAngle - (inAngle + math.Pi)
-					for diff < 0 {
-						diff += 2 * math.Pi
-					}
-					for diff >= 2*math.Pi {
-						diff -= 2 * math.Pi
-					}
-
-					// Cerchiamo l'angolo minore (svolta a destra più stretta)
-					// per chiudere l'involucro locale coerentemente
-					if diff < minAngleDiff {
-						minAngleDiff = diff
-						bestIdx = i
-					}
-				}
-
-				if bestIdx != -1 {
-					nextEdge = nextOptions[bestIdx]
-					found = true
-				}
-			}
-
-			if !found || nextEdge.V1 == startEdge.V1 {
-				break
-			}
-			curr = nextEdge
-		}
-
-		if len(currentLoop) >= 3 {
-			rawLoops = append(rawLoops, currentLoop)
-		}
-	}
-
-	if len(rawLoops) == 0 {
-		return nil
-	}
-
-	// ... [Il resto della logica di SignedArea e classificazione Outer/Holes rimane invariato] ...
-	var outers []Polygon
-	var holes []Polygon
-
-	maxArea := 0.0
-	outerSign := 1.0
-
-	areas := make([]float64, len(rawLoops))
-	for i, loop := range rawLoops {
-		areas[i] = loop.SignedArea()
-		absArea := math.Abs(areas[i])
-		if absArea > maxArea {
-			maxArea = absArea
-			if areas[i] < 0 {
-				outerSign = -1.0
-			} else {
-				outerSign = 1.0
-			}
-		}
-	}
-
-	for i, loop := range rawLoops {
-		if (areas[i] < 0 && outerSign < 0) || (areas[i] > 0 && outerSign > 0) {
-			outers = append(outers, loop)
-		} else {
-			holes = append(holes, loop)
-		}
-	}
-
-	defs := make([]ComplexPolygon, len(outers))
-	for i, o := range outers {
-		defs[i] = ComplexPolygon{Outer: o}
-	}
-
-	for _, h := range holes {
-		for i, def := range defs {
-			if def.Outer.PointInPolygon(h[0]) {
-				defs[i].Holes = append(defs[i].Holes, h)
-				break
-			}
-		}
-	}
-
-	return defs
 }

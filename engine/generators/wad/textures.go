@@ -8,24 +8,34 @@ import (
 	"github.com/markel1974/godoom/engine/textures"
 )
 
-// _animationsBase defines a 2D slice of strings representing grouped animation frames for flats and textures.
-var _animationsBase = [][]string{
-	//flats
-	{"NUKAGE1", "NUKAGE2", "NUKAGE3"},
-	{"FWATER1", "FWATER2", "FWATER3", "FWATER4"},
-	{"SWATER1", "SWATER2", "SWATER3", "SWATER4"},
-	{"LAVA1", "LAVA2", "LAVA3", "LAVA4"},
-	{"BLOOD1", "BLOOD2", "BLOOD3"},
-	{"FIRELAVA", "FIRELAV2", "FIRELAV3"},
-	{"FIREWALA", "FIREWALB", "FIREWALL"},
-	//textures
-	{"BLODGR1", "BLODGR2", "BLODGR3", "BLODGR4"},
-	{"SLADRIP1", "SLADRIP2", "SLADRIP3"},
-	{"BLODRIP1", "BLODRIP2", "BLODRIP3", "BLODRIP4"},
-	{"FIREMAG1", "FIREMAG2", "FIREMAG3"},
-	{"FIREBLU1", "FIREBLU2"},
-	{"ROCKRED1", "ROCKRED2", "ROCKRED3"},
-	{"GSTFONT1", "GSTFONT2", "GSTFONT3"},
+// TextureCreateId generates a unique texture identifier by appending a fixed prefix to a sanitized version of the input id.
+func TextureCreateId(id string) string {
+	const textureId = "__TEXTURE__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return textureId + id
+}
+
+// FlatCreateId generates a flat identifier by appending a predefined prefix to a cleaned version of the given id.
+func FlatCreateId(id string) string {
+	const flatId = "__FLAT__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return flatId + id
+}
+
+// SpriteCreateId generates a unique sprite identifier by appending a prefix to a cleaned version of the input string.
+func SpriteCreateId(id string) string {
+	const flatId = "__SPRITE__"
+	id = cleanId(id)
+	if len(id) == 0 || id == "-" {
+		return ""
+	}
+	return flatId + id
 }
 
 // cleanId transforms the input string by trimming leading/trailing spaces and converting it to uppercase.
@@ -148,34 +158,4 @@ func (t *Textures) SpriteCreateAnimation(ids []string) []string {
 		out = append(out, SpriteCreateId(id))
 	}
 	return out
-}
-
-// TextureCreateId generates a unique texture identifier by appending a fixed prefix to a sanitized version of the input id.
-func TextureCreateId(id string) string {
-	const textureId = "__TEXTURE__"
-	id = cleanId(id)
-	if len(id) == 0 || id == "-" {
-		return ""
-	}
-	return textureId + id
-}
-
-// FlatCreateId generates a flat identifier by appending a predefined prefix to a cleaned version of the given id.
-func FlatCreateId(id string) string {
-	const flatId = "__FLAT__"
-	id = cleanId(id)
-	if len(id) == 0 || id == "-" {
-		return ""
-	}
-	return flatId + id
-}
-
-// SpriteCreateId generates a unique sprite identifier by appending a prefix to a cleaned version of the input string.
-func SpriteCreateId(id string) string {
-	const flatId = "__SPRITE__"
-	id = cleanId(id)
-	if len(id) == 0 || id == "-" {
-		return ""
-	}
-	return flatId + id
 }

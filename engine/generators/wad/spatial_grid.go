@@ -6,16 +6,19 @@ import (
 	"github.com/markel1974/godoom/engine/model"
 )
 
+// CellKey represents a grid cell in a 2D spatial grid, defined by integer X and Y coordinates.
 type CellKey struct {
 	X, Y int
 }
 
+// SpatialGrid represents a spatial partitioning system for efficient management of ConfigSectors in a 2D grid.
 type SpatialGrid struct {
 	cellSize float64
 	cells    map[CellKey][]*model.ConfigSector
 	all      []*model.ConfigSector // Retained for global fallback
 }
 
+// NewSpatialGrid constructs a SpatialGrid, partitioning ConfigSector objects into cells based on the given cell size.
 func NewSpatialGrid(sectors []*model.ConfigSector, cellSize float64) *SpatialGrid {
 	grid := &SpatialGrid{
 		cellSize: cellSize,
@@ -53,6 +56,7 @@ func NewSpatialGrid(sectors []*model.ConfigSector, cellSize float64) *SpatialGri
 	return grid
 }
 
+// ResolveSectorId determines the sector ID for a given point within the spatial grid, considering grid cells and fallbacks.
 func (grid *SpatialGrid) ResolveSectorId(p Point) string {
 	if len(grid.all) == 0 {
 		return ""
@@ -111,6 +115,8 @@ func (grid *SpatialGrid) ResolveSectorId(p Point) string {
 	return closestSector
 }
 
+// PointInTriangle determines if a point lies inside or on the edges of a triangle defined by three vertices.
+// Returns true if the point is inside the triangle, false otherwise. Uses vector cross-products for calculations.
 func (grid *SpatialGrid) PointInTriangle(p Point, a Point, b Point, c Point) bool {
 	cp1 := (b.X-a.X)*(p.Y-a.Y) - (b.Y-a.Y)*(p.X-a.X)
 	cp2 := (c.X-b.X)*(p.Y-b.Y) - (c.Y-b.Y)*(p.X-b.X)

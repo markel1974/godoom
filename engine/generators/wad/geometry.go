@@ -75,6 +75,156 @@ func (t Triangle) GetOppositeVertex(e [2]Point) Point {
 // Polygon represents a slice of points defining a closed geometric shape in 2D space.
 type Polygon []Point
 
+// TraceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
+// Handles self-intersecting topologies and shared vertices by enforcing maximum-angle left turns.
+func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
+	adj := make([][]Edge, len(poly))
+	for _, e := range edges {
+		adj[e.V1] = append(adj[e.V1], e)
+	}
+
+	// Bitmask for visited edges: (LDIdx << 1) | IsLeft
+	visited := make([]bool, count*2)
+
+	getVisitedIdx := func(e Edge) int {
+		idx := e.LDIdx << 1
+		if e.IsLeft {
+			idx |= 1
+		}
+		return idx
+	}
+
+	var rawLoops []Polygon
+
+	for _, startEdge := range edges {
+		vIdx := getVisitedIdx(startEdge)
+		if visited[vIdx] {
+			continue
+		}
+
+		var currentLoop Polygon
+		curr := startEdge
+
+		for {
+			visited[getVisitedIdx(curr)] = true
+			v := poly[curr.V1]
+			currentLoop = append(currentLoop, Point{X: v.X, Y: v.Y})
+
+			nextOptions := adj[curr.V2]
+			var nextEdge Edge
+			found := false
+
+			if len(nextOptions) == 1 {
+				if !visited[getVisitedIdx(nextOptions[0])] {
+					nextEdge = nextOptions[0]
+					found = true
+				}
+			} else if len(nextOptions) > 1 {
+				// Multiple outgoing edges: Calculate angles to perform the tightest possible turn.
+				// We need the incoming vector to compute the relative deviation.
+				inV1 := poly[curr.V1]
+				inV2 := poly[curr.V2]
+				inDx := inV2.X - inV1.X
+				inDy := inV2.Y - inV1.Y
+				inAngle := math.Atan2(inDy, inDx)
+
+				minAngleDiff := math.MaxFloat64
+				bestIdx := -1
+
+				for i, o := range nextOptions {
+					if visited[getVisitedIdx(o)] {
+						continue
+					}
+					outV1 := poly[o.V1]
+					outV2 := poly[o.V2]
+					outDx := outV2.X - outV1.X
+					outDy := outV2.Y - outV1.Y
+					outAngle := math.Atan2(outDy, outDx)
+
+					// Calcolo della deviazione angolare relativa (orientamento CCW standard)
+					// L'angolo in ingresso va invertito (come se guardassimo all'indietro dal vertice)
+					diff := outAngle - (inAngle + math.Pi)
+					for diff < 0 {
+						diff += 2 * math.Pi
+					}
+					for diff >= 2*math.Pi {
+						diff -= 2 * math.Pi
+					}
+
+					// Cerchiamo l'angolo minore (svolta a destra più stretta)
+					// per chiudere l'involucro locale coerentemente
+					if diff < minAngleDiff {
+						minAngleDiff = diff
+						bestIdx = i
+					}
+				}
+
+				if bestIdx != -1 {
+					nextEdge = nextOptions[bestIdx]
+					found = true
+				}
+			}
+
+			if !found || nextEdge.V1 == startEdge.V1 {
+				break
+			}
+			curr = nextEdge
+		}
+
+		if len(currentLoop) >= 3 {
+			rawLoops = append(rawLoops, currentLoop)
+		}
+	}
+
+	if len(rawLoops) == 0 {
+		return nil
+	}
+
+	var outers []Polygon
+	var holes []Polygon
+
+	maxArea := 0.0
+	outerSign := 1.0
+
+	areas := make([]float64, len(rawLoops))
+	for i, loop := range rawLoops {
+		areas[i] = loop.SignedArea()
+		absArea := math.Abs(areas[i])
+		if absArea > maxArea {
+			maxArea = absArea
+			if areas[i] < 0 {
+				outerSign = -1.0
+			} else {
+				outerSign = 1.0
+			}
+		}
+	}
+
+	for i, loop := range rawLoops {
+		if (areas[i] < 0 && outerSign < 0) || (areas[i] > 0 && outerSign > 0) {
+			outers = append(outers, loop)
+		} else {
+			holes = append(holes, loop)
+		}
+	}
+
+	defs := make([]ComplexPolygon, len(outers))
+	for i, o := range outers {
+		defs[i] = ComplexPolygon{Outer: o}
+	}
+
+	for _, h := range holes {
+		for i, def := range defs {
+			if def.Outer.PointInPolygon(h[0]) {
+				defs[i].Holes = append(defs[i].Holes, h)
+				break
+			}
+		}
+	}
+
+	return defs
+}
+
 // Triangulate decomposes a polygon with possible holes into a set of non-overlapping triangles using PSLG processing.
 func (poly Polygon) Triangulate(secIdx int) []Polygon {
 	if len(poly) < 3 {
@@ -113,9 +263,9 @@ func (poly Polygon) Triangulate(secIdx int) []Polygon {
 
 	// PRE-PROCESSING TOPOLOGICO (Vertex Injection per T-Junctions e Intersezioni)
 	var rawConstraints [][2]Point
-	rawConstraints = append(rawConstraints, outer.buildConstraints()...)
+	rawConstraints = append(rawConstraints, outer.BuildConstraints()...)
 	for _, hole := range holes {
-		rawConstraints = append(rawConstraints, hole.buildConstraints()...)
+		rawConstraints = append(rawConstraints, hole.BuildConstraints()...)
 	}
 
 	sanitizedPoints, sanitizedConstraints := points.SanitizePSLG(rawConstraints)
@@ -247,8 +397,8 @@ func (poly Polygon) MaxPointsX() float64 {
 	return max
 }
 
-// buildConstraints generates a list of line segments representing the edges of the polygon in a cyclic order.
-func (poly Polygon) buildConstraints() [][2]Point {
+// BuildConstraints generates a list of line segments representing the edges of the polygon in a cyclic order.
+func (poly Polygon) BuildConstraints() [][2]Point {
 	var c [][2]Point
 	if len(poly) < 3 {
 		return c

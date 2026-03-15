@@ -1,0 +1,532 @@
+package software
+
+import (
+	"fmt"
+	"image/color"
+	"math"
+	"strings"
+	"sync"
+
+	"github.com/markel1974/godoom/mr_tech/engine"
+	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/pixels"
+)
+
+// _scale is a constant scaling factor used for adjusting dimensions and transformations in rendering operations.
+const _scale = 1
+
+// RenderSoftware is a struct responsible for handling software-based 2D rendering functionality.
+type RenderSoftware struct {
+	win         *pixels.GLWindow
+	mainSurface *pixels.PictureRGBA
+	mainMatrix  pixels.Matrix
+	mainSprite  *pixels.Sprite
+	enableClear bool
+	viewMode    int
+
+	screenWidth        int
+	screenHeight       int
+	textures           textures.ITextures
+	sectorsMaxHeight   float64
+	targetSectors      map[int]bool
+	targetIdx          int
+	targetLastCompiled int
+	targetEnabled      bool
+	targetId           string
+	dp                 *DrawPolygon
+
+	engine   *engine.Engine
+	vi       *model.ViewMatrix
+	player   *model.Player
+	debug    bool
+	debugIdx int
+}
+
+// NewSoftwareRender initializes and returns a new instance of RenderSoftware with default values.
+func NewSoftwareRender() *RenderSoftware {
+	return &RenderSoftware{
+		screenWidth:        0,
+		screenHeight:       0,
+		textures:           nil,
+		sectorsMaxHeight:   0,
+		targetIdx:          0,
+		targetSectors:      map[int]bool{0: true},
+		targetLastCompiled: 0,
+		targetEnabled:      false,
+		dp:                 nil,
+		vi:                 model.NewViewMatrix(),
+	}
+}
+
+// Setup initializes the RenderSoftware instance with the specified portal, player, and textures.
+func (w *RenderSoftware) Setup(engine *engine.Engine) error {
+	w.engine = engine
+	w.screenWidth = engine.GetWidth()
+	w.screenHeight = engine.GetHeight()
+	w.sectorsMaxHeight = engine.GetSectorsMaxHeight()
+	w.dp = NewDrawPolygon(w.screenWidth, w.screenHeight)
+	w.player = engine.GetPlayer()
+	w.textures = engine.GetTextures()
+	w.viewMode = -1
+	w.enableClear = false
+	return nil
+}
+
+// doInitialize initializes the rendering software window, surfaces, and matrices required for rendering.
+// Configures the pixel window with predefined settings and handles any initialization errors.
+// Sets up the main rendering surface, sprite, and transformation matrix for rendering.
+// Logs a message if the window clear feature is enabled.
+func (w *RenderSoftware) doInitialize() {
+	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
+	cfg := pixels.WindowConfig{
+		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
+		VSync:       true,
+		Undecorated: false,
+		Smooth:      false,
+	}
+	var err error
+	w.win, err = pixels.NewGLWindow(cfg)
+	if err != nil {
+		panic(err)
+	}
+	center := w.win.Bounds().Center()
+
+	w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+	w.mainSprite = pixels.NewSprite()
+	w.mainSprite.SetCached(pixels.CacheModeUpdate)
+	w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
+	w.mainMatrix = pixels.IM.Moved(center).Scaled(center, _scale)
+
+	if w.enableClear {
+		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")
+	}
+}
+
+// Start initializes and begins the main rendering loop for the RenderSoftware instance.
+func (w *RenderSoftware) Start() {
+	pixels.GLRun(w.doRun)
+}
+
+// doRun executes the main rendering and game loop, handling initialization, input processing, rendering, and game logic updates.
+func (w *RenderSoftware) doRun() {
+	const framerate = 30
+	const frameInterval = 1.0 / framerate
+
+	w.doInitialize()
+
+	var currentTimer float64
+	var lastTimer float64
+	mouseConnected := true
+
+	for !w.win.Closed() {
+		currentTimer = pixels.GLGetTime()
+		if (currentTimer - lastTimer) >= frameInterval {
+			lastTimer = currentTimer
+			w.doRender()
+		}
+
+		if mouseConnected && w.win.MouseInsideWindow() {
+			mousePos := w.win.MousePosition()
+			mousePrevPos := w.win.MousePreviousPosition()
+			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
+				mouseX := mousePos.X - mousePrevPos.X
+				mouseY := mousePos.Y - mousePrevPos.Y
+				w.doPlayerMouseMove(mouseX, mouseY)
+			}
+		}
+
+		var up, down, left, right bool
+
+		impulse := 0.2
+
+		if scroll := w.win.MouseScroll(); scroll.Y != 0 {
+			if scroll.Y > 0 {
+				up = true
+			} else {
+				down = true
+			}
+		}
+
+		for v := range w.win.KeysPressed() {
+			switch v {
+			case pixels.KeyEscape:
+				return
+			case pixels.KeyUp:
+				up = true
+			case pixels.KeyW:
+				up = true
+				impulse = 0.01
+			case pixels.KeyDown:
+				down = true
+			case pixels.KeyS:
+				down = true
+				impulse = 0.01
+			case pixels.KeyLeft:
+				left = true
+			case pixels.KeyRight:
+				right = true
+			case pixels.KeyV:
+				w.doDebugMoveSector(true)
+			case pixels.KeyB:
+				w.doDebugMoveSector(false)
+			}
+		}
+
+		w.doPlayerMoves(impulse, up, down, left, right)
+		if w.win.JustPressed(pixels.KeyC) {
+			w.enableClear = true
+			w.doDebugMoveSectorToggle()
+		}
+		if w.win.JustPressed(pixels.KeyZ) {
+			w.doDebugMoveSector(true)
+		}
+		if w.win.JustPressed(pixels.KeyX) {
+			w.doDebugMoveSector(false)
+		}
+		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
+			w.doPlayerDuckingToggle()
+		}
+		if w.win.JustPressed(pixels.KeySpace) || w.win.Pressed(pixels.MouseButton1) {
+			w.doPlayerJump()
+		}
+		if w.win.JustPressed(pixels.Key8) {
+			w.doDebug(0)
+		}
+		if w.win.JustPressed(pixels.Key0) {
+			w.doDebug(1)
+		}
+		if w.win.JustPressed(pixels.Key9) {
+			w.doDebug(-1)
+		}
+		if w.win.JustPressed(pixels.KeyM) {
+			mouseConnected = !mouseConnected
+		}
+		w.win.Update()
+		//text.Draw(win, g.mainMatrix)
+	}
+}
+
+// doRender performs the main rendering process, updating the frame buffer and drawing visible game elements on the screen.
+func (w *RenderSoftware) doRender() {
+	if w.enableClear {
+		w.win.Clear(color.Black)
+		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
+	}
+
+	cs, count, _ := w.engine.Compile(w.player, w.vi)
+	w.targetLastCompiled = count
+	//if count < 1 {
+	//	return
+	//}
+
+	w.doSerialRender(w.mainSurface, w.vi, cs, count)
+	//w.parallelRender(surface, vi, css, compiled)
+	w.mainSurface.ApplyFastAA(20)
+
+	if w.debug {
+		w.drawStub()
+	}
+
+	//w.player.Compute(w.vi)
+
+	w.mainSprite.Draw(w.win, w.mainMatrix)
+}
+
+// RenderSector renders a given sector by processing its segments and drawing polygons on the main surface.
+func (w *RenderSoftware) RenderSector(sector *model.Sector) {
+	maxX := float64(0)
+	maxY := float64(0)
+
+	var segments []*model.Segment
+
+	//	const useConvexHull = false
+	//	if useConvexHull {
+	//	ch := &polygons.ConvexHull{}
+	//	segments = ch.FromSector(sector)
+	//} else {
+	segments = sector.Segments
+	//}
+
+	for _, v := range segments {
+		x1 := math.Abs(v.Start.X)
+		y1 := math.Abs(v.Start.Y)
+		x2 := math.Abs(v.End.X)
+		y2 := math.Abs(v.End.Y)
+		if x1 > maxX {
+			maxX = x1
+		}
+		if y1 > maxY {
+			maxY = y1
+		}
+		if x2 > maxX {
+			maxX = x2
+		}
+		if y2 > maxY {
+			maxY = y2
+		}
+	}
+
+	xFactor := (float64(w.screenWidth) / 2) / maxX
+	yFactor := (float64(w.screenHeight) / 2) / maxY
+
+	var t []model.XYZ
+	for _, v := range segments {
+		x1 := v.Start.X
+		if x1 == 0 {
+			x1 = 1
+		}
+		x1 *= xFactor
+		y1 := v.Start.Y
+		if y1 == 0 {
+			y1 = 1
+		}
+		y1 *= yFactor
+		x2 := v.End.X
+		if x2 == 0 {
+			x2 = 1
+		}
+		x2 *= xFactor
+		y2 := v.End.Y
+		if y2 == 0 {
+			y2 = 1
+		}
+		y2 *= yFactor
+		t = append(t, model.XYZ{X: x1, Y: y1, Z: 0})
+		t = append(t, model.XYZ{X: x2, Y: y2, Z: 0})
+	}
+
+	if len(t) == 0 {
+		return
+	}
+	dp := NewDrawPolygon(640, 480)
+	dp.Setup(w.mainSurface, t, len(t), 0x00ff00)
+	dp.DrawPoints(10)
+	dp.Color = 0xff0000
+	dp.DrawLines(false)
+}
+
+// doPlayerDuckingToggle toggles the ducking state of the player by invoking the player's SetDucking method.
+func (w *RenderSoftware) doPlayerDuckingToggle() {
+	w.player.SetDucking()
+}
+
+// doPlayerJump triggers the player's jump behavior by calling the appropriate method on the player instance.
+func (w *RenderSoftware) doPlayerJump() {
+	w.player.SetJump()
+}
+
+// doPlayerMoves handles movement for the player based on the directional and speed inputs provided.
+func (w *RenderSoftware) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
+	w.player.Move(impulse, up, down, left, right)
+}
+
+// doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within predefined constraints.
+func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
+	const offset = 10
+	if mouseX > offset {
+		mouseX = offset
+	} else if mouseX < -offset {
+		mouseX = -offset
+	}
+	if mouseY > offset {
+		mouseY = offset
+	} else if mouseY < -offset {
+		mouseY = -offset
+	}
+
+	w.player.AddAngle(mouseX * 0.03)
+	w.player.SetYaw(mouseY)
+
+	w.player.MoveApply(0, 0)
+}
+
+// doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
+func (w *RenderSoftware) doDebug(next int) {
+	const offset = 5
+	if next == 0 {
+		w.debug = !w.debug
+		return
+	}
+	w.debug = true
+	idx := w.debugIdx + next
+	if idx < 0 || idx >= w.engine.Len() {
+		return
+	}
+	w.debugIdx = idx
+	sector := w.engine.SectorAt(idx)
+	x := sector.Segments[0].Start.X + offset
+	y := sector.Segments[0].Start.Y + offset
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
+	w.player.SetSector(sector)
+	w.player.SetXY(x, y)
+}
+
+// doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.
+func (w *RenderSoftware) doDebugMoveSectorToggle() {
+	w.targetEnabled = !w.targetEnabled
+}
+
+// doDebugMoveSector updates the target index for debugging sectors and refreshes the active target states.
+func (w *RenderSoftware) doDebugMoveSector(forward bool) {
+	if forward {
+		if w.targetIdx < w.targetLastCompiled {
+			w.targetIdx++
+		}
+	} else {
+		if w.targetIdx > 0 {
+			w.targetIdx--
+		}
+	}
+	for k := 0; k < w.targetLastCompiled; k++ {
+		w.targetSectors[k] = k == w.targetIdx
+	}
+}
+
+// drawStub renders the debug sector if the current debug index is within the range of available sectors.
+func (w *RenderSoftware) drawStub() {
+	if w.debugIdx >= 0 && w.debugIdx < w.engine.Len() {
+		sector := w.engine.SectorAt(w.debugIdx)
+		w.RenderSector(sector)
+	}
+}
+
+// doSerialRender renders compiled sectors to the provided surface in a serial manner, processing from back to front.
+// surface: The target rendering surface.
+// vi: ViewMatrix data containing camera position, angle, and other view parameters.
+// css: A slice of CompiledSector objects representing visible sectors for rendering.
+// compiled: The number of sectors available to render, processed in reverse order.
+func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+	for idx := compiled - 1; idx >= 0; idx-- {
+		mode := -1 //w.textures.GetViewMode()
+		if w.targetEnabled {
+			if f, _ := w.targetSectors[idx]; !f {
+				mode = 2
+			} else {
+				if w.targetId != css[idx].Sector.Id {
+					w.targetId = css[idx].Sector.Id
+					var neighbors []string
+					for _, z := range css[idx].Sector.Segments {
+						id := ""
+						if z != nil {
+							id = z.Ref
+						}
+						neighbors = append(neighbors, id)
+					}
+					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
+				}
+			}
+		}
+		polygons := css[idx].Get()
+		for k := len(polygons) - 1; k >= 0; k-- {
+			cp := polygons[k]
+			w.dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
+			w.doRenderPolygon(vi, cp, w.dp, mode)
+		}
+	}
+}
+
+// doParallelRender performs parallel rendering of compiled sectors using goroutines to improve rendering performance.
+func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+	//Experimental Render
+	wg := &sync.WaitGroup{}
+	wg.Add(compiled)
+
+	for idx := compiled - 1; idx >= 0; idx-- {
+		mode := -1 //w.textures.GetViewMode()
+		if w.targetEnabled {
+			if f, _ := w.targetSectors[idx]; !f {
+				mode = 2
+			}
+		}
+		//TODO queue
+		go func(polygons []*model.CompiledPolygon) {
+			//TODO each renderer must have a separate DrawPolygon
+			dp := NewDrawPolygon(w.screenWidth, w.screenHeight)
+			for k := len(polygons) - 1; k >= 0; k-- {
+				cp := polygons[k]
+				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)
+				w.doRenderPolygon(vi, cp, dp, mode)
+			}
+			wg.Done()
+		}(css[idx].Get())
+	}
+	wg.Wait()
+}
+
+// doRenderPolygon renders a polygon based on its type, mode, and lighting parameters, utilizing various drawing methods.
+func (w *RenderSoftware) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+	switch mode {
+	case 0:
+		dr.DrawWireFrame(false)
+		return
+	case 1:
+		dr.DrawWireFrame(true)
+		return
+	case 2:
+		dr.DrawRectangle()
+		return
+	case 3:
+		dr.DrawPoints(5)
+		return
+	case 4:
+		dr.DrawWireFrame(false)
+		dr.DrawPoints(10)
+		return
+	case 5:
+		dr.DrawWireFrame(true)
+		dr.DrawPoints(10)
+		return
+	case 6:
+		dr.DrawRectangle()
+		dr.DrawPoints(10)
+		return
+	case 7:
+		dr.DrawWireFrame(true)
+		dr.DrawRectangle()
+		return
+	}
+	lightAmbient := vi.GetLightIntensity()
+	lightArtificial := cp.Sector.Light.GetIntensity()
+	switch cp.Kind {
+	case model.IdWall:
+		_, scaleH := cp.Animation.ScaleFactor()
+		yRef := (cp.Sector.CeilY - cp.Sector.FloorY) * scaleH
+		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+	case model.IdUpper:
+		_, scaleH := cp.Animation.ScaleFactor()
+		yRef := math.Abs((cp.Sector.CeilY - cp.Neighbor.CeilY) * scaleH)
+		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+	case model.IdLower:
+		_, scaleH := cp.Animation.ScaleFactor()
+		yRef := math.Abs((cp.Neighbor.FloorY - cp.Sector.FloorY) * scaleH)
+		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+	case model.IdCeil:
+		_, scaleH := cp.Animation.ScaleFactor()
+		viX, viY, viZ := vi.GetXYZ()
+		viSin, viCos := vi.GetAngle()
+		viYaw := vi.GetYaw()
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Sector.CeilY, scaleH, lightAmbient, lightArtificial)
+	case model.IdFloor:
+		_, scaleH := cp.Animation.ScaleFactor()
+		viX, viY, viZ := vi.GetXYZ()
+		viSin, viCos := vi.GetAngle()
+		viYaw := vi.GetYaw()
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Sector.FloorY, scaleH, lightAmbient, lightArtificial)
+	case model.IdFloorTest:
+		_, scaleH := cp.Animation.ScaleFactor()
+		viX, viY, viZ := vi.GetXYZ()
+		viSin, viCos := vi.GetAngle()
+		viYaw := vi.GetYaw()
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Sector.FloorY, scaleH, lightAmbient, lightArtificial)
+	case model.IdCeilTest:
+		_, scaleH := cp.Animation.ScaleFactor()
+		viX, viY, viZ := vi.GetXYZ()
+		viSin, viCos := vi.GetAngle()
+		viYaw := vi.GetYaw()
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Sector.CeilY, scaleH, lightAmbient, lightArtificial)
+	default:
+		dr.DrawWireFrame(true)
+	}
+}

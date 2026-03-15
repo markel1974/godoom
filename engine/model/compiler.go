@@ -210,15 +210,24 @@ func (r *Compiler) compileLights() {
 
 		// Se l'area è composta da più poligoni, calcoliamo un baricentro globale
 		if len(areaSectors) > 1 {
-			var sumX, sumY float64
+			var sumX, sumY, totalArea float64
 			for _, s := range areaSectors {
-				// Sommiamo i baricentri dei singoli triangoli calcolati in precedenza
-				sumX += s.Light.pos.X
-				sumY += s.Light.pos.Y
+				// Calcola l'area del triangolo (prodotto vettoriale)
+				area := 0.0
+				for i := range s.Segments {
+					x0, y0 := s.Segments[i].Start.X, s.Segments[i].Start.Y
+					x1, y1 := s.Segments[i].End.X, s.Segments[i].End.Y
+					area += (x0 * y1) - (x1 * y0)
+				}
+				area = math.Abs(area * 0.5)
+
+				sumX += s.Light.pos.X * area
+				sumY += s.Light.pos.Y * area
+				totalArea += area
 			}
 
-			globalCenterX := sumX / float64(len(areaSectors))
-			globalCenterY := sumY / float64(len(areaSectors))
+			globalCenterX := sumX / totalArea
+			globalCenterY := sumY / totalArea
 
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {

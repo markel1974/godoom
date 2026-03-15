@@ -289,8 +289,9 @@ func Orient2DExact(pa, pb, pc Point) float64 {
 	right := new(big.Float).Mul(acy, bcx)
 
 	det := new(big.Float).Sub(left, right)
-	res, _ := det.Float64()
-	return res
+
+	// Prevents silent underflow of Float64() for infinitesimal non-zero determinants
+	return float64(det.Sign())
 }
 
 // InCircle2D computes the determinant to determine if point `pd` lies inside the circumcircle of triangle formed by `pa`, `pb`, `pc`.
@@ -346,6 +347,7 @@ func InCircle2DExact(pa, pb, pc, pd Point) float64 {
 	term3 := new(big.Float).Mul(cLift, abDet)
 
 	det := new(big.Float).Add(new(big.Float).Add(term1, term2), term3)
-	res, _ := det.Float64()
-	return res
+
+	// Prevents silent underflow of Float64() for infinitesimal non-zero determinants
+	return float64(det.Sign())
 }

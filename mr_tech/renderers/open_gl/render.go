@@ -688,7 +688,7 @@ func (w *RenderOpenGL) doRun() {
 
 // doRender executes the rendering process, updating the framebuffer and rendering the scene using OpenGL commands.
 func (w *RenderOpenGL) doRender() {
-	cs, count, things := w.engine.Compile(w.player, w.vi)
+	cs, count, things := w.engine.Compute(w.player, w.vi)
 	w.targetLastCompiled = count
 	cSky := w.createBatch(cs, count, things)
 

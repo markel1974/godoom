@@ -214,23 +214,14 @@ func (w *RenderSoftware) doRender() {
 		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
-
-	cs, count, _ := w.engine.Compile(w.player, w.vi)
+	cs, count, _ := w.engine.Compute(w.player, w.vi)
 	w.targetLastCompiled = count
-	//if count < 1 {
-	//	return
-	//}
-
 	w.doSerialRender(w.mainSurface, w.vi, cs, count)
 	//w.parallelRender(surface, vi, css, compiled)
 	w.mainSurface.ApplyFastAA(20)
-
 	if w.debug {
 		w.drawStub()
 	}
-
-	//w.player.Compute(w.vi)
-
 	w.mainSprite.Draw(w.win, w.mainMatrix)
 }
 

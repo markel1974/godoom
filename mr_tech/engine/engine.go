@@ -1,9 +1,6 @@
 package engine
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -19,6 +16,7 @@ type Engine struct {
 	maxQueue         int
 	things           []*model.Thing
 	sectorsMaxHeight float64
+	tree             *EntityManager
 }
 
 // NewEngine initializes and returns a new Engine instance with specified width, height, and maximum render queue size.
@@ -31,6 +29,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		maxQueue:         maxQueue,
 		things:           nil,
 		sectorsMaxHeight: 0,
+		tree:             nil,
 	}
 }
 
@@ -39,24 +38,34 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	e.textures = cfg.Textures
 	compiler := model.NewCompiler()
 	if err := compiler.Setup(cfg); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 	playerSector, err := compiler.Get(cfg.Player.Sector)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 	e.player = model.NewPlayer(cfg.Player, playerSector, false)
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
 	if err = e.portal.Setup(compiler.GetSectors()); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 	e.sectorsMaxHeight = compiler.GetMaxHeight()
-	//TODO
+
+	e.tree = NewEntityManager(4096)
 	e.things = compiler.GetThings()
+	for _, thing := range compiler.GetThings() {
+		e.tree.Spawn(thing)
+	}
 	return nil
+}
+
+// Compute performs calculations for rendering, updates player and tree states, and returns visible sectors, count, and entities.
+func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
+	vi.Compute(player)
+	cs, count := e.portal.Compute(vi)
+	player.Compute(vi)
+	e.tree.Compute()
+	return cs, count, e.things
 }
 
 // GetPlayer returns the current player instance associated with the engine.
@@ -77,12 +86,6 @@ func (e *Engine) GetWidth() int {
 // GetHeight returns the height of the Engine.
 func (e *Engine) GetHeight() int {
 	return e.h
-}
-
-// Compile generates a set of compiled sectors and associated things based on the player's view matrix and current state.
-func (e *Engine) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
-	cs, count := e.portal.Compile(player, vi)
-	return cs, count, e.things
 }
 
 // SectorAt retrieves the Sector at the specified index within the portal's sector list.

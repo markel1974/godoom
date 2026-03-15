@@ -250,7 +250,10 @@ func (r *Compiler) compileThings(cfg *ConfigRoot) {
 			Id:        ct.Id,
 			Position:  ct.Position,
 			Angle:     ct.Angle,
-			Type:      ct.Type,
+			Type:      ct.Kind,
+			Mass:      ct.Mass,
+			Radius:    ct.Radius,
+			Height:    ct.Height,
 			Sector:    sector,
 			Animation: cfg.GetAnimation(ct.Animation),
 		}

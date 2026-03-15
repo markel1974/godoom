@@ -105,10 +105,8 @@ func (r *Portal) clear() {
 	r.visibilityCache.Clear()
 }
 
-// Compile processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
-	vi.Compute(player)
-
+// Compute processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
+func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	r.clear()
 
 	r.queue.Reset()
@@ -142,8 +140,6 @@ func (r *Portal) Compile(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 			}
 		}
 	}
-
-	player.Compute(vi)
 
 	return r.compiledSectors, r.compiledCount
 }

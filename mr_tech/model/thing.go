@@ -6,6 +6,9 @@ import "github.com/markel1974/godoom/mr_tech/textures"
 type Thing struct {
 	Id        string
 	Position  XY
+	Mass      float64
+	Radius    float64
+	Height    float64
 	Angle     float64
 	Type      int
 	Sector    *Sector

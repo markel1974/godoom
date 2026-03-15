@@ -75,7 +75,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		tSectorId := grid.ResolveSectorId(geometry.Point{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, anim)
+		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, sd.Mass, sd.Radius, sd.Height, anim)
 		things = append(things, cfgThing)
 	}
 

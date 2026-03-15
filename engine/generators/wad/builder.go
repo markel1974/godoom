@@ -243,7 +243,8 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures)
 	}
 
 	var cSectors []*model.ConfigSector
-	edgeMap := make(map[geometry.EdgeKey]string)
+	const quantize = 1000
+	edgeMap := make(map[geometry.QuantizedEdgeKey]string)
 	wadLines := make(map[*model.ConfigSegment]bool)
 
 	for secIdx, edges := range sectorToEdges {
@@ -271,7 +272,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures)
 					cSeg, isWadLine := bld.buildConfigSegment(level, texHandler, cSector.Id, p1, p2, edges)
 					cSector.Segments = append(cSector.Segments, cSeg)
 					wadLines[cSeg] = isWadLine
-					key := geometry.EdgeKey{X1: cSeg.Start.X, Y1: cSeg.Start.Y, X2: cSeg.End.X, Y2: cSeg.End.Y}
+					key := geometry.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
 					edgeMap[key] = cSeg.Parent
 				}
 				cSectors = append(cSectors, cSector)
@@ -282,7 +283,7 @@ func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures)
 	for _, cf := range cSectors {
 		for _, cs := range cf.Segments {
 			if cs.Kind == model.DefinitionJoin {
-				reverseKey := geometry.EdgeKey{X1: cs.End.X, Y1: cs.End.Y, X2: cs.Start.X, Y2: cs.Start.Y}
+				reverseKey := geometry.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
 				if neighborId, exists := edgeMap[reverseKey]; exists {
 					cs.Neighbor = neighborId
 				} else {

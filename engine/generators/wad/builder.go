@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/markel1974/godoom/engine/generators/wad/geometry"
 	"github.com/markel1974/godoom/engine/generators/wad/lumps"
 	"github.com/markel1974/godoom/engine/model"
 )
@@ -19,21 +20,6 @@ const ScaleFactorLineDef = 25.0
 const ScaleFactorCeilFloorLineDef = 8.0
 
 const SkyPicture = "F_SKY1"
-
-// Edge represents a connection between two vertices in a graph or geometric structure.
-// V1 and V2 are the indices of the vertices connected by the edge.
-// LDIdx is an index associated with a line definition in the context of the level structure.
-// IsLeft indicates whether the edge corresponds to the left side of a line definition.
-type Edge struct {
-	V1, V2 uint16
-	LDIdx  int
-	IsLeft bool
-}
-
-// EdgeKey represents a unique key for an edge defined by its start and end points in 2D space.
-type EdgeKey struct {
-	X1, Y1, X2, Y2 float64
-}
 
 // Builder provides utilities for constructing or processing line definitions within a WAD file.
 type Builder struct {
@@ -86,95 +72,21 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		} else {
 			frames = sd.Sprites
 		}
-		tSectorId := grid.ResolveSectorId(Point{tX, tY})
+		tSectorId := grid.ResolveSectorId(geometry.Point{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
 		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, anim)
 		things = append(things, cfgThing)
 	}
 
-	playerSectorId := grid.ResolveSectorId(Point{pX, pY})
+	playerSectorId := grid.ResolveSectorId(geometry.Point{X: pX, Y: pY})
 	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId)
 
 	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, texHandler), nil
 }
 
-// buildSectorsFromLineDefs processes linedefs in a level to build and return a list of ConfigSector objects.
-func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures) []*model.ConfigSector {
-	sectorToEdges := make(map[uint16][]Edge)
-	for i, ld := range level.LineDefs {
-		if ld.SideDefRight != -1 {
-			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorToEdges[s] = append(sectorToEdges[s], Edge{uint16(ld.VertexStart), uint16(ld.VertexEnd), i, false})
-		}
-		if ld.SideDefLeft != -1 {
-			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorToEdges[s] = append(sectorToEdges[s], Edge{uint16(ld.VertexEnd), uint16(ld.VertexStart), i, true})
-		}
-	}
-
-	var cSectors []*model.ConfigSector
-	edgeMap := make(map[EdgeKey]string)
-	wadLines := make(map[*model.ConfigSegment]bool)
-
-	for secIdx, edges := range sectorToEdges {
-		wadSector := level.Sectors[secIdx]
-		vertexes := make(Polygon, len(level.Vertexes))
-		for idx, l := range level.Vertexes {
-			vertexes[idx] = Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
-		}
-		polygonDefs := vertexes.TraceLoops(edges, len(level.LineDefs))
-
-		//if secIdx == 7 {
-		//	fmt.Printf("Polygon: %v\n", edges)
-		//}
-
-		for loopIdx, def := range polygonDefs {
-			mergedPoly := def.BridgeHoles()
-
-			triangles := mergedPoly.Triangulate(int(secIdx))
-
-			for triIdx, tri := range triangles {
-				cSector := bld.buildConfigSector(level, wadSector, texHandler, secIdx, loopIdx, triIdx, edges)
-				for k := 0; k < 3; k++ {
-					p1 := tri[k]
-					p2 := tri[(k+1)%3]
-					cSeg, isWadLine := bld.buildConfigSegment(level, texHandler, cSector.Id, p1, p2, edges)
-					cSector.Segments = append(cSector.Segments, cSeg)
-					wadLines[cSeg] = isWadLine
-					key := EdgeKey{cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y}
-					edgeMap[key] = cSeg.Parent
-				}
-				cSectors = append(cSectors, cSector)
-			}
-		}
-	}
-
-	for _, cf := range cSectors {
-		for _, cs := range cf.Segments {
-			if cs.Kind == model.DefinitionJoin {
-				reverseKey := EdgeKey{cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y}
-				if neighborId, exists := edgeMap[reverseKey]; exists {
-					cs.Neighbor = neighborId
-				} else {
-					fmt.Printf("WARNING: Missing edge for join segment: %s - %s (%v)\n", cs.Id, cs.Tag, reverseKey)
-					// PROTECTION 2: Prevents Ghost Walls!
-					isWadLine := wadLines[cs]
-					if isWadLine {
-						cs.Kind = model.DefinitionWall
-					} else {
-						cs.Neighbor = cs.Parent
-					}
-				}
-			}
-		}
-	}
-
-	return cSectors
-}
-
 // buildConfigSector converts a WAD sector to a ConfigSector, assigning texture, height, light level, and ID properties.
-func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *model.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry.Edge) *model.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := model.NewConfigSector(sectorId, bld.convertLight(wadSector.LightLevel), model.LightKindSpot)
@@ -200,12 +112,15 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 
 // buildConfigSegment generates a ConfigSegment based on a level's geometry, sector ID, points, and sector edges.
 // It identifies if a matching edge exists, adjusts Y-coordinates, sets texture details, and determines the segment kind.
-func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 Point, sectorEdges []Edge) (*model.ConfigSegment, bool) {
-	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, p1.ToModelXY(), p2.ToModelXY(), "")
+func (bld *Builder) buildConfigSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.Point, sectorEdges []geometry.Edge) (*model.ConfigSegment, bool) {
+	mp1 := model.XY{X: p1.X, Y: p1.Y}
+	mp2 := model.XY{X: p2.X, Y: p2.Y}
+
+	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, mp1, mp2, "")
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
-		w1 := Point{float64(v1.XCoord), float64(v1.YCoord)}
-		w2 := Point{float64(v2.XCoord), float64(v2.YCoord)}
+		w1 := geometry.Point{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
+		w2 := geometry.Point{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
 			ld := level.LineDefs[e.LDIdx]
@@ -268,7 +183,7 @@ func (bld *Builder) convertLight(lightLevel int16) float64 {
 	return rawLight / 255.0
 }
 
-func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry.Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
 	hasAdjacent := false
@@ -311,4 +226,78 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 
 	// Return the original height if it's not a door
 	return float64(wadSector.CeilingHeight)
+}
+
+// buildSectorsFromLineDefs processes linedefs in a level to build and return a list of ConfigSector objects.
+func (bld *Builder) buildSectorsFromLineDefs(level *Level, texHandler *Textures) []*model.ConfigSector {
+	sectorToEdges := make(map[uint16][]geometry.Edge)
+	for i, ld := range level.LineDefs {
+		if ld.SideDefRight != -1 {
+			s := level.SideDefs[ld.SideDefRight].SectorRef
+			sectorToEdges[s] = append(sectorToEdges[s], geometry.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
+		}
+		if ld.SideDefLeft != -1 {
+			s := level.SideDefs[ld.SideDefLeft].SectorRef
+			sectorToEdges[s] = append(sectorToEdges[s], geometry.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
+		}
+	}
+
+	var cSectors []*model.ConfigSector
+	edgeMap := make(map[geometry.EdgeKey]string)
+	wadLines := make(map[*model.ConfigSegment]bool)
+
+	for secIdx, edges := range sectorToEdges {
+		wadSector := level.Sectors[secIdx]
+		vertexes := make(geometry.Polygon, len(level.Vertexes))
+		for idx, l := range level.Vertexes {
+			vertexes[idx] = geometry.Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
+		}
+		polygonDefs := vertexes.TraceLoops(edges, len(level.LineDefs))
+
+		//if secIdx == 7 {
+		//	fmt.Printf("Polygon: %v\n", edges)
+		//}
+
+		for loopIdx, def := range polygonDefs {
+			mergedPoly := def.BridgeHoles()
+
+			triangles := mergedPoly.Triangulate(int(secIdx))
+
+			for triIdx, tri := range triangles {
+				cSector := bld.buildConfigSector(level, wadSector, texHandler, secIdx, loopIdx, triIdx, edges)
+				for k := 0; k < 3; k++ {
+					p1 := tri[k]
+					p2 := tri[(k+1)%3]
+					cSeg, isWadLine := bld.buildConfigSegment(level, texHandler, cSector.Id, p1, p2, edges)
+					cSector.Segments = append(cSector.Segments, cSeg)
+					wadLines[cSeg] = isWadLine
+					key := geometry.EdgeKey{X1: cSeg.Start.X, Y1: cSeg.Start.Y, X2: cSeg.End.X, Y2: cSeg.End.Y}
+					edgeMap[key] = cSeg.Parent
+				}
+				cSectors = append(cSectors, cSector)
+			}
+		}
+	}
+
+	for _, cf := range cSectors {
+		for _, cs := range cf.Segments {
+			if cs.Kind == model.DefinitionJoin {
+				reverseKey := geometry.EdgeKey{X1: cs.End.X, Y1: cs.End.Y, X2: cs.Start.X, Y2: cs.Start.Y}
+				if neighborId, exists := edgeMap[reverseKey]; exists {
+					cs.Neighbor = neighborId
+				} else {
+					fmt.Printf("WARNING: Missing edge for join segment: %s - %s (%v)\n", cs.Id, cs.Tag, reverseKey)
+					// PROTECTION 2: Prevents Ghost Walls!
+					isWadLine := wadLines[cs]
+					if isWadLine {
+						cs.Kind = model.DefinitionWall
+					} else {
+						cs.Neighbor = cs.Parent
+					}
+				}
+			}
+		}
+	}
+
+	return cSectors
 }

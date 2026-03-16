@@ -1,17 +1,17 @@
 package engine
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// EntityManager manages a collection of entities and their spatial organization using an AABBTree.
+// EntityManager is responsible for managing entities and their spatial relationships within an AABBTree structure.
 type EntityManager struct {
 	tree     *physics.AABBTree
 	entities map[string]*physics.Entity
+	moving   []*physics.Entity
 }
 
-// NewEntityManager initializes and returns a new instance of EntityManager with a specified maximum number of entities.
+// NewEntityManager initializes and returns a new EntityManager with a specified maximum number of entities.
 func NewEntityManager(maxEntities uint) *EntityManager {
 	return &EntityManager{
 		tree:     physics.NewAABBTree(maxEntities),
@@ -19,30 +19,24 @@ func NewEntityManager(maxEntities uint) *EntityManager {
 	}
 }
 
-// Spawn creates a new physics entity from the given Thing, adds it to the entity manager, and inserts it into the spatial tree.
-func (em *EntityManager) Spawn(thing *model.Thing) *physics.Entity {
-	// Conversione centro -> top-left per il rect fisico
-	w := thing.Radius * 2
-	h := thing.Radius * 2
-	x := thing.Position.X - thing.Radius
-	y := thing.Position.Y - thing.Radius
-
-	ent := physics.NewEntity(x, y, w, h, thing.Mass)
-	ent.Id = thing.Id
-
-	em.entities[ent.Id] = ent
-	em.tree.InsertObject(ent)
-
+// Spawn creates a new entity with the specified ID, position, radius, and mass, and inserts it into the spatial tree.
+func (em *EntityManager) Spawn(id string, pX, pY, radius, mass float64) *physics.Entity {
+	w := radius / 10
+	h := radius / 10
+	x := pX - radius
+	y := pY - radius
+	ent := em.addEntity(id, x, y, w, h, mass)
 	return ent
 }
 
-// Compute updates the state of all entities, handling movement, friction, collision detection, and resolution in multiple phases.
+// Compute performs movement integration, updates the spatial tree, resolves collisions iteratively, and stabilizes the system.
 func (em *EntityManager) Compute() {
 	// Fase 1: Integrazione cinematica (Movimento e frizione)
 	counter := 0
 	for _, ent := range em.entities {
 		if ent.Compute() {
 			em.tree.UpdateObject(ent)
+			em.moving[counter] = ent
 			counter++
 		}
 	}
@@ -56,7 +50,8 @@ func (em *EntityManager) Compute() {
 	for i := 0; i < solverIterations; i++ {
 		isStable := true
 
-		for _, ent := range em.entities {
+		for x := 0; x < counter; x++ {
+			ent := em.moving[x]
 			overlaps := em.tree.QueryOverlaps(ent)
 
 			for _, overlapObj := range overlaps {
@@ -94,7 +89,19 @@ func (em *EntityManager) Compute() {
 	}
 }
 
-// QueryCollisions returns a slice of IAABB containing all entities colliding with the given entity.
+// QueryCollisions checks for overlapping entities in the spatial tree and returns a list of bounding boxes for collisions.
 func (em *EntityManager) QueryCollisions(ent *physics.Entity) []physics.IAABB {
 	return em.tree.QueryOverlaps(ent)
+}
+
+// addEntity adds the given entity to the manager, adjusts the moving entity slice, and inserts it into the spatial tree.
+func (em *EntityManager) addEntity(id string, x float64, y float64, w float64, h float64, mass float64) *physics.Entity {
+	ent := physics.NewEntity(x, y, w, h, mass)
+	ent.Id = id
+	em.entities[ent.Id] = ent
+	if len(em.entities) > len(em.moving) {
+		em.moving = make([]*physics.Entity, len(em.entities)+128)
+	}
+	em.tree.InsertObject(ent)
+	return ent
 }

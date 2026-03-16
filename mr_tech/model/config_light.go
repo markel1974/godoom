@@ -5,6 +5,7 @@ type LightKind int
 const (
 	LightKindNone LightKind = iota
 	LightKindSpot
+	LightKindAmbient
 	LightKindDiffuse
 	LightKindDirectional
 	LightKindParticle

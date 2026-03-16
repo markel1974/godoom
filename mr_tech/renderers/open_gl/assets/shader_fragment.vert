@@ -37,9 +37,20 @@ void main()
     // A. Luce del Settore (Zenitale)
     vec3 lightVectorRoom = LightCenterView - ViewPos;
     vec3 L_room = normalize(lightVectorRoom);
+
+    // 1. Luce Diretta (Spotlight principale verso il pavimento)
     vec3 spotDirRoom = vec3(0.0, -1.0, 0.0);
     float cosThetaRoom = dot(-L_room, spotDirRoom);
-    float roomSpotIntensity = smoothstep(0.30, 0.50, cosThetaRoom);
+    float directSpot = smoothstep(0.30, 0.50, cosThetaRoom);
+
+    // 2. Luce Indiretta / Radiosity (Rimbalzo dal pavimento verso l'alto)
+    vec3 bounceDir = vec3(0.0, 1.0, 0.0);
+    float cosThetaBounce = dot(-L_room, bounceDir);
+    // Il rimbalzo ha un cono molto più ampio (diffusione) e un'intensità ridotta (albedo)
+    float bounceSpot = smoothstep(0.0, 0.80, cosThetaBounce) * 0.15; // 15% di riflessione
+
+    float roomSpotIntensity = max(directSpot, bounceSpot);
+    
 
     // B. Torcia (Allineata alla visuale Y-Sheared)
     vec3 L_flash = normalize(-ViewPos);

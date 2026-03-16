@@ -126,7 +126,7 @@ func (e *Entity) SetupCollision(collider *Entity) {
 		collider.Vy += (j / collider.Mass) * vecCollisionNorm.y
 	}
 
-	// 5. Positional Projection (Baumgarte Stabilization) - Your existing code works well
+	// 5. Positional Projection (Baumgarte Stabilization)
 	if penetrationDepth := (e.GetWidth()/2 + collider.GetWidth()/2) - distance; penetrationDepth > 0 {
 		percent := 0.2
 		slop := 0.01

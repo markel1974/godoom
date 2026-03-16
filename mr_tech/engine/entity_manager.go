@@ -39,12 +39,17 @@ func (em *EntityManager) Spawn(thing *model.Thing) *physics.Entity {
 // Compute updates the state of all entities, handling movement, friction, collision detection, and resolution in multiple phases.
 func (em *EntityManager) Compute() {
 	// Fase 1: Integrazione cinematica (Movimento e frizione)
+	counter := 0
 	for _, ent := range em.entities {
 		if ent.Compute() {
 			em.tree.UpdateObject(ent)
+			counter++
 		}
 	}
 
+	if counter == 0 {
+		return
+	}
 	// Fase 2: Iterative Solver per collisioni multiple e propagazione
 	const solverIterations = 4
 

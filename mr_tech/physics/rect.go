@@ -27,16 +27,14 @@ func (r *Rect) rebuild() {
 	r.center.x = r.point.x + (r.size.w / 2)
 	r.center.y = r.point.y + (r.size.h / 2)
 
-	// Margin previene i ricalcoli dell'albero per piccoli spostamenti
-	const fatMargin = 10.0
-
-	r.aabb.minX = r.point.x - fatMargin
-	r.aabb.maxX = r.point.x + r.size.w + fatMargin
-	r.aabb.minY = r.point.y - fatMargin
-	r.aabb.maxY = r.point.y + r.size.h + fatMargin
+	// L'AABB ora riflette le dimensioni ESATTE (Tight Bounding Box)
+	r.aabb.minX = r.point.x
+	r.aabb.maxX = r.point.x + r.size.w
+	r.aabb.minY = r.point.y
+	r.aabb.maxY = r.point.y + r.size.h
 	r.aabb.minZ = 0
 	r.aabb.maxZ = r.z
-	r.aabb.surfaceArea = r.aabb.calculateSurfaceArea()
+	r.aabb.surfaceArea = r.aabb.CalculateSurfaceArea()
 }
 
 // SetSize adjusts the width and height of the rectangle by the given values and updates its bounding box.

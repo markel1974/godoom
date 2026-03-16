@@ -209,13 +209,16 @@ func (e *Engine) moveEnemies() {
 		if !ok {
 			continue
 		}
+		if t.Speed == 0 {
+			continue
+		}
 
 		dx := pX - t.Position.X
 		dy := pY - t.Position.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 
-		if dist < 1000.0 {
-			targetSpeed := 0.01
+		if dist < 25.0 {
+			targetSpeed := t.Speed
 			invDist := 1.0 / dist
 			dirX := dx * invDist * targetSpeed
 			dirY := dy * invDist * targetSpeed

@@ -5,31 +5,33 @@ type ThingDef struct {
 	Sprites []string
 	Radius  float64
 	Height  float64
+	Speed   float64
 	Mass    float64
 }
 
 const radiusF = 20.0
+const sSpeed = 0.03
 
 // _spriteDictionary is a map that associates integer keys with ThingDef structures, defining game objects and their properties.
 var _spriteDictionary = map[int]ThingDef{
 	// --- MOSTRI ---
-	3004: {Sprites: []string{"POSSA1", "POSSB1", "POSSC1", "POSSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0},   // Zombieman
-	9:    {Sprites: []string{"SPOSA1", "SPOSB1", "SPOSC1", "SPOSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0},   // Shotgun Guy
-	65:   {Sprites: []string{"CPOSA1", "CPOSB1", "CPOSC1", "CPOSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0},   // Heavy Weapon Dude
-	3001: {Sprites: []string{"TROOA1", "TROOB1", "TROOC1", "TROOD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0},   // Imp
-	3002: {Sprites: []string{"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, Radius: 30.0 / radiusF, Height: 56.0, Mass: 400.0},   // Demon
-	58:   {Sprites: []string{"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, Radius: 30.0 / radiusF, Height: 56.0, Mass: 400.0},   // Spectre
-	3003: {Sprites: []string{"BOSSA1", "BOSSB1", "BOSSC1", "BOSSD1"}, Radius: 24.0 / radiusF, Height: 64.0, Mass: 1000.0},  // Baron of Hell
-	69:   {Sprites: []string{"BOS2A1", "BOS2B1", "BOS2C1", "BOS2D1"}, Radius: 24.0 / radiusF, Height: 64.0, Mass: 1000.0},  // Hell Knight
-	3005: {Sprites: []string{"HEADA1", "HEADB1", "HEADC1", "HEADD1"}, Radius: 31.0 / radiusF, Height: 56.0, Mass: 400.0},   // Cacodemon
-	3006: {Sprites: []string{"SKULA1", "SKULB1"}, Radius: 16.0 / radiusF, Height: 56.0, Mass: 50.0},                        // Lost Soul
-	68:   {Sprites: []string{"BSPIA1", "BSPIB1", "BSPIC1"}, Radius: 64.0 / radiusF, Height: 64.0, Mass: 600.0},             // Arachnotron
-	71:   {Sprites: []string{"PAINA1", "PAINB1", "PAINC1"}, Radius: 31.0 / radiusF, Height: 56.0, Mass: 400.0},             // Pain Elemental
-	66:   {Sprites: []string{"SKELA1", "SKELB1", "SKELC1", "SKELD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 500.0},   // Revenant
-	67:   {Sprites: []string{"FATTA1", "FATTB1", "FATTC1"}, Radius: 48.0 / radiusF, Height: 64.0, Mass: 1000.0},            // Mancubus
-	64:   {Sprites: []string{"VILEA1", "VILEB1", "VILEC1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 500.0},             // Arch-Vile
-	16:   {Sprites: []string{"CYBRA1", "CYBRB1", "CYBRC1", "CYBRD1"}, Radius: 40.0 / radiusF, Height: 110.0, Mass: 1000.0}, // Cyberdemon
-	7:    {Sprites: []string{"SPIDA1", "SPIDB1", "SPIDC1"}, Radius: 130.0 / radiusF, Height: 100.0, Mass: 1000.0},          // Spider Mastermind
+	3004: {Sprites: []string{"POSSA1", "POSSB1", "POSSC1", "POSSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0, Speed: sSpeed},   // Zombieman
+	9:    {Sprites: []string{"SPOSA1", "SPOSB1", "SPOSC1", "SPOSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0, Speed: sSpeed},   // Shotgun Guy
+	65:   {Sprites: []string{"CPOSA1", "CPOSB1", "CPOSC1", "CPOSD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0, Speed: sSpeed},   // Heavy Weapon Dude
+	3001: {Sprites: []string{"TROOA1", "TROOB1", "TROOC1", "TROOD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 100.0, Speed: sSpeed},   // Imp
+	3002: {Sprites: []string{"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, Radius: 30.0 / radiusF, Height: 56.0, Mass: 400.0, Speed: sSpeed},   // Demon
+	58:   {Sprites: []string{"SARGA1", "SARGB1", "SARGC1", "SARGD1"}, Radius: 30.0 / radiusF, Height: 56.0, Mass: 400.0, Speed: sSpeed},   // Spectre
+	3003: {Sprites: []string{"BOSSA1", "BOSSB1", "BOSSC1", "BOSSD1"}, Radius: 24.0 / radiusF, Height: 64.0, Mass: 1000.0, Speed: sSpeed},  // Baron of Hell
+	69:   {Sprites: []string{"BOS2A1", "BOS2B1", "BOS2C1", "BOS2D1"}, Radius: 24.0 / radiusF, Height: 64.0, Mass: 1000.0, Speed: sSpeed},  // Hell Knight
+	3005: {Sprites: []string{"HEADA1", "HEADB1", "HEADC1", "HEADD1"}, Radius: 31.0 / radiusF, Height: 56.0, Mass: 400.0, Speed: sSpeed},   // Cacodemon
+	3006: {Sprites: []string{"SKULA1", "SKULB1"}, Radius: 16.0 / radiusF, Height: 56.0, Mass: 50.0, Speed: sSpeed},                        // Lost Soul
+	68:   {Sprites: []string{"BSPIA1", "BSPIB1", "BSPIC1"}, Radius: 64.0 / radiusF, Height: 64.0, Mass: 600.0, Speed: sSpeed},             // Arachnotron
+	71:   {Sprites: []string{"PAINA1", "PAINB1", "PAINC1"}, Radius: 31.0 / radiusF, Height: 56.0, Mass: 400.0, Speed: sSpeed},             // Pain Elemental
+	66:   {Sprites: []string{"SKELA1", "SKELB1", "SKELC1", "SKELD1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 500.0, Speed: sSpeed},   // Revenant
+	67:   {Sprites: []string{"FATTA1", "FATTB1", "FATTC1"}, Radius: 48.0 / radiusF, Height: 64.0, Mass: 1000.0, Speed: sSpeed},            // Mancubus
+	64:   {Sprites: []string{"VILEA1", "VILEB1", "VILEC1"}, Radius: 20.0 / radiusF, Height: 56.0, Mass: 500.0, Speed: sSpeed},             // Arch-Vile
+	16:   {Sprites: []string{"CYBRA1", "CYBRB1", "CYBRC1", "CYBRD1"}, Radius: 40.0 / radiusF, Height: 110.0, Mass: 1000.0, Speed: sSpeed}, // Cyberdemon
+	7:    {Sprites: []string{"SPIDA1", "SPIDB1", "SPIDC1"}, Radius: 130.0 / radiusF, Height: 100.0, Mass: 1000.0, Speed: sSpeed},          // Spider Mastermind
 
 	// --- ARMI ---
 	2001: {Sprites: []string{"SHOTA0"}, Radius: 20.0 / radiusF, Height: 16.0, Mass: 4.0},  // Shotgun

@@ -150,6 +150,12 @@ func (a *AABBTree) QueryOverlaps(object IAABB) []IAABB {
 		if node.aabb.Overlaps(testAabb) {
 			if node.IsLeaf() {
 				if node.object != object {
+					if counter >= len(a.overlaps) {
+						newOverlaps := make([]IAABB, len(a.overlaps)*2)
+						copy(newOverlaps, a.overlaps)
+						a.overlaps = newOverlaps
+					}
+
 					a.overlaps[counter] = node.object
 					counter++
 				}

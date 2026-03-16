@@ -16,6 +16,7 @@ type Thing struct {
 	Height    float64
 	Angle     float64
 	Type      int
+	Speed     float64
 	Sector    *Sector
 	Animation *textures.Animation
 }

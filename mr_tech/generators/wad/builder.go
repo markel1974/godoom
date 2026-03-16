@@ -75,14 +75,14 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 		tSectorId := grid.ResolveSectorId(geometry.Point{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, sd.Mass, sd.Radius, sd.Height, anim)
+		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, int(t.Type), tSectorId, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 		things = append(things, cfgThing)
 	}
 
 	playerSectorId := grid.ResolveSectorId(geometry.Point{X: pX, Y: pY})
 	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
 
-	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, texHandler), nil
+	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler), nil
 }
 
 // buildConfigSector converts a WAD sector to a ConfigSector, assigning texture, height, light level, and ID properties.

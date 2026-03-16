@@ -260,6 +260,7 @@ func (r *Compiler) compileThings(cfg *ConfigRoot) {
 			Radius:    ct.Radius,
 			Height:    ct.Height,
 			Sector:    sector,
+			Speed:     ct.Speed,
 			Animation: cfg.GetAnimation(ct.Animation),
 		}
 

@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 
+	"github.com/markel1974/godoom/mr_tech/mathematic"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -123,6 +124,37 @@ func (s *Sector) AddSpan(x1 float64, x2 float64) {
 	}
 
 	s.VisibleSpans = merged
+}
+
+// LocateSector esegue un topological walk partendo dal settore 's'.
+// Ritorna il settore contenente (px, py), oppure nil se il punto è fuori dalla mesh
+// o se si innesca un ciclo (precisione FP), caso in cui il chiamante deve usare l'AABB tree.
+func (s *Sector) LocateSector(px, py float64) *Sector {
+	curr := s
+	const maxSteps = 16 // Safeguard per loop infiniti da approssimazioni floating-point
+	for step := 0; step < maxSteps; step++ {
+		inside := true
+		for _, seg := range curr.Segments {
+			// Assumendo che < 0 indichi il semispazio "esterno" all'edge
+			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
+				if seg.Sector == nil {
+					// Hit boundary esterno della mesh
+					return nil
+				}
+				// Transizione: il punto è oltre questo segmento, saltiamo al vicino
+				curr = seg.Sector
+				inside = false
+				break
+			}
+		}
+		// Se il punto non è risultato all'esterno di nessun segmento,
+		// per definizione è all'interno del poligono convesso corrente.
+		if inside {
+			return curr
+		}
+	}
+	// Limite di walk superato (possibile ping-pong tra settori per edge-cases FP)
+	return nil
 }
 
 // Print converts the Sector instance into a JSON-formatted string, optionally indented for readability.

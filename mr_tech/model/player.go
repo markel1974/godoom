@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
@@ -247,43 +246,11 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	// 1. Apply the atomic vector and obtain the final coordinates
 	p.AddXY(dx, dy)
 	px, py := p.GetXY()
-
 	currentSector := p.GetSector()
-
 	// 2. Spatial stability check: are we still inside the same sector?
-	if PointInSegments(px, py, currentSector.Segments) {
+	if newSector := currentSector.LocateSector(px, py); newSector != nil {
+		p.SetSector(newSector)
 		return
-	}
-
-	// 3. Portal Transition: The point has physically exited the root sector.
-	// Navigate the topological graph by testing adjacent sectors (neighbors).
-	for _, seg := range currentSector.Segments {
-		neighbor := seg.Sector
-		if neighbor != nil {
-			if PointInSegments(px, py, neighbor.Segments) {
-				p.SetSector(neighbor)
-				if p.debug {
-					fmt.Println("New Sector crossed via PIP:", neighbor.Id)
-				}
-				return
-			}
-		}
-	}
-
-	// 4. Architectural Fallback (Edge Case Perimeter)
-	// If the point falls EXACTLY on the mathematical edge of a portal,
-	// the FP precision of ray-casting might return 'false' for both sectors.
-	// In this case, we force the update if the point is in the back half-plane of the portal.
-	for _, seg := range currentSector.Segments {
-		if seg.Sector != nil {
-			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
-				p.SetSector(seg.Sector)
-				if p.debug {
-					fmt.Println("New Sector crossed via Fallback:", seg.Sector.Id)
-				}
-				return
-			}
-		}
 	}
 }
 

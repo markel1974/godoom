@@ -92,14 +92,12 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		s.FloorY = cs.FloorY
 		s.Light = NewLight()
 		if cs.Light != nil {
-			//TODO TERMINARE CON TUTTI I TIPI DI LUCE
-
+			lXY := cs.GetCentroid()
 			lightZ := (cs.FloorY + cs.CeilY) * 1.3
+			//TODO TERMINARE CON TUTTI I TIPI DI LUCE
 			if cs.Light.Kind == LightKindAmbient {
 				lightZ = (cs.FloorY + cs.CeilY) * 1000
 			}
-			lXY := cs.GetCentroid()
-			//s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: s.CeilY})
 			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: lightZ})
 		}
 		r.sectors = append(r.sectors, s)

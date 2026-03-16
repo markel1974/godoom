@@ -168,28 +168,37 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	// 5b. Sync Up (Physics -> Model) - Things
 	for idx := 0; idx < e.tree.counter; idx++ {
 		physEnt := e.tree.moving[idx]
+
 		if t, ok := e.thingsDict[physEnt.Id]; ok {
-			//if physEnt, ok := e.tree.entities[t.Id]; ok {
 			tPx := physEnt.GetCenterX()
 			tPy := physEnt.GetCenterY()
+
+			// 1. Delta Passivo (rimbalzi calcolati da SetupCollision)
 			tDx := tPx - t.Position.X
 			tDy := tPy - t.Position.Y
 
-			// EPSILON FIX: Ignora i micro-spostamenti da virgola mobile
+			// 2. Delta Attivo (Kinematic Drive) aggiunto solo se c'è intenzionalità
+			if physEnt.G > 0 {
+				tDx += physEnt.Vx
+				tDy += physEnt.Vy
+			}
+
 			if math.Abs(tDx) > 0.001 || math.Abs(tDy) > 0.001 {
-				// 1. Taglia il vettore fisico contro i muri logici
+				// 3. Test Topologico (hit test contro settori/muri)
 				cDx, cDy := t.ClipMovement(tDx, tDy)
-				// 2. Applica il movimento spaziale (e aggiorna i portali)
-				//fmt.Printf("MOVEMENT APPLY %s %f:%f\n", t.Id, cDx, cDy)
+
+				// 4. Traslazione del modello logico
 				t.MoveApply(cDx, cDy)
-				// 3. RETRO-CORREZIONE (Sync-Back)
-				// Se il muro ci ha deviato o bloccato, l'AABB fisico è rimasto dentro il muro.
-				// Dobbiamo risincronizzarlo istantaneamente alle coordinate logiche esatte.
-				if cDx != tDx || cDy != tDy {
-					r := physEnt.GetWidth() / 2.0
-					physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
-					e.tree.tree.UpdateObject(physEnt)
+
+				// 5. Risoluzione del settore
+				if newSector := t.Sector.LocateSector(cDx, cDy); newSector != nil {
+					t.Sector = newSector
 				}
+
+				// 6. Retro-Correzione (Sync-Back) AABB fisico
+				r := physEnt.GetWidth() / 2.0
+				physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
+				e.tree.tree.UpdateObject(physEnt)
 			}
 		}
 	}
@@ -201,120 +210,33 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	return cs, count, e.things
 }
 
-func (e *Engine) moveEnemiesOld() {
-	pX, pY := e.player.GetXY()
-
-	for _, t := range e.things {
-		if t.Animation == nil {
-			continue
-		}
-		//TODO REMOVE
-		//if !_enemies[t.Type] {
-		//	continue
-		//}
-
-		physEnt, ok := e.tree.entities[t.Id]
-		if !ok {
-			continue
-		}
-
-		// 1. Calcolo direzione verso il player
-		dx := pX - t.Position.X
-		dy := pY - t.Position.Y
-		dist := math.Sqrt(dx*dx + dy*dy)
-
-		// 2. Se il nemico è abbastanza vicino ma non troppo (range di attacco)
-		if dist > 4.0 && dist < 200.0 {
-			speed := 0.2 // Tuning della velocità del nemico
-			invDist := 1.0 / dist
-
-			//t.MoveApply(dx*invDist*speed, dy*invDist*speed)
-			physEnt.Vx = dx * invDist * speed
-			physEnt.Vy = dy * invDist * speed
-
-			// Iniezione della forza nel motore fisico
-			//physEnt.ApplyImpulse(dx*invDist*speed, dy*invDist*speed, 1.0)
-		}
-	}
-}
-
 func (e *Engine) moveEnemies() {
 	pX, pY := e.player.GetXY()
-	acceleration := 0.15 // Fattore di accelerazione (0.0 a 1.0)
+	acceleration := 0.15
 
 	for _, t := range e.things {
-		if t.Animation == nil {
-			continue
-		}
-
 		physEnt, ok := e.tree.entities[t.Id]
 		if !ok {
 			continue
 		}
 
-		// 1. Calcolo direzione verso il player
 		dx := pX - t.Position.X
 		dy := pY - t.Position.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 
-		// 2. Comportamento: Blending Vettoriale
-		if dist > 32.0 && dist < 1000.0 {
-			targetSpeed := 3.0 // Velocità di crociera
+		if dist < 1000.0 {
+			targetSpeed := 0.01
 			invDist := 1.0 / dist
-
-			// Vettore intenzionale dell'IA
 			dirX := dx * invDist * targetSpeed
 			dirY := dy * invDist * targetSpeed
-
-			// VELOCITY BLEND: Conserva il knockback fisico e aggiunge la spinta dell'IA
 			physEnt.Vx = physEnt.Vx*(1-acceleration) + (dirX * acceleration)
 			physEnt.Vy = physEnt.Vy*(1-acceleration) + (dirY * acceleration)
-
-		} else {
-			// Decelera morbidamente. Se il nemico viene spinto, scivolerà per inerzia.
-			physEnt.Vx *= (1 - acceleration)
-			physEnt.Vy *= (1 - acceleration)
+			if physEnt.GForce == 0 {
+				physEnt.GForce = 1.0
+			}
+			if physEnt.Friction < 0.2 {
+				physEnt.Friction = 0.99
+			}
 		}
 	}
 }
-
-/*
-func (e *Engine) moveEnemies() {
-	pX, pY := e.player.GetXY()
-
-	for _, t := range e.things {
-		if t.Animation == nil {
-			continue
-		}
-
-		physEnt, ok := e.tree.entities[t.Id]
-		if !ok {
-			continue
-		}
-
-		// 1. Calcolo direzione verso il player
-		dx := pX - t.Position.X
-		dy := pY - t.Position.Y
-		dist := math.Sqrt(dx*dx + dy*dy)
-
-		// 2. Comportamento: Inseguimento Cinematico
-		if dist > 32.0 && dist < 1000.0 {
-			speed := 4.0 // Velocità costante desiderata (non è più una "forza")
-			invDist := 1.0 / dist
-
-			// Impostiamo direttamente la velocità cinematica bersaglio.
-			// NOTA: Se il nemico sta subendo un forte knockback (es. Vx > 10 per un'esplosione),
-			// potresti voler evitare di sovrascriverla, ma per il movimento base questo è il pattern corretto.
-			physEnt.Vx = dx * invDist * speed
-			physEnt.Vy = dy * invDist * speed
-		} else {
-			// Se è fuori range o è arrivato addosso al player, si ferma.
-			// Senza questo, il solver fisico lo farebbe scivolare lentamente per l'inerzia
-			// (a meno che l'attrito non sia a 1.0).
-			physEnt.Vx = 0
-			physEnt.Vy = 0
-		}
-	}
-}
-
-*/

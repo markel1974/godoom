@@ -74,6 +74,7 @@ func (s *Sector) Has(id uint64) bool {
 	return ok
 }
 
+// IsVisible determines if the range [x1, x2] is visible, updating the visibility spans if the compile ID has changed.
 func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
 	if s.LastCompileId != id {
 		s.VisibleSpans = s.VisibleSpans[:0]
@@ -154,6 +155,11 @@ func (s *Sector) LocateSector(px, py float64) *Sector {
 		}
 	}
 	// Limite di walk superato (possibile ping-pong tra settori per edge-cases FP)
+
+	//TODO
+	//Quando questa funzione restituisce nil,
+	//il chiamante saprà che la ricerca locale è fallita (punto teletrasportato troppo lontano, o uscito dalla mappa).
+	//In quel ramo if eseguira la query globale contro l'AABB tree per riagganciare la referenza corretta con un costo logaritmico.
 	return nil
 }
 

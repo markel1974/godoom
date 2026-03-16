@@ -31,7 +31,7 @@ func (em *EntityManager) Spawn(id string, pX, pY, radius, mass float64) *physics
 }
 
 // Compute performs movement integration, updates the spatial tree, resolves collisions iteratively, and stabilizes the system.
-func (em *EntityManager) Compute() {
+func (em *EntityManager) Compute() []*physics.Entity {
 	// Fase 1: Integrazione cinematica (Movimento e frizione)
 	em.counter = 0
 	for _, ent := range em.entities {
@@ -43,7 +43,7 @@ func (em *EntityManager) Compute() {
 	}
 
 	if em.counter == 0 {
-		return
+		return nil
 	}
 	// Fase 2: Iterative Solver per collisioni multiple e propagazione
 	const solverIterations = 4
@@ -86,11 +86,16 @@ func (em *EntityManager) Compute() {
 			break
 		}
 	}
+	return em.moving[:em.counter]
 }
 
 // QueryCollisions checks for overlapping entities in the spatial tree and returns a list of bounding boxes for collisions.
 func (em *EntityManager) QueryCollisions(ent *physics.Entity) []physics.IAABB {
 	return em.tree.QueryOverlaps(ent)
+}
+
+func (em *EntityManager) UpdateObject(ent *physics.Entity) {
+	em.tree.UpdateObject(ent)
 }
 
 // addEntity adds the given entity to the manager, adjusts the moving entity slice, and inserts it into the spatial tree.

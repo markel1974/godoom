@@ -41,7 +41,7 @@ type Engine struct {
 	things           []*model.Thing
 	thingsDict       map[string]*model.Thing
 	sectorsMaxHeight float64
-	tree             *EntityManager
+	manager          *EntityManager
 	playerEnt        *physics.Entity
 }
 
@@ -55,7 +55,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		maxQueue:         maxQueue,
 		things:           nil,
 		sectorsMaxHeight: 0,
-		tree:             nil,
+		manager:          nil,
 		thingsDict:       make(map[string]*model.Thing),
 	}
 }
@@ -113,14 +113,14 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	}
 	e.sectorsMaxHeight = compiler.GetMaxHeight()
 
-	e.tree = NewEntityManager(4096)
+	e.manager = NewEntityManager(4096)
 	pX, pY := e.player.GetXY()
-	e.playerEnt = e.tree.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
+	e.playerEnt = e.manager.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
 	e.things = compiler.GetThings()
 	for _, thing := range compiler.GetThings() {
 		tP := thing.Position
 		e.thingsDict[thing.Id] = thing
-		e.tree.Spawn(thing.Id, tP.X, tP.Y, thing.Radius, thing.Mass)
+		e.manager.Spawn(thing.Id, tP.X, tP.Y, thing.Radius, thing.Mass)
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (e *Engine) ComputeOLD(player *model.Player, vi *model.ViewMatrix) ([]*mode
 	vi.Compute(player)
 	cs, count := e.portal.Compute(vi)
 	player.Compute(vi)
-	e.tree.Compute()
+	e.manager.Compute()
 	return cs, count, e.things
 }
 
@@ -149,10 +149,10 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	pRadius := e.playerEnt.GetWidth() / 2.0
 	e.playerEnt.MoveTo(pX-pRadius, pY-pRadius)
 	e.playerEnt.Vx, e.playerEnt.Vy = player.GetVelocity()
-	e.tree.tree.UpdateObject(e.playerEnt)
+	e.manager.UpdateObject(e.playerEnt)
 
-	// 5. Solver Dinamico: Ora 'e.tree.counter' includerà i nemici con Vx/Vy > 0
-	e.tree.Compute()
+	// 5. Solver Dinamico
+	entities := e.manager.Compute()
 
 	// 5. Sync Up (Physics -> Model) - Player
 	newPx := e.playerEnt.GetCenterX()
@@ -166,9 +166,7 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	}
 
 	// 5b. Sync Up (Physics -> Model) - Things
-	for idx := 0; idx < e.tree.counter; idx++ {
-		physEnt := e.tree.moving[idx]
-
+	for _, physEnt := range entities {
 		if t, ok := e.thingsDict[physEnt.Id]; ok {
 			tPx := physEnt.GetCenterX()
 			tPy := physEnt.GetCenterY()
@@ -184,21 +182,13 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 			}
 
 			if math.Abs(tDx) > 0.001 || math.Abs(tDy) > 0.001 {
-				// 3. Test Topologico (hit test contro settori/muri)
-				cDx, cDy := t.ClipMovement(tDx, tDy)
+				// 3. Traslazione del modello logico
+				t.MoveApply(tDx, tDy)
 
-				// 4. Traslazione del modello logico
-				t.MoveApply(cDx, cDy)
-
-				// 5. Risoluzione del settore
-				if newSector := t.Sector.LocateSector(cDx, cDy); newSector != nil {
-					t.Sector = newSector
-				}
-
-				// 6. Retro-Correzione (Sync-Back) AABB fisico
+				// 5. Retro-Correzione (Sync-Back) AABB fisico
 				r := physEnt.GetWidth() / 2.0
 				physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
-				e.tree.tree.UpdateObject(physEnt)
+				e.manager.UpdateObject(physEnt)
 			}
 		}
 	}
@@ -215,7 +205,7 @@ func (e *Engine) moveEnemies() {
 	acceleration := 0.15
 
 	for _, t := range e.things {
-		physEnt, ok := e.tree.entities[t.Id]
+		physEnt, ok := e.manager.entities[t.Id]
 		if !ok {
 			continue
 		}

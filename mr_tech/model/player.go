@@ -27,6 +27,8 @@ type Player struct {
 	angleCos       float64
 	yaw            float64
 	yawState       float64
+	radius         float64
+	mass           float64
 	sector         *Sector
 	ducking        bool
 	falling        bool
@@ -41,6 +43,8 @@ func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
 		velocity:       XYZ{},
 		yaw:            0,
 		yawState:       0,
+		radius:         cfg.Radius,
+		mass:           cfg.Mass,
 		sector:         sector,
 		lightIntensity: 0.0039, // 1 / distance == 1 / 255
 		debug:          debug,
@@ -157,6 +161,16 @@ func (p *Player) GetLightIntensity() float64 {
 // SetLightIntensity sets the light intensity for the player by updating the lightIntensity property.
 func (p *Player) SetLightIntensity(lightIntensity float64) {
 	p.lightIntensity = lightIntensity
+}
+
+// GetRadius returns the radius of the player as a float64 value.
+func (p *Player) GetRadius() float64 {
+	return p.radius
+}
+
+// GetMass returns the mass of the player as a float64 value.
+func (p *Player) GetMass() float64 {
+	return p.mass
 }
 
 // GetVelocity returns the X and Y components of the player's velocity as two float64 values.

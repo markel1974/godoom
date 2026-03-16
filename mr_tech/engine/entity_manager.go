@@ -9,6 +9,7 @@ type EntityManager struct {
 	tree     *physics.AABBTree
 	entities map[string]*physics.Entity
 	moving   []*physics.Entity
+	counter  int
 }
 
 // NewEntityManager initializes and returns a new EntityManager with a specified maximum number of entities.
@@ -21,8 +22,8 @@ func NewEntityManager(maxEntities uint) *EntityManager {
 
 // Spawn creates a new entity with the specified ID, position, radius, and mass, and inserts it into the spatial tree.
 func (em *EntityManager) Spawn(id string, pX, pY, radius, mass float64) *physics.Entity {
-	w := radius / 10
-	h := radius / 10
+	w := radius * 2
+	h := radius * 2
 	x := pX - radius
 	y := pY - radius
 	ent := em.addEntity(id, x, y, w, h, mass)
@@ -32,16 +33,16 @@ func (em *EntityManager) Spawn(id string, pX, pY, radius, mass float64) *physics
 // Compute performs movement integration, updates the spatial tree, resolves collisions iteratively, and stabilizes the system.
 func (em *EntityManager) Compute() {
 	// Fase 1: Integrazione cinematica (Movimento e frizione)
-	counter := 0
+	em.counter = 0
 	for _, ent := range em.entities {
 		if ent.Compute() {
 			em.tree.UpdateObject(ent)
-			em.moving[counter] = ent
-			counter++
+			em.moving[em.counter] = ent
+			em.counter++
 		}
 	}
 
-	if counter == 0 {
+	if em.counter == 0 {
 		return
 	}
 	// Fase 2: Iterative Solver per collisioni multiple e propagazione
@@ -50,33 +51,31 @@ func (em *EntityManager) Compute() {
 	for i := 0; i < solverIterations; i++ {
 		isStable := true
 
-		for x := 0; x < counter; x++ {
+		for x := 0; x < em.counter; x++ {
 			ent := em.moving[x]
 			overlaps := em.tree.QueryOverlaps(ent)
 
+			// Dentro Fase 2: Iterative Solver
 			for _, overlapObj := range overlaps {
 				otherEnt, ok := overlapObj.(*physics.Entity)
 				if !ok || otherEnt == ent {
 					continue
 				}
 
-				// Ottimizzazione: previene la risoluzione bidirezionale (A->B calcolato, B->A skippato)
-				if ent.Id > otherEnt.Id {
+				// FIX REPULSIONE: Applica il tie-breaker SOLO se anche otherEnt è in movimento.
+				// Se otherEnt è fermo (sleeping), spetta al body attivo (ent) risolvere l'urto per entrambi.
+				otherIsActive := otherEnt.Vx != 0 || otherEnt.Vy != 0
+				if otherIsActive && ent.Id > otherEnt.Id {
 					continue
 				}
 
 				distance := ent.Distance(otherEnt)
 				sumRadii := (ent.GetWidth() / 2.0) + (otherEnt.GetWidth() / 2.0)
 
-				// Narrow-Phase radiale
 				if distance < sumRadii {
-					// SetupCollision applica l'impulso elastico e separa i centri
 					ent.SetupCollision(otherEnt)
-
-					// UpdateObject propaga il nuovo AABB, essenziale per l'urto successivo B->C
 					em.tree.UpdateObject(ent)
 					em.tree.UpdateObject(otherEnt)
-
 					isStable = false
 				}
 			}

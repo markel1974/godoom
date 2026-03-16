@@ -18,6 +18,7 @@ type Engine struct {
 	h                int
 	maxQueue         int
 	things           []*model.Thing
+	thingsDict       map[string]*model.Thing
 	sectorsMaxHeight float64
 	tree             *EntityManager
 	playerEnt        *physics.Entity
@@ -34,6 +35,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		things:           nil,
 		sectorsMaxHeight: 0,
 		tree:             nil,
+		thingsDict:       make(map[string]*model.Thing),
 	}
 }
 
@@ -57,10 +59,11 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 
 	e.tree = NewEntityManager(4096)
 	pX, pY := e.player.GetXY()
-	e.playerEnt = e.tree.Spawn("PLAYER", pX, pY, 20.0, 100.0)
+	e.playerEnt = e.tree.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
 	e.things = compiler.GetThings()
 	for _, thing := range compiler.GetThings() {
 		tP := thing.Position
+		e.thingsDict[thing.Id] = thing
 		e.tree.Spawn(thing.Id, tP.X, tP.Y, thing.Radius, thing.Mass)
 	}
 	return nil
@@ -75,8 +78,6 @@ func (e *Engine) ComputeOLD(player *model.Player, vi *model.ViewMatrix) ([]*mode
 	return cs, count, e.things
 }
 
-// Compute esegue l'integrazione del frame unendo la logica dei portali al solver fisico.
-// Compute esegue l'integrazione del frame unendo la logica dei portali al solver fisico.
 func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Compute(player)
@@ -106,8 +107,10 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	}
 
 	// 5b. Sync Up (Physics -> Model) - Things
-	for _, t := range e.things {
-		if physEnt, ok := e.tree.entities[t.Id]; ok {
+	for idx := 0; idx < e.tree.counter; idx++ {
+		physEnt := e.tree.moving[idx]
+		if t, ok := e.thingsDict[physEnt.Id]; ok {
+			//if physEnt, ok := e.tree.entities[t.Id]; ok {
 			tPx := physEnt.GetCenterX()
 			tPy := physEnt.GetCenterY()
 			tDx := tPx - t.Position.X

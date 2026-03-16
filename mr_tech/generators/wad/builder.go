@@ -80,7 +80,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 	}
 
 	playerSectorId := grid.ResolveSectorId(geometry.Point{X: pX, Y: pY})
-	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId)
+	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
 
 	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, true, texHandler), nil
 }

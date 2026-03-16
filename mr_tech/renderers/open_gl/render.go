@@ -24,10 +24,10 @@ Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping g
 Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
 */
 
-// scaleFactor defines the multiplier for scaling operations.
-// maxBatchVertices specifies the maximum number of vertices for a batch operation.
-// maxFrameCommands indicates the maximum number of commands processed per frame.
-// vboMaxFloats sets the maximum number of float values allowed in the vertex buffer object.
+// scaleFactor defines a constant value for scaling factors used in the application.
+// maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
+// maxFrameCommands sets the limit on the number of commands that can be issued per frame.
+// vboMaxFloats determines the maximum number of floats that can be stored in the vertex buffer object.
 const (
 	scaleFactor = 1
 
@@ -38,12 +38,13 @@ const (
 	vboMaxFloats = 1024 * 1024 * 4
 )
 
+// SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
 type SpriteNode struct {
 	Thing  *model.Thing
 	DistSq float64
 }
 
-// RenderOpenGL represents the main rendering engine using OpenGL for handling scene rendering and custom debug features.
+// RenderOpenGL is responsible for managing and executing OpenGL rendering operations for the game environment.
 type RenderOpenGL struct {
 	engine           *engine.Engine
 	vi               *model.ViewMatrix
@@ -76,7 +77,7 @@ type RenderOpenGL struct {
 	compiler *Compiler
 }
 
-// NewOpenGLRender initializes and returns a new RenderOpenGL instance with default configurations and settings.
+// NewOpenGLRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewOpenGLRender() *RenderOpenGL {
 	r := &RenderOpenGL{
 		engine:           nil,
@@ -100,7 +101,7 @@ func NewOpenGLRender() *RenderOpenGL {
 	return r
 }
 
-// Setup initializes the RenderOpenGL instance with the provided portal, player, and textures. Returns an error if any setup fails.
+// Setup initializes the RenderOpenGL instance by configuring essential properties based on the provided engine instance.
 func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.engine = en
 	w.screenWidth = w.engine.GetWidth()
@@ -111,7 +112,7 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	return nil
 }
 
-// createBatch processes and batches compiled sector polygons for rendering based on their type and attributes.
+// createBatch processes compiled sectors and things to create a batch of renderable geometry with optional sky texture.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, thing []*model.Thing) *textures.Texture {
 	w.frameVertices.Reset()
 	w.frameCommands.Reset()
@@ -146,7 +147,7 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, th
 	return cSky
 }
 
-// pushWall appends a textured wall's vertices and lighting properties into the frame for rendering using OpenGL.
+// pushWall generates and adds wall vertices to the frame buffer with appropriate texture mapping and lighting calculations.
 func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
 	//prepare
 	tex := anim.CurrentFrame()
@@ -205,7 +206,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 	w.frameCommands.Compute(texId, normTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
-// pushFlat renders a flat surface using vertices from a compiled polygon and texture, applying lighting and transformations.
+// pushFlat processes a flat surface polygon, computes its vertices for rendering, and generates associated render commands.
 func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, z float64) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
@@ -268,7 +269,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	return nil
 }
 
-// pushThings processes a list of things, applies culling, depth sorting, and billboarding, then batches them for rendering.
+// pushThings processes a list of Thing objects for rendering, handling culling, depth sorting, and batching into the VBO.
 func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 	if len(things) == 0 {
 		return
@@ -339,13 +340,13 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 		// --- LUCE IDENTICA A PUSH WALL ---
 		light := float32((1.0 - t.Sector.Light.GetIntensity()) * 5.0)
 		lightPos := t.Sector.Light.GetPos()
-		_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
+		_, _, liX, liZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
 		viZ := w.vi.GetZ()
-		lcY := lightPos.Z - viZ
+		liY := lightPos.Z - viZ
 
-		vLcX := float32(lcX)
-		vLcY := float32(lcY)
-		vLcZ := float32(-lcZ)
+		vLcX := float32(liX)
+		vLcY := float32(liY)
+		vLcZ := float32(-liZ)
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)
@@ -377,19 +378,72 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 	}
 }
 
-// glStreamRender streams vertex and command data to the GPU and executes rendering of frame vertices and textures.
+// glStreamRender performs the full OpenGL rendering pipeline for the scene, including geometry, SSAO, blur, and lighting passes.
 func (w *RenderOpenGL) glStreamRender() {
 	if w.frameVertices.Len() == 0 {
 		return
 	}
 
-	gl.BindVertexArray(w.mainVao)
+	// 0. UPLOAD VERTICI (Orphaning)
 	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
-
-	// Aggiornamento parziale in-place, zero allocazioni
+	gl.BufferData(gl.ARRAY_BUFFER, w.frameVertices.Len()*4, nil, gl.STREAM_DRAW)
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()))
 
+	// Calcolo e recupero matrici (w.glUpdateCameraUniforms inietta già su shaderMain)
+	proj, view := w.glUpdateCameraUniforms(w.vi)
+
+	// 1. GEOMETRY PASS (G-Buffer)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.gBufferFbo)
+	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
+	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
+
+	programGeometry := w.compiler.GetShaderProgram(shaderGeometry)
+	gl.UseProgram(programGeometry)
+	gl.Uniform1i(gl.GetUniformLocation(programGeometry, gl.Str("u_texture\x00")), 0)
+	gl.UniformMatrix4fv(gl.GetUniformLocation(programGeometry, gl.Str("u_view\x00")), 1, false, &view[0])
+	gl.UniformMatrix4fv(gl.GetUniformLocation(programGeometry, gl.Str("u_projection\x00")), 1, false, &proj[0])
+	w.renderScene(programGeometry)
+
+	// 2. SSAO PASS
+	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.ssaoFbo)
+	gl.Clear(gl.COLOR_BUFFER_BIT)
+
+	programSSAO := w.compiler.GetShaderProgram(shaderSSAO)
+	gl.UseProgram(programSSAO)
+
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, w.compiler.gPositionDepth)
 	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, w.compiler.gNormal)
+	gl.ActiveTexture(gl.TEXTURE2)
+	noiseTex, kernel := w.compiler.GetSSAOResources()
+	gl.BindTexture(gl.TEXTURE_2D, noiseTex)
+
+	gl.Uniform3fv(gl.GetUniformLocation(shaderSSAO, gl.Str("samples\x00")), 64, &kernel[0])
+	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderSSAO, gl.Str("projection\x00")), 1, false, &proj[0])
+	w.drawScreenQuad()
+
+	// 3. BLUR PASS
+	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.ssaoBlurFbo)
+	gl.Clear(gl.COLOR_BUFFER_BIT)
+
+	programBlur := w.compiler.GetShaderProgram(shaderBlur)
+	gl.UseProgram(programBlur)
+
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, w.compiler.ssaoColorBuffer)
+	w.drawScreenQuad()
+
+	// 4. FINAL LIGHTING PASS
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+
+	programMain := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(programMain)
+
+	ssaoBlurTex := w.compiler.GetSSAOBlurTexture()
+	gl.BindVertexArray(w.mainVao)
 
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
@@ -399,12 +453,36 @@ func (w *RenderOpenGL) glStreamRender() {
 			gl.ActiveTexture(gl.TEXTURE1)
 			gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
 
+			gl.ActiveTexture(gl.TEXTURE2)
+			gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
+
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}
 	}
 }
 
-// glInit initializes OpenGL resources, including VAOs, VBOs, shaders, and vertex attributes for rendering.
+// renderScene renders the current scene by iterating over draw commands and issuing OpenGL draw calls.
+func (w *RenderOpenGL) renderScene(program uint32) {
+	gl.BindVertexArray(w.mainVao)
+	for _, cmd := range w.frameCommands.Get() {
+		if cmd.vertexCount > 0 {
+			// Vincolo alla TEXTURE0 richiesto per l'alpha discard nel geometry.frag
+			gl.ActiveTexture(gl.TEXTURE0)
+			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
+		}
+	}
+}
+
+// drawScreenQuad renders a full-screen quad using the sky vertex array and disables depth testing during the draw operation.
+func (w *RenderOpenGL) drawScreenQuad() {
+	gl.BindVertexArray(w.skyVao)
+	gl.Disable(gl.DEPTH_TEST)
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	gl.Enable(gl.DEPTH_TEST)
+}
+
+// glInit initializes OpenGL state, buffers, shaders, and samplers required for rendering and SSAO processing.
 func (w *RenderOpenGL) glInit() error {
 	stride := w.frameVertices.Alignment() * 4
 	gl.GenVertexArrays(1, &w.mainVao)
@@ -445,13 +523,29 @@ func (w *RenderOpenGL) glInit() error {
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
-	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(shaderProgram)
+	// Setup SSAO Samplers
+	progSSAO := w.compiler.GetShaderProgram(shaderSSAO)
+	gl.UseProgram(progSSAO)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gPosition\x00")), 0)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gNormal\x00")), 1)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("texNoise\x00")), 2)
+
+	// Setup Blur Sampler
+	progBlur := w.compiler.GetShaderProgram(shaderBlur)
+	gl.UseProgram(progBlur)
+	gl.Uniform1i(gl.GetUniformLocation(progBlur, gl.Str("ssaoInput\x00")), 0)
+
+	// Setup Main Samplers
+	progMain := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(progMain)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_texture\x00")), 0)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00")), 1)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_ssao\x00")), 2)
 
 	// Configurazione Sampler Uniforms
-	texLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_texture\x00"))
+	texLoc := gl.GetUniformLocation(progMain, gl.Str("u_texture\x00"))
 	gl.Uniform1i(texLoc, 0)
-	normLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_normalMap\x00"))
+	normLoc := gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00"))
 	gl.Uniform1i(normLoc, 1)
 
 	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
@@ -472,10 +566,15 @@ func (w *RenderOpenGL) glInit() error {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
+	// Inizializzazione buffer SSAO tramite il compiler
+	fbW, fbH := w.win.GetFramebufferSize()
+
+	w.compiler.Setup(int32(fbW), int32(fbH))
+
 	return nil
 }
 
-// glUpdateCameraUniforms updates the camera's projection and view uniform matrices in the shader and returns them.
+// glUpdateCameraUniforms updates the camera view and projection matrices, along with related shader uniforms.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(shaderProgram)
@@ -519,6 +618,8 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 	gl.Uniform1f(gl.GetUniformLocation(shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
 	timeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_time\x00"))
 	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
+	fbW, fbH := w.win.GetFramebufferSize()
+	gl.Uniform2f(gl.GetUniformLocation(shaderProgram, gl.Str("u_screenResolution\x00")), float32(fbW), float32(fbH))
 
 	// --- NUOVI UNIFORM PER LA LUCE/TORCIA ---
 	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraPos\x00")), ex, ey, ez)
@@ -528,7 +629,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 
 }
 
-// glRenderSky renders the skybox using the provided projection and view matrices.
+// glRenderSky renders the skybox using the provided projection and view matrices, and binds the given sky texture.
 func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *textures.Texture) {
 	skyProg := w.compiler.GetShaderProgram(shaderSky)
 	gl.UseProgram(skyProg)
@@ -546,7 +647,9 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 		gl.ActiveTexture(gl.TEXTURE0)
 		gl.BindTexture(gl.TEXTURE_2D, texId)
 		gl.ActiveTexture(gl.TEXTURE1)
+
 		gl.BindTexture(gl.TEXTURE_2D, normTextId)
+		gl.ActiveTexture(gl.TEXTURE2)
 
 		gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
 	}
@@ -558,7 +661,7 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 	gl.DepthFunc(gl.LESS)
 }
 
-// doInitialize initializes the OpenGL rendering environment, window, and related resources. Returns an error if the setup fails.
+// doInitialize initializes the OpenGL rendering environment and compiles shaders and textures for the renderer.
 func (w *RenderOpenGL) doInitialize() error {
 	cfg := pixels.WindowConfig{
 		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*scaleFactor, float64(w.screenHeight)*scaleFactor),
@@ -589,12 +692,12 @@ func (w *RenderOpenGL) doInitialize() error {
 	return nil
 }
 
-// Start initializes and runs the primary rendering loop using the OpenGL context prepared by pixels.GLRun.
+// Start initializes and starts the OpenGL rendering loop by invoking the provided rendering function.
 func (w *RenderOpenGL) Start() {
 	pixels.GLRun(w.doRun)
 }
 
-// doRun manages the main rendering loop, player input handling, and game state updates for the OpenGL renderer.
+// doRun executes the main rendering and input handling loop for the RenderOpenGL instance.
 func (w *RenderOpenGL) doRun() {
 	if err := w.doInitialize(); err != nil {
 		panic(err)
@@ -686,7 +789,7 @@ func (w *RenderOpenGL) doRun() {
 	}
 }
 
-// doRender executes the rendering process, updating the framebuffer and rendering the scene using OpenGL commands.
+// doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
 	cs, count, things := w.engine.Compute(w.player, w.vi)
 	w.targetLastCompiled = count
@@ -706,18 +809,18 @@ func (w *RenderOpenGL) doRender() {
 	})
 }
 
-// doPlayerDuckingToggle toggles the ducking state of the player by invoking the SetDucking method on the player instance.
+// doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.
 func (w *RenderOpenGL) doPlayerDuckingToggle() { w.player.SetDucking() }
 
-// doPlayerJump triggers the player jump action by setting the appropriate state in the player object.
+// doPlayerJump triggers the player's jump action by invoking the SetJump method on the player instance.
 func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 
-// doPlayerMoves processes the player's movement based on the given impulse and directional inputs.
+// doPlayerMoves moves the player based on the provided impulse and directional flags (up, down, left, right).
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
 	w.player.Move(impulse, up, down, left, right)
 }
 
-// doPlayerMouseMove updates the player's viewing angle and yaw based on mouse movement, with clamped input values.
+// doPlayerMouseMove adjusts the player's angle and yaw based on mouse movement, clamping the values within a defined offset range.
 func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	const offset = 10
 	if mouseX > offset {
@@ -735,7 +838,7 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.MoveApply(0, 0)
 }
 
-// doDebug toggles debug mode or enables it and navigates through sectors based on the provided index delta.
+// doDebug toggles debugging or sets the debug mode to a specific sector depending on the provided next parameter.
 func (w *RenderOpenGL) doDebug(next int) {
 	if next == 0 {
 		w.debug = !w.debug
@@ -755,10 +858,10 @@ func (w *RenderOpenGL) doDebug(next int) {
 	w.player.SetXY(x, y)
 }
 
-// doDebugMoveSectorToggle toggles the debug mode for moving between sectors by flipping the targetEnabled flag.
+// doDebugMoveSectorToggle toggles the `targetEnabled` state, enabling or disabling the debug move sector functionality.
 func (w *RenderOpenGL) doDebugMoveSectorToggle() { w.targetEnabled = !w.targetEnabled }
 
-// doDebugMoveSector adjusts the currently selected sector for debugging purposes, moving forward or backward as specified.
+// doDebugMoveSector adjusts the target sector index and updates the target sectors map based on the direction provided.
 func (w *RenderOpenGL) doDebugMoveSector(forward bool) {
 	if forward {
 		if w.targetIdx < w.targetLastCompiled {

@@ -11,6 +11,8 @@ in vec3 NormalView;        // View Space
 
 uniform sampler2D u_texture;
 uniform sampler2D u_normalMap;
+uniform sampler2D u_ssao;           // Nuova: Texture SSAO generata dal pass precedente
+uniform vec2 u_screenResolution;    // Nuova: Risoluzione per mappare gl_FragCoord
 uniform bool u_hasNormalMap;
 uniform float u_ambient_light;
 
@@ -23,6 +25,11 @@ void main()
     if(texColor.a < 0.5) {
         discard;
     }
+
+    // --- 0. RECUPERO OCCLUSIONE (SSAO) ---
+    // Calcoliamo le coordinate schermo per campionare la texture SSAO
+    vec2 ssaoCoords = gl_FragCoord.xy / u_screenResolution;
+    float ao = texture(u_ssao, ssaoCoords).r;
 
     // --- 1. VETTORI DI ILLUMINAZIONE (View Space) ---
 
@@ -89,9 +96,12 @@ void main()
     float flashIntensity = flashCone * flashFalloff;
 
     // --- 6. FINAL MIX ---
-    vec3 litRoom = (texColor.rgb * bumpRoom * (0.3 + roomSpotIntensity * 1.7) + vec3(specularRoom * roomSpotIntensity)) * roomFalloff;
+    // Applichiamo 'ao' al termine ambientale (0.3) della luce di settore.
+    // Questo scurisce gli angoli e le intersezioni dove la luce indiretta non arriva.
+    vec3 litRoom = (texColor.rgb * bumpRoom * (0.3 * ao + roomSpotIntensity * 1.7) + vec3(specularRoom * roomSpotIntensity)) * roomFalloff;
 
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
+    // La torcia, essendo una luce diretta e puntiforme, solitamente non viene influenzata dal SSAO.
     vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashColor;
 
     vec3 linearColor = max(litRoom + litFlash, 0.0);

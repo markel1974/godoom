@@ -250,7 +250,8 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	// 2. Spatial stability check: are we still inside the same sector?
 	if newSector := currentSector.LocateSector(px, py); newSector != nil {
 		p.SetSector(newSector)
-		return
+	} else {
+		//TODO MANCA L'UTILIZZO DELL'AABBtree in engine per player
 	}
 }
 

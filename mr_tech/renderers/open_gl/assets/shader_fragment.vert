@@ -15,6 +15,7 @@ uniform sampler2D u_ssao;           // Nuova: Texture SSAO generata dal pass pre
 uniform vec2 u_screenResolution;    // Nuova: Risoluzione per mappare gl_FragCoord
 uniform bool u_hasNormalMap;
 uniform float u_ambient_light;
+uniform vec3 u_flashDir;
 
 void main()
 {
@@ -40,9 +41,9 @@ void main()
     float cosThetaRoom = dot(-L_room, spotDirRoom);
     float roomSpotIntensity = smoothstep(0.30, 0.50, cosThetaRoom);
 
-    // B. Torcia (Camera vincolata a 0,0,0)
+    // B. Torcia (Allineata alla visuale Y-Sheared)
     vec3 L_flash = normalize(-ViewPos);
-    vec3 viewFront = vec3(0.0, 0.0, -1.0);
+    vec3 viewFront = normalize(u_flashDir);
     float cosThetaFlash = dot(-L_flash, viewFront);
     float flashCone = smoothstep(0.85, 0.95, cosThetaFlash);
 

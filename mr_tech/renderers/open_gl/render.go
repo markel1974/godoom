@@ -112,6 +112,98 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	return nil
 }
 
+// glInit initializes OpenGL state, buffers, shaders, and samplers required for rendering and SSAO processing.
+func (w *RenderOpenGL) glInit() error {
+	stride := w.frameVertices.Alignment() * 4
+	gl.GenVertexArrays(1, &w.mainVao)
+	gl.BindVertexArray(w.mainVao)
+	gl.GenBuffers(1, &w.mainVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
+	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
+
+	// Location 0: aPos (vec3)
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
+	gl.EnableVertexAttribArray(0)
+	// Location 1: aTexCoords (vec2)
+	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
+	gl.EnableVertexAttribArray(1)
+	// Location 2: aLightIntensity (float)
+	gl.VertexAttribPointer(2, 1, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
+	gl.EnableVertexAttribArray(2)
+	// Location 3: aLightCenterView (vec3)
+	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
+	gl.EnableVertexAttribArray(3)
+	// Location 4: aNormal (vec3)
+	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
+	gl.EnableVertexAttribArray(4)
+
+	// Restore default state
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
+
+	// sky
+	gl.GenVertexArrays(1, &w.skyVao)
+	gl.BindVertexArray(w.skyVao)
+	gl.GenBuffers(1, &w.skyVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.skyVbo)
+	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
+	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
+	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
+	gl.EnableVertexAttribArray(0)
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
+
+	// Setup SSAO Samplers
+	progSSAO := w.compiler.GetShaderProgram(shaderSSAO)
+	gl.UseProgram(progSSAO)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gPosition\x00")), 0)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gNormal\x00")), 1)
+	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("texNoise\x00")), 2)
+
+	// Setup Blur Sampler
+	progBlur := w.compiler.GetShaderProgram(shaderBlur)
+	gl.UseProgram(progBlur)
+	gl.Uniform1i(gl.GetUniformLocation(progBlur, gl.Str("ssaoInput\x00")), 0)
+
+	// Setup Main Samplers
+	progMain := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(progMain)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_texture\x00")), 0)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00")), 1)
+	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_ssao\x00")), 2)
+
+	// Configurazione Sampler Uniforms
+	texLoc := gl.GetUniformLocation(progMain, gl.Str("u_texture\x00"))
+	gl.Uniform1i(texLoc, 0)
+	normLoc := gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00"))
+	gl.Uniform1i(normLoc, 1)
+
+	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
+	var defaultNormalMap uint32
+	gl.GenTextures(1, &defaultNormalMap)
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, defaultNormalMap)
+
+	// Creazione pixel indaco piatto (Z-Up) per annullare perturbazioni vettoriali
+	flatNormalPixel := []uint8{128, 128, 255, 255}
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(flatNormalPixel))
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+	// --- RIPRISTINO FLUSSO STANDARD (TEXTURE0) ---
+	gl.ActiveTexture(gl.TEXTURE0)
+	// I parametri qui sotto ora si applicano correttamente alla TEXTURE0 di default
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+	// Inizializzazione buffer SSAO tramite il compiler
+	fbW, fbH := w.win.GetFramebufferSize()
+
+	w.compiler.Setup(int32(fbW), int32(fbH))
+
+	return nil
+}
+
 // createBatch processes compiled sectors and things to create a batch of renderable geometry with optional sky texture.
 func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, thing []*model.Thing) *textures.Texture {
 	w.frameVertices.Reset()
@@ -119,7 +211,9 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, th
 	var cSky *textures.Texture = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {
-		polygons := css[idx].Get()
+		current := css[idx]
+
+		polygons := current.Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
 
@@ -131,11 +225,11 @@ func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, th
 			case model.IdLower:
 				w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 			case model.IdCeil, model.IdCeilTest:
-				if sky := w.pushFlat(cp, cp.AnimationCeil, cp.Sector.CeilY); sky != nil {
+				if sky := w.pushFlat(cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 					cSky = sky
 				}
 			case model.IdFloor, model.IdFloorTest:
-				if sky := w.pushFlat(cp, cp.AnimationFloor, cp.Sector.FloorY); sky != nil {
+				if sky := w.pushFlat(cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
 					cSky = sky
 				}
 			}
@@ -167,15 +261,9 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
-	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
-	lightPos := cp.Sector.Light.GetPos()
-
-	_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
-	viZ := w.vi.GetZ()
-	viX, vizY := w.vi.GetXY()
-	lcY := lightPos.Z - viZ
 
 	sin, cos := w.vi.GetAngle()
+	viX, vizY := w.vi.GetXY()
 	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + viX)
 	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + vizY)
 	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + viX)
@@ -189,17 +277,15 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 	nY := float32(0.0)
 	nZ := float32(dx / length)
 
-	vLcX := float32(lcX)
-	vLcY := float32(lcY)
-	vLcZ := float32(-lcZ)
+	light, lcX, lcY, lcZ := w.createLight(cp.Sector.Light)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
 
 	//apply
 	currentLen := w.frameVertices.Len()
@@ -207,7 +293,7 @@ func (w *RenderOpenGL) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 }
 
 // pushFlat processes a flat surface polygon, computes its vertices for rendering, and generates associated render commands.
-func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, z float64) *textures.Texture {
+func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -228,17 +314,6 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	texW, texH := tex.Size()
 	startLen := w.frameVertices.Len()
 	_, scaleH := anim.ScaleFactor()
-
-	lightPos := cp.Sector.Light.GetPos()
-	light := float32((1.0 - cp.Sector.Light.GetIntensity()) * 5.0)
-	_, _, lcX, lcZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
-	lcY := lightPos.Z - w.vi.GetZ()
-
-	vLcX := float32(lcX)
-	vLcY := float32(lcY)
-	vLcZ := float32(-lcZ)
-
-	zF := float32(z)
 	v0 := segments[0].Start
 
 	u0 := (float32(v0.X) / float32(texW)) * float32(scaleH)
@@ -249,6 +324,8 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 		nY = -1.0
 	}
 
+	light, lcX, lcY, lcZ := w.createLight(cp.Sector.Light)
+
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
 
@@ -257,9 +334,9 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 		u2 := (float32(v2.X) / float32(texW)) * float32(scaleH)
 		v2V := (float32(-v2.Y) / float32(texH)) * float32(scaleH)
 
-		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light, vLcX, vLcY, vLcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light, lcX, lcY, lcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light, lcX, lcY, lcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light, lcX, lcY, lcZ, 0, nY, 0)
 	}
 
 	//apply
@@ -338,15 +415,7 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 		zTop := zBottom + float32(height)
 
 		// --- LUCE IDENTICA A PUSH WALL ---
-		light := float32((1.0 - t.Sector.Light.GetIntensity()) * 5.0)
-		lightPos := t.Sector.Light.GetPos()
-		_, _, liX, liZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
-		viZ := w.vi.GetZ()
-		liY := lightPos.Z - viZ
-
-		vLcX := float32(liX)
-		vLcY := float32(liY)
-		vLcZ := float32(-liZ)
+		light, vLcX, vLcY, vLcZ := w.createLight(t.Sector.Light)
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)
@@ -482,98 +551,6 @@ func (w *RenderOpenGL) drawScreenQuad() {
 	gl.Enable(gl.DEPTH_TEST)
 }
 
-// glInit initializes OpenGL state, buffers, shaders, and samplers required for rendering and SSAO processing.
-func (w *RenderOpenGL) glInit() error {
-	stride := w.frameVertices.Alignment() * 4
-	gl.GenVertexArrays(1, &w.mainVao)
-	gl.BindVertexArray(w.mainVao)
-	gl.GenBuffers(1, &w.mainVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
-	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
-
-	// Location 0: aPos (vec3)
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
-	// Location 1: aTexCoords (vec2)
-	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
-	gl.EnableVertexAttribArray(1)
-	// Location 2: aLightIntensity (float)
-	gl.VertexAttribPointer(2, 1, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
-	gl.EnableVertexAttribArray(2)
-	// Location 3: aLightCenterView (vec3)
-	gl.VertexAttribPointer(3, 3, gl.FLOAT, false, stride, gl.PtrOffset(6*4))
-	gl.EnableVertexAttribArray(3)
-	// Location 4: aNormal (vec3)
-	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
-	gl.EnableVertexAttribArray(4)
-
-	// Restore default state
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
-
-	// sky
-	gl.GenVertexArrays(1, &w.skyVao)
-	gl.BindVertexArray(w.skyVao)
-	gl.GenBuffers(1, &w.skyVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.skyVbo)
-	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
-	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
-	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
-
-	// Setup SSAO Samplers
-	progSSAO := w.compiler.GetShaderProgram(shaderSSAO)
-	gl.UseProgram(progSSAO)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gPosition\x00")), 0)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gNormal\x00")), 1)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("texNoise\x00")), 2)
-
-	// Setup Blur Sampler
-	progBlur := w.compiler.GetShaderProgram(shaderBlur)
-	gl.UseProgram(progBlur)
-	gl.Uniform1i(gl.GetUniformLocation(progBlur, gl.Str("ssaoInput\x00")), 0)
-
-	// Setup Main Samplers
-	progMain := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(progMain)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_texture\x00")), 0)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00")), 1)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_ssao\x00")), 2)
-
-	// Configurazione Sampler Uniforms
-	texLoc := gl.GetUniformLocation(progMain, gl.Str("u_texture\x00"))
-	gl.Uniform1i(texLoc, 0)
-	normLoc := gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00"))
-	gl.Uniform1i(normLoc, 1)
-
-	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
-	var defaultNormalMap uint32
-	gl.GenTextures(1, &defaultNormalMap)
-	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D, defaultNormalMap)
-
-	// Creazione pixel indaco piatto (Z-Up) per annullare perturbazioni vettoriali
-	flatNormalPixel := []uint8{128, 128, 255, 255}
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(flatNormalPixel))
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-
-	// --- RIPRISTINO FLUSSO STANDARD (TEXTURE0) ---
-	gl.ActiveTexture(gl.TEXTURE0)
-	// I parametri qui sotto ora si applicano correttamente alla TEXTURE0 di default
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-
-	// Inizializzazione buffer SSAO tramite il compiler
-	fbW, fbH := w.win.GetFramebufferSize()
-
-	w.compiler.Setup(int32(fbW), int32(fbH))
-
-	return nil
-}
-
 // glUpdateCameraUniforms updates the camera view and projection matrices, along with related shader uniforms.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
@@ -624,7 +601,9 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 	// --- NUOVI UNIFORM PER LA LUCE/TORCIA ---
 	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraPos\x00")), ex, ey, ez)
 	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraFront\x00")), fX, 0.0, fZ)
-
+	// Calcolo della direzione della torcia compensando l'Y-Shear
+	flashDirY := pitchShear / scaleY
+	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_flashDir\x00")), 0.0, flashDirY, -1.0)
 	return proj, view
 
 }
@@ -875,4 +854,13 @@ func (w *RenderOpenGL) doDebugMoveSector(forward bool) {
 	for k := 0; k < w.targetLastCompiled; k++ {
 		w.targetSectors[k] = k == w.targetIdx
 	}
+}
+
+// createLight calculates and returns the light intensity and transformed light position in the OpenGL rendering context.
+func (w *RenderOpenGL) createLight(mLight *model.Light) (float32, float32, float32, float32) {
+	light := (1.0 - mLight.GetIntensity()) * 5.0
+	lightPos := mLight.GetPos()
+	_, _, liX, liZ := w.vi.TranslateXY(lightPos.X, lightPos.Y)
+	liY := lightPos.Z - w.vi.GetZ()
+	return float32(light), float32(liX), float32(liY), float32(-liZ)
 }

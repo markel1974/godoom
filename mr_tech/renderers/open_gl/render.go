@@ -605,7 +605,6 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 	flashDirY := pitchShear / scaleY
 	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_flashDir\x00")), 0.0, flashDirY, -1.0)
 	return proj, view
-
 }
 
 // glRenderSky renders the skybox using the provided projection and view matrices, and binds the given sky texture.

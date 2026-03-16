@@ -2,8 +2,10 @@ package model
 
 import (
 	"encoding/json"
+	"math"
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -22,6 +24,7 @@ type Sector struct {
 	compileId     uint64
 	references    map[uint64]bool
 	VisibleSpans  [][2]float64
+	aabb          *physics.AABB
 	LastCompileId uint64
 }
 
@@ -191,4 +194,49 @@ func (s *Sector) Print(indent bool) string {
 	}
 	d, _ := json.Marshal(p)
 	return string(d)
+}
+
+func (s *Sector) GetAABB() *physics.AABB {
+	return s.aabb
+}
+
+func (s *Sector) ComputeAABB() {
+	if len(s.Segments) == 0 {
+		s.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
+		return
+	}
+
+	minX, minY := math.MaxFloat64, math.MaxFloat64
+	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
+
+	for _, seg := range s.Segments {
+		if seg.Start.X < minX {
+			minX = seg.Start.X
+		}
+		if seg.Start.X > maxX {
+			maxX = seg.Start.X
+		}
+		if seg.Start.Y < minY {
+			minY = seg.Start.Y
+		}
+		if seg.Start.Y > maxY {
+			maxY = seg.Start.Y
+		}
+
+		if seg.End.X < minX {
+			minX = seg.End.X
+		}
+		if seg.End.X > maxX {
+			maxX = seg.End.X
+		}
+		if seg.End.Y < minY {
+			minY = seg.End.Y
+		}
+		if seg.End.Y > maxY {
+			maxY = seg.End.Y
+		}
+	}
+
+	// Assumendo 2D o altezza gestita separatamente; Z può riflettere floor/ceiling se necessario
+	s.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
 }

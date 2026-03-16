@@ -22,13 +22,9 @@ type Thing struct {
 }
 
 // MoveApply updates the position of the Thing by applying movement deltas, adjusting its sector if necessary.
-func (t *Thing) MoveApply(tDx float64, tDy float64) {
-	dx, dy := t.ClipMovement(tDx, tDy)
+func (t *Thing) MoveApply(dx float64, dy float64) {
 	t.Position.X += dx
 	t.Position.Y += dy
-	if newSector := t.Sector.LocateSector(t.Position.X, t.Position.Y); newSector != nil {
-		t.Sector = newSector
-	}
 }
 
 // ClipMovement adjusts the movement vector (dx, dy) to prevent collisions with walls or impassable terrain boundaries.

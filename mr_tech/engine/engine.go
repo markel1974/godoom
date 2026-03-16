@@ -43,6 +43,7 @@ type Engine struct {
 	sectorsMaxHeight float64
 	manager          *EntityManager
 	playerEnt        *physics.Entity
+	sectorTree       *physics.AABBTree
 }
 
 // NewEngine initializes and returns a new Engine instance with specified width, height, and maximum render queue size.
@@ -56,6 +57,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		things:           nil,
 		sectorsMaxHeight: 0,
 		manager:          nil,
+		sectorTree:       nil,
 		thingsDict:       make(map[string]*model.Thing),
 	}
 }
@@ -106,9 +108,12 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	if err != nil {
 		return err
 	}
+	sectors := compiler.GetSectors()
+	e.sectorTree = e.BuildSectorTree(sectors)
+
 	e.player = model.NewPlayer(cfg.Player, playerSector, false)
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
-	if err = e.portal.Setup(compiler.GetSectors()); err != nil {
+	if err = e.portal.Setup(sectors); err != nil {
 		return err
 	}
 	e.sectorsMaxHeight = compiler.GetMaxHeight()
@@ -117,21 +122,12 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	pX, pY := e.player.GetXY()
 	e.playerEnt = e.manager.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
 	e.things = compiler.GetThings()
-	for _, thing := range compiler.GetThings() {
+	for _, thing := range e.things {
 		tP := thing.Position
 		e.thingsDict[thing.Id] = thing
 		e.manager.Spawn(thing.Id, tP.X, tP.Y, thing.Radius, thing.Mass)
 	}
 	return nil
-}
-
-// ComputeOLD performs calculations for rendering, updates player and tree states, and returns visible sectors, count, and entities.
-func (e *Engine) ComputeOLD(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
-	vi.Compute(player)
-	cs, count := e.portal.Compute(vi)
-	player.Compute(vi)
-	e.manager.Compute()
-	return cs, count, e.things
 }
 
 func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
@@ -183,12 +179,21 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 
 			if math.Abs(tDx) > 0.001 || math.Abs(tDy) > 0.001 {
 				// 3. Traslazione del modello logico
-				t.MoveApply(tDx, tDy)
+				x, y := t.ClipMovement(tDx, tDy)
+				t.MoveApply(x, y)
 
 				// 5. Retro-Correzione (Sync-Back) AABB fisico
 				r := physEnt.GetWidth() / 2.0
 				physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
 				e.manager.UpdateObject(physEnt)
+
+				if newSector := t.Sector.LocateSector(t.Position.X, t.Position.Y); newSector != nil {
+					t.Sector = newSector
+				} else {
+					if newSector = e.SectorSearch(physEnt, t.Position.X, t.Position.Y); newSector != nil {
+						t.Sector = newSector
+					}
+				}
 			}
 		}
 	}
@@ -232,4 +237,29 @@ func (e *Engine) moveEnemies() {
 			}
 		}
 	}
+}
+
+// SectorSearch esegue il test di inclusione esatta sui settori candidati filtrati dall'AABBTree.
+func (e *Engine) SectorSearch(src *physics.Entity, px, py float64) *model.Sector {
+	candidates := e.sectorTree.QueryOverlaps(src)
+	for _, c := range candidates {
+		sector, ok := c.(*model.Sector)
+		if !ok {
+			continue
+		}
+		if target := sector.LocateSector(px, py); target != nil {
+			return target
+		}
+	}
+	return nil
+}
+
+// BuildSectorTree genera l'albero spaziale statico
+func (e *Engine) BuildSectorTree(sectors []*model.Sector) *physics.AABBTree {
+	tree := physics.NewAABBTree(uint(len(sectors)))
+	for _, s := range sectors {
+		s.ComputeAABB()
+		tree.InsertObject(s)
+	}
+	return tree
 }

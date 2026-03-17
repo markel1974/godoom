@@ -1,32 +1,8 @@
 package model
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
-
-// segment represents an internal 2D segment structure with start and end points, sector reference, and index.
-type segment struct {
-	start  XY
-	end    XY
-	sector *Sector
-	np     int
-}
-
-type edgeKey struct {
-	x1, y1, x2, y2 int64
-}
-
-func makeEdgeKey(start XY, end XY) edgeKey {
-	const precision = 1000.0
-	return edgeKey{
-		x1: int64(math.Round(start.X * precision)),
-		y1: int64(math.Round(start.Y * precision)),
-		x2: int64(math.Round(end.X * precision)),
-		y2: int64(math.Round(end.Y * precision)),
-	}
-}
 
 // Sectors represents a collection of Sector instances, organized in an AABBTree for efficient spatial queries.
 type Sectors struct {
@@ -90,13 +66,13 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 }
 
 // MakeSegmentsCache builds a map of edgeKey to segment, representing all unique segments in the sectors.
-func (s *Sectors) MakeSegmentsCache() map[edgeKey]*segment {
-	t := make(map[edgeKey]*segment)
+func (s *Sectors) MakeSegmentsCache() map[EdgeKey]*EdgeSegment {
+	t := make(map[EdgeKey]*EdgeSegment)
 	for _, sect := range s.sectors {
 		for np := 0; np < len(sect.Segments); np++ {
-			s := sect.Segments[np]
-			hash := makeEdgeKey(s.Start, s.End)
-			ld := &segment{sector: sect, np: np, start: s.Start, end: s.End}
+			seg := sect.Segments[np]
+			hash := seg.MakeStraightEdgeKey()
+			ld := &EdgeSegment{sector: sect, np: np, start: seg.Start, end: seg.End}
 			if fld, ok := t[hash]; ok {
 				if sect.Id != fld.sector.Id {
 					//fmt.Println("line segment already added", sect.Id, fld.Sector.Id, hash, np)

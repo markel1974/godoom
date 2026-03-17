@@ -183,7 +183,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 		for _, sector := range sectors.GetSectors() {
 			for np, s := range sector.Segments {
 				if s.Kind != DefinitionWall {
-					if ld, ok := lineDefsCache[makeEdgeKey(s.End, s.Start)]; ok {
+					if ld, ok := lineDefsCache[s.MakeReverseEdgeKey()]; ok {
 						if s.Ref != ld.sector.Id {
 							fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
 							if s.Kind == DefinitionUnknown {

@@ -252,12 +252,11 @@ func (p *Player) GetKneePosition() float64 {
 
 // MoveEntityApply synchronizes the player's position with the associated entity's center coordinates.
 func (p *Player) MoveEntityApply() {
-	newPx := p.entity.GetCenterX()
-	newPy := p.entity.GetCenterY()
 	pX, pY := p.GetXY()
-	dx := newPx - pX
-	dy := newPy - pY
-	if math.Abs(dx) > 0.001 || math.Abs(dy) > 0.001 {
+	eX, eY := p.entity.GetCenterXY()
+	dx := eX - pX
+	dy := eY - pY
+	if math.Abs(dx) > minMovement || math.Abs(dy) > minMovement {
 		p.MoveApply(dx, dy)
 	}
 }
@@ -267,11 +266,11 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	if dx == 0 && dy == 0 {
 		return
 	}
-	// 1. Apply the atomic vector and obtain the final coordinates
+	// Apply the atomic vector and obtain the final coordinates
 	p.AddXY(dx, dy)
 	px, py := p.GetXY()
 
-	// 2. Spatial stability check: are we still inside the same sector?
+	// Spatial stability check: are we still inside the same sector?
 	if newSector := p.sectors.SectorSearch(p.sector, px, py); newSector != nil {
 		p.sector = newSector
 	}
@@ -294,21 +293,21 @@ func (p *Player) Compute(vi *ViewMatrix) {
 
 	headPos := p.GetHeadPosition()
 	kneePos := p.GetKneePosition()
-	dx, dy := p.GetVelocity()
+	velX, velY := p.GetVelocity()
+	viewX, viewY := vi.GetXY()
+	pX := viewX + velX
+	pY := viewY + velY
 
 	// Micro-loop per predizione collisioni multiple
 	for iter := 0; iter < maxIter; iter++ {
 		hit := false
 		pSector := p.GetSector()
-		px, py := vi.GetXY()
-		p1 := px + dx
-		p2 := py + dy
 
 		for _, seg := range pSector.Segments {
 			start := seg.Start
 			end := seg.End
 
-			if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
+			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
 				holeLow := 9e9
 				holeHigh := -9e9
 				if seg.Sector != nil {
@@ -322,17 +321,17 @@ func (p *Player) Compute(vi *ViewMatrix) {
 					lenSq := xd*xd + yd*yd
 
 					if lenSq > 0 {
-						dot := dx*xd + dy*yd
-						dx = (xd * dot) / lenSq
-						dy = (yd * dot) / lenSq
+						dot := velX*xd + velY*yd
+						velX = (xd * dot) / lenSq
+						velY = (yd * dot) / lenSq
 
 						invLen := 1.0 / math.Sqrt(lenSq)
 						nx := -yd * invLen
 						ny := xd * invLen
 
 						epsilon := 0.005
-						dx += nx * epsilon
-						dy += ny * epsilon
+						velX += nx * epsilon
+						velY += ny * epsilon
 					}
 					hit = true
 					break // Vettore modificato, ri-valuta contro la geometria
@@ -351,5 +350,5 @@ func (p *Player) Compute(vi *ViewMatrix) {
 		p.velocity.Y = 0
 	}
 
-	p.MoveApply(dx, dy)
+	p.MoveApply(velX, velY)
 }

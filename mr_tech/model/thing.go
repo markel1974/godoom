@@ -80,8 +80,8 @@ func (t *Thing) GetCeilY() float64 {
 	return t.sector.CeilY
 }
 
-// Move updates the Thing's direction and position based on the player's coordinates and its current speed.
-func (t *Thing) Move(playerX float64, playerY float64) {
+// Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
+func (t *Thing) Compute(playerX float64, playerY float64) {
 	if t.speed == 0 {
 		return
 	}
@@ -96,34 +96,33 @@ func (t *Thing) Move(playerX float64, playerY float64) {
 	}
 }
 
+// MoveApply adjusts the Thing's position and updates its sector affiliation and physical bounds accordingly.
+func (t *Thing) MoveApply(tx float64, ty float64) {
+	x, y := t.clipMovement(tx, ty)
+	t.position.X += x
+	t.position.Y += y
+	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
+		t.sector = newSector
+	}
+	// 4. Retro-Correzione (Sync-Back) AABB fisico
+	r := t.entity.GetWidth() / 2.0
+	t.entity.MoveTo(t.position.X-r, t.position.Y-r)
+	t.entities.UpdateObject(t.entity)
+}
+
 // MoveEntityApply processes the logical and physical movement of the entity, adjusting positions and sector affiliations.
 func (t *Thing) MoveEntityApply() {
-	tPx := t.entity.GetCenterX()
-	tPy := t.entity.GetCenterY()
-
-	// 1. Delta Passivo (rimbalzi calcolati da SetupCollision)
-	tDx := tPx - t.position.X
-	tDy := tPy - t.position.Y
-
-	// 2. Delta Attivo (Kinematic Drive) aggiunto solo se c'è intenzionalità
+	ex, ey := t.entity.GetCenterXY()
+	// Passive Delta (bounces computed by SetupCollision)
+	tx := ex - t.position.X
+	ty := ey - t.position.Y
+	// Active Delta (Kinematic Drive) added only if there is intentionality
 	if t.entity.G > 0 {
-		tDx += t.entity.Vx
-		tDy += t.entity.Vy
+		tx += t.entity.Vx
+		ty += t.entity.Vy
 	}
-
-	if math.Abs(tDx) > 0.001 || math.Abs(tDy) > 0.001 {
-		// 3. Traslazione del modello logico
-		x, y := t.clipMovement(tDx, tDy)
-		t.position.X += x
-		t.position.Y += y
-		if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-			t.sector = newSector
-		}
-
-		// 4. Retro-Correzione (Sync-Back) AABB fisico
-		r := t.entity.GetWidth() / 2.0
-		t.entity.MoveTo(t.position.X-r, t.position.Y-r)
-		t.entities.UpdateObject(t.entity)
+	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
+		t.MoveApply(tx, ty)
 	}
 }
 
@@ -132,7 +131,7 @@ func (t *Thing) MoveEntityApply() {
 func (t *Thing) clipMovement(dx float64, dy float64) (float64, float64) {
 	const maxIter = 3
 
-	// Le Thing poggiano sul pavimento. Simuliamo l'altezza testa/ginocchia per i dislivelli
+	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
 	kneePos := t.sector.FloorY + 2.0
 
@@ -154,7 +153,7 @@ func (t *Thing) clipMovement(dx float64, dy float64) (float64, float64) {
 					holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
 				}
 
-				// Se il segmento è un muro solido o un gradino troppo alto/basso
+				// If the segment is a solid wall or a step too high/low
 				if holeHigh < headPos || holeLow > kneePos {
 					xd := end.X - start.X
 					yd := end.Y - start.Y
@@ -174,7 +173,7 @@ func (t *Thing) clipMovement(dx float64, dy float64) (float64, float64) {
 						dy += ny * epsilon
 					}
 					hit = true
-					break // Vettore deviato, ricalcola contro gli altri muri
+					break // Vector deflected, recalculate against other walls
 				}
 			}
 		}

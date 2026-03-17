@@ -91,13 +91,8 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 		return err
 	}
 
-	//e.manager = model.NewEntities(uint(1 + len(e.things)))
-	//pX, pY := e.player.GetXY()
-	//e.playerEnt = e.manager.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
 	for _, thing := range e.things {
-		//	tP := thing.Position
 		e.thingsDict[thing.GetId()] = thing
-		//	e.manager.Spawn(thing.Id, tP.X, tP.Y, thing.Radius, thing.Mass)
 	}
 	return nil
 }
@@ -107,7 +102,10 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	vi.Compute(player)
 
 	// 2. AI & Forze Esterne: Svegliamo le entità PRIMA del calcolo fisico
-	e.moveEnemies()
+	pX, pY := e.player.GetXY()
+	for _, t := range e.things {
+		t.Compute(pX, pY)
+	}
 
 	// 3. Moto Statico Player
 	player.Compute(vi)
@@ -119,8 +117,8 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	e.player.MoveEntityApply()
 
 	// 5b. Sync Up (Physics -> Model) - Things
-	for _, physEnt := range entities {
-		if t, ok := e.thingsDict[physEnt.GetId()]; ok {
+	for _, ent := range entities {
+		if t, ok := e.thingsDict[ent.GetId()]; ok {
 			t.MoveEntityApply()
 		}
 	}
@@ -131,12 +129,4 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	cs, count := e.portal.Compute(vi)
 
 	return cs, count, e.things
-}
-
-func (e *Engine) moveEnemies() {
-	pX, pY := e.player.GetXY()
-
-	for _, t := range e.things {
-		t.Move(pX, pY)
-	}
 }

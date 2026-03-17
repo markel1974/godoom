@@ -82,6 +82,11 @@ func (r *Rect) MoveToY(y float64) {
 	r.rebuild()
 }
 
+// GetCenterXY returns the x and y coordinates of the rectangle's center as a pair of float64 values.
+func (r *Rect) GetCenterXY() (float64, float64) {
+	return r.center.x, r.center.y
+}
+
 // GetCenterX returns the x-coordinate of the center point of the rectangle.
 func (r *Rect) GetCenterX() float64 {
 	return r.center.x

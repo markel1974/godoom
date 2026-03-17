@@ -4,6 +4,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+const minMovement = 0.001
+
 // Entities is responsible for managing entities and their spatial relationships within an AABBTree structure.
 type Entities struct {
 	tree     *physics.AABBTree

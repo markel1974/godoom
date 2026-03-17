@@ -719,11 +719,15 @@ func (w *RenderOpenGL) doRun() {
 				w.doDebugMoveSector(true)
 			case pixels.KeyB:
 				w.doDebugMoveSector(false)
+
 			}
 		}
 
 		w.doPlayerMoves(impulse, up, down, left, right)
 
+		if w.win.JustPressed(pixels.KeyF) {
+			w.doPlayerFire()
+		}
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
 			w.doDebugMoveSectorToggle()
@@ -775,6 +779,11 @@ func (w *RenderOpenGL) doRender() {
 			w.glRenderSky(proj, view, cSky)
 		}
 	})
+}
+
+func (w *RenderOpenGL) doPlayerFire() {
+	x, y := w.player.GetPosition()
+	w.engine.Fire(w.player.GetSector(), x, y, w.player.GetRealAngle())
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.

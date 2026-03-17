@@ -29,6 +29,8 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 // Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
 func (t *ThingBullet) Compute(playerX float64, playerY float64) {
 	if t.speed == 0 {
+		t.entity.Invalidate()
+		//TODO REMOVE!!!!
 		return
 	}
 
@@ -43,6 +45,7 @@ func (t *ThingBullet) Compute(playerX float64, playerY float64) {
 		// Hit/explosion logic, damage application and entity removal
 		t.speed = 0
 		t.entity.Invalidate()
+		//TODO REMOVE!!!!
 	}
 }
 

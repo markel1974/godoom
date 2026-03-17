@@ -102,7 +102,7 @@ func (em *Entities) UpdateThing(thing IThing, px float64, py float64) {
 }
 
 // AddThing adds an IThing instance to the Entities collection, sets its identifier, and inserts it into the AABB tree.
-func (em *Entities) AddThing(ent IThing) IThing {
+func (em *Entities) AddThing(ent IThing) {
 	em.entities[em.identifier] = ent
 	ent.SetIdentifier(em.identifier)
 	em.identifier++
@@ -110,5 +110,4 @@ func (em *Entities) AddThing(ent IThing) IThing {
 		em.moving = make([]IThing, len(em.entities)*2)
 	}
 	em.tree.InsertObject(ent)
-	return ent
 }

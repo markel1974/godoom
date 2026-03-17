@@ -4,6 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
 // Engine provides the core functionality for rendering, entity management, and spatial computations in a 3D environment.
@@ -18,6 +19,7 @@ type Engine struct {
 	entities         *model.Entities
 	player           *model.ThingPlayer
 	sectorTree       *model.Sectors
+	config           *model.ConfigRoot
 }
 
 // NewEngine initializes and returns a new instance of Engine with the specified width, height, and maxQueue size.
@@ -32,6 +34,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		entities:         nil,
 		sectorTree:       nil,
 		player:           nil,
+		config:           nil,
 	}
 }
 
@@ -72,6 +75,7 @@ func (e *Engine) Len() int {
 
 // Setup initializes the Engine by configuring its components using the provided configuration and setting up internal resources.
 func (e *Engine) Setup(cfg *model.ConfigRoot) error {
+	e.config = cfg
 	compiler := model.NewCompiler()
 	if err := compiler.Setup(cfg); err != nil {
 		return err
@@ -89,6 +93,18 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 		return err
 	}
 	return nil
+}
+
+// Fire triggers the creation of a bullet in the specified sector at the given position and angle.
+func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64) {
+	//test zero index
+	c := e.config.Things[2]
+	id := utils.NextUUId()
+	pos := model.XY{X: x, Y: y}
+	cfg := model.NewConfigThing(id, pos, angle, model.ThingBulletDef, sector.Id, 1000.0, 1.0, 5.0, 1.0, c.Animation)
+	thing := model.NewThingBullet(cfg, e.config.GetAnimation(cfg.Animation), sector, e.sectorTree, e.entities)
+	e.things = append(e.things, thing)
+	//e.entities.AddThing(thing)
 }
 
 // Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.

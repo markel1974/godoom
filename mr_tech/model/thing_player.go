@@ -141,6 +141,10 @@ func (p *ThingPlayer) SetAngle(angle float64) {
 	p.angleCos = math.Cos(p.angle)
 }
 
+func (p *ThingPlayer) GetRealAngle() float64 {
+	return p.angle
+}
+
 // GetAngle returns the sine and cosine of the player's current angle as float64 values.
 func (p *ThingPlayer) GetAngle() (float64, float64) {
 	return p.angleSin, p.angleCos

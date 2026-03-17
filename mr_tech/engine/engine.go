@@ -9,27 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// TODO REMOVE
-var _enemies = map[int]bool{
-	3004: true,
-	9:    true,
-	65:   true,
-	3001: true,
-	3002: true,
-	58:   true,
-	3003: true,
-	69:   true,
-	3005: true,
-	3006: true,
-	68:   true,
-	71:   true,
-	66:   true,
-	67:   true,
-	64:   true,
-	16:   true,
-	7:    true,
-}
-
 // Engine represents the core game engine handling rendering, player interactions, and environment configuration.
 type Engine struct {
 	portal           *portal.Portal
@@ -189,6 +168,7 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	vi.Compute(player)
 
 	cs, count := e.portal.Compute(vi)
+
 	return cs, count, e.things
 }
 

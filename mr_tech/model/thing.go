@@ -9,6 +9,8 @@ import (
 type IThing interface {
 	GetId() string
 
+	GetKind() int
+
 	GetAnimation() *textures.Animation
 
 	GetPosition() XY

@@ -288,7 +288,7 @@ func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Ent
 		if sector == nil {
 			return nil, fmt.Errorf("can't find thing sector at %s", ct.Sector)
 		}
-		thing := NewEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		thing := NewThingEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
 		things = append(things, thing)
 	}
 	return things, nil

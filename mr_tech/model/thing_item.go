@@ -7,8 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Enemy represents a physical or logical entity in the environment with attributes like position, mass, and associated data.
-type Enemy struct {
+// ThingBase represents a physical or logical entity in the environment with attributes like position, mass, and associated data.
+type ThingBase struct {
 	id        string
 	position  XY
 	mass      float64
@@ -24,13 +24,13 @@ type Enemy struct {
 	entity    *physics.Entity
 }
 
-// NewEnemy creates and initializes a new Enemy instance with the specified configuration, animation, sector, and entities.
-func NewEnemy(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *Enemy {
+// NewThingBase creates and initializes a new ThingEnemy instance with the specified configuration, animation, sector, and entities.
+func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingEnemy {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius
 	y := cfg.Position.Y - cfg.Radius
-	thing := &Enemy{
+	thing := &ThingEnemy{
 		id:        cfg.Id,
 		position:  cfg.Position,
 		angle:     cfg.Angle,
@@ -50,53 +50,46 @@ func NewEnemy(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sector
 }
 
 // GetId returns the unique identifier of the Thing as a string.
-func (t *Enemy) GetId() string {
+func (t *ThingBase) GetId() string {
 	return t.id
 }
 
+func (t *ThingBase) GetKind() int {
+	return t.kind
+}
+
 // GetAnimation retrieves the animation associated with the Thing and returns it as a pointer to textures.Animation.
-func (t *Enemy) GetAnimation() *textures.Animation {
+func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
 // GetPosition retrieves the current position of the Thing as an XY value.
-func (t *Enemy) GetPosition() XY {
+func (t *ThingBase) GetPosition() XY {
 	return t.position
 }
 
 // GetLight retrieves the light source associated with the Thing's current sector and returns it as a pointer to Light.
-func (t *Enemy) GetLight() *Light {
+func (t *ThingBase) GetLight() *Light {
 	return t.sector.Light
 }
 
 // GetFloorY returns the Y-coordinate of the floor in the Thing's current sector as a float64.
-func (t *Enemy) GetFloorY() float64 {
+func (t *ThingBase) GetFloorY() float64 {
 	return t.sector.FloorY
 }
 
 // GetCeilY retrieves the ceiling height of the sector associated with the Thing and returns it as a float64.
-func (t *Enemy) GetCeilY() float64 {
+func (t *ThingBase) GetCeilY() float64 {
 	return t.sector.CeilY
 }
 
 // Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
-func (t *Enemy) Compute(playerX float64, playerY float64) {
-	if t.speed == 0 {
-		return
-	}
-	dx := playerX - t.position.X
-	dy := playerY - t.position.Y
-	dist := math.Sqrt(dx*dx + dy*dy)
-	if dist < 25.0 {
-		invDist := 1.0 / dist
-		dirX := dx * invDist * t.speed
-		dirY := dy * invDist * t.speed
-		t.modifyDirection(dirX, dirY)
-	}
+func (t *ThingBase) Compute(playerX float64, playerY float64) {
+	//nothing to do
 }
 
 // MoveApply adjusts the Thing's position and updates its sector affiliation and physical bounds accordingly.
-func (t *Enemy) MoveApply(tx float64, ty float64) {
+func (t *ThingBase) MoveApply(tx float64, ty float64) {
 	x, y := t.clipMovement(tx, ty)
 	t.position.X += x
 	t.position.Y += y
@@ -110,7 +103,7 @@ func (t *Enemy) MoveApply(tx float64, ty float64) {
 }
 
 // MoveEntityApply processes the logical and physical movement of the entity, adjusting positions and sector affiliations.
-func (t *Enemy) MoveEntityApply() {
+func (t *ThingBase) MoveEntityApply() {
 	ex, ey := t.entity.GetCenterXY()
 	// Passive Delta (bounces computed by SetupCollision)
 	tx := ex - t.position.X
@@ -127,7 +120,7 @@ func (t *Enemy) MoveEntityApply() {
 
 // clipMovement adjusts movement vectors to handle collisions with environment walls or obstacles in a 2D space.
 // It takes initial deltas in X and Y directions (dx, dy) and returns the adjusted movement vector after collision checks.
-func (t *Enemy) clipMovement(velX float64, velY float64) (float64, float64) {
+func (t *ThingBase) clipMovement(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
 	kneePos := t.sector.FloorY + 2.0
@@ -139,7 +132,7 @@ func (t *Enemy) clipMovement(velX float64, velY float64) (float64, float64) {
 }
 
 // modifyDirection adjusts the velocity of the entity towards the specified direction with a constant acceleration factor.
-func (t *Enemy) modifyDirection(dirX, dirY float64) {
+func (t *ThingBase) modifyDirection(dirX, dirY float64) {
 	const acceleration = 0.15
 	t.entity.Vx = t.entity.Vx*(1-acceleration) + (dirX * acceleration)
 	t.entity.Vy = t.entity.Vy*(1-acceleration) + (dirY * acceleration)

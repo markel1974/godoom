@@ -781,6 +781,7 @@ func (w *RenderOpenGL) doRender() {
 	})
 }
 
+// doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
 func (w *RenderOpenGL) doPlayerFire() {
 	x, y := w.player.GetPosition()
 	w.engine.Fire(w.player.GetSector(), x, y, w.player.GetRealAngle())

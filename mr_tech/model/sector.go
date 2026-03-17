@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Sector represents a 3D environment component, defined by its boundaries, textures, lighting, and associated segments.
+// Sector represents a 3D space defined by its boundaries, texture animations, lighting, and associated metadata.
 type Sector struct {
 	ModelId       uint16
 	Id            string
@@ -28,7 +28,7 @@ type Sector struct {
 	LastCompileId uint64
 }
 
-// NewSector initializes and returns a new Sector instance with the given modelId, id, and segments.
+// NewSector initializes and returns a new Sector instance with specified parameters including model ID, ID, segments, floor, and ceiling.
 func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.Animation, ceil *textures.Animation) *Sector {
 	s := &Sector{
 		ModelId:    modelId,
@@ -45,7 +45,7 @@ func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.A
 	return s
 }
 
-// Reference resets or updates the Sector's state based on the provided compileId, managing usage count and references.
+// Reference updates the sector's compile ID if it differs or increments its usage count if it matches.
 func (s *Sector) Reference(compileId uint64) {
 	if compileId != s.compileId {
 		s.compileId = compileId
@@ -56,28 +56,28 @@ func (s *Sector) Reference(compileId uint64) {
 	}
 }
 
-// GetCompileId returns the current compile ID associated with the Sector instance.
+// GetCompileId retrieves the unique compile ID associated with the Sector instance.
 func (s *Sector) GetCompileId() uint64 {
 	return s.compileId
 }
 
-// GetUsage returns the current usage count of the Sector.
+// GetUsage retrieves the current usage count for the Sector instance.
 func (s *Sector) GetUsage() int {
 	return s.usage
 }
 
-// Add marks the specified ID as referenced in the sector's internal references map.
+// Add registers the given ID in the sector's references map by setting its value to true.
 func (s *Sector) Add(id uint64) {
 	s.references[id] = true
 }
 
-// Has checks whether the given id exists in the Sector's references map and returns true if it is found, false otherwise.
+// Has checks if the given `id` exists in the `references` map and returns true if it does, otherwise false.
 func (s *Sector) Has(id uint64) bool {
 	_, ok := s.references[id]
 	return ok
 }
 
-// IsVisible determines if the range [x1, x2] is visible, updating the visibility spans if the compile ID has changed.
+// IsVisible determines if a range [x1, x2] is not occluded and visible based on the provided identifier id.
 func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
 	if s.LastCompileId != id {
 		s.VisibleSpans = s.VisibleSpans[:0]
@@ -92,8 +92,7 @@ func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
 	return true
 }
 
-// AddSpan inserisce un nuovo segmento di occlusione (es. muro solido disegnato)
-// fondendolo con eventuali span adiacenti o sovrapposti in tempo reale.
+// AddSpan merges a new span defined by x1 and x2 into the VisibleSpans of the Sector, ensuring proper ordering and overlap handling.
 func (s *Sector) AddSpan(x1 float64, x2 float64) {
 	var merged [][2]float64
 	inserted := false
@@ -130,9 +129,7 @@ func (s *Sector) AddSpan(x1 float64, x2 float64) {
 	s.VisibleSpans = merged
 }
 
-// LocateSector esegue un topological walk partendo dal settore 's'.
-// Ritorna il settore contenente (px, py), oppure nil se il punto è fuori dalla mesh
-// o se si innesca un ciclo (precisione FP), caso in cui il chiamante deve usare l'AABB tree.
+// LocateSector identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
 func (s *Sector) LocateSector(px, py float64) *Sector {
 	curr := s
 	const maxSteps = 16 // Safeguard per loop infiniti da approssimazioni floating-point
@@ -166,7 +163,7 @@ func (s *Sector) LocateSector(px, py float64) *Sector {
 	return nil
 }
 
-// Print converts the Sector instance into a JSON-formatted string, optionally indented for readability.
+// Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
 func (s *Sector) Print(indent bool) string {
 	type printerSegment struct {
 		Start XY
@@ -196,10 +193,12 @@ func (s *Sector) Print(indent bool) string {
 	return string(d)
 }
 
+// GetAABB returns the axis-aligned bounding box (AABB) associated with the Sector instance.
 func (s *Sector) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
+// ComputeAABB calculates and updates the axis-aligned bounding box (AABB) for the sector based on its segments.
 func (s *Sector) ComputeAABB() {
 	if len(s.Segments) == 0 {
 		s.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
@@ -239,4 +238,54 @@ func (s *Sector) ComputeAABB() {
 
 	// Assumendo 2D o altezza gestita separatamente; Z può riflettere floor/ceiling se necessario
 	s.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
+}
+
+// ClipVelocity adjusts the velocity vector (velX, velY) for collision detection and resolution within the current sector.
+func (s *Sector) ClipVelocity(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
+	const maxIter = 3
+
+	// Micro-loop per predizione collisioni multiple
+	for iter := 0; iter < maxIter; iter++ {
+		hit := false
+
+		for _, seg := range s.Segments {
+			start := seg.Start
+			end := seg.End
+
+			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
+				holeLow := 9e9
+				holeHigh := -9e9
+				if seg.Sector != nil {
+					holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
+					holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
+				}
+
+				if holeHigh < headPos || holeLow > kneePos {
+					xd := end.X - start.X
+					yd := end.Y - start.Y
+					lenSq := xd*xd + yd*yd
+
+					if lenSq > 0 {
+						dot := velX*xd + velY*yd
+						velX = (xd * dot) / lenSq
+						velY = (yd * dot) / lenSq
+
+						invLen := 1.0 / math.Sqrt(lenSq)
+						nx := -yd * invLen
+						ny := xd * invLen
+
+						epsilon := 0.005
+						velX += nx * epsilon
+						velY += ny * epsilon
+					}
+					hit = true
+					break // Vettore modificato, ri-valuta contro la geometria
+				}
+			}
+		}
+		if !hit {
+			break // Traiettoria stabilizzata
+		}
+	}
+	return velX, velY
 }

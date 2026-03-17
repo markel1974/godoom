@@ -3,7 +3,6 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -128,60 +127,15 @@ func (t *Thing) MoveEntityApply() {
 
 // clipMovement adjusts movement vectors to handle collisions with environment walls or obstacles in a 2D space.
 // It takes initial deltas in X and Y directions (dx, dy) and returns the adjusted movement vector after collision checks.
-func (t *Thing) clipMovement(dx float64, dy float64) (float64, float64) {
-	const maxIter = 3
-
+func (t *Thing) clipMovement(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
 	kneePos := t.sector.FloorY + 2.0
-
-	for iter := 0; iter < maxIter; iter++ {
-		hit := false
-		px, py := t.position.X, t.position.Y
-		p1 := px + dx
-		p2 := py + dy
-
-		for _, seg := range t.sector.Segments {
-			start := seg.Start
-			end := seg.End
-
-			if mathematic.IntersectLineSegmentsF(px, py, p1, p2, start.X, start.Y, end.X, end.Y) {
-				holeLow := 9e9
-				holeHigh := -9e9
-				if seg.Sector != nil {
-					holeLow = mathematic.MaxF(t.sector.FloorY, seg.Sector.FloorY)
-					holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
-				}
-
-				// If the segment is a solid wall or a step too high/low
-				if holeHigh < headPos || holeLow > kneePos {
-					xd := end.X - start.X
-					yd := end.Y - start.Y
-					lenSq := xd*xd + yd*yd
-
-					if lenSq > 0 {
-						dot := dx*xd + dy*yd
-						dx = (xd * dot) / lenSq
-						dy = (yd * dot) / lenSq
-
-						invLen := 1.0 / math.Sqrt(lenSq)
-						nx := -yd * invLen
-						ny := xd * invLen
-
-						epsilon := 0.005
-						dx += nx * epsilon
-						dy += ny * epsilon
-					}
-					hit = true
-					break // Vector deflected, recalculate against other walls
-				}
-			}
-		}
-		if !hit {
-			break
-		}
-	}
-	return dx, dy
+	viewX, viewY := t.position.X, t.position.Y
+	pX := viewX + velX
+	pY := viewY + velY
+	velX, velY = t.sector.ClipVelocity(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	return velX, velY
 }
 
 // modifyDirection adjusts the velocity of the entity towards the specified direction with a constant acceleration factor.

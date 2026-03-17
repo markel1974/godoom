@@ -284,8 +284,6 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 
 // Compute updates the player's position and velocity based on collision detection and sector constraints.
 func (p *Player) Compute(vi *ViewMatrix) {
-	const maxIter = 3
-
 	p.VerticalCollision()
 	if !p.IsMoving() {
 		return
@@ -293,55 +291,12 @@ func (p *Player) Compute(vi *ViewMatrix) {
 
 	headPos := p.GetHeadPosition()
 	kneePos := p.GetKneePosition()
-	velX, velY := p.GetVelocity()
 	viewX, viewY := vi.GetXY()
+	velX, velY := p.GetVelocity()
 	pX := viewX + velX
 	pY := viewY + velY
 
-	// Micro-loop per predizione collisioni multiple
-	for iter := 0; iter < maxIter; iter++ {
-		hit := false
-		pSector := p.GetSector()
-
-		for _, seg := range pSector.Segments {
-			start := seg.Start
-			end := seg.End
-
-			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
-				holeLow := 9e9
-				holeHigh := -9e9
-				if seg.Sector != nil {
-					holeLow = mathematic.MaxF(pSector.FloorY, seg.Sector.FloorY)
-					holeHigh = mathematic.MinF(pSector.CeilY, seg.Sector.CeilY)
-				}
-
-				if holeHigh < headPos || holeLow > kneePos {
-					xd := end.X - start.X
-					yd := end.Y - start.Y
-					lenSq := xd*xd + yd*yd
-
-					if lenSq > 0 {
-						dot := velX*xd + velY*yd
-						velX = (xd * dot) / lenSq
-						velY = (yd * dot) / lenSq
-
-						invLen := 1.0 / math.Sqrt(lenSq)
-						nx := -yd * invLen
-						ny := xd * invLen
-
-						epsilon := 0.005
-						velX += nx * epsilon
-						velY += ny * epsilon
-					}
-					hit = true
-					break // Vettore modificato, ri-valuta contro la geometria
-				}
-			}
-		}
-		if !hit {
-			break // Traiettoria stabilizzata
-		}
-	}
+	velX, velY = p.sector.ClipVelocity(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
 
 	if math.Abs(p.velocity.X) < 0.001 {
 		p.velocity.X = 0

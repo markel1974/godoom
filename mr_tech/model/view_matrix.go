@@ -31,8 +31,8 @@ func NewViewMatrix() *ViewMatrix {
 	return &ViewMatrix{}
 }
 
-// Compute updates the ViewMatrix's position, orientation, sector, and lighting based on the given Player's state.
-func (vi *ViewMatrix) Compute(player *Player) {
+// Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given Player's state.
+func (vi *ViewMatrix) Update(player *Player) {
 	vi.angleSin, vi.angleCos = player.GetAngle()
 	vi.sector = player.GetSector()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()

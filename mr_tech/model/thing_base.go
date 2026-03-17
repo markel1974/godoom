@@ -69,8 +69,8 @@ func (t *ThingBase) GetSector() *Sector {
 }
 
 // GetPosition retrieves the current position of the Thing as an XY value.
-func (t *ThingBase) GetPosition() XY {
-	return t.position
+func (t *ThingBase) GetPosition() (float64, float64) {
+	return t.position.X, t.position.Y
 }
 
 // GetLight retrieves the light source associated with the Thing's current sector and returns it as a pointer to Light.

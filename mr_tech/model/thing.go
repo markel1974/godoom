@@ -13,7 +13,7 @@ type IThing interface {
 
 	GetAnimation() *textures.Animation
 
-	GetPosition() XY
+	GetPosition() (float64, float64)
 
 	GetLight() *Light
 

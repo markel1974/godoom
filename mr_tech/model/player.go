@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // EyeHeight represents the height of the eye level in units.
@@ -20,6 +21,8 @@ const (
 
 // Player represents a player entity with position, velocity, angle, yaw, sector, states, and lighting attributes.
 type Player struct {
+	id             string
+	kind           int
 	where          XYZ
 	velocity       XYZ
 	angle          float64
@@ -47,6 +50,8 @@ func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entities *En
 	y := cfg.Position.Y - cfg.Radius
 
 	p := &Player{
+		id:             "PLAYER",
+		kind:           0,
 		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
 		velocity:       XYZ{},
 		yaw:            0,
@@ -61,8 +66,42 @@ func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entities *En
 		entity:         physics.NewEntity(x, y, w, h, cfg.Mass),
 	}
 	p.SetAngle(cfg.Angle)
-	p.entities.AddEntity("PLAYER", p.entity)
+	p.entities.AddEntity(p.id, p.entity)
 	return p
+}
+
+// GetId retrieves the unique identifier of the Player instance.
+func (p *Player) GetId() string {
+	return p.id
+}
+
+// GetKind retrieves the kind or type classification of the Player as an integer value.
+func (p *Player) GetKind() int {
+	return 0
+}
+
+// GetAnimation retrieves the current animation associated with the Player instance.
+func (p *Player) GetAnimation() *textures.Animation {
+	return nil
+}
+
+// GetLight returns a pointer to the Light object associated with the Player.
+func (p *Player) GetLight() *Light {
+	return nil
+}
+
+// GetFloorY returns the Y-coordinate of the floor associated with the player's current sector.
+func (p *Player) GetFloorY() float64 {
+	return p.sector.FloorY
+}
+
+// GetCeilY returns the ceiling Y coordinate of the sector the player is currently located in.
+func (p *Player) GetCeilY() float64 {
+	return p.sector.CeilY
+}
+
+// Compute performs a calculation based on the provided float64 arguments using the Player instance.
+func (p *Player) Compute(_ float64, _ float64) {
 }
 
 // AddAngle increments the player's current angle by the specified value and updates related trigonometric properties.
@@ -136,8 +175,8 @@ func (p *Player) SetDucking() {
 	}
 }
 
-// GetXY returns the X and Y coordinates of the player's current position.
-func (p *Player) GetXY() (float64, float64) {
+// GetPosition returns the X and Y coordinates of the player's current position.
+func (p *Player) GetPosition() (float64, float64) {
 	return p.where.X, p.where.Y
 }
 
@@ -252,7 +291,7 @@ func (p *Player) GetKneePosition() float64 {
 
 // MoveEntityApply synchronizes the player's position with the associated entity's center coordinates.
 func (p *Player) MoveEntityApply() {
-	pX, pY := p.GetXY()
+	pX, pY := p.GetPosition()
 	eX, eY := p.entity.GetCenterXY()
 	dx := eX - pX
 	dy := eY - pY
@@ -268,7 +307,7 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	}
 	// Apply the atomic vector and obtain the final coordinates
 	p.AddXY(dx, dy)
-	px, py := p.GetXY()
+	px, py := p.GetPosition()
 
 	// Spatial stability check: are we still inside the same sector?
 	if newSector := p.sectors.SectorSearch(p.sector, px, py); newSector != nil {
@@ -282,8 +321,8 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	p.entities.UpdateObject(p.entity)
 }
 
-// Compute updates the player's position and velocity based on collision detection and sector constraints.
-func (p *Player) Compute(vi *ViewMatrix) {
+// Update updates the player's position and velocity based on collision detection and sector constraints.
+func (p *Player) Update(vi *ViewMatrix) {
 	p.VerticalCollision()
 	if !p.IsMoving() {
 		return

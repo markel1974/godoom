@@ -100,16 +100,16 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 // Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
 func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
 	// 1. Pre-Sync ViewMatrix
-	vi.Compute(player)
+	vi.Update(player)
 
 	// 2. AI & External Forces: Wake up entities BEFORE physics calculation
-	pX, pY := player.GetXY()
+	pX, pY := player.GetPosition()
 	for _, t := range e.things {
 		t.Compute(pX, pY)
 	}
 
 	// 3. Static Player Motion
-	player.Compute(vi)
+	player.Update(vi)
 
 	// 4. Dynamic Solver
 	entities := e.entities.Compute()
@@ -125,7 +125,7 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	}
 
 	// 7. Post-Sync ViewMatrix
-	vi.Compute(player)
+	vi.Update(player)
 
 	// 8. Portal Compute
 	cs, count := e.portal.Compute(vi)

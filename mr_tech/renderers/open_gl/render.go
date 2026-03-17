@@ -349,9 +349,9 @@ func (w *RenderOpenGL) pushThings(things []model.IThing) {
 		if t.GetAnimation() == nil {
 			continue
 		}
-		tPos := t.GetPosition()
-		dx := tPos.X - camX
-		dy := tPos.Y - camY
+		tPosX, tPosY := t.GetPosition()
+		dx := tPosX - camX
+		dy := tPosY - camY
 
 		queue = append(queue, SpriteNode{
 			Thing:  t,
@@ -390,15 +390,15 @@ func (w *RenderOpenGL) pushThings(things []model.IThing) {
 
 		// Vettore Right normalizzato e scalato per l'estensione del quad
 		halfW := width / 2.0
-		tPos := t.GetPosition()
-		rX := -((camY - tPos.Y) / dist) * halfW
-		rY := ((camX - tPos.X) / dist) * halfW
+		tPosX, tPosY := t.GetPosition()
+		rX := -((camY - tPosY) / dist) * halfW
+		rY := ((camX - tPosX) / dist) * halfW
 
 		// Coordinate planari dei due spigoli
-		v1x := float32(tPos.X - rX)
-		v1y := float32(tPos.Y - rY)
-		v2x := float32(tPos.X + rX)
-		v2y := float32(tPos.Y + rY)
+		v1x := float32(tPosX - rX)
+		v1y := float32(tPosY - rY)
+		v2x := float32(tPosX + rX)
+		v2y := float32(tPosY + rY)
 
 		// Quota verticale
 		zBottom := float32(t.GetFloorY())

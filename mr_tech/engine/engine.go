@@ -32,7 +32,6 @@ var _enemies = map[int]bool{
 
 // Engine represents the core game engine handling rendering, player interactions, and environment configuration.
 type Engine struct {
-	player           *model.Player
 	portal           *portal.Portal
 	textures         textures.ITextures
 	w                int
@@ -42,6 +41,7 @@ type Engine struct {
 	thingsDict       map[string]*model.Thing
 	sectorsMaxHeight float64
 	manager          *EntityManager
+	player           *model.Player
 	playerEnt        *physics.Entity
 	sectorTree       *model.Sectors
 }
@@ -49,7 +49,6 @@ type Engine struct {
 // NewEngine initializes and returns a new Engine instance with specified width, height, and maximum render queue size.
 func NewEngine(w int, h int, maxQueue int) *Engine {
 	return &Engine{
-		player:           nil,
 		portal:           nil,
 		w:                w,
 		h:                h,
@@ -58,6 +57,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		sectorsMaxHeight: 0,
 		manager:          nil,
 		sectorTree:       nil,
+		player:           nil,
 		thingsDict:       make(map[string]*model.Thing),
 	}
 }
@@ -104,19 +104,13 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	if err := compiler.Setup(cfg); err != nil {
 		return err
 	}
-	playerSector, err := compiler.Get(cfg.Player.Sector)
-	if err != nil {
-		return err
-	}
 	e.sectorTree = compiler.GetSectors()
-
-	e.player = model.NewPlayer(cfg.Player, playerSector, false)
+	e.player = compiler.GetPlayer()
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
-	if err = e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
+	if err := e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
 		return err
 	}
 	e.sectorsMaxHeight = compiler.GetMaxHeight()
-
 	e.manager = NewEntityManager(4096)
 	pX, pY := e.player.GetXY()
 	e.playerEnt = e.manager.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())

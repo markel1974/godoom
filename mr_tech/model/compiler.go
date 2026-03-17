@@ -22,6 +22,7 @@ const (
 type Compiler struct {
 	sectors          *Sectors
 	things           []*Thing
+	player           *Player
 	sectorsMaxHeight float64
 }
 
@@ -30,6 +31,7 @@ func NewCompiler() *Compiler {
 	return &Compiler{
 		sectors:          nil,
 		things:           nil,
+		player:           nil,
 		sectorsMaxHeight: 0,
 	}
 }
@@ -46,9 +48,44 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.finalize(cfg, r.sectors)
 
+	pSector := r.sectors.GetSector(cfg.Player.Sector)
+	if pSector == nil {
+		return fmt.Errorf("can't find player sector at %s", cfg.Player.Sector)
+	}
+	r.player = NewPlayer(cfg.Player, pSector, false)
+
 	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
 
 	return nil
+}
+
+// GetSectors retrieves the list of sectors associated with the Compiler instance.
+func (r *Compiler) GetSectors() *Sectors {
+	return r.sectors
+}
+
+// GetThings retrieves the list of compiled things associated with the Compiler instance.
+func (r *Compiler) GetThings() []*Thing {
+	return r.things
+}
+
+// GetPlayer retrieves the Player instance associated with the Compiler.
+func (r *Compiler) GetPlayer() *Player {
+	return r.player
+}
+
+// GetSector retrieves a Sector from the cache using the provided sectorId. Returns an error if the sectorId is invalid.
+func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
+	s := r.sectors.GetSector(sectorId)
+	if s == nil {
+		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
+	}
+	return s, nil
+}
+
+// GetMaxHeight returns the maximum height difference between the floor and ceiling among all sectors in the Compiler.
+func (r *Compiler) GetMaxHeight() float64 {
+	return r.sectorsMaxHeight
 }
 
 func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
@@ -275,28 +312,4 @@ func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) {
 			r.sectorsMaxHeight = h
 		}
 	}
-}
-
-// GetSectors retrieves the list of sectors associated with the Compiler instance.
-func (r *Compiler) GetSectors() *Sectors {
-	return r.sectors
-}
-
-// GetThings retrieves the list of compiled things associated with the Compiler instance.
-func (r *Compiler) GetThings() []*Thing {
-	return r.things
-}
-
-// Get retrieves a Sector from the cache using the provided sectorId. Returns an error if the sectorId is invalid.
-func (r *Compiler) Get(sectorId string) (*Sector, error) {
-	s := r.sectors.GetSector(sectorId)
-	if s == nil {
-		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
-	}
-	return s, nil
-}
-
-// GetMaxHeight returns the maximum height difference between the floor and ceiling among all sectors in the Compiler.
-func (r *Compiler) GetMaxHeight() float64 {
-	return r.sectorsMaxHeight
 }

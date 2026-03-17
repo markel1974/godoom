@@ -24,6 +24,7 @@ type Compiler struct {
 	things           []*Thing
 	player           *Player
 	sectorsMaxHeight float64
+	entities         *Entities
 }
 
 // NewCompiler initializes and returns a new instance of the Compiler type with default values.
@@ -33,30 +34,39 @@ func NewCompiler() *Compiler {
 		things:           nil,
 		player:           nil,
 		sectorsMaxHeight: 0,
+		entities:         nil,
 	}
 }
 
 // Setup initializes the sectors and segments for the compiler based on the provided configuration.
 func (r *Compiler) Setup(cfg *ConfigRoot) error {
-	sectors, totalSegments := r.compileSectors(cfg)
+	var totalSegments int
 
-	r.sectors = sectors
+	r.sectors, totalSegments = r.compileSectors(cfg)
+	r.compileLights(r.sectors)
 
-	r.compileLights(sectors)
+	r.sectorsMaxHeight = r.finalize(cfg, r.sectors)
 
-	r.things = r.compileThings(cfg, r.sectors)
+	var err error
 
-	r.finalize(cfg, r.sectors)
+	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
-	pSector := r.sectors.GetSector(cfg.Player.Sector)
-	if pSector == nil {
-		return fmt.Errorf("can't find player sector at %s", cfg.Player.Sector)
+	if r.things, err = r.createThings(cfg, r.sectors, r.entities); err != nil {
+		return err
 	}
-	r.player = NewPlayer(cfg.Player, pSector, r.sectors, false)
+
+	if r.player, err = r.createPlayer(cfg.Player, r.sectors, r.entities); err != nil {
+		return err
+	}
 
 	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
 
 	return nil
+}
+
+// GetEntities retrieves the Entities instance managed by the Compiler.
+func (r *Compiler) GetEntities() *Entities {
+	return r.entities
 }
 
 // GetSectors retrieves the list of sectors associated with the Compiler instance.
@@ -260,22 +270,31 @@ func (r *Compiler) compileLights(sectors *Sectors) {
 	}
 }
 
+func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *Entities) (*Player, error) {
+	pSector := r.sectors.GetSector(cfg.Sector)
+	if pSector == nil {
+		return nil, fmt.Errorf("can't find player sector at %s", cfg.Sector)
+	}
+	player := NewPlayer(cfg, pSector, sectors, entities, false)
+	return player, nil
+}
+
 // compileThings processes raw ConfigThing entities, resolving their sector references and storing them in the compiler.
-func (r *Compiler) compileThings(cfg *ConfigRoot, sectors *Sectors) []*Thing {
+func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Entities) ([]*Thing, error) {
 	var things []*Thing
 	for _, ct := range cfg.Things {
 		sector := sectors.GetSector(ct.Sector)
 		if sector == nil {
-			continue
+			return nil, fmt.Errorf("can't find thing sector at %s", ct.Sector)
 		}
-		thing := NewThing(ct, cfg.GetAnimation(ct.Animation), sector, sectors)
+		thing := NewThing(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
 		things = append(things, thing)
 	}
-	return things
+	return things, nil
 }
 
 // finalize adjusts player position and sector dimensions based on the scale factor and calculates the maximum sector height.
-func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) {
+func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) float64 {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
 		scale = 1
@@ -283,11 +302,11 @@ func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) {
 
 	cfg.Player.Position.Scale(scale)
 
-	for _, t := range r.things {
+	for _, t := range cfg.Things {
 		t.Position.Scale(scale)
 	}
 
-	r.sectorsMaxHeight = 0
+	sectorsMaxHeight := float64(0)
 	for _, sect := range sectors.GetSectors() {
 		//lights scale
 		sect.Light.pos.ScaleXY(scale)
@@ -298,7 +317,8 @@ func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) {
 		}
 		//maxHeight
 		if h := math.Abs(sect.CeilY - sect.FloorY); h > r.sectorsMaxHeight {
-			r.sectorsMaxHeight = h
+			sectorsMaxHeight = h
 		}
 	}
+	return sectorsMaxHeight
 }

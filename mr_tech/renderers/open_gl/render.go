@@ -357,12 +357,12 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 
 	// 1. Culling e calcolo distanza quadrica
 	for _, t := range things {
-		if t.Animation == nil {
+		if t.GetAnimation() == nil {
 			continue
 		}
-
-		dx := t.Position.X - camX
-		dy := t.Position.Y - camY
+		tPos := t.GetPosition()
+		dx := tPos.X - camX
+		dy := tPos.Y - camY
 
 		queue = append(queue, SpriteNode{
 			Thing:  t,
@@ -380,7 +380,7 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 	// 3. Billboarding Cilindrico e Batching VBO
 	for _, node := range queue {
 		t := node.Thing
-		tex := t.Animation.CurrentFrame()
+		tex := t.GetAnimation().CurrentFrame()
 		if tex == nil {
 			continue
 		}
@@ -390,7 +390,7 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 		}
 
 		texW, texH := tex.Size()
-		scaleW, scaleH := t.Animation.ScaleFactor()
+		scaleW, scaleH := t.GetAnimation().ScaleFactor()
 		width := float64(texW) * scaleW
 		height := float64(texH) * scaleH
 
@@ -401,21 +401,22 @@ func (w *RenderOpenGL) pushThings(things []*model.Thing) {
 
 		// Vettore Right normalizzato e scalato per l'estensione del quad
 		halfW := width / 2.0
-		rX := -((camY - t.Position.Y) / dist) * halfW
-		rY := ((camX - t.Position.X) / dist) * halfW
+		tPos := t.GetPosition()
+		rX := -((camY - tPos.Y) / dist) * halfW
+		rY := ((camX - tPos.X) / dist) * halfW
 
 		// Coordinate planari dei due spigoli
-		v1x := float32(t.Position.X - rX)
-		v1y := float32(t.Position.Y - rY)
-		v2x := float32(t.Position.X + rX)
-		v2y := float32(t.Position.Y + rY)
+		v1x := float32(tPos.X - rX)
+		v1y := float32(tPos.Y - rY)
+		v2x := float32(tPos.X + rX)
+		v2y := float32(tPos.Y + rY)
 
 		// Quota verticale
-		zBottom := float32(t.Sector.FloorY)
+		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
 		// --- LUCE IDENTICA A PUSH WALL ---
-		light, vLcX, vLcY, vLcZ := w.createLight(t.Sector.Light)
+		light, vLcX, vLcY, vLcZ := w.createLight(t.GetLight())
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)

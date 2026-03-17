@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // EyeHeight represents the height of the eye level in units.
@@ -33,11 +34,18 @@ type Player struct {
 	falling        bool
 	lightIntensity float64
 	sectors        *Sectors
+	entities       *Entities
+	entity         *physics.Entity
 	debug          bool
 }
 
 // NewPlayer creates a new Player instance with initial position, angle, sector, and debug configuration.
-func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, debug bool) *Player {
+func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entities *Entities, debug bool) *Player {
+	w := cfg.Radius * 2
+	h := cfg.Radius * 2
+	x := cfg.Position.X - cfg.Radius
+	y := cfg.Position.Y - cfg.Radius
+
 	p := &Player{
 		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
 		velocity:       XYZ{},
@@ -48,9 +56,12 @@ func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, debug bool) 
 		sector:         sector,
 		lightIntensity: 0.0039, // 1 / distance == 1 / 255
 		sectors:        sectors,
+		entities:       entities,
 		debug:          debug,
+		entity:         physics.NewEntity(x, y, w, h, cfg.Mass),
 	}
 	p.SetAngle(cfg.Angle)
+	p.entities.AddEntity("PLAYER", p.entity)
 	return p
 }
 
@@ -239,6 +250,18 @@ func (p *Player) GetKneePosition() float64 {
 	return p.where.Z - p.EyeHeight() + KneeHeight
 }
 
+// MoveEntityApply synchronizes the player's position with the associated entity's center coordinates.
+func (p *Player) MoveEntityApply() {
+	newPx := p.entity.GetCenterX()
+	newPy := p.entity.GetCenterY()
+	pX, pY := p.GetXY()
+	dx := newPx - pX
+	dy := newPy - pY
+	if math.Abs(dx) > 0.001 || math.Abs(dy) > 0.001 {
+		p.MoveApply(dx, dy)
+	}
+}
+
 // MoveApply updates the player's position based on the given displacement and handles sector transitions when necessary.
 func (p *Player) MoveApply(dx float64, dy float64) {
 	if dx == 0 && dy == 0 {
@@ -247,10 +270,17 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	// 1. Apply the atomic vector and obtain the final coordinates
 	p.AddXY(dx, dy)
 	px, py := p.GetXY()
+
 	// 2. Spatial stability check: are we still inside the same sector?
 	if newSector := p.sectors.SectorSearch(p.sector, px, py); newSector != nil {
 		p.sector = newSector
 	}
+
+	pRadius := p.entity.GetWidth() / 2.0
+	p.entity.MoveTo(px-pRadius, py-pRadius)
+	p.entity.Vx, p.entity.Vy = p.GetVelocity()
+
+	p.entities.UpdateObject(p.entity)
 }
 
 // Compute updates the player's position and velocity based on collision detection and sector constraints.

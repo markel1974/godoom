@@ -11,6 +11,16 @@ const (
 	friction = 0.9
 )
 
+// CalcDistance calculates the Euclidean distance between two points (x1, y1) and (x2, y2) in a 2D space.
+func CalcDistance(x1 float64, y1 float64, x2 float64, y2 float64) float64 {
+	d := (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)
+	sd := math.Sqrt(d)
+	if sd <= 0 {
+		sd = 0.01
+	}
+	return sd
+}
+
 // Entity represents a physics-based entity with properties for position, velocity, mass, and collision handling.
 type Entity struct {
 	Rect
@@ -24,27 +34,7 @@ type Entity struct {
 	G        float64
 	GForce   float64
 	impulse  float64
-	//breaker  *Entity
 	Collider *Entity
-}
-
-// calcG calculates a derived value based on the absolute velocities (Vx, Vy) and GForce of the given Entity.
-// Returns 0.0 if GForce is zero or the computed value otherwise.
-func calcG(e *Entity) float64 {
-	if e.GForce == 0.0 {
-		return 0.0
-	}
-	return (math.Abs(e.Vx) + math.Abs(e.Vy)) * e.GForce
-}
-
-// CalcDistance calculates the Euclidean distance between two points (x1, y1) and (x2, y2) in a 2D space.
-func CalcDistance(x1 float64, y1 float64, x2 float64, y2 float64) float64 {
-	d := (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)
-	sd := math.Sqrt(d)
-	if sd <= 0 {
-		sd = 0.01
-	}
-	return sd
 }
 
 // NewEntity creates and returns a new Entity instance with the specified position, dimensions, and mass.
@@ -62,14 +52,17 @@ func NewEntity(x float64, y float64, w float64, h float64, mass float64) *Entity
 		VxMin:    0.001,
 		VyMin:    0.001,
 		impulse:  0.001,
-		//breaker: nil,
 	}
 	return a
 }
 
+// GetId returns the unique identifier (Id) of the Entity as a string.
+func (e *Entity) GetId() string {
+	return e.Id
+}
+
 // Invalidate clears the collider association for the entity by resetting its collider reference.
 func (e *Entity) Invalidate() {
-	//e.clearBreaker()
 	e.clearCollider()
 }
 
@@ -102,14 +95,14 @@ func (e *Entity) SetupCollision(collider *Entity) {
 	vecCollision := Point{x: collider.center.x - e.center.x, y: collider.center.y - e.center.y}
 	vecCollisionNorm := Point{x: vecCollision.x / distance, y: vecCollision.y / distance}
 
-	// 2. EXACT calculation of relative velocity
+	// 2. Exact calculation of relative velocity
 	relVx := collider.Vx - e.Vx
 	relVy := collider.Vy - e.Vy
 
 	// 3. Dot product between relative velocity and collision normal
 	vRelDotN := relVx*vecCollisionNorm.x + relVy*vecCollisionNorm.y
 
-	// 4. EARLY EXIT: If vRelDotN > 0, entities are already moving apart.
+	// 4. Early exit: If vRelDotN > 0, entities are already moving apart.
 	// We only resolve positional penetration, no impulse transfer!
 	if vRelDotN < 0 {
 		// Coefficient of restitution (1.0 = perfectly elastic, 0.0 = inelastic)
@@ -139,10 +132,8 @@ func (e *Entity) SetupCollision(collider *Entity) {
 // SetupInelasticCollision configures inelastic collision properties for the entity with the given collider.
 func (e *Entity) SetupInelasticCollision(collider *Entity) {
 	e.Collider = collider
-	//e.breaker = collider
 	if collider != nil {
 		collider.Collider = e
-		//	collider.breaker.Collider = e
 	}
 	e.Friction = 0.7
 	e.Vx = -e.Vx
@@ -187,11 +178,6 @@ func (e *Entity) Compute() bool {
 			e.clearCollider()
 		}
 	}
-	//if e.breaker != nil {
-	//	if !e.hit(e.breaker) {
-	//		e.clearBreaker()
-	//	}
-	//}
 	if !e.isMoving() {
 		e.G = 0.0
 		return false
@@ -208,7 +194,7 @@ func (e *Entity) Compute() bool {
 		e.G = 0.0
 		return false
 	}
-	e.G = calcG(e)
+	e.G = e.calcG()
 	return true
 }
 
@@ -224,39 +210,11 @@ func (e *Entity) Move() {
 	e.AddTo(e.Vx, e.Vy)
 }
 
-/*
-func (e * Entity) clearBreaker() {
-	if e.breaker != nil {
-		if e.breaker.breaker != e {
-			e.breaker.breaker = nil
-		}
-		e.breaker = nil
+// calcG calculates a derived value based on the absolute velocities (Vx, Vy) and GForce of the given Entity.
+// Returns 0.0 if GForce is zero or the computed value otherwise.
+func (e *Entity) calcG() float64 {
+	if e.GForce == 0.0 {
+		return 0.0
 	}
+	return (math.Abs(e.Vx) + math.Abs(e.Vy)) * e.GForce
 }
-*/
-/*
-func (e *Entity) Hit() bool {
-	if e.lastCollider == nil {
-		return false
-	}
-	distance := calcDistance(e.center.x, e.center.y, e.lastCollider.center.x, e.lastCollider.center.y)
-	if distance > e.lastCollider.GetWidth() {
-		return false
-	}
-	return true
-}
-*/
-
-/*
-func (e *Entity) HitRect(x float64, y float64, w float64, h float64) bool {
-	if e.cb == nil {
-		return false
-	}
-	r := NewRect(x, y, w, h, 1.0)
-	distance := calcDistance(r.center.x, r.center.y, e.lastCollider.center.x, e.lastCollider.center.y)
-	if distance > e.cb.GetWidth() {
-		return false
-	}
-	return true
-}
-*/

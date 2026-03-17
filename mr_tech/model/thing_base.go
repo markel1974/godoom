@@ -63,6 +63,11 @@ func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
+// GetSector retrieves the current sector associated with the Thing and returns it as a pointer to Sector.
+func (t *ThingBase) GetSector() *Sector {
+	return t.sector
+}
+
 // GetPosition retrieves the current position of the Thing as an XY value.
 func (t *ThingBase) GetPosition() XY {
 	return t.position

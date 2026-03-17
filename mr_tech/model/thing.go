@@ -23,6 +23,8 @@ type IThing interface {
 
 	Compute(playerX float64, playerY float64)
 
+	GetSector() *Sector
+
 	MoveApply(tx float64, ty float64)
 
 	MoveEntityApply()

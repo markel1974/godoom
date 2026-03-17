@@ -132,3 +132,51 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 
 	return cs, count, e.things
 }
+
+/*
+// ComputeNew performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
+func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
+	// 1. Pre-Sync ViewMatrix
+	vi.Compute(player)
+
+	var things []model.IThing
+
+	// 8. Portal Compute
+	cs, count := e.portal.Compute(vi)
+
+	csDict := make(map[*model.Sector]bool)
+	for _, compiled := range cs {
+		csDict[compiled.Sector] = true
+	}
+
+	// 2. AI & External Forces: Wake up entities BEFORE physics calculation
+	pX, pY := player.GetXY()
+	for _, thing := range e.things {
+		thing.Compute(pX, pY)
+		if _, ok := csDict[thing.GetSector()]; ok {
+			things = append(things, thing)
+		}
+	}
+
+	// 3. Static Player Motion
+	player.Compute(vi)
+
+	// 4. Dynamic Solver
+	entities := e.entities.Compute()
+
+	// 5. Sync Up (Physics -> Model) - Player
+	player.MoveEntityApply()
+
+	// 6. Sync Up (Physics -> Model) - Things
+	for _, ent := range entities {
+		if t, ok := e.thingsDict[ent.GetId()]; ok {
+			t.MoveEntityApply()
+		}
+	}
+
+	// 7. Post-Sync ViewMatrix
+	vi.Compute(player)
+
+	return cs, count, things
+}
+*/

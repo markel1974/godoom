@@ -13,17 +13,6 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-/*
-
-// TODO
-
-Utilizzare LightCenter del Settore
-
-Materiali Avanzati (PBR leggero): Aggiungere Normal mapping e Specular mapping generando on-the-fly le normal map dalle texture dei WAD, per dare volume e riflessi dinamici ai mattoni sotto le point light.
-
-Post-Processing: Implementare un pass di SSAO (Screen Space Ambient Occlusion) per scurire realisticamente gli angoli dei settori, o un Bloom HDR per far brillare le zone illuminate.
-*/
-
 // scaleFactor defines a constant value for scaling factors used in the application.
 // maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
 // maxFrameCommands sets the limit on the number of commands that can be issued per frame.

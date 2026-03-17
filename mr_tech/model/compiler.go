@@ -43,9 +43,10 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	var totalSegments int
 
 	r.sectors, totalSegments = r.compileSectors(cfg)
+
 	r.compileLights(r.sectors)
 
-	r.sectorsMaxHeight = r.finalize(cfg, r.sectors)
+	r.sectorsMaxHeight = r.scale(cfg, r.sectors)
 
 	var err error
 
@@ -294,7 +295,7 @@ func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Ent
 }
 
 // finalize adjusts player position and sector dimensions based on the scale factor and calculates the maximum sector height.
-func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) float64 {
+func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) float64 {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
 		scale = 1

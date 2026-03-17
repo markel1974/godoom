@@ -9,19 +9,20 @@ import (
 
 // ThingBase represents the base structure for all entities in the system, defining their physical and graphical properties.
 type ThingBase struct {
-	id        string
-	position  XY
-	mass      float64
-	radius    float64
-	height    float64
-	angle     float64
-	kind      int
-	speed     float64
-	sector    *Sector
-	animation *textures.Animation
-	sectors   *Sectors
-	entities  *Entities
-	entity    *physics.Entity
+	id         string
+	position   XY
+	mass       float64
+	radius     float64
+	height     float64
+	angle      float64
+	kind       int
+	speed      float64
+	sector     *Sector
+	animation  *textures.Animation
+	sectors    *Sectors
+	entities   *Entities
+	entity     *physics.Entity
+	identifier int
 }
 
 // NewThingBase creates and initializes a new ThingBase with the specified configuration, animation, sector, and entities.
@@ -31,19 +32,20 @@ func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 	x := cfg.Position.X - cfg.Radius
 	y := cfg.Position.Y - cfg.Radius
 	thing := &ThingBase{
-		id:        cfg.Id,
-		position:  cfg.Position,
-		angle:     cfg.Angle,
-		kind:      cfg.Kind,
-		mass:      cfg.Mass,
-		radius:    cfg.Radius,
-		height:    cfg.Height,
-		speed:     cfg.Speed,
-		sector:    sector,
-		animation: anim,
-		sectors:   sectors,
-		entities:  entities,
-		entity:    physics.NewEntity(x, y, w, h, cfg.Mass),
+		id:         cfg.Id,
+		position:   cfg.Position,
+		angle:      cfg.Angle,
+		kind:       cfg.Kind,
+		mass:       cfg.Mass,
+		radius:     cfg.Radius,
+		height:     cfg.Height,
+		speed:      cfg.Speed,
+		sector:     sector,
+		animation:  anim,
+		sectors:    sectors,
+		entities:   entities,
+		entity:     physics.NewEntity(x, y, w, h, cfg.Mass),
+		identifier: -1,
 	}
 	thing.entities.AddThing(thing)
 	return thing
@@ -104,6 +106,16 @@ func (t *ThingBase) Compute(playerX float64, playerY float64) {
 	//nothing to do
 }
 
+// SetIdentifier sets the identifier field of the ThingBase instance to the specified integer value.
+func (t *ThingBase) SetIdentifier(identifier int) {
+	t.identifier = identifier
+}
+
+// GetIdentifier retrieves the integer identifier associated with the ThingBase instance.
+func (t *ThingBase) GetIdentifier() int {
+	return t.identifier
+}
+
 // MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
 func (t *ThingBase) MoveApply(tx float64, ty float64) {
 	x, y := t.clipMovement(tx, ty)
@@ -112,10 +124,6 @@ func (t *ThingBase) MoveApply(tx float64, ty float64) {
 	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
 		t.sector = newSector
 	}
-	// 4. Retro-Correzione (Sync-Back) AABB fisico
-	//eRadius := t.entity.GetWidth() / 2.0
-	//t.entity.MoveTo(t.position.X-eRadius, t.position.Y-eRadius)
-
 	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 

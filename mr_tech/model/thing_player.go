@@ -39,6 +39,7 @@ type ThingPlayer struct {
 	sectors        *Sectors
 	entities       *Entities
 	entity         *physics.Entity
+	identifier     int
 	debug          bool
 }
 
@@ -63,6 +64,7 @@ func NewThingPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entitie
 		sectors:        sectors,
 		entities:       entities,
 		debug:          debug,
+		identifier:     -1,
 		entity:         physics.NewEntity(x, y, w, h, cfg.Mass),
 	}
 	p.SetAngle(cfg.Angle)
@@ -108,10 +110,21 @@ func (p *ThingPlayer) GetCeilY() float64 {
 	return p.sector.CeilY
 }
 
+// SetIdentifier updates the value of the identifier for the ThingPlayer instance.
+func (p *ThingPlayer) SetIdentifier(identifier int) {
+	p.identifier = identifier
+}
+
+// GetIdentifier returns the unique identifier associated with the ThingPlayer instance.
+func (p *ThingPlayer) GetIdentifier() int {
+	return p.identifier
+}
+
 // Compute performs a calculation based on the provided float64 arguments using the ThingPlayer instance.
 func (p *ThingPlayer) Compute(_ float64, _ float64) {
 }
 
+// EntityUpdate updates the state of the entity associated with the ThingPlayer and returns whether the update was successful.
 func (p *ThingPlayer) EntityUpdate() bool {
 	return p.entity.Update()
 }
@@ -252,14 +265,6 @@ func (p *ThingPlayer) GetYaw() float64 {
 	return p.yaw
 }
 
-// EyeHeight returns the height of the player's eyes, considering whether the player is ducking or standing upright.
-func (p *ThingPlayer) EyeHeight() float64 {
-	if p.ducking {
-		return DuckHeight
-	}
-	return EyeHeight
-}
-
 // IsMoving determines whether the player is currently in motion based on its velocity in the X and Y axes.
 func (p *ThingPlayer) IsMoving() bool {
 	return !(p.velocity.X == 0 && p.velocity.Y == 0)
@@ -291,9 +296,6 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64) {
 	}
 
 	p.entity.Vx, p.entity.Vy = p.GetVelocity()
-
-	//eRadius := p.entity.GetWidth() / 2.0
-	//p.entity.MoveTo(px-eRadius, py-eRadius)
 
 	p.entities.UpdateThing(p, px, py)
 }
@@ -331,13 +333,21 @@ func (p *ThingPlayer) getHeadPosition() float64 {
 
 // GetKneePosition calculates and returns the player's knee position based on their current Z-coordinate and eye height.
 func (p *ThingPlayer) getKneePosition() float64 {
-	return p.where.Z - p.EyeHeight() + KneeHeight
+	return p.where.Z - p.eyeHeight() + KneeHeight
+}
+
+// EyeHeight returns the height of the player's eyes, considering whether the player is ducking or standing upright.
+func (p *ThingPlayer) eyeHeight() float64 {
+	if p.ducking {
+		return DuckHeight
+	}
+	return EyeHeight
 }
 
 // VerticalCollision checks and resolves vertical collisions for the player, adjusting position and velocity based on sector bounds.
 func (p *ThingPlayer) verticalCollision() {
 	if p.falling {
-		eyeHeight := p.EyeHeight()
+		eyeHeight := p.eyeHeight()
 		p.velocity.Z -= 0.05
 		nextZ := p.where.Z + p.velocity.Z
 		if p.velocity.Z < 0 && nextZ < p.sector.FloorY+eyeHeight {

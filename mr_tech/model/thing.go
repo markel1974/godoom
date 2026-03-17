@@ -10,6 +10,10 @@ import (
 type IThing interface {
 	GetId() string
 
+	SetIdentifier(identifier int)
+
+	GetIdentifier() int
+
 	GetKind() int
 
 	GetAABB() *physics.AABB

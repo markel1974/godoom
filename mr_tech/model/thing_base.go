@@ -58,6 +58,10 @@ func (t *ThingBase) GetKind() int {
 	return t.kind
 }
 
+func (p *ThingBase) GetAABB() *physics.AABB {
+	return p.entity.GetAABB()
+}
+
 // GetAnimation retrieves the animation associated with the Thing and returns it as a pointer to textures.Animation.
 func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation

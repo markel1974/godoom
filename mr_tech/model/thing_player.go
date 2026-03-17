@@ -85,6 +85,10 @@ func (p *Player) GetAnimation() *textures.Animation {
 	return nil
 }
 
+func (p *Player) GetAABB() *physics.AABB {
+	return p.entity.GetAABB()
+}
+
 // GetLight returns a pointer to the Light object associated with the Player.
 func (p *Player) GetLight() *Light {
 	return nil

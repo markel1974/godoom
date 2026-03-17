@@ -42,12 +42,16 @@ func NewThing(ct *ConfigThing, anim *textures.Animation, sector *Sector, sectors
 
 // MoveApply adjusts the position of the Thing by adding the given delta values dx and dy to its X and Y coordinates.
 func (t *Thing) MoveApply(dx float64, dy float64) {
-	t.Position.X += dx
-	t.Position.Y += dy
+	x, y := t.clipMovement(dx, dy)
+	t.Position.X += x
+	t.Position.Y += y
+	if newSector := t.sectors.SectorSearch(t.Sector, t.Position.X, t.Position.Y); newSector != nil {
+		t.Sector = newSector
+	}
 }
 
 // ClipMovement restricts the movement of a Thing based on collisions with walls and height differences in its sector.
-func (t *Thing) ClipMovement(dx float64, dy float64) (float64, float64) {
+func (t *Thing) clipMovement(dx float64, dy float64) (float64, float64) {
 	const maxIter = 3
 
 	// Le Thing poggiano sul pavimento. Simuliamo l'altezza testa/ginocchia per i dislivelli

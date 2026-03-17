@@ -172,17 +172,12 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 
 			if math.Abs(tDx) > 0.001 || math.Abs(tDy) > 0.001 {
 				// 3. Traslazione del modello logico
-				x, y := t.ClipMovement(tDx, tDy)
-				t.MoveApply(x, y)
+				t.MoveApply(tDx, tDy)
 
-				// 5. Retro-Correzione (Sync-Back) AABB fisico
+				// 4. Retro-Correzione (Sync-Back) AABB fisico
 				r := physEnt.GetWidth() / 2.0
 				physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
 				e.manager.UpdateObject(physEnt)
-
-				if newSector := e.sectorTree.SectorSearch(t.Sector, t.Position.X, t.Position.Y); newSector != nil {
-					t.Sector = newSector
-				}
 			}
 		}
 	}

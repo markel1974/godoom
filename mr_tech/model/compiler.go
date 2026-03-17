@@ -52,7 +52,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	if pSector == nil {
 		return fmt.Errorf("can't find player sector at %s", cfg.Player.Sector)
 	}
-	r.player = NewPlayer(cfg.Player, pSector, false)
+	r.player = NewPlayer(cfg.Player, pSector, r.sectors, false)
 
 	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
 
@@ -268,18 +268,7 @@ func (r *Compiler) compileThings(cfg *ConfigRoot, sectors *Sectors) []*Thing {
 		if sector == nil {
 			continue
 		}
-		thing := &Thing{
-			Id:        ct.Id,
-			Position:  ct.Position,
-			Angle:     ct.Angle,
-			Type:      ct.Kind,
-			Mass:      ct.Mass,
-			Radius:    ct.Radius,
-			Height:    ct.Height,
-			Sector:    sector,
-			Speed:     ct.Speed,
-			Animation: cfg.GetAnimation(ct.Animation),
-		}
+		thing := NewThing(ct, cfg.GetAnimation(ct.Animation), sector, sectors)
 		things = append(things, thing)
 	}
 	return things

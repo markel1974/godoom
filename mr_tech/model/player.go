@@ -32,11 +32,12 @@ type Player struct {
 	ducking        bool
 	falling        bool
 	lightIntensity float64
+	sectors        *Sectors
 	debug          bool
 }
 
 // NewPlayer creates a new Player instance with initial position, angle, sector, and debug configuration.
-func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
+func NewPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, debug bool) *Player {
 	p := &Player{
 		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
 		velocity:       XYZ{},
@@ -46,6 +47,7 @@ func NewPlayer(cfg *ConfigPlayer, sector *Sector, debug bool) *Player {
 		mass:           cfg.Mass,
 		sector:         sector,
 		lightIntensity: 0.0039, // 1 / distance == 1 / 255
+		sectors:        sectors,
 		debug:          debug,
 	}
 	p.SetAngle(cfg.Angle)

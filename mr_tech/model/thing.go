@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Thing represents a compiled game entity with its physical position and resolved sector.
+// Thing represents an object in the environment with physical, positional, and type-specific attributes.
 type Thing struct {
 	Id        string
 	Position  XY
@@ -19,15 +19,34 @@ type Thing struct {
 	Speed     float64
 	Sector    *Sector
 	Animation *textures.Animation
+	sectors   *Sectors
 }
 
-// MoveApply updates the position of the Thing by applying movement deltas, adjusting its sector if necessary.
+// NewThing initializes and returns a new Thing instance based on the provided configuration, animation, and sector data.
+func NewThing(ct *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors) *Thing {
+	thing := &Thing{
+		Id:        ct.Id,
+		Position:  ct.Position,
+		Angle:     ct.Angle,
+		Type:      ct.Kind,
+		Mass:      ct.Mass,
+		Radius:    ct.Radius,
+		Height:    ct.Height,
+		Speed:     ct.Speed,
+		Sector:    sector,
+		Animation: anim,
+		sectors:   sectors,
+	}
+	return thing
+}
+
+// MoveApply adjusts the position of the Thing by adding the given delta values dx and dy to its X and Y coordinates.
 func (t *Thing) MoveApply(dx float64, dy float64) {
 	t.Position.X += dx
 	t.Position.Y += dy
 }
 
-// ClipMovement adjusts the movement vector (dx, dy) to prevent collisions with walls or impassable terrain boundaries.
+// ClipMovement restricts the movement of a Thing based on collisions with walls and height differences in its sector.
 func (t *Thing) ClipMovement(dx float64, dy float64) (float64, float64) {
 	const maxIter = 3
 

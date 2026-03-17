@@ -78,8 +78,8 @@ func (p *ThingPlayer) GetId() string {
 }
 
 // GetKind retrieves the kind or type classification of the ThingPlayer as an integer value.
-func (p *ThingPlayer) GetKind() int {
-	return 0
+func (p *ThingPlayer) GetKind() ThingType {
+	return ThingPlayerDef
 }
 
 // GetAnimation retrieves the current animation associated with the ThingPlayer instance.

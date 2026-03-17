@@ -1,5 +1,17 @@
 package model
 
+type ThingType int
+
+const (
+	ThingUnknownDef = ThingType(iota)
+	ThingPlayerDef
+	ThingEnemyDef
+	ThingWeaponDef
+	ThingBulletDef
+	ThingKeyDef
+	ThingItemDef
+)
+
 // ConfigThing represents a game entity with physical properties, animation, and positional data within a specific sector.
 type ConfigThing struct {
 	Id        string
@@ -8,7 +20,7 @@ type ConfigThing struct {
 	Mass      float64
 	Radius    float64
 	Height    float64
-	Kind      int
+	Kind      ThingType
 	Sector    string
 	Speed     float64
 	Animation *ConfigAnimation
@@ -23,7 +35,7 @@ type ConfigThing struct {
 // mass defines the weight of the thing, used in physics calculations.
 // radius and height define the dimensions of the thing for collision and spatial representation.
 // anim is the animation configuration associated with the thing, such as frames, kind, and scale.
-func NewConfigThing(id string, pos XY, angle float64, kind int, sector string, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
+func NewConfigThing(id string, pos XY, angle float64, kind ThingType, sector string, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
 	return &ConfigThing{
 		Id:        id,
 		Position:  pos,

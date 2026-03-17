@@ -292,6 +292,22 @@ func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Ent
 			return nil, fmt.Errorf("can't find thing sector at %s", ct.Sector)
 		}
 		var thing IThing
+
+		switch ct.Kind {
+		case ThingEnemyDef:
+			thing = NewThingEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		case ThingWeaponDef:
+			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		case ThingBulletDef:
+			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		case ThingKeyDef:
+			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		case ThingItemDef:
+			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		default:
+			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		}
+
 		if ct.Speed > 0 {
 			thing = NewThingEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
 		} else {

@@ -14,7 +14,7 @@ type IThing interface {
 
 	GetIdentifier() int
 
-	GetKind() int
+	GetKind() ThingType
 
 	GetAABB() *physics.AABB
 

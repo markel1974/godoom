@@ -15,7 +15,7 @@ type ThingBase struct {
 	radius     float64
 	height     float64
 	angle      float64
-	kind       int
+	kind       ThingType
 	speed      float64
 	sector     *Sector
 	animation  *textures.Animation
@@ -57,7 +57,7 @@ func (t *ThingBase) GetId() string {
 }
 
 // GetKind returns the integer value representing the kind of the ThingBase.
-func (t *ThingBase) GetKind() int {
+func (t *ThingBase) GetKind() ThingType {
 	return t.kind
 }
 

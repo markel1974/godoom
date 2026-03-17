@@ -115,7 +115,7 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 	entities := e.entities.Compute()
 
 	// 5. Sync Up (Physics -> Model) - Player
-	e.player.MoveEntityApply()
+	player.MoveEntityApply()
 
 	// 6. Sync Up (Physics -> Model) - Things
 	for _, ent := range entities {

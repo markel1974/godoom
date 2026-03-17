@@ -244,16 +244,12 @@ func (p *Player) MoveApply(dx float64, dy float64) {
 	if dx == 0 && dy == 0 {
 		return
 	}
-
 	// 1. Apply the atomic vector and obtain the final coordinates
 	p.AddXY(dx, dy)
 	px, py := p.GetXY()
-	currentSector := p.GetSector()
 	// 2. Spatial stability check: are we still inside the same sector?
-	if newSector := currentSector.LocateSector(px, py); newSector != nil {
-		p.SetSector(newSector)
-	} else {
-		//TODO MANCA L'UTILIZZO DELL'AABBtree in engine per player
+	if newSector := p.sectors.SectorSearch(p.sector, px, py); newSector != nil {
+		p.sector = newSector
 	}
 }
 

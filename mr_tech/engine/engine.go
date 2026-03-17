@@ -6,7 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Engine represents the core game engine handling rendering, player interactions, and environment configuration.
+// Engine provides the core functionality for rendering, entity management, and spatial computations in a 3D environment.
 type Engine struct {
 	portal           *portal.Portal
 	textures         textures.ITextures
@@ -21,7 +21,7 @@ type Engine struct {
 	sectorTree       *model.Sectors
 }
 
-// NewEngine initializes and returns a new Engine instance with specified width, height, and maximum render queue size.
+// NewEngine initializes and returns a new instance of Engine with the specified width, height, and maxQueue size.
 func NewEngine(w int, h int, maxQueue int) *Engine {
 	return &Engine{
 		portal:           nil,
@@ -37,42 +37,42 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 	}
 }
 
-// GetPlayer returns the current player instance associated with the engine.
+// GetPlayer returns the player instance associated with the engine.
 func (e *Engine) GetPlayer() *model.Player {
 	return e.player
 }
 
-// GetTextures retrieves the ITextures implementation associated with the engine.
+// GetTextures returns the textures instance associated with the Engine.
 func (e *Engine) GetTextures() textures.ITextures {
 	return e.textures
 }
 
-// GetWidth returns the width of the engine as an integer.
+// GetWidth returns the width of the Engine in pixels.
 func (e *Engine) GetWidth() int {
 	return e.w
 }
 
-// GetHeight returns the height of the Engine.
+// GetHeight returns the height of the Engine instance.
 func (e *Engine) GetHeight() int {
 	return e.h
 }
 
-// SectorAt retrieves the Sector at the specified index within the portal's sector list.
+// SectorAt returns the Sector object located at the given index within the engine's portal.
 func (e *Engine) SectorAt(idx int) *model.Sector {
 	return e.portal.SectorAt(idx)
 }
 
-// GetSectorsMaxHeight returns the maximum height value among all sectors in the engine.
+// GetSectorsMaxHeight returns the maximum height value among all sectors as a float64.
 func (e *Engine) GetSectorsMaxHeight() float64 {
 	return e.sectorsMaxHeight
 }
 
-// Len returns the number of sectors currently managed by the Engine.
+// Len returns the number of sectors managed by the Engine.
 func (e *Engine) Len() int {
 	return e.portal.Len()
 }
 
-// Setup initializes the Engine instance using the provided configuration, setting up textures, player, portal, and sectors.
+// Setup initializes the Engine by configuring its components using the provided configuration and setting up internal resources.
 func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	compiler := model.NewCompiler()
 	if err := compiler.Setup(cfg); err != nil {
@@ -97,35 +97,37 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	return nil
 }
 
+// Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
 func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Compute(player)
 
-	// 2. AI & Forze Esterne: Svegliamo le entità PRIMA del calcolo fisico
-	pX, pY := e.player.GetXY()
+	// 2. AI & External Forces: Wake up entities BEFORE physics calculation
+	pX, pY := player.GetXY()
 	for _, t := range e.things {
 		t.Compute(pX, pY)
 	}
 
-	// 3. Moto Statico Player
+	// 3. Static Player Motion
 	player.Compute(vi)
 
-	// 5. Solver Dinamico
+	// 4. Dynamic Solver
 	entities := e.entities.Compute()
 
 	// 5. Sync Up (Physics -> Model) - Player
 	e.player.MoveEntityApply()
 
-	// 5b. Sync Up (Physics -> Model) - Things
+	// 6. Sync Up (Physics -> Model) - Things
 	for _, ent := range entities {
 		if t, ok := e.thingsDict[ent.GetId()]; ok {
 			t.MoveEntityApply()
 		}
 	}
 
-	// 6. Post-Sync ViewMatrix
+	// 7. Post-Sync ViewMatrix
 	vi.Compute(player)
 
+	// 8. Portal Compute
 	cs, count := e.portal.Compute(vi)
 
 	return cs, count, e.things

@@ -13,8 +13,8 @@ type Engine struct {
 	w                int
 	h                int
 	maxQueue         int
-	things           []*model.Thing
-	thingsDict       map[string]*model.Thing
+	things           []model.IThing
+	thingsDict       map[string]model.IThing
 	sectorsMaxHeight float64
 	entities         *model.Entities
 	player           *model.Player
@@ -33,7 +33,7 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		entities:         nil,
 		sectorTree:       nil,
 		player:           nil,
-		thingsDict:       make(map[string]*model.Thing),
+		thingsDict:       make(map[string]model.IThing),
 	}
 }
 
@@ -97,7 +97,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	return nil
 }
 
-func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []*model.Thing) {
+func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Compute(player)
 

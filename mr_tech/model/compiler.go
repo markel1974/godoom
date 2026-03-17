@@ -21,7 +21,7 @@ const (
 // Compiler represents a 3D map compiler that manages sectors, their heights, and an internal cache for fast lookups.
 type Compiler struct {
 	sectors          *Sectors
-	things           []*Thing
+	things           []IThing
 	player           *Player
 	sectorsMaxHeight float64
 	entities         *Entities
@@ -76,7 +76,7 @@ func (r *Compiler) GetSectors() *Sectors {
 }
 
 // GetThings retrieves the list of compiled things associated with the Compiler instance.
-func (r *Compiler) GetThings() []*Thing {
+func (r *Compiler) GetThings() []IThing {
 	return r.things
 }
 
@@ -281,14 +281,14 @@ func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *E
 }
 
 // compileThings processes raw ConfigThing entities, resolving their sector references and storing them in the compiler.
-func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Entities) ([]*Thing, error) {
-	var things []*Thing
+func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Entities) ([]IThing, error) {
+	var things []IThing
 	for _, ct := range cfg.Things {
 		sector := sectors.GetSector(ct.Sector)
 		if sector == nil {
 			return nil, fmt.Errorf("can't find thing sector at %s", ct.Sector)
 		}
-		thing := NewThing(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
+		thing := NewEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
 		things = append(things, thing)
 	}
 	return things, nil

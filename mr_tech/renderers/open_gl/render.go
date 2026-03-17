@@ -29,7 +29,7 @@ const (
 
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
 type SpriteNode struct {
-	Thing  *model.Thing
+	Thing  model.IThing
 	DistSq float64
 }
 
@@ -194,7 +194,7 @@ func (w *RenderOpenGL) glInit() error {
 }
 
 // createBatch processes compiled sectors and things to create a batch of renderable geometry with optional sky texture.
-func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, thing []*model.Thing) *textures.Texture {
+func (w *RenderOpenGL) createBatch(css []*model.CompiledSector, compiled int, thing []model.IThing) *textures.Texture {
 	w.frameVertices.Reset()
 	w.frameCommands.Reset()
 	var cSky *textures.Texture = nil
@@ -336,7 +336,7 @@ func (w *RenderOpenGL) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 }
 
 // pushThings processes a list of Thing objects for rendering, handling culling, depth sorting, and batching into the VBO.
-func (w *RenderOpenGL) pushThings(things []*model.Thing) {
+func (w *RenderOpenGL) pushThings(things []model.IThing) {
 	if len(things) == 0 {
 		return
 	}

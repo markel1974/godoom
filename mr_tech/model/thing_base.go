@@ -47,7 +47,6 @@ func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 		entity:     physics.NewEntity(x, y, w, h, cfg.Mass),
 		identifier: -1,
 	}
-	thing.entities.AddThing(thing)
 	return thing
 }
 
@@ -116,17 +115,6 @@ func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
 
-// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
-func (t *ThingBase) MoveApply(tx float64, ty float64) {
-	x, y := t.clipMovement(tx, ty)
-	t.position.X += x
-	t.position.Y += y
-	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-		t.sector = newSector
-	}
-	t.entities.UpdateThing(t, t.position.X, t.position.Y)
-}
-
 // PhysicsApply updates the entity's position based on passive and active deltas, ensuring movement exceeds a minimum threshold.
 func (t *ThingBase) PhysicsApply() {
 	ex, ey := t.entity.GetCenterXY()
@@ -139,8 +127,19 @@ func (t *ThingBase) PhysicsApply() {
 		ty += t.entity.Vy
 	}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
-		t.MoveApply(tx, ty)
+		t.moveApply(tx, ty)
 	}
+}
+
+// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
+func (t *ThingBase) moveApply(tx float64, ty float64) {
+	x, y := t.clipMovement(tx, ty)
+	t.position.X += x
+	t.position.Y += y
+	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
+		t.sector = newSector
+	}
+	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 
 // clipMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.

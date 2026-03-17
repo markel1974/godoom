@@ -34,7 +34,5 @@ type IThing interface {
 
 	GetSector() *Sector
 
-	MoveApply(tx float64, ty float64)
-
 	PhysicsApply()
 }

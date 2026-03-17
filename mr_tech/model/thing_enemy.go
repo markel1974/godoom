@@ -18,6 +18,7 @@ func NewThingEnemy(cfg *ConfigThing, anim *textures.Animation, sector *Sector, s
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
 		active:    false,
 	}
+	e.entities.AddThing(e)
 	return e
 }
 

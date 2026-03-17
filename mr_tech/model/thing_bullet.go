@@ -18,46 +18,82 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 	p := &ThingBullet{
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
 	}
-
+	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
 	p.entity.Friction = 1.0
 	p.entity.GForce = 1.0
 
+	// Calculate the directional vector based on the original firing angle
+	dirX := math.Cos(p.angle) * p.speed
+	dirY := math.Sin(p.angle) * p.speed
+
+	const acceleration = 0.15
+	p.entity.Vx = p.entity.Vx*(1-acceleration) + (dirX * acceleration)
+	p.entity.Vy = p.entity.Vy*(1-acceleration) + (dirY * acceleration)
+	if p.entity.GForce == 0 {
+		p.entity.GForce = 1.0
+	}
+	if p.entity.Friction < 0.2 {
+		p.entity.Friction = 0.99
+	}
 	return p
 }
 
 // Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
 func (t *ThingBullet) Compute(playerX float64, playerY float64) {
 	if t.speed == 0 {
+		return
+	}
+	if math.Abs(t.entity.Vx) < 0.1 && math.Abs(t.entity.Vy) < 0.1 {
+		t.entity.Vx = 0
+		t.entity.Vy = 0
+		t.speed = 0
 		t.entity.Invalidate()
 		//TODO REMOVE!!!!
 		return
 	}
 
 	// Calculate the directional vector based on the original firing angle
-	dirX := math.Cos(t.angle) * t.speed
-	dirY := math.Sin(t.angle) * t.speed
+	//dirX := math.Cos(t.angle) * t.speed
+	//dirY := math.Sin(t.angle) * t.speed
 
-	t.modifyDirection(dirX, dirY)
+	//t.modifyDirection(dirX, dirY)
 
 	// Trigger for impact handling and subsequent deallocation
-	if t.entity.Collider != nil {
-		// Hit/explosion logic, damage application and entity removal
-		t.speed = 0
-		t.entity.Invalidate()
-		//TODO REMOVE!!!!
+	//if t.entity.Collider != nil {
+	//	t.entity.Vx = 0
+	//	t.entity.Vy = 0
+	// Hit/explosion logic, damage application and entity removal
+	//	t.speed = 0
+	//	t.entity.Invalidate()
+	//	//TODO REMOVE!!!!
+	//}
+}
+
+// PhysicsApply updates the entity's position based on passive and active deltas, ensuring movement exceeds a minimum threshold.
+func (t *ThingBullet) PhysicsApply() {
+	ex, ey := t.entity.GetCenterXY()
+	// Passive Delta (bounces computed by SetupCollision)
+	tx := ex - t.position.X
+	ty := ey - t.position.Y
+	// Active Delta (Kinematic Drive) added only if there is intentionality
+	//if t.entity.G > 0 {
+	tx += t.entity.Vx
+	ty += t.entity.Vy
+	//}
+	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
+		t.moveApply(tx, ty)
 	}
 }
 
-// modifyDirection adjusts the entity's velocity based on the provided direction vector and applies acceleration and friction.
-func (t *ThingBullet) modifyDirection(dirX, dirY float64) {
-	const acceleration = 0.15
-	t.entity.Vx = t.entity.Vx*(1-acceleration) + (dirX * acceleration)
-	t.entity.Vy = t.entity.Vy*(1-acceleration) + (dirY * acceleration)
-	if t.entity.GForce == 0 {
-		t.entity.GForce = 1.0
+// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
+func (t *ThingBullet) moveApply(tx float64, ty float64) {
+	//x, y := t.clipMovement(tx, ty)
+	//TODO WALL BOUNCE!!!
+	t.position.X += tx
+	t.position.Y += ty
+	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
+		t.sector = newSector
 	}
-	if t.entity.Friction < 0.2 {
-		t.entity.Friction = 0.99
-	}
+	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }

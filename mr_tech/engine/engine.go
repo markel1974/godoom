@@ -101,10 +101,9 @@ func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64)
 	c := e.config.Things[2]
 	id := utils.NextUUId()
 	pos := model.XY{X: x, Y: y}
-	cfg := model.NewConfigThing(id, pos, angle, model.ThingBulletDef, sector.Id, 1000.0, 1.0, 5.0, 1.0, c.Animation)
+	cfg := model.NewConfigThing(id, pos, angle, model.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 1.0, c.Animation)
 	thing := model.NewThingBullet(cfg, e.config.GetAnimation(cfg.Animation), sector, e.sectorTree, e.entities)
 	e.things = append(e.things, thing)
-	//e.entities.AddThing(thing)
 }
 
 // Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.

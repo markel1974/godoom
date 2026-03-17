@@ -14,5 +14,6 @@ func NewThingItem(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 	thing := &ThingItem{
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
 	}
+	thing.entities.AddThing(thing)
 	return thing
 }

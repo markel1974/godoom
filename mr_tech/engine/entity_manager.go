@@ -26,7 +26,8 @@ func (em *EntityManager) Spawn(id string, pX, pY, radius, mass float64) *physics
 	h := radius * 2
 	x := pX - radius
 	y := pY - radius
-	ent := em.addEntity(id, x, y, w, h, mass)
+	ent := physics.NewEntity(x, y, w, h, mass)
+	em.addEntity(id, ent)
 	return ent
 }
 
@@ -99,12 +100,11 @@ func (em *EntityManager) UpdateObject(ent *physics.Entity) {
 }
 
 // addEntity adds the given entity to the manager, adjusts the moving entity slice, and inserts it into the spatial tree.
-func (em *EntityManager) addEntity(id string, x float64, y float64, w float64, h float64, mass float64) *physics.Entity {
-	ent := physics.NewEntity(x, y, w, h, mass)
+func (em *EntityManager) addEntity(id string, ent *physics.Entity) *physics.Entity {
 	ent.Id = id
 	em.entities[ent.Id] = ent
 	if len(em.entities) > len(em.moving) {
-		em.moving = make([]*physics.Entity, len(em.entities)+128)
+		em.moving = make([]*physics.Entity, len(em.entities)*2)
 	}
 	em.tree.InsertObject(ent)
 	return ent

@@ -251,6 +251,9 @@ func (s *Sector) ClipVelocity(viewX float64, viewY float64, pX float64, pY float
 		for _, seg := range s.Segments {
 			start := seg.Start
 			end := seg.End
+			if seg.Kind == DefinitionJoin {
+				continue
+			}
 
 			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
 				holeLow := 9e9

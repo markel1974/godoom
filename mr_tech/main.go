@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -10,48 +11,80 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/world"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/software"
+	"github.com/markel1974/godoom/mr_tech/version"
 )
 
-const (
-	_W        = 640 //1024 //1980 / 2
-	_H        = 480 //768  //1080 / 2
-	_MaxQueue = 32
-)
+type IRender interface {
+	Setup(engine *engine.Engine) error
+	Start()
+}
 
 func main() {
 	var cfg *model.ConfigRoot
 	var err error
+	var showHelp bool
+	var showVersion bool
+	var softwareRender bool
+	var mode int
+	var level int
+	var width int
+	var height int
+	var maxQueue int
 
-	//MODE Define World Mode [0 = legacy, 1 = Generate, 2 = Doom]
-	m := 2
-	switch m {
+	flag.BoolVar(&showHelp, "h", false, "show this help")
+	flag.BoolVar(&showVersion, "v", false, "show version")
+	flag.BoolVar(&softwareRender, "s", false, "enable software renderer")
+	flag.IntVar(&mode, "m", 2, "mode 0 = legacy, 1 = Generate, 2 = Doom")
+	flag.IntVar(&level, "l", 1, "level number")
+	flag.IntVar(&width, "width", 640, "width")
+	flag.IntVar(&height, "height", 480, "height")
+	flag.IntVar(&maxQueue, "queue", 32, "max queue size")
+	flag.Parse()
+
+	if showHelp {
+		flag.Usage()
+		return
+	}
+
+	if showVersion {
+		fmt.Println(version.AppName, version.AppVersion)
+		return
+	}
+
+	switch mode {
 	case 0:
 		cfg, err = script.ParseScriptData(script.StubOld2)
 	case 1:
 		cfg, err = world.Generate()
 	case 2:
-		const levelNumber = 1
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilder()
-		cfg, err = wb.Setup(wadFile, levelNumber)
+		cfg, err = wb.Setup(wadFile, level)
+	default:
+		cfg, err = world.Generate()
 	}
+
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		return
 	}
 
-	en := engine.NewEngine(_W, _H, _MaxQueue)
+	en := engine.NewEngine(width, height, maxQueue)
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		return
 	}
 
-	//render := software.NewSoftwareRender()
-	render := open_gl.NewOpenGLRender()
+	var render IRender
+	if softwareRender {
+		render = software.NewSoftwareRender()
+	} else {
+		render = open_gl.NewOpenGLRender()
+	}
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		return
 	}
-
 	render.Start()
 }

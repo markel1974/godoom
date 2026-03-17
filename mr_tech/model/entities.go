@@ -8,44 +8,32 @@ const minMovement = 0.001
 
 // Entities is responsible for managing entities and their spatial relationships within an AABBTree structure.
 type Entities struct {
-	tree     *physics.AABBTree
-	entities map[string]*physics.Entity
-	moving   []*physics.Entity
-	counter  int
+	tree       *physics.AABBTree
+	entities   map[string]IThing
+	moving     []IThing
+	counter    int
+	identifier int
 }
 
 // NewEntities initializes and returns a new Entities with a specified maximum number of entities.
 func NewEntities(maxEntities uint) *Entities {
 	return &Entities{
-		tree:     physics.NewAABBTree(maxEntities),
-		entities: make(map[string]*physics.Entity),
+		tree:       physics.NewAABBTree(maxEntities),
+		entities:   make(map[string]IThing),
+		identifier: 0,
+		counter:    0,
 	}
 }
 
-// GetEntity retrieves an entity by its ID from the entity manager's collection and returns a pointer to the entity.
-func (em *Entities) GetEntity(id string) *physics.Entity {
-	return em.entities[id]
-}
-
-// Spawn creates a new entity with the specified ID, position, radius, and mass, and inserts it into the spatial tree.
-//func (em *Entities) Spawn(id string, pX, pY, radius, mass float64) *physics.Entity {
-//	w := radius * 2
-//	h := radius * 2
-//	x := pX - radius
-//	y := pY - radius
-//	ent := physics.NewEntity(x, y, w, h, mass)
-//	em.addEntity(id, ent)
-//	return ent
-//}
-
 // Compute performs movement integration, updates the spatial tree, resolves collisions iteratively, and stabilizes the system.
-func (em *Entities) Compute() []*physics.Entity {
+func (em *Entities) Compute() []IThing {
 	// Fase 1: Integrazione cinematica (Movimento e frizione)
 	em.counter = 0
-	for _, ent := range em.entities {
-		if ent.Compute() {
+	for _, thing := range em.entities {
+		ent := thing.GetEntity()
+		if ent.Update() {
 			em.tree.UpdateObject(ent)
-			em.moving[em.counter] = ent
+			em.moving[em.counter] = thing
 			em.counter++
 		}
 	}
@@ -59,20 +47,22 @@ func (em *Entities) Compute() []*physics.Entity {
 		isStable := true
 
 		for x := 0; x < em.counter; x++ {
-			ent := em.moving[x]
-			overlaps := em.tree.QueryOverlaps(ent)
+			thing := em.moving[x]
+			ent := thing.GetEntity()
+			overlaps := em.tree.QueryOverlaps(thing)
 
 			// Dentro Fase 2: Iterative Solver
 			for _, overlapObj := range overlaps {
-				otherEnt, ok := overlapObj.(*physics.Entity)
-				if !ok || otherEnt == ent {
+				otherThing, ok := overlapObj.(IThing)
+				if !ok || otherThing == thing {
 					continue
 				}
+				otherEnt := otherThing.GetEntity()
 
 				// FIX REPULSIONE: Applica il tie-breaker SOLO se anche otherEnt è in movimento.
 				// Se otherEnt è fermo (sleeping), spetta al body attivo (ent) risolvere l'urto per entrambi.
 				otherIsActive := otherEnt.Vx != 0 || otherEnt.Vy != 0
-				if otherIsActive && ent.Id > otherEnt.Id {
+				if otherIsActive && ent.GetId() > otherEnt.GetId() {
 					continue
 				}
 
@@ -97,20 +87,23 @@ func (em *Entities) Compute() []*physics.Entity {
 }
 
 // QueryCollisions checks for overlapping entities in the spatial tree and returns a list of bounding boxes for collisions.
-func (em *Entities) QueryCollisions(ent *physics.Entity) []physics.IAABB {
+func (em *Entities) QueryCollisions(ent IThing) []physics.IAABB {
 	return em.tree.QueryOverlaps(ent)
 }
 
-func (em *Entities) UpdateObject(ent *physics.Entity) {
-	em.tree.UpdateObject(ent)
+func (em *Entities) UpdateThing(thing IThing, px float64, py float64) {
+	ent := thing.GetEntity()
+	eRadius := ent.GetWidth() / 2.0
+	ent.MoveTo(px-eRadius, py-eRadius)
+
+	em.tree.UpdateObject(thing)
 }
 
-// AddEntity adds the given entity to the manager, adjusts the moving entity slice, and inserts it into the spatial tree.
-func (em *Entities) AddEntity(id string, ent *physics.Entity) *physics.Entity {
-	ent.Id = id
-	em.entities[ent.Id] = ent
+// AddThing adds the given entity to the manager, adjusts the moving entity slice, and inserts it into the spatial tree.
+func (em *Entities) AddThing(ent IThing) IThing {
+	em.entities[ent.GetId()] = ent
 	if len(em.entities) > len(em.moving) {
-		em.moving = make([]*physics.Entity, len(em.entities)*2)
+		em.moving = make([]IThing, len(em.entities)*2)
 	}
 	em.tree.InsertObject(ent)
 	return ent

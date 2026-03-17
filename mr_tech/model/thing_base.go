@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ThingBase represents a physical or logical entity in the environment with attributes like position, mass, and associated data.
+// ThingBase represents the base structure for all entities in the system, defining their physical and graphical properties.
 type ThingBase struct {
 	id        string
 	position  XY
@@ -24,7 +24,7 @@ type ThingBase struct {
 	entity    *physics.Entity
 }
 
-// NewThingBase creates and initializes a new ThingEnemy instance with the specified configuration, animation, sector, and entities.
+// NewThingBase creates and initializes a new ThingBase with the specified configuration, animation, sector, and entities.
 func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBase {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
@@ -45,59 +45,66 @@ func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 		entities:  entities,
 		entity:    physics.NewEntity(x, y, w, h, cfg.Mass),
 	}
-	thing.entities.AddEntity(thing.id, thing.entity)
+	thing.entities.AddThing(thing)
 	return thing
 }
 
-// GetId returns the unique identifier of the Thing as a string.
+// GetId returns the unique identifier (id) of the ThingBase instance as a string.
 func (t *ThingBase) GetId() string {
 	return t.id
 }
 
+// GetKind returns the integer value representing the kind of the ThingBase.
 func (t *ThingBase) GetKind() int {
 	return t.kind
 }
 
-func (p *ThingBase) GetAABB() *physics.AABB {
-	return p.entity.GetAABB()
+// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the ThingBase's physics entity.
+func (t *ThingBase) GetAABB() *physics.AABB {
+	return t.entity.GetAABB()
 }
 
-// GetAnimation retrieves the animation associated with the Thing and returns it as a pointer to textures.Animation.
+// GetEntity returns the physics.Entity associated with the ThingBase instance.
+func (t *ThingBase) GetEntity() *physics.Entity {
+	return t.entity
+}
+
+// GetAnimation returns the current animation associated with the instance of ThingBase.
 func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
-// GetSector retrieves the current sector associated with the Thing and returns it as a pointer to Sector.
+// GetSector returns the current sector associated with the ThingBase instance.
 func (t *ThingBase) GetSector() *Sector {
 	return t.sector
 }
 
-// GetPosition retrieves the current position of the Thing as an XY value.
+// GetPosition returns the X and Y coordinates of the ThingBase's position.
 func (t *ThingBase) GetPosition() (float64, float64) {
 	return t.position.X, t.position.Y
 }
 
-// GetLight retrieves the light source associated with the Thing's current sector and returns it as a pointer to Light.
+// GetLight retrieves the Light object associated with the current ThingBase instance's sector.
 func (t *ThingBase) GetLight() *Light {
 	return t.sector.Light
 }
 
-// GetFloorY returns the Y-coordinate of the floor in the Thing's current sector as a float64.
+// GetFloorY returns the Y-coordinate of the floor level in the current sector associated with the ThingBase instance.
 func (t *ThingBase) GetFloorY() float64 {
 	return t.sector.FloorY
 }
 
-// GetCeilY retrieves the ceiling height of the sector associated with the Thing and returns it as a float64.
+// GetCeilY returns the ceiling Y-coordinate of the ThingBase's associated sector.
 func (t *ThingBase) GetCeilY() float64 {
 	return t.sector.CeilY
 }
 
-// Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
+// Compute updates the ThingBase object based on the player's position provided as playerX and playerY.
 func (t *ThingBase) Compute(playerX float64, playerY float64) {
 	//nothing to do
 }
 
-// MoveApply adjusts the Thing's position and updates its sector affiliation and physical bounds accordingly.
+// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
 func (t *ThingBase) MoveApply(tx float64, ty float64) {
 	x, y := t.clipMovement(tx, ty)
 	t.position.X += x
@@ -106,13 +113,14 @@ func (t *ThingBase) MoveApply(tx float64, ty float64) {
 		t.sector = newSector
 	}
 	// 4. Retro-Correzione (Sync-Back) AABB fisico
-	r := t.entity.GetWidth() / 2.0
-	t.entity.MoveTo(t.position.X-r, t.position.Y-r)
-	t.entities.UpdateObject(t.entity)
+	//eRadius := t.entity.GetWidth() / 2.0
+	//t.entity.MoveTo(t.position.X-eRadius, t.position.Y-eRadius)
+
+	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 
-// MoveEntityApply processes the logical and physical movement of the entity, adjusting positions and sector affiliations.
-func (t *ThingBase) MoveEntityApply() {
+// PhysicsApply updates the entity's position based on passive and active deltas, ensuring movement exceeds a minimum threshold.
+func (t *ThingBase) PhysicsApply() {
 	ex, ey := t.entity.GetCenterXY()
 	// Passive Delta (bounces computed by SetupCollision)
 	tx := ex - t.position.X
@@ -127,8 +135,7 @@ func (t *ThingBase) MoveEntityApply() {
 	}
 }
 
-// clipMovement adjusts movement vectors to handle collisions with environment walls or obstacles in a 2D space.
-// It takes initial deltas in X and Y directions (dx, dy) and returns the adjusted movement vector after collision checks.
+// clipMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
 func (t *ThingBase) clipMovement(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
@@ -138,17 +145,4 @@ func (t *ThingBase) clipMovement(velX float64, velY float64) (float64, float64) 
 	pY := viewY + velY
 	velX, velY = t.sector.ClipVelocity(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
 	return velX, velY
-}
-
-// modifyDirection adjusts the velocity of the entity towards the specified direction with a constant acceleration factor.
-func (t *ThingBase) modifyDirection(dirX, dirY float64) {
-	const acceleration = 0.15
-	t.entity.Vx = t.entity.Vx*(1-acceleration) + (dirX * acceleration)
-	t.entity.Vy = t.entity.Vy*(1-acceleration) + (dirY * acceleration)
-	if t.entity.GForce == 0 {
-		t.entity.GForce = 1.0
-	}
-	if t.entity.Friction < 0.2 {
-		t.entity.Friction = 0.99
-	}
 }

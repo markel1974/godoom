@@ -37,7 +37,7 @@ type SpriteNode struct {
 type RenderOpenGL struct {
 	engine           *engine.Engine
 	vi               *model.ViewMatrix
-	player           *model.Player
+	player           *model.ThingPlayer
 	textures         textures.ITextures
 	win              *pixels.GLWindow
 	screenWidth      int

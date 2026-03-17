@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -10,6 +11,8 @@ type IThing interface {
 	GetId() string
 
 	GetKind() int
+
+	GetAABB() *physics.AABB
 
 	GetAnimation() *textures.Animation
 
@@ -21,11 +24,13 @@ type IThing interface {
 
 	GetCeilY() float64
 
+	GetEntity() *physics.Entity
+
 	Compute(playerX float64, playerY float64)
 
 	GetSector() *Sector
 
 	MoveApply(tx float64, ty float64)
 
-	MoveEntityApply()
+	PhysicsApply()
 }

@@ -38,7 +38,7 @@ type RenderSoftware struct {
 
 	engine   *engine.Engine
 	vi       *model.ViewMatrix
-	player   *model.Player
+	player   *model.ThingPlayer
 	debug    bool
 	debugIdx int
 }

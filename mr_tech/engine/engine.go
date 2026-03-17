@@ -14,10 +14,9 @@ type Engine struct {
 	h                int
 	maxQueue         int
 	things           []model.IThing
-	thingsDict       map[string]model.IThing
 	sectorsMaxHeight float64
 	entities         *model.Entities
-	player           *model.Player
+	player           *model.ThingPlayer
 	sectorTree       *model.Sectors
 }
 
@@ -33,12 +32,11 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		entities:         nil,
 		sectorTree:       nil,
 		player:           nil,
-		thingsDict:       make(map[string]model.IThing),
 	}
 }
 
 // GetPlayer returns the player instance associated with the engine.
-func (e *Engine) GetPlayer() *model.Player {
+func (e *Engine) GetPlayer() *model.ThingPlayer {
 	return e.player
 }
 
@@ -90,15 +88,11 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	if err := e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
 		return err
 	}
-
-	for _, thing := range e.things {
-		e.thingsDict[thing.GetId()] = thing
-	}
 	return nil
 }
 
 // Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
-func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
+func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Update(player)
 
@@ -108,26 +102,21 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 		t.Compute(pX, pY)
 	}
 
-	// 3. Static Player Motion
+	// 3. Static ThingPlayer Motion
 	player.Update(vi)
 
 	// 4. Dynamic Solver
 	entities := e.entities.Compute()
 
-	// 5. Sync Up (Physics -> Model) - Player
-	player.MoveEntityApply()
-
-	// 6. Sync Up (Physics -> Model) - Things
+	// 5. Sync Up (Physics -> Model) - Things
 	for _, ent := range entities {
-		if t, ok := e.thingsDict[ent.GetId()]; ok {
-			t.MoveEntityApply()
-		}
+		ent.PhysicsApply()
 	}
 
-	// 7. Post-Sync ViewMatrix
+	// 6. Post-Sync ViewMatrix
 	vi.Update(player)
 
-	// 8. Portal Compute
+	// 7. Portal Compute
 	cs, count := e.portal.Compute(vi)
 
 	return cs, count, e.things
@@ -135,7 +124,7 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 
 /*
 // ComputeNew performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
-func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
+func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Compute(player)
 
@@ -158,13 +147,13 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 		}
 	}
 
-	// 3. Static Player Motion
+	// 3. Static ThingPlayer Motion
 	player.Compute(vi)
 
 	// 4. Dynamic Solver
 	entities := e.entities.Compute()
 
-	// 5. Sync Up (Physics -> Model) - Player
+	// 5. Sync Up (Physics -> Model) - ThingPlayer
 	player.MoveEntityApply()
 
 	// 6. Sync Up (Physics -> Model) - Things

@@ -22,7 +22,7 @@ const (
 type Compiler struct {
 	sectors          *Sectors
 	things           []IThing
-	player           *Player
+	player           *ThingPlayer
 	sectorsMaxHeight float64
 	entities         *Entities
 }
@@ -80,8 +80,8 @@ func (r *Compiler) GetThings() []IThing {
 	return r.things
 }
 
-// GetPlayer returns the Player instance associated with the Compiler.
-func (r *Compiler) GetPlayer() *Player {
+// GetPlayer returns the ThingPlayer instance associated with the Compiler.
+func (r *Compiler) GetPlayer() *ThingPlayer {
 	return r.player
 }
 
@@ -273,13 +273,13 @@ func (r *Compiler) compileLights(sectors *Sectors) {
 	}
 }
 
-// createPlayer initializes a Player instance based on the provided configuration, sectors, and entities.
-func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *Entities) (*Player, error) {
+// createPlayer initializes a ThingPlayer instance based on the provided configuration, sectors, and entities.
+func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *Entities) (*ThingPlayer, error) {
 	pSector := r.sectors.GetSector(cfg.Sector)
 	if pSector == nil {
 		return nil, fmt.Errorf("can't find player sector at %s", cfg.Sector)
 	}
-	player := NewPlayer(cfg, pSector, sectors, entities, false)
+	player := NewThingPlayer(cfg, pSector, sectors, entities, false)
 	return player, nil
 }
 

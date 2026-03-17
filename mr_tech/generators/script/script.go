@@ -25,7 +25,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 1.0, false, t)
 	//cfg := &model.ConfigRoot{
 	//	Sectors: nil,
-	//	Player:  &model.ConfigPlayer{},
+	//	ThingPlayer:  &model.ConfigPlayer{},
 	//	Textures:
 	//}
 

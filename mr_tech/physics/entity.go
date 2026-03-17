@@ -171,8 +171,8 @@ func (e *Entity) clearCollider() {
 	}
 }
 
-// Compute updates the entity's velocity and state based on collisions, friction, and movement, returning its active state.
-func (e *Entity) Compute() bool {
+// Update updates the entity's velocity and state based on collisions, friction, and movement, returning its active state.
+func (e *Entity) Update() bool {
 	if e.Collider != nil {
 		if distance := e.Distance(e.Collider); distance >= e.GetWidth()/2+e.Collider.GetWidth()/2 {
 			e.clearCollider()

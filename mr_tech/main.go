@@ -18,8 +18,6 @@ const (
 	_MaxQueue = 32
 )
 
-//TODO MANCA L'UTILIZZO DELL'AABBtree (definito in engine) in Player -> MoveApply
-
 func main() {
 	var cfg *model.ConfigRoot
 	var err error

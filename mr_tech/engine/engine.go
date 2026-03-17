@@ -99,22 +99,25 @@ func (e *Engine) Len() int {
 
 // Setup initializes the Engine instance using the provided configuration, setting up textures, player, portal, and sectors.
 func (e *Engine) Setup(cfg *model.ConfigRoot) error {
-	e.textures = cfg.Textures
 	compiler := model.NewCompiler()
 	if err := compiler.Setup(cfg); err != nil {
 		return err
 	}
 	e.sectorTree = compiler.GetSectors()
 	e.player = compiler.GetPlayer()
+	e.sectorsMaxHeight = compiler.GetMaxHeight()
+	e.things = compiler.GetThings()
+
+	e.textures = cfg.Textures
+
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
 	if err := e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
 		return err
 	}
-	e.sectorsMaxHeight = compiler.GetMaxHeight()
-	e.manager = NewEntityManager(4096)
+
+	e.manager = NewEntityManager(uint(1 + len(e.things)))
 	pX, pY := e.player.GetXY()
 	e.playerEnt = e.manager.Spawn("PLAYER", pX, pY, e.player.GetRadius(), e.player.GetMass())
-	e.things = compiler.GetThings()
 	for _, thing := range e.things {
 		tP := thing.Position
 		e.thingsDict[thing.Id] = thing

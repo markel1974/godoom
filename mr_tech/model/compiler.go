@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // DefinitionJoin represents the join type with an assigned value of 3.
@@ -20,35 +18,11 @@ const (
 	DefinitionUnknown = 0
 )
 
-// segment represents an internal 2D segment structure with start and end points, sector reference, and index.
-type segment struct {
-	start  XY
-	end    XY
-	sector *Sector
-	np     int
-}
-
-type edgeKey struct {
-	x1, y1, x2, y2 int64
-}
-
-func makeEdgeKey(start XY, end XY) edgeKey {
-	const precision = 1000.0
-	return edgeKey{
-		x1: int64(math.Round(start.X * precision)),
-		y1: int64(math.Round(start.Y * precision)),
-		x2: int64(math.Round(end.X * precision)),
-		y2: int64(math.Round(end.Y * precision)),
-	}
-}
-
 // Compiler represents a 3D map compiler that manages sectors, their heights, and an internal cache for fast lookups.
 type Compiler struct {
-	sectors          []*Sector
+	sectors          *Sectors
 	things           []*Thing
 	sectorsMaxHeight float64
-	cache            map[string]*Sector
-	textures         textures.ITextures
 }
 
 // NewCompiler initializes and returns a new instance of the Compiler type with default values.
@@ -57,14 +31,29 @@ func NewCompiler() *Compiler {
 		sectors:          nil,
 		things:           nil,
 		sectorsMaxHeight: 0,
-		cache:            make(map[string]*Sector),
 	}
 }
 
 // Setup initializes the sectors and segments for the compiler based on the provided configuration.
 func (r *Compiler) Setup(cfg *ConfigRoot) error {
-	r.textures = cfg.Textures
+	sectors, totalSegments := r.compileSectors(cfg)
+
+	r.sectors = sectors
+
+	r.compileLights(sectors)
+
+	r.things = r.compileThings(cfg, r.sectors)
+
+	r.finalize(cfg, r.sectors)
+
+	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
+
+	return nil
+}
+
+func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 	modelSectorId := uint16(0)
+	var container []*Sector
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
@@ -100,16 +89,17 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			}
 			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: lightZ})
 		}
-		r.sectors = append(r.sectors, s)
-		r.cache[cs.Id] = s
+		container = append(container, s)
 	}
 
+	sectors := NewSectors(container)
+
 	totalSegments := 0
-	for _, sect := range r.sectors {
+	for _, sect := range sectors.GetSectors() {
 		for _, seg := range sect.Segments {
 			totalSegments++
 			if seg.Kind != DefinitionWall {
-				if s, ok := r.cache[seg.Ref]; ok {
+				if s := sectors.GetSector(seg.Ref); s != nil {
 					seg.SetSector(s.Id, s)
 				} else {
 					//fmt.Println("OUT", segment.Ref)
@@ -121,7 +111,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	if !cfg.DisableLoop {
 		//Verify Loop
-		for _, sector := range r.sectors {
+		for _, sector := range sectors.GetSectors() {
 			if len(sector.Segments) == 1 {
 				continue
 			}
@@ -141,8 +131,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		// Verify that for each edge that has a neighbor, the neighbor has this same neighbor.
 		fixed := 0
 		undefined := 0
-		lineDefsCache := r.makeSegmentsCache()
-		for _, sector := range r.sectors {
+		lineDefsCache := sectors.MakeSegmentsCache()
+		for _, sector := range sectors.GetSectors() {
 			for np, s := range sector.Segments {
 				if s.Kind != DefinitionWall {
 					if ld, ok := lineDefsCache[makeEdgeKey(s.End, s.Start)]; ok {
@@ -166,27 +156,17 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		}
 		fmt.Println("undefined:", undefined, "fixed:", fixed)
 	}
-
-	r.compileLights()
-
-	r.compileThings(cfg)
-
-	r.finalize(cfg)
-
-	fmt.Printf("Scan complete sectors: %d, segments: %d\n", len(r.sectors), totalSegments)
-
-	return nil
+	return sectors, totalSegments
 }
 
-func (r *Compiler) compileLights() {
+func (r *Compiler) compileLights(sectors *Sectors) {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
-	for _, sect := range r.sectors {
+	for _, sect := range sectors.GetSectors() {
 		if visited[sect.Id] {
 			continue
 		}
-
 		// Utilizziamo un algoritmo di Flood Fill per trovare tutti i settori connessi
 		var areaSectors []*Sector
 		queue := []*Sector{sect}
@@ -200,7 +180,7 @@ func (r *Compiler) compileLights() {
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.Segments {
 				if seg.Kind != DefinitionWall && seg.Ref != "" {
-					if n, ok := r.cache[seg.Ref]; ok {
+					if n := sectors.GetSector(seg.Ref); n != nil {
 						if !visited[n.Id] {
 							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
 							if n.CeilY == curr.CeilY && n.FloorY == curr.FloorY && n.Light.intensity == curr.Light.intensity {
@@ -244,13 +224,13 @@ func (r *Compiler) compileLights() {
 }
 
 // compileThings processes raw ConfigThing entities, resolving their sector references and storing them in the compiler.
-func (r *Compiler) compileThings(cfg *ConfigRoot) {
+func (r *Compiler) compileThings(cfg *ConfigRoot, sectors *Sectors) []*Thing {
+	var things []*Thing
 	for _, ct := range cfg.Things {
-		sector, ok := r.cache[ct.Sector]
-		if !ok {
+		sector := sectors.GetSector(ct.Sector)
+		if sector == nil {
 			continue
 		}
-
 		thing := &Thing{
 			Id:        ct.Id,
 			Position:  ct.Position,
@@ -263,13 +243,13 @@ func (r *Compiler) compileThings(cfg *ConfigRoot) {
 			Speed:     ct.Speed,
 			Animation: cfg.GetAnimation(ct.Animation),
 		}
-
-		r.things = append(r.things, thing)
+		things = append(things, thing)
 	}
+	return things
 }
 
 // finalize adjusts player position and sector dimensions based on the scale factor and calculates the maximum sector height.
-func (r *Compiler) finalize(cfg *ConfigRoot) {
+func (r *Compiler) finalize(cfg *ConfigRoot, sectors *Sectors) {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
 		scale = 1
@@ -282,7 +262,7 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 	}
 
 	r.sectorsMaxHeight = 0
-	for _, sect := range r.sectors {
+	for _, sect := range sectors.GetSectors() {
 		//lights scale
 		sect.Light.pos.ScaleXY(scale)
 		//vertex scale
@@ -298,7 +278,7 @@ func (r *Compiler) finalize(cfg *ConfigRoot) {
 }
 
 // GetSectors retrieves the list of sectors associated with the Compiler instance.
-func (r *Compiler) GetSectors() []*Sector {
+func (r *Compiler) GetSectors() *Sectors {
 	return r.sectors
 }
 
@@ -309,8 +289,8 @@ func (r *Compiler) GetThings() []*Thing {
 
 // Get retrieves a Sector from the cache using the provided sectorId. Returns an error if the sectorId is invalid.
 func (r *Compiler) Get(sectorId string) (*Sector, error) {
-	s, ok := r.cache[sectorId]
-	if !ok {
+	s := r.sectors.GetSector(sectorId)
+	if s == nil {
 		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
 	}
 	return s, nil
@@ -319,24 +299,4 @@ func (r *Compiler) Get(sectorId string) (*Sector, error) {
 // GetMaxHeight returns the maximum height difference between the floor and ceiling among all sectors in the Compiler.
 func (r *Compiler) GetMaxHeight() float64 {
 	return r.sectorsMaxHeight
-}
-
-// makeSegmentsCache creates and returns a map associating unique edge keys to their corresponding segments.
-func (r *Compiler) makeSegmentsCache() map[edgeKey]*segment {
-	t := make(map[edgeKey]*segment)
-	for _, sect := range r.sectors {
-		for np := 0; np < len(sect.Segments); np++ {
-			s := sect.Segments[np]
-			hash := makeEdgeKey(s.Start, s.End)
-			ld := &segment{sector: sect, np: np, start: s.Start, end: s.End}
-			if fld, ok := t[hash]; ok {
-				if sect.Id != fld.sector.Id {
-					//fmt.Println("line segment already added", sect.Id, fld.Sector.Id, hash, np)
-				}
-			} else {
-				t[hash] = ld
-			}
-		}
-	}
-	return t
 }

@@ -43,7 +43,7 @@ type Engine struct {
 	sectorsMaxHeight float64
 	manager          *EntityManager
 	playerEnt        *physics.Entity
-	sectorTree       *physics.AABBTree
+	sectorTree       *model.Sectors
 }
 
 // NewEngine initializes and returns a new Engine instance with specified width, height, and maximum render queue size.
@@ -108,12 +108,11 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	if err != nil {
 		return err
 	}
-	sectors := compiler.GetSectors()
-	e.sectorTree = e.BuildSectorTree(sectors)
+	e.sectorTree = compiler.GetSectors()
 
 	e.player = model.NewPlayer(cfg.Player, playerSector, false)
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
-	if err = e.portal.Setup(sectors); err != nil {
+	if err = e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
 		return err
 	}
 	e.sectorsMaxHeight = compiler.GetMaxHeight()
@@ -187,12 +186,8 @@ func (e *Engine) Compute(player *model.Player, vi *model.ViewMatrix) ([]*model.C
 				physEnt.MoveTo(t.Position.X-r, t.Position.Y-r)
 				e.manager.UpdateObject(physEnt)
 
-				if newSector := t.Sector.LocateSector(t.Position.X, t.Position.Y); newSector != nil {
+				if newSector := e.sectorTree.SectorSearch(t.Sector, t.Position.X, t.Position.Y); newSector != nil {
 					t.Sector = newSector
-				} else {
-					if newSector = e.SectorSearch(physEnt, t.Position.X, t.Position.Y); newSector != nil {
-						t.Sector = newSector
-					}
 				}
 			}
 		}
@@ -237,29 +232,4 @@ func (e *Engine) moveEnemies() {
 			}
 		}
 	}
-}
-
-// SectorSearch esegue il test di inclusione esatta sui settori candidati filtrati dall'AABBTree.
-func (e *Engine) SectorSearch(src *physics.Entity, px, py float64) *model.Sector {
-	candidates := e.sectorTree.QueryOverlaps(src)
-	for _, c := range candidates {
-		sector, ok := c.(*model.Sector)
-		if !ok {
-			continue
-		}
-		if target := sector.LocateSector(px, py); target != nil {
-			return target
-		}
-	}
-	return nil
-}
-
-// BuildSectorTree genera l'albero spaziale statico
-func (e *Engine) BuildSectorTree(sectors []*model.Sector) *physics.AABBTree {
-	tree := physics.NewAABBTree(uint(len(sectors)))
-	for _, s := range sectors {
-		s.ComputeAABB()
-		tree.InsertObject(s)
-	}
-	return tree
 }

@@ -77,15 +77,14 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 	return nil
 }
 
+// QueryPoint performs a spatial query to determine if a point (px, py) lies within any sector and returns the matching Sector.
 func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	candidates := s.tree.QueryPoint(px, py)
 	for _, c := range candidates {
-		sector, ok := c.(*Sector)
-		if !ok {
-			continue
-		}
-		if target := sector.LocatePoint(px, py); target != nil {
-			return target
+		if sector, ok := c.(*Sector); ok {
+			if sector.ContainsPoint(px, py) {
+				return sector
+			}
 		}
 	}
 	return nil

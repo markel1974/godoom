@@ -240,6 +240,16 @@ func (s *Sector) ComputeAABB() {
 	s.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
 }
 
+// ContainsPoint esegue un test Point-in-Polygon convesso rigoroso.
+func (s *Sector) ContainsPoint(px, py float64) bool {
+	for _, seg := range s.Segments {
+		if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // ClipVelocity adjusts the velocity vector (velX, velY) for collision detection and resolution within the current sector.
 func (s *Sector) ClipVelocity(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
 	const maxIter = 3

@@ -74,6 +74,7 @@ func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, ma
 	e.VxMin = 0.001
 	e.VyMin = 0.001
 	e.impulse = 0.001
+	e.rebuild()
 }
 
 // GetId returns the unique identifier (Id) of the Entity as a string.

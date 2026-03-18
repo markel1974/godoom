@@ -114,6 +114,7 @@ func (t *ThingBullet) bounceMovement(velX float64, velY float64) (float64, float
 	return velX, velY
 }
 
+// EffectBounce calculates the resulting direction of a projectile after collision and applies bounce physics adjustments.
 func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos float64) (float64, float64) {
 	moveX := pX - viewX
 	moveY := pY - viewY
@@ -174,12 +175,12 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kn
 		// cx, cy: Centro spoofato sul punto d'impatto per generare la normale perfetta
 		// 0, 0: Width/Height nulli affinché Baumgarte usi solo il raggio del proiettile
 		// 1e12: Massa infinita per assorbire l'impulso al 100% (InverseMass ~ 0)
-		ent := physics.NewEntity(cx, cy, 0, 0, 1e12)
-
-		ent.Reset(cx, cy, 0, 0, 0, 1e12)
+		//ent := physics.NewEntity(cx, cy, 0, 0, 1e12)
+		//ent.Reset(cx, cy, 0, 0, 0, 1e12)
+		t.wall.Reset(cx, cy, 0, 0, 0, 1e12)
 
 		// 3. Risoluzione Newton + Baumgarte
-		t.entity.SetupCollision(ent)
+		t.entity.SetupCollision(t.wall)
 
 		return t.entity.Vx, t.entity.Vy
 	}

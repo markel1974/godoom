@@ -133,7 +133,7 @@ func (t *ThingBase) PhysicsApply() {
 
 // MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
 func (t *ThingBase) moveApply(tx float64, ty float64) {
-	x, y := t.clipMovement(tx, ty)
+	x, y := t.slidingMovement(tx, ty)
 	t.position.X += x
 	t.position.Y += y
 	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
@@ -142,14 +142,14 @@ func (t *ThingBase) moveApply(tx float64, ty float64) {
 	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 
-// clipMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
-func (t *ThingBase) clipMovement(velX float64, velY float64) (float64, float64) {
+// slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
+func (t *ThingBase) slidingMovement(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
 	kneePos := t.sector.FloorY + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-	velX, velY = t.sector.ClipVelocity(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	velX, velY = t.sector.EffectSliding(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
 	return velX, velY
 }

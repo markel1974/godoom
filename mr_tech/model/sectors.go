@@ -53,12 +53,6 @@ func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 		return newSector
 	}
 	//fmt.Println("SectorSearch: No sector found for point (", px, ",", py, ")")
-	//slowest
-	//for _, sec := range s.sectors {
-	//	if newSector := sec.LocatePoint(px, py); newSector != nil {
-	//		return newSector
-	//	}
-	//}
 	return nil
 }
 

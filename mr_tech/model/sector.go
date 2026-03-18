@@ -250,8 +250,7 @@ func (s *Sector) ContainsPoint(px, py float64) bool {
 	return true
 }
 
-// ClipVelocity adjusts the velocity vector (velX, velY) for collision detection and resolution within the current sector.
-func (s *Sector) ClipVelocity(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
+func (s *Sector) EffectSliding(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
 	const maxIter = 3
 
 	// Micro-loop per predizione collisioni multiple
@@ -287,6 +286,68 @@ func (s *Sector) ClipVelocity(viewX float64, viewY float64, pX float64, pY float
 						nx := -yd * invLen
 						ny := xd * invLen
 
+						epsilon := 0.005
+						velX += nx * epsilon
+						velY += ny * epsilon
+					}
+					hit = true
+					break // Vettore modificato, ri-valuta contro la geometria
+				}
+			}
+		}
+		if !hit {
+			break // Traiettoria stabilizzata
+		}
+	}
+	return velX, velY
+}
+
+func (s *Sector) EffectBounce(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
+	const maxIter = 3
+
+	// Micro-loop per predizione collisioni multiple
+	for iter := 0; iter < maxIter; iter++ {
+		hit := false
+
+		for _, seg := range s.Segments {
+			start := seg.Start
+			end := seg.End
+			if seg.Kind == DefinitionJoin {
+				continue
+			}
+
+			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
+				holeLow := 9e9
+				holeHigh := -9e9
+				if seg.Sector != nil {
+					holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
+					holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
+				}
+
+				if holeHigh < headPos || holeLow > kneePos {
+					xd := end.X - start.X
+					yd := end.Y - start.Y
+					lenSq := xd*xd + yd*yd
+
+					if lenSq > 0 {
+						invLen := 1.0 / math.Sqrt(lenSq)
+						nx := -yd * invLen // Normale X
+						ny := xd * invLen  // Normale Y
+
+						// Prodotto scalare tra velocità e normale (V · N)
+						dotNormal := velX*nx + velY*ny
+
+						// Risolvi solo se la velocità è opposta alla normale del muro
+						if dotNormal < 0 {
+							restitution := 0.8 // Coefficiente di restituzione (0.0 = slide, 1.0 = rimbalzo perfetto)
+
+							// Riflessione vettoriale algebrica
+							impulse := (1.0 + restitution) * dotNormal
+							velX -= impulse * nx
+							velY -= impulse * ny
+						}
+
+						// Micro-push lungo la normale per prevenire sink/compenetrazione per precisione FP
 						epsilon := 0.005
 						velX += nx * epsilon
 						velY += ny * epsilon

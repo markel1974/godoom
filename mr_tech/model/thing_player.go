@@ -318,7 +318,7 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	pX := viewX + velX
 	pY := viewY + velY
 
-	velX, velY = p.sector.ClipVelocity(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	velX, velY = p.sector.EffectSliding(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
 
 	if math.Abs(p.velocity.X) < 0.001 {
 		p.velocity.X = 0

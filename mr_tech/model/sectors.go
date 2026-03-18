@@ -13,14 +13,20 @@ type Sectors struct {
 
 // NewSectors initializes a new Sectors instance by building an AABB tree and a cache from the given slice of Sector pointers.
 func NewSectors(sectors []*Sector) *Sectors {
-	tree := physics.NewAABBTree(uint(len(sectors)))
 	cache := make(map[string]*Sector)
-	for _, s := range sectors {
-		s.ComputeAABB()
-		tree.InsertObject(s)
-		cache[s.Id] = s
+	for _, sec := range sectors {
+		cache[sec.Id] = sec
 	}
-	return &Sectors{sectors: sectors, tree: tree, cache: cache}
+	return &Sectors{sectors: sectors, tree: nil, cache: cache}
+}
+
+// CreateTree constructs a new AABB tree for spatial organization of sectors within the Sectors instance.
+func (s *Sectors) CreateTree() {
+	s.tree = physics.NewAABBTree(uint(len(s.sectors)))
+	for _, sec := range s.sectors {
+		sec.ComputeAABB()
+		s.tree.InsertObject(sec)
+	}
 }
 
 // GetSector retrieves a Sector instance by its unique identifier from the cache map. Returns nil if not found.
@@ -40,20 +46,19 @@ func (s *Sectors) Len() int {
 
 // SectorSearch attempts to locate a sector containing the point (px, py) within or near the provided sector.
 func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
-	if newSector := sector.LocateSector(px, py); newSector != nil {
-		return newSector
-
-	}
-	if newSector := s.QueryOverlap(sector, px, py); newSector != nil {
+	if newSector := sector.LocatePoint(px, py); newSector != nil {
 		return newSector
 	}
-	//slowest
-	for _, sec := range s.sectors {
-		if newSector := sec.LocateSector(px, py); newSector != nil {
-			return newSector
-		}
+	if newSector := s.QueryPoint(px, py); newSector != nil {
+		return newSector
 	}
 	//fmt.Println("SectorSearch: No sector found for point (", px, ",", py, ")")
+	//slowest
+	//for _, sec := range s.sectors {
+	//	if newSector := sec.LocatePoint(px, py); newSector != nil {
+	//		return newSector
+	//	}
+	//}
 	return nil
 }
 
@@ -65,7 +70,21 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 		if !ok {
 			continue
 		}
-		if target := sector.LocateSector(px, py); target != nil {
+		if target := sector.LocatePoint(px, py); target != nil {
+			return target
+		}
+	}
+	return nil
+}
+
+func (s *Sectors) QueryPoint(px, py float64) *Sector {
+	candidates := s.tree.QueryPoint(px, py)
+	for _, c := range candidates {
+		sector, ok := c.(*Sector)
+		if !ok {
+			continue
+		}
+		if target := sector.LocatePoint(px, py); target != nil {
 			return target
 		}
 	}

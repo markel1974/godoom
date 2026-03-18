@@ -1,6 +1,8 @@
 package physics
 
-import "math"
+import (
+	"math"
+)
 
 // IAABB represents an interface for objects that can provide their Axis-Aligned Bounding Box (AABB).
 type IAABB interface {
@@ -50,6 +52,14 @@ func (a *AABB) Overlaps(other *AABB) bool {
 		a.minY < other.maxY &&
 		a.maxZ > other.minZ &&
 		a.minZ < other.maxZ
+}
+
+// QueryPoint checks if the given point (pMinX, pMinY) lies within the bounds of the AABB.
+func (a *AABB) QueryPoint(pMinX, pMinY float64) bool {
+	return a.maxX >= pMinX &&
+		a.minX <= pMinX &&
+		a.maxY >= pMinY &&
+		a.minY <= pMinY
 }
 
 // Contains checks if the other AABB is entirely contained within the current AABB.

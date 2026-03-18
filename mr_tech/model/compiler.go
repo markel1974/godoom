@@ -48,6 +48,8 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.sectorsMaxHeight = r.scale(cfg, r.sectors)
 
+	r.sectors.CreateTree()
+
 	var err error
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))

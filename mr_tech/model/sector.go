@@ -129,8 +129,8 @@ func (s *Sector) AddSpan(x1 float64, x2 float64) {
 	s.VisibleSpans = merged
 }
 
-// LocateSector identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
-func (s *Sector) LocateSector(px, py float64) *Sector {
+// LocatePoint identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
+func (s *Sector) LocatePoint(px, py float64) *Sector {
 	curr := s
 	const maxSteps = 16 // Safeguard per loop infiniti da approssimazioni floating-point
 	for step := 0; step < maxSteps; step++ {

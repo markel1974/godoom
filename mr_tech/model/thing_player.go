@@ -310,24 +310,27 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	if !p.IsMoving() {
 		return
 	}
-
-	headPos := p.getHeadPosition()
-	kneePos := p.getKneePosition()
 	viewX, viewY := vi.GetXY()
 	velX, velY := p.GetVelocity()
-	pX := viewX + velX
-	pY := viewY + velY
-
-	velX, velY = p.wallSlidingEffect(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
-
+	velX, velY = p.adjustPassage(viewX, viewY, velX, velY)
 	if math.Abs(p.velocity.X) < 0.001 {
 		p.velocity.X = 0
 	}
 	if math.Abs(p.velocity.Y) < 0.001 {
 		p.velocity.Y = 0
 	}
-
 	p.MoveApply(velX, velY)
+}
+
+// checkWall adjusts the player's velocity when colliding with walls based on position, velocity, and collision detection logic.
+func (p *ThingPlayer) adjustPassage(viewX, viewY, velX, velY float64) (float64, float64) {
+	top := p.getHeadPosition()
+	bottom := p.getKneePosition()
+	pX := viewX + velX
+	pY := viewY + velY
+	radius := p.entity.GetWidth() / 2
+	velX, velY = WallSlidingEffect(p.sector, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
+	return velX, velY
 }
 
 // GetHeadPosition returns the Z-coordinate of the player's head, calculated as the player's current Z-position plus HeadMargin.
@@ -368,26 +371,4 @@ func (p *ThingPlayer) verticalCollision() {
 			p.where.Z += p.velocity.Z
 		}
 	}
-}
-
-// wallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.
-// Takes the current view coordinates, position, velocity, head and knee positions, and returns the modified velocity.
-func (p *ThingPlayer) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
-	const epsilon = 0.005
-	seg1 := p.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos, p.entity.GetWidth()/2)
-	if seg1 != nil {
-		xd := seg1.End.X - seg1.Start.X
-		yd := seg1.End.Y - seg1.Start.Y
-		if lenSq := xd*xd + yd*yd; lenSq > 0 {
-			dot := velX*xd + velY*yd
-			velX = (xd * dot) / lenSq
-			velY = (yd * dot) / lenSq
-			invLen := 1.0 / math.Sqrt(lenSq)
-			nx := -yd * invLen
-			ny := xd * invLen
-			velX += nx * epsilon
-			velY += ny * epsilon
-		}
-	}
-	return velX, velY
 }

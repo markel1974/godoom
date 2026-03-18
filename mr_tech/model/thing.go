@@ -1,6 +1,8 @@
 package model
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -35,4 +37,43 @@ type IThing interface {
 	GetSector() *Sector
 
 	PhysicsApply()
+}
+
+// WallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.
+// Takes the current view coordinates, position, velocity, head and knee positions, and returns the modified velocity.
+func WallSlidingEffect(sector *Sector, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
+	const epsilon = 0.5
+	// 1. Trova il segmento più vicino (con padding per gli spigoli)
+	seg1 := sector.CheckSegmentsClearance(viewX, viewY, pX, pY, top, bottom, radius)
+	if seg1 == nil {
+		return velX, velY
+	}
+	xd := seg1.End.X - seg1.Start.X
+	yd := seg1.End.Y - seg1.Start.Y
+	if lenSq := xd*xd + yd*yd; lenSq > 0 {
+		// 2. Proiezione della velocità sul vettore tangenziale del muro
+		dot := (velX*xd + velY*yd) / lenSq
+		velX = xd * dot
+		velY = yd * dot
+		// 3. Calcolo della normale
+		invLen := 1.0 / math.Sqrt(lenSq)
+		nx := -yd * invLen
+		ny := xd * invLen
+		// 4. DIREZIONE DELLA NORMALE (Cruciale)
+		// Calcoliamo il vettore che va dal muro al giocatore.
+		// Se la normale calcolata punta nella direzione opposta, la invertiamo.
+		// Usiamo viewX/Y come riferimento sicuro (posizione pre-collisione).
+		midX := (seg1.Start.X + seg1.End.X) * 0.5
+		midY := (seg1.Start.Y + seg1.End.Y) * 0.5
+		toPlayerX := viewX - midX
+		toPlayerY := viewY - midY
+		if (toPlayerX*nx + toPlayerY*ny) < 0 {
+			nx = -nx
+			ny = -ny
+		}
+		// 5. Applica l'epsilon push per staccarsi fisicamente dal piano di collisione
+		velX += nx * epsilon
+		velY += ny * epsilon
+	}
+	return velX, velY
 }

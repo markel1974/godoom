@@ -126,50 +126,25 @@ func (t *ThingBase) PhysicsApply() {
 		ty += t.entity.Vy
 	}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
-		t.moveApply(tx, ty)
+		x, y := t.adjustPassage(tx, ty)
+		t.position.X += x
+		t.position.Y += y
+		if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
+			t.sector = newSector
+		}
+		t.entities.UpdateThing(t, t.position.X, t.position.Y)
 	}
 }
 
-// moveApply adjusts the position of the ThingBase instance based on velocity while considering wall collisions and sector changes.
-func (t *ThingBase) moveApply(tx float64, ty float64) {
-	x, y := t.checkWall(tx, ty)
-	t.position.X += x
-	t.position.Y += y
-	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-		t.sector = newSector
-	}
-	t.entities.UpdateThing(t, t.position.X, t.position.Y)
-}
-
-// checkWall adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
-func (t *ThingBase) checkWall(velX float64, velY float64) (float64, float64) {
+// adjustPassage adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
+func (t *ThingBase) adjustPassage(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
-	headPos := t.sector.FloorY + t.height
-	kneePos := t.sector.FloorY + 2.0
+	top := t.sector.FloorY + t.height
+	bottom := t.sector.FloorY + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-	velX, velY = t.wallSlidingEffect(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
-	return velX, velY
-}
-
-// wallSlidingEffect adjusts velocity to simulate sliding along walls when collisions are detected in the provided sector.
-func (t *ThingBase) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
-	const epsilon = 0.005
-	seg := t.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos, t.entity.GetWidth()/2)
-	if seg != nil {
-		xd := seg.End.X - seg.Start.X
-		yd := seg.End.Y - seg.Start.Y
-		if lenSq := xd*xd + yd*yd; lenSq > 0 {
-			dot := velX*xd + velY*yd
-			velX = (xd * dot) / lenSq
-			velY = (yd * dot) / lenSq
-			invLen := 1.0 / math.Sqrt(lenSq)
-			nx := -yd * invLen
-			ny := xd * invLen
-			velX += nx * epsilon
-			velY += ny * epsilon
-		}
-	}
+	radius := t.entity.GetWidth() / 2
+	velX, velY = WallSlidingEffect(t.sector, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
 	return velX, velY
 }

@@ -214,7 +214,7 @@ func (s *Sector) ContainsPoint(px, py float64) bool {
 }
 
 // CheckSegmentsClearance determines if a line segment intersects with any sector boundary and verifies clearance within head and knee positions.
-func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, h float64, k float64, radius float64) *Segment {
+func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Segment {
 	moveX := pX - viewX
 	moveY := pY - viewY
 	minT := 1.0
@@ -235,8 +235,8 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, h float64, k float
 		t := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
 		u := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
 
-		// Calcolo del padding basato sul raggio dell'entità
-		// Questo estende il segmento virtualmente per chiudere i gap sui vertici
+		// Compute padding based on entity radius
+		// This virtually extends the segment to close gaps at vertices
 		uPadding := 0.0
 		if radius > 0 {
 			segLenSq := dx*dx + dy*dy
@@ -244,7 +244,7 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, h float64, k float
 				uPadding = radius / math.Sqrt(segLenSq)
 			}
 		}
-		// Test con estensione uPadding
+		// Test with uPadding extension
 		if t >= 0 && t <= minT && u >= -uPadding && u <= 1+uPadding {
 			holeLow := 9e9
 			holeHigh := -9e9
@@ -252,7 +252,7 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, h float64, k float
 				holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
 				holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
 			}
-			if holeHigh < h || holeLow > k {
+			if holeHigh < top || holeLow > bottom {
 				minT = t
 				closestSeg = seg
 			}

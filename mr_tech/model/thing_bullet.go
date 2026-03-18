@@ -3,12 +3,15 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/mathematic"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ThingBullet represents a specialized type of Thing designed to simulate projectile-like behavior in the environment.
 type ThingBullet struct {
 	*ThingBase
+	wall *physics.Entity
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
@@ -17,6 +20,7 @@ type ThingBullet struct {
 func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
+		wall:      physics.NewEntity(0, 0, 0, 0, 0),
 	}
 	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
@@ -89,7 +93,6 @@ func (t *ThingBullet) PhysicsApply() {
 // MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
 func (t *ThingBullet) moveApply(t1x float64, t1y float64) {
 	x, y := t.bounceMovement(t1x, t1y)
-	//TODO WALL BOUNCE!!!
 	t.position.X += x
 	t.position.Y += y
 	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
@@ -105,6 +108,81 @@ func (t *ThingBullet) bounceMovement(velX float64, velY float64) (float64, float
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-	velX, velY = t.sector.EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+
+	//t.entity.SetupCollision()
+	velX, velY = t.EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	return velX, velY
+}
+
+func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos float64) (float64, float64) {
+	moveX := pX - viewX
+	moveY := pY - viewY
+
+	var minT float64 = 1.0
+	var hit *Segment = nil
+
+	for _, seg := range t.sector.Segments {
+		if seg.Kind == DefinitionJoin {
+			continue
+		}
+
+		dx := seg.End.X - seg.Start.X
+		dy := seg.End.Y - seg.Start.Y
+		den := moveX*dy - moveY*dx
+
+		if den == 0 {
+			continue
+		}
+
+		// Calcolo parametrico
+		t1 := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
+		u1 := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
+
+		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
+		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
+			holeLow, holeHigh := 9e9, -9e9
+			if seg.Sector != nil {
+				holeLow = mathematic.MaxF(t.sector.FloorY, seg.Sector.FloorY)
+				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
+			}
+
+			if holeHigh < headPos || holeLow > kneePos {
+				minT = t1
+				hit = seg
+			}
+		}
+	}
+
+	// Risolvi l'impulso esclusivamente sulla faccia corretta
+	if hit != nil {
+		dx := hit.End.X - hit.Start.X
+		dy := hit.End.Y - hit.Start.Y
+		lenSq := dx*dx + dy*dy
+
+		// 1. Proiezione Ortogonale (Closest Point on Line Segment)
+		var cx, cy float64
+		if lenSq > 0 {
+			tProj := ((viewX-hit.Start.X)*dx + (viewY-hit.Start.Y)*dy) / lenSq
+			tProj = math.Max(0, math.Min(1, tProj))
+			cx = hit.Start.X + tProj*dx
+			cy = hit.Start.Y + tProj*dy
+		} else {
+			cx, cy = hit.Start.X, hit.Start.Y
+		}
+
+		// 2. Istanziazione Static Body
+		// cx, cy: Centro spoofato sul punto d'impatto per generare la normale perfetta
+		// 0, 0: Width/Height nulli affinché Baumgarte usi solo il raggio del proiettile
+		// 1e12: Massa infinita per assorbire l'impulso al 100% (InverseMass ~ 0)
+		ent := physics.NewEntity(cx, cy, 0, 0, 1e12)
+
+		ent.Reset(cx, cy, 0, 0, 0, 1e12)
+
+		// 3. Risoluzione Newton + Baumgarte
+		t.entity.SetupCollision(ent)
+
+		return t.entity.Vx, t.entity.Vy
+	}
+
 	return velX, velY
 }

@@ -43,12 +43,11 @@ type Entity struct {
 // NewEntity creates and returns a new Entity instance with the specified position, dimensions, and mass.
 func NewEntity(x float64, y float64, w float64, h float64, mass float64) *Entity {
 	a := &Entity{
-		Id:   utils.NextUUId(),
-		Rect: NewRect(x, y, w, h, 1.0),
-		Mass: mass,
-		Vx:   0.0,
-		Vy:   0.0,
-
+		Id:       utils.NextUUId(),
+		Rect:     NewRect(x, y, w, h, 1.0),
+		Mass:     mass,
+		Vx:       0.0,
+		Vy:       0.0,
 		Friction: friction,
 		G:        0.0,
 		GForce:   0.0,
@@ -57,6 +56,24 @@ func NewEntity(x float64, y float64, w float64, h float64, mass float64) *Entity
 		impulse:  0.001,
 	}
 	return a
+}
+
+// Reset reinitializes the Entity's position, size, and z-index with the given parameters.
+func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, mass float64) {
+	e.point.x = x
+	e.point.y = y
+	e.size.w = w
+	e.size.h = h
+	e.z = z
+	e.Mass = mass
+	e.Vx = 0.0
+	e.Vy = 0.0
+	e.Friction = friction
+	e.G = 0.0
+	e.GForce = 0.0
+	e.VxMin = 0.001
+	e.VyMin = 0.001
+	e.impulse = 0.001
 }
 
 // GetId returns the unique identifier (Id) of the Entity as a string.

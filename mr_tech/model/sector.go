@@ -331,26 +331,34 @@ func (s *Sector) EffectBounce(viewX float64, viewY float64, pX float64, pY float
 
 					if lenSq > 0 {
 						invLen := 1.0 / math.Sqrt(lenSq)
-						nx := -yd * invLen // Normale X
-						ny := xd * invLen  // Normale Y
+						nx := -yd * invLen
+						ny := xd * invLen
 
-						// Prodotto scalare tra velocità e normale (V · N)
-						dotNormal := velX*nx + velY*ny
-
-						// Risolvi solo se la velocità è opposta alla normale del muro
-						if dotNormal < 0 {
-							restitution := 0.8 // Coefficiente di restituzione (0.0 = slide, 1.0 = rimbalzo perfetto)
-
-							// Riflessione vettoriale algebrica
-							impulse := (1.0 + restitution) * dotNormal
-							velX -= impulse * nx
-							velY -= impulse * ny
+						// 1. Allinea la normale contro la direzione reale del raggio
+						moveX := pX - viewX
+						moveY := pY - viewY
+						if moveX*nx+moveY*ny > 0 {
+							nx = -nx
+							ny = -ny
 						}
 
-						// Micro-push lungo la normale per prevenire sink/compenetrazione per precisione FP
+						// 2. Riflessione pura dell'energia sul vettore velocità
+						dotVel := velX*nx + velY*ny
+						if dotVel < 0 {
+							restitution := 1.0 // 1.0 = rimbalzo perfetto (angolo incidenza = angolo riflesso)
+							velX -= (1.0 + restitution) * dotVel * nx
+							velY -= (1.0 + restitution) * dotVel * ny
+						}
+
+						// 3. Epsilon push-out codificato direttamente nel vettore velocità
 						epsilon := 0.005
 						velX += nx * epsilon
 						velY += ny * epsilon
+
+						// 4. CRITICO: Allinea il target virtuale per il prossimo ciclo di maxIter.
+						// Senza questo, il raycast successivo colliderebbe con la vecchia traiettoria.
+						pX = viewX + velX
+						pY = viewY + velY
 					}
 					hit = true
 					break // Vettore modificato, ri-valuta contro la geometria

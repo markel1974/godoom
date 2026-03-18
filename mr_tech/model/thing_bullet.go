@@ -87,13 +87,24 @@ func (t *ThingBullet) PhysicsApply() {
 }
 
 // MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
-func (t *ThingBullet) moveApply(tx float64, ty float64) {
-	//x, y := t.clipMovement(tx, ty)
+func (t *ThingBullet) moveApply(t1x float64, t1y float64) {
+	x, y := t.bounceMovement(t1x, t1y)
 	//TODO WALL BOUNCE!!!
-	t.position.X += tx
-	t.position.Y += ty
+	t.position.X += x
+	t.position.Y += y
 	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
 		t.sector = newSector
 	}
 	t.entities.UpdateThing(t, t.position.X, t.position.Y)
+}
+
+// slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
+func (t *ThingBullet) bounceMovement(velX float64, velY float64) (float64, float64) {
+	headPos := t.sector.FloorY + t.height
+	kneePos := t.sector.FloorY + 2.0
+	viewX, viewY := t.position.X, t.position.Y
+	pX := viewX + velX
+	pY := viewY + velY
+	velX, velY = t.sector.EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	return velX, velY
 }

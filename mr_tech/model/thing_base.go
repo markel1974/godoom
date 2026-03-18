@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ThingBase represents the base structure for all entities in the system, defining their physical and graphical properties.
+// ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id         string
 	position   XY
@@ -25,7 +25,7 @@ type ThingBase struct {
 	identifier int
 }
 
-// NewThingBase creates and initializes a new ThingBase with the specified configuration, animation, sector, and entities.
+// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, sectors, and entities.
 func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBase {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
@@ -50,72 +50,71 @@ func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 	return thing
 }
 
-// GetId returns the unique identifier (id) of the ThingBase instance as a string.
+// GetId returns the identifier string of the ThingBase instance.
 func (t *ThingBase) GetId() string {
 	return t.id
 }
 
-// GetKind returns the integer value representing the kind of the ThingBase.
+// GetKind returns the type of the ThingBase as a value of the ThingType enumeration.
 func (t *ThingBase) GetKind() ThingType {
 	return t.kind
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the ThingBase's physics entity.
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
 func (t *ThingBase) GetAABB() *physics.AABB {
 	return t.entity.GetAABB()
 }
 
-// GetEntity returns the physics.Entity associated with the ThingBase instance.
+// GetEntity returns the physics.Entity associated with the current ThingBase instance.
 func (t *ThingBase) GetEntity() *physics.Entity {
 	return t.entity
 }
 
-// GetAnimation returns the current animation associated with the instance of ThingBase.
+// GetAnimation returns the animation associated with the ThingBase instance.
 func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
-// GetSector returns the current sector associated with the ThingBase instance.
+// GetSector retrieves the current sector associated with the ThingBase instance.
 func (t *ThingBase) GetSector() *Sector {
 	return t.sector
 }
 
-// GetPosition returns the X and Y coordinates of the ThingBase's position.
 func (t *ThingBase) GetPosition() (float64, float64) {
 	return t.position.X, t.position.Y
 }
 
-// GetLight retrieves the Light object associated with the current ThingBase instance's sector.
+// GetLight retrieves the Light object associated with the ThingBase's current sector.
 func (t *ThingBase) GetLight() *Light {
 	return t.sector.Light
 }
 
-// GetFloorY returns the Y-coordinate of the floor level in the current sector associated with the ThingBase instance.
+// GetFloorY returns the floor Y-coordinate of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetFloorY() float64 {
 	return t.sector.FloorY
 }
 
-// GetCeilY returns the ceiling Y-coordinate of the ThingBase's associated sector.
+// GetCeilY returns the ceiling height of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetCeilY() float64 {
 	return t.sector.CeilY
 }
 
-// Compute updates the ThingBase object based on the player's position provided as playerX and playerY.
+// Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
 func (t *ThingBase) Compute(playerX float64, playerY float64) {
 	//nothing to do
 }
 
-// SetIdentifier sets the identifier field of the ThingBase instance to the specified integer value.
+// SetIdentifier sets the unique identifier for the ThingBase instance.
 func (t *ThingBase) SetIdentifier(identifier int) {
 	t.identifier = identifier
 }
 
-// GetIdentifier retrieves the integer identifier associated with the ThingBase instance.
+// GetIdentifier returns the unique identifier of the ThingBase instance.
 func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
 
-// PhysicsApply updates the entity's position based on passive and active deltas, ensuring movement exceeds a minimum threshold.
+// PhysicsApply updates the position of the object based on passive and active physics-driven deltas.
 func (t *ThingBase) PhysicsApply() {
 	ex, ey := t.entity.GetCenterXY()
 	// Passive Delta (bounces computed by SetupCollision)
@@ -131,9 +130,9 @@ func (t *ThingBase) PhysicsApply() {
 	}
 }
 
-// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
+// moveApply adjusts the position of the ThingBase instance based on velocity while considering wall collisions and sector changes.
 func (t *ThingBase) moveApply(tx float64, ty float64) {
-	x, y := t.slidingMovement(tx, ty)
+	x, y := t.checkWall(tx, ty)
 	t.position.X += x
 	t.position.Y += y
 	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
@@ -142,14 +141,35 @@ func (t *ThingBase) moveApply(tx float64, ty float64) {
 	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 
-// slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
-func (t *ThingBase) slidingMovement(velX float64, velY float64) (float64, float64) {
+// checkWall adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
+func (t *ThingBase) checkWall(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
 	headPos := t.sector.FloorY + t.height
 	kneePos := t.sector.FloorY + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-	velX, velY = t.sector.EffectSliding(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	velX, velY = t.wallSlidingEffect(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	return velX, velY
+}
+
+// wallSlidingEffect adjusts velocity to simulate sliding along walls when collisions are detected in the provided sector.
+func (t *ThingBase) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
+	const epsilon = 0.005
+	seg := t.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos)
+	if seg != nil {
+		xd := seg.End.X - seg.Start.X
+		yd := seg.End.Y - seg.Start.Y
+		if lenSq := xd*xd + yd*yd; lenSq > 0 {
+			dot := velX*xd + velY*yd
+			velX = (xd * dot) / lenSq
+			velY = (yd * dot) / lenSq
+			invLen := 1.0 / math.Sqrt(lenSq)
+			nx := -yd * invLen
+			ny := xd * invLen
+			velX += nx * epsilon
+			velY += ny * epsilon
+		}
+	}
 	return velX, velY
 }

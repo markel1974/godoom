@@ -318,7 +318,7 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	pX := viewX + velX
 	pY := viewY + velY
 
-	velX, velY = p.sector.EffectSliding(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	velX, velY = p.wallSlidingEffect(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
 
 	if math.Abs(p.velocity.X) < 0.001 {
 		p.velocity.X = 0
@@ -368,4 +368,24 @@ func (p *ThingPlayer) verticalCollision() {
 			p.where.Z += p.velocity.Z
 		}
 	}
+}
+
+func (p *ThingPlayer) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
+	const epsilon = 0.005
+	seg1 := p.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos)
+	if seg1 != nil {
+		xd := seg1.End.X - seg1.Start.X
+		yd := seg1.End.Y - seg1.Start.Y
+		if lenSq := xd*xd + yd*yd; lenSq > 0 {
+			dot := velX*xd + velY*yd
+			velX = (xd * dot) / lenSq
+			velY = (yd * dot) / lenSq
+			invLen := 1.0 / math.Sqrt(lenSq)
+			nx := -yd * invLen
+			ny := xd * invLen
+			velX += nx * epsilon
+			velY += ny * epsilon
+		}
+	}
+	return velX, velY
 }

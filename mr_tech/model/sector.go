@@ -45,154 +45,6 @@ func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.A
 	return s
 }
 
-// Reference updates the sector's compile ID if it differs or increments its usage count if it matches.
-func (s *Sector) Reference(compileId uint64) {
-	if compileId != s.compileId {
-		s.compileId = compileId
-		s.usage = 0
-		s.references = make(map[uint64]bool)
-	} else {
-		s.usage++
-	}
-}
-
-// GetCompileId retrieves the unique compile ID associated with the Sector instance.
-func (s *Sector) GetCompileId() uint64 {
-	return s.compileId
-}
-
-// GetUsage retrieves the current usage count for the Sector instance.
-func (s *Sector) GetUsage() int {
-	return s.usage
-}
-
-// Add registers the given ID in the sector's references map by setting its value to true.
-func (s *Sector) Add(id uint64) {
-	s.references[id] = true
-}
-
-// Has checks if the given `id` exists in the `references` map and returns true if it does, otherwise false.
-func (s *Sector) Has(id uint64) bool {
-	_, ok := s.references[id]
-	return ok
-}
-
-// IsVisible determines if a range [x1, x2] is not occluded and visible based on the provided identifier id.
-func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
-	if s.LastCompileId != id {
-		s.VisibleSpans = s.VisibleSpans[:0]
-		s.LastCompileId = id
-	}
-	for _, span := range s.VisibleSpans {
-		// Se lo span da testare è interamente contenuto in uno span fuso, è occluso.
-		if x1 >= span[0] && x2 <= span[1] {
-			return false
-		}
-	}
-	return true
-}
-
-// AddSpan merges a new span defined by x1 and x2 into the VisibleSpans of the Sector, ensuring proper ordering and overlap handling.
-func (s *Sector) AddSpan(x1 float64, x2 float64) {
-	var merged [][2]float64
-	inserted := false
-
-	for _, span := range s.VisibleSpans {
-		if inserted {
-			merged = append(merged, span)
-			continue
-		}
-
-		if x2 < span[0] {
-			// Inserimento a sinistra (mantiene l'ordinamento)
-			merged = append(merged, [2]float64{x1, x2})
-			merged = append(merged, span)
-			inserted = true
-		} else if x1 > span[1] {
-			// Nessuna sovrapposizione
-			merged = append(merged, span)
-		} else {
-			// Sovrapposizione: fusione dei limiti
-			if span[0] < x1 {
-				x1 = span[0]
-			}
-			if span[1] > x2 {
-				x2 = span[1]
-			}
-		}
-	}
-
-	if !inserted {
-		merged = append(merged, [2]float64{x1, x2})
-	}
-
-	s.VisibleSpans = merged
-}
-
-// LocatePoint identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
-func (s *Sector) LocatePoint(px, py float64) *Sector {
-	curr := s
-	const maxSteps = 16 // Safeguard per loop infiniti da approssimazioni floating-point
-	for step := 0; step < maxSteps; step++ {
-		inside := true
-		for _, seg := range curr.Segments {
-			// Assumendo che < 0 indichi il semispazio "esterno" all'edge
-			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
-				if seg.Sector == nil {
-					// Hit boundary esterno della mesh
-					return nil
-				}
-				// Transizione: il punto è oltre questo segmento, saltiamo al vicino
-				curr = seg.Sector
-				inside = false
-				break
-			}
-		}
-		// Se il punto non è risultato all'esterno di nessun segmento,
-		// per definizione è all'interno del poligono convesso corrente.
-		if inside {
-			return curr
-		}
-	}
-	// Limite di walk superato (possibile ping-pong tra settori per edge-cases FP)
-
-	//TODO
-	//Quando questa funzione restituisce nil,
-	//il chiamante saprà che la ricerca locale è fallita (punto teletrasportato troppo lontano, o uscito dalla mappa).
-	//In quel ramo if eseguira la query globale contro l'AABB tree per riagganciare la referenza corretta con un costo logaritmico.
-	return nil
-}
-
-// Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
-func (s *Sector) Print(indent bool) string {
-	type printerSegment struct {
-		Start XY
-		End   XY
-		Ref   string
-		Kind  int
-		Tag   string
-	}
-	type printerSector struct {
-		ModelId  uint16
-		Id       string
-		Floor    float64
-		Ceil     float64
-		Segments []*printerSegment
-	}
-
-	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.FloorY, Ceil: s.CeilY}
-	for _, z := range s.Segments {
-		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
-		p.Segments = append(p.Segments, ps)
-	}
-	if indent {
-		d, _ := json.MarshalIndent(p, "", "  ")
-		return string(d)
-	}
-	d, _ := json.Marshal(p)
-	return string(d)
-}
-
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the Sector instance.
 func (s *Sector) GetAABB() *physics.AABB {
 	return s.aabb
@@ -236,11 +88,122 @@ func (s *Sector) ComputeAABB() {
 		}
 	}
 
-	// Assumendo 2D o altezza gestita separatamente; Z può riflettere floor/ceiling se necessario
+	// Assuming 2D or height handled separately; Z can reflect floor/ceiling if needed
 	s.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
 }
 
-// ContainsPoint esegue un test Point-in-Polygon convesso rigoroso.
+// Reference updates the sector's compile ID if it differs or increments its usage count if it matches.
+func (s *Sector) Reference(compileId uint64) {
+	if compileId != s.compileId {
+		s.compileId = compileId
+		s.usage = 0
+		s.references = make(map[uint64]bool)
+	} else {
+		s.usage++
+	}
+}
+
+// GetCompileId retrieves the unique compile ID associated with the Sector instance.
+func (s *Sector) GetCompileId() uint64 {
+	return s.compileId
+}
+
+// GetUsage retrieves the current usage count for the Sector instance.
+func (s *Sector) GetUsage() int {
+	return s.usage
+}
+
+// Add registers the given ID in the sector's references map by setting its value to true.
+func (s *Sector) Add(id uint64) {
+	s.references[id] = true
+}
+
+// Has checks if the given `id` exists in the `references` map and returns true if it does, otherwise false.
+func (s *Sector) Has(id uint64) bool {
+	_, ok := s.references[id]
+	return ok
+}
+
+// IsVisible determines if a range [x1, x2] is not occluded and visible based on the provided identifier id.
+func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
+	if s.LastCompileId != id {
+		s.VisibleSpans = s.VisibleSpans[:0]
+		s.LastCompileId = id
+	}
+	for _, span := range s.VisibleSpans {
+		// If the span to test is entirely contained within a merged span, it is occluded.
+		if x1 >= span[0] && x2 <= span[1] {
+			return false
+		}
+	}
+	return true
+}
+
+// AddSpan merges a new span defined by x1 and x2 into the VisibleSpans of the Sector, ensuring proper ordering and overlap handling.
+func (s *Sector) AddSpan(x1 float64, x2 float64) {
+	var merged [][2]float64
+	inserted := false
+
+	for _, span := range s.VisibleSpans {
+		if inserted {
+			merged = append(merged, span)
+			continue
+		}
+
+		if x2 < span[0] {
+			// Insertion on the left (maintains ordering)
+			merged = append(merged, [2]float64{x1, x2})
+			merged = append(merged, span)
+			inserted = true
+		} else if x1 > span[1] {
+			// No overlap
+			merged = append(merged, span)
+		} else {
+			// Overlap: merge the bounds
+			if span[0] < x1 {
+				x1 = span[0]
+			}
+			if span[1] > x2 {
+				x2 = span[1]
+			}
+		}
+	}
+	if !inserted {
+		merged = append(merged, [2]float64{x1, x2})
+	}
+	s.VisibleSpans = merged
+}
+
+// LocatePoint identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
+func (s *Sector) LocatePoint(px, py float64) *Sector {
+	curr := s
+	const maxSteps = 16 // Safeguard for infinite loops caused by floating-point approximations
+	for step := 0; step < maxSteps; step++ {
+		inside := true
+		for _, seg := range curr.Segments {
+			// Assuming that < 0 indicates the "external" half-space of the edge
+			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
+				if seg.Sector == nil {
+					// Hit external boundary of the mesh
+					return nil
+				}
+				// Transition: the point is beyond this segment, jump to the neighbor
+				curr = seg.Sector
+				inside = false
+				break
+			}
+		}
+		// If the point was not outside any segment,
+		// by definition it is inside the current convex polygon.
+		if inside {
+			return curr
+		}
+	}
+	// Walk limit exceeded (possible ping-pong between sectors due to FP edge-cases)
+	return nil
+}
+
+// ContainsPoint performs a rigorous Point-in-Polygon test for convex polygons.
 func (s *Sector) ContainsPoint(px, py float64) bool {
 	for _, seg := range s.Segments {
 		if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
@@ -250,54 +213,71 @@ func (s *Sector) ContainsPoint(px, py float64) bool {
 	return true
 }
 
-func (s *Sector) EffectSliding(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
-	const maxIter = 3
+// CheckSegmentsClearance determines if a line segment intersects with any sector boundary and verifies clearance within head and knee positions.
+func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, h float64, k float64) *Segment {
+	moveX := pX - viewX
+	moveY := pY - viewY
+	minT := 1.0
+	var closestSeg *Segment = nil
 
-	// Micro-loop per predizione collisioni multiple
-	for iter := 0; iter < maxIter; iter++ {
-		hit := false
-
-		for _, seg := range s.Segments {
-			start := seg.Start
-			end := seg.End
-			if seg.Kind == DefinitionJoin {
-				continue
-			}
-
-			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
-				holeLow := 9e9
-				holeHigh := -9e9
-				if seg.Sector != nil {
-					holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
-					holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
-				}
-
-				if holeHigh < headPos || holeLow > kneePos {
-					xd := end.X - start.X
-					yd := end.Y - start.Y
-					lenSq := xd*xd + yd*yd
-
-					if lenSq > 0 {
-						dot := velX*xd + velY*yd
-						velX = (xd * dot) / lenSq
-						velY = (yd * dot) / lenSq
-
-						invLen := 1.0 / math.Sqrt(lenSq)
-						nx := -yd * invLen
-						ny := xd * invLen
-
-						epsilon := 0.005
-						velX += nx * epsilon
-						velY += ny * epsilon
-					}
-					hit = true
-					break // Vettore modificato, ri-valuta contro la geometria
-				}
-			}
+	for _, seg := range s.Segments {
+		if seg.Kind == DefinitionJoin {
+			continue
 		}
-		if !hit {
-			break // Traiettoria stabilizzata
+		dx := seg.End.X - seg.Start.X
+		dy := seg.End.Y - seg.Start.Y
+		den := moveX*dy - moveY*dx
+		// Parallel segments
+		if den == 0 {
+			continue
+		}
+		// Parametric calculation of intersection
+		t := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
+		u := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
+		// If there is spatial intersection AND it is closer than previous ones (t <= minT)
+		if t >= 0 && t <= minT && u >= 0 && u <= 1 {
+			holeLow := 9e9
+			holeHigh := -9e9
+			if seg.Sector != nil {
+				holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
+				holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
+			}
+			// Z-Clipping: is the passage blocked?
+			if holeHigh < h || holeLow > k {
+				minT = t
+				closestSeg = seg
+			}
 		}
 	}
-	return velX, velY
+	return closestSeg
+}
+
+// Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
+func (s *Sector) Print(indent bool) string {
+	type printerSegment struct {
+		Start XY
+		End   XY
+		Ref   string
+		Kind  int
+		Tag   string
+	}
+	type printerSector struct {
+		ModelId  uint16
+		Id       string
+		Floor    float64
+		Ceil     float64
+		Segments []*printerSegment
+	}
+
+	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.FloorY, Ceil: s.CeilY}
+	for _, z := range s.Segments {
+		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
+		p.Segments = append(p.Segments, ps)
+	}
+	if indent {
+		d, _ := json.MarshalIndent(p, "", "  ")
+		return string(d)
+	}
+	d, _ := json.Marshal(p)
+	return string(d)
 }

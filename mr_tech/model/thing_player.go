@@ -370,9 +370,11 @@ func (p *ThingPlayer) verticalCollision() {
 	}
 }
 
+// wallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.
+// Takes the current view coordinates, position, velocity, head and knee positions, and returns the modified velocity.
 func (p *ThingPlayer) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
 	const epsilon = 0.005
-	seg1 := p.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos)
+	seg1 := p.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos, p.entity.GetWidth()/2)
 	if seg1 != nil {
 		xd := seg1.End.X - seg1.Start.X
 		yd := seg1.End.Y - seg1.Start.Y

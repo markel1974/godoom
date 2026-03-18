@@ -156,7 +156,7 @@ func (t *ThingBase) checkWall(velX float64, velY float64) (float64, float64) {
 // wallSlidingEffect adjusts velocity to simulate sliding along walls when collisions are detected in the provided sector.
 func (t *ThingBase) wallSlidingEffect(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
 	const epsilon = 0.005
-	seg := t.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos)
+	seg := t.sector.CheckSegmentsClearance(viewX, viewY, pX, pY, headPos, kneePos, t.entity.GetWidth()/2)
 	if seg != nil {
 		xd := seg.End.X - seg.Start.X
 		yd := seg.End.Y - seg.Start.Y

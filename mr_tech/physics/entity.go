@@ -11,14 +11,17 @@ const (
 	friction = 0.9
 )
 
-// CalcDistance calculates the Euclidean distance between two points (x1, y1) and (x2, y2) in a 2D space.
-func CalcDistance(x1 float64, y1 float64, x2 float64, y2 float64) float64 {
-	d := (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)
-	sd := math.Sqrt(d)
-	if sd <= 0 {
-		sd = 0.01
+// CalcDistance calculates the Euclidean distance between two points (x1, y1) and (x2, y2)
+func CalcDistance(x1, y1, x2, y2 float64) float64 {
+	dx := x2 - x1
+	dy := y2 - y1
+	d := dx*dx + dy*dy
+	// Valuta la singolarità spaziale (compenetrazione perfetta) PRIMA di invocare l'istruzione hardware
+	if d < 0.0001 {
+		return 0.01
 	}
-	return sd
+	// Sfrutta l'intrinseco hardware (SQRTSD su amd64/arm64) senza branch successivi
+	return math.Sqrt(d)
 }
 
 // Entity represents a physics-based entity with properties for position, velocity, mass, and collision handling.

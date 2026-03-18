@@ -302,72 +302,64 @@ func (s *Sector) EffectSliding(viewX float64, viewY float64, pX float64, pY floa
 	return velX, velY
 }
 
-func (s *Sector) EffectBounce(viewX float64, viewY float64, pX float64, pY float64, velX float64, velY float64, headPos float64, kneePos float64) (float64, float64) {
-	const maxIter = 3
+func (s *Sector) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos float64) (float64, float64) {
+	moveX := pX - viewX
+	moveY := pY - viewY
 
-	// Micro-loop per predizione collisioni multiple
-	for iter := 0; iter < maxIter; iter++ {
-		hit := false
+	var minT float64 = 1.0
+	var hitNx, hitNy float64
+	hit := false
 
-		for _, seg := range s.Segments {
-			start := seg.Start
-			end := seg.End
-			if seg.Kind == DefinitionJoin {
-				continue
-			}
-
-			if mathematic.IntersectLineSegmentsF(viewX, viewY, pX, pY, start.X, start.Y, end.X, end.Y) {
-				holeLow := 9e9
-				holeHigh := -9e9
-				if seg.Sector != nil {
-					holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
-					holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
-				}
-
-				if holeHigh < headPos || holeLow > kneePos {
-					xd := end.X - start.X
-					yd := end.Y - start.Y
-					lenSq := xd*xd + yd*yd
-
-					if lenSq > 0 {
-						invLen := 1.0 / math.Sqrt(lenSq)
-						nx := -yd * invLen
-						ny := xd * invLen
-
-						// 1. Allinea la normale contro la direzione reale del raggio
-						moveX := pX - viewX
-						moveY := pY - viewY
-						if moveX*nx+moveY*ny > 0 {
-							nx = -nx
-							ny = -ny
-						}
-
-						// 2. Riflessione pura dell'energia sul vettore velocità
-						dotVel := velX*nx + velY*ny
-						if dotVel < 0 {
-							restitution := 1.0 // 1.0 = rimbalzo perfetto (angolo incidenza = angolo riflesso)
-							velX -= (1.0 + restitution) * dotVel * nx
-							velY -= (1.0 + restitution) * dotVel * ny
-						}
-
-						// 3. Epsilon push-out codificato direttamente nel vettore velocità
-						epsilon := 0.005
-						velX += nx * epsilon
-						velY += ny * epsilon
-
-						// 4. CRITICO: Allinea il target virtuale per il prossimo ciclo di maxIter.
-						// Senza questo, il raycast successivo colliderebbe con la vecchia traiettoria.
-						pX = viewX + velX
-						pY = viewY + velY
-					}
-					hit = true
-					break // Vettore modificato, ri-valuta contro la geometria
-				}
-			}
+	for _, seg := range s.Segments {
+		if seg.Kind == DefinitionJoin {
+			continue
 		}
-		if !hit {
-			break // Traiettoria stabilizzata
+
+		dx := seg.End.X - seg.Start.X
+		dy := seg.End.Y - seg.Start.Y
+		den := moveX*dy - moveY*dx
+
+		if den == 0 {
+			continue
+		}
+
+		// Calcolo parametrico
+		t := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
+		u := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
+
+		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
+		if t >= 0 && t <= minT && u >= 0 && u <= 1 {
+			holeLow, holeHigh := 9e9, -9e9
+			if seg.Sector != nil {
+				holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
+				holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
+			}
+
+			if holeHigh < headPos || holeLow > kneePos {
+				minT = t
+				invLen := 0.01
+				if d := (dx * dx) + (dy * dy); d >= 0.0001 {
+					invLen = 1.0 / math.Sqrt(d)
+				}
+				hitNx = -dy * invLen
+				hitNy = dx * invLen
+				hit = true
+			}
 		}
 	}
+
+	// Risolvi l'impulso esclusivamente sulla faccia corretta
+	if hit {
+		// Allineamento normale/traiettoria
+		if moveX*hitNx+moveY*hitNy > 0 {
+			hitNx, hitNy = -hitNx, -hitNy
+		}
+
+		// Riflessione balistica pura (Restituzione 1.0)
+		dotVel := velX*hitNx + velY*hitNy
+		velX -= 2.0 * dotVel * hitNx
+		velY -= 2.0 * dotVel * hitNy
+	}
+
 	return velX, velY
 }

@@ -11,7 +11,8 @@ import (
 // ThingBullet represents a specialized type of Thing designed to simulate projectile-like behavior in the environment.
 type ThingBullet struct {
 	*ThingBase
-	wall *physics.Entity
+	wall   *physics.Entity
+	floorY float64
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
@@ -21,6 +22,7 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 	p := &ThingBullet{
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
 		wall:      physics.NewEntity(0, 0, 0, 0, 0),
+		floorY:    sector.FloorY,
 	}
 	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
@@ -41,6 +43,10 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 		p.entity.Friction = 0.99
 	}
 	return p
+}
+
+func (t *ThingBullet) GetFloorY() float64 {
+	return t.floorY
 }
 
 // Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
@@ -81,41 +87,34 @@ func (t *ThingBullet) PhysicsApply() {
 	tx := ex - t.position.X
 	ty := ey - t.position.Y
 	// Active Delta (Kinematic Drive) added only if there is intentionality
-	//if t.entity.G > 0 {
-	tx += t.entity.Vx
-	ty += t.entity.Vy
-	//}
+	if t.entity.G > 0 {
+		tx += t.entity.Vx
+		ty += t.entity.Vy
+	}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
-		t.moveApply(tx, ty)
+		x, y := t.adjustPassage(tx, ty)
+		t.position.X += x
+		t.position.Y += y
+		if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
+			t.sector = newSector
+		}
+		t.entities.UpdateThing(t, t.position.X, t.position.Y)
 	}
-}
-
-// MoveApply updates the position of the object by applying the given translation vector (tx, ty) with movement constraints.
-func (t *ThingBullet) moveApply(t1x float64, t1y float64) {
-	x, y := t.bounceMovement(t1x, t1y)
-	t.position.X += x
-	t.position.Y += y
-	if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-		t.sector = newSector
-	}
-	t.entities.UpdateThing(t, t.position.X, t.position.Y)
 }
 
 // slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
-func (t *ThingBullet) bounceMovement(velX float64, velY float64) (float64, float64) {
-	headPos := t.sector.FloorY + t.height
-	kneePos := t.sector.FloorY + 2.0
+func (t *ThingBullet) adjustPassage(velX float64, velY float64) (float64, float64) {
+	top := t.floorY + t.height //t.sector.FloorY + t.height
+	bottom := t.floorY         //t.sector.FloorY + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-
-	//t.entity.SetupCollision()
-	velX, velY = t.EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos)
+	velX, velY = t.EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom)
 	return velX, velY
 }
 
 // EffectBounce calculates the resulting direction of a projectile after collision and applies bounce physics adjustments.
-func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kneePos float64) (float64, float64) {
+func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom float64) (float64, float64) {
 	moveX := pX - viewX
 	moveY := pY - viewY
 
@@ -124,7 +123,9 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kn
 
 	for _, seg := range t.sector.Segments {
 		if seg.Kind == DefinitionJoin {
-			continue
+			if top > t.sector.FloorY || bottom < t.sector.CeilY {
+				continue
+			}
 		}
 
 		dx := seg.End.X - seg.Start.X
@@ -147,7 +148,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, headPos, kn
 				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
 			}
 
-			if holeHigh < headPos || holeLow > kneePos {
+			if holeHigh < top || holeLow > bottom {
 				minT = t1
 				hit = seg
 			}

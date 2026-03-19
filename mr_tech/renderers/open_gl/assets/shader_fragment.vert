@@ -15,6 +15,7 @@ uniform sampler2D u_ssao;
 uniform vec2 u_screenResolution;
 uniform float u_ambient_light;
 uniform vec3 u_flashDir;
+uniform float u_flashIntensityFactor;
 
 void main()
 {
@@ -104,7 +105,7 @@ void main()
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
 
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
-    float flashIntensity = flashCone * flashFalloff * 10.0;
+    float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
     // -------------------------------------------------------------------------
     // --- 6. RAYMARCHING VOLUMETRICO SCALARE (FASCIO GARANTITO) ---

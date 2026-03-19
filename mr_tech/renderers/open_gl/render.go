@@ -58,6 +58,7 @@ type RenderOpenGL struct {
 	enableClear bool
 	debug       bool
 	debugIdx    int
+	flashFactor int
 
 	frameVertices *FrameVertices
 	frameCommands *DrawCommands
@@ -79,6 +80,7 @@ func NewOpenGLRender() *RenderOpenGL {
 		enableClear:   false,
 		debug:         false,
 		debugIdx:      0,
+		flashFactor:   10.0,
 
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		frameCommands: NewDrawCommands(maxFrameCommands),
@@ -581,6 +583,7 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 	gl.Uniform2f(w.compiler.table[shaderMainScreenResolution], float32(fbW), float32(fbH))
 	flashDirY := pitchShear / scaleY
 	gl.Uniform3f(w.compiler.table[shaderMainFlashDir], 0.0, flashDirY, -1.0)
+	gl.Uniform1f(w.compiler.table[shaderMainFlashIntensityFactor], float32(w.flashFactor))
 	return proj, view
 }
 
@@ -706,7 +709,12 @@ func (w *RenderOpenGL) doRun() {
 				w.doDebugMoveSector(true)
 			case pixels.KeyB:
 				w.doDebugMoveSector(false)
-
+			case pixels.KeyL:
+				w.flashFactor++
+			case pixels.KeyH:
+				if w.flashFactor > 0 {
+					w.flashFactor--
+				}
 			}
 		}
 

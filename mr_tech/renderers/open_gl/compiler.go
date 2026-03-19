@@ -137,7 +137,6 @@ func (w *Compiler) Compile(t textures.ITextures) error {
 	w.table[shaderMainProjection] = gl.GetUniformLocation(sm, gl.Str("u_projection\x00"))
 	w.table[shaderMainScreenResolution] = gl.GetUniformLocation(sm, gl.Str("u_screenResolution\x00"))
 	w.table[shaderMainFlashDir] = gl.GetUniformLocation(sm, gl.Str("u_flashDir\x00"))
-
 	w.table[shaderMainTexture] = gl.GetUniformLocation(sm, gl.Str("u_texture\x00"))
 	w.table[shaderMainNormalMap] = gl.GetUniformLocation(sm, gl.Str("u_normalMap\x00"))
 	w.table[shaderMainSSAO] = gl.GetUniformLocation(sm, gl.Str("u_ssao\x00"))

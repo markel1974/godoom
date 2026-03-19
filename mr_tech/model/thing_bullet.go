@@ -123,7 +123,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 
 	for _, seg := range t.sector.Segments {
 		if seg.Kind == DefinitionJoin {
-			if top > t.sector.FloorY || bottom < t.sector.CeilY {
+			if top > t.sector.CeilY || bottom < t.sector.FloorY {
 				continue
 			}
 		}

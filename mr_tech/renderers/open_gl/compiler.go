@@ -28,6 +28,36 @@ const (
 	shaderLatest   = 64 // unused
 )
 
+const (
+	shaderMainView = iota
+	shaderMainProj
+	shaderMainAmbientLight
+	shaderMainProjection
+	shaderMainScreenResolution
+	shaderMainFlashDir
+	shaderMainTexture
+	shaderMainNormalMap
+	shaderMainSSAO
+
+	shaderSkyProjection
+	shaderSkyView
+	shaderSkySky
+
+	shaderBlurSSAOInput
+
+	shaderSSAOGPosition
+	shaderSSAOGNormal
+	shaderSSAOTexNoise
+	shaderSSAOSamples
+	shaderSSAOProjection
+
+	shaderGeometryTexture
+	shaderGeometryView
+	shaderGeometryProjection
+
+	shaderLast
+)
+
 // ShaderProgram represents a shader program with associated vertex and fragment shader file paths and an ID.
 type ShaderProgram struct {
 	id    int
@@ -52,7 +82,8 @@ type Compiler struct {
 	ssaoFbo         uint32
 	ssaoColorBuffer uint32
 	ssaoBlurFbo     uint32
-	ssaoBlurTexture uint32 // Questa è la risorsa richiesta
+	ssaoBlurTexture uint32
+	table           [shaderLast]int32
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default shaderPrograms allocation.
@@ -98,6 +129,41 @@ func (w *Compiler) Compile(t textures.ITextures) error {
 	if err := w.compileTextures(t); err != nil {
 		return err
 	}
+
+	sm := w.GetShaderProgram(shaderMain)
+	w.table[shaderMainView] = gl.GetUniformLocation(sm, gl.Str("u_view\x00"))
+	w.table[shaderMainProj] = gl.GetUniformLocation(sm, gl.Str("u_projection\x00"))
+	w.table[shaderMainAmbientLight] = gl.GetUniformLocation(sm, gl.Str("u_ambient_light\x00"))
+	w.table[shaderMainProjection] = gl.GetUniformLocation(sm, gl.Str("u_projection\x00"))
+	w.table[shaderMainScreenResolution] = gl.GetUniformLocation(sm, gl.Str("u_screenResolution\x00"))
+	w.table[shaderMainFlashDir] = gl.GetUniformLocation(sm, gl.Str("u_flashDir\x00"))
+
+	w.table[shaderMainTexture] = gl.GetUniformLocation(sm, gl.Str("u_texture\x00"))
+	w.table[shaderMainNormalMap] = gl.GetUniformLocation(sm, gl.Str("u_normalMap\x00"))
+	w.table[shaderMainSSAO] = gl.GetUniformLocation(sm, gl.Str("u_ssao\x00"))
+	w.table[shaderMainTexture] = gl.GetUniformLocation(sm, gl.Str("u_texture\x00"))
+	w.table[shaderMainNormalMap] = gl.GetUniformLocation(sm, gl.Str("u_normalMap\x00"))
+
+	ss := w.GetShaderProgram(shaderSky)
+	w.table[shaderSkyProjection] = gl.GetUniformLocation(ss, gl.Str("u_projection\x00"))
+	w.table[shaderSkyView] = gl.GetUniformLocation(ss, gl.Str("u_view\x00"))
+	w.table[shaderSkySky] = gl.GetUniformLocation(ss, gl.Str("u_sky\x00"))
+
+	sb := w.GetShaderProgram(shaderBlur)
+	w.table[shaderBlurSSAOInput] = gl.GetUniformLocation(sb, gl.Str("ssaoInput\x00"))
+
+	progSSAO := w.GetShaderProgram(shaderSSAO)
+	w.table[shaderSSAOGPosition] = gl.GetUniformLocation(progSSAO, gl.Str("gPosition\x00"))
+	w.table[shaderSSAOGNormal] = gl.GetUniformLocation(progSSAO, gl.Str("gNormal\x00"))
+	w.table[shaderSSAOTexNoise] = gl.GetUniformLocation(progSSAO, gl.Str("texNoise\x00"))
+	w.table[shaderSSAOSamples] = gl.GetUniformLocation(progSSAO, gl.Str("samples\x00"))
+	w.table[shaderSSAOProjection] = gl.GetUniformLocation(progSSAO, gl.Str("projection\x00"))
+
+	programGeometry := w.GetShaderProgram(shaderGeometry)
+	w.table[shaderGeometryTexture] = gl.GetUniformLocation(programGeometry, gl.Str("u_texture\x00"))
+	w.table[shaderGeometryView] = gl.GetUniformLocation(programGeometry, gl.Str("u_view\x00"))
+	w.table[shaderGeometryProjection] = gl.GetUniformLocation(programGeometry, gl.Str("u_projection\x00"))
+
 	return nil
 }
 

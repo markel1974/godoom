@@ -142,27 +142,24 @@ func (w *RenderOpenGL) glInit() error {
 	// Setup SSAO Samplers
 	progSSAO := w.compiler.GetShaderProgram(shaderSSAO)
 	gl.UseProgram(progSSAO)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gPosition\x00")), 0)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("gNormal\x00")), 1)
-	gl.Uniform1i(gl.GetUniformLocation(progSSAO, gl.Str("texNoise\x00")), 2)
+	gl.Uniform1i(w.compiler.table[shaderSSAOGPosition], 0)
+	gl.Uniform1i(w.compiler.table[shaderSSAOGNormal], 1)
+	gl.Uniform1i(w.compiler.table[shaderSSAOTexNoise], 2)
 
 	// Setup Blur Sampler
 	progBlur := w.compiler.GetShaderProgram(shaderBlur)
 	gl.UseProgram(progBlur)
-	gl.Uniform1i(gl.GetUniformLocation(progBlur, gl.Str("ssaoInput\x00")), 0)
+	gl.Uniform1i(w.compiler.table[shaderBlurSSAOInput], 0)
 
 	// Setup Main Samplers
 	progMain := w.compiler.GetShaderProgram(shaderMain)
 	gl.UseProgram(progMain)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_texture\x00")), 0)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00")), 1)
-	gl.Uniform1i(gl.GetUniformLocation(progMain, gl.Str("u_ssao\x00")), 2)
-
+	gl.Uniform1i(w.compiler.table[shaderMainTexture], 0)
+	gl.Uniform1i(w.compiler.table[shaderMainNormalMap], 1)
+	gl.Uniform1i(w.compiler.table[shaderMainSSAO], 2)
 	// Configurazione Sampler Uniforms
-	texLoc := gl.GetUniformLocation(progMain, gl.Str("u_texture\x00"))
-	gl.Uniform1i(texLoc, 0)
-	normLoc := gl.GetUniformLocation(progMain, gl.Str("u_normalMap\x00"))
-	gl.Uniform1i(normLoc, 1)
+	gl.Uniform1i(w.compiler.table[shaderMainTexture], 0)
+	gl.Uniform1i(w.compiler.table[shaderMainNormalMap], 1)
 
 	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
 	var defaultNormalMap uint32
@@ -457,9 +454,9 @@ func (w *RenderOpenGL) glStreamRender() {
 
 	programGeometry := w.compiler.GetShaderProgram(shaderGeometry)
 	gl.UseProgram(programGeometry)
-	gl.Uniform1i(gl.GetUniformLocation(programGeometry, gl.Str("u_texture\x00")), 0)
-	gl.UniformMatrix4fv(gl.GetUniformLocation(programGeometry, gl.Str("u_view\x00")), 1, false, &view[0])
-	gl.UniformMatrix4fv(gl.GetUniformLocation(programGeometry, gl.Str("u_projection\x00")), 1, false, &proj[0])
+	gl.Uniform1i(w.compiler.table[shaderGeometryTexture], 0)
+	gl.UniformMatrix4fv(w.compiler.table[shaderGeometryView], 1, false, &view[0])
+	gl.UniformMatrix4fv(w.compiler.table[shaderGeometryProjection], 1, false, &proj[0])
 	w.renderScene(programGeometry)
 
 	// 2. SSAO PASS
@@ -477,8 +474,8 @@ func (w *RenderOpenGL) glStreamRender() {
 	noiseTex, kernel := w.compiler.GetSSAOResources()
 	gl.BindTexture(gl.TEXTURE_2D, noiseTex)
 
-	gl.Uniform3fv(gl.GetUniformLocation(shaderSSAO, gl.Str("samples\x00")), 64, &kernel[0])
-	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderSSAO, gl.Str("projection\x00")), 1, false, &proj[0])
+	gl.Uniform3fv(w.compiler.table[shaderSSAOSamples], 64, &kernel[0])
+	gl.UniformMatrix4fv(w.compiler.table[shaderSSAOProjection], 1, false, &proj[0])
 	w.drawScreenQuad()
 
 	// 3. BLUR PASS
@@ -540,8 +537,8 @@ func (w *RenderOpenGL) drawScreenQuad() {
 
 // glUpdateCameraUniforms updates the camera view and projection matrices, along with related shader uniforms.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
-	shaderProgram := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(shaderProgram)
+	programMain := w.compiler.GetShaderProgram(shaderMain)
+	gl.UseProgram(programMain)
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
@@ -577,20 +574,13 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 		tx, ty, tz, 1,
 	}
 
-	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderProgram, gl.Str("u_view\x00")), 1, false, &view[0])
-	gl.UniformMatrix4fv(gl.GetUniformLocation(shaderProgram, gl.Str("u_projection\x00")), 1, false, &proj[0])
-	gl.Uniform1f(gl.GetUniformLocation(shaderProgram, gl.Str("u_ambient_light\x00")), float32(vi.GetLightIntensity()))
-	timeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("u_time\x00"))
-	gl.Uniform1f(timeLoc, float32(pixels.GLGetTime()))
+	gl.UniformMatrix4fv(w.compiler.table[shaderMainView], 1, false, &view[0])
+	gl.UniformMatrix4fv(w.compiler.table[shaderMainProjection], 1, false, &proj[0])
+	gl.Uniform1f(w.compiler.table[shaderMainAmbientLight], float32(vi.GetLightIntensity()))
 	fbW, fbH := w.win.GetFramebufferSize()
-	gl.Uniform2f(gl.GetUniformLocation(shaderProgram, gl.Str("u_screenResolution\x00")), float32(fbW), float32(fbH))
-
-	// --- NUOVI UNIFORM PER LA LUCE/TORCIA ---
-	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraPos\x00")), ex, ey, ez)
-	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_cameraFront\x00")), fX, 0.0, fZ)
-	// Calcolo della direzione della torcia compensando l'Y-Shear
+	gl.Uniform2f(w.compiler.table[shaderMainScreenResolution], float32(fbW), float32(fbH))
 	flashDirY := pitchShear / scaleY
-	gl.Uniform3f(gl.GetUniformLocation(shaderProgram, gl.Str("u_flashDir\x00")), 0.0, flashDirY, -1.0)
+	gl.Uniform3f(w.compiler.table[shaderMainFlashDir], 0.0, flashDirY, -1.0)
 	return proj, view
 }
 
@@ -603,8 +593,8 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 	gl.DepthFunc(gl.LEQUAL)
 	gl.DepthMask(false) // Read-only
 
-	gl.UniformMatrix4fv(gl.GetUniformLocation(skyProg, gl.Str("u_projection\x00")), 1, false, &proj[0])
-	gl.UniformMatrix4fv(gl.GetUniformLocation(skyProg, gl.Str("u_view\x00")), 1, false, &view[0])
+	gl.UniformMatrix4fv(w.compiler.table[shaderSkyProjection], 1, false, &proj[0])
+	gl.UniformMatrix4fv(w.compiler.table[shaderSkyView], 1, false, &view[0])
 
 	gl.BindVertexArray(w.skyVao)
 
@@ -616,7 +606,7 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 		gl.BindTexture(gl.TEXTURE_2D, normTextId)
 		gl.ActiveTexture(gl.TEXTURE2)
 
-		gl.Uniform1i(gl.GetUniformLocation(skyProg, gl.Str("u_sky\x00")), 0)
+		gl.Uniform1i(w.compiler.table[shaderSkySky], 0)
 	}
 
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)

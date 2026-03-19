@@ -83,7 +83,7 @@ func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float6
 	c := r.config[2]
 	id := utils.NextUUId()
 	pos := XY{X: x, Y: y}
-	cfg := NewConfigThing(id, pos, angle, ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 1.0, c.Animation)
+	cfg := NewConfigThing(id, pos, angle, ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 5.0, c.Animation)
 	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }

@@ -24,7 +24,7 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 	}
 	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
-	p.entity.Friction = 1.0
+	p.entity.Friction = 0.99
 	p.entity.GForce = 1.0
 
 	// Calculate the directional vector based on the original firing angle

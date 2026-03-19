@@ -50,7 +50,7 @@ void main()
     float bounceSpot = smoothstep(0.0, 0.80, cosThetaBounce) * 0.15; // 15% di riflessione
 
     float roomSpotIntensity = max(directSpot, bounceSpot);
-    
+
 
     // B. Torcia (Allineata alla visuale Y-Sheared)
     vec3 L_flash = normalize(-ViewPos);
@@ -69,24 +69,33 @@ void main()
     vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
     if (length(mapColor) > 0.1) {
         vec3 unpacked = (mapColor * 2.0) - 1.0;
+        // Miscelazione per il controllo dell'intensità del bump
         vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
-        // Matrice Ortonormale Affine
-        vec3 up = vec3(0.0, 1.0, 0.0);
-        if (abs(finalNormal.y) > 0.9) {
-            up = vec3(1.0, 0.0, 0.0);
-        }
+        // Derivate in screen-space di posizione e UV
+        vec3 dp1 = dFdx(ViewPos);
+        vec3 dp2 = dFdy(ViewPos);
+        vec2 duv1 = dFdx(TexCoords);
+        vec2 duv2 = dFdy(TexCoords);
 
-        vec3 T = normalize(cross(up, finalNormal));
-        vec3 B = cross(finalNormal, T);
-        mat3 TBN = mat3(T, B, finalNormal);
+        // Risoluzione del sistema lineare per allineare T e B alle UV
+        vec3 dp2perp = cross(dp2, finalNormal);
+        vec3 dp1perp = cross(finalNormal, dp1);
+        vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+        vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+
+        // Costruzione e normalizzazione della matrice ortonormale
+        float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
+        mat3 TBN = mat3(T * invmax, B * invmax, finalNormal);
 
         finalNormal = normalize(TBN * mapNormal);
     }
 
     // --- 3. COMPONENTE DIFFUSA ---
     float bumpRoom = (max(dot(finalNormal, L_room), 0.0) * 0.2) + 1.0;
-    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
+    // Wrap Lighting per la torcia: impedisce l'azzeramento sulle superfici radenti
+    float NdotL_flash = dot(finalNormal, L_flash);
+    float diffFlash = max(NdotL_flash * 0.5 + 0.5, 0.0);
 
     // --- 4. RIFLESSO SPECULARE BLINN-PHONG ---
     vec3 V = normalize(-ViewPos);
@@ -105,7 +114,7 @@ void main()
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
 
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
-    float flashIntensity = flashCone * flashFalloff;
+    float flashIntensity = flashCone * flashFalloff * 10;
 
     // --- 6. FINAL MIX ---
     // Applichiamo 'ao' al termine ambientale (0.3) della luce di settore.

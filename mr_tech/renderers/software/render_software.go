@@ -28,7 +28,6 @@ type RenderSoftware struct {
 	screenWidth        int
 	screenHeight       int
 	textures           textures.ITextures
-	sectorsMaxHeight   float64
 	targetSectors      map[int]bool
 	targetIdx          int
 	targetLastCompiled int
@@ -49,7 +48,6 @@ func NewSoftwareRender() *RenderSoftware {
 		screenWidth:        0,
 		screenHeight:       0,
 		textures:           nil,
-		sectorsMaxHeight:   0,
 		targetIdx:          0,
 		targetSectors:      map[int]bool{0: true},
 		targetLastCompiled: 0,
@@ -64,7 +62,6 @@ func (w *RenderSoftware) Setup(engine *engine.Engine) error {
 	w.engine = engine
 	w.screenWidth = engine.GetWidth()
 	w.screenHeight = engine.GetHeight()
-	w.sectorsMaxHeight = engine.GetSectorsMaxHeight()
 	w.dp = NewDrawPolygon(w.screenWidth, w.screenHeight)
 	w.player = engine.GetPlayer()
 	w.textures = engine.GetTextures()

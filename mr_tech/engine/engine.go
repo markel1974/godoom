@@ -9,32 +9,30 @@ import (
 
 // Engine provides the core functionality for rendering, entity management, and spatial computations in a 3D environment.
 type Engine struct {
-	portal           *portal.Portal
-	textures         textures.ITextures
-	w                int
-	h                int
-	maxQueue         int
-	things           []model.IThing
-	sectorsMaxHeight float64
-	entities         *model.Entities
-	player           *model.ThingPlayer
-	sectorTree       *model.Sectors
-	config           *model.ConfigRoot
+	portal   *portal.Portal
+	textures textures.ITextures
+	w        int
+	h        int
+	maxQueue int
+	things   []model.IThing
+	entities *model.Entities
+	player   *model.ThingPlayer
+	sectors  *model.Sectors
+	config   *model.ConfigRoot
 }
 
 // NewEngine initializes and returns a new instance of Engine with the specified width, height, and maxQueue size.
 func NewEngine(w int, h int, maxQueue int) *Engine {
 	return &Engine{
-		portal:           nil,
-		w:                w,
-		h:                h,
-		maxQueue:         maxQueue,
-		things:           nil,
-		sectorsMaxHeight: 0,
-		entities:         nil,
-		sectorTree:       nil,
-		player:           nil,
-		config:           nil,
+		portal:   nil,
+		w:        w,
+		h:        h,
+		maxQueue: maxQueue,
+		things:   nil,
+		entities: nil,
+		sectors:  nil,
+		player:   nil,
+		config:   nil,
 	}
 }
 
@@ -63,11 +61,6 @@ func (e *Engine) SectorAt(idx int) *model.Sector {
 	return e.portal.SectorAt(idx)
 }
 
-// GetSectorsMaxHeight returns the maximum height value among all sectors as a float64.
-func (e *Engine) GetSectorsMaxHeight() float64 {
-	return e.sectorsMaxHeight
-}
-
 // Len returns the number of sectors managed by the Engine.
 func (e *Engine) Len() int {
 	return e.portal.Len()
@@ -80,16 +73,15 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	if err := compiler.Setup(cfg); err != nil {
 		return err
 	}
-	e.sectorTree = compiler.GetSectors()
+	e.sectors = compiler.GetSectors()
 	e.player = compiler.GetPlayer()
-	e.sectorsMaxHeight = compiler.GetMaxHeight()
 	e.things = compiler.GetThings()
 	e.entities = compiler.GetEntities()
 
 	e.textures = cfg.Textures
 
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
-	if err := e.portal.Setup(e.sectorTree.GetSectors()); err != nil {
+	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {
 		return err
 	}
 	return nil
@@ -102,7 +94,7 @@ func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64)
 	id := utils.NextUUId()
 	pos := model.XY{X: x, Y: y}
 	cfg := model.NewConfigThing(id, pos, angle, model.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 1.0, c.Animation)
-	thing := model.NewThingBullet(cfg, e.config.GetAnimation(cfg.Animation), sector, e.sectorTree, e.entities)
+	thing := model.NewThingBullet(cfg, e.config.GetAnimation(cfg.Animation), sector, e.sectors, e.entities)
 	e.things = append(e.things, thing)
 }
 

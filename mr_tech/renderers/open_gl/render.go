@@ -35,14 +35,13 @@ type SpriteNode struct {
 
 // RenderOpenGL is responsible for managing and executing OpenGL rendering operations for the game environment.
 type RenderOpenGL struct {
-	engine           *engine.Engine
-	vi               *model.ViewMatrix
-	player           *model.ThingPlayer
-	textures         textures.ITextures
-	win              *pixels.GLWindow
-	screenWidth      int
-	screenHeight     int
-	sectorsMaxHeight float64
+	engine       *engine.Engine
+	vi           *model.ViewMatrix
+	player       *model.ThingPlayer
+	textures     textures.ITextures
+	win          *pixels.GLWindow
+	screenWidth  int
+	screenHeight int
 
 	targetSectors      map[int]bool
 	targetIdx          int
@@ -69,18 +68,17 @@ type RenderOpenGL struct {
 // NewOpenGLRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewOpenGLRender() *RenderOpenGL {
 	r := &RenderOpenGL{
-		engine:           nil,
-		vi:               model.NewViewMatrix(),
-		textures:         nil,
-		player:           nil,
-		win:              nil,
-		screenWidth:      0,
-		screenHeight:     0,
-		sectorsMaxHeight: 0,
-		targetSectors:    map[int]bool{0: true},
-		enableClear:      false,
-		debug:            false,
-		debugIdx:         0,
+		engine:        nil,
+		vi:            model.NewViewMatrix(),
+		textures:      nil,
+		player:        nil,
+		win:           nil,
+		screenWidth:   0,
+		screenHeight:  0,
+		targetSectors: map[int]bool{0: true},
+		enableClear:   false,
+		debug:         false,
+		debugIdx:      0,
 
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		frameCommands: NewDrawCommands(maxFrameCommands),
@@ -95,7 +93,6 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.engine = en
 	w.screenWidth = w.engine.GetWidth()
 	w.screenHeight = w.engine.GetHeight()
-	w.sectorsMaxHeight = w.engine.GetSectorsMaxHeight()
 	w.player = en.GetPlayer()
 	w.textures = en.GetTextures()
 	return nil

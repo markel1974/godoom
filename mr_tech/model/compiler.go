@@ -20,21 +20,19 @@ const (
 
 // Compiler is responsible for managing game entities, sectors, and player interactions with a defined maximum height.
 type Compiler struct {
-	sectors          *Sectors
-	things           []IThing
-	player           *ThingPlayer
-	sectorsMaxHeight float64
-	entities         *Entities
+	sectors  *Sectors
+	things   []IThing
+	player   *ThingPlayer
+	entities *Entities
 }
 
 // NewCompiler creates and returns a new instance of Compiler with default-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		sectors:          nil,
-		things:           nil,
-		player:           nil,
-		sectorsMaxHeight: 0,
-		entities:         nil,
+		sectors:  nil,
+		things:   nil,
+		player:   nil,
+		entities: nil,
 	}
 }
 
@@ -46,7 +44,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.compileLights(r.sectors)
 
-	r.sectorsMaxHeight = r.scale(cfg, r.sectors)
+	r.scale(cfg, r.sectors)
 
 	//after scaling
 
@@ -96,11 +94,6 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
 	}
 	return s, nil
-}
-
-// GetMaxHeight returns the maximum height difference between the ceiling and floor across all sectors.
-func (r *Compiler) GetMaxHeight() float64 {
-	return r.sectorsMaxHeight
 }
 
 // compileSectors processes the sector configurations, constructs sectors with their segments and properties, and validates their topology.
@@ -323,7 +316,7 @@ func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Ent
 }
 
 // scale scales the positions of the player, things, lights, and vertices in the sectors using the provided scale factor.
-func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) float64 {
+func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) {
 	scale := cfg.ScaleFactor
 	if scale < 1 {
 		scale = 1
@@ -335,7 +328,6 @@ func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) float64 {
 		t.Position.Scale(scale)
 	}
 
-	sectorsMaxHeight := float64(0)
 	for _, sect := range sectors.GetSectors() {
 		//lights scale
 		sect.Light.pos.ScaleXY(scale)
@@ -345,9 +337,8 @@ func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) float64 {
 			sect.Segments[s].End.Scale(scale)
 		}
 		//maxHeight
-		if h := math.Abs(sect.CeilY - sect.FloorY); h > r.sectorsMaxHeight {
-			sectorsMaxHeight = h
-		}
+		//if h := math.Abs(sect.CeilY - sect.FloorY); h > sectorsMaxHeight {
+		//	sectorsMaxHeight = h
+		//}
 	}
-	return sectorsMaxHeight
 }

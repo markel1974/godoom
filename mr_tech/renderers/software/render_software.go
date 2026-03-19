@@ -9,7 +9,6 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/pixels"
 )
 
@@ -27,7 +26,6 @@ type RenderSoftware struct {
 
 	screenWidth        int
 	screenHeight       int
-	textures           textures.ITextures
 	targetSectors      map[int]bool
 	targetIdx          int
 	targetLastCompiled int
@@ -47,7 +45,6 @@ func NewSoftwareRender() *RenderSoftware {
 	return &RenderSoftware{
 		screenWidth:        0,
 		screenHeight:       0,
-		textures:           nil,
 		targetIdx:          0,
 		targetSectors:      map[int]bool{0: true},
 		targetLastCompiled: 0,
@@ -64,7 +61,6 @@ func (w *RenderSoftware) Setup(engine *engine.Engine) error {
 	w.screenHeight = engine.GetHeight()
 	w.dp = NewDrawPolygon(w.screenWidth, w.screenHeight)
 	w.player = engine.GetPlayer()
-	w.textures = engine.GetTextures()
 	w.viewMode = -1
 	w.enableClear = false
 	return nil

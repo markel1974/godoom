@@ -21,7 +21,7 @@ const (
 // Compiler is responsible for managing game entities, sectors, and player interactions with a defined maximum height.
 type Compiler struct {
 	sectors  *Sectors
-	things   []IThing
+	things   *Things
 	player   *ThingPlayer
 	entities *Entities
 }
@@ -39,12 +39,36 @@ func NewCompiler() *Compiler {
 // Setup initializes the Compiler by processing the configuration, creating sectors, entities, lights, and the player.
 func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	var totalSegments int
+	scale := cfg.ScaleFactor
+	if scale < 1 {
+		scale = 1
+	}
+
+	r.things = NewThings(cfg)
 
 	r.sectors, totalSegments = r.compileSectors(cfg)
 
 	r.compileLights(r.sectors)
 
-	r.scale(cfg, r.sectors)
+	cfg.Player.Position.Scale(scale)
+
+	for _, t := range cfg.Things {
+		t.Position.Scale(scale)
+	}
+
+	for _, sect := range r.sectors.GetSectors() {
+		//lights scale
+		sect.Light.pos.ScaleXY(scale)
+		//vertex scale
+		for s := 0; s < len(sect.Segments); s++ {
+			sect.Segments[s].Start.Scale(scale)
+			sect.Segments[s].End.Scale(scale)
+		}
+		//maxHeight
+		//if h := math.Abs(sect.CeilY - sect.FloorY); h > sectorsMaxHeight {
+		//	sectorsMaxHeight = h
+		//}
+	}
 
 	//after scaling
 
@@ -54,7 +78,7 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
-	if r.things, err = r.createThings(cfg, r.sectors, r.entities); err != nil {
+	if err = r.things.Setup(r.sectors, r.entities); err != nil {
 		return err
 	}
 
@@ -78,7 +102,7 @@ func (r *Compiler) GetSectors() *Sectors {
 }
 
 // GetThings returns a slice of IThing instances managed by the Compiler.
-func (r *Compiler) GetThings() []IThing {
+func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
@@ -105,9 +129,9 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			aUpper := cfg.GetAnimation(cn.Upper)
-			aMiddle := cfg.GetAnimation(cn.Middle)
-			aLower := cfg.GetAnimation(cn.Lower)
+			aUpper := r.things.GetAnimation(cn.Upper)
+			aMiddle := r.things.GetAnimation(cn.Middle)
+			aLower := r.things.GetAnimation(cn.Lower)
 			seg := NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
 			segments = append(segments, seg)
 		}
@@ -117,8 +141,8 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 			continue
 		}
 
-		texFloor := cfg.GetAnimation(cs.Floor)
-		texCeil := cfg.GetAnimation(cs.Ceil)
+		texFloor := r.things.GetAnimation(cs.Floor)
+		texCeil := r.things.GetAnimation(cs.Ceil)
 
 		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil)
 		modelSectorId++
@@ -278,67 +302,4 @@ func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *E
 	}
 	player := NewThingPlayer(cfg, pSector, sectors, entities, false)
 	return player, nil
-}
-
-// createThings parses the configuration and generates game objects, associating them with their respective sectors and entities.
-func (r *Compiler) createThings(cfg *ConfigRoot, sectors *Sectors, entities *Entities) ([]IThing, error) {
-	var things []IThing
-	for _, ct := range cfg.Things {
-		sector := sectors.GetSector(ct.Sector)
-		if sector == nil {
-			return nil, fmt.Errorf("can't find thing sector at %s", ct.Sector)
-		}
-		var thing IThing
-
-		switch ct.Kind {
-		case ThingEnemyDef:
-			thing = NewThingEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		case ThingWeaponDef:
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		case ThingBulletDef:
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		case ThingKeyDef:
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		case ThingItemDef:
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		default:
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		}
-
-		if ct.Speed > 0 {
-			thing = NewThingEnemy(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		} else {
-			thing = NewThingItem(ct, cfg.GetAnimation(ct.Animation), sector, sectors, entities)
-		}
-		things = append(things, thing)
-	}
-	return things, nil
-}
-
-// scale scales the positions of the player, things, lights, and vertices in the sectors using the provided scale factor.
-func (r *Compiler) scale(cfg *ConfigRoot, sectors *Sectors) {
-	scale := cfg.ScaleFactor
-	if scale < 1 {
-		scale = 1
-	}
-
-	cfg.Player.Position.Scale(scale)
-
-	for _, t := range cfg.Things {
-		t.Position.Scale(scale)
-	}
-
-	for _, sect := range sectors.GetSectors() {
-		//lights scale
-		sect.Light.pos.ScaleXY(scale)
-		//vertex scale
-		for s := 0; s < len(sect.Segments); s++ {
-			sect.Segments[s].Start.Scale(scale)
-			sect.Segments[s].End.Scale(scale)
-		}
-		//maxHeight
-		//if h := math.Abs(sect.CeilY - sect.FloorY); h > sectorsMaxHeight {
-		//	sectorsMaxHeight = h
-		//}
-	}
 }

@@ -4,17 +4,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
-	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
 // Engine provides the core functionality for rendering, entity management, and spatial computations in a 3D environment.
 type Engine struct {
 	portal   *portal.Portal
-	textures textures.ITextures
 	w        int
 	h        int
 	maxQueue int
-	things   []model.IThing
+	things   *model.Things
 	entities *model.Entities
 	player   *model.ThingPlayer
 	sectors  *model.Sectors
@@ -41,11 +39,6 @@ func (e *Engine) GetPlayer() *model.ThingPlayer {
 	return e.player
 }
 
-// GetTextures returns the textures instance associated with the Engine.
-func (e *Engine) GetTextures() textures.ITextures {
-	return e.textures
-}
-
 // GetWidth returns the width of the Engine in pixels.
 func (e *Engine) GetWidth() int {
 	return e.w
@@ -54,6 +47,10 @@ func (e *Engine) GetWidth() int {
 // GetHeight returns the height of the Engine instance.
 func (e *Engine) GetHeight() int {
 	return e.h
+}
+
+func (e *Engine) GetTextures() textures.ITextures {
+	return e.things.GetTextures()
 }
 
 // SectorAt returns the Sector object located at the given index within the engine's portal.
@@ -78,8 +75,6 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	e.things = compiler.GetThings()
 	e.entities = compiler.GetEntities()
 
-	e.textures = cfg.Textures
-
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
 	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {
 		return err
@@ -89,13 +84,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 
 // Fire triggers the creation of a bullet in the specified sector at the given position and angle.
 func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64) {
-	//test zero index
-	c := e.config.Things[2]
-	id := utils.NextUUId()
-	pos := model.XY{X: x, Y: y}
-	cfg := model.NewConfigThing(id, pos, angle, model.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 1.0, c.Animation)
-	thing := model.NewThingBullet(cfg, e.config.GetAnimation(cfg.Animation), sector, e.sectors, e.entities)
-	e.things = append(e.things, thing)
+	e.things.CreateBullet(sector, x, y, angle)
 }
 
 // Compute performs the main game logic including view matrix syncing, AI updates, physics simulation, and sector rendering.
@@ -105,9 +94,8 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 
 	// 2. AI & External Forces: Wake up entities BEFORE physics calculation
 	pX, pY := player.GetPosition()
-	for _, t := range e.things {
-		t.Compute(pX, pY)
-	}
+
+	e.things.Compute(pX, pY)
 
 	// 3. Static ThingPlayer Motion
 	player.Update(vi)
@@ -126,7 +114,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 	// 7. Portal Compute
 	cs, count := e.portal.Compute(vi)
 
-	return cs, count, e.things
+	return cs, count, e.things.GetThings()
 }
 
 /*

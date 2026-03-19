@@ -44,9 +44,9 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 		scale = 1
 	}
 
-	r.things = NewThings(cfg)
+	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectors(cfg)
+	r.sectors, totalSegments = r.compileSectors(cfg, animations)
 
 	r.compileLights(r.sectors)
 
@@ -64,10 +64,6 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 			sect.Segments[s].Start.Scale(scale)
 			sect.Segments[s].End.Scale(scale)
 		}
-		//maxHeight
-		//if h := math.Abs(sect.CeilY - sect.FloorY); h > sectorsMaxHeight {
-		//	sectorsMaxHeight = h
-		//}
 	}
 
 	//after scaling
@@ -78,13 +74,15 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
-	if err = r.things.Setup(r.sectors, r.entities); err != nil {
+	if r.things, err = NewThings(cfg.Things, r.sectors, r.entities, animations); err != nil {
 		return err
 	}
 
-	if r.player, err = r.createPlayer(cfg.Player, r.sectors, r.entities); err != nil {
-		return err
+	pSector := r.sectors.GetSector(cfg.Player.Sector)
+	if pSector == nil {
+		return fmt.Errorf("can't find player sector at %s", cfg.Player.Sector)
 	}
+	r.player = NewThingPlayer(cfg.Player, pSector, r.sectors, r.entities, false)
 
 	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
 
@@ -121,7 +119,7 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 }
 
 // compileSectors processes the sector configurations, constructs sectors with their segments and properties, and validates their topology.
-func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
+func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
 	for idx, cs := range cfg.Sectors {
@@ -129,9 +127,9 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
-			aUpper := r.things.GetAnimation(cn.Upper)
-			aMiddle := r.things.GetAnimation(cn.Middle)
-			aLower := r.things.GetAnimation(cn.Lower)
+			aUpper := anim.GetAnimation(cn.Upper)
+			aMiddle := anim.GetAnimation(cn.Middle)
+			aLower := anim.GetAnimation(cn.Lower)
 			seg := NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
 			segments = append(segments, seg)
 		}
@@ -141,8 +139,8 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot) (*Sectors, int) {
 			continue
 		}
 
-		texFloor := r.things.GetAnimation(cs.Floor)
-		texCeil := r.things.GetAnimation(cs.Ceil)
+		texFloor := anim.GetAnimation(cs.Floor)
+		texCeil := anim.GetAnimation(cs.Ceil)
 
 		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil)
 		modelSectorId++

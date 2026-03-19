@@ -2,58 +2,49 @@ package model
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// Things represents a collection of game entities, animations, textures, and configuration for managing game objects.
+// Things manages a collection of game objects, their configurations, sectors, entities, and animations.
 type Things struct {
-	animations map[string]*textures.Animation
-	tex        textures.ITextures
 	things     []IThing
-	config     *ConfigRoot
+	config     []*ConfigThing
 	sectors    *Sectors
 	entities   *Entities
+	animations *Animations
 }
 
-// NewThings initializes a Things instance with textures, configuration, sectors, and entities, and prepares animations.
-func NewThings(cfg *ConfigRoot) *Things {
-	return &Things{
+// NewThings initializes a Things instance with the provided configurations, sectors, entities, and animations.
+// Returns the created Things instance or an error if initialization of any Thing fails.
+func NewThings(cfg []*ConfigThing, sectors *Sectors, entities *Entities, animations *Animations) (*Things, error) {
+	r := &Things{
 		config:     cfg,
-		sectors:    nil,
-		entities:   nil,
-		tex:        cfg.Textures,
-		animations: make(map[string]*textures.Animation),
+		sectors:    sectors,
+		entities:   entities,
+		animations: animations,
 		things:     nil,
 	}
+	for _, ct := range cfg {
+		if err := r.CreateThing(ct); err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
 }
 
-// GetTextures returns the texture interface associated with the current Things instance.
+// GetTextures fetches the ITextures instance from the associated Animations object.
 func (r *Things) GetTextures() textures.ITextures {
-	return r.tex
+	return r.animations.GetTextures()
 }
 
-// GetThings returns a slice of IThing objects managed by the Things instance.
+// GetThings retrieves the list of all IThing instances managed by the Things object.
 func (r *Things) GetThings() []IThing {
 	return r.things
 }
 
-// Setup initializes and creates all `IThing` instances defined in the configuration. Returns an error if creation fails.
-func (r *Things) Setup(sectors *Sectors, entities *Entities) error {
-	r.sectors = sectors
-	r.entities = entities
-	for _, ct := range r.config.Things {
-		if err := r.CreateThing(ct); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// CreateThing initializes and adds a new `IThing` instance based on the provided configuration within the `Things` manager.
-// It determines the type, sector, and properties of the thing and appends it to the internal `things` slice.
+// CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
 func (r *Things) CreateThing(ct *ConfigThing) error {
 	sector := r.sectors.GetSector(ct.Sector)
 	if sector == nil {
@@ -63,55 +54,41 @@ func (r *Things) CreateThing(ct *ConfigThing) error {
 
 	switch ct.Kind {
 	case ThingEnemyDef:
-		thing = NewThingEnemy(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingEnemy(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	case ThingWeaponDef:
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	case ThingBulletDef:
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	case ThingKeyDef:
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	case ThingItemDef:
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	default:
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	}
 
 	if ct.Speed > 0 {
-		thing = NewThingEnemy(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingEnemy(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	} else {
-		thing = NewThingItem(ct, r.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
+		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	}
 	r.things = append(r.things, thing)
 	return nil
 }
 
+// CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
 func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float64) {
 	//TODO now is an hack
 	//test zero index
-	c := r.config.Things[2]
+	c := r.config[2]
 	id := utils.NextUUId()
 	pos := XY{X: x, Y: y}
 	cfg := NewConfigThing(id, pos, angle, ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 1.0, c.Animation)
-	thing := NewThingBullet(cfg, r.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
+	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }
 
-// GetAnimation retrieves or creates an animation instance based on the provided configuration.
-func (r *Things) GetAnimation(ca *ConfigAnimation) *textures.Animation {
-	if ca == nil {
-		return textures.NewAnimation(nil, int(AnimationKindNone), 1, 1)
-	}
-	key := strings.Join(ca.Frames, ";")
-	animation, ok := r.animations[key]
-	if ok {
-		return animation
-	}
-	tex := r.tex.Get(ca.Frames)
-	animation = textures.NewAnimation(tex, int(ca.Kind), ca.ScaleW, ca.ScaleH)
-	r.animations[key] = animation
-	return animation
-}
-
+// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
 func (r *Things) Compute(pX float64, pY float64) {
 	for _, t := range r.things {
 		t.Compute(pX, pY)

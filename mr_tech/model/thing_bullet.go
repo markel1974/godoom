@@ -11,8 +11,8 @@ import (
 // ThingBullet represents a specialized type of Thing designed to simulate projectile-like behavior in the environment.
 type ThingBullet struct {
 	*ThingBase
-	wall   *physics.Entity
-	floorY float64
+	wall        *physics.Entity
+	floorStartY float64
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
@@ -20,9 +20,9 @@ type ThingBullet struct {
 // sectors and entities provide references to all sectors and entities in the game world.
 func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
-		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
-		wall:      physics.NewEntity(0, 0, 0, 0, 0),
-		floorY:    sector.FloorY,
+		ThingBase:   NewThingBase(cfg, anim, sector, sectors, entities),
+		wall:        physics.NewEntity(0, 0, 0, 0, 0),
+		floorStartY: sector.FloorY,
 	}
 	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
@@ -46,7 +46,24 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 }
 
 func (t *ThingBullet) GetFloorY() float64 {
-	return t.floorY
+	// 1. Magnitudo vettoriale corrente
+	velSq := (t.entity.Vx * t.entity.Vx) + (t.entity.Vy * t.entity.Vy)
+	// Se l'energia cinetica è esaurita o malformata, il proiettile è a terra
+	if velSq <= 0.01 || t.speed <= 0 {
+		return t.sector.FloorY
+	}
+	// 2. Fattore T di decadimento: velocità corrente normalizzata sulla velocità originale
+	ratio := math.Sqrt(velSq) / t.speed
+	// Clamping di sicurezza vettoriale in caso di impulsi esterni imprevisti
+	if ratio <= 0 {
+		return t.sector.FloorY
+	}
+	if ratio > 1.0 {
+		ratio = 1.0
+	}
+	// 3. LERP tra la quota del suolo e la quota di sparo
+	currentY := t.floorStartY * ratio
+	return currentY
 }
 
 // Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
@@ -104,7 +121,7 @@ func (t *ThingBullet) PhysicsApply() {
 
 // slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
 func (t *ThingBullet) adjustPassage(velX float64, velY float64) (float64, float64) {
-	bottom := t.GetFloorY()
+	bottom := t.floorStartY
 	top := bottom + t.height
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX

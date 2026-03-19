@@ -87,10 +87,10 @@ func (t *ThingBullet) PhysicsApply() {
 	tx := ex - t.position.X
 	ty := ey - t.position.Y
 	// Active Delta (Kinematic Drive) added only if there is intentionality
-	if t.entity.G > 0 {
-		tx += t.entity.Vx
-		ty += t.entity.Vy
-	}
+	//if t.entity.G > 0 {
+	tx += t.entity.Vx
+	ty += t.entity.Vy
+	//}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x
@@ -104,8 +104,8 @@ func (t *ThingBullet) PhysicsApply() {
 
 // slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
 func (t *ThingBullet) adjustPassage(velX float64, velY float64) (float64, float64) {
-	top := t.floorY + t.height //t.sector.FloorY + t.height
-	bottom := t.floorY         //t.sector.FloorY + 2.0
+	bottom := t.GetFloorY()
+	top := bottom + t.height
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
@@ -127,19 +127,15 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 				continue
 			}
 		}
-
 		dx := seg.End.X - seg.Start.X
 		dy := seg.End.Y - seg.Start.Y
 		den := moveX*dy - moveY*dx
-
 		if den == 0 {
 			continue
 		}
-
 		// Calcolo parametrico
 		t1 := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
 		u1 := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
-
 		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
 		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
 			holeLow, holeHigh := 9e9, -9e9
@@ -147,20 +143,17 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 				holeLow = mathematic.MaxF(t.sector.FloorY, seg.Sector.FloorY)
 				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
 			}
-
 			if holeHigh < top || holeLow > bottom {
 				minT = t1
 				hit = seg
 			}
 		}
 	}
-
 	// Risolvi l'impulso esclusivamente sulla faccia corretta
 	if hit != nil {
 		dx := hit.End.X - hit.Start.X
 		dy := hit.End.Y - hit.Start.Y
 		lenSq := dx*dx + dy*dy
-
 		// 1. Proiezione Ortogonale (Closest Point on Line Segment)
 		var cx, cy float64
 		if lenSq > 0 {
@@ -171,20 +164,14 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 		} else {
 			cx, cy = hit.Start.X, hit.Start.Y
 		}
-
 		// 2. Istanziazione Static Body
 		// cx, cy: Centro spoofato sul punto d'impatto per generare la normale perfetta
 		// 0, 0: Width/Height nulli affinché Baumgarte usi solo il raggio del proiettile
 		// 1e12: Massa infinita per assorbire l'impulso al 100% (InverseMass ~ 0)
-		//ent := physics.NewEntity(cx, cy, 0, 0, 1e12)
-		//ent.Reset(cx, cy, 0, 0, 0, 1e12)
 		t.wall.Reset(cx, cy, 0, 0, 0, 1e12)
-
 		// 3. Risoluzione Newton + Baumgarte
 		t.entity.SetupCollision(t.wall)
-
 		return t.entity.Vx, t.entity.Vy
 	}
-
 	return velX, velY
 }

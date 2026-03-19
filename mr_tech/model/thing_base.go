@@ -121,10 +121,10 @@ func (t *ThingBase) PhysicsApply() {
 	tx := ex - t.position.X
 	ty := ey - t.position.Y
 	// Active Delta (Kinematic Drive) added only if there is intentionality
-	if t.entity.G > 0 {
-		tx += t.entity.Vx
-		ty += t.entity.Vy
-	}
+	//if t.entity.G > 0 {
+	tx += t.entity.Vx
+	ty += t.entity.Vy
+	//}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x

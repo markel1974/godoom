@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// DefinitionJoin represents the value for a "join" definition in the system.
-// DefinitionVoid represents the value for a "void" definition in the system.
-// DefinitionWall represents the value for a "wall" definition in the system.
-// DefinitionUnknown represents the value for an "unknown" definition in the system.
+// DefinitionJoin represents a join action in a system with a numeric value of 3.
+// DefinitionVoid represents a void action in a system with a numeric value of 1.
+// DefinitionWall represents a wall action in a system with a numeric value of 2.
+// DefinitionUnknown represents an undefined state in a system with a numeric value of 0.
 const (
 	DefinitionJoin    = 3
 	DefinitionVoid    = 1
@@ -18,7 +18,7 @@ const (
 	DefinitionUnknown = 0
 )
 
-// Compiler is responsible for managing game entities, sectors, and player interactions with a defined maximum height.
+// Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
 type Compiler struct {
 	sectors  *Sectors
 	things   *Things
@@ -26,7 +26,7 @@ type Compiler struct {
 	entities *Entities
 }
 
-// NewCompiler creates and returns a new instance of Compiler with default-initialized fields.
+// NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
 		sectors:  nil,
@@ -36,8 +36,8 @@ func NewCompiler() *Compiler {
 	}
 }
 
-// Setup initializes the Compiler by processing the configuration, creating sectors, entities, lights, and the player.
-func (r *Compiler) Setup(cfg *ConfigRoot) error {
+// Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
+func (r *Compiler) Compile(cfg *ConfigRoot) error {
 	var totalSegments int
 	scale := cfg.ScaleFactor
 	if scale < 1 {
@@ -89,27 +89,27 @@ func (r *Compiler) Setup(cfg *ConfigRoot) error {
 	return nil
 }
 
-// GetEntities retrieves the Entities instance managed by the Compiler.
+// GetEntities returns the Entities instance managed by the Compiler.
 func (r *Compiler) GetEntities() *Entities {
 	return r.entities
 }
 
-// GetSectors retrieves the collection of sectors managed by the Compiler instance. It returns a pointer to the Sectors object.
+// GetSectors retrieves the Sectors instance associated with the current Compiler object.
 func (r *Compiler) GetSectors() *Sectors {
 	return r.sectors
 }
 
-// GetThings returns a slice of IThing instances managed by the Compiler.
+// GetThings returns the Things instance managed by the Compiler.
 func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
-// GetPlayer returns the ThingPlayer instance associated with the Compiler.
+// GetPlayer returns the player object associated with the compiler instance.
 func (r *Compiler) GetPlayer() *ThingPlayer {
 	return r.player
 }
 
-// GetSector retrieves a sector by its ID from the internal sectors collection. Returns an error if the sector is not found.
+// GetSector retrieves a Sector by its ID. Returns an error if the Sector is not found.
 func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 	s := r.sectors.GetSector(sectorId)
 	if s == nil {
@@ -118,7 +118,7 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 	return s, nil
 }
 
-// compileSectors processes the sector configurations, constructs sectors with their segments and properties, and validates their topology.
+// compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
 func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
@@ -227,7 +227,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 	return sectors, totalSegments
 }
 
-// compileLights processes and merges lighting centroids in connected sectors with matching height and light characteristics.
+// compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
 func (r *Compiler) compileLights(sectors *Sectors) {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
@@ -290,14 +290,4 @@ func (r *Compiler) compileLights(sectors *Sectors) {
 			}
 		}
 	}
-}
-
-// createPlayer initializes a ThingPlayer instance based on the provided configuration, sectors, and entities.
-func (r *Compiler) createPlayer(cfg *ConfigPlayer, sectors *Sectors, entities *Entities) (*ThingPlayer, error) {
-	pSector := r.sectors.GetSector(cfg.Sector)
-	if pSector == nil {
-		return nil, fmt.Errorf("can't find player sector at %s", cfg.Sector)
-	}
-	player := NewThingPlayer(cfg, pSector, sectors, entities, false)
-	return player, nil
 }

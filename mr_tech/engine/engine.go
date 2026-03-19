@@ -16,7 +16,6 @@ type Engine struct {
 	entities *model.Entities
 	player   *model.ThingPlayer
 	sectors  *model.Sectors
-	config   *model.ConfigRoot
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -30,7 +29,6 @@ func NewEngine(w int, h int, maxQueue int) *Engine {
 		entities: nil,
 		sectors:  nil,
 		player:   nil,
-		config:   nil,
 	}
 }
 
@@ -66,9 +64,8 @@ func (e *Engine) Len() int {
 
 // Setup initializes the Engine using the provided configuration, creating sectors, player, things, entities, and the portal.
 func (e *Engine) Setup(cfg *model.ConfigRoot) error {
-	e.config = cfg
 	compiler := model.NewCompiler()
-	if err := compiler.Setup(cfg); err != nil {
+	if err := compiler.Compile(cfg); err != nil {
 		return err
 	}
 	e.sectors = compiler.GetSectors()

@@ -584,6 +584,8 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 	flashDirY := pitchShear / scaleY
 	gl.Uniform3f(w.compiler.table[shaderMainFlashDir], 0.0, flashDirY, -1.0)
 	gl.Uniform1f(w.compiler.table[shaderMainFlashIntensityFactor], float32(w.flashFactor))
+	gl.Uniform1f(w.compiler.table[shaderMainFlashConeStart], 0.60)
+	gl.Uniform1f(w.compiler.table[shaderMainFlashConeEnd], 0.90)
 	return proj, view
 }
 

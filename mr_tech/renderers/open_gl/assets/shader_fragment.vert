@@ -16,6 +16,8 @@ uniform vec2 u_screenResolution;
 uniform float u_ambient_light;
 uniform vec3 u_flashDir;
 uniform float u_flashIntensityFactor;
+uniform float u_flashConeStart; //0.70, 0.90
+uniform float u_flashConeEnd;  //0.70, 0.90
 
 void main()
 {
@@ -49,7 +51,7 @@ void main()
     vec3 L_flash = normalize(-ViewPos);
     vec3 viewFront = normalize(u_flashDir);
     float cosThetaFlash = dot(-L_flash, viewFront);
-    float flashCone = smoothstep(0.85, 0.95, cosThetaFlash);
+    float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, cosThetaFlash);
 
     // --- 2. NORMALE E BUMP MAPPING ---
     vec3 finalNormal = NormalView;

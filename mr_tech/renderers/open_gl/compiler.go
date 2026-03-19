@@ -36,6 +36,8 @@ const (
 	shaderMainScreenResolution
 	shaderMainFlashDir
 	shaderMainFlashIntensityFactor
+	shaderMainFlashConeStart
+	shaderMainFlashConeEnd
 	shaderMainTexture
 	shaderMainNormalMap
 	shaderMainSSAO
@@ -139,6 +141,8 @@ func (w *Compiler) Compile(t textures.ITextures) error {
 	w.table[shaderMainScreenResolution] = gl.GetUniformLocation(sm, gl.Str("u_screenResolution\x00"))
 	w.table[shaderMainFlashDir] = gl.GetUniformLocation(sm, gl.Str("u_flashDir\x00"))
 	w.table[shaderMainFlashIntensityFactor] = gl.GetUniformLocation(sm, gl.Str("u_flashIntensityFactor\x00"))
+	w.table[shaderMainFlashConeStart] = gl.GetUniformLocation(sm, gl.Str("u_flashConeStart\x00"))
+	w.table[shaderMainFlashConeEnd] = gl.GetUniformLocation(sm, gl.Str("u_flashConeEnd\x00"))
 	w.table[shaderMainTexture] = gl.GetUniformLocation(sm, gl.Str("u_texture\x00"))
 	w.table[shaderMainNormalMap] = gl.GetUniformLocation(sm, gl.Str("u_normalMap\x00"))
 	w.table[shaderMainSSAO] = gl.GetUniformLocation(sm, gl.Str("u_ssao\x00"))
@@ -164,6 +168,12 @@ func (w *Compiler) Compile(t textures.ITextures) error {
 	w.table[shaderGeometryTexture] = gl.GetUniformLocation(programGeometry, gl.Str("u_texture\x00"))
 	w.table[shaderGeometryView] = gl.GetUniformLocation(programGeometry, gl.Str("u_view\x00"))
 	w.table[shaderGeometryProjection] = gl.GetUniformLocation(programGeometry, gl.Str("u_projection\x00"))
+
+	for i, v := range w.table {
+		if v < 0 {
+			return fmt.Errorf("invalid uniform %d: %v\n", i, v)
+		}
+	}
 
 	return nil
 }

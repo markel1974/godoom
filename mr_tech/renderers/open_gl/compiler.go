@@ -184,11 +184,11 @@ func (w *Compiler) compileShaders() error {
 		return "assets/" + s
 	}
 	programs := map[int]ShaderProgram{
-		shaderMain:     {vPath: bp("shader_vertex.vert"), fPath: bp("shader_fragment.vert")},
-		shaderSky:      {vPath: bp("sky_vertex.vert"), fPath: bp("sky_fragment.vert")},
+		shaderMain:     {vPath: bp("main.vert"), fPath: bp("main.frag")},
+		shaderSky:      {vPath: bp("sky.vert"), fPath: bp("sky.frag")},
 		shaderSSAO:     {vPath: bp("ssao_vertex.vert"), fPath: bp("ssao.frag")},
 		shaderBlur:     {vPath: bp("ssao_vertex.vert"), fPath: bp("ssao_blur.frag")},
-		shaderGeometry: {vPath: bp("shader_vertex.vert"), fPath: bp("geometry.frag")}, // Nuovo
+		shaderGeometry: {vPath: bp("main.vert"), fPath: bp("geometry.frag")}, // Nuovo
 	}
 
 	for shaderId, data := range programs {

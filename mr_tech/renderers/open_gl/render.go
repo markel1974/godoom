@@ -445,19 +445,32 @@ func (w *RenderOpenGL) glStreamRender() {
 	shaderMain := w.compiler.shaderMain
 	gl.UseProgram(shaderMain.GetProgram())
 
+	// Ripristina il Depth Test standard senza Blit
+	gl.DepthMask(true)
+	gl.DepthFunc(gl.LESS)
+
 	ssaoBlurTex := shaderSSAO.GetSSAOBlurTexture()
 	gl.BindVertexArray(w.compiler.shaderMain.mainVao)
 
+	// Bind statico della texture SSAO per l'intero batch
+	gl.ActiveTexture(gl.TEXTURE2)
+	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
+
+	var lastTexId uint32 = math.MaxUint32
+	var lastNormId uint32 = math.MaxUint32
+
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
-			gl.ActiveTexture(gl.TEXTURE0)
-			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
-
-			gl.ActiveTexture(gl.TEXTURE1)
-			gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
-
-			gl.ActiveTexture(gl.TEXTURE2)
-			gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
+			if lastTexId != cmd.texId {
+				gl.ActiveTexture(gl.TEXTURE0)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+				lastTexId = cmd.texId
+			}
+			if lastNormId != cmd.normTexId {
+				gl.ActiveTexture(gl.TEXTURE1)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
+				lastNormId = cmd.normTexId
+			}
 
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}
@@ -467,11 +480,15 @@ func (w *RenderOpenGL) glStreamRender() {
 // renderScene renders the current scene by iterating over draw commands and issuing OpenGL draw calls.
 func (w *RenderOpenGL) renderScene(program uint32) {
 	gl.BindVertexArray(w.compiler.shaderMain.mainVao)
+	var lastTexId uint32 = math.MaxUint32
+
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
-			// Vincolo alla TEXTURE0 richiesto per l'alpha discard nel geometry.frag
-			gl.ActiveTexture(gl.TEXTURE0)
-			gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+			if lastTexId != cmd.texId {
+				gl.ActiveTexture(gl.TEXTURE0)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+				lastTexId = cmd.texId
+			}
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}
 	}

@@ -49,12 +49,6 @@ type RenderOpenGL struct {
 	targetEnabled      bool
 	targetId           string
 
-	mainVao uint32
-	mainVbo uint32
-
-	skyVao uint32
-	skyVbo uint32
-
 	enableClear bool
 	debug       bool
 	debugIdx    int
@@ -80,7 +74,7 @@ func NewOpenGLRender() *RenderOpenGL {
 		enableClear:   false,
 		debug:         false,
 		debugIdx:      0,
-		flashFactor:   10.0,
+		flashFactor:   3.0,
 
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		frameCommands: NewDrawCommands(maxFrameCommands),
@@ -102,13 +96,9 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 
 // glInit initializes OpenGL state, buffers, shaders, and samplers required for rendering and SSAO processing.
 func (w *RenderOpenGL) glInit() error {
-	stride := w.frameVertices.Alignment() * 4
-	gl.GenVertexArrays(1, &w.mainVao)
-	gl.BindVertexArray(w.mainVao)
-	gl.GenBuffers(1, &w.mainVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
-	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
+	w.compiler.shaderMain.Init()
 
+	stride := w.frameVertices.Alignment() * 4
 	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
@@ -124,44 +114,34 @@ func (w *RenderOpenGL) glInit() error {
 	// Location 4: aNormal (vec3)
 	gl.VertexAttribPointer(4, 3, gl.FLOAT, false, stride, gl.PtrOffset(9*4))
 	gl.EnableVertexAttribArray(4)
-
 	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
 
 	// sky
-	gl.GenVertexArrays(1, &w.skyVao)
-	gl.BindVertexArray(w.skyVao)
-	gl.GenBuffers(1, &w.skyVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.skyVbo)
-	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
-	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
-	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
+	w.compiler.shaderSky.Init()
 
 	// Setup SSAO Samplers
-	progSSAO := w.compiler.GetShaderProgram(shaderSSAO)
-	gl.UseProgram(progSSAO)
-	gl.Uniform1i(w.compiler.table[shaderSSAOGPosition], 0)
-	gl.Uniform1i(w.compiler.table[shaderSSAOGNormal], 1)
-	gl.Uniform1i(w.compiler.table[shaderSSAOTexNoise], 2)
+	shaderSSAO := w.compiler.shaderSSAO
+	gl.UseProgram(shaderSSAO.GetProgram())
+	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocGPosition), 0)
+	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocGNormal), 1)
+	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocTexNoise), 2)
 
 	// Setup Blur Sampler
-	progBlur := w.compiler.GetShaderProgram(shaderBlur)
-	gl.UseProgram(progBlur)
-	gl.Uniform1i(w.compiler.table[shaderBlurSSAOInput], 0)
+	shaderBlur := w.compiler.shaderBlur
+	gl.UseProgram(shaderBlur.GetProgram())
+	gl.Uniform1i(shaderBlur.GetUniform(ShaderBlurLocSSAOInput), 0)
 
 	// Setup Main Samplers
-	progMain := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(progMain)
-	gl.Uniform1i(w.compiler.table[shaderMainTexture], 0)
-	gl.Uniform1i(w.compiler.table[shaderMainNormalMap], 1)
-	gl.Uniform1i(w.compiler.table[shaderMainSSAO], 2)
+	shaderMain := w.compiler.shaderMain
+	gl.UseProgram(shaderMain.GetProgram())
+	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocTexture), 0)
+	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocNormalMap), 1)
+	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocSSAO), 2)
 	// Configurazione Sampler Uniforms
-	gl.Uniform1i(w.compiler.table[shaderMainTexture], 0)
-	gl.Uniform1i(w.compiler.table[shaderMainNormalMap], 1)
+	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocTexture), 0)
+	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocNormalMap), 1)
 
 	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
 	var defaultNormalMap uint32
@@ -180,11 +160,6 @@ func (w *RenderOpenGL) glInit() error {
 	// I parametri qui sotto ora si applicano correttamente alla TEXTURE0 di default
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-
-	// Inizializzazione buffer SSAO tramite il compiler
-	fbW, fbH := w.win.GetFramebufferSize()
-
-	w.compiler.Setup(int32(fbW), int32(fbH))
 
 	return nil
 }
@@ -440,7 +415,7 @@ func (w *RenderOpenGL) glStreamRender() {
 	}
 
 	// 0. UPLOAD VERTICI (Orphaning)
-	gl.BindBuffer(gl.ARRAY_BUFFER, w.mainVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, w.compiler.shaderMain.mainVbo)
 	gl.BufferData(gl.ARRAY_BUFFER, w.frameVertices.Len()*4, nil, gl.STREAM_DRAW)
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, w.frameVertices.Len()*4, gl.Ptr(w.frameVertices.Get()))
 
@@ -448,57 +423,57 @@ func (w *RenderOpenGL) glStreamRender() {
 	proj, view := w.glUpdateCameraUniforms(w.vi)
 
 	// 1. GEOMETRY PASS (G-Buffer)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.gBufferFbo)
+	shaderSSAO := w.compiler.shaderSSAO
+	gl.BindFramebuffer(gl.FRAMEBUFFER, shaderSSAO.gBufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
 	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
 
-	programGeometry := w.compiler.GetShaderProgram(shaderGeometry)
-	gl.UseProgram(programGeometry)
-	gl.Uniform1i(w.compiler.table[shaderGeometryTexture], 0)
-	gl.UniformMatrix4fv(w.compiler.table[shaderGeometryView], 1, false, &view[0])
-	gl.UniformMatrix4fv(w.compiler.table[shaderGeometryProjection], 1, false, &proj[0])
-	w.renderScene(programGeometry)
+	shaderGeometry := w.compiler.shaderGeometry
+	gl.UseProgram(shaderGeometry.GetProgram())
+	gl.Uniform1i(shaderGeometry.GetUniform(ShaderGeometryLocTexture), 0)
+	gl.UniformMatrix4fv(shaderGeometry.GetUniform(ShaderGeometryLocView), 1, false, &view[0])
+	gl.UniformMatrix4fv(shaderGeometry.GetUniform(ShaderGeometryLocProjection), 1, false, &proj[0])
+	w.renderScene(shaderGeometry.GetProgram())
 
 	// 2. SSAO PASS
-	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.ssaoFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, shaderSSAO.ssaoFbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	programSSAO := w.compiler.GetShaderProgram(shaderSSAO)
-	gl.UseProgram(programSSAO)
+	gl.UseProgram(shaderSSAO.GetProgram())
 
 	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, w.compiler.gPositionDepth)
+	gl.BindTexture(gl.TEXTURE_2D, shaderSSAO.gPositionDepth)
 	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D, w.compiler.gNormal)
+	gl.BindTexture(gl.TEXTURE_2D, shaderSSAO.gNormal)
 	gl.ActiveTexture(gl.TEXTURE2)
-	noiseTex, kernel := w.compiler.GetSSAOResources()
+	noiseTex, kernel := shaderSSAO.GetSSAOResources()
 	gl.BindTexture(gl.TEXTURE_2D, noiseTex)
 
-	gl.Uniform3fv(w.compiler.table[shaderSSAOSamples], 64, &kernel[0])
-	gl.UniformMatrix4fv(w.compiler.table[shaderSSAOProjection], 1, false, &proj[0])
+	gl.Uniform3fv(shaderSSAO.GetUniform(ShaderSSAOLocSamples), 64, &kernel[0])
+	gl.UniformMatrix4fv(shaderSSAO.GetUniform(ShaderSSAOLocProjection), 1, false, &proj[0])
 	w.drawScreenQuad()
 
 	// 3. BLUR PASS
-	gl.BindFramebuffer(gl.FRAMEBUFFER, w.compiler.ssaoBlurFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, shaderSSAO.ssaoBlurFbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	programBlur := w.compiler.GetShaderProgram(shaderBlur)
-	gl.UseProgram(programBlur)
+	shaderBlur := w.compiler.shaderBlur
+	gl.UseProgram(shaderBlur.GetProgram())
 
 	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, w.compiler.ssaoColorBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, shaderSSAO.ssaoColorBuffer)
 	w.drawScreenQuad()
 
 	// 4. FINAL LIGHTING PASS
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
-	programMain := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(programMain)
+	shaderMain := w.compiler.shaderMain
+	gl.UseProgram(shaderMain.GetProgram())
 
-	ssaoBlurTex := w.compiler.GetSSAOBlurTexture()
-	gl.BindVertexArray(w.mainVao)
+	ssaoBlurTex := shaderSSAO.GetSSAOBlurTexture()
+	gl.BindVertexArray(w.compiler.shaderMain.mainVao)
 
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
@@ -518,7 +493,7 @@ func (w *RenderOpenGL) glStreamRender() {
 
 // renderScene renders the current scene by iterating over draw commands and issuing OpenGL draw calls.
 func (w *RenderOpenGL) renderScene(program uint32) {
-	gl.BindVertexArray(w.mainVao)
+	gl.BindVertexArray(w.compiler.shaderMain.mainVao)
 	for _, cmd := range w.frameCommands.Get() {
 		if cmd.vertexCount > 0 {
 			// Vincolo alla TEXTURE0 richiesto per l'alpha discard nel geometry.frag
@@ -531,7 +506,7 @@ func (w *RenderOpenGL) renderScene(program uint32) {
 
 // drawScreenQuad renders a full-screen quad using the sky vertex array and disables depth testing during the draw operation.
 func (w *RenderOpenGL) drawScreenQuad() {
-	gl.BindVertexArray(w.skyVao)
+	gl.BindVertexArray(w.compiler.shaderSky.skyVao)
 	gl.Disable(gl.DEPTH_TEST)
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 	gl.Enable(gl.DEPTH_TEST)
@@ -539,8 +514,8 @@ func (w *RenderOpenGL) drawScreenQuad() {
 
 // glUpdateCameraUniforms updates the camera view and projection matrices, along with related shader uniforms.
 func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
-	programMain := w.compiler.GetShaderProgram(shaderMain)
-	gl.UseProgram(programMain)
+	shaderMain := w.compiler.shaderMain
+	gl.UseProgram(shaderMain.GetProgram())
 	aspect := float32(w.screenWidth) / float32(w.screenHeight)
 	near, far := float32(1.0), float32(100000.0)
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
@@ -576,32 +551,32 @@ func (w *RenderOpenGL) glUpdateCameraUniforms(vi *model.ViewMatrix) ([16]float32
 		tx, ty, tz, 1,
 	}
 
-	gl.UniformMatrix4fv(w.compiler.table[shaderMainView], 1, false, &view[0])
-	gl.UniformMatrix4fv(w.compiler.table[shaderMainProjection], 1, false, &proj[0])
-	gl.Uniform1f(w.compiler.table[shaderMainAmbientLight], float32(vi.GetLightIntensity()))
+	gl.UniformMatrix4fv(shaderMain.GetUniform(ShaderMainLocView), 1, false, &view[0])
+	gl.UniformMatrix4fv(shaderMain.GetUniform(ShaderMainLocProjection), 1, false, &proj[0])
+	gl.Uniform1f(shaderMain.GetUniform(ShaderMainLocAmbientLight), float32(vi.GetLightIntensity()))
 	fbW, fbH := w.win.GetFramebufferSize()
-	gl.Uniform2f(w.compiler.table[shaderMainScreenResolution], float32(fbW), float32(fbH))
+	gl.Uniform2f(shaderMain.GetUniform(ShaderMainLocScreenResolution), float32(fbW), float32(fbH))
 	flashDirY := pitchShear / scaleY
-	gl.Uniform3f(w.compiler.table[shaderMainFlashDir], 0.0, flashDirY, -1.0)
-	gl.Uniform1f(w.compiler.table[shaderMainFlashIntensityFactor], float32(w.flashFactor))
-	gl.Uniform1f(w.compiler.table[shaderMainFlashConeStart], 0.60)
-	gl.Uniform1f(w.compiler.table[shaderMainFlashConeEnd], 0.90)
+	gl.Uniform3f(shaderMain.GetUniform(ShaderMainLocFlashDir), 0.0, flashDirY, -1.0)
+	gl.Uniform1f(shaderMain.GetUniform(ShaderMainLocFlashIntensityFactor), float32(w.flashFactor))
+	gl.Uniform1f(shaderMain.GetUniform(ShaderMainLocFlashConeStart), 0.60)
+	gl.Uniform1f(shaderMain.GetUniform(ShaderMainLocFlashConeEnd), 0.90)
 	return proj, view
 }
 
 // glRenderSky renders the skybox using the provided projection and view matrices, and binds the given sky texture.
 func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *textures.Texture) {
-	skyProg := w.compiler.GetShaderProgram(shaderSky)
-	gl.UseProgram(skyProg)
+	shaderSky := w.compiler.shaderSky
+	gl.UseProgram(shaderSky.GetProgram())
 
 	// Z_Quad == Z_Clear: viene eseguito SOLO dove non c'è geometria solida!
 	gl.DepthFunc(gl.LEQUAL)
 	gl.DepthMask(false) // Read-only
 
-	gl.UniformMatrix4fv(w.compiler.table[shaderSkyProjection], 1, false, &proj[0])
-	gl.UniformMatrix4fv(w.compiler.table[shaderSkyView], 1, false, &view[0])
+	gl.UniformMatrix4fv(shaderSky.GetUniform(ShaderSkyLocProjection), 1, false, &proj[0])
+	gl.UniformMatrix4fv(shaderSky.GetUniform(ShaderSkyLocView), 1, false, &view[0])
 
-	gl.BindVertexArray(w.skyVao)
+	gl.BindVertexArray(w.compiler.shaderSky.skyVao)
 
 	if texId, normTextId, ok := w.compiler.GetTexture(cSky); ok {
 		gl.ActiveTexture(gl.TEXTURE0)
@@ -611,7 +586,7 @@ func (w *RenderOpenGL) glRenderSky(proj [16]float32, view [16]float32, cSky *tex
 		gl.BindTexture(gl.TEXTURE_2D, normTextId)
 		gl.ActiveTexture(gl.TEXTURE2)
 
-		gl.Uniform1i(w.compiler.table[shaderSkySky], 0)
+		gl.Uniform1i(shaderSky.GetUniform(ShaderSkyLocSky), 0)
 	}
 
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
@@ -637,10 +612,18 @@ func (w *RenderOpenGL) doInitialize() error {
 
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
+
+		fbW, fbH := w.win.GetFramebufferSize()
+
+		w.compiler.Setup(int32(fbW), int32(fbH))
+
+		if err := w.compiler.CompileShaders(); err != nil {
+			return err
+		}
 		if err := w.glInit(); err != nil {
 			return err
 		}
-		if err := w.compiler.Compile(w.textures); err != nil {
+		if err := w.compiler.CompileTextures(w.textures); err != nil {
 			return err
 		}
 		return nil

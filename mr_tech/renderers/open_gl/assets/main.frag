@@ -96,8 +96,8 @@ void main()
     float NdotH_flash = max(dot(finalNormal, normalize(L_flash + V)), 0.0);
 
     float isHorizontal = step(0.8, abs(finalNormal.y));
-    float shininess = mix(16.0, 4.0, isHorizontal);
-    float specBoost = mix(0.5, 1.5, isHorizontal);
+    float shininess = mix(64.0, 48.0, isHorizontal);
+    float specBoost = mix(0.6, 0.8, isHorizontal);
 
     float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
     float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);

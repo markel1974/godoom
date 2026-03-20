@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// assets is an embedded file system that contains static assets bundled with the application using the go:embed directive.
+// assets represents an embedded file system containing application resources such as shaders or assets.
 //
 //go:embed assets
 var assets embed.FS
@@ -28,22 +28,22 @@ const (
 
 */
 
-// ShaderProgram represents a compiled GPU shader program with associated vertex and fragment shader file paths.
+// ShaderProgram represents a compiled and linked GPU shader program, encapsulating vertex and fragment shaders.
 type ShaderProgram struct {
 	id    int
 	vPath string
 	fPath string
 }
 
-// glTexture represents an OpenGL texture with an associated texture ID and normal texture ID.
-// texId is the identifier for the diffuse texture.
-// normTexId is the identifier for the normal map texture.
+// glTexture represents an OpenGL texture with identifiers for diffuse and normal maps.
+// texId is the OpenGL-generated identifier for the diffuse texture.
+// normTexId is the OpenGL-generated identifier for the normal map texture.
 type glTexture struct {
 	texId     uint32
 	normTexId uint32
 }
 
-// Compiler represents a structure containing shaders and textures for rendering and graphics processing.
+// Compiler represents a structure responsible for compiling and managing shaders and textures in a rendering pipeline.
 type Compiler struct {
 	textures       map[*textures.Texture]glTexture
 	shaderMain     *ShaderMain
@@ -53,7 +53,7 @@ type Compiler struct {
 	shaderGeometry *ShaderGeometry
 }
 
-// NewCompiler initializes and returns a new instance of Compiler with preconfigured shader components.
+// NewCompiler initializes and returns a new instance of Compiler with preconfigured shader objects.
 func NewCompiler() *Compiler {
 	return &Compiler{
 		shaderMain:     NewShaderMain(),
@@ -64,7 +64,7 @@ func NewCompiler() *Compiler {
 	}
 }
 
-// Setup configures all associated shaders of the Compiler using the provided width and height.
+// Setup initializes all shader programs associated with the Compiler with the specified width and height.
 func (w *Compiler) Setup(width, height int32) {
 	w.shaderMain.Setup(width, height)
 	w.shaderSky.Setup(width, height)
@@ -73,29 +73,22 @@ func (w *Compiler) Setup(width, height int32) {
 	w.shaderGeometry.Setup(width, height)
 }
 
-// GetTexture retrieves the texture IDs for the given texture and indicates if it exists in the Compiler's cache.
+// GetTexture retrieves texture and normal texture IDs for the given texture and indicates if it was found in the cache.
 func (w *Compiler) GetTexture(tex *textures.Texture) (uint32, uint32, bool) {
 	t, ok := w.textures[tex]
 	return t.texId, t.normTexId, ok
 }
 
-// read reads the vertex and fragment shader source files from the specified paths and returns their contents as strings.
-func (w *Compiler) read(vPath, fPath string) (string, string, error) {
-	bp := func(s string) string {
-		return "assets/" + s
-	}
-	vertexSrc, err := fs.ReadFile(assets, bp(vPath))
-	if err != nil {
-		return "", "", err
-	}
-	fragmentSrc, err := fs.ReadFile(assets, bp(fPath))
-	if err != nil {
-		return "", "", err
-	}
-	return string(vertexSrc), string(fragmentSrc), nil
+// SetupSamplers configures samplers for all associated shaders in the Compiler, preparing them for rendering tasks.
+func (w *Compiler) SetupSamplers() {
+	w.shaderSky.SetupSamplers()
+	w.shaderSSAO.SetupSamplers()
+	w.shaderBlur.SetupSamplers()
+	w.shaderMain.SetupSamplers()
+	w.shaderGeometry.SetupSamplers()
 }
 
-// CompileShaders compiles all shaders required for rendering, including main, sky, SSAO, blur, and geometry shaders.
+// CompileShaders compiles and links all shaders required for the application, returning an error if any step fails.
 func (w *Compiler) CompileShaders() error {
 	mainV, mainF, err := w.read("main.vert", "main.frag")
 	if err != nil {
@@ -135,7 +128,7 @@ func (w *Compiler) CompileShaders() error {
 	return nil
 }
 
-// CompileTextures compiles and uploads textures and normal maps to the GPU from the provided ITextures collection.
+// CompileTextures uploads textures and normal maps to the GPU, generating OpenGL texture objects for rendering.
 func (w *Compiler) CompileTextures(t textures.ITextures) error {
 	w.textures = make(map[*textures.Texture]glTexture)
 
@@ -202,4 +195,21 @@ func (w *Compiler) CompileTextures(t textures.ITextures) error {
 	}
 
 	return nil
+}
+
+// read reads the contents of vertex and fragment shader files from the asset file system and returns them as strings.
+// It takes the paths to the vertex and fragment shaders as input and returns any errors encountered during file reading.
+func (w *Compiler) read(vPath, fPath string) (string, string, error) {
+	bp := func(s string) string {
+		return "assets/" + s
+	}
+	vertexSrc, err := fs.ReadFile(assets, bp(vPath))
+	if err != nil {
+		return "", "", err
+	}
+	fragmentSrc, err := fs.ReadFile(assets, bp(fPath))
+	if err != nil {
+		return "", "", err
+	}
+	return string(vertexSrc), string(fragmentSrc), nil
 }

@@ -35,6 +35,12 @@ func (s *ShaderBlur) GetUniform(id ShaderBlurLoc) int32 {
 	return s.table[id]
 }
 
+func (s *ShaderBlur) SetupSamplers() {
+	// Setup Blur Sampler
+	gl.UseProgram(s.prg)
+	gl.Uniform1i(s.GetUniform(ShaderBlurLocSSAOInput), 0)
+}
+
 func (s *ShaderBlur) Compile(vertexSrc string, fragmentSrc string) error {
 	vertexShader, err := ShaderCompile(vertexSrc, gl.VERTEX_SHADER)
 	if err != nil {

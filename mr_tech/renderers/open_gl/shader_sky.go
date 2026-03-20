@@ -28,7 +28,7 @@ func NewShaderSky() *ShaderSky {
 	}
 }
 
-func (s *ShaderSky) Init() {
+func (s *ShaderSky) SetupSamplers() {
 	// sky
 	gl.GenVertexArrays(1, &s.skyVao)
 	gl.BindVertexArray(s.skyVao)

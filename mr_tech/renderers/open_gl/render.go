@@ -96,8 +96,6 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 
 // glInit initializes OpenGL state, buffers, shaders, and samplers required for rendering and SSAO processing.
 func (w *RenderOpenGL) glInit() error {
-	w.compiler.shaderMain.Init()
-
 	stride := w.frameVertices.Alignment() * 4
 	// Location 0: aPos (vec3)
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
@@ -117,31 +115,6 @@ func (w *RenderOpenGL) glInit() error {
 	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
-
-	// sky
-	w.compiler.shaderSky.Init()
-
-	// Setup SSAO Samplers
-	shaderSSAO := w.compiler.shaderSSAO
-	gl.UseProgram(shaderSSAO.GetProgram())
-	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocGPosition), 0)
-	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocGNormal), 1)
-	gl.Uniform1i(shaderSSAO.GetUniform(ShaderSSAOLocTexNoise), 2)
-
-	// Setup Blur Sampler
-	shaderBlur := w.compiler.shaderBlur
-	gl.UseProgram(shaderBlur.GetProgram())
-	gl.Uniform1i(shaderBlur.GetUniform(ShaderBlurLocSSAOInput), 0)
-
-	// Setup Main Samplers
-	shaderMain := w.compiler.shaderMain
-	gl.UseProgram(shaderMain.GetProgram())
-	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocTexture), 0)
-	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocNormalMap), 1)
-	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocSSAO), 2)
-	// Configurazione Sampler Uniforms
-	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocTexture), 0)
-	gl.Uniform1i(shaderMain.GetUniform(ShaderMainLocNormalMap), 1)
 
 	// --- SETUP FALLBACK NORMAL MAP (TEXTURE1) ---
 	var defaultNormalMap uint32
@@ -616,13 +589,18 @@ func (w *RenderOpenGL) doInitialize() error {
 		fbW, fbH := w.win.GetFramebufferSize()
 
 		w.compiler.Setup(int32(fbW), int32(fbH))
-
 		if err := w.compiler.CompileShaders(); err != nil {
 			return err
 		}
+
+		w.compiler.shaderMain.Init()
+
 		if err := w.glInit(); err != nil {
 			return err
 		}
+
+		w.compiler.SetupSamplers()
+
 		if err := w.compiler.CompileTextures(w.textures); err != nil {
 			return err
 		}

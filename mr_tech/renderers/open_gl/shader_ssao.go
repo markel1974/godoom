@@ -55,6 +55,14 @@ func (s *ShaderSSAO) Setup(width int32, height int32) {
 	s.height = height
 }
 
+func (s *ShaderSSAO) SetupSamplers() {
+	// Setup SSAO Samplers
+	gl.UseProgram(s.prg)
+	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGPosition), 0)
+	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGNormal), 1)
+	gl.Uniform1i(s.GetUniform(ShaderSSAOLocTexNoise), 2)
+}
+
 // GetGBufferTextures returns the texture IDs for the position-depth and normal buffers of the G-Buffer.
 func (s *ShaderSSAO) GetGBufferTextures() (uint32, uint32) {
 	return s.gPositionDepth, s.gNormal

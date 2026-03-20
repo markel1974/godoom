@@ -45,6 +45,16 @@ func (s *ShaderMain) Init() {
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 }
 
+func (s *ShaderMain) SetupSamplers() {
+	gl.UseProgram(s.prg)
+	gl.Uniform1i(s.GetUniform(ShaderMainLocTexture), 0)
+	gl.Uniform1i(s.GetUniform(ShaderMainLocNormalMap), 1)
+	gl.Uniform1i(s.GetUniform(ShaderMainLocSSAO), 2)
+	// Configurazione Sampler Uniforms
+	gl.Uniform1i(s.GetUniform(ShaderMainLocTexture), 0)
+	gl.Uniform1i(s.GetUniform(ShaderMainLocNormalMap), 1)
+}
+
 func (s *ShaderMain) Setup(width int32, height int32) {
 }
 

@@ -29,6 +29,9 @@ func NewShaderGeometry() *ShaderGeometry {
 func (s *ShaderGeometry) Setup(width int32, height int32) {
 }
 
+func (s *ShaderGeometry) SetupSamplers() {
+}
+
 func (s *ShaderGeometry) GetProgram() uint32 {
 	return s.prg
 }

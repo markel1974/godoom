@@ -421,10 +421,10 @@ func (w *RenderOpenGL) glStreamRender() {
 	gl.ActiveTexture(gl.TEXTURE1)
 	gl.BindTexture(gl.TEXTURE_2D, shaderSSAO.gNormal)
 	gl.ActiveTexture(gl.TEXTURE2)
-	noiseTex, kernel := shaderSSAO.GetSSAOResources()
+	noiseTex := shaderSSAO.GetSSAOResources()
 	gl.BindTexture(gl.TEXTURE_2D, noiseTex)
 
-	gl.Uniform3fv(shaderSSAO.GetUniform(ShaderSSAOLocSamples), 64, &kernel[0])
+	//gl.Uniform3fv(shaderSSAO.GetUniform(ShaderSSAOLocSamples), 64, &kernel[0])
 	gl.UniformMatrix4fv(shaderSSAO.GetUniform(ShaderSSAOLocProjection), 1, false, &proj[0])
 	w.drawScreenQuad()
 

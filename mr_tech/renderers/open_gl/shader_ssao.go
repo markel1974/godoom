@@ -61,6 +61,8 @@ func (s *ShaderSSAO) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGPosition), 0)
 	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGNormal), 1)
 	gl.Uniform1i(s.GetUniform(ShaderSSAOLocTexNoise), 2)
+
+	gl.Uniform3fv(s.GetUniform(ShaderSSAOLocSamples), 64, &s.ssaoKernel[0])
 }
 
 // GetGBufferTextures returns the texture IDs for the position-depth and normal buffers of the G-Buffer.
@@ -69,8 +71,8 @@ func (s *ShaderSSAO) GetGBufferTextures() (uint32, uint32) {
 }
 
 // GetSSAOResources retrieves the SSAO noise texture and kernel data used for screen space ambient occlusion calculations.
-func (s *ShaderSSAO) GetSSAOResources() (uint32, []float32) {
-	return s.ssaoNoiseTex, s.ssaoKernel
+func (s *ShaderSSAO) GetSSAOResources() uint32 {
+	return s.ssaoNoiseTex
 }
 
 // GetSSAOBlurTexture retrieves the texture ID of the blurred SSAO (Screen Space Ambient Occlusion) buffer.

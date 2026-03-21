@@ -8,18 +8,20 @@ import (
 
 // CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
+	// --- 1. PROIEZIONE STANZA (Ortografica) ---
 	const orthoSize = 512.0
-	const zNear, zFar = 1.0, 2048.0
+	const zNearRoom, zFarRoom = 1.0, 2048.0
 
 	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
 		0, 1.0 / orthoSize, 0, 0,
-		0, 0, -2.0 / (zFar - zNear), 0,
-		0, 0, -(zFar + zNear) / (zFar - zNear), 1,
+		0, 0, -2.0 / (zFarRoom - zNearRoom), 0,
+		0, 0, -(zFarRoom + zNearRoom) / (zFarRoom - zNearRoom), 1,
 	}
 
-	// FIX: Snap ortografico alla risoluzione della Shadow Map (1024)
-	texelSize := float64(orthoSize / 1024.0)
+	// FIX: texelSize corretto. La larghezza del frustum ortografico è (orthoSize * 2).
+	// Essendo la texture a 1024x1024, il texel è (1024 / 1024) = 1.0.
+	texelSize := float64((orthoSize * 2.0) / 1024.0)
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
@@ -35,14 +37,18 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	var roomSpace [16]float32
 	MultiplyMatrix(&roomSpace, roomProj, roomView)
 
+	// --- 2. PROIEZIONE TORCIA (Prospettica) ---
+	// FIX: zNear abbassato da 1.0 a 0.1. Impedisce che i muri molto vicini vengano
+	// clippati fuori dalla shadow map causando bug quando sei faccia a faccia con la parete.
+	const zNearFlash, zFarFlash = 0.1, 2048.0
 	fovRad := float32(45.0 * math.Pi / 180.0)
 	f := float32(1.0 / math.Tan(float64(fovRad/2.0)))
 
 	flashProj := [16]float32{
 		f, 0, 0, 0,
 		0, f, 0, 0,
-		0, 0, (zFar + zNear) / (zNear - zFar), -1,
-		0, 0, (2 * zFar * zNear) / (zNear - zFar), 0,
+		0, 0, (zFarFlash + zNearFlash) / (zNearFlash - zFarFlash), -1,
+		0, 0, (2 * zFarFlash * zNearFlash) / (zNearFlash - zFarFlash), 0,
 	}
 
 	sinA, cosA := vi.GetAngle()
@@ -61,8 +67,6 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	uX := rY*fZ - rZ*fY
 	uY := rZ*fX - rX*fZ
 	uZ := rX*fY - rY*fX
-
-	//flashX, flashY, flashZ := float32(camX), float32(camZ), float32(-camY)
 
 	flashX := float32(camX) + (rX * flashOffsetX) + (uX * flashOffsetY)
 	flashY := float32(camZ) + (rY * flashOffsetX) + (uY * flashOffsetY)

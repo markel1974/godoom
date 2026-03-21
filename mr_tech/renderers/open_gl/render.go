@@ -370,8 +370,8 @@ func (w *RenderOpenGL) doRun() {
 		if w.win.JustPressed(pixels.KeyN) {
 			w.enableShadows = !w.enableShadows
 			if w.enableShadows {
-				w.flashOffsetX = 4.0
-				w.flashOffsetY = -2.0
+				w.flashOffsetX = 1.0
+				w.flashOffsetY = -1.0
 			} else {
 				w.flashOffsetX = 0.0
 				w.flashOffsetY = 0.0

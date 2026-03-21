@@ -29,14 +29,17 @@ uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
 uniform int u_enableShadows;
 
-// --- FUNZIONE SHADOW MAPPING PULITA ---
+// --- FUNZIONE SHADOW MAPPING PULITA (Pura Proiezione Vettoriale HW) ---
+// Rimosso normal e lightDirViewSpace, non servono per il test di profondità nativo.
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
-    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+    // DELEGA HARDWARE: Rimosso il clipping su X e Y.
+    // L'hardware campiona il GL_CLAMP_TO_BORDER restituendo 1.0 (nessuna ombra) oltre i bordi.
+    if(projCoords.z > 1.0) {
         return 0.0;
     }
 
@@ -44,7 +47,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap) {
     float shadow = 0.0;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
 
-    // Fetch bilineare nativo hardware (Il bias è garantito dal glPolygonOffset del depth pass)
+    // PCF Bilineare
     for(int x = -1; x <= 1; ++x) {
         for(int y = -1; y <= 1; ++y) {
             shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth));

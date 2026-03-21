@@ -9,8 +9,8 @@ import (
 // CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	// --- 1. PROIEZIONE STANZA (Ortografica) ---
-	const orthoSize = 512.0
-	const zNearRoom, zFarRoom = 1.0, 2048.0
+	const orthoSize = 1024.0
+	const zNearRoom, zFarRoom = 1.0, 4096.0
 
 	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
@@ -19,8 +19,6 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		0, 0, -(zFarRoom + zNearRoom) / (zFarRoom - zNearRoom), 1,
 	}
 
-	// FIX: texelSize corretto. La larghezza del frustum ortografico è (orthoSize * 2).
-	// Essendo la texture a 1024x1024, il texel è (1024 / 1024) = 1.0.
 	texelSize := float64((orthoSize * 2.0) / 1024.0)
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
@@ -37,11 +35,9 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	var roomSpace [16]float32
 	MultiplyMatrix(&roomSpace, roomProj, roomView)
 
-	// --- 2. PROIEZIONE TORCIA (Prospettica) ---
-	// FIX: zNear abbassato da 1.0 a 0.1. Impedisce che i muri molto vicini vengano
-	// clippati fuori dalla shadow map causando bug quando sei faccia a faccia con la parete.
+	// 2. SINCRONIZZAZIONE FOV TORCIA (Avvolge i 106° calcolati dallo shader)
 	const zNearFlash, zFarFlash = 0.1, 2048.0
-	fovRad := float32(45.0 * math.Pi / 180.0)
+	fovRad := float32(110.0 * math.Pi / 180.0)
 	f := float32(1.0 / math.Tan(float64(fovRad/2.0)))
 
 	flashProj := [16]float32{

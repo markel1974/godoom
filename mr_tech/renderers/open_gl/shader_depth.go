@@ -142,6 +142,8 @@ func (s *ShaderDepth) Render(renderScene func()) {
 
 	gl.Enable(gl.POLYGON_OFFSET_FILL)
 	gl.PolygonOffset(1.5, 4.0)
+	//TODO DEBUG
+	//gl.PolygonOffset(0.7, 2.0)
 
 	gl.Viewport(0, 0, s.shadowWidth, s.shadowHeight)
 

@@ -7,7 +7,7 @@ import (
 )
 
 // CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
-func CreateSpaces(vi *model.ViewMatrix, pX, pY float64) ([16]float32, [16]float32) {
+func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	const orthoSize = 512.0
 	const zNear, zFar = 1.0, 2048.0
 
@@ -62,7 +62,11 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64) ([16]float32, [16]float3
 	uY := rZ*fX - rX*fZ
 	uZ := rX*fY - rY*fX
 
-	flashX, flashY, flashZ := float32(camX), float32(camZ), float32(-camY)
+	//flashX, flashY, flashZ := float32(camX), float32(camZ), float32(-camY)
+
+	flashX := float32(camX) + (rX * flashOffsetX) + (uX * flashOffsetY)
+	flashY := float32(camZ) + (rY * flashOffsetX) + (uY * flashOffsetY)
+	flashZ := float32(-camY) + (rZ * flashOffsetX) + (uZ * flashOffsetY)
 
 	tx := -(rX*flashX + rY*flashY + rZ*flashZ)
 	ty := -(uX*flashX + uY*flashY + uZ*flashZ)

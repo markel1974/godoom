@@ -45,6 +45,7 @@ const (
 	ShaderMainLocRoomShadowMap
 	ShaderMainLocFlashShadowMap
 	ShaderMainLocEnableShadows
+	ShaderMainLocFlashOffset
 	ShaderMainLocLast
 )
 
@@ -66,6 +67,8 @@ type ShaderMain struct {
 	ambientLight     float32
 	flashDirY        float32
 	enableShadows    int32
+	flashOffsetX     float32
+	flashOffsetY     float32
 }
 
 // NewShaderMain initializes and returns a new instance of ShaderMain with default parameters.
@@ -143,6 +146,7 @@ func (s *ShaderMain) Compile(a IAssets) error {
 	s.table[ShaderMainLocFlashIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_flashIntensityFactor\x00"))
 	s.table[ShaderMainLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
 	s.table[ShaderMainLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
+	s.table[ShaderMainLocFlashOffset] = gl.GetUniformLocation(s.prg, gl.Str("u_flashOffset\x00"))
 	s.table[ShaderMainLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
 	s.table[ShaderMainLocNormalMap] = gl.GetUniformLocation(s.prg, gl.Str("u_normalMap\x00"))
 	s.table[ShaderMainLocSSAO] = gl.GetUniformLocation(s.prg, gl.Str("u_ssao\x00"))
@@ -167,7 +171,7 @@ func (s *ShaderMain) Prepare(fv []float32, l int) {
 }
 
 // UpdateUniforms updates the shader's uniform variables based on the view matrix and framebuffer dimensions.
-func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, flashFactor float32, enableShadows bool) ([16]float32, [16]float32) {
+func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, flashFactor float32, enableShadows bool, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	const near, far = float32(1.0), float32(4096.0)
 	aspect := float32(s.width) / float32(s.height)
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
@@ -187,6 +191,8 @@ func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flash
 
 	s.flashDirY = pitchShear / scaleY
 	s.flashFactor = flashFactor
+	s.flashOffsetX = flashOffsetX
+	s.flashOffsetY = flashOffsetY
 	s.ambientLight = float32(vi.GetLightIntensity())
 	s.roomSpaceMatrix = roomSpaceMatrix
 	s.flashSpaceMatrix = flashSpaceMatrix
@@ -225,6 +231,7 @@ func (s *ShaderMain) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 	gl.Uniform1f(s.GetUniform(ShaderMainLocFlashConeStart), 0.60)
 	gl.Uniform1f(s.GetUniform(ShaderMainLocFlashConeEnd), 0.90)
 	gl.Uniform1i(s.GetUniform(ShaderMainLocEnableShadows), s.enableShadows)
+	gl.Uniform3f(s.GetUniform(ShaderMainLocFlashOffset), s.flashOffsetX, s.flashOffsetY, 0.0)
 	gl.UniformMatrix4fv(s.GetUniform(ShaderMainLocRoomSpaceMatrix), 1, false, &s.roomSpaceMatrix[0])
 	gl.UniformMatrix4fv(s.GetUniform(ShaderMainLocFlashSpaceMatrix), 1, false, &s.flashSpaceMatrix[0])
 

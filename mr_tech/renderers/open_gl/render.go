@@ -48,11 +48,12 @@ type RenderOpenGL struct {
 	targetEnabled      bool
 	targetId           string
 
-	enableClear bool
-	debug       bool
-	debugIdx    int
-	flashFactor float32
-
+	enableClear   bool
+	debug         bool
+	debugIdx      int
+	flashFactor   float32
+	flashOffsetX  float32
+	flashOffsetY  float32
 	enableShadows bool
 
 	compiler *Compiler
@@ -75,10 +76,11 @@ func NewOpenGLRender() *RenderOpenGL {
 		debug:         false,
 		debugIdx:      0,
 		flashFactor:   3.0,
+		flashOffsetX:  0.0,
+		flashOffsetY:  0.0,
 		enableShadows: false,
-
-		compiler: compiler,
-		builder:  NewBatchBuilder(compiler),
+		compiler:      compiler,
+		builder:       NewBatchBuilder(compiler),
 	}
 	return r
 }
@@ -226,8 +228,8 @@ func (w *RenderOpenGL) doRender() {
 
 		// Aggiornamento Stato (CPU)
 		pX, pY := w.player.GetPosition()
-		roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(w.vi, pX, pY)
-		proj, view := w.compiler.shaderMain.UpdateUniforms(w.vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows)
+		roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(w.vi, pX, pY, w.flashOffsetX, w.flashOffsetY)
+		proj, view := w.compiler.shaderMain.UpdateUniforms(w.vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows, w.flashOffsetX, w.flashOffsetY)
 		w.compiler.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
 		w.compiler.shaderGeometry.UpdateUniforms(view, proj)
 		w.compiler.shaderSSAO.UpdateUniforms(view, proj)
@@ -364,6 +366,16 @@ func (w *RenderOpenGL) doRun() {
 		}
 		if w.win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
+		}
+		if w.win.JustPressed(pixels.KeyN) {
+			w.enableShadows = !w.enableShadows
+			if w.enableShadows {
+				w.flashOffsetX = 4.0
+				w.flashOffsetY = -2.0
+			} else {
+				w.flashOffsetX = 0.0
+				w.flashOffsetY = 0.0
+			}
 		}
 
 		w.win.UpdateInputAndSwap()

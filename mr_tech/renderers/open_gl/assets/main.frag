@@ -24,6 +24,7 @@ uniform vec2 u_screenResolution;
 uniform float u_ambient_light;
 uniform vec3 u_flashDir;
 uniform float u_flashIntensityFactor;
+uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
 uniform int u_enableShadows;
@@ -84,9 +85,8 @@ void main()
     float roomSpotIntensity = max(directSpot, bounceSpot);
 
     // 2. Luce Torcia: Calcoliamo il vettore esatto a partire dall'offset fisico (+4X, -2Y)
-    //vec3 flashPosView = vec3(4.0, -2.0, 0.0);
-    //vec3 L_flash = normalize(flashPosView - ViewPos);
-    vec3 L_flash = normalize(-ViewPos);
+    vec3 flashPosView = u_flashOffset;
+    vec3 L_flash = normalize(flashPosView - ViewPos);
 
     vec3 viewFront = normalize(u_flashDir);
     float cosThetaFlash = dot(-L_flash, viewFront);

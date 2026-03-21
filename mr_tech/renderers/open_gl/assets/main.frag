@@ -84,8 +84,9 @@ void main()
     float roomSpotIntensity = max(directSpot, bounceSpot);
 
     // 2. Luce Torcia: Calcoliamo il vettore esatto a partire dall'offset fisico (+4X, -2Y)
-    vec3 flashPosView = vec3(4.0, -2.0, 0.0);
-    vec3 L_flash = normalize(flashPosView - ViewPos);
+    //vec3 flashPosView = vec3(4.0, -2.0, 0.0);
+    //vec3 L_flash = normalize(flashPosView - ViewPos);
+    vec3 L_flash = normalize(-ViewPos);
 
     vec3 viewFront = normalize(u_flashDir);
     float cosThetaFlash = dot(-L_flash, viewFront);

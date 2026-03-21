@@ -227,7 +227,7 @@ func (w *RenderOpenGL) doRender() {
 		// Aggiornamento Stato (CPU)
 		pX, pY := w.player.GetPosition()
 		roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(w.vi, pX, pY)
-		proj, view := w.compiler.shaderMain.UpdateUniforms(w.vi, roomSpaceMatrix, flashSpaceMatrix, fbW, fbH, w.flashFactor, w.enableShadows)
+		proj, view := w.compiler.shaderMain.UpdateUniforms(w.vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows)
 		w.compiler.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
 		w.compiler.shaderGeometry.UpdateUniforms(view, proj)
 		w.compiler.shaderSSAO.UpdateUniforms(view, proj)
@@ -235,14 +235,14 @@ func (w *RenderOpenGL) doRender() {
 
 		// Render
 		w.compiler.shaderMain.Prepare(w.builder.GetFrameVertices())
-		// CONDIZIONE SUL PASS DELLE OMBRE
+		var roomShadowTex, flashShadowTex uint32
 		if w.enableShadows {
-			w.compiler.shaderDepth.Render(int32(fbW), int32(fbH), w.glRenderScene)
+			roomShadowTex, flashShadowTex = w.compiler.shaderDepth.GetShadowTextures()
+			w.compiler.shaderDepth.Render(w.glRenderScene)
 		}
 		w.compiler.shaderSSAO.Prepare()
 		w.compiler.shaderGeometry.Render(w.glRenderScene)
 		w.compiler.shaderSSAO.Render(w.glRenderSky, w.compiler.shaderBlur.GetProgram())
-		roomShadowTex, flashShadowTex := w.compiler.shaderDepth.GetShadowTextures()
 		blurTex := w.compiler.shaderSSAO.GetSSAOBlurTexture()
 		w.compiler.shaderMain.Render(roomShadowTex, flashShadowTex, blurTex)
 

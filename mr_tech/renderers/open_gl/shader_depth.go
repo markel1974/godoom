@@ -32,6 +32,8 @@ type ShaderDepth struct {
 	// Aggiunte per cache locale
 	roomMatrix  [16]float32
 	flashMatrix [16]float32
+	width       int32
+	height      int32
 }
 
 // NewShaderDepth initializes and returns a new instance of ShaderDepth with default uninitialized properties.
@@ -41,6 +43,8 @@ func NewShaderDepth() *ShaderDepth {
 
 // Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
 func (s *ShaderDepth) Setup(width int32, height int32) {
+	s.width = width
+	s.height = height
 	s.shadowWidth = 1024
 	s.shadowHeight = 1024
 }
@@ -59,20 +63,10 @@ func (s *ShaderDepth) GetUniform(id ShaderDepthLoc) int32 {
 	return s.table[id]
 }
 
-// GetShadowMapSize returns the width and height of the shadow map as int32 values.
-//func (s *ShaderDepth) GetShadowMapSize() (int32, int32) {
-//	return s.shadowWidth, s.shadowHeight
-//}
-
 // GetShadowTextures retrieves the texture IDs for the room and flashlight shadow maps, used for depth-based rendering.
 func (s *ShaderDepth) GetShadowTextures() (uint32, uint32) {
 	return s.roomShadowTex, s.flashShadowTex
 }
-
-// GetFBOs retrieves the framebuffer object (FBO) identifiers for room and flash shadow rendering.
-//func (s *ShaderDepth) GetFBOs() (uint32, uint32) {
-//	return s.roomShadowFbo, s.flashShadowFbo
-//}
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
 func (s *ShaderDepth) Compile(assets IAssets) error {
@@ -135,7 +129,6 @@ func (s *ShaderDepth) createDepthMap(width, height int32) (uint32, uint32) {
 }
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-
 func (s *ShaderDepth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
 	// Salva le matrici senza inviarle alla GPU
 	s.roomMatrix = roomSpaceMatrix
@@ -143,9 +136,7 @@ func (s *ShaderDepth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatr
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
-func (s *ShaderDepth) Render(fbW, fbH int32, renderScene func()) {
-	shaderDepth := s
-
+func (s *ShaderDepth) Render(renderScene func()) {
 	gl.Enable(gl.CULL_FACE)
 	gl.CullFace(gl.BACK)
 
@@ -157,11 +148,11 @@ func (s *ShaderDepth) Render(fbW, fbH int32, renderScene func()) {
 	// Stanza
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UseProgram(shaderDepth.GetProgram())
+	gl.UseProgram(s.GetProgram())
 
 	// Upload matrice stanza
-	gl.UniformMatrix4fv(shaderDepth.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
-	gl.Uniform1i(shaderDepth.GetUniform(ShaderDepthLocTexture), 0)
+	gl.UniformMatrix4fv(s.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
+	gl.Uniform1i(s.GetUniform(ShaderDepthLocTexture), 0)
 	renderScene()
 
 	// Torcia
@@ -169,11 +160,11 @@ func (s *ShaderDepth) Render(fbW, fbH int32, renderScene func()) {
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 
 	// Upload matrice torcia
-	gl.UniformMatrix4fv(shaderDepth.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
+	gl.UniformMatrix4fv(s.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
 	renderScene()
 
 	gl.Disable(gl.POLYGON_OFFSET_FILL)
 	gl.Disable(gl.CULL_FACE)
 
-	gl.Viewport(0, 0, fbW, fbH)
+	gl.Viewport(0, 0, s.width, s.height)
 }

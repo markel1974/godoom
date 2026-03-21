@@ -54,8 +54,8 @@ type ShaderMain struct {
 	table       [ShaderMainLocLast]int32
 	mainVao     uint32
 	mainVbo     uint32
-	width       int
-	height      int
+	width       int32
+	height      int32
 	flashFactor float32
 
 	// Cache Uniformi
@@ -101,8 +101,8 @@ func (s *ShaderMain) SetupSamplers() {
 
 // Setup initializes the width and height properties of the ShaderMain instance based on the provided dimensions.
 func (s *ShaderMain) Setup(width int32, height int32) {
-	s.width = int(width)
-	s.height = int(height)
+	s.width = width
+	s.height = height
 }
 
 // GetProgram returns the OpenGL program ID associated with the ShaderMain instance.
@@ -167,9 +167,9 @@ func (s *ShaderMain) Prepare(fv []float32, l int) {
 }
 
 // UpdateUniforms updates the shader's uniform variables based on the view matrix and framebuffer dimensions.
-func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, fbW, fbH int, flashFactor float32, enableShadows bool) ([16]float32, [16]float32) {
+func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, flashFactor float32, enableShadows bool) ([16]float32, [16]float32) {
 	const near, far = float32(1.0), float32(4096.0)
-	aspect := float32(fbW) / float32(fbH)
+	aspect := float32(s.width) / float32(s.height)
 	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
 	scaleY := float32(2.0 * model.VFov)
 	pitchShear := float32(-vi.GetYaw())
@@ -186,8 +186,6 @@ func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flash
 	tz := fX*ex + fZ*ez
 
 	s.flashDirY = pitchShear / scaleY
-	s.width = fbW
-	s.height = fbH
 	s.flashFactor = flashFactor
 	s.ambientLight = float32(vi.GetLightIntensity())
 	s.roomSpaceMatrix = roomSpaceMatrix
@@ -236,8 +234,10 @@ func (s *ShaderMain) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
-	gl.ActiveTexture(gl.TEXTURE3)
-	gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
-	gl.ActiveTexture(gl.TEXTURE4)
-	gl.BindTexture(gl.TEXTURE_2D, flashShadowTex)
+	if s.enableShadows != 0 {
+		gl.ActiveTexture(gl.TEXTURE3)
+		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
+		gl.ActiveTexture(gl.TEXTURE4)
+		gl.BindTexture(gl.TEXTURE_2D, flashShadowTex)
+	}
 }

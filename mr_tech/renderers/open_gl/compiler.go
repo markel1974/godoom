@@ -2,7 +2,6 @@ package open_gl
 
 import (
 	"embed"
-	"io/fs"
 	"math"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
@@ -13,20 +12,6 @@ import (
 //
 //go:embed assets
 var assets embed.FS
-
-/*
-// shaderMain represents the identifier for the main shader.
-// shaderSky represents the identifier for the sky shader.
-const (
-	shaderMain     = 0
-	shaderSky      = 1
-	shaderSSAO     = 2
-	shaderBlur     = 3
-	shaderGeometry = 4
-	shaderLatest   = 64 // unused
-)
-
-*/
 
 // ShaderProgram represents a compiled and linked GPU shader program, encapsulating vertex and fragment shaders.
 type ShaderProgram struct {
@@ -51,26 +36,29 @@ type Compiler struct {
 	shaderSSAO     *ShaderSSAO
 	shaderBlur     *ShaderBlur
 	shaderGeometry *ShaderGeometry
+	shaderDepth    *ShaderDepth
+	shaders        []IShader
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with preconfigured shader objects.
 func NewCompiler() *Compiler {
-	return &Compiler{
+	c := &Compiler{
 		shaderMain:     NewShaderMain(),
 		shaderSky:      NewShaderSky(),
 		shaderSSAO:     NewShaderSSAO(),
 		shaderBlur:     NewShaderBlur(),
 		shaderGeometry: NewShaderGeometry(),
+		shaderDepth:    NewShaderDepth(),
 	}
+	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth)
+	return c
 }
 
 // Setup initializes all shader programs associated with the Compiler with the specified width and height.
 func (w *Compiler) Setup(width, height int32) {
-	w.shaderMain.Setup(width, height)
-	w.shaderSky.Setup(width, height)
-	w.shaderSSAO.Setup(width, height)
-	w.shaderBlur.Setup(width, height)
-	w.shaderGeometry.Setup(width, height)
+	for _, s := range w.shaders {
+		s.Setup(width, height)
+	}
 }
 
 // GetTexture retrieves texture and normal texture IDs for the given texture and indicates if it was found in the cache.
@@ -81,49 +69,18 @@ func (w *Compiler) GetTexture(tex *textures.Texture) (uint32, uint32, bool) {
 
 // SetupSamplers configures samplers for all associated shaders in the Compiler, preparing them for rendering tasks.
 func (w *Compiler) SetupSamplers() {
-	w.shaderSky.SetupSamplers()
-	w.shaderSSAO.SetupSamplers()
-	w.shaderBlur.SetupSamplers()
-	w.shaderMain.SetupSamplers()
-	w.shaderGeometry.SetupSamplers()
+	for _, s := range w.shaders {
+		s.SetupSamplers()
+	}
 }
 
 // CompileShaders compiles and links all shaders required for the application, returning an error if any step fails.
 func (w *Compiler) CompileShaders() error {
-	mainV, mainF, err := w.read("main.vert", "main.frag")
-	if err != nil {
-		return err
-	}
-	slyV, skyF, err := w.read("sky.vert", "sky.frag")
-	if err != nil {
-		return err
-	}
-	ssaoV, ssaoF, err := w.read("ssao.vert", "ssao.frag")
-	if err != nil {
-		return err
-	}
-	blurV, blurF, err := w.read("ssao.vert", "ssao_blur.frag")
-	if err != nil {
-		return err
-	}
-	geometryV, geometryF, err := w.read("main.vert", "geometry.frag")
-	if err != nil {
-		return err
-	}
-	if err = w.shaderMain.Compile(mainV, mainF); err != nil {
-		return err
-	}
-	if err = w.shaderSky.Compile(slyV, skyF); err != nil {
-		return err
-	}
-	if err = w.shaderSSAO.Compile(ssaoV, ssaoF); err != nil {
-		return err
-	}
-	if err = w.shaderBlur.Compile(blurV, blurF); err != nil {
-		return err
-	}
-	if err = w.shaderGeometry.Compile(geometryV, geometryF); err != nil {
-		return err
+	a := &Assets{}
+	for _, s := range w.shaders {
+		if err := s.Compile(a); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -195,21 +152,4 @@ func (w *Compiler) CompileTextures(t textures.ITextures) error {
 	}
 
 	return nil
-}
-
-// read reads the contents of vertex and fragment shader files from the asset file system and returns them as strings.
-// It takes the paths to the vertex and fragment shaders as input and returns any errors encountered during file reading.
-func (w *Compiler) read(vPath, fPath string) (string, string, error) {
-	bp := func(s string) string {
-		return "assets/" + s
-	}
-	vertexSrc, err := fs.ReadFile(assets, bp(vPath))
-	if err != nil {
-		return "", "", err
-	}
-	fragmentSrc, err := fs.ReadFile(assets, bp(fPath))
-	if err != nil {
-		return "", "", err
-	}
-	return string(vertexSrc), string(fragmentSrc), nil
 }

@@ -1,0 +1,179 @@
+package open_gl
+
+import (
+	"fmt"
+
+	"github.com/go-gl/gl/v3.3-core/gl"
+)
+
+// ShaderDepthLoc represents the location identifiers for shader uniform variables used in depth shaders.
+type ShaderDepthLoc int
+
+// ShaderDepthLocLightSpaceMatrix represents the shader location for the light space matrix in depth shaders.
+// ShaderDepthLocTexture represents the shader location for the texture in depth shaders.
+// ShaderDepthLocLast is a sentinel value indicating the last shader depth location.
+const (
+	ShaderDepthLocLightSpaceMatrix = ShaderDepthLoc(iota)
+	ShaderDepthLocTexture
+	ShaderDepthLocLast
+)
+
+// ShaderDepth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
+type ShaderDepth struct {
+	prg            uint32
+	table          [ShaderDepthLocLast]int32
+	shadowWidth    int32
+	shadowHeight   int32
+	roomShadowFbo  uint32
+	roomShadowTex  uint32
+	flashShadowFbo uint32
+	flashShadowTex uint32
+
+	// Aggiunte per cache locale
+	roomMatrix  [16]float32
+	flashMatrix [16]float32
+}
+
+// NewShaderDepth initializes and returns a new instance of ShaderDepth with default uninitialized properties.
+func NewShaderDepth() *ShaderDepth {
+	return &ShaderDepth{}
+}
+
+// Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
+func (s *ShaderDepth) Setup(width int32, height int32) {
+	s.shadowWidth = 1024
+	s.shadowHeight = 1024
+}
+
+// SetupSamplers initializes or configures the sampler bindings for the ShaderDepth program.
+func (s *ShaderDepth) SetupSamplers() {
+}
+
+// GetProgram retrieves the OpenGL program ID associated with the ShaderDepth instance.
+func (s *ShaderDepth) GetProgram() uint32 {
+	return s.prg
+}
+
+// GetUniform retrieves the uniform location corresponding to the provided ShaderDepthLoc identifier from the uniform table.
+func (s *ShaderDepth) GetUniform(id ShaderDepthLoc) int32 {
+	return s.table[id]
+}
+
+// GetShadowMapSize returns the width and height of the shadow map as int32 values.
+//func (s *ShaderDepth) GetShadowMapSize() (int32, int32) {
+//	return s.shadowWidth, s.shadowHeight
+//}
+
+// GetShadowTextures retrieves the texture IDs for the room and flashlight shadow maps, used for depth-based rendering.
+func (s *ShaderDepth) GetShadowTextures() (uint32, uint32) {
+	return s.roomShadowTex, s.flashShadowTex
+}
+
+// GetFBOs retrieves the framebuffer object (FBO) identifiers for room and flash shadow rendering.
+//func (s *ShaderDepth) GetFBOs() (uint32, uint32) {
+//	return s.roomShadowFbo, s.flashShadowFbo
+//}
+
+// Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
+func (s *ShaderDepth) Compile(assets IAssets) error {
+	vertexSrc, fragmentSrc, err := assets.ReadMulti("depth_vertex.vert", "depth_fragment.frag")
+
+	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
+	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
+
+	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	if err != nil {
+		gl.DeleteShader(vertexShader)
+		return err
+	}
+	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	if err != nil {
+		return err
+	}
+	s.table[ShaderDepthLocLightSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_lightSpaceMatrix\x00"))
+	s.table[ShaderDepthLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
+
+	for _, v := range s.table {
+		if v < 0 {
+			return fmt.Errorf("invalid uniform location: %d", v)
+		}
+	}
+	return nil
+}
+
+// createDepthMap initializes a depth map with given width and height and returns the framebuffer and texture IDs.
+func (s *ShaderDepth) createDepthMap(width, height int32) (uint32, uint32) {
+	var fbo, tex uint32
+	borderColor := []float32{1.0, 1.0, 1.0, 1.0}
+
+	gl.GenFramebuffers(1, &fbo)
+	gl.GenTextures(1, &tex)
+
+	gl.BindTexture(gl.TEXTURE_2D, tex)
+	//gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
+
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
+	gl.TexParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, &borderColor[0])
+
+	gl.BindFramebuffer(gl.FRAMEBUFFER, fbo)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0)
+	gl.DrawBuffer(gl.NONE)
+	gl.ReadBuffer(gl.NONE)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+
+	return fbo, tex
+}
+
+// UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
+
+func (s *ShaderDepth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
+	// Salva le matrici senza inviarle alla GPU
+	s.roomMatrix = roomSpaceMatrix
+	s.flashMatrix = flashSpaceMatrix
+}
+
+// Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
+func (s *ShaderDepth) Render(fbW, fbH int32, renderScene func()) {
+	shaderDepth := s
+
+	gl.Enable(gl.CULL_FACE)
+	gl.CullFace(gl.BACK)
+
+	gl.Enable(gl.POLYGON_OFFSET_FILL)
+	gl.PolygonOffset(1.5, 4.0)
+
+	gl.Viewport(0, 0, s.shadowWidth, s.shadowHeight)
+
+	// Stanza
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
+	gl.Clear(gl.DEPTH_BUFFER_BIT)
+	gl.UseProgram(shaderDepth.GetProgram())
+
+	// Upload matrice stanza
+	gl.UniformMatrix4fv(shaderDepth.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
+	gl.Uniform1i(shaderDepth.GetUniform(ShaderDepthLocTexture), 0)
+	renderScene()
+
+	// Torcia
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
+	gl.Clear(gl.DEPTH_BUFFER_BIT)
+
+	// Upload matrice torcia
+	gl.UniformMatrix4fv(shaderDepth.GetUniform(ShaderDepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
+	renderScene()
+
+	gl.Disable(gl.POLYGON_OFFSET_FILL)
+	gl.Disable(gl.CULL_FACE)
+
+	gl.Viewport(0, 0, fbW, fbH)
+}

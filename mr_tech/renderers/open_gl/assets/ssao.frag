@@ -3,26 +3,35 @@ out float FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D gPosition; // Texture contenente ViewPos.xyz
-uniform sampler2D gNormal;   // Texture contenente NormalView.xyz
-uniform sampler2D texNoise;  // Texture 4x4 di rumore per rotazione kernel
+uniform sampler2D gPosition;
+uniform sampler2D gNormal;
+uniform sampler2D texNoise;
 
-uniform vec3 samples[64];    // Kernel di campionamento (generato in Go)
-uniform mat4 projection;     // Matrice di proiezione
+uniform vec3 samples[64];
+uniform mat4 projection;
 
 int kernelSize = 64;
-float radius = 16.0; // Deve essere comparabile alla scala spaziale di un gradino/spigolo nel modello
-float bias = 0.5;    // Deve scalare linearmente con il radius per eliminare il self-shadowing planare
+float radius = 16.0;
+float bias = 0.5;
 
 void main() {
     vec3 fragPos = texture(gPosition, TexCoords).xyz;
     vec3 normal  = normalize(texture(gNormal, TexCoords).rgb);
-    // Ottiene la risoluzione dinamicamente dal livello di mip 0 del G-Buffer
+
     vec2 noiseScale = vec2(textureSize(gPosition, 0)) / 4.0;
     vec3 randomVec = normalize(texture(texNoise, TexCoords * noiseScale).rgb);
 
-    // Creazione TBN per orientare l'emisfero
-    vec3 tangent   = normalize(randomVec - normal * dot(randomVec, normal));
+    // 1. PROTEZIONE ANTI-NaN: Evita i buchi neri geometrici se i vettori sono paralleli
+    vec3 tangent = randomVec - normal * dot(randomVec, normal);
+    if (length(tangent) > 0.001) {
+        tangent = normalize(tangent);
+    } else {
+        tangent = normalize(cross(normal, vec3(0.0, 1.0, 0.0)));
+        if (length(tangent) < 0.001) {
+            tangent = normalize(cross(normal, vec3(1.0, 0.0, 0.0)));
+        }
+    }
+
     vec3 bitangent = cross(normal, tangent);
     mat3 TBN       = mat3(tangent, bitangent, normal);
 
@@ -31,15 +40,21 @@ void main() {
         vec3 samplePos = TBN * samples[i];
         samplePos = fragPos + samplePos * radius;
 
-        // Proiezione del campione
         vec4 offset = vec4(samplePos, 1.0);
         offset = projection * offset;
         offset.xyz /= offset.w;
         offset.xyz = offset.xyz * 0.5 + 0.5;
 
         float sampleDepth = texture(gPosition, offset.xy).z;
-        float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));
+
+        // 2. FIX ALONI NERI: Inversione logica del Range Check
+        // Calcoliamo la distanza assoluta e usiamo un falloff decrescente da 1.0 a 0.0.
+        // Se la differenza supera il radius, l'occlusione diventa un perfetto 0.0 senza sbavature.
+        float depthDiff = abs(fragPos.z - sampleDepth);
+        float rangeCheck = smoothstep(1.0, 0.0, depthDiff / radius);
+
         occlusion += (sampleDepth >= samplePos.z + bias ? 1.0 : 0.0) * rangeCheck;
     }
+
     FragColor = 1.0 - (occlusion / kernelSize);
 }

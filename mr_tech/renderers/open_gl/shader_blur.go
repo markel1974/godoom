@@ -41,12 +41,16 @@ func (s *ShaderBlur) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(ShaderBlurLocSSAOInput), 0)
 }
 
-func (s *ShaderBlur) Compile(vertexSrc string, fragmentSrc string) error {
-	vertexShader, err := ShaderCompile(vertexSrc, gl.VERTEX_SHADER)
+func (s *ShaderBlur) Compile(assets IAssets) error {
+	vertexSrc, fragmentSrc, err := assets.ReadMulti("ssao.vert", "ssao_blur.frag")
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragmentSrc, gl.FRAGMENT_SHADER)
+	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err

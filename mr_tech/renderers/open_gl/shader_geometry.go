@@ -18,6 +18,8 @@ const (
 type ShaderGeometry struct {
 	prg   uint32
 	table [ShaderGeometryLocLast]int32
+	view  [16]float32
+	proj  [16]float32
 }
 
 func NewShaderGeometry() *ShaderGeometry {
@@ -40,12 +42,16 @@ func (s *ShaderGeometry) GetUniform(id ShaderGeometryLoc) int32 {
 	return s.table[id]
 }
 
-func (s *ShaderGeometry) Compile(vertexSrc string, fragmentSrc string) error {
-	vertexShader, err := ShaderCompile(vertexSrc, gl.VERTEX_SHADER)
+func (s *ShaderGeometry) Compile(assets IAssets) error {
+	vertexSrc, fragmentSrc, err := assets.ReadMulti("main.vert", "geometry.frag")
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragmentSrc, gl.FRAGMENT_SHADER)
+	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
@@ -63,4 +69,17 @@ func (s *ShaderGeometry) Compile(vertexSrc string, fragmentSrc string) error {
 		}
 	}
 	return nil
+}
+
+func (s *ShaderGeometry) UpdateUniforms(view, proj [16]float32) {
+	s.view = view
+	s.proj = proj
+}
+
+func (s *ShaderGeometry) Render(renderScene func()) {
+	gl.UseProgram(s.GetProgram())
+	gl.Uniform1i(s.GetUniform(ShaderGeometryLocTexture), 0)
+	gl.UniformMatrix4fv(s.GetUniform(ShaderGeometryLocView), 1, false, &s.view[0])
+	gl.UniformMatrix4fv(s.GetUniform(ShaderGeometryLocProjection), 1, false, &s.proj[0])
+	renderScene()
 }

@@ -7,6 +7,19 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
+// IShader defines an interface for managing shader operations in a rendering pipeline.
+// Setup initializes shader-specific configurations with the given width and height.
+// SetupSamplers configures the required texture samplers for the shader program.
+// Compile compiles the shader using provided assets and returns an error if compilation fails.
+type IShader interface {
+	Setup(width int32, height int32)
+
+	SetupSamplers()
+
+	Compile(a IAssets) error
+}
+
+// ShaderCompile compiles a shader of the given type using the provided source code and returns the shader or an error.
 func ShaderCompile(source string, shaderType uint32) (uint32, error) {
 	shader := gl.CreateShader(shaderType)
 	cSources, free := gl.Strs(source + "\x00")
@@ -26,6 +39,7 @@ func ShaderCompile(source string, shaderType uint32) (uint32, error) {
 	return shader, nil
 }
 
+// ShaderCreateProgram links vertex and fragment shaders into a program, activates it, and cleans up shader objects.
 func ShaderCreateProgram(vertexShader uint32, fragmentShader uint32) (uint32, error) {
 	shaderProgram := gl.CreateProgram()
 	gl.AttachShader(shaderProgram, vertexShader)

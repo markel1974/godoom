@@ -20,6 +20,8 @@ type ShaderSky struct {
 	table  [ShaderSkyLocLast]int32
 	skyVao uint32
 	skyVbo uint32
+	view   [16]float32
+	proj   [16]float32
 }
 
 func NewShaderSky() *ShaderSky {
@@ -54,12 +56,21 @@ func (s *ShaderSky) GetUniform(id ShaderSkyLoc) int32 {
 	return s.table[id]
 }
 
-func (s *ShaderSky) Compile(vertexSrc string, fragmentSrc string) error {
-	vertexShader, err := ShaderCompile(vertexSrc, gl.VERTEX_SHADER)
+func (s *ShaderSky) UpdateUniforms(view, proj [16]float32) {
+	s.view = view
+	s.proj = proj
+}
+
+func (s *ShaderSky) Compile(a IAssets) error {
+	vertexSrc, fragmentSrc, err := a.ReadMulti("sky.vert", "sky.frag")
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragmentSrc, gl.FRAGMENT_SHADER)
+	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
@@ -77,4 +88,29 @@ func (s *ShaderSky) Compile(vertexSrc string, fragmentSrc string) error {
 		}
 	}
 	return nil
+}
+
+func (s *ShaderSky) Render(texId uint32, normTexId uint32, validTex bool) {
+	gl.UseProgram(s.GetProgram())
+
+	gl.DepthFunc(gl.LEQUAL)
+	gl.DepthMask(false)
+
+	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, &s.proj[0])
+	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, &s.view[0])
+
+	gl.BindVertexArray(s.skyVao)
+
+	if validTex {
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, texId)
+		gl.ActiveTexture(gl.TEXTURE1)
+		gl.BindTexture(gl.TEXTURE_2D, normTexId)
+		gl.Uniform1i(s.GetUniform(ShaderSkyLocSky), 0)
+	}
+
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+	gl.DepthMask(true)
+	gl.DepthFunc(gl.LESS)
 }

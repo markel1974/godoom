@@ -5,55 +5,93 @@ out vec4 FragColor;
 in vec2 TexCoords;
 in float LightDist;
 in float FragDepth;
-in vec3 ViewPos;           // View Space
-in vec3 LightCenterView;   // View Space
-in vec3 NormalView;        // View Space
+in vec3 ViewPos;
+in vec3 LightCenterView;
+in vec3 NormalView;
+
+in vec4 FragPosLightRoom;
+in vec4 FragPosLightFlash;
 
 uniform sampler2D u_texture;
 uniform sampler2D u_normalMap;
 uniform sampler2D u_ssao;
+uniform sampler2DShadow u_roomShadowMap;
+uniform sampler2DShadow u_flashShadowMap;
+
+uniform mat4 u_view;
+
 uniform vec2 u_screenResolution;
 uniform float u_ambient_light;
 uniform vec3 u_flashDir;
 uniform float u_flashIntensityFactor;
-uniform float u_flashConeStart; //0.70, 0.90
-uniform float u_flashConeEnd;  //0.70, 0.90
+uniform float u_flashConeStart;
+uniform float u_flashConeEnd;
+uniform int u_enableShadows;
+
+
+// 2. AGGIORNA LA FUNZIONE
+float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, vec3 normal, vec3 lightDirViewSpace) {
+    if (fragPosLightSpace.w <= 0.0) return 0.0;
+
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+
+    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
+    }
+
+    float currentDepth = projCoords.z;
+    // float ndotl e float bias POSSONO ESSERE ELIMINATI QUI
+
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+
+    // Fetch bilineare nativo hardware. Rimosso il "- bias".
+    for(int x = -1; x <= 1; ++x) {
+        for(int y = -1; y <= 1; ++y) {
+            // Usa solo currentDepth come terzo parametro di riferimento (Z reference)
+            shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth));
+        }
+    }
+
+    return 1.0 - (shadow / 9.0);
+}
 
 void main()
 {
     vec4 texColor = texture(u_texture, TexCoords);
+    if(texColor.a < 0.5) discard;
 
-    if(texColor.a < 0.5) {
-        discard;
-    }
-
-    // --- 0. RECUPERO OCCLUSIONE (SSAO) ---
     vec2 ssaoCoords = gl_FragCoord.xy / u_screenResolution;
     float ao = texture(u_ssao, ssaoCoords).r;
 
-    // --- 1. VETTORI DI ILLUMINAZIONE (View Space) ---
-    vec3 lightVectorRoom = LightCenterView - ViewPos;
-    vec3 L_room = normalize(lightVectorRoom);
+    // --- VETTORI DI ILLUMINAZIONE SINCRONIZZATI ---
 
-    // 1. Luce Diretta
-    vec3 spotDirRoom = vec3(0.0, -1.0, 0.0);
-    float cosThetaRoom = dot(-L_room, spotDirRoom);
+    // 1. Luce Stanza: Calcolo shading (spotlight divergente)
+    vec3 L_room_point = normalize(LightCenterView - ViewPos);
+
+    // Direzione Parallela: Usata per la Shadow Map Ortografica e il bias
+    vec3 roomLightDirParallel = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+    vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, -1.0, 0.0));
+
+    float cosThetaRoom = dot(-L_room_point, spotDirRoom);
     float directSpot = smoothstep(0.30, 0.50, cosThetaRoom);
 
-    // 2. Luce Indiretta
-    vec3 bounceDir = vec3(0.0, 1.0, 0.0);
-    float cosThetaBounce = dot(-L_room, bounceDir);
+    vec3 bounceDir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+    float cosThetaBounce = dot(-L_room_point, bounceDir);
     float bounceSpot = smoothstep(0.0, 0.80, cosThetaBounce) * 0.15;
 
     float roomSpotIntensity = max(directSpot, bounceSpot);
 
-    // B. Torcia
-    vec3 L_flash = normalize(-ViewPos);
+    // 2. Luce Torcia: Calcoliamo il vettore esatto a partire dall'offset fisico (+4X, -2Y)
+    vec3 flashPosView = vec3(4.0, -2.0, 0.0);
+    vec3 L_flash = normalize(flashPosView - ViewPos);
+
     vec3 viewFront = normalize(u_flashDir);
     float cosThetaFlash = dot(-L_flash, viewFront);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, cosThetaFlash);
 
-    // --- 2. NORMALE E BUMP MAPPING ---
+    // --- NORMALI E GUARDIE ANTI-NaN ---
     vec3 finalNormal = NormalView;
     if (dot(finalNormal, finalNormal) < 0.01) {
         finalNormal = vec3(0.0, 1.0, 0.0);
@@ -76,24 +114,36 @@ void main()
         vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
         vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
-        float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
-        mat3 TBN = mat3(T * invmax, B * invmax, finalNormal);
-
-        finalNormal = normalize(TBN * mapNormal);
+        // PROTEZIONE NaN: Impedisce l'esplosione dei bordi se le derivate collassano
+        float denom = max(dot(T, T), dot(B, B));
+        if (denom > 1e-5) {
+            float invmax = inversesqrt(denom);
+            mat3 TBN = mat3(T * invmax, B * invmax, finalNormal);
+            finalNormal = normalize(TBN * mapNormal);
+        }
     }
 
-    // --- 3. COMPONENTE DIFFUSA ---
-    // RIPRISTINATA LUMINOSITA' ORIGINALE
-    float bumpRoom = (max(dot(finalNormal, L_room), 0.0) * 0.2) + 1.0;
+    float shadowRoom = 0.0;
+    float shadowFlash = 0.0;
 
-    // Wrap Lighting Torcia
-    float NdotL_flash = dot(finalNormal, L_flash);
-    float diffFlash = max(NdotL_flash * 0.5 + 0.5, 0.0);
+    if (u_enableShadows == 1) {
+        // Usiamo il raggio parallelo per l'ombra della stanza
+        shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap, finalNormal, roomLightDirParallel);
+        // Usiamo il raggio scalato per l'ombra della torcia
+        shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap, finalNormal, L_flash);
+    }
+    // --- ILLUMINAZIONE E RIFLESSI (ANTI-NaN) ---
+    float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
+    float diffFlash = max(dot(finalNormal, L_flash) * 0.5 + 0.5, 0.0);
 
-    // --- 4. RIFLESSO SPECULARE BLINN-PHONG ---
     vec3 V = normalize(-ViewPos);
-    float NdotH_room = max(dot(finalNormal, normalize(L_room + V)), 0.0);
-    float NdotH_flash = max(dot(finalNormal, normalize(L_flash + V)), 0.0);
+
+    // Protezione Blinn-Phong: Evita il collasso della radice quadrata
+    vec3 H_room = L_room_point + V;
+    float NdotH_room = length(H_room) > 0.0001 ? max(dot(finalNormal, normalize(H_room)), 0.0) : 0.0;
+
+    vec3 H_flash = L_flash + V;
+    float NdotH_flash = length(H_flash) > 0.0001 ? max(dot(finalNormal, normalize(H_flash)), 0.0) : 0.0;
 
     float isHorizontal = step(0.8, abs(finalNormal.y));
     float shininess = mix(64.0, 48.0, isHorizontal);
@@ -102,59 +152,46 @@ void main()
     float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
     float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);
 
-    // --- 5. DECADIMENTI ED EFFETTO BUIO ---
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
-
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
-    // -------------------------------------------------------------------------
-    // --- 6. RAYMARCHING VOLUMETRICO SCALARE (FASCIO GARANTITO) ---
-    // -------------------------------------------------------------------------
+    // --- RAYMARCHING VOLUMETRICO ---
     float volumetricScattering = 0.0;
     const int STEPS = 16;
     vec3 rayStep = ViewPos / float(STEPS);
-    vec3 currentPos = rayStep * 0.5; // Offset per evitare compenetrazioni vicine
+    vec3 currentPos = rayStep * 0.5;
 
     for(int i = 0; i < STEPS; i++) {
         vec3 toLight = LightCenterView - currentPos;
         vec3 lDir = normalize(toLight);
-
-        // Verifica se lo step corrente nell'aria è dentro il cono zenitale
         float cosTheta = dot(-lDir, spotDirRoom);
         float inCone = smoothstep(0.30, 0.50, cosTheta);
-
-        // Accumuliamo solo l'intensità del cono, ignorando la distanza quadratica.
-        // Questo protegge l'algoritmo da scale vettoriali massive.
         volumetricScattering += inCone;
         currentPos += rayStep;
     }
 
-    // Calcoliamo la percentuale di raggio visivo che ha attraversato il fascio
     float beamRatio = volumetricScattering / float(STEPS);
     float beamRatioFactor = 0.05;
-
-    // Applichiamo colore, moltiplicatore d'intensità costante e il TUO roomFalloff
     vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * beamRatioFactor) * roomFalloff;
 
-    // --- 7. FINAL MIX ---
+    // --- MIX FINALE ---
     float aoFactor = 0.3;
     float roomSpotIntensityFactor = 1.7;
-    vec3 litRoom = (texColor.rgb * bumpRoom * ((ao * aoFactor) + (roomSpotIntensity * roomSpotIntensityFactor)) + vec3(specularRoom * roomSpotIntensity)) * roomFalloff;
+
+    float roomLightOcclusion = (1.0 - shadowRoom);
+    float flashLightOcclusion = (1.0 - shadowFlash);
+
+    vec3 litRoom = (texColor.rgb * bumpRoom * ((ao * aoFactor) + (roomSpotIntensity * roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
 
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
-    vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashColor;
+    vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
 
     vec3 linearColor = max(litRoom + litFlash, 0.0);
-
-    // INIEZIONE DEL FASCIO VOLUMETRICO
     linearColor += beamColor;
 
-    // Curva gamma a 0.8
     vec3 finalColor = pow(linearColor, vec3(0.8));
-
-    // Dithering spaziale
     float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
 
     FragColor = vec4(finalColor + dither - (0.5 / 255.0), texColor.a);

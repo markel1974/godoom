@@ -108,7 +108,7 @@ func (s *ShaderSky) Compile(a IAssets) error {
 }
 
 // Render renders the skybox using the specified textures and projection/view matrices. Handles depth testing and texture bindings.
-func (s *ShaderSky) Render(texId uint32, normTexId uint32, validTex bool) {
+func (s *ShaderSky) Render(texId uint32, normTexId uint32) {
 	gl.UseProgram(s.GetProgram())
 
 	gl.DepthFunc(gl.LEQUAL)
@@ -119,13 +119,11 @@ func (s *ShaderSky) Render(texId uint32, normTexId uint32, validTex bool) {
 
 	gl.BindVertexArray(s.skyVao)
 
-	if validTex {
-		gl.ActiveTexture(gl.TEXTURE0)
-		gl.BindTexture(gl.TEXTURE_2D, texId)
-		gl.ActiveTexture(gl.TEXTURE1)
-		gl.BindTexture(gl.TEXTURE_2D, normTexId)
-		gl.Uniform1i(s.GetUniform(ShaderSkyLocSky), 0)
-	}
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, texId)
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, normTexId)
+	gl.Uniform1i(s.GetUniform(ShaderSkyLocSky), 0)
 
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 

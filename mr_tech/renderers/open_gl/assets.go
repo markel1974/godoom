@@ -1,9 +1,15 @@
 package open_gl
 
 import (
+	"embed"
 	"io/fs"
 	"os"
 )
+
+// assets represents an embedded file system containing application resources such as shaders or assets.
+//
+//go:embed assets
+var assets embed.FS
 
 // IAssets represents an interface for handling asset operations such as resolving base paths and reading asset files.
 type IAssets interface {

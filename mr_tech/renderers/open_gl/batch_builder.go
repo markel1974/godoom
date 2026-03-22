@@ -10,15 +10,15 @@ import (
 
 // BatchBuilder is a utility for constructing GPU-ready batches of vertices and draw commands.
 type BatchBuilder struct {
-	compiler      *Compiler
+	tex           *Textures
 	frameVertices *FrameVertices
 	drawCommands  *DrawCommands
 }
 
 // NewBatchBuilder initializes and returns a new BatchBuilder using the provided Compiler to manage rendering resources.
-func NewBatchBuilder(compiler *Compiler) *BatchBuilder {
+func NewBatchBuilder(compiler *Textures) *BatchBuilder {
 	return &BatchBuilder{
-		compiler:      compiler,
+		tex:           compiler,
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		drawCommands:  NewDrawCommands(maxFrameCommands),
 	}
@@ -85,7 +85,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	if tex == nil {
 		return
 	}
-	texId, normTexId, ok := w.compiler.GetTexture(tex)
+	texId, normTexId, ok := w.tex.Get(tex)
 	if !ok {
 		return
 	}
@@ -144,7 +144,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 		return nil
 	}
 	//prepare
-	texId, normTexId, ok := w.compiler.GetTexture(tex)
+	texId, normTexId, ok := w.tex.Get(tex)
 	if !ok {
 		return nil
 	}
@@ -221,7 +221,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		if tex == nil {
 			continue
 		}
-		texId, normTexId, ok := w.compiler.GetTexture(tex)
+		texId, normTexId, ok := w.tex.Get(tex)
 		if !ok {
 			continue
 		}

@@ -19,20 +19,22 @@ const (
 	PostLocExposure
 	PostLocContrast
 	PostLocSaturation
+	ShaderPostLocBloomBlur
 	PostLocLast
 )
 
 // Post represents a post-processing shader structure with framebuffer, textures, and various configurable parameters.
 type Post struct {
-	prg            uint32
-	table          [PostLocLast]int32
-	fbo            uint32
-	texColorBuffer uint32
-	rboDepth       uint32
-	width          int32
-	height         int32
-	vao            uint32
-	vbo            uint32
+	prg             uint32
+	table           [PostLocLast]int32
+	fbo             uint32
+	texColorBuffer  uint32
+	texBrightBuffer uint32
+	rboDepth        uint32
+	width           int32
+	height          int32
+	vao             uint32
+	vbo             uint32
 
 	Exposure   float32
 	Contrast   float32
@@ -51,6 +53,10 @@ func NewPost() *Post {
 // Setup initializes the width and height properties of the Post instance.
 func (s *Post) Setup(width, height int32) {
 	s.width, s.height = width, height
+}
+
+func (s *Post) GetBrightBuffer() uint32 {
+	return s.texBrightBuffer
 }
 
 // SetupSamplers initializes OpenGL vertex arrays, buffers, and sets up the shader samplers for post-processing rendering.
@@ -94,6 +100,7 @@ func (s *Post) Compile(a IAssets) error {
 	s.table[PostLocExposure] = gl.GetUniformLocation(s.prg, gl.Str("u_exposure\x00"))
 	s.table[PostLocContrast] = gl.GetUniformLocation(s.prg, gl.Str("u_contrast\x00"))
 	s.table[PostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
+	s.table[ShaderPostLocBloomBlur] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomBlur\x00"))
 
 	gl.GenFramebuffers(1, &s.fbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
@@ -105,6 +112,16 @@ func (s *Post) Compile(a IAssets) error {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.texColorBuffer, 0)
+
+	gl.GenTextures(1, &s.texBrightBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.texBrightBuffer)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.width, s.height, 0, gl.RGBA, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.texBrightBuffer, 0)
+
+	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
+	gl.DrawBuffers(2, &attachments[0])
 
 	gl.GenRenderbuffers(1, &s.rboDepth)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepth)
@@ -122,7 +139,7 @@ func (s *Post) Compile(a IAssets) error {
 func (s *Post) GetFBO() uint32 { return s.fbo }
 
 // Render handles the post-processing rendering pipeline, including clearing buffers and applying shader effects.
-func (s *Post) Render() {
+func (s *Post) Render(bloomTex uint32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	// Il Clear è rimosso. Il quad sovrascrive il 100% dei pixel.
@@ -135,6 +152,10 @@ func (s *Post) Render() {
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, s.texColorBuffer)
+
+	gl.Uniform1i(s.table[ShaderPostLocBloomBlur], 1)
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, bloomTex)
 
 	gl.BindVertexArray(s.vao)
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)

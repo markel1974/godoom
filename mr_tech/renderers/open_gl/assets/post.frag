@@ -3,6 +3,7 @@ out vec4 FragColor;
 in vec2 TexCoords;
 
 uniform sampler2D u_hdrBuffer;
+uniform sampler2D u_bloomBlur;
 uniform float u_exposure;
 uniform float u_contrast;
 uniform float u_saturation;
@@ -14,7 +15,11 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
     vec3 color = texture(u_hdrBuffer, TexCoords).rgb;
+    vec3 bloom = texture(u_bloomBlur, TexCoords).rgb;
 
+    // Additive Blend in spazio lineare puro
+    color += bloom;
+    
     // 1. Exposure
     color *= u_exposure;
 

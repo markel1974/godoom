@@ -6,7 +6,7 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
 
-	shaders2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
 // IShader is an interface defining methods for setting up, compiling, and configuring GPU shader programs.
@@ -15,18 +15,19 @@ type IShader interface {
 
 	SetupSamplers()
 
-	Compile(a shaders2.IAssets) error
+	Compile(a shaders.IAssets) error
 }
 
 // Shaders manages multiple shader programs and associated configurations used in the rendering pipeline.
 type Shaders struct {
-	shaderMain     *shaders2.Main
-	shaderSky      *shaders2.ShaderSky
-	shaderSSAO     *shaders2.SSAO
-	shaderBlur     *shaders2.Blur
-	shaderGeometry *shaders2.ShaderGeometry
-	shaderDepth    *shaders2.Depth
-	shaderPost     *shaders2.Post
+	shaderMain     *shaders.Main
+	shaderSky      *shaders.ShaderSky
+	shaderSSAO     *shaders.SSAO
+	shaderBlur     *shaders.Blur
+	shaderGeometry *shaders.ShaderGeometry
+	shaderDepth    *shaders.Depth
+	shaderPost     *shaders.Post
+	shaderBloom    *shaders.Bloom
 	shaders        []IShader
 
 	flashFactor   float32
@@ -38,19 +39,20 @@ type Shaders struct {
 // NewShaders initializes and returns a new Shaders instance with default shader configurations and settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
-		shaderMain:     shaders2.NewMain(),
-		shaderSky:      shaders2.NewShaderSky(),
-		shaderSSAO:     shaders2.NewSSAO(),
-		shaderBlur:     shaders2.NewBlur(),
-		shaderGeometry: shaders2.NewShaderGeometry(),
-		shaderDepth:    shaders2.NewDepth(),
-		shaderPost:     shaders2.NewPost(),
+		shaderMain:     shaders.NewMain(),
+		shaderSky:      shaders.NewShaderSky(),
+		shaderSSAO:     shaders.NewSSAO(),
+		shaderBlur:     shaders.NewBlur(),
+		shaderGeometry: shaders.NewShaderGeometry(),
+		shaderDepth:    shaders.NewDepth(),
+		shaderPost:     shaders.NewPost(),
+		shaderBloom:    shaders.NewBloom(),
 		flashFactor:    3.0,
 		flashOffsetX:   0.0,
 		flashOffsetY:   0.0,
 		enableShadows:  false,
 	}
-	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth, c.shaderPost)
+	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth, c.shaderPost, c.shaderBloom)
 	c.SetShadowEnabled(true)
 	return c
 }
@@ -217,6 +219,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 		w.shaderSky.Render(skyTexId, skyNormalTexId)
 	}
 
+	// BLOCCO BLOOM E POST-PROCESSING
 	// PASS FINALE: Tonemapping & Color Grading a schermo
-	w.shaderPost.Render()
+	bloomTex := w.shaderBloom.Render(w.shaderPost.GetBrightBuffer())
+	w.shaderPost.Render(bloomTex)
 }

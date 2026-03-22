@@ -70,7 +70,7 @@ func (s *Depth) GetShadowTextures() (uint32, uint32) {
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
 func (s *Depth) Compile(assets IAssets) error {
-	vertexSrc, fragmentSrc, err := assets.ReadMulti("depth_vertex.vert", "depth_fragment.frag")
+	vertexSrc, fragmentSrc, err := assets.ReadMulti("depth.vert", "depth.frag")
 
 	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)

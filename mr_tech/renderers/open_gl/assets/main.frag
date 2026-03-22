@@ -1,6 +1,7 @@
 #version 330 core
 
-out vec4 FragColor;
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
 
 in vec2 TexCoords;
 in float LightDist;
@@ -179,5 +180,9 @@ void main()
     //FragColor = vec4(finalColor + dither - (0.5 / 255.0), texColor.a);
 
     // Output HDR puro non clippato
+    //FragColor = vec4(linearColor, texColor.a);
+
     FragColor = vec4(linearColor, texColor.a);
+    float brightness = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));
+    BrightColor = vec4(brightness > 1.0 ? linearColor : vec3(0.0), 1.0);
 }

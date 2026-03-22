@@ -1,4 +1,4 @@
-package open_gl
+package shaders
 
 import (
 	"fmt"
@@ -82,6 +82,8 @@ func NewShaderMain() *ShaderMain {
 
 // Init initializes the main VAO and VBO for the shader, and allocates buffer data for dynamic drawing.
 func (s *ShaderMain) Init() {
+	const vboMaxFloats = 1024 * 1024 * 4
+
 	gl.GenVertexArrays(1, &s.mainVao)
 	gl.BindVertexArray(s.mainVao)
 	gl.GenBuffers(1, &s.mainVbo)
@@ -116,6 +118,11 @@ func (s *ShaderMain) GetProgram() uint32 {
 // GetUniform retrieves the uniform location for the given ShaderMainLoc identifier from the predefined lookup table.
 func (s *ShaderMain) GetUniform(id ShaderMainLoc) int32 {
 	return s.table[id]
+}
+
+// GetVao returns the ID of the main Vertex Array Object (VAO) associated with the ShaderMain instance.
+func (s *ShaderMain) GetVao() uint32 {
+	return s.mainVao
 }
 
 // Compile initializes, compiles, and links the shaders required for the ShaderMain program using provided assets.

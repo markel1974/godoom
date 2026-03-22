@@ -11,15 +11,6 @@ import (
 //go:embed assets
 var assets embed.FS
 
-// IAssets represents an interface for handling asset operations such as resolving base paths and reading asset files.
-type IAssets interface {
-	BasePath(vPath string) string
-
-	Read(p string) ([]byte, error)
-
-	ReadMulti(a string, b string) ([]byte, []byte, error)
-}
-
 // Assets is a struct utilized for handling file operations within an embedded assets file system.
 type Assets struct {
 }

@@ -1,4 +1,4 @@
-package open_gl
+package shaders
 
 import (
 	"fmt"
@@ -75,6 +75,10 @@ func (s *ShaderSky) GetUniform(id ShaderSkyLoc) int32 {
 func (s *ShaderSky) UpdateUniforms(view, proj [16]float32) {
 	s.view = view
 	s.proj = proj
+}
+
+func (s *ShaderSky) GetVao() uint32 {
+	return s.skyVao
 }
 
 // Compile loads and compiles the vertex and fragment shaders, creates a shader program, and initializes uniform locations.

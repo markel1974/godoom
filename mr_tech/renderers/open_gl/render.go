@@ -10,15 +10,12 @@ import (
 // scaleFactor defines a constant value for scaling factors used in the application.
 // maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
 // maxFrameCommands sets the limit on the number of commands that can be issued per frame.
-// vboMaxFloats determines the maximum number of floats that can be stored in the vertex buffer object.
 const (
 	scaleFactor = 1
 
 	maxBatchVertices = 65536 * 2
 
 	maxFrameCommands = 4096
-
-	vboMaxFloats = 1024 * 1024 * 4
 )
 
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.

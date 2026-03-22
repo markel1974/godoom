@@ -1,12 +1,12 @@
 package open_gl
 
 import (
-	"fmt"
 	"math"
-	"strings"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+
+	shaders2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
 // IShader is an interface defining methods for setting up, compiling, and configuring GPU shader programs.
@@ -15,56 +15,18 @@ type IShader interface {
 
 	SetupSamplers()
 
-	Compile(a IAssets) error
-}
-
-// ShaderCompile compiles a shader from source code and returns the shader ID or an error if compilation fails.
-func ShaderCompile(source string, shaderType uint32) (uint32, error) {
-	shader := gl.CreateShader(shaderType)
-	cSources, free := gl.Strs(source + "\x00")
-	gl.ShaderSource(shader, 1, cSources, nil)
-	free()
-	gl.CompileShader(shader)
-
-	var status int32
-	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
-	if status == gl.FALSE {
-		var logLength int32
-		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &logLength)
-		log := strings.Repeat("\x00", int(logLength+1))
-		gl.GetShaderInfoLog(shader, logLength, nil, gl.Str(log))
-		return 0, fmt.Errorf("failed to compile shader: %v", log)
-	}
-	return shader, nil
-}
-
-// ShaderCreateProgram links a vertex and fragment shader into a shader program, validates it, and returns the program ID.
-func ShaderCreateProgram(vertexShader uint32, fragmentShader uint32) (uint32, error) {
-	shaderProgram := gl.CreateProgram()
-	gl.AttachShader(shaderProgram, vertexShader)
-	gl.AttachShader(shaderProgram, fragmentShader)
-	gl.LinkProgram(shaderProgram)
-	var status int32
-	gl.GetProgramiv(shaderProgram, gl.LINK_STATUS, &status)
-	if status == gl.FALSE {
-		return 0, fmt.Errorf("failed to link shader prg")
-	}
-	gl.UseProgram(shaderProgram)
-	gl.DeleteShader(fragmentShader)
-	gl.DeleteShader(vertexShader)
-
-	return shaderProgram, nil
+	Compile(a shaders2.IAssets) error
 }
 
 // Shaders manages multiple shader programs and associated configurations used in the rendering pipeline.
 type Shaders struct {
-	shaderMain     *ShaderMain
-	shaderSky      *ShaderSky
-	shaderSSAO     *ShaderSSAO
-	shaderBlur     *ShaderBlur
-	shaderGeometry *ShaderGeometry
-	shaderDepth    *ShaderDepth
-	shaderPost     *ShaderPost
+	shaderMain     *shaders2.ShaderMain
+	shaderSky      *shaders2.ShaderSky
+	shaderSSAO     *shaders2.ShaderSSAO
+	shaderBlur     *shaders2.ShaderBlur
+	shaderGeometry *shaders2.ShaderGeometry
+	shaderDepth    *shaders2.ShaderDepth
+	shaderPost     *shaders2.ShaderPost
 	shaders        []IShader
 
 	flashFactor   float32
@@ -76,13 +38,13 @@ type Shaders struct {
 // NewShaders initializes and returns a new Shaders instance with default shader configurations and settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
-		shaderMain:     NewShaderMain(),
-		shaderSky:      NewShaderSky(),
-		shaderSSAO:     NewShaderSSAO(),
-		shaderBlur:     NewShaderBlur(),
-		shaderGeometry: NewShaderGeometry(),
-		shaderDepth:    NewShaderDepth(),
-		shaderPost:     NewShaderPost(),
+		shaderMain:     shaders2.NewShaderMain(),
+		shaderSky:      shaders2.NewShaderSky(),
+		shaderSSAO:     shaders2.NewShaderSSAO(),
+		shaderBlur:     shaders2.NewShaderBlur(),
+		shaderGeometry: shaders2.NewShaderGeometry(),
+		shaderDepth:    shaders2.NewShaderDepth(),
+		shaderPost:     shaders2.NewShaderPost(),
 		flashFactor:    3.0,
 		flashOffsetX:   0.0,
 		flashOffsetY:   0.0,
@@ -178,8 +140,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	renderScene := func() {
-		gl.BindVertexArray(w.shaderMain.mainVao)
+	renderMain := func() {
+		gl.BindVertexArray(w.shaderMain.GetVao())
 		var lastTexId uint32 = math.MaxUint32
 		for _, cmd := range dc {
 			if cmd.vertexCount > 0 {
@@ -194,7 +156,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	}
 
 	renderSky := func() {
-		gl.BindVertexArray(w.shaderSky.skyVao)
+		gl.BindVertexArray(w.shaderSky.GetVao())
 		gl.Disable(gl.DEPTH_TEST)
 		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 		gl.Enable(gl.DEPTH_TEST)
@@ -213,10 +175,10 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	var roomShadowTex, flashShadowTex uint32
 	if w.enableShadows {
 		roomShadowTex, flashShadowTex = w.shaderDepth.GetShadowTextures()
-		w.shaderDepth.Render(renderScene)
+		w.shaderDepth.Render(renderMain)
 	}
 	w.shaderSSAO.Prepare()
-	w.shaderGeometry.Render(renderScene)
+	w.shaderGeometry.Render(renderMain)
 	w.shaderSSAO.Render(renderSky, w.shaderBlur.GetProgram())
 	blurTex := w.shaderSSAO.GetSSAOBlurTexture()
 

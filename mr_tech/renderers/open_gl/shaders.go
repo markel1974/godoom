@@ -51,6 +51,7 @@ func NewShaders() *Shaders {
 		enableShadows:  false,
 	}
 	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth, c.shaderPost)
+	c.SetShadowEnabled(true)
 	return c
 }
 
@@ -66,9 +67,14 @@ func (w *Shaders) DecreaseFlashFactor() {
 	}
 }
 
-// EnableShadows toggles the shadow rendering state and updates related flash offset values accordingly.
-func (w *Shaders) EnableShadows() {
-	w.enableShadows = !w.enableShadows
+// ToggleShadows toggles the shadow rendering feature by inverting the current shadow-enabled state of the Shaders instance.
+func (w *Shaders) ToggleShadows() {
+	w.SetShadowEnabled(!w.enableShadows)
+}
+
+// SetShadowEnabled enables or disables shadows and updates flash offset values based on the given boolean parameter.
+func (w *Shaders) SetShadowEnabled(v bool) {
+	w.enableShadows = v
 	if w.enableShadows {
 		w.flashOffsetX = 2.0
 		w.flashOffsetY = -1.0
@@ -180,7 +186,6 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	w.shaderSSAO.Prepare()
 	w.shaderGeometry.Render(renderMain)
 	w.shaderSSAO.Render(renderSky, w.shaderBlur.GetProgram())
-	blurTex := w.shaderSSAO.GetSSAOBlurTexture()
 
 	// Dirotta tutto il rendering 3D (scena + cielo) nel buffer HDR a 16-bit
 	gl.BindFramebuffer(gl.FRAMEBUFFER, w.shaderPost.GetFBO())
@@ -188,7 +193,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	// ------------------------------
 
-	w.shaderMain.Render(roomShadowTex, flashShadowTex, blurTex)
+	w.shaderMain.Render(roomShadowTex, flashShadowTex, w.shaderSSAO.GetSSAOBlurTexture())
 
 	var lastTexId uint32 = math.MaxUint32
 	var lastNormId uint32 = math.MaxUint32

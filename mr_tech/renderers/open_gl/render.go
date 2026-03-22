@@ -230,7 +230,7 @@ func (w *RenderOpenGL) doRun() {
 			mouseConnected = !mouseConnected
 		}
 		if w.win.JustPressed(pixels.KeyN) {
-			w.shaders.EnableShadows()
+			w.shaders.ToggleShadows()
 		}
 
 		w.win.UpdateInputAndSwap()

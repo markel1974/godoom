@@ -11,8 +11,9 @@ import (
 // texId is the OpenGL ID of the primary texture.
 // normTexId is the OpenGL ID of the normal map texture.
 type glTexture struct {
-	texId     uint32
-	normTexId uint32
+	texId         uint32
+	normTexId     uint32
+	emissiveTexId uint32
 }
 
 // Textures represents a collection of textures mapped to their corresponding OpenGL texture identifiers.
@@ -28,9 +29,9 @@ func NewTextures() *Textures {
 }
 
 // Get retrieves the OpenGL texture ID, normal texture ID, and existence status for the given texture.
-func (w *Textures) Get(tex *textures.Texture) (uint32, uint32, bool) {
+func (w *Textures) Get(tex *textures.Texture) (uint32, uint32, uint32, bool) {
 	t, ok := w.textures[tex]
-	return t.texId, t.normTexId, ok
+	return t.texId, t.normTexId, t.emissiveTexId, ok
 }
 
 // Setup initializes the textures by uploading diffuse and normal maps to the GPU using OpenGL and stores them in the Textures map.
@@ -96,7 +97,16 @@ func (w *Textures) Setup(t textures.ITextures) error {
 		gl.GenerateMipmap(gl.TEXTURE_2D)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 
-		w.textures[tex] = glTexture{texId: glTex, normTexId: glNormTex}
+		// --- 4. UPLOAD EMISSIVE MAP (Placeholder nero) ---
+		var glEmissiveTex uint32
+		gl.GenTextures(1, &glEmissiveTex)
+		gl.BindTexture(gl.TEXTURE_2D, glEmissiveTex)
+		blackPixel := []uint8{0, 0, 0, 255}
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixel))
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+		w.textures[tex] = glTexture{texId: glTex, normTexId: glNormTex, emissiveTexId: glEmissiveTex}
 	}
 
 	return nil

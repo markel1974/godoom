@@ -128,12 +128,12 @@ func (w *RenderOpenGL) doRender() {
 		fbW, fbH := w.win.GetFramebufferSize()
 		commands := w.builder.GetDrawCommands()
 		vert, vertCount := w.builder.GetFrameVertices()
-		skyTexId, skyNormalTexId := uint32(0), uint32(0)
+		skyTexId, skyNormalTexId, emissiveTexId := uint32(0), uint32(0), uint32(0)
 		skyEnabled := false
 		if cSky != nil {
-			skyTexId, skyNormalTexId, skyEnabled = w.tex.Get(cSky)
+			skyTexId, skyNormalTexId, emissiveTexId, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertCount, commands, skyEnabled, skyTexId, skyNormalTexId)
+		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertCount, commands, skyEnabled, skyTexId, emissiveTexId, skyNormalTexId)
 	})
 }
 

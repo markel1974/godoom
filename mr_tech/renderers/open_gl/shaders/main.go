@@ -46,6 +46,7 @@ const (
 	MainLocFlashShadowMap
 	MainLocEnableShadows
 	MainLocFlashOffset
+	MainLocEmissiveMap
 	MainLocLast
 )
 
@@ -102,6 +103,7 @@ func (s *Main) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(MainLocNormalMap), 1)
 	gl.Uniform1i(s.GetUniform(MainLocRoomShadowMap), 3)
 	gl.Uniform1i(s.GetUniform(MainLocFlashShadowMap), 4)
+	gl.Uniform1i(s.GetUniform(MainLocEmissiveMap), 5)
 }
 
 // Setup initializes the width and height properties of the Main instance based on the provided dimensions.
@@ -162,6 +164,7 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocRoomShadowMap] = gl.GetUniformLocation(s.prg, gl.Str("u_roomShadowMap\x00"))
 	s.table[MainLocFlashShadowMap] = gl.GetUniformLocation(s.prg, gl.Str("u_flashShadowMap\x00"))
 	s.table[MainLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
+	s.table[MainLocEmissiveMap] = gl.GetUniformLocation(s.prg, gl.Str("u_emissiveMap\x00"))
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)

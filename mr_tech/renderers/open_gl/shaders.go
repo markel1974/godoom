@@ -143,7 +143,7 @@ func (w *Shaders) Setup(width, height, stride int32) error {
 }
 
 // Render executes the rendering pipeline for the scene and sky, handling input matrices, view configs, and draw commands.
-func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId uint32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, emissiveTexId uint32) {
 	gl.Viewport(0, 0, fbW, fbH)
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -199,6 +199,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 
 	var lastTexId uint32 = math.MaxUint32
 	var lastNormId uint32 = math.MaxUint32
+	var lastEmissiveId uint32 = math.MaxUint32
 	for _, cmd := range dc {
 		if cmd.vertexCount > 0 {
 			if lastTexId != cmd.texId {
@@ -210,6 +211,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 				gl.ActiveTexture(gl.TEXTURE1)
 				gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
 				lastNormId = cmd.normTexId
+			}
+			if lastEmissiveId != cmd.emissiveTexId {
+				gl.ActiveTexture(gl.TEXTURE5)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.emissiveTexId)
+				lastEmissiveId = cmd.emissiveTexId
 			}
 			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
 		}

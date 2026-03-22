@@ -85,7 +85,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	if tex == nil {
 		return
 	}
-	texId, normTexId, ok := w.tex.Get(tex)
+	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
 	if !ok {
 		return
 	}
@@ -126,7 +126,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 
 	//apply
 	currentLen := w.frameVertices.Len()
-	w.drawCommands.Compute(texId, normTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 }
 
 // pushFlat processes a flat polygon, computes its light and texture mapping, and adds its vertices to the frame buffer.
@@ -144,7 +144,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 		return nil
 	}
 	//prepare
-	texId, normTexId, ok := w.tex.Get(tex)
+	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
 	if !ok {
 		return nil
 	}
@@ -178,13 +178,14 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 
 	//apply
 	currentLen := w.frameVertices.Len()
-	w.drawCommands.Compute(texId, normTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 
 	return nil
 }
 
 // pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.
 func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
+	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
@@ -221,7 +222,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		if tex == nil {
 			continue
 		}
-		texId, normTexId, ok := w.tex.Get(tex)
+		texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
 		if !ok {
 			continue
 		}
@@ -232,8 +233,8 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		height := float64(texH) * scaleH
 
 		dist := math.Sqrt(node.DistSq)
-		if dist < 0.0001 {
-			dist = 0.0001
+		if dist < minDist {
+			dist = minDist
 		}
 
 		// Vettore Right normalizzato e scalato per l'estensione del quad
@@ -281,7 +282,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
 
-		w.drawCommands.Compute(texId, normTexId, startLen, int32(fv.Len()), fv.Alignment())
+		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, int32(fv.Len()), fv.Alignment())
 	}
 }
 

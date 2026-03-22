@@ -29,8 +29,9 @@ uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
 uniform int u_enableShadows;
+uniform sampler2D u_emissiveMap;
 
-// --- FUNZIONE SHADOW MAPPING PULITA (Pura Proiezione Vettoriale HW) ---
+// --- Pura Proiezione Vettoriale HW ---
 // Rimosso normal e lightDirViewSpace, non servono per il test di profondità nativo.
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
@@ -172,15 +173,16 @@ void main()
     vec3 litRoom = (texColor.rgb * bumpRoom * ((ao * aoFactor) + (roomSpotIntensity * roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
     vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
+
+    vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;
+    // Boost lineare per attivare violentemente il Bloom HDR
+    float emissiveIntensity = 15.0;
+
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;
 
-    //vec3 finalColor = pow(linearColor, vec3(0.8));
-    //float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
-    //FragColor = vec4(finalColor + dither - (0.5 / 255.0), texColor.a);
-
-    // Output HDR puro non clippato
-    //FragColor = vec4(linearColor, texColor.a);
+    // Addizione pura per la luce emissiva (ignora totalmente le ombre e l'AO)
+    linearColor += (emissive * emissiveIntensity);
 
     FragColor = vec4(linearColor, texColor.a);
     float brightness = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));

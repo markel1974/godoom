@@ -33,13 +33,19 @@ type Portal struct {
 	compiledSectors  []*model.CompiledSector
 	compiledCount    int
 	visibilityCache  *VisibilityCache
+	wMin             float64
+	wMax             float64
+	hMax             float64
 }
 
 // NewPortal creates and initializes a new Portal instance with the specified screen dimensions and queue length.
 // If maxQueue is 0, it defaults to a predefined constant value.
-func NewPortal(width int, height int, maxQueue int) *Portal {
-	if maxQueue == 0 {
+func NewPortal(width int, height int, maxQueue int, viewFactor float64) *Portal {
+	if maxQueue <= 0 {
 		maxQueue = defaultQueueLen
+	}
+	if viewFactor <= 1.0 {
+		viewFactor = 1.0
 	}
 	r := &Portal{
 		screenWidth:      width,
@@ -52,6 +58,9 @@ func NewPortal(width int, height int, maxQueue int) *Portal {
 		screenVFov:       model.VFov * float64(height),
 		visibilityCache:  NewVisibilityCache(),
 	}
+	r.wMin = float64(-r.screenWidth) * viewFactor
+	r.wMax = float64(r.screenWidth) * viewFactor
+	r.hMax = float64(r.screenHeight-1) * viewFactor
 	return r
 }
 
@@ -111,11 +120,9 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 
 	r.queue.Reset()
 
-	wMax := float64(r.screenWidth - 1)
-	hMax := float64(r.screenHeight-1) * 3
-
 	qHead := r.queue.GetHead()
-	qHead.Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
+	//qHead.Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
+	qHead.Update(vi.GetSector(), r.wMin, r.wMax, -r.hMax, -r.hMax, r.hMax, r.hMax)
 
 	var qTail *QueueItem
 

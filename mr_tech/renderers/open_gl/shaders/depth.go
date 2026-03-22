@@ -135,36 +135,34 @@ func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
 func (s *Depth) Render(renderScene func()) {
-	gl.Enable(gl.CULL_FACE)
-	gl.CullFace(gl.BACK)
-
+	gl.Disable(gl.CULL_FACE)
 	gl.Enable(gl.POLYGON_OFFSET_FILL)
-	gl.PolygonOffset(1.5, 4.0)
-	//TODO DEBUG
-	//gl.PolygonOffset(0.7, 2.0)
+
+	// FIX: Attiviamo il clamp della profondità.
+	// Impedisce che la geometria sparisca dalla mappa delle ombre
+	// quando la telecamera ci finisce letteralmente addosso.
+	gl.Enable(gl.DEPTH_CLAMP)
 
 	gl.Viewport(0, 0, s.shadowWidth, s.shadowHeight)
 
-	// Room
+	// --- 1. OMBRE STANZA (Ortografica) ---
+	gl.PolygonOffset(2.0, 4.0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(s.GetProgram())
-
-	// Upload room matrix
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
 	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
-	// Flashlight
+	// --- 2. OMBRE TORCIA (Prospettica) ---
+	gl.PolygonOffset(0.5, 1.0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
-
-	// Upload flashlight matrix
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
 	renderScene()
 
+	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
+	gl.Disable(gl.DEPTH_CLAMP)
 	gl.Disable(gl.POLYGON_OFFSET_FILL)
-	gl.Disable(gl.CULL_FACE)
-
 	gl.Viewport(0, 0, s.width, s.height)
 }

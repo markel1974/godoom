@@ -64,6 +64,11 @@ void main()
     vec4 texColor = texture(u_texture, TexCoords);
     if(texColor.a < 0.5) discard;
 
+    // --- EDGE FADE CINEMATICO ---
+    vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
+    // Sfuma dolcemente la luce nel primo e nell'ultimo 8% dello schermo orizzontale
+    float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
+
     vec2 ssaoCoords = gl_FragCoord.xy / u_screenResolution;
     float ao = texture(u_ssao, ssaoCoords).r;
 
@@ -163,26 +168,28 @@ void main()
 
     float beamRatio = volumetricScattering / float(STEPS);
     float beamRatioFactor = 0.05;
-    vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * beamRatioFactor) * roomFalloff;
+    // APPLICA L'EDGE FADE AL RAGGIO: Evita che il fascio di luce si tronchi di netto se il muro dietro viene scartato
+    vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * beamRatioFactor) * roomFalloff * edgeFade;
 
     // --- MIX FINALE ---
     float aoFactor = 0.3;
     float roomSpotIntensityFactor = 1.7;
     float roomLightOcclusion = (1.0 - shadowRoom);
     float flashLightOcclusion = (1.0 - shadowFlash);
+
     vec3 litRoom = (texColor.rgb * bumpRoom * ((ao * aoFactor) + (roomSpotIntensity * roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
+
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
     vec3 litFlash = (texColor.rgb * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
 
     vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;
-    // Boost lineare per attivare violentemente il Bloom HDR
     float emissiveIntensity = 15.0;
 
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;
 
-    // Addizione pura per la luce emissiva (ignora totalmente le ombre e l'AO)
-    linearColor += (emissive * emissiveIntensity);
+    // APPLICA L'EDGE FADE ALL'EMISSIVE: Impedisce al Bloom del neon/fuoco di "poppare" quando lo sprite esce dallo schermo
+    linearColor += (emissive * emissiveIntensity) * edgeFade;
 
     FragColor = vec4(linearColor, texColor.a);
     float brightness = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));

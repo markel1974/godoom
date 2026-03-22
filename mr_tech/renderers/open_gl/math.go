@@ -8,10 +8,14 @@ import (
 
 // CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
-	// --- 1. PROIEZIONE STANZA (Ortografica) ---
-	const orthoSize = 1024.0
-	const zNearRoom, zFarRoom = 1.0, 4096.0
 	const zNearFlash, zFarFlash = 0.1, 2048.0
+
+	// --- 1. PROIEZIONE STANZA (Ortografica Direzionale) ---
+	// Incrementato a 1280.0. Copre un'area colossale di 2560x2560 unità.
+	// Garantisce che l'estrema destra/sinistra della telecamera non finisca mai
+	// fuori dalla matrice, impedendo l'illuminazione improvvisa dei bordi.
+	const orthoSize = 1280.0
+	const zNearRoom, zFarRoom = 1.0, 4096.0
 
 	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
@@ -21,6 +25,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	}
 
 	texelSize := (orthoSize * 2.0) / 1024.0
+
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 

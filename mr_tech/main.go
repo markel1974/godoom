@@ -70,7 +70,7 @@ func main() {
 		return
 	}
 
-	en := engine.NewEngine(width, height, maxQueue)
+	en := engine.NewEngine(width, height, maxQueue, 5.0)
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)
 		return

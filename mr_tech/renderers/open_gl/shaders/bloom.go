@@ -101,7 +101,7 @@ func (s *Bloom) Render(brightTex uint32) uint32 {
 
 	horizontal := true
 	firstIteration := true
-	amount := 10 // 5 passaggi orizzontali, 5 verticali
+	const amount = 10 // 5 passaggi orizzontali, 5 verticali
 
 	for i := 0; i < amount; i++ {
 		idx := 0

@@ -8,27 +8,29 @@ import (
 
 // Engine represents a core game simulation system, managing entities, sectors, player, and rendering configurations.
 type Engine struct {
-	portal   *portal.Portal
-	w        int
-	h        int
-	maxQueue int
-	things   *model.Things
-	entities *model.Entities
-	player   *model.ThingPlayer
-	sectors  *model.Sectors
+	portal     *portal.Portal
+	w          int
+	h          int
+	maxQueue   int
+	viewFactor float64
+	things     *model.Things
+	entities   *model.Entities
+	player     *model.ThingPlayer
+	sectors    *model.Sectors
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
-func NewEngine(w int, h int, maxQueue int) *Engine {
+func NewEngine(w int, h int, maxQueue int, viewFactor float64) *Engine {
 	return &Engine{
-		portal:   nil,
-		w:        w,
-		h:        h,
-		maxQueue: maxQueue,
-		things:   nil,
-		entities: nil,
-		sectors:  nil,
-		player:   nil,
+		portal:     nil,
+		w:          w,
+		h:          h,
+		maxQueue:   maxQueue,
+		viewFactor: viewFactor,
+		things:     nil,
+		entities:   nil,
+		sectors:    nil,
+		player:     nil,
 	}
 }
 
@@ -73,7 +75,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	e.things = compiler.GetThings()
 	e.entities = compiler.GetEntities()
 
-	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue)
+	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue, e.viewFactor)
 	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {
 		return err
 	}

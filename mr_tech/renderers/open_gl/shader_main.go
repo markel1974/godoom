@@ -218,7 +218,7 @@ func (s *ShaderMain) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flash
 
 // Render sets up and executes the main rendering pipeline using provided transformation matrices and texture IDs.
 func (s *ShaderMain) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	//gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.UseProgram(s.GetProgram())
 
 	// Upload differito e isolato

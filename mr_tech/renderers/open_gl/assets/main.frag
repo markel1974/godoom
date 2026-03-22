@@ -174,8 +174,10 @@ void main()
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;
 
-    vec3 finalColor = pow(linearColor, vec3(0.8));
-    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
+    //vec3 finalColor = pow(linearColor, vec3(0.8));
+    //float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) / 255.0;
+    //FragColor = vec4(finalColor + dither - (0.5 / 255.0), texColor.a);
 
-    FragColor = vec4(finalColor + dither - (0.5 / 255.0), texColor.a);
+    // Output HDR puro non clippato
+    FragColor = vec4(linearColor, texColor.a);
 }

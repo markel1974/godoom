@@ -64,6 +64,7 @@ type Shaders struct {
 	shaderBlur     *ShaderBlur
 	shaderGeometry *ShaderGeometry
 	shaderDepth    *ShaderDepth
+	shaderPost     *ShaderPost
 	shaders        []IShader
 
 	flashFactor   float32
@@ -81,12 +82,13 @@ func NewShaders() *Shaders {
 		shaderBlur:     NewShaderBlur(),
 		shaderGeometry: NewShaderGeometry(),
 		shaderDepth:    NewShaderDepth(),
+		shaderPost:     NewShaderPost(),
 		flashFactor:    3.0,
 		flashOffsetX:   0.0,
 		flashOffsetY:   0.0,
 		enableShadows:  false,
 	}
-	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth)
+	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur, c.shaderGeometry, c.shaderDepth, c.shaderPost)
 	return c
 }
 
@@ -217,6 +219,13 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	w.shaderGeometry.Render(renderScene)
 	w.shaderSSAO.Render(renderSky, w.shaderBlur.GetProgram())
 	blurTex := w.shaderSSAO.GetSSAOBlurTexture()
+
+	// Dirotta tutto il rendering 3D (scena + cielo) nel buffer HDR a 16-bit
+	gl.BindFramebuffer(gl.FRAMEBUFFER, w.shaderPost.GetFBO())
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	// ------------------------------
+
 	w.shaderMain.Render(roomShadowTex, flashShadowTex, blurTex)
 
 	var lastTexId uint32 = math.MaxUint32
@@ -240,4 +249,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	if skyEnabled {
 		w.shaderSky.Render(skyTexId, skyNormalTexId)
 	}
+
+	// PASS FINALE: Tonemapping & Color Grading a schermo
+	w.shaderPost.Render()
 }

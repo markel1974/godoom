@@ -20,13 +20,13 @@ type IShader interface {
 
 // Shaders manages multiple shader programs and associated configurations used in the rendering pipeline.
 type Shaders struct {
-	shaderMain     *shaders2.ShaderMain
+	shaderMain     *shaders2.Main
 	shaderSky      *shaders2.ShaderSky
-	shaderSSAO     *shaders2.ShaderSSAO
-	shaderBlur     *shaders2.ShaderBlur
+	shaderSSAO     *shaders2.SSAO
+	shaderBlur     *shaders2.Blur
 	shaderGeometry *shaders2.ShaderGeometry
-	shaderDepth    *shaders2.ShaderDepth
-	shaderPost     *shaders2.ShaderPost
+	shaderDepth    *shaders2.Depth
+	shaderPost     *shaders2.Post
 	shaders        []IShader
 
 	flashFactor   float32
@@ -38,13 +38,13 @@ type Shaders struct {
 // NewShaders initializes and returns a new Shaders instance with default shader configurations and settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
-		shaderMain:     shaders2.NewShaderMain(),
+		shaderMain:     shaders2.NewMain(),
 		shaderSky:      shaders2.NewShaderSky(),
-		shaderSSAO:     shaders2.NewShaderSSAO(),
-		shaderBlur:     shaders2.NewShaderBlur(),
+		shaderSSAO:     shaders2.NewSSAO(),
+		shaderBlur:     shaders2.NewBlur(),
 		shaderGeometry: shaders2.NewShaderGeometry(),
-		shaderDepth:    shaders2.NewShaderDepth(),
-		shaderPost:     shaders2.NewShaderPost(),
+		shaderDepth:    shaders2.NewDepth(),
+		shaderPost:     shaders2.NewPost(),
 		flashFactor:    3.0,
 		flashOffsetX:   0.0,
 		flashOffsetY:   0.0,
@@ -70,7 +70,7 @@ func (w *Shaders) DecreaseFlashFactor() {
 func (w *Shaders) EnableShadows() {
 	w.enableShadows = !w.enableShadows
 	if w.enableShadows {
-		w.flashOffsetX = 1.0
+		w.flashOffsetX = 2.0
 		w.flashOffsetY = -1.0
 	} else {
 		w.flashOffsetX = 0.0

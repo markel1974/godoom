@@ -6,8 +6,8 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ShaderPostLoc represents a numerical identifier for specific shader post-processing locations.
-type ShaderPostLoc int
+// PostLoc represents a numerical identifier for specific shader post-processing locations.
+type PostLoc int
 
 // ShaderPostLocHDRBuffer represents the location for the HDR buffer in the shader pipeline.
 // ShaderPostLocExposure represents the location for exposure adjustment in the shader pipeline.
@@ -15,17 +15,17 @@ type ShaderPostLoc int
 // ShaderPostLocSaturation represents the location for saturation adjustment in the shader pipeline.
 // ShaderPostLocLast represents the sentinel value for the last shader post-processing location.
 const (
-	ShaderPostLocHDRBuffer = ShaderPostLoc(iota)
-	ShaderPostLocExposure
-	ShaderPostLocContrast
-	ShaderPostLocSaturation
-	ShaderPostLocLast
+	PostLocHDRBuffer = PostLoc(iota)
+	PostLocExposure
+	PostLocContrast
+	PostLocSaturation
+	PostLocLast
 )
 
-// ShaderPost represents a post-processing shader structure with framebuffer, textures, and various configurable parameters.
-type ShaderPost struct {
+// Post represents a post-processing shader structure with framebuffer, textures, and various configurable parameters.
+type Post struct {
 	prg            uint32
-	table          [ShaderPostLocLast]int32
+	table          [PostLocLast]int32
 	fbo            uint32
 	texColorBuffer uint32
 	rboDepth       uint32
@@ -39,24 +39,24 @@ type ShaderPost struct {
 	Saturation float32
 }
 
-// NewShaderPost initializes and returns a pointer to a ShaderPost with predefined Exposure, Contrast, and Saturation values.
-func NewShaderPost() *ShaderPost {
-	return &ShaderPost{
+// NewPost initializes and returns a pointer to a Post with predefined Exposure, Contrast, and Saturation values.
+func NewPost() *Post {
+	return &Post{
 		Exposure:   1.2,
 		Contrast:   1.05,
 		Saturation: 1.1,
 	}
 }
 
-// Setup initializes the width and height properties of the ShaderPost instance.
-func (s *ShaderPost) Setup(width, height int32) {
+// Setup initializes the width and height properties of the Post instance.
+func (s *Post) Setup(width, height int32) {
 	s.width, s.height = width, height
 }
 
 // SetupSamplers initializes OpenGL vertex arrays, buffers, and sets up the shader samplers for post-processing rendering.
-func (s *ShaderPost) SetupSamplers() {
+func (s *Post) SetupSamplers() {
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.table[ShaderPostLocHDRBuffer], 0)
+	gl.Uniform1i(s.table[PostLocHDRBuffer], 0)
 
 	gl.GenVertexArrays(1, &s.vao)
 	gl.BindVertexArray(s.vao)
@@ -69,7 +69,7 @@ func (s *ShaderPost) SetupSamplers() {
 }
 
 // Compile initializes the shader program, framebuffers, and texture buffers required for the post-processing effect.
-func (s *ShaderPost) Compile(a IAssets) error {
+func (s *Post) Compile(a IAssets) error {
 	vSrc, fSrc, err := a.ReadMulti("post.vert", "post.frag")
 	if err != nil {
 		return err
@@ -90,10 +90,10 @@ func (s *ShaderPost) Compile(a IAssets) error {
 		return err
 	}
 
-	s.table[ShaderPostLocHDRBuffer] = gl.GetUniformLocation(s.prg, gl.Str("u_hdrBuffer\x00"))
-	s.table[ShaderPostLocExposure] = gl.GetUniformLocation(s.prg, gl.Str("u_exposure\x00"))
-	s.table[ShaderPostLocContrast] = gl.GetUniformLocation(s.prg, gl.Str("u_contrast\x00"))
-	s.table[ShaderPostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
+	s.table[PostLocHDRBuffer] = gl.GetUniformLocation(s.prg, gl.Str("u_hdrBuffer\x00"))
+	s.table[PostLocExposure] = gl.GetUniformLocation(s.prg, gl.Str("u_exposure\x00"))
+	s.table[PostLocContrast] = gl.GetUniformLocation(s.prg, gl.Str("u_contrast\x00"))
+	s.table[PostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
 
 	gl.GenFramebuffers(1, &s.fbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
@@ -118,20 +118,20 @@ func (s *ShaderPost) Compile(a IAssets) error {
 	return nil
 }
 
-// GetFBO retrieves the framebuffer object (FBO) ID associated with the ShaderPost instance.
-func (s *ShaderPost) GetFBO() uint32 { return s.fbo }
+// GetFBO retrieves the framebuffer object (FBO) ID associated with the Post instance.
+func (s *Post) GetFBO() uint32 { return s.fbo }
 
 // Render handles the post-processing rendering pipeline, including clearing buffers and applying shader effects.
-func (s *ShaderPost) Render() {
+func (s *Post) Render() {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	// Il Clear è rimosso. Il quad sovrascrive il 100% dei pixel.
 	gl.Disable(gl.DEPTH_TEST)
 
 	gl.UseProgram(s.prg)
-	gl.Uniform1f(s.table[ShaderPostLocExposure], s.Exposure)
-	gl.Uniform1f(s.table[ShaderPostLocContrast], s.Contrast)
-	gl.Uniform1f(s.table[ShaderPostLocSaturation], s.Saturation)
+	gl.Uniform1f(s.table[PostLocExposure], s.Exposure)
+	gl.Uniform1f(s.table[PostLocContrast], s.Contrast)
+	gl.Uniform1f(s.table[PostLocSaturation], s.Saturation)
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, s.texColorBuffer)

@@ -6,25 +6,25 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ShaderGeometryLoc represents a location identifier for shader geometry uniforms.
-type ShaderGeometryLoc int
+// GeometryLoc represents a location identifier for shader geometry uniforms.
+type GeometryLoc int
 
-// ShaderGeometryLocTexture represents the texture location in shader geometry.
-// ShaderGeometryLocView represents the view matrix location in shader geometry.
-// ShaderGeometryLocProjection represents the projection matrix location in shader geometry.
-// ShaderGeometryLocLast marks the end of the ShaderGeometryLoc constants.
+// GeometryLocTexture represents the texture location in shader geometry.
+// GeometryLocView represents the view matrix location in shader geometry.
+// GeometryLocProjection represents the projection matrix location in shader geometry.
+// GeometryLocLast marks the end of the GeometryLoc constants.
 const (
-	ShaderGeometryLocTexture = ShaderGeometryLoc(iota)
-	ShaderGeometryLocView
-	ShaderGeometryLocProjection
-	ShaderGeometryLocLast
+	GeometryLocTexture = GeometryLoc(iota)
+	GeometryLocView
+	GeometryLocProjection
+	GeometryLocLast
 )
 
 // ShaderGeometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
 type ShaderGeometry struct {
 	prg    uint32
-	table  [ShaderGeometryLocLast]int32
+	table  [GeometryLocLast]int32
 	view   [16]float32
 	proj   [16]float32
 	width  int32
@@ -53,8 +53,8 @@ func (s *ShaderGeometry) GetProgram() uint32 {
 	return s.prg
 }
 
-// GetUniform retrieves the uniform location associated with the given ShaderGeometryLoc identifier.
-func (s *ShaderGeometry) GetUniform(id ShaderGeometryLoc) int32 {
+// GetUniform retrieves the uniform location associated with the given GeometryLoc identifier.
+func (s *ShaderGeometry) GetUniform(id GeometryLoc) int32 {
 	return s.table[id]
 }
 
@@ -77,9 +77,9 @@ func (s *ShaderGeometry) Compile(assets IAssets) error {
 	if err != nil {
 		return err
 	}
-	s.table[ShaderGeometryLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[ShaderGeometryLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[ShaderGeometryLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
+	s.table[GeometryLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
+	s.table[GeometryLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
+	s.table[GeometryLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -97,8 +97,8 @@ func (s *ShaderGeometry) UpdateUniforms(view, proj [16]float32) {
 // Render applies shader program, updates uniform values, and executes the provided rendering function.
 func (s *ShaderGeometry) Render(renderScene func()) {
 	gl.UseProgram(s.GetProgram())
-	gl.Uniform1i(s.GetUniform(ShaderGeometryLocTexture), 0)
-	gl.UniformMatrix4fv(s.GetUniform(ShaderGeometryLocView), 1, false, &s.view[0])
-	gl.UniformMatrix4fv(s.GetUniform(ShaderGeometryLocProjection), 1, false, &s.proj[0])
+	gl.Uniform1i(s.GetUniform(GeometryLocTexture), 0)
+	gl.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])
+	gl.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, &s.proj[0])
 	renderScene()
 }

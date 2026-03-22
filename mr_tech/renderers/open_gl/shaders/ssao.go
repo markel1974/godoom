@@ -8,28 +8,28 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ShaderSSAOLoc represents an identifier for accessing SSAO shader uniform locations.
-type ShaderSSAOLoc int
+// SSAOLoc represents an identifier for accessing SSAO shader uniform locations.
+type SSAOLoc int
 
 // ShaderSSAOLocGPosition represents the location of the G-position attribute in the SSAO shader.
 // ShaderSSAOLocGNormal represents the location of the G-normal attribute in the SSAO shader.
 // ShaderSSAOLocTexNoise represents the location of the texture noise attribute in the SSAO shader.
 // ShaderSSAOLocSamples represents the location of the SSAO samples attribute in the shader.
 // ShaderSSAOLocProjection represents the location of the projection matrix attribute in the SSAO shader.
-// ShaderSSAOLocLast marks the end of the ShaderSSAOLoc constants.
+// ShaderSSAOLocLast marks the end of the SSAOLoc constants.
 const (
-	ShaderSSAOLocGPosition = ShaderSSAOLoc(iota)
-	ShaderSSAOLocGNormal
-	ShaderSSAOLocTexNoise
-	ShaderSSAOLocSamples
-	ShaderSSAOLocProjection
-	ShaderSSAOLocLast
+	SSAOLocGPosition = SSAOLoc(iota)
+	SSAOLocGNormal
+	SSAOLocTexNoise
+	SSAOLocSamples
+	SSAOLocProjection
+	SSAOLocLast
 )
 
-// ShaderSSAO represents a shader implementation for Screen Space Ambient Occlusion (SSAO).
-type ShaderSSAO struct {
+// SSAO represents a shader implementation for Screen Space Ambient Occlusion (SSAO).
+type SSAO struct {
 	prg             uint32
-	table           [ShaderSSAOLocLast]int32
+	table           [SSAOLocLast]int32
 	width           int32
 	height          int32
 	ssaoNoiseTex    uint32    // Texture di rumore 4x4
@@ -44,57 +44,57 @@ type ShaderSSAO struct {
 	proj            [16]float32
 }
 
-// NewShaderSSAO initializes and returns a new instance of ShaderSSAO with default values.
-func NewShaderSSAO() *ShaderSSAO {
-	return &ShaderSSAO{
+// NewSSAO initializes and returns a new instance of SSAO with default values.
+func NewSSAO() *SSAO {
+	return &SSAO{
 		prg: 0,
 	}
 }
 
-// Setup initializes the ShaderSSAO instance with the specified width and height, updating internal dimensions.
-func (s *ShaderSSAO) Setup(width int32, height int32) {
+// Setup initializes the SSAO instance with the specified width and height, updating internal dimensions.
+func (s *SSAO) Setup(width int32, height int32) {
 	s.width = width
 	s.height = height
 }
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
-func (s *ShaderSSAO) SetupSamplers() {
+func (s *SSAO) SetupSamplers() {
 	// Setup SSAO Samplers
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGPosition), 0)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGNormal), 1)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocTexNoise), 2)
+	gl.Uniform1i(s.GetUniform(SSAOLocGPosition), 0)
+	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
+	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
 
-	gl.Uniform3fv(s.GetUniform(ShaderSSAOLocSamples), 64, &s.ssaoKernel[0])
+	gl.Uniform3fv(s.GetUniform(SSAOLocSamples), 64, &s.ssaoKernel[0])
 }
 
 // GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.
-func (s *ShaderSSAO) GetGBufferTextures() (uint32, uint32) {
+func (s *SSAO) GetGBufferTextures() (uint32, uint32) {
 	return s.gPositionDepth, s.gNormal
 }
 
 // GetSSAOResources returns the ID of the texture containing the SSAO noise pattern.
-func (s *ShaderSSAO) GetSSAOResources() uint32 {
+func (s *SSAO) GetSSAOResources() uint32 {
 	return s.ssaoNoiseTex
 }
 
 // GetSSAOBlurTexture returns the texture ID of the blurred SSAO texture used in the rendering pipeline.
-func (s *ShaderSSAO) GetSSAOBlurTexture() uint32 {
+func (s *SSAO) GetSSAOBlurTexture() uint32 {
 	return s.ssaoBlurTexture
 }
 
-// GetProgram returns the OpenGL program identifier associated with the ShaderSSAO instance.
-func (s *ShaderSSAO) GetProgram() uint32 {
+// GetProgram returns the OpenGL program identifier associated with the SSAO instance.
+func (s *SSAO) GetProgram() uint32 {
 	return s.prg
 }
 
 // GetUniform retrieves the location of a uniform variable in the shader program by its identifier.
-func (s *ShaderSSAO) GetUniform(id ShaderSSAOLoc) int32 {
+func (s *SSAO) GetUniform(id SSAOLoc) int32 {
 	return s.table[id]
 }
 
 // Compile initializes and compiles the SSAO shader program, sets up buffers, and validates uniform locations.
-func (s *ShaderSSAO) Compile(a IAssets) error {
+func (s *SSAO) Compile(a IAssets) error {
 	if s.width == 0 || s.height == 0 {
 		return fmt.Errorf("invalid shader dimensions: width=%d, height=%d", s.width, s.height)
 	}
@@ -118,11 +118,11 @@ func (s *ShaderSSAO) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	s.table[ShaderSSAOLocGPosition] = gl.GetUniformLocation(s.prg, gl.Str("gPosition\x00"))
-	s.table[ShaderSSAOLocGNormal] = gl.GetUniformLocation(s.prg, gl.Str("gNormal\x00"))
-	s.table[ShaderSSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("texNoise\x00"))
-	s.table[ShaderSSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("samples\x00"))
-	s.table[ShaderSSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("projection\x00"))
+	s.table[SSAOLocGPosition] = gl.GetUniformLocation(s.prg, gl.Str("gPosition\x00"))
+	s.table[SSAOLocGNormal] = gl.GetUniformLocation(s.prg, gl.Str("gNormal\x00"))
+	s.table[SSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("texNoise\x00"))
+	s.table[SSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("samples\x00"))
+	s.table[SSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("projection\x00"))
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -133,15 +133,15 @@ func (s *ShaderSSAO) Compile(a IAssets) error {
 	}
 
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGPosition), 0)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocGNormal), 1)
-	gl.Uniform1i(s.GetUniform(ShaderSSAOLocTexNoise), 2)
+	gl.Uniform1i(s.GetUniform(SSAOLocGPosition), 0)
+	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
+	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
 
 	return nil
 }
 
 // createBuffers initializes and configures framebuffer objects and textures required for SSAO rendering.
-func (s *ShaderSSAO) createBuffers(width int32, height int32) error {
+func (s *SSAO) createBuffers(width int32, height int32) error {
 	// 1. G-Buffer
 	gl.GenFramebuffers(1, &s.gBufferFbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.gBufferFbo)
@@ -194,7 +194,7 @@ func (s *ShaderSSAO) createBuffers(width int32, height int32) error {
 }
 
 // createKernel generates a 64-sample SSAO kernel and initializes a 4x4 noise texture used in ambient occlusion rendering.
-func (s *ShaderSSAO) createKernel() error {
+func (s *SSAO) createKernel() error {
 	// --- 4. SSAO: GENERAZIONE KERNEL (64 campioni) ---
 	s.ssaoKernel = make([]float32, 64*3)
 	for i := 0; i < 64; i++ {
@@ -232,7 +232,7 @@ func (s *ShaderSSAO) createKernel() error {
 }
 
 // Prepare initializes the framebuffer and clears buffers to set up for SSAO rendering.
-func (s *ShaderSSAO) Prepare() {
+func (s *SSAO) Prepare() {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.gBufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
 	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
@@ -241,12 +241,12 @@ func (s *ShaderSSAO) Prepare() {
 }
 
 // UpdateUniforms updates the shader's projection matrix uniform with the provided projection matrix.
-func (s *ShaderSSAO) UpdateUniforms(view, proj [16]float32) {
+func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 	s.proj = proj
 }
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *ShaderSSAO) Render(drawScreenQuad func(), blurPgr uint32) {
+func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoFbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
@@ -259,7 +259,7 @@ func (s *ShaderSSAO) Render(drawScreenQuad func(), blurPgr uint32) {
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, s.ssaoNoiseTex)
 
-	gl.UniformMatrix4fv(s.GetUniform(ShaderSSAOLocProjection), 1, false, &s.proj[0])
+	gl.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
 	drawScreenQuad()
 
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoBlurFbo)

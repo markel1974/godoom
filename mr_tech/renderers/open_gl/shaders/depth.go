@@ -108,7 +108,6 @@ func (s *Depth) createDepthMap(width, height int32) (uint32, uint32) {
 	gl.GenTextures(1, &tex)
 
 	gl.BindTexture(gl.TEXTURE_2D, tex)
-	//gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
@@ -130,7 +129,6 @@ func (s *Depth) createDepthMap(width, height int32) (uint32, uint32) {
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
 func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
-	// Salva le matrici senza inviarle alla GPU
 	s.roomMatrix = roomSpaceMatrix
 	s.flashMatrix = flashSpaceMatrix
 }
@@ -147,21 +145,21 @@ func (s *Depth) Render(renderScene func()) {
 
 	gl.Viewport(0, 0, s.shadowWidth, s.shadowHeight)
 
-	// Stanza
+	// Room
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(s.GetProgram())
 
-	// Upload matrice stanza
+	// Upload room matrix
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
 	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
-	// Torcia
+	// Flashlight
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 
-	// Upload matrice torcia
+	// Upload flashlight matrix
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
 	renderScene()
 

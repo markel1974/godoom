@@ -11,6 +11,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	// --- 1. PROIEZIONE STANZA (Ortografica) ---
 	const orthoSize = 1024.0
 	const zNearRoom, zFarRoom = 1.0, 4096.0
+	const zNearFlash, zFarFlash = 0.1, 2048.0
 
 	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
@@ -19,7 +20,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		0, 0, -(zFarRoom + zNearRoom) / (zFarRoom - zNearRoom), 1,
 	}
 
-	texelSize := float64((orthoSize * 2.0) / 1024.0)
+	texelSize := (orthoSize * 2.0) / 1024.0
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
@@ -36,7 +37,6 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	MultiplyMatrix(&roomSpace, roomProj, roomView)
 
 	// 2. SINCRONIZZAZIONE FOV TORCIA (Avvolge i 106° calcolati dallo shader)
-	const zNearFlash, zFarFlash = 0.1, 2048.0
 	fovRad := float32(110.0 * math.Pi / 180.0)
 	f := float32(1.0 / math.Tan(float64(fovRad/2.0)))
 
@@ -52,7 +52,14 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	camZ := vi.GetZ()
 	pitchShear := float32(-vi.GetYaw())
 
-	fX, fY, fZ := float32(cosA), pitchShear, float32(-sinA)
+	//fX, fY, fZ := float32(cosA), pitchShear, float32(-sinA)
+	//invLenF := float32(1.0 / math.Sqrt(float64(fX*fX+fY*fY+fZ*fZ)))
+	//fX, fY, fZ = fX*invLenF, fY*invLenF, fZ*invLenF
+	scaleY := float32(2.0 * model.VFov)
+	flashDirY := pitchShear / scaleY
+
+	// Usa flashDirY al posto di pitchShear puro
+	fX, fY, fZ := float32(cosA), flashDirY, float32(-sinA)
 	invLenF := float32(1.0 / math.Sqrt(float64(fX*fX+fY*fY+fZ*fZ)))
 	fX, fY, fZ = fX*invLenF, fY*invLenF, fZ*invLenF
 

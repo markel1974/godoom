@@ -118,6 +118,14 @@ func (w *RenderOpenGL) Start() {
 
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
+	// 1. Svuotamento manuale per il nuovo frame
+	w.builder.Reset()
+
+	// 2. PASSAGGIO ALL'INDIETRO (Cattura i caster per le ombre posteriori)
+	//csBack, countBack := w.engine.ComputeReverse(w.player, w.vi)
+	//w.builder.CreateBatch(w.vi, csBack, countBack, nil)
+
+	// 3. PASSAGGIO IN AVANTI (Visuale standard e ombre frontali)
 	cs, count, things := w.engine.Compute(w.player, w.vi)
 	w.targetLastCompiled = count
 	cSky := w.builder.CreateBatch(w.vi, cs, count, things)

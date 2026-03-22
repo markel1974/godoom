@@ -41,10 +41,15 @@ func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
 	return w.drawCommands.Get()
 }
 
-// CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
-func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, thing []model.IThing) *textures.Texture {
+func (w *BatchBuilder) Reset() {
 	w.frameVertices.Reset()
 	w.drawCommands.Reset()
+}
+
+// CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
+func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, thing []model.IThing) *textures.Texture {
+	//w.frameVertices.Reset()
+	//w.drawCommands.Reset()
 	var cSky *textures.Texture = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {

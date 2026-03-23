@@ -44,19 +44,22 @@ uniform int u_volumetricSteps;
 
 const float PI = 3.14159265359;
 
-// Generatore pseudo-random per Dithering (Jittering)
 float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-// FIX 1: Ombre stocastiche morbide (Vogel Disk)
+// Filtro di Vogel per ombre morbide
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
-    if(projCoords.z > 1.0) return 0.0;
+    // FIX FONDAMENTALE TORCIA: Se campioniamo fuori dalla Shadow Map, restituisci LUCE PIENA (0.0 = no ombra).
+    // Impedisce alla torcia di auto-oscurare i suoi stessi bordi o i pavimenti lontani.
+    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
+    }
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
@@ -64,14 +67,13 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
 
     const int SAMPLES = 16;
     const float GOLDEN_ANGLE = 2.39996323;
-    float noise = randomNoise(gl_FragCoord.xy) * 6.2831853; // Rotazione random per pixel
-    float spread = 2.0; // Raggio di sfocatura (aumenta per ombre più morbide)
+    float noise = randomNoise(gl_FragCoord.xy) * 6.2831853;
+    float spread = 2.0;
 
     for(int i = 0; i < SAMPLES; ++i) {
         float r = sqrt(float(i) + 0.5) / sqrt(float(SAMPLES));
         float theta = float(i) * GOLDEN_ANGLE + noise;
         vec2 offset = vec2(cos(theta), sin(theta)) * r * spread;
-
         shadow += texture(shadowMap, vec3(projCoords.xy + offset * texelSize, currentDepth - bias));
     }
 
@@ -91,7 +93,7 @@ void main()
     vec2 ssaoCoords = gl_FragCoord.xy / u_screenResolution;
     float ao = texture(u_ssao, ssaoCoords).r;
 
-    // --- VETTORI DI ILLUMINAZIONE (Stanza) ---
+    // --- VETTORI STANZA ---
     vec3 L_room_point = normalize(LightCenterView - ViewPos);
     vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, -1.0, 0.0));
 
@@ -103,15 +105,25 @@ void main()
 
     float roomSpotIntensity = max(directSpot, bounceSpot);
 
-    // --- VETTORI DI ILLUMINAZIONE (Torcia) ---
+    // --- VETTORI TORCIA ---
     vec3 flashPosView = u_flashOffset;
+
+    // Vettore L per Blinn-Phong (dalla geometria all'offset della torcia)
     vec3 L_flash = normalize(flashPosView - ViewPos);
 
-    vec3 viewFront = normalize(u_flashDir);
-    float cosThetaFlash = dot(-L_flash, viewFront);
+    // FIX PARALLASSE DEFINITIVO (Y-Shear Aware):
+    // Essendo u_flashDir (0, Y-shear, -1), moltiplicandolo per 512.0 otteniamo
+    // l'esatto punto 3D in View-Space che si trova a profondità Z = -512.0
+    // e allineato al centro focale dello schermo.
+    vec3 targetPos = u_flashDir * 512.0;
+
+    // Generiamo il vettore direzionale del fascio luminoso convergente
+    vec3 flashSpotDir = normalize(targetPos - flashPosView);
+
+    // Calcoliamo l'attenuazione radiale del cono rispetto al nuovo asse
+    float cosThetaFlash = dot(-L_flash, flashSpotDir);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, cosThetaFlash);
 
-    // --- NORMALI ---
     vec3 finalNormal = NormalView;
     if (dot(finalNormal, finalNormal) < 0.01) {
         finalNormal = vec3(0.0, 1.0, 0.0);
@@ -142,7 +154,7 @@ void main()
         }
     }
 
-    // --- CALCOLO OMBRE ---
+    // --- OMBRE DINAMICHE ---
     float shadowRoom = 0.0;
     float shadowFlash = 0.0;
 
@@ -151,14 +163,15 @@ void main()
         float ndotlRoom = clamp(dot(geoNormal, -spotDirRoom), 0.0, 1.0);
         float roomBias = max(0.002 * (1.0 - ndotlRoom), 0.0005);
 
+        // Aumentato il bias della torcia per prevenire il self-shadowing estremo sui pavimenti
         float ndotlFlash = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
-        float flashBias = max(0.002 * (1.0 - ndotlFlash), 0.0005);
+        float flashBias = max(0.005 * (1.0 - ndotlFlash), 0.001);
 
         shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
 
-    // --- ILLUMINAZIONE E RIFLESSI ---
+    // --- RIFLESSI E ILLUMINAZIONE ---
     float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
 
@@ -173,14 +186,14 @@ void main()
     float shininess = mix(u_shininessWall, u_shininessFloor, isHorizontal);
     float specBoost = mix(u_specBoostWall, u_specBoostFloor, isHorizontal);
 
-    // FIX 2: Normalizzazione dell'energia di Blinn-Phong
     float energyConservation = (shininess + 2.0) / (8.0 * PI);
     float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0) * energyConservation;
     float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0) * energyConservation;
 
-    // --- LUCE DI DISTANZA (Falloff) ---
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
+
+    // Attenuazione torcia
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
@@ -188,7 +201,6 @@ void main()
     float volumetricScattering = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
 
-    // FIX 3: Jittering per distruggere il banding volumetrico
     float jitter = randomNoise(gl_FragCoord.xy);
     vec3 currentPos = rayStep * jitter;
 
@@ -204,14 +216,19 @@ void main()
     float beamRatio = volumetricScattering / float(u_volumetricSteps);
     vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * u_beamRatioFactor) * roomFalloff * edgeFade;
 
-    // --- MIX FINALE ---
+    // --- MIX FINALE (IL SEGRETO DELLA TORCIA DOMINANTE) ---
     float roomLightOcclusion = (1.0 - shadowRoom);
     float flashLightOcclusion = (1.0 - shadowFlash);
 
+    // Illuminazione base della stanza (esatta come la volevi tu, niente cali di grigio)
     vec3 litRoom = (albedo * bumpRoom * ((ao * u_aoFactor) + (roomSpotIntensity * u_roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
 
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
-    vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
+
+    // FLASHLIGHT OVERDRIVE: Moltiplichiamo brutalmente la forza della torcia per x5.0.
+    // Questa forza additiva massiccia "cancellerà" visivamente l'ombra della stanza quando ci punti sopra.
+    float overdrive = 5.0;
+    vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * overdrive) * flashLightOcclusion * flashColor;
 
     vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;
 

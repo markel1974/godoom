@@ -31,10 +31,6 @@ uniform float u_flashConeEnd;
 uniform int u_enableShadows;
 uniform sampler2D u_emissiveMap;
 
-// --- Pura Proiezione Vettoriale HW ---
-// Rimosso normal e lightDirViewSpace, non servono per il test di profondità nativo.
-// --- FUNZIONE SHADOW MAPPING ---
-// Reintroduciamo normal e lightDir per calcolare un micro-bias adattivo
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, vec3 normal, vec3 lightDir) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
@@ -45,9 +41,12 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, vec3 
         return 0.0;
     }
 
-    // Micro-bias adattivo: più la luce è parallela al muro, maggiore è la protezione necessaria
     float ndotl = clamp(dot(normal, lightDir), 0.0, 1.0);
-    float bias = max(0.005 * (1.0 - ndotl), 0.0005);
+
+    // FIX: Bias ridotto di 10 volte.
+    // Ora lo scarto massimo è di ~2 unità mondo, sufficienti a pulire le striature
+    // del PCF senza causare scollamenti visibili alla base dei muri.
+    float bias = max(0.0008 * (1.0 - ndotl), 0.0001);
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
@@ -56,7 +55,6 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, vec3 
     // PCF Bilineare
     for(int x = -1; x <= 1; ++x) {
         for(int y = -1; y <= 1; ++y) {
-            // Sottraiamo il bias per evitare che i sample adiacenti "sbattano" contro il muro
             shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize * 1.5, currentDepth - bias));
         }
     }

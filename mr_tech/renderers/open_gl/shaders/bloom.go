@@ -1,6 +1,8 @@
 package shaders
 
 import (
+	"fmt"
+
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
@@ -13,23 +15,31 @@ type BloomLoc int
 const (
 	BloomLocImage = BloomLoc(iota)
 	BloomLocHorizontal
+	BloomLocPassage
 	BloomLocLast
 )
 
 // Bloom is a struct that encapsulates data and methods for managing bloom post-processing effects in a graphics engine.
 type Bloom struct {
-	prg         uint32
-	table       [BloomLocLast]int32
-	pingPongFbo [2]uint32
-	pingPongTex [2]uint32
-	width       int32
-	height      int32
-	vao         uint32
-	vbo         uint32
+	prg              uint32
+	table            [BloomLocLast]int32
+	pingPongFbo      [2]uint32
+	pingPongTex      [2]uint32
+	width            int32
+	height           int32
+	hvPassages       int32
+	internalPassages int32
+	vao              uint32
+	vbo              uint32
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
-func NewBloom() *Bloom { return &Bloom{} }
+func NewBloom() *Bloom {
+	return &Bloom{
+		hvPassages:       5, //passaggi orizzontali e verticali
+		internalPassages: 3,
+	}
+}
 
 // Setup initializes the Bloom structure with the specified width and height values.
 func (s *Bloom) Setup(width, height int32) {
@@ -73,6 +83,12 @@ func (s *Bloom) Compile(a IAssets) error {
 
 	s.table[BloomLocImage] = gl.GetUniformLocation(s.prg, gl.Str("image\x00"))
 	s.table[BloomLocHorizontal] = gl.GetUniformLocation(s.prg, gl.Str("horizontal\x00"))
+	s.table[BloomLocPassage] = gl.GetUniformLocation(s.prg, gl.Str("u_passages\x00"))
+	for _, v := range s.table {
+		if v < 0 {
+			return fmt.Errorf("invalid uniform location: %d", v)
+		}
+	}
 
 	gl.GenFramebuffers(2, &s.pingPongFbo[0])
 	gl.GenTextures(2, &s.pingPongTex[0])
@@ -101,9 +117,8 @@ func (s *Bloom) Render(brightTex uint32) uint32 {
 
 	horizontal := true
 	firstIteration := true
-	const amount = 10 // 5 passaggi orizzontali, 5 verticali
 
-	for i := 0; i < amount; i++ {
+	for i := int32(0); i < s.hvPassages; i++ {
 		idx := 0
 		if !horizontal {
 			idx = 1
@@ -115,6 +130,7 @@ func (s *Bloom) Render(brightTex uint32) uint32 {
 			val = 1
 		}
 		gl.Uniform1i(s.table[BloomLocHorizontal], val)
+		gl.Uniform1i(s.table[BloomLocPassage], s.internalPassages)
 
 		gl.ActiveTexture(gl.TEXTURE0)
 		if firstIteration {

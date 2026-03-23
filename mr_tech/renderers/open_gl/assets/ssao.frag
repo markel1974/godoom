@@ -10,9 +10,9 @@ uniform sampler2D u_texNoise;
 uniform vec3 u_samples[64];
 uniform mat4 u_projection;
 
-int kernelSize = 64;
-float radius = 16.0;
-float bias = 0.5;
+uniform int u_kernelSize;
+uniform float u_radius;
+uniform float u_bias;
 
 void main() {
     vec3 fragPos = texture(u_position, TexCoords).xyz;
@@ -36,9 +36,9 @@ void main() {
     mat3 TBN       = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.0;
-    for(int i = 0; i < kernelSize; ++i) {
+    for(int i = 0; i < u_kernelSize; ++i) {
         vec3 samplePos = TBN * u_samples[i];
-        samplePos = fragPos + samplePos * radius;
+        samplePos = fragPos + samplePos * u_radius;
 
         vec4 offset = vec4(samplePos, 1.0);
         offset = u_projection * offset;
@@ -51,10 +51,10 @@ void main() {
         // Calcoliamo la distanza assoluta e usiamo un falloff decrescente da 1.0 a 0.0.
         // Se la differenza supera il radius, l'occlusione diventa un perfetto 0.0 senza sbavature.
         float depthDiff = abs(fragPos.z - sampleDepth);
-        float rangeCheck = smoothstep(1.0, 0.0, depthDiff / radius);
+        float rangeCheck = smoothstep(1.0, 0.0, depthDiff / u_radius);
 
-        occlusion += (sampleDepth >= samplePos.z + bias ? 1.0 : 0.0) * rangeCheck;
+        occlusion += (sampleDepth >= samplePos.z + u_bias ? 1.0 : 0.0) * rangeCheck;
     }
 
-    FragColor = 1.0 - (occlusion / kernelSize);
+    FragColor = 1.0 - (occlusion / u_kernelSize);
 }

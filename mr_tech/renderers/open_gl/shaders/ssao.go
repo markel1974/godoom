@@ -19,35 +19,46 @@ type SSAOLoc int
 // ShaderSSAOLocLast marks the end of the SSAOLoc constants.
 const (
 	SSAOLocPosition = SSAOLoc(iota)
-	SSAOLocGNormal
+	SSAOLocNormal
 	SSAOLocTexNoise
 	SSAOLocSamples
 	SSAOLocProjection
+	SSAOLocKernelSize
+	SSAOLocRadius
+	SSAOLocBias
 	SSAOLocLast
 )
 
 // SSAO represents a shader implementation for Screen Space Ambient Occlusion (SSAO).
 type SSAO struct {
-	prg             uint32
-	table           [SSAOLocLast]int32
-	width           int32
-	height          int32
-	ssaoNoiseTex    uint32    // Texture di rumore 4x4
-	ssaoKernel      []float32 // 64 campioni vec3
-	bufferFbo       uint32
-	positionDepth   uint32
-	normal          uint32
-	ssaoFbo         uint32
-	ssaoColorBuffer uint32
-	ssaoBlurTexture uint32
-	ssaoBlurFbo     uint32
-	proj            [16]float32
+	prg              uint32
+	table            [SSAOLocLast]int32
+	width            int32
+	height           int32
+	noiseTex         uint32    // Texture di rumore 4x4
+	kernel           []float32 // 64 campioni vec3
+	noiseTextureSize int32
+	bufferFbo        uint32
+	positionDepth    uint32
+	kernelSize       int32
+	radius           float32
+	bias             float32
+	normal           uint32
+	fbo              uint32
+	colorBuffer      uint32
+	blurTexture      uint32
+	blurFbo          uint32
+	proj             [16]float32
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.
 func NewSSAO() *SSAO {
 	return &SSAO{
-		prg: 0,
+		prg:              0,
+		kernelSize:       64,
+		noiseTextureSize: 4 * 4,
+		radius:           16.0,
+		bias:             0.5,
 	}
 }
 
@@ -62,10 +73,12 @@ func (s *SSAO) SetupSamplers() {
 	// Setup SSAO Samplers
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
-	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
+	gl.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
 	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
-
-	gl.Uniform3fv(s.GetUniform(SSAOLocSamples), 64, &s.ssaoKernel[0])
+	gl.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, &s.kernel[0])
+	gl.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
+	gl.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
+	gl.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
 }
 
 // GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.
@@ -75,12 +88,12 @@ func (s *SSAO) GetGBufferTextures() (uint32, uint32) {
 
 // GetSSAOResources returns the ID of the texture containing the SSAO noise pattern.
 func (s *SSAO) GetSSAOResources() uint32 {
-	return s.ssaoNoiseTex
+	return s.noiseTex
 }
 
 // GetSSAOBlurTexture returns the texture ID of the blurred SSAO texture used in the rendering pipeline.
 func (s *SSAO) GetSSAOBlurTexture() uint32 {
-	return s.ssaoBlurTexture
+	return s.blurTexture
 }
 
 // GetProgram returns the OpenGL program identifier associated with the SSAO instance.
@@ -119,10 +132,14 @@ func (s *SSAO) Compile(a IAssets) error {
 		return err
 	}
 	s.table[SSAOLocPosition] = gl.GetUniformLocation(s.prg, gl.Str("u_position\x00"))
-	s.table[SSAOLocGNormal] = gl.GetUniformLocation(s.prg, gl.Str("u_normal\x00"))
+	s.table[SSAOLocNormal] = gl.GetUniformLocation(s.prg, gl.Str("u_normal\x00"))
 	s.table[SSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("u_texNoise\x00"))
 	s.table[SSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("u_samples\x00"))
 	s.table[SSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
+	s.table[SSAOLocKernelSize] = gl.GetUniformLocation(s.prg, gl.Str("u_kernelSize\x00"))
+	s.table[SSAOLocRadius] = gl.GetUniformLocation(s.prg, gl.Str("u_radius\x00"))
+	s.table[SSAOLocBias] = gl.GetUniformLocation(s.prg, gl.Str("u_bias\x00"))
+
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -131,11 +148,6 @@ func (s *SSAO) Compile(a IAssets) error {
 	if err = s.createKernel(); err != nil {
 		return err
 	}
-
-	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
-	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
-	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
 
 	return nil
 }
@@ -173,55 +185,54 @@ func (s *SSAO) createBuffers(width int32, height int32) error {
 	gl.DrawBuffers(2, &attachments[0])
 
 	// 2. SSAO FBO
-	gl.GenFramebuffers(1, &s.ssaoFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoFbo)
-	gl.GenTextures(1, &s.ssaoColorBuffer)
-	gl.BindTexture(gl.TEXTURE_2D, s.ssaoColorBuffer)
+	gl.GenFramebuffers(1, &s.fbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
+	gl.GenTextures(1, &s.colorBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.ssaoColorBuffer, 0)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.colorBuffer, 0)
 
 	// 3. SSAO Blur FBO
-	gl.GenFramebuffers(1, &s.ssaoBlurFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoBlurFbo)
-	gl.GenTextures(1, &s.ssaoBlurTexture)
-	gl.BindTexture(gl.TEXTURE_2D, s.ssaoBlurTexture)
+	gl.GenFramebuffers(1, &s.blurFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
+	gl.GenTextures(1, &s.blurTexture)
+	gl.BindTexture(gl.TEXTURE_2D, s.blurTexture)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.ssaoBlurTexture, 0)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.blurTexture, 0)
 
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	return nil
 }
 
-// createKernel generates a 64-sample SSAO kernel and initializes a 4x4 noise texture used in ambient occlusion rendering.
+// createKernel generates the kernel samples and noise texture required for performing SSAO calculations.
 func (s *SSAO) createKernel() error {
-	// --- 4. SSAO: GENERAZIONE KERNEL (64 campioni) ---
-	s.ssaoKernel = make([]float32, 64*3)
-	for i := 0; i < 64; i++ {
+	s.kernel = make([]float32, s.kernelSize*3)
+	for i := int32(0); i < s.kernelSize; i++ {
 		sample := [3]float32{
-			rnd.Float32()*2.0 - 1.0,
-			rnd.Float32()*2.0 - 1.0,
+			(rnd.Float32() * 2.0) - 1.0,
+			(rnd.Float32() * 2.0) - 1.0,
 			rnd.Float32(), // Emisfero orientato verso Z+
 		}
 		// Normalizzazione
 		mag := float32(math.Sqrt(float64(sample[0]*sample[0] + sample[1]*sample[1] + sample[2]*sample[2])))
-		z := float32(i) / 64.0
+		z := float32(i) / float32(s.kernelSize)
 		scale := 0.1 + (z*z)*(1.0-0.1) // Lerp per concentrare i campioni vicino all'origine
-		s.ssaoKernel[i*3] = (sample[0] / mag) * scale
-		s.ssaoKernel[i*3+1] = (sample[1] / mag) * scale
-		s.ssaoKernel[i*3+2] = (sample[2] / mag) * scale
+		s.kernel[i*3] = (sample[0] / mag) * scale
+		s.kernel[i*3+1] = (sample[1] / mag) * scale
+		s.kernel[i*3+2] = (sample[2] / mag) * scale
 	}
 
 	// --- 5. SSAO: GENERAZIONE NOISE TEXTURE (4x4) ---
-	noiseData := make([]float32, 16*3)
-	for i := 0; i < 16; i++ {
+	noiseData := make([]float32, s.noiseTextureSize*3)
+	for i := int32(0); i < s.noiseTextureSize; i++ {
 		noiseData[i*3] = rnd.Float32()*2.0 - 1.0
 		noiseData[i*3+1] = rnd.Float32()*2.0 - 1.0
 		noiseData[i*3+2] = 0.0
 	}
 
-	gl.GenTextures(1, &s.ssaoNoiseTex)
-	gl.BindTexture(gl.TEXTURE_2D, s.ssaoNoiseTex)
+	gl.GenTextures(1, &s.noiseTex)
+	gl.BindTexture(gl.TEXTURE_2D, s.noiseTex)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB32F, 4, 4, 0, gl.RGB, gl.FLOAT, gl.Ptr(noiseData))
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
@@ -247,7 +258,7 @@ func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
 func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
 	gl.UseProgram(s.GetProgram())
@@ -257,16 +268,16 @@ func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
 	gl.ActiveTexture(gl.TEXTURE1)
 	gl.BindTexture(gl.TEXTURE_2D, s.normal)
 	gl.ActiveTexture(gl.TEXTURE2)
-	gl.BindTexture(gl.TEXTURE_2D, s.ssaoNoiseTex)
+	gl.BindTexture(gl.TEXTURE_2D, s.noiseTex)
 
 	gl.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
 	drawScreenQuad()
 
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.ssaoBlurFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
 	gl.UseProgram(blurPgr)
 	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, s.ssaoColorBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
 	drawScreenQuad()
 }

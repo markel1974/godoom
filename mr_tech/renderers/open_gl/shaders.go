@@ -78,8 +78,8 @@ func (w *Shaders) ToggleShadows() {
 func (w *Shaders) SetShadowEnabled(v bool) {
 	w.enableShadows = v
 	if w.enableShadows {
-		w.flashOffsetX = 2.0
-		w.flashOffsetY = -1.0
+		w.flashOffsetX = 0.1
+		w.flashOffsetY = -0.05
 	} else {
 		w.flashOffsetX = 0.0
 		w.flashOffsetY = 0.0
@@ -178,8 +178,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 
 	// Se c'è movimento, la torcia oscilla in ritardo rispetto alla testa
 	if w.enableShadows {
-		swayX += float32(math.Cos(bob*0.5) * 1.2)       // Oscillazione laterale lenta
-		swayY -= float32(math.Abs(math.Sin(bob)) * 0.8) // Rimbalzo pesante verso il basso a ogni passo
+		swayX += float32(math.Cos(bob*0.5) * 1.1)       // Oscillazione laterale lenta
+		swayY -= float32(math.Abs(math.Sin(bob)) * 1.2) // Rimbalzo pesante verso il basso a ogni passo
 	}
 
 	roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(vi, pX, pY, swayX, swayY)

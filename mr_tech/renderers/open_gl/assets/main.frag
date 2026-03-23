@@ -31,6 +31,16 @@ uniform float u_flashConeEnd;
 uniform int u_enableShadows;
 uniform sampler2D u_emissiveMap;
 
+uniform float u_emissiveIntensity;
+uniform float u_shininessWall;
+uniform float u_shininessFloor;
+uniform float u_specBoostWall;
+uniform float u_specBoostFloor;
+uniform float u_beamRatioFactor;
+uniform float u_aoFactor;
+uniform float u_roomSpotIntensityFactor;
+uniform int u_volumetricSteps;
+
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
@@ -153,10 +163,8 @@ void main()
     float NdotH_flash = length(H_flash) > 0.0001 ? max(dot(finalNormal, normalize(H_flash)), 0.0) : 0.0;
 
     float isHorizontal = step(0.8, abs(finalNormal.y));
-    // Stringiamo il lobo (128/64) e abbattiamo la riflettanza (0.05/0.1)
-    // per simulare cemento, pietra e metallo ruvido.
-    float shininess = mix(128.0, 64.0, isHorizontal);
-    float specBoost = mix(0.05, 0.1, isHorizontal);
+    float shininess = mix(u_shininessWall, u_shininessFloor, isHorizontal);
+    float specBoost = mix(u_specBoostWall, u_specBoostFloor, isHorizontal);
     float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
     float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);
 
@@ -167,10 +175,9 @@ void main()
 
     // --- RAYMARCHING VOLUMETRICO ---
     float volumetricScattering = 0.0;
-    const int STEPS = 16;
-    vec3 rayStep = ViewPos / float(STEPS);
+    vec3 rayStep = ViewPos / float(u_volumetricSteps);
     vec3 currentPos = rayStep * 0.5;
-    for(int i = 0; i < STEPS; i++) {
+    for(int i = 0; i < u_volumetricSteps; i++) {
         vec3 toLight = LightCenterView - currentPos;
         vec3 lDir = normalize(toLight);
         float cosTheta = dot(-lDir, spotDirRoom);
@@ -179,30 +186,28 @@ void main()
         currentPos += rayStep;
     }
 
-    float beamRatio = volumetricScattering / float(STEPS);
-    float beamRatioFactor = 0.05;
+    float beamRatio = volumetricScattering / float(u_volumetricSteps);
+    //float u_beamRatioFactor = 0.05;
     // APPLICA L'EDGE FADE AL RAGGIO: Evita che il fascio di luce si tronchi di netto se il muro dietro viene scartato
-    vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * beamRatioFactor) * roomFalloff * edgeFade;
+    vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * u_beamRatioFactor) * roomFalloff * edgeFade;
 
     // --- MIX FINALE ---
-    float aoFactor = 0.3;
-    float roomSpotIntensityFactor = 1.7;
     float roomLightOcclusion = (1.0 - shadowRoom);
     float flashLightOcclusion = (1.0 - shadowFlash);
 
-    vec3 litRoom = (albedo * bumpRoom * ((ao * aoFactor) + (roomSpotIntensity * roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
+    vec3 litRoom = (albedo * bumpRoom * ((ao * u_aoFactor) + (roomSpotIntensity * u_roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
 
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
 
     vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;
-    float emissiveIntensity = 15.0;
+    //float emissiveIntensity = 15.0;
 
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;
 
     // APPLICA L'EDGE FADE ALL'EMISSIVE: Impedisce al Bloom del neon/fuoco di "poppare" quando lo sprite esce dallo schermo
-    linearColor += (emissive * emissiveIntensity) * edgeFade;
+    linearColor += (emissive * u_emissiveIntensity) * edgeFade;
 
     FragColor = vec4(linearColor, texColor.a);
     float brightness = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));

@@ -47,6 +47,15 @@ const (
 	MainLocEnableShadows
 	MainLocFlashOffset
 	MainLocEmissiveMap
+	MainLocEmissiveIntensity
+	MainLocShininessWall // Nuove locazioni
+	MainLocShininessFloor
+	MainLocSpecBoostWall
+	MainLocSpecBoostFloor
+	MainLocBeamRatioFactor
+	MainLocAoFactor
+	MainLocRoomSpotIntensityFactor
+	MainLocVolumetricSteps
 	MainLocLast
 )
 
@@ -61,23 +70,45 @@ type Main struct {
 	flashFactor float32
 
 	// Cache Uniformi
-	view             [16]float32
-	proj             [16]float32
-	roomSpaceMatrix  [16]float32
-	flashSpaceMatrix [16]float32
-	ambientLight     float32
-	flashDirY        float32
-	enableShadows    int32
-	flashOffsetX     float32
-	flashOffsetY     float32
+	view                    [16]float32
+	proj                    [16]float32
+	roomSpaceMatrix         [16]float32
+	flashSpaceMatrix        [16]float32
+	ambientLight            float32
+	flashDirY               float32
+	enableShadows           int32
+	flashOffsetX            float32
+	flashOffsetY            float32
+	flashConeStart          float32
+	flashConeEnd            float32
+	shininessWall           float32
+	shininessFloor          float32
+	specBoostWall           float32
+	specBoostFloor          float32
+	emissiveIntensity       float32
+	beamRatioFactor         float32
+	aoFactor                float32
+	roomSpotIntensityFactor float32
+	volumetricSteps         int32
 }
 
 // NewMain initializes and returns a new instance of Main with default parameters.
 func NewMain() *Main {
 	return &Main{
-		prg:           0,
-		flashFactor:   0.0,
-		enableShadows: 0,
+		prg:                     0,
+		flashFactor:             0.0,
+		flashConeStart:          0.60,
+		flashConeEnd:            0.90,
+		enableShadows:           0,
+		shininessWall:           128.0,
+		shininessFloor:          64.0,
+		specBoostWall:           0.05,
+		specBoostFloor:          0.1,
+		emissiveIntensity:       15.0,
+		beamRatioFactor:         0.05,
+		aoFactor:                0.3,
+		roomSpotIntensityFactor: 1.7,
+		volumetricSteps:         32,
 	}
 }
 
@@ -110,6 +141,13 @@ func (s *Main) SetupSamplers() {
 func (s *Main) Setup(width int32, height int32) {
 	s.width = width
 	s.height = height
+}
+
+func (s *Main) SetMaterialParams(shWall, shFloor, sbWall, sbFloor float32) {
+	s.shininessWall = shWall
+	s.shininessFloor = shFloor
+	s.specBoostWall = sbWall
+	s.specBoostFloor = sbFloor
 }
 
 // GetProgram returns the OpenGL program ID associated with the Main instance.
@@ -165,6 +203,16 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocFlashShadowMap] = gl.GetUniformLocation(s.prg, gl.Str("u_flashShadowMap\x00"))
 	s.table[MainLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
 	s.table[MainLocEmissiveMap] = gl.GetUniformLocation(s.prg, gl.Str("u_emissiveMap\x00"))
+	s.table[MainLocEmissiveIntensity] = gl.GetUniformLocation(s.prg, gl.Str("u_emissiveIntensity\x00"))
+	s.table[MainLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
+	s.table[MainLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
+	s.table[MainLocSpecBoostWall] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostWall\x00"))
+	s.table[MainLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
+	s.table[MainLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
+	s.table[MainLocAoFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_aoFactor\x00"))
+	s.table[MainLocRoomSpotIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_roomSpotIntensityFactor\x00"))
+	s.table[MainLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
+
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -238,12 +286,21 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 	gl.Uniform2f(s.GetUniform(MainLocScreenResolution), float32(s.width), float32(s.height))
 	gl.Uniform3f(s.GetUniform(MainLocFlashDir), 0.0, s.flashDirY, -1.0)
 	gl.Uniform1f(s.GetUniform(MainLocFlashIntensityFactor), s.flashFactor)
-	gl.Uniform1f(s.GetUniform(MainLocFlashConeStart), 0.60)
-	gl.Uniform1f(s.GetUniform(MainLocFlashConeEnd), 0.90)
+	gl.Uniform1f(s.GetUniform(MainLocFlashConeStart), s.flashConeStart)
+	gl.Uniform1f(s.GetUniform(MainLocFlashConeEnd), s.flashConeEnd)
 	gl.Uniform1i(s.GetUniform(MainLocEnableShadows), s.enableShadows)
 	gl.Uniform3f(s.GetUniform(MainLocFlashOffset), s.flashOffsetX, s.flashOffsetY, 0.0)
+	gl.Uniform1f(s.GetUniform(MainLocShininessWall), s.shininessWall)
+	gl.Uniform1f(s.GetUniform(MainLocShininessFloor), s.shininessFloor)
+	gl.Uniform1f(s.GetUniform(MainLocSpecBoostWall), s.specBoostWall)
+	gl.Uniform1f(s.GetUniform(MainLocSpecBoostFloor), s.specBoostFloor)
 	gl.UniformMatrix4fv(s.GetUniform(MainLocRoomSpaceMatrix), 1, false, &s.roomSpaceMatrix[0])
 	gl.UniformMatrix4fv(s.GetUniform(MainLocFlashSpaceMatrix), 1, false, &s.flashSpaceMatrix[0])
+	gl.Uniform1f(s.GetUniform(MainLocEmissiveIntensity), s.emissiveIntensity)
+	gl.Uniform1f(s.GetUniform(MainLocBeamRatioFactor), s.beamRatioFactor)
+	gl.Uniform1f(s.GetUniform(MainLocAoFactor), s.aoFactor)
+	gl.Uniform1f(s.GetUniform(MainLocRoomSpotIntensityFactor), s.roomSpotIntensityFactor)
+	gl.Uniform1i(s.GetUniform(MainLocVolumetricSteps), s.volumetricSteps)
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)

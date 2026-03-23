@@ -18,7 +18,7 @@ type SSAOLoc int
 // ShaderSSAOLocProjection represents the location of the projection matrix attribute in the SSAO shader.
 // ShaderSSAOLocLast marks the end of the SSAOLoc constants.
 const (
-	SSAOLocGPosition = SSAOLoc(iota)
+	SSAOLocPosition = SSAOLoc(iota)
 	SSAOLocGNormal
 	SSAOLocTexNoise
 	SSAOLocSamples
@@ -34,9 +34,9 @@ type SSAO struct {
 	height          int32
 	ssaoNoiseTex    uint32    // Texture di rumore 4x4
 	ssaoKernel      []float32 // 64 campioni vec3
-	gBufferFbo      uint32
-	gPositionDepth  uint32
-	gNormal         uint32
+	bufferFbo       uint32
+	positionDepth   uint32
+	normal          uint32
 	ssaoFbo         uint32
 	ssaoColorBuffer uint32
 	ssaoBlurTexture uint32
@@ -61,7 +61,7 @@ func (s *SSAO) Setup(width int32, height int32) {
 func (s *SSAO) SetupSamplers() {
 	// Setup SSAO Samplers
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(SSAOLocGPosition), 0)
+	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
 	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
 	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
 
@@ -70,7 +70,7 @@ func (s *SSAO) SetupSamplers() {
 
 // GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.
 func (s *SSAO) GetGBufferTextures() (uint32, uint32) {
-	return s.gPositionDepth, s.gNormal
+	return s.positionDepth, s.normal
 }
 
 // GetSSAOResources returns the ID of the texture containing the SSAO noise pattern.
@@ -118,11 +118,11 @@ func (s *SSAO) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	s.table[SSAOLocGPosition] = gl.GetUniformLocation(s.prg, gl.Str("gPosition\x00"))
-	s.table[SSAOLocGNormal] = gl.GetUniformLocation(s.prg, gl.Str("gNormal\x00"))
-	s.table[SSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("texNoise\x00"))
-	s.table[SSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("samples\x00"))
-	s.table[SSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("projection\x00"))
+	s.table[SSAOLocPosition] = gl.GetUniformLocation(s.prg, gl.Str("u_position\x00"))
+	s.table[SSAOLocGNormal] = gl.GetUniformLocation(s.prg, gl.Str("u_normal\x00"))
+	s.table[SSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("u_texNoise\x00"))
+	s.table[SSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("u_samples\x00"))
+	s.table[SSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -133,7 +133,7 @@ func (s *SSAO) Compile(a IAssets) error {
 	}
 
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(SSAOLocGPosition), 0)
+	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
 	gl.Uniform1i(s.GetUniform(SSAOLocGNormal), 1)
 	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
 
@@ -143,24 +143,24 @@ func (s *SSAO) Compile(a IAssets) error {
 // createBuffers initializes and configures framebuffer objects and textures required for SSAO rendering.
 func (s *SSAO) createBuffers(width int32, height int32) error {
 	// 1. G-Buffer
-	gl.GenFramebuffers(1, &s.gBufferFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.gBufferFbo)
+	gl.GenFramebuffers(1, &s.bufferFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
 
 	// Position + Depth (RGBA16F per precisione spaziale)
-	gl.GenTextures(1, &s.gPositionDepth)
-	gl.BindTexture(gl.TEXTURE_2D, s.gPositionDepth)
+	gl.GenTextures(1, &s.positionDepth)
+	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.gPositionDepth, 0)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.positionDepth, 0)
 
 	// Normals
-	gl.GenTextures(1, &s.gNormal)
-	gl.BindTexture(gl.TEXTURE_2D, s.gNormal)
+	gl.GenTextures(1, &s.normal)
+	gl.BindTexture(gl.TEXTURE_2D, s.normal)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.gNormal, 0)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.normal, 0)
 
 	// Aggiungi il Depth Renderbuffer
 	var rboDepth uint32
@@ -233,7 +233,7 @@ func (s *SSAO) createKernel() error {
 
 // Prepare initializes the framebuffer and clears buffers to set up for SSAO rendering.
 func (s *SSAO) Prepare() {
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.gBufferFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
 	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -253,9 +253,9 @@ func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
 	gl.UseProgram(s.GetProgram())
 
 	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, s.gPositionDepth)
+	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
 	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D, s.gNormal)
+	gl.BindTexture(gl.TEXTURE_2D, s.normal)
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, s.ssaoNoiseTex)
 

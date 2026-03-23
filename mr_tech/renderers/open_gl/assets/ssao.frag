@@ -3,23 +3,23 @@ out float FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D gPosition;
-uniform sampler2D gNormal;
-uniform sampler2D texNoise;
+uniform sampler2D u_position;
+uniform sampler2D u_normal;
+uniform sampler2D u_texNoise;
 
-uniform vec3 samples[64];
-uniform mat4 projection;
+uniform vec3 u_samples[64];
+uniform mat4 u_projection;
 
 int kernelSize = 64;
 float radius = 16.0;
 float bias = 0.5;
 
 void main() {
-    vec3 fragPos = texture(gPosition, TexCoords).xyz;
-    vec3 normal  = normalize(texture(gNormal, TexCoords).rgb);
+    vec3 fragPos = texture(u_position, TexCoords).xyz;
+    vec3 normal  = normalize(texture(u_normal, TexCoords).rgb);
 
-    vec2 noiseScale = vec2(textureSize(gPosition, 0)) / 4.0;
-    vec3 randomVec = normalize(texture(texNoise, TexCoords * noiseScale).rgb);
+    vec2 noiseScale = vec2(textureSize(u_position, 0)) / 4.0;
+    vec3 randomVec = normalize(texture(u_texNoise, TexCoords * noiseScale).rgb);
 
     // 1. PROTEZIONE ANTI-NaN: Evita i buchi neri geometrici se i vettori sono paralleli
     vec3 tangent = randomVec - normal * dot(randomVec, normal);
@@ -37,15 +37,15 @@ void main() {
 
     float occlusion = 0.0;
     for(int i = 0; i < kernelSize; ++i) {
-        vec3 samplePos = TBN * samples[i];
+        vec3 samplePos = TBN * u_samples[i];
         samplePos = fragPos + samplePos * radius;
 
         vec4 offset = vec4(samplePos, 1.0);
-        offset = projection * offset;
+        offset = u_projection * offset;
         offset.xyz /= offset.w;
         offset.xyz = offset.xyz * 0.5 + 0.5;
 
-        float sampleDepth = texture(gPosition, offset.xy).z;
+        float sampleDepth = texture(u_position, offset.xy).z;
 
         // 2. FIX ALONI NERI: Inversione logica del Range Check
         // Calcoliamo la distanza assoluta e usiamo un falloff decrescente da 1.0 a 0.0.

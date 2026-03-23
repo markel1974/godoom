@@ -33,17 +33,21 @@ uniform sampler2D u_emissiveMap;
 
 // --- Pura Proiezione Vettoriale HW ---
 // Rimosso normal e lightDirViewSpace, non servono per il test di profondità nativo.
-float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap) {
+// --- FUNZIONE SHADOW MAPPING ---
+// Reintroduciamo normal e lightDir per calcolare un micro-bias adattivo
+float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, vec3 normal, vec3 lightDir) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
-    // DELEGA HARDWARE: Rimosso il clipping su X e Y.
-    // L'hardware campiona il GL_CLAMP_TO_BORDER restituendo 1.0 (nessuna ombra) oltre i bordi.
     if(projCoords.z > 1.0) {
         return 0.0;
     }
+
+    // Micro-bias adattivo: più la luce è parallela al muro, maggiore è la protezione necessaria
+    float ndotl = clamp(dot(normal, lightDir), 0.0, 1.0);
+    float bias = max(0.005 * (1.0 - ndotl), 0.0005);
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
@@ -52,7 +56,8 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap) {
     // PCF Bilineare
     for(int x = -1; x <= 1; ++x) {
         for(int y = -1; y <= 1; ++y) {
-            shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth));
+            // Sottraiamo il bias per evitare che i sample adiacenti "sbattano" contro il muro
+            shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize * 1.5, currentDepth - bias));
         }
     }
 
@@ -126,9 +131,12 @@ void main()
     // --- CALCOLO OMBRE ---
     float shadowRoom = 0.0;
     float shadowFlash = 0.0;
+    // Usiamo la normale geometrica nuda per un bias stabile senza subire i bump della normal map
+
     if (u_enableShadows == 1) {
-        shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap);
-        shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap);
+        vec3 geoNormal = normalize(NormalView);
+        shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap, geoNormal, L_room_point);
+        shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap, geoNormal, L_flash);
     }
 
     // --- ILLUMINAZIONE E RIFLESSI ---

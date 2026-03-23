@@ -1,8 +1,6 @@
 package engine
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -107,19 +105,9 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 
 	// 6. Post-Sync ViewMatrix
 	vi.Update(player)
-
 	// 7. Portal Compute
 	cs, count := e.portal.Compute(vi)
-
 	return cs, count, e.things.GetThings()
-}
-
-func (e *Engine) ComputeReverse(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
-	player.AddAngle(math.Pi)
-	vi.Update(player)
-	cs, count := e.portal.Compute(vi)
-	player.AddAngle(-math.Pi)
-	return cs, count
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.

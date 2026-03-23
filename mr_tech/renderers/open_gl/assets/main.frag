@@ -70,7 +70,7 @@ void main()
     if(texColor.a < 0.5) discard;
 
     // FIX: Converti da sRGB a Spazio Lineare
-    vec3 albedo = pow(texColor.rgb, vec3(1.5));
+    vec3 albedo = pow(texColor.rgb, vec3(2.2));
 
     // --- EDGE FADE CINEMATICO ---
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
@@ -142,11 +142,9 @@ void main()
         // Il vettore verso la luce è -spotDirRoom
         float ndotlRoom = clamp(dot(geoNormal, -spotDirRoom), 0.0, 1.0);
         float roomBias = max(0.002 * (1.0 - ndotlRoom), 0.0005);
-
         // 2. Bias logaritmico per proiezione Prospettica (la luce proviene da L_flash)
         float ndotlFlash = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
         float flashBias = max(0.002 * (1.0 - ndotlFlash), 0.0005);
-
         shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
@@ -154,10 +152,6 @@ void main()
     // --- ILLUMINAZIONE E RIFLESSI ---
     float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
-    //const float wrap = 0.2;
-    //float diffFlash = max((dot(finalNormal, L_flash) + wrap) / (1.0 + wrap), 0.0);
-
-    //float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
     vec3 V = normalize(-ViewPos);
     vec3 H_room = L_room_point + V;

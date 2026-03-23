@@ -19,7 +19,8 @@ const (
 	PostLocExposure
 	PostLocContrast
 	PostLocSaturation
-	ShaderPostLocBloomBlur
+	PostLocBloomBlur
+	PostLocBloomIntensity
 	PostLocLast
 )
 
@@ -36,17 +37,21 @@ type Post struct {
 	vao             uint32
 	vbo             uint32
 
-	Exposure   float32
-	Contrast   float32
-	Saturation float32
+	exposure       float32
+	contrast       float32
+	saturation     float32
+	bloomIntensity float32
+	bloomBlur      int32
 }
 
 // NewPost initializes and returns a pointer to a Post with predefined Exposure, Contrast, and Saturation values.
 func NewPost() *Post {
 	return &Post{
-		Exposure:   1.1,  // Ridotto da 1.2 per compensare l'HDR
-		Contrast:   1.05, // Aumentato da 1.05 per neri più intensi
-		Saturation: 1.0,
+		exposure:       1.1,  // Ridotto da 1.2 per compensare l'HDR
+		contrast:       1.05, // Aumentato da 1.05 per neri più intensi
+		saturation:     1.0,
+		bloomIntensity: 0.05,
+		bloomBlur:      1.0,
 	}
 }
 
@@ -100,7 +105,13 @@ func (s *Post) Compile(a IAssets) error {
 	s.table[PostLocExposure] = gl.GetUniformLocation(s.prg, gl.Str("u_exposure\x00"))
 	s.table[PostLocContrast] = gl.GetUniformLocation(s.prg, gl.Str("u_contrast\x00"))
 	s.table[PostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
-	s.table[ShaderPostLocBloomBlur] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomBlur\x00"))
+	s.table[PostLocBloomIntensity] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomIntensity\x00"))
+	s.table[PostLocBloomBlur] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomBlur\x00"))
+	for _, v := range s.table {
+		if v < 0 {
+			return fmt.Errorf("invalid uniform location: %d", v)
+		}
+	}
 
 	gl.GenFramebuffers(1, &s.fbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
@@ -146,14 +157,15 @@ func (s *Post) Render(bloomTex uint32) {
 	gl.Disable(gl.DEPTH_TEST)
 
 	gl.UseProgram(s.prg)
-	gl.Uniform1f(s.table[PostLocExposure], s.Exposure)
-	gl.Uniform1f(s.table[PostLocContrast], s.Contrast)
-	gl.Uniform1f(s.table[PostLocSaturation], s.Saturation)
+	gl.Uniform1f(s.table[PostLocExposure], s.exposure)
+	gl.Uniform1f(s.table[PostLocContrast], s.contrast)
+	gl.Uniform1f(s.table[PostLocSaturation], s.saturation)
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, s.texColorBuffer)
 
-	gl.Uniform1i(s.table[ShaderPostLocBloomBlur], 1)
+	gl.Uniform1f(s.table[PostLocBloomIntensity], s.bloomIntensity)
+	gl.Uniform1i(s.table[PostLocBloomBlur], s.bloomBlur)
 	gl.ActiveTexture(gl.TEXTURE1)
 	gl.BindTexture(gl.TEXTURE_2D, bloomTex)
 

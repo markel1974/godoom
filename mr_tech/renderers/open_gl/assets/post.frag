@@ -7,6 +7,7 @@ uniform sampler2D u_bloomBlur;
 uniform float u_exposure;
 uniform float u_contrast;
 uniform float u_saturation;
+uniform float u_bloomIntensity;
 
 // Curva ACES Filmic
 vec3 ACESFilm(vec3 x) {
@@ -17,8 +18,8 @@ void main() {
     vec3 color = texture(u_hdrBuffer, TexCoords).rgb;
     vec3 bloom = texture(u_bloomBlur, TexCoords).rgb;
 
-    const float bloomIntensity = 0.05;
-    color += (bloom * bloomIntensity);
+    //const float bloomIntensity = 0.05;
+    color += (bloom * u_bloomIntensity);
 
     // Additive Blend in spazio lineare puro
     color += bloom;

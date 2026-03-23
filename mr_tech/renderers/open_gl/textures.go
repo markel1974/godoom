@@ -54,7 +54,9 @@ func (w *Textures) Setup(t textures.ITextures) error {
 		gl.GenerateMipmap(gl.TEXTURE_2D)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameterf(gl.TEXTURE_2D, 0x84FE, 4.0)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+		gl.TexParameterf(gl.TEXTURE_2D, 0x84FE, 8.0)
 
 		// --- 2. GENERAZIONE NORMALI (Sobel Filter) ---
 		normPixels := make([]uint8, len(pixels))

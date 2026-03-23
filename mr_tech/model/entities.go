@@ -50,13 +50,10 @@ func (em *Entities) Compute() []IThing {
 		for x := 0; x < em.counter; x++ {
 			thing := em.moving[x]
 			ent := thing.GetEntity()
-			overlaps := em.tree.QueryOverlaps(thing)
-
-			// Inside Phase 2: Iterative Solver
-			for _, overlapObj := range overlaps {
-				otherThing, ok := overlapObj.(IThing)
+			em.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
+				otherThing, ok := object.(IThing)
 				if !ok || otherThing == thing {
-					continue
+					return false
 				}
 				otherEnt := otherThing.GetEntity()
 
@@ -64,7 +61,7 @@ func (em *Entities) Compute() []IThing {
 				// If otherEnt is stationary (sleeping), it's up to the active body (ent) to resolve the collision for both.
 				otherIsActive := otherEnt.Vx != 0 || otherEnt.Vy != 0
 				if otherIsActive && thing.GetIdentifier() > otherThing.GetIdentifier() {
-					continue
+					return false
 				}
 
 				distance := ent.Distance(otherEnt)
@@ -76,7 +73,8 @@ func (em *Entities) Compute() []IThing {
 					em.tree.UpdateObject(otherEnt)
 					isStable = false
 				}
-			}
+				return false
+			})
 		}
 
 		// Early Exit: if the scene no longer presents overlaps, the solver stops saving CPU
@@ -85,11 +83,6 @@ func (em *Entities) Compute() []IThing {
 		}
 	}
 	return em.moving[:em.counter]
-}
-
-// QueryCollisions retrieves a list of IAABB objects from the spatial AABBTree that overlap with the specified entity.
-func (em *Entities) QueryCollisions(ent IThing) []physics.IAABB {
-	return em.tree.QueryOverlaps(ent)
 }
 
 // UpdateThing updates the position of the given IThing and adjusts its spatial data in the AABBTree.

@@ -11,7 +11,6 @@ type AABBTree struct {
 	nextFreeNodeIndex  uint
 	nodeCapacity       uint
 	growthSize         uint
-	overlaps           []IAABB
 	stack              []uint
 }
 
@@ -27,7 +26,6 @@ func NewAABBTree(initialSize uint) *AABBTree {
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
 		nodes:              make([]*AABBNode, initialSize),
-		overlaps:           make([]IAABB, initialSize),
 		objectNodeIndexMap: make(map[IAABB]uint),
 		stack:              make([]uint, 0, 256),
 	}
@@ -52,8 +50,6 @@ func (a *AABBTree) allocateNode() (uint, *AABBNode) {
 		nodes := make([]*AABBNode, a.nodeCapacity)
 		copy(nodes, a.nodes)
 		a.nodes = nodes
-
-		a.overlaps = make([]IAABB, a.nodeCapacity)
 
 		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
 			node := NewAABBNode()
@@ -121,8 +117,7 @@ func (a *AABBTree) UpdateObject(object IAABB) {
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
-func (a *AABBTree) QueryOverlaps(object IAABB) []IAABB {
-	counter := 0
+func (a *AABBTree) QueryOverlaps(object IAABB, f func(object IAABB) bool) {
 	testAabb := object.GetAABB()
 	a.stack = a.stack[:0]
 	a.stack = append(a.stack, a.rootNodeIndex)
@@ -132,24 +127,16 @@ func (a *AABBTree) QueryOverlaps(object IAABB) []IAABB {
 		lastIdx := len(a.stack) - 1
 		nodeIndex := a.stack[lastIdx]
 		a.stack = a.stack[:lastIdx]
-
 		if nodeIndex == AABBNullNode {
 			continue
 		}
-
 		node := a.nodes[nodeIndex]
-
 		if node.aabb.Overlaps(testAabb) {
 			if node.IsLeaf() {
 				if node.object != object {
-					if counter >= len(a.overlaps) {
-						newOverlaps := make([]IAABB, len(a.overlaps)*2)
-						copy(newOverlaps, a.overlaps)
-						a.overlaps = newOverlaps
+					if f(node.object) {
+						break
 					}
-
-					a.overlaps[counter] = node.object
-					counter++
 				}
 			} else {
 				// Push dei nodi figli
@@ -158,13 +145,10 @@ func (a *AABBTree) QueryOverlaps(object IAABB) []IAABB {
 			}
 		}
 	}
-
-	return a.overlaps[:counter]
 }
 
 // QueryPoint searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
-func (a *AABBTree) QueryPoint(px, py float64) []IAABB {
-	counter := 0
+func (a *AABBTree) QueryPoint(px, py float64, f func(object IAABB) bool) {
 	a.stack = a.stack[:0]
 	a.stack = append(a.stack, a.rootNodeIndex)
 
@@ -181,18 +165,9 @@ func (a *AABBTree) QueryPoint(px, py float64) []IAABB {
 
 		if node.aabb.QueryPoint(px, py) {
 			if node.IsLeaf() {
-				if counter >= len(a.overlaps) {
-					newCap := len(a.overlaps) * 2
-					if newCap == 0 {
-						newCap = 8 // Bootstrapping minimo
-					}
-					newOverlaps := make([]IAABB, newCap)
-					copy(newOverlaps, a.overlaps)
-					a.overlaps = newOverlaps
+				if f(node.object) {
+					break
 				}
-
-				a.overlaps[counter] = node.object
-				counter++
 			} else {
 				a.stack = append(a.stack, node.leftNodeIndex)
 				a.stack = append(a.stack, node.rightNodeIndex)
@@ -200,16 +175,10 @@ func (a *AABBTree) QueryPoint(px, py float64) []IAABB {
 		}
 	}
 
-	return a.overlaps[:counter]
 }
 
 // insertLeaf inserts a new leaf node with the given index into the AABB tree, adjusting the tree structure as needed.
 func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
-	// make sure we're inserting a new leaf
-	//assert(a.nodes[leafNodeIndex].parentNodeIndex == AABBNullNode)
-	//assert(a.nodes[leafNodeIndex].leftNodeIndex == AABBNullNode)
-	//assert(a.nodes[leafNodeIndex].rightNodeIndex == AABBNullNode)
-
 	// if the tree is empty, then we make the root the leaf
 	if a.rootNodeIndex == AABBNullNode {
 		a.rootNodeIndex = leafNodeIndex
@@ -222,7 +191,6 @@ func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
 	leafNode := a.nodes[leafNodeIndex]
 
 	for !a.nodes[treeNodeIndex].IsLeaf() {
-		//while !a.nodes[treeNodeIndex].isLeaf() {
 		// because of the test in the while loop above, we know we are never a leaf inside it
 		treeNode := a.nodes[treeNodeIndex]
 		leftNodeIndex := treeNode.leftNodeIndex
@@ -318,8 +286,6 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 	} else {
 		siblingNodeIndex = parentNode.leftNodeIndex
 	}
-	//parentNode.leftNodeIndex == leafNodeIndex ? parentNode.rightNodeIndex : parentNode.leftNodeIndex
-	//assert(siblingNodeIndex != AABBNullNode) // we must have a sibling
 	siblingNode := a.nodes[siblingNodeIndex]
 
 	if grandParentNodeIndex != AABBNullNode {
@@ -349,12 +315,10 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 // It removes the leaf, updates its AABB, and reinserts it into the tree.
 func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	node := a.nodes[leafNodeIndex]
-
 	// Branch Prediction amichevole: nel 99% dei frame le entità restano nel loro Fat Margin
 	if node.aabb.Contains(newAABB) {
 		return
 	}
-
 	// Boundary violato: mutazione dell'albero necessaria
 	a.removeLeaf(leafNodeIndex)
 	node.aabb = newAABB.Expand(aabbMargin) // Rigenera il Fat Margin centrato sulla nuova posizione
@@ -365,9 +329,6 @@ func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
 	for treeNodeIndex != AABBNullNode {
 		treeNode := a.nodes[treeNodeIndex]
-
-		// every node should be a parent
-		//assert(treeNode.leftNodeIndex != AABBNullNode && treeNode.rightNodeIndex != AABBNullNode)
 
 		// fix height and area
 		leftNode := a.nodes[treeNode.leftNodeIndex]

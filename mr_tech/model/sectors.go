@@ -58,30 +58,34 @@ func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 
 // QueryOverlap performs an AABB overlap query to locate a Sector containing the point (px, py) or returns nil if not found.
 func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
-	candidates := s.tree.QueryOverlaps(aabb)
-	for _, c := range candidates {
-		sector, ok := c.(*Sector)
+	var target *Sector = nil
+	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
+		sector, ok := object.(*Sector)
 		if !ok {
-			continue
+			return false
 		}
-		if target := sector.LocatePoint(px, py); target != nil {
-			return target
+		if t1 := sector.LocatePoint(px, py); target != t1 {
+			target = t1
+			return true
 		}
-	}
-	return nil
+		return false
+	})
+	return target
 }
 
 // QueryPoint performs a spatial query to determine if a point (px, py) lies within any sector and returns the matching Sector.
 func (s *Sectors) QueryPoint(px, py float64) *Sector {
-	candidates := s.tree.QueryPoint(px, py)
-	for _, c := range candidates {
-		if sector, ok := c.(*Sector); ok {
+	var target *Sector = nil
+	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
+		if sector, ok := object.(*Sector); ok {
 			if sector.ContainsPoint(px, py) {
-				return sector
+				target = sector
+				return true
 			}
 		}
-	}
-	return nil
+		return false
+	})
+	return target
 }
 
 // MakeSegmentsCache builds a map of edgeKey to segment, representing all unique segments in the sectors.

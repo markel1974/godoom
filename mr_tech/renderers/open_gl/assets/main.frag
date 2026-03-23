@@ -42,6 +42,14 @@ uniform float u_aoFactor;
 uniform float u_roomSpotIntensityFactor;
 uniform int u_volumetricSteps;
 
+const float PI = 3.14159265359;
+
+// Generatore pseudo-random per Dithering (Jittering)
+float randomNoise(vec2 co) {
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// FIX 1: Ombre stocastiche morbide (Vogel Disk)
 float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
 
@@ -54,14 +62,20 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     float shadow = 0.0;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
 
-    // Sottrazione del bias dinamico per abbattere il self-shadowing di prossimità
-    for(int x = -1; x <= 1; ++x) {
-        for(int y = -1; y <= 1; ++y) {
-            shadow += texture(shadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize * 1.5, currentDepth - bias));
-        }
+    const int SAMPLES = 16;
+    const float GOLDEN_ANGLE = 2.39996323;
+    float noise = randomNoise(gl_FragCoord.xy) * 6.2831853; // Rotazione random per pixel
+    float spread = 2.0; // Raggio di sfocatura (aumenta per ombre più morbide)
+
+    for(int i = 0; i < SAMPLES; ++i) {
+        float r = sqrt(float(i) + 0.5) / sqrt(float(SAMPLES));
+        float theta = float(i) * GOLDEN_ANGLE + noise;
+        vec2 offset = vec2(cos(theta), sin(theta)) * r * spread;
+
+        shadow += texture(shadowMap, vec3(projCoords.xy + offset * texelSize, currentDepth - bias));
     }
 
-    return 1.0 - (shadow / 9.0);
+    return 1.0 - (shadow / float(SAMPLES));
 }
 
 void main()
@@ -69,18 +83,15 @@ void main()
     vec4 texColor = texture(u_texture, TexCoords);
     if(texColor.a < 0.5) discard;
 
-    // FIX: Converti da sRGB a Spazio Lineare
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
 
-    // --- EDGE FADE CINEMATICO ---
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
-    // Sfuma dolcemente la luce nel primo e nell'ultimo 8% dello schermo orizzontale
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 
     vec2 ssaoCoords = gl_FragCoord.xy / u_screenResolution;
     float ao = texture(u_ssao, ssaoCoords).r;
 
-    // --- VETTORI DI ILLUMINAZIONE ---
+    // --- VETTORI DI ILLUMINAZIONE (Stanza) ---
     vec3 L_room_point = normalize(LightCenterView - ViewPos);
     vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, -1.0, 0.0));
 
@@ -92,7 +103,7 @@ void main()
 
     float roomSpotIntensity = max(directSpot, bounceSpot);
 
-    // Torcia: Uso dell'Uniform Parametrica
+    // --- VETTORI DI ILLUMINAZIONE (Torcia) ---
     vec3 flashPosView = u_flashOffset;
     vec3 L_flash = normalize(flashPosView - ViewPos);
 
@@ -100,7 +111,7 @@ void main()
     float cosThetaFlash = dot(-L_flash, viewFront);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, cosThetaFlash);
 
-    // --- NORMALI E GUARDIE ANTI-NaN ---
+    // --- NORMALI ---
     vec3 finalNormal = NormalView;
     if (dot(finalNormal, finalNormal) < 0.01) {
         finalNormal = vec3(0.0, 1.0, 0.0);
@@ -134,17 +145,15 @@ void main()
     // --- CALCOLO OMBRE ---
     float shadowRoom = 0.0;
     float shadowFlash = 0.0;
-    // Usiamo la normale geometrica nuda per un bias stabile senza subire i bump della normal map
 
     if (u_enableShadows == 1) {
         vec3 geoNormal = normalize(NormalView);
-        // 1. Bias lineare per proiezione Ortografica (la luce viaggia lungo spotDirRoom)
-        // Il vettore verso la luce è -spotDirRoom
         float ndotlRoom = clamp(dot(geoNormal, -spotDirRoom), 0.0, 1.0);
         float roomBias = max(0.002 * (1.0 - ndotlRoom), 0.0005);
-        // 2. Bias logaritmico per proiezione Prospettica (la luce proviene da L_flash)
+
         float ndotlFlash = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
         float flashBias = max(0.002 * (1.0 - ndotlFlash), 0.0005);
+
         shadowRoom = ShadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         shadowFlash = ShadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
@@ -163,9 +172,13 @@ void main()
     float isHorizontal = step(0.8, abs(finalNormal.y));
     float shininess = mix(u_shininessWall, u_shininessFloor, isHorizontal);
     float specBoost = mix(u_specBoostWall, u_specBoostFloor, isHorizontal);
-    float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
-    float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);
 
+    // FIX 2: Normalizzazione dell'energia di Blinn-Phong
+    float energyConservation = (shininess + 2.0) / (8.0 * PI);
+    float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0) * energyConservation;
+    float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0) * energyConservation;
+
+    // --- LUCE DI DISTANZA (Falloff) ---
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
@@ -174,7 +187,11 @@ void main()
     // --- RAYMARCHING VOLUMETRICO ---
     float volumetricScattering = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
-    vec3 currentPos = rayStep * 0.5;
+
+    // FIX 3: Jittering per distruggere il banding volumetrico
+    float jitter = randomNoise(gl_FragCoord.xy);
+    vec3 currentPos = rayStep * jitter;
+
     for(int i = 0; i < u_volumetricSteps; i++) {
         vec3 toLight = LightCenterView - currentPos;
         vec3 lDir = normalize(toLight);
@@ -185,7 +202,6 @@ void main()
     }
 
     float beamRatio = volumetricScattering / float(u_volumetricSteps);
-    // APPLICA L'EDGE FADE AL RAGGIO: Evita che il fascio di luce si tronchi di netto se il muro dietro viene scartato
     vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * u_beamRatioFactor) * roomFalloff * edgeFade;
 
     // --- MIX FINALE ---
@@ -202,7 +218,6 @@ void main()
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;
 
-    // APPLICA L'EDGE FADE ALL'EMISSIVE: Impedisce al Bloom del neon/fuoco di "poppare" quando lo sprite esce dallo schermo
     linearColor += (emissive * u_emissiveIntensity) * edgeFade;
 
     FragColor = vec4(linearColor, texColor.a);

@@ -44,9 +44,9 @@ type Post struct {
 // NewPost initializes and returns a pointer to a Post with predefined Exposure, Contrast, and Saturation values.
 func NewPost() *Post {
 	return &Post{
-		Exposure:   1.2,
-		Contrast:   1.05,
-		Saturation: 1.1,
+		Exposure:   1.1,  // Ridotto da 1.2 per compensare l'HDR
+		Contrast:   1.05, // Aumentato da 1.05 per neri più intensi
+		Saturation: 1.0,
 	}
 }
 

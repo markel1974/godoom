@@ -47,7 +47,7 @@ func NewShaders() *Shaders {
 		shaderDepth:    shaders.NewDepth(),
 		shaderPost:     shaders.NewPost(),
 		shaderBloom:    shaders.NewBloom(),
-		flashFactor:    3.0,
+		flashFactor:    15.0,
 		flashOffsetX:   0.0,
 		flashOffsetY:   0.0,
 		enableShadows:  false,

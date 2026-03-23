@@ -143,6 +143,7 @@ void main()
     // --- ILLUMINAZIONE E RIFLESSI ---
     float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
     float diffFlash = max(dot(finalNormal, L_flash) * 0.5 + 0.5, 0.0);
+    //float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
     vec3 V = normalize(-ViewPos);
     vec3 H_room = L_room_point + V;
@@ -152,10 +153,13 @@ void main()
     float NdotH_flash = length(H_flash) > 0.0001 ? max(dot(finalNormal, normalize(H_flash)), 0.0) : 0.0;
 
     float isHorizontal = step(0.8, abs(finalNormal.y));
-    float shininess = mix(64.0, 48.0, isHorizontal);
-    float specBoost = mix(0.6, 0.8, isHorizontal);
+    // Stringiamo il lobo (128/64) e abbattiamo la riflettanza (0.05/0.1)
+    // per simulare cemento, pietra e metallo ruvido.
+    float shininess = mix(128.0, 64.0, isHorizontal);
+    float specBoost = mix(0.05, 0.1, isHorizontal);
     float specularRoom = clamp(pow(NdotH_room, shininess) * specBoost, 0.0, 1.0);
     float specularFlash = clamp(pow(NdotH_flash, shininess) * specBoost, 0.0, 1.0);
+
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
     float roomFalloff = exp(-FragDepth * decayRate * 0.1);
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
@@ -202,5 +206,5 @@ void main()
 
     FragColor = vec4(linearColor, texColor.a);
     float brightness = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));
-    BrightColor = vec4(brightness > 1.0 ? linearColor : vec3(0.0), 1.0);
+    BrightColor = vec4(brightness > 3.0 ? linearColor : vec3(0.0), 1.0);
 }

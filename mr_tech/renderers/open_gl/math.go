@@ -8,7 +8,7 @@ import (
 
 // CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
-	const zNearFlash, zFarFlash = 0.1, 2048.0
+	const zNearFlash, zFarFlash = 1, 2048.0
 
 	// --- 1. PROIEZIONE STANZA (Ortografica Direzionale) ---
 	// Incrementato a 1280.0. Copre un'area colossale di 2560x2560 unità.

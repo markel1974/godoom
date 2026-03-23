@@ -37,6 +37,7 @@ const (
 	MainLocFlashIntensityFactor
 	MainLocFlashConeStart
 	MainLocFlashConeEnd
+	MainLocFlashBase
 	MainLocTexture
 	MainLocNormalMap
 	MainLocSSAO // Allineato al tuo codice
@@ -81,6 +82,7 @@ type Main struct {
 	flashOffsetY            float32
 	flashConeStart          float32
 	flashConeEnd            float32
+	flashBase               float32
 	shininessWall           float32
 	shininessFloor          float32
 	specBoostWall           float32
@@ -99,6 +101,7 @@ func NewMain() *Main {
 		flashFactor:             0.0,
 		flashConeStart:          0.60,
 		flashConeEnd:            0.90,
+		flashBase:               0.9,
 		enableShadows:           0,
 		shininessWall:           128.0,
 		shininessFloor:          64.0,
@@ -194,6 +197,7 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
 	s.table[MainLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
 	s.table[MainLocFlashOffset] = gl.GetUniformLocation(s.prg, gl.Str("u_flashOffset\x00"))
+	s.table[MainLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
 	s.table[MainLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
 	s.table[MainLocNormalMap] = gl.GetUniformLocation(s.prg, gl.Str("u_normalMap\x00"))
 	s.table[MainLocSSAO] = gl.GetUniformLocation(s.prg, gl.Str("u_ssao\x00"))
@@ -288,6 +292,7 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 	gl.Uniform1f(s.GetUniform(MainLocFlashIntensityFactor), s.flashFactor)
 	gl.Uniform1f(s.GetUniform(MainLocFlashConeStart), s.flashConeStart)
 	gl.Uniform1f(s.GetUniform(MainLocFlashConeEnd), s.flashConeEnd)
+	gl.Uniform1f(s.GetUniform(MainLocFlashBase), s.flashBase)
 	gl.Uniform1i(s.GetUniform(MainLocEnableShadows), s.enableShadows)
 	gl.Uniform3f(s.GetUniform(MainLocFlashOffset), s.flashOffsetX, s.flashOffsetY, 0.0)
 	gl.Uniform1f(s.GetUniform(MainLocShininessWall), s.shininessWall)

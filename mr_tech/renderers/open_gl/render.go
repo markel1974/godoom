@@ -43,6 +43,8 @@ type RenderOpenGL struct {
 	debug       bool
 	debugIdx    int
 
+	bobPhase float64
+
 	shaders *Shaders
 	tex     *Textures
 	builder *BatchBuilder
@@ -65,6 +67,7 @@ func NewOpenGLRender() *RenderOpenGL {
 		shaders:       NewShaders(),
 		builder:       NewBatchBuilder(tex),
 		tex:           tex,
+		bobPhase:      0.0,
 	}
 	return r
 }
@@ -263,6 +266,13 @@ func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 // doPlayerMoves moves the player based on the provided impulse and directional flags (up, down, left, right).
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
 	w.player.Move(impulse, up, down, left, right)
+
+	// Modulazione della fase basata sul moto reale
+	if up || down || left || right {
+		w.bobPhase += impulse * 15.0 // Frequenza del passo
+	} else {
+		w.bobPhase *= 0.85 // Smorzamento critico verso l'origine
+	}
 }
 
 // doPlayerMouseMove adjusts the player's angle and yaw based on mouse movement, clamping the values within a defined offset range.

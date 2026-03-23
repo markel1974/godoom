@@ -28,6 +28,7 @@ uniform float u_flashIntensityFactor;
 uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
+uniform float u_flashBase;
 uniform int u_enableShadows;
 uniform sampler2D u_emissiveMap;
 
@@ -152,7 +153,10 @@ void main()
 
     // --- ILLUMINAZIONE E RIFLESSI ---
     float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
-    float diffFlash = max(dot(finalNormal, L_flash) * 0.5 + 0.5, 0.0);
+    float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
+    //const float wrap = 0.2;
+    //float diffFlash = max((dot(finalNormal, L_flash) + wrap) / (1.0 + wrap), 0.0);
+
     //float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
     vec3 V = normalize(-ViewPos);

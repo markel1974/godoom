@@ -1,5 +1,7 @@
 package model
 
+import "math"
+
 // HFov represents the horizontal field of view in radians.
 // VFov represents the vertical field of view in radians.
 // NearZ defines the near clipping plane distance in a 3D view.
@@ -24,6 +26,7 @@ type ViewMatrix struct {
 	yaw            float64
 	lightIntensity float64
 	sector         *Sector
+	bobPhase       float64
 }
 
 // NewViewMatrix creates and returns a new instance of ViewMatrix with default values.
@@ -38,7 +41,15 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()
-
+	vx, vy := player.GetVelocity()
+	if speed := math.Sqrt(vx*vx + vy*vy); speed > 0.05 {
+		vi.bobPhase += speed * 0.7 // Frequenza dei passi legata alla velocità reale
+	} else {
+		vi.bobPhase *= 0.85 // Smorzamento elastico quando ti fermi
+	}
+	// Applica l'oscillazione verticale (es. ampiezza di 1.5 unità mondo).
+	// Stiamo alterando vi.where.Z senza toccare il player.GetXYZ()!
+	vi.where.Z += math.Sin(vi.bobPhase) * 0.9
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewMatrix's position and orientation.
@@ -105,4 +116,8 @@ func (vi *ViewMatrix) ComputeYaw(y float64, z float64) float64 {
 // ZDistance calculates the distance between the given value and the Z-coordinate of the ViewMatrix's position.
 func (vi *ViewMatrix) ZDistance(v float64) float64 {
 	return v - vi.where.Z
+}
+
+func (vi *ViewMatrix) GetBobPhase() float64 {
+	return vi.bobPhase
 }

@@ -171,8 +171,21 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	}
 
 	// Aggiornamento Stato (CPU)
-	roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(vi, pX, pY, w.flashOffsetX, w.flashOffsetY)
-	proj, view := w.shaderMain.UpdateUniforms(vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows, w.flashOffsetX, w.flashOffsetY)
+
+	bob := vi.GetBobPhase()
+	swayX := w.flashOffsetX
+	swayY := w.flashOffsetY
+
+	// Se c'è movimento, la torcia oscilla in ritardo rispetto alla testa
+	if w.enableShadows {
+		swayX += float32(math.Cos(bob*0.5) * 1.2)       // Oscillazione laterale lenta
+		swayY -= float32(math.Abs(math.Sin(bob)) * 0.8) // Rimbalzo pesante verso il basso a ogni passo
+	}
+
+	roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(vi, pX, pY, swayX, swayY)
+	proj, view := w.shaderMain.UpdateUniforms(vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows, swayX, swayY)
+	w.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
+
 	w.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
 	w.shaderGeometry.UpdateUniforms(view, proj)
 	w.shaderSSAO.UpdateUniforms(view, proj)

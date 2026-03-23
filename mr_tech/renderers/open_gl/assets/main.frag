@@ -187,7 +187,6 @@ void main()
     }
 
     float beamRatio = volumetricScattering / float(u_volumetricSteps);
-    //float u_beamRatioFactor = 0.05;
     // APPLICA L'EDGE FADE AL RAGGIO: Evita che il fascio di luce si tronchi di netto se il muro dietro viene scartato
     vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * u_beamRatioFactor) * roomFalloff * edgeFade;
 
@@ -201,7 +200,6 @@ void main()
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * flashIntensity * flashLightOcclusion * flashColor;
 
     vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;
-    //float emissiveIntensity = 15.0;
 
     vec3 linearColor = max(litRoom + litFlash, 0.0);
     linearColor += beamColor;

@@ -57,8 +57,8 @@ func NewSSAO() *SSAO {
 		prg:              0,
 		kernelSize:       64,
 		noiseTextureSize: 4 * 4,
-		radius:           16.0,
-		bias:             0.5,
+		radius:           3.0,
+		bias:             0.025,
 	}
 }
 

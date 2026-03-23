@@ -222,7 +222,7 @@ void main()
 
     // 1. Sollevamento del Black-Point in Spazio Lineare
     // Il clamp inferiore (0.02) garantisce che le zone d'ombra non collassino allo zero assoluto (RGB 0,0,0)
-    float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.02);
+    float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.15);
 
     // 2. Disaccoppiamento Radianza Ambientale vs Direzionale
     // L'ambient base decade più dolcemente per preservare i dettagli nei volumi in penombra

@@ -12,8 +12,8 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	const zNearFlash, zFarFlash = 1.0, 2048.0
 
 	// --- 1. PROIEZIONE STANZA (Ortografica Direzionale) ---
-	const orthoSize = 1280.0
-	const zNearRoom, zFarRoom = 1.0, 8192.0 // Frustum esteso
+	const orthoSize = 640.0
+	const zNearRoom, zFarRoom = 1.0, 8192.0
 
 	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
@@ -28,12 +28,10 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
 	// lY a 4096.0 impedisce il near-plane clipping dei soffitti
-	lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY)
-
-	// Tilt matrix (0.02) elimina la Zero-Area Projection per i muri perfettamente verticali
+	lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY) // Telecamera altissima per non tagliare i soffitti
 	roomView := [16]float32{
 		1, 0, 0, 0,
-		0.02, 0.02, 1, 0,
+		0.02, 0.02, 1, 0, // TILT: Inclinazione impercettibile per dare area d'ombra ai muri
 		0, -1, 0, 0,
 		-lX, lZ, -lY, 1,
 	}

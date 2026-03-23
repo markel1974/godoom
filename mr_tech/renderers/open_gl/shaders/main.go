@@ -107,10 +107,10 @@ func NewMain() *Main {
 		shininessFloor:          64.0,
 		specBoostWall:           0.05,
 		specBoostFloor:          0.1,
-		emissiveIntensity:       15.0,
+		emissiveIntensity:       4.0,
 		beamRatioFactor:         0.05,
-		aoFactor:                0.3,
-		roomSpotIntensityFactor: 1.7,
+		aoFactor:                0.8,
+		roomSpotIntensityFactor: 1.2,
 		volumetricSteps:         32,
 	}
 }

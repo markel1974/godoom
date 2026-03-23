@@ -220,14 +220,21 @@ void main()
     float roomLightOcclusion = (1.0 - shadowRoom);
     float flashLightOcclusion = (1.0 - shadowFlash);
 
-    // Illuminazione base della stanza (esatta come la volevi tu, niente cali di grigio)
-    vec3 litRoom = (albedo * bumpRoom * ((ao * u_aoFactor) + (roomSpotIntensity * u_roomSpotIntensityFactor * roomLightOcclusion)) + vec3(specularRoom * roomSpotIntensity * roomLightOcclusion)) * roomFalloff;
+    // 1. Sollevamento del Black-Point in Spazio Lineare
+    // Il clamp inferiore (0.02) garantisce che le zone d'ombra non collassino allo zero assoluto (RGB 0,0,0)
+    float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.02);
+
+    // 2. Disaccoppiamento Radianza Ambientale vs Direzionale
+    // L'ambient base decade più dolcemente per preservare i dettagli nei volumi in penombra
+    vec3 ambientBase = albedo * bumpRoom * linearAmbient * max(roomFalloff, 0.15);
+    vec3 directRoom = (albedo * bumpRoom * roomSpotIntensity * u_roomSpotIntensityFactor + vec3(specularRoom * roomSpotIntensity)) * roomLightOcclusion * roomFalloff;
+
+    vec3 litRoom = ambientBase + directRoom;
 
     vec3 flashColor = vec3(1.0, 0.98, 0.9);
 
-    // FLASHLIGHT OVERDRIVE: Moltiplichiamo brutalmente la forza della torcia per x5.0.
-    // Questa forza additiva massiccia "cancellerà" visivamente l'ombra della stanza quando ci punti sopra.
-    float overdrive = 5.0;
+    // 3. Torcia Sovrascrivente (Overdrive ricalibrato per flashFactor 3.5)
+    float overdrive = 2.5;
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * overdrive) * flashLightOcclusion * flashColor;
 
     vec3 emissive = texture(u_emissiveMap, TexCoords).rgb;

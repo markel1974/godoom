@@ -57,6 +57,7 @@ const (
 	MainLocAoFactor
 	MainLocRoomSpotIntensityFactor
 	MainLocVolumetricSteps
+	MainLocInvView
 	MainLocLast
 )
 
@@ -92,6 +93,7 @@ type Main struct {
 	aoFactor                float32
 	roomSpotIntensityFactor float32
 	volumetricSteps         int32
+	invView                 [16]float32
 }
 
 // NewMain initializes and returns a new instance of Main with default parameters.
@@ -216,7 +218,7 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocAoFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_aoFactor\x00"))
 	s.table[MainLocRoomSpotIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_roomSpotIntensityFactor\x00"))
 	s.table[MainLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
-
+	s.table[MainLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00"))
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -275,6 +277,9 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 		rZ, 0, -fZ, 0,
 		tx, ty, tz, 1,
 	}
+	if inv, ok := Inverse4x4(s.view); ok {
+		s.invView = inv
+	}
 	return s.proj, s.view
 }
 
@@ -306,6 +311,7 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 	gl.Uniform1f(s.GetUniform(MainLocAoFactor), s.aoFactor)
 	gl.Uniform1f(s.GetUniform(MainLocRoomSpotIntensityFactor), s.roomSpotIntensityFactor)
 	gl.Uniform1i(s.GetUniform(MainLocVolumetricSteps), s.volumetricSteps)
+	gl.UniformMatrix4fv(s.GetUniform(MainLocInvView), 1, false, &s.invView[0])
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)

@@ -41,8 +41,27 @@ uniform float u_beamRatioFactor;
 uniform float u_aoFactor;
 uniform float u_roomSpotIntensityFactor;
 uniform int u_volumetricSteps;
+uniform mat4 u_invView;
+uniform mat4 u_roomSpaceMatrix;
+uniform mat4 u_flashSpaceMatrix;
 
 const float PI = 3.14159265359;
+
+
+// --- FUNZIONI AGGIUNTE ---
+float phaseHG(float cosTheta, float g) {
+    float g2 = g * g;
+    return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+}
+
+float sampleVolumetricShadow(vec3 posView, mat4 lightSpaceMatrix, sampler2DShadow shadowMap) {
+    vec4 worldPos = u_invView * vec4(posView, 1.0);
+    vec4 shadowPos = lightSpaceMatrix * worldPos;
+    vec3 proj = shadowPos.xyz / shadowPos.w;
+    proj = proj * 0.5 + 0.5;
+    if(proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) return 1.0;
+    return texture(shadowMap, vec3(proj.xy, proj.z - 0.005));
+}
 
 float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
@@ -198,23 +217,34 @@ void main()
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
     // --- RAYMARCHING VOLUMETRICO ---
-    float volumetricScattering = 0.0;
+    float volRoom = 0.0;
+    float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
-
+    // Il vettore vista (V) ci serve per la direzione di Scattering
+    vec3 viewDir = normalize(-ViewPos);
     float jitter = randomNoise(gl_FragCoord.xy);
     vec3 currentPos = rayStep * jitter;
-
     for(int i = 0; i < u_volumetricSteps; i++) {
-        vec3 toLight = LightCenterView - currentPos;
-        vec3 lDir = normalize(toLight);
-        float cosTheta = dot(-lDir, spotDirRoom);
-        float inCone = smoothstep(0.30, 0.50, cosTheta);
-        volumetricScattering += inCone;
+        // 1. Scattering Ambientale (Stanza)
+        vec3 lDirRoom = normalize(LightCenterView - currentPos);
+        float cosThetaRoom = dot(-lDirRoom, spotDirRoom);
+        float inConeRoom = smoothstep(0.30, 0.50, cosThetaRoom);
+        if(inConeRoom > 0.01) {
+            float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
+            volRoom += inConeRoom * sRoom * phaseHG(dot(viewDir, -lDirRoom), 0.3);
+        }
+        // 2. Scattering Torcia
+        vec3 lDirFlash = normalize(flashPosView - currentPos); // flashPosView è già noto nello shader!
+        float cosThetaFlash = dot(-lDirFlash, flashSpotDir);   // flashSpotDir è già noto!
+        float inConeFlash = smoothstep(u_flashConeStart, u_flashConeEnd, cosThetaFlash);
+        if(inConeFlash > 0.01) {
+            float sFlash = sampleVolumetricShadow(currentPos, u_flashSpaceMatrix, u_flashShadowMap);
+            volFlash += inConeFlash * sFlash * phaseHG(dot(viewDir, -lDirFlash), 0.5); // G più alto = raggio più marcato guardando la luce
+        }
         currentPos += rayStep;
     }
-
-    float beamRatio = volumetricScattering / float(u_volumetricSteps);
-    vec3 beamColor = vec3(1.0, 0.95, 0.85) * (beamRatio * u_beamRatioFactor) * roomFalloff * edgeFade;
+    float beamRatio = u_beamRatioFactor / float(u_volumetricSteps);
+    vec3 beamColor = (vec3(1.0, 0.95, 0.85) * volRoom + vec3(0.9, 0.95, 1.0) * volFlash) * beamRatio * roomFalloff * edgeFade;
 
     // --- MIX FINALE (IL SEGRETO DELLA TORCIA DOMINANTE) ---
     float roomLightOcclusion = (1.0 - shadowRoom);

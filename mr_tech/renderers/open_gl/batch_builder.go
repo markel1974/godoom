@@ -258,7 +258,6 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		// --- LUCE IDENTICA A PUSH WALL ---
 		light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight())
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---

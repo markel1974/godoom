@@ -23,6 +23,7 @@ type Compiler struct {
 	sectors  *Sectors
 	things   *Things
 	player   *ThingPlayer
+	lights   []*Light
 	entities *Entities
 }
 
@@ -33,6 +34,7 @@ func NewCompiler() *Compiler {
 		things:   nil,
 		player:   nil,
 		entities: nil,
+		lights:   nil,
 	}
 }
 
@@ -46,9 +48,9 @@ func (r *Compiler) Compile(cfg *ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectors(cfg, animations)
+	r.sectors, r.lights, totalSegments = r.compileSectors(cfg, animations)
 
-	r.compileLights(r.sectors)
+	r.compileSectorsLights(r.sectors)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -109,6 +111,11 @@ func (r *Compiler) GetPlayer() *ThingPlayer {
 	return r.player
 }
 
+// GetLights retrieves the list of Light objects managed by the Compiler.
+func (r *Compiler) GetLights() []*Light {
+	return r.lights
+}
+
 // GetSector retrieves a Sector by its ID. Returns an error if the Sector is not found.
 func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 	s := r.sectors.GetSector(sectorId)
@@ -119,9 +126,10 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 }
 
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
-func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, int) {
+func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, []*Light, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
+	var lights []*Light
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
@@ -156,6 +164,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 				lightZ = (cs.FloorY + cs.CeilY) * 1000
 			}
 			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: lightZ})
+			lights = append(lights, s.Light)
 		}
 		container = append(container, s)
 	}
@@ -224,11 +233,11 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 		}
 		fmt.Println("undefined:", undefined, "fixed:", fixed)
 	}
-	return sectors, totalSegments
+	return sectors, lights, totalSegments
 }
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileLights(sectors *Sectors) {
+func (r *Compiler) compileSectorsLights(sectors *Sectors) {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)

@@ -17,6 +17,7 @@ type Engine struct {
 	entities   *model.Entities
 	player     *model.ThingPlayer
 	sectors    *model.Sectors
+	lights     []*model.Light
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -31,6 +32,7 @@ func NewEngine(w int, h int, maxQueue int, viewFactor float64) *Engine {
 		entities:   nil,
 		sectors:    nil,
 		player:     nil,
+		lights:     nil,
 	}
 }
 
@@ -54,6 +56,11 @@ func (e *Engine) GetTextures() textures.ITextures {
 	return e.things.GetTextures()
 }
 
+// GetLights returns the list of Light objects currently managed by the Engine.
+func (e *Engine) GetLights() []*model.Light {
+	return e.lights
+}
+
 // SectorAt returns the sector at the specified index from the portal within the engine.
 func (e *Engine) SectorAt(idx int) *model.Sector {
 	return e.portal.SectorAt(idx)
@@ -74,6 +81,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	e.player = compiler.GetPlayer()
 	e.things = compiler.GetThings()
 	e.entities = compiler.GetEntities()
+	e.lights = compiler.GetLights()
 
 	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue, e.viewFactor)
 	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {

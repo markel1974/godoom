@@ -10,23 +10,6 @@ import (
 // MainLoc represents an identifier for uniform variables in the Main shader program.
 type MainLoc int
 
-// MainLocView represents the location for the view matrix in the shader.
-// MainLocProj represents the location for the projection matrix in the shader.
-// MainLocAmbientLight represents the location for the ambient light in the shader.
-// MainLocProjection represents the location for the projection data in the shader.
-// MainLocScreenResolution represents the location for screen resolution in the shader.
-// MainLocFlashDir represents the location for the flashlight direction in the shader.
-// MainLocFlashIntensityFactor represents the location for the flashlight intensity factor in the shader.
-// MainLocFlashConeStart represents the location for the flashlight cone start in the shader.
-// MainLocFlashConeEnd represents the location for the flashlight cone end in the shader.
-// MainLocTexture represents the location for the texture in the shader.
-// MainLocNormalMap represents the location for the normal map in the shader.
-// MainLocSSAO represents the location for the screen-space ambient occlusion in the shader.
-// MainLocRoomSpaceMatrix represents the location for the room space matrix in the shader.
-// MainLocFlashSpaceMatrix represents the location for the flashlight space matrix in the shader.
-// MainLocRoomShadowMap represents the location for the room shadow map in the shader.
-// MainLocFlashShadowMap represents the location for the flashlight shadow map in the shader.
-// MainLocLast represents the end of the MainLoc enumerations.
 const (
 	MainLocView = MainLoc(iota)
 	MainLocProj
@@ -40,7 +23,7 @@ const (
 	MainLocFlashBase
 	MainLocTexture
 	MainLocNormalMap
-	MainLocSSAO // Allineato al tuo codice
+	MainLocSSAO
 	MainLocRoomSpaceMatrix
 	MainLocFlashSpaceMatrix
 	MainLocRoomShadowMap
@@ -49,7 +32,7 @@ const (
 	MainLocFlashOffset
 	MainLocEmissiveMap
 	MainLocEmissiveIntensity
-	MainLocShininessWall // Nuove locazioni
+	MainLocShininessWall
 	MainLocShininessFloor
 	MainLocSpecBoostWall
 	MainLocSpecBoostFloor
@@ -57,7 +40,7 @@ const (
 	MainLocAoFactor
 	MainLocRoomSpotIntensityFactor
 	MainLocVolumetricSteps
-	MainLocInvView
+	MainLocInvView // <--- Matrice inversa per raymarching
 	MainLocLast
 )
 
@@ -76,6 +59,7 @@ type Main struct {
 	proj                    [16]float32
 	roomSpaceMatrix         [16]float32
 	flashSpaceMatrix        [16]float32
+	invView                 [16]float32 // <--- Matrice inversa allocata in memoria
 	ambientLight            float32
 	flashDirY               float32
 	enableShadows           int32
@@ -93,7 +77,6 @@ type Main struct {
 	aoFactor                float32
 	roomSpotIntensityFactor float32
 	volumetricSteps         int32
-	invView                 [16]float32
 }
 
 // NewMain initializes and returns a new instance of Main with default parameters.
@@ -101,9 +84,9 @@ func NewMain() *Main {
 	return &Main{
 		prg:                     0,
 		flashFactor:             0.0,
-		flashConeStart:          0.60,
-		flashConeEnd:            0.90,
-		flashBase:               0.9,
+		flashConeStart:          0.0,
+		flashConeEnd:            0.0,
+		flashBase:               0.0,
 		enableShadows:           0,
 		shininessWall:           128.0,
 		shininessFloor:          64.0,
@@ -112,12 +95,12 @@ func NewMain() *Main {
 		emissiveIntensity:       4.0,
 		beamRatioFactor:         0.05,
 		aoFactor:                0.8,
-		roomSpotIntensityFactor: 1.2,
+		roomSpotIntensityFactor: 500, //1.2,
 		volumetricSteps:         32,
 	}
 }
 
-// Init initializes the main VAO and VBO for the shader, and allocates buffer data for dynamic drawing.
+// Init initializes the main VAO and VBO for the shader.
 func (s *Main) Init() {
 	const vboMaxFloats = 1024 * 1024 * 4
 
@@ -128,7 +111,7 @@ func (s *Main) Init() {
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
 }
 
-// SetupSamplers configures the shader program's texture samplers with specified uniform locations and texture units.
+// SetupSamplers configures the shader program's texture samplers.
 func (s *Main) SetupSamplers() {
 	gl.UseProgram(s.prg)
 
@@ -142,7 +125,7 @@ func (s *Main) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(MainLocEmissiveMap), 5)
 }
 
-// Setup initializes the width and height properties of the Main instance based on the provided dimensions.
+// Setup initializes the width and height properties of the Main instance.
 func (s *Main) Setup(width int32, height int32) {
 	s.width = width
 	s.height = height
@@ -160,17 +143,17 @@ func (s *Main) GetProgram() uint32 {
 	return s.prg
 }
 
-// GetUniform retrieves the uniform location for the given MainLoc identifier from the predefined lookup table.
+// GetUniform retrieves the uniform location for the given MainLoc identifier.
 func (s *Main) GetUniform(id MainLoc) int32 {
 	return s.table[id]
 }
 
-// GetVao returns the ID of the main Vertex Array Object (VAO) associated with the Main instance.
+// GetVao returns the ID of the main Vertex Array Object (VAO).
 func (s *Main) GetVao() uint32 {
 	return s.mainVao
 }
 
-// Compile initializes, compiles, and links the shaders required for the Main program using provided assets.
+// Compile initializes, compiles, and links the shaders.
 func (s *Main) Compile(a IAssets) error {
 	vertexSrc, fragmentSrc, err := a.ReadMulti("main.vert", "main.frag")
 	if err != nil {
@@ -218,7 +201,7 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocAoFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_aoFactor\x00"))
 	s.table[MainLocRoomSpotIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_roomSpotIntensityFactor\x00"))
 	s.table[MainLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
-	s.table[MainLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00"))
+	s.table[MainLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00")) // Link inversione
 	for _, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location: %d", v)
@@ -227,14 +210,14 @@ func (s *Main) Compile(a IAssets) error {
 	return nil
 }
 
-// Prepare uploads vertex data from the given FrameVertices to the GPU buffer for rendering.
+// Prepare uploads vertex data from the given FrameVertices to the GPU buffer.
 func (s *Main) Prepare(fv []float32, l int) {
 	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVbo)
 	gl.BufferData(gl.ARRAY_BUFFER, l*4, nil, gl.STREAM_DRAW)
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, l*4, gl.Ptr(fv))
 }
 
-// UpdateUniforms updates the shader's uniform variables based on the view matrix and framebuffer dimensions.
+// UpdateUniforms updates the shader's uniform variables and calculates the Inverse View Matrix.
 func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, flashFactor float32, enableShadows bool, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	const near, far = float32(1.0), float32(4096.0)
 	aspect := float32(s.width) / float32(s.height)
@@ -253,10 +236,8 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 	ty := -ey
 	tz := fX*ex + fZ*ez
 
-	s.flashDirY = pitchShear / scaleY
-	s.flashFactor = flashFactor
-	s.flashOffsetX = flashOffsetX
-	s.flashOffsetY = flashOffsetY
+	s.buildFlash(flashFactor, pitchShear/scaleY, flashOffsetX, flashOffsetY)
+
 	s.ambientLight = float32(vi.GetLightIntensity())
 	s.roomSpaceMatrix = roomSpaceMatrix
 	s.flashSpaceMatrix = flashSpaceMatrix
@@ -277,18 +258,19 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 		rZ, 0, -fZ, 0,
 		tx, ty, tz, 1,
 	}
+
+	// Calcolo on-the-fly della matrice inversa (evita cicli in shader)
 	if inv, ok := Inverse4x4(s.view); ok {
 		s.invView = inv
 	}
+
 	return s.proj, s.view
 }
 
-// Render sets up and executes the main rendering pipeline using provided transformation matrices and texture IDs.
+// Render sets up and executes the main rendering pipeline using provided transformation matrices.
 func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
-	//gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.UseProgram(s.GetProgram())
 
-	// Upload differito e isolato
 	gl.UniformMatrix4fv(s.GetUniform(MainLocView), 1, false, &s.view[0])
 	gl.UniformMatrix4fv(s.GetUniform(MainLocProjection), 1, false, &s.proj[0])
 	gl.Uniform1f(s.GetUniform(MainLocAmbientLight), s.ambientLight)
@@ -311,7 +293,7 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 	gl.Uniform1f(s.GetUniform(MainLocAoFactor), s.aoFactor)
 	gl.Uniform1f(s.GetUniform(MainLocRoomSpotIntensityFactor), s.roomSpotIntensityFactor)
 	gl.Uniform1i(s.GetUniform(MainLocVolumetricSteps), s.volumetricSteps)
-	gl.UniformMatrix4fv(s.GetUniform(MainLocInvView), 1, false, &s.invView[0])
+	gl.UniformMatrix4fv(s.GetUniform(MainLocInvView), 1, false, &s.invView[0]) // Upload matrice inversa
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
@@ -324,5 +306,28 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
 		gl.ActiveTexture(gl.TEXTURE4)
 		gl.BindTexture(gl.TEXTURE_2D, flashShadowTex)
+	}
+}
+
+func (s *Main) buildFlash(factor float32, dirY float32, flashOffsetX float32, flashOffsetY float32) {
+	const flashConeStartMax float32 = 0.60
+	const flashConeEndMax float32 = 0.90
+	const flashBaseMax float32 = 0.90
+
+	s.flashDirY = dirY //pitchShear / scaleY
+	s.flashOffsetX = flashOffsetX
+	s.flashOffsetY = flashOffsetY
+
+	s.flashFactor = factor
+
+	if s.flashFactor <= 0.0 {
+		s.flashFactor = 0.0
+		s.flashConeStart = 0.0
+		s.flashConeEnd = 0.0
+		s.flashBase = 0.0
+	} else {
+		s.flashConeStart = flashConeStartMax
+		s.flashConeEnd = flashConeEndMax
+		s.flashBase = flashBaseMax
 	}
 }

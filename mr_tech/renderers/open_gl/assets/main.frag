@@ -139,8 +139,7 @@ float CalculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizon
 // ==========================================================
 // VOLUMETRIC RAYMARCHING
 // ==========================================================
-// FIX: Aggiunto lightCenterVS per elaborare le distanze nello stesso View Space
-vec3 CalculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec3 spotDirRoom, vec3 lightCenterVS, float edgeFade, float distanceFalloff) {
+vec3 CalculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec3 spotDirRoom, float edgeFade, float distanceFalloff) {
     float volRoom = 0.0;
     float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
@@ -152,8 +151,9 @@ vec3 CalculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec
     float normalizedIntensity = clamp(1.0 - (decayRate / 5.0), 0.0, 1.0);
 
     for(int i = 0; i < u_volumetricSteps; i++) {
-        // 1. ROOM: Nebbia ambientale diffusa (calcolata con centro luce corretto)
-        float distToCenter = length(lightCenterVS - currentPos);
+        // 1. ROOM: Nebbia ambientale diffusa
+        // FIX: Usiamo direttamente LightCenterView che è già nello spazio corretto
+        float distToCenter = length(LightCenterView - currentPos);
         float fogGlow = exp(-distToCenter * 0.005) * normalizedIntensity;
 
         float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
@@ -192,14 +192,18 @@ void main()
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
     float ao = texture(u_ssao, screenUV).r;
 
-    // --- FIX SPAZIALE: Da World Space a View Space ---
-    vec3 lightCenterVS = (u_view * vec4(LightCenterView, 1.0)).xyz;
-
-    // Vettori di vista e luce allineati
+    // ==========================================================
+    // FIX ALLINEAMENTO VETTORI
+    // ==========================================================
     vec3 V = normalize(-ViewPos);
-    vec3 L_room_point = normalize(lightCenterVS - ViewPos); // Ora punta saldamente al centro!
-    vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, -1.0, 0.0));
 
+    // 1. Rimuoviamo la doppia trasformazione, LightCenterView è già in View Space!
+    vec3 L_room_point = normalize(LightCenterView - ViewPos);
+
+    // 2. INVERTIAMO il raggio (da -1.0 a 1.0) per capovolgere il cono.
+    vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+
+    // Vettori Torcia
     vec3 flashPosView = u_flashOffset;
     vec3 L_flash = normalize(flashPosView - ViewPos);
     vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
@@ -231,6 +235,11 @@ void main()
     float normalizedIntensity = clamp(1.0 - (decayRate / 5.0), 0.0, 1.0);
     float sectorHdrFactor = 100.0;
     float sectorLightLevel = pow(normalizedIntensity, 2.2) * sectorHdrFactor;
+
+    // ==========================================================
+    // DECADIMENTO PER DISTANZA DISABILITATO (FORZATO A 1.0)
+    // ==========================================================
+    //float roomFalloff = 1.0;
     float roomFalloff = exp(-FragDepth * decayRate * 0.015);
     float finalSectorLight = sectorLightLevel * roomFalloff;
 
@@ -238,8 +247,8 @@ void main()
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
-    // Volumetria (passando il View Space corretto)
-    vec3 beamColor = CalculateVolumetric(V, flashPosView, flashSpotDir, spotDirRoom, lightCenterVS, edgeFade, roomFalloff);
+    // Volumetria
+    vec3 beamColor = CalculateVolumetric(V, flashPosView, flashSpotDir, spotDirRoom, edgeFade, roomFalloff);
 
     // Composizione Finale
     float roomLightOcclusion = (1.0 - shadowRoom);

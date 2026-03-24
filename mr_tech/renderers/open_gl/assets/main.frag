@@ -193,17 +193,14 @@ void main()
     float ao = texture(u_ssao, screenUV).r;
 
     // ==========================================================
-    // FIX ALLINEAMENTO VETTORI
+    // SETUP VETTORIALE
     // ==========================================================
     vec3 V = normalize(-ViewPos);
 
-    // 1. Rimuoviamo la doppia trasformazione, LightCenterView è già in View Space!
-    vec3 L_room_point = normalize(LightCenterView - ViewPos);
+    // Vettore direzionale fisso verso l'alto convertito in View Space
+    vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+    vec3 spotDirRoom = L_room_dir; // Allineato al calcolo direzionale
 
-    // 2. INVERTIAMO il raggio (da -1.0 a 1.0) per capovolgere il cono.
-    vec3 spotDirRoom = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
-
-    // Vettori Torcia
     vec3 flashPosView = u_flashOffset;
     vec3 L_flash = normalize(flashPosView - ViewPos);
     vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
@@ -217,17 +214,19 @@ void main()
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {
         vec3 geoNormal = normalize(NormalView);
-        float roomBias = max(0.002 * (1.0 - clamp(dot(geoNormal, -spotDirRoom), 0.0, 1.0)), 0.0005);
+        // Riduciamo l'ordine di grandezza, il Normal Offset farà il lavoro pesante
+        float roomBias = max(0.0005 * (1.0 - clamp(dot(geoNormal, spotDirRoom), 0.0, 1.0)), 0.0001);
         float flashBias = max(0.005 * (1.0 - clamp(dot(geoNormal, L_flash), 0.0, 1.0)), 0.001);
 
         shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
 
-    // Materiali e Speculari
-    float bumpRoom = (max(dot(finalNormal, L_room_point), 0.0) * 0.2) + 1.0;
+    // Materiali e Speculari accoppiati
+    float bumpRoom = (max(dot(finalNormal, L_room_dir), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
-    float specularRoom = CalculateSpecular(finalNormal, L_room_point, V, isHorizontal);
+    //TODO bug e' sbagliato il calcolo della luce speculare nella stanza
+    float specularRoom = 0.0001;//CalculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
     float specularFlash = CalculateSpecular(finalNormal, L_flash, V, isHorizontal);
 
     // Illuminazione HDR Sector
@@ -236,12 +235,11 @@ void main()
     float sectorHdrFactor = 100.0;
     float sectorLightLevel = pow(normalizedIntensity, 2.2) * sectorHdrFactor;
 
-    // ==========================================================
-    // DECADIMENTO PER DISTANZA DISABILITATO (FORZATO A 1.0)
-    // ==========================================================
-    //float roomFalloff = 1.0;
+    // Falloff forzato a 1.0 per debug
     float roomFalloff = exp(-FragDepth * decayRate * 0.015);
+    //float roomFalloff = 1.0;
     float finalSectorLight = sectorLightLevel * roomFalloff;
+
 
     // Intensità Flashlight
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));

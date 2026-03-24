@@ -293,9 +293,9 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 
 // createLight calculates light level and transformed position for rendering, returning intensity and adjusted position values.
 func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light) (float32, float32, float32, float32) {
-	light := (1.0 - mLight.GetIntensity()) * 5.0
+	lightIntensity := (1.0 - mLight.GetIntensity()) * 5.0
 	lightPos := mLight.GetPos()
-	_, _, liX, liZ := vi.TranslateXY(lightPos.X, lightPos.Y)
-	liY := lightPos.Z - vi.GetZ()
-	return float32(light), float32(liX), float32(liY), float32(-liZ)
+
+	// Trasmissione diretta delle coordinate World (X, Z, -Y)
+	return float32(lightIntensity), float32(lightPos.X), float32(lightPos.Z), float32(-lightPos.Y)
 }

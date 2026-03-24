@@ -95,7 +95,7 @@ func NewMain() *Main {
 		emissiveIntensity:       4.0,
 		beamRatioFactor:         0.05,
 		aoFactor:                0.8,
-		roomSpotIntensityFactor: 1.2, //500
+		roomSpotIntensityFactor: 1.2, //500,
 		volumetricSteps:         32,
 	}
 }

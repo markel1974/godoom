@@ -151,8 +151,8 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	return r.compiledSectors, r.compiledCount
 }
 
-// GetCS retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
-func (r *Portal) GetCS(sector *model.Sector) (*model.CompiledSector, bool) {
+// getCompiledSector retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
+func (r *Portal) getCompiledSector(sector *model.Sector) (*model.CompiledSector, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
 		fmt.Println("OUT OF COMPILED SECTORS!")
@@ -292,7 +292,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 		}
 
 		if cs == nil {
-			if cs, first = r.GetCS(sector); cs == nil {
+			if cs, first = r.getCompiledSector(sector); cs == nil {
 				return nil, 0
 			}
 		}

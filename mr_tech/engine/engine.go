@@ -115,6 +115,8 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 	vi.Update(player)
 	// 7. Portal Compute
 	cs, count := e.portal.Compute(vi)
+
+	//TODO Restiture solo le things e le luci che fanno parte della compute!!!
 	return cs, count, e.things.GetThings()
 }
 

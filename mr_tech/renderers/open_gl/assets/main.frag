@@ -226,7 +226,7 @@ void main()
     float bumpRoom = (max(dot(finalNormal, L_room_dir), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
     //TODO bug e' sbagliato il calcolo della luce speculare nella stanza
-    float specularRoom = 0.0001;//CalculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
+    float specularRoom = 0.0000;//CalculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
     float specularFlash = CalculateSpecular(finalNormal, L_flash, V, isHorizontal);
 
     // Illuminazione HDR Sector
@@ -236,8 +236,8 @@ void main()
     float sectorLightLevel = pow(normalizedIntensity, 2.2) * sectorHdrFactor;
 
     // Falloff forzato a 1.0 per debug
-    float roomFalloff = exp(-FragDepth * decayRate * 0.015);
     //float roomFalloff = 1.0;
+    float roomFalloff = exp(-FragDepth * decayRate * 0.015);
     float finalSectorLight = sectorLightLevel * roomFalloff;
 
 

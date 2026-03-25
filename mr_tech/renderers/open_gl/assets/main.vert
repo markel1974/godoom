@@ -38,8 +38,8 @@ void main()
     vec4 shadowWorldPos = worldPos + vec4(aNormal * 2.0, 0.0);
 
     FragPosLightRoom = u_roomSpaceMatrix * shadowWorldPos;
-    //FragPosLightFlash = u_flashSpaceMatrix * worldPos;
-    FragPosLightFlash = u_flashSpaceMatrix * shadowWorldPos;
+    FragPosLightFlash = u_flashSpaceMatrix * worldPos;
+    //FragPosLightFlash = u_flashSpaceMatrix * shadowWorldPos;
 
     gl_Position = u_projection * viewPos;
 }

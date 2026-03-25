@@ -85,7 +85,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	pitchShear := float32(-vi.GetYaw())
 	flashDirY := pitchShear / fovScaleY
 
-	// 1. Costruzione della Main View Matrix
+	// 1. Costruzione della Main View Matrix (Senza Pitch, basata solo sullo Yaw)
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
@@ -108,19 +108,17 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	posViewY := flashOffsetY
 	posViewZ := float32(0.0)
 
-	// --- CORREZIONE: BERSAGLIO PLANARE ---
-	// Rimuoviamo la normalizzazione sferica! Calcoliamo il bersaglio esattamente
-	// come fa lo shader: (u_flashDir * 512.0)
+	// --- CORREZIONE CRITICA: BERSAGLIO PLANARE ---
+	// Qui ho rimosso la normalizzazione "sferica".
+	// targetViewX/Y/Z ora combaciano perfettamente con (u_flashDir * 512.0) dello shader
 	targetViewX := float32(0.0)
 	targetViewY := flashDirY * rayUnit
 	targetViewZ := -rayUnit
 
-	// Forward (dal pos al target). Equivalente a: (u_flashDir * 512.0) - flashPosView
+	// Forward (dal pos al target)
 	ffX := targetViewX - posViewX
 	ffY := targetViewY - posViewY
 	ffZ := targetViewZ - posViewZ
-
-	// Equivalente al normalize() esterno dello shader
 	invLenF := float32(1.0 / math.Sqrt(float64(ffX*ffX+ffY*ffY+ffZ*ffZ)))
 	ffX *= invLenF
 	ffY *= invLenF
@@ -154,7 +152,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		tLocX, tLocY, tLocZ, 1,
 	}
 
-	// 3. Matrice Flash View Globale = flashViewLocal * mainView
+	// 3. Matrice Flash View Globale
 	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 	flashSpace := MatrixMultiply4x4(_flashProj, flashView)
 

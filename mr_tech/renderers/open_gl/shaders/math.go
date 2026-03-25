@@ -6,6 +6,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
+// zNearRoom defines the near clipping plane distance for room projection.
+// zFarRoom defines the far clipping plane distance for room projection.
+// zNearFlash defines the near clipping plane distance for flashlight projection.
+// zFarFlash defines the far clipping plane distance for flashlight projection.
+// fovScaleY calculates the scaled vertical field of view for room projection.
+// fovFlashDeg specifies the flashlight's field of view in degrees.
+// fovFlashRad converts the flashlight's field of view from degrees to radians.
+// fovScaleFactor determines the scaling factor applied to the field of view.
+// fovFlashHalfRad calculates half of the flashlight's field of view in radians.
+// orthoSize sets the size of the orthographic directional projection for a room.
+// texelSize calculates the size of a texel based on the orthographic projection size.
+// flashBaseMax defines the maximum base intensity for the flashlight.
+// rayUnit specifies the unit distance for a ray in the scene.
 const (
 	//far                           = float32(4096.0)
 	zNearRoom               = 1.0
@@ -23,12 +36,16 @@ const (
 	rayUnit                 = float32(512.0)
 )
 
+// _flashConeStartMax defines the maximum starting angle for the flash cone, slightly larger than the cosine of half the FOV.
 var _flashConeStartMax = float32(math.Cos(fovFlashHalfRad)) + 0.01
 
+// _flashConeEndMax defines the maximum cosine value for the end of the flashlight cone, scaled by 0.6 of the flash FOV.
 var _flashConeEndMax = float32(math.Cos(fovFlashHalfRad * 0.6))
 
+// _f represents the scaling factor for the flash projection matrix derived from the field of view in radians.
 var _f = float32(1.0 / math.Tan(float64(fovFlashRad/2.0)))
 
+// _flashProj is a 4x4 projection matrix for flashlight rendering, configured with perspective parameters and depth range.
 var _flashProj = [16]float32{
 	_f, 0, 0, 0,
 	0, _f, 0, 0,
@@ -36,6 +53,7 @@ var _flashProj = [16]float32{
 	0, 0, (2 * zFarFlash * zNearFlash) / (zNearFlash - zFarFlash), 0,
 }
 
+// _roomProj defines a 4x4 orthographic projection matrix for rendering a room in normalized device coordinates.
 var _roomProj = [16]float32{
 	1.0 / orthoSize, 0, 0, 0,
 	0, 1.0 / orthoSize, 0, 0,
@@ -43,7 +61,7 @@ var _roomProj = [16]float32{
 	0, 0, -(zFarRoom + zNearRoom) / (zFarRoom - zNearRoom), 1,
 }
 
-// CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
+// CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
@@ -58,8 +76,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		-lX, lZ, -lY, 1,
 	}
 
-	var roomSpace [16]float32
-	MatrixMultiply(&roomSpace, _roomProj, roomView)
+	roomSpace := MatrixMultiply4x4(_roomProj, roomView)
 
 	// --- 2. SINCRONIZZAZIONE FOV E PARALLASSE TORCIA (Prospettica) ---
 	sinA, cosA := vi.GetAngle()
@@ -121,14 +138,13 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		tx, ty, tz, 1,
 	}
 
-	var flashSpace [16]float32
-	MatrixMultiply(&flashSpace, _flashProj, flashView)
-
+	flashSpace := MatrixMultiply4x4(_flashProj, flashView)
 	return roomSpace, flashSpace
 }
 
-// MatrixMultiply multiplies two 4x4 matrices `a` and `b`, storing the result in `out`.
-func MatrixMultiply(out *[16]float32, a [16]float32, b [16]float32) {
+// MatrixMultiply4x4 multiplies two 4x4 matrices represented as 1D arrays and returns the resulting matrix.
+func MatrixMultiply4x4(a [16]float32, b [16]float32) [16]float32 {
+	var out [16]float32
 	for col := 0; col < 4; col++ {
 		for row := 0; row < 4; row++ {
 			sum := float32(0.0)
@@ -138,8 +154,11 @@ func MatrixMultiply(out *[16]float32, a [16]float32, b [16]float32) {
 			out[col*4+row] = sum
 		}
 	}
+	return out
 }
 
+// MatrixInverse4x4 computes the inverse of a 4x4 matrix `m` and returns the inverted matrix and a success flag.
+// Returns `([16]float32{}, false)` if the matrix is not invertible.
 func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
 	var inv [16]float32
 	var det float32

@@ -182,7 +182,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 		swayY -= float32(math.Abs(math.Sin(bob)) * 1.2) // Rimbalzo pesante verso il basso a ogni passo
 	}
 
-	roomSpaceMatrix, flashSpaceMatrix := CreateSpaces(vi, pX, pY, swayX, swayY)
+	roomSpaceMatrix, flashSpaceMatrix := shaders.CreateSpaces(vi, pX, pY, swayX, swayY)
 	proj, view := w.shaderMain.UpdateUniforms(vi, roomSpaceMatrix, flashSpaceMatrix, w.flashFactor, w.enableShadows, swayX, swayY)
 	w.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
 

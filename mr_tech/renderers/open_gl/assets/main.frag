@@ -96,7 +96,7 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
 // ==========================================================
 // GEOMETRY & PBR
 // ==========================================================
-vec3 CalculateNormal(vec3 baseNormal) {
+vec3 calculateNormal(vec3 baseNormal) {
     if (dot(baseNormal, baseNormal) < 0.01) return vec3(0.0, 1.0, 0.0);
     vec3 normal = normalize(baseNormal);
 
@@ -125,7 +125,7 @@ vec3 CalculateNormal(vec3 baseNormal) {
     return normal;
 }
 
-float CalculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizontal) {
+float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizontal) {
     vec3 H = normalize(lightDir + viewDir);
     float NdotH = max(dot(normal, H), 0.0);
 
@@ -139,7 +139,7 @@ float CalculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizon
 // ==========================================================
 // VOLUMETRIC RAYMARCHING
 // ==========================================================
-vec3 CalculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec3 spotDirRoom, float edgeFade, float distanceFalloff) {
+vec3 calculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec3 spotDirRoom, float edgeFade, float distanceFalloff) {
     float volRoom = 0.0;
     float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
@@ -150,7 +150,7 @@ vec3 CalculateVolumetric(vec3 viewDir, vec3 flashPosView, vec3 flashSpotDir, vec
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
     float normalizedIntensity = clamp(1.0 - (decayRate / 5.0), 0.0, 1.0);
 
-    for(int i = 0; i < u_volumetricSteps; i++) {
+    for(int i = 0; i < u_volumetricSteps * 2; i++) {
         // 1. ROOM: Nebbia ambientale diffusa
         // FIX: Usiamo direttamente LightCenterView che è già nello spazio corretto
         float distToCenter = length(LightCenterView - currentPos);
@@ -206,7 +206,7 @@ void main()
     vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
-    vec3 finalNormal = CalculateNormal(NormalView);
+    vec3 finalNormal = calculateNormal(NormalView);
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
 
     // Ombre
@@ -226,8 +226,8 @@ void main()
     float bumpRoom = (max(dot(finalNormal, L_room_dir), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
     //TODO bug e' sbagliato il calcolo della luce speculare nella stanza
-    float specularRoom = 0.0000;//CalculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
-    float specularFlash = CalculateSpecular(finalNormal, L_flash, V, isHorizontal);
+    float specularRoom = 0.0;//calculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
+    float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
 
     // Illuminazione HDR Sector
     float decayRate = (LightDist >= 0.0) ? LightDist : u_ambient_light;
@@ -246,7 +246,7 @@ void main()
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
     // Volumetria
-    vec3 beamColor = CalculateVolumetric(V, flashPosView, flashSpotDir, spotDirRoom, edgeFade, roomFalloff);
+    vec3 beamColor = calculateVolumetric(V, flashPosView, flashSpotDir, spotDirRoom, edgeFade, roomFalloff);
 
     // Composizione Finale
     float roomLightOcclusion = (1.0 - shadowRoom);

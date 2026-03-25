@@ -219,10 +219,8 @@ func (s *Main) Prepare(fv []float32, l int) {
 
 // UpdateUniforms updates the shader's uniform variables and calculates the Inverse View Matrix.
 func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceMatrix [16]float32, flashFactor float32, enableShadows bool, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
-	const near, far = float32(1.0), float32(4096.0)
 	aspect := float32(s.width) / float32(s.height)
-	scaleX := float32(-(2.0 / float64(aspect)) * model.HFov)
-	scaleY := float32(2.0 * model.VFov)
+	scaleX := -(fovScaleFactor / aspect) * float32(model.HFov)
 	pitchShear := float32(-vi.GetYaw())
 
 	sinA, cosA := vi.GetAngle()
@@ -236,7 +234,7 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 	ty := -ey
 	tz := fX*ex + fZ*ez
 
-	s.buildFlash(flashFactor, pitchShear/scaleY, flashOffsetX, flashOffsetY)
+	s.buildFlash(flashFactor, pitchShear/fovScaleY, flashOffsetX, flashOffsetY)
 
 	s.ambientLight = float32(vi.GetLightIntensity())
 	s.roomSpaceMatrix = roomSpaceMatrix
@@ -248,9 +246,9 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 	}
 	s.proj = [16]float32{
 		scaleX, 0, 0, 0,
-		0, scaleY, 0, 0,
-		0, pitchShear, (far + near) / (near - far), -1,
-		0, 0, (2 * far * near) / (near - far), 0,
+		0, fovScaleY, 0, 0,
+		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
+		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}
 	s.view = [16]float32{
 		rX, 0, -fX, 0,
@@ -260,7 +258,7 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, roomSpaceMatrix, flashSpaceM
 	}
 
 	// Calcolo on-the-fly della matrice inversa (evita cicli in shader)
-	if inv, ok := Inverse4x4(s.view); ok {
+	if inv, ok := MatrixInverse4x4(s.view); ok {
 		s.invView = inv
 	}
 
@@ -310,10 +308,6 @@ func (s *Main) Render(roomShadowTex, flashShadowTex, ssaoBlurTex uint32) {
 }
 
 func (s *Main) buildFlash(factor float32, dirY float32, flashOffsetX float32, flashOffsetY float32) {
-	const flashConeStartMax float32 = 0.60
-	const flashConeEndMax float32 = 0.90
-	const flashBaseMax float32 = 0.90
-
 	s.flashDirY = dirY //pitchShear / scaleY
 	s.flashOffsetX = flashOffsetX
 	s.flashOffsetY = flashOffsetY
@@ -326,8 +320,8 @@ func (s *Main) buildFlash(factor float32, dirY float32, flashOffsetX float32, fl
 		s.flashConeEnd = 0.0
 		s.flashBase = 0.0
 	} else {
-		s.flashConeStart = flashConeStartMax
-		s.flashConeEnd = flashConeEndMax
+		s.flashConeStart = _flashConeStartMax
+		s.flashConeEnd = _flashConeEndMax
 		s.flashBase = flashBaseMax
 	}
 }

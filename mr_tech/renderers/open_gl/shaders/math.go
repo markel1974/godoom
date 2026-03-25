@@ -62,17 +62,16 @@ var _roomProj = [16]float32{
 }
 
 // CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
-// CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
+// CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
 	// --- 1. PROIEZIONE STANZA ---
-	// lY a 4096.0 impedisce il near-plane clipping dei soffitti
 	lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY)
 	roomView := [16]float32{
 		1, 0, 0, 0,
-		0.02, 0.02, 1, 0, // TILT: Inclinazione impercettibile per dare area d'ombra ai muri
+		0.02, 0.02, 1, 0,
 		0, -1, 0, 0,
 		-lX, lZ, -lY, 1,
 	}
@@ -86,8 +85,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	pitchShear := float32(-vi.GetYaw())
 	flashDirY := pitchShear / fovScaleY
 
-	// 1. Costruzione della Main View Matrix (Senza Pitch, basata solo sullo Yaw)
-	// Mappatura assi World -> View del tuo engine: X=camX, Y=camZ(Altezza), Z=-camY(Profondità)
+	// 1. Costruzione della Main View Matrix
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
@@ -110,15 +108,19 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	posViewY := flashOffsetY
 	posViewZ := float32(0.0)
 
-	// Bersaglio a 512 unità con il pitch (shear) applicato
+	// --- CORREZIONE: BERSAGLIO PLANARE ---
+	// Rimuoviamo la normalizzazione sferica! Calcoliamo il bersaglio esattamente
+	// come fa lo shader: (u_flashDir * 512.0)
 	targetViewX := float32(0.0)
-	targetViewY := flashDirY * 512.0
-	targetViewZ := float32(-512.0)
+	targetViewY := flashDirY * rayUnit
+	targetViewZ := -rayUnit
 
-	// Forward (dal pos al target)
+	// Forward (dal pos al target). Equivalente a: (u_flashDir * 512.0) - flashPosView
 	ffX := targetViewX - posViewX
 	ffY := targetViewY - posViewY
 	ffZ := targetViewZ - posViewZ
+
+	// Equivalente al normalize() esterno dello shader
 	invLenF := float32(1.0 / math.Sqrt(float64(ffX*ffX+ffY*ffY+ffZ*ffZ)))
 	ffX *= invLenF
 	ffY *= invLenF
@@ -127,7 +129,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	// Up fittizio per calcolare Right nello spazio vista locale
 	upViewX, upViewY, upViewZ := float32(0.0), float32(1.0), float32(0.0)
 
-	// Right = Forward x Up (Regola mano destra standard per la proiezione OpenGL)
+	// Right = Forward x Up
 	rrX := ffY*upViewZ - ffZ*upViewY
 	rrY := ffZ*upViewX - ffX*upViewZ
 	rrZ := ffX*upViewY - ffY*upViewX
@@ -136,7 +138,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	rrY *= invLenR
 	rrZ *= invLenR
 
-	// Up reale = Right x Forward
+	// Up = Right x Forward
 	uuX := rrY*ffZ - rrZ*ffY
 	uuY := rrZ*ffX - rrX*ffZ
 	uuZ := rrX*ffY - rrY*ffX
@@ -151,10 +153,11 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 		rrZ, uuZ, -ffZ, 0,
 		tLocX, tLocY, tLocZ, 1,
 	}
+
 	// 3. Matrice Flash View Globale = flashViewLocal * mainView
-	// Questo trasforma un vertice World -> Main View -> Flash View
 	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 	flashSpace := MatrixMultiply4x4(_flashProj, flashView)
+
 	return roomSpace, flashSpace
 }
 

@@ -2,7 +2,6 @@ package open_gl
 
 import (
 	"math"
-	"sort"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -52,12 +51,17 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	//w.drawCommands.Reset()
 	var cSky *textures.Texture = nil
 
+	//TODO BETTER IMPLEMENTATION
+	sectors := make(map[*model.Sector]bool, len(css))
+
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
 
 		polygons := current.Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
+
+			sectors[cp.Sector] = true
 
 			switch cp.Kind {
 			case model.IdWall:
@@ -79,7 +83,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	}
 
 	//TODO
-	w.pushThings(vi, thing)
+	w.pushThings(vi, thing, sectors)
 	return cSky
 }
 
@@ -189,40 +193,26 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 }
 
 // pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.
-func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
+func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
-
+	fv := w.frameVertices
 	camX, camY := vi.GetXY()
-	queue := make([]SpriteNode, 0, len(things))
 
 	// 1. Culling e calcolo distanza quadrica
 	for _, t := range things {
+		if !sectors[t.GetSector()] {
+			continue
+		}
 		if t.GetAnimation() == nil {
 			continue
 		}
 		tPosX, tPosY := t.GetPosition()
 		dx := tPosX - camX
 		dy := tPosY - camY
-
-		queue = append(queue, SpriteNode{
-			Thing:  t,
-			DistSq: dx*dx + dy*dy,
-		})
-	}
-
-	// 2. Depth Sort (Painter's Algorithm)
-	sort.Slice(queue, func(i, j int) bool {
-		return queue[i].DistSq > queue[j].DistSq
-	})
-
-	fv := w.frameVertices
-
-	// 3. Billboarding Cilindrico e Batching VBO
-	for _, node := range queue {
-		t := node.Thing
+		distSq := dx*dx + dy*dy
 		tex := t.GetAnimation().CurrentFrame()
 		if tex == nil {
 			continue
@@ -237,14 +227,13 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		width := float64(texW) * scaleW
 		height := float64(texH) * scaleH
 
-		dist := math.Sqrt(node.DistSq)
+		dist := math.Sqrt(distSq)
 		if dist < minDist {
 			dist = minDist
 		}
 
 		// Vettore Right normalizzato e scalato per l'estensione del quad
 		halfW := width / 2.0
-		tPosX, tPosY := t.GetPosition()
 		rX := -((camY - tPosY) / dist) * halfW
 		rY := ((camX - tPosX) / dist) * halfW
 

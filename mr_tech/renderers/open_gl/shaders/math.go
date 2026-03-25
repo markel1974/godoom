@@ -62,12 +62,13 @@ var _roomProj = [16]float32{
 }
 
 // CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
+// CreateSpaces generates and returns the room and flash projection-view matrices used for rendering transformations.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
+	// --- 1. PROIEZIONE STANZA ---
 	// lY a 4096.0 impedisce il near-plane clipping dei soffitti
-	// Telecamera altissima per non tagliare i soffitti
 	lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY)
 	roomView := [16]float32{
 		1, 0, 0, 0,
@@ -85,59 +86,74 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	pitchShear := float32(-vi.GetYaw())
 	flashDirY := pitchShear / fovScaleY
 
-	// Estrazione vettori base della Telecamera
-	fCamX, fCamY, fCamZ := float32(cosA), flashDirY, float32(-sinA)
-	invLenF := float32(1.0 / math.Sqrt(float64(fCamX*fCamX+fCamY*fCamY+fCamZ*fCamZ)))
-	fCamX, fCamY, fCamZ = fCamX*invLenF, fCamY*invLenF, fCamZ*invLenF
+	// 1. Costruzione della Main View Matrix (Senza Pitch, basata solo sullo Yaw)
+	// Mappatura assi World -> View del tuo engine: X=camX, Y=camZ(Altezza), Z=-camY(Profondità)
+	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
+	rX, rY, rZ := -fZ, float32(0.0), fX
+	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
 
-	rCamX, rCamY, rCamZ := -fCamZ, float32(0.0), fCamX
-	invLenR := float32(1.0 / math.Sqrt(float64(rCamX*rCamX+rCamZ*rCamZ)))
-	rCamX, rCamZ = rCamX*invLenR, rCamZ*invLenR
+	eX, eY, eZ := float32(camX), float32(camZ), float32(-camY)
 
-	uCamX := rCamY*fCamZ - rCamZ*fCamY
-	uCamY := rCamZ*fCamX - rCamX*fCamZ
-	uCamZ := rCamX*fCamY - rCamY*fCamX
+	tx := -(rX*eX + rY*eY + rZ*eZ)
+	ty := -(uX*eX + uY*eY + uZ*eZ)
+	tz := fX*eX + fY*eY + fZ*eZ
 
-	// Posizionamento fisico originario della Torcia (Offset applicato)
-	flashX := float32(camX) + (rCamX * flashOffsetX) + (uCamX * flashOffsetY)
-	flashY := float32(camZ) + (rCamY * flashOffsetX) + (uCamY * flashOffsetY)
-	flashZ := float32(-camY) + (rCamZ * flashOffsetX) + (uCamZ * flashOffsetY)
-
-	// Crosshair virtuale a 512 unità per la convergenza del raggio
-	targetX := float32(camX) + (fCamX * rayUnit)
-	targetY := float32(camZ) + (fCamY * rayUnit)
-	targetZ := float32(-camY) + (fCamZ * rayUnit)
-
-	// Triangolazione: Il Forward punta dalla torcia verso il crosshair
-	fX := targetX - flashX
-	fY := targetY - flashY
-	fZ := targetZ - flashZ
-	invLenFlashF := float32(1.0 / math.Sqrt(float64(fX*fX+fY*fY+fZ*fZ)))
-	fX, fY, fZ = fX*invLenFlashF, fY*invLenFlashF, fZ*invLenFlashF
-
-	// Right = Forward x Up
-	rX := fY*uCamZ - fZ*uCamY
-	rY := fZ*uCamX - fX*uCamZ
-	rZ := fX*uCamY - fY*uCamX
-	invLenFlashR := float32(1.0 / math.Sqrt(float64(rX*rX+rY*rY+rZ*rZ)))
-	rX, rY, rZ = rX*invLenFlashR, rY*invLenFlashR, rZ*invLenFlashR
-
-	// Up = Right x Forward
-	uX := rY*fZ - rZ*fY
-	uY := rZ*fX - rX*fZ
-	uZ := rX*fY - rY*fX
-
-	tx := -(rX*flashX + rY*flashY + rZ*flashZ)
-	ty := -(uX*flashX + uY*flashY + uZ*flashZ)
-	tz := fX*flashX + fY*flashY + fZ*flashZ
-
-	flashView := [16]float32{
+	mainView := [16]float32{
 		rX, uX, -fX, 0,
 		rY, uY, -fY, 0,
 		rZ, uZ, -fZ, 0,
 		tx, ty, tz, 1,
 	}
 
+	// 2. Costruzione della Flash View Matrix puramente in View Space
+	posViewX := flashOffsetX
+	posViewY := flashOffsetY
+	posViewZ := float32(0.0)
+
+	// Bersaglio a 512 unità con il pitch (shear) applicato
+	targetViewX := float32(0.0)
+	targetViewY := flashDirY * 512.0
+	targetViewZ := float32(-512.0)
+
+	// Forward (dal pos al target)
+	ffX := targetViewX - posViewX
+	ffY := targetViewY - posViewY
+	ffZ := targetViewZ - posViewZ
+	invLenF := float32(1.0 / math.Sqrt(float64(ffX*ffX+ffY*ffY+ffZ*ffZ)))
+	ffX *= invLenF
+	ffY *= invLenF
+	ffZ *= invLenF
+
+	// Up fittizio per calcolare Right nello spazio vista locale
+	upViewX, upViewY, upViewZ := float32(0.0), float32(1.0), float32(0.0)
+
+	// Right = Forward x Up (Regola mano destra standard per la proiezione OpenGL)
+	rrX := ffY*upViewZ - ffZ*upViewY
+	rrY := ffZ*upViewX - ffX*upViewZ
+	rrZ := ffX*upViewY - ffY*upViewX
+	invLenR := float32(1.0 / math.Sqrt(float64(rrX*rrX+rrY*rrY+rrZ*rrZ)))
+	rrX *= invLenR
+	rrY *= invLenR
+	rrZ *= invLenR
+
+	// Up reale = Right x Forward
+	uuX := rrY*ffZ - rrZ*ffY
+	uuY := rrZ*ffX - rrX*ffZ
+	uuZ := rrX*ffY - rrY*ffX
+
+	tLocX := -(rrX*posViewX + rrY*posViewY + rrZ*posViewZ)
+	tLocY := -(uuX*posViewX + uuY*posViewY + uuZ*posViewZ)
+	tLocZ := ffX*posViewX + ffY*posViewY + ffZ*posViewZ
+
+	flashViewLocal := [16]float32{
+		rrX, uuX, -ffX, 0,
+		rrY, uuY, -ffY, 0,
+		rrZ, uuZ, -ffZ, 0,
+		tLocX, tLocY, tLocZ, 1,
+	}
+	// 3. Matrice Flash View Globale = flashViewLocal * mainView
+	// Questo trasforma un vertice World -> Main View -> Flash View
+	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 	flashSpace := MatrixMultiply4x4(_flashProj, flashView)
 	return roomSpace, flashSpace
 }

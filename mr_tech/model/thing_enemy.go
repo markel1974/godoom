@@ -44,12 +44,12 @@ func (t *ThingEnemy) Compute(playerX float64, playerY float64) {
 // modifyDirection adjusts the entity's velocity based on the provided direction vector and applies acceleration and friction.
 func (t *ThingEnemy) modifyDirection(dirX, dirY float64) {
 	const acceleration = 0.15
-	t.entity.Vx = t.entity.Vx*(1-acceleration) + (dirX * acceleration)
-	t.entity.Vy = t.entity.Vy*(1-acceleration) + (dirY * acceleration)
-	if t.entity.GForce == 0 {
-		t.entity.GForce = 1.0
-	}
-	if t.entity.Friction < 0.2 {
-		t.entity.Friction = 0.99
-	}
+	t.entity.SetVx(t.entity.GetVx()*(1-acceleration) + (dirX * acceleration))
+	t.entity.SetVy(t.entity.GetVy()*(1-acceleration) + (dirY * acceleration))
+	//if t.entity.GForce == 0 {
+	//	t.entity.GForce = 1.0
+	//}
+	//if t.entity.Friction < 0.2 {
+	//	t.entity.Friction = 0.99
+	//}
 }

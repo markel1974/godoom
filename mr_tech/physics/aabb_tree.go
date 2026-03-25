@@ -117,7 +117,7 @@ func (a *AABBTree) UpdateObject(object IAABB) {
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
-func (a *AABBTree) QueryOverlaps(object IAABB, f func(object IAABB) bool) {
+func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
 	testAabb := object.GetAABB()
 	a.stack = a.stack[:0]
 	a.stack = append(a.stack, a.rootNodeIndex)
@@ -134,7 +134,7 @@ func (a *AABBTree) QueryOverlaps(object IAABB, f func(object IAABB) bool) {
 		if node.aabb.Overlaps(testAabb) {
 			if node.IsLeaf() {
 				if node.object != object {
-					if f(node.object) {
+					if callback(node.object) {
 						break
 					}
 				}
@@ -148,7 +148,7 @@ func (a *AABBTree) QueryOverlaps(object IAABB, f func(object IAABB) bool) {
 }
 
 // QueryPoint searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
-func (a *AABBTree) QueryPoint(px, py float64, f func(object IAABB) bool) {
+func (a *AABBTree) QueryPoint(px, py float64, callback func(object IAABB) bool) {
 	a.stack = a.stack[:0]
 	a.stack = append(a.stack, a.rootNodeIndex)
 
@@ -165,7 +165,7 @@ func (a *AABBTree) QueryPoint(px, py float64, f func(object IAABB) bool) {
 
 		if node.aabb.QueryPoint(px, py) {
 			if node.IsLeaf() {
-				if f(node.object) {
+				if callback(node.object) {
 					break
 				}
 			} else {
@@ -174,7 +174,6 @@ func (a *AABBTree) QueryPoint(px, py float64, f func(object IAABB) bool) {
 			}
 		}
 	}
-
 }
 
 // insertLeaf inserts a new leaf node with the given index into the AABB tree, adjusting the tree structure as needed.

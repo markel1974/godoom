@@ -59,7 +59,7 @@ func (em *Entities) Compute() []IThing {
 
 				// Apply the tie-breaker ONLY if otherEnt is also in motion.
 				// If otherEnt is stationary (sleeping), it's up to the active body (ent) to resolve the collision for both.
-				otherIsActive := otherEnt.Vx != 0 || otherEnt.Vy != 0
+				otherIsActive := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0
 				if otherIsActive && thing.GetIdentifier() > otherThing.GetIdentifier() {
 					return false
 				}

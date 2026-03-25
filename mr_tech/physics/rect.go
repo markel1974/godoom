@@ -123,7 +123,7 @@ func (r *Rect) GetAABB() *AABB {
 }
 
 // IntersectRect checks if the current rectangle intersects with another rectangle (r2) and returns true if they overlap.
-func (r *Rect) IntersectRect(r2 *Rect) bool {
+func (r *Rect) IntersectRect(r2 Rect) bool {
 	return r.Intersect(r2.point.x, r2.point.y, r2.size.w, r2.size.h)
 }
 

@@ -299,7 +299,9 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64) {
 		p.sector = newSector
 	}
 
-	p.entity.Vx, p.entity.Vy = p.GetVelocity()
+	vx, vy := p.GetVelocity()
+	p.entity.SetVx(vx)
+	p.entity.SetVy(vy)
 
 	p.entities.UpdateThing(p, px, py)
 }

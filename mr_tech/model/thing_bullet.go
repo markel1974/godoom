@@ -24,30 +24,24 @@ func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, 
 		wall:        physics.NewEntity(0, 0, 0, 0, 0),
 		floorStartY: sector.FloorY,
 	}
-	p.entities.AddThing(p)
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
-	p.entity.Friction = 0.99
-	p.entity.GForce = 1.0
+	p.entity.SetFriction(0.99)
+	p.entity.SetGForce(1.0)
+	p.entities.AddThing(p)
 
 	// Calculate the directional vector based on the original firing angle
 	dirX := math.Cos(p.angle) * p.speed
 	dirY := math.Sin(p.angle) * p.speed
 
 	const acceleration = 0.15
-	p.entity.Vx = p.entity.Vx*(1-acceleration) + (dirX * acceleration)
-	p.entity.Vy = p.entity.Vy*(1-acceleration) + (dirY * acceleration)
-	if p.entity.GForce == 0 {
-		p.entity.GForce = 1.0
-	}
-	if p.entity.Friction < 0.2 {
-		p.entity.Friction = 0.99
-	}
+	p.entity.SetVx(p.entity.GetVx()*(1-acceleration) + (dirX * acceleration))
+	p.entity.SetVy(p.entity.GetVy()*(1-acceleration) + (dirY * acceleration))
 	return p
 }
 
 func (t *ThingBullet) GetFloorY() float64 {
 	// 1. Magnitudo vettoriale corrente
-	velSq := (t.entity.Vx * t.entity.Vx) + (t.entity.Vy * t.entity.Vy)
+	velSq := (t.entity.GetVx() * t.entity.GetVx()) + (t.entity.GetVy() * t.entity.GetVy())
 	// Se l'energia cinetica è esaurita o malformata, il proiettile è a terra
 	if velSq <= 0.01 || t.speed <= 0 {
 		return t.sector.FloorY
@@ -68,17 +62,17 @@ func (t *ThingBullet) GetFloorY() float64 {
 
 // Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
 func (t *ThingBullet) Compute(playerX float64, playerY float64) {
-	if t.speed == 0 {
-		return
-	}
-	if math.Abs(t.entity.Vx) < 0.1 && math.Abs(t.entity.Vy) < 0.1 {
-		t.entity.Vx = 0
-		t.entity.Vy = 0
-		t.speed = 0
-		t.entity.Invalidate()
-		//TODO REMOVE!!!!
-		return
-	}
+	//if t.speed == 0 {
+	//	return
+	//}
+	//if math.Abs(t.entity.GetVx()) < 0.1 && math.Abs(t.entity.GetVy()) < 0.1 {
+	//	t.entity.SetVx(0)
+	//	t.entity.Vy = 0
+	//	t.speed = 0
+	//	t.entity.Invalidate()
+	//	//TODO REMOVE!!!!
+	//	return
+	//}
 
 	// Calculate the directional vector based on the original firing angle
 	//dirX := math.Cos(t.angle) * t.speed
@@ -105,8 +99,8 @@ func (t *ThingBullet) PhysicsApply() {
 	ty := ey - t.position.Y
 	// Active Delta (Kinematic Drive) added only if there is intentionality
 	//if t.entity.G > 0 {
-	tx += t.entity.Vx
-	ty += t.entity.Vy
+	tx += t.entity.GetVx()
+	ty += t.entity.GetVy()
 	//}
 	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
 		x, y := t.adjustPassage(tx, ty)
@@ -188,7 +182,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 		t.wall.Reset(cx, cy, 0, 0, 0, 1e12)
 		// 3. Risoluzione Newton + Baumgarte
 		t.entity.SetupCollision(t.wall)
-		return t.entity.Vx, t.entity.Vy
+		return t.entity.GetVx(), t.entity.GetVy()
 	}
 	return velX, velY
 }

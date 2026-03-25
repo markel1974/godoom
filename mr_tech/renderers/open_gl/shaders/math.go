@@ -85,7 +85,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	pitchShear := float32(-vi.GetYaw())
 	flashDirY := pitchShear / fovScaleY
 
-	// 1. Costruzione della Main View Matrix (Senza Pitch, basata solo sullo Yaw)
+	// 1. Costruzione della Main View Matrix
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
@@ -108,9 +108,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	posViewY := flashOffsetY
 	posViewZ := float32(0.0)
 
-	// --- CORREZIONE CRITICA: BERSAGLIO PLANARE ---
-	// Qui ho rimosso la normalizzazione "sferica".
-	// targetViewX/Y/Z ora combaciano perfettamente con (u_flashDir * 512.0) dello shader
+	// BERSAGLIO PLANARE (Risolve il disallineamento)
 	targetViewX := float32(0.0)
 	targetViewY := flashDirY * rayUnit
 	targetViewZ := -rayUnit

@@ -91,6 +91,7 @@ func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffse
 	targetY := float32(camZ) + (fCamY * rayUnit)
 	targetZ := float32(-camY) + (fCamZ * rayUnit)
 
+	// Triangolazione: Il Forward punta dalla torcia verso il crosshair
 	fX := targetX - flashX
 	fY := targetY - flashY
 	fZ := targetZ - flashZ

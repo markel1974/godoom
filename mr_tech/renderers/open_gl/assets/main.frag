@@ -225,6 +225,7 @@ void main()
     // Materiali e Speculari accoppiati
     float bumpRoom = (max(dot(finalNormal, L_room_dir), 0.0) * 0.2) + 1.0;
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
+
     //TODO bug e' sbagliato il calcolo della luce speculare nella stanza
     float specularRoom = 0.0;//calculateSpecular(finalNormal, L_room_dir, V, isHorizontal);
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);

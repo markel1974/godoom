@@ -19,8 +19,8 @@ type XYZ struct {
 	Z float64 `json:"z"`
 }
 
-// ScaleXY divides the X and Y components of the XYZ struct by the given scale factor.
-func (xyz *XYZ) ScaleXY(scale float64) {
+// Scale divides the X, Y and Z components of the XYZ struct by the given scale factor.
+func (xyz *XYZ) Scale(scale float64) {
 	xyz.X /= scale
 	xyz.Y /= scale
 	xyz.Z /= scale

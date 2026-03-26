@@ -91,7 +91,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 }
 
 // Compute handles the main game logic loop, updating the player, entities, physics, portals, and view matrix synchronously.
-func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing) {
+func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Update(player)
 
@@ -116,8 +116,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 	// 7. Portal Compute
 	cs, count := e.portal.Compute(vi)
 
-	//TODO Restiture solo le things e le luci che fanno parte della compute!!!
-	return cs, count, e.things.GetThings()
+	return cs, count, e.things.GetThings(), e.lights
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.

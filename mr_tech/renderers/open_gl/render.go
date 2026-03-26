@@ -124,17 +124,9 @@ func (w *RenderOpenGL) doRender() {
 	// 1. Svuotamento manuale per il nuovo frame
 	w.builder.Reset()
 
-	//TODO
-	// 2. PASSAGGIO ALL'INDIETRO (Cattura i caster per le ombre posteriori)
-	//w.player.AddAngle(math.Pi)
-	//csBack, countBack := w.engine.ComputeReverse(w.player, w.vi)
-	//w.builder.CreateBatch(w.vi, csBack, countBack, nil)
-
-	// 3. PASSAGGIO IN AVANTI (Visuale standard e ombre frontali)
-	//w.player.AddAngle(-math.Pi)
-	cs, count, things := w.engine.Compute(w.player, w.vi)
+	cs, count, things, lights := w.engine.Compute(w.player, w.vi)
 	w.targetLastCompiled = count
-	cSky := w.builder.CreateBatch(w.vi, cs, count, things)
+	cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
 
 	executor.Thread.Call(func() {
 		w.win.Begin()

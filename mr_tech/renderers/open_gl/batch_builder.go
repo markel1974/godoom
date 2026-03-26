@@ -7,6 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+const lightScaleFactor = 5.0
+
 // BatchBuilder is a utility for constructing GPU-ready batches of vertices and draw commands.
 type BatchBuilder struct {
 	tex           *Textures
@@ -46,9 +48,7 @@ func (w *BatchBuilder) Reset() {
 }
 
 // CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
-func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, thing []model.IThing) *textures.Texture {
-	//w.frameVertices.Reset()
-	//w.drawCommands.Reset()
+func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
 	var cSky *textures.Texture = nil
 
 	//TODO BETTER IMPLEMENTATION
@@ -83,7 +83,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	}
 
 	//TODO
-	w.pushThings(vi, thing, sectors)
+	w.pushThings(vi, things, sectors)
 	return cSky
 }
 
@@ -123,7 +123,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	nY := float32(0.0)
 	nZ := float32(dx / length)
 
-	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light)
+	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
 	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
 	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
@@ -170,7 +170,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 		nY = -1.0
 	}
 
-	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light)
+	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
@@ -247,7 +247,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight())
+		light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight(), lightScaleFactor)
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)
@@ -280,8 +280,8 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 }
 
 // createLight calculates light level and transformed position for rendering, returning intensity and adjusted position values.
-func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light) (float32, float32, float32, float32) {
-	lightIntensity := (1.0 - mLight.GetIntensity()) * 5.0
+func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light, lightFactor float64) (float32, float32, float32, float32) {
+	lightIntensity := (1.0 - mLight.GetIntensity()) * lightFactor
 	lightPos := mLight.GetPos()
 
 	// Trasmissione diretta delle coordinate World (X, Z, -Y)

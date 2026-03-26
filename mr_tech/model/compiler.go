@@ -48,9 +48,9 @@ func (r *Compiler) Compile(cfg *ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, r.lights, totalSegments = r.compileSectors(cfg, animations)
+	r.sectors, totalSegments = r.compileSectors(cfg, animations)
 
-	r.compileSectorsLights(r.sectors)
+	r.lights = r.compileSectorsLights(r.sectors)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -58,9 +58,14 @@ func (r *Compiler) Compile(cfg *ConfigRoot) error {
 		t.Position.Scale(scale)
 	}
 
+	for _, l := range r.lights {
+		l.pos.Scale(scale)
+	}
+
 	for _, sect := range r.sectors.GetSectors() {
-		//lights scale
-		sect.Light.pos.ScaleXY(scale)
+		//legacy lights scale
+		sect.Light.pos.Scale(scale)
+
 		//vertex scale
 		for s := 0; s < len(sect.Segments); s++ {
 			sect.Segments[s].Start.Scale(scale)
@@ -126,10 +131,9 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 }
 
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
-func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, []*Light, int) {
+func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
-	var lights []*Light
 	for idx, cs := range cfg.Sectors {
 		var segments []*Segment
 		var tags []string
@@ -164,7 +168,6 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 				lightZ = (cs.FloorY + cs.CeilY) * 1000
 			}
 			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: lightZ})
-			lights = append(lights, s.Light)
 		}
 		container = append(container, s)
 	}
@@ -233,14 +236,15 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 		}
 		fmt.Println("undefined:", undefined, "fixed:", fixed)
 	}
-	return sectors, lights, totalSegments
+	return sectors, totalSegments
 }
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileSectorsLights(sectors *Sectors) {
+func (r *Compiler) compileSectorsLights(sectors *Sectors) []*Light {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
+	var out []*Light
 	for _, sect := range sectors.GetSectors() {
 		if visited[sect.Id] {
 			continue
@@ -297,6 +301,8 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) {
 				s.Light.pos.X = globalCenterX
 				s.Light.pos.Y = globalCenterY
 			}
+			out = append(out, areaSectors[0].Light)
 		}
 	}
+	return out
 }

@@ -26,7 +26,7 @@ const (
 	zNearFlash              = 0.1
 	zFarFlash               = 2048.0
 	fovScaleY               = fovScaleFactor * float32(model.VFov)
-	fovFlashDeg     float64 = 130.0
+	fovFlashDeg     float64 = 70.0
 	fovFlashRad             = float32((fovFlashDeg * math.Pi) / 180.0)
 	fovScaleFactor          = float32(2.0)
 	fovFlashHalfRad         = (fovFlashDeg / 2.0) * (math.Pi / 180.0)

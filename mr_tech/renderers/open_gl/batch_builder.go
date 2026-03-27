@@ -52,7 +52,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	var cSky *textures.Texture = nil
 
 	//TODO BETTER IMPLEMENTATION
-	sectors := make(map[*model.Sector]bool, len(css))
+	visibleSectors := make(map[*model.Sector]bool, len(css))
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -61,7 +61,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
 
-			sectors[cp.Sector] = true
+			visibleSectors[cp.Sector] = true
 
 			switch cp.Kind {
 			case model.IdWall:
@@ -82,8 +82,8 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 		}
 	}
 
-	//TODO
-	w.pushThings(vi, things, sectors)
+	w.pushLights(vi, lights, visibleSectors)
+	w.pushThings(vi, things, visibleSectors)
 	return cSky
 }
 
@@ -190,6 +190,10 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 
 	return nil
+}
+
+func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
+	//TODO IMPLEMENT
 }
 
 // pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.

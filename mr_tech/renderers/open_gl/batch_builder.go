@@ -14,6 +14,7 @@ type BatchBuilder struct {
 	tex           *Textures
 	frameVertices *FrameVertices
 	drawCommands  *DrawCommands
+	frameLights   *FrameLights
 }
 
 // NewBatchBuilder initializes and returns a new BatchBuilder using the provided Compiler to manage rendering resources.
@@ -22,6 +23,7 @@ func NewBatchBuilder(compiler *Textures) *BatchBuilder {
 		tex:           compiler,
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		drawCommands:  NewDrawCommands(maxFrameCommands),
+		frameLights:   NewFrameLights(256),
 	}
 }
 
@@ -45,6 +47,7 @@ func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
 func (w *BatchBuilder) Reset() {
 	w.frameVertices.Reset()
 	w.drawCommands.Reset()
+	w.frameLights.Reset()
 }
 
 // CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
@@ -193,7 +196,20 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 }
 
 func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
-	//TODO IMPLEMENT
+	if len(lights) == 0 {
+		return
+	}
+
+	for _, l := range lights {
+		// Eventuale culling spaziale o di settore
+		// if l.GetSector() != nil && !sectors[l.GetSector()] { continue }
+
+		pos := l.GetPos()
+		intensity := float32((1.0 - l.GetIntensity()) * lightScaleFactor)
+
+		// Mapping coordinate World: X, Z, -Y per coerenza con il resto della pipeline
+		w.frameLights.Add(float32(pos.X), float32(pos.Z), float32(-pos.Y), intensity)
+	}
 }
 
 // pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.

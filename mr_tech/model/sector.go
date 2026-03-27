@@ -261,6 +261,35 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 	return closestSeg
 }
 
+// GetCentroid calculates the centroid of the polygon formed by the sector's segments based on their vertex coordinates.
+func (s *Sector) GetCentroid() XY {
+	var signedArea, cx, cy float64
+
+	for i := range s.Segments {
+		x0, y0 := s.Segments[i].Start.X, s.Segments[i].Start.Y
+		x1, y1 := s.Segments[i].End.X, s.Segments[i].End.Y
+
+		// Prodotto vettoriale 2D (determinante)
+		a := (x0 * y1) - (x1 * y0)
+
+		signedArea += a
+		cx += (x0 + x1) * a
+		cy += (y0 + y1) * a
+	}
+
+	signedArea *= 0.5
+
+	if signedArea == 0 {
+		// Fallback di sicurezza per topologia degenere (es. area nulla)
+		return XY{X: s.Segments[0].Start.X, Y: s.Segments[0].Start.Y}
+	}
+
+	return XY{
+		X: cx / (6.0 * signedArea),
+		Y: cy / (6.0 * signedArea),
+	}
+}
+
 // Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
 func (s *Sector) Print(indent bool) string {
 	type printerSegment struct {

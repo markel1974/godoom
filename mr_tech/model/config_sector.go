@@ -46,35 +46,6 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 	return out
 }
 
-// GetCentroid calculates the centroid of the polygon formed by the sector's segments based on their vertex coordinates.
-func (is *ConfigSector) GetCentroid() XY {
-	var signedArea, cx, cy float64
-
-	for i := range is.Segments {
-		x0, y0 := is.Segments[i].Start.X, is.Segments[i].Start.Y
-		x1, y1 := is.Segments[i].End.X, is.Segments[i].End.Y
-
-		// Prodotto vettoriale 2D (determinante)
-		a := (x0 * y1) - (x1 * y0)
-
-		signedArea += a
-		cx += (x0 + x1) * a
-		cy += (y0 + y1) * a
-	}
-
-	signedArea *= 0.5
-
-	if signedArea == 0 {
-		// Fallback di sicurezza per topologia degenere (es. area nulla)
-		return XY{X: is.Segments[0].Start.X, Y: is.Segments[0].Start.Y}
-	}
-
-	return XY{
-		X: cx / (6.0 * signedArea),
-		Y: cy / (6.0 * signedArea),
-	}
-}
-
 // Print serializes the ConfigSector struct into JSON format; optionally indents the output if the indent parameter is true.
 func (is *ConfigSector) Print(indent bool) []byte {
 	if indent {

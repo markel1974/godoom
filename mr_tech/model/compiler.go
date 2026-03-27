@@ -161,13 +161,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 		s.FloorY = cs.FloorY
 		s.Light = NewLight()
 		if cs.Light != nil {
-			lXY := cs.GetCentroid()
-			lightZ := (cs.FloorY + cs.CeilY) * 1.3
-			//TODO TERMINARE CON TUTTI I TIPI DI LUCE
-			if cs.Light.Kind == LightKindAmbient {
-				lightZ = (cs.FloorY + cs.CeilY) * 1000
-			}
-			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, XYZ{X: lXY.X, Y: lXY.Y, Z: lightZ})
+			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
 		}
 		container = append(container, s)
 	}
@@ -287,21 +281,23 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) []*Light {
 					area += (x0 * y1) - (x1 * y0)
 				}
 				area = math.Abs(area * 0.5)
-
 				sumX += s.Light.pos.X * area
 				sumY += s.Light.pos.Y * area
 				totalArea += area
 			}
 
-			globalCenterX := sumX / totalArea
-			globalCenterY := sumY / totalArea
+			globalCenter := XY{X: sumX / totalArea, Y: sumY / totalArea}
 
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {
-				s.Light.pos.X = globalCenterX
-				s.Light.pos.Y = globalCenterY
+				s.Light.pos.X = globalCenter.X
+				s.Light.pos.Y = globalCenter.Y
 			}
-			out = append(out, areaSectors[0].Light)
+
+			first := areaSectors[0]
+			light := NewLight()
+			light.Setup(first.Light.intensity, first.Light.kind, globalCenter, first.FloorY+first.CeilY)
+			out = append(out, light)
 		}
 	}
 	return out

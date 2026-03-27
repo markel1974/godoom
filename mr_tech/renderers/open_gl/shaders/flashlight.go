@@ -108,9 +108,9 @@ func (s *Flashlight) Compile(a IAssets) error {
 	s.table[FlashLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
 	s.table[FlashLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location in ShaderFlashlight: %d", v)
+			return fmt.Errorf("invalid uniform location in flashlight: %d", idx)
 		}
 	}
 

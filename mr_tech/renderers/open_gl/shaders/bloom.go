@@ -84,9 +84,9 @@ func (s *Bloom) Compile(a IAssets) error {
 	s.table[BloomLocImage] = gl.GetUniformLocation(s.prg, gl.Str("image\x00"))
 	s.table[BloomLocHorizontal] = gl.GetUniformLocation(s.prg, gl.Str("horizontal\x00"))
 	s.table[BloomLocPassage] = gl.GetUniformLocation(s.prg, gl.Str("u_passages\x00"))
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in bloom: %d", idx)
 		}
 	}
 

@@ -91,9 +91,9 @@ func (s *Depth) Compile(assets IAssets) error {
 	s.table[DepthLocLightSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_lightSpaceMatrix\x00"))
 	s.table[DepthLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
 
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in depth: %d", idx)
 		}
 	}
 	return nil

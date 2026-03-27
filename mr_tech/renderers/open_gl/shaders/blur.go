@@ -69,9 +69,9 @@ func (s *Blur) Compile(assets IAssets) error {
 		return err
 	}
 	s.table[BlurLocSSAOInput] = gl.GetUniformLocation(s.prg, gl.Str("ssaoInput\x00"))
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in blur: %d", idx)
 		}
 	}
 	return nil

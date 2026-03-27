@@ -80,9 +80,9 @@ func (s *ShaderGeometry) Compile(assets IAssets) error {
 	s.table[GeometryLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
 	s.table[GeometryLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
 	s.table[GeometryLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in geometry: %d", idx)
 		}
 	}
 	return nil

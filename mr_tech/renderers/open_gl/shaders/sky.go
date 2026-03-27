@@ -103,9 +103,9 @@ func (s *ShaderSky) Compile(a IAssets) error {
 	s.table[ShaderSkyLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
 	s.table[ShaderSkyLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
 	s.table[ShaderSkyLocSky] = gl.GetUniformLocation(s.prg, gl.Str("u_sky\x00"))
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in sky: %d", idx)
 		}
 	}
 	return nil

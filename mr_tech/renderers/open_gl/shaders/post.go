@@ -107,9 +107,9 @@ func (s *Post) Compile(a IAssets) error {
 	s.table[PostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
 	s.table[PostLocBloomIntensity] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomIntensity\x00"))
 	s.table[PostLocBloomBlur] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomBlur\x00"))
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in post: %d", idx)
 		}
 	}
 

@@ -202,9 +202,9 @@ func (s *Main) Compile(a IAssets) error {
 	s.table[MainLocRoomSpotIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_roomSpotIntensityFactor\x00"))
 	s.table[MainLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 	s.table[MainLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00")) // Link inversione
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in main: %d", idx)
 		}
 	}
 	return nil

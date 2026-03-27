@@ -140,9 +140,9 @@ func (s *SSAO) Compile(a IAssets) error {
 	s.table[SSAOLocRadius] = gl.GetUniformLocation(s.prg, gl.Str("u_radius\x00"))
 	s.table[SSAOLocBias] = gl.GetUniformLocation(s.prg, gl.Str("u_bias\x00"))
 
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location: %d", v)
+			return fmt.Errorf("invalid uniform location in ssao: %d", idx)
 		}
 	}
 	if err = s.createKernel(); err != nil {

@@ -69,9 +69,9 @@ func (s *Lights) Compile(a IAssets) error {
 	s.table[LightLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00"))
 	s.table[LightLocAmbientLight] = gl.GetUniformLocation(s.prg, gl.Str("u_ambient_light\x00"))
 
-	for _, v := range s.table {
+	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location in Lights: %d", v)
+			return fmt.Errorf("invalid uniform location in lights: %d", idx)
 		}
 	}
 

@@ -23,6 +23,7 @@ void main() {
 
     // 1. PROTEZIONE ANTI-NaN: Evita i buchi neri geometrici se i vettori sono paralleli
     vec3 tangent = randomVec - normal * dot(randomVec, normal);
+
     if (length(tangent) > 0.001) {
         tangent = normalize(tangent);
     } else {

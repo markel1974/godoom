@@ -62,23 +62,16 @@ var _roomProj = [16]float32{
 }
 
 // CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
+// CreateSpaces computes and returns two 4x4 transformation matrices: roomSpace and flashSpace, based on input parameters and projections.
 func CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	snappedX := math.Floor(pX/texelSize) * texelSize
 	snappedY := math.Floor(-pY/texelSize) * texelSize
 
 	// --- 1. PROIEZIONE STANZA ---
-	//lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY)
-	//roomView := [16]float32{
-	//	1, 0, 0, 0,
-	//	0.02, 0.02, 1, 0,
-	//	0, -1, 0, 0,
-	//	-lX, lZ, -lY, 1,
-	//}
-	const skew = 0.02 //0.0
 	lX, lY, lZ := float32(snappedX), float32(4096.0), float32(snappedY)
 	roomView := [16]float32{
 		1, 0, 0, 0,
-		skew, skew, 1, 0,
+		0.02, 0.02, 1, 0,
 		0, -1, 0, 0,
 		-lX, lZ, -lY, 1,
 	}

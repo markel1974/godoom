@@ -1,4 +1,4 @@
-package open_gl
+package open_gl_legacy
 
 // DrawCommand represents a rendering command consisting of texture ID, starting vertex index, and vertex count.
 type DrawCommand struct {

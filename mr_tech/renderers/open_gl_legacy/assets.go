@@ -1,4 +1,4 @@
-package open_gl
+package open_gl_legacy
 
 import (
 	"embed"

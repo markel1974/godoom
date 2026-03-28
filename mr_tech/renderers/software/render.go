@@ -15,8 +15,8 @@ import (
 // _scale is a constant scaling factor used for adjusting dimensions and transformations in rendering operations.
 const _scale = 1
 
-// RenderSoftware is a struct responsible for handling software-based 2D rendering functionality.
-type RenderSoftware struct {
+// Render is a struct responsible for handling software-based 2D rendering functionality.
+type Render struct {
 	win         *pixels.GLWindow
 	mainSurface *pixels.PictureRGBA
 	mainMatrix  pixels.Matrix
@@ -40,9 +40,9 @@ type RenderSoftware struct {
 	debugIdx int
 }
 
-// NewSoftwareRender initializes and returns a new instance of RenderSoftware with default values.
-func NewSoftwareRender() *RenderSoftware {
-	return &RenderSoftware{
+// NewRender initializes and returns a new instance of Render with default values.
+func NewRender() *Render {
+	return &Render{
 		screenWidth:        0,
 		screenHeight:       0,
 		targetIdx:          0,
@@ -54,8 +54,8 @@ func NewSoftwareRender() *RenderSoftware {
 	}
 }
 
-// Setup initializes the RenderSoftware instance with the specified portal, player, and textures.
-func (w *RenderSoftware) Setup(engine *engine.Engine) error {
+// Setup initializes the Render instance with the specified portal, player, and textures.
+func (w *Render) Setup(engine *engine.Engine) error {
 	w.engine = engine
 	w.screenWidth = engine.GetWidth()
 	w.screenHeight = engine.GetHeight()
@@ -70,7 +70,7 @@ func (w *RenderSoftware) Setup(engine *engine.Engine) error {
 // Configures the pixel window with predefined settings and handles any initialization errors.
 // Sets up the main rendering surface, sprite, and transformation matrix for rendering.
 // Logs a message if the window clear feature is enabled.
-func (w *RenderSoftware) doInitialize() {
+func (w *Render) doInitialize() {
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	cfg := pixels.WindowConfig{
 		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
@@ -96,13 +96,13 @@ func (w *RenderSoftware) doInitialize() {
 	}
 }
 
-// Start initializes and begins the main rendering loop for the RenderSoftware instance.
-func (w *RenderSoftware) Start() {
+// Start initializes and begins the main rendering loop for the Render instance.
+func (w *Render) Start() {
 	pixels.GLRun(w.doRun)
 }
 
 // doRun executes the main rendering and game loop, handling initialization, input processing, rendering, and game logic updates.
-func (w *RenderSoftware) doRun() {
+func (w *Render) doRun() {
 	const framerate = 30
 	const frameInterval = 1.0 / framerate
 
@@ -201,7 +201,7 @@ func (w *RenderSoftware) doRun() {
 }
 
 // doRender performs the main rendering process, updating the frame buffer and drawing visible game elements on the screen.
-func (w *RenderSoftware) doRender() {
+func (w *Render) doRender() {
 	if w.enableClear {
 		w.win.Clear(color.Black)
 		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
@@ -219,7 +219,7 @@ func (w *RenderSoftware) doRender() {
 }
 
 // RenderSector renders a given sector by processing its segments and drawing polygons on the main surface.
-func (w *RenderSoftware) RenderSector(sector *model.Sector) {
+func (w *Render) RenderSector(sector *model.Sector) {
 	maxX := float64(0)
 	maxY := float64(0)
 
@@ -292,22 +292,22 @@ func (w *RenderSoftware) RenderSector(sector *model.Sector) {
 }
 
 // doPlayerDuckingToggle toggles the ducking state of the player by invoking the player's SetDucking method.
-func (w *RenderSoftware) doPlayerDuckingToggle() {
+func (w *Render) doPlayerDuckingToggle() {
 	w.player.SetDucking()
 }
 
 // doPlayerJump triggers the player's jump behavior by calling the appropriate method on the player instance.
-func (w *RenderSoftware) doPlayerJump() {
+func (w *Render) doPlayerJump() {
 	w.player.SetJump()
 }
 
 // doPlayerMoves handles movement for the player based on the directional and speed inputs provided.
-func (w *RenderSoftware) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
+func (w *Render) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
 	w.player.Move(impulse, up, down, left, right)
 }
 
 // doPlayerMouseMove adjusts the player's viewing angle and yaw based on mouse movement within predefined constraints.
-func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
+func (w *Render) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	const offset = 10
 	if mouseX > offset {
 		mouseX = offset
@@ -327,7 +327,7 @@ func (w *RenderSoftware) doPlayerMouseMove(mouseX float64, mouseY float64) {
 }
 
 // doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
-func (w *RenderSoftware) doDebug(next int) {
+func (w *Render) doDebug(next int) {
 	const offset = 5
 	if next == 0 {
 		w.debug = !w.debug
@@ -348,12 +348,12 @@ func (w *RenderSoftware) doDebug(next int) {
 }
 
 // doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.
-func (w *RenderSoftware) doDebugMoveSectorToggle() {
+func (w *Render) doDebugMoveSectorToggle() {
 	w.targetEnabled = !w.targetEnabled
 }
 
 // doDebugMoveSector updates the target index for debugging sectors and refreshes the active target states.
-func (w *RenderSoftware) doDebugMoveSector(forward bool) {
+func (w *Render) doDebugMoveSector(forward bool) {
 	if forward {
 		if w.targetIdx < w.targetLastCompiled {
 			w.targetIdx++
@@ -369,7 +369,7 @@ func (w *RenderSoftware) doDebugMoveSector(forward bool) {
 }
 
 // drawStub renders the debug sector if the current debug index is within the range of available sectors.
-func (w *RenderSoftware) drawStub() {
+func (w *Render) drawStub() {
 	if w.debugIdx >= 0 && w.debugIdx < w.engine.Len() {
 		sector := w.engine.SectorAt(w.debugIdx)
 		w.RenderSector(sector)
@@ -381,7 +381,7 @@ func (w *RenderSoftware) drawStub() {
 // vi: ViewMatrix data containing camera position, angle, and other view parameters.
 // css: A slice of CompiledSector objects representing visible sectors for rendering.
 // compiled: The number of sectors available to render, processed in reverse order.
-func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
 		mode := -1 //w.textures.GetViewMode()
 		if w.targetEnabled {
@@ -412,7 +412,7 @@ func (w *RenderSoftware) doSerialRender(surface *pixels.PictureRGBA, vi *model.V
 }
 
 // doParallelRender performs parallel rendering of compiled sectors using goroutines to improve rendering performance.
-func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+func (w *Render) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
@@ -440,7 +440,7 @@ func (w *RenderSoftware) doParallelRender(surface *pixels.PictureRGBA, vi *model
 }
 
 // doRenderPolygon renders a polygon based on its type, mode, and lighting parameters, utilizing various drawing methods.
-func (w *RenderSoftware) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
+func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon, dr *DrawPolygon, mode int) {
 	switch mode {
 	case 0:
 		dr.DrawWireFrame(false)

@@ -1,4 +1,4 @@
-package open_gl
+package open_gl_legacy
 
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
@@ -50,8 +50,8 @@ type RenderOpenGL struct {
 	builder *BatchBuilder
 }
 
-// NewOpenGLRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
-func NewOpenGLRender() *RenderOpenGL {
+// NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
+func NewRender() *RenderOpenGL {
 	tex := NewTextures()
 	r := &RenderOpenGL{
 		engine:        nil,
@@ -121,24 +121,25 @@ func (w *RenderOpenGL) Start() {
 
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
+	// 1. Svuotamento manuale per il nuovo frame
+	w.builder.Reset()
+
+	cs, count, things, lights := w.engine.Compute(w.player, w.vi)
+	w.targetLastCompiled = count
+	cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
+
 	executor.Thread.Call(func() {
-		cs, count, things, lights := w.engine.Compute(w.player, w.vi)
-		w.targetLastCompiled = count
 		w.win.Begin()
-		w.builder.Reset()
-		cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
 		pX, pY := w.player.GetPosition()
 		fbW, fbH := w.win.GetFramebufferSize()
 		commands := w.builder.GetDrawCommands()
 		vert, vertCount := w.builder.GetFrameVertices()
-		light, lightsCount := w.builder.GetFrameLights()
-
-		skyTexId, skyNormalTexId, skyEmissiveTexId := uint32(0), uint32(0), uint32(0)
+		skyTexId, skyNormalTexId, emissiveTexId := uint32(0), uint32(0), uint32(0)
 		skyEnabled := false
 		if cSky != nil {
-			skyTexId, skyNormalTexId, skyEmissiveTexId, skyEnabled = w.tex.Get(cSky)
+			skyTexId, skyNormalTexId, emissiveTexId, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertCount, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
+		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertCount, commands, skyEnabled, skyTexId, emissiveTexId, skyNormalTexId)
 	})
 }
 

@@ -1,6 +1,6 @@
-package open_gl
+package open_gl_legacy
 
-const vertexAlignment = 8
+const vertexAlignment = 12
 
 // FrameVertices represents a structure for storing 3D vertex data, including positions, UV coordinates, and light values.
 type FrameVertices struct {
@@ -33,7 +33,7 @@ func (w *FrameVertices) Alignment() int32 {
 
 // AddVertex appends a new vertex defined by position (x, y, z), texture coordinates (u, v), and lighting intensity.
 // AddVertex appends a new vertex defined by position (x, y, z), texture coordinates (u, v), and lighting intensity.
-func (w *FrameVertices) AddVertex(x, y, z, u, v, nX, nY, nZ float32) {
+func (w *FrameVertices) AddVertex(x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, nZ float32) {
 	if w.len+vertexAlignment > len(w.vertices) {
 		w.Grow()
 	}
@@ -44,9 +44,13 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v, nX, nY, nZ float32) {
 	w.vertices[idx+2] = z
 	w.vertices[idx+3] = u
 	w.vertices[idx+4] = v
-	w.vertices[idx+5] = nX
-	w.vertices[idx+6] = nY
-	w.vertices[idx+7] = nZ
+	w.vertices[idx+5] = light
+	w.vertices[idx+6] = lcX
+	w.vertices[idx+7] = lcY
+	w.vertices[idx+8] = lcZ
+	w.vertices[idx+9] = nX
+	w.vertices[idx+10] = nY
+	w.vertices[idx+11] = nZ
 	w.len += vertexAlignment
 }
 

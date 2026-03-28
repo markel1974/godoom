@@ -87,9 +87,7 @@ func (s *Sector) ComputeAABB() {
 			maxY = seg.End.Y
 		}
 	}
-
-	// Assuming 2D or height handled separately; Z can reflect floor/ceiling if needed
-	s.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
+	s.aabb = physics.NewAABB(minX, minY, s.FloorY, maxX, maxY, s.CeilY)
 }
 
 // Reference updates the sector's compile ID if it differs or increments its usage count if it matches.

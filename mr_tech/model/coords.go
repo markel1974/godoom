@@ -23,5 +23,5 @@ type XYZ struct {
 func (xyz *XYZ) Scale(scale float64) {
 	xyz.X /= scale
 	xyz.Y /= scale
-	xyz.Z /= scale
+	//xyz.Z /= scale
 }

@@ -50,21 +50,22 @@ func (r *Compiler) Compile(cfg *ConfigRoot) error {
 
 	r.sectors, totalSegments = r.compileSectors(cfg, animations)
 
-	r.lights = r.compileSectorsLights(r.sectors)
-
 	cfg.Player.Position.Scale(scale)
 
 	for _, t := range cfg.Things {
 		t.Position.Scale(scale)
 	}
 
-	for _, l := range r.lights {
-		l.pos.Scale(scale)
-	}
+	//for _, l := range r.lights {
+	//	l.pos.Scale(scale)
+	//}
 
 	for _, sect := range r.sectors.GetSectors() {
 		//legacy lights scale
 		sect.Light.pos.Scale(scale)
+
+		//sect.CeilY /= scale
+		//sect.FloorY /= scale
 
 		//vertex scale
 		for s := 0; s < len(sect.Segments); s++ {
@@ -78,6 +79,11 @@ func (r *Compiler) Compile(cfg *ConfigRoot) error {
 	var err error
 
 	r.sectors.CreateTree()
+
+	r.lights, err = r.compileSectorsLights(r.sectors)
+	if err != nil {
+		return err
+	}
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
@@ -161,7 +167,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 		s.FloorY = cs.FloorY
 		s.Light = NewLight()
 		if cs.Light != nil {
-			s.Light.Setup(cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
+			s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
 		}
 		container = append(container, s)
 	}
@@ -234,12 +240,12 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 }
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileSectorsLights(sectors *Sectors) []*Light {
+func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
 	var out []*Light
-	for _, sect := range sectors.GetSectors() {
+	for sectIdx, sect := range sectors.GetSectors() {
 		if visited[sect.Id] {
 			continue
 		}
@@ -285,6 +291,10 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) []*Light {
 				sumY += s.Light.pos.Y * area
 				totalArea += area
 			}
+			if totalArea == 0 {
+				fmt.Println("total area is zero")
+				continue
+			}
 
 			globalCenter := XY{X: sumX / totalArea, Y: sumY / totalArea}
 
@@ -293,12 +303,21 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) []*Light {
 				s.Light.pos.X = globalCenter.X
 				s.Light.pos.Y = globalCenter.Y
 			}
-
 			first := areaSectors[0]
 			light := NewLight()
-			light.Setup(first.Light.intensity, first.Light.kind, globalCenter, first.FloorY+first.CeilY)
+			sector := r.sectors.QueryPoint(first.Light.pos.X, first.Light.pos.Y)
+			if sector == nil {
+				sector = first
+				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)
+			}
+			light.Setup(sector, first.Light.intensity, first.Light.kind, globalCenter, first.CeilY)
+			out = append(out, light)
+		} else if len(areaSectors) == 1 {
+			first := areaSectors[0]
+			light := NewLight()
+			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid(), first.CeilY)
 			out = append(out, light)
 		}
 	}
-	return out
+	return out, nil
 }

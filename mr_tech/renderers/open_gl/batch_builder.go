@@ -9,6 +9,39 @@ import (
 
 const lightScaleFactor = 5.0
 
+type PolyKey struct {
+	sector *model.Sector
+	kind   int
+	tx1    float32
+	tz1    float32
+	tx2    float32
+	tz2    float32
+	u0     float32
+	u1     float32
+}
+
+func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
+	key := PolyKey{
+		sector: cp.Sector,
+		kind:   cp.Kind,
+		tx1:    float32(cp.Tx1),
+		tz1:    float32(cp.Tz1),
+		tx2:    float32(cp.Tx2),
+		tz2:    float32(cp.Tz2),
+		u0:     float32(cp.U0),
+		u1:     float32(cp.U1),
+	}
+	return key
+}
+
+func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
+	key := PolyKey{
+		sector: cp.Sector,
+		kind:   cp.Kind,
+	}
+	return key
+}
+
 // BatchBuilder is a utility for constructing GPU-ready batches of vertices and draw commands.
 type BatchBuilder struct {
 	tex           *Textures
@@ -60,8 +93,8 @@ func (w *BatchBuilder) Reset() {
 func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
 	var cSky *textures.Texture = nil
 
-	//TODO BETTER IMPLEMENTATION
-	visibleSectors := make(map[*model.Sector]bool, len(css))
+	visibleSectors := make(map[*model.Sector]bool)
+	processedPolygons := make(map[PolyKey]bool)
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -69,23 +102,37 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 		polygons := current.Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]
-
-			visibleSectors[cp.Sector] = true
-
 			switch cp.Kind {
-			case model.IdWall:
-				w.pushWall(vi, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
-			case model.IdUpper:
-				w.pushWall(vi, cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
-			case model.IdLower:
-				w.pushWall(vi, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
-			case model.IdCeil, model.IdCeilTest:
-				if sky := w.pushFlat(vi, cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-					cSky = sky
+			case model.IdWall, model.IdUpper, model.IdLower:
+				key := CreatePolygonSegment(cp)
+				if processedPolygons[key] {
+					continue
 				}
-			case model.IdFloor, model.IdFloorTest:
-				if sky := w.pushFlat(vi, cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-					cSky = sky
+				processedPolygons[key] = true
+				visibleSectors[cp.Sector] = true
+				if cp.Kind == model.IdWall {
+					w.pushWall(vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+				} else if cp.Kind == model.IdUpper {
+					w.pushWall(vi, key, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+				} else {
+					w.pushWall(vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+				}
+			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
+				key := CreatePolygonSector(cp)
+				if processedPolygons[key] {
+					continue
+				}
+				processedPolygons[key] = true
+				visibleSectors[cp.Sector] = true
+				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
+					if sky := w.pushFlat(vi, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+						cSky = sky
+					}
+				} else {
+					// IdFloor, IdFloorTest
+					if sky := w.pushFlat(vi, key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+						cSky = sky
+					}
 				}
 			}
 		}
@@ -97,7 +144,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 }
 
 // pushWall adds vertices for a wall segment to the frame, computing texture coordinates, normals, and lighting.
-func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
 	//prepare
 	tex := anim.CurrentFrame()
 	if tex == nil {
@@ -111,18 +158,18 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	startLen := w.frameVertices.Len()
 	scaleW, scaleH := anim.ScaleFactor()
 
-	u0 := float32(cp.U0) / (float32(texW) * float32(scaleW))
-	u1 := float32(cp.U1) / (float32(texW) * float32(scaleW))
+	u0 := cp.u0 / (float32(texW) * float32(scaleW))
+	u1 := cp.u1 / (float32(texW) * float32(scaleW))
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
 
 	sin, cos := vi.GetAngle()
 	viX, vizY := vi.GetXY()
-	wx1 := float32((cp.Tx1 * sin) + (cp.Tz1 * cos) + viX)
-	wy1 := float32(-(cp.Tx1 * cos) + (cp.Tz1 * sin) + vizY)
-	wx2 := float32((cp.Tx2 * sin) + (cp.Tz2 * cos) + viX)
-	wy2 := float32(-(cp.Tx2 * cos) + (cp.Tz2 * sin) + vizY)
+	wx1 := (cp.tx1 * float32(sin)) + (cp.tz1 * float32(cos)) + float32(viX)
+	wy1 := -(cp.tx1 * float32(cos)) + (cp.tz1 * float32(sin)) + float32(vizY)
+	wx2 := (cp.tx2 * float32(sin)) + (cp.tz2 * float32(cos)) + float32(viX)
+	wy2 := -(cp.tx2 * float32(cos)) + (cp.tz2 * float32(sin)) + float32(vizY)
 
 	dx := float64(wx2 - wx1)
 	dz := float64((-wy2) - (-wy1))
@@ -131,8 +178,6 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	nX := float32(-dz / length)
 	nY := float32(0.0)
 	nZ := float32(dx / length)
-
-	//light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
 	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
 	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, nX, nY, nZ)
@@ -148,7 +193,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 }
 
 // pushFlat processes a flat polygon, computes its light and texture mapping, and adds its vertices to the frame buffer.
-func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -157,7 +202,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	if tex == nil {
 		return nil
 	}
-	segments := cp.Sector.Segments
+	segments := cp.sector.Segments
 	if len(segments) < 3 {
 		return nil
 	}
@@ -175,11 +220,9 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	v0V := (float32(-v0.Y) / float32(texH)) * float32(scaleH)
 
 	nY := float32(1.0)
-	if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
+	if cp.kind == model.IdCeil || cp.kind == model.IdCeilTest {
 		nY = -1.0
 	}
-
-	//light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
@@ -210,13 +253,12 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 		if l.GetSector() == nil {
 			continue
 		}
-		if !sectors[l.GetSector()] {
-			continue
-		}
+		//TODO BETTER IMPLEMENTATION
+		//if !sectors[l.GetSector()] {
+		//	continue
+		//}
 		pos := l.GetPos()
 		intensity := float32(l.GetIntensity())
-		//intensity := float32((1.0 - l.GetIntensity()) * lightScaleFactor)
-		// Mapping coordinate World: X, Z, -Y per coerenza con il resto della pipeline
 		w.frameLights.Add(float32(pos.X), float32(pos.Z), float32(-pos.Y), intensity)
 	}
 }
@@ -276,8 +318,6 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		//light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight(), lightScaleFactor)
-
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)
 		dzNorm := float64((-v2y) - (-v1y))
@@ -293,26 +333,14 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
-
 		// Triangolo 1 (Top-Left -> Bottom-Left -> Bottom-Right)
 		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
 		w.frameVertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, nX, nY, nZ)
 		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
-
 		// Triangolo 2 (Top-Left -> Bottom-Right -> Top-Right)
 		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
 		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
 		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, nX, nY, nZ)
-
 		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, int32(fv.Len()), fv.Alignment())
 	}
 }
-
-// createLight calculates light level and transformed position for rendering, returning intensity and adjusted position values.
-//func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light, lightFactor float64) (float32, float32, float32, float32) {
-//	lightIntensity := (1.0 - mLight.GetIntensity()) * lightFactor
-//	lightPos := mLight.GetPos()
-
-//	// Trasmissione diretta delle coordinate World (X, Z, -Y)
-//	return float32(lightIntensity), float32(lightPos.X), float32(lightPos.Z), float32(-lightPos.Y)
-//}

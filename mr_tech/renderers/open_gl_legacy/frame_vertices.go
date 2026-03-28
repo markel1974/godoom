@@ -1,5 +1,7 @@
 package open_gl_legacy
 
+import "fmt"
+
 const vertexAlignment = 12
 
 // FrameVertices represents a structure for storing 3D vertex data, including positions, UV coordinates, and light values.
@@ -56,6 +58,7 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, n
 
 // Get returns the slice of float32 vertices stored in the FrameVertices instance.
 func (w *FrameVertices) Get() []float32 {
+	w.CheckDuplicatedTriangles()
 	return w.vertices[:w.len]
 }
 
@@ -68,4 +71,43 @@ func (w *FrameVertices) Grow() {
 	newVertices := make([]float32, newSize)
 	copy(newVertices, w.vertices)
 	w.vertices = newVertices
+}
+
+func (w *FrameVertices) CheckDuplicatedTriangles() {
+	const stride = 12 // x, y, z, u, v, light, lcX, lcY, lcZ, nX, nY, nZ
+	const floatsPerTri = stride * 3
+
+	seen := make(map[string]int)
+	duplicates := 0
+
+	// Itera su ogni triangolo inserito nell'array flat
+	for i := 0; i+floatsPerTri <= w.len; i += floatsPerTri {
+
+		// Estrai le (x, y, z) dei 3 vertici
+		x1, y1, z1 := w.vertices[i], w.vertices[i+1], w.vertices[i+2]
+		x2, y2, z2 := w.vertices[i+stride], w.vertices[i+stride+1], w.vertices[i+stride+2]
+		x3, y3, z3 := w.vertices[i+stride*2], w.vertices[i+stride*2+1], w.vertices[i+stride*2+2]
+
+		// Calcola il baricentro per identificazione spaziale
+		cX := (x1 + x2 + x3) / 3.0
+		cY := (y1 + y2 + y3) / 3.0
+		cZ := (z1 + z2 + z3) / 3.0
+
+		// Chiave di hash con 3 decimali (assorbe l'imprecisione del float32 IEEE 754)
+		key := fmt.Sprintf("%.3f_%.3f_%.3f", cX, cY, cZ)
+
+		if count, exists := seen[key]; exists {
+			fmt.Printf("OVERDRAW RILEVATO: Triangolo al centroide [%s] sottomesso %d volte\n", key, count+1)
+			duplicates++
+			seen[key]++
+		} else {
+			seen[key] = 1
+		}
+	}
+
+	if duplicates > 0 {
+		fmt.Printf("CRITICO: Rilevati %d triangoli duplicati nel VBO di questo frame!\n", duplicates)
+	} else {
+		fmt.Println("TOPOLOGIA PULITA: Nessun triangolo sovrapposto rilevato.")
+	}
 }

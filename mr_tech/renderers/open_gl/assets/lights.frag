@@ -213,6 +213,13 @@ void main()
     FragColor = vec4(vec3(0.05) + debugFootprint, 1.0);
     */
 
+    // albedo = vec3(0.8);
+    // NdotL_room = 0.5;
+    // shadowFactor = 0.5;
+    // ambientLight = 0.8;
+    // roomBeam = vec3(0.0);
+    // dynamicLights = vec3(0.4, 0.4, 0.4);
+
     FragColor = vec4(finalLight, 0.0);
     BrightColor = vec4(dot(finalLight, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? finalLight : vec3(0.0), 1.0);
 }

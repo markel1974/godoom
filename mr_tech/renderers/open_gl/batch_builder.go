@@ -244,6 +244,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	return nil
 }
 
+/*
 func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
 	if len(lights) == 0 {
 		return
@@ -260,6 +261,83 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 		pos := l.GetPos()
 		intensity := float32(l.GetIntensity())
 		w.frameLights.Add(float32(pos.X), float32(pos.Z), float32(-pos.Y), intensity)
+	}
+}
+*/
+
+/*
+func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
+	if len(lights) == 0 {
+		return
+	}
+
+	for _, l := range lights {
+		//if l.GetSector() == nil || !sectors[l.GetSector()] {
+		//	continue
+		//}
+		pos := l.GetPos()
+		intensity := float32(l.GetIntensity())
+
+		// Scegli dinamicamente in base alle proprietà del tuo model.Light
+		lightType := float32(0) // 0=Point, 1=Spot, 2=Directional
+
+		// Colore default bianco
+		r, g, b := float32(1.0), float32(1.0), float32(1.0)
+
+		// Direzione default in basso
+		dirX, dirY, dirZ := float32(0.0), float32(-1.0), float32(0.0)
+
+		falloff := float32(10.0) // Il tuo falloffFactor
+
+		// Angoli del cono per spot (in coseni)
+		cutOff := float32(math.Cos(25.0 * math.Pi / 180.0))
+		outerCutOff := float32(math.Cos(35.0 * math.Pi / 180.0))
+
+		// Usa un metodo aggiornato in FrameLights che accetti 16 float
+		w.frameLights.Add(
+			float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType, // pos_type
+			r, g, b, intensity, // color_intensity
+			dirX, dirZ, -dirY, falloff, // dir_falloff (World Y è invertito nel tuo engine)
+			cutOff, outerCutOff, 0.0, 0.0, // spot_params + padding
+		)
+	}
+}
+*/
+
+func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
+	if len(lights) == 0 {
+		return
+	}
+
+	for _, l := range lights {
+		//if l.GetSector() == nil || !sectors[l.GetSector()] {
+		//	continue
+		//}
+		pos := l.GetPos()
+		intensity := float32(l.GetIntensity())
+
+		// 1. RIATTIVA LO SPOTLIGHT
+		lightType := float32(1) // 1 = Spot (Faretto)
+		falloff := float32(8.0)
+		r, g, b := float32(1.0), float32(1.0), float32(1.0)
+
+		// 2. VETTORE DIREZIONE CORRETTO (Spazio OpenGL: Y è l'altezza)
+		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(-1.0), float32(0.0)
+
+		// Abbassa leggermente per ridurre la sovraesposizione in profondità
+		if lightType == 1 {
+			falloff = 50
+		}
+
+		cutOff := float32(math.Cos(35.0 * math.Pi / 180.0))
+		outerCutOff := float32(math.Cos(45 * math.Pi / 180.0))
+
+		w.frameLights.Add(
+			float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
+			r, g, b, intensity,
+			dirGlX, dirGlY, dirGlZ, falloff,
+			cutOff, outerCutOff, 0.0, 0.0,
+		)
 	}
 }
 

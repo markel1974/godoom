@@ -21,10 +21,18 @@ uniform float u_ambient_light;
 uniform int u_enableShadows;
 uniform int u_volumetricSteps;
 uniform float u_beamRatioFactor;
+uniform int u_numLights;
+
+// --- NUOVO UBO PER LUCI MULTIPLE (Allineamento std140 rigoroso a 16 byte) ---
+struct Light {
+    vec4 pos_type;       // xyz: Posizione World, w: Tipo (0.0=Point, 1.0=Spot, 2.0=Directional)
+    vec4 color_intensity;// xyz: Colore RGB,      w: Intensità
+    vec4 dir_falloff;    // xyz: Direzione World, w: Falloff Factor
+    vec4 spot_params;    // x: inner cutoff (cos), y: outer cutoff (cos), z,w: padding
+};
 
 layout(std140) uniform LightsBlock {
-    vec4 u_lights[256];
-    int u_numLights;
+    Light u_lights[256];
 };
 
 float randomNoise(vec2 co) {
@@ -64,7 +72,6 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
 }
 
 vec3 calculateNormal(vec3 baseNormal) {
-    // Rimosso il gl_FrontFacing: rispetta la normale geometrica passata dal Vertex Shader
     if (dot(baseNormal, baseNormal) < 0.01) return vec3(0.0, 1.0, 0.0);
     vec3 normal = normalize(baseNormal);
 
@@ -86,16 +93,11 @@ vec3 calculateNormal(vec3 baseNormal) {
 
     float denom = max(dot(T, T), dot(B, B));
 
-    // TRAPPOLA HARDWARE (Anti-NaN)
-    // Se dFdx esplode a Infinito sui triangoli degeneri, denom va a Inf.
-    // inversesqrt(Inf) fa 0. Inf * 0 fa NaN!
-    // Il limite < 1e6 blocca gli infiniti e salva il frammento.
     if (denom > 1e-5 && denom < 1e6) {
         float invmax = inversesqrt(denom);
         mat3 TBN = mat3(T * invmax, B * invmax, normal);
         return normalize(TBN * mapNormal);
     }
-
     return normal;
 }
 
@@ -115,15 +117,15 @@ void main()
     float shadowRoom = 0.0;
     if (u_enableShadows == 1) {
         vec3 geoNormal = normalize(NormalView);
-        float roomBias = max(0.0005 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.0001);
+        float roomBias = max(0.05 * (1.0 - clamp(dot(finalNormal, L_room_dir), 0.0, 1.0)), 0.005);
         shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
     }
 
-    // 1. LUCE AMBIENTALE DIREZIONALE (Risolve il problema del "troppo chiaro")
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     float shadowFactor = (0.3 + 0.7 * (1.0 - shadowRoom));
     vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
-    // 2. NEBBIA VOLUMETRICA AMBIENTALE
+
+    // NEBBIA VOLUMETRICA
     float volRoom = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
     vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
@@ -135,91 +137,59 @@ void main()
     }
     vec3 roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
 
-    // 3. LUCI DINAMICHE (UBO)
+    // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);
 
-    vec3 spotDirView = normalize(mat3(u_view) * vec3(0.0, -1.0, 0.0));
-
-    // 2. Definisci l'apertura del cono in gradi (usiamo il coseno perché dot product restituisce il coseno)
-    float cutOff = cos(radians(25.0));       // Il cerchio di luce piena centrale
-    float outerCutOff = cos(radians(35.0));  // La sfumatura esterna del cono
-    int debug = 0;
-
     for (int i = 0; i < u_numLights; ++i) {
-        float normalizedIntensity = u_lights[i].w;
-        if (normalizedIntensity <= 0.001) continue;
-        if (normalizedIntensity > 1) {
-            normalizedIntensity = 1;
-        }
+        int lightType = int(u_lights[i].pos_type.w);
+        float intensity = clamp(u_lights[i].color_intensity.w, 0.0, 1.0);
+        if (intensity <= 0.001) continue;
 
-        vec3 lightPosView = (u_view * vec4(u_lights[i].xyz, 1.0)).xyz;
-        vec3 L = lightPosView - ViewPos;
-        float dist = length(L);
-        L = L / dist; // L punta dal frammento alla luce
+        vec3 lightColor = u_lights[i].color_intensity.xyz;
+        vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
 
-        // Calcolo Lambertiano puro
-        float NdotL = max(dot(finalNormal, L), 0.0);
+        // La direzione viene passata da Go in coordinate World, quindi la trasformiamo in View-Space
+        vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
+        float falloffFactor = u_lights[i].dir_falloff.w;
 
-        // --- HACK VOLUMETRICO ---
-        // Forza un'illuminazione di base (es. 40%) per qualsiasi geometria
-        // che si trovi fisicamente all'interno del cono, bypassando la normale.
-        float wrapLight = max(NdotL, 0.4);
+        vec3 L;
+        float dist;
+        float falloff = 1.0;
+        float spotEffect = 1.0;
 
-        // --- LOGICA DEL CONO ---
-        vec3 lightToFrag = -L;
-        float theta = dot(lightToFrag, spotDirView);
-        float spotEffect = smoothstep(outerCutOff, cutOff, theta);
+        if (lightType == 2) {
+            // --- LUCE DIREZIONALE ---
+            L = -spotDirView;
+            //PATCH
+            intensity = intensity * 1.0;
+        } else {
+            // --- POINT & SPOT ---
+            L = lightPosView - ViewPos;
+            dist = length(L);
+            L = L / dist;
+            falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
 
-        float power = normalizedIntensity * 30.0;
-        float fallofFactor = 200.0;//150.0;
-        float falloff = exp(-dist / (fallofFactor * max(normalizedIntensity, 0.1)));
-        //float falloff = 0.1;
-        dynamicLights += albedo * wrapLight * power * falloff * spotEffect;
-
-        if (debug == 1) {
-            // --- DEBUG ORIGINE LUCE ---
-            // Vettore normalizzato dalla telecamera al frammento attuale
-            vec3 viewRay = normalize(ViewPos);
-            // Distanza perpendicolare tra l'origine della luce e il raggio visivo
-            float distToRay = length(cross(lightPosView, viewRay));
-            float depthToLight = length(lightPosView);
-            float depthToFrag = length(ViewPos);
-            // Se il raggio incrocia il volume della luce (raggio 4.0 unità) e la luce NON è dietro un muro
-            if (distToRay < 1.0 && depthToLight < depthToFrag) {
-                float bulb = smoothstep(1.0, 0.0, distToRay);
-                // Disegna un nucleo magenta brillante per identificare l'origine esatta
-                dynamicLights += vec3(1.0, 0.0, 1.0) * bulb * 10.0;
+            if (lightType == 1) {
+                // --- LIMITATORE CONO SPOT ---
+                float theta = dot(-L, spotDirView);
+                float cutOff = u_lights[i].spot_params.x;
+                float outerCutOff = u_lights[i].spot_params.y;
+                spotEffect = smoothstep(outerCutOff, cutOff, theta);
             }
+
+            //PATCH
+            intensity = intensity * 50;
         }
+
+        float NdotL = max(dot(finalNormal, L), 0.0);
+        float wrapLight = max(NdotL, 0.4);
+        //float wrapLight = max(dot(finalNormal, L), 0.0);
+        float power = intensity;
+
+        dynamicLights += albedo * lightColor * wrapLight * power * falloff * spotEffect;
     }
 
     vec3 finalLight = litRoom + roomBeam + dynamicLights;
-
-
-    /*
-    vec3 debugFootprint = vec3(0.0);
-    for (int i = 0; i < u_numLights; ++i) {
-        float intensity = u_lights[i].w;
-        if (intensity <= 0.001) continue;
-        vec3 lightPosView = (u_view * vec4(u_lights[i].xyz, 1.0)).xyz;
-        vec3 L = lightPosView - ViewPos;
-        float dist = length(L);
-        L = normalize(L);
-        float NdotL = max(dot(finalNormal, L), 0.0);
-        float falloff = exp(-dist * 0.015);
-        // Macchia solida, senza anelli
-        debugFootprint += vec3(1.0, 0.0, 0.0) * NdotL * intensity * falloff;
-    }
-    FragColor = vec4(vec3(0.05) + debugFootprint, 1.0);
-    */
-
-    // albedo = vec3(0.8);
-    // NdotL_room = 0.5;
-    // shadowFactor = 0.5;
-    // ambientLight = 0.8;
-    // roomBeam = vec3(0.0);
-    // dynamicLights = vec3(0.4, 0.4, 0.4);
-
     FragColor = vec4(finalLight, 0.0);
     BrightColor = vec4(dot(finalLight, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? finalLight : vec3(0.0), 1.0);
 }

@@ -9,19 +9,6 @@ import (
 // LightLoc is a type representing uniform variable locations in a shader program.
 type LightLoc int
 
-// LightLocProjection represents the projection matrix location for the light.
-// LightLocView represents the view matrix location for the light.
-// LightLocInvView represents the inverse view matrix location for the light.
-// LightLocRoomSpaceMatrix represents the room-space matrix location for the light.
-// LightLocTexture represents the texture location for the light.
-// LightLocNormalMap represents the normal map location for the light.
-// LightLocRoomShadowMap represents the room shadow map location for the light.
-// LightLocScreenResolution represents the screen resolution location for the light.
-// LightLocAmbientLight represents the ambient light parameter location.
-// LightLocEnableShadows represents the toggle for enabling or disabling shadows.
-// LightLocVolumetricSteps represents the number of volumetric steps for rendering light effects.
-// LightLocBeamRatioFactor represents the beam ratio factor for volumetric light effects.
-// LightLocLast is a marker for the last element in the LightLoc enumeration.
 const (
 	LightLocProjection = LightLoc(iota)
 	LightLocView
@@ -35,14 +22,16 @@ const (
 	LightLocEnableShadows
 	LightLocVolumetricSteps
 	LightLocBeamRatioFactor
+	LightLocNumLights
 	LightLocLast
 )
 
 // Lights manages a shader program and its associated uniform locations for rendering lighting effects.
 type Lights struct {
-	prg       uint32
-	table     [LightLocLast]int32
-	uboLights uint32
+	prg          uint32
+	table        [LightLocLast]int32
+	uboLights    uint32
+	activeLights int32 // Aggiunto per memorizzare il numero di luci tra Prepare e Render
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
@@ -57,7 +46,8 @@ func (s *Lights) Init() {
 	// CREAZIONE UBO LIGHTS
 	gl.GenBuffers(1, &s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
-	gl.BufferData(gl.UNIFORM_BUFFER, (256*16)+16, nil, gl.DYNAMIC_DRAW)
+	// 256 luci * 64 bytes (16 float32) = 16384 bytes esatti.
+	gl.BufferData(gl.UNIFORM_BUFFER, 16384, gl.Ptr(nil), gl.DYNAMIC_DRAW)
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 }
@@ -108,9 +98,13 @@ func (s *Lights) Compile(a IAssets) error {
 	s.table[LightLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 	s.table[LightLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
 
+	// Ora è un uniform standard, non nell'UBO
+	s.table[LightLocNumLights] = gl.GetUniformLocation(s.prg, gl.Str("u_numLights\x00"))
+
 	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("invalid uniform location in lights: %d\n", idx)
+			// Evita il crash se il compilatore GLSL ottimizza via una variabile non usata
+			fmt.Printf("Warning: uniform location %d not found or optimized out\n", idx)
 		}
 	}
 
@@ -123,12 +117,14 @@ func (s *Lights) Compile(a IAssets) error {
 }
 
 func (s *Lights) Prepare(frameLights []float32, numLights int32) {
-	// UPLOAD UBO LIGHTS
+	s.activeLights = numLights
+
 	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
 	if numLights > 0 {
-		gl.BufferSubData(gl.UNIFORM_BUFFER, 0, int(numLights)*16, gl.Ptr(frameLights))
+		// Scrittura diretta dei float. len(frameLights) * 4 bytes per float.
+		gl.BufferSubData(gl.UNIFORM_BUFFER, 0, len(frameLights)*4, gl.Ptr(frameLights))
 	}
-	gl.BufferSubData(gl.UNIFORM_BUFFER, 256*16, 4, gl.Ptr(&numLights))
+	// u_numLights rimosso dal subdata dell'UBO
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 }
 
@@ -144,6 +140,9 @@ func (s *Lights) Render(view, proj, invView, roomSpace [16]float32, ambient floa
 	gl.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
 	gl.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, &invView[0])
 	gl.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, &roomSpace[0])
+
+	// Invio del contatore luci come uniform indipendente
+	gl.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
 
 	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)

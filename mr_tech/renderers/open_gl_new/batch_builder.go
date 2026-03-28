@@ -14,6 +14,7 @@ type BatchBuilder struct {
 	tex           *Textures
 	frameVertices *FrameVertices
 	drawCommands  *DrawCommands
+	frameLights   *FrameLights
 }
 
 // NewBatchBuilder initializes and returns a new BatchBuilder using the provided Compiler to manage rendering resources.
@@ -22,6 +23,7 @@ func NewBatchBuilder(compiler *Textures) *BatchBuilder {
 		tex:           compiler,
 		frameVertices: NewFrameVertices(maxBatchVertices),
 		drawCommands:  NewDrawCommands(maxFrameCommands),
+		frameLights:   NewFrameLights(256),
 	}
 }
 
@@ -31,10 +33,16 @@ func (w *BatchBuilder) Stride() int32 {
 }
 
 // GetFrameVertices retrieves the current frame's vertex data as a slice of float32 and the number of vertices stored.
-func (w *BatchBuilder) GetFrameVertices() ([]float32, int) {
+func (w *BatchBuilder) GetFrameVertices() ([]float32, int32) {
 	fvLen := w.frameVertices.Len()
 	fv := w.frameVertices.Get()
-	return fv, fvLen
+	return fv, int32(fvLen)
+}
+
+func (w *BatchBuilder) GetFrameLights() ([]float32, int32) {
+	fvLen := w.frameLights.Len()
+	fv := w.frameLights.Get()
+	return fv, int32(fvLen)
 }
 
 // GetDrawCommands retrieves the list of draw commands that represent rendering instructions for the current batch.
@@ -45,6 +53,7 @@ func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
 func (w *BatchBuilder) Reset() {
 	w.frameVertices.Reset()
 	w.drawCommands.Reset()
+	w.frameLights.Reset()
 }
 
 // CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
@@ -81,6 +90,8 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 			}
 		}
 	}
+
+	w.pushLights(vi, lights, visibleSectors)
 	w.pushThings(vi, things, visibleSectors)
 	return cSky
 }
@@ -121,15 +132,15 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	nY := float32(0.0)
 	nZ := float32(dx / length)
 
-	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
+	//light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, light, lcX, lcY, lcZ, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, light, lcX, lcY, lcZ, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
+	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, nX, nY, nZ)
 
 	//apply
 	currentLen := w.frameVertices.Len()
@@ -168,7 +179,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 		nY = -1.0
 	}
 
-	light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
+	//light, lcX, lcY, lcZ := w.createLight(vi, cp.Sector.Light, lightScaleFactor)
 
 	for i := 1; i < len(segments)-1; i++ {
 		v1, v2 := segments[i].Start, segments[i+1].Start
@@ -178,9 +189,9 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 		u2 := (float32(v2.X) / float32(texW)) * float32(scaleH)
 		v2V := (float32(-v2.Y) / float32(texH)) * float32(scaleH)
 
-		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, light, lcX, lcY, lcZ, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, light, lcX, lcY, lcZ, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, light, lcX, lcY, lcZ, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, 0, nY, 0)
+		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, 0, nY, 0)
 	}
 
 	//apply
@@ -188,6 +199,26 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
 
 	return nil
+}
+
+func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
+	if len(lights) == 0 {
+		return
+	}
+
+	for _, l := range lights {
+		if l.GetSector() == nil {
+			continue
+		}
+		if !sectors[l.GetSector()] {
+			continue
+		}
+		pos := l.GetPos()
+		intensity := float32(l.GetIntensity())
+		//intensity := float32((1.0 - l.GetIntensity()) * lightScaleFactor)
+		// Mapping coordinate World: X, Z, -Y per coerenza con il resto della pipeline
+		w.frameLights.Add(float32(pos.X), float32(pos.Z), float32(-pos.Y), intensity)
+	}
 }
 
 // pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.
@@ -245,7 +276,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight(), lightScaleFactor)
+		//light, vLcX, vLcY, vLcZ := w.createLight(vi, t.GetLight(), lightScaleFactor)
 
 		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
 		dxNorm := float64(v2x - v1x)
@@ -264,24 +295,24 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		vTop, vBottom := float32(0.0), float32(1.0)
 
 		// Triangolo 1 (Top-Left -> Bottom-Left -> Bottom-Right)
-		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-		w.frameVertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
+		w.frameVertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
 
 		// Triangolo 2 (Top-Left -> Bottom-Right -> Top-Right)
-		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, light, vLcX, vLcY, vLcZ, nX, nY, nZ)
+		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
+		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, nX, nY, nZ)
 
 		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, int32(fv.Len()), fv.Alignment())
 	}
 }
 
 // createLight calculates light level and transformed position for rendering, returning intensity and adjusted position values.
-func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light, lightFactor float64) (float32, float32, float32, float32) {
-	lightIntensity := (1.0 - mLight.GetIntensity()) * lightFactor
-	lightPos := mLight.GetPos()
+//func (w *BatchBuilder) createLight(vi *model.ViewMatrix, mLight *model.Light, lightFactor float64) (float32, float32, float32, float32) {
+//	lightIntensity := (1.0 - mLight.GetIntensity()) * lightFactor
+//	lightPos := mLight.GetPos()
 
-	// Trasmissione diretta delle coordinate World (X, Z, -Y)
-	return float32(lightIntensity), float32(lightPos.X), float32(lightPos.Z), float32(-lightPos.Y)
-}
+//	// Trasmissione diretta delle coordinate World (X, Z, -Y)
+//	return float32(lightIntensity), float32(lightPos.X), float32(lightPos.Z), float32(-lightPos.Y)
+//}

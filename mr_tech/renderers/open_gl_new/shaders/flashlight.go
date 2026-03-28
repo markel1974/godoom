@@ -2,8 +2,10 @@ package shaders
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/model"
 )
 
 type FlashlightLoc int
@@ -36,13 +38,63 @@ const (
 type Flashlight struct {
 	prg   uint32
 	table [FlashLocLast]int32
+
+	factor           float32
+	offsetX          float32
+	offsetY          float32
+	enableShadows    bool
+	enableShadowsInt int32
 }
 
 func NewShaderFlashlight() *Flashlight {
-	return &Flashlight{}
+	f := &Flashlight{
+		factor:           5.0,
+		offsetX:          0.0,
+		offsetY:          0.0,
+		enableShadows:    false,
+		enableShadowsInt: 0,
+	}
+	f.EnableFlash(false)
+	return f
 }
 
-func (s *Flashlight) Setup(width, height int32) {}
+func (s *Flashlight) GetFactor() float32 {
+	return s.factor
+}
+
+func (s *Flashlight) GetOffsetX() float32 {
+	return s.offsetX
+}
+
+func (s *Flashlight) GetOffsetY() float32 {
+	return s.offsetY
+}
+
+func (s *Flashlight) IncreaseFlashFactor() {
+	s.factor++
+}
+
+// DecreaseFlashFactor reduces the factor value by 1, ensuring it does not drop below 0.
+func (s *Flashlight) DecreaseFlashFactor() {
+	if s.factor > 0 {
+		s.factor--
+	}
+}
+
+func (s *Flashlight) EnableFlash(e bool) {
+	s.enableShadows = e
+	if s.enableShadows {
+		s.offsetX, s.offsetY = 0.1, -0.05
+		s.enableShadowsInt = 1
+	} else {
+		s.offsetX, s.offsetY = 0.0, 0.0
+		s.enableShadowsInt = 0
+	}
+}
+
+func (s *Flashlight) Setup(width, height int32) {
+
+}
 
 func (s *Flashlight) SetupSamplers() {
 	gl.UseProgram(s.prg)
@@ -105,7 +157,19 @@ func (s *Flashlight) Compile(a IAssets) error {
 	return nil
 }
 
-func (s *Flashlight) Render(proj, view, invView, flashSpace [16]float32, flashDirY, flashFactor, flashOffsetX, flashOffsetY, fConeStart, fConeEnd, fBase float32, enableShadows, volSteps int32, screenW, screenH, shininessWall, shininessFloor, specBoostWall, specBoostFloor, beamRatio float32) {
+func (s *Flashlight) Render(view, proj, invView, flashSpace [16]float32, pitchShear float32, fSwayX, fSwayY float32, screenW, screenH float32) {
+	const shininessWall = 128.0
+	const shininessFloor = 64.0
+	const specBoostWall = 0.05
+	const specBoostFloor = 0.1
+	const beamRatio = 0.05
+	const fBase = 0.9
+	const volSteps = 32
+
+	fConeStart := float32(math.Cos(fovFlashDeg/2.0*math.Pi/180.0)) + 0.01
+	fConeEnd := float32(math.Cos(fovFlashDeg / 2.0 * 0.6 * math.Pi / 180.0))
+	flashDirY := pitchShear / (2.0 * float32(model.VFov))
+
 	gl.UseProgram(s.prg)
 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])
@@ -115,12 +179,12 @@ func (s *Flashlight) Render(proj, view, invView, flashSpace [16]float32, flashDi
 
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
 	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), 0.0, flashDirY, -1.0)
-	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), flashFactor)
-	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), flashOffsetX, flashOffsetY, 0.0)
+	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
+	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), fConeStart)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), fConeEnd)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
-	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), enableShadows)
+	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.enableShadowsInt)
 
 	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), shininessWall)
 	gl.Uniform1f(s.GetUniform(FlashLocShininessFloor), shininessFloor)

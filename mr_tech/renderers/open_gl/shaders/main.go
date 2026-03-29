@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl_legacy/shaders"
 )
 
 // MainLoc represents an identifier for uniform variables in the Main shader program.
@@ -26,8 +27,8 @@ const (
 type Main struct {
 	prg               uint32
 	table             [MainLocLast]int32
-	mainVao           uint32
-	mainVbo           uint32
+	mainVAO           uint32
+	mainVBO           uint32
 	width             int32
 	height            int32
 	view              [16]float32
@@ -46,14 +47,25 @@ func NewMain() *Main {
 }
 
 // Init initializes the main VAO and VBO for the shader.
-func (s *Main) Init() {
-	const vboMaxFloats = 1024 * 1024 * 4
+func (s *Main) Init(stride int32) {
+	vboMaxFloats := 8192 * int(stride)
 
-	gl.GenVertexArrays(1, &s.mainVao)
-	gl.BindVertexArray(s.mainVao)
-	gl.GenBuffers(1, &s.mainVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVbo)
-	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats*4, nil, gl.DYNAMIC_DRAW)
+	gl.GenVertexArrays(1, &s.mainVAO)
+	gl.BindVertexArray(s.mainVAO)
+	gl.GenBuffers(1, &s.mainVBO)
+	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO)
+	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats, nil, gl.DYNAMIC_DRAW)
+
+	// VBO A 8 FLOAT
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
+	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
+	gl.EnableVertexAttribArray(1)
+	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
+	gl.EnableVertexAttribArray(2)
+
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
 }
 
 // SetupSamplers configures the shader program's texture samplers.
@@ -81,9 +93,9 @@ func (s *Main) GetUniform(id MainLoc) int32 {
 	return s.table[id]
 }
 
-// GetVao returns the ID of the main Vertex Array Object (VAO).
-func (s *Main) GetVao() uint32 {
-	return s.mainVao
+// GetVAO returns the ID of the main Vertex Array Object (VAO).
+func (s *Main) GetVAO() uint32 {
+	return s.mainVAO
 }
 
 // Compile initializes, compiles, and links the shaders.
@@ -125,13 +137,13 @@ func (s *Main) Compile(a IAssets) error {
 // Prepare uploads vertex data from the given FrameVertices to the GPU buffer.
 func (s *Main) Prepare(vertices []float32, verticesLen int32) {
 	total := int(verticesLen * 4)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO)
 	gl.BufferData(gl.ARRAY_BUFFER, total, nil, gl.STREAM_DRAW)
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, total, gl.Ptr(vertices))
 }
 
 // UpdateUniforms updates the shader's uniform variables for base rendering.
-func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
+func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [16]float32) {
 	aspect := float32(s.width) / float32(s.height)
 	scaleX := -(fovScaleFactor / aspect) * float32(model.HFov)
 	pitchShear := float32(-vi.GetYaw())
@@ -160,11 +172,16 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 		tx, ty, tz, 1,
 	}
 
-	return s.proj, s.view
+	var invView [16]float32
+	if inv, ok := shaders.MatrixInverse4x4(s.view); ok {
+		invView = inv
+	}
+
+	return s.proj, s.view, invView
 }
 
 // Render sets up and executes the main rendering pipeline for the base pass.
-func (s *Main) Render(ssaoBlurTex uint32) {
+func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
 	gl.UseProgram(s.GetProgram())
 
 	gl.UniformMatrix4fv(s.GetUniform(MainLocView), 1, false, &s.view[0])
@@ -175,8 +192,10 @@ func (s *Main) Render(ssaoBlurTex uint32) {
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
-	gl.BindVertexArray(s.mainVao)
+	gl.BindVertexArray(s.mainVAO)
 
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
+
+	renderGeometry()
 }

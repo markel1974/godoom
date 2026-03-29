@@ -98,8 +98,9 @@ func (w *RenderOpenGL) doInitialize() error {
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
-		stride := w.builder.VerticesStride()
-		if err := w.shaders.Setup(int32(fbW), int32(fbH), stride); err != nil {
+		vStride := w.builder.VerticesStride()
+		lStride := w.builder.LightsStride()
+		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {

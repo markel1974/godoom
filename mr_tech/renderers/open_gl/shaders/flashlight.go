@@ -8,8 +8,31 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
+// FlashlightLoc represents a uniform location identifier used in the Flashlight's shader program.
 type FlashlightLoc int
 
+// FlashLocProjection specifies the location of the projection matrix for the flashlight.
+// FlashLocView specifies the location of the view matrix for the flashlight.
+// FlashLocInvView specifies the location of the inverse view matrix for the flashlight.
+// FlashLocFlashSpaceMatrix specifies the location of the flashlight space matrix.
+// FlashLocTexture specifies the location of the flashlight texture.
+// FlashLocNormalMap specifies the location of the flashlight normal map.
+// FlashLocFlashShadowMap specifies the location of the flashlight shadow map.
+// FlashLocScreenResolution specifies the location of the screen resolution data.
+// FlashLocFlashDir specifies the location of the flashlight direction data.
+// FlashLocFlashIntensityFactor specifies the location of the flashlight intensity factor.
+// FlashLocFlashOffset specifies the location of the flashlight offset data.
+// FlashLocFlashConeStart specifies the location of the flashlight cone start parameter.
+// FlashLocFlashConeEnd specifies the location of the flashlight cone end parameter.
+// FlashLocFlashBase specifies the location of the base position of the flashlight.
+// FlashLocEnableShadows specifies the location of the flashlight shadow enable flag.
+// FlashLocShininessWall specifies the location of the wall shininess factor for the flashlight effect.
+// FlashLocShininessFloor specifies the location of the floor shininess factor for the flashlight effect.
+// FlashLocSpecBoostWall specifies the location of the wall specular boost factor for the flashlight effect.
+// FlashLocSpecBoostFloor specifies the location of the floor specular boost factor for the flashlight effect.
+// FlashLocBeamRatioFactor specifies the location of the flashlight beam ratio factor.
+// FlashLocVolumetricSteps specifies the location of the number of volumetric rendering steps for the flashlight.
+// FlashLocLast represents the last flashlight location, marking the end of the enumeration.
 const (
 	FlashLocProjection = FlashlightLoc(iota)
 	FlashLocView
@@ -35,67 +58,82 @@ const (
 	FlashLocLast
 )
 
+// Flashlight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
 type Flashlight struct {
 	prg   uint32
 	table [FlashLocLast]int32
 
-	factor           float32
-	offsetX          float32
-	offsetY          float32
-	enableShadows    bool
-	enableShadowsInt int32
+	factor     float32
+	offsetX    float32
+	offsetY    float32
+	shadows    bool
+	shadowsInt int32
 }
 
+// NewShaderFlashlight creates and returns a new instance of Flashlight with default values and shadows disabled.
 func NewShaderFlashlight() *Flashlight {
 	f := &Flashlight{
-		factor:           30.0,
-		offsetX:          0.0,
-		offsetY:          0.0,
-		enableShadows:    false,
-		enableShadowsInt: 0,
+		factor:     30.0,
+		offsetX:    0.0,
+		offsetY:    0.0,
+		shadows:    false,
+		shadowsInt: 0,
 	}
-	f.EnableFlash(false)
+	f.EnableShadows(false)
 	return f
 }
 
+// GetFactor returns the current intensity factor of the flashlight.
 func (s *Flashlight) GetFactor() float32 {
 	return s.factor
 }
 
-func (s *Flashlight) GetOffsetX() float32 {
+// GetOffsetX returns the horizontal offset value for the flashlight.
+func (s *Flashlight) GetOffsetX(bob float64) float32 {
+	if s.shadows {
+		return s.offsetX + float32(math.Cos(bob*0.5)*1.1)
+	}
 	return s.offsetX
 }
 
-func (s *Flashlight) GetOffsetY() float32 {
+// GetOffsetY returns the vertical offset value of the flashlight.
+func (s *Flashlight) GetOffsetY(bob float64) float32 {
+	if s.shadows {
+		return s.offsetY - float32(math.Abs(math.Sin(bob))*1.2)
+	}
 	return s.offsetY
 }
 
+// IncreaseFlashFactor increments the flashlight's intensity factor by increasing the `factor` field by 1.
 func (s *Flashlight) IncreaseFlashFactor() {
 	s.factor++
 }
 
-// DecreaseFlashFactor reduces the factor value by 1, ensuring it does not drop below 0.
+// DecreaseFlashFactor reduces the flashlight's intensity factor by 1, ensuring it does not drop below 0.
 func (s *Flashlight) DecreaseFlashFactor() {
 	if s.factor > 0 {
 		s.factor--
 	}
 }
 
-func (s *Flashlight) EnableFlash(e bool) {
-	s.enableShadows = e
-	if s.enableShadows {
+// EnableShadows toggles shadow rendering for the flashlight and updates related shadow parameters.
+func (s *Flashlight) EnableShadows(e bool) {
+	s.shadows = e
+	if s.shadows {
 		s.offsetX, s.offsetY = 0.1, -0.05
-		s.enableShadowsInt = 1
+		s.shadowsInt = 1
 	} else {
 		s.offsetX, s.offsetY = 0.0, 0.0
-		s.enableShadowsInt = 0
+		s.shadowsInt = 0
 	}
 }
 
+// Setup initializes the flashlight's dimensions using the specified width and height values.
 func (s *Flashlight) Setup(width, height int32) {
 
 }
 
+// SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
 func (s *Flashlight) SetupSamplers() {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(FlashLocTexture), 0)
@@ -103,10 +141,12 @@ func (s *Flashlight) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 4)
 }
 
+// GetUniform retrieves the uniform location associated with the given FlashlightLoc ID from the internal table.
 func (s *Flashlight) GetUniform(id FlashlightLoc) int32 {
 	return s.table[id]
 }
 
+// Compile builds and links the shader program for the flashlight, resolving uniforms and handling shader errors.
 func (s *Flashlight) Compile(a IAssets) error {
 	vSrc, fSrc, err := a.ReadMulti("main.vert", "flashlight.frag")
 	if err != nil {
@@ -157,7 +197,8 @@ func (s *Flashlight) Compile(a IAssets) error {
 	return nil
 }
 
-func (s *Flashlight) Render(view, proj, invView, flashSpace [16]float32, pitchShear float32, fSwayX, fSwayY float32, screenW, screenH float32) {
+// Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
+func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, pitchShear float32, fSwayX, fSwayY float32, screenW, screenH float32) {
 	const shininessWall = 128.0
 	const shininessFloor = 64.0
 	const specBoostWall = 0.05
@@ -165,6 +206,10 @@ func (s *Flashlight) Render(view, proj, invView, flashSpace [16]float32, pitchSh
 	const beamRatio = 0.05
 	const fBase = 0.9
 	const volSteps = 32
+
+	if s.factor <= 0 {
+		return
+	}
 
 	fConeStart := float32(math.Cos(fovFlashDeg/2.0*math.Pi/180.0)) + 0.01
 	fConeEnd := float32(math.Cos(fovFlashDeg / 2.0 * 0.6 * math.Pi / 180.0))
@@ -184,7 +229,7 @@ func (s *Flashlight) Render(view, proj, invView, flashSpace [16]float32, pitchSh
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), fConeStart)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), fConeEnd)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
-	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.enableShadowsInt)
+	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
 	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), shininessWall)
 	gl.Uniform1f(s.GetUniform(FlashLocShininessFloor), shininessFloor)
@@ -192,4 +237,11 @@ func (s *Flashlight) Render(view, proj, invView, flashSpace [16]float32, pitchSh
 	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), specBoostFloor)
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), beamRatio)
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), volSteps)
+
+	if s.shadows {
+		gl.ActiveTexture(gl.TEXTURE4)
+		gl.BindTexture(gl.TEXTURE_2D, flashShadowTex)
+	}
+
+	renderGeometry()
 }

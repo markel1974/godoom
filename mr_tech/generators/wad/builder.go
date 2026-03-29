@@ -101,11 +101,11 @@ func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, tex
 	floorType := model.AnimationKindLoop
 	if wadSector.CeilingPic == SkyPicture {
 		ceilingType = model.AnimationKindSky
-		miSector.Light.Kind = model.LightKindAmbient
+		miSector.Light.Kind = model.LightKindOpenAir
 	}
 	if wadSector.FloorPic == SkyPicture {
 		floorType = model.AnimationKindSky
-		miSector.Light.Kind = model.LightKindAmbient
+		miSector.Light.Kind = model.LightKindOpenAir
 	}
 	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.CeilingPic), ceilingType, TextureScaleW, TextureScaleH)
 	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(wadSector.FloorPic), floorType, TextureScaleW, TextureScaleH)

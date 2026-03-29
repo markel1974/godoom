@@ -6,13 +6,13 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ShaderSkyLoc represents an enumerated type for locating shader uniform variables in a ShaderSky instance.
+// ShaderSkyLoc represents the location index of shader uniforms specific to the ShaderSky renderer.
 type ShaderSkyLoc int
 
-// ShaderSkyLocProjection specifies the location index for the projection matrix in the shader.
-// ShaderSkyLocView specifies the location index for the view matrix in the shader.
-// ShaderSkyLocSky specifies the location index for the sky texture in the shader.
-// ShaderSkyLocLast marks the last valid index for shader locations.
+// ShaderSkyLocProjection represents the projection matrix location for the sky shader.
+// ShaderSkyLocView represents the view matrix location for the sky shader.
+// ShaderSkyLocSky represents the sky texture location for the sky shader.
+// ShaderSkyLocLast represents the total count of sky shader locations.
 const (
 	ShaderSkyLocProjection = ShaderSkyLoc(iota)
 	ShaderSkyLocView
@@ -20,32 +20,32 @@ const (
 	ShaderSkyLocLast
 )
 
-// ShaderSky represents a GPU shader program used for rendering sky environments with custom vertex and fragment workflows.
+// ShaderSky is a type that manages the state and rendering of the sky shader in a graphics application.
 type ShaderSky struct {
 	prg    uint32
 	table  [ShaderSkyLocLast]int32
-	skyVao uint32
-	skyVbo uint32
+	skyVAO uint32
+	skyVBO uint32
 	view   [16]float32
 	proj   [16]float32
 	width  int32
 	height int32
 }
 
-// NewShaderSky initializes and returns a new instance of ShaderSky with default uninitialized properties.
+// NewShaderSky creates and returns a new instance of ShaderSky with default uninitialized properties.
 func NewShaderSky() *ShaderSky {
 	return &ShaderSky{
 		prg: 0,
 	}
 }
 
-// SetupSamplers initializes and configures the vertex array and buffer objects for rendering the sky geometry.
+// SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
 func (s *ShaderSky) SetupSamplers() {
 	// sky
-	gl.GenVertexArrays(1, &s.skyVao)
-	gl.BindVertexArray(s.skyVao)
-	gl.GenBuffers(1, &s.skyVbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.skyVbo)
+	gl.GenVertexArrays(1, &s.skyVAO)
+	gl.BindVertexArray(s.skyVAO)
+	gl.GenBuffers(1, &s.skyVBO)
+	gl.BindBuffer(gl.ARRAY_BUFFER, s.skyVBO)
 	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
 	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
@@ -55,33 +55,34 @@ func (s *ShaderSky) SetupSamplers() {
 	gl.DepthFunc(gl.LEQUAL)
 }
 
-// Setup initializes the ShaderSky instance with the provided width and height values.
+// Setup initializes the ShaderSky dimensions by assigning the provided width and height values.
 func (s *ShaderSky) Setup(width int32, height int32) {
 	s.width = width
 	s.height = height
 }
 
-// GetProgram returns the OpenGL shader program ID associated with the ShaderSky instance.
+// GetProgram returns the OpenGL program identifier associated with the ShaderSky instance.
 func (s *ShaderSky) GetProgram() uint32 {
 	return s.prg
 }
 
-// GetUniform returns the OpenGL uniform location for the specified ShaderSkyLoc identifier.
+// GetUniform retrieves the location of a shader uniform variable by its ID.
 func (s *ShaderSky) GetUniform(id ShaderSkyLoc) int32 {
 	return s.table[id]
 }
 
-// UpdateUniforms updates the view and projection matrices used by the shader with the given values.
+// UpdateUniforms updates the view and projection matrices for the shader.
 func (s *ShaderSky) UpdateUniforms(view, proj [16]float32) {
 	s.view = view
 	s.proj = proj
 }
 
-func (s *ShaderSky) GetVao() uint32 {
-	return s.skyVao
+// GetVAO retrieves the vertex array object (VAO) associated with the ShaderSky instance.
+func (s *ShaderSky) GetVAO() uint32 {
+	return s.skyVAO
 }
 
-// Compile loads and compiles the vertex and fragment shaders, creates a shader program, and initializes uniform locations.
+// Compile compiles the shader program for rendering the sky using provided vertex and fragment shaders from assets.
 func (s *ShaderSky) Compile(a IAssets) error {
 	vertexSrc, fragmentSrc, err := a.ReadMulti("sky.vert", "sky.frag")
 	if err != nil {
@@ -111,7 +112,7 @@ func (s *ShaderSky) Compile(a IAssets) error {
 	return nil
 }
 
-// Render renders the skybox using the specified textures and projection/view matrices. Handles depth testing and texture bindings.
+// Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
 func (s *ShaderSky) Render(texId uint32, normTexId uint32) {
 	gl.UseProgram(s.GetProgram())
 
@@ -121,7 +122,7 @@ func (s *ShaderSky) Render(texId uint32, normTexId uint32) {
 	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, &s.proj[0])
 	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, &s.view[0])
 
-	gl.BindVertexArray(s.skyVao)
+	gl.BindVertexArray(s.skyVAO)
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, texId)

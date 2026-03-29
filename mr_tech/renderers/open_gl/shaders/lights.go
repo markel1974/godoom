@@ -6,9 +6,23 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// LightLoc is a type representing uniform variable locations in a shader program.
+// LightLoc represents an identifier for light-related uniform locations in a shader program.
 type LightLoc int
 
+// LightLocProjection specifies the light's projection matrix location.
+// LightLocView specifies the light's view matrix location.
+// LightLocInvView specifies the light's inverse view matrix location.
+// LightLocRoomSpaceMatrix specifies the light's room-space matrix location.
+// LightLocTexture specifies the light's texture resource location.
+// LightLocNormalMap specifies the light's normal map resource location.
+// LightLocRoomShadowMap specifies the light's room shadow map resource location.
+// LightLocScreenResolution specifies the screen resolution location.
+// LightLocAmbientLight specifies the ambient light intensity location.
+// LightLocEnableShadows specifies whether shadows are enabled location.
+// LightLocVolumetricSteps specifies the number of volumetric lighting steps location.
+// LightLocBeamRatioFactor specifies the beam-to-light ratio factor location.
+// LightLocNumLights specifies the number of active lights location.
+// LightLocLast specifies the marker for the last LightLoc value.
 const (
 	LightLocProjection = LightLoc(iota)
 	LightLocView
@@ -26,12 +40,13 @@ const (
 	LightLocLast
 )
 
-// Lights manages a shader program and its associated uniform locations for rendering lighting effects.
+// Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
 	prg          uint32
 	table        [LightLocLast]int32
 	uboLights    uint32
 	activeLights int32 // Aggiunto per memorizzare il numero di luci tra Prepare e Render
+	shadows      int32
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
@@ -39,20 +54,30 @@ func NewLights() *Lights {
 	return &Lights{}
 }
 
-// Setup initializes light configurations with the specified screen width and height.
+// EnableShadows enables or disables shadow rendering based on the provided boolean value.
+func (s *Lights) EnableShadows(e bool) {
+	if e {
+		s.shadows = 1
+	} else {
+		s.shadows = 0
+	}
+}
+
+// Setup initializes the lighting system with the given screen width and height.
 func (s *Lights) Setup(width, height int32) {}
 
-func (s *Lights) Init() {
+// Init initializes the uniform buffer object (UBO) for storing light data with the specified stride size.
+func (s *Lights) Init(lStride int32) {
 	// CREAZIONE UBO LIGHTS
+	size := 1024 * int(lStride)
 	gl.GenBuffers(1, &s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
-	// 256 luci * 64 bytes (16 float32) = 16384 bytes esatti.
-	gl.BufferData(gl.UNIFORM_BUFFER, 16384, gl.Ptr(nil), gl.DYNAMIC_DRAW)
+	gl.BufferData(gl.UNIFORM_BUFFER, size, gl.Ptr(nil), gl.DYNAMIC_DRAW)
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 }
 
-// SetupSamplers initializes texture samplers for the shader by binding uniform locations to specific texture units.
+// SetupSamplers configures shader samplers for texture, normal map, and room shadow map locations.
 func (s *Lights) SetupSamplers() {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(LightLocTexture), 0)
@@ -60,12 +85,12 @@ func (s *Lights) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 3)
 }
 
-// GetUniform retrieves the location of a specified uniform variable from the precomputed table.
+// GetUniform retrieves the uniform location for a given LightLoc identifier from the internal table.
 func (s *Lights) GetUniform(id LightLoc) int32 {
 	return s.table[id]
 }
 
-// Compile initializes and builds shaders for the Lights object, setting up uniform locations and validating their presence.
+// Compile compiles the shaders for the Lights object and initializes its uniform locations and shader program.
 func (s *Lights) Compile(a IAssets) error {
 	vSrc, fSrc, err := a.ReadMulti("main.vert", "lights.frag")
 	if err != nil {
@@ -116,20 +141,19 @@ func (s *Lights) Compile(a IAssets) error {
 	return nil
 }
 
+// Prepare updates the uniform buffer object (UBO) with lighting data for rendering and sets the active lights count.
 func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 	s.activeLights = numLights
-
 	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
 	if numLights > 0 {
 		// Scrittura diretta dei float. len(frameLights) * 4 bytes per float.
 		gl.BufferSubData(gl.UNIFORM_BUFFER, 0, len(frameLights)*4, gl.Ptr(frameLights))
 	}
-	// u_numLights rimosso dal subdata dell'UBO
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 }
 
-// Render configures and dispatches the shader program to render lights with provided matrices, ambient light, and settings.
-func (s *Lights) Render(view, proj, invView, roomSpace [16]float32, ambient float32, enableShadows int32, screenW, screenH float32) {
+// Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
+func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
 	const spotIntensity = 10.0
 	const beamRatio = 0.05
 	const volSteps = 32
@@ -146,9 +170,16 @@ func (s *Lights) Render(view, proj, invView, roomSpace [16]float32, ambient floa
 
 	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), enableShadows)
+	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
 	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
 
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
+
+	if s.shadows != 0 {
+		gl.ActiveTexture(gl.TEXTURE3)
+		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
+	}
+
+	renderGeometry()
 }

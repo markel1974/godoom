@@ -257,7 +257,10 @@ func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 }
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
+func (s *SSAO) Render(drawScreenQuad func(), blurPgr, mainVAO, postFBO uint32) {
+	s.Prepare()
+	gl.BindVertexArray(mainVAO)
+
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
@@ -280,4 +283,14 @@ func (s *SSAO) Render(drawScreenQuad func(), blurPgr uint32) {
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
 	drawScreenQuad()
+
+	// 3. FORWARD MULTI-PASS
+	gl.BindFramebuffer(gl.FRAMEBUFFER, postFBO)
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	gl.BindVertexArray(mainVAO)
+
+	// PASS A: BASE
+	gl.DepthFunc(gl.LEQUAL)
+	gl.DepthMask(true)
 }

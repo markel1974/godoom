@@ -68,6 +68,11 @@ func (w *BatchBuilder) VerticesStride() int32 {
 	return w.vertices.Stride() * 4
 }
 
+// LightsStride returns the stride of the vertex buffer in bytes by multiplying the stride in elements by 4.
+func (w *BatchBuilder) LightsStride() int32 {
+	return w.frameLights.Stride() * 4
+}
+
 // GetFrameVertices retrieves the vertex data and its count from the frame's vertex buffer. Returns a slice of float32 for vertex data and an int32 representing the vertex count.
 func (w *BatchBuilder) GetFrameVertices() ([]float32, int32) {
 	fvLen := w.vertices.Len()
@@ -267,6 +272,14 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 		falloff := float32(0.0)
 		lightType := float32(-1)
 		switch l.GetKind() {
+		case model.LightKindOpenAir:
+			lightType = 1
+			//intensity *= 115
+			falloff = 50.0
+			r, g, b = float32(1.0), float32(1.0), float32(1.0)
+			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
+			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+			outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
 		case model.LightKindAmbient:
 			r, g, b = float32(1.0), float32(1.0), float32(1.0)
 			lightType = 0
@@ -278,7 +291,7 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 			// 2. VETTORE DIREZIONE CORRETTO (Spazio OpenGL: Y è l'altezza)
 			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
 			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-			outerCutOff = float32(math.Cos(45 * math.Pi / 180.0))
+			outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
 		case model.LightKindNone:
 			continue
 		default:

@@ -6,6 +6,7 @@ const (
 	LightKindNone LightKind = iota
 	LightKindSpot
 	LightKindAmbient
+	LightKindOpenAir
 	LightKindDiffuse
 	LightKindDirectional
 	LightKindParticle

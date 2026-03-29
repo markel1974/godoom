@@ -34,11 +34,17 @@ type Depth struct {
 	flashMatrix [16]float32
 	width       int32
 	height      int32
+	shadows     bool
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
 func NewDepth() *Depth {
 	return &Depth{}
+}
+
+// EnableShadows toggles shadow rendering by setting the internal shadows flag to the provided boolean value.
+func (s *Depth) EnableShadows(e bool) {
+	s.shadows = e
 }
 
 // Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
@@ -63,9 +69,14 @@ func (s *Depth) GetUniform(id DepthLoc) int32 {
 	return s.table[id]
 }
 
-// GetShadowTextures retrieves the texture IDs for the room and flashlight shadow maps, used for depth-based rendering.
-func (s *Depth) GetShadowTextures() (uint32, uint32) {
-	return s.roomShadowTex, s.flashShadowTex
+// GetRoomShadowTextures retrieves the texture ID associated with the room shadow map.
+func (s *Depth) GetRoomShadowTextures() uint32 {
+	return s.roomShadowTex
+}
+
+// GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight's shadow map.
+func (s *Depth) GetFlashShadowTextures() uint32 {
+	return s.flashShadowTex
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
@@ -134,7 +145,13 @@ func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
-func (s *Depth) Render(renderScene func()) {
+func (s *Depth) Render(renderScene func(), mainVao uint32) {
+	if !s.shadows {
+		return
+	}
+
+	gl.BindVertexArray(mainVao)
+
 	gl.Disable(gl.CULL_FACE)
 	gl.Enable(gl.POLYGON_OFFSET_FILL)
 

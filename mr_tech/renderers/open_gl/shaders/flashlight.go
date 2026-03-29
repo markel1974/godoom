@@ -47,7 +47,7 @@ const (
 	FlashLocFlashOffset
 	FlashLocFlashConeStart
 	FlashLocFlashConeEnd
-	FlashLocFlashBase
+	//FlashLocFlashBase
 	FlashLocEnableShadows
 	FlashLocShininessWall
 	FlashLocShininessFloor
@@ -190,7 +190,7 @@ func (s *Flashlight) Compile(a IAssets) error {
 	s.table[FlashLocFlashOffset] = gl.GetUniformLocation(s.prg, gl.Str("u_flashOffset\x00"))
 	s.table[FlashLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
 	s.table[FlashLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
-	s.table[FlashLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
+	//s.table[FlashLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
 	s.table[FlashLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
 	s.table[FlashLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
 	s.table[FlashLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
@@ -213,7 +213,7 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	const specBoostWall = 0.05
 	const specBoostFloor = 0.1
 	const beamRatio = 0.05
-	const fBase = 0.9
+	//const fBase = 0.9
 	const volSteps = 32
 
 	if s.factor <= 0 {
@@ -237,7 +237,7 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), fConeStart)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), fConeEnd)
-	gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
+	//gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
 	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
 	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), shininessWall)

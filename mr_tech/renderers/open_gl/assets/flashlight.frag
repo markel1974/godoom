@@ -22,7 +22,7 @@ uniform float u_flashIntensityFactor;
 uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
-uniform float u_flashBase;
+//uniform float u_flashBase;
 uniform int u_enableShadows;
 
 uniform float u_shininessWall;
@@ -151,7 +151,8 @@ void main()
     }
 
     //float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
-    float diffFlash = max(dot(finalNormal, L_flash) + u_flashBase, 0.0);
+    //float diffFlash = max(dot(finalNormal, L_flash) + u_flashBase, 0.0);
+    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
 
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));

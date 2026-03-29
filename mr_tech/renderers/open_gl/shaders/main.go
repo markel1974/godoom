@@ -12,6 +12,10 @@ import (
 type MainLoc int
 
 const (
+	mainDoubleBuffer = 2
+)
+
+const (
 	MainLocView = MainLoc(iota)
 	MainLocProjection
 	MainLocTexture
@@ -27,8 +31,9 @@ const (
 type Main struct {
 	prg               uint32
 	table             [MainLocLast]int32
-	mainVAO           uint32
-	mainVBO           uint32
+	mainVAO           [mainDoubleBuffer]uint32 // double buffering
+	mainVBO           [mainDoubleBuffer]uint32 // double buffering
+	frameIdx          int                      // double buffer index
 	width             int32
 	height            int32
 	view              [16]float32
@@ -51,20 +56,24 @@ func NewMain(stride int32) *Main {
 // Init initializes the main VAO and VBO for the shader.
 func (s *Main) Init() error {
 	vboMaxFloats := 8192 * int(s.stride)
+	bytesSize := vboMaxFloats * 4
 
-	gl.GenVertexArrays(1, &s.mainVAO)
-	gl.BindVertexArray(s.mainVAO)
-	gl.GenBuffers(1, &s.mainVBO)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO)
-	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats, nil, gl.DYNAMIC_DRAW)
+	gl.GenVertexArrays(mainDoubleBuffer, &s.mainVAO[0])
+	gl.GenBuffers(mainDoubleBuffer, &s.mainVBO[0])
 
-	// VBO A 8 FLOAT
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, s.stride, gl.PtrOffset(3*4))
-	gl.EnableVertexAttribArray(1)
-	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(5*4))
-	gl.EnableVertexAttribArray(2)
+	for i := 0; i < mainDoubleBuffer; i++ {
+		gl.BindVertexArray(s.mainVAO[i])
+		gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[i])
+
+		gl.BufferData(gl.ARRAY_BUFFER, bytesSize, nil, gl.DYNAMIC_DRAW)
+
+		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(0))
+		gl.EnableVertexAttribArray(0)
+		gl.VertexAttribPointer(1, 2, gl.FLOAT, false, s.stride, gl.PtrOffset(3*4))
+		gl.EnableVertexAttribArray(1)
+		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(5*4))
+		gl.EnableVertexAttribArray(2)
+	}
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
@@ -100,7 +109,7 @@ func (s *Main) GetUniform(id MainLoc) int32 {
 
 // GetVAO returns the ID of the main Vertex Array Object (VAO).
 func (s *Main) GetVAO() uint32 {
-	return s.mainVAO
+	return s.mainVAO[s.frameIdx]
 }
 
 // Compile initializes, compiles, and links the shaders.
@@ -141,9 +150,12 @@ func (s *Main) Compile(a IAssets) error {
 
 // Prepare uploads vertex data from the given FrameVertices to the GPU buffer.
 func (s *Main) Prepare(vertices []float32, verticesLen int32) {
+	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
+
 	total := int(verticesLen * 4)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO)
-	gl.BufferData(gl.ARRAY_BUFFER, total, nil, gl.STREAM_DRAW)
+	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
+
+	// Scrittura diretta senza orphaning
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, total, gl.Ptr(vertices))
 }
 
@@ -197,7 +209,9 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
-	gl.BindVertexArray(s.mainVAO)
+
+	// Bind del VAO corrispondente al frame corrente
+	gl.BindVertexArray(s.mainVAO[s.frameIdx])
 
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)

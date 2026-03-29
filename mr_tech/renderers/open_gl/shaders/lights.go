@@ -6,6 +6,10 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
+const (
+	lightsDoubleBuffer = 2
+)
+
 // LightLoc represents an identifier for light-related uniform locations in a shader program.
 type LightLoc int
 
@@ -44,8 +48,9 @@ const (
 type Lights struct {
 	prg          uint32
 	table        [LightLocLast]int32
-	uboLights    uint32
-	activeLights int32 // Aggiunto per memorizzare il numero di luci tra Prepare e Render
+	uboLights    [lightsDoubleBuffer]uint32
+	frameIdx     int
+	activeLights int32
 	shadows      int32
 	stride       int32
 }
@@ -53,7 +58,8 @@ type Lights struct {
 // NewLights initializes and returns a new instance of Lights with default settings.
 func NewLights(stride int32) *Lights {
 	return &Lights{
-		stride: stride,
+		stride:   stride,
+		frameIdx: 0,
 	}
 }
 
@@ -73,12 +79,15 @@ func (s *Lights) Setup(width, height int32) error {
 
 // Init initializes the uniform buffer object (UBO) for storing light data with the specified stride size.
 func (s *Lights) Init() error {
-	// CREAZIONE UBO LIGHTS
 	size := 1024 * int(s.stride)
-	gl.GenBuffers(1, &s.uboLights)
-	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
-	gl.BufferData(gl.UNIFORM_BUFFER, size, gl.Ptr(nil), gl.DYNAMIC_DRAW)
-	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
+
+	gl.GenBuffers(lightsDoubleBuffer, &s.uboLights[0])
+
+	for i := 0; i < lightsDoubleBuffer; i++ {
+		gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights[i])
+		gl.BufferData(gl.UNIFORM_BUFFER, size, gl.Ptr(nil), gl.DYNAMIC_DRAW)
+	}
+
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 	return nil
 }
@@ -152,12 +161,13 @@ func (s *Lights) Compile(a IAssets) error {
 // Prepare updates the uniform buffer object (UBO) with lighting data for rendering and sets the active lights count.
 func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 	s.activeLights = numLights
-	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
+	s.frameIdx = (s.frameIdx + 1) % lightsDoubleBuffer
 	if numLights > 0 {
-		// Scrittura diretta dei float. len(frameLights) * 4 bytes per float.
+		gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
+		// Scrittura asincrona garantita sull'UBO inattivo
 		gl.BufferSubData(gl.UNIFORM_BUFFER, 0, len(frameLights)*4, gl.Ptr(frameLights))
+		gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 	}
-	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
 }
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
@@ -182,7 +192,7 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
 
-	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
+	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 
 	if s.shadows != 0 {
 		gl.ActiveTexture(gl.TEXTURE3)

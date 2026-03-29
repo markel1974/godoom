@@ -17,49 +17,47 @@ type IShader interface {
 
 // Shaders manages a collection of shader programs and related state for rendering, including lighting and post-processing.
 type Shaders struct {
-	shaderMain *shaders.Main
-	shaderSky  *shaders.ShaderSky
-	shaderSSAO *shaders.SSAO
-	shaderBlur *shaders.Blur
-	//shaderGeometry   *shaders.ShaderGeometry
-	shaderDepth      *shaders.Depth
-	shaderLights     *shaders.Lights
-	shaderFlashlight *shaders.Flashlight
-	shaderPost       *shaders.Post
-	shaderBloom      *shaders.Bloom
-	shaders          []IShader
+	main       *shaders.Main
+	sky        *shaders.ShaderSky
+	ssao       *shaders.SSAO
+	blur       *shaders.Blur
+	depth      *shaders.Depth
+	lights     *shaders.Lights
+	flashlight *shaders.Flashlight
+	post       *shaders.Post
+	bloom      *shaders.Bloom
+	container  []IShader
 
 	enableShadows bool
 }
 
-// NewShaders initializes and returns a new instance of Shaders with default shaders and settings.
+// NewShaders initializes and returns a new instance of Shaders with default container and settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
-		shaderMain: shaders.NewMain(),
-		shaderSky:  shaders.NewShaderSky(),
-		shaderSSAO: shaders.NewSSAO(),
-		shaderBlur: shaders.NewBlur(),
-		//shaderGeometry:   shaders.NewShaderGeometry(),
-		shaderDepth:      shaders.NewDepth(),
-		shaderLights:     shaders.NewLights(),
-		shaderFlashlight: shaders.NewShaderFlashlight(),
-		shaderPost:       shaders.NewPost(),
-		shaderBloom:      shaders.NewBloom(),
-		enableShadows:    false,
+		main:          shaders.NewMain(),
+		sky:           shaders.NewShaderSky(),
+		ssao:          shaders.NewSSAO(),
+		blur:          shaders.NewBlur(),
+		depth:         shaders.NewDepth(),
+		lights:        shaders.NewLights(),
+		flashlight:    shaders.NewShaderFlashlight(),
+		post:          shaders.NewPost(),
+		bloom:         shaders.NewBloom(),
+		enableShadows: false,
 	}
-	c.shaders = append(c.shaders, c.shaderMain, c.shaderSky, c.shaderSSAO, c.shaderBlur /*c.shaderGeometry,*/, c.shaderDepth, c.shaderLights, c.shaderFlashlight, c.shaderPost, c.shaderBloom)
+	c.container = append(c.container, c.main, c.sky, c.ssao, c.blur /*c.shaderGeometry,*/, c.depth, c.lights, c.flashlight, c.post, c.bloom)
 	c.SetShadowEnabled(true)
 	return c
 }
 
 // IncreaseFlashFactor increments the flashFactor field of the Shaders instance by 1.
 func (w *Shaders) IncreaseFlashFactor() {
-	w.shaderFlashlight.IncreaseFlashFactor()
+	w.flashlight.IncreaseFlashFactor()
 }
 
 // DecreaseFlashFactor reduces the flashFactor value by 1, ensuring it does not drop below 0.
 func (w *Shaders) DecreaseFlashFactor() {
-	w.shaderFlashlight.DecreaseFlashFactor()
+	w.flashlight.DecreaseFlashFactor()
 }
 
 // ToggleShadows toggles the shadow rendering state by inverting the current shadow-enabled flag.
@@ -68,27 +66,27 @@ func (w *Shaders) ToggleShadows() { w.SetShadowEnabled(!w.enableShadows) }
 // SetShadowEnabled toggles the shadow rendering feature on or off based on the provided boolean value.
 func (w *Shaders) SetShadowEnabled(v bool) {
 	w.enableShadows = v
-	w.shaderFlashlight.EnableShadows(w.enableShadows)
-	w.shaderLights.EnableShadows(w.enableShadows)
-	w.shaderDepth.EnableShadows(w.enableShadows)
+	w.flashlight.EnableShadows(w.enableShadows)
+	w.lights.EnableShadows(w.enableShadows)
+	w.depth.EnableShadows(w.enableShadows)
 }
 
-// Setup initializes and configures all shaders, VBOs, VAOs, and UBOs for rendering, and handles shader compilation and linking.
+// Setup initializes and configures all container, VBOs, VAOs, and UBOs for rendering, and handles shader compilation and linking.
 func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 	a := &Assets{}
-	for _, s := range w.shaders {
+	for _, s := range w.container {
 		s.Setup(width, height)
 	}
-	for _, s := range w.shaders {
+	for _, s := range w.container {
 		if err := s.Compile(a); err != nil {
 			return err
 		}
 	}
-	w.shaderMain.Init(vStride)
+	w.main.Init(vStride)
 
-	w.shaderLights.Init(lStride)
+	w.lights.Init(lStride)
 
-	for _, s := range w.shaders {
+	for _, s := range w.container {
 		s.SetupSamplers()
 	}
 	return nil
@@ -121,31 +119,28 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	}
 
 	bob := vi.GetBobPhase()
-	swayX := w.shaderFlashlight.GetOffsetX(bob)
-	swayY := w.shaderFlashlight.GetOffsetY(bob)
+	swayX := w.flashlight.GetOffsetX(bob)
+	swayY := w.flashlight.GetOffsetY(bob)
 	roomSpaceMatrix, flashSpaceMatrix := shaders.CreateSpaces(vi, pX, pY, swayX, swayY)
 
-	proj, view, invView := w.shaderMain.UpdateUniforms(vi)
-	w.shaderDepth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
-	w.shaderSSAO.UpdateUniforms(view, proj)
-	w.shaderSky.UpdateUniforms(view, proj)
+	proj, view, invView := w.main.UpdateUniforms(vi)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
+	w.ssao.UpdateUniforms(view, proj)
+	w.sky.UpdateUniforms(view, proj)
 
 	gl.Viewport(0, 0, fbW, fbH)
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	w.shaderLights.Prepare(frameLights, numLights)
+	w.lights.Prepare(frameLights, numLights)
 
-	w.shaderMain.Prepare(vert, vertCount)
-
-	// 1. OMBRE
-	w.shaderDepth.Render(renderGeometry, w.shaderMain.GetVAO())
-
-	// 2. SSAO
-	w.shaderSSAO.Render(w.shaderBlur.GetProgram(), w.shaderMain.GetVAO(), w.shaderSky.GetVAO(), w.shaderPost.GetFBO())
-
-	// 3. MAIN
-	w.shaderMain.Render(renderGeometry, w.shaderSSAO.GetSSAOBlurTexture())
+	w.main.Prepare(vert, vertCount)
+	// OMBRE
+	w.depth.Render(renderGeometry, w.main.GetVAO())
+	// SSAO
+	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
+	// MAIN
+	w.main.Render(renderGeometry, w.ssao.GetSSAOBlurTexture())
 
 	// PREPARE FOR ADDITIVE
 	gl.DepthMask(false)
@@ -153,26 +148,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.BlendFunc(gl.ONE, gl.ONE)
 	gl.DepthFunc(gl.LEQUAL)
 
-	// PASS B: LUCI AMBIENTALI E UBO
-	ambientLight := float32(vi.GetLightIntensity())
-	roomShadowTex := w.shaderDepth.GetRoomShadowTextures()
-	w.shaderLights.Render(renderGeometry, roomShadowTex, view, proj, invView, roomSpaceMatrix, ambientLight, float32(fbW), float32(fbH))
-
-	// PASS C: TORCIA
-	pitchShear := float32(-vi.GetYaw())
-	flashShadowTex := w.shaderDepth.GetFlashShadowTextures()
-	w.shaderFlashlight.Render(renderGeometry, flashShadowTex, view, proj, invView, flashSpaceMatrix, pitchShear, swayX, swayY, float32(fbW), float32(fbH))
+	// LIGHTS
+	w.lights.Render(renderGeometry, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	// FLASHLIGHTS
+	w.flashlight.Render(renderGeometry, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
 
 	gl.Disable(gl.BLEND)
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
 
 	// 4. SKYBOX
-	if skyEnabled {
-		w.shaderSky.Render(skyTexId, skyNormalTexId)
-	}
+	w.sky.Render(skyTexId, skyNormalTexId, skyEnabled)
 
 	// 5. POST
-	bloomTex := w.shaderBloom.Render(w.shaderPost.GetBrightBuffer())
-	w.shaderPost.Render(bloomTex)
+	bloomTex := w.bloom.Render(w.post.GetBrightBuffer())
+	w.post.Render(bloomTex)
 }

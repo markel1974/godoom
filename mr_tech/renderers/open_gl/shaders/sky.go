@@ -113,7 +113,10 @@ func (s *ShaderSky) Compile(a IAssets) error {
 }
 
 // Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
-func (s *ShaderSky) Render(texId uint32, normTexId uint32) {
+func (s *ShaderSky) Render(texId uint32, normTexId uint32, skyEnabled bool) {
+	if !skyEnabled {
+		return
+	}
 	gl.UseProgram(s.GetProgram())
 
 	gl.DepthFunc(gl.LEQUAL)

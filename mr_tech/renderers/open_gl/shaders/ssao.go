@@ -257,7 +257,7 @@ func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 }
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32) {
+func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool) {
 	s.Prepare()
 	gl.BindVertexArray(mainVAO)
 
@@ -273,18 +273,22 @@ func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32) {
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, s.noiseTex)
 
-	gl.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
-	gl.BindVertexArray(skyVAO)
-	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	if skyEnabled {
+		gl.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
+		gl.BindVertexArray(skyVAO)
+		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	}
 
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	gl.UseProgram(blurPgr)
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
-	gl.BindVertexArray(skyVAO)
-	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	if skyEnabled {
+		gl.UseProgram(blurPgr)
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
+		gl.BindVertexArray(skyVAO)
+		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	}
 
 	// 3. FORWARD MULTI-PASS
 	gl.BindFramebuffer(gl.FRAMEBUFFER, postFBO)

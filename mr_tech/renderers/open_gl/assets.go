@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// assets represents an embedded file system containing application resources such as shaders or assets.
+// assets represents an embedded file system containing application resources such as container or assets.
 //
 //go:embed assets
 var assets embed.FS

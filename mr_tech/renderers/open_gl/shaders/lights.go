@@ -139,14 +139,11 @@ func (s *Lights) Compile(a IAssets) error {
 	s.table[LightLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
 	s.table[LightLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 	s.table[LightLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
-
-	// Ora è un uniform standard, non nell'UBO
 	s.table[LightLocNumLights] = gl.GetUniformLocation(s.prg, gl.Str("u_numLights\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
-			// Evita il crash se il compilatore GLSL ottimizza via una variabile non usata
-			fmt.Printf("Warning: uniform location %d not found or optimized out\n", idx)
+			return fmt.Errorf("unused uniform location in lights: %d\n", idx)
 		}
 	}
 

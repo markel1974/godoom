@@ -1,37 +1,10 @@
 package open_gl
 
 import (
-	"math"
-
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
-
-// renderDrawCommands processes and executes a list of draw commands for rendering geometry with associated textures.
-func renderDrawCommands(dc []*DrawCommand) {
-	var lastTexId, lastNormId, lastEmissiveId uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
-	for _, cmd := range dc {
-		if cmd.vertexCount > 0 {
-			if lastTexId != cmd.texId {
-				gl.ActiveTexture(gl.TEXTURE0)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
-				lastTexId = cmd.texId
-			}
-			if lastNormId != cmd.normTexId {
-				gl.ActiveTexture(gl.TEXTURE1)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
-				lastNormId = cmd.normTexId
-			}
-			if lastEmissiveId != cmd.emissiveTexId {
-				gl.ActiveTexture(gl.TEXTURE5)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.emissiveTexId)
-				lastEmissiveId = cmd.emissiveTexId
-			}
-			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
-		}
-	}
-}
 
 // enableAdditiveLights configures OpenGL to use additive blending for rendering by adjusting depth and blend settings.
 func enableAdditiveLights() {
@@ -58,17 +31,17 @@ type IShader interface {
 
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
-	main       *shaders.Main
-	sky        *shaders.Sky
-	ssao       *shaders.SSAO
-	blur       *shaders.Blur
-	depth      *shaders.Depth
-	lights     *shaders.Lights
-	flashlight *shaders.Flashlight
-	post       *shaders.Post
-	bloom      *shaders.Bloom
-	container  []IShader
-
+	main          *shaders.Main
+	sky           *shaders.Sky
+	ssao          *shaders.SSAO
+	blur          *shaders.Blur
+	depth         *shaders.Depth
+	lights        *shaders.Lights
+	flashlight    *shaders.Flashlight
+	post          *shaders.Post
+	bloom         *shaders.Bloom
+	container     []IShader
+	dcRender      *DrawCommandsRender
 	enableShadows bool
 }
 
@@ -92,6 +65,7 @@ func NewShaders() *Shaders {
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
 func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 	a := &Assets{}
+	w.dcRender = NewDrawCommandsRender()
 
 	w.main = shaders.NewMain(vStride)
 	w.sky = shaders.NewSky()
@@ -139,7 +113,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	exec := func() { renderDrawCommands(dc) }
+	exec := func() { w.dcRender.Render(dc) }
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)

@@ -106,6 +106,26 @@ func (a *AABB) GetMaxY() float64 {
 	return a.maxY
 }
 
+// GetMinX returns the minimum X-coordinate of the axis-aligned bounding box (AABB).
+func (a *AABB) GetMinX() float64 {
+	return a.minX
+}
+
+// GetMaxX returns the maximum X-coordinate (maxX) of the axis-aligned bounding box (AABB).
+func (a *AABB) GetMaxX() float64 {
+	return a.maxX
+}
+
+// GetMinZ returns the minimum Z-coordinate of the axis-aligned bounding box (AABB).
+func (a *AABB) GetMinZ() float64 {
+	return a.minZ
+}
+
+// GetMaxZ returns the maximum Z-coordinate (maxZ) of the axis-aligned bounding box (AABB).
+func (a *AABB) GetMaxZ() float64 {
+	return a.maxZ
+}
+
 // GetDepth calculates and returns the depth of the axis-aligned bounding box (AABB) along the Z-axis.
 func (a *AABB) GetDepth() float64 {
 	return a.maxZ - a.minZ

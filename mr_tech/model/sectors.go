@@ -34,23 +34,38 @@ func (s *Sectors) GetSector(id string) *Sector {
 	return s.cache[id]
 }
 
-// GetOrthoSize calculates and returns half of the largest axis (width or height) of the root node's bounding box.
-// Returns false if the root node does not exist in the AABB tree.
-func (s *Sectors) GetOrthoSize() (float64, float64, float64, bool) {
+type Calibration struct {
+	OrthoSize  float32
+	MapCenterX float32
+	MapCenterZ float32
+	LightCamY  float32
+	ZNearRoom  float32
+	ZFarRoom   float32
+}
+
+// GetCalibration calculates and returns calibration parameters for rendering based on the root node's bounding box.
+func (s *Sectors) GetCalibration() *Calibration {
 	root, ok := s.tree.GetRoot()
 	if !ok {
-		return 0, 0, 0, false
+		return nil
 	}
+	c := &Calibration{}
 	// 2. OrthoSize è esattamente la metà dell'asse maggiore
 	width := root.GetWidth()
-	height := root.GetHeight()
-	orthoSize := width
-	if height > width {
-		orthoSize = height
+	depth := root.GetDepth()
+	if width > depth {
+		c.OrthoSize = float32(width / 2.0)
+	} else {
+		c.OrthoSize = float32(depth / 2.0)
 	}
-	orthoSize = orthoSize / 2.0
-
-	return orthoSize, root.GetMinY(), root.GetMaxY(), true
+	c.MapCenterX = float32(root.GetMinX() + (width / 2.0))
+	c.MapCenterZ = float32(root.GetMinZ() + (depth / 2.0))
+	// La telecamera si posiziona appena sopra il punto più alto della mappa
+	c.LightCamY = float32(root.GetMaxY()) //+ 2.0
+	// Distanze di proiezione relative dalla telecamera
+	c.ZNearRoom = 1.0
+	c.ZFarRoom = float32(root.GetMaxY() - root.GetMinY())
+	return c
 }
 
 // GetSectors retrieves the list of all sectors managed within the current Sectors instance.

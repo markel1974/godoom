@@ -101,8 +101,8 @@ func (w *RenderOpenGL) doInitialize() error {
 		fbW, fbH := w.win.GetFramebufferSize()
 		vStride := w.builder.VerticesStride()
 		lStride := w.builder.LightsStride()
-		orthoSize, minY, maxY, _ := w.engine.GetOrthoSize()
-		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, float32(orthoSize), float32(minY), float32(maxY)); err != nil {
+		calibration := w.engine.GetCalibration()
+		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {

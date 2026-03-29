@@ -14,6 +14,9 @@ type MapMetrics struct {
 	ZFarRoom       float32
 	ZNearFlash     float32
 	ZFarFlash      float32
+	LightCamY      float32
+	MapCenterX     float32
+	MapCenterZ     float32
 	FovFlashDeg    float32
 	FovScaleFactor float32
 	RayUnit        float32
@@ -36,9 +39,9 @@ func NewMapMetrics() *MapMetrics {
 
 // CreateSpaces calculates two transformation spaces for room and flashlight perspective using input view matrix and offsets.
 func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
-	texelSize := float64((m.OrthoSize * 2.0) / m.ShadowMapRes)
-	snappedX := math.Floor(pX/texelSize) * texelSize
-	snappedY := math.Floor(-pY/texelSize) * texelSize
+	//texelSize := float64((m.OrthoSize * 2.0) / m.ShadowMapRes)
+	//snappedX := math.Floor(pX/texelSize) * texelSize
+	//snappedY := math.Floor(-pY/texelSize) * texelSize
 
 	// 1. Matrice Stanza (Dinamica)
 	roomProj := [16]float32{
@@ -49,7 +52,10 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOff
 	}
 
 	const skew = 0.02
-	lX, lY, lZ := float32(snappedX), m.ZFarRoom/2.0, float32(snappedY)
+	//lX, lY, lZ := float32(snappedX), m.ZFarRoom/2.0, float32(snappedY)
+
+	lX, lY, lZ := m.MapCenterX, m.LightCamY, m.MapCenterZ
+
 	roomView := [16]float32{
 		1, 0, 0, 0,
 		skew, skew, 1, 0,

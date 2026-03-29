@@ -96,11 +96,6 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 
 // Render renders the scene using the specified view matrix, framebuffer dimensions, vertex data, draw commands, and lighting settings.
 func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	drawScreenQuad := func() {
-		gl.BindVertexArray(w.shaderSky.GetVAO())
-		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
-	}
-
 	renderGeometry := func() {
 		var lastTexId, lastNormId, lastEmissiveId uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
 		for _, cmd := range dc {
@@ -147,7 +142,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	w.shaderDepth.Render(renderGeometry, w.shaderMain.GetVAO())
 
 	// 2. SSAO
-	w.shaderSSAO.Render(drawScreenQuad, w.shaderBlur.GetProgram(), w.shaderMain.GetVAO(), w.shaderPost.GetFBO())
+	w.shaderSSAO.Render(w.shaderBlur.GetProgram(), w.shaderMain.GetVAO(), w.shaderSky.GetVAO(), w.shaderPost.GetFBO())
 
 	// 3. MAIN
 	w.shaderMain.Render(renderGeometry, w.shaderSSAO.GetSSAOBlurTexture())

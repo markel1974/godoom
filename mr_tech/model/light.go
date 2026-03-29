@@ -25,7 +25,7 @@ func (cl *Light) Setup(sector *Sector, intensity float64, kind LightKind, coords
 	lightZ := (height) * 1.0
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
 	if kind == LightKindOpenAir {
-		lightZ = (height) * 1000 //50
+		lightZ = math.Abs(height) * 1000 //50
 	}
 	pos := XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
 

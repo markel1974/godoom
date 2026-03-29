@@ -89,7 +89,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 func (bld *Builder) buildConfigSector(level *Level, wadSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry.Edge) *model.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-	miSector := model.NewConfigSector(sectorId, bld.convertLight(wadSector.LightLevel), model.LightKindSpot)
+	miSector := model.NewConfigSector(sectorId, bld.convertLight(wadSector.LightLevel), model.LightKindAmbient)
 	miSector.FloorY = float64(wadSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	ceilHeight := float64(wadSector.CeilingHeight)
 	if openAllDoors {

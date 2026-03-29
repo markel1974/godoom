@@ -175,7 +175,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	wx2 := (cp.tx2 * float32(sin)) + (cp.tz2 * float32(cos)) + float32(viX)
 	wy2 := -(cp.tx2 * float32(cos)) + (cp.tz2 * float32(sin)) + float32(vizY)
 
-	startIndices := int32(len(w.vertices.indices))
+	startIndices := w.vertices.GetIndicesLen()
 
 	// Invia SOLO i 4 vertici perimetrali fisici (Stride: X, Y, Z, U, V)
 	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
@@ -187,7 +187,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	w.vertices.AddTriangle(idx0, idx1, idx2)
 	w.vertices.AddTriangle(idx0, idx2, idx3)
 
-	currentIndices := int32(len(w.vertices.indices))
+	currentIndices := w.vertices.GetIndicesLen()
 	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 }
 
@@ -213,7 +213,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	texW, texH := tex.Size()
 	_, scaleH := anim.ScaleFactor()
 
-	startIndices := int32(len(w.vertices.indices))
+	startIndices := w.vertices.GetIndicesLen()
 
 	// Pre-caricamento vertici unici (Fan Triangle pattern)
 	indices := make([]uint32, len(segments))
@@ -231,7 +231,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 		w.vertices.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
-	currentIndices := int32(len(w.vertices.indices))
+	currentIndices := w.vertices.GetIndicesLen()
 	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	return nil
 }
@@ -243,6 +243,9 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 	}
 
 	for _, l := range lights {
+		//if _, ok := sectors[l.GetSector()]; !ok {
+		//	continue
+		//}
 		r, g, b := float32(1.0), float32(1.0), float32(1.0)
 		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
 		cutOff := float32(0)
@@ -254,16 +257,15 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 
 		switch l.GetKind() {
 		case model.LightKindOpenAir:
-			lightType = 1
-			falloff = 50.0
+			continue
+			pos.Z = 100
 			r, g, b = float32(1.0), float32(1.0), float32(1.0)
-			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-			outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
+			lightType = 0
+			falloff = 500.0
 		case model.LightKindAmbient:
 			r, g, b = float32(1.0), float32(1.0), float32(1.0)
 			lightType = 0
-			falloff = 8.0
+			falloff = 10.0
 		case model.LightKindSpot:
 			lightType = 1
 			falloff = 100.0
@@ -341,7 +343,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		startIndices := int32(len(w.vertices.indices))
+		startIndices := w.vertices.GetIndicesLen()
 
 		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
 		u0, u1 := float32(0.0), float32(1.0)
@@ -355,7 +357,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		w.vertices.AddTriangle(idx0, idx1, idx2)
 		w.vertices.AddTriangle(idx0, idx2, idx3)
 
-		currentIndices := int32(len(w.vertices.indices))
+		currentIndices := w.vertices.GetIndicesLen()
 		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	}
 }

@@ -7,8 +7,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-const lightScaleFactor = 5.0
+//const lightScaleFactor = 5.0
 
+// PolyKey represents a key used for uniquely identifying a polygon within a 3D rendered sector's data structure.
 type PolyKey struct {
 	sector *model.Sector
 	kind   int
@@ -20,6 +21,7 @@ type PolyKey struct {
 	u1     float32
 }
 
+// CreatePolygonSegment generates a PolyKey based on the provided CompiledPolygon.
 func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
 		sector: cp.Sector,
@@ -34,6 +36,7 @@ func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	return key
 }
 
+// CreatePolygonSector creates and returns a PolyKey initialized with the Sector and Kind of the given CompiledPolygon.
 func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
 		sector: cp.Sector,
@@ -42,54 +45,56 @@ func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	return key
 }
 
-// BatchBuilder is a utility for constructing GPU-ready batches of vertices and draw commands.
+// BatchBuilder is a structure that manages batching of drawing data, including textures, vertices, draw commands, and lights.
 type BatchBuilder struct {
-	tex           *Textures
-	frameVertices *FrameVertices
-	drawCommands  *DrawCommands
-	frameLights   *FrameLights
+	tex          *Textures
+	vertices     *FrameVertices
+	drawCommands *DrawCommands
+	frameLights  *FrameLights
 }
 
-// NewBatchBuilder initializes and returns a new BatchBuilder using the provided Compiler to manage rendering resources.
+// NewBatchBuilder creates and returns a new BatchBuilder configured with preallocated resources for rendering batches.
 func NewBatchBuilder(compiler *Textures) *BatchBuilder {
 	return &BatchBuilder{
-		tex:           compiler,
-		frameVertices: NewFrameVertices(maxBatchVertices),
-		drawCommands:  NewDrawCommands(maxFrameCommands),
-		frameLights:   NewFrameLights(256),
+		tex:          compiler,
+		vertices:     NewFrameVertices(maxBatchVertices),
+		drawCommands: NewDrawCommands(maxFrameCommands),
+		frameLights:  NewFrameLights(256),
 	}
 }
 
-// Stride calculates and returns the vertex stride size in bytes, based on the alignment of frame vertices.
-func (w *BatchBuilder) Stride() int32 {
-	return w.frameVertices.Alignment() * 4
+// VerticesStride returns the stride of the vertex buffer in bytes by multiplying the stride in elements by 4.
+func (w *BatchBuilder) VerticesStride() int32 {
+	return w.vertices.Stride() * 4
 }
 
-// GetFrameVertices retrieves the current frame's vertex data as a slice of float32 and the number of vertices stored.
+// GetFrameVertices retrieves the vertex data and its count from the frame's vertex buffer. Returns a slice of float32 for vertex data and an int32 representing the vertex count.
 func (w *BatchBuilder) GetFrameVertices() ([]float32, int32) {
-	fvLen := w.frameVertices.Len()
-	fv := w.frameVertices.Get()
-	return fv, int32(fvLen)
+	fvLen := w.vertices.Len()
+	fv := w.vertices.Get()
+	return fv, fvLen
 }
 
+// GetFrameLights retrieves the frame light data and its count from the current BatchBuilder instance.
 func (w *BatchBuilder) GetFrameLights() ([]float32, int32) {
 	fvLen := w.frameLights.Len()
 	fv := w.frameLights.Get()
 	return fv, int32(fvLen)
 }
 
-// GetDrawCommands retrieves the list of draw commands that represent rendering instructions for the current batch.
+// GetDrawCommands retrieves the collection of draw commands stored in the BatchBuilder's DrawCommands structure.
 func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
 	return w.drawCommands.Get()
 }
 
+// Reset clears the state of BatchBuilder by resetting vertices, draw commands, and frame lights to their initial states.
 func (w *BatchBuilder) Reset() {
-	w.frameVertices.Reset()
+	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
 }
 
-// CreateBatch generates a batch of rendering data by processing compiled sectors and objects with the provided ViewMatrix.
+// CreateBatch generates a batch of textures based on the given view matrix, compiled sectors, things, and lights.
 func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
 	var cSky *textures.Texture = nil
 
@@ -143,7 +148,7 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	return cSky
 }
 
-// pushWall adds vertices for a wall segment to the frame, computing texture coordinates, normals, and lighting.
+// pushWall appends vertices and draw commands to render a wall with given position, texture, and height range.
 func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
 	//prepare
 	tex := anim.CurrentFrame()
@@ -155,7 +160,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 		return
 	}
 	texW, texH := tex.Size()
-	startLen := w.frameVertices.Len()
+	startLen := w.vertices.Len()
 	scaleW, scaleH := anim.ScaleFactor()
 
 	u0 := cp.u0 / (float32(texW) * float32(scaleW))
@@ -179,20 +184,20 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	nY := float32(0.0)
 	nZ := float32(dx / length)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
+	w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
+	w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, nX, nY, nZ)
+	w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
 
-	w.frameVertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
-	w.frameVertices.AddVertex(wx2, zTop, -wy2, u1, vTop, nX, nY, nZ)
+	w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
+	w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
+	w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop, nX, nY, nZ)
 
 	//apply
-	currentLen := w.frameVertices.Len()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
+	currentLen := w.vertices.Len()
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, w.vertices.Stride())
 }
 
-// pushFlat processes a flat polygon, computes its light and texture mapping, and adds its vertices to the frame buffer.
+// pushFlat adds flat polygonal segments to the batch for rendering, applying texture, light, and scale transformations.
 func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
@@ -212,7 +217,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 		return nil
 	}
 	texW, texH := tex.Size()
-	startLen := w.frameVertices.Len()
+	startLen := w.vertices.Len()
 	_, scaleH := anim.ScaleFactor()
 	v0 := segments[0].Start
 
@@ -232,105 +237,53 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 		u2 := (float32(v2.X) / float32(texW)) * float32(scaleH)
 		v2V := (float32(-v2.Y) / float32(texH)) * float32(scaleH)
 
-		w.frameVertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, 0, nY, 0)
-		w.frameVertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, 0, nY, 0)
+		w.vertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, 0, nY, 0)
+		w.vertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, 0, nY, 0)
+		w.vertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, 0, nY, 0)
 	}
 
 	//apply
-	currentLen := w.frameVertices.Len()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, int32(startLen), int32(currentLen), w.frameVertices.Alignment())
-
+	currentLen := w.vertices.Len()
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, w.vertices.Stride())
 	return nil
 }
 
-/*
+// pushLights processes the provided lights and adds them to the frame with their properties transformed for rendering.
 func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
 	if len(lights) == 0 {
 		return
 	}
 
 	for _, l := range lights {
-		if l.GetSector() == nil {
+		//if l.GetSector() == nil || !sectors[l.GetSector()] {
+		//	continue
+		//}
+		r, g, b := float32(1.0), float32(1.0), float32(1.0)
+		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
+		cutOff := float32(0)
+		outerCutOff := float32(0)
+		pos := l.GetPos()
+		intensity := float32(l.GetIntensity())
+		falloff := float32(0.0)
+		lightType := float32(-1)
+		switch l.GetKind() {
+		case model.LightKindAmbient:
+			r, g, b = float32(1.0), float32(1.0), float32(1.0)
+			lightType = 0
+			falloff = 8.0
+		case model.LightKindSpot:
+			lightType = 1
+			falloff = 50.0
+			r, g, b = float32(1.0), float32(1.0), float32(1.0)
+			// 2. VETTORE DIREZIONE CORRETTO (Spazio OpenGL: Y è l'altezza)
+			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
+			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+			outerCutOff = float32(math.Cos(45 * math.Pi / 180.0))
+		case model.LightKindNone:
 			continue
+		default:
+			lightType = 0
 		}
-		//TODO BETTER IMPLEMENTATION
-		//if !sectors[l.GetSector()] {
-		//	continue
-		//}
-		pos := l.GetPos()
-		intensity := float32(l.GetIntensity())
-		w.frameLights.Add(float32(pos.X), float32(pos.Z), float32(-pos.Y), intensity)
-	}
-}
-*/
-
-/*
-func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
-	if len(lights) == 0 {
-		return
-	}
-
-	for _, l := range lights {
-		//if l.GetSector() == nil || !sectors[l.GetSector()] {
-		//	continue
-		//}
-		pos := l.GetPos()
-		intensity := float32(l.GetIntensity())
-
-		// Scegli dinamicamente in base alle proprietà del tuo model.Light
-		lightType := float32(0) // 0=Point, 1=Spot, 2=Directional
-
-		// Colore default bianco
-		r, g, b := float32(1.0), float32(1.0), float32(1.0)
-
-		// Direzione default in basso
-		dirX, dirY, dirZ := float32(0.0), float32(-1.0), float32(0.0)
-
-		falloff := float32(10.0) // Il tuo falloffFactor
-
-		// Angoli del cono per spot (in coseni)
-		cutOff := float32(math.Cos(25.0 * math.Pi / 180.0))
-		outerCutOff := float32(math.Cos(35.0 * math.Pi / 180.0))
-
-		// Usa un metodo aggiornato in FrameLights che accetti 16 float
-		w.frameLights.Add(
-			float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType, // pos_type
-			r, g, b, intensity, // color_intensity
-			dirX, dirZ, -dirY, falloff, // dir_falloff (World Y è invertito nel tuo engine)
-			cutOff, outerCutOff, 0.0, 0.0, // spot_params + padding
-		)
-	}
-}
-*/
-
-func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
-	if len(lights) == 0 {
-		return
-	}
-
-	for _, l := range lights {
-		//if l.GetSector() == nil || !sectors[l.GetSector()] {
-		//	continue
-		//}
-		pos := l.GetPos()
-		intensity := float32(l.GetIntensity())
-
-		// 1. RIATTIVA LO SPOTLIGHT
-		lightType := float32(1) // 1 = Spot (Faretto)
-		falloff := float32(8.0)
-		r, g, b := float32(1.0), float32(1.0), float32(1.0)
-
-		// 2. VETTORE DIREZIONE CORRETTO (Spazio OpenGL: Y è l'altezza)
-		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(-1.0), float32(0.0)
-
-		// Abbassa leggermente per ridurre la sovraesposizione in profondità
-		if lightType == 1 {
-			falloff = 50
-		}
-
-		cutOff := float32(math.Cos(35.0 * math.Pi / 180.0))
-		outerCutOff := float32(math.Cos(45 * math.Pi / 180.0))
 
 		w.frameLights.Add(
 			float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
@@ -341,13 +294,13 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 	}
 }
 
-// pushThings processes and batches a list of things into the frame buffer using depth sorting and cylindrical billboarding.
+// pushThings processes visible entities, applies transformations, performs culling, and updates vertex and draw command buffers.
 func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
-	fv := w.frameVertices
+	fv := w.vertices
 	camX, camY := vi.GetXY()
 
 	// 1. Culling e calcolo distanza quadrica
@@ -405,20 +358,22 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		nY := float32(0.0)
 		nZ := float32(dxNorm / length)
 
-		startLen := int32(fv.Len())
+		startLen := fv.Len()
 
 		// --- BATCHING NEL VBO ---
 		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
 		// Triangolo 1 (Top-Left -> Bottom-Left -> Bottom-Right)
-		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
-		w.frameVertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
+		w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
+		w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, nX, nY, nZ)
+		w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
 		// Triangolo 2 (Top-Left -> Bottom-Right -> Top-Right)
-		w.frameVertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
-		w.frameVertices.AddVertex(v2x, zTop, -v2y, u1, vTop, nX, nY, nZ)
-		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, int32(fv.Len()), fv.Alignment())
+		w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
+		w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
+		w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop, nX, nY, nZ)
+
+		currentLen := fv.Len()
+		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, fv.Stride())
 	}
 }

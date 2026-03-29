@@ -27,7 +27,7 @@ func NewDrawCommands(s int) *DrawCommands {
 }
 
 // Compute updates the vertex count of a draw command by calculating the difference between lengths and aligning it.
-func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startLen, currentLen, alignment int32) {
+func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startLen, currentLen int32, stride int32) {
 	var cmd *DrawCommand
 	if w.len > 0 && w.commands[w.len-1].texId == texId {
 		cmd = w.commands[w.len-1]
@@ -40,11 +40,11 @@ func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startLen,
 		cmd.texId = texId
 		cmd.normTexId = normTexId
 		cmd.emissiveTexId = emissiveTexId
-		cmd.firstVertex = startLen / alignment
+		cmd.firstVertex = startLen / stride
 		cmd.vertexCount = 0
 		w.len++
 	}
-	cmd.vertexCount += (currentLen - startLen) / alignment
+	cmd.vertexCount += (currentLen - startLen) / stride
 }
 
 // Reset clears all draw commands by resetting the slice to an empty state without deallocating its memory.
@@ -62,7 +62,7 @@ func (w *DrawCommands) Grow() {
 	oldLen := len(w.commands)
 	newSize := oldLen * 2
 	if newSize == 0 {
-		newSize = 128 // Rimossa la dipendenza da vertexAlignment (qui non c'entra)
+		newSize = 128
 	}
 	newCommands := make([]*DrawCommand, newSize)
 	copy(newCommands, w.commands)

@@ -48,7 +48,7 @@ type Flashlight struct {
 
 func NewShaderFlashlight() *Flashlight {
 	f := &Flashlight{
-		factor:           5.0,
+		factor:           30.0,
 		offsetX:          0.0,
 		offsetY:          0.0,
 		enableShadows:    false,

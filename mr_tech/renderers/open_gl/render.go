@@ -98,7 +98,7 @@ func (w *RenderOpenGL) doInitialize() error {
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
-		stride := w.builder.Stride()
+		stride := w.builder.VerticesStride()
 		if err := w.shaders.Setup(int32(fbW), int32(fbH), stride); err != nil {
 			return err
 		}

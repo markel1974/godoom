@@ -34,6 +34,11 @@ func (cl *Light) Setup(sector *Sector, intensity float64, kind LightKind, coords
 	cl.pos = pos
 }
 
+// GetKind retrieves the type of the light as a LightKind value.
+func (cl *Light) GetKind() LightKind {
+	return cl.kind
+}
+
 // GetSector retrieves the sector associated with the Light instance. Returns a pointer to a Sector object.
 func (cl *Light) GetSector() *Sector {
 	return cl.sector

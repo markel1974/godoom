@@ -18,13 +18,13 @@ func NewFrameVertices(maxVerts int) *FrameVertices {
 		indicesCount:  0,
 		verticesCount: 0,
 		verticesSlot:  0,
-		stride:        5, // Solo X, Y, Z, U, V
+		stride:        5,
 	}
 }
 
 // GetIndicesLen returns the current number of indices in the frame vertex buffer.
 func (w *FrameVertices) GetIndicesLen() int32 {
-	return w.indicesCount //int32(len(w.indices2))
+	return w.indicesCount
 }
 
 // Stride returns the number of elements in each vertex's attribute group within the vertex buffer.
@@ -68,10 +68,8 @@ func (w *FrameVertices) AddTriangle(i0, i1, i2 uint32) {
 }
 
 // GetVertices returns the slice of vertices and indices currently stored in the frame's vertex buffer.
-func (w *FrameVertices) GetVertices() ([]float32, []uint32) {
-	v := w.vertices[:w.verticesCount]
-	i := w.indices[:w.indicesCount]
-	return v, i
+func (w *FrameVertices) GetVertices() ([]float32, int32, []uint32, int32) {
+	return w.vertices, w.verticesCount, w.indices, w.indicesCount
 }
 
 // growIndices dynamically doubles the size of the indices slice or initializes it to 128 if empty to accommodate new indices.

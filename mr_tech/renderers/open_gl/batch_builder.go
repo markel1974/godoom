@@ -72,7 +72,7 @@ func (w *BatchBuilder) LightsStride() int32 {
 }
 
 // GetFrameVertices retrieves the vertex data and indices from the frame's vertex buffer.
-func (w *BatchBuilder) GetFrameVertices() ([]float32, []uint32) {
+func (w *BatchBuilder) GetFrameVertices() ([]float32, int32, []uint32, int32) {
 	return w.vertices.GetVertices()
 }
 

@@ -112,7 +112,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, indices []uint32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
 	exec := func() { w.dcRender.Render(dc) }
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
@@ -129,7 +129,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	// MAIN PREPARE (Ora invia sia VBO che EBO)
-	w.main.Prepare(vert, indices)
+	w.main.Prepare(vert, vertLen, indices, indicesLen)
 
 	// LIGHTS PREPARE
 	w.lights.Prepare(frameLights, numLights)

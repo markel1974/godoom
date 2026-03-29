@@ -168,11 +168,11 @@ func (s *Main) Compile(a IAssets) error {
 }
 
 // Prepare updates vertex and index buffer data for the current frame using double buffering.
-func (s *Main) Prepare(vertices []float32, indices []uint32) {
+func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32) {
 	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
 
-	vTotal := len(vertices) * 4
-	iTotal := len(indices) * 4
+	vTotal := int(verticesLen) * 4
+	iTotal := int(indicesLen) * 4
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, vTotal, gl.Ptr(vertices))

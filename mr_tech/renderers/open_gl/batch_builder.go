@@ -7,7 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// PolyKey represents a key used for uniquely identifying a polygon within a 3D rendered sector's data structure.
+// PolyKey represents a key used for identifying and differentiating polygonal geometry in a 3D simulation space.
+// It comprises references to a sector, specific texture coordinates, and unique identifiers for polygonal boundaries.
 type PolyKey struct {
 	sector *model.Sector
 	kind   int
@@ -19,7 +20,7 @@ type PolyKey struct {
 	u1     float32
 }
 
-// CreatePolygonSegment generates a PolyKey based on the provided CompiledPolygon.
+// CreatePolygonSegment converts a CompiledPolygon into a PolyKey for identification and processing.
 func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
 		sector: cp.Sector,
@@ -34,7 +35,7 @@ func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	return key
 }
 
-// CreatePolygonSector creates and returns a PolyKey initialized with the Sector and Kind of the given CompiledPolygon.
+// CreatePolygonSector generates a PolyKey from a given CompiledPolygon by extracting its Sector and Kind properties.
 func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
 		sector: cp.Sector,
@@ -43,64 +44,73 @@ func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	return key
 }
 
-// BatchBuilder is a structure that manages batching of drawing data, including textures, vertices, draw commands, and lights.
+// BatchBuilder is a utility structure for efficiently handling batched rendering operations.
+// It organizes textures, vertex data, draw commands, lighting, and visibility checks for a frame.
 type BatchBuilder struct {
-	tex          *Textures
-	vertices     *FrameVertices
-	drawCommands *DrawCommands
-	frameLights  *FrameLights
+	tex               *Textures
+	vertices          *FrameVertices
+	drawCommands      *DrawCommands
+	frameLights       *FrameLights
+	visibleSectors    map[*model.Sector]bool
+	processedPolygons map[PolyKey]bool
 }
 
-// NewBatchBuilder creates and returns a new BatchBuilder configured with preallocated resources for rendering batches.
+// NewBatchBuilder creates and initializes a new BatchBuilder with preallocated memory for vertices, commands, and lights.
 func NewBatchBuilder(compiler *Textures) *BatchBuilder {
 	return &BatchBuilder{
-		tex:          compiler,
-		vertices:     NewFrameVertices(maxBatchVertices),
-		drawCommands: NewDrawCommands(maxFrameCommands),
-		frameLights:  NewFrameLights(256),
+		tex:               compiler,
+		vertices:          NewFrameVertices(maxBatchVertices),
+		drawCommands:      NewDrawCommands(maxFrameCommands),
+		frameLights:       NewFrameLights(256),
+		visibleSectors:    make(map[*model.Sector]bool, 256),
+		processedPolygons: make(map[PolyKey]bool, 2048),
 	}
 }
 
-// VerticesStride returns the stride of the vertex buffer in bytes by multiplying the stride in elements by 4.
+// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
 func (w *BatchBuilder) VerticesStride() int32 {
 	return w.vertices.Stride() * 4
 }
 
-// LightsStride returns the stride of the vertex buffer in bytes by multiplying the stride in elements by 4.
+// LightsStride calculates the total stride value for frame lights, considering the size of each light's data fields.
 func (w *BatchBuilder) LightsStride() int32 {
 	return w.frameLights.Stride() * 4
 }
 
-// GetFrameVertices retrieves the vertex data and indices from the frame's vertex buffer.
+// GetFrameVertices retrieves the current vertex and index buffers along with their respective counts.
 func (w *BatchBuilder) GetFrameVertices() ([]float32, int32, []uint32, int32) {
 	return w.vertices.GetVertices()
 }
 
-// GetFrameLights retrieves the frame light data and its count from the current BatchBuilder instance.
+// GetFrameLights retrieves the frame light data and their count from the FrameLights structure.
 func (w *BatchBuilder) GetFrameLights() ([]float32, int32) {
 	fvLen := w.frameLights.Len()
 	fv := w.frameLights.Get()
 	return fv, int32(fvLen)
 }
 
-// GetDrawCommands retrieves the collection of draw commands stored in the BatchBuilder's DrawCommands structure.
+// GetDrawCommands retrieves the list of active draw commands for rendering the current frame.
 func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
 	return w.drawCommands.Get()
 }
 
-// Reset clears the state of BatchBuilder by resetting vertices, draw commands, and frame lights to their initial states.
+// Reset clears all data stored in the BatchBuilder, resetting its vertices, draw commands, lights, and sector data maps.
 func (w *BatchBuilder) Reset() {
 	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
+	for k := range w.visibleSectors {
+		delete(w.visibleSectors, k)
+	}
+	for k := range w.processedPolygons {
+		delete(w.processedPolygons, k)
+	}
 }
 
-// CreateBatch generates a batch of textures based on the given view matrix, compiled sectors, things, and lights.
+// CreateBatch generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
+// It updates visible sectors and processed polygons, and returns a sky texture if one is found.
 func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
 	var cSky *textures.Texture = nil
-
-	visibleSectors := make(map[*model.Sector]bool)
-	processedPolygons := make(map[PolyKey]bool)
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -111,11 +121,11 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 			switch cp.Kind {
 			case model.IdWall, model.IdUpper, model.IdLower:
 				key := CreatePolygonSegment(cp)
-				if processedPolygons[key] {
+				if w.processedPolygons[key] {
 					continue
 				}
-				processedPolygons[key] = true
-				visibleSectors[cp.Sector] = true
+				w.processedPolygons[key] = true
+				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdWall {
 					w.pushWall(vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 				} else if cp.Kind == model.IdUpper {
@@ -125,11 +135,11 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
-				if processedPolygons[key] {
+				if w.processedPolygons[key] {
 					continue
 				}
-				processedPolygons[key] = true
-				visibleSectors[cp.Sector] = true
+				w.processedPolygons[key] = true
+				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
 					if sky := w.pushFlat(vi, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 						cSky = sky
@@ -144,12 +154,12 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 		}
 	}
 
-	w.pushLights(vi, lights, visibleSectors)
-	w.pushThings(vi, things, visibleSectors)
+	w.pushLights(vi, lights, w.visibleSectors)
+	w.pushThings(vi, things, w.visibleSectors)
 	return cSky
 }
 
-// pushWall appends indexed vertices and draw commands to render a wall with given position, texture, and height range.
+// pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.
 func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
@@ -168,6 +178,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
 
+	// Back-transformation: View-Space -> World-Space
 	sin, cos := vi.GetAngle()
 	viX, vizY := vi.GetXY()
 	wx1 := (cp.tx1 * float32(sin)) + (cp.tz1 * float32(cos)) + float32(viX)
@@ -177,13 +188,11 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 
 	startIndices := w.vertices.GetIndicesLen()
 
-	// Invia SOLO i 4 vertici perimetrali fisici (Stride: X, Y, Z, U, V)
 	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
 	idx1 := w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
 	idx2 := w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
 	idx3 := w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop)
 
-	// Mesh indicizzata: unione dei due triangoli riutilizzando i vertici
 	w.vertices.AddTriangle(idx0, idx1, idx2)
 	w.vertices.AddTriangle(idx0, idx2, idx3)
 
@@ -191,7 +200,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 }
 
-// pushFlat adds indexed flat polygonal segments to the batch for rendering, applying texture, light, and scale transformations.
+// pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
 func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
@@ -215,19 +224,16 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 
 	startIndices := w.vertices.GetIndicesLen()
 
-	// Pre-caricamento vertici unici (Fan Triangle pattern)
 	indices := make([]uint32, len(segments))
 	for i, seg := range segments {
 		v := seg.Start
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
+		// Coordinate assolute
 		indices[i] = w.vertices.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
 	}
 
-	// Costruzione della mesh indicizzata a raggiera (Fan) partendo da indices[0]
 	for i := 1; i < len(segments)-1; i++ {
-		// NOTA: L'ordine dei vertici determina il winding (Cull Face).
-		// Essendo state eliminate le normali su CPU, il winding corretto è essenziale per dFdx/dFdy.
 		w.vertices.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
@@ -236,7 +242,76 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	return nil
 }
 
-// pushLights processes the provided lights and adds them to the frame with their properties transformed for rendering.
+// pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
+func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
+	const minDist = 0.0001
+	if len(things) == 0 {
+		return
+	}
+	camX, camY := vi.GetXY()
+
+	for _, t := range things {
+		if !sectors[t.GetSector()] {
+			continue
+		}
+		if t.GetAnimation() == nil {
+			continue
+		}
+		tPosX, tPosY := t.GetPosition()
+		dx := tPosX - camX
+		dy := tPosY - camY
+		distSq := dx*dx + dy*dy
+		tex := t.GetAnimation().CurrentFrame()
+		if tex == nil {
+			continue
+		}
+		texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+		if !ok {
+			continue
+		}
+
+		texW, texH := tex.Size()
+		scaleW, scaleH := t.GetAnimation().ScaleFactor()
+		width := float64(texW) * scaleW
+		height := float64(texH) * scaleH
+
+		dist := math.Sqrt(distSq)
+		if dist < minDist {
+			dist = minDist
+		}
+
+		halfW := width / 2.0
+		rX := -((camY - tPosY) / dist) * halfW
+		rY := ((camX - tPosX) / dist) * halfW
+
+		// Vettori spigoli in spazio assoluto
+		v1x := float32(tPosX - rX)
+		v1y := float32(tPosY - rY)
+		v2x := float32(tPosX + rX)
+		v2y := float32(tPosY + rY)
+
+		zBottom := float32(t.GetFloorY())
+		zTop := zBottom + float32(height)
+
+		startIndices := w.vertices.GetIndicesLen()
+
+		u0, u1 := float32(0.0), float32(1.0)
+		vTop, vBottom := float32(0.0), float32(1.0)
+
+		idx0 := w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop)
+		idx1 := w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
+		idx2 := w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
+		idx3 := w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop)
+
+		w.vertices.AddTriangle(idx0, idx1, idx2)
+		w.vertices.AddTriangle(idx0, idx2, idx3)
+
+		currentIndices := w.vertices.GetIndicesLen()
+		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	}
+}
+
+// pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
 func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
 	if len(lights) == 0 {
 		return
@@ -285,79 +360,5 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 			dirGlX, dirGlY, dirGlZ, falloff,
 			cutOff, outerCutOff, 0.0, 0.0,
 		)
-	}
-}
-
-// pushThings processes visible entities, applies transformations, performs culling, and updates vertex and draw command buffers.
-func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
-	const minDist = 0.0001
-	if len(things) == 0 {
-		return
-	}
-	//fv := w.vertices
-	camX, camY := vi.GetXY()
-
-	// 1. Culling e calcolo distanza quadrica
-	for _, t := range things {
-		if !sectors[t.GetSector()] {
-			continue
-		}
-		if t.GetAnimation() == nil {
-			continue
-		}
-		tPosX, tPosY := t.GetPosition()
-		dx := tPosX - camX
-		dy := tPosY - camY
-		distSq := dx*dx + dy*dy
-		tex := t.GetAnimation().CurrentFrame()
-		if tex == nil {
-			continue
-		}
-		texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
-		if !ok {
-			continue
-		}
-
-		texW, texH := tex.Size()
-		scaleW, scaleH := t.GetAnimation().ScaleFactor()
-		width := float64(texW) * scaleW
-		height := float64(texH) * scaleH
-
-		dist := math.Sqrt(distSq)
-		if dist < minDist {
-			dist = minDist
-		}
-
-		// Vettore Right normalizzato e scalato per l'estensione del quad
-		halfW := width / 2.0
-		rX := -((camY - tPosY) / dist) * halfW
-		rY := ((camX - tPosX) / dist) * halfW
-
-		// Coordinate planari dei due spigoli
-		v1x := float32(tPosX - rX)
-		v1y := float32(tPosY - rY)
-		v2x := float32(tPosX + rX)
-		v2y := float32(tPosY + rY)
-
-		// Quota verticale
-		zBottom := float32(t.GetFloorY())
-		zTop := zBottom + float32(height)
-
-		startIndices := w.vertices.GetIndicesLen()
-
-		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
-		u0, u1 := float32(0.0), float32(1.0)
-		vTop, vBottom := float32(0.0), float32(1.0)
-
-		idx0 := w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop)
-		idx1 := w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
-		idx2 := w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
-		idx3 := w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop)
-
-		w.vertices.AddTriangle(idx0, idx1, idx2)
-		w.vertices.AddTriangle(idx0, idx2, idx3)
-
-		currentIndices := w.vertices.GetIndicesLen()
-		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	}
 }

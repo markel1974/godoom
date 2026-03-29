@@ -112,7 +112,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, indices []uint32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
 	exec := func() { w.dcRender.Render(dc) }
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
@@ -128,16 +128,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	//MAIN PREPARE
-	w.main.Prepare(vert, vertCount)
-	//LIGHTS PREPARE
+	// MAIN PREPARE (Ora invia sia VBO che EBO)
+	w.main.Prepare(vert, indices)
+
+	// LIGHTS PREPARE
 	w.lights.Prepare(frameLights, numLights)
+
 	// OMBRE
 	w.depth.Render(exec, w.main.GetVAO())
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
 	w.main.Render(exec, w.ssao.GetSSAOBlurTexture())
+
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
@@ -146,6 +149,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	w.flashlight.Render(exec, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
+
 	// SKYBOX
 	w.sky.Render(skyTexId, skyNormalTexId, skyEnabled)
 	// BLOOM

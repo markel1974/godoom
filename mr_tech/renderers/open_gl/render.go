@@ -127,11 +127,14 @@ func (w *RenderOpenGL) doRender() {
 		w.targetLastCompiled = count
 		w.win.Begin()
 		w.builder.Reset()
+
 		cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
 		pX, pY := w.player.GetPosition()
 		fbW, fbH := w.win.GetFramebufferSize()
 		commands := w.builder.GetDrawCommands()
-		vert, vertCount := w.builder.GetFrameVertices()
+
+		// Estrazione VBO e EBO
+		vert, indices := w.builder.GetFrameVertices()
 		light, lightsCount := w.builder.GetFrameLights()
 
 		skyTexId, skyNormalTexId, skyEmissiveTexId := uint32(0), uint32(0), uint32(0)
@@ -139,7 +142,9 @@ func (w *RenderOpenGL) doRender() {
 		if cSky != nil {
 			skyTexId, skyNormalTexId, skyEmissiveTexId, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertCount, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
+
+		// Invocazione con `indices`
+		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, indices, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
 	})
 }
 

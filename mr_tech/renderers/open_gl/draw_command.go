@@ -1,21 +1,22 @@
+// open_gl/draw_command.go
 package open_gl
 
-// DrawCommand represents a rendering command consisting of texture ID, starting vertex index, and vertex count.
+// DrawCommand represents a rendering command for indexed geometry.
 type DrawCommand struct {
 	texId         uint32
 	normTexId     uint32
 	emissiveTexId uint32
-	firstVertex   int32
-	vertexCount   int32
+	firstIndex    int32
+	indexCount    int32
 }
 
-// DrawCommands manages a collection of draw commands, each representing rendering instructions for a specific texture or geometry.
+// DrawCommands manages a collection of draw commands.
 type DrawCommands struct {
 	commands []*DrawCommand
 	len      int
 }
 
-// NewDrawCommands initializes and returns a new DrawCommands instance with a preallocated capacity for the command slice.
+// NewDrawCommands initializes and returns a new DrawCommands instance.
 func NewDrawCommands(s int) *DrawCommands {
 	dc := &DrawCommands{
 		commands: make([]*DrawCommand, s),
@@ -26,8 +27,8 @@ func NewDrawCommands(s int) *DrawCommands {
 	return dc
 }
 
-// Compute updates the vertex count of a draw command by calculating the difference between lengths and aligning it.
-func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startLen, currentLen int32, stride int32) {
+// Compute updates or creates a new draw command based on texture IDs and index boundaries.
+func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startIndices, currentIndices int32) {
 	var cmd *DrawCommand
 	if w.len > 0 && w.commands[w.len-1].texId == texId {
 		cmd = w.commands[w.len-1]
@@ -40,24 +41,24 @@ func (w *DrawCommands) Compute(texId, normTexId, emissiveTexId uint32, startLen,
 		cmd.texId = texId
 		cmd.normTexId = normTexId
 		cmd.emissiveTexId = emissiveTexId
-		cmd.firstVertex = startLen / stride
-		cmd.vertexCount = 0
+		cmd.firstIndex = startIndices
+		cmd.indexCount = 0
 		w.len++
 	}
-	cmd.vertexCount += (currentLen - startLen) / stride
+	cmd.indexCount += currentIndices - startIndices
 }
 
-// Reset clears all draw commands by resetting the slice to an empty state without deallocating its memory.
+// Reset clears all draw commands logically without deallocating.
 func (w *DrawCommands) Reset() {
 	w.len = 0
 }
 
-// Get retrieves all draw commands stored in the DrawCommands structure.
+// Get retrieves all active draw commands.
 func (w *DrawCommands) Get() []*DrawCommand {
 	return w.commands[0:w.len]
 }
 
-// Grow increases the capacity of the commands slice, doubling its size or setting an initial size if empty.
+// Grow increases the capacity of the commands slice.
 func (w *DrawCommands) Grow() {
 	oldLen := len(w.commands)
 	newSize := oldLen * 2

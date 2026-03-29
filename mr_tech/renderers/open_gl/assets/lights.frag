@@ -71,34 +71,42 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     return 1.0 - (shadow / float(SAMPLES));
 }
 
-vec3 calculateNormal(vec3 baseNormal) {
-    if (dot(baseNormal, baseNormal) < 0.01) return vec3(0.0, 1.0, 0.0);
-    vec3 normal = normalize(baseNormal);
+vec3 calculateNormal() {
+    vec3 dp1 = dFdx(ViewPos);
+    vec3 dp2 = dFdy(ViewPos);
+    vec3 geoNormal = normalize(cross(dp1, dp2));
+
+    // Sicurezza Anti-Backface antisfarfallio
+    if (geoNormal.z < 0.0) {
+        geoNormal = -geoNormal;
+    }
+
+    // Sicurezza Anti-Backface: forza la normale a guardare la camera
+    if (dot(geoNormal, ViewPos) > 0.0) {
+        geoNormal = -geoNormal;
+    }
 
     vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
-    if (length(mapColor) < 0.1) return normal;
+    if (length(mapColor) < 0.1) return geoNormal;
 
     vec3 unpacked = (mapColor * 2.0) - 1.0;
     vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
-    vec3 dp1 = dFdx(ViewPos);
-    vec3 dp2 = dFdy(ViewPos);
     vec2 duv1 = dFdx(TexCoords);
     vec2 duv2 = dFdy(TexCoords);
 
-    vec3 dp2perp = cross(dp2, normal);
-    vec3 dp1perp = cross(normal, dp1);
+    vec3 dp2perp = cross(dp2, geoNormal);
+    vec3 dp1perp = cross(geoNormal, dp1);
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
     float denom = max(dot(T, T), dot(B, B));
-
     if (denom > 1e-5 && denom < 1e6) {
         float invmax = inversesqrt(denom);
-        mat3 TBN = mat3(T * invmax, B * invmax, normal);
+        mat3 TBN = mat3(T * invmax, B * invmax, geoNormal);
         return normalize(TBN * mapNormal);
     }
-    return normal;
+    return geoNormal;
 }
 
 void main()
@@ -110,14 +118,15 @@ void main()
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 
-    vec3 finalNormal = calculateNormal(NormalView);
+    vec3 finalNormal = calculateNormal();
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
 
     // OMBRE STANZA
     float shadowRoom = 0.0;
     if (u_enableShadows == 1) {
-        vec3 geoNormal = normalize(NormalView);
-        float roomBias = max(0.05 * (1.0 - clamp(dot(finalNormal, L_room_dir), 0.0, 1.0)), 0.005);
+        // Usa la normale geometrica già fusa dal TBN
+        vec3 geoNormal = finalNormal;
+        float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
     }
 
@@ -182,8 +191,8 @@ void main()
         }
 
         float NdotL = max(dot(finalNormal, L), 0.0);
-        float wrapLight = max(NdotL, 0.4);
-        //float wrapLight = max(dot(finalNormal, L), 0.0);
+        //float wrapLight = max(NdotL, 0.4);
+        float wrapLight = max(dot(finalNormal, L), 0.0);
         float power = intensity;
 
         dynamicLights += albedo * lightColor * wrapLight * power * falloff * spotEffect;

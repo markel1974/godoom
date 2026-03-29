@@ -7,8 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-//const lightScaleFactor = 5.0
-
 // PolyKey represents a key used for uniquely identifying a polygon within a 3D rendered sector's data structure.
 type PolyKey struct {
 	sector *model.Sector
@@ -73,11 +71,9 @@ func (w *BatchBuilder) LightsStride() int32 {
 	return w.frameLights.Stride() * 4
 }
 
-// GetFrameVertices retrieves the vertex data and its count from the frame's vertex buffer. Returns a slice of float32 for vertex data and an int32 representing the vertex count.
-func (w *BatchBuilder) GetFrameVertices() ([]float32, int32) {
-	fvLen := w.vertices.Len()
-	fv := w.vertices.Get()
-	return fv, fvLen
+// GetFrameVertices retrieves the vertex data and indices from the frame's vertex buffer.
+func (w *BatchBuilder) GetFrameVertices() ([]float32, []uint32) {
+	return w.vertices.Get()
 }
 
 // GetFrameLights retrieves the frame light data and its count from the current BatchBuilder instance.
@@ -153,9 +149,8 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 	return cSky
 }
 
-// pushWall appends vertices and draw commands to render a wall with given position, texture, and height range.
+// pushWall appends indexed vertices and draw commands to render a wall with given position, texture, and height range.
 func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
-	//prepare
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -165,7 +160,6 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 		return
 	}
 	texW, texH := tex.Size()
-	startLen := w.vertices.Len()
 	scaleW, scaleH := anim.ScaleFactor()
 
 	u0 := cp.u0 / (float32(texW) * float32(scaleW))
@@ -181,28 +175,23 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	wx2 := (cp.tx2 * float32(sin)) + (cp.tz2 * float32(cos)) + float32(viX)
 	wy2 := -(cp.tx2 * float32(cos)) + (cp.tz2 * float32(sin)) + float32(vizY)
 
-	dx := float64(wx2 - wx1)
-	dz := float64((-wy2) - (-wy1))
-	length := math.Hypot(dx, dz)
+	startIndices := int32(len(w.vertices.indices))
 
-	nX := float32(-dz / length)
-	nY := float32(0.0)
-	nZ := float32(dx / length)
+	// Invia SOLO i 4 vertici perimetrali fisici (Stride: X, Y, Z, U, V)
+	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
+	idx1 := w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
+	idx2 := w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
+	idx3 := w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop)
 
-	w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
-	w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom, nX, nY, nZ)
-	w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
+	// Mesh indicizzata: unione dei due triangoli riutilizzando i vertici
+	w.vertices.AddTriangle(idx0, idx1, idx2)
+	w.vertices.AddTriangle(idx0, idx2, idx3)
 
-	w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop, nX, nY, nZ)
-	w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom, nX, nY, nZ)
-	w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop, nX, nY, nZ)
-
-	//apply
-	currentLen := w.vertices.Len()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, w.vertices.Stride())
+	currentIndices := int32(len(w.vertices.indices))
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 }
 
-// pushFlat adds flat polygonal segments to the batch for rendering, applying texture, light, and scale transformations.
+// pushFlat adds indexed flat polygonal segments to the batch for rendering, applying texture, light, and scale transformations.
 func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
@@ -216,40 +205,34 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 	if len(segments) < 3 {
 		return nil
 	}
-	//prepare
+
 	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
 	if !ok {
 		return nil
 	}
 	texW, texH := tex.Size()
-	startLen := w.vertices.Len()
 	_, scaleH := anim.ScaleFactor()
-	v0 := segments[0].Start
 
-	u0 := (float32(v0.X) / float32(texW)) * float32(scaleH)
-	v0V := (float32(-v0.Y) / float32(texH)) * float32(scaleH)
+	startIndices := int32(len(w.vertices.indices))
 
-	nY := float32(1.0)
-	if cp.kind == model.IdCeil || cp.kind == model.IdCeilTest {
-		nY = -1.0
+	// Pre-caricamento vertici unici (Fan Triangle pattern)
+	indices := make([]uint32, len(segments))
+	for i, seg := range segments {
+		v := seg.Start
+		u := (float32(v.X) / float32(texW)) * float32(scaleH)
+		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
+		indices[i] = w.vertices.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
 	}
 
+	// Costruzione della mesh indicizzata a raggiera (Fan) partendo da indices[0]
 	for i := 1; i < len(segments)-1; i++ {
-		v1, v2 := segments[i].Start, segments[i+1].Start
-
-		u1 := (float32(v1.X) / float32(texW)) * float32(scaleH)
-		v1V := (float32(-v1.Y) / float32(texH)) * float32(scaleH)
-		u2 := (float32(v2.X) / float32(texW)) * float32(scaleH)
-		v2V := (float32(-v2.Y) / float32(texH)) * float32(scaleH)
-
-		w.vertices.AddVertex(float32(v0.X), zF, float32(-v0.Y), u0, v0V, 0, nY, 0)
-		w.vertices.AddVertex(float32(v1.X), zF, float32(-v1.Y), u1, v1V, 0, nY, 0)
-		w.vertices.AddVertex(float32(v2.X), zF, float32(-v2.Y), u2, v2V, 0, nY, 0)
+		// NOTA: L'ordine dei vertici determina il winding (Cull Face).
+		// Essendo state eliminate le normali su CPU, il winding corretto è essenziale per dFdx/dFdy.
+		w.vertices.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
-	//apply
-	currentLen := w.vertices.Len()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, w.vertices.Stride())
+	currentIndices := int32(len(w.vertices.indices))
+	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	return nil
 }
 
@@ -260,9 +243,6 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 	}
 
 	for _, l := range lights {
-		//if l.GetSector() == nil || !sectors[l.GetSector()] {
-		//	continue
-		//}
 		r, g, b := float32(1.0), float32(1.0), float32(1.0)
 		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
 		cutOff := float32(0)
@@ -271,10 +251,10 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 		intensity := float32(l.GetIntensity())
 		falloff := float32(0.0)
 		lightType := float32(-1)
+
 		switch l.GetKind() {
 		case model.LightKindOpenAir:
 			lightType = 1
-			//intensity *= 115
 			falloff = 50.0
 			r, g, b = float32(1.0), float32(1.0), float32(1.0)
 			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
@@ -286,9 +266,8 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 			falloff = 8.0
 		case model.LightKindSpot:
 			lightType = 1
-			falloff = 50.0
+			falloff = 100.0
 			r, g, b = float32(1.0), float32(1.0), float32(1.0)
-			// 2. VETTORE DIREZIONE CORRETTO (Spazio OpenGL: Y è l'altezza)
 			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
 			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
 			outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
@@ -313,7 +292,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 	if len(things) == 0 {
 		return
 	}
-	fv := w.vertices
+	//fv := w.vertices
 	camX, camY := vi.GetXY()
 
 	// 1. Culling e calcolo distanza quadrica
@@ -362,31 +341,21 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		// --- CALCOLO NORMALE IDENTICO A PUSH WALL ---
-		dxNorm := float64(v2x - v1x)
-		dzNorm := float64((-v2y) - (-v1y))
-		length := math.Hypot(dxNorm, dzNorm)
+		startIndices := int32(len(w.vertices.indices))
 
-		nX := float32(-dzNorm / length)
-		nY := float32(0.0)
-		nZ := float32(dxNorm / length)
-
-		startLen := fv.Len()
-
-		// --- BATCHING NEL VBO ---
 		// A differenza di un muro che ripete la texture, lo sprite mappa l'intera texture (UV 0.0 -> 1.0)
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
-		// Triangolo 1 (Top-Left -> Bottom-Left -> Bottom-Right)
-		w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
-		w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom, nX, nY, nZ)
-		w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
-		// Triangolo 2 (Top-Left -> Bottom-Right -> Top-Right)
-		w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop, nX, nY, nZ)
-		w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom, nX, nY, nZ)
-		w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop, nX, nY, nZ)
 
-		currentLen := fv.Len()
-		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startLen, currentLen, fv.Stride())
+		idx0 := w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop)
+		idx1 := w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
+		idx2 := w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
+		idx3 := w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop)
+
+		w.vertices.AddTriangle(idx0, idx1, idx2)
+		w.vertices.AddTriangle(idx0, idx2, idx3)
+
+		currentIndices := int32(len(w.vertices.indices))
+		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	}
 }

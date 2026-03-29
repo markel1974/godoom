@@ -154,22 +154,25 @@ func (s *Flashlight) GetUniform(id FlashlightLoc) int32 {
 
 // Compile builds and links the shader program for the flashlight, resolving uniforms and handling shader errors.
 func (s *Flashlight) Compile(a IAssets) error {
-	vSrc, fSrc, err := a.ReadMulti("main.vert", "flashlight.frag")
+	const vertId = "main.vert"
+	const fragId = "flashlight.frag"
+
+	vSrc, fSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
 
-	vSh, err := ShaderCompile(string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vSh)
 		return err
 	}
 
-	s.prg, err = ShaderCreateProgram(vSh, fSh)
+	s.prg, err = ShaderCreateProgram("flashLight", vSh, fSh)
 	if err != nil {
 		return err
 	}

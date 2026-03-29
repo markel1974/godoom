@@ -75,40 +75,42 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     return 1.0 - (shadow / float(SAMPLES));
 }
 
-vec3 calculateNormal(vec3 baseNormal) {
-    // Rimosso il gl_FrontFacing: rispetta la normale geometrica passata dal Vertex Shader
-    if (dot(baseNormal, baseNormal) < 0.01) return vec3(0.0, 1.0, 0.0);
-    vec3 normal = normalize(baseNormal);
+vec3 calculateNormal() {
+    vec3 dp1 = dFdx(ViewPos);
+    vec3 dp2 = dFdy(ViewPos);
+    vec3 geoNormal = normalize(cross(dp1, dp2));
+
+    // Sicurezza Anti-Backface antisfarfallio
+    if (geoNormal.z < 0.0) {
+        geoNormal = -geoNormal;
+    }
+
+    // Sicurezza Anti-Backface: forza la normale a guardare la camera
+    if (dot(geoNormal, ViewPos) > 0.0) {
+        geoNormal = -geoNormal;
+    }
 
     vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
-    if (length(mapColor) < 0.1) return normal;
+    if (length(mapColor) < 0.1) return geoNormal;
 
     vec3 unpacked = (mapColor * 2.0) - 1.0;
     vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
-    vec3 dp1 = dFdx(ViewPos);
-    vec3 dp2 = dFdy(ViewPos);
     vec2 duv1 = dFdx(TexCoords);
     vec2 duv2 = dFdy(TexCoords);
 
-    vec3 dp2perp = cross(dp2, normal);
-    vec3 dp1perp = cross(normal, dp1);
+    vec3 dp2perp = cross(dp2, geoNormal);
+    vec3 dp1perp = cross(geoNormal, dp1);
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
     float denom = max(dot(T, T), dot(B, B));
-
-    // TRAPPOLA HARDWARE (Anti-NaN)
-    // Se dFdx esplode a Infinito sui triangoli degeneri, denom va a Inf.
-    // inversesqrt(Inf) fa 0. Inf * 0 fa NaN!
-    // Il limite < 1e6 blocca gli infiniti e salva il frammento.
     if (denom > 1e-5 && denom < 1e6) {
         float invmax = inversesqrt(denom);
-        mat3 TBN = mat3(T * invmax, B * invmax, normal);
+        mat3 TBN = mat3(T * invmax, B * invmax, geoNormal);
         return normalize(TBN * mapNormal);
     }
-
-    return normal;
+    return geoNormal;
 }
 
 float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizontal) {
@@ -131,7 +133,7 @@ void main()
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 
-    vec3 finalNormal = calculateNormal(NormalView);
+    vec3 finalNormal = calculateNormal();
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos);
 
@@ -142,12 +144,14 @@ void main()
 
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {
-        vec3 geoNormal = normalize(NormalView);
+        // Usa la normale geometrica già fusa dal TBN
+        vec3 geoNormal = finalNormal;
         float flashBias = max(0.005 * (1.0 - clamp(dot(geoNormal, L_flash), 0.0, 1.0)), 0.001);
         shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
 
     float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
+
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
     float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);

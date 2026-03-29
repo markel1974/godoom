@@ -88,21 +88,23 @@ func (s *Depth) GetFlashShadowTextures() uint32 {
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
 func (s *Depth) Compile(assets IAssets) error {
-	vertexSrc, fragmentSrc, err := assets.ReadMulti("depth.vert", "depth.frag")
+	const vertId = "depth.vert"
+	const fragId = "depth.frag"
+	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertId, fragId)
 
 	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 
-	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram("depth", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}

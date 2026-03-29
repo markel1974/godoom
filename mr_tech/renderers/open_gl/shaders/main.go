@@ -8,13 +8,23 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl_legacy/shaders"
 )
 
-// MainLoc represents an identifier for uniform variables in the Main shader program.
+// MainLoc represents an enumerated type for identifying shader uniform locations.
 type MainLoc int
 
+// mainDoubleBuffer defines the number of buffers used in double buffering for efficient rendering operations.
 const (
 	mainDoubleBuffer = 2
 )
 
+// MainLocView represents the location index for the view matrix.
+// MainLocProjection represents the location index for the projection matrix.
+// MainLocTexture represents the location index for the texture sampler.
+// MainLocSSAO represents the location index for the SSAO effect.
+// MainLocScreenResolution represents the location index for the screen resolution.
+// MainLocEmissiveMap represents the location index for the emissive map texture.
+// MainLocEmissiveIntensity represents the location index for the emissive light intensity.
+// MainLocAoFactor represents the location index for the ambient occlusion factor.
+// MainLocLast represents the last index in the MainLoc enumeration.
 const (
 	MainLocView = MainLoc(iota)
 	MainLocProjection
@@ -27,13 +37,14 @@ const (
 	MainLocLast
 )
 
-// Main represents the main OpenGL shader and associated resources for rendering.
+// Main represents the primary rendering configuration and state for a graphics pipeline.
 type Main struct {
 	prg               uint32
 	table             [MainLocLast]int32
-	mainVAO           [mainDoubleBuffer]uint32 // double buffering
-	mainVBO           [mainDoubleBuffer]uint32 // double buffering
-	frameIdx          int                      // double buffer index
+	mainVAO           [mainDoubleBuffer]uint32
+	mainVBO           [mainDoubleBuffer]uint32
+	mainEBO           [mainDoubleBuffer]uint32
+	frameIdx          int
 	width             int32
 	height            int32
 	view              [16]float32
@@ -43,7 +54,7 @@ type Main struct {
 	stride            int32
 }
 
-// NewMain initializes and returns a new instance of Main with default parameters.
+// NewMain creates and initializes a new instance of Main with the provided vertex stride value.
 func NewMain(stride int32) *Main {
 	return &Main{
 		prg:               0,
@@ -53,26 +64,32 @@ func NewMain(stride int32) *Main {
 	}
 }
 
-// Init initializes the main VAO and VBO for the shader.
+// Init initializes OpenGL buffers and vertex array objects, configures memory layout, and enables depth testing.
 func (s *Main) Init() error {
-	vboMaxFloats := 8192 * int(s.stride)
-	bytesSize := vboMaxFloats * 4
+	vboBytesSize := 131072 * int(s.stride)
+	eboBytesSize := 262144 * 4
 
 	gl.GenVertexArrays(mainDoubleBuffer, &s.mainVAO[0])
 	gl.GenBuffers(mainDoubleBuffer, &s.mainVBO[0])
+	gl.GenBuffers(mainDoubleBuffer, &s.mainEBO[0])
 
 	for i := 0; i < mainDoubleBuffer; i++ {
 		gl.BindVertexArray(s.mainVAO[i])
+
+		// Buffer dei vertici
 		gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[i])
+		gl.BufferData(gl.ARRAY_BUFFER, vboBytesSize, nil, gl.DYNAMIC_DRAW)
 
-		gl.BufferData(gl.ARRAY_BUFFER, bytesSize, nil, gl.DYNAMIC_DRAW)
+		// Buffer degli indici
+		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
+		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, gl.DYNAMIC_DRAW)
 
-		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(0))
+		// FIX: Usa s.stride direttamente
+		strideBytes := s.stride
+		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
 		gl.EnableVertexAttribArray(0)
-		gl.VertexAttribPointer(1, 2, gl.FLOAT, false, s.stride, gl.PtrOffset(3*4))
+		gl.VertexAttribPointer(1, 2, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
 		gl.EnableVertexAttribArray(1)
-		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(5*4))
-		gl.EnableVertexAttribArray(2)
 	}
 
 	gl.Enable(gl.DEPTH_TEST)
@@ -80,54 +97,56 @@ func (s *Main) Init() error {
 	return nil
 }
 
-// SetupSamplers configures the shader program's texture samplers.
+// SetupSamplers initializes and binds sampler uniforms for texture, SSAO, and emissive maps to the shader program.
 func (s *Main) SetupSamplers() error {
 	gl.UseProgram(s.prg)
-
 	gl.Uniform1i(s.GetUniform(MainLocTexture), 0)
 	gl.Uniform1i(s.GetUniform(MainLocSSAO), 2)
 	gl.Uniform1i(s.GetUniform(MainLocEmissiveMap), 5)
 	return nil
 }
 
-// Setup initializes the width and height properties of the Main instance.
+// Setup initializes the width and height values for the Main instance and returns an error if any issues occur.
 func (s *Main) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
 	return nil
 }
 
-// GetProgram returns the OpenGL program ID associated with the Main instance.
+// GetProgram returns the program ID associated with the Main instance.
 func (s *Main) GetProgram() uint32 {
 	return s.prg
 }
 
-// GetUniform retrieves the uniform location for the given MainLoc identifier.
+// GetUniform returns the location of the specified uniform variable from the internal table.
 func (s *Main) GetUniform(id MainLoc) int32 {
 	return s.table[id]
 }
 
-// GetVAO returns the ID of the main Vertex Array Object (VAO).
+// GetVAO returns the vertex array object identifier for the current frame buffer.
 func (s *Main) GetVAO() uint32 {
 	return s.mainVAO[s.frameIdx]
 }
 
-// Compile initializes, compiles, and links the shaders.
+// Compile loads, compiles, and links the vertex and fragment shaders into a program, and sets up uniform locations.
 func (s *Main) Compile(a IAssets) error {
-	vertexSrc, fragmentSrc, err := a.ReadMulti("main.vert", "main.frag")
+	const vertId = "main.vert"
+	const fragId = "main.frag"
+
+	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram("main", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
@@ -148,18 +167,21 @@ func (s *Main) Compile(a IAssets) error {
 	return nil
 }
 
-// Prepare uploads vertex data from the given FrameVertices to the GPU buffer.
-func (s *Main) Prepare(vertices []float32, verticesLen int32) {
+// Prepare updates vertex and index buffer data for the current frame using double buffering.
+func (s *Main) Prepare(vertices []float32, indices []uint32) {
 	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
 
-	total := int(verticesLen * 4)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
+	vTotal := len(vertices) * 4
+	iTotal := len(indices) * 4
 
-	// Scrittura diretta senza orphaning
-	gl.BufferSubData(gl.ARRAY_BUFFER, 0, total, gl.Ptr(vertices))
+	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
+	gl.BufferSubData(gl.ARRAY_BUFFER, 0, vTotal, gl.Ptr(vertices))
+
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
+	gl.BufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, iTotal, gl.Ptr(indices))
 }
 
-// UpdateUniforms updates the shader's uniform variables for base rendering.
+// UpdateUniforms calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
 func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [16]float32) {
 	aspect := float32(s.width) / float32(s.height)
 	scaleX := -(fovScaleFactor / aspect) * float32(model.HFov)
@@ -197,7 +219,7 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [
 	return s.proj, s.view, invView
 }
 
-// Render sets up and executes the main rendering pipeline for the base pass.
+// Render prepares and executes the rendering pipeline using the provided geometry and SSAO texture.
 func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
 	gl.UseProgram(s.GetProgram())
 
@@ -210,7 +232,7 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
 
-	// Bind del VAO corrispondente al frame corrente
+	// Il Bind del VAO riattiva automaticamente lo stato del VBO e dell'EBO associati
 	gl.BindVertexArray(s.mainVAO[s.frameIdx])
 
 	gl.ActiveTexture(gl.TEXTURE2)

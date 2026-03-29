@@ -2,13 +2,10 @@
 
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoords;
-layout (location = 2) in vec3 aNormal;
 
 out vec2 TexCoords;
 out float FragDepth;
 out vec3 ViewPos;
-out vec3 NormalView;
-
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
 
@@ -26,11 +23,9 @@ void main()
 
     ViewPos = viewPos.xyz;
     FragDepth = abs(viewPos.z);
-    NormalView = mat3(u_view) * aNormal;
 
-    vec4 shadowWorldPos = worldPos + vec4(aNormal * 2.0, 0.0);
-
-    FragPosLightRoom = u_roomSpaceMatrix * shadowWorldPos;
+    // Rimossa la dipendenza dalla normale, usiamo il worldPos puro.
+    FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
 
     gl_Position = u_projection * viewPos;

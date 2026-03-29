@@ -58,20 +58,22 @@ func (s *Blur) SetupSamplers() error {
 
 // Compile compiles the necessary shaders, links them into a program, and assigns uniform locations for the Blur instance.
 func (s *Blur) Compile(assets IAssets) error {
-	vertexSrc, fragmentSrc, err := assets.ReadMulti("ssao.vert", "ssao_blur.frag")
+	const vertId = "ssao.vert"
+	const fragId = "ssao_blur.frag"
+	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram("blur", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}

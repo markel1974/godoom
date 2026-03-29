@@ -114,26 +114,29 @@ func (s *SSAO) GetUniform(id SSAOLoc) int32 {
 
 // Compile initializes and compiles the SSAO shader program, sets up buffers, and validates uniform locations.
 func (s *SSAO) Compile(a IAssets) error {
+	const vertId = "ssao.vert"
+	const fragId = "ssao.frag"
+
 	if s.width == 0 || s.height == 0 {
 		return fmt.Errorf("invalid shader dimensions: width=%d, height=%d", s.width, s.height)
 	}
-	vertexSrc, fragmentSrc, err := a.ReadMulti("ssao.vert", "ssao.frag")
+	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
 	if err = s.createBuffers(s.width, s.height); err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram("ssao", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}

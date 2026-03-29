@@ -68,22 +68,24 @@ func (s *Bloom) SetupSamplers() error {
 
 // Compile initializes the bloom effect by compiling shaders, creating a shader program, and setting up framebuffer resources.
 func (s *Bloom) Compile(a IAssets) error {
-	vSrc, fSrc, err := a.ReadMulti("post.vert", "bloom.frag")
+	const vertId = "post.vert"
+	const fragId = "bloom.frag"
+	vSrc, fSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
 
-	vSh, err := ShaderCompile(string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vSh)
 		return err
 	}
 
-	s.prg, err = ShaderCreateProgram(vSh, fSh)
+	s.prg, err = ShaderCreateProgram("bloom", vSh, fSh)
 	if err != nil {
 		return err
 	}

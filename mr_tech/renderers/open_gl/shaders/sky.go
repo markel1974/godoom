@@ -91,20 +91,23 @@ func (s *Sky) GetVAO() uint32 {
 
 // Compile compiles the shader program for rendering the sky using provided vertex and fragment shaders from assets.
 func (s *Sky) Compile(a IAssets) error {
-	vertexSrc, fragmentSrc, err := a.ReadMulti("sky.vert", "sky.frag")
+	const vertId = "sky.vert"
+	const fragId = "sky.frag"
+
+	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram("sky", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}

@@ -109,20 +109,23 @@ func (s *Lights) GetUniform(id LightLoc) int32 {
 
 // Compile compiles the shaders for the Lights object and initializes its uniform locations and shader program.
 func (s *Lights) Compile(a IAssets) error {
-	vSrc, fSrc, err := a.ReadMulti("main.vert", "lights.frag")
+	const vertId = "main.vert"
+	const fragId = "lights.frag"
+
+	vSrc, fSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
-	vSh, err := ShaderCompile(string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vSh)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram(vSh, fSh)
+	s.prg, err = ShaderCreateProgram("lights", vSh, fSh)
 	if err != nil {
 		return err
 	}

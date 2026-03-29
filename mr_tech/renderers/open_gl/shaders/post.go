@@ -84,22 +84,25 @@ func (s *Post) SetupSamplers() error {
 
 // Compile initializes the shader program, framebuffers, and texture buffers required for the post-processing effect.
 func (s *Post) Compile(a IAssets) error {
-	vSrc, fSrc, err := a.ReadMulti("post.vert", "post.frag")
+	const vertId = "post.vert"
+	const fragId = "post.frag"
+
+	vSrc, fSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
 		return err
 	}
 
-	vSh, err := ShaderCompile(string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vSh)
 		return err
 	}
 
-	s.prg, err = ShaderCreateProgram(vSh, fSh)
+	s.prg, err = ShaderCreateProgram("post", vSh, fSh)
 	if err != nil {
 		return err
 	}

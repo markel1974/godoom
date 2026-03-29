@@ -22,7 +22,7 @@ void main() {
     color += (bloom * u_bloomIntensity);
 
     // Additive Blend in spazio lineare puro
-    color += bloom;
+    //color += bloom;
 
     // 1. Exposure
     color *= u_exposure;

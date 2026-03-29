@@ -1,0 +1,39 @@
+1. Rischio di Corruzione VRAM (Buffer Overflow)
+Nel file open_gl/shaders/main.go, hai allocato fisicamente la memoria per il VBO e l'EBO nel metodo Init() con dimensioni fisse:
+
+Go
+vboBytesSize := 131072 * int(s.stride)
+eboBytesSize := 262144 * 4
+gl.BufferData(gl.ARRAY_BUFFER, vboBytesSize, nil, gl.DYNAMIC_DRAW)
+Tuttavia, nel metodo Prepare, invii i dati usando la lunghezza degli slice senza alcun controllo sui limiti:
+
+Go
+vTotal := len(vertices) * 4
+gl.BufferSubData(gl.ARRAY_BUFFER, 0, vTotal, gl.Ptr(vertices))
+Se una mappa complessa genera più di 131.072 vertici (o se il Grow() del FrameVertices espande lo slice), BufferSubData tenterà di scrivere oltre il limite fisico allocato nella memoria della GPU. Questo porterà a un Segmentation Fault del driver OpenGL o al blocco della macchina.
+Soluzione: Devi tracciare la capacità attualmente allocata in byte (es. s.currentVboCap) e, se vTotal > s.currentVboCap, devi richiamare gl.BufferData con nil per riallocare un buffer più grande prima di chiamare BufferSubData.
+
+2. Ritorno del GC Thrashing (Allocazioni nell'Hot Path)
+Avevamo rimosso le allocazioni dinamiche nei draw command e nel visibility culling per salvare il Garbage Collector. Purtroppo, nel nuovo open_gl/batch_builder.go, il metodo CreateBatch distrugge questo sforzo allocando due mappe ex-novo a ogni singolo frame:
+
+Go
+visibleSectors := make(map[*model.Sector]bool)
+processedPolygons := make(map[PolyKey]bool)
+Creare e distruggere mappe complesse a 60+ FPS scatenerà il GC Stop-The-World, causando scatti evidenti (stuttering).
+Soluzione: Sposta queste due mappe come membri interni della struct BatchBuilder. All'inizio di CreateBatch, svuotale usando la funzione nativa di Go 1.21 clear(w.visibleSectors) e clear(w.processedPolygons), riciclando la memoria fisica già preallocata dalla mappa.
+
+4. Overdraw Estremo sulla GPU
+Nel file open_gl/shaders.go, il metodo Render esegue questa sequenza:
+
+Go
+w.main.Render(exec, ...)       // Disegna tutto l'ambiente
+w.lights.Render(exec, ...)     // Ridisegna tutto l'ambiente per le luci di stanza
+w.flashlight.Render(exec, ...) // Ridisegna tutto l'ambiente per la torcia
+La closure exec invoca l'intero batch della mappa (w.dcRender.Render(dc)).
+Stai chiedendo alla GPU di processare il 100% dei poligoni visibili per 3 volte consecutive a ogni frame.
+Per la torcia ha senso (poiché illumina in base alla posizione della camera),
+ma per le luci dinamiche della stanza far processare a tutti i frammenti della mappa il ciclo for for (int i = 0; i < u_numLights; ++i) è uno spreco enorme di fill-rate.
+Soluzione architetturale a lungo termine:
+In un motore Forward puro, tutte le luci (torcia inclusa) dovrebbero essere valutate in un singolo shader pass
+(unendo main.frag, lights.frag e flashlight.frag in un solo uber-shader),
+oppure dovresti passare al Deferred Shading o renderizzare volumi geometrici (sfere/coni) attorno alle luci per limitare i pixel processati, invece di sfoltire a schermo intero.

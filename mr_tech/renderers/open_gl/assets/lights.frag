@@ -131,7 +131,8 @@ void main()
     }
 
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
-    float shadowFactor = (0.3 + 0.7 * (1.0 - shadowRoom));
+    //float shadowFactor = (0.3 + 0.7 * (1.0 - shadowRoom));
+    float shadowFactor = 1.0 - shadowRoom;
     vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
 
     // NEBBIA VOLUMETRICA

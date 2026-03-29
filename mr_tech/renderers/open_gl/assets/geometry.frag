@@ -3,18 +3,25 @@ layout (location = 0) out vec4 gPositionDepth;
 layout (location = 1) out vec4 gNormal;
 
 in vec3 ViewPos;
-in vec3 NormalView;
 in vec2 TexCoords;
 in float FragDepth;
 
 uniform sampler2D u_texture;
 
 void main() {
-    // Rispetta l'alpha discard per i portali/sprite
     if(texture(u_texture, TexCoords).a < 0.5) discard;
 
-    // Attachment 0
     gPositionDepth = vec4(ViewPos, FragDepth);
-    // Attachment 1
-    gNormal = vec4(normalize(NormalView), 1.0);
+
+    // Ricalcolo della normale geometrica su GPU (Zero-Math su CPU)
+    vec3 dp1 = dFdx(ViewPos);
+    vec3 dp2 = dFdy(ViewPos);
+    vec3 geoNormal = normalize(cross(dp1, dp2));
+
+    // Sicurezza Anti-Backface
+    if (geoNormal.z < 0.0) {
+        geoNormal = -geoNormal;
+    }
+
+    gNormal = vec4(geoNormal, 1.0);
 }

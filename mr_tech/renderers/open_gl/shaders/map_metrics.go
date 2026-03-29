@@ -8,8 +8,8 @@ import (
 
 // MapMetrics represents configuration parameters for rendering spaces, including room and flashlight projection metrics.
 type MapMetrics struct {
-	OrthoSize      float32
-	ShadowMapRes   float32
+	OrthoSize float32
+	//ShadowMapRes   float32
 	ZNearRoom      float32
 	ZFarRoom       float32
 	ZNearFlash     float32
@@ -19,21 +19,19 @@ type MapMetrics struct {
 	MapCenterZ     float32
 	FovFlashDeg    float32
 	FovScaleFactor float32
-	RayUnit        float32
 }
 
 // NewMapMetrics initializes and returns a pointer to a new MapMetrics instance with default metric values.
 func NewMapMetrics() *MapMetrics {
 	return &MapMetrics{
-		OrthoSize:      640.0,
-		ShadowMapRes:   1024.0,
+		OrthoSize: 640.0,
+		//ShadowMapRes:   1024.0,
 		ZNearRoom:      1.0,
 		ZFarRoom:       8192.0,
 		ZNearFlash:     0.1,
 		ZFarFlash:      2048.0,
 		FovFlashDeg:    85.0,
 		FovScaleFactor: 2.0,
-		RayUnit:        512.0,
 	}
 }
 
@@ -87,7 +85,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOff
 
 	// 3. Spazio Torcia Locale
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	targetViewX, targetViewY, targetViewZ := float32(0.0), flashDirY*m.RayUnit, -m.RayUnit
+	targetViewX, targetViewY, targetViewZ := float32(0.0), flashDirY*m.ZFarFlash, -m.ZFarFlash
 
 	ffX, ffY, ffZ := targetViewX-posViewX, targetViewY-posViewY, targetViewZ-posViewZ
 	invLenF := float32(1.0 / math.Sqrt(float64(ffX*ffX+ffY*ffY+ffZ*ffZ)))

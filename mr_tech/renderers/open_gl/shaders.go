@@ -33,6 +33,7 @@ type IShader interface {
 type Shaders struct {
 	main          *shaders.Main
 	sky           *shaders.Sky
+	geometry      *shaders.Geometry
 	ssao          *shaders.SSAO
 	blur          *shaders.Blur
 	depth         *shaders.Depth
@@ -50,6 +51,7 @@ func NewShaders() *Shaders {
 	c := &Shaders{
 		main:          nil,
 		sky:           nil,
+		geometry:      nil,
 		ssao:          nil,
 		blur:          nil,
 		depth:         nil,
@@ -69,6 +71,7 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 
 	w.main = shaders.NewMain(vStride)
 	w.sky = shaders.NewSky()
+	w.geometry = shaders.NewGeometry()
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth()
@@ -77,7 +80,7 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()
 	w.enableShadows = false
-	w.container = append(w.container, w.main, w.sky, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom)
+	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom)
 	w.SetShadowEnabled(true)
 
 	for _, s := range w.container {
@@ -121,6 +124,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 
 	proj, view, invView := w.main.UpdateUniforms(vi)
 	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
+	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)
 
@@ -137,6 +141,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	// OMBRE
 	w.depth.Render(exec, w.main.GetVAO())
 	// SSAO
+	w.ssao.Prepare()
+	w.geometry.Render(exec)
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
 	w.main.Render(exec, w.ssao.GetSSAOBlurTexture())

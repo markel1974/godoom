@@ -20,9 +20,9 @@ const (
 	GeometryLocLast
 )
 
-// ShaderGeometry represents a shader program used for geometry rendering in a graphics pipeline.
+// Geometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
-type ShaderGeometry struct {
+type Geometry struct {
 	prg    uint32
 	table  [GeometryLocLast]int32
 	view   [16]float32
@@ -31,42 +31,42 @@ type ShaderGeometry struct {
 	height int32
 }
 
-// NewShaderGeometry initializes and returns a new ShaderGeometry instance with default properties.
-func NewShaderGeometry() *ShaderGeometry {
-	return &ShaderGeometry{
+// NewGeometry initializes and returns a new Geometry instance with default properties.
+func NewGeometry() *Geometry {
+	return &Geometry{
 		prg: 0,
 	}
 }
 
-// Setup initializes the ShaderGeometry with the specified viewport width and height.
-func (s *ShaderGeometry) Setup(width int32, height int32) error {
+// Setup initializes the Geometry with the specified viewport width and height.
+func (s *Geometry) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
 	return nil
 }
 
-// SetupSamplers initializes and configures texture samplers for the ShaderGeometry instance.
-func (s *ShaderGeometry) SetupSamplers() error {
+// SetupSamplers initializes and configures texture samplers for the Geometry instance.
+func (s *Geometry) SetupSamplers() error {
 	return nil
 }
 
-// Init initializes the ShaderGeometry instance and prepares it for use. It ensures necessary internal state is configured.
-func (s *ShaderGeometry) Init() error {
+// Init initializes the Geometry instance and prepares it for use. It ensures necessary internal state is configured.
+func (s *Geometry) Init() error {
 	return nil
 }
 
 // GetProgram returns the OpenGL program ID associated with the shader.
-func (s *ShaderGeometry) GetProgram() uint32 {
+func (s *Geometry) GetProgram() uint32 {
 	return s.prg
 }
 
 // GetUniform retrieves the uniform location associated with the given GeometryLoc identifier.
-func (s *ShaderGeometry) GetUniform(id GeometryLoc) int32 {
+func (s *Geometry) GetUniform(id GeometryLoc) int32 {
 	return s.table[id]
 }
 
 // Compile initializes and compiles shaders, links them into a program, sets uniform locations, and validates the program.
-func (s *ShaderGeometry) Compile(assets IAssets) error {
+func (s *Geometry) Compile(assets IAssets) error {
 	const vertId = "main.vert"
 	const fragId = "geometry.frag"
 
@@ -99,13 +99,13 @@ func (s *ShaderGeometry) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the view and projection matrices used by the shader with the given values.
-func (s *ShaderGeometry) UpdateUniforms(view, proj [16]float32) {
+func (s *Geometry) UpdateUniforms(view, proj [16]float32) {
 	s.view = view
 	s.proj = proj
 }
 
 // Render applies shader program, updates uniform values, and executes the provided rendering function.
-func (s *ShaderGeometry) Render(renderScene func()) {
+func (s *Geometry) Render(renderScene func()) {
 	gl.UseProgram(s.GetProgram())
 	gl.Uniform1i(s.GetUniform(GeometryLocTexture), 0)
 	gl.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])

@@ -267,7 +267,6 @@ func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
 func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool) {
-	s.Prepare()
 	gl.BindVertexArray(mainVAO)
 
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)

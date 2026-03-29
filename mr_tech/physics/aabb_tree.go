@@ -41,48 +41,12 @@ func NewAABBTree(initialSize uint) *AABBTree {
 	return t
 }
 
-// allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
-func (a *AABBTree) allocateNode() (uint, *AABBNode) {
-	if a.nextFreeNodeIndex == AABBNullNode {
-		//assert(a.allocatedNodeCount == a.nodeCapacity)
-		a.nodeCapacity += a.growthSize
-
-		nodes := make([]*AABBNode, a.nodeCapacity)
-		copy(nodes, a.nodes)
-		a.nodes = nodes
-
-		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
-			node := NewAABBNode()
-			a.nodes[nodeIndex] = node
-			node.nextNodeIndex = nodeIndex + 1
-		}
-		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
-		a.nextFreeNodeIndex = a.allocatedNodeCount
+// GetRoot returns the root AABB of the tree along with a boolean indicating its existence.
+func (a *AABBTree) GetRoot() (*AABB, bool) {
+	if a.rootNodeIndex == AABBNullNode {
+		return nil, false
 	}
-
-	nodeIndex := a.nextFreeNodeIndex
-	allocatedNode := a.nodes[nodeIndex]
-	allocatedNode.parentNodeIndex = AABBNullNode
-	allocatedNode.leftNodeIndex = AABBNullNode
-	allocatedNode.rightNodeIndex = AABBNullNode
-	a.nextFreeNodeIndex = allocatedNode.nextNodeIndex
-	a.allocatedNodeCount++
-
-	return nodeIndex, allocatedNode
-}
-
-// deallocateNode removes a node from the tree, marking it as free and linking it to the free list for reuse.
-func (a *AABBTree) deallocateNode(nodeIndex uint) {
-	if len(a.nodes) == 0 {
-		return
-	}
-
-	if nodeIndex >= 0 && nodeIndex < uint(len(a.nodes)) {
-		deallocatedNode := a.nodes[nodeIndex]
-		deallocatedNode.nextNodeIndex = a.nextFreeNodeIndex
-		a.nextFreeNodeIndex = nodeIndex
-		a.allocatedNodeCount--
-	}
+	return a.nodes[a.rootNodeIndex].aabb, true
 }
 
 // Nodes returns a map linking objects implementing IAABB to their corresponding node indices in the AABB tree.
@@ -173,6 +137,50 @@ func (a *AABBTree) QueryPoint(px, py float64, callback func(object IAABB) bool) 
 				a.stack = append(a.stack, node.rightNodeIndex)
 			}
 		}
+	}
+}
+
+// allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
+func (a *AABBTree) allocateNode() (uint, *AABBNode) {
+	if a.nextFreeNodeIndex == AABBNullNode {
+		//assert(a.allocatedNodeCount == a.nodeCapacity)
+		a.nodeCapacity += a.growthSize
+
+		nodes := make([]*AABBNode, a.nodeCapacity)
+		copy(nodes, a.nodes)
+		a.nodes = nodes
+
+		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
+			node := NewAABBNode()
+			a.nodes[nodeIndex] = node
+			node.nextNodeIndex = nodeIndex + 1
+		}
+		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
+		a.nextFreeNodeIndex = a.allocatedNodeCount
+	}
+
+	nodeIndex := a.nextFreeNodeIndex
+	allocatedNode := a.nodes[nodeIndex]
+	allocatedNode.parentNodeIndex = AABBNullNode
+	allocatedNode.leftNodeIndex = AABBNullNode
+	allocatedNode.rightNodeIndex = AABBNullNode
+	a.nextFreeNodeIndex = allocatedNode.nextNodeIndex
+	a.allocatedNodeCount++
+
+	return nodeIndex, allocatedNode
+}
+
+// deallocateNode removes a node from the tree, marking it as free and linking it to the free list for reuse.
+func (a *AABBTree) deallocateNode(nodeIndex uint) {
+	if len(a.nodes) == 0 {
+		return
+	}
+
+	if nodeIndex >= 0 && nodeIndex < uint(len(a.nodes)) {
+		deallocatedNode := a.nodes[nodeIndex]
+		deallocatedNode.nextNodeIndex = a.nextFreeNodeIndex
+		a.nextFreeNodeIndex = nodeIndex
+		a.allocatedNodeCount--
 	}
 }
 

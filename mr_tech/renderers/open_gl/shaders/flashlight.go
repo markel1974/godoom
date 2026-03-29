@@ -68,16 +68,18 @@ type Flashlight struct {
 	offsetY    float32
 	shadows    bool
 	shadowsInt int32
+	metrics    *MapMetrics
 }
 
 // NewShaderFlashlight creates and returns a new instance of Flashlight with default values and shadows disabled.
-func NewShaderFlashlight() *Flashlight {
+func NewShaderFlashlight(metrics *MapMetrics) *Flashlight {
 	f := &Flashlight{
 		factor:     30.0,
 		offsetX:    0.0,
 		offsetY:    0.0,
 		shadows:    false,
 		shadowsInt: 0,
+		metrics:    metrics,
 	}
 	f.EnableShadows(false)
 	return f
@@ -220,8 +222,8 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 		return
 	}
 
-	fConeStart := float32(math.Cos(fovFlashDeg/2.0*math.Pi/180.0)) + 0.01
-	fConeEnd := float32(math.Cos(fovFlashDeg / 2.0 * 0.6 * math.Pi / 180.0))
+	fConeStart := float32(math.Cos(float64(s.metrics.FovFlashDeg)/2.0*math.Pi/180.0)) + 0.01
+	fConeEnd := float32(math.Cos(float64(s.metrics.FovFlashDeg) / 2.0 * 0.6 * math.Pi / 180.0))
 	flashDirY := pitchShear / (2.0 * float32(model.VFov))
 
 	gl.UseProgram(s.prg)

@@ -44,6 +44,7 @@ type Shaders struct {
 	container     []IShader
 	dcRender      *DrawCommandsRender
 	enableShadows bool
+	metrics       *shaders.MapMetrics
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -67,16 +68,17 @@ func NewShaders() *Shaders {
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
 func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
 	a := &Assets{}
+	w.metrics = shaders.NewMapMetrics()
 	w.dcRender = NewDrawCommandsRender()
 
-	w.main = shaders.NewMain(vStride)
+	w.main = shaders.NewMain(vStride, w.metrics)
 	w.sky = shaders.NewSky()
 	w.geometry = shaders.NewGeometry()
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth()
 	w.lights = shaders.NewLights(lStride)
-	w.flashlight = shaders.NewShaderFlashlight()
+	w.flashlight = shaders.NewShaderFlashlight(w.metrics)
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()
 	w.enableShadows = false
@@ -120,7 +122,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
-	roomSpaceMatrix, flashSpaceMatrix := shaders.CreateSpaces(vi, pX, pY, swayX, swayY)
+	roomSpaceMatrix, flashSpaceMatrix := w.metrics.CreateSpaces(vi, pX, pY, swayX, swayY)
 
 	proj, view, invView := w.main.UpdateUniforms(vi)
 	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)

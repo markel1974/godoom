@@ -1,6 +1,8 @@
 package model
 
-import "math"
+import (
+	"math"
+)
 
 // Light represents a light source with an intensity, type, and position in 3D space.
 type Light struct {
@@ -26,6 +28,10 @@ func (cl *Light) Setup(sector *Sector, intensity float64, kind LightKind, coords
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
 	if kind == LightKindOpenAir {
 		lightZ = math.Abs(height) * 1000 //50
+	} else {
+		//TODO TEST
+		//n := rand.Intn(2) + 1
+		//kind = LightKind(n)
 	}
 	pos := XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
 

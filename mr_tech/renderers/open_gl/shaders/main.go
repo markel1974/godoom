@@ -44,6 +44,8 @@ type Main struct {
 	mainVAO           [mainDoubleBuffer]uint32
 	mainVBO           [mainDoubleBuffer]uint32
 	mainEBO           [mainDoubleBuffer]uint32
+	vboBytesCap       [mainDoubleBuffer]int
+	eboBytesCap       [mainDoubleBuffer]int
 	frameIdx          int
 	width             int32
 	height            int32
@@ -74,17 +76,18 @@ func (s *Main) Init() error {
 	gl.GenBuffers(mainDoubleBuffer, &s.mainEBO[0])
 
 	for i := 0; i < mainDoubleBuffer; i++ {
+		// Salva la capacità iniziale
+		s.vboBytesCap[i] = vboBytesSize
+		s.eboBytesCap[i] = eboBytesSize
+
 		gl.BindVertexArray(s.mainVAO[i])
 
-		// Buffer dei vertici
 		gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[i])
 		gl.BufferData(gl.ARRAY_BUFFER, vboBytesSize, nil, gl.DYNAMIC_DRAW)
 
-		// Buffer degli indici
 		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
 		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, gl.DYNAMIC_DRAW)
 
-		// FIX: Usa s.stride direttamente
 		strideBytes := s.stride
 		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
 		gl.EnableVertexAttribArray(0)
@@ -175,9 +178,19 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 	iTotal := int(indicesLen) * 4
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
+	if vTotal > s.vboBytesCap[s.frameIdx] {
+		newCap := vTotal * 2
+		gl.BufferData(gl.ARRAY_BUFFER, newCap, nil, gl.DYNAMIC_DRAW)
+		s.vboBytesCap[s.frameIdx] = newCap
+	}
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, vTotal, gl.Ptr(vertices))
 
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
+	if iTotal > s.eboBytesCap[s.frameIdx] {
+		newCap := iTotal * 2
+		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, newCap, nil, gl.DYNAMIC_DRAW)
+		s.eboBytesCap[s.frameIdx] = newCap
+	}
 	gl.BufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, iTotal, gl.Ptr(indices))
 }
 

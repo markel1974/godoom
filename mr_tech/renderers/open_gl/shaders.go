@@ -8,17 +8,58 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
-// IShader represents an interface for managing shader programs, including setup, sampler configuration, and compilation.
-type IShader interface {
-	Setup(width int32, height int32)
-	SetupSamplers()
-	Compile(a shaders.IAssets) error
+// renderDrawCommands processes and executes a list of draw commands for rendering geometry with associated textures.
+func renderDrawCommands(dc []*DrawCommand) {
+	var lastTexId, lastNormId, lastEmissiveId uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
+	for _, cmd := range dc {
+		if cmd.vertexCount > 0 {
+			if lastTexId != cmd.texId {
+				gl.ActiveTexture(gl.TEXTURE0)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
+				lastTexId = cmd.texId
+			}
+			if lastNormId != cmd.normTexId {
+				gl.ActiveTexture(gl.TEXTURE1)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
+				lastNormId = cmd.normTexId
+			}
+			if lastEmissiveId != cmd.emissiveTexId {
+				gl.ActiveTexture(gl.TEXTURE5)
+				gl.BindTexture(gl.TEXTURE_2D, cmd.emissiveTexId)
+				lastEmissiveId = cmd.emissiveTexId
+			}
+			gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
+		}
+	}
 }
 
-// Shaders manages a collection of shader programs and related state for rendering, including lighting and post-processing.
+// enableAdditiveLights configures OpenGL to use additive blending for rendering by adjusting depth and blend settings.
+func enableAdditiveLights() {
+	gl.DepthMask(false)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.ONE, gl.ONE)
+	gl.DepthFunc(gl.LEQUAL)
+}
+
+// disableAdditiveLights disables blend-based additive light rendering and reconfigures the depth test to default behavior.
+func disableAdditiveLights() {
+	gl.Disable(gl.BLEND)
+	gl.DepthMask(true)
+	gl.DepthFunc(gl.LESS)
+}
+
+// IShader defines an interface for shader operations, including setup, sampler configuration, and compilation logic.
+type IShader interface {
+	Setup(width int32, height int32) error
+	SetupSamplers() error
+	Compile(a shaders.IAssets) error
+	Init() error
+}
+
+// Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
 	main       *shaders.Main
-	sky        *shaders.ShaderSky
+	sky        *shaders.Sky
 	ssao       *shaders.SSAO
 	blur       *shaders.Blur
 	depth      *shaders.Depth
@@ -31,39 +72,64 @@ type Shaders struct {
 	enableShadows bool
 }
 
-// NewShaders initializes and returns a new instance of Shaders with default container and settings.
+// NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
-		main:          shaders.NewMain(),
-		sky:           shaders.NewShaderSky(),
-		ssao:          shaders.NewSSAO(),
-		blur:          shaders.NewBlur(),
-		depth:         shaders.NewDepth(),
-		lights:        shaders.NewLights(),
-		flashlight:    shaders.NewShaderFlashlight(),
-		post:          shaders.NewPost(),
-		bloom:         shaders.NewBloom(),
+		main:          nil,
+		sky:           nil,
+		ssao:          nil,
+		blur:          nil,
+		depth:         nil,
+		lights:        nil,
+		flashlight:    nil,
+		post:          nil,
+		bloom:         nil,
 		enableShadows: false,
 	}
-	c.container = append(c.container, c.main, c.sky, c.ssao, c.blur /*c.shaderGeometry,*/, c.depth, c.lights, c.flashlight, c.post, c.bloom)
-	c.SetShadowEnabled(true)
 	return c
 }
 
-// IncreaseFlashFactor increments the flashFactor field of the Shaders instance by 1.
-func (w *Shaders) IncreaseFlashFactor() {
-	w.flashlight.IncreaseFlashFactor()
+// Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
+func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
+	a := &Assets{}
+
+	w.main = shaders.NewMain(vStride)
+	w.sky = shaders.NewSky()
+	w.ssao = shaders.NewSSAO()
+	w.blur = shaders.NewBlur()
+	w.depth = shaders.NewDepth()
+	w.lights = shaders.NewLights(lStride)
+	w.flashlight = shaders.NewShaderFlashlight()
+	w.post = shaders.NewPost()
+	w.bloom = shaders.NewBloom()
+	w.enableShadows = false
+	w.container = append(w.container, w.main, w.sky, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom)
+	w.SetShadowEnabled(true)
+
+	for _, s := range w.container {
+		if err := s.Setup(width, height); err != nil {
+			return err
+		}
+	}
+	for _, s := range w.container {
+		if err := s.Compile(a); err != nil {
+			return err
+		}
+	}
+	for _, s := range w.container {
+		if err := s.Init(); err != nil {
+			return err
+		}
+	}
+	for _, s := range w.container {
+		if err := s.SetupSamplers(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// DecreaseFlashFactor reduces the flashFactor value by 1, ensuring it does not drop below 0.
-func (w *Shaders) DecreaseFlashFactor() {
-	w.flashlight.DecreaseFlashFactor()
-}
-
-// ToggleShadows toggles the shadow rendering state by inverting the current shadow-enabled flag.
-func (w *Shaders) ToggleShadows() { w.SetShadowEnabled(!w.enableShadows) }
-
-// SetShadowEnabled toggles the shadow rendering feature on or off based on the provided boolean value.
+// SetShadowEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
 func (w *Shaders) SetShadowEnabled(v bool) {
 	w.enableShadows = v
 	w.flashlight.EnableShadows(w.enableShadows)
@@ -71,53 +137,9 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 	w.depth.EnableShadows(w.enableShadows)
 }
 
-// Setup initializes and configures all container, VBOs, VAOs, and UBOs for rendering, and handles shader compilation and linking.
-func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
-	a := &Assets{}
-	for _, s := range w.container {
-		s.Setup(width, height)
-	}
-	for _, s := range w.container {
-		if err := s.Compile(a); err != nil {
-			return err
-		}
-	}
-	w.main.Init(vStride)
-
-	w.lights.Init(lStride)
-
-	for _, s := range w.container {
-		s.SetupSamplers()
-	}
-	return nil
-}
-
-// Render renders the scene using the specified view matrix, framebuffer dimensions, vertex data, draw commands, and lighting settings.
+// Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH int32, vert []float32, vertCount int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	renderGeometry := func() {
-		var lastTexId, lastNormId, lastEmissiveId uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
-		for _, cmd := range dc {
-			if cmd.vertexCount > 0 {
-				if lastTexId != cmd.texId {
-					gl.ActiveTexture(gl.TEXTURE0)
-					gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
-					lastTexId = cmd.texId
-				}
-				if lastNormId != cmd.normTexId {
-					gl.ActiveTexture(gl.TEXTURE1)
-					gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
-					lastNormId = cmd.normTexId
-				}
-				if lastEmissiveId != cmd.emissiveTexId {
-					gl.ActiveTexture(gl.TEXTURE5)
-					gl.BindTexture(gl.TEXTURE_2D, cmd.emissiveTexId)
-					lastEmissiveId = cmd.emissiveTexId
-				}
-				gl.DrawArrays(gl.TRIANGLES, cmd.firstVertex, cmd.vertexCount)
-			}
-		}
-	}
-
+	exec := func() { renderDrawCommands(dc) }
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
@@ -132,35 +154,41 @@ func (w *Shaders) Render(vi *model.ViewMatrix, pX, pY float64, fbW int32, fbH in
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	w.lights.Prepare(frameLights, numLights)
-
+	//MAIN PREPARE
 	w.main.Prepare(vert, vertCount)
+	//LIGHTS PREPARE
+	w.lights.Prepare(frameLights, numLights)
 	// OMBRE
-	w.depth.Render(renderGeometry, w.main.GetVAO())
+	w.depth.Render(exec, w.main.GetVAO())
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
-	w.main.Render(renderGeometry, w.ssao.GetSSAOBlurTexture())
-
-	// PREPARE FOR ADDITIVE
-	gl.DepthMask(false)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.ONE, gl.ONE)
-	gl.DepthFunc(gl.LEQUAL)
-
+	w.main.Render(exec, w.ssao.GetSSAOBlurTexture())
+	// ENABLE ADDITIVE LIGHTS
+	enableAdditiveLights()
 	// LIGHTS
-	w.lights.Render(renderGeometry, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(exec, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(renderGeometry, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
-
-	gl.Disable(gl.BLEND)
-	gl.DepthMask(true)
-	gl.DepthFunc(gl.LESS)
-
-	// 4. SKYBOX
+	w.flashlight.Render(exec, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
+	// DISABLE ADDITIVE LIGHTS
+	disableAdditiveLights()
+	// SKYBOX
 	w.sky.Render(skyTexId, skyNormalTexId, skyEnabled)
-
-	// 5. POST
-	bloomTex := w.bloom.Render(w.post.GetBrightBuffer())
-	w.post.Render(bloomTex)
+	// BLOOM
+	w.bloom.Render(w.post.GetBrightBuffer())
+	// POST
+	w.post.Render(w.bloom.GetBloomTexture())
 }
+
+// IncreaseFlashFactor increases the flashlight's intensity factor, enhancing the brightness of the flashlight effect.
+func (w *Shaders) IncreaseFlashFactor() {
+	w.flashlight.IncreaseFlashFactor()
+}
+
+// DecreaseFlashFactor reduces the flashlight's intensity factor, ensuring the value does not fall below the minimum limit.
+func (w *Shaders) DecreaseFlashFactor() {
+	w.flashlight.DecreaseFlashFactor()
+}
+
+// ToggleShadows toggles the state of shadow rendering in the shader system.
+func (w *Shaders) ToggleShadows() { w.SetShadowEnabled(!w.enableShadows) }

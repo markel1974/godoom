@@ -42,13 +42,19 @@ func NewBloom() *Bloom {
 }
 
 // Setup initializes the Bloom structure with the specified width and height values.
-func (s *Bloom) Setup(width, height int32) {
+func (s *Bloom) Setup(width, height int32) error {
 	s.width = width
 	s.height = height
+	return nil
+}
+
+// Init initializes the Bloom effect by setting up its resources and ensuring it is ready for rendering operations.
+func (s *Bloom) Init() error {
+	return nil
 }
 
 // SetupSamplers initializes the VAO and VBO for rendering a full-screen quad and configures vertex attribute pointers.
-func (s *Bloom) SetupSamplers() {
+func (s *Bloom) SetupSamplers() error {
 	gl.GenVertexArrays(1, &s.vao)
 	gl.BindVertexArray(s.vao)
 	gl.GenBuffers(1, &s.vbo)
@@ -57,6 +63,7 @@ func (s *Bloom) SetupSamplers() {
 	gl.BufferData(gl.ARRAY_BUFFER, len(quad)*4, gl.Ptr(quad), gl.STATIC_DRAW)
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
 	gl.EnableVertexAttribArray(0)
+	return nil
 }
 
 // Compile initializes the bloom effect by compiling shaders, creating a shader program, and setting up framebuffer resources.
@@ -108,7 +115,7 @@ func (s *Bloom) Compile(a IAssets) error {
 }
 
 // Render applies a multi-pass Gaussian blur to the bright regions of the texture and returns the final blurred texture ID.
-func (s *Bloom) Render(brightTex uint32) uint32 {
+func (s *Bloom) Render(brightTex uint32) {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.table[BloomLocImage], 0)
 	gl.BindVertexArray(s.vao)
@@ -150,5 +157,8 @@ func (s *Bloom) Render(brightTex uint32) uint32 {
 
 	gl.Viewport(0, 0, s.width, s.height)
 	gl.Enable(gl.DEPTH_TEST)
+}
+
+func (s *Bloom) GetBloomTexture() uint32 {
 	return s.pingPongTex[1] // L'ultima scrittura cade sull'indice 1
 }

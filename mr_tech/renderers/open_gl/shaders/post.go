@@ -56,8 +56,9 @@ func NewPost() *Post {
 }
 
 // Setup initializes the width and height properties of the Post instance.
-func (s *Post) Setup(width, height int32) {
+func (s *Post) Setup(width, height int32) error {
 	s.width, s.height = width, height
+	return nil
 }
 
 func (s *Post) GetBrightBuffer() uint32 {
@@ -65,7 +66,7 @@ func (s *Post) GetBrightBuffer() uint32 {
 }
 
 // SetupSamplers initializes OpenGL vertex arrays, buffers, and sets up the shader samplers for post-processing rendering.
-func (s *Post) SetupSamplers() {
+func (s *Post) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.table[PostLocHDRBuffer], 0)
 
@@ -77,6 +78,8 @@ func (s *Post) SetupSamplers() {
 	gl.BufferData(gl.ARRAY_BUFFER, len(quad)*4, gl.Ptr(quad), gl.STATIC_DRAW)
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
 	gl.EnableVertexAttribArray(0)
+
+	return nil
 }
 
 // Compile initializes the shader program, framebuffers, and texture buffers required for the post-processing effect.
@@ -145,6 +148,11 @@ func (s *Post) Compile(a IAssets) error {
 		return fmt.Errorf("post FBO not complete")
 	}
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	return nil
+}
+
+// Init initializes the Post instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *Post) Init() error {
 	return nil
 }
 

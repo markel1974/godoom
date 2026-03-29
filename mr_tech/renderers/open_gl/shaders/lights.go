@@ -47,11 +47,14 @@ type Lights struct {
 	uboLights    uint32
 	activeLights int32 // Aggiunto per memorizzare il numero di luci tra Prepare e Render
 	shadows      int32
+	stride       int32
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
-func NewLights() *Lights {
-	return &Lights{}
+func NewLights(stride int32) *Lights {
+	return &Lights{
+		stride: stride,
+	}
 }
 
 // EnableShadows enables or disables shadow rendering based on the provided boolean value.
@@ -64,25 +67,30 @@ func (s *Lights) EnableShadows(e bool) {
 }
 
 // Setup initializes the lighting system with the given screen width and height.
-func (s *Lights) Setup(width, height int32) {}
+func (s *Lights) Setup(width, height int32) error {
+	return nil
+}
 
 // Init initializes the uniform buffer object (UBO) for storing light data with the specified stride size.
-func (s *Lights) Init(lStride int32) {
+func (s *Lights) Init() error {
 	// CREAZIONE UBO LIGHTS
-	size := 1024 * int(lStride)
+	size := 1024 * int(s.stride)
 	gl.GenBuffers(1, &s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights)
 	gl.BufferData(gl.UNIFORM_BUFFER, size, gl.Ptr(nil), gl.DYNAMIC_DRAW)
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights)
 	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
+	return nil
 }
 
 // SetupSamplers configures shader samplers for texture, normal map, and room shadow map locations.
-func (s *Lights) SetupSamplers() {
+func (s *Lights) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(LightLocTexture), 0)
 	gl.Uniform1i(s.GetUniform(LightLocNormalMap), 1)
 	gl.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 3)
+
+	return nil
 }
 
 // GetUniform retrieves the uniform location for a given LightLoc identifier from the internal table.

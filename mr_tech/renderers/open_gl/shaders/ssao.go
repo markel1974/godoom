@@ -63,14 +63,14 @@ func NewSSAO() *SSAO {
 }
 
 // Setup initializes the SSAO instance with the specified width and height, updating internal dimensions.
-func (s *SSAO) Setup(width int32, height int32) {
+func (s *SSAO) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
+	return nil
 }
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
-func (s *SSAO) SetupSamplers() {
-	// Setup SSAO Samplers
+func (s *SSAO) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
 	gl.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
@@ -79,6 +79,12 @@ func (s *SSAO) SetupSamplers() {
 	gl.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
 	gl.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
 	gl.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
+	return nil
+}
+
+// Init initializes the SSAO instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *SSAO) Init() error {
+	return nil
 }
 
 // GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.

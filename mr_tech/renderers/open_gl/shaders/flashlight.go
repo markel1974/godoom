@@ -129,16 +129,22 @@ func (s *Flashlight) EnableShadows(e bool) {
 }
 
 // Setup initializes the flashlight's dimensions using the specified width and height values.
-func (s *Flashlight) Setup(width, height int32) {
-
+func (s *Flashlight) Setup(width, height int32) error {
+	return nil
 }
 
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
-func (s *Flashlight) SetupSamplers() {
+func (s *Flashlight) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(FlashLocTexture), 0)
 	gl.Uniform1i(s.GetUniform(FlashLocNormalMap), 1)
 	gl.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 4)
+	return nil
+}
+
+// Init initializes the Depth instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *Flashlight) Init() error {
+	return nil
 }
 
 // GetUniform retrieves the uniform location associated with the given FlashlightLoc ID from the internal table.

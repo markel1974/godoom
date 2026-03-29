@@ -30,7 +30,13 @@ func NewBlur() *Blur {
 }
 
 // Setup initializes the Blur instance with specified render dimensions.
-func (s *Blur) Setup(width int32, height int32) {
+func (s *Blur) Setup(width int32, height int32) error {
+	return nil
+}
+
+// Init initializes the Blur instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *Blur) Init() error {
+	return nil
 }
 
 // GetProgram retrieves the program ID associated with the Blur instance.
@@ -44,9 +50,10 @@ func (s *Blur) GetUniform(id BlurLoc) int32 {
 }
 
 // SetupSamplers binds the blur shader program and sets up the sampler for the SSAO input texture.
-func (s *Blur) SetupSamplers() {
+func (s *Blur) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(BlurLocSSAOInput), 0)
+	return nil
 }
 
 // Compile compiles the necessary shaders, links them into a program, and assigns uniform locations for the Blur instance.

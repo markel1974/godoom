@@ -35,20 +35,22 @@ type Main struct {
 	proj              [16]float32
 	emissiveIntensity float32
 	aoFactor          float32
+	stride            int32
 }
 
 // NewMain initializes and returns a new instance of Main with default parameters.
-func NewMain() *Main {
+func NewMain(stride int32) *Main {
 	return &Main{
 		prg:               0,
 		emissiveIntensity: 4.0,
 		aoFactor:          0.8,
+		stride:            stride,
 	}
 }
 
 // Init initializes the main VAO and VBO for the shader.
-func (s *Main) Init(stride int32) {
-	vboMaxFloats := 8192 * int(stride)
+func (s *Main) Init() error {
+	vboMaxFloats := 8192 * int(s.stride)
 
 	gl.GenVertexArrays(1, &s.mainVAO)
 	gl.BindVertexArray(s.mainVAO)
@@ -57,30 +59,33 @@ func (s *Main) Init(stride int32) {
 	gl.BufferData(gl.ARRAY_BUFFER, vboMaxFloats, nil, gl.DYNAMIC_DRAW)
 
 	// VBO A 8 FLOAT
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, stride, gl.PtrOffset(0))
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(0))
 	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, stride, gl.PtrOffset(3*4))
+	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, s.stride, gl.PtrOffset(3*4))
 	gl.EnableVertexAttribArray(1)
-	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, stride, gl.PtrOffset(5*4))
+	gl.VertexAttribPointer(2, 3, gl.FLOAT, false, s.stride, gl.PtrOffset(5*4))
 	gl.EnableVertexAttribArray(2)
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
+	return nil
 }
 
 // SetupSamplers configures the shader program's texture samplers.
-func (s *Main) SetupSamplers() {
+func (s *Main) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 
 	gl.Uniform1i(s.GetUniform(MainLocTexture), 0)
 	gl.Uniform1i(s.GetUniform(MainLocSSAO), 2)
 	gl.Uniform1i(s.GetUniform(MainLocEmissiveMap), 5)
+	return nil
 }
 
 // Setup initializes the width and height properties of the Main instance.
-func (s *Main) Setup(width int32, height int32) {
+func (s *Main) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
+	return nil
 }
 
 // GetProgram returns the OpenGL program ID associated with the Main instance.

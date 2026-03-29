@@ -42,21 +42,28 @@ func NewDepth() *Depth {
 	return &Depth{}
 }
 
-// EnableShadows toggles shadow rendering by setting the internal shadows flag to the provided boolean value.
-func (s *Depth) EnableShadows(e bool) {
-	s.shadows = e
-}
-
 // Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
-func (s *Depth) Setup(width int32, height int32) {
+func (s *Depth) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
 	s.shadowWidth = 1024
 	s.shadowHeight = 1024
+	return nil
 }
 
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
-func (s *Depth) SetupSamplers() {
+func (s *Depth) SetupSamplers() error {
+	return nil
+}
+
+// Init initializes the Depth instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *Depth) Init() error {
+	return nil
+}
+
+// EnableShadows toggles shadow rendering by setting the internal shadows flag to the provided boolean value.
+func (s *Depth) EnableShadows(e bool) {
+	s.shadows = e
 }
 
 // GetProgram retrieves the OpenGL program ID associated with the Depth instance.

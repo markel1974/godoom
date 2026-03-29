@@ -6,7 +6,7 @@ import (
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ShaderSkyLoc represents the location index of shader uniforms specific to the ShaderSky renderer.
+// ShaderSkyLoc represents the location index of shader uniforms specific to the Sky renderer.
 type ShaderSkyLoc int
 
 // ShaderSkyLocProjection represents the projection matrix location for the sky shader.
@@ -20,8 +20,8 @@ const (
 	ShaderSkyLocLast
 )
 
-// ShaderSky is a type that manages the state and rendering of the sky shader in a graphics application.
-type ShaderSky struct {
+// Sky is a type that manages the state and rendering of the sky shader in a graphics application.
+type Sky struct {
 	prg    uint32
 	table  [ShaderSkyLocLast]int32
 	skyVAO uint32
@@ -32,15 +32,15 @@ type ShaderSky struct {
 	height int32
 }
 
-// NewShaderSky creates and returns a new instance of ShaderSky with default uninitialized properties.
-func NewShaderSky() *ShaderSky {
-	return &ShaderSky{
+// NewSky creates and returns a new instance of Sky with default uninitialized properties.
+func NewSky() *Sky {
+	return &Sky{
 		prg: 0,
 	}
 }
 
 // SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
-func (s *ShaderSky) SetupSamplers() {
+func (s *Sky) SetupSamplers() error {
 	// sky
 	gl.GenVertexArrays(1, &s.skyVAO)
 	gl.BindVertexArray(s.skyVAO)
@@ -53,37 +53,44 @@ func (s *ShaderSky) SetupSamplers() {
 	// Restore default state
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
+	return nil
 }
 
-// Setup initializes the ShaderSky dimensions by assigning the provided width and height values.
-func (s *ShaderSky) Setup(width int32, height int32) {
+// Setup initializes the Sky dimensions by assigning the provided width and height values.
+func (s *Sky) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
+	return nil
 }
 
-// GetProgram returns the OpenGL program identifier associated with the ShaderSky instance.
-func (s *ShaderSky) GetProgram() uint32 {
+// Init initializes the Sky instance by setting up necessary resources and ensuring its readiness for rendering.
+func (s *Sky) Init() error {
+	return nil
+}
+
+// GetProgram returns the OpenGL program identifier associated with the Sky instance.
+func (s *Sky) GetProgram() uint32 {
 	return s.prg
 }
 
 // GetUniform retrieves the location of a shader uniform variable by its ID.
-func (s *ShaderSky) GetUniform(id ShaderSkyLoc) int32 {
+func (s *Sky) GetUniform(id ShaderSkyLoc) int32 {
 	return s.table[id]
 }
 
 // UpdateUniforms updates the view and projection matrices for the shader.
-func (s *ShaderSky) UpdateUniforms(view, proj [16]float32) {
+func (s *Sky) UpdateUniforms(view, proj [16]float32) {
 	s.view = view
 	s.proj = proj
 }
 
-// GetVAO retrieves the vertex array object (VAO) associated with the ShaderSky instance.
-func (s *ShaderSky) GetVAO() uint32 {
+// GetVAO retrieves the vertex array object (VAO) associated with the Sky instance.
+func (s *Sky) GetVAO() uint32 {
 	return s.skyVAO
 }
 
 // Compile compiles the shader program for rendering the sky using provided vertex and fragment shaders from assets.
-func (s *ShaderSky) Compile(a IAssets) error {
+func (s *Sky) Compile(a IAssets) error {
 	vertexSrc, fragmentSrc, err := a.ReadMulti("sky.vert", "sky.frag")
 	if err != nil {
 		return err
@@ -113,7 +120,7 @@ func (s *ShaderSky) Compile(a IAssets) error {
 }
 
 // Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
-func (s *ShaderSky) Render(texId uint32, normTexId uint32, skyEnabled bool) {
+func (s *Sky) Render(texId uint32, normTexId uint32, skyEnabled bool) {
 	if !skyEnabled {
 		return
 	}

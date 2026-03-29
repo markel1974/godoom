@@ -34,6 +34,25 @@ func (s *Sectors) GetSector(id string) *Sector {
 	return s.cache[id]
 }
 
+// GetOrthoSize calculates and returns half of the largest axis (width or height) of the root node's bounding box.
+// Returns false if the root node does not exist in the AABB tree.
+func (s *Sectors) GetOrthoSize() (float64, float64, float64, bool) {
+	root, ok := s.tree.GetRoot()
+	if !ok {
+		return 0, 0, 0, false
+	}
+	// 2. OrthoSize è esattamente la metà dell'asse maggiore
+	width := root.GetWidth()
+	height := root.GetHeight()
+	orthoSize := width
+	if height > width {
+		orthoSize = height
+	}
+	orthoSize = orthoSize / 2.0
+
+	return orthoSize, root.GetMinY(), root.GetMaxY(), true
+}
+
 // GetSectors retrieves the list of all sectors managed within the current Sectors instance.
 func (s *Sectors) GetSectors() []*Sector {
 	return s.sectors

@@ -123,3 +123,9 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64) {
 	e.things.CreateBullet(sector, x, y, angle)
 }
+
+// GetOrthoSize returns half the size of the largest axis (width or height) of the root AABB node.
+// The second return value indicates whether the root node exists.
+func (e *Engine) GetOrthoSize() (float64, float64, float64, bool) {
+	return e.sectors.GetOrthoSize()
+}

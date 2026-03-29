@@ -64,7 +64,7 @@ func NewRender() *RenderOpenGL {
 		enableClear:   false,
 		debug:         false,
 		debugIdx:      0,
-		shaders:       NewShaders(),
+		shaders:       nil,
 		builder:       NewBatchBuilder(tex),
 		tex:           tex,
 		bobPhase:      0.0,
@@ -78,6 +78,7 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.screenWidth = w.engine.GetWidth()
 	w.screenHeight = w.engine.GetHeight()
 	w.player = en.GetPlayer()
+	w.shaders = NewShaders()
 	return nil
 }
 
@@ -100,7 +101,8 @@ func (w *RenderOpenGL) doInitialize() error {
 		fbW, fbH := w.win.GetFramebufferSize()
 		vStride := w.builder.VerticesStride()
 		lStride := w.builder.LightsStride()
-		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride); err != nil {
+		orthoSize, minY, maxY, _ := w.engine.GetOrthoSize()
+		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, float32(orthoSize), float32(minY), float32(maxY)); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {

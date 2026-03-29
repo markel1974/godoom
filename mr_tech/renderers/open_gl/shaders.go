@@ -66,9 +66,16 @@ func NewShaders() *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(width, height, vStride, lStride int32) error {
+func (w *Shaders) Setup(width, height, vStride, lStride int32, orthoSize float32, minY float32, maxY float32) error {
 	a := &Assets{}
 	w.metrics = shaders.NewMapMetrics()
+	if orthoSize != 0 {
+		w.metrics.OrthoSize = orthoSize
+	}
+	if minY != 0 && maxY != 0 {
+		w.metrics.ZNearRoom = 1.0
+		w.metrics.ZFarRoom = float32(maxY-minY) + 4.0
+	}
 	w.dcRender = NewDrawCommandsRender()
 
 	w.main = shaders.NewMain(vStride, w.metrics)

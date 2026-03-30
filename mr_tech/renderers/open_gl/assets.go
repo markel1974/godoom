@@ -3,7 +3,6 @@ package open_gl
 import (
 	"embed"
 	"io/fs"
-	"os"
 )
 
 // assets represents an embedded file system containing application resources such as container or assets.
@@ -17,7 +16,7 @@ type Assets struct {
 
 // BasePath constructs a platform-specific file path by combining the "assets" directory with the given relative path.
 func (w *Assets) BasePath(vPath string) string {
-	return "assets" + string(os.PathSeparator) + vPath
+	return "assets" + "/" + vPath
 }
 
 // Read retrieves the contents of the specified file path `p` from the embedded file system and returns it as a byte slice.

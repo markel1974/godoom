@@ -90,7 +90,20 @@ func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float6
 
 // Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
 func (r *Things) Compute(pX float64, pY float64) {
+	activeThings := r.things[:0] // Reslice reusing memory
+
 	for _, t := range r.things {
+		if !t.IsActive() {
+			r.entities.RemoveThing(t)
+			continue
+		}
 		t.Compute(pX, pY)
+		activeThings = append(activeThings, t)
 	}
+
+	// Clear dangling pointers per il GC
+	for i := len(activeThings); i < len(r.things); i++ {
+		r.things[i] = nil
+	}
+	r.things = activeThings
 }

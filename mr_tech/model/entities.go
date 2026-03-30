@@ -69,6 +69,10 @@ func (em *Entities) Compute() []IThing {
 
 				if distance < sumRadii {
 					ent.SetupCollision(otherEnt)
+
+					thing.OnCollide(otherThing)
+					otherThing.OnCollide(thing)
+
 					em.tree.UpdateObject(ent)
 					em.tree.UpdateObject(otherEnt)
 					isStable = false
@@ -103,4 +107,9 @@ func (em *Entities) AddThing(ent IThing) {
 		em.moving = make([]IThing, len(em.entities)*2)
 	}
 	em.tree.InsertObject(ent)
+}
+
+func (em *Entities) RemoveThing(ent IThing) {
+	em.tree.RemoveObject(ent)
+	delete(em.entities, ent.GetIdentifier())
 }

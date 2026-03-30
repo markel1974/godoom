@@ -186,3 +186,19 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	}
 	return velX, velY
 }
+
+// OnCollide handles the interaction when the bullet collides with another object, applying damage and deactivating itself.
+func (t *ThingBullet) OnCollide(other IThing) {
+	//other.TakeDamage(t.damage)
+	if enemy, ok := other.(*ThingEnemy); ok {
+		// enemy.TakeDamage(...)
+		_ = enemy
+		// Marca il proiettile per la rimozione al prossimo frame
+		t.SetActive(false)
+		// Spawn particellare / Suono impatto qui
+	}
+}
+
+func (t *ThingBullet) IsActive() bool {
+	return t.isActive
+}

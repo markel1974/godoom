@@ -341,6 +341,20 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	p.MoveApply(velX, velY)
 }
 
+// IsActive checks if the ThingPlayer instance is currently active and returns true if it is, otherwise false.
+func (p *ThingPlayer) IsActive() bool {
+	return true
+}
+
+// SetActive sets the active state of the ThingPlayer based on the provided boolean value.
+func (p *ThingPlayer) SetActive(active bool) {
+}
+
+// OnCollide handles the collision event between the ThingPlayer and another object of type IThing.
+func (p *ThingPlayer) OnCollide(other IThing) {
+	//TODO IMPLEMENT
+}
+
 // checkWall adjusts the player's velocity when colliding with walls based on position, velocity, and collision detection logic.
 func (p *ThingPlayer) adjustPassage(viewX, viewY, velX, velY float64) (float64, float64) {
 	top := p.getHeadPosition()

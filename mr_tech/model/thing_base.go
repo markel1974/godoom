@@ -22,6 +22,7 @@ type ThingBase struct {
 	sectors    *Sectors
 	entities   *Entities
 	entity     *physics.Entity
+	isActive   bool
 	identifier int
 }
 
@@ -45,6 +46,7 @@ func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, se
 		sectors:    sectors,
 		entities:   entities,
 		entity:     physics.NewEntity(x, y, w, h, cfg.Mass),
+		isActive:   true,
 		identifier: -1,
 	}
 	return thing
@@ -134,6 +136,21 @@ func (t *ThingBase) PhysicsApply() {
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y)
 	}
+}
+
+// OnCollide handles interactions when the current object collides with another object implementing the IThing interface.
+func (t *ThingBase) OnCollide(other IThing) {
+	//fmt.Println("COLLISION -> ", other.GetId())
+}
+
+// IsActive checks if the ThingBase instance is currently active.
+func (t *ThingBase) IsActive() bool {
+	return t.isActive
+}
+
+// SetActive updates the activation state of the ThingBase instance and returns the updated state as a boolean.
+func (t *ThingBase) SetActive(active bool) {
+	t.isActive = active
 }
 
 // adjustPassage adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.

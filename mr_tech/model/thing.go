@@ -37,6 +37,12 @@ type IThing interface {
 	GetSector() *Sector
 
 	PhysicsApply()
+
+	IsActive() bool
+
+	SetActive(active bool)
+
+	OnCollide(other IThing)
 }
 
 // WallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.

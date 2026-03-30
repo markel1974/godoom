@@ -38,16 +38,17 @@ type Depth struct {
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth() *Depth {
-	return &Depth{}
+func NewDepth(shadowWidth, shadowHeight int32) *Depth {
+	return &Depth{
+		shadowWidth:  shadowWidth,
+		shadowHeight: shadowHeight,
+	}
 }
 
 // Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
-func (s *Depth) Setup(width int32, height int32) error {
+func (s *Depth) Setup(width, height int32) error {
 	s.width = width
 	s.height = height
-	s.shadowWidth = 1024
-	s.shadowHeight = 1024
 	return nil
 }
 

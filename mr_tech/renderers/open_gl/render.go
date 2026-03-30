@@ -30,41 +30,28 @@ type RenderOpenGL struct {
 	vi           *model.ViewMatrix
 	player       *model.ThingPlayer
 	win          *pixels.GLWindow
+	shaders      *Shaders
+	tex          *Textures
+	builder      *BatchBuilder
 	screenWidth  int
 	screenHeight int
-
-	targetSectors      map[int]bool
-	targetIdx          int
-	targetLastCompiled int
-	targetEnabled      bool
-	targetId           string
-
-	enableClear bool
-	debug       bool
-	debugIdx    int
-
-	shaders *Shaders
-	tex     *Textures
-	builder *BatchBuilder
+	enableClear  bool
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewRender() *RenderOpenGL {
 	tex := NewTextures()
 	r := &RenderOpenGL{
-		engine:        nil,
-		vi:            model.NewViewMatrix(),
-		player:        nil,
-		win:           nil,
-		screenWidth:   0,
-		screenHeight:  0,
-		targetSectors: map[int]bool{0: true},
-		enableClear:   false,
-		debug:         false,
-		debugIdx:      0,
-		shaders:       nil,
-		builder:       NewBatchBuilder(tex),
-		tex:           tex,
+		engine:       nil,
+		vi:           model.NewViewMatrix(),
+		player:       nil,
+		win:          nil,
+		screenWidth:  0,
+		screenHeight: 0,
+		enableClear:  false,
+		shaders:      nil,
+		builder:      NewBatchBuilder(tex),
+		tex:          tex,
 	}
 	return r
 }
@@ -123,7 +110,6 @@ func (w *RenderOpenGL) Start() {
 func (w *RenderOpenGL) doRender() {
 	executor.Thread.Call(func() {
 		cs, count, things, lights := w.engine.Compute(w.player, w.vi)
-		w.targetLastCompiled = count
 		w.win.Begin()
 		w.builder.Reset()
 
@@ -193,10 +179,6 @@ func (w *RenderOpenGL) doRun() {
 				left = true
 			case pixels.KeyRight:
 				right = true
-			case pixels.KeyV:
-				w.doDebugMoveSector(true)
-			case pixels.KeyB:
-				w.doDebugMoveSector(false)
 			case pixels.KeyL:
 				w.shaders.IncreaseFlashFactor()
 			case pixels.KeyH:
@@ -211,28 +193,12 @@ func (w *RenderOpenGL) doRun() {
 		}
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
-			w.doDebugMoveSectorToggle()
-		}
-		if w.win.JustPressed(pixels.KeyZ) {
-			w.doDebugMoveSector(true)
-		}
-		if w.win.JustPressed(pixels.KeyX) {
-			w.doDebugMoveSector(false)
 		}
 		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
 			w.doPlayerDuckingToggle()
 		}
 		if w.win.JustPressed(pixels.KeySpace) || w.win.Pressed(pixels.MouseButton1) {
 			w.doPlayerJump()
-		}
-		if w.win.JustPressed(pixels.Key8) {
-			w.doDebug(0)
-		}
-		if w.win.JustPressed(pixels.Key0) {
-			w.doDebug(1)
-		}
-		if w.win.JustPressed(pixels.Key9) {
-			w.doDebug(-1)
 		}
 		if w.win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
@@ -278,43 +244,4 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	w.player.AddAngle(mouseX * 0.03)
 	w.player.SetYaw(mouseY)
 	w.player.MoveApply(0, 0)
-}
-
-// doDebug toggles debugging or sets the debug mode to a specific sector depending on the provided next parameter.
-func (w *RenderOpenGL) doDebug(next int) {
-	if next == 0 {
-		w.debug = !w.debug
-		return
-	}
-	w.debug = true
-	idx := w.debugIdx + next
-	if idx < 0 || idx >= w.engine.Len() {
-		return
-	}
-	w.debugIdx = idx
-	sector := w.engine.SectorAt(idx)
-	const offset = 5
-	x := sector.Segments[0].Start.X + offset
-	y := sector.Segments[0].Start.Y + offset
-	w.player.SetSector(sector)
-	w.player.SetXY(x, y)
-}
-
-// doDebugMoveSectorToggle toggles the `targetEnabled` state, enabling or disabling the debug move sector functionality.
-func (w *RenderOpenGL) doDebugMoveSectorToggle() { w.targetEnabled = !w.targetEnabled }
-
-// doDebugMoveSector adjusts the target sector index and updates the target sectors map based on the direction provided.
-func (w *RenderOpenGL) doDebugMoveSector(forward bool) {
-	if forward {
-		if w.targetIdx < w.targetLastCompiled {
-			w.targetIdx++
-		}
-	} else {
-		if w.targetIdx > 0 {
-			w.targetIdx--
-		}
-	}
-	for k := 0; k < w.targetLastCompiled; k++ {
-		w.targetSectors[k] = k == w.targetIdx
-	}
 }

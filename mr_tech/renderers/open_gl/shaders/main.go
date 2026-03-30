@@ -199,7 +199,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 // UpdateUniforms calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
 func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [16]float32) {
 	aspect := float32(s.width) / float32(s.height)
-	scaleX := -(s.metrics.FovScaleFactor / aspect) * float32(model.HFov)
+	scaleX := -(s.metrics.GetFovScaleFactor() / aspect) * float32(model.HFov)
 	pitchShear := float32(-vi.GetYaw())
 
 	sinA, cosA := vi.GetAngle()
@@ -213,13 +213,14 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [
 	ty := -ey
 	tz := fX*ex + fZ*ez
 
-	fovScaleY := s.metrics.FovScaleFactor * float32(model.VFov)
-
+	fovScaleY := s.metrics.GetFovScaleFactor() * float32(model.VFov)
+	zFarRoom := s.metrics.GetRoomZFar()
+	zNearRoom := s.metrics.GetRoomZNear()
 	s.proj = [16]float32{
 		scaleX, 0, 0, 0,
 		0, fovScaleY, 0, 0,
-		0, pitchShear, (s.metrics.ZFarRoom + s.metrics.ZNearRoom) / (s.metrics.ZNearRoom - s.metrics.ZFarRoom), -1,
-		0, 0, (2 * s.metrics.ZFarRoom * s.metrics.ZNearRoom) / (s.metrics.ZNearRoom - s.metrics.ZFarRoom), 0,
+		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
+		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}
 	s.view = [16]float32{
 		rX, 0, -fX, 0,

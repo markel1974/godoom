@@ -222,8 +222,6 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 		return
 	}
 
-	fConeStart := float32(math.Cos(float64(s.metrics.FovFlashDeg)/2.0*math.Pi/180.0)) + 0.01
-	fConeEnd := float32(math.Cos(float64(s.metrics.FovFlashDeg) / 2.0 * 0.6 * math.Pi / 180.0))
 	flashDirY := pitchShear / (2.0 * float32(model.VFov))
 
 	gl.UseProgram(s.prg)
@@ -237,8 +235,8 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), 0.0, flashDirY, -1.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
 	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), fConeStart)
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), fConeEnd)
+	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), s.metrics.GetFlashConeStart())
+	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), s.metrics.GetFlashConeEnd())
 	//gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
 	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 

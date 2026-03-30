@@ -69,13 +69,12 @@ func NewShaders() *Shaders {
 func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *model.Calibration) error {
 	a := &Assets{}
 	w.metrics = shaders.NewMapMetrics()
+	const shadowWidth = 1024
+	const shadowHeight = 1024
 	if calibration != nil {
-		w.metrics.OrthoSize = calibration.OrthoSize
-		w.metrics.ZNearRoom = calibration.ZNearRoom
-		w.metrics.ZFarRoom = calibration.ZFarRoom + 4.0
-		w.metrics.LightCamY = calibration.LightCamY + 2.0
-		w.metrics.MapCenterX = calibration.MapCenterX
-		w.metrics.MapCenterZ = calibration.MapCenterZ
+		w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
+		w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
+		w.metrics.SetFlash(85.0, 0.1, 2048.0, shadowWidth, shadowHeight)
 	}
 	w.dcRender = NewDrawCommandsRender()
 
@@ -84,7 +83,7 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *mode
 	w.geometry = shaders.NewGeometry()
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
-	w.depth = shaders.NewDepth()
+	w.depth = shaders.NewDepth(shadowWidth, shadowHeight)
 	w.lights = shaders.NewLights(lStride)
 	w.flashlight = shaders.NewShaderFlashlight(w.metrics)
 	w.post = shaders.NewPost()

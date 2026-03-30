@@ -39,6 +39,7 @@ func NewMapMetrics() *MapMetrics {
 	return m
 }
 
+// GetScale calculates and returns the X and Y scaling factors based on the provided screen width and height.
 func (m *MapMetrics) GetScale(width, height int32) (float32, float32) {
 	aspect := float32(width) / float32(height)
 	scaleX := (ndcRange / aspect) * float32(model.HFov)
@@ -216,7 +217,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 		rX, uX, -fX, 0, rY, uY, -fY, 0, rZ, uZ, -fZ, 0, tx, ty, tz, 1,
 	}
 
-	// 2. Spazio Torcia Locale
+	// 2. Local Flashlight Space
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetViewX, targetViewY, targetViewZ := float32(0.0), flashDirY*m.flashZFar, -m.flashZFar
 
@@ -240,7 +241,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 	tLocY := -(uuX*posViewX + uuY*posViewY + uuZ*posViewZ)
 	tLocZ := ffX*posViewX + ffY*posViewY + ffZ*posViewZ
 
-	// 3. Matrice Torcia (Dinamica)
+	// 3. Flashlight Matrix (Dynamic)
 	flashViewLocal := [16]float32{
 		rrX, uuX, -ffX, 0, rrY, uuY, -ffY, 0, rrZ, uuZ, -ffZ, 0, tLocX, tLocY, tLocZ, 1,
 	}

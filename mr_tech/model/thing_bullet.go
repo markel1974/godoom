@@ -199,6 +199,7 @@ func (t *ThingBullet) OnCollide(other IThing) {
 	}
 }
 
+// IsActive checks if the ThingBullet is currently active and operational. Returns true if active, false otherwise.
 func (t *ThingBullet) IsActive() bool {
 	return t.isActive
 }

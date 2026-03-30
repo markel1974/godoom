@@ -1,21 +1,12 @@
 package model
 
-import "math"
-
 // HFov represents the horizontal field of view in radians.
 // VFov represents the vertical field of view in radians.
 // NearZ defines the near clipping plane distance in a 3D view.
-// NearSide defines the minimum side clipping distance in a 3D view.
-// FarZ defines the far clipping plane distance in a 3D view.
-// FarSide defines the maximum side clipping distance in a 3D view.
 const (
-	HFov = 0.73
-	VFov = 0.2
-
+	HFov  = 0.73
+	VFov  = 0.2
 	NearZ = 1e-4
-	//NearSide = 1e-5
-	//FarZ     = 5.0
-	//FarSide  = 20.0
 )
 
 // ViewMatrix represents a view configuration with position, orientation, zoom level, and lighting intensity for rendering.
@@ -40,16 +31,10 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.sector = player.GetSector()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
 	vi.yaw = player.GetYaw()
-	vi.lightIntensity = player.GetLightIntensity()
-	vx, vy := player.GetVelocity()
-	if speed := math.Sqrt(vx*vx + vy*vy); speed > 0.05 {
-		vi.bobPhase += speed * 0.7 // Frequenza dei passi legata alla velocità reale
-	} else {
-		vi.bobPhase *= 0.85 // Smorzamento elastico quando ti fermi
-	}
-	// Applica l'oscillazione verticale (es. ampiezza di 1.5 unità mondo).
-	// Stiamo alterando vi.where.Z senza toccare il player.GetXYZ()!
-	vi.where.Z += math.Sin(vi.bobPhase) * 0.9
+	vi.lightIntensity = 0.0 //player.GetLightIntensity()
+	bob, bobPhase := player.GetBobPhase()
+	vi.bobPhase = bobPhase
+	vi.where.Z += bob
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewMatrix's position and orientation.
@@ -118,6 +103,7 @@ func (vi *ViewMatrix) ZDistance(v float64) float64 {
 	return v - vi.where.Z
 }
 
+// GetBobPhase returns the current bob phase value of the ViewMatrix as a float64 for use in animation or rendering calculations.
 func (vi *ViewMatrix) GetBobPhase() float64 {
 	return vi.bobPhase
 }

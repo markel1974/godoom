@@ -43,8 +43,6 @@ type RenderOpenGL struct {
 	debug       bool
 	debugIdx    int
 
-	bobPhase float64
-
 	shaders *Shaders
 	tex     *Textures
 	builder *BatchBuilder
@@ -67,7 +65,6 @@ func NewRender() *RenderOpenGL {
 		shaders:       nil,
 		builder:       NewBatchBuilder(tex),
 		tex:           tex,
-		bobPhase:      0.0,
 	}
 	return r
 }
@@ -131,7 +128,7 @@ func (w *RenderOpenGL) doRender() {
 		w.builder.Reset()
 
 		cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
-		pX, pY := w.player.GetPosition()
+		//pX, pY := w.player.GetPosition()
 		fbW, fbH := w.win.GetFramebufferSize()
 		commands := w.builder.GetDrawCommands()
 
@@ -144,7 +141,7 @@ func (w *RenderOpenGL) doRender() {
 		if cSky != nil {
 			skyTexId, skyNormalTexId, skyEmissiveTexId, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, pX, pY, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
+		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
 	})
 }
 
@@ -263,13 +260,6 @@ func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
 // doPlayerMoves moves the player based on the provided impulse and directional flags (up, down, left, right).
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
 	w.player.Move(impulse, up, down, left, right)
-
-	// Modulazione della fase basata sul moto reale
-	if up || down || left || right {
-		w.bobPhase += impulse * 15.0 // Frequenza del passo
-	} else {
-		w.bobPhase *= 0.85 // Smorzamento critico verso l'origine
-	}
 }
 
 // doPlayerMouseMove adjusts the player's angle and yaw based on mouse movement, clamping the values within a defined offset range.

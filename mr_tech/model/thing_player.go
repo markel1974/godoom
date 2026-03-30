@@ -40,6 +40,8 @@ type ThingPlayer struct {
 	entities       *Entities
 	entity         *physics.Entity
 	identifier     int
+	bob            float64
+	bobPhase       float64
 	debug          bool
 }
 
@@ -57,6 +59,8 @@ func NewThingPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entitie
 		velocity:       XYZ{},
 		yaw:            0,
 		yawState:       0,
+		bob:            0,
+		bobPhase:       0,
 		radius:         cfg.Radius,
 		mass:           cfg.Mass,
 		sector:         sector,
@@ -182,8 +186,16 @@ func (p *ThingPlayer) Move(impulse float64, up bool, down bool, left bool, right
 	} else {
 		acceleration = 0.2
 	}
-	p.velocity.X = p.velocity.X*(1-acceleration) + (moveX * acceleration)
-	p.velocity.Y = p.velocity.Y*(1-acceleration) + (moveY * acceleration)
+	vx := p.velocity.X*(1-acceleration) + (moveX * acceleration)
+	vy := p.velocity.Y*(1-acceleration) + (moveY * acceleration)
+	p.velocity.X = vx
+	p.velocity.Y = vy
+	if speed := math.Sqrt(vx*vx + vy*vy); speed > 0.05 {
+		p.bobPhase += speed * 0.7 // Frequenza dei passi legata alla velocità reale
+	} else {
+		p.bobPhase *= 0.85 // Smorzamento elastico quando ti fermi
+	}
+	p.bob = math.Sin(p.bobPhase) * 0.9
 }
 
 // SetJump increases the player's Z velocity to simulate a jump and marks the player as falling.
@@ -198,6 +210,11 @@ func (p *ThingPlayer) SetDucking() {
 	if p.ducking {
 		p.falling = true
 	}
+}
+
+// GetBobPhase returns the current bob and bob phase values as a pair of float64.
+func (p *ThingPlayer) GetBobPhase() (float64, float64) {
+	return p.bob, p.bobPhase
 }
 
 // GetPosition returns the X and Y coordinates of the player's current position.
@@ -308,7 +325,7 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64) {
 
 // Update updates the player's position and velocity based on collision detection and sector constraints.
 func (p *ThingPlayer) Update(vi *ViewMatrix) {
-	p.verticalCollision()
+	p.verticalMovementApply()
 	if !p.IsMoving() {
 		return
 	}
@@ -354,7 +371,7 @@ func (p *ThingPlayer) eyeHeight() float64 {
 }
 
 // VerticalCollision checks and resolves vertical collisions for the player, adjusting position and velocity based on sector bounds.
-func (p *ThingPlayer) verticalCollision() {
+func (p *ThingPlayer) verticalMovementApply() {
 	if p.falling {
 		eyeHeight := p.eyeHeight()
 		p.velocity.Z -= 0.05

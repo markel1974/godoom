@@ -36,7 +36,7 @@ func NewMapMetrics() *MapMetrics {
 }
 
 // CreateSpaces calculates two transformation spaces for room and flashlight perspective using input view matrix and offsets.
-func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
+func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
 	//texelSize := float64((m.OrthoSize * 2.0) / m.ShadowMapRes)
 	//snappedX := math.Floor(pX/texelSize) * texelSize
 	//snappedY := math.Floor(-pY/texelSize) * texelSize
@@ -114,7 +114,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, pX, pY float64, flashOff
 	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 
 	// 4. Matrice Torcia (Dinamica)
-	fovFlashRad := float32((m.FovFlashDeg * math.Pi) / 180.0)
+	fovFlashRad := (m.FovFlashDeg * math.Pi) / 180.0
 	f := float32(1.0 / math.Tan(float64(fovFlashRad/2.0)))
 	flashProj := [16]float32{
 		f, 0, 0, 0,

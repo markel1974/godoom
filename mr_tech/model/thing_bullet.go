@@ -194,7 +194,7 @@ func (t *ThingBullet) OnCollide(other IThing) {
 		// enemy.TakeDamage(...)
 		_ = enemy
 		// Marca il proiettile per la rimozione al prossimo frame
-		t.SetActive(false)
+		//t.SetActive(false)
 		// Spawn particellare / Suono impatto qui
 	}
 }

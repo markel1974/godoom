@@ -6,6 +6,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
+// The 2.0 is the extent of OpenGL's NDC range [-1.0, +1.0]
+const ndcRange = 2.0
+
 // MapMetrics is a structure that defines various metrics and configurations for room projection and flashlight rendering.
 type MapMetrics struct {
 	orthoSize      float32
@@ -21,13 +24,10 @@ type MapMetrics struct {
 	flashConeStart float32
 	flashConeEnd   float32
 	flashAspect    float32
-	fovScaleFactor float32
-	scaleFovY      float32
-
-	roomProj  [16]float32
-	roomView  [16]float32
-	roomSpace [16]float32
-	flashProj [16]float32
+	roomProj       [16]float32
+	roomView       [16]float32
+	roomSpace      [16]float32
+	flashProj      [16]float32
 }
 
 // NewMapMetrics initializes and returns a new instance of MapMetrics with predefined settings.
@@ -36,8 +36,14 @@ func NewMapMetrics() *MapMetrics {
 	m.SetOrthoSize(640.0, 0.0, 8192.0)
 	m.SetFlash(85.0, 0.1, 2048.0, 1024, 1024)
 	m.SetMapCenter(0.0, 0.0, 0.0)
-	m.SetFovScaleFactor(2.0)
 	return m
+}
+
+func (m *MapMetrics) GetScale(width, height int32) (float32, float32) {
+	aspect := float32(width) / float32(height)
+	scaleX := (ndcRange / aspect) * float32(model.HFov)
+	scaleY := ndcRange * float32(model.VFov)
+	return scaleX, scaleY
 }
 
 // GetOrthoSize returns the orthographic size value from the MapMetrics instance.
@@ -80,10 +86,10 @@ func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash, width, height 
 	m.flashZFar = zFarFlash
 	m.flashAspect = width / height
 	fovFlashRad := (m.flashFovDeg * math.Pi) / 180.0
-	m.flashFov = float32(1.0 / math.Tan(float64(fovFlashRad/2.0)))
+	m.flashFov = float32(1.0 / math.Tan(float64(fovFlashRad/ndcRange)))
 	m.updateFlashProj(m.flashFov, m.flashAspect, m.flashZNear, m.flashZFar)
-	m.flashConeStart = float32(math.Cos(float64(m.flashFovDeg)/2.0*math.Pi/180.0)) + 0.01
-	m.flashConeEnd = float32(math.Cos(float64(m.flashFovDeg) / 2.0 * 0.6 * math.Pi / 180.0))
+	m.flashConeStart = float32(math.Cos(float64(m.flashFovDeg)/ndcRange*math.Pi/180.0)) + 0.01
+	m.flashConeEnd = float32(math.Cos(float64(m.flashFovDeg) / ndcRange * 0.6 * math.Pi / 180.0))
 }
 
 // GetFlashZFar returns the far clipping distance of the flashlight projection matrix.
@@ -120,9 +126,9 @@ func (m *MapMetrics) GetFovFlashDeg() float32 {
 }
 
 // GetFovScaleFactor retrieves the scaling factor applied to the field of view (FOV) for perspective calculations.
-func (m *MapMetrics) GetFovScaleFactor() float32 {
-	return m.fovScaleFactor
-}
+//func (m *MapMetrics) GetFovScaleFactor() float32 {
+//	return m.fovScaleFactor
+//}
 
 // GetFlashConeStart retrieves the starting angle's cosine value for the flashlight cone, used for defining its shape.
 func (m *MapMetrics) GetFlashConeStart() float32 {
@@ -135,10 +141,10 @@ func (m *MapMetrics) GetFlashConeEnd() float32 {
 }
 
 // SetFovScaleFactor sets the field-of-view (FOV) scale factor and updates the scaled FOV value.
-func (m *MapMetrics) SetFovScaleFactor(value float32) {
-	m.fovScaleFactor = value
-	m.scaleFovY = m.fovScaleFactor * float32(model.VFov)
-}
+//func (m *MapMetrics) SetFovScaleFactor(value float32) {
+//	m.fovScaleFactor = value
+//	m.scaleFovY = m.fovScaleFactor * float32(model.VFov)
+//}
 
 // updateRoomProj updates the orthographic projection matrix (roomProj) and combined matrix (roomSpace) for the room space.
 // It recalculates these matrices based on the provided orthoSize, zNearRoom, and zFarRoom values.
@@ -153,7 +159,7 @@ func (m *MapMetrics) updateRoomProj(orthoSize, zNearRoom, zFarRoom float32) {
 	m.roomProj = [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
 		0, 1.0 / orthoSize, 0, 0,
-		0, 0, -2.0 / diffZ, 0,
+		0, 0, -ndcRange / diffZ, 0,
 		0, 0, -(zFarRoom + zNearRoom) / diffZ, 1,
 	}
 	m.roomSpace = MatrixMultiply4x4(m.roomProj, m.roomView)
@@ -195,7 +201,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 	camX, camY := vi.GetXY()
 	camZ := vi.GetZ()
 	pitchShear := float32(-vi.GetYaw())
-	flashDirY := pitchShear / m.scaleFovY
+	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX

@@ -49,6 +49,8 @@ type Main struct {
 	frameIdx          int
 	width             int32
 	height            int32
+	scaleX            float32
+	scaleY            float32
 	view              [16]float32
 	proj              [16]float32
 	emissiveIntensity float32
@@ -115,6 +117,7 @@ func (s *Main) SetupSamplers() error {
 func (s *Main) Setup(width int32, height int32) error {
 	s.width = width
 	s.height = height
+	s.scaleX, s.scaleY = s.metrics.GetScale(s.width, s.height)
 	return nil
 }
 
@@ -198,10 +201,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 
 // UpdateUniforms calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
 func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [16]float32) {
-	aspect := float32(s.width) / float32(s.height)
-	scaleX := -(s.metrics.GetFovScaleFactor() / aspect) * float32(model.HFov)
 	pitchShear := float32(-vi.GetYaw())
-
 	sinA, cosA := vi.GetAngle()
 	fX, fZ := float32(cosA), float32(-sinA)
 	rX, rZ := float32(sinA), float32(cosA)
@@ -213,12 +213,11 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [
 	ty := -ey
 	tz := fX*ex + fZ*ez
 
-	fovScaleY := s.metrics.GetFovScaleFactor() * float32(model.VFov)
 	zFarRoom := s.metrics.GetRoomZFar()
 	zNearRoom := s.metrics.GetRoomZNear()
 	s.proj = [16]float32{
-		scaleX, 0, 0, 0,
-		0, fovScaleY, 0, 0,
+		-s.scaleX, 0, 0, 0,
+		0, s.scaleY, 0, 0,
 		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
 		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}

@@ -34,9 +34,9 @@ func (w *FrameVertices) GetIndicesLen() int32 {
 	return w.indicesCount
 }
 
-// Stride returns the number of elements in each vertex's attribute group within the vertex buffer.
-func (w *FrameVertices) Stride() int32 {
-	return w.stride
+// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
+func (w *FrameVertices) VerticesStride() int32 {
+	return w.stride * 4
 }
 
 // Reset clears the FrameVertices by resetting vertex and index counts, and vertex slot to their initial state.
@@ -44,6 +44,20 @@ func (w *FrameVertices) Reset() {
 	w.verticesCount = 0
 	w.indicesCount = 0
 	w.verticesSlot = 0
+}
+
+// SaveCheckpoint saves the current state of vertices count, indices count, and vertex slot for later restoration.
+func (w *FrameVertices) SaveCheckpoint() {
+	w.savedVerticesCount = w.verticesCount
+	w.savedIndicesCount = w.indicesCount
+	w.savedVerticesSlot = w.verticesSlot
+}
+
+// RestoreCheckpoint resets vertex and index counts, and vertex slot to their values saved by SaveCheckpoint.
+func (w *FrameVertices) RestoreCheckpoint() {
+	w.verticesCount = w.savedVerticesCount
+	w.indicesCount = w.savedIndicesCount
+	w.verticesSlot = w.savedVerticesSlot
 }
 
 // AddVertex adds a vertex with specified position (x, y, z) and texture coordinates (u, v) to the buffer and returns its slot.
@@ -77,25 +91,6 @@ func (w *FrameVertices) AddTriangle(i0, i1, i2 uint32) {
 // GetVertices returns the slice of vertices and indices currently stored in the frame's vertex buffer.
 func (w *FrameVertices) GetVertices() ([]float32, int32, []uint32, int32) {
 	return w.vertices, w.verticesCount, w.indices, w.indicesCount
-}
-
-// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
-func (w *FrameVertices) VerticesStride() int32 {
-	return w.stride * 4
-}
-
-// SaveCheckpoint saves the current state of vertices count, indices count, and vertex slot for later restoration.
-func (w *FrameVertices) SaveCheckpoint() {
-	w.savedVerticesCount = w.verticesCount
-	w.savedIndicesCount = w.indicesCount
-	w.savedVerticesSlot = w.verticesSlot
-}
-
-// RestoreCheckpoint resets vertex and index counts, and vertex slot to their values saved by SaveCheckpoint.
-func (w *FrameVertices) RestoreCheckpoint() {
-	w.verticesCount = w.savedVerticesCount
-	w.indicesCount = w.savedIndicesCount
-	w.verticesSlot = w.savedVerticesSlot
 }
 
 // growIndices dynamically doubles the size of the indices slice or initializes it to 128 if empty to accommodate new indices.

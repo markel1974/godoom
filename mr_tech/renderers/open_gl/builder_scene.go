@@ -14,18 +14,19 @@ type BuilderScene struct {
 	vertices     *FrameVertices
 	drawCommands *DrawCommands
 	frameLights  *FrameLights
-	//visibleSectors    map[*model.Sector]bool
-	processedPolygons map[PolyKey]bool
+	mapBuilt     bool
+	cSkyCached   *textures.Texture
 }
 
 // NewBuilderScene initializes and returns a new BuilderScene instance with given vertices, commands, lights, and textures.
 func NewBuilderScene(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderScene {
 	return &BuilderScene{
-		tex:               tex,
-		vertices:          vertices,
-		drawCommands:      commands,
-		frameLights:       lights,
-		processedPolygons: make(map[PolyKey]bool, 2048),
+		tex:          tex,
+		vertices:     vertices,
+		drawCommands: commands,
+		frameLights:  lights,
+		mapBuilt:     false,
+		cSkyCached:   nil,
 	}
 }
 
@@ -34,20 +35,12 @@ func (w *BuilderScene) reset() {
 	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
-	for k := range w.processedPolygons {
-		delete(w.processedPolygons, k)
-	}
 }
 
-// Compute processes visible sectors, walls, floors, ceilings, lights, and things to prepare the render state. Returns the sky texture.
 func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
 	w.reset()
 
-	var cSky *textures.Texture = nil
 	css, compiled := engine.Build()
-	things := engine.GetThings()
-	lights := engine.GetLights()
-
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
 
@@ -56,46 +49,91 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *tex
 			cp := polygons[k]
 			switch cp.Kind {
 			case model.IdWall, model.IdUpper, model.IdLower:
-				key := CreatePolygonSegment(cp)
-				if w.processedPolygons[key] {
-					continue
-				}
-				w.processedPolygons[key] = true
-				//w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(key, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+					w.pushWall(cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
 				} else {
-					w.pushWall(key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
-				key := CreatePolygonSector(cp)
-				if w.processedPolygons[key] {
-					continue
-				}
-				w.processedPolygons[key] = true
-				//w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-						cSky = sky
+					if sky := w.pushFlat(cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+						w.cSkyCached = sky
 					}
 				} else {
-					if sky := w.pushFlat(key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-						cSky = sky
+					if sky := w.pushFlat(cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+						w.cSkyCached = sky
 					}
 				}
 			}
 		}
 	}
 
+	lights := engine.GetLights()
 	w.pushLights(lights)
+
+	things := engine.GetThings()
 	w.pushThings(vi, things)
-	return cSky
+
+	return w.cSkyCached
+}
+
+// ComputeNew processes visible sectors, walls, floors, ceilings, lights, and things to prepare the render state. Returns the sky texture.
+func (w *BuilderScene) ComputeNew(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
+	//const dirty = false //TODO From engine
+	if w.mapBuilt {
+		w.vertices.RestoreCheckpoint()
+		w.drawCommands.RestoreCheckpoint()
+		w.frameLights.RestoreCheckpoint()
+		w.pushThings(vi, engine.GetThings())
+		return w.cSkyCached
+	}
+
+	w.reset()
+
+	css, compiled := engine.Build()
+	for idx := compiled - 1; idx >= 0; idx-- {
+		current := css[idx]
+		polygons := current.Get()
+		for k := len(polygons) - 1; k >= 0; k-- {
+			cp := polygons[k]
+			switch cp.Kind {
+			case model.IdWall, model.IdUpper, model.IdLower:
+				if cp.Kind == model.IdWall {
+					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+				} else if cp.Kind == model.IdUpper {
+					w.pushWall(cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+				} else {
+					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+				}
+			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
+				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
+					if sky := w.pushFlat(cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+						w.cSkyCached = sky
+					}
+				} else {
+					if sky := w.pushFlat(cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+						w.cSkyCached = sky
+					}
+				}
+			}
+		}
+	}
+	w.pushLights(engine.GetLights())
+	// Salviamo lo stato esatto dei buffer (Geometria + Luci statiche finite)
+	w.vertices.SaveCheckpoint()
+	w.drawCommands.SaveCheckpoint()
+	w.frameLights.SaveCheckpoint()
+	w.mapBuilt = true
+
+	w.pushThings(vi, engine.GetThings())
+
+	return w.cSkyCached
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.
-func (w *BuilderScene) pushWall(cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderScene) pushWall(cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -107,16 +145,16 @@ func (w *BuilderScene) pushWall(cp PolyKey, anim *textures.Animation, zBottom, z
 	texW, texH := tex.Size()
 	scaleW, scaleH := anim.ScaleFactor()
 
-	u0 := cp.u0 / (float32(texW) * float32(scaleW))
-	u1 := cp.u1 / (float32(texW) * float32(scaleW))
+	u0 := float32(cp.U0) / (float32(texW) * float32(scaleW))
+	u1 := float32(cp.U1) / (float32(texW) * float32(scaleW))
 
 	vTop := float32(0.0)
 	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
 
-	wx1 := cp.tx1
-	wy1 := cp.tz1
-	wx2 := cp.tx2
-	wy2 := cp.tz2
+	wx1 := float32(cp.Tx1)
+	wy1 := float32(cp.Tz1)
+	wx2 := float32(cp.Tx2)
+	wy2 := float32(cp.Tz2)
 
 	startIndices := w.vertices.GetIndicesLen()
 
@@ -135,7 +173,7 @@ func (w *BuilderScene) pushWall(cp PolyKey, anim *textures.Animation, zBottom, z
 
 // pushFlat processes and renders a flat surface using the given polygon key, animation, and Z-coordinate.
 // It returns a texture if the animation is of type sky or a nil value in other cases.
-func (w *BuilderScene) pushFlat(cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderScene) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -144,7 +182,7 @@ func (w *BuilderScene) pushFlat(cp PolyKey, anim *textures.Animation, zF float32
 	if tex == nil {
 		return nil
 	}
-	segments := cp.sector.Segments
+	segments := cp.Sector.Segments
 	if len(segments) < 3 {
 		return nil
 	}
@@ -163,7 +201,6 @@ func (w *BuilderScene) pushFlat(cp PolyKey, anim *textures.Animation, zF float32
 		v := seg.Start
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
-
 		// Coordinate assolute (nessuna rotazione)
 		indices[i] = w.vertices.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
 	}

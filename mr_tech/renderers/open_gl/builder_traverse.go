@@ -54,22 +54,55 @@ type BuilderTraverse struct {
 	fl                *FrameLights
 	visibleSectors    map[*model.Sector]bool
 	processedPolygons map[PolyKey]bool
+	cSky              *textures.Texture
 }
 
 // NewBuilderTraverse creates and initializes a new BuilderTraverse with preallocated memory for vertices, commands, and lights.
-func NewBuilderTraverse(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderTraverse {
+func NewBuilderTraverse(tex *Textures) *BuilderTraverse {
 	return &BuilderTraverse{
 		tex:               tex,
-		fv:                vertices,
-		dc:                commands,
-		fl:                lights,
+		fv:                NewFrameVertices(maxBatchVertices),
+		dc:                NewDrawCommands(maxFrameCommands),
+		fl:                NewFrameLights(256),
 		visibleSectors:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
+		cSky:              nil,
 	}
 }
 
-// Reset clears all data stored in the BuilderTraverse, resetting its vertices, draw commands, lights, and sector data maps.
-func (w *BuilderTraverse) reset() {
+// GetVerticesStride returns the byte stride of vertex data in the buffer, computed as the attribute group size multiplied by 4.
+func (w *BuilderTraverse) GetVerticesStride() int32 {
+	return w.fv.VerticesStride()
+}
+
+// GetLightsStride returns the stride value for lights in the current frame, scaled by 4.
+func (w *BuilderTraverse) GetLightsStride() int32 {
+	return w.fl.LightsStride()
+}
+
+// GetSkyTexture retrieves the current sky texture used in the rendering pipeline.
+func (w *BuilderTraverse) GetSkyTexture() *textures.Texture {
+	return w.cSky
+}
+
+// GetDrawCommands returns a slice of active draw commands for rendering the current frame.
+func (w *BuilderTraverse) GetDrawCommands() []*DrawCommand {
+	return w.dc.GetDrawCommands()
+}
+
+// GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the frame vertices.
+func (w *BuilderTraverse) GetVertices() ([]float32, int32, []uint32, int32) {
+	return w.fv.GetVertices()
+}
+
+// GetLights retrieves the light data and count from the current frame, returning them as a float32 slice and an int32.
+func (w *BuilderTraverse) GetLights() ([]float32, int32) {
+	return w.fl.GetLights()
+}
+
+// Compute generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
+// It updates visible sectors and processed polygons, and returns a sky texture if one is found.
+func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 	w.fv.Reset()
 	w.dc.Reset()
 	w.fl.Reset()
@@ -79,17 +112,12 @@ func (w *BuilderTraverse) reset() {
 	for k := range w.processedPolygons {
 		delete(w.processedPolygons, k)
 	}
-}
 
-// Compute generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
-// It updates visible sectors and processed polygons, and returns a sky texture if one is found.
-func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
-	w.reset()
 	css, compiled := engine.Traverse(vi)
 	things := engine.GetThings()
 	lights := engine.GetLights()
 
-	var cSky *textures.Texture = nil
+	w.cSky = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -120,12 +148,12 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
 					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-						cSky = sky
+						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
 					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-						cSky = sky
+						w.cSky = sky
 					}
 				}
 			}
@@ -134,7 +162,6 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *
 
 	w.pushLights(w.fl, lights, w.visibleSectors)
 	w.pushThings(w.fv, w.dc, vi, things, w.visibleSectors)
-	return cSky
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.

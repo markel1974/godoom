@@ -10,37 +10,63 @@ import (
 
 // BuilderScene represents the state and resources used to construct a 3D scene, including textures, vertices, commands, and lighting.
 type BuilderScene struct {
-	tex        *Textures
-	fv         *FrameVertices
-	dc         *DrawCommands
-	fl         *FrameLights
-	mapBuilt   bool
-	cSkyCached *textures.Texture
+	tex      *Textures
+	fv       *FrameVertices
+	dc       *DrawCommands
+	fl       *FrameLights
+	mapBuilt bool
+	cSky     *textures.Texture
 }
 
 // NewBuilderScene initializes and returns a new BuilderScene instance with given vertices, commands, lights, and textures.
-func NewBuilderScene(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderScene {
+func NewBuilderScene(tex *Textures) *BuilderScene {
 	return &BuilderScene{
-		tex:        tex,
-		fv:         vertices,
-		dc:         commands,
-		fl:         lights,
-		mapBuilt:   false,
-		cSkyCached: nil,
+		tex:      tex,
+		fv:       NewFrameVertices(maxBatchVertices),
+		dc:       NewDrawCommands(maxFrameCommands),
+		fl:       NewFrameLights(256),
+		mapBuilt: false,
+		cSky:     nil,
 	}
 }
 
-// reset clears all frame-related data structures, restoring the BuilderScene to its initial state for reuse.
-func (w *BuilderScene) reset() {
-	w.fv.Reset()
-	w.dc.Reset()
-	w.fl.Reset()
+// GetVerticesStride returns the byte stride of vertex data in the buffer, calculated as the vertex attribute group size multiplied by 4.
+func (w *BuilderScene) GetVerticesStride() int32 {
+	return w.fv.VerticesStride()
+}
+
+// GetLightsStride retrieves the stride of light data, measured as the number of float32 values per light attribute set.
+func (w *BuilderScene) GetLightsStride() int32 {
+	return w.fl.LightsStride()
+}
+
+// GetDrawCommands returns a slice of active draw commands for rendering the current frame.
+func (w *BuilderScene) GetDrawCommands() []*DrawCommand {
+	return w.dc.GetDrawCommands()
+}
+
+// GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the frame vertices.
+func (w *BuilderScene) GetVertices() ([]float32, int32, []uint32, int32) {
+	return w.fv.GetVertices()
+}
+
+// GetLights retrieves the light data and count from the current frame, returning them as a float32 slice and an int32.
+func (w *BuilderScene) GetLights() ([]float32, int32) {
+	return w.fl.GetLights()
+}
+
+// GetSkyTexture returns the cached sky texture associated with the BuilderScene.
+func (w *BuilderScene) GetSkyTexture() *textures.Texture {
+	return w.cSky
 }
 
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
-func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
-	w.reset()
+func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
+	w.fv.Reset()
+	w.dc.Reset()
+	w.fl.Reset()
 
+	w.cSky = nil
 	css, compiled := engine.Build()
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -60,11 +86,11 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *tex
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
 					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-						w.cSkyCached = sky
+						w.cSky = sky
 					}
 				} else {
 					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-						w.cSkyCached = sky
+						w.cSky = sky
 					}
 				}
 			}
@@ -74,8 +100,6 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *tex
 	w.pushLights(w.fl, engine.GetLights())
 
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
-
-	return w.cSkyCached
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.

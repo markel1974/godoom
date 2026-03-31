@@ -20,7 +20,19 @@ const (
 )
 
 type IBuilder interface {
-	Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture
+	Compute(vi *model.ViewMatrix, engine *engine.Engine)
+
+	GetSkyTexture() *textures.Texture
+
+	GetVerticesStride() int32
+
+	GetLightsStride() int32
+
+	GetDrawCommands() []*DrawCommand
+
+	GetVertices() ([]float32, int32, []uint32, int32)
+
+	GetLights() ([]float32, int32)
 }
 
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
@@ -37,9 +49,6 @@ type RenderOpenGL struct {
 	win          *pixels.GLWindow
 	shaders      *Shaders
 	tex          *Textures
-	vertices     *FrameVertices
-	drawCommands *DrawCommands
-	frameLights  *FrameLights
 	builder      IBuilder
 	screenWidth  int
 	screenHeight int
@@ -49,11 +58,9 @@ type RenderOpenGL struct {
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewRender() *RenderOpenGL {
 	tex := NewTextures()
-	vertices := NewFrameVertices(maxBatchVertices)
-	drawCommands := NewDrawCommands(maxFrameCommands)
-	frameLights := NewFrameLights(256)
-	builder := NewBuilderTraverse(vertices, drawCommands, frameLights, tex)
-	//builder := NewBuilderScene(vertices, drawCommands, frameLights, tex)
+
+	builder := NewBuilderTraverse(tex)
+	//builder := NewBuilderScene(tex)
 	r := &RenderOpenGL{
 		engine:       nil,
 		vi:           model.NewViewMatrix(),
@@ -64,9 +71,6 @@ func NewRender() *RenderOpenGL {
 		enableClear:  false,
 		shaders:      nil,
 		builder:      builder,
-		vertices:     vertices,
-		drawCommands: drawCommands,
-		frameLights:  frameLights,
 		tex:          tex,
 	}
 	return r
@@ -99,8 +103,8 @@ func (w *RenderOpenGL) doInitialize() error {
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
-		vStride := w.vertices.VerticesStride()
-		lStride := w.frameLights.LightsStride()
+		vStride := w.builder.GetVerticesStride()
+		lStride := w.builder.GetLightsStride()
 		calibration := w.engine.GetCalibration()
 		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration); err != nil {
 			return err
@@ -128,12 +132,11 @@ func (w *RenderOpenGL) doRender() {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
 		w.engine.Compute(w.player, w.vi)
-		cSky := w.builder.Compute(w.vi, w.engine)
-		//pX, pY := w.player.GetPosition()
-		commands := w.drawCommands.GetDrawCommands()
-		vert, vertLen, indices, indicesLen := w.vertices.GetVertices()
-		light, lightsCount := w.frameLights.GetLights()
-
+		w.builder.Compute(w.vi, w.engine)
+		cSky := w.builder.GetSkyTexture()
+		commands := w.builder.GetDrawCommands()
+		vert, vertLen, indices, indicesLen := w.builder.GetVertices()
+		light, lightsCount := w.builder.GetLights()
 		skyTexId, skyNormalTexId, skyEmissiveTexId := uint32(0), uint32(0), uint32(0)
 		skyEnabled := false
 		if cSky != nil {

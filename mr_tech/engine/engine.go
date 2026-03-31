@@ -90,8 +90,8 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	return nil
 }
 
-// Compute handles the main game logic loop, updating the player, entities, physics, portals, and view matrix synchronously.
-func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
+// Compute updates the game state by synchronizing the player, processing AI, applying physics, and updating the view matrix.
+func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	// 1. Pre-Sync ViewMatrix
 	vi.Update(player)
 
@@ -113,11 +113,21 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 
 	// 6. Post-Sync ViewMatrix
 	vi.Update(player)
-	// 7. Portal Compute
 
+	// 7. Update Textures
 	textures.Tick()
+}
 
+// Traverse computes visible sectors, counts them, and retrieves associated things and lights based on the given ViewMatrix.
+func (e *Engine) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
 	cs, count := e.portal.Traverse(vi)
+
+	return cs, count, e.things.GetThings(), e.lights
+}
+
+// Build generates and retrieves the list of compiled sectors, their count, active game entities, and lights in the engine.
+func (e *Engine) Build() ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
+	cs, count := e.portal.Build()
 
 	return cs, count, e.things.GetThings(), e.lights
 }

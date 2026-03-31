@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/pixels"
 	"github.com/markel1974/godoom/pixels/executor"
 )
@@ -18,6 +19,11 @@ const (
 	maxFrameCommands = 4096
 )
 
+type IBuilder interface {
+	Reset()
+	Compute(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture
+}
+
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
 type SpriteNode struct {
 	Thing  model.IThing
@@ -32,7 +38,10 @@ type RenderOpenGL struct {
 	win          *pixels.GLWindow
 	shaders      *Shaders
 	tex          *Textures
-	builder      *BatchBuilder
+	vertices     *FrameVertices
+	drawCommands *DrawCommands
+	frameLights  *FrameLights
+	builder      IBuilder
 	screenWidth  int
 	screenHeight int
 	enableClear  bool
@@ -41,6 +50,11 @@ type RenderOpenGL struct {
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewRender() *RenderOpenGL {
 	tex := NewTextures()
+	vertices := NewFrameVertices(maxBatchVertices)
+	drawCommands := NewDrawCommands(maxFrameCommands)
+	frameLights := NewFrameLights(256)
+	builder := NewBuilderTraverse(vertices, drawCommands, frameLights, tex)
+	//builder := NewBuilderScene(vertices, drawCommands, frameLights, tex)
 	r := &RenderOpenGL{
 		engine:       nil,
 		vi:           model.NewViewMatrix(),
@@ -50,7 +64,10 @@ func NewRender() *RenderOpenGL {
 		screenHeight: 0,
 		enableClear:  false,
 		shaders:      nil,
-		builder:      NewBatchBuilder(tex),
+		builder:      builder,
+		vertices:     vertices,
+		drawCommands: drawCommands,
+		frameLights:  frameLights,
 		tex:          tex,
 	}
 	return r
@@ -83,8 +100,8 @@ func (w *RenderOpenGL) doInitialize() error {
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
-		vStride := w.builder.VerticesStride()
-		lStride := w.builder.LightsStride()
+		vStride := w.vertices.VerticesStride()
+		lStride := w.frameLights.LightsStride()
 		calibration := w.engine.GetCalibration()
 		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration); err != nil {
 			return err
@@ -109,18 +126,19 @@ func (w *RenderOpenGL) Start() {
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
 	executor.Thread.Call(func() {
-		cs, count, things, lights := w.engine.Compute(w.player, w.vi)
+		w.engine.Compute(w.player, w.vi)
+		cs, count, things, lights := w.engine.Traverse(w.vi)
 		w.win.Begin()
 		w.builder.Reset()
 
-		cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
+		cSky := w.builder.Compute(w.vi, cs, count, things, lights)
 		//pX, pY := w.player.GetPosition()
 		fbW, fbH := w.win.GetFramebufferSize()
-		commands := w.builder.GetDrawCommands()
+		commands := w.drawCommands.GetDrawCommands()
 
 		// Estrazione VBO e EBO
-		vert, vertLen, indices, indicesLen := w.builder.GetFrameVertices()
-		light, lightsCount := w.builder.GetFrameLights()
+		vert, vertLen, indices, indicesLen := w.vertices.GetVertices()
+		light, lightsCount := w.frameLights.GetLights()
 
 		skyTexId, skyNormalTexId, skyEmissiveTexId := uint32(0), uint32(0), uint32(0)
 		skyEnabled := false

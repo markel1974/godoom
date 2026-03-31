@@ -1,13 +1,19 @@
 package open_gl
 
-// FrameLights stores data for multiple lights in a frame, including their positions, colors, directions, and other attributes.
+import (
+	"math"
+
+	"github.com/markel1974/godoom/mr_tech/model"
+)
+
+// FrameLights manages light data for rendering, including position, color, intensity, and other attributes.
 type FrameLights struct {
 	data   []float32
 	count  int
 	stride int32
 }
 
-// NewFrameLights initializes and returns a pointer to a new FrameLights instance with a specified maximum light capacity.
+// NewFrameLights creates and returns a new instance of FrameLights with a specified maximum number of lights.
 func NewFrameLights(maxLights int) *FrameLights {
 	const stride = 16
 	return &FrameLights{
@@ -16,28 +22,66 @@ func NewFrameLights(maxLights int) *FrameLights {
 	}
 }
 
-// Reset clears all stored data and resets the count in the FrameLights structure, preparing it for reuse without reallocation.
+// Reset clears all previously stored light data and resets the count to prepare for new light data.
 func (f *FrameLights) Reset() {
 	f.data = f.data[:0]
 	f.count = 0
 }
 
-// Len returns the number of lights currently stored in the FrameLights structure.
-func (f *FrameLights) Len() int {
-	return f.count
+// LightsStride returns the total stride value for lights, calculated as the internal stride multiplied by 4.
+func (f *FrameLights) LightsStride() int32 {
+	return f.stride * 4
 }
 
-// Get returns the slice of float32 values representing the frame light data stored in the FrameLights instance.
-func (f *FrameLights) Get() []float32 {
-	return f.data
+// GetLights retrieves the current list of light data and the count of lights in the frame as a slice and an integer.
+func (f *FrameLights) GetLights() ([]float32, int32) {
+	return f.data, int32(f.count)
 }
 
-// Stride returns the stride value, which represents the spacing between consecutive elements in the data array.
-func (f *FrameLights) Stride() int32 {
-	return f.stride
+// Create processes the given light and adds its data to the FrameLights if the light type is supported.
+func (f *FrameLights) Create(light *model.Light) {
+	r, g, b := float32(1.0), float32(1.0), float32(1.0)
+	dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
+	cutOff := float32(0)
+	outerCutOff := float32(0)
+	pos := light.GetPos()
+	intensity := float32(light.GetIntensity())
+	falloff := float32(0.0)
+	lightType := float32(-1)
+
+	switch light.GetKind() {
+	case model.LightKindOpenAir:
+		return
+		pos.Z = 100
+		r, g, b = float32(1.0), float32(1.0), float32(1.0)
+		lightType = 0
+		falloff = 500.0
+	case model.LightKindAmbient:
+		r, g, b = float32(1.0), float32(1.0), float32(1.0)
+		lightType = 0
+		falloff = 10.0
+	case model.LightKindSpot:
+		lightType = 1
+		falloff = 100.0
+		r, g, b = float32(1.0), float32(1.0), float32(1.0)
+		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
+		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
+	case model.LightKindNone:
+		return
+	default:
+		lightType = 0
+	}
+
+	f.Add(
+		float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
+		r, g, b, intensity,
+		dirGlX, dirGlY, dirGlZ, falloff,
+		cutOff, outerCutOff, 0.0, 0.0,
+	)
 }
 
-// Add appends a light's properties to the internal buffer and increments the light count.
+// Add appends properties of a light source (position, color, direction, etc.) to the FrameLights storage.
 func (f *FrameLights) Add(
 	posX, posY, posZ, lightType float32,
 	colR, colG, colB, intensity float32,
@@ -56,7 +100,7 @@ func (f *FrameLights) Add(
 	f.count++
 }
 
-// Grow doubles the capacity of the internal data slice or initializes it if unallocated.
+// Grow doubles the size of the internal data slice or initializes it if empty to accommodate additional elements.
 func (f *FrameLights) Grow() {
 	newSize := len(f.data) * 2
 	if newSize == 0 {

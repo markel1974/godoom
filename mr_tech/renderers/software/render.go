@@ -207,7 +207,8 @@ func (w *Render) doRender() {
 		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
-	cs, count, _, _ := w.engine.Compute(w.player, w.vi)
+	w.engine.Compute(w.player, w.vi)
+	cs, count, _, _ := w.engine.Traverse(w.vi)
 	w.targetLastCompiled = count
 	w.doSerialRender(w.mainSurface, w.vi, cs, count)
 	//w.parallelRender(surface, vi, css, compiled)

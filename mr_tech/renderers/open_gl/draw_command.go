@@ -58,6 +58,11 @@ func (w *DrawCommands) Get() []*DrawCommand {
 	return w.commands[0:w.len]
 }
 
+// GetDrawCommands retrieves the list of active draw commands for rendering the current frame.
+func (w *DrawCommands) GetDrawCommands() []*DrawCommand {
+	return w.Get()
+}
+
 // Grow increases the capacity of the commands slice.
 func (w *DrawCommands) Grow() {
 	oldLen := len(w.commands)

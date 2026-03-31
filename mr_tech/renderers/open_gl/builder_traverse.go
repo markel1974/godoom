@@ -44,9 +44,9 @@ func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	return key
 }
 
-// BatchBuilder is a utility structure for efficiently handling batched rendering operations.
+// BuilderTraverse is a utility structure for efficiently handling batched rendering operations.
 // It organizes textures, vertex data, draw commands, lighting, and visibility checks for a frame.
-type BatchBuilder struct {
+type BuilderTraverse struct {
 	tex               *Textures
 	vertices          *FrameVertices
 	drawCommands      *DrawCommands
@@ -55,47 +55,25 @@ type BatchBuilder struct {
 	processedPolygons map[PolyKey]bool
 }
 
-// NewBatchBuilder creates and initializes a new BatchBuilder with preallocated memory for vertices, commands, and lights.
-func NewBatchBuilder(compiler *Textures) *BatchBuilder {
-	return &BatchBuilder{
-		tex:               compiler,
-		vertices:          NewFrameVertices(maxBatchVertices),
-		drawCommands:      NewDrawCommands(maxFrameCommands),
-		frameLights:       NewFrameLights(256),
+// NewBuilderTraverse creates and initializes a new BuilderTraverse with preallocated memory for vertices, commands, and lights.
+func NewBuilderTraverse(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderTraverse {
+	return &BuilderTraverse{
+		tex:               tex,
+		vertices:          vertices,
+		drawCommands:      commands,
+		frameLights:       lights,
 		visibleSectors:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 	}
 }
 
-// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
-func (w *BatchBuilder) VerticesStride() int32 {
-	return w.vertices.Stride() * 4
-}
-
-// LightsStride calculates the total stride value for frame lights, considering the size of each light's data fields.
-func (w *BatchBuilder) LightsStride() int32 {
-	return w.frameLights.Stride() * 4
-}
-
 // GetFrameVertices retrieves the current vertex and index buffers along with their respective counts.
-func (w *BatchBuilder) GetFrameVertices() ([]float32, int32, []uint32, int32) {
-	return w.vertices.GetVertices()
-}
+//func (w *BuilderTraverse) GetFrameVertices() ([]float32, int32, []uint32, int32) {
+//	return w.vertices.GetVertices()
+//}
 
-// GetFrameLights retrieves the frame light data and their count from the FrameLights structure.
-func (w *BatchBuilder) GetFrameLights() ([]float32, int32) {
-	fvLen := w.frameLights.Len()
-	fv := w.frameLights.Get()
-	return fv, int32(fvLen)
-}
-
-// GetDrawCommands retrieves the list of active draw commands for rendering the current frame.
-func (w *BatchBuilder) GetDrawCommands() []*DrawCommand {
-	return w.drawCommands.Get()
-}
-
-// Reset clears all data stored in the BatchBuilder, resetting its vertices, draw commands, lights, and sector data maps.
-func (w *BatchBuilder) Reset() {
+// Reset clears all data stored in the BuilderTraverse, resetting its vertices, draw commands, lights, and sector data maps.
+func (w *BuilderTraverse) Reset() {
 	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
@@ -107,9 +85,9 @@ func (w *BatchBuilder) Reset() {
 	}
 }
 
-// CreateBatch generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
+// Compute generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
 // It updates visible sectors and processed polygons, and returns a sky texture if one is found.
-func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
+func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
 	var cSky *textures.Texture = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {
@@ -141,12 +119,12 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 				w.processedPolygons[key] = true
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(vi, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+					if sky := w.pushFlat(key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 						cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(vi, key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+					if sky := w.pushFlat(key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
 						cSky = sky
 					}
 				}
@@ -154,13 +132,13 @@ func (w *BatchBuilder) CreateBatch(vi *model.ViewMatrix, css []*model.CompiledSe
 		}
 	}
 
-	w.pushLights(vi, lights, w.visibleSectors)
+	w.pushLights(lights, w.visibleSectors)
 	w.pushThings(vi, things, w.visibleSectors)
 	return cSky
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.
-func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderTraverse) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -201,7 +179,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures
 }
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
-func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderTraverse) pushFlat(cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -243,7 +221,7 @@ func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp PolyKey, anim *textures
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
@@ -312,7 +290,7 @@ func (w *BatchBuilder) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 }
 
 // pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
-func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushLights(lights []*model.Light, sectors map[*model.Sector]bool) {
 	if len(lights) == 0 {
 		return
 	}
@@ -321,44 +299,6 @@ func (w *BatchBuilder) pushLights(vi *model.ViewMatrix, lights []*model.Light, s
 		//if _, ok := sectors[l.GetSector()]; !ok {
 		//	continue
 		//}
-		r, g, b := float32(1.0), float32(1.0), float32(1.0)
-		dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
-		cutOff := float32(0)
-		outerCutOff := float32(0)
-		pos := l.GetPos()
-		intensity := float32(l.GetIntensity())
-		falloff := float32(0.0)
-		lightType := float32(-1)
-
-		switch l.GetKind() {
-		case model.LightKindOpenAir:
-			continue
-			pos.Z = 100
-			r, g, b = float32(1.0), float32(1.0), float32(1.0)
-			lightType = 0
-			falloff = 500.0
-		case model.LightKindAmbient:
-			r, g, b = float32(1.0), float32(1.0), float32(1.0)
-			lightType = 0
-			falloff = 10.0
-		case model.LightKindSpot:
-			lightType = 1
-			falloff = 100.0
-			r, g, b = float32(1.0), float32(1.0), float32(1.0)
-			dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-			cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-			outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
-		case model.LightKindNone:
-			continue
-		default:
-			lightType = 0
-		}
-
-		w.frameLights.Add(
-			float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
-			r, g, b, intensity,
-			dirGlX, dirGlY, dirGlZ, falloff,
-			cutOff, outerCutOff, 0.0, 0.0,
-		)
+		w.frameLights.Create(l)
 	}
 }

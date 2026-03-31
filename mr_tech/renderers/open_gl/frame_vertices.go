@@ -72,6 +72,11 @@ func (w *FrameVertices) GetVertices() ([]float32, int32, []uint32, int32) {
 	return w.vertices, w.verticesCount, w.indices, w.indicesCount
 }
 
+// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
+func (w *FrameVertices) VerticesStride() int32 {
+	return w.stride * 4
+}
+
 // growIndices dynamically doubles the size of the indices slice or initializes it to 128 if empty to accommodate new indices.
 func (w *FrameVertices) growIndices() {
 	newSize := len(w.indices) * 2

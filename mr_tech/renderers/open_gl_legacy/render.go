@@ -123,10 +123,10 @@ func (w *RenderOpenGL) Start() {
 func (w *RenderOpenGL) doRender() {
 	// 1. Svuotamento manuale per il nuovo frame
 	w.builder.Reset()
-
 	w.engine.Compute(w.player, w.vi)
-	cs, count, things, lights := w.engine.Traverse(w.vi)
-
+	cs, count := w.engine.Traverse(w.vi)
+	things := w.engine.GetThings()
+	lights := w.engine.GetLights()
 	w.targetLastCompiled = count
 	cSky := w.builder.CreateBatch(w.vi, cs, count, things, lights)
 

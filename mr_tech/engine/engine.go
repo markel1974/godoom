@@ -56,7 +56,12 @@ func (e *Engine) GetTextures() textures.ITextures {
 	return e.things.GetTextures()
 }
 
-// GetLights returns the list of Light objects currently managed by the Engine.
+// GetThings retrieves a slice of IThing instances managed by the Engine's Things component.
+func (e *Engine) GetThings() []model.IThing {
+	return e.things.GetThings()
+}
+
+// GetLights retrieves the list of light sources currently managed by the engine.
 func (e *Engine) GetLights() []*model.Light {
 	return e.lights
 }
@@ -118,18 +123,16 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	textures.Tick()
 }
 
-// Traverse computes visible sectors, counts them, and retrieves associated things and lights based on the given ViewMatrix.
-func (e *Engine) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
+// Traverse processes the given ViewMatrix through the portal system, returning a list of compiled sectors and their count.
+func (e *Engine) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	cs, count := e.portal.Traverse(vi)
-
-	return cs, count, e.things.GetThings(), e.lights
+	return cs, count
 }
 
 // Build generates and retrieves the list of compiled sectors, their count, active game entities, and lights in the engine.
-func (e *Engine) Build() ([]*model.CompiledSector, int, []model.IThing, []*model.Light) {
+func (e *Engine) Build() ([]*model.CompiledSector, int) {
 	cs, count := e.portal.Build()
-
-	return cs, count, e.things.GetThings(), e.lights
+	return cs, count
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.

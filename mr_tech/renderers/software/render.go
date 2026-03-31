@@ -208,7 +208,7 @@ func (w *Render) doRender() {
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
 	w.engine.Compute(w.player, w.vi)
-	cs, count, _, _ := w.engine.Traverse(w.vi)
+	cs, count := w.engine.Traverse(w.vi)
 	w.targetLastCompiled = count
 	w.doSerialRender(w.mainSurface, w.vi, cs, count)
 	//w.parallelRender(surface, vi, css, compiled)

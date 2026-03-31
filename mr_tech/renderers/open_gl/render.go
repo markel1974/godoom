@@ -20,8 +20,7 @@ const (
 )
 
 type IBuilder interface {
-	Reset()
-	Compute(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture
+	Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture
 }
 
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
@@ -126,17 +125,12 @@ func (w *RenderOpenGL) Start() {
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
 	executor.Thread.Call(func() {
-		w.engine.Compute(w.player, w.vi)
-		cs, count, things, lights := w.engine.Traverse(w.vi)
 		w.win.Begin()
-		w.builder.Reset()
-
-		cSky := w.builder.Compute(w.vi, cs, count, things, lights)
-		//pX, pY := w.player.GetPosition()
 		fbW, fbH := w.win.GetFramebufferSize()
+		w.engine.Compute(w.player, w.vi)
+		cSky := w.builder.Compute(w.vi, w.engine)
+		//pX, pY := w.player.GetPosition()
 		commands := w.drawCommands.GetDrawCommands()
-
-		// Estrazione VBO e EBO
 		vert, vertLen, indices, indicesLen := w.vertices.GetVertices()
 		light, lightsCount := w.frameLights.GetLights()
 

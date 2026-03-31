@@ -3,17 +3,18 @@ package open_gl
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // BuilderScene represents the state and resources used to construct a 3D scene, including textures, vertices, commands, and lighting.
 type BuilderScene struct {
-	tex               *Textures
-	vertices          *FrameVertices
-	drawCommands      *DrawCommands
-	frameLights       *FrameLights
-	visibleSectors    map[*model.Sector]bool
+	tex          *Textures
+	vertices     *FrameVertices
+	drawCommands *DrawCommands
+	frameLights  *FrameLights
+	//visibleSectors    map[*model.Sector]bool
 	processedPolygons map[PolyKey]bool
 }
 
@@ -24,27 +25,28 @@ func NewBuilderScene(vertices *FrameVertices, commands *DrawCommands, lights *Fr
 		vertices:          vertices,
 		drawCommands:      commands,
 		frameLights:       lights,
-		visibleSectors:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 	}
 }
 
-// Reset clears all frame-related data structures, restoring the BuilderScene to its initial state for reuse.
-func (w *BuilderScene) Reset() {
+// reset clears all frame-related data structures, restoring the BuilderScene to its initial state for reuse.
+func (w *BuilderScene) reset() {
 	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
-	for k := range w.visibleSectors {
-		delete(w.visibleSectors, k)
-	}
 	for k := range w.processedPolygons {
 		delete(w.processedPolygons, k)
 	}
 }
 
 // Compute processes visible sectors, walls, floors, ceilings, lights, and things to prepare the render state. Returns the sky texture.
-func (w *BuilderScene) Compute(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
+func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
+	w.reset()
+
 	var cSky *textures.Texture = nil
+	css, compiled := engine.Build()
+	things := engine.GetThings()
+	lights := engine.GetLights()
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
@@ -59,7 +61,7 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, css []*model.CompiledSector
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleSectors[cp.Sector] = true
+				//w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdWall {
 					w.pushWall(key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 				} else if cp.Kind == model.IdUpper {
@@ -73,7 +75,7 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, css []*model.CompiledSector
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleSectors[cp.Sector] = true
+				//w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
 					if sky := w.pushFlat(key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 						cSky = sky
@@ -87,8 +89,8 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, css []*model.CompiledSector
 		}
 	}
 
-	w.pushLights(lights, w.visibleSectors)
-	w.pushThings(vi, things, w.visibleSectors)
+	w.pushLights(lights)
+	w.pushThings(vi, things)
 	return cSky
 }
 
@@ -118,7 +120,7 @@ func (w *BuilderScene) pushWall(cp PolyKey, anim *textures.Animation, zBottom, z
 
 	startIndices := w.vertices.GetIndicesLen()
 
-	// Invertiamo l'asse Z perché la mappa Doom cresce in positivo, ma OpenGL guarda in -Z
+	// Invertiamo l'asse Z, OpenGL guarda in -Z
 	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
 	idx1 := w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
 	idx2 := w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
@@ -176,7 +178,7 @@ func (w *BuilderScene) pushFlat(cp PolyKey, anim *textures.Animation, zF float32
 }
 
 // pushThings processes and pushes visible objects (things) into the rendering pipeline for the current frame.
-func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
+func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
@@ -184,10 +186,6 @@ func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 	camX, camY := vi.GetXY()
 
 	for _, t := range things {
-		// Opzionale: se Build compila tutto, potremmo voler renderizzare tutti i things
-		if !sectors[t.GetSector()] {
-			continue
-		}
 		if t.GetAnimation() == nil {
 			continue
 		}
@@ -245,14 +243,11 @@ func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing, s
 }
 
 // pushLights adds the provided lights to the frameLights while optionally filtering by sectors. Skips if no lights are given.
-func (w *BuilderScene) pushLights(lights []*model.Light, sectors map[*model.Sector]bool) {
+func (w *BuilderScene) pushLights(lights []*model.Light) {
 	if len(lights) == 0 {
 		return
 	}
 	for _, l := range lights {
-		//if _, ok := sectors[l.GetSector()]; !ok {
-		//	continue
-		//}
 		w.frameLights.Create(l)
 	}
 }

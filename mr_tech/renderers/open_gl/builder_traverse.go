@@ -3,6 +3,7 @@ package open_gl
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -67,13 +68,8 @@ func NewBuilderTraverse(vertices *FrameVertices, commands *DrawCommands, lights 
 	}
 }
 
-// GetFrameVertices retrieves the current vertex and index buffers along with their respective counts.
-//func (w *BuilderTraverse) GetFrameVertices() ([]float32, int32, []uint32, int32) {
-//	return w.vertices.GetVertices()
-//}
-
 // Reset clears all data stored in the BuilderTraverse, resetting its vertices, draw commands, lights, and sector data maps.
-func (w *BuilderTraverse) Reset() {
+func (w *BuilderTraverse) reset() {
 	w.vertices.Reset()
 	w.drawCommands.Reset()
 	w.frameLights.Reset()
@@ -87,12 +83,16 @@ func (w *BuilderTraverse) Reset() {
 
 // Compute generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
 // It updates visible sectors and processed polygons, and returns a sky texture if one is found.
-func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, css []*model.CompiledSector, compiled int, things []model.IThing, lights []*model.Light) *textures.Texture {
+func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
+	w.reset()
+	css, compiled := engine.Traverse(vi)
+	things := engine.GetThings()
+	lights := engine.GetLights()
+
 	var cSky *textures.Texture = nil
 
 	for idx := compiled - 1; idx >= 0; idx-- {
 		current := css[idx]
-
 		polygons := current.Get()
 		for k := len(polygons) - 1; k >= 0; k-- {
 			cp := polygons[k]

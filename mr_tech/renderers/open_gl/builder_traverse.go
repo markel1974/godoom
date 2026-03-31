@@ -48,6 +48,7 @@ func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 // BuilderTraverse is a utility structure for efficiently handling batched rendering operations.
 // It organizes textures, vertex data, draw commands, lighting, and visibility checks for a frame.
 type BuilderTraverse struct {
+	dcRender          *DrawCommandsRender
 	tex               *Textures
 	fv                *FrameVertices
 	dc                *DrawCommands
@@ -64,6 +65,7 @@ func NewBuilderTraverse(tex *Textures) *BuilderTraverse {
 		fv:                NewFrameVertices(maxBatchVertices),
 		dc:                NewDrawCommands(maxFrameCommands),
 		fl:                NewFrameLights(256),
+		dcRender:          NewDrawCommandsRender(),
 		visibleSectors:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 		cSky:              nil,
@@ -86,8 +88,8 @@ func (w *BuilderTraverse) GetSkyTexture() *textures.Texture {
 }
 
 // GetDrawCommands returns a slice of active draw commands for rendering the current frame.
-func (w *BuilderTraverse) GetDrawCommands() []*DrawCommand {
-	return w.dc.GetDrawCommands()
+func (w *BuilderTraverse) GetDrawCommands() *DrawCommandsRender {
+	return w.dcRender
 }
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the frame vertices.
@@ -161,7 +163,10 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 	}
 
 	w.pushLights(w.fl, lights, w.visibleSectors)
+
 	w.pushThings(w.fv, w.dc, vi, things, w.visibleSectors)
+
+	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.

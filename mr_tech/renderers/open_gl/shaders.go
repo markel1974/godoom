@@ -42,7 +42,6 @@ type Shaders struct {
 	post          *shaders.Post
 	bloom         *shaders.Bloom
 	container     []IShader
-	dcRender      *DrawCommandsRender
 	enableShadows bool
 	metrics       *shaders.MapMetrics
 }
@@ -76,7 +75,6 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *mode
 		w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
 		w.metrics.SetFlash(85.0, 0.1, 2048.0, shadowWidth, shadowHeight)
 	}
-	w.dcRender = NewDrawCommandsRender()
 
 	w.main = shaders.NewMain(vStride, w.metrics)
 	w.sky = shaders.NewSky()
@@ -124,8 +122,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	w.dcRender.Prepare(dc, true)
+func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc *DrawCommandsRender, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
@@ -148,20 +145,20 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.lights.Prepare(frameLights, numLights)
 
 	// OMBRE
-	w.depth.Render(w.dcRender.Render, w.main.GetVAO())
+	w.depth.Render(dc.Render, w.main.GetVAO())
 	// SSAO
 	w.ssao.Prepare()
-	w.geometry.Render(w.dcRender.Render)
+	w.geometry.Render(dc.Render)
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
-	w.main.Render(w.dcRender.Render, w.ssao.GetSSAOBlurTexture())
+	w.main.Render(dc.Render, w.ssao.GetSSAOBlurTexture())
 
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
-	w.lights.Render(w.dcRender.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(w.dcRender.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
+	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 

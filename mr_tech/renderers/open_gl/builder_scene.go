@@ -14,6 +14,7 @@ type BuilderScene struct {
 	fv       *FrameVertices
 	dc       *DrawCommands
 	fl       *FrameLights
+	dcRender *DrawCommandsRender
 	mapBuilt bool
 	cSky     *textures.Texture
 }
@@ -22,6 +23,7 @@ type BuilderScene struct {
 func NewBuilderScene(tex *Textures) *BuilderScene {
 	return &BuilderScene{
 		tex:      tex,
+		dcRender: NewDrawCommandsRender(),
 		fv:       NewFrameVertices(maxBatchVertices),
 		dc:       NewDrawCommands(maxFrameCommands),
 		fl:       NewFrameLights(256),
@@ -41,8 +43,8 @@ func (w *BuilderScene) GetLightsStride() int32 {
 }
 
 // GetDrawCommands returns a slice of active draw commands for rendering the current frame.
-func (w *BuilderScene) GetDrawCommands() []*DrawCommand {
-	return w.dc.GetDrawCommands()
+func (w *BuilderScene) GetDrawCommands() *DrawCommandsRender {
+	return w.dcRender
 }
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the frame vertices.
@@ -96,10 +98,11 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 			}
 		}
 	}
-
 	w.pushLights(w.fl, engine.GetLights())
 
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
+
+	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.

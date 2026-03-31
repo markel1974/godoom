@@ -28,7 +28,7 @@ type IBuilder interface {
 
 	GetLightsStride() int32
 
-	GetDrawCommands() []*DrawCommand
+	GetDrawCommands() *DrawCommandsRender
 
 	GetVertices() ([]float32, int32, []uint32, int32)
 

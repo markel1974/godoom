@@ -14,7 +14,6 @@ type DrawCommand struct {
 type DrawCommands struct {
 	commands []*DrawCommand
 	len      int
-	savedLen int
 }
 
 // NewDrawCommands initializes and returns a new DrawCommands instance.
@@ -61,16 +60,6 @@ func (w *DrawCommands) Get() []*DrawCommand {
 // GetDrawCommands retrieves the list of active draw commands for rendering the current frame.
 func (w *DrawCommands) GetDrawCommands() []*DrawCommand {
 	return w.Get()
-}
-
-// SaveCheckpoint records the current length of the draw commands as a checkpoint for potential restoration.
-func (w *DrawCommands) SaveCheckpoint() {
-	w.savedLen = w.len
-}
-
-// RestoreCheckpoint restores the length of active draw commands to the previously saved checkpoint.
-func (w *DrawCommands) RestoreCheckpoint() {
-	w.len = w.savedLen
 }
 
 // Grow increases the capacity of the commands slice.

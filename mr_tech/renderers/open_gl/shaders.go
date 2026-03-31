@@ -125,7 +125,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	exec := func() { w.dcRender.Render(dc) }
+	w.dcRender.Prepare(dc)
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
@@ -148,20 +148,20 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.lights.Prepare(frameLights, numLights)
 
 	// OMBRE
-	w.depth.Render(exec, w.main.GetVAO())
+	w.depth.Render(w.dcRender.Render, w.main.GetVAO())
 	// SSAO
 	w.ssao.Prepare()
-	w.geometry.Render(exec)
+	w.geometry.Render(w.dcRender.Render)
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
-	w.main.Render(exec, w.ssao.GetSSAOBlurTexture())
+	w.main.Render(w.dcRender.Render, w.ssao.GetSSAOBlurTexture())
 
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
-	w.lights.Render(exec, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(w.dcRender.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(exec, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
+	w.flashlight.Render(w.dcRender.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 

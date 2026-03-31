@@ -27,6 +27,7 @@ func (a ByMaterial) Less(i, j int) bool {
 
 // DrawCommandsRender manages batched rendering commands using multi-draw elements for indexed geometry.
 type DrawCommandsRender struct {
+	dc           []*DrawCommand
 	multiCounts  []int32
 	multiIndices []unsafe.Pointer
 }
@@ -39,14 +40,21 @@ func NewDrawCommandsRender() *DrawCommandsRender {
 	}
 }
 
-// Render processes and renders a list of DrawCommand objects into multi-draw elements for efficient batching.
-func (w *DrawCommandsRender) Render(dc []*DrawCommand) {
-	if len(dc) == 0 {
+// Prepare initializes the DrawCommandsRender instance with a list of DrawCommand objects and sorts them by material properties.
+func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
+	w.dc = dc
+	if len(w.dc) == 0 {
 		return
 	}
-
 	// Sorting in-place tramite interfaccia (zero reflection)
-	sort.Sort(ByMaterial(dc))
+	sort.Sort(ByMaterial(w.dc))
+}
+
+// Render processes and renders a list of DrawCommand objects into multi-draw elements for efficient batching.
+func (w *DrawCommandsRender) Render() {
+	if len(w.dc) == 0 {
+		return
+	}
 
 	// Re-slicing logico: capacity mantenuta, length a 0. Zero GC.
 	w.multiCounts = w.multiCounts[:0]
@@ -54,7 +62,7 @@ func (w *DrawCommandsRender) Render(dc []*DrawCommand) {
 
 	var lastTex, lastNorm, lastEmiss uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
 
-	for _, cmd := range dc {
+	for _, cmd := range w.dc {
 		if cmd.indexCount <= 0 {
 			continue
 		}
@@ -63,7 +71,6 @@ func (w *DrawCommandsRender) Render(dc []*DrawCommand) {
 			// Flush del materiale precedente
 			if len(w.multiCounts) > 0 {
 				gl.MultiDrawElements(gl.TRIANGLES, &w.multiCounts[0], gl.UNSIGNED_INT, &w.multiIndices[0], int32(len(w.multiCounts)))
-
 				// Reset per il prossimo materiale
 				w.multiCounts = w.multiCounts[:0]
 				w.multiIndices = w.multiIndices[:0]

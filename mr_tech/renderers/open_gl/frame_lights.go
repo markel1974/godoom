@@ -8,10 +8,9 @@ import (
 
 // FrameLights manages light data for rendering, including position, color, intensity, and other attributes.
 type FrameLights struct {
-	data       []float32
-	count      int
-	savedCount int
-	stride     int32
+	data   []float32
+	count  int
+	stride int32
 }
 
 // NewFrameLights creates and returns a new instance of FrameLights with a specified maximum number of lights.
@@ -37,16 +36,6 @@ func (f *FrameLights) LightsStride() int32 {
 // GetLights retrieves the current list of light data and the count of lights in the frame as a slice and an integer.
 func (f *FrameLights) GetLights() ([]float32, int32) {
 	return f.data, int32(f.count)
-}
-
-// SaveCheckpoint saves the current light count to allow restoration later with RestoreCheckpoint.
-func (f *FrameLights) SaveCheckpoint() {
-	f.savedCount = f.count
-}
-
-// RestoreCheckpoint restores the count of lights to the most recently saved checkpoint value.
-func (f *FrameLights) RestoreCheckpoint() {
-	f.count = f.savedCount
 }
 
 // Create processes the given light and adds its data to the FrameLights if the light type is supported.

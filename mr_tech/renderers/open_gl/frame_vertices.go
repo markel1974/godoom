@@ -8,24 +8,17 @@ type FrameVertices struct {
 	verticesSlot  uint32
 	indicesCount  int32
 	stride        int32
-
-	savedVerticesCount int32
-	savedIndicesCount  int32
-	savedVerticesSlot  uint32
 }
 
 // NewFrameVertices initializes and returns a new FrameVertices instance with preallocated space for vertices and indices.
 func NewFrameVertices(maxVerts int) *FrameVertices {
 	return &FrameVertices{
-		vertices:           make([]float32, 0, maxVerts*5),
-		indices:            make([]uint32, 0, maxVerts*6),
-		indicesCount:       0,
-		verticesCount:      0,
-		verticesSlot:       0,
-		stride:             5,
-		savedVerticesCount: 0,
-		savedIndicesCount:  0,
-		savedVerticesSlot:  0,
+		vertices:      make([]float32, 0, maxVerts*5),
+		indices:       make([]uint32, 0, maxVerts*6),
+		indicesCount:  0,
+		verticesCount: 0,
+		verticesSlot:  0,
+		stride:        5,
 	}
 }
 
@@ -44,20 +37,6 @@ func (w *FrameVertices) Reset() {
 	w.verticesCount = 0
 	w.indicesCount = 0
 	w.verticesSlot = 0
-}
-
-// SaveCheckpoint saves the current state of vertices count, indices count, and vertex slot for later restoration.
-func (w *FrameVertices) SaveCheckpoint() {
-	w.savedVerticesCount = w.verticesCount
-	w.savedIndicesCount = w.indicesCount
-	w.savedVerticesSlot = w.verticesSlot
-}
-
-// RestoreCheckpoint resets vertex and index counts, and vertex slot to their values saved by SaveCheckpoint.
-func (w *FrameVertices) RestoreCheckpoint() {
-	w.verticesCount = w.savedVerticesCount
-	w.indicesCount = w.savedIndicesCount
-	w.verticesSlot = w.savedVerticesSlot
 }
 
 // AddVertex adds a vertex with specified position (x, y, z) and texture coordinates (u, v) to the buffer and returns its slot.

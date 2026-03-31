@@ -10,33 +10,34 @@ import (
 
 // BuilderScene represents the state and resources used to construct a 3D scene, including textures, vertices, commands, and lighting.
 type BuilderScene struct {
-	tex          *Textures
-	vertices     *FrameVertices
-	drawCommands *DrawCommands
-	frameLights  *FrameLights
-	mapBuilt     bool
-	cSkyCached   *textures.Texture
+	tex        *Textures
+	fv         *FrameVertices
+	dc         *DrawCommands
+	fl         *FrameLights
+	mapBuilt   bool
+	cSkyCached *textures.Texture
 }
 
 // NewBuilderScene initializes and returns a new BuilderScene instance with given vertices, commands, lights, and textures.
 func NewBuilderScene(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderScene {
 	return &BuilderScene{
-		tex:          tex,
-		vertices:     vertices,
-		drawCommands: commands,
-		frameLights:  lights,
-		mapBuilt:     false,
-		cSkyCached:   nil,
+		tex:        tex,
+		fv:         vertices,
+		dc:         commands,
+		fl:         lights,
+		mapBuilt:   false,
+		cSkyCached: nil,
 	}
 }
 
 // reset clears all frame-related data structures, restoring the BuilderScene to its initial state for reuse.
 func (w *BuilderScene) reset() {
-	w.vertices.Reset()
-	w.drawCommands.Reset()
-	w.frameLights.Reset()
+	w.fv.Reset()
+	w.dc.Reset()
+	w.fl.Reset()
 }
 
+// Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
 func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
 	w.reset()
 
@@ -50,19 +51,19 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *tex
 			switch cp.Kind {
 			case model.IdWall, model.IdUpper, model.IdLower:
 				if cp.Kind == model.IdWall {
-					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
 				} else {
-					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 						w.cSkyCached = sky
 					}
 				} else {
-					if sky := w.pushFlat(cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
 						w.cSkyCached = sky
 					}
 				}
@@ -70,70 +71,15 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) *tex
 		}
 	}
 
-	lights := engine.GetLights()
-	w.pushLights(lights)
+	w.pushLights(w.fl, engine.GetLights())
 
-	things := engine.GetThings()
-	w.pushThings(vi, things)
-
-	return w.cSkyCached
-}
-
-// ComputeNew processes visible sectors, walls, floors, ceilings, lights, and things to prepare the render state. Returns the sky texture.
-func (w *BuilderScene) ComputeNew(vi *model.ViewMatrix, engine *engine.Engine) *textures.Texture {
-	//const dirty = false //TODO From engine
-	if w.mapBuilt {
-		w.vertices.RestoreCheckpoint()
-		w.drawCommands.RestoreCheckpoint()
-		w.frameLights.RestoreCheckpoint()
-		w.pushThings(vi, engine.GetThings())
-		return w.cSkyCached
-	}
-
-	w.reset()
-
-	css, compiled := engine.Build()
-	for idx := compiled - 1; idx >= 0; idx-- {
-		current := css[idx]
-		polygons := current.Get()
-		for k := len(polygons) - 1; k >= 0; k-- {
-			cp := polygons[k]
-			switch cp.Kind {
-			case model.IdWall, model.IdUpper, model.IdLower:
-				if cp.Kind == model.IdWall {
-					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
-				} else if cp.Kind == model.IdUpper {
-					w.pushWall(cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
-				} else {
-					w.pushWall(cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
-				}
-			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
-				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-						w.cSkyCached = sky
-					}
-				} else {
-					if sky := w.pushFlat(cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-						w.cSkyCached = sky
-					}
-				}
-			}
-		}
-	}
-	w.pushLights(engine.GetLights())
-	// Salviamo lo stato esatto dei buffer (Geometria + Luci statiche finite)
-	w.vertices.SaveCheckpoint()
-	w.drawCommands.SaveCheckpoint()
-	w.frameLights.SaveCheckpoint()
-	w.mapBuilt = true
-
-	w.pushThings(vi, engine.GetThings())
+	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
 
 	return w.cSkyCached
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.
-func (w *BuilderScene) pushWall(cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -156,24 +102,24 @@ func (w *BuilderScene) pushWall(cp *model.CompiledPolygon, anim *textures.Animat
 	wx2 := float32(cp.Tx2)
 	wy2 := float32(cp.Tz2)
 
-	startIndices := w.vertices.GetIndicesLen()
+	startIndices := fv.GetIndicesLen()
 
 	// Invertiamo l'asse Z, OpenGL guarda in -Z
-	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
-	idx1 := w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
-	idx2 := w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
-	idx3 := w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop)
+	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop)
+	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
+	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
+	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop)
 
-	w.vertices.AddTriangle(idx0, idx1, idx2)
-	w.vertices.AddTriangle(idx0, idx2, idx3)
+	fv.AddTriangle(idx0, idx1, idx2)
+	fv.AddTriangle(idx0, idx2, idx3)
 
-	currentIndices := w.vertices.GetIndicesLen()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	currentIndices := fv.GetIndicesLen()
+	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 }
 
 // pushFlat processes and renders a flat surface using the given polygon key, animation, and Z-coordinate.
 // It returns a texture if the animation is of type sky or a nil value in other cases.
-func (w *BuilderScene) pushFlat(cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -194,7 +140,7 @@ func (w *BuilderScene) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 	texW, texH := tex.Size()
 	_, scaleH := anim.ScaleFactor()
 
-	startIndices := w.vertices.GetIndicesLen()
+	startIndices := fv.GetIndicesLen()
 
 	indices := make([]uint32, len(segments))
 	for i, seg := range segments {
@@ -202,20 +148,20 @@ func (w *BuilderScene) pushFlat(cp *model.CompiledPolygon, anim *textures.Animat
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute (nessuna rotazione)
-		indices[i] = w.vertices.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
+		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
 	}
 
 	for i := 1; i < len(segments)-1; i++ {
-		w.vertices.AddTriangle(indices[0], indices[i], indices[i+1])
+		fv.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
-	currentIndices := w.vertices.GetIndicesLen()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	currentIndices := fv.GetIndicesLen()
+	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	return nil
 }
 
 // pushThings processes and pushes visible objects (things) into the rendering pipeline for the current frame.
-func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing) {
+func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
@@ -262,29 +208,29 @@ func (w *BuilderScene) pushThings(vi *model.ViewMatrix, things []model.IThing) {
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		startIndices := w.vertices.GetIndicesLen()
+		startIndices := fv.GetIndicesLen()
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
 
-		idx0 := w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop)
-		idx1 := w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
-		idx2 := w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
-		idx3 := w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop)
+		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop)
+		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
+		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
+		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop)
 
-		w.vertices.AddTriangle(idx0, idx1, idx2)
-		w.vertices.AddTriangle(idx0, idx2, idx3)
+		fv.AddTriangle(idx0, idx1, idx2)
+		fv.AddTriangle(idx0, idx2, idx3)
 
-		currentIndices := w.vertices.GetIndicesLen()
-		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+		currentIndices := fv.GetIndicesLen()
+		dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	}
 }
 
 // pushLights adds the provided lights to the frameLights while optionally filtering by sectors. Skips if no lights are given.
-func (w *BuilderScene) pushLights(lights []*model.Light) {
+func (w *BuilderScene) pushLights(fl *FrameLights, lights []*model.Light) {
 	if len(lights) == 0 {
 		return
 	}
 	for _, l := range lights {
-		w.frameLights.Create(l)
+		fl.Create(l)
 	}
 }

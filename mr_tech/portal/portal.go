@@ -5,15 +5,12 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.
 const (
 	defaultQueueLen = 512
 )
-
-//TODO culling gerarchico spaziale
 
 // Portal represents a rendering portal used for managing visibility, sectors, and screen dimensions in a 3D environment.
 type Portal struct {
@@ -121,8 +118,71 @@ func (r *Portal) clear() {
 	r.visibilityCache.Clear()
 }
 
-// Compute processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+// Build compiles all sectors within the Portal, updates the compiled sector list, and returns the results.
+func (r *Portal) Build() ([]*model.CompiledSector, int) {
+	r.clear()
+	for _, sector := range r.sectors {
+		if cs, _ := r.getCompiledSector(sector); cs != nil {
+			r.compile(sector, cs)
+		}
+	}
+	return r.compiledSectors, r.compiledCount
+}
+
+// compile processes a given sector, generating compiled geometry for rendering, including walls, floors, and ceilings.
+func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
+	for s := 0; s < len(sector.Segments); s++ {
+		segment := sector.Segments[s]
+		neighbor := segment.Sector
+		if segment.Kind == model.DefinitionVoid {
+			continue
+		}
+		// Coordinate World assolute sul piano XZ (niente proiezioni fotocamera!)
+		wx1, wz1 := segment.Start.X, segment.Start.Y
+		wx2, wz2 := segment.End.X, segment.End.Y
+
+		// UV mapping basato sulla lunghezza reale del muro
+		u0 := 0.0
+		u1 := math.Hypot(wx2-wx1, wz2-wz1) * r.textureScaleRepetition
+
+		ceilT := cs.Sector.Ceil
+		floorT := cs.Sector.Floor
+		sectorCeilY := sector.CeilY
+		sectorFloorY := sector.FloorY
+
+		// 1. Muri di connessione (Portali verso altri settori)
+		if neighbor != nil {
+			neighborCeilY := neighbor.CeilY
+			neighborFloorY := neighbor.FloorY
+			// Upper Wall (dal soffitto corrente scende al soffitto del vicino)
+			if sectorCeilY > neighborCeilY {
+				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, segment.Upper, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				// x1, Y_top, Y_bottom, z1, x2, Y_top, Y_bottom, z2
+				upperP.Rect(wx1, sectorCeilY, neighborCeilY, wz1, wx2, sectorCeilY, neighborCeilY, wz2)
+			}
+			// Lower Wall (dal pavimento del vicino scende al pavimento corrente)
+			if sectorFloorY < neighborFloorY {
+				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, segment.Lower, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				lowerP.Rect(wx1, neighborFloorY, sectorFloorY, wz1, wx2, neighborFloorY, sectorFloorY, wz2)
+			}
+		} else {
+			// 2. Muro Solido (Middle Wall) - connette soffitto e pavimento del settore
+			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, segment.Middle, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
+		}
+		center := sector.GetCentroid()
+
+		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+		// Generi un triangolo orizzontale: Centro, P1, P2
+		ceilP.Triangle(center.X, sectorCeilY, center.Y, wx1, sectorCeilY, wz1, wx2, sectorCeilY, wz2)
+
+		floorP := cs.Acquire(neighbor, model.IdFloor, ceilT, floorT, floorT, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+		floorP.Triangle(center.X, sectorFloorY, center.Y, wx1, sectorFloorY, wz1, wx2, sectorFloorY, wz2)
+	}
+}
+
+// Traverse processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
+func (r *Portal) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	r.clear()
 
 	r.queue.Reset()
@@ -132,13 +192,11 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 
 	var qTail *QueueItem
 
-	textures.Tick()
-
 	for !r.queue.IsEmpty() {
 		qTail = r.queue.GetTail()
 		qTail.sector.Reference(r.compileId)
 
-		sq, sqCount := r.compileSector(vi, qTail.sector, qTail)
+		sq, sqCount := r.compileProjection(vi, qTail.sector, qTail)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
 			// Geometric check
@@ -157,20 +215,8 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	return r.compiledSectors, r.compiledCount
 }
 
-// getCompiledSector retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
-func (r *Portal) getCompiledSector(sector *model.Sector) (*model.CompiledSector, bool) {
-	first := r.compiledCount == 0
-	if r.compiledCount >= len(r.compiledSectors) {
-		r.Grow()
-	}
-	cs := r.compiledSectors[r.compiledCount]
-	r.compiledCount++
-	cs.Bind(sector)
-	return cs, first
-}
-
 // compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
-func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
+func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
 	var cs *model.CompiledSector = nil
 	first := false
 	outIdx := 0
@@ -351,4 +397,16 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 	}
 
 	return r.sectorQueue.Items(), outIdx
+}
+
+// getCompiledSector retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
+func (r *Portal) getCompiledSector(sector *model.Sector) (*model.CompiledSector, bool) {
+	first := r.compiledCount == 0
+	if r.compiledCount >= len(r.compiledSectors) {
+		r.Grow()
+	}
+	cs := r.compiledSectors[r.compiledCount]
+	r.compiledCount++
+	cs.Bind(sector)
+	return cs, first
 }

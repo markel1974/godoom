@@ -55,17 +55,19 @@ func (p *CompiledPolygon) Init(kind int) {
 	p.PLen = 0
 }
 
-// Triangle sets the vertices of a triangular polygon based on the provided 3D coordinates and updates the point length.
-func (p *CompiledPolygon) Triangle(x1 float64, y1 float64, y2 float64, z1 float64, x2 float64, y3 float64, z2 float64) {
+// Triangle sets the three vertices of the polygon based on the given 3D coordinates and updates the point length to 3.
+func (p *CompiledPolygon) Triangle(x1, y1, z1, x2, y2, z2, x3, y3, z3 float64) {
 	p.Points[0].X = x1
 	p.Points[0].Y = y1
 	p.Points[0].Z = z1
+
 	p.Points[1].X = x2
 	p.Points[1].Y = y2
 	p.Points[1].Z = z2
-	p.Points[2].X = x2
+
+	p.Points[2].X = x3
 	p.Points[2].Y = y3
-	p.Points[2].Z = z2
+	p.Points[2].Z = z3
 	p.PLen = 3
 }
 
@@ -165,6 +167,7 @@ func (cp *CompiledPolygons) Get() []*CompiledPolygon {
 	return t
 }
 
+// Grow expands the internal slice to accommodate additional CompiledPolygon instances, doubling its capacity when needed.
 func (cp *CompiledPolygons) Grow() {
 	oldSize := len(cp.data)
 	newSize := 16

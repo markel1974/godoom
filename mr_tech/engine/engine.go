@@ -114,7 +114,10 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) ([]*mo
 	// 6. Post-Sync ViewMatrix
 	vi.Update(player)
 	// 7. Portal Compute
-	cs, count := e.portal.Compute(vi)
+
+	textures.Tick()
+
+	cs, count := e.portal.Traverse(vi)
 
 	return cs, count, e.things.GetThings(), e.lights
 }

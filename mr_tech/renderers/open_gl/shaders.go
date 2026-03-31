@@ -125,7 +125,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc []*DrawCommand, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
-	w.dcRender.Prepare(dc)
+	w.dcRender.Prepare(dc, true)
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)

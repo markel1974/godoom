@@ -27,27 +27,35 @@ func (a ByMaterial) Less(i, j int) bool {
 
 // DrawCommandsRender manages batched rendering commands using multi-draw elements for indexed geometry.
 type DrawCommandsRender struct {
-	dc           []*DrawCommand
-	multiCounts  []int32
-	multiIndices []unsafe.Pointer
+	dc []*DrawCommand
+	mc []int32
+	mi []unsafe.Pointer
 }
 
 // NewDrawCommandsRender creates and returns a new instance of DrawCommandsRender with pre-allocated capacity.
 func NewDrawCommandsRender() *DrawCommandsRender {
+	const startSize = 128
 	return &DrawCommandsRender{
-		multiCounts:  make([]int32, 0, 128),
-		multiIndices: make([]unsafe.Pointer, 0, 128),
+		mc: make([]int32, startSize),
+		mi: make([]unsafe.Pointer, startSize),
+		dc: make([]*DrawCommand, startSize),
 	}
 }
 
 // Prepare initializes the DrawCommandsRender instance with a list of DrawCommand objects and sorts them by material properties.
-func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
-	w.dc = dc
-	if len(w.dc) == 0 {
-		return
+func (w *DrawCommandsRender) Prepare(dc []*DrawCommand, sortRequired bool) {
+	dcLen := len(dc)
+	if dcLen >= cap(w.mc) {
+		newSize := dcLen * 2
+		w.mc = make([]int32, newSize)
+		w.mi = make([]unsafe.Pointer, newSize)
+		w.dc = make([]*DrawCommand, newSize)
 	}
-	// Sorting in-place tramite interfaccia (zero reflection)
-	sort.Sort(ByMaterial(w.dc))
+	w.dc = w.dc[:dcLen]
+	copy(w.dc, dc)
+	if sortRequired {
+		sort.Sort(ByMaterial(w.dc))
+	}
 }
 
 // Render processes and renders a list of DrawCommand objects into multi-draw elements for efficient batching.
@@ -55,27 +63,17 @@ func (w *DrawCommandsRender) Render() {
 	if len(w.dc) == 0 {
 		return
 	}
-
-	// Re-slicing logico: capacity mantenuta, length a 0. Zero GC.
-	w.multiCounts = w.multiCounts[:0]
-	w.multiIndices = w.multiIndices[:0]
-
+	index := int32(0)
 	var lastTex, lastNorm, lastEmiss uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
-
 	for _, cmd := range w.dc {
 		if cmd.indexCount <= 0 {
 			continue
 		}
-
 		if cmd.texId != lastTex || cmd.normTexId != lastNorm || cmd.emissiveTexId != lastEmiss {
-			// Flush del materiale precedente
-			if len(w.multiCounts) > 0 {
-				gl.MultiDrawElements(gl.TRIANGLES, &w.multiCounts[0], gl.UNSIGNED_INT, &w.multiIndices[0], int32(len(w.multiCounts)))
-				// Reset per il prossimo materiale
-				w.multiCounts = w.multiCounts[:0]
-				w.multiIndices = w.multiIndices[:0]
+			if index > 0 {
+				gl.MultiDrawElements(gl.TRIANGLES, &w.mc[0], gl.UNSIGNED_INT, &w.mi[0], index)
+				index = 0
 			}
-
 			if lastTex != cmd.texId {
 				gl.ActiveTexture(gl.TEXTURE0)
 				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
@@ -92,14 +90,11 @@ func (w *DrawCommandsRender) Render() {
 				lastEmiss = cmd.emissiveTexId
 			}
 		}
-
-		// Memorizza il numero di indici e l'offset in byte all'interno dell'EBO (uint32 = 4 byte)
-		w.multiCounts = append(w.multiCounts, cmd.indexCount)
-		w.multiIndices = append(w.multiIndices, gl.PtrOffset(int(cmd.firstIndex*4)))
+		w.mc[index] = cmd.indexCount
+		w.mi[index] = gl.PtrOffset(int(cmd.firstIndex * 4))
+		index++
 	}
-
-	// Flush della coda finale
-	if len(w.multiCounts) > 0 {
-		gl.MultiDrawElements(gl.TRIANGLES, &w.multiCounts[0], gl.UNSIGNED_INT, &w.multiIndices[0], int32(len(w.multiCounts)))
+	if index > 0 {
+		gl.MultiDrawElements(gl.TRIANGLES, &w.mc[0], gl.UNSIGNED_INT, &w.mi[0], index)
 	}
 }

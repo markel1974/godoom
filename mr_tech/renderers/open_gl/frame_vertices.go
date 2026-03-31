@@ -1,48 +1,66 @@
 package open_gl
 
-// FrameVertices represents a structure for managing vertex and index data for rendering, with support for dynamic growth.
+// FrameVertices represents a structure for managing vertex and index buffers for rendering geometries in frames.
 type FrameVertices struct {
-	vertices      []float32
-	indices       []uint32
-	verticesCount int32
-	verticesSlot  uint32
-	indicesCount  int32
-	stride        int32
+	vertices            []float32
+	indices             []uint32
+	verticesCount       int32
+	verticesSlot        uint32
+	indicesCount        int32
+	freezeIndicesCount  int32
+	freezeVerticesCount int32
+	freezeVerticesSlot  uint32
+	stride              int32
 }
 
-// NewFrameVertices initializes and returns a new FrameVertices instance with preallocated space for vertices and indices.
+// NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(maxVerts int) *FrameVertices {
 	return &FrameVertices{
-		vertices:      make([]float32, 0, maxVerts*5),
-		indices:       make([]uint32, 0, maxVerts*6),
-		indicesCount:  0,
-		verticesCount: 0,
-		verticesSlot:  0,
-		stride:        5,
+		vertices: make([]float32, maxVerts*5),
+		indices:  make([]uint32, maxVerts*6),
+		stride:   5,
 	}
 }
 
-// GetIndicesLen returns the current number of indices in the frame vertex buffer.
+// Freeze locks the current state of verticesCount, indicesCount, and verticesSlot for subsequent resets.
+func (w *FrameVertices) Freeze() {
+	w.freezeVerticesCount = w.verticesCount
+	w.freezeIndicesCount = w.indicesCount
+	w.freezeVerticesSlot = w.verticesSlot
+}
+
+// DeepReset clears all frozen state and resets the FrameVertices instance completely, including frozen counts and slots.
+func (w *FrameVertices) DeepReset() {
+	// FIX: Corretto il copia-incolla
+	w.freezeVerticesCount = 0
+	w.freezeIndicesCount = 0
+	w.freezeVerticesSlot = 0
+	w.Reset()
+}
+
+// Reset restores the vertices count, indices count, and vertices slot to their previously frozen states.
+func (w *FrameVertices) Reset() {
+	w.verticesCount = w.freezeVerticesCount
+	w.indicesCount = w.freezeIndicesCount
+	w.verticesSlot = w.freezeVerticesSlot
+}
+
+// GetIndicesLen returns the current count of indices in the FrameVertices structure.
 func (w *FrameVertices) GetIndicesLen() int32 {
 	return w.indicesCount
 }
 
-// VerticesStride calculates the byte stride of vertex data in the buffer by multiplying the attribute group size by 4.
+// VerticesStride returns the byte stride of the vertex data, calculated as the stride value multiplied by 4.
 func (w *FrameVertices) VerticesStride() int32 {
 	return w.stride * 4
 }
 
-// Reset clears the FrameVertices by resetting vertex and index counts, and vertex slot to their initial state.
-func (w *FrameVertices) Reset() {
-	w.verticesCount = 0
-	w.indicesCount = 0
-	w.verticesSlot = 0
-}
-
-// AddVertex adds a vertex with specified position (x, y, z) and texture coordinates (u, v) to the buffer and returns its slot.
+// AddVertex adds a vertex to the FrameVertices at the specified coordinates and texture mapping values.
+// It returns the index of the added vertex.
 func (w *FrameVertices) AddVertex(x, y, z, u, v float32) uint32 {
 	head := w.verticesCount
-	if w.verticesCount += w.stride; w.verticesCount >= int32(len(w.vertices)) {
+	w.verticesCount += w.stride
+	if w.verticesCount > int32(len(w.vertices)) {
 		w.growVertices()
 	}
 	w.vertices[head] = x
@@ -56,10 +74,12 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v float32) uint32 {
 	return slot
 }
 
-// AddTriangle appends three vertex indices (i0, i1, i2) to define a triangle in the index buffer.
+// AddTriangle adds a new triangle to the index buffer using the specified vertex indices i0, i1, and i2.
 func (w *FrameVertices) AddTriangle(i0, i1, i2 uint32) {
 	head := w.indicesCount
-	if w.indicesCount += 3; w.indicesCount >= int32(len(w.indices)) {
+	w.indicesCount += 3
+	// FIX: Controllo di overflow corretto
+	if w.indicesCount > int32(len(w.indices)) {
 		w.growIndices()
 	}
 	w.indices[head] = i0
@@ -67,12 +87,12 @@ func (w *FrameVertices) AddTriangle(i0, i1, i2 uint32) {
 	w.indices[head+2] = i2
 }
 
-// GetVertices returns the slice of vertices and indices currently stored in the frame's vertex buffer.
+// GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the FrameVertices.
 func (w *FrameVertices) GetVertices() ([]float32, int32, []uint32, int32) {
 	return w.vertices, w.verticesCount, w.indices, w.indicesCount
 }
 
-// growIndices dynamically doubles the size of the indices slice or initializes it to 128 if empty to accommodate new indices.
+// growIndices dynamically increases the capacity of the indices slice, doubling its size or initializing it to 128 if empty.
 func (w *FrameVertices) growIndices() {
 	newSize := len(w.indices) * 2
 	if newSize == 0 {
@@ -83,7 +103,7 @@ func (w *FrameVertices) growIndices() {
 	w.indices = newData
 }
 
-// growVertices allocates a larger slice for storing vertex data when the current capacity is exceeded.
+// growVertices doubles the capacity of the vertices slice or initializes it with a default size of 128 if empty.
 func (w *FrameVertices) growVertices() {
 	newSize := len(w.vertices) * 2
 	if newSize == 0 {

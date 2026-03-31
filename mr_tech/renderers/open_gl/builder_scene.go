@@ -10,25 +10,27 @@ import (
 
 // BuilderScene represents the state and resources used to construct a 3D scene, including textures, vertices, commands, and lighting.
 type BuilderScene struct {
-	tex      *Textures
-	fv       *FrameVertices
-	dc       *DrawCommands
-	fl       *FrameLights
-	dcRender *DrawCommandsRender
-	mapBuilt bool
-	cSky     *textures.Texture
+	tex         *Textures
+	fv          *FrameVertices
+	dc          *DrawCommands
+	fl          *FrameLights
+	dcRender    *DrawCommandsRender
+	mapBuilt    bool
+	cSky        *textures.Texture
+	flatIndices []uint32
 }
 
 // NewBuilderScene initializes and returns a new BuilderScene instance with given vertices, commands, lights, and textures.
 func NewBuilderScene(tex *Textures) *BuilderScene {
 	return &BuilderScene{
-		tex:      tex,
-		dcRender: NewDrawCommandsRender(),
-		fv:       NewFrameVertices(maxBatchVertices),
-		dc:       NewDrawCommands(maxFrameCommands),
-		fl:       NewFrameLights(256),
-		mapBuilt: false,
-		cSky:     nil,
+		tex:         tex,
+		dcRender:    NewDrawCommandsRender(),
+		fv:          NewFrameVertices(maxBatchVertices),
+		dc:          NewDrawCommands(maxFrameCommands),
+		fl:          NewFrameLights(256),
+		flatIndices: make([]uint32, 0, 128),
+		mapBuilt:    false,
+		cSky:        nil,
 	}
 }
 
@@ -98,9 +100,14 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 			}
 		}
 	}
+
 	w.pushLights(w.fl, engine.GetLights())
 
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
+
+	//w.fv.Freeze()
+
+	//w.dc.Freeze()
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
 }
@@ -169,17 +176,16 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 
 	startIndices := fv.GetIndicesLen()
 
-	indices := make([]uint32, len(segments))
-	for i, seg := range segments {
+	w.flatIndices = w.flatIndices[:0]
+	for _, seg := range segments {
 		v := seg.Start
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
-		// Coordinate assolute (nessuna rotazione)
-		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
+		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV))
 	}
 
 	for i := 1; i < len(segments)-1; i++ {
-		fv.AddTriangle(indices[0], indices[i], indices[i+1])
+		fv.AddTriangle(w.flatIndices[0], w.flatIndices[i], w.flatIndices[i+1])
 	}
 
 	currentIndices := fv.GetIndicesLen()

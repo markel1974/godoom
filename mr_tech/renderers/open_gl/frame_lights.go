@@ -8,24 +8,37 @@ import (
 
 // FrameLights manages light data for rendering, including position, color, intensity, and other attributes.
 type FrameLights struct {
-	data   []float32
-	count  int
-	stride int32
+	data        []float32
+	index       int
+	freezeIndex int
+	stride      int32
 }
 
 // NewFrameLights creates and returns a new instance of FrameLights with a specified maximum number of lights.
 func NewFrameLights(maxLights int) *FrameLights {
 	const stride = 16
 	return &FrameLights{
-		data:   make([]float32, 0, maxLights*stride),
-		stride: stride,
+		data:        make([]float32, maxLights*stride),
+		index:       0,
+		freezeIndex: 0,
+		stride:      stride,
 	}
+}
+
+// DeepReset resets the freezeIndex and calls Reset to clear the stored light data and prepare for new inputs.
+func (f *FrameLights) DeepReset() {
+	f.freezeIndex = 0
+	f.Reset()
 }
 
 // Reset clears all previously stored light data and resets the count to prepare for new light data.
 func (f *FrameLights) Reset() {
-	f.data = f.data[:0]
-	f.count = 0
+	f.index = f.freezeIndex
+}
+
+// Freeze sets the freezeIndex to the current index, marking the current state for later resets.
+func (f *FrameLights) Freeze() {
+	f.freezeIndex = f.index
 }
 
 // LightsStride returns the total stride value for lights, calculated as the internal stride multiplied by 4.
@@ -35,7 +48,7 @@ func (f *FrameLights) LightsStride() int32 {
 
 // GetLights retrieves the current list of light data and the count of lights in the frame as a slice and an integer.
 func (f *FrameLights) GetLights() ([]float32, int32) {
-	return f.data, int32(f.count)
+	return f.data[:f.index], int32(f.index) / f.stride
 }
 
 // Create processes the given light and adds its data to the FrameLights if the light type is supported.
@@ -88,16 +101,28 @@ func (f *FrameLights) Add(
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff, pad1, pad2 float32,
 ) {
-	if f.count*int(f.stride+f.stride) > len(f.data) {
+	idx := f.index
+	if idx+int(f.stride) > len(f.data) {
 		f.Grow()
 	}
-	f.data = append(f.data,
-		posX, posY, posZ, lightType,
-		colR, colG, colB, intensity,
-		dirX, dirY, dirZ, falloff,
-		cutOff, outerCutOff, pad1, pad2,
-	)
-	f.count++
+	f.index += int(f.stride)
+
+	f.data[idx] = posX
+	f.data[idx+1] = posY
+	f.data[idx+2] = posZ
+	f.data[idx+3] = lightType
+	f.data[idx+4] = colR
+	f.data[idx+5] = colG
+	f.data[idx+6] = colB
+	f.data[idx+7] = intensity
+	f.data[idx+8] = dirX
+	f.data[idx+9] = dirY
+	f.data[idx+10] = dirZ
+	f.data[idx+11] = falloff
+	f.data[idx+12] = cutOff
+	f.data[idx+13] = outerCutOff
+	f.data[idx+14] = pad1
+	f.data[idx+15] = pad2
 }
 
 // Grow doubles the size of the internal data slice or initializes it if empty to accommodate additional elements.

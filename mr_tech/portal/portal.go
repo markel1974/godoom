@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/mathematic"
@@ -18,24 +17,25 @@ const (
 
 // Portal represents a rendering portal used for managing visibility, sectors, and screen dimensions in a 3D environment.
 type Portal struct {
-	screenWidth      int
-	screenWidthHalf  int
-	screenHeight     int
-	screenHeightHalf float64
-	maxSectors       int
-	queue            *RingQueue
-	sectorQueue      *LinearBatch
-	screenHFov       float64
-	screenVFov       float64
-	compileId        uint64
-	sectorsMaxHeight float64
-	sectors          []*model.Sector
-	compiledSectors  []*model.CompiledSector
-	compiledCount    int
-	visibilityCache  *VisibilityCache
-	wMin             float64
-	wMax             float64
-	hMax             float64
+	screenWidth            int
+	screenWidthHalf        int
+	screenHeight           int
+	screenHeightHalf       float64
+	maxSectors             int
+	queue                  *RingQueue
+	sectorQueue            *LinearBatch
+	screenHFov             float64
+	screenVFov             float64
+	compileId              uint64
+	sectorsMaxHeight       float64
+	sectors                []*model.Sector
+	compiledSectors        []*model.CompiledSector
+	compiledCount          int
+	visibilityCache        *VisibilityCache
+	wMin                   float64
+	wMax                   float64
+	hMax                   float64
+	textureScaleRepetition float64
 }
 
 // NewPortal creates and initializes a new Portal instance with the specified screen dimensions and queue length.
@@ -48,15 +48,16 @@ func NewPortal(width int, height int, maxQueue int, viewFactor float64) *Portal 
 		viewFactor = 1.0
 	}
 	r := &Portal{
-		screenWidth:      width,
-		screenWidthHalf:  width / 2,
-		screenHeight:     height,
-		screenHeightHalf: float64(height) / 2,
-		queue:            NewRingQueue(maxQueue),
-		sectorQueue:      NewLinearBatch(256),
-		screenHFov:       model.HFov * float64(height),
-		screenVFov:       model.VFov * float64(height),
-		visibilityCache:  NewVisibilityCache(),
+		screenWidth:            width,
+		screenWidthHalf:        width / 2,
+		screenHeight:           height,
+		screenHeightHalf:       float64(height) / 2,
+		queue:                  NewRingQueue(maxQueue),
+		sectorQueue:            NewLinearBatch(256),
+		screenHFov:             model.HFov * float64(height),
+		screenVFov:             model.VFov * float64(height),
+		visibilityCache:        NewVisibilityCache(),
+		textureScaleRepetition: 100.0,
 	}
 	r.wMin = float64(-r.screenWidth) * viewFactor
 	r.wMax = float64(r.screenWidth) * viewFactor
@@ -64,21 +65,27 @@ func NewPortal(width int, height int, maxQueue int, viewFactor float64) *Portal 
 	return r
 }
 
+func (r *Portal) Grow() {
+	oldSize := len(r.compiledSectors)
+	newSize := len(r.sectors) * 2
+	if oldSize == 0 {
+		r.compiledSectors = make([]*model.CompiledSector, newSize)
+	} else {
+		newSize = oldSize * 2
+		newData := make([]*model.CompiledSector, newSize)
+		copy(newData, r.compiledSectors)
+		r.compiledSectors = newData
+	}
+	for cs := oldSize; cs < newSize; cs++ {
+		r.compiledSectors[cs] = model.NewCompiledSector()
+		r.compiledSectors[cs].Setup()
+	}
+}
+
 // Setup configures the Portal by assigning sectors, setting the maximum height, and initializing compiled sectors.
 func (r *Portal) Setup(sectors []*model.Sector) error {
 	r.sectors = sectors
-
-	r.compiledSectors = make([]*model.CompiledSector, len(r.sectors)*16)
-
-	//debug
-	//for _, s := range sectors {
-	//	fmt.Println(s.Print(false))
-	//}
-
-	for cs := 0; cs < len(r.compiledSectors); cs++ {
-		r.compiledSectors[cs] = model.NewCompiledSector()
-		r.compiledSectors[cs].Setup(512)
-	}
+	r.Grow()
 	return nil
 }
 
@@ -121,7 +128,6 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 	r.queue.Reset()
 
 	qHead := r.queue.GetHead()
-	//qHead.Update(vi.GetSector(), 0, wMax, -hMax, -hMax, hMax, hMax)
 	qHead.Update(vi.GetSector(), r.wMin, r.wMax, -r.hMax, -r.hMax, r.hMax, r.hMax)
 
 	var qTail *QueueItem
@@ -155,8 +161,7 @@ func (r *Portal) Compute(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 func (r *Portal) getCompiledSector(sector *model.Sector) (*model.CompiledSector, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
-		fmt.Println("OUT OF COMPILED SECTORS!")
-		return nil, false
+		r.Grow()
 	}
 	cs := r.compiledSectors[r.compiledCount]
 	r.compiledCount++
@@ -199,9 +204,8 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 		}
 
 		// Calculate real length for texture repetition (world UV mapping)
-		// Multiply by TextureScaleFactor if your WAD coordinates have been scaled (e.g. * 100.0)
 		u0 := 0.0
-		u1 := math.Hypot(vx2-vx1, vy2-vy1) * 100.0 // Adjust multiplier
+		u1 := math.Hypot(vx2-vx1, vy2-vy1) * r.textureScaleRepetition
 
 		// EXACT LINEAR CLIPPING AGAINST THE NEAR-Z PLANE
 		if tz1 <= model.NearZ || tz2 <= model.NearZ {
@@ -267,9 +271,6 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			zStop = 10e4
 		}
 
-		lightStart := vi.GetLightIntensityFactor(zStart)
-		lightStop := vi.GetLightIntensityFactor(zStop)
-
 		y1Ceil := qi.y1t
 		y2Ceil := qi.y2t
 		y1Floor := qi.y1b
@@ -301,10 +302,10 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 		floorT := cs.Sector.Floor
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, lightStart, x2Min, y2Ceil, yaStop, zStop, lightStop)
+		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, x2Min, y2Ceil, yaStop, zStop)
 
 		floorP := cs.Acquire(neighbor, model.IdFloor, ceilT, floorT, floorT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-		floorP.Rect(x1Max, ybStart, y1Floor, zStart, lightStart, x2Min, ybStop, y2Floor, zStop, lightStop)
+		floorP.Rect(x1Max, ybStart, y1Floor, zStart, x2Min, ybStop, y2Floor, zStop)
 
 		if neighbor != nil {
 			neighborYCeil := vi.ZDistance(neighbor.CeilY)
@@ -315,7 +316,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
 				upperT := segment.Upper
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-				upperP.Rect(x1Max, yaStart, nYaStart, zStart, lightStart, x2Min, yaStop, nYaStop, zStop, lightStop)
+				upperP.Rect(x1Max, yaStart, nYaStart, zStart, x2Min, yaStop, nYaStop, zStop)
 			}
 			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
@@ -328,7 +329,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {
 				lowerT := segment.Lower
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, lightStart, x2Min, nYbStop, ybStop, zStop, lightStop)
+				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, x2Min, nYbStop, ybStop, zStop)
 			}
 			y1Floor = mathematic.MinF(nYbStart, ybStart)
 			y2Floor = mathematic.MinF(nYbStop, ybStop)
@@ -337,7 +338,7 @@ func (r *Portal) compileSector(vi *model.ViewMatrix, sector *model.Sector, qi *Q
 		} else {
 			middleT := segment.Middle
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
-			wallP.Rect(x1Max, yaStart, ybStart, zStart, lightStart, x2Min, yaStop, ybStop, zStop, lightStop)
+			wallP.Rect(x1Max, yaStart, ybStart, zStart, x2Min, yaStop, ybStop, zStop)
 		}
 	}
 

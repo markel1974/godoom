@@ -17,8 +17,8 @@ func NewCompiledSector() *CompiledSector {
 }
 
 // Setup initializes the compiledPolygons of the CompiledSector with the specified number of empty CompiledPolygon objects.
-func (cs *CompiledSector) Setup(count int) {
-	cs.compiledPolygons.Setup(count)
+func (cs *CompiledSector) Setup() {
+	cs.compiledPolygons.Setup()
 }
 
 // Bind associates the CompiledSector with a given Sector and resets its compiledPolygons collection.

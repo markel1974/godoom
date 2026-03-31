@@ -44,7 +44,7 @@ type CompiledPolygon struct {
 // NewCompiledPolygon creates and returns a pointer to an empty CompiledPolygon with preallocated points.
 func NewCompiledPolygon() *CompiledPolygon {
 	return &CompiledPolygon{
-		Points: make([]XYZ, 32),
+		Points: make([]XYZ, 4),
 		PLen:   0,
 	}
 }
@@ -60,16 +60,13 @@ func (p *CompiledPolygon) Triangle(x1 float64, y1 float64, y2 float64, z1 float6
 	p.Points[0].X = x1
 	p.Points[0].Y = y1
 	p.Points[0].Z = z1
-
 	p.Points[1].X = x2
 	p.Points[1].Y = y2
 	p.Points[1].Z = z2
-
 	p.Points[2].X = x2
 	p.Points[2].Y = y3
 	p.Points[2].Z = z2
-
-	p.PLen = 4
+	p.PLen = 3
 }
 
 // Rect sets the points of the polygon to form a rectangle based on the given coordinates and updates the point length to 4.
@@ -89,6 +86,7 @@ func (p *CompiledPolygon) Rect(x1 float64, y1 float64, y2 float64, z1 float64, x
 	p.PLen = 4
 }
 
+/*
 // AddPoint adds two consecutive points to the polygon and increments the point length counter accordingly.
 func (p *CompiledPolygon) AddPoint(x1 float64, y1 float64, z1 float64, x2 float64, y2 float64, z2 float64) {
 	p.Points[p.PLen].X = x1
@@ -100,6 +98,7 @@ func (p *CompiledPolygon) AddPoint(x1 float64, y1 float64, z1 float64, x2 float6
 	p.Points[p.PLen].Z = z2
 	p.PLen++
 }
+*/
 
 // Finalize prepares the CompiledPolygon for use by applying necessary final calculations or adjustments.
 func (p *CompiledPolygon) Finalize() {

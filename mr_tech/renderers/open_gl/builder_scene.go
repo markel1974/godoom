@@ -65,50 +65,59 @@ func (w *BuilderScene) GetSkyTexture() *textures.Texture {
 }
 
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
+// Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
 func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
+	// 1. Reset al Checkpoint Statico (azzeramento totale solo se mapBuilt è false)
 	w.fv.Reset()
 	w.dc.Reset()
 	w.fl.Reset()
 
-	w.cSky = nil
-	css, compiled := engine.Build()
-	for idx := compiled - 1; idx >= 0; idx-- {
-		current := css[idx]
+	// 2. Compilazione Mappa Statica (One-Off)
+	if !w.mapBuilt {
+		w.cSky = nil
+		css, compiled := engine.Build()
+		for idx := compiled - 1; idx >= 0; idx-- {
+			current := css[idx]
 
-		polygons := current.Get()
-		for k := len(polygons) - 1; k >= 0; k-- {
-			cp := polygons[k]
-			switch cp.Kind {
-			case model.IdWall, model.IdUpper, model.IdLower:
-				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
-				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
-				} else {
-					w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
-				}
-			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
-				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
-						w.cSky = sky
+			polygons := current.Get()
+			for k := len(polygons) - 1; k >= 0; k-- {
+				cp := polygons[k]
+				switch cp.Kind {
+				case model.IdWall, model.IdUpper, model.IdLower:
+					if cp.Kind == model.IdWall {
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+					} else if cp.Kind == model.IdUpper {
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+					} else {
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 					}
-				} else {
-					if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
-						w.cSky = sky
+				case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
+					if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+							w.cSky = sky
+						}
+					} else {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+							w.cSky = sky
+						}
 					}
 				}
 			}
 		}
+
+		w.pushLights(w.fl, engine.GetLights())
+
+		// Salvataggio dello stato statico!
+		w.fv.Freeze()
+		w.dc.Freeze()
+		w.fl.Freeze()
+		w.mapBuilt = true
 	}
 
-	w.pushLights(w.fl, engine.GetLights())
-
+	// 3. Geometria Dinamica (Ogni Frame)
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
 
-	//w.fv.Freeze()
-
-	//w.dc.Freeze()
-
+	// 4. Sort Globale e Batching
 	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
 }
 

@@ -4,7 +4,7 @@ layout (location = 1) out vec4 gNormal;
 
 in vec3 ViewPos;
 in vec3 NormalView;
-in vec2 TexCoords;
+in vec3 TexCoords;
 in float FragDepth;
 
 uniform sampler2D u_texture;

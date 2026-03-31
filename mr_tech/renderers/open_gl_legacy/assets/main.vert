@@ -1,12 +1,12 @@
 #version 330 core
 
 layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoords;
+layout (location = 1) in vec3 aTexCoords;
 layout (location = 2) in float aLightDist;
 layout (location = 3) in vec3 aLightCenterWorld; // Rinominato per coerenza
 layout (location = 4) in vec3 aNormal;
 
-out vec2 TexCoords;
+out vec3 TexCoords;
 out float LightDist;
 out float FragDepth;
 out vec3 ViewPos;

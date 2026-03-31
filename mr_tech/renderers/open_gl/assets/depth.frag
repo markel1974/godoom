@@ -1,7 +1,7 @@
 #version 330 core
-in vec2 TexCoords;
+in vec3 TexCoords;
 
-uniform sampler2D u_texture;
+uniform sampler2DArray u_texture;
 
 void main() {
     // Indispensabile per proiettare correttamente le ombre di sprite e grate

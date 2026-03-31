@@ -3,7 +3,7 @@
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
 
-in vec2 TexCoords;
+in vec3 TexCoords;
 in float LightDist;
 in float FragDepth;
 in vec3 ViewPos;

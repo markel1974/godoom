@@ -166,7 +166,7 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 
 	w.pushThings(w.fv, w.dc, vi, things, w.visibleSectors)
 
-	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
+	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.
@@ -175,7 +175,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 	if tex == nil {
 		return
 	}
-	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+	layer, ok := w.tex.Get(tex)
 	if !ok {
 		return
 	}
@@ -198,16 +198,16 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 
 	startIndices := w.fv.GetIndicesLen()
 
-	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop)
-	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
-	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
-	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop)
+	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop, layer)
+	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom, layer)
+	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom, layer)
+	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop, layer)
 
 	fv.AddTriangle(idx0, idx1, idx2)
 	fv.AddTriangle(idx0, idx2, idx3)
 
 	currentIndices := fv.GetIndicesLen()
-	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	dc.Compute(startIndices, currentIndices)
 }
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
@@ -225,7 +225,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		return nil
 	}
 
-	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+	layer, ok := w.tex.Get(tex)
 	if !ok {
 		return nil
 	}
@@ -240,7 +240,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute
-		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
+		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer)
 	}
 
 	for i := 1; i < len(segments)-1; i++ {
@@ -248,7 +248,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 	}
 
 	currentIndices := fv.GetIndicesLen()
-	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	dc.Compute(startIndices, currentIndices)
 	return nil
 }
 
@@ -275,7 +275,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		if tex == nil {
 			continue
 		}
-		texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+		layer, ok := w.tex.Get(tex)
 		if !ok {
 			continue
 		}
@@ -308,16 +308,16 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
 
-		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop)
-		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
-		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
-		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop)
+		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
+		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
+		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
+		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
 
 		fv.AddTriangle(idx0, idx1, idx2)
 		fv.AddTriangle(idx0, idx2, idx3)
 
 		currentIndices := fv.GetIndicesLen()
-		dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+		dc.Compute(startIndices, currentIndices)
 	}
 }
 

@@ -74,6 +74,9 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 
 	// 2. Compilazione Mappa Statica (One-Off)
 	if !w.mapBuilt {
+		w.fv.DeepReset()
+		w.dc.DeepReset()
+		w.fl.DeepReset()
 		w.cSky = nil
 		css, compiled := engine.Build()
 		for idx := compiled - 1; idx >= 0; idx-- {
@@ -118,7 +121,7 @@ func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
 
 	// 4. Sort Globale e Batching
-	w.dcRender.Prepare(w.dc.GetDrawCommands(), true)
+	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.
@@ -127,7 +130,7 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	if tex == nil {
 		return
 	}
-	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+	layer, ok := w.tex.Get(tex)
 	if !ok {
 		return
 	}
@@ -148,16 +151,16 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	startIndices := fv.GetIndicesLen()
 
 	// Invertiamo l'asse Z, OpenGL guarda in -Z
-	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop)
-	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
-	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
-	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop)
+	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop, layer)
+	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom, layer)
+	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom, layer)
+	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop, layer)
 
 	fv.AddTriangle(idx0, idx1, idx2)
 	fv.AddTriangle(idx0, idx2, idx3)
 
 	currentIndices := fv.GetIndicesLen()
-	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	dc.Compute(startIndices, currentIndices)
 }
 
 // pushFlat processes and renders a flat surface using the given polygon key, animation, and Z-coordinate.
@@ -176,7 +179,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		return nil
 	}
 
-	texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+	layer, ok := w.tex.Get(tex)
 	if !ok {
 		return nil
 	}
@@ -190,7 +193,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		v := seg.Start
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
-		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV))
+		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer))
 	}
 
 	for i := 1; i < len(segments)-1; i++ {
@@ -198,7 +201,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	}
 
 	currentIndices := fv.GetIndicesLen()
-	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	dc.Compute(startIndices, currentIndices)
 	return nil
 }
 
@@ -222,7 +225,7 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		if tex == nil {
 			continue
 		}
-		texId, normTexId, emissiveTexId, ok := w.tex.Get(tex)
+		layer, ok := w.tex.Get(tex)
 		if !ok {
 			continue
 		}
@@ -254,16 +257,16 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
 
-		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop)
-		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
-		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
-		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop)
+		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
+		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
+		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
+		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
 
 		fv.AddTriangle(idx0, idx1, idx2)
 		fv.AddTriangle(idx0, idx2, idx3)
 
 		currentIndices := fv.GetIndicesLen()
-		dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+		dc.Compute(startIndices, currentIndices)
 	}
 }
 

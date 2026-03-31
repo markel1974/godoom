@@ -17,6 +17,7 @@ const (
 	ShaderSkyLocProjection = ShaderSkyLoc(iota)
 	ShaderSkyLocView
 	ShaderSkyLocSky
+	ShaderSkyLocSkyLayer
 	ShaderSkyLocLast
 )
 
@@ -114,6 +115,7 @@ func (s *Sky) Compile(a IAssets) error {
 	s.table[ShaderSkyLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
 	s.table[ShaderSkyLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
 	s.table[ShaderSkyLocSky] = gl.GetUniformLocation(s.prg, gl.Str("u_sky\x00"))
+	s.table[ShaderSkyLocSkyLayer] = gl.GetUniformLocation(s.prg, gl.Str("u_skyLayer\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location in sky: %d", idx)
@@ -123,7 +125,7 @@ func (s *Sky) Compile(a IAssets) error {
 }
 
 // Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
-func (s *Sky) Render(texId uint32, normTexId uint32, skyEnabled bool) {
+func (s *Sky) Render(skyLayer float32, skyEnabled bool) {
 	if !skyEnabled {
 		return
 	}
@@ -137,12 +139,7 @@ func (s *Sky) Render(texId uint32, normTexId uint32, skyEnabled bool) {
 
 	gl.BindVertexArray(s.skyVAO)
 
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, texId)
-	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D, normTexId)
-	gl.Uniform1i(s.GetUniform(ShaderSkyLocSky), 0)
-
+	gl.Uniform1f(s.GetUniform(ShaderSkyLocSkyLayer), skyLayer)
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
 	gl.DepthMask(true)

@@ -1,8 +1,8 @@
 #version 330 core
 
-layout (location = 0) in vec2 aPos;
+layout (location = 0) in vec3 aPos;
 
-out vec2 TexCoords;
+out vec3 TexCoords;
 
 void main()
 {

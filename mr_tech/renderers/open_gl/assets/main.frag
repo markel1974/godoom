@@ -3,16 +3,15 @@
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
 
-in vec2 TexCoords;
+in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
 in vec3 NormalView;
 
-uniform sampler2D u_texture;
-uniform sampler2D u_normalMap;
+uniform sampler2DArray u_texture;
+uniform sampler2DArray u_normalMap;
+uniform sampler2DArray u_emissiveMap;
 uniform sampler2D u_ssao;
-uniform sampler2D u_emissiveMap;
-
 uniform vec2 u_screenResolution;
 uniform float u_emissiveIntensity;
 uniform float u_aoFactor;

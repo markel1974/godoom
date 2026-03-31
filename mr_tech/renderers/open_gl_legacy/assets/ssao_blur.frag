@@ -1,7 +1,7 @@
 #version 330 core
 out float FragColor;
 
-in vec2 TexCoords;
+in vec3 TexCoords;
 
 uniform sampler2D ssaoInput; // La texture ssaoColorBuffer prodotta dal pass precedente
 

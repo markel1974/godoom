@@ -1,100 +1,48 @@
 package open_gl
 
 import (
-	"math"
-	"sort"
 	"unsafe"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 )
 
-// ByMaterial is a slice of pointers to DrawCommand, sorted based on texture, normal texture, and emissive texture IDs.
-type ByMaterial []*DrawCommand
-
-func (a ByMaterial) Len() int { return len(a) }
-
-func (a ByMaterial) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-
-func (a ByMaterial) Less(i, j int) bool {
-	if a[i].texId != a[j].texId {
-		return a[i].texId < a[j].texId
-	}
-	if a[i].normTexId != a[j].normTexId {
-		return a[i].normTexId < a[j].normTexId
-	}
-	return a[i].emissiveTexId < a[j].emissiveTexId
-}
-
-// DrawCommandsRender manages batched rendering commands using multi-draw elements for indexed geometry.
+// DrawCommandsRender manages batched GPU drawing commands, storing index counts and memory offsets for rendering.
 type DrawCommandsRender struct {
-	dc []*DrawCommand
-	mc []int32
-	mi []unsafe.Pointer
+	mc    []int32
+	mi    []unsafe.Pointer
+	count int32
 }
 
-// NewDrawCommandsRender creates and returns a new instance of DrawCommandsRender with pre-allocated capacity.
+// NewDrawCommandsRender initializes and returns a new instance of DrawCommandsRender with preallocated internal arrays.
 func NewDrawCommandsRender() *DrawCommandsRender {
-	const startSize = 128
 	return &DrawCommandsRender{
-		mc: make([]int32, startSize),
-		mi: make([]unsafe.Pointer, startSize),
-		dc: make([]*DrawCommand, startSize),
+		mc:    make([]int32, 1024),
+		mi:    make([]unsafe.Pointer, 1024),
+		count: 0,
 	}
 }
 
-// Prepare initializes the DrawCommandsRender instance with a list of DrawCommand objects and sorts them by material properties.
-func (w *DrawCommandsRender) Prepare(dc []*DrawCommand, sortRequired bool) {
+// Prepare initializes the draw command buffers and sets up data for rendering based on the provided draw commands.
+func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	dcLen := len(dc)
-	if dcLen >= cap(w.mc) {
-		newSize := dcLen * 2
-		w.mc = make([]int32, newSize)
-		w.mi = make([]unsafe.Pointer, newSize)
-		w.dc = make([]*DrawCommand, newSize)
-	}
-	w.dc = w.dc[:dcLen]
-	copy(w.dc, dc)
-	if sortRequired {
-		sort.Sort(ByMaterial(w.dc))
-	}
-}
-
-// Render processes and renders a list of DrawCommand objects into multi-draw elements for efficient batching.
-func (w *DrawCommandsRender) Render() {
-	if len(w.dc) == 0 {
+	w.count = int32(dcLen)
+	if dcLen == 0 {
 		return
 	}
-	index := int32(0)
-	var lastTex, lastNorm, lastEmiss uint32 = math.MaxUint32, math.MaxUint32, math.MaxUint32
-	for _, cmd := range w.dc {
-		if cmd.indexCount <= 0 {
-			continue
-		}
-		if cmd.texId != lastTex || cmd.normTexId != lastNorm || cmd.emissiveTexId != lastEmiss {
-			if index > 0 {
-				gl.MultiDrawElements(gl.TRIANGLES, &w.mc[0], gl.UNSIGNED_INT, &w.mi[0], index)
-				index = 0
-			}
-			if lastTex != cmd.texId {
-				gl.ActiveTexture(gl.TEXTURE0)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.texId)
-				lastTex = cmd.texId
-			}
-			if lastNorm != cmd.normTexId {
-				gl.ActiveTexture(gl.TEXTURE1)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.normTexId)
-				lastNorm = cmd.normTexId
-			}
-			if lastEmiss != cmd.emissiveTexId {
-				gl.ActiveTexture(gl.TEXTURE5)
-				gl.BindTexture(gl.TEXTURE_2D, cmd.emissiveTexId)
-				lastEmiss = cmd.emissiveTexId
-			}
-		}
-		w.mc[index] = cmd.indexCount
-		w.mi[index] = gl.PtrOffset(int(cmd.firstIndex * 4))
-		index++
+	if dcLen > cap(w.mc) {
+		w.mc = make([]int32, dcLen*2)
+		w.mi = make([]unsafe.Pointer, dcLen*2)
 	}
-	if index > 0 {
-		gl.MultiDrawElements(gl.TRIANGLES, &w.mc[0], gl.UNSIGNED_INT, &w.mi[0], index)
+	for i, cmd := range dc {
+		w.mc[i] = cmd.indexCount
+		w.mi[i] = gl.PtrOffset(int(cmd.firstIndex * 4))
 	}
+}
+
+// Render executes the rendering process for the prepared draw commands using multi-draw elements in OpenGL.
+func (w *DrawCommandsRender) Render() {
+	if w.count == 0 {
+		return
+	}
+	gl.MultiDrawElements(gl.TRIANGLES, &w.mc[0], gl.UNSIGNED_INT, &w.mi[0], w.count)
 }

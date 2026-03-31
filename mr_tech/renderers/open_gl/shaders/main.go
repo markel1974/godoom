@@ -95,7 +95,7 @@ func (s *Main) Init() error {
 		strideBytes := s.stride
 		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
 		gl.EnableVertexAttribArray(0)
-		gl.VertexAttribPointer(1, 2, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
+		gl.VertexAttribPointer(1, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
 		gl.EnableVertexAttribArray(1)
 	}
 

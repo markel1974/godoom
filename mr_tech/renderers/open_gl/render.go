@@ -106,7 +106,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		calibration := w.engine.GetCalibration()
-		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration); err != nil {
+		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration, w.tex); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {
@@ -137,12 +137,15 @@ func (w *RenderOpenGL) doRender() {
 		commands := w.builder.GetDrawCommands()
 		vert, vertLen, indices, indicesLen := w.builder.GetVertices()
 		light, lightsCount := w.builder.GetLights()
-		skyTexId, skyNormalTexId, skyEmissiveTexId := uint32(0), uint32(0), uint32(0)
+		// CORRETTO
+		skyLayer := float32(-1.0)
 		skyEnabled := false
 		if cSky != nil {
-			skyTexId, skyNormalTexId, skyEmissiveTexId, skyEnabled = w.tex.Get(cSky)
+			skyLayer, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyTexId, skyNormalTexId, skyEmissiveTexId, light, lightsCount)
+		// 2. BIND GLOBALE TEXTURE ARRAYS (Zero State Changes negli shader)
+
+		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyLayer, light, lightsCount)
 	})
 }
 

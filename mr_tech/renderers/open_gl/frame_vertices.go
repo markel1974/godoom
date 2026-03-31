@@ -18,7 +18,7 @@ func NewFrameVertices(maxVerts int) *FrameVertices {
 	return &FrameVertices{
 		vertices: make([]float32, maxVerts*5),
 		indices:  make([]uint32, maxVerts*6),
-		stride:   5,
+		stride:   6,
 	}
 }
 
@@ -57,7 +57,7 @@ func (w *FrameVertices) VerticesStride() int32 {
 
 // AddVertex adds a vertex to the FrameVertices at the specified coordinates and texture mapping values.
 // It returns the index of the added vertex.
-func (w *FrameVertices) AddVertex(x, y, z, u, v float32) uint32 {
+func (w *FrameVertices) AddVertex(x, y, z, u, v, texLayer float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount > int32(len(w.vertices)) {
@@ -68,6 +68,7 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v float32) uint32 {
 	w.vertices[head+2] = z
 	w.vertices[head+3] = u
 	w.vertices[head+4] = v
+	w.vertices[head+5] = texLayer
 
 	slot := w.verticesSlot
 	w.verticesSlot++

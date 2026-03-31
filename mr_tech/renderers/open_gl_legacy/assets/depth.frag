@@ -1,5 +1,5 @@
 #version 330 core
-in vec2 TexCoords;
+in vec3 TexCoords;
 
 uniform sampler2D u_texture;
 

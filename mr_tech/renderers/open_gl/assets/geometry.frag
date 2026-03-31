@@ -3,9 +3,9 @@ layout (location = 0) out vec4 gPositionDepth;
 layout (location = 1) out vec4 gNormal;
 
 in vec3 ViewPos;
-in vec2 TexCoords;
+in vec3 TexCoords;
 in float FragDepth;
-uniform sampler2D u_texture;
+uniform sampler2DArray u_texture;
 
 void main() {
     // Early discard per la trasparenza
@@ -13,7 +13,7 @@ void main() {
 
     // Scrive Posizione e Profondità (necessari per SSAO)
     gPositionDepth = vec4(ViewPos, FragDepth);
-    
+
     // Calcoliamo la variazione di ViewPos rispetto alle coordinate schermo X e Y
     vec3 dp1 = dFdx(ViewPos);
     vec3 dp2 = dFdy(ViewPos);

@@ -3,14 +3,14 @@
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
 
-in vec2 TexCoords;
+in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
 in vec3 NormalView;
 in vec4 FragPosLightFlash;
 
-uniform sampler2D u_texture;
-uniform sampler2D u_normalMap;
+uniform sampler2DArray u_texture;
+uniform sampler2DArray u_normalMap;
 uniform sampler2DShadow u_flashShadowMap;
 uniform mat4 u_view;
 uniform mat4 u_invView;
@@ -96,8 +96,8 @@ vec3 calculateNormal() {
     vec3 unpacked = (mapColor * 2.0) - 1.0;
     vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
-    vec2 duv1 = dFdx(TexCoords);
-    vec2 duv2 = dFdy(TexCoords);
+    vec2 duv1 = dFdx(TexCoords.xy);
+    vec2 duv2 = dFdy(TexCoords.xy);
 
     vec3 dp2perp = cross(dp2, geoNormal);
     vec3 dp1perp = cross(geoNormal, dp1);

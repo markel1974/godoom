@@ -1,5 +1,7 @@
 #version 330 core
+
 layout (location = 0) in vec2 aPos;
+
 out vec3 v_ray;
 
 uniform mat4 u_projection;

@@ -31,6 +31,7 @@ type IShader interface {
 
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
+	tex           *Textures
 	main          *shaders.Main
 	sky           *shaders.Sky
 	geometry      *shaders.Geometry
@@ -49,6 +50,7 @@ type Shaders struct {
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
 func NewShaders() *Shaders {
 	c := &Shaders{
+		tex:           nil,
 		main:          nil,
 		sky:           nil,
 		geometry:      nil,
@@ -65,8 +67,9 @@ func NewShaders() *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *model.Calibration) error {
+func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *model.Calibration, tex *Textures) error {
 	a := &Assets{}
+	w.tex = tex
 	w.metrics = shaders.NewMapMetrics()
 	const shadowWidth = 1024
 	const shadowHeight = 1024
@@ -122,7 +125,14 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc *DrawCommandsRender, skyEnabled bool, skyTexId, skyNormalTexId, skyEmissiveTexId uint32, frameLights []float32, numLights int32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc *DrawCommandsRender, skyEnabled bool, skyLayer float32, frameLights []float32, numLights int32) {
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetNormalArray())
+	gl.ActiveTexture(gl.TEXTURE5)
+	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetEmissiveArray())
+
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
@@ -162,8 +172,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 
-	// SKYBOX
-	w.sky.Render(skyTexId, skyNormalTexId, skyEnabled)
+	// SKYBOX (Ora accetta l'indice del layer 3D)
+	w.sky.Render(skyLayer, skyEnabled)
 	// BLOOM
 	w.bloom.Render(w.post.GetBrightBuffer())
 	// POST

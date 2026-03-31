@@ -49,9 +49,9 @@ func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 // It organizes textures, vertex data, draw commands, lighting, and visibility checks for a frame.
 type BuilderTraverse struct {
 	tex               *Textures
-	vertices          *FrameVertices
-	drawCommands      *DrawCommands
-	frameLights       *FrameLights
+	fv                *FrameVertices
+	dc                *DrawCommands
+	fl                *FrameLights
 	visibleSectors    map[*model.Sector]bool
 	processedPolygons map[PolyKey]bool
 }
@@ -60,9 +60,9 @@ type BuilderTraverse struct {
 func NewBuilderTraverse(vertices *FrameVertices, commands *DrawCommands, lights *FrameLights, tex *Textures) *BuilderTraverse {
 	return &BuilderTraverse{
 		tex:               tex,
-		vertices:          vertices,
-		drawCommands:      commands,
-		frameLights:       lights,
+		fv:                vertices,
+		dc:                commands,
+		fl:                lights,
 		visibleSectors:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 	}
@@ -70,9 +70,9 @@ func NewBuilderTraverse(vertices *FrameVertices, commands *DrawCommands, lights 
 
 // Reset clears all data stored in the BuilderTraverse, resetting its vertices, draw commands, lights, and sector data maps.
 func (w *BuilderTraverse) reset() {
-	w.vertices.Reset()
-	w.drawCommands.Reset()
-	w.frameLights.Reset()
+	w.fv.Reset()
+	w.dc.Reset()
+	w.fl.Reset()
 	for k := range w.visibleSectors {
 		delete(w.visibleSectors, k)
 	}
@@ -105,11 +105,11 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *
 				w.processedPolygons[key] = true
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(vi, key, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
 				} else {
-					w.pushWall(vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -119,12 +119,12 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *
 				w.processedPolygons[key] = true
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
 						cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
 						cSky = sky
 					}
 				}
@@ -132,13 +132,13 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) *
 		}
 	}
 
-	w.pushLights(lights, w.visibleSectors)
-	w.pushThings(vi, things, w.visibleSectors)
+	w.pushLights(w.fl, lights, w.visibleSectors)
+	w.pushThings(w.fv, w.dc, vi, things, w.visibleSectors)
 	return cSky
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.
-func (w *BuilderTraverse) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -164,22 +164,22 @@ func (w *BuilderTraverse) pushWall(vi *model.ViewMatrix, cp PolyKey, anim *textu
 	wx2 := (cp.tx2 * float32(sin)) + (cp.tz2 * float32(cos)) + float32(viX)
 	wy2 := -(cp.tx2 * float32(cos)) + (cp.tz2 * float32(sin)) + float32(vizY)
 
-	startIndices := w.vertices.GetIndicesLen()
+	startIndices := w.fv.GetIndicesLen()
 
-	idx0 := w.vertices.AddVertex(wx1, zTop, -wy1, u0, vTop)
-	idx1 := w.vertices.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
-	idx2 := w.vertices.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
-	idx3 := w.vertices.AddVertex(wx2, zTop, -wy2, u1, vTop)
+	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop)
+	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom)
+	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom)
+	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop)
 
-	w.vertices.AddTriangle(idx0, idx1, idx2)
-	w.vertices.AddTriangle(idx0, idx2, idx3)
+	fv.AddTriangle(idx0, idx1, idx2)
+	fv.AddTriangle(idx0, idx2, idx3)
 
-	currentIndices := w.vertices.GetIndicesLen()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	currentIndices := fv.GetIndicesLen()
+	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 }
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
-func (w *BuilderTraverse) pushFlat(cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
 	if anim.Kind() == int(model.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
@@ -200,7 +200,7 @@ func (w *BuilderTraverse) pushFlat(cp PolyKey, anim *textures.Animation, zF floa
 	texW, texH := tex.Size()
 	_, scaleH := anim.ScaleFactor()
 
-	startIndices := w.vertices.GetIndicesLen()
+	startIndices := fv.GetIndicesLen()
 
 	indices := make([]uint32, len(segments))
 	for i, seg := range segments {
@@ -208,20 +208,20 @@ func (w *BuilderTraverse) pushFlat(cp PolyKey, anim *textures.Animation, zF floa
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute
-		indices[i] = w.vertices.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
+		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV)
 	}
 
 	for i := 1; i < len(segments)-1; i++ {
-		w.vertices.AddTriangle(indices[0], indices[i], indices[i+1])
+		fv.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
-	currentIndices := w.vertices.GetIndicesLen()
-	w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+	currentIndices := fv.GetIndicesLen()
+	dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	return nil
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BuilderTraverse) pushThings(vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
@@ -271,26 +271,26 @@ func (w *BuilderTraverse) pushThings(vi *model.ViewMatrix, things []model.IThing
 		zBottom := float32(t.GetFloorY())
 		zTop := zBottom + float32(height)
 
-		startIndices := w.vertices.GetIndicesLen()
+		startIndices := fv.GetIndicesLen()
 
 		u0, u1 := float32(0.0), float32(1.0)
 		vTop, vBottom := float32(0.0), float32(1.0)
 
-		idx0 := w.vertices.AddVertex(v1x, zTop, -v1y, u0, vTop)
-		idx1 := w.vertices.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
-		idx2 := w.vertices.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
-		idx3 := w.vertices.AddVertex(v2x, zTop, -v2y, u1, vTop)
+		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop)
+		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom)
+		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom)
+		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop)
 
-		w.vertices.AddTriangle(idx0, idx1, idx2)
-		w.vertices.AddTriangle(idx0, idx2, idx3)
+		fv.AddTriangle(idx0, idx1, idx2)
+		fv.AddTriangle(idx0, idx2, idx3)
 
-		currentIndices := w.vertices.GetIndicesLen()
-		w.drawCommands.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
+		currentIndices := fv.GetIndicesLen()
+		dc.Compute(texId, normTexId, emissiveTexId, startIndices, currentIndices)
 	}
 }
 
 // pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
-func (w *BuilderTraverse) pushLights(lights []*model.Light, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushLights(fl *FrameLights, lights []*model.Light, sectors map[*model.Sector]bool) {
 	if len(lights) == 0 {
 		return
 	}
@@ -299,6 +299,6 @@ func (w *BuilderTraverse) pushLights(lights []*model.Light, sectors map[*model.S
 		//if _, ok := sectors[l.GetSector()]; !ok {
 		//	continue
 		//}
-		w.frameLights.Create(l)
+		fl.Create(l)
 	}
 }

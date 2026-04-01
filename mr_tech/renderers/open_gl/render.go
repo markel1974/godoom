@@ -50,15 +50,15 @@ type RenderOpenGL struct {
 	shaders         *Shaders
 	tex             *Textures
 	builder         IBuilder
-	screenWidth     int
-	screenHeight    int
 	enableClear     bool
 	builderScene    *BuilderScene
 	builderTraverse *BuilderTraverse
+	startWidth      int32
+	startHeight     int32
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
-func NewRender() *RenderOpenGL {
+func NewRender(w, h int32) *RenderOpenGL {
 	tex := NewTextures()
 
 	r := &RenderOpenGL{
@@ -66,13 +66,13 @@ func NewRender() *RenderOpenGL {
 		vi:              model.NewViewMatrix(),
 		player:          nil,
 		win:             nil,
-		screenWidth:     0,
-		screenHeight:    0,
 		enableClear:     false,
 		shaders:         nil,
 		builderScene:    NewBuilderScene(tex),
 		builderTraverse: NewBuilderTraverse(tex),
 		tex:             tex,
+		startWidth:      w,
+		startHeight:     h,
 	}
 	r.builder = r.builderTraverse
 	return r
@@ -81,8 +81,6 @@ func NewRender() *RenderOpenGL {
 // Setup initializes the RenderOpenGL instance by configuring essential properties based on the provided engine instance.
 func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.engine = en
-	w.screenWidth = w.engine.GetWidth()
-	w.screenHeight = w.engine.GetHeight()
 	w.player = en.GetPlayer()
 	w.shaders = NewShaders()
 	return nil
@@ -90,25 +88,25 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 
 // doInitialize initializes the OpenGL rendering environment and compiles shaders and textures for the renderer.
 func (w *RenderOpenGL) doInitialize() error {
+	bounds := pixels.R(0, 0, float64(w.startWidth), float64(w.startHeight))
 	cfg := pixels.WindowConfig{
-		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*scaleFactor, float64(w.screenHeight)*scaleFactor),
+		Bounds:      bounds,
 		VSync:       true,
 		Undecorated: false,
 		Smooth:      false,
+		Resizable:   true,
 	}
 	var winErr error
 	w.win, winErr = pixels.NewGLWindow(cfg)
 	if winErr != nil {
 		return winErr
 	}
-
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
-		fbW, fbH := w.win.GetFramebufferSize()
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		calibration := w.engine.GetCalibration()
-		if err := w.shaders.Setup(int32(fbW), int32(fbH), vStride, lStride, calibration, w.tex); err != nil {
+		if err := w.shaders.Setup(vStride, lStride, calibration, w.tex); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {
@@ -139,14 +137,11 @@ func (w *RenderOpenGL) doRender() {
 		commands := w.builder.GetDrawCommands()
 		vert, vertLen, indices, indicesLen := w.builder.GetVertices()
 		light, lightsCount := w.builder.GetLights()
-		// CORRETTO
 		skyLayer := float32(-1.0)
 		skyEnabled := false
 		if cSky != nil {
 			skyLayer, skyEnabled = w.tex.Get(cSky)
 		}
-		// 2. BIND GLOBALE TEXTURE ARRAYS (Zero State Changes negli shader)
-
 		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyLayer, light, lightsCount)
 	})
 }

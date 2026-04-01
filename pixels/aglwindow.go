@@ -200,12 +200,8 @@ func (w *GLWindow) SwapBuffers() {
 	executor.Thread.Call(func() {
 		_, _, oldW, oldH := intBounds(w.bounds)
 		newW, newH := w.window.GetSize()
-		w.bounds = w.bounds.ResizedMin(w.bounds.Size().Add(MakeVec(
-			float64(newW-oldW),
-			float64(newH-oldH),
-		)))
+		w.bounds = w.bounds.ResizedMin(w.bounds.Size().Add(MakeVec(float64(newW-oldW), float64(newH-oldH))))
 	})
-
 	w.canvas.SetBounds(w.bounds)
 
 	executor.Thread.Call(func() {

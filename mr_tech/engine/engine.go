@@ -9,8 +9,6 @@ import (
 // Engine represents a core game simulation system, managing entities, sectors, player, and rendering configurations.
 type Engine struct {
 	portal     *portal.Portal
-	w          int
-	h          int
 	maxQueue   int
 	viewFactor float64
 	things     *model.Things
@@ -21,11 +19,9 @@ type Engine struct {
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
-func NewEngine(w int, h int, maxQueue int, viewFactor float64) *Engine {
+func NewEngine(maxQueue int, viewFactor float64) *Engine {
 	return &Engine{
 		portal:     nil,
-		w:          w,
-		h:          h,
 		maxQueue:   maxQueue,
 		viewFactor: viewFactor,
 		things:     nil,
@@ -39,16 +35,6 @@ func NewEngine(w int, h int, maxQueue int, viewFactor float64) *Engine {
 // GetPlayer returns the current player instance managed by the engine.
 func (e *Engine) GetPlayer() *model.ThingPlayer {
 	return e.player
-}
-
-// GetWidth returns the width of the Engine's configured screen or viewport as an integer value.
-func (e *Engine) GetWidth() int {
-	return e.w
-}
-
-// GetHeight returns the height of the engine in pixels.
-func (e *Engine) GetHeight() int {
-	return e.h
 }
 
 // GetTextures retrieves the ITextures instance, providing access to texture names and indexed textures.

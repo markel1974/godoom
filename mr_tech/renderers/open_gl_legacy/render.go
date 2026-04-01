@@ -26,12 +26,10 @@ type SpriteNode struct {
 
 // RenderOpenGL is responsible for managing and executing OpenGL rendering operations for the game environment.
 type RenderOpenGL struct {
-	engine       *engine.Engine
-	vi           *model.ViewMatrix
-	player       *model.ThingPlayer
-	win          *pixels.GLWindow
-	screenWidth  int
-	screenHeight int
+	engine *engine.Engine
+	vi     *model.ViewMatrix
+	player *model.ThingPlayer
+	win    *pixels.GLWindow
 
 	targetSectors      map[int]bool
 	targetIdx          int
@@ -48,18 +46,18 @@ type RenderOpenGL struct {
 	shaders *Shaders
 	tex     *Textures
 	builder *BatchBuilder
+	w       int32
+	h       int32
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
-func NewRender() *RenderOpenGL {
+func NewRender(w, h int32) *RenderOpenGL {
 	tex := NewTextures()
 	r := &RenderOpenGL{
 		engine:        nil,
 		vi:            model.NewViewMatrix(),
 		player:        nil,
 		win:           nil,
-		screenWidth:   0,
-		screenHeight:  0,
 		targetSectors: map[int]bool{0: true},
 		enableClear:   false,
 		debug:         false,
@@ -68,6 +66,8 @@ func NewRender() *RenderOpenGL {
 		builder:       NewBatchBuilder(tex),
 		tex:           tex,
 		bobPhase:      0.0,
+		w:             w,
+		h:             h,
 	}
 	return r
 }
@@ -75,8 +75,6 @@ func NewRender() *RenderOpenGL {
 // Setup initializes the RenderOpenGL instance by configuring essential properties based on the provided engine instance.
 func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.engine = en
-	w.screenWidth = w.engine.GetWidth()
-	w.screenHeight = w.engine.GetHeight()
 	w.player = en.GetPlayer()
 	return nil
 }
@@ -84,7 +82,7 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 // doInitialize initializes the OpenGL rendering environment and compiles shaders and textures for the renderer.
 func (w *RenderOpenGL) doInitialize() error {
 	cfg := pixels.WindowConfig{
-		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*scaleFactor, float64(w.screenHeight)*scaleFactor),
+		Bounds:      pixels.R(0, 0, float64(w.w)*scaleFactor, float64(w.h)*scaleFactor),
 		VSync:       true,
 		Undecorated: false,
 		Smooth:      false,

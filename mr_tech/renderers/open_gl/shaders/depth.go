@@ -22,8 +22,8 @@ const (
 type Depth struct {
 	prg            uint32
 	table          [DepthLocLast]int32
-	shadowWidth    int32
-	shadowHeight   int32
+	sWidth         int32
+	sHeight        int32
 	roomShadowFbo  uint32
 	roomShadowTex  uint32
 	flashShadowFbo uint32
@@ -31,13 +31,13 @@ type Depth struct {
 	roomMatrix     [16]float32
 	flashMatrix    [16]float32
 	shadows        bool
+	metrics        *MapMetrics
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(shadowWidth, shadowHeight int32) *Depth {
+func NewDepth(m *MapMetrics) *Depth {
 	return &Depth{
-		shadowWidth:  shadowWidth,
-		shadowHeight: shadowHeight,
+		metrics: m,
 	}
 }
 
@@ -82,8 +82,8 @@ func (s *Depth) Compile(assets IAssets) error {
 	const fragId = "depth.frag"
 	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertId, fragId)
 
-	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
-	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
+	//s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
+	//s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 
 	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
@@ -107,6 +107,77 @@ func (s *Depth) Compile(assets IAssets) error {
 		}
 	}
 	return nil
+}
+
+// UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
+func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
+	s.roomMatrix = roomSpaceMatrix
+	s.flashMatrix = flashSpaceMatrix
+}
+
+// Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
+func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
+	if !s.shadows {
+		return
+	}
+
+	sWidth, sHeight := s.metrics.GetShadowSize()
+	if sWidth != s.sWidth || sHeight != s.sHeight {
+		s.allocate(sWidth, sHeight)
+	}
+
+	gl.BindVertexArray(mainVao)
+
+	gl.Disable(gl.CULL_FACE)
+	gl.Enable(gl.POLYGON_OFFSET_FILL)
+
+	// FIX: Attiviamo il clamp della profondità.
+	// Impedisce che la geometria sparisca dalla mappa delle ombre
+	// quando la telecamera ci finisce letteralmente addosso.
+	gl.Enable(gl.DEPTH_CLAMP)
+
+	gl.Viewport(0, 0, sWidth, sHeight)
+
+	// --- 1. OMBRE STANZA (Ortografica) ---
+	gl.PolygonOffset(2.0, 4.0)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
+	gl.Clear(gl.DEPTH_BUFFER_BIT)
+	gl.UseProgram(s.GetProgram())
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
+	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
+	renderScene()
+
+	// --- 2. OMBRE TORCIA (Prospettica) ---
+	gl.PolygonOffset(0.5, 1.0)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
+	gl.Clear(gl.DEPTH_BUFFER_BIT)
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
+	renderScene()
+
+	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
+	gl.Disable(gl.DEPTH_CLAMP)
+	gl.Disable(gl.POLYGON_OFFSET_FILL)
+	gl.Viewport(0, 0, fbw, fbh)
+}
+
+func (s *Depth) allocate(width, height int32) {
+	s.sWidth = width
+	s.sHeight = height
+	// 1. PULIZIA PREVENTIVA (Prevenzione Memory Leak)
+	if s.roomShadowFbo != 0 {
+		gl.DeleteFramebuffers(1, &s.roomShadowFbo)
+		gl.DeleteTextures(1, &s.roomShadowTex)
+	}
+	if s.flashShadowFbo != 0 {
+		gl.DeleteFramebuffers(1, &s.flashShadowFbo)
+		gl.DeleteTextures(1, &s.flashShadowTex)
+	}
+
+	// 2. CREAZIONE DELLE NUOVE RISORSE
+	// roomShadowFbo e roomShadowTex gestiscono le ombre delle luci ambientali.
+	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.sWidth, s.sHeight)
+	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (Flashlight).
+	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.sWidth, s.sHeight)
 }
 
 // createDepthMap initializes a depth map with given width and height and returns the framebuffer and texture IDs.
@@ -135,50 +206,4 @@ func (s *Depth) createDepthMap(width, height int32) (uint32, uint32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	return fbo, tex
-}
-
-// UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
-	s.roomMatrix = roomSpaceMatrix
-	s.flashMatrix = flashSpaceMatrix
-}
-
-// Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
-func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
-	if !s.shadows {
-		return
-	}
-
-	gl.BindVertexArray(mainVao)
-
-	gl.Disable(gl.CULL_FACE)
-	gl.Enable(gl.POLYGON_OFFSET_FILL)
-
-	// FIX: Attiviamo il clamp della profondità.
-	// Impedisce che la geometria sparisca dalla mappa delle ombre
-	// quando la telecamera ci finisce letteralmente addosso.
-	gl.Enable(gl.DEPTH_CLAMP)
-
-	gl.Viewport(0, 0, s.shadowWidth, s.shadowHeight)
-
-	// --- 1. OMBRE STANZA (Ortografica) ---
-	gl.PolygonOffset(2.0, 4.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
-	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UseProgram(s.GetProgram())
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
-	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
-	renderScene()
-
-	// --- 2. OMBRE TORCIA (Prospettica) ---
-	gl.PolygonOffset(0.5, 1.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
-	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
-	renderScene()
-
-	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
-	gl.Disable(gl.DEPTH_CLAMP)
-	gl.Disable(gl.POLYGON_OFFSET_FILL)
-	gl.Viewport(0, 0, fbw, fbh)
 }

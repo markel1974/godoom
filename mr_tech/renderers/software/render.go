@@ -17,34 +17,32 @@ const _scale = 1
 
 // Render is a struct responsible for handling software-based 2D rendering functionality.
 type Render struct {
-	win         *pixels.GLWindow
-	mainSurface *pixels.PictureRGBA
-	mainMatrix  pixels.Matrix
-	mainSprite  *pixels.Sprite
-	enableClear bool
-	viewMode    int
-
-	screenWidth        int
-	screenHeight       int
+	win                *pixels.GLWindow
+	mainSurface        *pixels.PictureRGBA
+	mainMatrix         pixels.Matrix
+	mainSprite         *pixels.Sprite
+	enableClear        bool
+	viewMode           int
 	targetSectors      map[int]bool
 	targetIdx          int
 	targetLastCompiled int
 	targetEnabled      bool
 	targetId           string
 	dp                 *DrawPolygon
-
-	engine   *engine.Engine
-	vi       *model.ViewMatrix
-	player   *model.ThingPlayer
-	debug    bool
-	debugIdx int
+	engine             *engine.Engine
+	vi                 *model.ViewMatrix
+	player             *model.ThingPlayer
+	w                  int32
+	h                  int32
+	debug              bool
+	debugIdx           int
 }
 
 // NewRender initializes and returns a new instance of Render with default values.
-func NewRender() *Render {
+func NewRender(w, h int32) *Render {
 	return &Render{
-		screenWidth:        0,
-		screenHeight:       0,
+		w:                  w,
+		h:                  h,
 		targetIdx:          0,
 		targetSectors:      map[int]bool{0: true},
 		targetLastCompiled: 0,
@@ -57,9 +55,7 @@ func NewRender() *Render {
 // Setup initializes the Render instance with the specified portal, player, and textures.
 func (w *Render) Setup(engine *engine.Engine) error {
 	w.engine = engine
-	w.screenWidth = engine.GetWidth()
-	w.screenHeight = engine.GetHeight()
-	w.dp = NewDrawPolygon(w.screenWidth, w.screenHeight)
+	w.dp = NewDrawPolygon(int(w.w), int(w.h))
 	w.player = engine.GetPlayer()
 	w.viewMode = -1
 	w.enableClear = false
@@ -73,7 +69,7 @@ func (w *Render) Setup(engine *engine.Engine) error {
 func (w *Render) doInitialize() {
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	cfg := pixels.WindowConfig{
-		Bounds:      pixels.R(0, 0, float64(w.screenWidth)*_scale, float64(w.screenHeight)*_scale),
+		Bounds:      pixels.R(0, 0, float64(w.w)*_scale, float64(w.h)*_scale),
 		VSync:       true,
 		Undecorated: false,
 		Smooth:      false,
@@ -85,7 +81,7 @@ func (w *Render) doInitialize() {
 	}
 	center := w.win.Bounds().Center()
 
-	w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+	w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.w), float64(w.h)))
 	w.mainSprite = pixels.NewSprite()
 	w.mainSprite.SetCached(pixels.CacheModeUpdate)
 	w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
@@ -204,7 +200,7 @@ func (w *Render) doRun() {
 func (w *Render) doRender() {
 	if w.enableClear {
 		w.win.Clear(color.Black)
-		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.screenWidth), float64(w.screenHeight)))
+		w.mainSurface = pixels.NewPictureRGBA(pixels.R(float64(0), float64(0), float64(w.w), float64(w.h)))
 		w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
 	}
 	w.win.Begin()
@@ -255,8 +251,8 @@ func (w *Render) RenderSector(sector *model.Sector) {
 		}
 	}
 
-	xFactor := (float64(w.screenWidth) / 2) / maxX
-	yFactor := (float64(w.screenHeight) / 2) / maxY
+	xFactor := (float64(w.w) / 2) / maxX
+	yFactor := (float64(w.h) / 2) / maxY
 
 	var t []model.XYZ
 	for _, v := range segments {
@@ -430,7 +426,7 @@ func (w *Render) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMat
 		//TODO queue
 		go func(polygons []*model.CompiledPolygon) {
 			//TODO each renderer must have a separate DrawPolygon
-			dp := NewDrawPolygon(w.screenWidth, w.screenHeight)
+			dp := NewDrawPolygon(int(w.w), int(w.h))
 			for k := len(polygons) - 1; k >= 0; k-- {
 				cp := polygons[k]
 				dp.Setup(surface, cp.Points, cp.PLen, cp.Kind)

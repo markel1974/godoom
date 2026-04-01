@@ -17,6 +17,8 @@ type MapMetrics struct {
 	lightCamY      float32
 	mapCenterX     float32
 	mapCenterZ     float32
+	shadowWidth    int32
+	shadowHeight   int32
 	flashZNear     float32
 	flashZFar      float32
 	flashFovDeg    float32
@@ -31,10 +33,10 @@ type MapMetrics struct {
 }
 
 // NewMapMetrics initializes and returns a new instance of MapMetrics with predefined settings.
-func NewMapMetrics(fbw, fbh int32) *MapMetrics {
+func NewMapMetrics() *MapMetrics {
 	m := &MapMetrics{}
-	m.SetOrthoSize(float32(fbw), 0.0, 8192.0)
-	m.SetFlash(85.0, 0.1, 2048.0, fbw, fbh)
+	m.SetOrthoSize(float32(640), 0.0, 8192.0)
+	m.SetFlash(85.0, 0.1, 2048.0, 1024, 1024)
 	m.SetMapCenter(0.0, 0.0, 0.0)
 	return m
 }
@@ -45,6 +47,11 @@ func (m *MapMetrics) GetScale(width, height int32) (float32, float32) {
 	scaleX := (ndcRange / aspect) * float32(model.HFov)
 	scaleY := ndcRange * float32(model.VFov)
 	return scaleX, scaleY
+}
+
+// GetShadowSize returns the width and height of the shadow map as two int32 values.
+func (m *MapMetrics) GetShadowSize() (int32, int32) {
+	return m.shadowWidth, m.shadowHeight
 }
 
 // GetOrthoSize returns the orthographic size value from the MapMetrics instance.
@@ -82,6 +89,8 @@ func (m *MapMetrics) GetFlashAspect() float32 {
 
 // SetFlash configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
 func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash float32, width, height int32) {
+	m.shadowWidth = width
+	m.shadowHeight = height
 	m.flashFovDeg = flashFovDeg
 	m.flashZNear = zNearFlash
 	m.flashZFar = zFarFlash

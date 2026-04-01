@@ -44,6 +44,8 @@ type Shaders struct {
 	container     []IShader
 	enableShadows bool
 	metrics       *shaders.MapMetrics
+	w             int32
+	h             int32
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -66,18 +68,17 @@ func NewShaders() *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *model.Calibration, tex *Textures) error {
+func (w *Shaders) Setup(vStride, lStride int32, calibration *model.Calibration, tex *Textures) error {
 	gl.Enable(gl.MULTISAMPLE)
 	//gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
 	w.tex = tex
-	w.metrics = shaders.NewMapMetrics(width, height)
-	shadowWidth := width   //1024
-	shadowHeight := height //1024
+	w.metrics = shaders.NewMapMetrics()
+	//shadowWidth := width   //1024
+	//shadowHeight := height //1024
 	if calibration != nil {
 		w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
 		w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
-		w.metrics.SetFlash(85.0, 0.1, 2048.0, shadowWidth, shadowHeight)
 	}
 
 	w.main = shaders.NewMain(vStride, w.metrics)
@@ -85,7 +86,7 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *mode
 	w.geometry = shaders.NewGeometry()
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
-	w.depth = shaders.NewDepth(shadowWidth, shadowHeight)
+	w.depth = shaders.NewDepth(w.metrics)
 	w.lights = shaders.NewLights(lStride)
 	w.flashlight = shaders.NewShaderFlashlight(w.metrics)
 	w.post = shaders.NewPost()
@@ -122,6 +123,11 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc *DrawCommandsRender, skyEnabled bool, skyLayer float32, frameLights []float32, numLights int32) {
+	if (w.w != fbW) || (w.h != fbH) {
+		w.w = fbW
+		w.h = fbH
+		w.metrics.SetFlash(85.0, 0.1, 2048.0, fbW, fbH)
+	}
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
 	gl.ActiveTexture(gl.TEXTURE1)

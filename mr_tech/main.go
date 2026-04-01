@@ -71,7 +71,7 @@ func main() {
 		return
 	}
 
-	en := engine.NewEngine(width, height, maxQueue, 3.0)
+	en := engine.NewEngine(maxQueue, 3.0)
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)
 		return
@@ -79,13 +79,13 @@ func main() {
 
 	var render IRender
 	if softwareRender {
-		render = software.NewRender()
+		render = software.NewRender(int32(width), int32(height))
 	} else {
 		const useLegacy = false
 		if useLegacy {
-			render = open_gl_legacy.NewRender()
+			render = open_gl_legacy.NewRender(int32(width), int32(height))
 		} else {
-			render = open_gl.NewRender()
+			render = open_gl.NewRender(int32(width), int32(height))
 		}
 	}
 	if err = render.Setup(en); err != nil {

@@ -29,9 +29,8 @@ type Bloom struct {
 	internalPassages int32
 	vao              uint32
 	vbo              uint32
-
-	width  int32
-	height int32
+	w                int32
+	h                int32
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
@@ -42,11 +41,8 @@ func NewBloom() *Bloom {
 	}
 }
 
-// Setup initializes the Bloom structure with the specified width and height values.
-func (s *Bloom) Setup(width, height int32) error {
-	s.width = width
-	s.height = height
-	return nil
+func (s *Bloom) GetBloomTexture() uint32 {
+	return s.pingPongTex[1] // L'ultima scrittura cade sull'indice 1
 }
 
 // Init initializes the Bloom effect by setting up its resources and ensuring it is ready for rendering operations.
@@ -99,26 +95,15 @@ func (s *Bloom) Compile(a IAssets) error {
 			return fmt.Errorf("invalid uniform location in bloom: %d", idx)
 		}
 	}
-
-	gl.GenFramebuffers(2, &s.pingPongFbo[0])
-	gl.GenTextures(2, &s.pingPongTex[0])
-	for i := 0; i < 2; i++ {
-		gl.BindFramebuffer(gl.FRAMEBUFFER, s.pingPongFbo[i])
-		gl.BindTexture(gl.TEXTURE_2D, s.pingPongTex[i])
-		// Downsample a metà risoluzione (massimizza banda e diffusione)
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.width/2, s.height/2, 0, gl.RGBA, gl.FLOAT, nil)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.pingPongTex[i], 0)
-	}
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	return nil
 }
 
 // Render applies a multi-pass Gaussian blur to the bright regions of the texture and returns the final blurred texture ID.
 func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
+	if fbw != s.w || fbh != s.h {
+		s.allocate(fbw, fbh)
+	}
+
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.table[BloomLocImage], 0)
 	gl.BindVertexArray(s.vao)
@@ -162,6 +147,33 @@ func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
 	gl.Enable(gl.DEPTH_TEST)
 }
 
-func (s *Bloom) GetBloomTexture() uint32 {
-	return s.pingPongTex[1] // L'ultima scrittura cade sull'indice 1
+// allocate resizes the bloom effect textures and framebuffers to match the specified width and height values.
+func (s *Bloom) allocate(width, height int32) {
+	s.w = width
+	s.h = height
+
+	// Prevenzione memory leak al ridimensionamento
+	if s.pingPongFbo[0] != 0 {
+		gl.DeleteFramebuffers(2, &s.pingPongFbo[0])
+		gl.DeleteTextures(2, &s.pingPongTex[0])
+	}
+
+	gl.GenFramebuffers(2, &s.pingPongFbo[0])
+	gl.GenTextures(2, &s.pingPongTex[0])
+
+	mipW := s.w / 2
+	mipH := s.h / 2
+
+	for i := 0; i < 2; i++ {
+		gl.BindFramebuffer(gl.FRAMEBUFFER, s.pingPongFbo[i])
+		gl.BindTexture(gl.TEXTURE_2D, s.pingPongTex[i])
+
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, mipW, mipH, 0, gl.RGBA, gl.FLOAT, nil)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.pingPongTex[i], 0)
+	}
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }

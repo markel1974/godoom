@@ -36,11 +36,6 @@ func NewGeometry() *Geometry {
 	}
 }
 
-// Setup initializes the Geometry with the specified viewport width and height.
-func (s *Geometry) Setup(width int32, height int32) error {
-	return nil
-}
-
 // SetupSamplers initializes and configures texture samplers for the Geometry instance.
 func (s *Geometry) SetupSamplers() error {
 	return nil

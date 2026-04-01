@@ -47,7 +47,6 @@ const (
 	FlashLocFlashOffset
 	FlashLocFlashConeStart
 	FlashLocFlashConeEnd
-	//FlashLocFlashBase
 	FlashLocEnableShadows
 	FlashLocShininessWall
 	FlashLocShininessFloor
@@ -127,11 +126,6 @@ func (s *Flashlight) EnableShadows(e bool) {
 		s.offsetX, s.offsetY = 0.0, 0.0
 		s.shadowsInt = 0
 	}
-}
-
-// Setup initializes the flashlight's dimensions using the specified width and height values.
-func (s *Flashlight) Setup(width, height int32) error {
-	return nil
 }
 
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.

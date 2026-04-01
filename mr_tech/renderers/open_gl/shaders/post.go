@@ -51,7 +51,8 @@ type Post struct {
 	bloomIntensity float32
 	bloomBlur      int32
 
-	width, height int32
+	w int32
+	h int32
 }
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
@@ -63,13 +64,6 @@ func NewPost() *Post {
 		bloomIntensity: 0.05,
 		bloomBlur:      1.0,
 	}
-}
-
-// Setup configures the dimensions for the post-processing system by setting the width and height properties.
-func (s *Post) Setup(width, height int32) error {
-	s.width = width
-	s.height = height
-	return nil
 }
 
 // GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
@@ -108,7 +102,6 @@ func (s *Post) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-
 	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
@@ -118,71 +111,21 @@ func (s *Post) Compile(a IAssets) error {
 		gl.DeleteShader(vSh)
 		return err
 	}
-
 	s.prg, err = ShaderCreateProgram("post", vSh, fSh)
 	if err != nil {
 		return err
 	}
-
 	s.table[PostLocHDRBuffer] = gl.GetUniformLocation(s.prg, gl.Str("u_hdrBuffer\x00"))
 	s.table[PostLocExposure] = gl.GetUniformLocation(s.prg, gl.Str("u_exposure\x00"))
 	s.table[PostLocContrast] = gl.GetUniformLocation(s.prg, gl.Str("u_contrast\x00"))
 	s.table[PostLocSaturation] = gl.GetUniformLocation(s.prg, gl.Str("u_saturation\x00"))
 	s.table[PostLocBloomIntensity] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomIntensity\x00"))
 	s.table[PostLocBloomBlur] = gl.GetUniformLocation(s.prg, gl.Str("u_bloomBlur\x00"))
-
-	// --- 1. MSAA FBO (Target Principale 4x Anti-Aliasing) ---
-	gl.GenFramebuffers(1, &s.msaaFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.msaaFbo)
-
-	gl.GenTextures(1, &s.texColorBufferMSAA)
-	gl.BindTexture(gl.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA)
-	gl.TexImage2DMultisample(gl.TEXTURE_2D_MULTISAMPLE, 4, gl.RGBA16F, s.width, s.height, true)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA, 0)
-
-	gl.GenTextures(1, &s.texBrightBufferMSAA)
-	gl.BindTexture(gl.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA)
-	gl.TexImage2DMultisample(gl.TEXTURE_2D_MULTISAMPLE, 4, gl.RGBA16F, s.width, s.height, true)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA, 0)
-
-	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
-	gl.DrawBuffers(2, &attachments[0])
-
-	gl.GenRenderbuffers(1, &s.rboDepthMSAA)
-	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepthMSAA)
-	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, 4, gl.DEPTH_COMPONENT24, s.width, s.height)
-	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, s.rboDepthMSAA)
-
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		return fmt.Errorf("post MSAA FBO not complete")
+	for idx, v := range s.table {
+		if v < 0 {
+			return fmt.Errorf("invalid uniform location in post: %d", idx)
+		}
 	}
-
-	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---
-	gl.GenFramebuffers(1, &s.fbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
-
-	gl.GenTextures(1, &s.texColorBuffer)
-	gl.BindTexture(gl.TEXTURE_2D, s.texColorBuffer)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.width, s.height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.texColorBuffer, 0)
-
-	gl.GenTextures(1, &s.texBrightBuffer)
-	gl.BindTexture(gl.TEXTURE_2D, s.texBrightBuffer)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.width, s.height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.texBrightBuffer, 0)
-
-	gl.DrawBuffers(2, &attachments[0])
-
-	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		return fmt.Errorf("post Resolve FBO not complete")
-	}
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	return nil
 }
 
@@ -193,29 +136,11 @@ func (s *Post) Init() error {
 
 // Prepare prepares the post-processing pipeline by resolving the multisample anti-aliasing (MSAA) buffers to standard buffers.
 func (s *Post) Prepare(fbw, fbh int32) {
+	if fbw != s.w || fbh != s.h {
+		s.allocate(fbw, fbh)
+	}
 	// Physically resolve the multisampled FBO before 2D filters
 	s.resolveMSAA(fbw, fbh)
-}
-
-// resolveMSAA resolves a multisample anti-aliasing (MSAA) framebuffer to a standard framebuffer for post-processing.
-func (s *Post) resolveMSAA(fbw, fbh int32) {
-	gl.BindFramebuffer(gl.READ_FRAMEBUFFER, s.msaaFbo)
-	gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, s.fbo)
-
-	// Blit Albedo Base
-	gl.ReadBuffer(gl.COLOR_ATTACHMENT0)
-	gl.DrawBuffer(gl.COLOR_ATTACHMENT0)
-	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
-
-	// Blit Canale Bloom/Brightness
-	gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
-	gl.DrawBuffer(gl.COLOR_ATTACHMENT1)
-	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
-
-	// Restore FBO state for subsequent frames
-	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
-	gl.DrawBuffers(2, &attachments[0])
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
@@ -240,4 +165,97 @@ func (s *Post) Render(bloomTex uint32) {
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
 	gl.Enable(gl.DEPTH_TEST)
+}
+
+// resolveMSAA resolves a multisample anti-aliasing (MSAA) framebuffer to a standard framebuffer for post-processing.
+func (s *Post) resolveMSAA(fbw, fbh int32) {
+	gl.BindFramebuffer(gl.READ_FRAMEBUFFER, s.msaaFbo)
+	gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, s.fbo)
+
+	// Blit Albedo Base
+	gl.ReadBuffer(gl.COLOR_ATTACHMENT0)
+	gl.DrawBuffer(gl.COLOR_ATTACHMENT0)
+	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+
+	// Blit Canale Bloom/Brightness
+	gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
+	gl.DrawBuffer(gl.COLOR_ATTACHMENT1)
+	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+
+	// Restore FBO state for subsequent frames
+	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
+	gl.DrawBuffers(2, &attachments[0])
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+}
+
+// Allocate gestisce la creazione e il ridimensionamento lazy dei Framebuffer per il post-processing (MSAA + Resolve).
+func (s *Post) allocate(width, height int32) {
+	s.w = width
+	s.h = height
+
+	// Prevenzione memory leak: distruzione esplicita dei buffer precedenti
+	if s.msaaFbo != 0 {
+		gl.DeleteFramebuffers(1, &s.msaaFbo)
+		gl.DeleteTextures(1, &s.texColorBufferMSAA)
+		gl.DeleteTextures(1, &s.texBrightBufferMSAA)
+		gl.DeleteRenderbuffers(1, &s.rboDepthMSAA)
+
+		gl.DeleteFramebuffers(1, &s.fbo)
+		gl.DeleteTextures(1, &s.texColorBuffer)
+		gl.DeleteTextures(1, &s.texBrightBuffer)
+	}
+
+	// --- 1. MSAA FBO (Target Principale 4x Anti-Aliasing) ---
+	gl.GenFramebuffers(1, &s.msaaFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.msaaFbo)
+
+	gl.GenTextures(1, &s.texColorBufferMSAA)
+	gl.BindTexture(gl.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA)
+	gl.TexImage2DMultisample(gl.TEXTURE_2D_MULTISAMPLE, 4, gl.RGBA16F, s.w, s.h, true)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA, 0)
+
+	gl.GenTextures(1, &s.texBrightBufferMSAA)
+	gl.BindTexture(gl.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA)
+	gl.TexImage2DMultisample(gl.TEXTURE_2D_MULTISAMPLE, 4, gl.RGBA16F, s.w, s.h, true)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA, 0)
+
+	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
+	gl.DrawBuffers(2, &attachments[0])
+
+	gl.GenRenderbuffers(1, &s.rboDepthMSAA)
+	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepthMSAA)
+	gl.RenderbufferStorageMultisample(gl.RENDERBUFFER, 4, gl.DEPTH_COMPONENT24, s.w, s.h)
+	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, s.rboDepthMSAA)
+
+	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+		panic("post MSAA FBO not complete")
+	}
+
+	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---
+	gl.GenFramebuffers(1, &s.fbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
+
+	gl.GenTextures(1, &s.texColorBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.texColorBuffer)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.w, s.h, 0, gl.RGBA, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.texColorBuffer, 0)
+
+	gl.GenTextures(1, &s.texBrightBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.texBrightBuffer)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, s.w, s.h, 0, gl.RGBA, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.texBrightBuffer, 0)
+
+	gl.DrawBuffers(2, &attachments[0])
+
+	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+		panic("post Resolve FBO not complete")
+	}
+
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }

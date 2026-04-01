@@ -72,11 +72,6 @@ func (s *Lights) EnableShadows(e bool) {
 	}
 }
 
-// Setup initializes the lighting system with the given screen width and height.
-func (s *Lights) Setup(width, height int32) error {
-	return nil
-}
-
 // Init initializes the uniform buffer object (UBO) for storing light data with the specified stride size.
 func (s *Lights) Init() error {
 	size := 1024 * int(s.stride)

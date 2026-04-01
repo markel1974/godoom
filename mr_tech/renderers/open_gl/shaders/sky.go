@@ -54,11 +54,6 @@ func (s *Sky) SetupSamplers() error {
 	return nil
 }
 
-// Setup initializes the Sky dimensions by assigning the provided width and height values.
-func (s *Sky) Setup(width int32, height int32) error {
-	return nil
-}
-
 // Init initializes the Sky instance by setting up necessary resources and ensuring its readiness for rendering.
 func (s *Sky) Init() error {
 	return nil

@@ -46,9 +46,10 @@ type SSAO struct {
 	colorBuffer      uint32
 	blurTexture      uint32
 	blurFbo          uint32
+	rboDepth         uint32
 	proj             [16]float32
-
-	width, height int32
+	w                int32
+	h                int32
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.
@@ -59,14 +60,8 @@ func NewSSAO() *SSAO {
 		noiseTextureSize: 4 * 4,
 		radius:           12.0,
 		bias:             0.025,
+		rboDepth:         0,
 	}
-}
-
-// Setup initializes the SSAO instance with the specified width and height, updating internal dimensions.
-func (s *SSAO) Setup(width int32, height int32) error {
-	s.width = width
-	s.height = height
-	return nil
 }
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
@@ -117,14 +112,8 @@ func (s *SSAO) Compile(a IAssets) error {
 	const vertId = "ssao.vert"
 	const fragId = "ssao.frag"
 
-	if s.width == 0 || s.height == 0 {
-		return fmt.Errorf("invalid shader dimensions: width=%d, height=%d", s.width, s.height)
-	}
 	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {
-		return err
-	}
-	if err = s.createBuffers(s.width, s.height); err != nil {
 		return err
 	}
 	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
@@ -157,59 +146,6 @@ func (s *SSAO) Compile(a IAssets) error {
 	if err = s.createKernel(); err != nil {
 		return err
 	}
-
-	return nil
-}
-
-// createBuffers initializes and configures framebuffer objects and textures required for SSAO rendering.
-func (s *SSAO) createBuffers(width int32, height int32) error {
-	// 1. G-Buffer
-	gl.GenFramebuffers(1, &s.bufferFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
-
-	// Position + Depth (RGBA16F per precisione spaziale)
-	gl.GenTextures(1, &s.positionDepth)
-	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.positionDepth, 0)
-
-	// Normals
-	gl.GenTextures(1, &s.normal)
-	gl.BindTexture(gl.TEXTURE_2D, s.normal)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.normal, 0)
-
-	// Aggiungi il Depth Renderbuffer
-	var rboDepth uint32
-	gl.GenRenderbuffers(1, &rboDepth)
-	gl.BindRenderbuffer(gl.RENDERBUFFER, rboDepth)
-	gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height)
-	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rboDepth)
-
-	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
-	gl.DrawBuffers(2, &attachments[0])
-
-	// 2. SSAO FBO
-	gl.GenFramebuffers(1, &s.fbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
-	gl.GenTextures(1, &s.colorBuffer)
-	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.colorBuffer, 0)
-
-	// 3. SSAO Blur FBO
-	gl.GenFramebuffers(1, &s.blurFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
-	gl.GenTextures(1, &s.blurTexture)
-	gl.BindTexture(gl.TEXTURE_2D, s.blurTexture)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.blurTexture, 0)
-
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	return nil
 }
@@ -252,7 +188,10 @@ func (s *SSAO) createKernel() error {
 }
 
 // Prepare initializes the framebuffer and clears buffers to set up for SSAO rendering.
-func (s *SSAO) Prepare() {
+func (s *SSAO) Prepare(fbw, fbh int32) {
+	if fbw != s.w || fbh != s.h {
+		s.allocate(fbw, fbh)
+	}
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
 	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
@@ -307,4 +246,71 @@ func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool)
 	// PASS A: BASE
 	gl.DepthFunc(gl.LEQUAL)
 	gl.DepthMask(true)
+}
+
+// allocate initializes or reinitializes framebuffers, textures, and renderbuffers for the given width and height.
+func (s *SSAO) allocate(width, height int32) {
+	s.w = width
+	s.h = height
+
+	// Prevenzione memory leak: distruzione esplicita dei buffer precedenti
+	if s.bufferFbo != 0 {
+		gl.DeleteFramebuffers(1, &s.bufferFbo)
+		gl.DeleteTextures(1, &s.positionDepth)
+		gl.DeleteTextures(1, &s.normal)
+		gl.DeleteRenderbuffers(1, &s.rboDepth)
+
+		gl.DeleteFramebuffers(1, &s.fbo)
+		gl.DeleteTextures(1, &s.colorBuffer)
+
+		gl.DeleteFramebuffers(1, &s.blurFbo)
+		gl.DeleteTextures(1, &s.blurTexture)
+	}
+
+	// 1. G-Buffer
+	gl.GenFramebuffers(1, &s.bufferFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
+
+	// Position + Depth (RGBA16F per precisione spaziale)
+	gl.GenTextures(1, &s.positionDepth)
+	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.positionDepth, 0)
+
+	// Normals
+	gl.GenTextures(1, &s.normal)
+	gl.BindTexture(gl.TEXTURE_2D, s.normal)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.normal, 0)
+
+	// Aggiungi il Depth Renderbuffer (ora salvato nella struct)
+	gl.GenRenderbuffers(1, &s.rboDepth)
+	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepth)
+	gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height)
+	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, s.rboDepth)
+
+	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
+	gl.DrawBuffers(2, &attachments[0])
+
+	// 2. SSAO FBO
+	gl.GenFramebuffers(1, &s.fbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
+	gl.GenTextures(1, &s.colorBuffer)
+	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.colorBuffer, 0)
+
+	// 3. SSAO Blur FBO
+	gl.GenFramebuffers(1, &s.blurFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
+	gl.GenTextures(1, &s.blurTexture)
+	gl.BindTexture(gl.TEXTURE_2D, s.blurTexture)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.blurTexture, 0)
+
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 }

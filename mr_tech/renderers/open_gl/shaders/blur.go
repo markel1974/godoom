@@ -29,11 +29,6 @@ func NewBlur() *Blur {
 	}
 }
 
-// Setup initializes the Blur instance with specified render dimensions.
-func (s *Blur) Setup(width int32, height int32) error {
-	return nil
-}
-
 // Init initializes the Blur instance by setting up necessary resources and ensuring its readiness for rendering.
 func (s *Blur) Init() error {
 	return nil

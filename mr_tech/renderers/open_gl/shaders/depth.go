@@ -41,11 +41,6 @@ func NewDepth(shadowWidth, shadowHeight int32) *Depth {
 	}
 }
 
-// Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
-func (s *Depth) Setup(width, height int32) error {
-	return nil
-}
-
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
 func (s *Depth) SetupSamplers() error {
 	return nil

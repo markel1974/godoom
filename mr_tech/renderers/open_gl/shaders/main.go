@@ -113,14 +113,6 @@ func (s *Main) SetupSamplers() error {
 	return nil
 }
 
-// Setup initializes the width and height values for the Main instance and returns an error if any issues occur.
-func (s *Main) Setup(width int32, height int32) error {
-	s.w = width
-	s.h = height
-	s.scaleX, s.scaleY = s.metrics.GetScale(width, height)
-	return nil
-}
-
 // GetProgram returns the program ID associated with the Main instance.
 func (s *Main) GetProgram() uint32 {
 	return s.prg

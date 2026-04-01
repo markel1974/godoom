@@ -23,10 +23,9 @@ func disableAdditiveLights() {
 
 // IShader defines an interface for shader operations, including setup, sampler configuration, and compilation logic.
 type IShader interface {
-	Setup(width int32, height int32) error
+	Init() error
 	SetupSamplers() error
 	Compile(a shaders.IAssets) error
-	Init() error
 }
 
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
@@ -96,11 +95,6 @@ func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *mode
 	w.SetShadowEnabled(true)
 
 	for _, s := range w.container {
-		if err := s.Setup(width, height); err != nil {
-			return err
-		}
-	}
-	for _, s := range w.container {
 		if err := s.Compile(a); err != nil {
 			return err
 		}
@@ -153,7 +147,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// OMBRE
 	w.depth.Render(dc.Render, w.main.GetVAO(), fbW, fbH)
 	// SSAO PREPARE
-	w.ssao.Prepare()
+	w.ssao.Prepare(fbW, fbH)
 	// GEOMETRY
 	w.geometry.Render(dc.Render)
 	// SSAO

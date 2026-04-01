@@ -209,7 +209,7 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	const specBoostFloor = 0.1
 	const beamRatio = 0.05
 	//const fBase = 0.9
-	const volSteps = 32
+	const volSteps = 16
 
 	if s.factor <= 0 {
 		return

@@ -169,7 +169,7 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
 	const spotIntensity = 10.0
 	const beamRatio = 0.05
-	const volSteps = 32
+	const volSteps = 16
 
 	gl.UseProgram(s.prg)
 

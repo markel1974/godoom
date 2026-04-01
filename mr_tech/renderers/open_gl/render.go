@@ -90,11 +90,12 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 func (w *RenderOpenGL) doInitialize() error {
 	bounds := pixels.R(0, 0, float64(w.startWidth), float64(w.startHeight))
 	cfg := pixels.WindowConfig{
-		Bounds:      bounds,
-		VSync:       true,
-		Undecorated: false,
-		Smooth:      false,
-		Resizable:   true,
+		Bounds:             bounds,
+		VSync:              true,
+		Undecorated:        false,
+		Smooth:             false,
+		Resizable:          true,
+		DisableScissorTest: true,
 	}
 	var winErr error
 	w.win, winErr = pixels.NewGLWindow(cfg)

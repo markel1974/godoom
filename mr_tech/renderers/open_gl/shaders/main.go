@@ -47,8 +47,6 @@ type Main struct {
 	vboBytesCap       [mainDoubleBuffer]int
 	eboBytesCap       [mainDoubleBuffer]int
 	frameIdx          int
-	scaleX            float32
-	scaleY            float32
 	view              [16]float32
 	proj              [16]float32
 	emissiveIntensity float32
@@ -169,11 +167,11 @@ func (s *Main) Compile(a IAssets) error {
 
 // Prepare updates vertex and index buffer data for the current frame using double buffering.
 func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32, fbW, fbH int32) {
-	if fbW != s.w || fbH != s.h {
-		s.w = fbW
-		s.h = fbH
-		s.scaleX, s.scaleY = s.metrics.GetScale(fbW, fbH)
-	}
+	//if fbW != s.w || fbH != s.h {
+	//	s.w = fbW
+	//	s.h = fbH
+	//	s.scaleX, s.scaleY = s.metrics.GetScale(fbW, fbH)
+	//}
 
 	gl.Viewport(0, 0, fbW, fbH)
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
@@ -202,7 +200,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 }
 
 // UpdateUniforms calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
-func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [16]float32) {
+func (s *Main) UpdateUniforms(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	pitchShear := float32(-vi.GetYaw())
 	sinA, cosA := vi.GetAngle()
 	fX, fZ := float32(cosA), float32(-sinA)
@@ -218,8 +216,8 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [
 	zFarRoom := s.metrics.GetRoomZFar()
 	zNearRoom := s.metrics.GetRoomZNear()
 	s.proj = [16]float32{
-		-s.scaleX, 0, 0, 0,
-		0, s.scaleY, 0, 0,
+		-scaleX, 0, 0, 0,
+		0, scaleY, 0, 0,
 		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
 		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}

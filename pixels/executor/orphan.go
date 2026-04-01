@@ -2,14 +2,17 @@ package executor
 
 import "github.com/go-gl/gl/v3.3-core/gl"
 
-func Init() {
+func Init(disableScissorTest bool) {
 	err := gl.Init()
 	if err != nil {
 		panic(err)
 	}
 	gl.Enable(gl.BLEND)
-	gl.Enable(gl.SCISSOR_TEST)
+	if !disableScissorTest {
+		gl.Enable(gl.SCISSOR_TEST)
+	}
 	gl.BlendEquation(gl.FUNC_ADD)
+
 }
 
 func Clear(r, g, b, a float32) {

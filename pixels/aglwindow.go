@@ -44,6 +44,8 @@ type WindowConfig struct {
 	Invisible bool
 
 	SamplesMSAA int
+
+	DisableScissorTest bool
 }
 
 type GLWindow struct {
@@ -134,7 +136,7 @@ func NewGLWindow(cfg WindowConfig) (*GLWindow, error) {
 
 		// enter the OpenGL context
 		w.begin()
-		executor.Init()
+		executor.Init(cfg.DisableScissorTest)
 		gl.Enable(gl.MULTISAMPLE)
 		w.end()
 

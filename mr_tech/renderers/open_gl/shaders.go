@@ -46,6 +46,8 @@ type Shaders struct {
 	metrics       *shaders.MapMetrics
 	w             int32
 	h             int32
+	scaleX        float32
+	scaleY        float32
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -127,6 +129,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.w = fbW
 		w.h = fbH
 		w.metrics.SetFlash(85.0, 0.1, 2048.0, fbW, fbH)
+		w.scaleX, w.scaleY = w.metrics.GetScale(fbW, fbH)
 	}
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
@@ -140,7 +143,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	swayY := w.flashlight.GetOffsetY(bob)
 	roomSpaceMatrix, flashSpaceMatrix := w.metrics.CreateSpaces(vi, swayX, swayY)
 
-	proj, view, invView := w.main.UpdateUniforms(vi)
+	proj, view, invView := w.main.UpdateUniforms(vi, w.scaleX, w.scaleY)
 	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
@@ -175,7 +178,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// BLOOM
 	w.bloom.Render(w.post.GetBrightBuffer(), fbW, fbH)
 	// POST
-	w.post.Render(w.bloom.GetBloomTexture())
+	w.post.Render(w.bloom.GetBloomTexture(), fbW, fbH)
 }
 
 // IncreaseFlashFactor increases the flashlight's intensity factor, enhancing the brightness of the flashlight effect.

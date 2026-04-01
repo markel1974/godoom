@@ -144,7 +144,7 @@ func (s *Post) Prepare(fbw, fbh int32) {
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
-func (s *Post) Render(bloomTex uint32) {
+func (s *Post) Render(bloomTex uint32, fbW, fbH int32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	gl.Disable(gl.DEPTH_TEST)
 

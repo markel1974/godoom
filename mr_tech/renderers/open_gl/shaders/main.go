@@ -249,11 +249,14 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
 
-	// Il Bind del VAO riattiva automaticamente lo stato del VBO e dell'EBO associati
 	gl.BindVertexArray(s.mainVAO[s.frameIdx])
 
 	gl.ActiveTexture(gl.TEXTURE2)
 	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
 
+	// enable Alpha To Coverage only for the main geometry
+	gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 	renderGeometry()
+	// disable it immediately to not destroy light passes
+	gl.Disable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 }

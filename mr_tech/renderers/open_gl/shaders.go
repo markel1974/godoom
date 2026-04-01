@@ -68,11 +68,13 @@ func NewShaders() *Shaders {
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
 func (w *Shaders) Setup(width, height, vStride, lStride int32, calibration *model.Calibration, tex *Textures) error {
+	gl.Enable(gl.MULTISAMPLE)
+	//gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
 	w.tex = tex
 	w.metrics = shaders.NewMapMetrics()
-	const shadowWidth = 1024
-	const shadowHeight = 1024
+	const shadowWidth = 640
+	const shadowHeight = 480
 	if calibration != nil {
 		w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
 		w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
@@ -150,19 +152,18 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 	// MAIN PREPARE (Ora invia sia VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen)
-
 	// LIGHTS PREPARE
 	w.lights.Prepare(frameLights, numLights)
-
 	// OMBRE
 	w.depth.Render(dc.Render, w.main.GetVAO())
-	// SSAO
+	// SSAO PREPARE
 	w.ssao.Prepare()
+	// GEOMETRY
 	w.geometry.Render(dc.Render)
+	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN
 	w.main.Render(dc.Render, w.ssao.GetSSAOBlurTexture())
-
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
@@ -171,9 +172,10 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetYaw()), swayX, swayY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
-
-	// SKYBOX (Ora accetta l'indice del layer 3D)
+	// SKYBOX
 	w.sky.Render(skyLayer, skyEnabled)
+	// MSAA resolution
+	w.post.Prepare()
 	// BLOOM
 	w.bloom.Render(w.post.GetBrightBuffer())
 	// POST

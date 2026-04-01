@@ -43,36 +43,38 @@ type SpriteNode struct {
 
 // RenderOpenGL is responsible for managing and executing OpenGL rendering operations for the game environment.
 type RenderOpenGL struct {
-	engine       *engine.Engine
-	vi           *model.ViewMatrix
-	player       *model.ThingPlayer
-	win          *pixels.GLWindow
-	shaders      *Shaders
-	tex          *Textures
-	builder      IBuilder
-	screenWidth  int
-	screenHeight int
-	enableClear  bool
+	engine          *engine.Engine
+	vi              *model.ViewMatrix
+	player          *model.ThingPlayer
+	win             *pixels.GLWindow
+	shaders         *Shaders
+	tex             *Textures
+	builder         IBuilder
+	screenWidth     int
+	screenHeight    int
+	enableClear     bool
+	builderScene    *BuilderScene
+	builderTraverse *BuilderTraverse
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewRender() *RenderOpenGL {
 	tex := NewTextures()
 
-	builder := NewBuilderTraverse(tex)
-	//builder := NewBuilderScene(tex)
 	r := &RenderOpenGL{
-		engine:       nil,
-		vi:           model.NewViewMatrix(),
-		player:       nil,
-		win:          nil,
-		screenWidth:  0,
-		screenHeight: 0,
-		enableClear:  false,
-		shaders:      nil,
-		builder:      builder,
-		tex:          tex,
+		engine:          nil,
+		vi:              model.NewViewMatrix(),
+		player:          nil,
+		win:             nil,
+		screenWidth:     0,
+		screenHeight:    0,
+		enableClear:     false,
+		shaders:         nil,
+		builderScene:    NewBuilderScene(tex),
+		builderTraverse: NewBuilderTraverse(tex),
+		tex:             tex,
 	}
+	r.builder = r.builderTraverse
 	return r
 }
 
@@ -224,7 +226,13 @@ func (w *RenderOpenGL) doRun() {
 		if w.win.JustPressed(pixels.KeyN) {
 			w.shaders.ToggleShadows()
 		}
-
+		if w.win.JustPressed(pixels.KeyT) {
+			if w.builder == w.builderScene {
+				w.builder = w.builderTraverse
+			} else {
+				w.builder = w.builderScene
+			}
+		}
 		w.win.UpdateInputAndSwap()
 	}
 }

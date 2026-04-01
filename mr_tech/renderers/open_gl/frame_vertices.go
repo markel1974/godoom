@@ -31,7 +31,6 @@ func (w *FrameVertices) Freeze() {
 
 // DeepReset clears all frozen state and resets the FrameVertices instance completely, including frozen counts and slots.
 func (w *FrameVertices) DeepReset() {
-	// FIX: Corretto il copia-incolla
 	w.freezeVerticesCount = 0
 	w.freezeIndicesCount = 0
 	w.freezeVerticesSlot = 0

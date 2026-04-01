@@ -25,12 +25,13 @@ type Bloom struct {
 	table            [BloomLocLast]int32
 	pingPongFbo      [2]uint32
 	pingPongTex      [2]uint32
-	width            int32
-	height           int32
 	hvPassages       int32
 	internalPassages int32
 	vao              uint32
 	vbo              uint32
+
+	width  int32
+	height int32
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
@@ -117,12 +118,12 @@ func (s *Bloom) Compile(a IAssets) error {
 }
 
 // Render applies a multi-pass Gaussian blur to the bright regions of the texture and returns the final blurred texture ID.
-func (s *Bloom) Render(brightTex uint32) {
+func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.table[BloomLocImage], 0)
 	gl.BindVertexArray(s.vao)
 	gl.Disable(gl.DEPTH_TEST)
-	gl.Viewport(0, 0, s.width/2, s.height/2)
+	gl.Viewport(0, 0, fbw/2, fbh/2)
 
 	horizontal := true
 	firstIteration := true
@@ -157,7 +158,7 @@ func (s *Bloom) Render(brightTex uint32) {
 		horizontal = !horizontal
 	}
 
-	gl.Viewport(0, 0, s.width, s.height)
+	gl.Viewport(0, 0, fbw, fbh)
 	gl.Enable(gl.DEPTH_TEST)
 }
 

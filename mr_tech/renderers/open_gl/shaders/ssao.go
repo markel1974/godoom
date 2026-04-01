@@ -33,8 +33,6 @@ const (
 type SSAO struct {
 	prg              uint32
 	table            [SSAOLocLast]int32
-	width            int32
-	height           int32
 	noiseTex         uint32    // Texture di rumore 4x4
 	kernel           []float32 // 64 campioni vec3
 	noiseTextureSize int32
@@ -49,6 +47,8 @@ type SSAO struct {
 	blurTexture      uint32
 	blurFbo          uint32
 	proj             [16]float32
+
+	width, height int32
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.

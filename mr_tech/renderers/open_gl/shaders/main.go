@@ -47,8 +47,6 @@ type Main struct {
 	vboBytesCap       [mainDoubleBuffer]int
 	eboBytesCap       [mainDoubleBuffer]int
 	frameIdx          int
-	width             int32
-	height            int32
 	scaleX            float32
 	scaleY            float32
 	view              [16]float32
@@ -56,6 +54,8 @@ type Main struct {
 	emissiveIntensity float32
 	aoFactor          float32
 	stride            int32
+	w                 int32
+	h                 int32
 	metrics           *MapMetrics
 }
 
@@ -115,9 +115,9 @@ func (s *Main) SetupSamplers() error {
 
 // Setup initializes the width and height values for the Main instance and returns an error if any issues occur.
 func (s *Main) Setup(width int32, height int32) error {
-	s.width = width
-	s.height = height
-	s.scaleX, s.scaleY = s.metrics.GetScale(s.width, s.height)
+	s.w = width
+	s.h = height
+	s.scaleX, s.scaleY = s.metrics.GetScale(width, height)
 	return nil
 }
 
@@ -176,7 +176,17 @@ func (s *Main) Compile(a IAssets) error {
 }
 
 // Prepare updates vertex and index buffer data for the current frame using double buffering.
-func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32) {
+func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32, fbW, fbH int32) {
+	if fbW != s.w || fbH != s.h {
+		s.w = fbW
+		s.h = fbH
+		s.scaleX, s.scaleY = s.metrics.GetScale(fbW, fbH)
+	}
+
+	gl.Viewport(0, 0, fbW, fbH)
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
 	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
 
 	vTotal := int(verticesLen) * 4
@@ -237,12 +247,18 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix) ([16]float32, [16]float32, [
 }
 
 // Render prepares and executes the rendering pipeline using the provided geometry and SSAO texture.
-func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32) {
+func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
+	// target FBO preparation
+	gl.BindFramebuffer(gl.FRAMEBUFFER, targetFbo)
+	gl.Viewport(0, 0, fbW, fbH)
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
 	gl.UseProgram(s.GetProgram())
 
 	gl.UniformMatrix4fv(s.GetUniform(MainLocView), 1, false, &s.view[0])
 	gl.UniformMatrix4fv(s.GetUniform(MainLocProjection), 1, false, &s.proj[0])
-	gl.Uniform2f(s.GetUniform(MainLocScreenResolution), float32(s.width), float32(s.height))
+	gl.Uniform2f(s.GetUniform(MainLocScreenResolution), float32(fbW), float32(fbH))
 	gl.Uniform1f(s.GetUniform(MainLocEmissiveIntensity), s.emissiveIntensity)
 	gl.Uniform1f(s.GetUniform(MainLocAoFactor), s.aoFactor)
 

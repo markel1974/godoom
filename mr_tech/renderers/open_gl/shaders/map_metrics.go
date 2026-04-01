@@ -31,10 +31,10 @@ type MapMetrics struct {
 }
 
 // NewMapMetrics initializes and returns a new instance of MapMetrics with predefined settings.
-func NewMapMetrics() *MapMetrics {
+func NewMapMetrics(fbw, fbh int32) *MapMetrics {
 	m := &MapMetrics{}
-	m.SetOrthoSize(640.0, 0.0, 8192.0)
-	m.SetFlash(85.0, 0.1, 2048.0, 1024, 1024)
+	m.SetOrthoSize(float32(fbw), 0.0, 8192.0)
+	m.SetFlash(85.0, 0.1, 2048.0, fbw, fbh)
 	m.SetMapCenter(0.0, 0.0, 0.0)
 	return m
 }
@@ -81,11 +81,11 @@ func (m *MapMetrics) GetFlashAspect() float32 {
 }
 
 // SetFlash configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
-func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash, width, height float32) {
+func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash float32, width, height int32) {
 	m.flashFovDeg = flashFovDeg
 	m.flashZNear = zNearFlash
 	m.flashZFar = zFarFlash
-	m.flashAspect = width / height
+	m.flashAspect = float32(width) / float32(height)
 	fovFlashRad := (m.flashFovDeg * math.Pi) / 180.0
 	m.flashFov = float32(1.0 / math.Tan(float64(fovFlashRad/ndcRange)))
 	m.updateFlashProj(m.flashFov, m.flashAspect, m.flashZNear, m.flashZFar)

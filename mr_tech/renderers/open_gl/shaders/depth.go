@@ -28,13 +28,9 @@ type Depth struct {
 	roomShadowTex  uint32
 	flashShadowFbo uint32
 	flashShadowTex uint32
-
-	// Aggiunte per cache locale
-	roomMatrix  [16]float32
-	flashMatrix [16]float32
-	width       int32
-	height      int32
-	shadows     bool
+	roomMatrix     [16]float32
+	flashMatrix    [16]float32
+	shadows        bool
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
@@ -47,8 +43,6 @@ func NewDepth(shadowWidth, shadowHeight int32) *Depth {
 
 // Setup initializes the shadow map dimensions with default values or overrides them using the provided width and height.
 func (s *Depth) Setup(width, height int32) error {
-	s.width = width
-	s.height = height
 	return nil
 }
 
@@ -155,7 +149,7 @@ func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
-func (s *Depth) Render(renderScene func(), mainVao uint32) {
+func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	if !s.shadows {
 		return
 	}
@@ -191,5 +185,5 @@ func (s *Depth) Render(renderScene func(), mainVao uint32) {
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
 	gl.Disable(gl.DEPTH_CLAMP)
 	gl.Disable(gl.POLYGON_OFFSET_FILL)
-	gl.Viewport(0, 0, s.width, s.height)
+	gl.Viewport(0, 0, fbw, fbh)
 }

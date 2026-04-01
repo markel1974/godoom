@@ -29,8 +29,6 @@ type Sky struct {
 	skyVBO uint32
 	view   [16]float32
 	proj   [16]float32
-	width  int32
-	height int32
 }
 
 // NewSky creates and returns a new instance of Sky with default uninitialized properties.
@@ -42,7 +40,6 @@ func NewSky() *Sky {
 
 // SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
 func (s *Sky) SetupSamplers() error {
-	// sky
 	gl.GenVertexArrays(1, &s.skyVAO)
 	gl.BindVertexArray(s.skyVAO)
 	gl.GenBuffers(1, &s.skyVBO)
@@ -59,8 +56,6 @@ func (s *Sky) SetupSamplers() error {
 
 // Setup initializes the Sky dimensions by assigning the provided width and height values.
 func (s *Sky) Setup(width int32, height int32) error {
-	s.width = width
-	s.height = height
 	return nil
 }
 

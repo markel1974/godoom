@@ -23,12 +23,10 @@ const (
 // Geometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
 type Geometry struct {
-	prg    uint32
-	table  [GeometryLocLast]int32
-	view   [16]float32
-	proj   [16]float32
-	width  int32
-	height int32
+	prg   uint32
+	table [GeometryLocLast]int32
+	view  [16]float32
+	proj  [16]float32
 }
 
 // NewGeometry initializes and returns a new Geometry instance with default properties.
@@ -40,8 +38,6 @@ func NewGeometry() *Geometry {
 
 // Setup initializes the Geometry with the specified viewport width and height.
 func (s *Geometry) Setup(width int32, height int32) error {
-	s.width = width
-	s.height = height
 	return nil
 }
 

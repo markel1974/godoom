@@ -60,9 +60,8 @@ const (
 
 // Flashlight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
 type Flashlight struct {
-	prg   uint32
-	table [FlashLocLast]int32
-
+	prg        uint32
+	table      [FlashLocLast]int32
 	factor     float32
 	offsetX    float32
 	offsetY    float32

@@ -42,16 +42,16 @@ type Post struct {
 	texBrightBufferMSAA uint32
 	rboDepthMSAA        uint32
 
-	width  int32
-	height int32
-	vao    uint32
-	vbo    uint32
+	vao uint32
+	vbo uint32
 
 	exposure       float32
 	contrast       float32
 	saturation     float32
 	bloomIntensity float32
 	bloomBlur      int32
+
+	width, height int32
 }
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
@@ -67,7 +67,8 @@ func NewPost() *Post {
 
 // Setup configures the dimensions for the post-processing system by setting the width and height properties.
 func (s *Post) Setup(width, height int32) error {
-	s.width, s.height = width, height
+	s.width = width
+	s.height = height
 	return nil
 }
 
@@ -191,25 +192,25 @@ func (s *Post) Init() error {
 }
 
 // Prepare prepares the post-processing pipeline by resolving the multisample anti-aliasing (MSAA) buffers to standard buffers.
-func (s *Post) Prepare() {
+func (s *Post) Prepare(fbw, fbh int32) {
 	// Physically resolve the multisampled FBO before 2D filters
-	s.resolveMSAA()
+	s.resolveMSAA(fbw, fbh)
 }
 
 // resolveMSAA resolves a multisample anti-aliasing (MSAA) framebuffer to a standard framebuffer for post-processing.
-func (s *Post) resolveMSAA() {
+func (s *Post) resolveMSAA(fbw, fbh int32) {
 	gl.BindFramebuffer(gl.READ_FRAMEBUFFER, s.msaaFbo)
 	gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, s.fbo)
 
 	// Blit Albedo Base
 	gl.ReadBuffer(gl.COLOR_ATTACHMENT0)
 	gl.DrawBuffer(gl.COLOR_ATTACHMENT0)
-	gl.BlitFramebuffer(0, 0, s.width, s.height, 0, 0, s.width, s.height, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
 	// Blit Canale Bloom/Brightness
 	gl.ReadBuffer(gl.COLOR_ATTACHMENT1)
 	gl.DrawBuffer(gl.COLOR_ATTACHMENT1)
-	gl.BlitFramebuffer(0, 0, s.width, s.height, 0, 0, s.width, s.height, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+	gl.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
 	// Restore FBO state for subsequent frames
 	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}

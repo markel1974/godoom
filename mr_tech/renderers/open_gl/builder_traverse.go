@@ -104,7 +104,7 @@ func (w *BuilderTraverse) GetLights() ([]float32, int32) {
 
 // Compute generates a batch for rendering by processing sectors, walls, floors, ceilings, things, and lights.
 // It updates visible sectors and processed polygons, and returns a sky texture if one is found.
-func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
+func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	w.fv.Reset()
 	w.dc.Reset()
 	w.fl.Reset()
@@ -115,7 +115,7 @@ func (w *BuilderTraverse) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
 		delete(w.processedPolygons, k)
 	}
 
-	css, compiled := engine.Traverse(vi)
+	css, compiled := engine.Traverse(fbw, fbh, vi)
 	things := engine.GetThings()
 	lights := engine.GetLights()
 

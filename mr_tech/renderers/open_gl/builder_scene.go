@@ -66,7 +66,7 @@ func (w *BuilderScene) GetSkyTexture() *textures.Texture {
 
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
-func (w *BuilderScene) Compute(vi *model.ViewMatrix, engine *engine.Engine) {
+func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	// 1. Reset al Checkpoint Statico (azzeramento totale solo se mapBuilt è false)
 	w.fv.Reset()
 	w.dc.Reset()

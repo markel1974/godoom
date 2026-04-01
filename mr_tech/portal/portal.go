@@ -14,30 +14,22 @@ const (
 
 // Portal represents a rendering portal used for managing visibility, sectors, and screen dimensions in a 3D environment.
 type Portal struct {
-	screenWidth            int
-	screenWidthHalf        int
-	screenHeight           int
-	screenHeightHalf       float64
 	maxSectors             int
 	queue                  *RingQueue
 	sectorQueue            *LinearBatch
-	screenHFov             float64
-	screenVFov             float64
 	compileId              uint64
 	sectorsMaxHeight       float64
 	sectors                []*model.Sector
 	compiledSectors        []*model.CompiledSector
 	compiledCount          int
 	visibilityCache        *VisibilityCache
-	wMin                   float64
-	wMax                   float64
-	hMax                   float64
+	viewFactor             float64
 	textureScaleRepetition float64
 }
 
 // NewPortal creates and initializes a new Portal instance with the specified screen dimensions and queue length.
 // If maxQueue is 0, it defaults to a predefined constant value.
-func NewPortal(width int, height int, maxQueue int, viewFactor float64) *Portal {
+func NewPortal(maxQueue int, viewFactor float64) *Portal {
 	if maxQueue <= 0 {
 		maxQueue = defaultQueueLen
 	}
@@ -45,20 +37,12 @@ func NewPortal(width int, height int, maxQueue int, viewFactor float64) *Portal 
 		viewFactor = 1.0
 	}
 	r := &Portal{
-		screenWidth:            width,
-		screenWidthHalf:        width / 2,
-		screenHeight:           height,
-		screenHeightHalf:       float64(height) / 2,
+		viewFactor:             viewFactor,
 		queue:                  NewRingQueue(maxQueue),
 		sectorQueue:            NewLinearBatch(256),
-		screenHFov:             model.HFov * float64(height),
-		screenVFov:             model.VFov * float64(height),
 		visibilityCache:        NewVisibilityCache(),
 		textureScaleRepetition: 100.0,
 	}
-	r.wMin = float64(-r.screenWidth) * viewFactor
-	r.wMax = float64(r.screenWidth) * viewFactor
-	r.hMax = float64(r.screenHeight-1) * viewFactor
 	return r
 }
 
@@ -99,16 +83,6 @@ func (r *Portal) SectorAt(idx int) *model.Sector {
 // SectorsMaxHeight returns the maximum height of all sectors in the portal as a float64 value.
 func (r *Portal) SectorsMaxHeight() float64 {
 	return r.sectorsMaxHeight
-}
-
-// ScreenWidth returns the current width of the screen associated with the Portal instance.
-func (r *Portal) ScreenWidth() int {
-	return r.screenWidth
-}
-
-// ScreenHeight returns the height of the screen in pixels.
-func (r *Portal) ScreenHeight() int {
-	return r.screenHeight
 }
 
 // clear resets the Portal's state by incrementing the compile ID, setting compiled sector count to 0, and clearing the visibility cache.
@@ -182,13 +156,17 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 }
 
 // Traverse processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+	wMin := float64(-fbw) * r.viewFactor
+	wMax := float64(fbw) * r.viewFactor
+	hMax := float64(fbh-1) * r.viewFactor
+
 	r.clear()
 
 	r.queue.Reset()
 
 	qHead := r.queue.GetHead()
-	qHead.Update(vi.GetSector(), r.wMin, r.wMax, -r.hMax, -r.hMax, r.hMax, r.hMax)
+	qHead.Update(vi.GetSector(), wMin, wMax, -hMax, -hMax, hMax, hMax)
 
 	var qTail *QueueItem
 
@@ -196,7 +174,7 @@ func (r *Portal) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 		qTail = r.queue.GetTail()
 		qTail.sector.Reference(r.compileId)
 
-		sq, sqCount := r.compileProjection(vi, qTail.sector, qTail)
+		sq, sqCount := r.compileProjection(fbw, fbh, vi, qTail.sector, qTail)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
 			// Geometric check
@@ -216,7 +194,12 @@ func (r *Portal) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
 }
 
 // compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
-func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
+func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
+	screenWidthHalf := fbw / 2
+	screenHeightHalf := float64(fbh) / 2
+	screenHFov := model.HFov * float64(fbw)
+	screenVFov := model.VFov * float64(fbh)
+
 	var cs *model.CompiledSector = nil
 	first := false
 	outIdx := 0
@@ -277,13 +260,13 @@ func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, q
 		}
 
 		// Perspective transformation
-		xScale1 := r.screenHFov / tz1
-		yScale1 := r.screenVFov / tz1
-		x1 := float64(r.screenWidthHalf) - (tx1 * xScale1)
+		xScale1 := screenHFov / tz1
+		yScale1 := screenVFov / tz1
+		x1 := float64(screenWidthHalf) - (tx1 * xScale1)
 
-		xScale2 := r.screenHFov / tz2
-		yScale2 := r.screenVFov / tz2
-		x2 := float64(r.screenWidthHalf) - (tx2 * xScale2)
+		xScale2 := screenHFov / tz2
+		yScale2 := screenVFov / tz2
+		x2 := float64(screenWidthHalf) - (tx2 * xScale2)
 
 		if x1 > x2 {
 			continue
@@ -298,10 +281,10 @@ func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, q
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
-		y1a := r.screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz1) * yScale1)
-		y2a := r.screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz2) * yScale2)
-		y1b := r.screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz1) * yScale1)
-		y2b := r.screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz2) * yScale2)
+		y1a := screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz1) * yScale1)
+		y2a := screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz2) * yScale2)
+		y1b := screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz1) * yScale1)
+		y2b := screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz2) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -355,8 +338,8 @@ func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, q
 
 		if neighbor != nil {
 			neighborYCeil := vi.ZDistance(neighbor.CeilY)
-			ny1a := r.screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz1) * yScale1)
-			ny2a := r.screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz2) * yScale2)
+			ny1a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz1) * yScale1)
+			ny2a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz2) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -368,8 +351,8 @@ func (r *Portal) compileProjection(vi *model.ViewMatrix, sector *model.Sector, q
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := vi.ZDistance(neighbor.FloorY)
-			ny1b := r.screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz1) * yScale1)
-			ny2b := r.screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz2) * yScale2)
+			ny1b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz1) * yScale1)
+			ny2b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz2) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {

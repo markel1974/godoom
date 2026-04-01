@@ -122,9 +122,11 @@ func (w *RenderOpenGL) Start() {
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
 	// 1. Svuotamento manuale per il nuovo frame
+	w.win.Begin()
+	fbW, fbH := w.win.GetFramebufferSize()
 	w.builder.Reset()
 	w.engine.Compute(w.player, w.vi)
-	cs, count := w.engine.Traverse(w.vi)
+	cs, count := w.engine.Traverse(int32(fbW), int32(fbH), w.vi)
 	things := w.engine.GetThings()
 	lights := w.engine.GetLights()
 	w.targetLastCompiled = count

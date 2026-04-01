@@ -88,7 +88,7 @@ func (e *Engine) Setup(cfg *model.ConfigRoot) error {
 	e.entities = compiler.GetEntities()
 	e.lights = compiler.GetLights()
 
-	e.portal = portal.NewPortal(e.w, e.h, e.maxQueue, e.viewFactor)
+	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
 	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {
 		return err
 	}
@@ -124,8 +124,8 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 }
 
 // Traverse processes the given ViewMatrix through the portal system, returning a list of compiled sectors and their count.
-func (e *Engine) Traverse(vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
-	cs, count := e.portal.Traverse(vi)
+func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+	cs, count := e.portal.Traverse(fbw, fbh, vi)
 	return cs, count
 }
 

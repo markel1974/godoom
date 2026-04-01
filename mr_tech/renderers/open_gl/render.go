@@ -20,7 +20,7 @@ const (
 )
 
 type IBuilder interface {
-	Compute(vi *model.ViewMatrix, engine *engine.Engine)
+	Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine)
 
 	GetSkyTexture() *textures.Texture
 
@@ -134,7 +134,7 @@ func (w *RenderOpenGL) doRender() {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
 		w.engine.Compute(w.player, w.vi)
-		w.builder.Compute(w.vi, w.engine)
+		w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 		cSky := w.builder.GetSkyTexture()
 		commands := w.builder.GetDrawCommands()
 		vert, vertLen, indices, indicesLen := w.builder.GetVertices()

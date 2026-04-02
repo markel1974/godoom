@@ -7,6 +7,18 @@ type Polygon []XY
 
 // TriangulateEdges decomposes closed polygon loops derived from edges into sets of non-overlapping triangles for each polygon group.
 func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
+	if len(edges) == 3 {
+		// Sequential verification: the End (V2) of each edge must match the Start (V1) of the next one
+		isClosed := edges[0].V2Idx == edges[1].V1Idx && edges[1].V2Idx == edges[2].V1Idx && edges[2].V2Idx == edges[0].V1Idx
+		if isClosed {
+			triangle := Polygon{
+				poly[edges[0].V1Idx],
+				poly[edges[1].V1Idx],
+				poly[edges[2].V1Idx],
+			}
+			return [][]Polygon{{triangle}}
+		}
+	}
 	polygonDefs := poly.TraceLoops(edges, count)
 	output := make([][]Polygon, len(polygonDefs))
 	for idx, def := range polygonDefs {
@@ -21,24 +33,16 @@ func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
 func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 	adj := make([][]Edge, len(poly))
 	for _, e := range edges {
-		adj[e.V1] = append(adj[e.V1], e)
+		adj[e.V1Idx] = append(adj[e.V1Idx], e)
 	}
 
 	// Bitmask for visited edges: (LDIdx << 1) | IsLeft
 	visited := make([]bool, count*2)
 
-	getVisitedIdx := func(e Edge) int {
-		idx := e.LDIdx << 1
-		if e.IsLeft {
-			idx |= 1
-		}
-		return idx
-	}
-
 	var rawLoops []Polygon
 
 	for _, startEdge := range edges {
-		vIdx := getVisitedIdx(startEdge)
+		vIdx := startEdge.GetVisitedIdx()
 		if visited[vIdx] {
 			continue
 		}
@@ -47,24 +51,24 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 		curr := startEdge
 
 		for {
-			visited[getVisitedIdx(curr)] = true
-			v := poly[curr.V1]
+			visited[curr.GetVisitedIdx()] = true
+			v := poly[curr.V1Idx]
 			currentLoop = append(currentLoop, XY{X: v.X, Y: v.Y})
 
-			nextOptions := adj[curr.V2]
+			nextOptions := adj[curr.V2Idx]
 			var nextEdge Edge
 			found := false
 
 			if len(nextOptions) == 1 {
-				if !visited[getVisitedIdx(nextOptions[0])] {
+				if !visited[nextOptions[0].GetVisitedIdx()] {
 					nextEdge = nextOptions[0]
 					found = true
 				}
 			} else if len(nextOptions) > 1 {
 				// Multiple outgoing edges: Calculate angles to perform the tightest possible turn.
 				// We need the incoming vector to compute the relative deviation.
-				inV1 := poly[curr.V1]
-				inV2 := poly[curr.V2]
+				inV1 := poly[curr.V1Idx]
+				inV2 := poly[curr.V2Idx]
 				inDx := inV2.X - inV1.X
 				inDy := inV2.Y - inV1.Y
 				inAngle := math.Atan2(inDy, inDx)
@@ -73,11 +77,11 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 				bestIdx := -1
 
 				for i, o := range nextOptions {
-					if visited[getVisitedIdx(o)] {
+					if visited[o.GetVisitedIdx()] {
 						continue
 					}
-					outV1 := poly[o.V1]
-					outV2 := poly[o.V2]
+					outV1 := poly[o.V1Idx]
+					outV2 := poly[o.V2Idx]
 					outDx := outV2.X - outV1.X
 					outDy := outV2.Y - outV1.Y
 					outAngle := math.Atan2(outDy, outDx)
@@ -106,7 +110,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 				}
 			}
 
-			if !found || nextEdge.V1 == startEdge.V1 {
+			if !found || nextEdge.V1Idx == startEdge.V1Idx {
 				break
 			}
 			curr = nextEdge

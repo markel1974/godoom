@@ -197,12 +197,12 @@ func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId st
 
 	seg := config.NewConfigSegment(sectorId, config.DefinitionWall, mp1, mp2, "")
 	for _, e := range sectorEdges {
-		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
+		v1, v2 := level.Vertexes[e.V1Idx], level.Vertexes[e.V2Idx]
 		w1 := geometry.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
 		w2 := geometry.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
-			ld := level.LineDefs[e.LDIdx]
+			ld := level.LineDefs[e.LdIdx]
 
 			sideIdx := ld.SideDefRight
 			if e.IsLeft {
@@ -298,7 +298,7 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 	hasAdjacent := false
 
 	for _, e := range edges {
-		ld := level.LineDefs[e.LDIdx]
+		ld := level.LineDefs[e.LdIdx]
 		// Check if the segment has a typical Doom door Action Special
 		special := ld.Function
 		if special != 0 {
@@ -338,11 +338,11 @@ func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry.Edge 
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
 			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: int(ld.VertexStart), V2: int(ld.VertexEnd), LDIdx: i, IsLeft: false})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1Idx: int(ld.VertexStart), V2Idx: int(ld.VertexEnd), LdIdx: i, IsLeft: false})
 		}
 		if ld.SideDefLeft != -1 {
 			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: int(ld.VertexEnd), V2: int(ld.VertexStart), LDIdx: i, IsLeft: true})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1Idx: int(ld.VertexEnd), V2Idx: int(ld.VertexStart), LdIdx: i, IsLeft: true})
 		}
 	}
 	return sectorsEdges

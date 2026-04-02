@@ -126,27 +126,28 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 	ve := NewVertexEdges()
 	vertexes, sectorsEdges := ve.Construct(cfg.Sectors)
 
-	// 2. Triangolazione e costruzione dei Sector runtime
 	for csIdx, cs := range cfg.Sectors {
 		texFloor := anim.GetAnimation(cs.Floor)
 		texCeil := anim.GetAnimation(cs.Ceil)
 		edges := sectorsEdges[csIdx]
+
 		triContainer := vertexes.TriangulateEdges(edges, len(vertexes))
-		for loopIdx, triangles := range triContainer {
-			for triIdx, tri := range triangles {
+		for _, triangles := range triContainer {
+			for _, tri := range triangles {
 				// Verifica e forza il Winding Order atteso da ContainsPoint.
-				// Se il terzo vertice cade nel semispazio negativo del vettore tri[0]->tri[1],
-				// invertiamo l'ordine dei vertici per capovolgere la normale.
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
-				subSectorId := fmt.Sprintf("%s_l%d_t%d", cs.Id, loopIdx, triIdx)
+
+				subSectorId := cs.Id
 				var segments []*Segment
 				var tags []string
+
 				// Generazione dei 3 lati del triangolo
 				for k := 0; k < 3; k++ {
 					p1, p2 := tri[k], tri[(k+1)%3]
 					var origSeg *config.ConfigSegment
+
 					// Match topologico esatto per rimappare le proprietà del muro
 					for _, cn := range cs.Segments {
 						if (p1.X == cn.Start.X && p1.Y == cn.Start.Y && p2.X == cn.End.X && p2.Y == cn.End.Y) ||
@@ -155,9 +156,11 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 							break
 						}
 					}
+
 					start := geometry.XY{X: p1.X, Y: p1.Y}
 					end := geometry.XY{X: p2.X, Y: p2.Y}
 					var seg *Segment
+
 					if origSeg != nil {
 						if origSeg.Tag != "" {
 							tags = append(tags, origSeg.Tag)
@@ -172,6 +175,7 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 					}
 					segments = append(segments, seg)
 				}
+
 				// Assemblaggio del settore
 				s := NewSector(modelSectorId, subSectorId, segments, texFloor, texCeil)
 				modelSectorId++
@@ -222,7 +226,7 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 			}
 		}
 	}
-	return NewSectors(container), totalPolygons
+	return tst, totalPolygons
 }
 
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.

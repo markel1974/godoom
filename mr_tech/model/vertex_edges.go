@@ -37,8 +37,6 @@ func NewVertexEdges() *VertexEdges {
 	return &VertexEdges{}
 }
 
-// getOrAddVertex retrieves the vertex ID if it exists, or adds a new vertex and returns its ID.
-
 // Construct constructs a polygon and associated edges from the given sectors using a spatial acceleration structure.
 func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) (geometry.Polygon, [][]geometry.Edge) {
 	tree := physics.NewAABBTree(1024)
@@ -72,7 +70,7 @@ func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) (geometry.Polyg
 		for i, cn := range cs.Segments {
 			vStart := getOrAddVertex(cn.Start)
 			vEnd := getOrAddVertex(cn.End)
-			edges = append(edges, geometry.Edge{V1: vStart, V2: vEnd, LDIdx: i, IsLeft: false})
+			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, LdIdx: i, IsLeft: false})
 		}
 		sectorsEdges[idx] = edges
 	}

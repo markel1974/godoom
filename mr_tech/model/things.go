@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 
-	config2 "github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
@@ -12,7 +12,7 @@ import (
 // Things manages a collection of game objects, their configurations, sectors, entities, and animations.
 type Things struct {
 	things     []IThing
-	config     []*config2.ConfigThing
+	config     []*config.ConfigThing
 	sectors    *Sectors
 	entities   *Entities
 	animations *Animations
@@ -20,7 +20,7 @@ type Things struct {
 
 // NewThings initializes a Things instance with the provided configurations, sectors, entities, and animations.
 // Returns the created Things instance or an error if initialization of any Thing fails.
-func NewThings(cfg []*config2.ConfigThing, sectors *Sectors, entities *Entities, animations *Animations) (*Things, error) {
+func NewThings(cfg []*config.ConfigThing, sectors *Sectors, entities *Entities, animations *Animations) (*Things, error) {
 	r := &Things{
 		config:     cfg,
 		sectors:    sectors,
@@ -30,7 +30,8 @@ func NewThings(cfg []*config2.ConfigThing, sectors *Sectors, entities *Entities,
 	}
 	for _, ct := range cfg {
 		if err := r.CreateThing(ct); err != nil {
-			return nil, err
+			fmt.Println("ERROR: ", err)
+			//return nil, err
 		}
 	}
 	return r, nil
@@ -47,23 +48,24 @@ func (r *Things) GetThings() []IThing {
 }
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
-func (r *Things) CreateThing(ct *config2.ConfigThing) error {
+func (r *Things) CreateThing(ct *config.ConfigThing) error {
 	sector := r.sectors.GetSector(ct.Sector)
+	//sector := r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
 	if sector == nil {
 		return fmt.Errorf("can't find thing sector at %s", ct.Sector)
 	}
 	var thing IThing
 
 	switch ct.Kind {
-	case config2.ThingEnemyDef:
+	case config.ThingEnemyDef:
 		thing = NewThingEnemy(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
-	case config2.ThingWeaponDef:
+	case config.ThingWeaponDef:
 		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
-	case config2.ThingBulletDef:
+	case config.ThingBulletDef:
 		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
-	case config2.ThingKeyDef:
+	case config.ThingKeyDef:
 		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
-	case config2.ThingItemDef:
+	case config.ThingItemDef:
 		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
 	default:
 		thing = NewThingItem(ct, r.animations.GetAnimation(ct.Animation), sector, r.sectors, r.entities)
@@ -85,7 +87,7 @@ func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float6
 	c := r.config[2]
 	id := utils.NextUUId()
 	pos := geometry.XY{X: x, Y: y}
-	cfg := config2.NewConfigThing(id, pos, angle, config2.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 5.0, c.Animation)
+	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 5.0, c.Animation)
 	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }

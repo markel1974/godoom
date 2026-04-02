@@ -1,13 +1,13 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
@@ -83,7 +83,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		return err
 	}
 
-	pSector := r.sectors.GetSector(cfg.Player.Sector)
+	pSector := r.sectors.QueryPoint(cfg.Player.Position.X, cfg.Player.Position.Y)
 	if pSector == nil {
 		return fmt.Errorf("can't find player sector at %s", cfg.Player.Sector)
 	}
@@ -119,15 +119,6 @@ func (r *Compiler) GetLights() []*Light {
 	return r.lights
 }
 
-// GetSector retrieves a Sector by its ID. Returns an error if the Sector is not found.
-func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
-	s := r.sectors.GetSector(sectorId)
-	if s == nil {
-		return nil, errors.New(fmt.Sprintf("invalid Sector: %s", sectorId))
-	}
-	return s, nil
-}
-
 func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
@@ -143,6 +134,12 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 		triContainer := vertexes.TriangulateEdges(edges, len(vertexes))
 		for loopIdx, triangles := range triContainer {
 			for triIdx, tri := range triangles {
+				// Verifica e forza il Winding Order atteso da ContainsPoint.
+				// Se il terzo vertice cade nel semispazio negativo del vettore tri[0]->tri[1],
+				// invertiamo l'ordine dei vertici per capovolgere la normale.
+				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
+					tri[1], tri[2] = tri[2], tri[1]
+				}
 				subSectorId := fmt.Sprintf("%s_l%d_t%d", cs.Id, loopIdx, triIdx)
 				var segments []*Segment
 				var tags []string
@@ -202,7 +199,7 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 			candidates := tst.Query(seg)
 			resolved := false
 			for _, candidate := range candidates {
-				if candidate.Id == sect.Id {
+				if candidate == sect {
 					continue // Ignora se stesso
 				}
 				for _, candSeg := range candidate.Segments {

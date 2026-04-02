@@ -128,6 +128,106 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 	return s, nil
 }
 
+func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
+	modelSectorId := uint16(0)
+	var container []*Sector
+	totalPolygons := 0
+	ve := NewVertexEdges()
+	vertexes, sectorsEdges := ve.Construct(cfg.Sectors)
+
+	// 2. Triangolazione e costruzione dei Sector runtime
+	for csIdx, cs := range cfg.Sectors {
+		texFloor := anim.GetAnimation(cs.Floor)
+		texCeil := anim.GetAnimation(cs.Ceil)
+		edges := sectorsEdges[csIdx]
+		triContainer := vertexes.TriangulateEdges(edges, len(vertexes))
+		for loopIdx, triangles := range triContainer {
+			for triIdx, tri := range triangles {
+				subSectorId := fmt.Sprintf("%s_l%d_t%d", cs.Id, loopIdx, triIdx)
+				var segments []*Segment
+				var tags []string
+				// Generazione dei 3 lati del triangolo
+				for k := 0; k < 3; k++ {
+					p1, p2 := tri[k], tri[(k+1)%3]
+					var origSeg *config.ConfigSegment
+					// Match topologico esatto per rimappare le proprietà del muro
+					for _, cn := range cs.Segments {
+						if (p1.X == cn.Start.X && p1.Y == cn.Start.Y && p2.X == cn.End.X && p2.Y == cn.End.Y) ||
+							(p1.X == cn.End.X && p1.Y == cn.End.Y && p2.X == cn.Start.X && p2.Y == cn.Start.Y) {
+							origSeg = cn
+							break
+						}
+					}
+					start := geometry.XY{X: p1.X, Y: p1.Y}
+					end := geometry.XY{X: p2.X, Y: p2.Y}
+					var seg *Segment
+					if origSeg != nil {
+						if origSeg.Tag != "" {
+							tags = append(tags, origSeg.Tag)
+						}
+						upper := anim.GetAnimation(origSeg.Upper)
+						middle := anim.GetAnimation(origSeg.Middle)
+						lower := anim.GetAnimation(origSeg.Lower)
+						seg = NewSegment(origSeg.Neighbor, nil, origSeg.Kind, start, end, origSeg.Tag, upper, middle, lower)
+					} else {
+						// Segmento interno creato dal triangolatore
+						seg = NewSegment("", nil, config.DefinitionJoin, start, end, "", nil, nil, nil)
+					}
+					segments = append(segments, seg)
+				}
+				// Assemblaggio del settore
+				s := NewSector(modelSectorId, subSectorId, segments, texFloor, texCeil)
+				modelSectorId++
+				if len(tags) > 0 {
+					s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
+				} else {
+					s.Tag = cs.Tag
+				}
+				s.CeilY, s.FloorY = cs.CeilY, cs.FloorY
+				if cs.Light != nil {
+					s.Light = NewLight()
+					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
+				}
+				container = append(container, s)
+				totalPolygons++
+			}
+		}
+	}
+
+	tst := NewSectors(container)
+	tst.CreateTree()
+	for _, sect := range container {
+		for _, seg := range sect.Segments {
+			seg.ComputeAABB()
+			candidates := tst.Query(seg)
+			resolved := false
+			for _, candidate := range candidates {
+				if candidate.Id == sect.Id {
+					continue // Ignora se stesso
+				}
+				for _, candSeg := range candidate.Segments {
+					// Match TOPOLOGICO ESATTO: i float combaciano al bit
+					if seg.Start.X == candSeg.End.X && seg.Start.Y == candSeg.End.Y &&
+						seg.End.X == candSeg.Start.X && seg.End.Y == candSeg.Start.Y {
+						seg.SetSector(candidate.Id, candidate)
+						seg.Kind = config.DefinitionJoin
+						resolved = true
+						break
+					}
+				}
+				if resolved {
+					break
+				}
+			}
+			// Chiusura del bordo se non ha vicini
+			if !resolved && seg.Kind != config.DefinitionWall {
+				seg.Kind = config.DefinitionWall
+			}
+		}
+	}
+	return NewSectors(container), totalPolygons
+}
+
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
 func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)

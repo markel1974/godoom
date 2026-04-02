@@ -338,11 +338,11 @@ func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry.Edge 
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
 			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: int(ld.VertexStart), V2: int(ld.VertexEnd), LDIdx: i, IsLeft: false})
 		}
 		if ld.SideDefLeft != -1 {
 			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: int(ld.VertexEnd), V2: int(ld.VertexStart), LDIdx: i, IsLeft: true})
 		}
 	}
 	return sectorsEdges

@@ -90,6 +90,19 @@ func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 	return nil
 }
 
+func (s *Sectors) Query(aabb physics.IAABB) []*Sector {
+	var target []*Sector
+	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
+		sector, ok := object.(*Sector)
+		if !ok {
+			return false
+		}
+		target = append(target, sector)
+		return false
+	})
+	return target
+}
+
 // QueryOverlap performs an AABB overlap query to locate a Sector containing the point (px, py) or returns nil if not found.
 func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 	var target *Sector = nil

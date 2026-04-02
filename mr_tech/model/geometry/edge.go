@@ -4,7 +4,8 @@ import "math"
 
 // Edge represents a connection between two vertices with additional metadata such as linedef index and orientation.
 type Edge struct {
-	V1, V2 uint16
+	V1     int
+	V2     int
 	LDIdx  int
 	IsLeft bool
 }

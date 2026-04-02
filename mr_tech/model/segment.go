@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -44,6 +45,7 @@ type Segment struct {
 	Upper  *textures.Animation
 	Middle *textures.Animation
 	Lower  *textures.Animation
+	aabb   *physics.AABB
 }
 
 // NewSegment creates a new Segment instance with the provided start and end points, textures, and associated metadata.
@@ -58,8 +60,33 @@ func NewSegment(ref string, sector *Sector, kind int, start geometry.XY, end geo
 		Upper:  tUpper,
 		Middle: tMiddle,
 		Lower:  tLower,
+		aabb:   nil,
 	}
+	out.ComputeAABB()
 	return out
+}
+
+// ComputeAABB calculates the axis-aligned bounding box (AABB) for the segment and stores it in the `aabb` field.
+func (k *Segment) ComputeAABB() {
+	const eps = 0.001
+	minX := math.Min(k.Start.X, k.End.X)
+	maxX := math.Max(k.Start.X, k.End.X)
+	minY := math.Min(k.Start.Y, k.End.Y)
+	maxY := math.Max(k.Start.Y, k.End.Y)
+	if minX == maxX {
+		minX -= eps
+		maxX += eps
+	}
+	if minY == maxY {
+		minY -= eps
+		maxY += eps
+	}
+	k.aabb = physics.NewAABB(minX, minY, 0, maxX, maxY, 0)
+}
+
+// GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
+func (k *Segment) GetAABB() *physics.AABB {
+	return k.aabb
 }
 
 // Copy creates and returns a deep copy of the current Segment instance, duplicating all its fields.

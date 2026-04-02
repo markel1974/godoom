@@ -3,8 +3,8 @@ package portal
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/mathematic"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
 // defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.

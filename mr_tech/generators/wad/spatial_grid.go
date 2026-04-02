@@ -3,8 +3,8 @@ package wad
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/generators/wad/geometry"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // CellKey represents a grid cell in a 2D spatial grid, defined by integer X and Y coordinates.

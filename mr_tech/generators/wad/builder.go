@@ -5,9 +5,9 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/markel1974/godoom/mr_tech/generators/wad/geometry"
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
 	"github.com/markel1974/godoom/mr_tech/model"
+	geometry2 "github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // TextureScaleW defines the horizontal texture scaling factor used when creating texture animations or configurations.
@@ -105,7 +105,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 }
 
 // buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
-func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry.Edge) *model.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry2.Edge) *model.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := model.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), model.LightKindAmbient)
@@ -136,22 +136,20 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 	const quantize = 1000
 
 	var cSectors []*model.ConfigSector
-	parentsContainer := make(map[geometry.QuantizedEdgeKey]string)
+	parentsContainer := make(map[geometry2.QuantizedEdgeKey]string)
 	edgeSegmentsContainer := make(map[*model.ConfigSegment]bool)
 
-	totalLineDefs := len(level.LineDefs)
-	vertexes := make(geometry.Polygon, len(level.Vertexes))
+	count := len(level.LineDefs)
+	vertexes := make(geometry2.Polygon, len(level.Vertexes))
 	for idx, l := range level.Vertexes {
-		vertexes[idx] = geometry.Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
+		vertexes[idx] = geometry2.Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
 	}
 
-	sectorsEdges := bld.createSectorsEdge(level)
+	sectorsEdges := bld.createSectorsEdges(level)
 	for secIdx, edges := range sectorsEdges {
 		lumpSector := level.Sectors[secIdx]
-		polygonDefs := vertexes.TraceLoops(edges, totalLineDefs)
-		for loopIdx, def := range polygonDefs {
-			mergedPoly := def.BridgeHoles()
-			triangles := mergedPoly.Triangulate()
+		triContainer := vertexes.TriangulateEdges(edges, count)
+		for loopIdx, triangles := range triContainer {
 			for triIdx, tri := range triangles {
 				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, loopIdx, triIdx, edges)
 				for k := 0; k < 3; k++ {
@@ -160,7 +158,7 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 					cSeg, matchEdges := bld.buildSegment(level, texHandler, cSector.Id, p1, p2, edges)
 					cSector.Segments = append(cSector.Segments, cSeg)
 					edgeSegmentsContainer[cSeg] = matchEdges
-					edgeKey := geometry.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
+					edgeKey := geometry2.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
 					parentsContainer[edgeKey] = cSeg.Parent
 				}
 				cSectors = append(cSectors, cSector)
@@ -171,7 +169,7 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 	for _, cf := range cSectors {
 		for _, cs := range cf.Segments {
 			if cs.Kind == model.DefinitionJoin {
-				reverseKey := geometry.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
+				reverseKey := geometry2.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
 				if neighborId, exists := parentsContainer[reverseKey]; exists {
 					cs.Neighbor = neighborId
 				} else {
@@ -193,15 +191,15 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 
 // buildSegment creates a ConfigSegment for a wall section based on sector edges and textures, handling sky and two-sided flags.
 // Returns the constructed ConfigSegment and a bool indicating if it matched any edge.
-func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.Point, sectorEdges []geometry.Edge) (*model.ConfigSegment, bool) {
+func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry2.Point, sectorEdges []geometry2.Edge) (*model.ConfigSegment, bool) {
 	mp1 := model.XY{X: p1.X, Y: p1.Y}
 	mp2 := model.XY{X: p2.X, Y: p2.Y}
 
 	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, mp1, mp2, "")
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
-		w1 := geometry.Point{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
-		w2 := geometry.Point{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
+		w1 := geometry2.Point{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
+		w2 := geometry2.Point{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
 			ld := level.LineDefs[e.LDIdx]
@@ -270,7 +268,7 @@ func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *Spatia
 		} else {
 			frames = sd.Sprites
 		}
-		tSectorId := grid.ResolveSectorId(geometry.Point{X: tX, Y: tY})
+		tSectorId := grid.ResolveSectorId(geometry2.Point{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
 		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, sd.Kind, tSectorId, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
@@ -288,13 +286,13 @@ func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *model.ConfigPl
 			break
 		}
 	}
-	playerSectorId := grid.ResolveSectorId(geometry.Point{X: pX, Y: pY})
+	playerSectorId := grid.ResolveSectorId(geometry2.Point{X: pX, Y: pY})
 	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
 	return player
 }
 
 // calculateOpenDoorCeil determines the ceiling height for an open door based on adjacent sectors and door conditions.
-func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry.Edge) float64 {
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry2.Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
 	hasAdjacent := false
@@ -335,16 +333,16 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 }
 
 // createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
-func (bld *Builder) createSectorsEdge(level *Level) map[uint16][]geometry.Edge {
-	sectorsEdges := make(map[uint16][]geometry.Edge)
+func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry2.Edge {
+	sectorsEdges := make(map[uint16][]geometry2.Edge)
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
 			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry2.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
 		}
 		if ld.SideDefLeft != -1 {
 			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry2.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
 		}
 	}
 	return sectorsEdges

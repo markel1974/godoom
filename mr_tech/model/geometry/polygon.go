@@ -5,6 +5,17 @@ import "math"
 // Polygon represents a slice of points defining a closed geometric shape in 2D space.
 type Polygon []Point
 
+// TriangulateEdges decomposes closed polygon loops derived from edges into sets of non-overlapping triangles for each polygon group.
+func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
+	polygonDefs := poly.TraceLoops(edges, count)
+	output := make([][]Polygon, len(polygonDefs))
+	for idx, def := range polygonDefs {
+		mergedPoly := def.BridgeHoles()
+		output[idx] = mergedPoly.Triangulate()
+	}
+	return output
+}
+
 // TraceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
 // Handles self-intersecting topologies and shared vertices by enforcing maximum-angle left turns.
 func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {

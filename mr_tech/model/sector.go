@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/mathematic"
+	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )

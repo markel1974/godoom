@@ -1,4 +1,4 @@
-package model
+package geometry
 
 // XY represents a 2D point or vector with X and Y coordinates in floating-point precision.
 type XY struct {

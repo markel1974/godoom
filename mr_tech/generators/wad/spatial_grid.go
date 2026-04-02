@@ -3,7 +3,7 @@ package wad
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -15,15 +15,15 @@ type CellKey struct {
 // SpatialGrid represents a spatial partitioning system for efficient management of ConfigSectors in a 2D grid.
 type SpatialGrid struct {
 	cellSize float64
-	cells    map[CellKey][]*model.ConfigSector
-	all      []*model.ConfigSector // Retained for global fallback
+	cells    map[CellKey][]*config.ConfigSector
+	all      []*config.ConfigSector // Retained for global fallback
 }
 
 // NewSpatialGrid constructs a SpatialGrid, partitioning ConfigSector objects into cells based on the given cell size.
-func NewSpatialGrid(sectors []*model.ConfigSector, cellSize float64) *SpatialGrid {
+func NewSpatialGrid(sectors []*config.ConfigSector, cellSize float64) *SpatialGrid {
 	grid := &SpatialGrid{
 		cellSize: cellSize,
-		cells:    make(map[CellKey][]*model.ConfigSector),
+		cells:    make(map[CellKey][]*config.ConfigSector),
 		all:      sectors,
 	}
 
@@ -33,9 +33,9 @@ func NewSpatialGrid(sectors []*model.ConfigSector, cellSize float64) *SpatialGri
 		}
 
 		// Note: Y coordinates are inverted as in the original code
-		v1 := geometry.Point{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
-		v2 := geometry.Point{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
-		v3 := geometry.Point{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
+		v1 := geometry.XY{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
+		v2 := geometry.XY{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
+		v3 := geometry.XY{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
 
 		minX := math.Min(v1.X, math.Min(v2.X, v3.X))
 		maxX := math.Max(v1.X, math.Max(v2.X, v3.X))
@@ -58,7 +58,7 @@ func NewSpatialGrid(sectors []*model.ConfigSector, cellSize float64) *SpatialGri
 }
 
 // ResolveSectorId determines the sector ID for a given point within the spatial grid, considering grid cells and fallbacks.
-func (grid *SpatialGrid) ResolveSectorId(p geometry.Point) string {
+func (grid *SpatialGrid) ResolveSectorId(p geometry.XY) string {
 	if len(grid.all) == 0 {
 		return ""
 	}
@@ -72,9 +72,9 @@ func (grid *SpatialGrid) ResolveSectorId(p geometry.Point) string {
 		closestSector := candidates[0].Id
 
 		for _, s := range candidates {
-			v1 := geometry.Point{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
-			v2 := geometry.Point{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
-			v3 := geometry.Point{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
+			v1 := geometry.XY{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
+			v2 := geometry.XY{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
+			v3 := geometry.XY{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
 
 			if grid.PointInTriangle(p, v1, v2, v3) {
 				return s.Id
@@ -100,9 +100,9 @@ func (grid *SpatialGrid) ResolveSectorId(p geometry.Point) string {
 		if len(s.Segments) != 3 {
 			continue
 		}
-		v1 := geometry.Point{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
-		v2 := geometry.Point{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
-		v3 := geometry.Point{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
+		v1 := geometry.XY{X: s.Segments[0].Start.X, Y: -s.Segments[0].Start.Y}
+		v2 := geometry.XY{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
+		v3 := geometry.XY{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
 
 		cx := (v1.X + v2.X + v3.X) / 3.0
 		cy := (v1.Y + v2.Y + v3.Y) / 3.0
@@ -118,7 +118,7 @@ func (grid *SpatialGrid) ResolveSectorId(p geometry.Point) string {
 
 // PointInTriangle determines if a point lies inside or on the edges of a triangle defined by three vertices.
 // Returns true if the point is inside the triangle, false otherwise. Uses vector cross-products for calculations.
-func (grid *SpatialGrid) PointInTriangle(p geometry.Point, a geometry.Point, b geometry.Point, c geometry.Point) bool {
+func (grid *SpatialGrid) PointInTriangle(p geometry.XY, a geometry.XY, b geometry.XY, c geometry.XY) bool {
 	cp1 := (b.X-a.X)*(p.Y-a.Y) - (b.Y-a.Y)*(p.X-a.X)
 	cp2 := (c.X-b.X)*(p.Y-b.Y) - (c.Y-b.Y)*(p.X-b.X)
 	cp3 := (a.X-c.X)*(p.Y-c.Y) - (a.Y-c.Y)*(p.X-c.X)

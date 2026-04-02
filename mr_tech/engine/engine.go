@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -63,7 +64,7 @@ func (e *Engine) Len() int {
 }
 
 // Setup initializes the Engine using the provided configuration, creating sectors, player, things, entities, and the portal.
-func (e *Engine) Setup(cfg *model.ConfigRoot) error {
+func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	compiler := model.NewCompiler()
 	if err := compiler.Compile(cfg); err != nil {
 		return err

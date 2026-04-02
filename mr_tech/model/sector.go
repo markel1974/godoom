@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -219,7 +221,7 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 	var closestSeg *Segment = nil
 
 	for _, seg := range s.Segments {
-		if seg.Kind == DefinitionJoin {
+		if seg.Kind == config.DefinitionJoin {
 			continue
 		}
 		dx := seg.End.X - seg.Start.X
@@ -260,7 +262,7 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 }
 
 // GetCentroid calculates the centroid of the polygon formed by the sector's segments based on their vertex coordinates.
-func (s *Sector) GetCentroid() XY {
+func (s *Sector) GetCentroid() geometry.XY {
 	var signedArea, cx, cy float64
 
 	for i := range s.Segments {
@@ -279,10 +281,10 @@ func (s *Sector) GetCentroid() XY {
 
 	if signedArea == 0 {
 		// Fallback di sicurezza per topologia degenere (es. area nulla)
-		return XY{X: s.Segments[0].Start.X, Y: s.Segments[0].Start.Y}
+		return geometry.XY{X: s.Segments[0].Start.X, Y: s.Segments[0].Start.Y}
 	}
 
-	return XY{
+	return geometry.XY{
 		X: cx / (6.0 * signedArea),
 		Y: cy / (6.0 * signedArea),
 	}
@@ -291,8 +293,8 @@ func (s *Sector) GetCentroid() XY {
 // Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
 func (s *Sector) Print(indent bool) string {
 	type printerSegment struct {
-		Start XY
-		End   XY
+		Start geometry.XY
+		End   geometry.XY
 		Ref   string
 		Kind  int
 		Tag   string

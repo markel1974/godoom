@@ -5,17 +5,9 @@ import (
 	"fmt"
 	"math"
 	"strings"
-)
 
-// DefinitionJoin represents a join action in a system with a numeric value of 3.
-// DefinitionVoid represents a void action in a system with a numeric value of 1.
-// DefinitionWall represents a wall action in a system with a numeric value of 2.
-// DefinitionUnknown represents an undefined state in a system with a numeric value of 0.
-const (
-	DefinitionJoin    = 3
-	DefinitionVoid    = 1
-	DefinitionWall    = 2
-	DefinitionUnknown = 0
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
@@ -39,7 +31,7 @@ func NewCompiler() *Compiler {
 }
 
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
-func (r *Compiler) Compile(cfg *ConfigRoot) error {
+func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	var totalSegments int
 	scale := cfg.ScaleFactor
 	if scale < 1 {
@@ -137,7 +129,7 @@ func (r *Compiler) GetSector(sectorId string) (*Sector, error) {
 }
 
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
-func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, int) {
+func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
 	for idx, cs := range cfg.Sectors {
@@ -178,7 +170,7 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 	for _, sect := range sectors.GetSectors() {
 		for _, seg := range sect.Segments {
 			totalSegments++
-			if seg.Kind != DefinitionWall {
+			if seg.Kind != config.DefinitionWall {
 				if s := sectors.GetSector(seg.Ref); s != nil {
 					seg.SetSector(s.Id, s)
 				} else {
@@ -214,18 +206,18 @@ func (r *Compiler) compileSectors(cfg *ConfigRoot, anim *Animations) (*Sectors, 
 		lineDefsCache := sectors.MakeSegmentsCache()
 		for _, sector := range sectors.GetSectors() {
 			for np, s := range sector.Segments {
-				if s.Kind != DefinitionWall {
+				if s.Kind != config.DefinitionWall {
 					if ld, ok := lineDefsCache[s.MakeReverseEdgeKey()]; ok {
 						if s.Ref != ld.sector.Id {
 							fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
-							if s.Kind == DefinitionUnknown {
-								s.Kind = DefinitionJoin
+							if s.Kind == config.DefinitionUnknown {
+								s.Kind = config.DefinitionJoin
 							}
 							s.SetSector(ld.sector.Id, ld.sector)
 							fixed++
 						}
 					} else {
-						s.Kind = DefinitionWall
+						s.Kind = config.DefinitionWall
 						s.SetSector("", nil)
 
 						fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
@@ -261,7 +253,7 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.Segments {
-				if seg.Kind != DefinitionWall && seg.Ref != "" {
+				if seg.Kind != config.DefinitionWall && seg.Ref != "" {
 					if n := sectors.GetSector(seg.Ref); n != nil {
 						if !visited[n.Id] {
 							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
@@ -296,7 +288,7 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 				continue
 			}
 
-			globalCenter := XY{X: sumX / totalArea, Y: sumY / totalArea}
+			globalCenter := geometry.XY{X: sumX / totalArea, Y: sumY / totalArea}
 
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {

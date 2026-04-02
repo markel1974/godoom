@@ -1,9 +1,10 @@
-package model
+package config
 
 import (
 	"fmt"
 	"sort"
 
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
@@ -19,7 +20,7 @@ const (
 // segmentData represents detailed information about a line segment in the system, including its coordinates and properties.
 type segmentData struct {
 	id            string
-	point         XY
+	point         geometry.XY
 	kind          int
 	neighbor      string
 	textureUpper  *ConfigAnimation
@@ -33,8 +34,8 @@ type segmentData struct {
 type ConfigSegment struct {
 	Parent   string           `json:"parent"`
 	Id       string           `json:"id"`
-	Start    XY               `json:"start"`
-	End      XY               `json:"end"`
+	Start    geometry.XY      `json:"start"`
+	End      geometry.XY      `json:"end"`
 	Kind     int              `json:"Kind"`
 	Neighbor string           `json:"neighbor"`
 	Tag      string           `json:"tag"`
@@ -45,7 +46,7 @@ type ConfigSegment struct {
 }
 
 // NewConfigSegment creates a new ConfigSegment instance with the specified parent, Kind, start, and end coordinates.
-func NewConfigSegment(parent string, kind int, s XY, e XY, neighbor string) *ConfigSegment {
+func NewConfigSegment(parent string, kind int, s geometry.XY, e geometry.XY, neighbor string) *ConfigSegment {
 	is := &ConfigSegment{
 		Parent:   parent,
 		Id:       utils.NextUUId(),
@@ -172,7 +173,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if wall == nil {
 			if data, d := createSegment(SegmentDataWall, b.data); d != nil {
-				wall = NewConfigSegment(is.Parent, DefinitionWall, d.point, XY{}, "")
+				wall = NewConfigSegment(is.Parent, DefinitionWall, d.point, geometry.XY{}, "")
 				wall.Id = d.id
 				b.data = data
 			}
@@ -187,7 +188,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if texture == nil {
 			if data, d := createSegment(SegmentDataTexture, b.data); d != nil {
-				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, XY{}, "")
+				texture = NewConfigSegment(is.Parent, SegmentDataTexture, d.point, geometry.XY{}, "")
 				texture.Id = d.id
 				texture.Upper = d.textureUpper
 				texture.Middle = d.textureMiddle
@@ -208,7 +209,7 @@ func (is *ConfigSegment) Build() []*ConfigSegment {
 
 		if neighbor == nil {
 			if data, d := createSegment(SegmentDataNeighbor, b.data); d != nil {
-				neighbor = NewConfigSegment(is.Parent, DefinitionJoin, d.point, XY{}, d.neighbor)
+				neighbor = NewConfigSegment(is.Parent, DefinitionJoin, d.point, geometry.XY{}, d.neighbor)
 				neighbor.Id = d.id
 				if texture != nil {
 					neighbor.Upper = texture.Upper

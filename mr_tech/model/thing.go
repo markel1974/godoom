@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -16,7 +17,7 @@ type IThing interface {
 
 	GetIdentifier() int
 
-	GetKind() ThingType
+	GetKind() config.ThingType
 
 	GetAABB() *physics.AABB
 

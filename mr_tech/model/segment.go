@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -16,14 +17,14 @@ type EdgeKey struct {
 
 // EdgeSegment represents an internal 2D segment structure with start and end points, sector reference, and index.
 type EdgeSegment struct {
-	start  XY
-	end    XY
+	start  geometry.XY
+	end    geometry.XY
 	sector *Sector
 	np     int
 }
 
 // makeEdgeKey creates a unique EdgeKey by scaling and rounding the coordinates of the start and end points using precision.
-func makeEdgeKey(precision float64, start XY, end XY) EdgeKey {
+func makeEdgeKey(precision float64, start geometry.XY, end geometry.XY) EdgeKey {
 	return EdgeKey{
 		x1: int64(math.Round(start.X * precision)),
 		y1: int64(math.Round(start.Y * precision)),
@@ -34,8 +35,8 @@ func makeEdgeKey(precision float64, start XY, end XY) EdgeKey {
 
 // Segment represents a line segment with start and end points, a reference, type, sector association, and texture animations.
 type Segment struct {
-	Start  XY
-	End    XY
+	Start  geometry.XY
+	End    geometry.XY
 	Ref    string
 	Kind   int
 	Sector *Sector
@@ -46,7 +47,7 @@ type Segment struct {
 }
 
 // NewSegment creates a new Segment instance with the provided start and end points, textures, and associated metadata.
-func NewSegment(ref string, sector *Sector, kind int, start XY, end XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Segment {
+func NewSegment(ref string, sector *Sector, kind int, start geometry.XY, end geometry.XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Segment {
 	out := &Segment{
 		Start:  start,
 		End:    end,

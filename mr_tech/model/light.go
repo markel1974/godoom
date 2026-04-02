@@ -2,14 +2,17 @@ package model
 
 import (
 	"math"
+
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // Light represents a light source with an intensity, type, and position in 3D space.
 type Light struct {
 	sector    *Sector
 	intensity float64
-	kind      LightKind
-	pos       XYZ
+	kind      config.LightKind
+	pos       geometry.XYZ
 }
 
 // NewLight creates and returns a new Light instance with default values for intensity and kind.
@@ -17,23 +20,23 @@ func NewLight() *Light {
 	return &Light{
 		sector:    nil,
 		intensity: 0.0,
-		kind:      LightKindNone,
+		kind:      config.LightKindNone,
 	}
 }
 
 // Setup configures the Light object by setting its intensity, kind, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(sector *Sector, intensity float64, kind LightKind, coords XY, height float64) {
+func (cl *Light) Setup(sector *Sector, intensity float64, kind config.LightKind, coords geometry.XY, height float64) {
 	cl.sector = sector
 	lightZ := (height) * 1.0
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
-	if kind == LightKindOpenAir {
+	if kind == config.LightKindOpenAir {
 		lightZ = math.Abs(height) * 1000 //50
 	} else {
 		//TODO TEST
 		//n := rand.Intn(2) + 1
 		//kind = LightKind(n)
 	}
-	pos := XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
+	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
 
 	cl.intensity = math.Max(0.0, math.Min(1.0, intensity))
 	cl.kind = kind
@@ -41,7 +44,7 @@ func (cl *Light) Setup(sector *Sector, intensity float64, kind LightKind, coords
 }
 
 // GetKind retrieves the type of the light as a LightKind value.
-func (cl *Light) GetKind() LightKind {
+func (cl *Light) GetKind() config.LightKind {
 	return cl.kind
 }
 
@@ -56,6 +59,6 @@ func (cl *Light) GetIntensity() float64 {
 }
 
 // GetPos returns the position of the Light as an XYZ struct.
-func (cl *Light) GetPos() XYZ {
+func (cl *Light) GetPos() geometry.XYZ {
 	return cl.pos
 }

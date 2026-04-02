@@ -9,6 +9,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/pixels"
 )
 
@@ -254,7 +255,7 @@ func (w *Render) RenderSector(sector *model.Sector) {
 	xFactor := (float64(w.w) / 2) / maxX
 	yFactor := (float64(w.h) / 2) / maxY
 
-	var t []model.XYZ
+	var t []geometry.XYZ
 	for _, v := range segments {
 		x1 := v.Start.X
 		if x1 == 0 {
@@ -276,8 +277,8 @@ func (w *Render) RenderSector(sector *model.Sector) {
 			y2 = 1
 		}
 		y2 *= yFactor
-		t = append(t, model.XYZ{X: x1, Y: y1, Z: 0})
-		t = append(t, model.XYZ{X: x2, Y: y2, Z: 0})
+		t = append(t, geometry.XYZ{X: x1, Y: y1, Z: 0})
+		t = append(t, geometry.XYZ{X: x2, Y: y2, Z: 0})
 	}
 
 	if len(t) == 0 {

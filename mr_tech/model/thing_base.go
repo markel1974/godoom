@@ -3,6 +3,8 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -10,12 +12,12 @@ import (
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id         string
-	position   XY
+	position   geometry.XY
 	mass       float64
 	radius     float64
 	height     float64
 	angle      float64
-	kind       ThingType
+	kind       config.ThingType
 	speed      float64
 	sector     *Sector
 	animation  *textures.Animation
@@ -27,7 +29,7 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, sectors, and entities.
-func NewThingBase(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBase {
+func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBase {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius
@@ -58,7 +60,7 @@ func (t *ThingBase) GetId() string {
 }
 
 // GetKind returns the type of the ThingBase as a value of the ThingType enumeration.
-func (t *ThingBase) GetKind() ThingType {
+func (t *ThingBase) GetKind() config.ThingType {
 	return t.kind
 }
 

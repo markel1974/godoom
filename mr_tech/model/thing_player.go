@@ -3,6 +3,8 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -23,8 +25,8 @@ const (
 type ThingPlayer struct {
 	id             string
 	kind           int
-	where          XYZ
-	velocity       XYZ
+	where          geometry.XYZ
+	velocity       geometry.XYZ
 	angle          float64
 	angleSin       float64
 	angleCos       float64
@@ -46,7 +48,7 @@ type ThingPlayer struct {
 }
 
 // NewThingPlayer creates a new ThingPlayer instance with initial position, angle, sector, and debug configuration.
-func NewThingPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entities *Entities, debug bool) *ThingPlayer {
+func NewThingPlayer(cfg *config.ConfigPlayer, sector *Sector, sectors *Sectors, entities *Entities, debug bool) *ThingPlayer {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius
@@ -55,8 +57,8 @@ func NewThingPlayer(cfg *ConfigPlayer, sector *Sector, sectors *Sectors, entitie
 	p := &ThingPlayer{
 		id:             "PLAYER",
 		kind:           0,
-		where:          XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
-		velocity:       XYZ{},
+		where:          geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
+		velocity:       geometry.XYZ{},
 		yaw:            0,
 		yawState:       0,
 		bob:            0,
@@ -82,8 +84,8 @@ func (p *ThingPlayer) GetId() string {
 }
 
 // GetKind retrieves the kind or type classification of the ThingPlayer as an integer value.
-func (p *ThingPlayer) GetKind() ThingType {
-	return ThingPlayerDef
+func (p *ThingPlayer) GetKind() config.ThingType {
+	return config.ThingPlayerDef
 }
 
 // GetAnimation retrieves the current animation associated with the ThingPlayer instance.

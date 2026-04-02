@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
@@ -108,7 +109,7 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
 		neighbor := segment.Sector
-		if segment.Kind == model.DefinitionVoid {
+		if segment.Kind == config.DefinitionVoid {
 			continue
 		}
 		// Coordinate World assolute sul piano XZ (niente proiezioni fotocamera!)
@@ -211,7 +212,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			continue
 		}
 
-		if segment.Kind == model.DefinitionVoid {
+		if segment.Kind == config.DefinitionVoid {
 			if neighbor != nil {
 				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}

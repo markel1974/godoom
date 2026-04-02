@@ -1,4 +1,4 @@
-package model
+package config
 
 import (
 	"github.com/markel1974/godoom/mr_tech/textures"

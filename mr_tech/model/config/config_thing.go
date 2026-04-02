@@ -1,4 +1,8 @@
-package model
+package config
+
+import (
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
+)
 
 type ThingType int
 
@@ -15,7 +19,7 @@ const (
 // ConfigThing represents a game entity with physical properties, animation, and positional data within a specific sector.
 type ConfigThing struct {
 	Id        string
-	Position  XY
+	Position  geometry.XY
 	Angle     float64
 	Mass      float64
 	Radius    float64
@@ -35,7 +39,7 @@ type ConfigThing struct {
 // mass defines the weight of the thing, used in physics calculations.
 // radius and height define the dimensions of the thing for collision and spatial representation.
 // anim is the animation configuration associated with the thing, such as frames, kind, and scale.
-func NewConfigThing(id string, pos XY, angle float64, kind ThingType, sector string, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
+func NewConfigThing(id string, pos geometry.XY, angle float64, kind ThingType, sector string, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
 	return &ConfigThing{
 		Id:        id,
 		Position:  pos,

@@ -3,6 +3,7 @@ package model
 import (
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -26,9 +27,9 @@ func (r *Animations) GetTextures() textures.ITextures {
 }
 
 // GetAnimation retrieves or creates an animation based on the given configuration and caches it for reuse.
-func (r *Animations) GetAnimation(ca *ConfigAnimation) *textures.Animation {
+func (r *Animations) GetAnimation(ca *config.ConfigAnimation) *textures.Animation {
 	if ca == nil {
-		return textures.NewAnimation(nil, int(AnimationKindNone), 1, 1)
+		return textures.NewAnimation(nil, int(config.AnimationKindNone), 1, 1)
 	}
 	key := strings.Join(ca.Frames, ";")
 	animation, ok := r.animations[key]

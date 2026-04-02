@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
-	"github.com/markel1974/godoom/mr_tech/model"
-	geometry2 "github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // TextureScaleW defines the horizontal texture scaling factor used when creating texture animations or configurations.
@@ -81,7 +81,7 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the game level configuration by loading WAD file data, processing textures, sectors, and player setup.
-func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, error) {
+func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, error) {
 	wad := New()
 	if err := wad.Load(wadFile); err != nil {
 		return nil, err
@@ -101,14 +101,14 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*model.ConfigRoot, e
 	grid := NewSpatialGrid(sectors, 256.0)
 	things := bld.buildThings(level, texHandler, grid)
 	player := bld.buildPlayer(level, grid)
-	return model.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler), nil
+	return config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler), nil
 }
 
 // buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
-func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry2.Edge) *model.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry.Edge) *config.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-	miSector := model.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), model.LightKindAmbient)
+	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
 	miSector.FloorY = float64(lumpSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	ceilHeight := float64(lumpSector.CeilingHeight)
 	if openAllDoors {
@@ -116,33 +116,33 @@ func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, te
 	}
 	miSector.CeilY = ceilHeight / ScaleFactorCeilFloorLineDef
 	miSector.Tag = strconv.Itoa(int(secIdx))
-	ceilingType := model.AnimationKindLoop
-	floorType := model.AnimationKindLoop
+	ceilingType := config.AnimationKindLoop
+	floorType := config.AnimationKindLoop
 	if lumpSector.CeilingPic == SkyPicture {
-		ceilingType = model.AnimationKindSky
-		miSector.Light.Kind = model.LightKindOpenAir
+		ceilingType = config.AnimationKindSky
+		miSector.Light.Kind = config.LightKindOpenAir
 	}
 	if lumpSector.FloorPic == SkyPicture {
-		floorType = model.AnimationKindSky
-		miSector.Light.Kind = model.LightKindOpenAir
+		floorType = config.AnimationKindSky
+		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	miSector.Ceil = model.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.CeilingPic), ceilingType, TextureScaleW, TextureScaleH)
-	miSector.Floor = model.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.FloorPic), floorType, TextureScaleW, TextureScaleH)
+	miSector.Ceil = config.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.CeilingPic), ceilingType, TextureScaleW, TextureScaleH)
+	miSector.Floor = config.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.FloorPic), floorType, TextureScaleW, TextureScaleH)
 	return miSector
 }
 
 // buildSectors processes the level data to create and return a list of configuration sectors with their segments and properties.
-func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.ConfigSector {
+func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.ConfigSector {
 	const quantize = 1000
 
-	var cSectors []*model.ConfigSector
-	parentsContainer := make(map[geometry2.QuantizedEdgeKey]string)
-	edgeSegmentsContainer := make(map[*model.ConfigSegment]bool)
+	var cSectors []*config.ConfigSector
+	parentsContainer := make(map[geometry.QuantizedEdgeKey]string)
+	edgeSegmentsContainer := make(map[*config.ConfigSegment]bool)
 
 	count := len(level.LineDefs)
-	vertexes := make(geometry2.Polygon, len(level.Vertexes))
+	vertexes := make(geometry.Polygon, len(level.Vertexes))
 	for idx, l := range level.Vertexes {
-		vertexes[idx] = geometry2.Point{X: float64(l.XCoord), Y: float64(l.YCoord)}
+		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
 	}
 
 	sectorsEdges := bld.createSectorsEdges(level)
@@ -158,7 +158,7 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 					cSeg, matchEdges := bld.buildSegment(level, texHandler, cSector.Id, p1, p2, edges)
 					cSector.Segments = append(cSector.Segments, cSeg)
 					edgeSegmentsContainer[cSeg] = matchEdges
-					edgeKey := geometry2.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
+					edgeKey := geometry.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
 					parentsContainer[edgeKey] = cSeg.Parent
 				}
 				cSectors = append(cSectors, cSector)
@@ -168,8 +168,8 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 
 	for _, cf := range cSectors {
 		for _, cs := range cf.Segments {
-			if cs.Kind == model.DefinitionJoin {
-				reverseKey := geometry2.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
+			if cs.Kind == config.DefinitionJoin {
+				reverseKey := geometry.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
 				if neighborId, exists := parentsContainer[reverseKey]; exists {
 					cs.Neighbor = neighborId
 				} else {
@@ -177,7 +177,7 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 					// Prevents ghost walls
 					matchEdges := edgeSegmentsContainer[cs]
 					if matchEdges {
-						cs.Kind = model.DefinitionWall
+						cs.Kind = config.DefinitionWall
 					} else {
 						cs.Neighbor = cs.Parent
 					}
@@ -191,15 +191,15 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*model.Co
 
 // buildSegment creates a ConfigSegment for a wall section based on sector edges and textures, handling sky and two-sided flags.
 // Returns the constructed ConfigSegment and a bool indicating if it matched any edge.
-func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry2.Point, sectorEdges []geometry2.Edge) (*model.ConfigSegment, bool) {
-	mp1 := model.XY{X: p1.X, Y: p1.Y}
-	mp2 := model.XY{X: p2.X, Y: p2.Y}
+func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.XY, sectorEdges []geometry.Edge) (*config.ConfigSegment, bool) {
+	mp1 := geometry.XY{X: p1.X, Y: p1.Y}
+	mp2 := geometry.XY{X: p2.X, Y: p2.Y}
 
-	seg := model.NewConfigSegment(sectorId, model.DefinitionWall, mp1, mp2, "")
+	seg := config.NewConfigSegment(sectorId, config.DefinitionWall, mp1, mp2, "")
 	for _, e := range sectorEdges {
 		v1, v2 := level.Vertexes[e.V1], level.Vertexes[e.V2]
-		w1 := geometry2.Point{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
-		w2 := geometry2.Point{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
+		w1 := geometry.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
+		w2 := geometry.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
 
 		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
 			ld := level.LineDefs[e.LDIdx]
@@ -213,9 +213,9 @@ func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId st
 			middleT := texHandler.TextureCreateAnimation(side.MiddleTexture)
 			upperT := texHandler.TextureCreateAnimation(side.UpperTexture)
 			lowerT := texHandler.TextureCreateAnimation(side.LowerTexture)
-			seg.Middle = model.NewConfigAnimation(middleT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
-			seg.Upper = model.NewConfigAnimation(upperT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
-			seg.Lower = model.NewConfigAnimation(lowerT, model.AnimationKindLoop, TextureScaleW, TextureScaleH)
+			seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+			seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+			seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
 
 			frontSector := level.Sectors[side.SectorRef]
 			// vertical sky hack
@@ -230,29 +230,29 @@ func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId st
 					backSector := level.Sectors[backSide.SectorRef]
 					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
-						seg.Upper = model.NewConfigAnimation(nil, model.AnimationKindNone, TextureScaleW, TextureScaleH)
+						seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 					}
 					// Extension for floors (e.g. moats that show sky at the bottom)
 					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
-						seg.Lower = model.NewConfigAnimation(nil, model.AnimationKindNone, TextureScaleW, TextureScaleH)
+						seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 					}
 				}
 			}
 			if ld.HasFlag(2) {
-				seg.Kind = model.DefinitionJoin
+				seg.Kind = config.DefinitionJoin
 			}
 			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
 			return seg, true
 		}
 	}
-	seg.Kind = model.DefinitionJoin
+	seg.Kind = config.DefinitionJoin
 	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
 	return seg, false
 }
 
 // buildConfigThing creates and returns a list of ConfigThing objects based on the given level, texture handler, and spatial grid.
-func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *SpatialGrid) []*model.ConfigThing {
-	var things []*model.ConfigThing
+func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *SpatialGrid) []*config.ConfigThing {
+	var things []*config.ConfigThing
 	for i, t := range level.Things {
 		tX := float64(t.X)
 		tY := float64(t.Y)
@@ -268,17 +268,17 @@ func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *Spatia
 		} else {
 			frames = sd.Sprites
 		}
-		tSectorId := grid.ResolveSectorId(geometry2.Point{X: tX, Y: tY})
+		tSectorId := grid.ResolveSectorId(geometry.XY{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
-		anim := model.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), model.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := model.NewConfigThing(tId, model.XY{X: tX, Y: -tY}, tAngle, sd.Kind, tSectorId, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+		anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
+		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, tSectorId, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 		things = append(things, cfgThing)
 	}
 	return things
 }
 
 // buildPlayer initializes and returns a ConfigPlayer based on the player's starting position and angle in the level.
-func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *model.ConfigPlayer {
+func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *config.ConfigPlayer {
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	for _, t := range level.Things {
 		if t.Type == 1 {
@@ -286,13 +286,13 @@ func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *model.ConfigPl
 			break
 		}
 	}
-	playerSectorId := grid.ResolveSectorId(geometry2.Point{X: pX, Y: pY})
-	player := model.NewConfigPlayer(model.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
+	playerSectorId := grid.ResolveSectorId(geometry.XY{X: pX, Y: pY})
+	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
 	return player
 }
 
 // calculateOpenDoorCeil determines the ceiling height for an open door based on adjacent sectors and door conditions.
-func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry2.Edge) float64 {
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry.Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
 	hasAdjacent := false
@@ -333,16 +333,16 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 }
 
 // createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
-func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry2.Edge {
-	sectorsEdges := make(map[uint16][]geometry2.Edge)
+func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry.Edge {
+	sectorsEdges := make(map[uint16][]geometry.Edge)
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
 			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry2.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexStart), V2: uint16(ld.VertexEnd), LDIdx: i, IsLeft: false})
 		}
 		if ld.SideDefLeft != -1 {
 			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry2.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
+			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1: uint16(ld.VertexEnd), V2: uint16(ld.VertexStart), LDIdx: i, IsLeft: true})
 		}
 	}
 	return sectorsEdges

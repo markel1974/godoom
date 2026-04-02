@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -13,7 +14,7 @@ type ThingEnemy struct {
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance with the specified configuration, animation, sector, and entities.
-func NewThingEnemy(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingEnemy {
+func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingEnemy {
 	e := &ThingEnemy{
 		ThingBase: NewThingBase(cfg, anim, sector, sectors, entities),
 		active:    false,

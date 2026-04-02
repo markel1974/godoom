@@ -1,16 +1,20 @@
-package model
+package config
+
+import (
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
+)
 
 // ConfigPlayer represents the configuration of a player in the game, including position, angle, and current sector.
 type ConfigPlayer struct {
-	Position XY      `json:"position"`
-	Angle    float64 `json:"angle"`
-	Radius   float64 `json:"radius"`
-	Mass     float64 `json:"mass"`
-	Sector   string  `json:"sector"`
+	Position geometry.XY `json:"position"`
+	Angle    float64     `json:"angle"`
+	Radius   float64     `json:"radius"`
+	Mass     float64     `json:"mass"`
+	Sector   string      `json:"sector"`
 }
 
 // NewConfigPlayer creates and returns a new instance of ConfigPlayer with the specified position, angle, and sector.
-func NewConfigPlayer(position XY, angle float64, sector string, radius float64, mass float64) *ConfigPlayer {
+func NewConfigPlayer(position geometry.XY, angle float64, sector string, radius float64, mass float64) *ConfigPlayer {
 	return &ConfigPlayer{
 		Position: position,
 		Angle:    angle,

@@ -28,13 +28,13 @@ func BigFloat(f float64) *big.Float {
 }
 
 // RecoverConstraints ensures that a set of constraints is respected in a Delaunay triangulated mesh by edge flipping.
-func RecoverConstraints(constraints [][2]Point, triangles []Triangle) []Triangle {
+func RecoverConstraints(constraints [][2]XY, triangles []Triangle) []Triangle {
 	for _, c := range constraints {
-		var queue [][2]Point
+		var queue [][2]XY
 
 		// 1. Enqueue edges that strictly intersect the constraint
 		for _, t := range triangles {
-			edges := [3][2]Point{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
+			edges := [3][2]XY{{t.A, t.B}, {t.B, t.C}, {t.C, t.A}}
 			for _, e := range edges {
 				if SegmentsCross(e[0], e[1], c[0], c[1]) {
 					queue = AppendUniqueEdge(queue, e)
@@ -70,12 +70,12 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle) []Triangle
 				triangles[t1Idx] = Triangle{pOpp1, pOpp2, e[0]}
 				triangles[t2Idx] = Triangle{pOpp1, pOpp2, e[1]}
 
-				newEdge := [2]Point{pOpp1, pOpp2}
+				newEdge := [2]XY{pOpp1, pOpp2}
 				if SegmentsCross(newEdge[0], newEdge[1], c[0], c[1]) {
 					queue = append(queue, newEdge)
 				} else {
 					// Evaluate if the new quadrilateral edges intersect the constraint
-					for _, newBoundary := range [][2]Point{{pOpp1, e[0]}, {e[0], pOpp2}, {pOpp2, e[1]}, {e[1], pOpp1}} {
+					for _, newBoundary := range [][2]XY{{pOpp1, e[0]}, {e[0], pOpp2}, {pOpp2, e[1]}, {e[1], pOpp1}} {
 						if SegmentsCross(newBoundary[0], newBoundary[1], c[0], c[1]) {
 							queue = AppendUniqueEdge(queue, newBoundary)
 						}
@@ -92,14 +92,14 @@ func RecoverConstraints(constraints [][2]Point, triangles []Triangle) []Triangle
 }
 
 // DistanceSq calculates the squared distance between two points p1 and p2 in a 2D Cartesian plane.
-func DistanceSq(p1 Point, p2 Point) float64 {
+func DistanceSq(p1 XY, p2 XY) float64 {
 	dx := p1.X - p2.X
 	dy := p1.Y - p2.Y
 	return dx*dx + dy*dy
 }
 
 // HasLineOfSight determines if two points have a clear line of sight, considering obstacles in the form of polygons.
-func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
+func HasLineOfSight(p1 XY, p2 XY, hole Polygon, outer Polygon) bool {
 	for i := 0; i < len(outer); i++ {
 		e1, e2 := outer[i], outer[(i+1)%len(outer)]
 		if e1 == p1 || e1 == p2 || e2 == p1 || e2 == p2 {
@@ -122,8 +122,8 @@ func HasLineOfSight(p1 Point, p2 Point, hole Polygon, outer Polygon) bool {
 }
 
 // AppendUniqueEdge appends the given edge to the queue if it is not already present, considering both orientations of the edge.
-func AppendUniqueEdge(queue [][2]Point, edge [2]Point) [][2]Point {
-	eRev := [2]Point{edge[1], edge[0]}
+func AppendUniqueEdge(queue [][2]XY, edge [2]XY) [][2]XY {
+	eRev := [2]XY{edge[1], edge[0]}
 	for _, qe := range queue {
 		if qe == edge || qe == eRev {
 			return queue
@@ -134,7 +134,7 @@ func AppendUniqueEdge(queue [][2]Point, edge [2]Point) [][2]Point {
 
 // FindAdjacentTriangles finds the indices of two triangles sharing the specified edge in a given list of triangles.
 // Returns -1 for an index if no triangle with the edge is found.
-func FindAdjacentTriangles(triangles []Triangle, e [2]Point) (int, int) {
+func FindAdjacentTriangles(triangles []Triangle, e [2]XY) (int, int) {
 	idx1, idx2 := -1, -1
 	for i, t := range triangles {
 		if t.HasEdge(e) {
@@ -150,7 +150,7 @@ func FindAdjacentTriangles(triangles []Triangle, e [2]Point) (int, int) {
 }
 
 // IsConvexQuadrilateral determines if four points form a strictly convex quadrilateral using orientation checks.
-func IsConvexQuadrilateral(p1, p2, p3, p4 Point) bool {
+func IsConvexQuadrilateral(p1, p2, p3, p4 XY) bool {
 	o1 := Orientation(p3, p4, p1)
 	o2 := Orientation(p3, p4, p2)
 	o3 := Orientation(p1, p2, p3)
@@ -160,7 +160,7 @@ func IsConvexQuadrilateral(p1, p2, p3, p4 Point) bool {
 
 // LineIntersection calculates the intersection point of two lines defined by points (p1, q1) and (p2, q2).
 // Returns NaN, NaN if the lines are parallel or overlapping.
-func LineIntersection(p1, q1, p2, q2 Point) (float64, float64) {
+func LineIntersection(p1, q1, p2, q2 XY) (float64, float64) {
 	a1 := new(big.Float).Sub(BigFloat(q1.Y), BigFloat(p1.Y))
 	b1 := new(big.Float).Sub(BigFloat(p1.X), BigFloat(q1.X))
 	c1 := new(big.Float).Add(
@@ -201,21 +201,21 @@ func LineIntersection(p1, q1, p2, q2 Point) (float64, float64) {
 }
 
 // OnSegment checks if point q lies on the line segment defined by points p and r, assuming p, q, and r are collinear.
-func OnSegment(p, q, r Point) bool {
+func OnSegment(p, q, r XY) bool {
 	return q.X <= math.Max(p.X, r.X) && q.X >= math.Min(p.X, r.X) &&
 		q.Y <= math.Max(p.Y, r.Y) && q.Y >= math.Min(p.Y, r.Y)
 }
 
 // OnSegmentStrict checks if point q lies strictly on the line segment formed by points p and r.
 // This function ensures q is collinear with p and r and lies within the bounded box formed by p and r.
-func OnSegmentStrict(p, q, r Point) bool {
+func OnSegmentStrict(p, q, r XY) bool {
 	return Orientation(p, q, r) == 0 &&
 		q.X >= math.Min(p.X, r.X) && q.X <= math.Max(p.X, r.X) &&
 		q.Y >= math.Min(p.Y, r.Y) && q.Y <= math.Max(p.Y, r.Y)
 }
 
 // SegmentsCross determines if two line segments, defined by points (p1, q1) and (p2, q2), intersect each other strictly.
-func SegmentsCross(p1, q1, p2, q2 Point) bool {
+func SegmentsCross(p1, q1, p2, q2 XY) bool {
 	// 1. AABB Fast Rejection (inline branching per branch-predictor)
 	if p1.X < q1.X {
 		if p2.X < q2.X {
@@ -282,7 +282,7 @@ func SegmentsCross(p1, q1, p2, q2 Point) bool {
 }
 
 // SegmentsIntersect determines if two line segments, defined by points p1-q1 and p2-q2, intersect in 2D space.
-func SegmentsIntersect(p1, q1, p2, q2 Point) bool {
+func SegmentsIntersect(p1, q1, p2, q2 XY) bool {
 	o1 := Orientation(p1, q1, p2)
 	o2 := Orientation(p1, q1, q2)
 	o3 := Orientation(p2, q2, p1)
@@ -308,7 +308,7 @@ func SegmentsIntersect(p1, q1, p2, q2 Point) bool {
 }
 
 // Orientation determines the orientation of the triplet (p, q, r): 0 = collinear, 1 = clockwise, 2 = counterclockwise.
-func Orientation(p, q, r Point) int {
+func Orientation(p, q, r XY) int {
 	det := Orient2D(p, q, r)
 	if det > 0 {
 		return 2
@@ -320,7 +320,7 @@ func Orientation(p, q, r Point) int {
 }
 
 // Orient2D calculates the 2D orientation determinant for three points to determine their relative orientation in a plane.
-func Orient2D(pa, pb, pc Point) float64 {
+func Orient2D(pa, pb, pc XY) float64 {
 	detLeft := (pa.X - pc.X) * (pb.Y - pc.Y)
 	detRight := (pa.Y - pc.Y) * (pb.X - pc.X)
 	det := detLeft - detRight
@@ -333,7 +333,7 @@ func Orient2D(pa, pb, pc Point) float64 {
 }
 
 // Orient2DExact computes the determinant to exactly determine the orientation of three 2D points (pa, pb, pc).
-func Orient2DExact(pa, pb, pc Point) float64 {
+func Orient2DExact(pa, pb, pc XY) float64 {
 	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
 	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
 	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)
@@ -353,7 +353,7 @@ func Orient2DExact(pa, pb, pc Point) float64 {
 }
 
 // InCircle2D computes the determinant to determine if point `pd` lies inside the circumcircle of triangle formed by `pa`, `pb`, `pc`.
-func InCircle2D(pa, pb, pc, pd Point) float64 {
+func InCircle2D(pa, pb, pc, pd XY) float64 {
 	adx, ady := pa.X-pd.X, pa.Y-pd.Y
 	bdx, bdy := pb.X-pd.X, pb.Y-pd.Y
 	cdx, cdy := pc.X-pd.X, pc.Y-pd.Y
@@ -382,7 +382,7 @@ func InCircle2D(pa, pb, pc, pd Point) float64 {
 // Uses exact arithmetic based on arbitrary-precision floating-point computations to ensure robustness.
 // The input points pa, pb, pc, pd are expected in a 2D plane with their coordinates provided as float64 values.
 // Returns a positive value if pd is inside, zero if on, and negative if outside the circumcircle of pa, pb, and pc.
-func InCircle2DExact(pa, pb, pc, pd Point) float64 {
+func InCircle2DExact(pa, pb, pc, pd XY) float64 {
 	ax, ay := BigFloat(pa.X), BigFloat(pa.Y)
 	bx, by := BigFloat(pb.X), BigFloat(pb.Y)
 	cx, cy := BigFloat(pc.X), BigFloat(pc.Y)

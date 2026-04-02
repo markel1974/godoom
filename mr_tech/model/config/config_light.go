@@ -1,4 +1,4 @@
-package model
+package config
 
 type LightKind int
 

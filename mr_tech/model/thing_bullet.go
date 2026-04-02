@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -18,7 +19,7 @@ type ThingBullet struct {
 // NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
 // cfg specifies the configuration of the bullet, anim defines its animation, and sector represents its initial sector.
 // sectors and entities provide references to all sectors and entities in the game world.
-func NewThingBullet(cfg *ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBullet {
+func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
 		ThingBase:   NewThingBase(cfg, anim, sector, sectors, entities),
 		wall:        physics.NewEntity(0, 0, 0, 0, 0),
@@ -133,7 +134,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	var hit *Segment = nil
 
 	for _, seg := range t.sector.Segments {
-		if seg.Kind == DefinitionJoin {
+		if seg.Kind == config.DefinitionJoin {
 			if top > t.sector.CeilY || bottom < t.sector.FloorY {
 				continue
 			}

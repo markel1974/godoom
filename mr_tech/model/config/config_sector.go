@@ -1,6 +1,17 @@
-package model
+package config
 
 import "encoding/json"
+
+// DefinitionJoin represents a join action in a system with a numeric value of 3.
+// DefinitionVoid represents a void action in a system with a numeric value of 1.
+// DefinitionWall represents a wall action in a system with a numeric value of 2.
+// DefinitionUnknown represents an undefined state in a system with a numeric value of 0.
+const (
+	DefinitionJoin    = 3
+	DefinitionVoid    = 1
+	DefinitionWall    = 2
+	DefinitionUnknown = 0
+)
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type ConfigSector struct {

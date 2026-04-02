@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -138,7 +139,7 @@ func (w *BatchBuilder) pushWall(vi *model.ViewMatrix, cp *model.CompiledPolygon,
 
 // pushFlat processes a flat polygon, computes its light and texture mapping, and adds its vertices to the frame buffer.
 func (w *BatchBuilder) pushFlat(vi *model.ViewMatrix, cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
-	if anim.Kind() == int(model.AnimationKindSky) {
+	if anim.Kind() == int(config.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
 

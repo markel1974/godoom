@@ -1,6 +1,9 @@
 package model
 
-import "github.com/markel1974/godoom/mr_tech/textures"
+import (
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/textures"
+)
 
 // IdFloor represents the hexadecimal color value for the floor.
 // IdCeil represents the hexadecimal color value for the ceiling.
@@ -22,7 +25,7 @@ const (
 
 // CompiledPolygon represents a polygon with precompiled data for rendering or simulation purposes.
 type CompiledPolygon struct {
-	Points         []XYZ
+	Points         []geometry.XYZ
 	Sector         *Sector
 	Neighbor       *Sector
 	Kind           int
@@ -44,7 +47,7 @@ type CompiledPolygon struct {
 // NewCompiledPolygon creates and returns a pointer to an empty CompiledPolygon with preallocated points.
 func NewCompiledPolygon() *CompiledPolygon {
 	return &CompiledPolygon{
-		Points: make([]XYZ, 4),
+		Points: make([]geometry.XYZ, 4),
 		PLen:   0,
 	}
 }

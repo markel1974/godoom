@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	mathematic2 "github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/pixels"
@@ -23,7 +24,7 @@ type DrawPolygon struct {
 
 	surface   *pixels.PictureRGBA
 	Color     int
-	points    []model.XYZ
+	points    []geometry.XYZ
 	pointsLen int
 	top       int
 	bottom    int
@@ -46,7 +47,7 @@ func NewDrawPolygon(maxW int, maxH int) *DrawPolygon {
 }
 
 // Setup initializes the DrawPolygon instance with the given surface, points, color, and calculates bounding box constraints.
-func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []model.XYZ, pointsLen1 int, color int) {
+func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []geometry.XYZ, pointsLen1 int, color int) {
 	dp.Color = color
 	dp.surface = surface
 	dp.points = points1

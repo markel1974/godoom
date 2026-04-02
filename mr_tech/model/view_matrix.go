@@ -1,5 +1,7 @@
 package model
 
+import "github.com/markel1974/godoom/mr_tech/model/geometry"
+
 // HFov represents the horizontal field of view in radians.
 // VFov represents the vertical field of view in radians.
 // NearZ defines the near clipping plane distance in a 3D view.
@@ -11,7 +13,7 @@ const (
 
 // ViewMatrix represents a view configuration with position, orientation, zoom level, and lighting intensity for rendering.
 type ViewMatrix struct {
-	where          XYZ
+	where          geometry.XYZ
 	angleSin       float64
 	angleCos       float64
 	yaw            float64

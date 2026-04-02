@@ -9,7 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 const (
@@ -18,11 +19,11 @@ const (
 )
 
 // ParseScriptData parses the provided script data string and generates a ConfigRoot object or returns an error.
-func ParseScriptData(id string) (*model.ConfigRoot, error) {
-	var cfgVertices []model.XY
+func ParseScriptData(id string) (*config.ConfigRoot, error) {
+	var cfgVertices []geometry.XY
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(basePath)
-	cfg := model.NewConfigRoot(nil, &model.ConfigPlayer{}, nil, 1.0, false, t)
+	cfg := config.NewConfigRoot(nil, &config.ConfigPlayer{}, nil, 1.0, false, t)
 	//cfg := &model.ConfigRoot{
 	//	Sectors: nil,
 	//	ThingPlayer:  &model.ConfigPlayer{},
@@ -54,7 +55,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					break
 				}
 				for {
-					xy := model.XY{Y: vertexY}
+					xy := geometry.XY{Y: vertexY}
 					if _, err := fmt.Fscanf(r, "%f", &xy.X); err != nil {
 						if err != io.EOF {
 							return nil, err
@@ -70,7 +71,7 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 			if cfgVertices == nil {
 				return nil, errors.New(fmt.Sprintf("nil vertices"))
 			}
-			cs := model.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), model.LightKindAmbient)
+			cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), config.LightKindAmbient)
 			configSectorIdx++
 			_, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY)
 			if err != nil {
@@ -87,15 +88,15 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				}
 				var d data
 				if word[0] == 'x' {
-					d.Val = model.DefinitionUnknown
-					d.Kind = model.DefinitionUnknown
+					d.Val = config.DefinitionUnknown
+					d.Kind = config.DefinitionUnknown
 				} else {
 					if val, err := strconv.Atoi(word); err != nil {
-						d.Val = model.DefinitionUnknown
-						d.Kind = model.DefinitionUnknown
+						d.Val = config.DefinitionUnknown
+						d.Kind = config.DefinitionUnknown
 					} else {
 						d.Val = val
-						d.Kind = model.DefinitionJoin
+						d.Kind = config.DefinitionJoin
 					}
 				}
 				numbers = append(numbers, d)
@@ -112,12 +113,12 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 					return nil, errors.New(fmt.Sprintf("invalid vertex number: %d max: %d", vertexId, len(cfgVertices)))
 				}
 
-				xy := model.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
+				xy := geometry.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
 				if idx == 0 {
-					neighbor := model.NewConfigSegment("", neighborId.Kind, xy, xy, strconv.Itoa(neighborId.Val))
-					neighbor.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor := config.NewConfigSegment("", neighborId.Kind, xy, xy, strconv.Itoa(neighborId.Val))
+					neighbor.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
 					cs.Segments = append(cs.Segments, neighbor)
 				} else if idx == m-1 {
 					prev := cs.Segments[idx-1]
@@ -125,15 +126,15 @@ func ParseScriptData(id string) (*model.ConfigRoot, error) {
 				} else {
 					prev := cs.Segments[idx-1]
 					prev.End = xy
-					neighbor := model.NewConfigSegment("", model.DefinitionUnknown, xy, xy, "unknown")
-					neighbor.Middle = model.NewConfigAnimation([]string{"wall2.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Lower = model.NewConfigAnimation([]string{"wall.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Upper = model.NewConfigAnimation([]string{"wall3.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+					neighbor := config.NewConfigSegment("", config.DefinitionUnknown, xy, xy, "unknown")
+					neighbor.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+					neighbor.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
 					cs.Segments = append(cs.Segments, neighbor)
 				}
 
-				cs.Floor = model.NewConfigAnimation([]string{"floor.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
-				cs.Ceil = model.NewConfigAnimation([]string{"ceil.ppm"}, model.AnimationKindLoop, scaleW, scaleH)
+				cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+				cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
 				//cs.Textures = true
 			}
 			cfg.Sectors = append(cfg.Sectors, cs)

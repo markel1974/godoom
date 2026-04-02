@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -212,7 +213,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
 func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
-	if anim.Kind() == int(model.AnimationKindSky) {
+	if anim.Kind() == int(config.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}
 

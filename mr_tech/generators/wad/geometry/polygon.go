@@ -156,7 +156,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 }
 
 // Triangulate decomposes a polygon with possible holes into a set of non-overlapping triangles using PSLG processing.
-func (poly Polygon) Triangulate(secIdx int) []Polygon {
+func (poly Polygon) Triangulate() []Polygon {
 	if len(poly) < 3 {
 		return nil
 	}
@@ -210,7 +210,7 @@ func (poly Polygon) Triangulate(secIdx int) []Polygon {
 
 	// 4. Constraint Recovery (deterministic FIFO Lawson)
 	// We use the fragmented constraint set to guarantee exact adjacencies
-	mesh = RecoverConstraints(sanitizedConstraints, mesh, secIdx)
+	mesh = RecoverConstraints(sanitizedConstraints, mesh)
 
 	// 5. Domain Culling tramite incentro per la massima stabilità topologica
 	var finalTriangles []Polygon

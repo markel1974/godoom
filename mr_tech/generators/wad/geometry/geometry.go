@@ -28,7 +28,7 @@ func BigFloat(f float64) *big.Float {
 }
 
 // RecoverConstraints ensures that a set of constraints is respected in a Delaunay triangulated mesh by edge flipping.
-func RecoverConstraints(constraints [][2]Point, triangles []Triangle, secIdx int) []Triangle {
+func RecoverConstraints(constraints [][2]Point, triangles []Triangle) []Triangle {
 	for _, c := range constraints {
 		var queue [][2]Point
 

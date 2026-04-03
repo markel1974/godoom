@@ -71,36 +71,24 @@ func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
 }
 
 // Construct builds the vertex and edge data structures from the provided configuration sectors.
-func (t *VertexEdges) Construct(config *config.ConfigRoot) {
+func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.ConfigSector) {
 	// STEP 1: Priming dell'AABB Tree
-	// Se il pool esiste, lo usiamo per "pre-occupare" lo spazio.
-	// Questo garantisce che ogni getOrAddVertex successivo faccia uno SNAP perfetto.
-	if len(config.Vertices) > 0 {
-		for _, point := range config.Vertices {
-			idx := len(t.vertexes)
-			t.vertexes = append(t.vertexes, point)
-			vNode := NewVertexNode(idx, point, t.eps)
-			t.tree.InsertObject(vNode)
-		}
+	for _, point := range vertices {
+		idx := len(t.vertexes)
+		t.vertexes = append(t.vertexes, point)
+		vNode := NewVertexNode(idx, point, t.eps)
+		t.tree.InsertObject(vNode)
 	}
 
 	// STEP 2: Costruzione degli Edges (Constraints)
-	// Ora t.sectorsEdges viene popolato usando il pool appena creato (o creandone uno al volo)
-	t.sectorsEdges = make([][]geometry.Edge, len(config.Sectors))
+	t.sectorsEdges = make([][]geometry.Edge, len(css))
 
-	for configIdx, cs := range config.Sectors {
+	for configIdx, cs := range css {
 		var edges []geometry.Edge
 		for i, cn := range cs.Segments {
-			// getOrAddVertex cercherà nell'AABB Tree.
-			// Grazie al priming dello Step 1, troverà gli indici dei vertici originali.
 			vStart := t.getOrAddVertex(cn.Start)
 			vEnd := t.getOrAddVertex(cn.End)
-
-			edges = append(edges, geometry.Edge{
-				V1Idx: vStart,
-				V2Idx: vEnd,
-				Index: i, // L'indice del segmento nel settore
-			})
+			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, Index: i})
 		}
 		t.sectorsEdges[configIdx] = edges
 	}

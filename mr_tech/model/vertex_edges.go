@@ -48,37 +48,37 @@ func NewVertexEdges(eps float64) *VertexEdges {
 	}
 }
 
+func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
+	foundId := -1
+	t.tree.QueryPoint(p.X, p.Y, func(object physics.IAABB) bool {
+		if v, ok := object.(*VertexNode); ok {
+			if v.X == p.X && v.Y == p.Y {
+				foundId = v.Id
+				return true
+			}
+		}
+		return false
+	})
+	if foundId >= 0 {
+		return foundId
+	}
+	point := geometry.XY{X: p.X, Y: p.Y}
+	idx := len(t.vertexes)
+	t.vertexes = append(t.vertexes, point)
+	vNode := NewVertexNode(idx, point, t.eps)
+	t.tree.InsertObject(vNode)
+	return idx
+}
+
 // Construct builds the vertex and edge data structures from the provided configuration sectors.
 func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) {
-	getOrAddVertex := func(p geometry.XY) int {
-		foundId := -1
-		t.tree.QueryPoint(p.X, p.Y, func(object physics.IAABB) bool {
-			if v, ok := object.(*VertexNode); ok {
-				if v.X == p.X && v.Y == p.Y {
-					foundId = v.Id
-					return true
-				}
-			}
-			return false
-		})
-		if foundId >= 0 {
-			return foundId
-		}
-		point := geometry.XY{X: p.X, Y: p.Y}
-		idx := len(t.vertexes)
-		t.vertexes = append(t.vertexes, point)
-		vNode := NewVertexNode(idx, point, t.eps)
-		t.tree.InsertObject(vNode)
-		return idx
-	}
-
 	t.sectorsEdges = make([][]geometry.Edge, len(cSectors))
 	// Build edges (constraints) for the triangulator
 	for configIdx, cs := range cSectors {
 		var edges []geometry.Edge
 		for i, cn := range cs.Segments {
-			vStart := getOrAddVertex(cn.Start)
-			vEnd := getOrAddVertex(cn.End)
+			vStart := t.getOrAddVertex(cn.Start)
+			vEnd := t.getOrAddVertex(cn.End)
 			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, LdIdx: i, IsLeft: false})
 		}
 		t.sectorsEdges[configIdx] = edges

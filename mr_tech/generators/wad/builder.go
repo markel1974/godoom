@@ -302,7 +302,6 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 			break
 		}
 	}
-	//playerSectorId := grid.ResolveSectorId(geometry.XY{X: pX, Y: pY})
 	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, 20.0/radiusF, 100.0)
 	return player
 }

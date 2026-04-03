@@ -120,48 +120,54 @@ func (r *Compiler) GetLights() []*Light {
 }
 
 func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
+	const quantize = 1000
+
 	modelSectorId := uint16(0)
 	var container []*Sector
 	totalPolygons := 0
+	parentsContainer := make(map[geometry.QuantizedEdgeKey]*Sector)
+	edgeSegmentsContainer := make(map[*Segment]bool)
+
 	ve := NewVertexEdges()
-	vertexes, sectorsEdges := ve.Construct(cfg.Sectors)
+	ve.Construct(cfg.Sectors)
 
 	for csIdx, cs := range cfg.Sectors {
+		if len(cs.Segments) == 0 {
+			continue
+		}
+		triContainer, err := ve.GetTriangles(csIdx)
+		if err != nil {
+			fmt.Println("Error retrieving polygons for sector", csIdx, ":", err.Error())
+			continue
+		}
 		texFloor := anim.GetAnimation(cs.Floor)
 		texCeil := anim.GetAnimation(cs.Ceil)
-		edges := sectorsEdges[csIdx]
-
-		triContainer := vertexes.TriangulateEdges(edges, len(vertexes))
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
-				// Verifica e forza il Winding Order atteso da ContainsPoint.
+				// Mantiene il Winding Order consistente per ContainsPoint
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
-
 				subSectorId := cs.Id
 				var segments []*Segment
 				var tags []string
-
-				// Generazione dei 3 lati del triangolo
 				for k := 0; k < 3; k++ {
-					p1, p2 := tri[k], tri[(k+1)%3]
+					p1 := tri[k]
+					p2 := tri[(k+1)%3]
 					var origSeg *config.ConfigSegment
-
-					// Match topologico esatto per rimappare le proprietà del muro
+					// Match topologico ESATTO
 					for _, cn := range cs.Segments {
-						if (p1.X == cn.Start.X && p1.Y == cn.Start.Y && p2.X == cn.End.X && p2.Y == cn.End.Y) ||
-							(p1.X == cn.End.X && p1.Y == cn.End.Y && p2.X == cn.Start.X && p2.Y == cn.Start.Y) {
+						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
 							origSeg = cn
 							break
 						}
 					}
-
 					start := geometry.XY{X: p1.X, Y: p1.Y}
 					end := geometry.XY{X: p2.X, Y: p2.Y}
 					var seg *Segment
-
+					matchEdges := false
 					if origSeg != nil {
+						matchEdges = true
 						if origSeg.Tag != "" {
 							tags = append(tags, origSeg.Tag)
 						}
@@ -170,24 +176,25 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 						lower := anim.GetAnimation(origSeg.Lower)
 						seg = NewSegment(origSeg.Neighbor, nil, origSeg.Kind, start, end, origSeg.Tag, upper, middle, lower)
 					} else {
-						// Segmento interno creato dal triangolatore
-						seg = NewSegment("", nil, config.DefinitionJoin, start, end, "", nil, nil, nil)
+						matchEdges = false
+						empty := anim.GetAnimation(nil)
+						seg = NewSegment("", nil, config.DefinitionJoin, start, end, "", empty, empty, empty)
 					}
 					segments = append(segments, seg)
+					edgeSegmentsContainer[seg] = matchEdges
 				}
-
-				// Assemblaggio del settore
 				s := NewSector(modelSectorId, subSectorId, segments, texFloor, texCeil)
 				modelSectorId++
-				if len(tags) > 0 {
-					s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
-				} else {
-					s.Tag = cs.Tag
-				}
+				s.AddTag(cs.Tag, tags)
 				s.CeilY, s.FloorY = cs.CeilY, cs.FloorY
+
+				s.Light = NewLight()
 				if cs.Light != nil {
-					s.Light = NewLight()
 					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
+				}
+				for _, seg := range segments {
+					edgeKey := geometry.NewQuantizedEdgeKey(seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, quantize)
+					parentsContainer[edgeKey] = s
 				}
 				container = append(container, s)
 				totalPolygons++
@@ -195,38 +202,29 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 		}
 	}
 
-	tst := NewSectors(container)
-	tst.CreateTree()
+	// Risoluzione adiacenze
 	for _, sect := range container {
 		for _, seg := range sect.Segments {
-			seg.ComputeAABB()
-			candidates := tst.Query(seg)
-			resolved := false
-			for _, candidate := range candidates {
-				if candidate == sect {
-					continue // Ignora se stesso
-				}
-				for _, candSeg := range candidate.Segments {
-					// Match TOPOLOGICO ESATTO: i float combaciano al bit
-					if seg.Start.X == candSeg.End.X && seg.Start.Y == candSeg.End.Y &&
-						seg.End.X == candSeg.Start.X && seg.End.Y == candSeg.Start.Y {
-						seg.SetSector(candidate.Id, candidate)
-						seg.Kind = config.DefinitionJoin
-						resolved = true
-						break
+			if seg.Kind == config.DefinitionJoin {
+				reverseKey := geometry.NewQuantizedEdgeKey(seg.End.X, seg.End.Y, seg.Start.X, seg.Start.Y, quantize)
+				if neighborSect, exists := parentsContainer[reverseKey]; exists {
+					seg.SetSector(neighborSect.Id, neighborSect)
+				} else {
+					// Prevents ghost walls
+					matchEdges := edgeSegmentsContainer[seg]
+					if matchEdges {
+						seg.Kind = config.DefinitionWall
+						seg.SetSector("", nil)
+					} else {
+						// Taglio interno: richiude su se stesso
+						seg.SetSector(sect.Id, sect)
 					}
 				}
-				if resolved {
-					break
-				}
-			}
-			// Chiusura del bordo se non ha vicini
-			if !resolved && seg.Kind != config.DefinitionWall {
-				seg.Kind = config.DefinitionWall
 			}
 		}
 	}
-	return tst, totalPolygons
+
+	return NewSectors(container), totalPolygons
 }
 
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.

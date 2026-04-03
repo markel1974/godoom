@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"math"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -90,6 +91,13 @@ func (s *Sector) ComputeAABB() {
 		}
 	}
 	s.aabb = physics.NewAABB(minX, minY, s.FloorY, maxX, maxY, s.CeilY)
+}
+
+func (s *Sector) AddTag(id string, tags []string) {
+	s.Tag = id
+	if len(tags) > 0 {
+		s.Tag += "[" + strings.Join(tags, ";") + "]"
+	}
 }
 
 // Reference updates the sector's compile ID if it differs or increments its usage count if it matches.

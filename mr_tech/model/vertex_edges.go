@@ -1,19 +1,21 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// VertexNode represents a graph vertex with a unique ID, geometric position, and an associated bounding box.
+// VertexNode represents a graph vertex with an identifier, 2D position, and an associated axis-aligned bounding box (AABB).
 type VertexNode struct {
 	Id   int
 	aabb *physics.AABB
 	geometry.XY
 }
 
-// NewVertexNode creates a new VertexNode with the given ID and coordinates, initializing its bounding box (AABB).
+// NewVertexNode creates and returns a new VertexNode with the specified ID and 2D coordinates (XY) initialized with an AABB.
 func NewVertexNode(id int, xy geometry.XY) *VertexNode {
 	const eps = 0.001
 	return &VertexNode{
@@ -23,27 +25,32 @@ func NewVertexNode(id int, xy geometry.XY) *VertexNode {
 	}
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the VertexNode.
+// GetAABB returns the axis-aligned bounding box (AABB) associated with the VertexNode.
 func (v *VertexNode) GetAABB() *physics.AABB {
 	return v.aabb
 }
 
-// VertexEdges represents a structure that facilitates vertex and edge compilation from sector configurations.
+// VertexEdges represents a structure that associates a polygon with an AABB tree and its corresponding sector edges.
 type VertexEdges struct {
+	vertexes     geometry.Polygon
+	tree         *physics.AABBTree
+	sectorsEdges [][]geometry.Edge
 }
 
-// NewVertexEdges creates and returns a new instance of the VertexEdges structure.
+// NewVertexEdges creates and initializes a new instance of VertexEdges with an empty vertex list and a new AABBTree.
 func NewVertexEdges() *VertexEdges {
-	return &VertexEdges{}
+	return &VertexEdges{
+		tree:         physics.NewAABBTree(1024),
+		vertexes:     nil,
+		sectorsEdges: nil,
+	}
 }
 
-// Construct constructs a polygon and associated edges from the given sectors using a spatial acceleration structure.
-func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) (geometry.Polygon, [][]geometry.Edge) {
-	tree := physics.NewAABBTree(1024)
-	var vertexes geometry.Polygon
+// Construct builds the vertex and edge data structures from the provided configuration sectors.
+func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) {
 	getOrAddVertex := func(p geometry.XY) int {
 		foundId := -1
-		tree.QueryPoint(p.X, p.Y, func(object physics.IAABB) bool {
+		t.tree.QueryPoint(p.X, p.Y, func(object physics.IAABB) bool {
 			if v, ok := object.(*VertexNode); ok {
 				if v.X == p.X && v.Y == p.Y {
 					foundId = v.Id
@@ -56,23 +63,33 @@ func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) (geometry.Polyg
 			return foundId
 		}
 		point := geometry.XY{X: p.X, Y: p.Y}
-		idx := len(vertexes)
-		vertexes = append(vertexes, point)
+		idx := len(t.vertexes)
+		t.vertexes = append(t.vertexes, point)
 		vNode := NewVertexNode(idx, point)
-		tree.InsertObject(vNode)
+		t.tree.InsertObject(vNode)
 		return idx
 	}
 
-	sectorsEdges := make([][]geometry.Edge, len(cSectors))
-	// 1. Costruzione dei bordi (vincoli) per il triangolatore
-	for idx, cs := range cSectors {
+	t.sectorsEdges = make([][]geometry.Edge, len(cSectors))
+	// Build edges (constraints) for the triangulator
+	for configIdx, cs := range cSectors {
 		var edges []geometry.Edge
 		for i, cn := range cs.Segments {
 			vStart := getOrAddVertex(cn.Start)
 			vEnd := getOrAddVertex(cn.End)
 			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, LdIdx: i, IsLeft: false})
 		}
-		sectorsEdges[idx] = edges
+		t.sectorsEdges[configIdx] = edges
 	}
-	return vertexes, sectorsEdges
+}
+
+// GetTriangles returns a collection of triangulated polygons for the specified sector index or an error if the index is invalid.
+// The returned polygons represent non-overlapping triangle groups derived from the sector's edges.
+func (t *VertexEdges) GetTriangles(configIdx int) ([][]geometry.Polygon, error) {
+	if configIdx < 0 || configIdx >= len(t.sectorsEdges) {
+		return nil, fmt.Errorf("invalid sector index %d", configIdx)
+	}
+	edges := t.sectorsEdges[configIdx]
+	triContainer := t.vertexes.TriangulateEdges(edges, len(t.vertexes))
+	return triContainer, nil
 }

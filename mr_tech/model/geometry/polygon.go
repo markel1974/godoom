@@ -42,7 +42,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 	var rawLoops []Polygon
 
 	for _, startEdge := range edges {
-		vIdx := startEdge.GetVisitedIdx()
+		vIdx := startEdge.Index
 		if visited[vIdx] {
 			continue
 		}
@@ -51,7 +51,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 		curr := startEdge
 
 		for {
-			visited[curr.GetVisitedIdx()] = true
+			visited[curr.Index] = true
 			v := poly[curr.V1Idx]
 			currentLoop = append(currentLoop, XY{X: v.X, Y: v.Y})
 
@@ -60,7 +60,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 			found := false
 
 			if len(nextOptions) == 1 {
-				if !visited[nextOptions[0].GetVisitedIdx()] {
+				if !visited[nextOptions[0].Index] {
 					nextEdge = nextOptions[0]
 					found = true
 				}
@@ -77,7 +77,7 @@ func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
 				bestIdx := -1
 
 				for i, o := range nextOptions {
-					if visited[o.GetVisitedIdx()] {
+					if visited[o.Index] {
 						continue
 					}
 					outV1 := poly[o.V1Idx]

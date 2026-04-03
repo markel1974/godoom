@@ -105,7 +105,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 }
 
 // buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
-func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []geometry.Edge) *config.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *config.ConfigSector {
 	const openAllDoors = true
 	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
@@ -164,7 +164,19 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.C
 	sectorsEdges := bld.createSectorsEdges(level)
 	for secIdx, edges := range sectorsEdges {
 		lumpSector := level.Sectors[secIdx]
-		triContainer := vertexes.TriangulateEdges(edges, count)
+
+		geometryEdge := make([]geometry.Edge, len(edges))
+		for i := range edges {
+			index := edges[i].LdIdx << 1
+			if edges[i].IsLeft {
+				index |= 1
+			}
+			geometryEdge[i].V1Idx = int(edges[i].V1Idx)
+			geometryEdge[i].V2Idx = int(edges[i].V2Idx)
+			geometryEdge[i].Index = index
+		}
+
+		triContainer := vertexes.TriangulateEdges(geometryEdge, count)
 		for loopIdx, triangles := range triContainer {
 			for triIdx, tri := range triangles {
 				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, loopIdx, triIdx, edges)
@@ -207,7 +219,7 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.C
 
 // buildSegment creates a ConfigSegment for a wall section based on sector edges and textures, handling sky and two-sided flags.
 // Returns the constructed ConfigSegment and a bool indicating if it matched any edge.
-func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.XY, sectorEdges []geometry.Edge) (*config.ConfigSegment, bool) {
+func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.XY, sectorEdges []Edge) (*config.ConfigSegment, bool) {
 	mp1 := geometry.XY{X: p1.X, Y: p1.Y}
 	mp2 := geometry.XY{X: p2.X, Y: p2.Y}
 
@@ -307,7 +319,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 }
 
 // calculateOpenDoorCeil determines the ceiling height for an open door based on adjacent sectors and door conditions.
-func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []geometry.Edge) float64 {
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
 	hasAdjacent := false
@@ -347,17 +359,24 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 	return float64(wadSector.CeilingHeight)
 }
 
+type Edge struct {
+	V1Idx  int16
+	V2Idx  int16
+	LdIdx  int
+	IsLeft bool
+}
+
 // createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
-func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]geometry.Edge {
-	sectorsEdges := make(map[uint16][]geometry.Edge)
+func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]Edge {
+	sectorsEdges := make(map[uint16][]Edge)
 	for i, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
 			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1Idx: int(ld.VertexStart), V2Idx: int(ld.VertexEnd), LdIdx: i, IsLeft: false})
+			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexStart, V2Idx: ld.VertexEnd, LdIdx: i, IsLeft: false})
 		}
 		if ld.SideDefLeft != -1 {
 			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], geometry.Edge{V1Idx: int(ld.VertexEnd), V2Idx: int(ld.VertexStart), LdIdx: i, IsLeft: true})
+			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexEnd, V2Idx: ld.VertexStart, LdIdx: i, IsLeft: true})
 		}
 	}
 	return sectorsEdges

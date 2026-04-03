@@ -4,19 +4,9 @@ import "math"
 
 // Edge represents a connection between two vertices with additional metadata such as linedef index and orientation.
 type Edge struct {
-	V1Idx  int
-	V2Idx  int
-	LdIdx  int
-	IsLeft bool
-}
-
-// GetVisitedIdx computes a unique bitmask for the edge based on its linedef index and orientation.
-func (e Edge) GetVisitedIdx() int {
-	idx := e.LdIdx << 1
-	if e.IsLeft {
-		idx |= 1
-	}
-	return idx
+	V1Idx int
+	V2Idx int
+	Index int
 }
 
 // EdgeKey uniquely identifies a 2D undirected edge using normalized coordinates independent of edge orientation.

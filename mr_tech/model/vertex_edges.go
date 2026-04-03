@@ -79,7 +79,7 @@ func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) {
 		for i, cn := range cs.Segments {
 			vStart := t.getOrAddVertex(cn.Start)
 			vEnd := t.getOrAddVertex(cn.End)
-			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, LdIdx: i, IsLeft: false})
+			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, Index: i})
 		}
 		t.sectorsEdges[configIdx] = edges
 	}

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
@@ -48,7 +49,12 @@ type ThingPlayer struct {
 }
 
 // NewThingPlayer creates a new ThingPlayer instance with initial position, angle, sector, and debug configuration.
-func NewThingPlayer(cfg *config.ConfigPlayer, sector *Sector, sectors *Sectors, entities *Entities, debug bool) *ThingPlayer {
+func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entities, debug bool) (*ThingPlayer, error) {
+	sector := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
+	if sector == nil {
+		return nil, fmt.Errorf("can't find player sector at %d, %d", cfg.Position.X, cfg.Position.Y)
+	}
+
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius
@@ -75,7 +81,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, sector *Sector, sectors *Sectors, 
 	}
 	p.SetAngle(cfg.Angle)
 	p.entities.AddThing(p)
-	return p
+	return p, nil
 }
 
 // GetId retrieves the unique identifier of the ThingPlayer instance.

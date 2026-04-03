@@ -83,11 +83,9 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		return err
 	}
 
-	pSector := r.sectors.QueryPoint(cfg.Player.Position.X, cfg.Player.Position.Y)
-	if pSector == nil {
-		return fmt.Errorf("can't find player sector at %d, %d", cfg.Player.Position.X, cfg.Player.Position.Y)
+	if r.player, err = NewThingPlayer(cfg.Player, r.sectors, r.entities, false); err != nil {
+		return err
 	}
-	r.player = NewThingPlayer(cfg.Player, pSector, r.sectors, r.entities, false)
 
 	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
 

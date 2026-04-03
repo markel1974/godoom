@@ -52,7 +52,7 @@ type ThingPlayer struct {
 func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entities, debug bool) (*ThingPlayer, error) {
 	sector := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
 	if sector == nil {
-		return nil, fmt.Errorf("can't find player sector at %d, %d", cfg.Position.X, cfg.Position.Y)
+		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
 	}
 
 	w := cfg.Radius * 2

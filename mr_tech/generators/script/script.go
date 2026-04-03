@@ -141,12 +141,9 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 		return nil, errors.New("nil vertices")
 	}
 	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), config.LightKindAmbient)
-	configSectorIdx++
-
 	if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 		return nil, err
 	}
-
 	type data struct {
 		Val  int
 		Kind int

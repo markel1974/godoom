@@ -55,9 +55,8 @@ func main() {
 
 	switch mode {
 	case 0:
-		//p := script.NewParser()
-		//cfg, err = p.Parse(script.StubOld2)
-		cfg, err = script.ParseScriptData(script.StubOld2)
+		p := script.NewParser()
+		cfg, err = p.Parse(script.StubOld2)
 	case 1:
 		cfg, err = world.Generate()
 	case 2:

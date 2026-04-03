@@ -18,20 +18,13 @@ const (
 	scaleH = 50.0
 )
 
-// ParseScriptData parses the provided script data string and generates a ConfigRoot object or returns an error.
 func ParseScriptData(id string) (*config.ConfigRoot, error) {
 	var cfgVertices []geometry.XY
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(basePath)
 	cfg := config.NewConfigRoot(nil, &config.ConfigPlayer{}, nil, 1.0, false, t)
-	//cfg := &model.ConfigRoot{
-	//	Sectors: nil,
-	//	ThingPlayer:  &model.ConfigPlayer{},
-	//	Textures:
-	//}
 
 	oldData := strings.Split(id, "\n")
-
 	configSectorIdx := 0
 
 	for _, data := range oldData {
@@ -62,21 +55,21 @@ func ParseScriptData(id string) (*config.ConfigRoot, error) {
 						}
 						break
 					}
-					//fmt.Printf("idx: %d, x: %f, y: %f\n", len(cfgVertices), xy.X, xy.Y)
 					cfgVertices = append(cfgVertices, xy)
 				}
 			}
 
 		case "sector":
 			if cfgVertices == nil {
-				return nil, errors.New(fmt.Sprintf("nil vertices"))
+				return nil, errors.New("nil vertices")
 			}
 			cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), config.LightKindAmbient)
 			configSectorIdx++
-			_, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY)
-			if err != nil {
+
+			if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 				return nil, err
 			}
+
 			type data struct {
 				Val  int
 				Kind int
@@ -101,48 +94,35 @@ func ParseScriptData(id string) (*config.ConfigRoot, error) {
 				}
 				numbers = append(numbers, d)
 			}
+
 			if len(numbers) == 0 || len(numbers)%2 > 0 {
-				return nil, errors.New("empty sector number")
+				return nil, errors.New("empty or invalid sector definition")
 			}
-			//numbers viene diviso a metà perche la prima parte contiene i riferimenti ai vertici e la seconda i Neighbors
+
 			m := len(numbers) / 2
 			for idx := 0; idx < m; idx++ {
-				vertexId := numbers[idx]
+				v1Idx := numbers[idx]
+				v2Idx := numbers[(idx+1)%m] // Chiusura topologica
 				neighborId := numbers[idx+m]
-				if vertexId.Val < 0 || vertexId.Val >= len(cfgVertices) {
-					return nil, errors.New(fmt.Sprintf("invalid vertex number: %d max: %d", vertexId, len(cfgVertices)))
+
+				if v1Idx.Val < 0 || v1Idx.Val >= len(cfgVertices) || v2Idx.Val < 0 || v2Idx.Val >= len(cfgVertices) {
+					return nil, fmt.Errorf("invalid vertex index, max: %d", len(cfgVertices))
 				}
 
-				xy := geometry.XY{X: cfgVertices[vertexId.Val].X, Y: cfgVertices[vertexId.Val].Y}
-				if idx == 0 {
-					neighbor := config.NewConfigSegment("", neighborId.Kind, xy, xy, strconv.Itoa(neighborId.Val))
-					neighbor.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					cs.Segments = append(cs.Segments, neighbor)
-				} else if idx == m-1 {
-					prev := cs.Segments[idx-1]
-					prev.End = xy
-				} else {
-					prev := cs.Segments[idx-1]
-					prev.End = xy
-					neighbor := config.NewConfigSegment("", config.DefinitionUnknown, xy, xy, "unknown")
-					neighbor.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					neighbor.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-					cs.Segments = append(cs.Segments, neighbor)
-				}
+				start := cfgVertices[v1Idx.Val]
+				end := cfgVertices[v2Idx.Val]
 
-				cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-				cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
-				//cs.Textures = true
+				seg := config.NewConfigSegment("", neighborId.Kind, start, end, strconv.Itoa(neighborId.Val))
+				seg.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+				seg.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+				seg.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+				cs.Segments = append(cs.Segments, seg)
 			}
-			cfg.Sectors = append(cfg.Sectors, cs)
 
-		case "light":
-			//l := &model.ConfigLight{}
-			//_, _ = fmt.Fscanf(r, "%f %f %f %s %f %f %f", &l.Where.X, &l.Where.Z, &l.Where.Y, &l.Sector, &l.Light.X, &l.Light.Y, &l.Light.Z)
-			//cfg.Lights = append(cfg.Lights, l)
+			cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+			cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
+
+			cfg.Sectors = append(cfg.Sectors, cs)
 
 		case "player":
 			_, _ = fmt.Fscanf(r, "%f %f %f %s", &cfg.Player.Position.X, &cfg.Player.Position.Y, &cfg.Player.Angle)
@@ -152,20 +132,36 @@ func ParseScriptData(id string) (*config.ConfigRoot, error) {
 		}
 	}
 
-	if cfgVertices == nil {
-		return nil, errors.New(fmt.Sprintf("nil vertices"))
+	// 2. Fase di Sigillatura (Rescan Topologico)
+	type edgeKey struct{ p1, p2 geometry.XY }
+	lineDefsCache := make(map[edgeKey]*config.ConfigSector)
+	for _, sector := range cfg.Sectors {
+		for _, s := range sector.Segments {
+			lineDefsCache[edgeKey{s.Start, s.End}] = sector
+		}
+	}
+	for _, sector := range cfg.Sectors {
+		for _, s := range sector.Segments {
+			if s.Kind != config.DefinitionWall {
+				// Cerchiamo il segmento invertito (il "lato B" della linea)
+				revKey := edgeKey{p1: s.End, p2: s.Start}
+				if neighborSector, ok := lineDefsCache[revKey]; ok {
+					s.Tag = neighborSector.Id
+					s.Kind = config.DefinitionUnknown
+				} else {
+					// Nessun segmento corrispondente trovato: la linea deve essere un muro
+					s.Kind = config.DefinitionWall
+					s.Tag = "unknown"
+				}
+			}
+		}
 	}
 
-	//out, _ := json.MarshalIndent(cfg, "", " ")
-	//fmt.Println(string(out))
+	if cfgVertices == nil {
+		return nil, errors.New("nil vertices")
+	}
 
-	/*
-		var ranges  = []int{ 3, 14, 27, 45 }
-		for _, r := range ranges {
-			out, _ := json.MarshalIndent(cfg.Vertices[r], "", " ")
-			fmt.Println(string(out))
-		}
-	*/
+	cfg.Vertices = cfgVertices
 
 	return cfg, nil
 }

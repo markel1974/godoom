@@ -134,7 +134,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	var hit *Segment = nil
 
 	for _, seg := range t.sector.Segments {
-		if seg.Kind == config.DefinitionJoin {
+		if seg.Neighbor != nil {
 			if top > t.sector.CeilY || bottom < t.sector.FloorY {
 				continue
 			}

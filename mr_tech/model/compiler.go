@@ -121,33 +121,30 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 	modelSectorId := uint16(0)
 	var container []*Sector
 	totalPolygons := 0
-	edgeSegmentsContainer := make(map[*Segment]bool)
+	var fixSegments []*Segment
 	segmentsTree := physics.NewAABBTree(1024)
+	emptyAnim := anim.GetAnimation(nil)
 	ve := NewVertexEdges(0.001)
-	ve.Construct(cfg)
+	ve.Construct(cfg.Vertices, cfg.Sectors)
 
 	for csIdx, cs := range cfg.Sectors {
 		if len(cs.Segments) == 0 {
 			continue
 		}
-		triContainer, err := ve.GetTriangles(csIdx)
+		triContainer, _, err := ve.GetTriangles(csIdx)
 		if err != nil {
 			fmt.Println("Error retrieving polygons for sector", csIdx, ":", err.Error())
 			continue
 		}
-		texFloor := anim.GetAnimation(cs.Floor)
-		texCeil := anim.GetAnimation(cs.Ceil)
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
+				s := NewSector(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
+				modelSectorId++
+				container = append(container, s)
 				// Mantiene il Winding Order consistente per ContainsPoint
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
-
-				s := NewSector(modelSectorId, cs.Id, cs.FloorY, texFloor, cs.CeilY, texCeil)
-				modelSectorId++
-
-				var tags []string
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
 					p2 := tri[(k+1)%3]
@@ -161,79 +158,69 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 					}
 					start := geometry.XY{X: p1.X, Y: p1.Y}
 					end := geometry.XY{X: p2.X, Y: p2.Y}
-					var seg *Segment
-					matchEdges := false
+					kind := config.DefinitionUnknown
+					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
+					tag := "unknown"
 					if origSeg != nil {
-						matchEdges = true
-						if origSeg.Tag != "" {
-							tags = append(tags, origSeg.Tag)
-						}
-						upper := anim.GetAnimation(origSeg.Upper)
-						middle := anim.GetAnimation(origSeg.Middle)
-						lower := anim.GetAnimation(origSeg.Lower)
-						seg = NewSegment(nil, origSeg.Kind, start, end, origSeg.Tag, upper, middle, lower)
-					} else {
-						matchEdges = false
-						empty := anim.GetAnimation(nil)
-						seg = NewSegment(nil, config.DefinitionJoin, start, end, "", empty, empty, empty)
+						kind = origSeg.Kind
+						tag = origSeg.Tag
+						upper = anim.GetAnimation(origSeg.Upper)
+						middle = anim.GetAnimation(origSeg.Middle)
+						lower = anim.GetAnimation(origSeg.Lower)
 					}
-					s.AddSegment(seg)
-					edgeSegmentsContainer[seg] = matchEdges
-
+					s.AddTag(tag)
+					seg := NewSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
+					if kind == config.DefinitionWall {
+						seg.Kind = config.DefinitionWall
+					} else {
+						fixSegments = append(fixSegments, seg)
+					}
 					seg.ComputeAABB()
 					segmentsTree.InsertObject(seg)
+					s.AddSegment(seg)
 				}
-
-				s.AddTag(cs.Tag, tags)
 				s.Light = NewLight()
 				if cs.Light != nil {
 					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
 				}
-				container = append(container, s)
 				totalPolygons++
 			}
 		}
 	}
-	const eps = 0.001
-	// Tolleranza massima al quadrato per 4 assi
-	const maxDistSq = (eps * eps) * 4
 
 	// Risoluzione adiacenze
-	for _, sect := range container {
-		for _, seg := range sect.Segments {
-			var bestCandidate *Sector
-			bestDistSq := math.MaxFloat64
-			segmentsTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
-				candSeg, ok := object.(*Segment)
-				if !ok {
-					return false
-				}
-				if candSeg.Parent.Id == sect.Id {
-					return false
-				}
-				dx1 := seg.Start.X - candSeg.End.X
-				dy1 := seg.Start.Y - candSeg.End.Y
-				dx2 := seg.End.X - candSeg.Start.X
-				dy2 := seg.End.Y - candSeg.Start.Y
-				distSq := (dx1 * dx1) + (dy1 * dy1) + (dx2 * dx2) + (dy2 * dy2)
-				if distSq < bestDistSq {
-					bestDistSq = distSq
-					bestCandidate = candSeg.Parent
-				}
+	for _, seg := range fixSegments {
+		// already linked
+		if seg.Kind == config.DefinitionJoin || seg.Kind == config.DefinitionWall {
+			continue
+		}
+		bestDistSq := math.MaxFloat64
+		var bestNeighborSeg *Segment
+		segmentsTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
+			overlapSeg, ok := object.(*Segment)
+			if !ok || overlapSeg.Parent == seg.Parent {
 				return false
-			})
-
-			// Assegna SOLO se il miglior candidato rientra nella tolleranza esatta
-			if bestCandidate != nil && bestDistSq <= maxDistSq {
-				seg.SetNeighbor(bestCandidate)
-			} else {
-				if edgeSegmentsContainer[seg] {
-					seg.Kind = config.DefinitionWall
-					seg.SetNeighbor(nil)
-				} else {
-					seg.SetNeighbor(sect)
-				}
 			}
+			dx1 := seg.Start.X - overlapSeg.End.X
+			dy1 := seg.Start.Y - overlapSeg.End.Y
+			dx2 := seg.End.X - overlapSeg.Start.X
+			dy2 := seg.End.Y - overlapSeg.Start.Y
+			distSq := (dx1 * dx1) + (dy1 * dy1) + (dx2 * dx2) + (dy2 * dy2)
+			if distSq < bestDistSq {
+				bestDistSq = distSq
+				bestNeighborSeg = overlapSeg
+			}
+			return false
+		})
+		if bestNeighborSeg != nil {
+			// Link reciproco (O(N/2)
+			bestNeighborSeg.Kind = config.DefinitionJoin
+			bestNeighborSeg.SetNeighbor(seg.Parent)
+			seg.Kind = config.DefinitionJoin
+			seg.SetNeighbor(bestNeighborSeg.Parent)
+		} else {
+			seg.Kind = config.DefinitionWall
+			seg.SetNeighbor(nil)
 		}
 	}
 
@@ -249,12 +236,11 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 	for idx, cs := range cfg.Sectors {
 		texFloor := anim.GetAnimation(cs.Floor)
 		texCeil := anim.GetAnimation(cs.Ceil)
-		s := NewSector(modelSectorId, cs.Id, cs.FloorY, texFloor, cs.CeilY, texCeil)
+		s := NewSector(modelSectorId, cs.Id, cs.FloorY, texFloor, cs.CeilY, texCeil, cs.Tag)
 		modelSectorId++
 
-		var tags []string
 		for _, cn := range cs.Segments {
-			tags = append(tags, cn.Tag)
+			s.AddTag(cn.Tag)
 			aUpper := anim.GetAnimation(cn.Upper)
 			aMiddle := anim.GetAnimation(cn.Middle)
 			aLower := anim.GetAnimation(cn.Lower)
@@ -269,8 +255,6 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 			fmt.Printf("Sector %s (idx: %d): vertices as zero len, removing\n", cs.Id, idx)
 			continue
 		}
-
-		s.AddTag(cs.Tag, tags)
 		s.Light = NewLight()
 		if cs.Light != nil {
 			s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)

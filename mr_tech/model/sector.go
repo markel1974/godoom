@@ -2,9 +2,7 @@ package model
 
 import (
 	"math"
-	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
@@ -31,7 +29,7 @@ type Sector struct {
 }
 
 // NewSector initializes and returns a new Sector instance with specified parameters including model ID, ID, segments, floor, and ceiling.
-func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation) *Sector {
+func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation, tag string) *Sector {
 	s := &Sector{
 		ModelId:    modelId,
 		Id:         id,
@@ -42,6 +40,7 @@ func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animat
 		references: make(map[uint64]bool),
 		Ceil:       ceil,
 		Floor:      floor,
+		Tag:        tag,
 	}
 	return s
 }
@@ -97,10 +96,9 @@ func (s *Sector) ComputeAABB() {
 	s.aabb = physics.NewAABB(minX, minY, s.FloorY, maxX, maxY, s.CeilY)
 }
 
-func (s *Sector) AddTag(id string, tags []string) {
-	s.Tag = id
+func (s *Sector) AddTag(tags string) {
 	if len(tags) > 0 {
-		s.Tag += "[" + strings.Join(tags, ";") + "]"
+		s.Tag += ";" + tags
 	}
 }
 
@@ -233,7 +231,7 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 	var closestSeg *Segment = nil
 
 	for _, seg := range s.Segments {
-		if seg.Kind == config.DefinitionJoin {
+		if seg.Neighbor != nil {
 			continue
 		}
 		dx := seg.End.X - seg.Start.X

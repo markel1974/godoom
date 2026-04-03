@@ -97,7 +97,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 		return nil, err
 	}
 	texHandler := wad.GetTextures()
-	sectors := bld.buildSectors(level, texHandler)
+	sectors := bld.buildSectorsNew(level, texHandler)
 	//grid := NewSpatialGrid(sectors, 256.0)
 	things := bld.buildThings(level, texHandler)
 	player := bld.buildPlayer(level)
@@ -105,9 +105,9 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 }
 
 // buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
-func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, loopIdx int, triIdx int, edges []Edge) *config.ConfigSector {
+func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, sectorId string, edges []Edge) *config.ConfigSector {
 	const openAllDoors = true
-	sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
+	//sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
 	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
 	miSector.FloorY = float64(lumpSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	ceilHeight := float64(lumpSector.CeilingHeight)
@@ -147,6 +147,48 @@ func (bld *Builder) createSectorsEdgesNew(level *Level) map[uint16][]Edge {
 	return sectorsEdges
 }
 
+func (bld *Builder) buildSectorsNew(level *Level, texHandler *Textures) []*config.ConfigSector {
+	var cSectors []*config.ConfigSector
+
+	totalLines := len(level.LineDefs)
+	vertexes := make(geometry.Polygon, len(level.Vertexes))
+	for idx, l := range level.Vertexes {
+		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
+	}
+
+	sectorsEdges := bld.createSectorsEdges(level)
+	for secIdx, edges := range sectorsEdges {
+		lumpSector := level.Sectors[secIdx]
+
+		geometryEdge := make([]geometry.Edge, len(edges))
+		for i := range edges {
+			index := edges[i].LdIdx << 1
+			if edges[i].IsLeft {
+				index |= 1
+			}
+			geometryEdge[i].V1Idx = int(edges[i].V1Idx)
+			geometryEdge[i].V2Idx = int(edges[i].V2Idx)
+			geometryEdge[i].Index = index
+		}
+
+		triContainer := vertexes.TriangulateEdges(geometryEdge, totalLines)
+		for loopIdx, triangles := range triContainer {
+			for triIdx, tri := range triangles {
+				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
+				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, sectorId, edges)
+				for k := 0; k < 3; k++ {
+					p1 := tri[k]
+					p2 := tri[(k+1)%3]
+					cSeg, _ := bld.buildSegment(level, texHandler, cSector.Id, p1, p2, edges)
+					cSector.Segments = append(cSector.Segments, cSeg)
+				}
+				cSectors = append(cSectors, cSector)
+			}
+		}
+	}
+	return cSectors
+}
+
 // buildSectors processes the level data to create and return a list of configuration sectors with their segments and properties.
 func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.ConfigSector {
 	const quantize = 1000
@@ -179,7 +221,8 @@ func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.C
 		triContainer := vertexes.TriangulateEdges(geometryEdge, count)
 		for loopIdx, triangles := range triContainer {
 			for triIdx, tri := range triangles {
-				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, loopIdx, triIdx, edges)
+				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
+				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, sectorId, edges)
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
 					p2 := tri[(k+1)%3]

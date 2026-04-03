@@ -1,16 +1,18 @@
 package config
 
 import (
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ConfigRoot represents the root configuration for a level, including sectors, lights, player, scale, and loop settings.
 type ConfigRoot struct {
-	Sectors     []*ConfigSector `json:"sectors"`
-	Things      []*ConfigThing  `json:"things"`
-	Player      *ConfigPlayer   `json:"player"`
-	ScaleFactor float64         `json:"scaleFactor"`
-	DisableLoop bool            `json:"disableLoop"`
+	Sectors     []*ConfigSector  `json:"sectors"`
+	Things      []*ConfigThing   `json:"things"`
+	Player      *ConfigPlayer    `json:"player"`
+	ScaleFactor float64          `json:"scaleFactor"`
+	DisableLoop bool             `json:"disableLoop"`
+	Vertices    geometry.Polygon `json:"vertices"`
 	Textures    textures.ITextures
 }
 

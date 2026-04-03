@@ -97,11 +97,18 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 		return nil, err
 	}
 	texHandler := wad.GetTextures()
-	sectors := bld.buildSectorsNew(level, texHandler)
+	vertexes := make(geometry.Polygon, len(level.Vertexes))
+	for idx, l := range level.Vertexes {
+		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
+	}
+	sectors := bld.buildSectorsNew(level, vertexes, texHandler)
 	//grid := NewSpatialGrid(sectors, 256.0)
 	things := bld.buildThings(level, texHandler)
 	player := bld.buildPlayer(level)
-	return config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler), nil
+	cr := config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler)
+	cr.Vertices = vertexes
+
+	return cr, nil
 }
 
 // buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
@@ -147,14 +154,10 @@ func (bld *Builder) createSectorsEdgesNew(level *Level) map[uint16][]Edge {
 	return sectorsEdges
 }
 
-func (bld *Builder) buildSectorsNew(level *Level, texHandler *Textures) []*config.ConfigSector {
+func (bld *Builder) buildSectorsNew(level *Level, vertexes geometry.Polygon, texHandler *Textures) []*config.ConfigSector {
 	var cSectors []*config.ConfigSector
 
 	totalLines := len(level.LineDefs)
-	vertexes := make(geometry.Polygon, len(level.Vertexes))
-	for idx, l := range level.Vertexes {
-		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
-	}
 
 	sectorsEdges := bld.createSectorsEdges(level)
 	for secIdx, edges := range sectorsEdges {
@@ -190,19 +193,13 @@ func (bld *Builder) buildSectorsNew(level *Level, texHandler *Textures) []*confi
 }
 
 // buildSectors processes the level data to create and return a list of configuration sectors with their segments and properties.
-func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.ConfigSector {
+func (bld *Builder) buildSectors(level *Level, vertexes geometry.Polygon, texHandler *Textures) []*config.ConfigSector {
 	const quantize = 1000
 
 	var cSectors []*config.ConfigSector
 	parentsContainer := make(map[geometry.QuantizedEdgeKey]string)
 	edgeSegmentsContainer := make(map[*config.ConfigSegment]bool)
-
 	count := len(level.LineDefs)
-	vertexes := make(geometry.Polygon, len(level.Vertexes))
-	for idx, l := range level.Vertexes {
-		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
-	}
-
 	sectorsEdges := bld.createSectorsEdges(level)
 	for secIdx, edges := range sectorsEdges {
 		lumpSector := level.Sectors[secIdx]

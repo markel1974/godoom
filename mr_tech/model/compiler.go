@@ -124,7 +124,7 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 	edgeSegmentsContainer := make(map[*Segment]bool)
 	segmentsTree := physics.NewAABBTree(1024)
 	ve := NewVertexEdges(0.001)
-	ve.Construct(cfg.Sectors)
+	ve.Construct(cfg)
 
 	for csIdx, cs := range cfg.Sectors {
 		if len(cs.Segments) == 0 {

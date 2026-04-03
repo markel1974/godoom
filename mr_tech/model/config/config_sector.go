@@ -1,16 +1,15 @@
 package config
 
-import "encoding/json"
-
-// DefinitionJoin represents a join action in a system with a numeric value of 3.
-// DefinitionVoid represents a void action in a system with a numeric value of 1.
-// DefinitionWall represents a wall action in a system with a numeric value of 2.
-// DefinitionUnknown represents an undefined state in a system with a numeric value of 0.
 const (
-	DefinitionJoin    = 3
-	DefinitionVoid    = 1
-	DefinitionWall    = 2
-	DefinitionUnknown = 0
+
+	// DefinitionUnknown represents an unspecified or undefined configuration type in the context of segment definition.
+	DefinitionUnknown = iota
+
+	// DefinitionWall represents a configuration segment identified as a wall within the level's geometry or structure.
+	DefinitionWall
+
+	// DefinitionJoin represents a constant used to define a join or connection segment within a configuration structure.
+	DefinitionJoin
 )
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.
@@ -55,14 +54,4 @@ func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
 		}
 	}
 	return out
-}
-
-// Print serializes the ConfigSector struct into JSON format; optionally indents the output if the indent parameter is true.
-func (is *ConfigSector) Print(indent bool) []byte {
-	if indent {
-		d, _ := json.MarshalIndent(is, "", "  ")
-		return d
-	}
-	d, _ := json.Marshal(is)
-	return d
 }

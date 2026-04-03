@@ -60,7 +60,7 @@ func main() {
 		cfg, err = world.Generate()
 	case 2:
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
-		wb := wad.NewBuilder()
+		wb := wad.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(wadFile, level)
 	default:
 		cfg, err = world.Generate()

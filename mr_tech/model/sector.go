@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"math"
 	"strings"
 
@@ -32,13 +31,12 @@ type Sector struct {
 }
 
 // NewSector initializes and returns a new Sector instance with specified parameters including model ID, ID, segments, floor, and ceiling.
-func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.Animation, ceil *textures.Animation) *Sector {
+func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation) *Sector {
 	s := &Sector{
 		ModelId:    modelId,
 		Id:         id,
-		CeilY:      0,
-		FloorY:     0,
-		Segments:   segments,
+		FloorY:     floorY,
+		CeilY:      ceilY,
 		usage:      0,
 		compileId:  0,
 		references: make(map[uint64]bool),
@@ -46,6 +44,12 @@ func NewSector(modelId uint16, id string, segments []*Segment, floor *textures.A
 		Floor:      floor,
 	}
 	return s
+}
+
+// AddSegment appends a Segment to the Sector and assigns the Sector as the Segment's Parent.
+func (s *Sector) AddSegment(seg *Segment) {
+	seg.Parent = s
+	s.Segments = append(s.Segments, seg)
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the Sector instance.
@@ -191,12 +195,12 @@ func (s *Sector) LocatePoint(px, py float64) *Sector {
 		for _, seg := range curr.Segments {
 			// Assuming that < 0 indicates the "external" half-space of the edge
 			if mathematic.PointSideF(px, py, seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y) < 0 {
-				if seg.Sector == nil {
+				if seg.Neighbor == nil {
 					// Hit external boundary of the mesh
 					return nil
 				}
 				// Transition: the point is beyond this segment, jump to the neighbor
-				curr = seg.Sector
+				curr = seg.Neighbor
 				inside = false
 				break
 			}
@@ -256,9 +260,9 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 		if t >= 0 && t <= minT && u >= -uPadding && u <= 1+uPadding {
 			holeLow := 9e9
 			holeHigh := -9e9
-			if seg.Sector != nil {
-				holeLow = mathematic.MaxF(s.FloorY, seg.Sector.FloorY)
-				holeHigh = mathematic.MinF(s.CeilY, seg.Sector.CeilY)
+			if seg.Neighbor != nil {
+				holeLow = mathematic.MaxF(s.FloorY, seg.Neighbor.FloorY)
+				holeHigh = mathematic.MinF(s.CeilY, seg.Neighbor.CeilY)
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t
@@ -296,34 +300,4 @@ func (s *Sector) GetCentroid() geometry.XY {
 		X: cx / (6.0 * signedArea),
 		Y: cy / (6.0 * signedArea),
 	}
-}
-
-// Print serializes the Sector into a JSON string, optionally indented, including its segments, floor, and ceiling data.
-func (s *Sector) Print(indent bool) string {
-	type printerSegment struct {
-		Start geometry.XY
-		End   geometry.XY
-		Ref   string
-		Kind  int
-		Tag   string
-	}
-	type printerSector struct {
-		ModelId  uint16
-		Id       string
-		Floor    float64
-		Ceil     float64
-		Segments []*printerSegment
-	}
-
-	p := printerSector{ModelId: s.ModelId, Id: s.Id, Floor: s.FloorY, Ceil: s.CeilY}
-	for _, z := range s.Segments {
-		ps := &printerSegment{Start: z.Start, End: z.End, Ref: z.Ref, Kind: z.Kind, Tag: z.Tag}
-		p.Segments = append(p.Segments, ps)
-	}
-	if indent {
-		d, _ := json.MarshalIndent(p, "", "  ")
-		return string(d)
-	}
-	d, _ := json.Marshal(p)
-	return string(d)
 }

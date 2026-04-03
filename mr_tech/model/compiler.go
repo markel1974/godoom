@@ -3,11 +3,11 @@ package model
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
@@ -40,7 +40,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectors(cfg, animations)
+	r.sectors, totalSegments = r.compileSectorsNew(cfg, animations)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -120,15 +120,12 @@ func (r *Compiler) GetLights() []*Light {
 }
 
 func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
-	const quantize = 1000
-
 	modelSectorId := uint16(0)
 	var container []*Sector
 	totalPolygons := 0
-	parentsContainer := make(map[geometry.QuantizedEdgeKey]*Sector)
 	edgeSegmentsContainer := make(map[*Segment]bool)
-
-	ve := NewVertexEdges()
+	segmentsTree := physics.NewAABBTree(1024)
+	ve := NewVertexEdges(0.001)
 	ve.Construct(cfg.Sectors)
 
 	for csIdx, cs := range cfg.Sectors {
@@ -148,8 +145,10 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
-				subSectorId := cs.Id
-				var segments []*Segment
+
+				s := NewSector(modelSectorId, cs.Id, cs.FloorY, texFloor, cs.CeilY, texCeil)
+				modelSectorId++
+
 				var tags []string
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
@@ -174,51 +173,67 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 						upper := anim.GetAnimation(origSeg.Upper)
 						middle := anim.GetAnimation(origSeg.Middle)
 						lower := anim.GetAnimation(origSeg.Lower)
-						seg = NewSegment(origSeg.Neighbor, nil, origSeg.Kind, start, end, origSeg.Tag, upper, middle, lower)
+						seg = NewSegment(nil, origSeg.Kind, start, end, origSeg.Tag, upper, middle, lower)
 					} else {
 						matchEdges = false
 						empty := anim.GetAnimation(nil)
-						seg = NewSegment("", nil, config.DefinitionJoin, start, end, "", empty, empty, empty)
+						seg = NewSegment(nil, config.DefinitionJoin, start, end, "", empty, empty, empty)
 					}
-					segments = append(segments, seg)
+					s.AddSegment(seg)
 					edgeSegmentsContainer[seg] = matchEdges
-				}
-				s := NewSector(modelSectorId, subSectorId, segments, texFloor, texCeil)
-				modelSectorId++
-				s.AddTag(cs.Tag, tags)
-				s.CeilY, s.FloorY = cs.CeilY, cs.FloorY
 
+					seg.ComputeAABB()
+					segmentsTree.InsertObject(seg)
+				}
+
+				s.AddTag(cs.Tag, tags)
 				s.Light = NewLight()
 				if cs.Light != nil {
 					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
-				}
-				for _, seg := range segments {
-					edgeKey := geometry.NewQuantizedEdgeKey(seg.Start.X, seg.Start.Y, seg.End.X, seg.End.Y, quantize)
-					parentsContainer[edgeKey] = s
 				}
 				container = append(container, s)
 				totalPolygons++
 			}
 		}
 	}
+	const eps = 0.001
+	// Tolleranza massima al quadrato per 4 assi
+	const maxDistSq = (eps * eps) * 4
 
 	// Risoluzione adiacenze
 	for _, sect := range container {
 		for _, seg := range sect.Segments {
-			if seg.Kind == config.DefinitionJoin {
-				reverseKey := geometry.NewQuantizedEdgeKey(seg.End.X, seg.End.Y, seg.Start.X, seg.Start.Y, quantize)
-				if neighborSect, exists := parentsContainer[reverseKey]; exists {
-					seg.SetSector(neighborSect.Id, neighborSect)
+			var bestCandidate *Sector
+			bestDistSq := math.MaxFloat64
+			segmentsTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
+				candSeg, ok := object.(*Segment)
+				if !ok {
+					return false
+				}
+				if candSeg.Parent.Id == sect.Id {
+					return false
+				}
+				dx1 := seg.Start.X - candSeg.End.X
+				dy1 := seg.Start.Y - candSeg.End.Y
+				dx2 := seg.End.X - candSeg.Start.X
+				dy2 := seg.End.Y - candSeg.Start.Y
+				distSq := (dx1 * dx1) + (dy1 * dy1) + (dx2 * dx2) + (dy2 * dy2)
+				if distSq < bestDistSq {
+					bestDistSq = distSq
+					bestCandidate = candSeg.Parent
+				}
+				return false
+			})
+
+			// Assegna SOLO se il miglior candidato rientra nella tolleranza esatta
+			if bestCandidate != nil && bestDistSq <= maxDistSq {
+				seg.SetNeighbor(bestCandidate)
+			} else {
+				if edgeSegmentsContainer[seg] {
+					seg.Kind = config.DefinitionWall
+					seg.SetNeighbor(nil)
 				} else {
-					// Prevents ghost walls
-					matchEdges := edgeSegmentsContainer[seg]
-					if matchEdges {
-						seg.Kind = config.DefinitionWall
-						seg.SetSector("", nil)
-					} else {
-						// Taglio interno: richiude su se stesso
-						seg.SetSector(sect.Id, sect)
-					}
+					seg.SetNeighbor(sect)
 				}
 			}
 		}
@@ -231,31 +246,33 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
+
+	segmentsRef := make(map[*Segment]string)
 	for idx, cs := range cfg.Sectors {
-		var segments []*Segment
+		texFloor := anim.GetAnimation(cs.Floor)
+		texCeil := anim.GetAnimation(cs.Ceil)
+		s := NewSector(modelSectorId, cs.Id, cs.FloorY, texFloor, cs.CeilY, texCeil)
+		modelSectorId++
+
 		var tags []string
 		for _, cn := range cs.Segments {
 			tags = append(tags, cn.Tag)
 			aUpper := anim.GetAnimation(cn.Upper)
 			aMiddle := anim.GetAnimation(cn.Middle)
 			aLower := anim.GetAnimation(cn.Lower)
-			seg := NewSegment(cn.Neighbor, nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
-			segments = append(segments, seg)
+			seg := NewSegment(nil, cn.Kind, cn.Start, cn.End, cn.Tag, aUpper, aMiddle, aLower)
+			if cn.Neighbor != "" {
+				segmentsRef[seg] = cn.Neighbor
+			}
+			s.AddSegment(seg)
 		}
 
-		if len(segments) == 0 {
+		if len(s.Segments) == 0 {
 			fmt.Printf("Sector %s (idx: %d): vertices as zero len, removing\n", cs.Id, idx)
 			continue
 		}
 
-		texFloor := anim.GetAnimation(cs.Floor)
-		texCeil := anim.GetAnimation(cs.Ceil)
-
-		s := NewSector(modelSectorId, cs.Id, segments, texFloor, texCeil)
-		modelSectorId++
-		s.Tag = cs.Tag + "[" + strings.Join(tags, ";") + "]"
-		s.CeilY = cs.CeilY
-		s.FloorY = cs.FloorY
+		s.AddTag(cs.Tag, tags)
 		s.Light = NewLight()
 		if cs.Light != nil {
 			s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
@@ -270,11 +287,13 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 		for _, seg := range sect.Segments {
 			totalSegments++
 			if seg.Kind != config.DefinitionWall {
-				if s := sectors.GetSector(seg.Ref); s != nil {
-					seg.SetSector(s.Id, s)
-				} else {
-					//fmt.Println("OUT", segment.Ref)
-					//os.Exit(-1)
+				if z, ok := segmentsRef[seg]; ok {
+					if s := sectors.GetSector(z); s != nil {
+						seg.SetNeighbor(s)
+					} else {
+						//fmt.Println("OUT", segment.Ref)
+						//os.Exit(-1)
+					}
 				}
 			}
 		}
@@ -307,19 +326,20 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 			for np, s := range sector.Segments {
 				if s.Kind != config.DefinitionWall {
 					if ld, ok := lineDefsCache[s.MakeReverseEdgeKey()]; ok {
-						if s.Ref != ld.sector.Id {
-							fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, %s found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id, s.Ref)
-							if s.Kind == config.DefinitionUnknown {
-								s.Kind = config.DefinitionJoin
+						if neighborRef, ok := segmentsRef[s]; ok {
+							if neighborRef != ld.sector.Id {
+								fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) should be %s, found instead. Fixing...\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, ld.sector.Id)
+								if s.Kind == config.DefinitionUnknown {
+									s.Kind = config.DefinitionJoin
+								}
+								s.SetNeighbor(ld.sector)
+								fixed++
 							}
-							s.SetSector(ld.sector.Id, ld.sector)
-							fixed++
 						}
 					} else {
 						s.Kind = config.DefinitionWall
-						s.SetSector("", nil)
-
-						fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Ref, s.Tag)
+						s.SetNeighbor(nil)
+						fmt.Printf("p1 - Sector %s (segment: %d): Neighbor behind line (%g, %g) - (%g, %g) %s. Opposite not found\n", sector.Id, np, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Tag)
 						undefined++
 					}
 				}
@@ -352,17 +372,17 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.Segments {
-				if seg.Kind != config.DefinitionWall && seg.Ref != "" {
-					if n := sectors.GetSector(seg.Ref); n != nil {
-						if !visited[n.Id] {
-							// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
-							if n.CeilY == curr.CeilY && n.FloorY == curr.FloorY && n.Light.intensity == curr.Light.intensity {
-								visited[n.Id] = true
-								queue = append(queue, n)
-							}
+				if seg.Kind != config.DefinitionWall && seg.Neighbor != nil {
+					n := seg.Neighbor
+					if !visited[n.Id] {
+						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
+						if n.CeilY == curr.CeilY && n.FloorY == curr.FloorY && n.Light.intensity == curr.Light.intensity {
+							visited[n.Id] = true
+							queue = append(queue, n)
 						}
 					}
 				}
+
 			}
 		}
 

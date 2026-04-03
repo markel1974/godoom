@@ -16,8 +16,8 @@ type VertexNode struct {
 }
 
 // NewVertexNode creates and returns a new VertexNode with the specified ID and 2D coordinates (XY) initialized with an AABB.
-func NewVertexNode(id int, xy geometry.XY) *VertexNode {
-	const eps = 0.001
+func NewVertexNode(id int, xy geometry.XY, eps float64) *VertexNode {
+	//const eps = 0.001
 	return &VertexNode{
 		Id:   id,
 		XY:   xy,
@@ -35,14 +35,16 @@ type VertexEdges struct {
 	vertexes     geometry.Polygon
 	tree         *physics.AABBTree
 	sectorsEdges [][]geometry.Edge
+	eps          float64
 }
 
 // NewVertexEdges creates and initializes a new instance of VertexEdges with an empty vertex list and a new AABBTree.
-func NewVertexEdges() *VertexEdges {
+func NewVertexEdges(eps float64) *VertexEdges {
 	return &VertexEdges{
 		tree:         physics.NewAABBTree(1024),
 		vertexes:     nil,
 		sectorsEdges: nil,
+		eps:          eps,
 	}
 }
 
@@ -65,7 +67,7 @@ func (t *VertexEdges) Construct(cSectors []*config.ConfigSector) {
 		point := geometry.XY{X: p.X, Y: p.Y}
 		idx := len(t.vertexes)
 		t.vertexes = append(t.vertexes, point)
-		vNode := NewVertexNode(idx, point)
+		vNode := NewVertexNode(idx, point, t.eps)
 		t.tree.InsertObject(vNode)
 		return idx
 	}

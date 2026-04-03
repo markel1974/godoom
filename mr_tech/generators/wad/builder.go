@@ -131,6 +131,22 @@ func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, te
 	return miSector
 }
 
+// createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
+func (bld *Builder) createSectorsEdgesNew(level *Level) map[uint16][]Edge {
+	sectorsEdges := make(map[uint16][]Edge)
+	for i, ld := range level.LineDefs {
+		if ld.SideDefRight != -1 {
+			s := level.SideDefs[ld.SideDefRight].SectorRef
+			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexStart, V2Idx: ld.VertexEnd, LdIdx: i, IsLeft: false})
+		}
+		if ld.SideDefLeft != -1 {
+			s := level.SideDefs[ld.SideDefLeft].SectorRef
+			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexEnd, V2Idx: ld.VertexStart, LdIdx: i, IsLeft: true})
+		}
+	}
+	return sectorsEdges
+}
+
 // buildSectors processes the level data to create and return a list of configuration sectors with their segments and properties.
 func (bld *Builder) buildSectors(level *Level, texHandler *Textures) []*config.ConfigSector {
 	const quantize = 1000

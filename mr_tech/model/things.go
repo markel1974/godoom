@@ -30,7 +30,7 @@ func NewThings(cfg []*config.ConfigThing, sectors *Sectors, entities *Entities, 
 	}
 	for _, ct := range cfg {
 		if err := r.CreateThing(ct); err != nil {
-			fmt.Println("ERROR: ", err)
+			fmt.Println("Warning: ", err)
 			//return nil, err
 		}
 	}
@@ -49,8 +49,13 @@ func (r *Things) GetThings() []IThing {
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
 func (r *Things) CreateThing(ct *config.ConfigThing) error {
-	sector := r.sectors.GetSector(ct.Sector)
-	//sector := r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
+	var sector *Sector
+	if len(ct.Sector) > 0 {
+		sector = r.sectors.GetSector(ct.Sector)
+	}
+	if sector == nil {
+		sector = r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
+	}
 	if sector == nil {
 		return fmt.Errorf("can't find thing sector at %s", ct.Sector)
 	}

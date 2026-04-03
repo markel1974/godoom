@@ -151,9 +151,9 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
 		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
 			holeLow, holeHigh := 9e9, -9e9
-			if seg.Sector != nil {
-				holeLow = mathematic.MaxF(t.sector.FloorY, seg.Sector.FloorY)
-				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Sector.CeilY)
+			if seg.Neighbor != nil {
+				holeLow = mathematic.MaxF(t.sector.FloorY, seg.Neighbor.FloorY)
+				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Neighbor.CeilY)
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t1

@@ -392,11 +392,9 @@ func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatri
 					w.targetId = css[idx].Sector.Id
 					var neighbors []string
 					for _, z := range css[idx].Sector.Segments {
-						id := ""
-						if z != nil {
-							id = z.Ref
+						if z != nil && z.Neighbor != nil {
+							neighbors = append(neighbors, z.Neighbor.Id)
 						}
-						neighbors = append(neighbors, id)
 					}
 					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
 				}

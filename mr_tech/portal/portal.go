@@ -108,7 +108,7 @@ func (r *Portal) Build() ([]*model.CompiledSector, int) {
 func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
-		neighbor := segment.Sector
+		neighbor := segment.Neighbor
 		if segment.Kind == config.DefinitionVoid {
 			continue
 		}
@@ -207,7 +207,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
-		neighbor := sector.Segments[s].Sector
+		neighbor := sector.Segments[s].Neighbor
 		if neighbor == sector {
 			continue
 		}
@@ -374,8 +374,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 	if first && outIdx == 0 {
 		for _, s := range sector.Segments {
-			if s.Sector != nil && s.Sector != sector {
-				outIdx = r.sectorQueue.UpdateItem(s.Sector, outIdx, qi)
+			if s.Neighbor != nil && s.Neighbor != sector {
+				outIdx = r.sectorQueue.UpdateItem(s.Neighbor, outIdx, qi)
 			}
 		}
 	}

@@ -1,7 +1,6 @@
 package config
 
 const (
-
 	// DefinitionUnknown represents an unspecified or undefined configuration type in the context of segment definition.
 	DefinitionUnknown = iota
 

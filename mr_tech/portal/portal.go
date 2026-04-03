@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
@@ -109,9 +108,9 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
 		neighbor := segment.Neighbor
-		if segment.Kind == config.DefinitionVoid {
-			continue
-		}
+		//if segment.Kind == config.DefinitionVoid {
+		//	continue
+		//}
 		// Coordinate World assolute sul piano XZ (niente proiezioni fotocamera!)
 		wx1, wz1 := segment.Start.X, segment.Start.Y
 		wx2, wz2 := segment.End.X, segment.End.Y
@@ -212,12 +211,12 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			continue
 		}
 
-		if segment.Kind == config.DefinitionVoid {
-			if neighbor != nil {
-				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
-			}
-			continue
-		}
+		//if segment.Kind == config.DefinitionVoid {
+		//	if neighbor != nil {
+		//		outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
+		//	}
+		//	continue
+		//}
 
 		// Rotate around the player's view
 		vx1, vy1, tx1, tz1 := vi.TranslateXY(segment.Start.X, segment.Start.Y)

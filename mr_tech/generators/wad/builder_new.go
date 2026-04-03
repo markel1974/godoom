@@ -201,7 +201,7 @@ func (bld *BuilderNew) buildThings(level *Level, texHandler *Textures) []*config
 		//tSectorId := grid.ResolveSectorId(geometry.XY{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, "", sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 		things = append(things, cfgThing)
 	}
 	return things
@@ -217,7 +217,7 @@ func (bld *BuilderNew) buildPlayer(level *Level) *config.ConfigPlayer {
 		}
 	}
 	//playerSectorId := grid.ResolveSectorId(geometry.XY{X: pX, Y: pY})
-	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, "", 20.0/radiusF, 100.0)
+	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, 20.0/radiusF, 100.0)
 	return player
 }
 

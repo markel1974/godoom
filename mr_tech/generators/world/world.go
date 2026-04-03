@@ -123,7 +123,6 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.ConfigRoot, error)
 
 	cfg.Player.Position.X = 1
 	cfg.Player.Position.Y = 1
-	cfg.Player.Sector = s1.Id
 
 	return cfg, nil
 }
@@ -235,7 +234,6 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 	}
 
 	// 4. Spawn del Giocatore al centro esatto
-	cfg.Player.Sector = fmt.Sprintf("cell_%d_%d", gridWidth/2, gridHeight/2)
 	cfg.Player.Position = geometry.XY{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2}
 	cfg.Player.Angle = 0.0
 

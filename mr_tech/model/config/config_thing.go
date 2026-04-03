@@ -25,7 +25,6 @@ type ConfigThing struct {
 	Radius    float64
 	Height    float64
 	Kind      ThingType
-	Sector    string
 	Speed     float64
 	Animation *ConfigAnimation
 }
@@ -39,13 +38,12 @@ type ConfigThing struct {
 // mass defines the weight of the thing, used in physics calculations.
 // radius and height define the dimensions of the thing for collision and spatial representation.
 // anim is the animation configuration associated with the thing, such as frames, kind, and scale.
-func NewConfigThing(id string, pos geometry.XY, angle float64, kind ThingType, sector string, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
+func NewConfigThing(id string, pos geometry.XY, angle float64, kind ThingType, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
 	return &ConfigThing{
 		Id:        id,
 		Position:  pos,
 		Angle:     angle,
 		Kind:      kind,
-		Sector:    sector,
 		Mass:      mass,
 		Radius:    radius,
 		Height:    height,

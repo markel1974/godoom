@@ -145,7 +145,7 @@ func ParseScriptData(id string) (*config.ConfigRoot, error) {
 			//cfg.Lights = append(cfg.Lights, l)
 
 		case "player":
-			_, _ = fmt.Fscanf(r, "%f %f %f %s", &cfg.Player.Position.X, &cfg.Player.Position.Y, &cfg.Player.Angle, &cfg.Player.Sector)
+			_, _ = fmt.Fscanf(r, "%f %f %f %s", &cfg.Player.Position.X, &cfg.Player.Position.Y, &cfg.Player.Angle)
 
 		default:
 			continue

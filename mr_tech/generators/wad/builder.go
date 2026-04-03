@@ -98,9 +98,9 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 	}
 	texHandler := wad.GetTextures()
 	sectors := bld.buildSectors(level, texHandler)
-	grid := NewSpatialGrid(sectors, 256.0)
-	things := bld.buildThings(level, texHandler, grid)
-	player := bld.buildPlayer(level, grid)
+	//grid := NewSpatialGrid(sectors, 256.0)
+	things := bld.buildThings(level, texHandler)
+	player := bld.buildPlayer(level)
 	return config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler), nil
 }
 
@@ -267,7 +267,7 @@ func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId st
 }
 
 // buildConfigThing creates and returns a list of ConfigThing objects based on the given level, texture handler, and spatial grid.
-func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *SpatialGrid) []*config.ConfigThing {
+func (bld *Builder) buildThings(level *Level, texHandler *Textures) []*config.ConfigThing {
 	var things []*config.ConfigThing
 	for i, t := range level.Things {
 		tX := float64(t.X)
@@ -284,17 +284,17 @@ func (bld *Builder) buildThings(level *Level, texHandler *Textures, grid *Spatia
 		} else {
 			frames = sd.Sprites
 		}
-		tSectorId := grid.ResolveSectorId(geometry.XY{X: tX, Y: tY})
+		//tSectorId := grid.ResolveSectorId(geometry.XY{X: tX, Y: tY})
 		tId := fmt.Sprintf("t_%d", i)
 		anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, tSectorId, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 		things = append(things, cfgThing)
 	}
 	return things
 }
 
 // buildPlayer initializes and returns a ConfigPlayer based on the player's starting position and angle in the level.
-func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *config.ConfigPlayer {
+func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	for _, t := range level.Things {
 		if t.Type == 1 {
@@ -302,8 +302,8 @@ func (bld *Builder) buildPlayer(level *Level, grid *SpatialGrid) *config.ConfigP
 			break
 		}
 	}
-	playerSectorId := grid.ResolveSectorId(geometry.XY{X: pX, Y: pY})
-	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, playerSectorId, 20.0/radiusF, 100.0)
+	//playerSectorId := grid.ResolveSectorId(geometry.XY{X: pX, Y: pY})
+	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, 20.0/radiusF, 100.0)
 	return player
 }
 

@@ -49,15 +49,9 @@ func (r *Things) GetThings() []IThing {
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
 func (r *Things) CreateThing(ct *config.ConfigThing) error {
-	var sector *Sector
-	if len(ct.Sector) > 0 {
-		sector = r.sectors.GetSector(ct.Sector)
-	}
+	sector := r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
 	if sector == nil {
-		sector = r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
-	}
-	if sector == nil {
-		return fmt.Errorf("can't find thing sector at %s", ct.Sector)
+		return fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
 	}
 	var thing IThing
 
@@ -92,7 +86,7 @@ func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float6
 	c := r.config[2]
 	id := utils.NextUUId()
 	pos := geometry.XY{X: x, Y: y}
-	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, sector.Id, 500.0, 1.0, 5.0, 5.0, c.Animation)
+	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, 500.0, 1.0, 5.0, 5.0, c.Animation)
 	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }

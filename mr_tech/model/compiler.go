@@ -40,7 +40,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectorsNew(cfg, animations)
+	r.sectors, totalSegments = r.compileSectors(cfg, animations)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -117,7 +117,7 @@ func (r *Compiler) GetLights() []*Light {
 	return r.lights
 }
 
-func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
+func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
 	totalPolygons := 0
@@ -227,6 +227,7 @@ func (r *Compiler) compileSectorsNew(cfg *config.ConfigRoot, anim *Animations) (
 	return NewSectors(container), totalPolygons
 }
 
+/*
 // compileSectors processes the sector configurations and animations to construct and return the compiled Sectors and total segments.
 func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
@@ -331,6 +332,7 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 	}
 	return sectors, totalSegments
 }
+*/
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
 func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {

@@ -4,36 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Sectors represents a collection of Sector instances, organized in an AABBTree for efficient spatial queries.
-type Sectors struct {
-	sectors []*Sector
-	tree    *physics.AABBTree
-	cache   map[string]*Sector
-}
-
-// NewSectors initializes a new Sectors instance by building an AABB tree and a cache from the given slice of Sector pointers.
-func NewSectors(sectors []*Sector) *Sectors {
-	cache := make(map[string]*Sector)
-	for _, sec := range sectors {
-		cache[sec.Id] = sec
-	}
-	return &Sectors{sectors: sectors, tree: nil, cache: cache}
-}
-
-// CreateTree constructs a new AABB tree for spatial organization of sectors within the Sectors instance.
-func (s *Sectors) CreateTree() {
-	s.tree = physics.NewAABBTree(uint(len(s.sectors)))
-	for _, sec := range s.sectors {
-		sec.ComputeAABB()
-		s.tree.InsertObject(sec)
-	}
-}
-
-// GetSector retrieves a Sector instance by its unique identifier from the cache map. Returns nil if not found.
-func (s *Sectors) GetSector(id string) *Sector {
-	return s.cache[id]
-}
-
+// Calibration represents the parameters used for setting up rendering configurations in a 3D engine.
 type Calibration struct {
 	OrthoSize  float32
 	MapCenterX float32
@@ -43,7 +14,37 @@ type Calibration struct {
 	ZFarRoom   float32
 }
 
-// GetCalibration calculates and returns calibration parameters for rendering based on the root node's bounding box.
+// Sectors is a collection of Sector instances, organized with spatial indexing and caching for optimized queries.
+type Sectors struct {
+	sectors []*Sector
+	tree    *physics.AABBTree
+	cache   map[string]*Sector
+}
+
+// NewSectors initializes a Sectors structure with a cache mapping sector IDs to their respective Sector objects.
+func NewSectors(sectors []*Sector) *Sectors {
+	cache := make(map[string]*Sector)
+	for _, sec := range sectors {
+		cache[sec.Id] = sec
+	}
+	return &Sectors{sectors: sectors, tree: nil, cache: cache}
+}
+
+// CreateTree constructs a new AABBTree and populates it with sectors after computing their axis-aligned bounding boxes.
+func (s *Sectors) CreateTree() {
+	s.tree = physics.NewAABBTree(uint(len(s.sectors)))
+	for _, sec := range s.sectors {
+		sec.ComputeAABB()
+		s.tree.InsertObject(sec)
+	}
+}
+
+// GetSector retrieves a Sector from the cache using the given id. Returns nil if the id is not found.
+func (s *Sectors) GetSector(id string) *Sector {
+	return s.cache[id]
+}
+
+// GetCalibration computes and returns a calibration object based on the spatial properties of the sector tree's root node.
 func (s *Sectors) GetCalibration() *Calibration {
 	root, ok := s.tree.GetRoot()
 	if !ok {
@@ -68,17 +69,18 @@ func (s *Sectors) GetCalibration() *Calibration {
 	return c
 }
 
-// GetSectors retrieves the list of all sectors managed within the current Sectors instance.
+// GetSectors returns the list of sectors managed by the Sectors instance.
 func (s *Sectors) GetSectors() []*Sector {
 	return s.sectors
 }
 
-// Len returns the number of sectors contained within the Sectors instance.
+// Len returns the number of sectors in the Sectors collection.
 func (s *Sectors) Len() int {
 	return len(s.sectors)
 }
 
-// SectorSearch attempts to locate a sector containing the point (px, py) within or near the provided sector.
+// SectorSearch searches for a sector containing the point (px, py), starting from the given sector and querying the tree if needed.
+// It returns the sector containing the point or nil if no matching sector is found.
 func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 	if newSector := sector.LocatePoint(px, py); newSector != nil {
 		return newSector
@@ -90,6 +92,7 @@ func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 	return nil
 }
 
+// Query retrieves all sectors that overlap with the given Axis-Aligned Bounding Box (AABB).
 func (s *Sectors) Query(aabb physics.IAABB) []*Sector {
 	var target []*Sector
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
@@ -103,7 +106,8 @@ func (s *Sectors) Query(aabb physics.IAABB) []*Sector {
 	return target
 }
 
-// QueryOverlap performs an AABB overlap query to locate a Sector containing the point (px, py) or returns nil if not found.
+// QueryOverlap identifies a Sector containing a given point (px, py) within an AABB, if such a Sector exists.
+// It searches the AABB tree for overlaps and attempts to locate the point within the overlapping sectors.
 func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 	var target *Sector = nil
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
@@ -120,7 +124,7 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 	return target
 }
 
-// QueryPoint performs a spatial query to determine if a point (px, py) lies within any sector and returns the matching Sector.
+// QueryPoint searches for the sector containing the specified point (px, py) and returns it, or nil if not found.
 func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	var target *Sector = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
@@ -133,24 +137,4 @@ func (s *Sectors) QueryPoint(px, py float64) *Sector {
 		return false
 	})
 	return target
-}
-
-// MakeSegmentsCache builds a map of edgeKey to segment, representing all unique segments in the sectors.
-func (s *Sectors) MakeSegmentsCache() map[EdgeKey]*EdgeSegment {
-	t := make(map[EdgeKey]*EdgeSegment)
-	for _, sect := range s.sectors {
-		for np := 0; np < len(sect.Segments); np++ {
-			seg := sect.Segments[np]
-			hash := seg.MakeStraightEdgeKey()
-			ld := &EdgeSegment{sector: sect, np: np, start: seg.Start, end: seg.End}
-			if fld, ok := t[hash]; ok {
-				if sect.Id != fld.sector.Id {
-					//fmt.Println("line segment already added", sect.Id, fld.Sector.Id, hash, np)
-				}
-			} else {
-				t[hash] = ld
-			}
-		}
-	}
-	return t
 }

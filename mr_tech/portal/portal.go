@@ -172,7 +172,7 @@ func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 
 	for !r.queue.IsEmpty() {
 		qTail = r.queue.GetTail()
-		qTail.sector.Reference(r.compileId)
+		//qTail.sector.Reference(r.compileId)
 
 		sq, sqCount := r.compileProjection(fbw, fbh, vi, qTail.sector, qTail)
 		for w := 0; w < sqCount; w++ {

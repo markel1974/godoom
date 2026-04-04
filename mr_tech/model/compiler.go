@@ -216,12 +216,12 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 		if bestNeighborSeg != nil {
 			// Link reciproco (O(N/2)
 			bestNeighborSeg.Kind = config.DefinitionJoin
-			bestNeighborSeg.SetNeighbor(seg.Parent)
+			bestNeighborSeg.Neighbor = seg.Parent
 			seg.Kind = config.DefinitionJoin
-			seg.SetNeighbor(bestNeighborSeg.Parent)
+			seg.Neighbor = bestNeighborSeg.Parent
 		} else {
 			seg.Kind = config.DefinitionWall
-			seg.SetNeighbor(nil)
+			seg.Neighbor = nil
 		}
 	}
 

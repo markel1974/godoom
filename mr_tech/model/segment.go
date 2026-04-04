@@ -88,27 +88,6 @@ func (k *Segment) GetAABB() *physics.AABB {
 	return k.aabb
 }
 
-// Copy creates and returns a new Segment instance with the same properties as the current Segment.
-func (k *Segment) Copy() *Segment {
-	out := &Segment{
-		Parent:   k.Parent,
-		Start:    k.Start,
-		End:      k.End,
-		Kind:     k.Kind,
-		Neighbor: k.Neighbor,
-		Tag:      k.Tag,
-		Upper:    k.Upper,
-		Middle:   k.Middle,
-		Lower:    k.Lower,
-	}
-	return out
-}
-
-// SetNeighbor assigns a reference and a pointer to a neighboring sector to the segment.
-func (k *Segment) SetNeighbor(Neighbor *Sector) {
-	k.Neighbor = Neighbor
-}
-
 // MakeStraightEdgeKey generates a unique EdgeKey for the segment using its start and end points with predefined precision.
 func (k *Segment) MakeStraightEdgeKey() EdgeKey {
 	return makeEdgeKey(edgePrecision, k.Start, k.End)

@@ -11,36 +11,28 @@ import (
 
 // Sector represents a 3D space defined by its boundaries, texture animations, lighting, and associated metadata.
 type Sector struct {
-	ModelId       uint16
-	Id            string
-	Segments      []*Segment
-	Tag           string
-	FloorY        float64
-	CeilY         float64
-	Ceil          *textures.Animation
-	Floor         *textures.Animation
-	Light         *Light
-	usage         int
-	compileId     uint64
-	references    map[uint64]bool
-	VisibleSpans  [][2]float64
-	aabb          *physics.AABB
-	LastCompileId uint64
+	ModelId  uint16
+	Id       string
+	Segments []*Segment
+	Tag      string
+	FloorY   float64
+	CeilY    float64
+	Ceil     *textures.Animation
+	Floor    *textures.Animation
+	Light    *Light
+	aabb     *physics.AABB
 }
 
 // NewSector initializes and returns a new Sector instance with specified parameters including model ID, ID, segments, floor, and ceiling.
 func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation, tag string) *Sector {
 	s := &Sector{
-		ModelId:    modelId,
-		Id:         id,
-		FloorY:     floorY,
-		CeilY:      ceilY,
-		usage:      0,
-		compileId:  0,
-		references: make(map[uint64]bool),
-		Ceil:       ceil,
-		Floor:      floor,
-		Tag:        tag,
+		ModelId: modelId,
+		Id:      id,
+		FloorY:  floorY,
+		CeilY:   ceilY,
+		Ceil:    ceil,
+		Floor:   floor,
+		Tag:     tag,
 	}
 	return s
 }
@@ -100,88 +92,6 @@ func (s *Sector) AddTag(tags string) {
 	if len(tags) > 0 {
 		s.Tag += ";" + tags
 	}
-}
-
-// Reference updates the sector's compile ID if it differs or increments its usage count if it matches.
-func (s *Sector) Reference(compileId uint64) {
-	if compileId != s.compileId {
-		s.compileId = compileId
-		s.usage = 0
-		s.references = make(map[uint64]bool)
-	} else {
-		s.usage++
-	}
-}
-
-// GetCompileId retrieves the unique compile ID associated with the Sector instance.
-func (s *Sector) GetCompileId() uint64 {
-	return s.compileId
-}
-
-// GetUsage retrieves the current usage count for the Sector instance.
-func (s *Sector) GetUsage() int {
-	return s.usage
-}
-
-// Add registers the given ID in the sector's references map by setting its value to true.
-func (s *Sector) Add(id uint64) {
-	s.references[id] = true
-}
-
-// Has checks if the given `id` exists in the `references` map and returns true if it does, otherwise false.
-func (s *Sector) Has(id uint64) bool {
-	_, ok := s.references[id]
-	return ok
-}
-
-// IsVisible determines if a range [x1, x2] is not occluded and visible based on the provided identifier id.
-func (s *Sector) IsVisible(x1 float64, x2 float64, id uint64) bool {
-	if s.LastCompileId != id {
-		s.VisibleSpans = s.VisibleSpans[:0]
-		s.LastCompileId = id
-	}
-	for _, span := range s.VisibleSpans {
-		// If the span to test is entirely contained within a merged span, it is occluded.
-		if x1 >= span[0] && x2 <= span[1] {
-			return false
-		}
-	}
-	return true
-}
-
-// AddSpan merges a new span defined by x1 and x2 into the VisibleSpans of the Sector, ensuring proper ordering and overlap handling.
-func (s *Sector) AddSpan(x1 float64, x2 float64) {
-	var merged [][2]float64
-	inserted := false
-
-	for _, span := range s.VisibleSpans {
-		if inserted {
-			merged = append(merged, span)
-			continue
-		}
-
-		if x2 < span[0] {
-			// Insertion on the left (maintains ordering)
-			merged = append(merged, [2]float64{x1, x2})
-			merged = append(merged, span)
-			inserted = true
-		} else if x1 > span[1] {
-			// No overlap
-			merged = append(merged, span)
-		} else {
-			// Overlap: merge the bounds
-			if span[0] < x1 {
-				x1 = span[0]
-			}
-			if span[1] > x2 {
-				x2 = span[1]
-			}
-		}
-	}
-	if !inserted {
-		merged = append(merged, [2]float64{x1, x2})
-	}
-	s.VisibleSpans = merged
 }
 
 // LocatePoint identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.

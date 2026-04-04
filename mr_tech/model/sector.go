@@ -15,8 +15,8 @@ type Sector struct {
 	Id       string
 	Segments []*Segment
 	Tag      string
-	FloorY   float64
-	CeilY    float64
+	floorY   float64
+	ceilY    float64
 	Ceil     *textures.Animation
 	Floor    *textures.Animation
 	Light    *Light
@@ -28,13 +28,23 @@ func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animat
 	s := &Sector{
 		ModelId: modelId,
 		Id:      id,
-		FloorY:  floorY,
-		CeilY:   ceilY,
+		floorY:  floorY,
+		ceilY:   ceilY,
 		Ceil:    ceil,
 		Floor:   floor,
 		Tag:     tag,
 	}
 	return s
+}
+
+// GetFloorY returns the Y-coordinate of the floor for the Sector instance as a float64.
+func (s *Sector) GetFloorY() float64 {
+	return s.floorY
+}
+
+// GetCeilY returns the Y-coordinate of the ceiling for the sector.
+func (s *Sector) GetCeilY() float64 {
+	return s.ceilY
 }
 
 // AddSegment appends a Segment to the Sector and assigns the Sector as the Segment's Parent.
@@ -85,7 +95,7 @@ func (s *Sector) ComputeAABB() {
 			maxY = seg.End.Y
 		}
 	}
-	s.aabb = physics.NewAABB(minX, minY, s.FloorY, maxX, maxY, s.CeilY)
+	s.aabb = physics.NewAABB(minX, minY, s.floorY, maxX, maxY, s.ceilY)
 }
 
 func (s *Sector) AddTag(tags string) {
@@ -169,8 +179,8 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 			holeLow := 9e9
 			holeHigh := -9e9
 			if seg.Neighbor != nil {
-				holeLow = mathematic.MaxF(s.FloorY, seg.Neighbor.FloorY)
-				holeHigh = mathematic.MinF(s.CeilY, seg.Neighbor.CeilY)
+				holeLow = mathematic.MaxF(s.floorY, seg.Neighbor.floorY)
+				holeHigh = mathematic.MinF(s.ceilY, seg.Neighbor.ceilY)
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t

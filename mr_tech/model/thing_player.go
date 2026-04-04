@@ -63,7 +63,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entiti
 	p := &ThingPlayer{
 		id:             "PLAYER",
 		kind:           0,
-		where:          geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.FloorY + EyeHeight},
+		where:          geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.GetFloorY() + EyeHeight},
 		velocity:       geometry.XYZ{},
 		yaw:            0,
 		yawState:       0,
@@ -114,12 +114,12 @@ func (p *ThingPlayer) GetLight() *Light {
 
 // GetFloorY returns the Y-coordinate of the floor associated with the player's current sector.
 func (p *ThingPlayer) GetFloorY() float64 {
-	return p.sector.FloorY
+	return p.sector.GetFloorY()
 }
 
 // GetCeilY returns the ceiling Y coordinate of the sector the player is currently located in.
 func (p *ThingPlayer) GetCeilY() float64 {
-	return p.sector.CeilY
+	return p.sector.GetCeilY()
 }
 
 // SetIdentifier updates the value of the identifier for the ThingPlayer instance.
@@ -398,12 +398,12 @@ func (p *ThingPlayer) verticalMovementApply() {
 		eyeHeight := p.eyeHeight()
 		p.velocity.Z -= 0.05
 		nextZ := p.where.Z + p.velocity.Z
-		if p.velocity.Z < 0 && nextZ < p.sector.FloorY+eyeHeight {
+		if p.velocity.Z < 0 && nextZ < p.sector.GetFloorY()+eyeHeight {
 			// down
-			p.where.Z = p.sector.FloorY + eyeHeight
+			p.where.Z = p.sector.GetFloorY() + eyeHeight
 			p.velocity.Z = 0
 			p.falling = false
-		} else if p.velocity.Z > 0 && nextZ > p.sector.CeilY {
+		} else if p.velocity.Z > 0 && nextZ > p.sector.GetCeilY() {
 			// up
 			p.velocity.Z = 0
 			p.falling = true

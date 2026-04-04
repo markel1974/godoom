@@ -95,12 +95,12 @@ func (t *ThingBase) GetLight() *Light {
 
 // GetFloorY returns the floor Y-coordinate of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetFloorY() float64 {
-	return t.sector.FloorY
+	return t.sector.GetFloorY()
 }
 
 // GetCeilY returns the ceiling height of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetCeilY() float64 {
-	return t.sector.CeilY
+	return t.sector.GetCeilY()
 }
 
 // Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
@@ -158,8 +158,8 @@ func (t *ThingBase) SetActive(active bool) {
 // adjustPassage adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
 func (t *ThingBase) adjustPassage(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
-	top := t.sector.FloorY + t.height
-	bottom := t.sector.FloorY + 2.0
+	top := t.sector.GetFloorY() + t.height
+	bottom := t.sector.GetFloorY() + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY

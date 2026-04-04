@@ -254,7 +254,7 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 					n := seg.Neighbor
 					if !visited[n.Id] {
 						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
-						if n.CeilY == curr.CeilY && n.FloorY == curr.FloorY && n.Light.intensity == curr.Light.intensity {
+						if n.GetCeilY() == curr.GetCeilY() && n.GetFloorY() == curr.GetFloorY() && n.Light.intensity == curr.Light.intensity {
 							visited[n.Id] = true
 							queue = append(queue, n)
 						}
@@ -299,12 +299,12 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 				sector = first
 				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)
 			}
-			light.Setup(sector, first.Light.intensity, first.Light.kind, globalCenter, first.CeilY)
+			light.Setup(sector, first.Light.intensity, first.Light.kind, globalCenter, first.GetCeilY())
 			out = append(out, light)
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
 			light := NewLight()
-			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid(), first.CeilY)
+			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid(), first.GetCeilY())
 			out = append(out, light)
 		}
 	}

@@ -136,11 +136,11 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Sector.GetCeilY()))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.CeilY), float32(cp.Sector.CeilY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Sector.GetCeilY()))
 				} else {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.FloorY), float32(cp.Neighbor.FloorY))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -150,12 +150,12 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleSectors[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Sector.CeilY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Sector.GetCeilY())); sky != nil {
 						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Sector.FloorY)); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Sector.GetFloorY())); sky != nil {
 						w.cSky = sky
 					}
 				}

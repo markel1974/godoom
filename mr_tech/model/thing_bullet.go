@@ -23,7 +23,7 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, sector *S
 	p := &ThingBullet{
 		ThingBase:   NewThingBase(cfg, anim, sector, sectors, entities),
 		wall:        physics.NewEntity(0, 0, 0, 0, 0),
-		floorStartY: sector.FloorY,
+		floorStartY: sector.GetFloorY(),
 	}
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
 	p.entity.SetFriction(0.99)
@@ -45,13 +45,13 @@ func (t *ThingBullet) GetFloorY() float64 {
 	velSq := (t.entity.GetVx() * t.entity.GetVx()) + (t.entity.GetVy() * t.entity.GetVy())
 	// Se l'energia cinetica è esaurita o malformata, il proiettile è a terra
 	if velSq <= 0.01 || t.speed <= 0 {
-		return t.sector.FloorY
+		return t.sector.GetFloorY()
 	}
 	// 2. Fattore T di decadimento: velocità corrente normalizzata sulla velocità originale
 	ratio := math.Sqrt(velSq) / t.speed
 	// Clamping di sicurezza vettoriale in caso di impulsi esterni imprevisti
 	if ratio <= 0 {
-		return t.sector.FloorY
+		return t.sector.GetFloorY()
 	}
 	if ratio > 1.0 {
 		ratio = 1.0
@@ -135,7 +135,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 
 	for _, seg := range t.sector.Segments {
 		if seg.Neighbor != nil {
-			if top > t.sector.CeilY || bottom < t.sector.FloorY {
+			if top > t.sector.GetCeilY() || bottom < t.sector.GetFloorY() {
 				continue
 			}
 		}
@@ -152,8 +152,8 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
 			holeLow, holeHigh := 9e9, -9e9
 			if seg.Neighbor != nil {
-				holeLow = mathematic.MaxF(t.sector.FloorY, seg.Neighbor.FloorY)
-				holeHigh = mathematic.MinF(t.sector.CeilY, seg.Neighbor.CeilY)
+				holeLow = mathematic.MaxF(t.sector.GetFloorY(), seg.Neighbor.GetFloorY())
+				holeHigh = mathematic.MinF(t.sector.GetCeilY(), seg.Neighbor.GetCeilY())
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t1

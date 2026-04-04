@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Engine represents a core game simulation system, managing entities, sectors, player, and rendering configurations.
+// Engine represents a core game simulation system, managing entities, volumes, player, and rendering configurations.
 type Engine struct {
 	portal     *portal.Portal
 	maxQueue   int
@@ -15,7 +15,7 @@ type Engine struct {
 	things     *model.Things
 	entities   *model.Entities
 	player     *model.ThingPlayer
-	sectors    *model.Volumes
+	volumes    *model.Volumes
 	lights     []*model.Light
 }
 
@@ -27,7 +27,7 @@ func NewEngine(maxQueue int, viewFactor float64) *Engine {
 		viewFactor: viewFactor,
 		things:     nil,
 		entities:   nil,
-		sectors:    nil,
+		volumes:    nil,
 		player:     nil,
 		lights:     nil,
 	}
@@ -58,25 +58,25 @@ func (e *Engine) VolumeAt(idx int) *model.Volume {
 	return e.portal.VolumeAt(idx)
 }
 
-// Len returns the number of sectors currently managed by the Engine.
+// Len returns the number of volumes currently managed by the Engine.
 func (e *Engine) Len() int {
 	return e.portal.Len()
 }
 
-// Setup initializes the Engine using the provided configuration, creating sectors, player, things, entities, and the portal.
+// Setup initializes the Engine using the provided configuration, creating volumes, player, things, entities, and the portal.
 func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	compiler := model.NewCompiler()
 	if err := compiler.Compile(cfg); err != nil {
 		return err
 	}
-	e.sectors = compiler.GetSectors()
+	e.volumes = compiler.GetVolumes()
 	e.player = compiler.GetPlayer()
 	e.things = compiler.GetThings()
 	e.entities = compiler.GetEntities()
 	e.lights = compiler.GetLights()
 
 	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-	if err := e.portal.Setup(e.sectors.GetVolumes()); err != nil {
+	if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
 		return err
 	}
 	return nil
@@ -110,13 +110,13 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	textures.Tick()
 }
 
-// Traverse processes the given ViewMatrix through the portal system, returning a list of compiled sectors and their count.
+// Traverse processes the given ViewMatrix through the portal system, returning a list of compiled volumes and their count.
 func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledVolume, int) {
 	cs, count := e.portal.Traverse(fbw, fbh, vi)
 	return cs, count
 }
 
-// Build generates and retrieves the list of compiled sectors, their count, active game entities, and lights in the engine.
+// Build generates and retrieves the list of compiled volumes, their count, active game entities, and lights in the engine.
 func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 	cs, count := e.portal.Build()
 	return cs, count
@@ -127,7 +127,7 @@ func (e *Engine) Fire(volume *model.Volume, x float64, y float64, angle float64)
 	e.things.CreateBullet(volume, x, y, angle)
 }
 
-// GetCalibration retrieves calibration parameters used for rendering, derived from the sectors' spatial configuration.
+// GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.
 func (e *Engine) GetCalibration() *model.Calibration {
-	return e.sectors.GetCalibration()
+	return e.volumes.GetCalibration()
 }

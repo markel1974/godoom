@@ -12,7 +12,7 @@ import (
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
 type Compiler struct {
-	sectors  *Volumes
+	volumes  *Volumes
 	things   *Things
 	player   *ThingPlayer
 	lights   []*Light
@@ -22,7 +22,7 @@ type Compiler struct {
 // NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		sectors:  nil,
+		volumes:  nil,
 		things:   nil,
 		player:   nil,
 		entities: nil,
@@ -40,7 +40,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectors2d(cfg, animations)
+	r.volumes, totalSegments = r.compile2d(cfg, animations)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -52,7 +52,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	//	l.pos.Scale(scale)
 	//}
 
-	for _, sect := range r.sectors.GetVolumes() {
+	for _, sect := range r.volumes.GetVolumes() {
 		//legacy lights scale
 		sect.Light.pos.Scale(scale)
 
@@ -69,24 +69,24 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	var err error
 
-	r.sectors.CreateTree()
+	r.volumes.CreateTree()
 
-	r.lights, err = r.compileSectorsLights(r.sectors)
+	r.lights, err = r.compileSectorsLights(r.volumes)
 	if err != nil {
 		return err
 	}
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
-	if r.things, err = NewThings(cfg.Things, r.sectors, r.entities, animations); err != nil {
+	if r.things, err = NewThings(cfg.Things, r.volumes, r.entities, animations); err != nil {
 		return err
 	}
 
-	if r.player, err = NewThingPlayer(cfg.Player, r.sectors, r.entities, false); err != nil {
+	if r.player, err = NewThingPlayer(cfg.Player, r.volumes, r.entities, false); err != nil {
 		return err
 	}
 
-	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.sectors.Len(), totalSegments)
+	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.volumes.Len(), totalSegments)
 
 	return nil
 }
@@ -96,9 +96,9 @@ func (r *Compiler) GetEntities() *Entities {
 	return r.entities
 }
 
-// GetSectors retrieves the Volumes instance associated with the current Compiler object.
-func (r *Compiler) GetSectors() *Volumes {
-	return r.sectors
+// GetVolumes retrieves the Volumes instance associated with the current Compiler object.
+func (r *Compiler) GetVolumes() *Volumes {
+	return r.volumes
 }
 
 // GetThings returns the Things instance managed by the Compiler.
@@ -116,13 +116,13 @@ func (r *Compiler) GetLights() []*Light {
 	return r.lights
 }
 
-// compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
+// compile2d constructs and processes game sectors based on configuration data, animations, and geometry relationships.
+func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
 	modelSectorId := 0
 	var container []*Volume
 	totalPolygons := 0
-	var fixSegments []*Face
-	segmentsTree := physics.NewAABBTree(1024)
+	var fixFaces []*Face
+	facesTree := physics.NewAABBTree(1024)
 	emptyAnim := anim.GetAnimation(nil)
 	ve := NewVertexEdges(0.001)
 	ve.Construct(cfg.Vertices, cfg.Sectors)
@@ -173,10 +173,10 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 					if kind == config.DefinitionWall {
 						face.SetKind(config.DefinitionWall)
 					} else {
-						fixSegments = append(fixSegments, face)
+						fixFaces = append(fixFaces, face)
 					}
 					face.Rebuild()
-					segmentsTree.InsertObject(face)
+					facesTree.InsertObject(face)
 					s.AddFace(face)
 				}
 				s.Light = NewLight()
@@ -189,22 +189,22 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 	}
 
 	// Risoluzione adiacenze
-	for _, seg := range fixSegments {
+	for _, seg := range fixFaces {
 		// already linked
 		if seg.GetKind() == config.DefinitionJoin || seg.GetKind() == config.DefinitionWall {
 			continue
 		}
 		bestDistSq := math.MaxFloat64
-		var bestNeighborSeg *Face
-		segmentsTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
-			overlapSeg, ok := object.(*Face)
-			if !ok || overlapSeg.GetParent() == seg.GetParent() {
+		var bestNeighborFace *Face
+		facesTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
+			overlapFace, ok := object.(*Face)
+			if !ok || overlapFace.GetParent() == seg.GetParent() {
 				return false
 			}
 			start := seg.GetStart()
 			end := seg.GetEnd()
-			overlapStart := overlapSeg.GetStart()
-			overlapEnd := overlapSeg.GetEnd()
+			overlapStart := overlapFace.GetStart()
+			overlapEnd := overlapFace.GetEnd()
 			dx1 := start.X - overlapEnd.X
 			dy1 := start.Y - overlapEnd.Y
 			dx2 := end.X - overlapStart.X
@@ -212,16 +212,16 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 			distSq := (dx1 * dx1) + (dy1 * dy1) + (dx2 * dx2) + (dy2 * dy2)
 			if distSq < bestDistSq {
 				bestDistSq = distSq
-				bestNeighborSeg = overlapSeg
+				bestNeighborFace = overlapFace
 			}
 			return false
 		})
-		if bestNeighborSeg != nil {
+		if bestNeighborFace != nil {
 			// Link reciproco (O(N/2)
-			bestNeighborSeg.SetKind(config.DefinitionJoin)
-			bestNeighborSeg.SetNeighbor(seg.GetParent())
+			bestNeighborFace.SetKind(config.DefinitionJoin)
+			bestNeighborFace.SetNeighbor(seg.GetParent())
 			seg.SetKind(config.DefinitionJoin)
-			seg.SetNeighbor(bestNeighborSeg.GetParent())
+			seg.SetNeighbor(bestNeighborFace.GetParent())
 		} else {
 			seg.SetKind(config.DefinitionWall)
 			seg.SetNeighbor(nil)
@@ -299,7 +299,7 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 			}
 			first := areaSectors[0]
 			light := NewLight()
-			sector := r.sectors.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+			sector := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
 			if sector == nil {
 				sector = first
 				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)

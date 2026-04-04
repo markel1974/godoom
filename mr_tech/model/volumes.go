@@ -4,7 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Calibration represents parameters used for rendering and camera positioning in a 3D spatial context.
+// Calibration represents calibration parameters for rendering and spatial configuration.
 type Calibration struct {
 	OrthoSize  float32
 	MapCenterX float32
@@ -14,14 +14,14 @@ type Calibration struct {
 	ZFarRoom   float32
 }
 
-// Volumes is a collection of 3D navigable spaces managed within a hierarchical bounding volume tree for spatial queries.
+// Volumes represents a collection of 3D or 2D volumes, utilizing a hierarchical spatial structure and caching for efficiency.
 type Volumes struct {
 	container []*Volume
 	tree      *physics.AABBTree
 	cache     map[string]*Volume
 }
 
-// NewVolumes creates a new Volumes instance, initializing its container and cache with the given Volume list.
+// NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
 func NewVolumes(container []*Volume) *Volumes {
 	cache := make(map[string]*Volume)
 	for _, sec := range container {
@@ -30,6 +30,7 @@ func NewVolumes(container []*Volume) *Volumes {
 	return &Volumes{container: container, tree: nil, cache: cache}
 }
 
+// CreateTree constructs a new AABB tree based on the current container and populates it with rebuilt volume objects.
 func (s *Volumes) CreateTree() {
 	s.tree = physics.NewAABBTree(uint(len(s.container)))
 	for _, sec := range s.container {
@@ -38,13 +39,12 @@ func (s *Volumes) CreateTree() {
 	}
 }
 
-// GetVolume retrieves a Volume from the cache using its unique identifier.
-// Returns nil if the Volume is not found in the cache.
+// GetVolume retrieves a Volume from the cache using the provided unique identifier.
 func (s *Volumes) GetVolume(id string) *Volume {
 	return s.cache[id]
 }
 
-// GetCalibration computes and returns a Calibration object based on the spatial properties of the AABBTree's root element.
+// GetCalibration computes calibration details based on the spatial properties of the root node in the AABB tree.
 func (s *Volumes) GetCalibration() *Calibration {
 	root, ok := s.tree.GetRoot()
 	if !ok {
@@ -69,17 +69,17 @@ func (s *Volumes) GetCalibration() *Calibration {
 	return c
 }
 
-// GetVolumes returns the list of all volumes managed by the Volumes instance.
+// GetVolumes returns all Volume objects managed by the Volumes instance.
 func (s *Volumes) GetVolumes() []*Volume {
 	return s.container
 }
 
-// Len returns the total number of volumes currently stored in the container.
+// Len returns the number of Volume objects contained within the Volumes container.
 func (s *Volumes) Len() int {
 	return len(s.container)
 }
 
-// Query retrieves all volumes from the tree that overlap with the given Axis-Aligned Bounding Box (AABB).
+// Query retrieves a list of volumes that overlap with the specified axis-aligned bounding box (AABB).
 func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 	var target []*Volume
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
@@ -93,7 +93,7 @@ func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 	return target
 }
 
-// SearchVolume2d searches for a 2D volume containing the point (px, py) starting from the given sector or the volume tree.
+// SearchVolume2d searches for a 2D volume in the provided sector or the tree using the given x and y coordinates.
 func (s *Volumes) SearchVolume2d(sector *Volume, px, py float64) *Volume {
 	if newSector := sector.LocatePoint(px, py, 0); newSector != nil {
 		return newSector
@@ -104,7 +104,7 @@ func (s *Volumes) SearchVolume2d(sector *Volume, px, py float64) *Volume {
 	return nil
 }
 
-// QueryOverlap2d checks for overlapping volumes within a 2D plane at the given point and returns the first matching volume.
+// QueryOverlap2d checks for overlaps with the given 2D AABB and identifies which volume contains the specified point.
 func (s *Volumes) QueryOverlap2d(aabb physics.IAABB, px, py float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
@@ -121,7 +121,8 @@ func (s *Volumes) QueryOverlap2d(aabb physics.IAABB, px, py float64) *Volume {
 	return target
 }
 
-// QueryPoint2d queries the spatial tree to find a 2D volume that contains the specified point (px, py).
+// QueryPoint2d performs a 2D query to find a Volume containing the point (px, py).
+// Returns the first matching Volume or nil if no match is found.
 func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
@@ -136,7 +137,8 @@ func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
 	return target
 }
 
-// SearchVolume searches for a volume containing the point (px, py, pz) starting from the currentVolume and returns it.
+// SearchVolume searches for the Volume containing the point (px, py, pz) starting from the given currentVolume.
+// Returns the located Volume if found, otherwise nil.
 func (s *Volumes) SearchVolume(currentVolume *Volume, px, py, pz float64) *Volume {
 	if newVolume := currentVolume.LocatePoint(px, py, pz); newVolume != nil {
 		return newVolume
@@ -147,7 +149,7 @@ func (s *Volumes) SearchVolume(currentVolume *Volume, px, py, pz float64) *Volum
 	return nil
 }
 
-// QueryPoint locates and returns the first Volume containing the specified 3D point (px, py, pz), or nil if no match is found.
+// QueryPoint searches for a volume containing the specified 3D point (px, py, pz) and returns the matched Volume, or nil if not found.
 func (s *Volumes) QueryPoint(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
@@ -162,7 +164,7 @@ func (s *Volumes) QueryPoint(px, py, pz float64) *Volume {
 	return target
 }
 
-// QueryOverlap checks for overlaps within the given AABB and returns the first volume containing the provided point (px, py, pz).
+// QueryOverlap performs a spatial query to find the first volume overlapping the given AABB and containing the specified point.
 func (s *Volumes) QueryOverlap(aabb physics.IAABB, px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {

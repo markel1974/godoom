@@ -25,6 +25,8 @@ const ScaleFactorCeilFloorLineDef = 8.0
 // SkyPicture represents the identifier for sky-related ceiling or floor textures in the game's level configuration.
 const SkyPicture = "F_SKY1"
 
+const openAllDoors = true
+
 // _doors is a map that associates specific action special IDs (int16) with corresponding door behaviors (string descriptions).
 var _doors = map[int16]string{
 	1:   "DR	Door Open, Wait, Close",
@@ -120,10 +122,19 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 		if edges == nil {
 			continue
 		}
-		lumpSector := level.Sectors[secIdx]
-		cSector := bld.buildSector(level, lumpSector, texHandler, uint16(secIdx), edges)
-		for _, e := range edges {
-			cSeg := bld.buildSegment(texHandler, cSector.Id, e)
+		lSector := level.Sectors[secIdx]
+		light := lSector.LightLevel
+		ceilPic := lSector.CeilingPic
+		floorPic := lSector.FloorPic
+		floorY := float64(lSector.FloorHeight)
+		ceilY := float64(lSector.CeilingHeight)
+		if openAllDoors {
+			ceilY = bld.calculateOpenDoorCeil(level, uint16(secIdx), lSector, edges)
+		}
+		sectorId := strconv.Itoa(secIdx)
+		cSector := bld.buildSector(sectorId, light, floorPic, floorY, ceilPic, ceilY, texHandler)
+		for _, edge := range edges {
+			cSeg := bld.buildSegment(sectorId, edge, texHandler)
 			cSector.Segments = append(cSector.Segments, cSeg)
 		}
 		sectors = append(sectors, cSector)
@@ -144,66 +155,51 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 }
 
 // buildConfigSector constructs and returns a ConfigSector for a given level sector, including floor, ceiling, and lighting data.
-func (bld *Builder) buildSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, edges []Edge) *config.ConfigSector {
-	const openAllDoors = true
-	sectorId := strconv.Itoa(int(secIdx))
+func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.ConfigSector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
-	ceilHeight := float64(lumpSector.CeilingHeight)
-	if openAllDoors {
-		ceilHeight = bld.calculateOpenDoorCeil(level, secIdx, lumpSector, edges)
-	}
-	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
-	miSector.FloorY = float64(lumpSector.FloorHeight) / ScaleFactorCeilFloorLineDef
-	miSector.CeilY = ceilHeight / ScaleFactorCeilFloorLineDef
+	miSector := config.NewConfigSector(sectorId, bld.convertLight(lightLevel), config.LightKindAmbient)
+	miSector.FloorY = floorY / ScaleFactorCeilFloorLineDef
+	miSector.CeilY = ceilY / ScaleFactorCeilFloorLineDef
 	miSector.Tag = sectorId
-	if lumpSector.CeilingPic == SkyPicture {
+	if ceilPic == SkyPicture {
 		ceilingType = config.AnimationKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	if lumpSector.FloorPic == SkyPicture {
+	if floorPic == SkyPicture {
 		floorType = config.AnimationKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	miSector.Ceil = config.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.CeilingPic), ceilingType, TextureScaleW, TextureScaleH)
-	miSector.Floor = config.NewConfigAnimation(texHandler.FlatCreateAnimation(lumpSector.FloorPic), floorType, TextureScaleW, TextureScaleH)
+	miSector.Ceil = config.NewConfigAnimation(texHandler.FlatCreateAnimation(ceilPic), ceilingType, TextureScaleW, TextureScaleH)
+	miSector.Floor = config.NewConfigAnimation(texHandler.FlatCreateAnimation(floorPic), floorType, TextureScaleW, TextureScaleH)
 	return miSector
 }
 
-func (bld *Builder) buildSegment(texHandler *Textures, sectorId string, e Edge) *config.ConfigSegment {
+// buildSegment constructs a ConfigSegment for a given edge within a sector, including wall textures and alignment adjustments.
+func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) *config.ConfigSegment {
 	seg := config.NewConfigSegment(sectorId, config.DefinitionWall, e.P1, e.P2, "")
-	side := e.SideDef
-	ld := e.LineDef
-
-	middleT := texHandler.TextureCreateAnimation(side.MiddleTexture)
-	upperT := texHandler.TextureCreateAnimation(side.UpperTexture)
-	lowerT := texHandler.TextureCreateAnimation(side.LowerTexture)
-
+	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
+	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
+	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
 	seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
 	seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
 	seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-
-	frontSector := e.Sector
-
 	// vertical sky hack
-	if ld.HasFlag(lumps.TwoSided) && e.BackSector != nil {
+	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
-		if frontSector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
+		if e.Sector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
 			seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 		}
 		// Extension for floors (e.g. moats that show sky at the bottom)
-		if frontSector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
+		if e.Sector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
 			seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 		}
 	}
-
-	if ld.HasFlag(2) {
+	if e.LineDef.HasFlag(2) {
 		seg.Kind = config.DefinitionJoin
 	}
-
 	// Inversione Y per l'allineamento con il motore di rendering
 	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-
 	return seg
 }
 

@@ -117,6 +117,7 @@ func (r *Compiler) GetLights() []*Light {
 	return r.lights
 }
 
+// compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector

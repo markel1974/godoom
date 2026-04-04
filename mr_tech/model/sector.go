@@ -307,8 +307,7 @@ func (s *Sector) ContainsPoint2D(px, py float64) bool {
 // CheckFacesClearance checks if a movement intersects any face in the sector and returns the closest obstructing face.
 func (s *Sector) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
 	if s.is3d {
-		// Nel vero 3D, la clearance è gestita con l'ellissoide di collisione contro i piani (AABB Sweeping).
-		return nil
+		return nil // AABB Sweeping 3D futuro
 	}
 
 	moveX := pX - viewX
@@ -317,24 +316,16 @@ func (s *Sector) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom f
 	var closestFace *Face = nil
 
 	for _, face := range s.faces {
-		neighbor := face.GetNeighbor()
-		if neighbor != nil {
-			continue
-		}
-
 		start := face.GetStart()
 		end := face.GetEnd()
 		dx := end.X - start.X
 		dy := end.Y - start.Y
 		den := moveX*dy - moveY*dx
-
 		if den == 0 {
 			continue
 		}
-
 		t := ((start.X-viewX)*dy - (start.Y-viewY)*dx) / den
 		u := ((start.X-viewX)*moveY - (start.Y-viewY)*moveX) / den
-
 		uPadding := 0.0
 		if radius > 0 {
 			faceLenSq := dx*dx + dy*dy
@@ -342,13 +333,19 @@ func (s *Sector) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom f
 				uPadding = radius / math.Sqrt(faceLenSq)
 			}
 		}
+
 		if t >= 0 && t <= minT && u >= -uPadding && u <= 1+uPadding {
 			holeLow := 9e9
 			holeHigh := -9e9
+			neighbor := face.GetNeighbor()
+
 			if neighbor != nil {
+				// È un portale: calcola lo spazio attraversabile (clearance)
 				holeLow = mathematic.MaxF(s.floorY, neighbor.GetFloorY())
 				holeHigh = mathematic.MinF(s.ceilY, neighbor.GetCeilY())
 			}
+
+			// Se è un muro solido (holeHigh = -9e9) O se lo spazio è troppo stretto per l'entità:
 			if holeHigh < top || holeLow > bottom {
 				minT = t
 				closestFace = face

@@ -221,8 +221,8 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 	if tex == nil {
 		return nil
 	}
-	segments := cp.sector.Segments
-	if len(segments) < 3 {
+	faces := cp.sector.GetFaces()
+	if len(faces) < 3 {
 		return nil
 	}
 
@@ -235,8 +235,8 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 
 	startIndices := fv.GetIndicesLen()
 
-	indices := make([]uint32, len(segments))
-	for i, seg := range segments {
+	indices := make([]uint32, len(faces))
+	for i, seg := range faces {
 		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
@@ -244,7 +244,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer)
 	}
 
-	for i := 1; i < len(segments)-1; i++ {
+	for i := 1; i < len(faces)-1; i++ {
 		fv.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 

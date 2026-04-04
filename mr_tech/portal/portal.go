@@ -105,15 +105,10 @@ func (r *Portal) Build() ([]*model.CompiledSector, int) {
 
 // compile processes a given sector, generating compiled geometry for rendering, including walls, floors, and ceilings.
 func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
-	for s := 0; s < len(sector.Segments); s++ {
-		segment := sector.Segments[s]
-		neighbor := segment.GetNeighbor()
-		//if segment.Kind == config.DefinitionVoid {
-		//	continue
-		//}
-		// Coordinate World assolute sul piano XZ (niente proiezioni fotocamera!)
-		sStart := segment.GetStart()
-		sEnd := segment.GetEnd()
+	for _, face := range sector.GetFaces() {
+		neighbor := face.GetNeighbor()
+		sStart := face.GetStart()
+		sEnd := face.GetEnd()
 		wx1, wz1 := sStart.X, sStart.Y
 		wx2, wz2 := sEnd.X, sEnd.Y
 
@@ -121,8 +116,8 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 		u0 := 0.0
 		u1 := math.Hypot(wx2-wx1, wz2-wz1) * r.textureScaleRepetition
 
-		ceilT := cs.Sector.Ceil
-		floorT := cs.Sector.Floor
+		ceilT := cs.Sector.GetCeilMaterial()
+		floorT := cs.Sector.GetFloorMaterial()
 		sectorCeilY := sector.GetCeilY()
 		sectorFloorY := sector.GetFloorY()
 
@@ -132,18 +127,18 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 			neighborFloorY := neighbor.GetFloorY()
 			// Upper Wall (dal soffitto corrente scende al soffitto del vicino)
 			if sectorCeilY > neighborCeilY {
-				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, segment.GetUpper(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, face.GetUpper(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				// x1, Y_top, Y_bottom, z1, x2, Y_top, Y_bottom, z2
 				upperP.Rect(wx1, sectorCeilY, neighborCeilY, wz1, wx2, sectorCeilY, neighborCeilY, wz2)
 			}
 			// Lower Wall (dal pavimento del vicino scende al pavimento corrente)
 			if sectorFloorY < neighborFloorY {
-				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, segment.GetLower(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, face.GetLower(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				lowerP.Rect(wx1, neighborFloorY, sectorFloorY, wz1, wx2, neighborFloorY, sectorFloorY, wz2)
 			}
 		} else {
 			// 2. Muro Solido (Middle Wall) - connette soffitto e pavimento del settore
-			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, segment.GetMiddle(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, face.GetMiddle(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
 		center := sector.GetCentroid()
@@ -206,9 +201,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 	first := false
 	outIdx := 0
 
-	for s := 0; s < len(sector.Segments); s++ {
-		segment := sector.Segments[s]
-		neighbor := sector.Segments[s].GetNeighbor()
+	for _, face := range sector.GetFaces() {
+		neighbor := face.GetNeighbor()
 		if neighbor == sector {
 			continue
 		}
@@ -220,8 +214,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 		//	continue
 		//}
 
-		sStart := segment.GetStart()
-		sEnd := segment.GetEnd()
+		sStart := face.GetStart()
+		sEnd := face.GetEnd()
 
 		// Rotate around the player's view
 		vx1, vy1, tx1, tz1 := vi.TranslateXY(sStart.X, sStart.Y)
@@ -332,8 +326,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			}
 		}
 
-		ceilT := cs.Sector.Ceil
-		floorT := cs.Sector.Floor
+		ceilT := cs.Sector.GetCeilMaterial()
+		floorT := cs.Sector.GetFloorMaterial()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, x2Min, y2Ceil, yaStop, zStop)
@@ -348,7 +342,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperT := segment.GetUpper()
+				upperT := face.GetUpper()
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, x2Min, yaStop, nYaStop, zStop)
 			}
@@ -361,7 +355,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {
-				lowerT := segment.GetLower()
+				lowerT := face.GetLower()
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, x2Min, nYbStop, ybStop, zStop)
 			}
@@ -370,15 +364,15 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {
-			middleT := segment.GetMiddle()
+			middleT := face.GetMiddle()
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, x2Min, yaStop, ybStop, zStop)
 		}
 	}
 
 	if first && outIdx == 0 {
-		for _, s := range sector.Segments {
-			neighbor := s.GetNeighbor()
+		for _, face := range sector.GetFaces() {
+			neighbor := face.GetNeighbor()
 			if neighbor != nil && neighbor != sector {
 				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}

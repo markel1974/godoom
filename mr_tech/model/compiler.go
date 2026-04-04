@@ -60,8 +60,8 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		//sect.FloorY /= scale
 
 		//vertex scale
-		for s := 0; s < len(sect.Segments); s++ {
-			sect.Segments[s].Scale2D(scale)
+		for _, face := range sect.GetFaces() {
+			face.Scale2D(scale)
 		}
 	}
 
@@ -118,7 +118,7 @@ func (r *Compiler) GetLights() []*Light {
 
 // compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
-	modelSectorId := uint16(0)
+	modelSectorId := 0
 	var container []*Sector
 	totalPolygons := 0
 	var fixSegments []*Face
@@ -169,15 +169,15 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 						lower = anim.GetAnimation(origSeg.Lower)
 					}
 					s.AddTag(tag)
-					seg := NewFaceSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
+					face := NewFaceSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
 					if kind == config.DefinitionWall {
-						seg.SetKind(config.DefinitionWall)
+						face.SetKind(config.DefinitionWall)
 					} else {
-						fixSegments = append(fixSegments, seg)
+						fixSegments = append(fixSegments, face)
 					}
-					seg.ComputeAABB()
-					segmentsTree.InsertObject(seg)
-					s.AddSegment(seg)
+					face.ComputeAABB()
+					segmentsTree.InsertObject(face)
+					s.AddFace(face)
 				}
 				s.Light = NewLight()
 				if cs.Light != nil {
@@ -238,13 +238,13 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 	visited := make(map[string]bool)
 	var out []*Light
 	for sectIdx, sect := range sectors.GetSectors() {
-		if visited[sect.Id] {
+		if visited[sect.GetId()] {
 			continue
 		}
 		// Utilizziamo un algoritmo di Flood Fill per trovare tutti i settori connessi
 		var areaSectors []*Sector
 		queue := []*Sector{sect}
-		visited[sect.Id] = true
+		visited[sect.GetId()] = true
 
 		for len(queue) > 0 {
 			curr := queue[0]
@@ -252,13 +252,13 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 			areaSectors = append(areaSectors, curr)
 
 			// Controlla i vicini di questo settore
-			for _, seg := range curr.Segments {
+			for _, seg := range curr.GetFaces() {
 				if seg.GetKind() != config.DefinitionWall && seg.GetNeighbor() != nil {
 					n := seg.GetNeighbor()
-					if !visited[n.Id] {
+					if !visited[n.GetId()] {
 						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
 						if n.GetCeilY() == curr.GetCeilY() && n.GetFloorY() == curr.GetFloorY() && n.Light.intensity == curr.Light.intensity {
-							visited[n.Id] = true
+							visited[n.GetId()] = true
 							queue = append(queue, n)
 						}
 					}
@@ -273,9 +273,9 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 			for _, s := range areaSectors {
 				// Calcola l'area del triangolo (prodotto vettoriale)
 				area := 0.0
-				for i := range s.Segments {
-					start := s.Segments[i].GetStart()
-					end := s.Segments[i].GetEnd()
+				for _, face := range s.GetFaces() {
+					start := face.GetStart()
+					end := face.GetEnd()
 					x0, y0 := start.X, start.Y
 					x1, y1 := end.X, end.Y
 					area += (x0 * y1) - (x1 * y0)
@@ -290,7 +290,7 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 				continue
 			}
 
-			globalCenter := geometry.XY{X: sumX / totalArea, Y: sumY / totalArea}
+			globalCenter := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
 
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {

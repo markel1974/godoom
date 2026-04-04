@@ -51,12 +51,12 @@ type IThing interface {
 func WallSlidingEffect(sector *Sector, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
 	const epsilon = 0.5
 	// 1. Trova il segmento più vicino (con padding per gli spigoli)
-	seg1 := sector.CheckSegmentsClearance(viewX, viewY, pX, pY, top, bottom, radius)
-	if seg1 == nil {
+	face := sector.CheckFacesClearance(viewX, viewY, pX, pY, top, bottom, radius)
+	if face == nil {
 		return velX, velY
 	}
-	start := seg1.GetStart()
-	end := seg1.GetEnd()
+	start := face.GetStart()
+	end := face.GetEnd()
 	xd := end.X - start.X
 	yd := end.Y - start.Y
 	if lenSq := xd*xd + yd*yd; lenSq > 0 {

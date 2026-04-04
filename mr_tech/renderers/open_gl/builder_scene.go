@@ -175,8 +175,8 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	if tex == nil {
 		return nil
 	}
-	segments := cp.Sector.Segments
-	if len(segments) < 3 {
+	faces := cp.Sector.GetFaces()
+	if len(faces) < 3 {
 		return nil
 	}
 
@@ -190,14 +190,14 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	startIndices := fv.GetIndicesLen()
 
 	w.flatIndices = w.flatIndices[:0]
-	for _, seg := range segments {
+	for _, seg := range faces {
 		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer))
 	}
 
-	for i := 1; i < len(segments)-1; i++ {
+	for i := 1; i < len(faces)-1; i++ {
 		fv.AddTriangle(w.flatIndices[0], w.flatIndices[i], w.flatIndices[i+1])
 	}
 

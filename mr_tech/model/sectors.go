@@ -25,7 +25,7 @@ type Sectors struct {
 func NewSectors(sectors []*Sector) *Sectors {
 	cache := make(map[string]*Sector)
 	for _, sec := range sectors {
-		cache[sec.Id] = sec
+		cache[sec.GetId()] = sec
 	}
 	return &Sectors{sectors: sectors, tree: nil, cache: cache}
 }
@@ -82,7 +82,7 @@ func (s *Sectors) Len() int {
 // SectorSearch searches for a sector containing the point (px, py), starting from the given sector and querying the tree if needed.
 // It returns the sector containing the point or nil if no matching sector is found.
 func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
-	if newSector := sector.LocatePoint(px, py); newSector != nil {
+	if newSector := sector.LocatePoint2D(px, py); newSector != nil {
 		return newSector
 	}
 	if newSector := s.QueryPoint(px, py); newSector != nil {
@@ -115,7 +115,7 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 		if !ok {
 			return false
 		}
-		if t1 := sector.LocatePoint(px, py); target != t1 {
+		if t1 := sector.LocatePoint2D(px, py); target != t1 {
 			target = t1
 			return true
 		}
@@ -129,7 +129,7 @@ func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	var target *Sector = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
 		if sector, ok := object.(*Sector); ok {
-			if sector.ContainsPoint(px, py) {
+			if sector.ContainsPoint2D(px, py) {
 				target = sector
 				return true
 			}

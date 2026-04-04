@@ -132,15 +132,15 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	minT := 1.0
 	var hit *Face = nil
 
-	for _, seg := range t.sector.Segments {
-		neighbor := seg.GetNeighbor()
+	for _, face := range t.sector.GetFaces() {
+		neighbor := face.GetNeighbor()
 		if neighbor != nil {
 			if top > t.sector.GetCeilY() || bottom < t.sector.GetFloorY() {
 				continue
 			}
 		}
-		start := seg.GetStart()
-		end := seg.GetEnd()
+		start := face.GetStart()
+		end := face.GetEnd()
 		dx := end.X - start.X
 		dy := end.Y - start.Y
 		den := moveX*dy - moveY*dx
@@ -159,7 +159,7 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t1
-				hit = seg
+				hit = face
 			}
 		}
 	}

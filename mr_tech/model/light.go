@@ -25,7 +25,7 @@ func NewLight() *Light {
 }
 
 // Setup configures the Light object by setting its intensity, kind, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(sector *Sector, intensity float64, kind config.LightKind, coords geometry.XY, height float64) {
+func (cl *Light) Setup(sector *Sector, intensity float64, kind config.LightKind, coords geometry.XYZ, height float64) {
 	cl.sector = sector
 	lightZ := (height) * 1.0
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE

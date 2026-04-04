@@ -20,7 +20,7 @@ func NewQueueItem() *QueueItem {
 
 // Hash64 generates a unique 64-bit hash combining sector model ID and quantized position values for the QueueItem.
 func (qi *QueueItem) Hash64() uint64 {
-	return (uint64(qi.sector.ModelId) << 48) |
+	return (uint64(qi.sector.GetModelId()) << 48) |
 		((uint64(int64(qi.x1)) & 0xFFF) << 36) |
 		((uint64(int64(qi.x2)) & 0xFFF) << 24) |
 		((uint64(int64(qi.y1t)) & 0xFFF) << 12) |

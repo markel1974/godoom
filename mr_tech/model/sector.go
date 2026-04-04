@@ -9,58 +9,105 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Sector represents a 3D space defined by its boundaries, texture animations, lighting, and associated metadata.
+// Sector represents a 3D navigable space, defined by its geometry, boundaries, materials, lighting, and spatial limits.
 type Sector struct {
-	ModelId  uint16
-	Id       string
-	Segments []*Face
-	Tag      string
-	floorY   float64
-	ceilY    float64
-	Ceil     *textures.Animation
-	Floor    *textures.Animation
-	Light    *Light
-	aabb     *physics.AABB
+	is3d      bool
+	modelId   int
+	id        string
+	faces     []*Face
+	tag       string
+	floorY    float64
+	ceilY     float64
+	materials []*textures.Animation
+	Light     *Light
+	aabb      *physics.AABB
 }
 
-// NewSector initializes and returns a new Sector instance with specified parameters including model ID, ID, segments, floor, and ceiling.
-func NewSector(modelId uint16, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation, tag string) *Sector {
+// NewSector creates and initializes a Sector object with specified parameters and materials for floor and ceiling.
+func NewSector(modelId int, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation, tag string) *Sector {
 	s := &Sector{
-		ModelId: modelId,
-		Id:      id,
-		floorY:  floorY,
-		ceilY:   ceilY,
-		Ceil:    ceil,
-		Floor:   floor,
-		Tag:     tag,
+		is3d:      false,
+		modelId:   modelId,
+		id:        id,
+		floorY:    floorY,
+		ceilY:     ceilY,
+		materials: make([]*textures.Animation, 2),
+		tag:       tag,
 	}
+	s.materials[0] = floor
+	s.materials[1] = ceil
 	return s
 }
 
-// GetFloorY returns the Y-coordinate of the floor for the Sector instance as a float64.
+func NewSector3d(modelId int, id string, tag string) *Sector {
+	s := &Sector{
+		is3d:      true,
+		modelId:   modelId,
+		id:        id,
+		floorY:    0,
+		ceilY:     0,
+		materials: make([]*textures.Animation, 2),
+		tag:       tag,
+	}
+	s.materials[0] = nil
+	s.materials[1] = nil
+	return nil
+}
+
+// Is3d checks whether the Sector represents a 3D navigable space and returns true if it does.
+func (s *Sector) Is3d() bool {
+	return s.is3d
+}
+
+// GetModelId returns the model ID associated with the Sector instance.
+func (s *Sector) GetModelId() int {
+	return s.modelId
+}
+
+// GetId returns the unique identifier of the Sector as a string.
+func (s *Sector) GetId() string {
+	return s.id
+}
+
+// GetFloorY returns the Y-coordinate of the sector's floor.
 func (s *Sector) GetFloorY() float64 {
 	return s.floorY
 }
 
-// GetCeilY returns the Y-coordinate of the ceiling for the sector.
+// GetCeilY returns the ceiling height of the sector.
 func (s *Sector) GetCeilY() float64 {
 	return s.ceilY
 }
 
-// AddSegment appends a Face to the Sector and assigns the Sector as the Face's Parent.
-func (s *Sector) AddSegment(seg *Face) {
-	seg.SetParent(s)
-	s.Segments = append(s.Segments, seg)
+// GetFloorMaterial retrieves the animation used for the sector's floor material, typically found at index 0 in materials.
+func (s *Sector) GetFloorMaterial() *textures.Animation {
+	return s.materials[0]
 }
 
-// GetAABB returns the axis-aligned bounding box (AABB) associated with the Sector instance.
+// GetCeilMaterial retrieves the material used for the ceiling of the sector, represented as an animated texture.
+func (s *Sector) GetCeilMaterial() *textures.Animation {
+	return s.materials[1]
+}
+
+// AddFace adds a new Face to the Sector and sets the Sector as its parent.
+func (s *Sector) AddFace(face *Face) {
+	face.SetParent(s)
+	s.faces = append(s.faces, face)
+}
+
+// GetFaces retrieves the list of faces associated with the sector.
+func (s *Sector) GetFaces() []*Face {
+	return s.faces
+}
+
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the sector, representing its spatial boundaries.
 func (s *Sector) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
-// ComputeAABB calculates and updates the axis-aligned bounding box (AABB) for the sector based on its segments.
+// ComputeAABB calculates the axis-aligned bounding box (AABB) for the sector based on its faces and vertical bounds.
 func (s *Sector) ComputeAABB() {
-	if len(s.Segments) == 0 {
+	if len(s.faces) == 0 {
 		s.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
 		return
 	}
@@ -68,9 +115,9 @@ func (s *Sector) ComputeAABB() {
 	minX, minY := math.MaxFloat64, math.MaxFloat64
 	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
 
-	for _, seg := range s.Segments {
-		start := seg.GetStart()
-		end := seg.GetEnd()
+	for _, face := range s.faces {
+		start := face.GetStart()
+		end := face.GetEnd()
 		if start.X < minX {
 			minX = start.X
 		}
@@ -100,35 +147,41 @@ func (s *Sector) ComputeAABB() {
 	s.aabb = physics.NewAABB(minX, minY, s.floorY, maxX, maxY, s.ceilY)
 }
 
+// AddTag appends a new tag to the sector's existing tags, separated by a semicolon if the input is non-empty.
 func (s *Sector) AddTag(tags string) {
 	if len(tags) > 0 {
-		s.Tag += ";" + tags
+		s.tag += ";" + tags
 	}
 }
 
-// LocatePoint identifies the Sector containing the point (px, py) by traversing convex polygons linked via Segments.
-func (s *Sector) LocatePoint(px, py float64) *Sector {
+// GetTag returns the tag associated with the Sector as a string.
+func (s *Sector) GetTag() string {
+	return s.tag
+}
+
+// LocatePoint2D traverses neighboring sectors to locate the sector containing the given 2D point (px, py), or returns nil if outside.
+func (s *Sector) LocatePoint2D(px, py float64) *Sector {
 	curr := s
 	const maxSteps = 16 // Safeguard for infinite loops caused by floating-point approximations
 	for step := 0; step < maxSteps; step++ {
 		inside := true
-		for _, seg := range curr.Segments {
-			start := seg.GetStart()
-			end := seg.GetEnd()
+		for _, face := range curr.faces {
+			start := face.GetStart()
+			end := face.GetEnd()
 			// Assuming that < 0 indicates the "external" half-space of the edge
 			if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
-				neighbor := seg.GetNeighbor()
+				neighbor := face.GetNeighbor()
 				if neighbor == nil {
 					// Hit external boundary of the mesh
 					return nil
 				}
-				// Transition: the point is beyond this segment, jump to the neighbor
+				// Transition: the point is beyond this face, jump to the neighbor
 				curr = neighbor
 				inside = false
 				break
 			}
 		}
-		// If the point was not outside any segment,
+		// If the point was not outside any face,
 		// by definition it is inside the current convex polygon.
 		if inside {
 			return curr
@@ -138,11 +191,11 @@ func (s *Sector) LocatePoint(px, py float64) *Sector {
 	return nil
 }
 
-// ContainsPoint performs a rigorous Point-in-Polygon test for convex polygons.
-func (s *Sector) ContainsPoint(px, py float64) bool {
-	for _, seg := range s.Segments {
-		start := seg.GetStart()
-		end := seg.GetEnd()
+// ContainsPoint2D checks if the given 2D point (px, py) lies within the sector by evaluating all its face boundaries.
+func (s *Sector) ContainsPoint2D(px, py float64) bool {
+	for _, face := range s.faces {
+		start := face.GetStart()
+		end := face.GetEnd()
 		if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
 			return false
 		}
@@ -150,16 +203,16 @@ func (s *Sector) ContainsPoint(px, py float64) bool {
 	return true
 }
 
-// CheckSegmentsClearance determines if a line segment intersects with any sector boundary and verifies clearance within head and knee positions.
-func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
+// CheckFacesClearance determines the closest colliding face within a sector given a movement vector and an entity radius.
+func (s *Sector) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
 	moveX := pX - viewX
 	moveY := pY - viewY
 	minT := 1.0
-	var closestSeg *Face = nil
+	var closestFace *Face = nil
 
-	for _, seg := range s.Segments {
+	for _, face := range s.faces {
 		//todo verificare neighbor!!!
-		neighbor := seg.GetNeighbor()
+		neighbor := face.GetNeighbor()
 		if neighbor != nil {
 			continue
 		}
@@ -168,8 +221,8 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 		//		continue
 		//	}
 		//}
-		start := seg.GetStart()
-		end := seg.GetEnd()
+		start := face.GetStart()
+		end := face.GetEnd()
 		dx := end.X - start.X
 		dy := end.Y - start.Y
 		den := moveX*dy - moveY*dx
@@ -180,12 +233,12 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 		u := ((start.X-viewX)*moveY - (start.Y-viewY)*moveX) / den
 
 		// Compute padding based on entity radius
-		// This virtually extends the segment to close gaps at vertices
+		// This virtually extends the face to close gaps at vertices
 		uPadding := 0.0
 		if radius > 0 {
-			segLenSq := dx*dx + dy*dy
-			if segLenSq > 0 {
-				uPadding = radius / math.Sqrt(segLenSq)
+			faceLenSq := dx*dx + dy*dy
+			if faceLenSq > 0 {
+				uPadding = radius / math.Sqrt(faceLenSq)
 			}
 		}
 		// Test with uPadding extension
@@ -199,20 +252,20 @@ func (s *Sector) CheckSegmentsClearance(viewX, viewY, pX, pY, top float64, botto
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t
-				closestSeg = seg
+				closestFace = face
 			}
 		}
 	}
-	return closestSeg
+	return closestFace
 }
 
-// GetCentroid calculates the centroid of the polygon formed by the sector's segments based on their vertex coordinates.
-func (s *Sector) GetCentroid() geometry.XY {
+// GetCentroid computes and returns the centroid of the sector as a geometry.XYZ object.
+func (s *Sector) GetCentroid() geometry.XYZ {
 	var signedArea, cx, cy float64
 
-	for i := range s.Segments {
-		start := s.Segments[i].GetStart()
-		end := s.Segments[i].GetEnd()
+	for i := range s.faces {
+		start := s.faces[i].GetStart()
+		end := s.faces[i].GetEnd()
 		x0, y0 := start.X, start.Y
 		x1, y1 := end.X, end.Y
 
@@ -227,13 +280,14 @@ func (s *Sector) GetCentroid() geometry.XY {
 	signedArea *= 0.5
 
 	if signedArea == 0 {
-		start := s.Segments[0].GetStart()
+		start := s.faces[0].GetStart()
 		// Fallback di sicurezza per topologia degenere (es. area nulla)
-		return geometry.XY{X: start.X, Y: start.Y}
+		return geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
 	}
 
-	return geometry.XY{
+	return geometry.XYZ{
 		X: cx / (6.0 * signedArea),
 		Y: cy / (6.0 * signedArea),
+		Z: 0,
 	}
 }

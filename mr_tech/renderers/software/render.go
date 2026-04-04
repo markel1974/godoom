@@ -222,18 +222,7 @@ func (w *Render) doRender() {
 func (w *Render) RenderSector(sector *model.Sector) {
 	maxX := float64(0)
 	maxY := float64(0)
-
-	var segments []*model.Face
-
-	//	const useConvexHull = false
-	//	if useConvexHull {
-	//	ch := &polygons.ConvexHull{}
-	//	segments = ch.FromSector(sector)
-	//} else {
-	segments = sector.Segments
-	//}
-
-	for _, v := range segments {
+	for _, v := range sector.GetFaces() {
 		sStart := v.GetStart()
 		sEnd := v.GetEnd()
 		x1 := math.Abs(sStart.X)
@@ -258,7 +247,7 @@ func (w *Render) RenderSector(sector *model.Sector) {
 	yFactor := (float64(w.h) / 2) / maxY
 
 	var t []geometry.XYZ
-	for _, v := range segments {
+	for _, v := range sector.GetFaces() {
 		sStart := v.GetStart()
 		sEnd := v.GetEnd()
 		x1 := sStart.X
@@ -344,12 +333,16 @@ func (w *Render) doDebug(next int) {
 	}
 	w.debugIdx = idx
 	sector := w.engine.SectorAt(idx)
-	sStart := sector.Segments[0].GetStart()
-	x := sStart.X + offset
-	y := sStart.Y + offset
-	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
-	w.player.SetSector(sector)
-	w.player.SetXY(x, y)
+	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", sector.GetId())
+
+	/*
+		sStart := sector.Faces[0].GetStart()
+		x := sStart.X + offset
+		y := sStart.Y + offset
+		fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.GetId()))
+		w.player.SetSector(sector)
+		w.player.SetXY(x, y)
+	*/
 }
 
 // doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.
@@ -393,16 +386,16 @@ func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatri
 			if f, _ := w.targetSectors[idx]; !f {
 				mode = 2
 			} else {
-				if w.targetId != css[idx].Sector.Id {
-					w.targetId = css[idx].Sector.Id
+				if w.targetId != css[idx].Sector.GetId() {
+					w.targetId = css[idx].Sector.GetId()
 					var neighbors []string
-					for _, z := range css[idx].Sector.Segments {
+					for _, z := range css[idx].Sector.GetFaces() {
 						neighbor := z.GetNeighbor()
 						if z != nil && neighbor != nil {
-							neighbors = append(neighbors, neighbor.Id)
+							neighbors = append(neighbors, neighbor.GetId())
 						}
 					}
-					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)
+					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.GetTag())
 				}
 			}
 		}

@@ -38,7 +38,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		scale = 1
 	}
 
-	animations := NewAnimations(cfg.Textures)
+	animations := NewAnimations(cfg.GetTextures())
 
 	r.volumes, totalSegments = r.compile2d(cfg, animations)
 

@@ -32,25 +32,3 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind) *ConfigS
 		Light: NewConfigLight(lightIntensity, kind),
 	}
 }
-
-// Clone creates a deep copy of the ConfigSector, optionally cloning its segments based on the cloneSegments parameter.
-func (is *ConfigSector) Clone(cloneSegments bool) *ConfigSector {
-	out := NewConfigSector(is.Id, is.Light.Intensity, is.Light.Kind)
-	out.CeilY = is.CeilY
-	out.FloorY = is.FloorY
-	if is.Ceil != nil {
-		out.Ceil = is.Ceil.Clone()
-	}
-	if is.Floor != nil {
-		out.Floor = is.Floor.Clone()
-	}
-	out.Tag = is.Tag
-	out.Segments = nil
-	if cloneSegments {
-		out.Segments = make([]*ConfigSegment, len(is.Segments))
-		for idx, seg := range is.Segments {
-			out.Segments[idx] = seg.Clone()
-		}
-	}
-	return out
-}

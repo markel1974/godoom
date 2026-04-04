@@ -2,7 +2,7 @@ package wolfstein
 
 import (
 	"fmt"
-	"os"
+	"math"
 	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
@@ -10,10 +10,10 @@ import (
 )
 
 // floorCeilScaleW defines a fixed scaling factor for animations applied to floor and ceiling textures.
-const floorCeilScaleW = 50.0
+const floorCeilScaleW = 10.0
 
 // floorCeilScaleH defines the height scaling factor for floor and ceiling textures, used in rendering calculations.
-const floorCeilScaleH = 50.0
+const floorCeilScaleH = 10.0
 
 // isDoor checks if the given cell value corresponds to a door by verifying if it is within the range [90, 101].
 func isDoor(cell uint16) bool {
@@ -45,8 +45,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
 	}
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	texProvider, tErr := NewTextures(basePath)
+	texProvider, tErr := NewTextures()
 	if tErr != nil {
 		return nil, tErr
 	}
@@ -76,8 +75,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 			if isDoor(cell) {
 				cs.Tag = "door"
 			}
-			cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
-			cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+			cs.Floor = config.NewConfigAnimation([]string{"image91.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+			cs.Ceil = config.NewConfigAnimation([]string{"image89.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
 			y0, y1 := float64(y)*wp.tileSize, float64(y+1)*wp.tileSize
 			pTL := geometry.XY{X: x0, Y: y0}
@@ -97,10 +97,11 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 					wp.addSegment(cs, width, height, pBR, pMidB, x, y+1, cell)
 					wp.addSegment(cs, width, height, pMidB, pBL, x, y+1, cell)
 					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
-					// Switch: Generate the physical door wall only if OpenDoors is false
+
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidT, pMidB, "")
-						anim := config.NewConfigAnimation([]string{"door.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+						// Segmento verticale (X costante): Normale E/W -> Texture scura (99)
+						anim := config.NewConfigAnimation([]string{"image99.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -115,10 +116,11 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 					wp.addSegment(cs, width, height, pBR, pBL, x, y+1, cell)
 					wp.addSegment(cs, width, height, pBL, pMidL, x-1, y, cell)
 					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
-					// Switch: Generate the physical door wall only if OpenDoors is false
+
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidL, pMidR, "")
-						anim := config.NewConfigAnimation([]string{"door.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+						// Segmento orizzontale (Y costante): Normale N/S -> Texture chiara (98)
+						anim := config.NewConfigAnimation([]string{"image98.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -159,29 +161,65 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	return nil
 }
 
-// addSegment appends a new ConfigSegment to a ConfigSector based on sector geometry, neighboring cells, and textures.
+// addSegment constructs and appends a configuration segment to the given sector based on map data and adjacency rules.
 func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
 	kind := config.DefinitionWall
 	neighborId := ""
-	texName := "wall1.ppm"
+	isAdjDoor := false
+	adj := uint16(1) // Fallback muro per l'out-of-bounds
+	// Adiacenze
 	if nx >= 0 && nx < width && ny >= 0 && ny < height {
-		adj := wp.mapData[ny*width+nx]
+		adj = wp.mapData[ny*width+nx]
 		if adj == 0 || isDoor(adj) {
 			kind = config.DefinitionJoin
 			neighborId = wp.sectorIds[ny][nx]
-		} else {
-			texName = fmt.Sprintf("wall%d.ppm", adj)
+			if isDoor(adj) {
+				isAdjDoor = true
+			}
 		}
 	}
 	seg := config.NewConfigSegment(cs.Id, kind, start, end, neighborId)
-	// If the current cell is a door and this segment borders a solid wall,
-	// it's the track on which the door will slide!
-	if kind == config.DefinitionWall {
-		if isDoor(currentCell) {
-			texName = "doortrak.ppm"
+	// Calcolo orientamento: X costante significa normale verso Est/Ovest
+	isEW := math.Abs(start.X-end.X) < 0.001
+	var texName string
+	if isDoor(currentCell) {
+		if kind == config.DefinitionJoin {
+			// Portale verso l'aria: faccia mobile della porta (98 = base, 99 = scura/EW)
+			idx := 98
+			if isEW {
+				idx++
+			}
+			texName = fmt.Sprintf("image%d.png", idx)
+		} else {
+			// Lato a contatto con muro solido: stipite/doortrak (104 = base, 105 = scura/EW)
+			idx := 104
+			if isEW {
+				idx++
+			}
+			texName = fmt.Sprintf("image%d.png", idx)
 		}
-		anim := config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 10.0, 50.0)
-		seg.Upper, seg.Middle, seg.Lower = anim, anim, anim
+	} else {
+		if kind == config.DefinitionWall {
+			// Muro standard: (TileID - 1) * 2 (+1 se EW)
+			baseIdx := (int(adj) - 1) * 2
+			if isEW {
+				baseIdx++
+			}
+			texName = fmt.Sprintf("image%d.png", baseIdx)
+		} else if isAdjDoor {
+			// Stiamo guardando il portale di una porta (Upper Wall visibile)
+			idx := 98
+			if isEW {
+				idx++
+			}
+			texName = fmt.Sprintf("image%d.png", idx)
+		}
+	}
+	if texName != "" {
+		anim := config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 7.0, 4.0)
+		seg.Upper = anim
+		seg.Middle = anim
+		seg.Lower = anim
 	}
 	cs.Segments = append(cs.Segments, seg)
 }

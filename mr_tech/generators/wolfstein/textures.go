@@ -1,12 +1,18 @@
 package wolfstein
 
 import (
-	"bufio"
+	"embed"
+	"image"
+	_ "image/png"
 	"io"
-	"os"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+// assets represents an embedded file system containing application resources such as container or assets.
+//
+//go:embed images
+var assets embed.FS
 
 // Textures is a collection of texture resources identified by unique string keys.
 type Textures struct {
@@ -14,19 +20,18 @@ type Textures struct {
 }
 
 // NewTextures loads textures from files in the specified directory and returns a Textures instance or an error.
-func NewTextures(basePath string) (*Textures, error) {
+func NewTextures() (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}
-	files, err := os.ReadDir(basePath)
+	files, err := assets.ReadDir("images")
 	if err != nil {
 		return nil, err
 	}
-
 	for idx, f := range files {
 		if !f.IsDir() {
-			tex := textures.NewTexture(f.Name(), uint32(idx), 1024, 1024)
-			err = t.load(tex, basePath+f.Name())
+			target := "images" + "/" + f.Name()
+			tex, err := t.load(target, int32(idx))
 			if err == nil || err == io.EOF {
 				t.resources[f.Name()] = tex
 			} else {
@@ -37,43 +42,43 @@ func NewTextures(basePath string) (*Textures, error) {
 	return t, nil
 }
 
-// load reads texture data from the specified file and populates the given Animations instance with pixel values.
-func (t *Textures) load(tex *textures.Texture, filename string) error {
-	file, err := os.Open(filename)
+func (w *Textures) load(filename string, idx int32) (*textures.Texture, error) {
+	file, err := assets.Open(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
-	if _, err := file.Seek(0x11, io.SeekStart); err != nil {
-		return err
+	// Decodifica l'immagine (il decoder PNG è registrato tramite l'import blank)
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return nil, err
 	}
-	br := bufio.NewReader(file)
-	var r byte
-	var g byte
-	var b byte
-	for {
-		for y := 0; y < 1024; y++ {
-			for x := 0; x < 1024; x++ {
-				if r, err = br.ReadByte(); err != nil {
-					return err
-				}
-				if g, err = br.ReadByte(); err != nil {
-					return err
-				}
-				if b, err = br.ReadByte(); err != nil {
-					return err
-				}
-				tex.Set(x, y, int(r)*65536+int(g)*256+int(b))
-			}
+	bounds := img.Bounds()
+	width := bounds.Max.X - bounds.Min.X
+	height := bounds.Max.Y - bounds.Min.Y
+	tex := textures.NewTexture(filename, uint32(idx), width, height)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// At() estrae il colore. L'offset Min.X/Min.Y è necessario nel caso di sub-immagini
+			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			// r, g, b sono uint32 a 16-bit (0-65535).
+			// Shift a destra per riportarli a 8-bit (0-255).
+			r8 := int(r >> 8)
+			g8 := int(g >> 8)
+			b8 := int(b >> 8)
+			// Packing RGB 24-bit equivalente a r*65536 + g*256 + b
+			color := (r8 << 16) | (g8 << 8) | b8
+			tex.Set(x, y, color)
 		}
 	}
+	return tex, nil
 }
 
 // Get retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.
-func (t *Textures) Get(ids []string) []*textures.Texture {
+func (w *Textures) Get(ids []string) []*textures.Texture {
 	var out []*textures.Texture
 	for _, id := range ids {
-		x, ok := t.resources[id]
+		x, ok := w.resources[id]
 		if !ok {
 			return nil
 		}
@@ -83,9 +88,9 @@ func (t *Textures) Get(ids []string) []*textures.Texture {
 }
 
 // GetNames returns a list of all texture names (keys) stored in the Textures' resources map.
-func (t *Textures) GetNames() []string {
+func (w *Textures) GetNames() []string {
 	var out []string
-	for id := range t.resources {
+	for id := range w.resources {
 		out = append(out, id)
 	}
 	return out

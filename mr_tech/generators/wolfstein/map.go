@@ -30,6 +30,6 @@ func GetOriginalMapData() (int, int, []uint16) {
 
 func CreateLevel(level int) (*config.ConfigRoot, error) {
 	w, h, data := GetOriginalMapData()
-	wp := NewParser(6, 15, true)
+	wp := NewParser(8, 15, true)
 	return wp.Parse(w, h, data)
 }

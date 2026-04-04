@@ -55,8 +55,8 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 	return v
 }
 
-// SeZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
-func (v *Volume) SeZ(minZ, maxZ float64) {
+// SetZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
+func (v *Volume) SetZ(minZ, maxZ float64) {
 	v.minZ = minZ
 	v.maxZ = maxZ
 	v.hasZ = true

@@ -133,7 +133,7 @@ func (t *ThingBase) PhysicsApply() {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x
 		t.position.Y += y
-		if newVolume := t.sectors.SearchVolume(t.volume, t.position.X, t.position.Y); newVolume != nil {
+		if newVolume := t.sectors.SearchVolume2d(t.volume, t.position.X, t.position.Y); newVolume != nil {
 			t.volume = newVolume
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y)

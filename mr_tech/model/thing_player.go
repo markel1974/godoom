@@ -50,7 +50,7 @@ type ThingPlayer struct {
 
 // NewThingPlayer creates a new ThingPlayer instance with initial position, angle, sector, and debug configuration.
 func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Volumes, entities *Entities, debug bool) (*ThingPlayer, error) {
-	volume := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
+	volume := sectors.QueryPoint2d(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
 	}
@@ -320,7 +320,7 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64) {
 	px, py := p.GetPosition()
 
 	// Spatial stability check: are we still inside the same sector?
-	if newVolume := p.sectors.SearchVolume(p.volume, px, py); newVolume != nil {
+	if newVolume := p.sectors.SearchVolume2d(p.volume, px, py); newVolume != nil {
 		p.volume = newVolume
 	}
 

@@ -299,7 +299,7 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 			}
 			first := areaSectors[0]
 			light := NewLight()
-			sector := r.sectors.QueryPoint(first.Light.pos.X, first.Light.pos.Y)
+			sector := r.sectors.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
 			if sector == nil {
 				sector = first
 				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)

@@ -107,7 +107,7 @@ func (t *ThingBullet) PhysicsApply() {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x
 		t.position.Y += y
-		if newSector := t.sectors.SearchVolume(t.volume, t.position.X, t.position.Y); newSector != nil {
+		if newSector := t.sectors.SearchVolume2d(t.volume, t.position.X, t.position.Y); newSector != nil {
 			t.volume = newSector
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y)

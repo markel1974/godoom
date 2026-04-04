@@ -49,7 +49,7 @@ func (r *Things) GetThings() []IThing {
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
 func (r *Things) CreateThing(ct *config.ConfigThing) error {
-	sector := r.sectors.QueryPoint(ct.Position.X, ct.Position.Y)
+	sector := r.sectors.QueryPoint2d(ct.Position.X, ct.Position.Y)
 	if sector == nil {
 		return fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
 	}

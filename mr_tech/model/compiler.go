@@ -175,7 +175,7 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 					} else {
 						fixSegments = append(fixSegments, face)
 					}
-					face.ComputeAABB()
+					face.Rebuild()
 					segmentsTree.InsertObject(face)
 					s.AddFace(face)
 				}

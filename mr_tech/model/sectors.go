@@ -34,7 +34,7 @@ func NewSectors(sectors []*Sector) *Sectors {
 func (s *Sectors) CreateTree() {
 	s.tree = physics.NewAABBTree(uint(len(s.sectors)))
 	for _, sec := range s.sectors {
-		sec.ComputeAABB()
+		sec.Rebuild()
 		s.tree.InsertObject(sec)
 	}
 }
@@ -82,7 +82,8 @@ func (s *Sectors) Len() int {
 // SectorSearch searches for a sector containing the point (px, py), starting from the given sector and querying the tree if needed.
 // It returns the sector containing the point or nil if no matching sector is found.
 func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
-	if newSector := sector.LocatePoint2D(px, py); newSector != nil {
+	//TODO missing z
+	if newSector := sector.LocatePoint(px, py, 0); newSector != nil {
 		return newSector
 	}
 	if newSector := s.QueryPoint(px, py); newSector != nil {
@@ -115,7 +116,8 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 		if !ok {
 			return false
 		}
-		if t1 := sector.LocatePoint2D(px, py); target != t1 {
+		//todo missing z
+		if t1 := sector.LocatePoint(px, py, 0); target != t1 {
 			target = t1
 			return true
 		}
@@ -129,7 +131,8 @@ func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	var target *Sector = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
 		if sector, ok := object.(*Sector); ok {
-			if sector.ContainsPoint2D(px, py) {
+			//todo missing z
+			if sector.ContainsPoint(px, py, 0) {
 				target = sector
 				return true
 			}

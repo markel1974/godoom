@@ -56,7 +56,7 @@ func NewFaceSegment(neighbor *Sector, kind int, start geometry.XYZ, end geometry
 	out.points[0] = start
 	out.points[1] = end
 	out.pSize = len(out.points) - 1
-	out.ComputeAABB()
+	out.Rebuild()
 	return out
 }
 
@@ -77,7 +77,7 @@ func NewFace(neighbor *Sector, kind int, points []geometry.XYZ, tag string, mate
 	out.material[0] = material
 	out.pSize = len(out.points) - 1
 	out.ComputeNormal()
-	out.ComputeAABB()
+	out.Rebuild()
 	return out
 }
 
@@ -193,8 +193,8 @@ func (s *Face) ComputeNormal() {
 	}
 }
 
-// ComputeAABB calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
-func (s *Face) ComputeAABB() {
+// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
+func (s *Face) Rebuild() {
 	const eps = 0.001
 	if s.is3D {
 		minX, minY, minZ := s.points[0].X, s.points[0].Y, s.points[0].Z

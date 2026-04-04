@@ -257,6 +257,11 @@ func (v *Volume) CheckFacesClearance2d(viewX, viewY, pX, pY, top float64, bottom
 	var closestFace *Face = nil
 
 	for _, face := range v.faces {
+		//TODO COMPLETARE!!!!!
+		neighbor := face.GetNeighbor()
+		if neighbor != nil {
+			continue
+		}
 		start := face.GetStart()
 		end := face.GetEnd()
 		dx := end.X - start.X
@@ -281,7 +286,6 @@ func (v *Volume) CheckFacesClearance2d(viewX, viewY, pX, pY, top float64, bottom
 		if t >= 0 && t <= minT && u >= -uPadding && u <= 1+uPadding {
 			holeLow := 9e9
 			holeHigh := -9e9
-			neighbor := face.GetNeighbor()
 
 			if neighbor != nil {
 				floorY := v.GetFloorY()

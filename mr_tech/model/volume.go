@@ -11,49 +11,64 @@ import (
 
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
 type Volume struct {
-	is3d      bool
 	modelId   int
 	id        string
 	faces     []*Face
 	tag       string
-	floorY    float64
-	ceilY     float64
-	materials []*textures.Animation
+	materials [2]*textures.Animation
 	Light     *Light
 	aabb      *physics.AABB
+	minZ      float64
+	maxZ      float64
+	hasZ      bool
 }
 
 // NewVolume creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded sectors.
-func NewVolume(modelId int, id string, floorY float64, floor *textures.Animation, ceilY float64, ceil *textures.Animation, tag string) *Volume {
+func NewVolume(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
 	v := &Volume{
-		is3d:      false,
-		modelId:   modelId,
-		id:        id,
-		floorY:    floorY,
-		ceilY:     ceilY,
-		materials: make([]*textures.Animation, 2),
-		tag:       tag,
+		modelId: modelId,
+		id:      id,
+		tag:     tag,
+		minZ:    minZ,
+		maxZ:    maxZ,
+		hasZ:    true,
 	}
 	v.materials[0] = floor
 	v.materials[1] = ceil
+	v.Rebuild()
 	return v
 }
 
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
 	v := &Volume{
-		is3d:      true,
-		modelId:   modelId,
-		id:        id,
-		materials: make([]*textures.Animation, 2),
-		tag:       tag,
+		modelId: modelId,
+		id:      id,
+		tag:     tag,
+		minZ:    0,
+		maxZ:    0,
+		hasZ:    false,
 	}
+	v.materials[0] = nil
+	v.materials[1] = nil
+	v.Rebuild()
 	return v
 }
 
-// Is3d returns true if the volume represents a true 3D space, otherwise false (2.5D extruded).
-func (v *Volume) Is3d() bool {
-	return v.is3d
+// SeZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
+func (v *Volume) SeZ(minZ, maxZ float64) {
+	v.minZ = minZ
+	v.maxZ = maxZ
+	v.hasZ = true
+	v.Rebuild()
+}
+
+// ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
+func (v *Volume) ClearZ() {
+	v.minZ = 0
+	v.maxZ = 0
+	v.hasZ = false
+	v.Rebuild()
 }
 
 // GetModelId retrieves the model ID associated with the Volume instance.
@@ -68,49 +83,26 @@ func (v *Volume) GetId() string {
 
 // GetFloorY returns the Y-coordinate of the floor. In 3D mode, it retrieves the minimum Z from the AABB if available.
 func (v *Volume) GetFloorY() float64 {
-	if v.is3d && v.aabb != nil {
-		return v.aabb.GetMinZ()
-	}
-	return v.floorY
+	return v.aabb.GetMinZ()
 }
 
 // GetCeilY returns the ceiling Y-coordinate of the volume. For 3D volumes with an AABB, it returns the maximum Z value.
 func (v *Volume) GetCeilY() float64 {
-	if v.is3d && v.aabb != nil {
-		return v.aabb.GetMaxZ()
-	}
-	return v.ceilY
+	return v.aabb.GetMaxZ()
 }
 
 // GetFloorMaterial returns the material used for the floor of the volume, based on 3D state and face normals.
 func (v *Volume) GetFloorMaterial() *textures.Animation {
-	if v.is3d {
-		for _, face := range v.faces {
-			if face.GetNormal().Z > 0.9 {
-				return face.GetMaterial()
-			}
-		}
-		return nil
-	}
 	return v.materials[0]
 }
 
 // GetCeilMaterial returns the material used for the ceiling of the volume. Prioritizes 3D faces if the volume is 3D.
 func (v *Volume) GetCeilMaterial() *textures.Animation {
-	if v.is3d {
-		for _, face := range v.faces {
-			if face.GetNormal().Z < -0.9 {
-				return face.GetMaterial()
-			}
-		}
-		return nil
-	}
 	return v.materials[1]
 }
 
 // AddFace adds a new face to the volume and sets the volume as the parent of the face.
 func (v *Volume) AddFace(face *Face) {
-	// Attenzione: Face dovrà avere GetNeighbor che ritorna un *Volume anziché *Sector
 	face.SetParent(v)
 	v.faces = append(v.faces, face)
 }
@@ -127,44 +119,6 @@ func (v *Volume) GetAABB() *physics.AABB {
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
 func (v *Volume) Rebuild() {
-	if !v.is3d {
-		minX, minY := math.MaxFloat64, math.MaxFloat64
-		maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
-		if len(v.faces) == 0 {
-			minX, minY = 0, 0
-		} else {
-			for _, face := range v.faces {
-				start := face.GetStart()
-				end := face.GetEnd()
-				if start.X < minX {
-					minX = start.X
-				}
-				if start.X > maxX {
-					maxX = start.X
-				}
-				if start.Y < minY {
-					minY = start.Y
-				}
-				if start.Y > maxY {
-					maxY = start.Y
-				}
-				if end.X < minX {
-					minX = end.X
-				}
-				if end.X > maxX {
-					maxX = end.X
-				}
-				if end.Y < minY {
-					minY = end.Y
-				}
-				if end.Y > maxY {
-					maxY = end.Y
-				}
-			}
-		}
-		v.aabb = physics.NewAABB(minX, minY, v.floorY, maxX, maxY, v.ceilY)
-		return
-	}
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	if len(v.faces) == 0 {
@@ -193,6 +147,10 @@ func (v *Volume) Rebuild() {
 			}
 		}
 	}
+	if v.hasZ {
+		minZ = v.minZ
+		maxZ = v.maxZ
+	}
 	v.aabb = physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
@@ -208,11 +166,8 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// LocatePoint determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
-func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
-	if !v.is3d {
-		return v.LocatePoint2D(px, py)
-	}
+// LocatePoint3d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
+func (v *Volume) LocatePoint3d(px, py, pz float64) *Volume {
 	curr := v
 	const maxSteps = 16
 	for step := 0; step < maxSteps; step++ {
@@ -241,8 +196,8 @@ func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
 	return nil
 }
 
-// LocatePoint2D attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
-func (v *Volume) LocatePoint2D(px, py float64) *Volume {
+// LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
+func (v *Volume) LocatePoint2d(px, py float64) *Volume {
 	curr := v
 	const maxSteps = 16
 	for step := 0; step < maxSteps; step++ {
@@ -267,11 +222,8 @@ func (v *Volume) LocatePoint2D(px, py float64) *Volume {
 	return nil
 }
 
-// ContainsPoint determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
-func (v *Volume) ContainsPoint(px, py, pz float64) bool {
-	if !v.is3d {
-		return v.ContainsPoint2D(px, py)
-	}
+// ContainsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
+func (v *Volume) ContainsPoint3d(px, py, pz float64) bool {
 	for _, face := range v.faces {
 		pts := face.GetPoints()
 		if len(pts) == 0 {
@@ -285,8 +237,8 @@ func (v *Volume) ContainsPoint(px, py, pz float64) bool {
 	return true
 }
 
-// ContainsPoint2D determines if a 2D point (px, py) lies within the bounds of the Volume.
-func (v *Volume) ContainsPoint2D(px, py float64) bool {
+// ContainsPoint2d determines if a 2D point (px, py) lies within the bounds of the Volume.
+func (v *Volume) ContainsPoint2d(px, py float64) bool {
 	for _, face := range v.faces {
 		start := face.GetStart()
 		end := face.GetEnd()
@@ -297,12 +249,8 @@ func (v *Volume) ContainsPoint2D(px, py float64) bool {
 	return true
 }
 
-// CheckFacesClearance checks if a movement intersects any face in the volume and returns the closest obstructing face.
-func (v *Volume) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
-	if v.is3d {
-		return nil
-	}
-
+// CheckFacesClearance2d checks if a movement intersects any face in the volume and returns the closest obstructing face.
+func (v *Volume) CheckFacesClearance2d(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
 	moveX := pX - viewX
 	moveY := pY - viewY
 	minT := 1.0
@@ -336,8 +284,10 @@ func (v *Volume) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom f
 			neighbor := face.GetNeighbor()
 
 			if neighbor != nil {
-				holeLow = mathematic.MaxF(v.floorY, neighbor.GetFloorY())
-				holeHigh = mathematic.MinF(v.ceilY, neighbor.GetCeilY())
+				floorY := v.GetFloorY()
+				ceilY := v.GetCeilY()
+				holeLow = mathematic.MaxF(floorY, neighbor.GetFloorY())
+				holeHigh = mathematic.MinF(ceilY, neighbor.GetCeilY())
 			}
 
 			if holeHigh < top || holeLow > bottom {
@@ -349,24 +299,24 @@ func (v *Volume) CheckFacesClearance(viewX, viewY, pX, pY, top float64, bottom f
 	return closestFace
 }
 
-// GetCentroid calculates and returns the geometric centroid of the volume based on its faces and 3D mode.
-func (v *Volume) GetCentroid() geometry.XYZ {
-	if v.is3d {
-		var cx, cy, cz, count float64
-		for _, face := range v.faces {
-			for _, p := range face.GetPoints() {
-				cx += p.X
-				cy += p.Y
-				cz += p.Z
-				count++
-			}
+// GetCentroid3d calculates and returns the geometric centroid of the volume based on its faces and 3D mode.
+func (v *Volume) GetCentroid3d() geometry.XYZ {
+	var cx, cy, cz, count float64
+	for _, face := range v.faces {
+		for _, p := range face.GetPoints() {
+			cx += p.X
+			cy += p.Y
+			cz += p.Z
+			count++
 		}
-		if count > 0 {
-			return geometry.XYZ{X: cx / count, Y: cy / count, Z: cz / count}
-		}
-		return geometry.XYZ{}
 	}
+	if count > 0 {
+		return geometry.XYZ{X: cx / count, Y: cy / count, Z: cz / count}
+	}
+	return geometry.XYZ{}
+}
 
+func (v *Volume) GetCentroid2d() geometry.XYZ {
 	var signedArea, cx, cy float64
 	for i := range v.faces {
 		start := v.faces[i].GetStart()
@@ -379,16 +329,15 @@ func (v *Volume) GetCentroid() geometry.XYZ {
 		cx += (x0 + x1) * a
 		cy += (y0 + y1) * a
 	}
-
+	floorY := v.GetFloorY()
 	signedArea *= 0.5
 	if signedArea == 0 {
 		start := v.faces[0].GetStart()
-		return geometry.XYZ{X: start.X, Y: start.Y, Z: v.floorY}
+		return geometry.XYZ{X: start.X, Y: start.Y, Z: floorY}
 	}
-
 	return geometry.XYZ{
 		X: cx / (6.0 * signedArea),
 		Y: cy / (6.0 * signedArea),
-		Z: v.floorY,
+		Z: floorY,
 	}
 }

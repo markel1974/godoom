@@ -9,6 +9,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+//TODO
+//Dobbiamo far migrare thing_base.go affinché usi il nuovo Volumes.SearchVolume(v, x, y, z)
+//per l'aggiornamento spaziale e riscrivere il wall-sliding per operare contro i piani 3D.
+
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id         string

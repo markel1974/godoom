@@ -51,7 +51,7 @@ type IThing interface {
 func WallSlidingEffect(volume *Volume, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
 	const epsilon = 0.5
 	// 1. Trova il segmento più vicino (con padding per gli spigoli)
-	face := volume.CheckFacesClearance(viewX, viewY, pX, pY, top, bottom, radius)
+	face := volume.CheckFacesClearance2d(viewX, viewY, pX, pY, top, bottom, radius)
 	if face == nil {
 		return velX, velY
 	}

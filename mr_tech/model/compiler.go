@@ -181,7 +181,7 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 				}
 				s.Light = NewLight()
 				if cs.Light != nil {
-					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid(), cs.FloorY+cs.CeilY)
+					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid2d(), cs.FloorY+cs.CeilY)
 				}
 				totalPolygons++
 			}
@@ -309,7 +309,7 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
 			light := NewLight()
-			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid(), first.GetCeilY())
+			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid2d(), first.GetCeilY())
 			out = append(out, light)
 		}
 	}

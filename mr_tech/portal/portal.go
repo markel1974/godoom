@@ -141,7 +141,7 @@ func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
 			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, face.GetMiddle(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
-		center := volume.GetCentroid()
+		center := volume.GetCentroid2d()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 		// Generi un triangolo orizzontale: Centro, P1, P2

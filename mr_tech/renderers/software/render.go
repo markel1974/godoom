@@ -13,9 +13,6 @@ import (
 	"github.com/markel1974/godoom/pixels"
 )
 
-// _scale is a constant scaling factor used for adjusting dimensions and transformations in rendering operations.
-const _scale = 1
-
 // Render is a struct responsible for handling software-based 2D rendering functionality.
 type Render struct {
 	win                *pixels.GLWindow
@@ -70,10 +67,11 @@ func (w *Render) Setup(engine *engine.Engine) error {
 func (w *Render) doInitialize() {
 	//VIEWMODE = -1 = Normal, 0 = Wireframe, 1 = Flat, 2 = Wireframe
 	cfg := pixels.WindowConfig{
-		Bounds:      pixels.R(0, 0, float64(w.w)*_scale, float64(w.h)*_scale),
-		VSync:       true,
-		Undecorated: false,
-		Smooth:      false,
+		Bounds:             pixels.R(0, 0, float64(w.w), float64(w.h)),
+		VSync:              true,
+		Undecorated:        false,
+		Smooth:             false,
+		DisableScissorTest: true,
 	}
 	var err error
 	w.win, err = pixels.NewGLWindow(cfg)
@@ -86,7 +84,7 @@ func (w *Render) doInitialize() {
 	w.mainSprite = pixels.NewSprite()
 	w.mainSprite.SetCached(pixels.CacheModeUpdate)
 	w.mainSprite.Set(w.mainSurface, w.mainSurface.Bounds())
-	w.mainMatrix = pixels.IM.Moved(center).Scaled(center, _scale)
+	w.mainMatrix = pixels.IM.Moved(center).Scaled(center, 1.0)
 
 	if w.enableClear {
 		fmt.Println("WIN CLEAR IS ENABLE - DISABLE WHEN COMPLETE!!!!!!!!!!")

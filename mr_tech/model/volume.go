@@ -91,13 +91,13 @@ func (v *Volume) GetCeilY() float64 {
 	return v.aabb.GetMaxZ()
 }
 
-// GetFloorMaterial returns the material used for the floor of the volume, based on 3D state and face normals.
-func (v *Volume) GetFloorMaterial() *textures.Animation {
+// GetMaterialFloor returns the material used for the floor of the volume, based on 3D state and face normals.
+func (v *Volume) GetMaterialFloor() *textures.Animation {
 	return v.materials[0]
 }
 
-// GetCeilMaterial returns the material used for the ceiling of the volume. Prioritizes 3D faces if the volume is 3D.
-func (v *Volume) GetCeilMaterial() *textures.Animation {
+// GetMaterialCeil returns the material used for the ceiling of the volume. Prioritizes 3D faces if the volume is 3D.
+func (v *Volume) GetMaterialCeil() *textures.Animation {
 	return v.materials[1]
 }
 

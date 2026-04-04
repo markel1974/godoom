@@ -116,8 +116,8 @@ func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
 		u0 := 0.0
 		u1 := math.Hypot(wx2-wx1, wz2-wz1) * r.textureScaleRepetition
 
-		ceilT := cs.Volume.GetCeilMaterial()
-		floorT := cs.Volume.GetFloorMaterial()
+		ceilT := cs.Volume.GetMaterialCeil()
+		floorT := cs.Volume.GetMaterialFloor()
 		sectorCeilY := volume.GetCeilY()
 		sectorFloorY := volume.GetFloorY()
 
@@ -326,8 +326,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			}
 		}
 
-		ceilT := cs.Volume.GetCeilMaterial()
-		floorT := cs.Volume.GetFloorMaterial()
+		ceilT := cs.Volume.GetMaterialCeil()
+		floorT := cs.Volume.GetMaterialFloor()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, x2Min, y2Ceil, yaStop, zStop)

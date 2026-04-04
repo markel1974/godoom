@@ -12,7 +12,7 @@ import (
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
 type Compiler struct {
-	sectors  *Sectors
+	sectors  *Volumes
 	things   *Things
 	player   *ThingPlayer
 	lights   []*Light
@@ -96,8 +96,8 @@ func (r *Compiler) GetEntities() *Entities {
 	return r.entities
 }
 
-// GetSectors retrieves the Sectors instance associated with the current Compiler object.
-func (r *Compiler) GetSectors() *Sectors {
+// GetSectors retrieves the Volumes instance associated with the current Compiler object.
+func (r *Compiler) GetSectors() *Volumes {
 	return r.sectors
 }
 
@@ -117,7 +117,7 @@ func (r *Compiler) GetLights() []*Light {
 }
 
 // compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
+func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
 	modelSectorId := 0
 	var container []*Volume
 	totalPolygons := 0
@@ -228,11 +228,11 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 		}
 	}
 
-	return NewSectors(container), totalPolygons
+	return NewVolumes(container), totalPolygons
 }
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
+func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)

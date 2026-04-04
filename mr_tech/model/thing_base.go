@@ -21,7 +21,7 @@ type ThingBase struct {
 	speed      float64
 	volume     *Volume
 	animation  *textures.Animation
-	sectors    *Sectors
+	sectors    *Volumes
 	entities   *Entities
 	entity     *physics.Entity
 	isActive   bool
@@ -29,7 +29,7 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, sectors, and entities.
-func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Sectors, entities *Entities) *ThingBase {
+func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingBase {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius

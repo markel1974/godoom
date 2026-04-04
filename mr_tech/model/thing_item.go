@@ -11,7 +11,7 @@ type ThingItem struct {
 }
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
-func NewThingItem(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Sectors, entities *Entities) *ThingItem {
+func NewThingItem(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingItem {
 	thing := &ThingItem{
 		ThingBase: NewThingBase(cfg, anim, volume, sectors, entities),
 	}

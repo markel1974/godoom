@@ -15,7 +15,7 @@ type Engine struct {
 	things     *model.Things
 	entities   *model.Entities
 	player     *model.ThingPlayer
-	sectors    *model.Sectors
+	sectors    *model.Volumes
 	lights     []*model.Light
 }
 

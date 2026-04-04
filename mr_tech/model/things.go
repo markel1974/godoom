@@ -13,14 +13,14 @@ import (
 type Things struct {
 	things     []IThing
 	config     []*config.ConfigThing
-	sectors    *Sectors
+	sectors    *Volumes
 	entities   *Entities
 	animations *Animations
 }
 
 // NewThings initializes a Things instance with the provided configurations, sectors, entities, and animations.
 // Returns the created Things instance or an error if initialization of any Thing fails.
-func NewThings(cfg []*config.ConfigThing, sectors *Sectors, entities *Entities, animations *Animations) (*Things, error) {
+func NewThings(cfg []*config.ConfigThing, sectors *Volumes, entities *Entities, animations *Animations) (*Things, error) {
 	r := &Things{
 		config:     cfg,
 		sectors:    sectors,

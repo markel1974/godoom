@@ -39,7 +39,7 @@ type ThingPlayer struct {
 	ducking        bool
 	falling        bool
 	lightIntensity float64
-	sectors        *Sectors
+	sectors        *Volumes
 	entities       *Entities
 	entity         *physics.Entity
 	identifier     int
@@ -49,7 +49,7 @@ type ThingPlayer struct {
 }
 
 // NewThingPlayer creates a new ThingPlayer instance with initial position, angle, sector, and debug configuration.
-func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entities, debug bool) (*ThingPlayer, error) {
+func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Volumes, entities *Entities, debug bool) (*ThingPlayer, error) {
 	volume := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)

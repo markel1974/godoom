@@ -14,7 +14,7 @@ type ThingEnemy struct {
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance with the specified configuration, animation, sector, and entities.
-func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Sectors, entities *Entities) *ThingEnemy {
+func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingEnemy {
 	e := &ThingEnemy{
 		ThingBase: NewThingBase(cfg, anim, volume, sectors, entities),
 		active:    false,

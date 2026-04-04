@@ -9,27 +9,32 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// Parser represents a structure for parsing and organizing map data into a configurable level format.
-// TileSize specifies the dimensions of each tile in the map grid.
-// Height represents the height of individual map sectors.
-// mapData holds the raw data for the map's structure, represented as a slice of uint16 values.
-// sectorIds contains unique identifiers for sectors, organized as a 2D grid of strings.
-type Parser struct {
-	tileSize  float64
-	height    float64
-	width     float64
-	mapData   []uint16
-	sectorIds [][]string
+const floorCeilScaleW = 50.0
+const floorCeilScaleH = 50.0
+
+// isDoor determina se il valore del tile corrisponde a una porta (es. 90-101).
+func isDoor(cell uint16) bool {
+	return cell >= 90 && cell <= 101
 }
 
-// NewParser initializes and returns a new Parser with the specified tile size and height.
-func NewParser(tileSize float64) *Parser {
+type Parser struct {
+	tileSize     float64
+	sectorHeight float64
+	gridWidth    int
+	gridHeight   int
+	mapData      []uint16
+	sectorIds    [][]string
+	openDoors    bool
+}
+
+func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 	return &Parser{
-		tileSize: tileSize,
+		tileSize:     tileSize,
+		sectorHeight: sectorHeight,
+		openDoors:    openDoors,
 	}
 }
 
-// Parse initializes and processes map data, generating configuration sectors, animations, and vertices for the game level.
 func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot, error) {
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
@@ -39,65 +44,124 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	if tErr != nil {
 		return nil, tErr
 	}
+
 	player := &config.ConfigPlayer{}
 	root := config.NewConfigRoot(nil, player, nil, 1.0, false, texProvider)
+
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
 	}
 
-	// Animazioni di base per i flats (pavimento/soffitto)
+	isSolid := func(nx, ny int) bool {
+		if nx < 0 || nx >= width || ny < 0 || ny >= height {
+			return true
+		}
+		adj := wp.mapData[ny*width+nx]
+		return adj != 0 && !isDoor(adj)
+	}
+
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			cell := wp.mapData[y*width+x]
-			if cell != 0 {
-				continue // Ignoriamo i blocchi solidi (saranno i bordi dei settori vuoti)
+
+			if cell != 0 && !isDoor(cell) {
+				continue
 			}
+
 			sid := wp.sectorIds[y][x]
 			cs := config.NewConfigSector(sid, 1.0, config.LightKindAmbient)
 			cs.FloorY = 0
-			cs.CeilY = wp.height
-			cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, 100.0, 100.0)
-			cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, 200.0, 200.0)
+			cs.CeilY = wp.sectorHeight
 			cs.Tag = "wolf_cell"
-			// Vertici della cella (TopLeft, TopRight, BottomRight, BottomLeft)
+
+			if isDoor(cell) {
+				cs.Tag = "door"
+			}
+
+			cs.Floor = config.NewConfigAnimation([]string{"floor.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+			cs.Ceil = config.NewConfigAnimation([]string{"ceil.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
 			y0, y1 := float64(y)*wp.tileSize, float64(y+1)*wp.tileSize
 			pTL := geometry.XY{X: x0, Y: y0}
 			pTR := geometry.XY{X: x1, Y: y0}
 			pBR := geometry.XY{X: x1, Y: y1}
 			pBL := geometry.XY{X: x0, Y: y1}
-			// Cicliamo in ordine orario/antiorario per chiudere il perimetro del settore
-			// Nord
-			wp.addSegment(cs, width, height, pTL, pTR, x, y-1)
-			// Est
-			wp.addSegment(cs, width, height, pTR, pBR, x+1, y)
-			// Sud
-			wp.addSegment(cs, width, height, pBR, pBL, x, y+1)
-			// Ovest
-			wp.addSegment(cs, width, height, pBL, pTL, x-1, y)
+
+			if isDoor(cell) {
+				solidN := isSolid(x, y-1)
+				solidS := isSolid(x, y+1)
+
+				if solidN || solidS {
+					pMidT := geometry.XY{X: x0 + wp.tileSize/2, Y: y0}
+					pMidB := geometry.XY{X: x0 + wp.tileSize/2, Y: y1}
+
+					wp.addSegment(cs, width, height, pTL, pMidT, x, y-1, cell)
+					wp.addSegment(cs, width, height, pMidT, pTR, x, y-1, cell)
+					wp.addSegment(cs, width, height, pTR, pBR, x+1, y, cell)
+					wp.addSegment(cs, width, height, pBR, pMidB, x, y+1, cell)
+					wp.addSegment(cs, width, height, pMidB, pBL, x, y+1, cell)
+					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
+
+					// Switch: Genera il muro fisico della porta solo se OpenDoors è false
+					if !wp.openDoors {
+						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidT, pMidB, "")
+						anim := config.NewConfigAnimation([]string{"door.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						cs.Segments = append(cs.Segments, doorSeg)
+					}
+
+					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidT, pMidB)
+
+				} else {
+					pMidL := geometry.XY{X: x0, Y: y0 + wp.tileSize/2}
+					pMidR := geometry.XY{X: x1, Y: y0 + wp.tileSize/2}
+
+					wp.addSegment(cs, width, height, pTL, pTR, x, y-1, cell)
+					wp.addSegment(cs, width, height, pTR, pMidR, x+1, y, cell)
+					wp.addSegment(cs, width, height, pMidR, pBR, x+1, y, cell)
+					wp.addSegment(cs, width, height, pBR, pBL, x, y+1, cell)
+					wp.addSegment(cs, width, height, pBL, pMidL, x-1, y, cell)
+					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
+
+					// Switch: Genera il muro fisico della porta solo se OpenDoors è false
+					if !wp.openDoors {
+						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidL, pMidR, "")
+						anim := config.NewConfigAnimation([]string{"door.ppm"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
+						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						cs.Segments = append(cs.Segments, doorSeg)
+					}
+
+					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidL, pMidR)
+				}
+			} else {
+				wp.addSegment(cs, width, height, pTL, pTR, x, y-1, cell)
+				wp.addSegment(cs, width, height, pTR, pBR, x+1, y, cell)
+				wp.addSegment(cs, width, height, pBR, pBL, x, y+1, cell)
+				wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
+				root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL)
+			}
+
 			root.Sectors = append(root.Sectors, cs)
-			// Aggiungiamo i vertici alla lista globale per il compilatore (VertexEdges)
-			root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL)
 		}
 	}
 
-	player.Position = root.Sectors[0].Segments[0].End
+	if len(root.Sectors) > 0 && len(root.Sectors[0].Segments) > 0 {
+		player.Position = root.Sectors[0].Segments[0].End
+	}
 	return root, nil
 }
 
 func (wp *Parser) prepare(width int, height int, md []uint16) error {
-	if len(md) != width*height {
-		return fmt.Errorf("mapData size does not match width * height")
-	}
-	wp.height = float64(height)
-	wp.width = float64(width)
+	wp.gridWidth = width
+	wp.gridHeight = height
 	wp.mapData = md
-	// Mappatura pre-pass per generare gli ID univoci dei settori (celle vuote)
 	wp.sectorIds = make([][]string, height)
+
 	for y := 0; y < height; y++ {
 		wp.sectorIds[y] = make([]string, width)
 		for x := 0; x < width; x++ {
-			if wp.mapData[y*width+x] == 0 {
+			if wp.mapData[y*width+x] == 0 || isDoor(wp.mapData[y*width+x]) {
 				wp.sectorIds[y][x] = strconv.Itoa(y*width + x)
 			}
 		}
@@ -105,25 +169,32 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	return nil
 }
 
-// addSegment adds a new segment to the provided ConfigSector based on map adjacency, geometry, and texture information.
-func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int) {
+func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
 	kind := config.DefinitionWall
 	neighborId := ""
-	texId := uint16(1)
+	texName := "wall1.ppm"
+
 	if nx >= 0 && nx < width && ny >= 0 && ny < height {
 		adj := wp.mapData[ny*width+nx]
-		if adj == 0 {
+		if adj == 0 || isDoor(adj) {
 			kind = config.DefinitionJoin
 			neighborId = wp.sectorIds[ny][nx]
 		} else {
-			texId = adj
+			texName = fmt.Sprintf("wall%d.ppm", adj)
 		}
 	}
+
 	seg := config.NewConfigSegment(cs.Id, kind, start, end, neighborId)
+
+	// Se la cella corrente è una porta e questo segmento confina con un muro solido,
+	// è il binario in cui scivolerà la porta!
 	if kind == config.DefinitionWall {
-		texName := fmt.Sprintf("wall%d.ppm", texId)
+		if isDoor(currentCell) {
+			texName = "doortrak.ppm"
+		}
 		anim := config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 10.0, 50.0)
-		seg.Middle = anim
+		seg.Upper, seg.Middle, seg.Lower = anim, anim, anim
 	}
+
 	cs.Segments = append(cs.Segments, seg)
 }

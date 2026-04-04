@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
+	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/generators/world"
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
@@ -62,6 +63,8 @@ func main() {
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(wadFile, level)
+	case 3:
+		cfg, err = wolfstein.CreateLevel(level)
 	default:
 		cfg, err = world.Generate()
 	}

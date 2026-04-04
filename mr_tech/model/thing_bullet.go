@@ -129,31 +129,33 @@ func (t *ThingBullet) adjustPassage(velX float64, velY float64) (float64, float6
 func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom float64) (float64, float64) {
 	moveX := pX - viewX
 	moveY := pY - viewY
-
-	var minT float64 = 1.0
-	var hit *Segment = nil
+	minT := 1.0
+	var hit *Face = nil
 
 	for _, seg := range t.sector.Segments {
-		if seg.Neighbor != nil {
+		neighbor := seg.GetNeighbor()
+		if neighbor != nil {
 			if top > t.sector.GetCeilY() || bottom < t.sector.GetFloorY() {
 				continue
 			}
 		}
-		dx := seg.End.X - seg.Start.X
-		dy := seg.End.Y - seg.Start.Y
+		start := seg.GetStart()
+		end := seg.GetEnd()
+		dx := end.X - start.X
+		dy := end.Y - start.Y
 		den := moveX*dy - moveY*dx
 		if den == 0 {
 			continue
 		}
 		// Calcolo parametrico
-		t1 := ((seg.Start.X-viewX)*dy - (seg.Start.Y-viewY)*dx) / den
-		u1 := ((seg.Start.X-viewX)*moveY - (seg.Start.Y-viewY)*moveX) / den
+		t1 := ((start.X-viewX)*dy - (start.Y-viewY)*dx) / den
+		u1 := ((start.X-viewX)*moveY - (start.Y-viewY)*moveX) / den
 		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
 		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
 			holeLow, holeHigh := 9e9, -9e9
-			if seg.Neighbor != nil {
-				holeLow = mathematic.MaxF(t.sector.GetFloorY(), seg.Neighbor.GetFloorY())
-				holeHigh = mathematic.MinF(t.sector.GetCeilY(), seg.Neighbor.GetCeilY())
+			if neighbor != nil {
+				holeLow = mathematic.MaxF(t.sector.GetFloorY(), neighbor.GetFloorY())
+				holeHigh = mathematic.MinF(t.sector.GetCeilY(), neighbor.GetCeilY())
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t1
@@ -163,18 +165,20 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	}
 	// Risolvi l'impulso esclusivamente sulla faccia corretta
 	if hit != nil {
-		dx := hit.End.X - hit.Start.X
-		dy := hit.End.Y - hit.Start.Y
+		start := hit.GetStart()
+		end := hit.GetEnd()
+		dx := end.X - start.X
+		dy := end.Y - start.Y
 		lenSq := dx*dx + dy*dy
-		// 1. Proiezione Ortogonale (Closest Point on Line Segment)
+		// 1. Proiezione Ortogonale (Closest Point on Line Face)
 		var cx, cy float64
 		if lenSq > 0 {
-			tProj := ((viewX-hit.Start.X)*dx + (viewY-hit.Start.Y)*dy) / lenSq
+			tProj := ((viewX-start.X)*dx + (viewY-start.Y)*dy) / lenSq
 			tProj = math.Max(0, math.Min(1, tProj))
-			cx = hit.Start.X + tProj*dx
-			cy = hit.Start.Y + tProj*dy
+			cx = start.X + tProj*dx
+			cy = start.Y + tProj*dy
 		} else {
-			cx, cy = hit.Start.X, hit.Start.Y
+			cx, cy = start.X, start.Y
 		}
 		// 2. Istanziazione Static Body
 		// cx, cy: Centro spoofato sul punto d'impatto per generare la normale perfetta

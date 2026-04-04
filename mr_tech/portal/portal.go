@@ -107,13 +107,15 @@ func (r *Portal) Build() ([]*model.CompiledSector, int) {
 func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
-		neighbor := segment.Neighbor
+		neighbor := segment.GetNeighbor()
 		//if segment.Kind == config.DefinitionVoid {
 		//	continue
 		//}
 		// Coordinate World assolute sul piano XZ (niente proiezioni fotocamera!)
-		wx1, wz1 := segment.Start.X, segment.Start.Y
-		wx2, wz2 := segment.End.X, segment.End.Y
+		sStart := segment.GetStart()
+		sEnd := segment.GetEnd()
+		wx1, wz1 := sStart.X, sStart.Y
+		wx2, wz2 := sEnd.X, sEnd.Y
 
 		// UV mapping basato sulla lunghezza reale del muro
 		u0 := 0.0
@@ -130,18 +132,18 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 			neighborFloorY := neighbor.GetFloorY()
 			// Upper Wall (dal soffitto corrente scende al soffitto del vicino)
 			if sectorCeilY > neighborCeilY {
-				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, segment.Upper, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, segment.GetUpper(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				// x1, Y_top, Y_bottom, z1, x2, Y_top, Y_bottom, z2
 				upperP.Rect(wx1, sectorCeilY, neighborCeilY, wz1, wx2, sectorCeilY, neighborCeilY, wz2)
 			}
 			// Lower Wall (dal pavimento del vicino scende al pavimento corrente)
 			if sectorFloorY < neighborFloorY {
-				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, segment.Lower, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, segment.GetLower(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				lowerP.Rect(wx1, neighborFloorY, sectorFloorY, wz1, wx2, neighborFloorY, sectorFloorY, wz2)
 			}
 		} else {
 			// 2. Muro Solido (Middle Wall) - connette soffitto e pavimento del settore
-			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, segment.Middle, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, segment.GetMiddle(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
 		center := sector.GetCentroid()
@@ -206,7 +208,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 	for s := 0; s < len(sector.Segments); s++ {
 		segment := sector.Segments[s]
-		neighbor := sector.Segments[s].Neighbor
+		neighbor := sector.Segments[s].GetNeighbor()
 		if neighbor == sector {
 			continue
 		}
@@ -218,9 +220,12 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 		//	continue
 		//}
 
+		sStart := segment.GetStart()
+		sEnd := segment.GetEnd()
+
 		// Rotate around the player's view
-		vx1, vy1, tx1, tz1 := vi.TranslateXY(segment.Start.X, segment.Start.Y)
-		vx2, vy2, tx2, tz2 := vi.TranslateXY(segment.End.X, segment.End.Y)
+		vx1, vy1, tx1, tz1 := vi.TranslateXY(sStart.X, sStart.Y)
+		vx2, vy2, tx2, tz2 := vi.TranslateXY(sEnd.X, sEnd.Y)
 
 		// If the entire segment is behind the camera, discard it immediately
 		if tz1 <= 0 && tz2 <= 0 {
@@ -343,7 +348,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperT := segment.Upper
+				upperT := segment.GetUpper()
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, x2Min, yaStop, nYaStop, zStop)
 			}
@@ -356,7 +361,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {
-				lowerT := segment.Lower
+				lowerT := segment.GetLower()
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, x2Min, nYbStop, ybStop, zStop)
 			}
@@ -365,7 +370,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {
-			middleT := segment.Middle
+			middleT := segment.GetMiddle()
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, x2Min, yaStop, ybStop, zStop)
 		}
@@ -373,8 +378,9 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 
 	if first && outIdx == 0 {
 		for _, s := range sector.Segments {
-			if s.Neighbor != nil && s.Neighbor != sector {
-				outIdx = r.sectorQueue.UpdateItem(s.Neighbor, outIdx, qi)
+			neighbor := s.GetNeighbor()
+			if neighbor != nil && neighbor != sector {
+				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}
 		}
 	}

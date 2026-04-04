@@ -55,8 +55,10 @@ func WallSlidingEffect(sector *Sector, viewX, viewY, pX, pY, velX, velY, top, bo
 	if seg1 == nil {
 		return velX, velY
 	}
-	xd := seg1.End.X - seg1.Start.X
-	yd := seg1.End.Y - seg1.Start.Y
+	start := seg1.GetStart()
+	end := seg1.GetEnd()
+	xd := end.X - start.X
+	yd := end.Y - start.Y
 	if lenSq := xd*xd + yd*yd; lenSq > 0 {
 		// 2. Proiezione della velocità sul vettore tangenziale del muro
 		dot := (velX*xd + velY*yd) / lenSq
@@ -70,8 +72,8 @@ func WallSlidingEffect(sector *Sector, viewX, viewY, pX, pY, velX, velY, top, bo
 		// Calcoliamo il vettore che va dal muro al giocatore.
 		// Se la normale calcolata punta nella direzione opposta, la invertiamo.
 		// Usiamo viewX/Y come riferimento sicuro (posizione pre-collisione).
-		midX := (seg1.Start.X + seg1.End.X) * 0.5
-		midY := (seg1.Start.Y + seg1.End.Y) * 0.5
+		midX := (start.X + end.X) * 0.5
+		midY := (start.Y + end.Y) * 0.5
 		toPlayerX := viewX - midX
 		toPlayerY := viewY - midY
 		if (toPlayerX*nx + toPlayerY*ny) < 0 {

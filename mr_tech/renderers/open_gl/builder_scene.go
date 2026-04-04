@@ -191,7 +191,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 
 	w.flatIndices = w.flatIndices[:0]
 	for _, seg := range segments {
-		v := seg.Start
+		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer))

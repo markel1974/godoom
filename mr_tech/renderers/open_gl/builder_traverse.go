@@ -237,7 +237,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 
 	indices := make([]uint32, len(segments))
 	for i, seg := range segments {
-		v := seg.Start
+		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute

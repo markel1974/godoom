@@ -40,7 +40,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	animations := NewAnimations(cfg.Textures)
 
-	r.sectors, totalSegments = r.compileSectors(cfg, animations)
+	r.sectors, totalSegments = r.compileSectors2d(cfg, animations)
 
 	cfg.Player.Position.Scale(scale)
 
@@ -61,8 +61,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 		//vertex scale
 		for s := 0; s < len(sect.Segments); s++ {
-			sect.Segments[s].Start.Scale(scale)
-			sect.Segments[s].End.Scale(scale)
+			sect.Segments[s].Scale2D(scale)
 		}
 	}
 
@@ -118,11 +117,11 @@ func (r *Compiler) GetLights() []*Light {
 }
 
 // compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
+func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := uint16(0)
 	var container []*Sector
 	totalPolygons := 0
-	var fixSegments []*Segment
+	var fixSegments []*Face
 	segmentsTree := physics.NewAABBTree(1024)
 	emptyAnim := anim.GetAnimation(nil)
 	ve := NewVertexEdges(0.001)
@@ -157,8 +156,8 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 							break
 						}
 					}
-					start := geometry.XY{X: p1.X, Y: p1.Y}
-					end := geometry.XY{X: p2.X, Y: p2.Y}
+					start := geometry.XYZ{X: p1.X, Y: p1.Y, Z: 0}
+					end := geometry.XYZ{X: p2.X, Y: p2.Y, Z: 0}
 					kind := config.DefinitionUnknown
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
 					tag := "unknown"
@@ -170,9 +169,9 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 						lower = anim.GetAnimation(origSeg.Lower)
 					}
 					s.AddTag(tag)
-					seg := NewSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
+					seg := NewFaceSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
 					if kind == config.DefinitionWall {
-						seg.Kind = config.DefinitionWall
+						seg.SetKind(config.DefinitionWall)
 					} else {
 						fixSegments = append(fixSegments, seg)
 					}
@@ -192,20 +191,24 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 	// Risoluzione adiacenze
 	for _, seg := range fixSegments {
 		// already linked
-		if seg.Kind == config.DefinitionJoin || seg.Kind == config.DefinitionWall {
+		if seg.GetKind() == config.DefinitionJoin || seg.GetKind() == config.DefinitionWall {
 			continue
 		}
 		bestDistSq := math.MaxFloat64
-		var bestNeighborSeg *Segment
+		var bestNeighborSeg *Face
 		segmentsTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
-			overlapSeg, ok := object.(*Segment)
-			if !ok || overlapSeg.Parent == seg.Parent {
+			overlapSeg, ok := object.(*Face)
+			if !ok || overlapSeg.GetParent() == seg.GetParent() {
 				return false
 			}
-			dx1 := seg.Start.X - overlapSeg.End.X
-			dy1 := seg.Start.Y - overlapSeg.End.Y
-			dx2 := seg.End.X - overlapSeg.Start.X
-			dy2 := seg.End.Y - overlapSeg.Start.Y
+			start := seg.GetStart()
+			end := seg.GetEnd()
+			overlapStart := overlapSeg.GetStart()
+			overlapEnd := overlapSeg.GetEnd()
+			dx1 := start.X - overlapEnd.X
+			dy1 := start.Y - overlapEnd.Y
+			dx2 := end.X - overlapStart.X
+			dy2 := end.Y - overlapStart.Y
 			distSq := (dx1 * dx1) + (dy1 * dy1) + (dx2 * dx2) + (dy2 * dy2)
 			if distSq < bestDistSq {
 				bestDistSq = distSq
@@ -215,13 +218,13 @@ func (r *Compiler) compileSectors(cfg *config.ConfigRoot, anim *Animations) (*Se
 		})
 		if bestNeighborSeg != nil {
 			// Link reciproco (O(N/2)
-			bestNeighborSeg.Kind = config.DefinitionJoin
-			bestNeighborSeg.Neighbor = seg.Parent
-			seg.Kind = config.DefinitionJoin
-			seg.Neighbor = bestNeighborSeg.Parent
+			bestNeighborSeg.SetKind(config.DefinitionJoin)
+			bestNeighborSeg.SetNeighbor(seg.GetParent())
+			seg.SetKind(config.DefinitionJoin)
+			seg.SetNeighbor(bestNeighborSeg.GetParent())
 		} else {
-			seg.Kind = config.DefinitionWall
-			seg.Neighbor = nil
+			seg.SetKind(config.DefinitionWall)
+			seg.SetNeighbor(nil)
 		}
 	}
 
@@ -250,8 +253,8 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.Segments {
-				if seg.Kind != config.DefinitionWall && seg.Neighbor != nil {
-					n := seg.Neighbor
+				if seg.GetKind() != config.DefinitionWall && seg.GetNeighbor() != nil {
+					n := seg.GetNeighbor()
 					if !visited[n.Id] {
 						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
 						if n.GetCeilY() == curr.GetCeilY() && n.GetFloorY() == curr.GetFloorY() && n.Light.intensity == curr.Light.intensity {
@@ -271,8 +274,10 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 				// Calcola l'area del triangolo (prodotto vettoriale)
 				area := 0.0
 				for i := range s.Segments {
-					x0, y0 := s.Segments[i].Start.X, s.Segments[i].Start.Y
-					x1, y1 := s.Segments[i].End.X, s.Segments[i].End.Y
+					start := s.Segments[i].GetStart()
+					end := s.Segments[i].GetEnd()
+					x0, y0 := start.X, start.Y
+					x1, y1 := end.X, end.Y
 					area += (x0 * y1) - (x1 * y0)
 				}
 				area = math.Abs(area * 0.5)

@@ -223,7 +223,7 @@ func (w *Render) RenderSector(sector *model.Sector) {
 	maxX := float64(0)
 	maxY := float64(0)
 
-	var segments []*model.Segment
+	var segments []*model.Face
 
 	//	const useConvexHull = false
 	//	if useConvexHull {
@@ -234,10 +234,12 @@ func (w *Render) RenderSector(sector *model.Sector) {
 	//}
 
 	for _, v := range segments {
-		x1 := math.Abs(v.Start.X)
-		y1 := math.Abs(v.Start.Y)
-		x2 := math.Abs(v.End.X)
-		y2 := math.Abs(v.End.Y)
+		sStart := v.GetStart()
+		sEnd := v.GetEnd()
+		x1 := math.Abs(sStart.X)
+		y1 := math.Abs(sStart.Y)
+		x2 := math.Abs(sEnd.X)
+		y2 := math.Abs(sEnd.Y)
 		if x1 > maxX {
 			maxX = x1
 		}
@@ -257,22 +259,24 @@ func (w *Render) RenderSector(sector *model.Sector) {
 
 	var t []geometry.XYZ
 	for _, v := range segments {
-		x1 := v.Start.X
+		sStart := v.GetStart()
+		sEnd := v.GetEnd()
+		x1 := sStart.X
 		if x1 == 0 {
 			x1 = 1
 		}
 		x1 *= xFactor
-		y1 := v.Start.Y
+		y1 := sStart.Y
 		if y1 == 0 {
 			y1 = 1
 		}
 		y1 *= yFactor
-		x2 := v.End.X
+		x2 := sEnd.X
 		if x2 == 0 {
 			x2 = 1
 		}
 		x2 *= xFactor
-		y2 := v.End.Y
+		y2 := sEnd.Y
 		if y2 == 0 {
 			y2 = 1
 		}
@@ -340,8 +344,9 @@ func (w *Render) doDebug(next int) {
 	}
 	w.debugIdx = idx
 	sector := w.engine.SectorAt(idx)
-	x := sector.Segments[0].Start.X + offset
-	y := sector.Segments[0].Start.Y + offset
+	sStart := sector.Segments[0].GetStart()
+	x := sStart.X + offset
+	y := sStart.Y + offset
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.Segments))
 	w.player.SetSector(sector)
 	w.player.SetXY(x, y)
@@ -392,8 +397,9 @@ func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatri
 					w.targetId = css[idx].Sector.Id
 					var neighbors []string
 					for _, z := range css[idx].Sector.Segments {
-						if z != nil && z.Neighbor != nil {
-							neighbors = append(neighbors, z.Neighbor.Id)
+						neighbor := z.GetNeighbor()
+						if z != nil && neighbor != nil {
+							neighbors = append(neighbors, neighbor.Id)
 						}
 					}
 					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.Tag)

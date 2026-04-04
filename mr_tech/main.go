@@ -10,8 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/world"
 	"github.com/markel1974/godoom/mr_tech/model/config"
-	open_gl "github.com/markel1974/godoom/mr_tech/renderers/open_gl"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl_legacy"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/software"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
@@ -82,12 +81,7 @@ func main() {
 	if softwareRender {
 		render = software.NewRender(int32(width), int32(height))
 	} else {
-		const useLegacy = false
-		if useLegacy {
-			render = open_gl_legacy.NewRender(int32(width), int32(height))
-		} else {
-			render = open_gl.NewRender(int32(width), int32(height))
-		}
+		render = open_gl.NewRender(int32(width), int32(height))
 	}
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)

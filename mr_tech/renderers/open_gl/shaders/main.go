@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl_legacy/shaders"
 )
 
 // MainLoc represents an enumerated type for identifying shader uniform locations.
@@ -229,7 +228,7 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, scaleX float32, scaleY float
 	}
 
 	var invView [16]float32
-	if inv, ok := shaders.MatrixInverse4x4(s.view); ok {
+	if inv, ok := MatrixInverse4x4(s.view); ok {
 		invView = inv
 	}
 

@@ -19,11 +19,11 @@ type ThingBullet struct {
 // NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
 // cfg specifies the configuration of the bullet, anim defines its animation, and sector represents its initial sector.
 // sectors and entities provide references to all sectors and entities in the game world.
-func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBullet {
+func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Sectors, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
-		ThingBase:   NewThingBase(cfg, anim, sector, sectors, entities),
+		ThingBase:   NewThingBase(cfg, anim, volume, sectors, entities),
 		wall:        physics.NewEntity(0, 0, 0, 0, 0),
-		floorStartY: sector.GetFloorY(),
+		floorStartY: volume.GetFloorY(),
 	}
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
 	p.entity.SetFriction(0.99)
@@ -45,13 +45,13 @@ func (t *ThingBullet) GetFloorY() float64 {
 	velSq := (t.entity.GetVx() * t.entity.GetVx()) + (t.entity.GetVy() * t.entity.GetVy())
 	// Se l'energia cinetica è esaurita o malformata, il proiettile è a terra
 	if velSq <= 0.01 || t.speed <= 0 {
-		return t.sector.GetFloorY()
+		return t.volume.GetFloorY()
 	}
 	// 2. Fattore T di decadimento: velocità corrente normalizzata sulla velocità originale
 	ratio := math.Sqrt(velSq) / t.speed
 	// Clamping di sicurezza vettoriale in caso di impulsi esterni imprevisti
 	if ratio <= 0 {
-		return t.sector.GetFloorY()
+		return t.volume.GetFloorY()
 	}
 	if ratio > 1.0 {
 		ratio = 1.0
@@ -107,8 +107,8 @@ func (t *ThingBullet) PhysicsApply() {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x
 		t.position.Y += y
-		if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-			t.sector = newSector
+		if newSector := t.sectors.SearchVolume(t.volume, t.position.X, t.position.Y); newSector != nil {
+			t.volume = newSector
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y)
 	}
@@ -132,10 +132,10 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 	minT := 1.0
 	var hit *Face = nil
 
-	for _, face := range t.sector.GetFaces() {
+	for _, face := range t.volume.GetFaces() {
 		neighbor := face.GetNeighbor()
 		if neighbor != nil {
-			if top > t.sector.GetCeilY() || bottom < t.sector.GetFloorY() {
+			if top > t.volume.GetCeilY() || bottom < t.volume.GetFloorY() {
 				continue
 			}
 		}
@@ -154,8 +154,8 @@ func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom
 		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
 			holeLow, holeHigh := 9e9, -9e9
 			if neighbor != nil {
-				holeLow = mathematic.MaxF(t.sector.GetFloorY(), neighbor.GetFloorY())
-				holeHigh = mathematic.MinF(t.sector.GetCeilY(), neighbor.GetCeilY())
+				holeLow = mathematic.MaxF(t.volume.GetFloorY(), neighbor.GetFloorY())
+				holeHigh = mathematic.MinF(t.volume.GetCeilY(), neighbor.GetCeilY())
 			}
 			if holeHigh < top || holeLow > bottom {
 				minT = t1

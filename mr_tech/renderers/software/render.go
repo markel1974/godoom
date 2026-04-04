@@ -219,10 +219,10 @@ func (w *Render) doRender() {
 }
 
 // RenderSector renders a given sector by processing its segments and drawing polygons on the main surface.
-func (w *Render) RenderSector(sector *model.Sector) {
+func (w *Render) RenderSector(volume *model.Volume) {
 	maxX := float64(0)
 	maxY := float64(0)
-	for _, v := range sector.GetFaces() {
+	for _, v := range volume.GetFaces() {
 		sStart := v.GetStart()
 		sEnd := v.GetEnd()
 		x1 := math.Abs(sStart.X)
@@ -247,7 +247,7 @@ func (w *Render) RenderSector(sector *model.Sector) {
 	yFactor := (float64(w.h) / 2) / maxY
 
 	var t []geometry.XYZ
-	for _, v := range sector.GetFaces() {
+	for _, v := range volume.GetFaces() {
 		sStart := v.GetStart()
 		sEnd := v.GetEnd()
 		x1 := sStart.X
@@ -332,7 +332,7 @@ func (w *Render) doDebug(next int) {
 		return
 	}
 	w.debugIdx = idx
-	sector := w.engine.SectorAt(idx)
+	sector := w.engine.VolumeAt(idx)
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", sector.GetId())
 
 	/*
@@ -369,7 +369,7 @@ func (w *Render) doDebugMoveSector(forward bool) {
 // drawStub renders the debug sector if the current debug index is within the range of available sectors.
 func (w *Render) drawStub() {
 	if w.debugIdx >= 0 && w.debugIdx < w.engine.Len() {
-		sector := w.engine.SectorAt(w.debugIdx)
+		sector := w.engine.VolumeAt(w.debugIdx)
 		w.RenderSector(sector)
 	}
 }
@@ -377,25 +377,25 @@ func (w *Render) drawStub() {
 // doSerialRender renders compiled sectors to the provided surface in a serial manner, processing from back to front.
 // surface: The target rendering surface.
 // vi: ViewMatrix data containing camera position, angle, and other view parameters.
-// css: A slice of CompiledSector objects representing visible sectors for rendering.
+// css: A slice of CompiledVolume objects representing visible sectors for rendering.
 // compiled: The number of sectors available to render, processed in reverse order.
-func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledVolume, compiled int) {
 	for idx := compiled - 1; idx >= 0; idx-- {
 		mode := -1 //w.textures.GetViewMode()
 		if w.targetEnabled {
 			if f, _ := w.targetSectors[idx]; !f {
 				mode = 2
 			} else {
-				if w.targetId != css[idx].Sector.GetId() {
-					w.targetId = css[idx].Sector.GetId()
+				if w.targetId != css[idx].Volume.GetId() {
+					w.targetId = css[idx].Volume.GetId()
 					var neighbors []string
-					for _, z := range css[idx].Sector.GetFaces() {
+					for _, z := range css[idx].Volume.GetFaces() {
 						neighbor := z.GetNeighbor()
 						if z != nil && neighbor != nil {
 							neighbors = append(neighbors, neighbor.GetId())
 						}
 					}
-					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Sector.GetTag())
+					fmt.Println("Current target Sector:", w.targetId, strings.Join(neighbors, ","), css[idx].Volume.GetTag())
 				}
 			}
 		}
@@ -409,7 +409,7 @@ func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatri
 }
 
 // doParallelRender performs parallel rendering of compiled sectors using goroutines to improve rendering performance.
-func (w *Render) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledSector, compiled int) {
+func (w *Render) doParallelRender(surface *pixels.PictureRGBA, vi *model.ViewMatrix, css []*model.CompiledVolume, compiled int) {
 	//Experimental Render
 	wg := &sync.WaitGroup{}
 	wg.Add(compiled)
@@ -469,44 +469,44 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 		return
 	}
 	lightAmbient := vi.GetLightIntensity()
-	lightArtificial := cp.Sector.Light.GetIntensity()
+	lightArtificial := cp.Volume.Light.GetIntensity()
 	switch cp.Kind {
 	case model.IdWall:
 		_, scaleH := cp.Animation.ScaleFactor()
-		yRef := (cp.Sector.GetCeilY() - cp.Sector.GetFloorY()) * scaleH
+		yRef := (cp.Volume.GetCeilY() - cp.Volume.GetFloorY()) * scaleH
 		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdUpper:
 		_, scaleH := cp.Animation.ScaleFactor()
-		yRef := math.Abs((cp.Sector.GetCeilY() - cp.Neighbor.GetCeilY()) * scaleH)
+		yRef := math.Abs((cp.Volume.GetCeilY() - cp.Neighbor.GetCeilY()) * scaleH)
 		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdLower:
 		_, scaleH := cp.Animation.ScaleFactor()
-		yRef := math.Abs((cp.Neighbor.GetFloorY() - cp.Sector.GetFloorY()) * scaleH)
+		yRef := math.Abs((cp.Neighbor.GetFloorY() - cp.Volume.GetFloorY()) * scaleH)
 		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Sector.GetCeilY(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetCeilY(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloor:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Sector.GetFloorY(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetFloorY(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Sector.GetFloorY(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetFloorY(), scaleH, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
 		viYaw := vi.GetYaw()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Sector.GetCeilY(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetCeilY(), scaleH, lightAmbient, lightArtificial)
 	default:
 		dr.DrawWireFrame(true)
 	}

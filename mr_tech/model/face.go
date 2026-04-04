@@ -28,9 +28,9 @@ func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKe
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	parent   *Sector
+	parent   *Volume
 	kind     int
-	neighbor *Sector
+	neighbor *Volume
 	tag      string
 	aabb     *physics.AABB
 	points   []geometry.XYZ
@@ -41,7 +41,7 @@ type Face struct {
 }
 
 // NewFaceSegment creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFaceSegment(neighbor *Sector, kind int, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
+func NewFaceSegment(neighbor *Volume, kind int, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
 	out := &Face{
 		is3D:     false,
 		points:   make([]geometry.XYZ, 2),
@@ -61,7 +61,7 @@ func NewFaceSegment(neighbor *Sector, kind int, start geometry.XYZ, end geometry
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Sector, kind int, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, kind int, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
 	if len(points) == 0 {
 		points = make([]geometry.XYZ, 1)
 		points[0] = geometry.XYZ{X: 0, Y: 0, Z: 0}
@@ -82,12 +82,12 @@ func NewFace(neighbor *Sector, kind int, points []geometry.XYZ, tag string, mate
 }
 
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
-func (s *Face) GetParent() *Sector {
+func (s *Face) GetParent() *Volume {
 	return s.parent
 }
 
 // SetParent assigns a parent sector to the segment.
-func (s *Face) SetParent(parent *Sector) {
+func (s *Face) SetParent(parent *Volume) {
 	s.parent = parent
 }
 
@@ -102,12 +102,12 @@ func (s *Face) SetKind(kind int) {
 }
 
 // GetNeighbor returns the neighboring Sector associated with the Face.
-func (s *Face) GetNeighbor() *Sector {
+func (s *Face) GetNeighbor() *Volume {
 	return s.neighbor
 }
 
 // SetNeighbor sets the neighbor sector of the segment. It establishes a link to an adjacent sector.
-func (s *Face) SetNeighbor(neighbor *Sector) {
+func (s *Face) SetNeighbor(neighbor *Volume) {
 	s.neighbor = neighbor
 }
 

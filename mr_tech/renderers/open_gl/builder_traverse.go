@@ -12,7 +12,7 @@ import (
 // PolyKey represents a key used for identifying and differentiating polygonal geometry in a 3D simulation space.
 // It comprises references to a sector, specific texture coordinates, and unique identifiers for polygonal boundaries.
 type PolyKey struct {
-	sector *model.Sector
+	volume *model.Volume
 	kind   int
 	tx1    float32
 	tz1    float32
@@ -25,7 +25,7 @@ type PolyKey struct {
 // CreatePolygonSegment converts a CompiledPolygon into a PolyKey for identification and processing.
 func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
-		sector: cp.Sector,
+		volume: cp.Volume,
 		kind:   cp.Kind,
 		tx1:    float32(cp.Tx1),
 		tz1:    float32(cp.Tz1),
@@ -40,7 +40,7 @@ func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 // CreatePolygonSector generates a PolyKey from a given CompiledPolygon by extracting its Sector and Kind properties.
 func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
-		sector: cp.Sector,
+		volume: cp.Volume,
 		kind:   cp.Kind,
 	}
 	return key
@@ -54,7 +54,7 @@ type BuilderTraverse struct {
 	fv                *FrameVertices
 	dc                *DrawCommands
 	fl                *FrameLights
-	visibleSectors    map[*model.Sector]bool
+	visibleVolumes    map[*model.Volume]bool
 	processedPolygons map[PolyKey]bool
 	cSky              *textures.Texture
 }
@@ -67,7 +67,7 @@ func NewBuilderTraverse(tex *Textures) *BuilderTraverse {
 		dc:                NewDrawCommands(maxFrameCommands),
 		fl:                NewFrameLights(256),
 		dcRender:          NewDrawCommandsRender(),
-		visibleSectors:    make(map[*model.Sector]bool, 256),
+		visibleVolumes:    make(map[*model.Volume]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 		cSky:              nil,
 	}
@@ -109,8 +109,8 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 	w.fv.Reset()
 	w.dc.Reset()
 	w.fl.Reset()
-	for k := range w.visibleSectors {
-		delete(w.visibleSectors, k)
+	for k := range w.visibleVolumes {
+		delete(w.visibleVolumes, k)
 	}
 	for k := range w.processedPolygons {
 		delete(w.processedPolygons, k)
@@ -134,13 +134,13 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleSectors[cp.Sector] = true
+				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Sector.GetCeilY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Volume.GetCeilY()))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Sector.GetCeilY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Volume.GetCeilY()))
 				} else {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -148,14 +148,14 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleSectors[cp.Sector] = true
+				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Sector.GetCeilY())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Volume.GetCeilY())); sky != nil {
 						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Sector.GetFloorY())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Volume.GetFloorY())); sky != nil {
 						w.cSky = sky
 					}
 				}
@@ -163,9 +163,9 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 		}
 	}
 
-	w.pushLights(w.fl, lights, w.visibleSectors)
+	w.pushLights(w.fl, lights, w.visibleVolumes)
 
-	w.pushThings(w.fv, w.dc, vi, things, w.visibleSectors)
+	w.pushThings(w.fv, w.dc, vi, things, w.visibleVolumes)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
@@ -221,7 +221,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 	if tex == nil {
 		return nil
 	}
-	faces := cp.sector.GetFaces()
+	faces := cp.volume.GetFaces()
 	if len(faces) < 3 {
 		return nil
 	}
@@ -254,7 +254,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Volume]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
@@ -262,7 +262,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 	camX, camY := vi.GetXY()
 
 	for _, t := range things {
-		if !sectors[t.GetSector()] {
+		if !sectors[t.GetVolume()] {
 			continue
 		}
 		if t.GetAnimation() == nil {
@@ -323,13 +323,13 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 }
 
 // pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
-func (w *BuilderTraverse) pushLights(fl *FrameLights, lights []*model.Light, sectors map[*model.Sector]bool) {
+func (w *BuilderTraverse) pushLights(fl *FrameLights, lights []*model.Light, volume map[*model.Volume]bool) {
 	if len(lights) == 0 {
 		return
 	}
 
 	for _, l := range lights {
-		//if _, ok := sectors[l.GetSector()]; !ok {
+		//if _, ok := sectors[l.GetVolume()]; !ok {
 		//	continue
 		//}
 		fl.Create(l)

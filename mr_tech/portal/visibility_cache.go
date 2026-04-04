@@ -10,14 +10,14 @@ type Span struct {
 // VisibilityCache stores calculated visibility spans for sectors to optimize rendering and minimize redundant calculations.
 // It uses a pre-allocated buffer to reduce garbage collection during span merges.
 type VisibilityCache struct {
-	cache map[*model.Sector][]Span
+	cache map[*model.Volume][]Span
 	temp  []Span // Buffer di swap pre-allocato per le fusioni (zero GC)
 }
 
 // NewVisibilityCache initializes and returns a pointer to a new VisibilityCache with pre-allocated internal structures.
 func NewVisibilityCache() *VisibilityCache {
 	return &VisibilityCache{
-		cache: make(map[*model.Sector][]Span, 1024), // Warm-up immediato della mappa
+		cache: make(map[*model.Volume][]Span, 1024), // Warm-up immediato della mappa
 		temp:  make([]Span, 0, 128),
 	}
 }
@@ -31,7 +31,7 @@ func (v *VisibilityCache) Clear() {
 }
 
 // Get retrieves the spans associated with the given sector and a boolean indicating their existence in the cache.
-func (v *VisibilityCache) Get(s *model.Sector) ([]Span, bool) {
+func (v *VisibilityCache) Get(s *model.Volume) ([]Span, bool) {
 	spans, ok := v.cache[s]
 	if ok && len(spans) == 0 {
 		return nil, false // Gestisce logicamente gli span azzerati dal Clear()
@@ -40,7 +40,7 @@ func (v *VisibilityCache) Get(s *model.Sector) ([]Span, bool) {
 }
 
 // Add merges the given range [x1, x2] into the cached spans for the specified sector, avoiding overlap and redundancies.
-func (v *VisibilityCache) Add(s *model.Sector, x1 float64, x2 float64) {
+func (v *VisibilityCache) Add(s *model.Volume, x1 float64, x2 float64) {
 	spans := v.cache[s]
 	v.temp = v.temp[:0] // Reset del buffer di swap (costo: 1 ciclo di clock)
 	inserted := false
@@ -79,7 +79,7 @@ func (v *VisibilityCache) Add(s *model.Sector, x1 float64, x2 float64) {
 }
 
 // IsVisible checks if the range [x1, x2] is not entirely covered by any spans in the specified sector. Returns true if visible.
-func (v *VisibilityCache) IsVisible(s *model.Sector, x1 float64, x2 float64) bool {
+func (v *VisibilityCache) IsVisible(s *model.Volume, x1 float64, x2 float64) bool {
 	spans, ok := v.Get(s)
 	if !ok {
 		return true

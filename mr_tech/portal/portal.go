@@ -19,8 +19,8 @@ type Portal struct {
 	sectorQueue            *LinearBatch
 	compileId              uint64
 	sectorsMaxHeight       float64
-	sectors                []*model.Sector
-	compiledSectors        []*model.CompiledSector
+	volumes                []*model.Volume
+	compiledSectors        []*model.CompiledVolume
 	compiledCount          int
 	visibilityCache        *VisibilityCache
 	viewFactor             float64
@@ -48,12 +48,12 @@ func NewPortal(maxQueue int, viewFactor float64) *Portal {
 
 func (r *Portal) Grow() {
 	oldSize := len(r.compiledSectors)
-	newSize := len(r.sectors) * 2
+	newSize := len(r.volumes) * 2
 	if oldSize == 0 {
-		r.compiledSectors = make([]*model.CompiledSector, newSize)
+		r.compiledSectors = make([]*model.CompiledVolume, newSize)
 	} else {
 		newSize = oldSize * 2
-		newData := make([]*model.CompiledSector, newSize)
+		newData := make([]*model.CompiledVolume, newSize)
 		copy(newData, r.compiledSectors)
 		r.compiledSectors = newData
 	}
@@ -64,20 +64,20 @@ func (r *Portal) Grow() {
 }
 
 // Setup configures the Portal by assigning sectors, setting the maximum height, and initializing compiled sectors.
-func (r *Portal) Setup(sectors []*model.Sector) error {
-	r.sectors = sectors
+func (r *Portal) Setup(volumes []*model.Volume) error {
+	r.volumes = volumes
 	r.Grow()
 	return nil
 }
 
 // Len returns the number of sectors currently managed by the Portal.
 func (r *Portal) Len() int {
-	return len(r.sectors)
+	return len(r.volumes)
 }
 
-// SectorAt retrieves the Sector at the specified index within the Portal's sector list. Returns nil if the index is invalid.
-func (r *Portal) SectorAt(idx int) *model.Sector {
-	return r.sectors[idx]
+// VolumeAt retrieves the Volume at the specified index within the Portal's sector list. Returns nil if the index is invalid.
+func (r *Portal) VolumeAt(idx int) *model.Volume {
+	return r.volumes[idx]
 }
 
 // SectorsMaxHeight returns the maximum height of all sectors in the portal as a float64 value.
@@ -93,9 +93,9 @@ func (r *Portal) clear() {
 }
 
 // Build compiles all sectors within the Portal, updates the compiled sector list, and returns the results.
-func (r *Portal) Build() ([]*model.CompiledSector, int) {
+func (r *Portal) Build() ([]*model.CompiledVolume, int) {
 	r.clear()
-	for _, sector := range r.sectors {
+	for _, sector := range r.volumes {
 		if cs, _ := r.getCompiledSector(sector); cs != nil {
 			r.compile(sector, cs)
 		}
@@ -104,8 +104,8 @@ func (r *Portal) Build() ([]*model.CompiledSector, int) {
 }
 
 // compile processes a given sector, generating compiled geometry for rendering, including walls, floors, and ceilings.
-func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
-	for _, face := range sector.GetFaces() {
+func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
+	for _, face := range volume.GetFaces() {
 		neighbor := face.GetNeighbor()
 		sStart := face.GetStart()
 		sEnd := face.GetEnd()
@@ -116,10 +116,10 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 		u0 := 0.0
 		u1 := math.Hypot(wx2-wx1, wz2-wz1) * r.textureScaleRepetition
 
-		ceilT := cs.Sector.GetCeilMaterial()
-		floorT := cs.Sector.GetFloorMaterial()
-		sectorCeilY := sector.GetCeilY()
-		sectorFloorY := sector.GetFloorY()
+		ceilT := cs.Volume.GetCeilMaterial()
+		floorT := cs.Volume.GetFloorMaterial()
+		sectorCeilY := volume.GetCeilY()
+		sectorFloorY := volume.GetFloorY()
 
 		// 1. Muri di connessione (Portali verso altri settori)
 		if neighbor != nil {
@@ -141,7 +141,7 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, face.GetMiddle(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
-		center := sector.GetCentroid()
+		center := volume.GetCentroid()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 		// Generi un triangolo orizzontale: Centro, P1, P2
@@ -153,7 +153,7 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledSector) {
 }
 
 // Traverse processes the active view, traverses sectors, and generates compiled sectors for rendering optimization.
-func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledVolume, int) {
 	wMin := float64(-fbw) * r.viewFactor
 	wMax := float64(fbw) * r.viewFactor
 	hMax := float64(fbh-1) * r.viewFactor
@@ -163,7 +163,7 @@ func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 	r.queue.Reset()
 
 	qHead := r.queue.GetHead()
-	qHead.Update(vi.GetSector(), wMin, wMax, -hMax, -hMax, hMax, hMax)
+	qHead.Update(vi.GetVolume(), wMin, wMax, -hMax, -hMax, hMax, hMax)
 
 	var qTail *QueueItem
 
@@ -171,18 +171,18 @@ func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 		qTail = r.queue.GetTail()
 		//qTail.sector.Reference(r.compileId)
 
-		sq, sqCount := r.compileProjection(fbw, fbh, vi, qTail.sector, qTail)
+		sq, sqCount := r.compileProjection(fbw, fbh, vi, qTail.volume, qTail)
 		for w := 0; w < sqCount; w++ {
 			q := sq[w]
 			// Geometric check
-			if q.x2 > q.x1 && r.visibilityCache.IsVisible(q.sector, q.x1, q.x2) {
+			if q.x2 > q.x1 && r.visibilityCache.IsVisible(q.volume, q.x1, q.x2) {
 				// Store the span for this sector
-				r.visibilityCache.Add(q.sector, q.x1, q.x2)
+				r.visibilityCache.Add(q.volume, q.x1, q.x2)
 				if r.queue.IsFull() {
 					continue
 				}
 				qHead = r.queue.GetHead()
-				qHead.Update(q.sector, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
+				qHead.Update(q.volume, q.x1, q.x2, q.y1t, q.y2t, q.y1b, q.y2b)
 			}
 		}
 	}
@@ -191,19 +191,19 @@ func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 }
 
 // compileSector determines visible geometry and propagates visibility to adjacent sectors based on the current view matrix.
-func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector *model.Sector, qi *QueueItem) ([]QueueItem, int) {
+func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume *model.Volume, qi *QueueItem) ([]QueueItem, int) {
 	screenWidthHalf := fbw / 2
 	screenHeightHalf := float64(fbh) / 2
 	screenHFov := model.HFov * float64(fbw)
 	screenVFov := model.VFov * float64(fbh)
 
-	var cs *model.CompiledSector = nil
+	var cs *model.CompiledVolume = nil
 	first := false
 	outIdx := 0
 
-	for _, face := range sector.GetFaces() {
+	for _, face := range volume.GetFaces() {
 		neighbor := face.GetNeighbor()
-		if neighbor == sector {
+		if neighbor == volume {
 			continue
 		}
 
@@ -274,8 +274,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 			continue
 		}
 
-		sectorYCeil := vi.ZDistance(sector.GetCeilY())
-		sectorYFloor := vi.ZDistance(sector.GetFloorY())
+		sectorYCeil := vi.ZDistance(volume.GetCeilY())
+		sectorYFloor := vi.ZDistance(volume.GetFloorY())
 
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
@@ -321,13 +321,13 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 		}
 
 		if cs == nil {
-			if cs, first = r.getCompiledSector(sector); cs == nil {
+			if cs, first = r.getCompiledSector(volume); cs == nil {
 				return nil, 0
 			}
 		}
 
-		ceilT := cs.Sector.GetCeilMaterial()
-		floorT := cs.Sector.GetFloorMaterial()
+		ceilT := cs.Volume.GetCeilMaterial()
+		floorT := cs.Volume.GetFloorMaterial()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, x2Min, y2Ceil, yaStop, zStop)
@@ -371,9 +371,9 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 	}
 
 	if first && outIdx == 0 {
-		for _, face := range sector.GetFaces() {
+		for _, face := range volume.GetFaces() {
 			neighbor := face.GetNeighbor()
-			if neighbor != nil && neighbor != sector {
+			if neighbor != nil && neighbor != volume {
 				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)
 			}
 		}
@@ -382,14 +382,14 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 	return r.sectorQueue.Items(), outIdx
 }
 
-// getCompiledSector retrieves a CompiledSector and binds it to the provided Sector, returning whether it is the first retrieval.
-func (r *Portal) getCompiledSector(sector *model.Sector) (*model.CompiledSector, bool) {
+// getCompiledSector retrieves a CompiledVolume and binds it to the provided Sector, returning whether it is the first retrieval.
+func (r *Portal) getCompiledSector(volume *model.Volume) (*model.CompiledVolume, bool) {
 	first := r.compiledCount == 0
 	if r.compiledCount >= len(r.compiledSectors) {
 		r.Grow()
 	}
 	cs := r.compiledSectors[r.compiledCount]
 	r.compiledCount++
-	cs.Bind(sector)
+	cs.Bind(volume)
 	return cs, first
 }

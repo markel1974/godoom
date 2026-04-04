@@ -16,14 +16,14 @@ type Calibration struct {
 
 // Sectors is a collection of Sector instances, organized with spatial indexing and caching for optimized queries.
 type Sectors struct {
-	sectors []*Sector
+	sectors []*Volume
 	tree    *physics.AABBTree
-	cache   map[string]*Sector
+	cache   map[string]*Volume
 }
 
 // NewSectors initializes a Sectors structure with a cache mapping sector IDs to their respective Sector objects.
-func NewSectors(sectors []*Sector) *Sectors {
-	cache := make(map[string]*Sector)
+func NewSectors(sectors []*Volume) *Sectors {
+	cache := make(map[string]*Volume)
 	for _, sec := range sectors {
 		cache[sec.GetId()] = sec
 	}
@@ -39,8 +39,8 @@ func (s *Sectors) CreateTree() {
 	}
 }
 
-// GetSector retrieves a Sector from the cache using the given id. Returns nil if the id is not found.
-func (s *Sectors) GetSector(id string) *Sector {
+// GetVolume retrieves a Sector from the cache using the given id. Returns nil if the id is not found.
+func (s *Sectors) GetVolume(id string) *Volume {
 	return s.cache[id]
 }
 
@@ -69,8 +69,8 @@ func (s *Sectors) GetCalibration() *Calibration {
 	return c
 }
 
-// GetSectors returns the list of sectors managed by the Sectors instance.
-func (s *Sectors) GetSectors() []*Sector {
+// GetVolumes returns the list of sectors managed by the Sectors instance.
+func (s *Sectors) GetVolumes() []*Volume {
 	return s.sectors
 }
 
@@ -79,9 +79,9 @@ func (s *Sectors) Len() int {
 	return len(s.sectors)
 }
 
-// SectorSearch searches for a sector containing the point (px, py), starting from the given sector and querying the tree if needed.
+// SearchVolume searches for a sector containing the point (px, py), starting from the given sector and querying the tree if needed.
 // It returns the sector containing the point or nil if no matching sector is found.
-func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
+func (s *Sectors) SearchVolume(sector *Volume, px, py float64) *Volume {
 	//TODO missing z
 	if newSector := sector.LocatePoint(px, py, 0); newSector != nil {
 		return newSector
@@ -89,15 +89,15 @@ func (s *Sectors) SectorSearch(sector *Sector, px, py float64) *Sector {
 	if newSector := s.QueryPoint(px, py); newSector != nil {
 		return newSector
 	}
-	//fmt.Println("SectorSearch: No sector found for point (", px, ",", py, ")")
+	//fmt.Println("SearchVolume: No sector found for point (", px, ",", py, ")")
 	return nil
 }
 
 // Query retrieves all sectors that overlap with the given Axis-Aligned Bounding Box (AABB).
-func (s *Sectors) Query(aabb physics.IAABB) []*Sector {
-	var target []*Sector
+func (s *Sectors) Query(aabb physics.IAABB) []*Volume {
+	var target []*Volume
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
-		sector, ok := object.(*Sector)
+		sector, ok := object.(*Volume)
 		if !ok {
 			return false
 		}
@@ -109,15 +109,15 @@ func (s *Sectors) Query(aabb physics.IAABB) []*Sector {
 
 // QueryOverlap identifies a Sector containing a given point (px, py) within an AABB, if such a Sector exists.
 // It searches the AABB tree for overlaps and attempts to locate the point within the overlapping sectors.
-func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
-	var target *Sector = nil
+func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Volume {
+	var target *Volume = nil
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
-		sector, ok := object.(*Sector)
+		volume, ok := object.(*Volume)
 		if !ok {
 			return false
 		}
 		//todo missing z
-		if t1 := sector.LocatePoint(px, py, 0); target != t1 {
+		if t1 := volume.LocatePoint(px, py, 0); target != t1 {
 			target = t1
 			return true
 		}
@@ -127,13 +127,13 @@ func (s *Sectors) QueryOverlap(aabb physics.IAABB, px, py float64) *Sector {
 }
 
 // QueryPoint searches for the sector containing the specified point (px, py) and returns it, or nil if not found.
-func (s *Sectors) QueryPoint(px, py float64) *Sector {
-	var target *Sector = nil
+func (s *Sectors) QueryPoint(px, py float64) *Volume {
+	var target *Volume = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
-		if sector, ok := object.(*Sector); ok {
+		if volume, ok := object.(*Volume); ok {
 			//todo missing z
-			if sector.ContainsPoint(px, py, 0) {
-				target = sector
+			if volume.ContainsPoint(px, py, 0) {
+				target = volume
 				return true
 			}
 		}

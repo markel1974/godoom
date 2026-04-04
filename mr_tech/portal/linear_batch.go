@@ -35,12 +35,12 @@ func (q *LinearBatch) Grow() {
 }
 
 // UpdateItem updates the specified QueueItem's coordinates and associates it with a neighbor sector at the given index.
-func (q *LinearBatch) UpdateItem(neighbor *model.Sector, outIdx int, qi *QueueItem) int {
+func (q *LinearBatch) UpdateItem(neighbor *model.Volume, outIdx int, qi *QueueItem) int {
 	return q.Update(neighbor, outIdx, qi.x1, qi.x2, qi.y1t, qi.y2t, qi.y1b, qi.y2b)
 }
 
 // Update incrementally updates a QueueItem with new sector data and coordinate boundaries, growing capacity if necessary.
-func (q *LinearBatch) Update(neighbor *model.Sector, outIdx int, x1, x2, y1t, y2t, y1b, y2b float64) int {
+func (q *LinearBatch) Update(neighbor *model.Volume, outIdx int, x1, x2, y1t, y2t, y1b, y2b float64) int {
 	if outIdx >= len(q.items) {
 		q.Grow()
 	}

@@ -80,14 +80,14 @@ func (r *Things) CreateThing(ct *config.ConfigThing) error {
 }
 
 // CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
-func (r *Things) CreateBullet(sector *Sector, x float64, y float64, angle float64) {
+func (r *Things) CreateBullet(volume *Volume, x float64, y float64, angle float64) {
 	//TODO now is an hack
 	//test zero index
 	c := r.config[2]
 	id := utils.NextUUId()
 	pos := geometry.XY{X: x, Y: y}
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, 500.0, 1.0, 5.0, 5.0, c.Animation)
-	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), sector, r.sectors, r.entities)
+	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), volume, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }
 

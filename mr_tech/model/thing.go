@@ -35,7 +35,7 @@ type IThing interface {
 
 	Compute(playerX float64, playerY float64)
 
-	GetSector() *Sector
+	GetVolume() *Volume
 
 	PhysicsApply()
 
@@ -48,10 +48,10 @@ type IThing interface {
 
 // WallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.
 // Takes the current view coordinates, position, velocity, head and knee positions, and returns the modified velocity.
-func WallSlidingEffect(sector *Sector, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
+func WallSlidingEffect(volume *Volume, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
 	const epsilon = 0.5
 	// 1. Trova il segmento più vicino (con padding per gli spigoli)
-	face := sector.CheckFacesClearance(viewX, viewY, pX, pY, top, bottom, radius)
+	face := volume.CheckFacesClearance(viewX, viewY, pX, pY, top, bottom, radius)
 	if face == nil {
 		return velX, velY
 	}

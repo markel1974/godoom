@@ -53,9 +53,9 @@ func (e *Engine) GetLights() []*model.Light {
 	return e.lights
 }
 
-// SectorAt returns the sector at the specified index from the portal within the engine.
-func (e *Engine) SectorAt(idx int) *model.Sector {
-	return e.portal.SectorAt(idx)
+// VolumeAt returns the volume at the specified index from the portal within the engine.
+func (e *Engine) VolumeAt(idx int) *model.Volume {
+	return e.portal.VolumeAt(idx)
 }
 
 // Len returns the number of sectors currently managed by the Engine.
@@ -76,7 +76,7 @@ func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	e.lights = compiler.GetLights()
 
 	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-	if err := e.portal.Setup(e.sectors.GetSectors()); err != nil {
+	if err := e.portal.Setup(e.sectors.GetVolumes()); err != nil {
 		return err
 	}
 	return nil
@@ -111,20 +111,20 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 }
 
 // Traverse processes the given ViewMatrix through the portal system, returning a list of compiled sectors and their count.
-func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledSector, int) {
+func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledVolume, int) {
 	cs, count := e.portal.Traverse(fbw, fbh, vi)
 	return cs, count
 }
 
 // Build generates and retrieves the list of compiled sectors, their count, active game entities, and lights in the engine.
-func (e *Engine) Build() ([]*model.CompiledSector, int) {
+func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 	cs, count := e.portal.Build()
 	return cs, count
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.
-func (e *Engine) Fire(sector *model.Sector, x float64, y float64, angle float64) {
-	e.things.CreateBullet(sector, x, y, angle)
+func (e *Engine) Fire(volume *model.Volume, x float64, y float64, angle float64) {
+	e.things.CreateBullet(volume, x, y, angle)
 }
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the sectors' spatial configuration.

@@ -26,8 +26,8 @@ const (
 // CompiledPolygon represents a polygon with precompiled data for rendering or simulation purposes.
 type CompiledPolygon struct {
 	Points         []geometry.XYZ
-	Sector         *Sector
-	Neighbor       *Sector
+	Volume         *Volume
+	Neighbor       *Volume
 	Kind           int
 	id             float64
 	PLen           int
@@ -134,7 +134,7 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire assigns properties to a `CompiledPolygon` from the pool and returns the initialized instance.
-func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, c, f, t *textures.Animation, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(volume *Volume, neighbor *Volume, kind int, c, f, t *textures.Animation, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
 	if cp.idx >= len(cp.data) {
 		cp.Grow()
 	}
@@ -143,7 +143,7 @@ func (cp *CompiledPolygons) Acquire(sector *Sector, neighbor *Sector, kind int, 
 	p.id = float64(cp.idx)
 	cp.idx++
 
-	p.Sector = sector
+	p.Volume = volume
 	p.Neighbor = neighbor
 	p.X1 = x1
 	p.X2 = x2

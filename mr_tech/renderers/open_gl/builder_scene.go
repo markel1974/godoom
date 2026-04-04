@@ -89,19 +89,19 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 				switch cp.Kind {
 				case model.IdWall, model.IdUpper, model.IdLower:
 					if cp.Kind == model.IdWall {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Sector.GetCeilY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Volume.GetCeilY()))
 					} else if cp.Kind == model.IdUpper {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Sector.GetCeilY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Volume.GetCeilY()))
 					} else {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Sector.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
 					}
 				case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 					if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Sector.GetCeilY())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Volume.GetCeilY())); sky != nil {
 							w.cSky = sky
 						}
 					} else {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Sector.GetFloorY())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Volume.GetFloorY())); sky != nil {
 							w.cSky = sky
 						}
 					}
@@ -175,7 +175,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	if tex == nil {
 		return nil
 	}
-	faces := cp.Sector.GetFaces()
+	faces := cp.Volume.GetFaces()
 	if len(faces) < 3 {
 		return nil
 	}

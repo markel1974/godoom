@@ -52,7 +52,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	//	l.pos.Scale(scale)
 	//}
 
-	for _, sect := range r.sectors.GetSectors() {
+	for _, sect := range r.sectors.GetVolumes() {
 		//legacy lights scale
 		sect.Light.pos.Scale(scale)
 
@@ -119,7 +119,7 @@ func (r *Compiler) GetLights() []*Light {
 // compileSectors constructs and processes game sectors based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*Sectors, int) {
 	modelSectorId := 0
-	var container []*Sector
+	var container []*Volume
 	totalPolygons := 0
 	var fixSegments []*Face
 	segmentsTree := physics.NewAABBTree(1024)
@@ -138,7 +138,7 @@ func (r *Compiler) compileSectors2d(cfg *config.ConfigRoot, anim *Animations) (*
 		}
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
-				s := NewSector(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
+				s := NewVolume(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
 				container = append(container, s)
 				// Mantiene il Winding Order consistente per ContainsPoint
@@ -237,13 +237,13 @@ func (r *Compiler) compileSectorsLights(sectors *Sectors) ([]*Light, error) {
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
 	var out []*Light
-	for sectIdx, sect := range sectors.GetSectors() {
+	for sectIdx, sect := range sectors.GetVolumes() {
 		if visited[sect.GetId()] {
 			continue
 		}
 		// Utilizziamo un algoritmo di Flood Fill per trovare tutti i settori connessi
-		var areaSectors []*Sector
-		queue := []*Sector{sect}
+		var areaSectors []*Volume
+		queue := []*Volume{sect}
 		visited[sect.GetId()] = true
 
 		for len(queue) > 0 {

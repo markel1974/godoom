@@ -35,7 +35,7 @@ type ThingPlayer struct {
 	yawState       float64
 	radius         float64
 	mass           float64
-	sector         *Sector
+	volume         *Volume
 	ducking        bool
 	falling        bool
 	lightIntensity float64
@@ -50,8 +50,8 @@ type ThingPlayer struct {
 
 // NewThingPlayer creates a new ThingPlayer instance with initial position, angle, sector, and debug configuration.
 func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entities, debug bool) (*ThingPlayer, error) {
-	sector := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
-	if sector == nil {
+	volume := sectors.QueryPoint(cfg.Position.X, cfg.Position.Y)
+	if volume == nil {
 		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
 	}
 
@@ -63,7 +63,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entiti
 	p := &ThingPlayer{
 		id:             "PLAYER",
 		kind:           0,
-		where:          geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: sector.GetFloorY() + EyeHeight},
+		where:          geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: volume.GetFloorY() + EyeHeight},
 		velocity:       geometry.XYZ{},
 		yaw:            0,
 		yawState:       0,
@@ -71,7 +71,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Sectors, entities *Entiti
 		bobPhase:       0,
 		radius:         cfg.Radius,
 		mass:           cfg.Mass,
-		sector:         sector,
+		volume:         volume,
 		lightIntensity: 0.0039, // 1 / distance == 1 / 255
 		sectors:        sectors,
 		entities:       entities,
@@ -114,12 +114,12 @@ func (p *ThingPlayer) GetLight() *Light {
 
 // GetFloorY returns the Y-coordinate of the floor associated with the player's current sector.
 func (p *ThingPlayer) GetFloorY() float64 {
-	return p.sector.GetFloorY()
+	return p.volume.GetFloorY()
 }
 
 // GetCeilY returns the ceiling Y coordinate of the sector the player is currently located in.
 func (p *ThingPlayer) GetCeilY() float64 {
-	return p.sector.GetCeilY()
+	return p.volume.GetCeilY()
 }
 
 // SetIdentifier updates the value of the identifier for the ThingPlayer instance.
@@ -279,14 +279,14 @@ func (p *ThingPlayer) GetVelocity() (float64, float64) {
 	return p.velocity.X, p.velocity.Y
 }
 
-// GetSector returns the current sector the player is located in.
-func (p *ThingPlayer) GetSector() *Sector {
-	return p.sector
+// GetVolume returns the current volume the player is located in.
+func (p *ThingPlayer) GetVolume() *Volume {
+	return p.volume
 }
 
-// SetSector updates the ThingPlayer's current sector to the specified Sector instance.
-func (p *ThingPlayer) SetSector(sector *Sector) {
-	p.sector = sector
+// SetVolume updates the ThingPlayer's current sector to the specified Sector instance.
+func (p *ThingPlayer) SetVolume(volume *Volume) {
+	p.volume = volume
 }
 
 // GetYaw returns the current yaw value of the player.
@@ -320,8 +320,8 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64) {
 	px, py := p.GetPosition()
 
 	// Spatial stability check: are we still inside the same sector?
-	if newSector := p.sectors.SectorSearch(p.sector, px, py); newSector != nil {
-		p.sector = newSector
+	if newVolume := p.sectors.SearchVolume(p.volume, px, py); newVolume != nil {
+		p.volume = newVolume
 	}
 
 	vx, vy := p.GetVelocity()
@@ -370,7 +370,7 @@ func (p *ThingPlayer) adjustPassage(viewX, viewY, velX, velY float64) (float64, 
 	pX := viewX + velX
 	pY := viewY + velY
 	radius := p.entity.GetWidth() / 2
-	velX, velY = WallSlidingEffect(p.sector, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
+	velX, velY = WallSlidingEffect(p.volume, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
 	return velX, velY
 }
 
@@ -398,12 +398,12 @@ func (p *ThingPlayer) verticalMovementApply() {
 		eyeHeight := p.eyeHeight()
 		p.velocity.Z -= 0.05
 		nextZ := p.where.Z + p.velocity.Z
-		if p.velocity.Z < 0 && nextZ < p.sector.GetFloorY()+eyeHeight {
+		if p.velocity.Z < 0 && nextZ < p.volume.GetFloorY()+eyeHeight {
 			// down
-			p.where.Z = p.sector.GetFloorY() + eyeHeight
+			p.where.Z = p.volume.GetFloorY() + eyeHeight
 			p.velocity.Z = 0
 			p.falling = false
-		} else if p.velocity.Z > 0 && nextZ > p.sector.GetCeilY() {
+		} else if p.velocity.Z > 0 && nextZ > p.volume.GetCeilY() {
 			// up
 			p.velocity.Z = 0
 			p.falling = true

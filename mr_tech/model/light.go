@@ -9,7 +9,7 @@ import (
 
 // Light represents a light source with an intensity, type, and position in 3D space.
 type Light struct {
-	sector    *Sector
+	volume    *Volume
 	intensity float64
 	kind      config.LightKind
 	pos       geometry.XYZ
@@ -18,15 +18,15 @@ type Light struct {
 // NewLight creates and returns a new Light instance with default values for intensity and kind.
 func NewLight() *Light {
 	return &Light{
-		sector:    nil,
+		volume:    nil,
 		intensity: 0.0,
 		kind:      config.LightKindNone,
 	}
 }
 
 // Setup configures the Light object by setting its intensity, kind, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(sector *Sector, intensity float64, kind config.LightKind, coords geometry.XYZ, height float64) {
-	cl.sector = sector
+func (cl *Light) Setup(volume *Volume, intensity float64, kind config.LightKind, coords geometry.XYZ, height float64) {
+	cl.volume = volume
 	lightZ := (height) * 1.0
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
 	if kind == config.LightKindOpenAir {
@@ -48,9 +48,9 @@ func (cl *Light) GetKind() config.LightKind {
 	return cl.kind
 }
 
-// GetSector retrieves the sector associated with the Light instance. Returns a pointer to a Sector object.
-func (cl *Light) GetSector() *Sector {
-	return cl.sector
+// GetVolume retrieves the volume associated with the Light instance. Returns a pointer to a Sector object.
+func (cl *Light) GetVolume() *Volume {
+	return cl.volume
 }
 
 // GetIntensity returns the current intensity of the light as a float64 value normalized between 0.0 and 1.0.

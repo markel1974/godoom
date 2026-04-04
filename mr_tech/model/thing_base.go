@@ -19,7 +19,7 @@ type ThingBase struct {
 	angle      float64
 	kind       config.ThingType
 	speed      float64
-	sector     *Sector
+	volume     *Volume
 	animation  *textures.Animation
 	sectors    *Sectors
 	entities   *Entities
@@ -29,7 +29,7 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, sectors, and entities.
-func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, sector *Sector, sectors *Sectors, entities *Entities) *ThingBase {
+func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Sectors, entities *Entities) *ThingBase {
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	x := cfg.Position.X - cfg.Radius
@@ -43,7 +43,7 @@ func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, sector *Sec
 		radius:     cfg.Radius,
 		height:     cfg.Height,
 		speed:      cfg.Speed,
-		sector:     sector,
+		volume:     volume,
 		animation:  anim,
 		sectors:    sectors,
 		entities:   entities,
@@ -79,9 +79,9 @@ func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
-// GetSector retrieves the current sector associated with the ThingBase instance.
-func (t *ThingBase) GetSector() *Sector {
-	return t.sector
+// GetVolume retrieves the current volume associated with the ThingBase instance.
+func (t *ThingBase) GetVolume() *Volume {
+	return t.volume
 }
 
 func (t *ThingBase) GetPosition() (float64, float64) {
@@ -90,17 +90,17 @@ func (t *ThingBase) GetPosition() (float64, float64) {
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
 func (t *ThingBase) GetLight() *Light {
-	return t.sector.Light
+	return t.volume.Light
 }
 
 // GetFloorY returns the floor Y-coordinate of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetFloorY() float64 {
-	return t.sector.GetFloorY()
+	return t.volume.GetFloorY()
 }
 
 // GetCeilY returns the ceiling height of the sector associated with the ThingBase instance.
 func (t *ThingBase) GetCeilY() float64 {
-	return t.sector.GetCeilY()
+	return t.volume.GetCeilY()
 }
 
 // Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
@@ -133,8 +133,8 @@ func (t *ThingBase) PhysicsApply() {
 		x, y := t.adjustPassage(tx, ty)
 		t.position.X += x
 		t.position.Y += y
-		if newSector := t.sectors.SectorSearch(t.sector, t.position.X, t.position.Y); newSector != nil {
-			t.sector = newSector
+		if newVolume := t.sectors.SearchVolume(t.volume, t.position.X, t.position.Y); newVolume != nil {
+			t.volume = newVolume
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y)
 	}
@@ -158,12 +158,12 @@ func (t *ThingBase) SetActive(active bool) {
 // adjustPassage adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
 func (t *ThingBase) adjustPassage(velX float64, velY float64) (float64, float64) {
 	// Things rest on the floor. We simulate head/knee height for elevation differences
-	top := t.sector.GetFloorY() + t.height
-	bottom := t.sector.GetFloorY() + 2.0
+	top := t.volume.GetFloorY() + t.height
+	bottom := t.volume.GetFloorY() + 2.0
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
 	radius := t.entity.GetWidth() / 2
-	velX, velY = WallSlidingEffect(t.sector, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
+	velX, velY = WallSlidingEffect(t.volume, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
 	return velX, velY
 }

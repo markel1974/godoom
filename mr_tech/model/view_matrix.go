@@ -18,7 +18,7 @@ type ViewMatrix struct {
 	angleCos       float64
 	yaw            float64
 	lightIntensity float64
-	sector         *Sector
+	volume         *Volume
 	bobPhase       float64
 }
 
@@ -30,7 +30,7 @@ func NewViewMatrix() *ViewMatrix {
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngle()
-	vi.sector = player.GetSector()
+	vi.volume = player.GetVolume()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = 0.0 //player.GetLightIntensity()
@@ -90,9 +90,9 @@ func (vi *ViewMatrix) GetLightIntensityFactor(factor float64) float64 {
 	return l
 }
 
-// GetSector retrieves the Sector instance associated with the ViewMatrix.
-func (vi *ViewMatrix) GetSector() *Sector {
-	return vi.sector
+// GetVolume retrieves the Volume instance associated with the ViewMatrix.
+func (vi *ViewMatrix) GetVolume() *Volume {
+	return vi.volume
 }
 
 // ComputeYaw calculates a new yaw value based on the input parameters and the ViewMatrix's current yaw attribute.

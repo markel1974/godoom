@@ -10,22 +10,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// TextureScaleW defines the horizontal texture scaling factor used when creating texture animations or configurations.
+// TextureScaleW defines the horizontal scaling factor for textures, used in rendering and configuration processes.
 const TextureScaleW = 4.0
 
-// TextureScaleH defines the horizontal scale factor for texture mapping, used in rendering and configuration calculations.
+// TextureScaleH defines the horizontal scaling factor for textures, typically used to adjust their visual dimensions.
 const TextureScaleH = 10.0
 
-// ScaleFactorLineDef defines the default scaling factor applied to line definitions in the level configuration.
+// ScaleFactorLineDef defines the scaling factor applied to line definitions during level configuration processing.
 const ScaleFactorLineDef = 25.0
 
-// ScaleFactorCeilFloorLineDef defines the scale factor used for converting ceiling and floor heights in level configurations.
+// ScaleFactorCeilFloorLineDef defines the scaling factor for converting ceiling and floor heights in level configurations.
 const ScaleFactorCeilFloorLineDef = 8.0
 
-// SkyPicture represents a constant string identifier for the default sky texture in the level configuration.
+// SkyPicture represents the identifier for sky-related ceiling or floor textures in the game's level configuration.
 const SkyPicture = "F_SKY1"
 
-// _doors is a map where keys represent door action codes, and values describe their associated behavior or requirements.
+// _doors is a map that associates specific action special IDs (int16) with corresponding door behaviors (string descriptions).
 var _doors = map[int16]string{
 	1:   "DR	Door Open, Wait, Close",
 	2:   "W1	Door Stay Open",
@@ -71,16 +71,28 @@ var _doors = map[int16]string{
 	330: "UNK   Door Locked Closest",
 }
 
-// Builder is a type responsible for constructing and configuring level data structures from resource files.
+// Edge represents a connection between two points (P1 and P2) with metadata such as Sidedef, Linedef, and associated Sectors.
+type Edge struct {
+	P1         geometry.XY
+	P2         geometry.XY
+	SideDef    *lumps.SideDef
+	LineDef    *lumps.LineDef
+	Sector     *lumps.Sector
+	V1         geometry.XY
+	V2         geometry.XY
+	BackSector *lumps.Sector
+}
+
+// Builder is a type responsible for constructing and configuring game assets like sectors, things, and players.
 type Builder struct {
 }
 
-// NewBuilder creates and returns a new instance of the Builder type.
+// NewBuilder creates and returns a new instance of Builder.
 func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-// Setup initializes the game level configuration by loading WAD file data, processing textures, sectors, and player setup.
+// Setup initializes the configuration for a specific level in the WAD file and returns a ConfigRoot or an error.
 func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, error) {
 	wad := New()
 	if err := wad.Load(wadFile); err != nil {
@@ -101,9 +113,29 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 	for idx, l := range level.Vertexes {
 		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
 	}
-	sectors := bld.buildSectorsNew(level, vertexes, texHandler)
-	//grid := NewSpatialGrid(sectors, 256.0)
-	things := bld.buildThings(level, texHandler)
+
+	sectorsEdges := bld.createSectorsEdges(level, vertexes)
+	var sectors []*config.ConfigSector
+	for secIdx, edges := range sectorsEdges {
+		if edges == nil {
+			continue
+		}
+		lumpSector := level.Sectors[secIdx]
+		cSector := bld.buildSector(level, lumpSector, texHandler, uint16(secIdx), edges)
+		for _, e := range edges {
+			cSeg := bld.buildSegment(texHandler, cSector.Id, e)
+			cSector.Segments = append(cSector.Segments, cSeg)
+		}
+		sectors = append(sectors, cSector)
+	}
+
+	var things []*config.ConfigThing
+	for i, lThing := range level.Things {
+		if thing := bld.buildThings(lThing, i, texHandler); thing != nil {
+			things = append(things, thing)
+		}
+	}
+
 	player := bld.buildPlayer(level)
 	cr := config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler)
 	cr.Vertices = vertexes
@@ -111,20 +143,20 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 	return cr, nil
 }
 
-// buildConfigSector creates a ConfigSector for a given sector using level data, textures, and geometric information.
-func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, sectorId string, edges []Edge) *config.ConfigSector {
+// buildConfigSector constructs and returns a ConfigSector for a given level sector, including floor, ceiling, and lighting data.
+func (bld *Builder) buildSector(level *Level, lumpSector *lumps.Sector, texHandler *Textures, secIdx uint16, edges []Edge) *config.ConfigSector {
 	const openAllDoors = true
-	//sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
-	miSector.FloorY = float64(lumpSector.FloorHeight) / ScaleFactorCeilFloorLineDef
+	sectorId := strconv.Itoa(int(secIdx))
+	ceilingType := config.AnimationKindLoop
+	floorType := config.AnimationKindLoop
 	ceilHeight := float64(lumpSector.CeilingHeight)
 	if openAllDoors {
 		ceilHeight = bld.calculateOpenDoorCeil(level, secIdx, lumpSector, edges)
 	}
+	miSector := config.NewConfigSector(sectorId, bld.convertLight(lumpSector.LightLevel), config.LightKindAmbient)
+	miSector.FloorY = float64(lumpSector.FloorHeight) / ScaleFactorCeilFloorLineDef
 	miSector.CeilY = ceilHeight / ScaleFactorCeilFloorLineDef
-	miSector.Tag = strconv.Itoa(int(secIdx))
-	ceilingType := config.AnimationKindLoop
-	floorType := config.AnimationKindLoop
+	miSector.Tag = sectorId
 	if lumpSector.CeilingPic == SkyPicture {
 		ceilingType = config.AnimationKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
@@ -138,214 +170,66 @@ func (bld *Builder) buildConfigSector(level *Level, lumpSector *lumps.Sector, te
 	return miSector
 }
 
-// createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
-func (bld *Builder) createSectorsEdgesNew(level *Level) map[uint16][]Edge {
-	sectorsEdges := make(map[uint16][]Edge)
-	for i, ld := range level.LineDefs {
-		if ld.SideDefRight != -1 {
-			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexStart, V2Idx: ld.VertexEnd, LdIdx: i, IsLeft: false})
+func (bld *Builder) buildSegment(texHandler *Textures, sectorId string, e Edge) *config.ConfigSegment {
+	seg := config.NewConfigSegment(sectorId, config.DefinitionWall, e.P1, e.P2, "")
+	side := e.SideDef
+	ld := e.LineDef
+
+	middleT := texHandler.TextureCreateAnimation(side.MiddleTexture)
+	upperT := texHandler.TextureCreateAnimation(side.UpperTexture)
+	lowerT := texHandler.TextureCreateAnimation(side.LowerTexture)
+
+	seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+	seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+	seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+
+	frontSector := e.Sector
+
+	// vertical sky hack
+	if ld.HasFlag(lumps.TwoSided) && e.BackSector != nil {
+		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
+		if frontSector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
+			seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 		}
-		if ld.SideDefLeft != -1 {
-			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexEnd, V2Idx: ld.VertexStart, LdIdx: i, IsLeft: true})
-		}
-	}
-	return sectorsEdges
-}
-
-func (bld *Builder) buildSectorsNew(level *Level, vertexes geometry.Polygon, texHandler *Textures) []*config.ConfigSector {
-	var cSectors []*config.ConfigSector
-
-	totalLines := len(level.LineDefs)
-
-	sectorsEdges := bld.createSectorsEdges(level)
-	for secIdx, edges := range sectorsEdges {
-		lumpSector := level.Sectors[secIdx]
-
-		geometryEdge := make([]geometry.Edge, len(edges))
-		for i := range edges {
-			index := edges[i].LdIdx << 1
-			if edges[i].IsLeft {
-				index |= 1
-			}
-			geometryEdge[i].V1Idx = int(edges[i].V1Idx)
-			geometryEdge[i].V2Idx = int(edges[i].V2Idx)
-			geometryEdge[i].Index = index
-		}
-
-		triContainer := vertexes.TriangulateEdges(geometryEdge, totalLines)
-		for loopIdx, triangles := range triContainer {
-			for triIdx, tri := range triangles {
-				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, sectorId, edges)
-				for k := 0; k < 3; k++ {
-					p1 := tri[k]
-					p2 := tri[(k+1)%3]
-					cSeg, _ := bld.buildSegment(level, texHandler, cSector.Id, p1, p2, edges)
-					cSector.Segments = append(cSector.Segments, cSeg)
-				}
-				cSectors = append(cSectors, cSector)
-			}
-		}
-	}
-	return cSectors
-}
-
-// buildSectors processes the level data to create and return a list of configuration sectors with their segments and properties.
-func (bld *Builder) buildSectors(level *Level, vertexes geometry.Polygon, texHandler *Textures) []*config.ConfigSector {
-	const quantize = 1000
-
-	var cSectors []*config.ConfigSector
-	parentsContainer := make(map[geometry.QuantizedEdgeKey]string)
-	edgeSegmentsContainer := make(map[*config.ConfigSegment]bool)
-	count := len(level.LineDefs)
-	sectorsEdges := bld.createSectorsEdges(level)
-	for secIdx, edges := range sectorsEdges {
-		lumpSector := level.Sectors[secIdx]
-
-		geometryEdge := make([]geometry.Edge, len(edges))
-		for i := range edges {
-			index := edges[i].LdIdx << 1
-			if edges[i].IsLeft {
-				index |= 1
-			}
-			geometryEdge[i].V1Idx = int(edges[i].V1Idx)
-			geometryEdge[i].V2Idx = int(edges[i].V2Idx)
-			geometryEdge[i].Index = index
-		}
-
-		triContainer := vertexes.TriangulateEdges(geometryEdge, count)
-		for loopIdx, triangles := range triContainer {
-			for triIdx, tri := range triangles {
-				sectorId := fmt.Sprintf("s%d_l%d_t%d", secIdx, loopIdx, triIdx)
-				cSector := bld.buildConfigSector(level, lumpSector, texHandler, secIdx, sectorId, edges)
-				for k := 0; k < 3; k++ {
-					p1 := tri[k]
-					p2 := tri[(k+1)%3]
-					cSeg, matchEdges := bld.buildSegment(level, texHandler, cSector.Id, p1, p2, edges)
-					cSector.Segments = append(cSector.Segments, cSeg)
-					edgeSegmentsContainer[cSeg] = matchEdges
-					edgeKey := geometry.NewQuantizedEdgeKey(cSeg.Start.X, cSeg.Start.Y, cSeg.End.X, cSeg.End.Y, quantize)
-					parentsContainer[edgeKey] = cSeg.Parent
-				}
-				cSectors = append(cSectors, cSector)
-			}
+		// Extension for floors (e.g. moats that show sky at the bottom)
+		if frontSector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
+			seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
 		}
 	}
 
-	for _, cf := range cSectors {
-		for _, cs := range cf.Segments {
-			if cs.Kind == config.DefinitionJoin {
-				reverseKey := geometry.NewQuantizedEdgeKey(cs.End.X, cs.End.Y, cs.Start.X, cs.Start.Y, quantize)
-				if neighborId, exists := parentsContainer[reverseKey]; exists {
-					cs.Neighbor = neighborId
-				} else {
-					fmt.Printf("WARNING: Missing edge for join segment: %s - %s (%v)\n", cs.Id, cs.Tag, reverseKey)
-					// Prevents ghost walls
-					matchEdges := edgeSegmentsContainer[cs]
-					if matchEdges {
-						cs.Kind = config.DefinitionWall
-					} else {
-						cs.Neighbor = cs.Parent
-					}
-				}
-			}
-		}
+	if ld.HasFlag(2) {
+		seg.Kind = config.DefinitionJoin
 	}
 
-	return cSectors
-}
-
-// buildSegment creates a ConfigSegment for a wall section based on sector edges and textures, handling sky and two-sided flags.
-// Returns the constructed ConfigSegment and a bool indicating if it matched any edge.
-func (bld *Builder) buildSegment(level *Level, texHandler *Textures, sectorId string, p1, p2 geometry.XY, sectorEdges []Edge) (*config.ConfigSegment, bool) {
-	mp1 := geometry.XY{X: p1.X, Y: p1.Y}
-	mp2 := geometry.XY{X: p2.X, Y: p2.Y}
-
-	seg := config.NewConfigSegment(sectorId, config.DefinitionWall, mp1, mp2, "")
-	for _, e := range sectorEdges {
-		v1, v2 := level.Vertexes[e.V1Idx], level.Vertexes[e.V2Idx]
-		w1 := geometry.XY{X: float64(v1.XCoord), Y: float64(v1.YCoord)}
-		w2 := geometry.XY{X: float64(v2.XCoord), Y: float64(v2.YCoord)}
-
-		if (p1 == w1 && p2 == w2) || (p1 == w2 && p2 == w1) {
-			ld := level.LineDefs[e.LdIdx]
-
-			sideIdx := ld.SideDefRight
-			if e.IsLeft {
-				sideIdx = ld.SideDefLeft
-			}
-			side := level.SideDefs[sideIdx]
-
-			middleT := texHandler.TextureCreateAnimation(side.MiddleTexture)
-			upperT := texHandler.TextureCreateAnimation(side.UpperTexture)
-			lowerT := texHandler.TextureCreateAnimation(side.LowerTexture)
-			seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-			seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-			seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-
-			frontSector := level.Sectors[side.SectorRef]
-			// vertical sky hack
-			if ld.HasFlag(lumps.TwoSided) {
-				backSideIdx := ld.SideDefLeft
-				if e.IsLeft {
-					backSideIdx = ld.SideDefRight
-				}
-
-				if backSideIdx != -1 {
-					backSide := level.SideDefs[backSideIdx]
-					backSector := level.Sectors[backSide.SectorRef]
-					// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
-					if frontSector.CeilingPic == SkyPicture && backSector.CeilingPic == SkyPicture {
-						seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
-					}
-					// Extension for floors (e.g. moats that show sky at the bottom)
-					if frontSector.FloorPic == SkyPicture && backSector.FloorPic == SkyPicture {
-						seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
-					}
-				}
-			}
-			if ld.HasFlag(2) {
-				seg.Kind = config.DefinitionJoin
-			}
-			seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-			return seg, true
-		}
-	}
-	seg.Kind = config.DefinitionJoin
+	// Inversione Y per l'allineamento con il motore di rendering
 	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
-	return seg, false
+
+	return seg
 }
 
-// buildConfigThing creates and returns a list of ConfigThing objects based on the given level, texture handler, and spatial grid.
-func (bld *Builder) buildThings(level *Level, texHandler *Textures) []*config.ConfigThing {
-	var things []*config.ConfigThing
-	for i, t := range level.Things {
-		tX := float64(t.X)
-		tY := float64(t.Y)
-		tAngle := float64(t.Angle)
-		if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
-			continue
-		}
-		sd, hasAnim := _spriteDictionary[int(t.Type)]
-		var frames []string
-		if !hasAnim {
-			fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
-			frames = []string{"UNKNOWN"}
-		} else {
-			frames = sd.Sprites
-		}
-		//tSectorId := grid.ResolveSectorId(geometry.XY{X: tX, Y: tY})
-		tId := fmt.Sprintf("t_%d", i)
-		anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-		cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
-		things = append(things, cfgThing)
+// buildThings generates a list of config.ConfigThing objects from a level's things, excluding specific types (1, 2, 3, 4, 11).
+func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *config.ConfigThing {
+	tX := float64(t.X)
+	tY := float64(t.Y)
+	tAngle := float64(t.Angle)
+	if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
+		return nil
 	}
-	return things
+	sd, hasAnim := _spriteDictionary[int(t.Type)]
+	var frames []string
+	if !hasAnim {
+		fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
+		frames = []string{"UNKNOWN"}
+	} else {
+		frames = sd.Sprites
+	}
+	tId := fmt.Sprintf("t_%d", i)
+	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
+	cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+	return cfgThing
 }
 
-// buildPlayer initializes and returns a ConfigPlayer based on the player's starting position and angle in the level.
+// buildPlayer initializes and returns a ConfigPlayer instance based on the first thing of type 1 found in the level.
 func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	for _, t := range level.Things {
@@ -358,26 +242,22 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 	return player
 }
 
-// calculateOpenDoorCeil determines the ceiling height for an open door based on adjacent sectors and door conditions.
-func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector *lumps.Sector, edges []Edge) float64 {
+// calculateOpenDoorCeil calculates the ceiling height for an open door or collapsed sector based on adjacent sectors and door checks.
+func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, sector *lumps.Sector, edges []Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
 	hasAdjacent := false
 
 	for _, e := range edges {
-		ld := level.LineDefs[e.LdIdx]
 		// Check if the segment has a typical Doom door Action Special
-		special := ld.Function
-		if special != 0 {
-			if _, ok := _doors[special]; ok {
-				isDoor = true
-			}
+		if _, ok := _doors[e.LineDef.Function]; ok {
+			isDoor = true
 		}
 		// Navigate the segment sides to find the adjacent sector
-		if ld.SideDefRight != -1 && ld.SideDefLeft != -1 {
-			adjSideIdx := ld.SideDefRight
+		if e.LineDef.SideDefRight != -1 && e.LineDef.SideDefLeft != -1 {
+			adjSideIdx := e.LineDef.SideDefRight
 			if level.SideDefs[adjSideIdx].SectorRef == secIdx {
-				adjSideIdx = ld.SideDefLeft
+				adjSideIdx = e.LineDef.SideDefLeft
 			}
 			adjSectorRef := level.SideDefs[adjSideIdx].SectorRef
 			adjSector := level.Sectors[adjSectorRef]
@@ -388,42 +268,70 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, wadSector
 		}
 	}
 	// If it's a confirmed door (or a collapsed sector with valid adiacencies), we calculate the elevation
-	if (isDoor && (wadSector.CeilingHeight <= wadSector.FloorHeight && hasAdjacent)) && lowestAdjCeil != math.MaxInt16 {
+	if (isDoor && (sector.CeilingHeight <= sector.FloorHeight && hasAdjacent)) && lowestAdjCeil != math.MaxInt16 {
 		targetCeil := lowestAdjCeil - 4
-		if targetCeil < wadSector.FloorHeight {
+		if targetCeil < sector.FloorHeight {
 			targetCeil = lowestAdjCeil // Emergency fallback if -4 penetrates the floor
 		}
 		return float64(targetCeil)
 	}
 	// Return the original height if it's not a door
-	return float64(wadSector.CeilingHeight)
+	return float64(sector.CeilingHeight)
 }
 
-type Edge struct {
-	V1Idx  int16
-	V2Idx  int16
-	LdIdx  int
-	IsLeft bool
-}
-
-// createSectorsEdge maps sector IDs to their respective edges by analyzing LineDefs and SideDefs in the given level.
-func (bld *Builder) createSectorsEdges(level *Level) map[uint16][]Edge {
-	sectorsEdges := make(map[uint16][]Edge)
-	for i, ld := range level.LineDefs {
+// createSectorsEdges constructs edges for each sector in the provided level using its LineDefs and vertex data.
+func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) [][]Edge {
+	sectorsEdges := make([][]Edge, len(level.Sectors))
+	add := func(ld *lumps.LineDef, sdIdx int16, isLeft bool) {
+		if sdIdx < 0 || int(sdIdx) >= len(level.SideDefs) {
+			fmt.Printf("WARNING: Invalid side index %d\n", sdIdx)
+			return
+		}
+		sd := level.SideDefs[sdIdx]
+		if sd.SectorRef < 0 || int(sd.SectorRef) >= len(sectorsEdges) {
+			fmt.Printf("WARNING: Invalid sector reference %d\n", sd.SectorRef)
+			return
+		}
+		sector := level.Sectors[sd.SectorRef]
+		vStart := ld.VertexStart
+		vEnd := ld.VertexEnd
+		backSideIdx := ld.SideDefLeft
+		vertexStart := level.Vertexes[vStart]
+		vertexEnd := level.Vertexes[vEnd]
+		edge := Edge{
+			P1:         vertexes[vStart],
+			P2:         vertexes[vEnd],
+			V1:         geometry.XY{X: float64(vertexStart.XCoord), Y: float64(vertexStart.YCoord)},
+			V2:         geometry.XY{X: float64(vertexEnd.XCoord), Y: float64(vertexEnd.YCoord)},
+			LineDef:    ld,
+			Sector:     sector,
+			SideDef:    sd,
+			BackSector: nil,
+		}
+		if isLeft {
+			edge.P1, edge.P2 = edge.P2, edge.P1
+			edge.V1, edge.V2 = edge.V2, edge.V1
+			backSideIdx = ld.SideDefRight
+		}
+		if backSideIdx != -1 {
+			backSide := level.SideDefs[backSideIdx]
+			edge.BackSector = level.Sectors[backSide.SectorRef]
+		}
+		sectorsEdges[sd.SectorRef] = append(sectorsEdges[sd.SectorRef], edge)
+	}
+	for _, ld := range level.LineDefs {
 		if ld.SideDefRight != -1 {
-			s := level.SideDefs[ld.SideDefRight].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexStart, V2Idx: ld.VertexEnd, LdIdx: i, IsLeft: false})
+			add(ld, ld.SideDefRight, false)
 		}
 		if ld.SideDefLeft != -1 {
-			s := level.SideDefs[ld.SideDefLeft].SectorRef
-			sectorsEdges[s] = append(sectorsEdges[s], Edge{V1Idx: ld.VertexEnd, V2Idx: ld.VertexStart, LdIdx: i, IsLeft: true})
+			add(ld, ld.SideDefLeft, true)
 		}
 	}
 	return sectorsEdges
 }
 
-// convertLight converts a given light level (int16) into a normalized float64 linear intensity value ranging from 0 to 1.
-// Returns -1.0 if the light level is below a predefined threshold.
+// convertLight converts a light level from an integer value to a normalized float intensity ranging from 0.0 to 1.0.
+// If the light level is below the ambient threshold (16), it returns -1.0 to indicate insufficient illumination.
 func (bld *Builder) convertLight(lightLevel int16) float64 {
 	rawLight := float64(lightLevel)
 	// Ambient threshold

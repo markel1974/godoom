@@ -6,7 +6,7 @@ import "math"
 type Polygon []XY
 
 // TriangulateEdges decomposes closed polygon loops derived from edges into sets of non-overlapping triangles for each polygon group.
-func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
+func (poly Polygon) TriangulateEdges(edges []Edge) [][]Polygon {
 	if len(edges) == 3 {
 		// Sequential verification: the End (V2) of each edge must match the Start (V1) of the next one
 		isClosed := edges[0].V2Idx == edges[1].V1Idx && edges[1].V2Idx == edges[2].V1Idx && edges[2].V2Idx == edges[0].V1Idx
@@ -19,7 +19,7 @@ func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
 			return [][]Polygon{{triangle}}
 		}
 	}
-	polygonDefs := poly.TraceLoops(edges, count)
+	polygonDefs := poly.TraceLoops(edges)
 	output := make([][]Polygon, len(polygonDefs))
 	for idx, def := range polygonDefs {
 		mergedPoly := def.BridgeHoles()
@@ -30,14 +30,14 @@ func (poly Polygon) TriangulateEdges(edges []Edge, count int) [][]Polygon {
 
 // TraceLoops constructs closed polygon definitions (outers and holes) from a set of edges for a given Level.
 // Handles self-intersecting topologies and shared vertices by enforcing maximum-angle left turns.
-func (poly Polygon) TraceLoops(edges []Edge, count int) []ComplexPolygon {
+func (poly Polygon) TraceLoops(edges []Edge) []ComplexPolygon {
 	adj := make([][]Edge, len(poly))
 	for _, e := range edges {
 		adj[e.V1Idx] = append(adj[e.V1Idx], e)
 	}
 
 	// Bitmask for visited edges: (LDIdx << 1) | IsLeft
-	visited := make([]bool, count*2)
+	visited := make(map[int]bool)
 
 	var rawLoops []Polygon
 

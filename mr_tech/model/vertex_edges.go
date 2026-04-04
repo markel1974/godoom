@@ -101,6 +101,6 @@ func (t *VertexEdges) GetTriangles(configIdx int) ([][]geometry.Polygon, []geome
 		return nil, nil, fmt.Errorf("invalid sector index %d", configIdx)
 	}
 	edges := t.sectorsEdges[configIdx]
-	triContainer := t.vertexes.TriangulateEdges(edges, len(t.vertexes))
+	triContainer := t.vertexes.TriangulateEdges(edges)
 	return triContainer, edges, nil
 }

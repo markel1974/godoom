@@ -316,6 +316,7 @@ func (v *Volume) GetCentroid3d() geometry.XYZ {
 	return geometry.XYZ{}
 }
 
+// GetCentroid2d calculates and returns the 2D centroid of the volume projected onto the XY plane.
 func (v *Volume) GetCentroid2d() geometry.XYZ {
 	var signedArea, cx, cy float64
 	for i := range v.faces {

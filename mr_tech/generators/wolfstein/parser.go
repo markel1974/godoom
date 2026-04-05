@@ -130,8 +130,8 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 
 			if isDoor(cell) {
 				cs.Tag = "door"
-				wallN := wp.isWall(width, height, x, y-1)
-				wallS := wp.isWall(width, height, x, y+1)
+				_, wallN := wp.isWall(width, height, x, y-1)
+				_, wallS := wp.isWall(width, height, x, y+1)
 				if wallN || wallS {
 					pMidT := geometry.XY{X: x0 + wp.tileSize/2, Y: y0}
 					pMidB := geometry.XY{X: x0 + wp.tileSize/2, Y: y1}
@@ -191,9 +191,7 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	for y := 0; y < height; y++ {
 		wp.sectorIds[y] = make([]string, width)
 		for x := 0; x < width; x++ {
-			target := (y * width) + x
-			cell := wp.mapData[target]
-			if !isWall(cell) {
+			if target, wall := wp.isWall(width, height, x, y); !wall {
 				wp.sectorIds[y][x] = strconv.Itoa(target)
 			}
 		}
@@ -206,7 +204,7 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 	kind := config.SegmentUnknown
 	isAdjDoor := false
 	cell := uint16(1)
-	if wp.isWall(width, height, nx, ny) {
+	if _, wall := wp.isWall(width, height, nx, ny); wall {
 		kind = config.SegmentWall
 	} else {
 		if isDoor(cell) {
@@ -214,10 +212,8 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 		}
 	}
 	seg := config.NewConfigSegment(cs.Id, kind, start, end)
-	// Calcolo normale: X costante -> Est/Ovest
-	isEW := math.Abs(start.X-end.X) < 0.001
+	isEW := math.Abs(start.X-end.X) < 0.001 // Calcolo normale: X costante -> Est/Ovest
 	var texName string
-
 	if isDoor(currentCell) {
 		if kind != config.SegmentWall {
 			idx := 98
@@ -234,11 +230,11 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 		}
 	} else {
 		if kind == config.SegmentWall {
-			baseIdx := (int(cell) - 1) * 2
+			idx := (int(cell) - 1) * 2
 			if isEW {
-				baseIdx++
+				idx++
 			}
-			texName = fmt.Sprintf("image%d.png", baseIdx)
+			texName = fmt.Sprintf("image%d.png", idx)
 		} else if isAdjDoor {
 			idx := 98
 			if isEW {
@@ -257,11 +253,11 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 }
 
 // isSolid checks if a given map cell is solid based on its position and attributes from the map data.
-func (wp *Parser) isWall(width, height, nx, ny int) bool {
-	if nx < 0 || nx >= width || ny < 0 || ny >= height {
-		return true
-	}
+func (wp *Parser) isWall(width, height, nx, ny int) (int, bool) {
 	target := (ny * width) + nx
+	if nx < 0 || nx >= width || ny < 0 || ny >= height {
+		return target, true
+	}
 	cell := wp.mapData[target]
-	return isWall(cell)
+	return target, isWall(cell)
 }

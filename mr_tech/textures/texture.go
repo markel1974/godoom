@@ -75,17 +75,24 @@ func (t *Texture) RGBA() (int, int, []uint8) {
 			c := t.Get(x, y)
 			idx := (y*width + x) * 4
 
-			if c == -1 {
-				pixels[idx] = 0
-				pixels[idx+1] = 0
-				pixels[idx+2] = 0
-				pixels[idx+3] = 0
-			} else {
-				pixels[idx] = uint8(c >> 16)
-				pixels[idx+1] = uint8(c >> 8)
-				pixels[idx+2] = uint8(c)
-				pixels[idx+3] = 255
-			}
+			pixels[idx] = uint8(c >> 24)
+			pixels[idx+1] = uint8(c >> 16)
+			pixels[idx+2] = uint8(c >> 8)
+			pixels[idx+3] = uint8(c)
+
+			/*
+				if c == -1 {
+					pixels[idx] = 0
+					pixels[idx+1] = 0
+					pixels[idx+2] = 0
+					pixels[idx+3] = 0
+				} else {
+					pixels[idx] = uint8(c >> 16)
+					pixels[idx+1] = uint8(c >> 8)
+					pixels[idx+2] = uint8(c)
+					pixels[idx+3] = 255
+				}
+			*/
 		}
 	}
 	return width, height, pixels

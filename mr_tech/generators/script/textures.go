@@ -63,7 +63,8 @@ func (t *Textures) load(tex *textures.Texture, filename string) error {
 				if b, err = br.ReadByte(); err != nil {
 					return err
 				}
-				tex.Set(x, y, int(r)*65536+int(g)*256+int(b))
+				rgba := int(r)<<24 | int(g)<<16 | int(b)<<8 | 255
+				tex.Set(x, y, rgba)
 			}
 		}
 	}

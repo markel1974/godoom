@@ -71,13 +71,19 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	for y := 0; y < size.Y; y++ {
 		for x := 0; x < size.X; x++ {
 			c := src.RGBAAt(x, y)
-			if c.A == 0 {
-				// Truly transparent pixel
-				texture.Set(x, y, -1)
-			} else {
-				rgb := int(c.R)*65536 + int(c.G)*256 + int(c.B)
-				texture.Set(x, y, rgb)
-			}
+			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
+			texture.Set(x, y, rgba)
+
+			/*
+				if c.A == 0 {
+					texture.Set(x, y, 0)
+				} else {
+					//rgb := int(c.R)*65536 + int(c.G)*256 + int(c.B)
+					rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | 0xff
+					texture.Set(x, y, rgba)
+				}
+
+			*/
 		}
 	}
 	t.resources[srcId] = texture

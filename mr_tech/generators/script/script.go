@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	rnd "math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -140,7 +139,7 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 	if cfgVertices == nil {
 		return nil, errors.New("nil vertices")
 	}
-	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), rnd.Float64(), config.LightKindAmbient)
+	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), 0.3, config.LightKindAmbient)
 	if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 		return nil, err
 	}

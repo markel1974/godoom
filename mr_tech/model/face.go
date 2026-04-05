@@ -29,7 +29,6 @@ func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKe
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	parent   *Volume
-	kind     int
 	neighbor *Volume
 	tag      string
 	aabb     *physics.AABB
@@ -42,12 +41,11 @@ type Face struct {
 	hasZ     bool
 }
 
-// NewFaceSegment creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFaceSegment(neighbor *Volume, kind int, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
+// NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
+func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
 	out := &Face{
 		hasZ:     true,
 		points:   make([]geometry.XYZ, 2),
-		kind:     kind,
 		neighbor: neighbor,
 		tag:      tag,
 		minZ:     0,
@@ -64,11 +62,10 @@ func NewFaceSegment(neighbor *Volume, kind int, start geometry.XYZ, end geometry
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, kind int, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
 		hasZ:     false,
 		points:   points,
-		kind:     kind,
 		neighbor: neighbor,
 		tag:      tag,
 	}
@@ -108,16 +105,6 @@ func (s *Face) GetParent() *Volume {
 // SetParent assigns a parent sector to the segment.
 func (s *Face) SetParent(parent *Volume) {
 	s.parent = parent
-}
-
-// GetKind retrieves the integer value representing the kind or type of the segment.
-func (s *Face) GetKind() int {
-	return s.kind
-}
-
-// SetKind sets the type or category of the segment by assigning a specific integer value to its kind field.
-func (s *Face) SetKind(kind int) {
-	s.kind = kind
 }
 
 // GetNeighbor returns the neighboring Sector associated with the Face.

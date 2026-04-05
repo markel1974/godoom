@@ -23,8 +23,8 @@ type Volume struct {
 	hasZ      bool
 }
 
-// NewVolume creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded sectors.
-func NewVolume(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
+// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded sectors.
+func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
 	v := &Volume{
 		modelId: modelId,
 		id:      id,

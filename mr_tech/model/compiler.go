@@ -138,9 +138,9 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 		}
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
-				s := NewVolume(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
+				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
-				container = append(container, s)
+				container = append(container, volume)
 				// Mantiene il Winding Order consistente per ContainsPoint
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
@@ -148,40 +148,35 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
 					p2 := tri[(k+1)%3]
-					var origSeg *config.ConfigSegment
+					start := geometry.XYZ{X: p1.X, Y: p1.Y, Z: 0}
+					end := geometry.XYZ{X: p2.X, Y: p2.Y, Z: 0}
+					isWall := false
+					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
+					tag := "unknown"
 					// Match topologico ESATTO
 					for _, cn := range cs.Segments {
 						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
-							origSeg = cn
+							isWall = cn.Kind == config.DefinitionWall
+							tag = cn.Tag
+							upper = anim.GetAnimation(cn.Upper)
+							middle = anim.GetAnimation(cn.Middle)
+							lower = anim.GetAnimation(cn.Lower)
 							break
 						}
 					}
-					start := geometry.XYZ{X: p1.X, Y: p1.Y, Z: 0}
-					end := geometry.XYZ{X: p2.X, Y: p2.Y, Z: 0}
-					kind := config.DefinitionUnknown
-					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
-					tag := "unknown"
-					if origSeg != nil {
-						kind = origSeg.Kind
-						tag = origSeg.Tag
-						upper = anim.GetAnimation(origSeg.Upper)
-						middle = anim.GetAnimation(origSeg.Middle)
-						lower = anim.GetAnimation(origSeg.Lower)
-					}
-					s.AddTag(tag)
-					face := NewFaceSegment(nil, config.DefinitionUnknown, start, end, tag, upper, middle, lower)
-					if kind == config.DefinitionWall {
-						face.SetKind(config.DefinitionWall)
-					} else {
+					face := NewFace2d(nil, start, end, tag, upper, middle, lower)
+					volume.AddFace(face)
+					volume.AddTag(tag)
+					facesTree.InsertObject(face)
+					if !isWall {
 						fixFaces = append(fixFaces, face)
 					}
-					face.Rebuild()
-					facesTree.InsertObject(face)
-					s.AddFace(face)
 				}
-				s.Light = NewLight()
+				volume.Light = NewLight()
 				if cs.Light != nil {
-					s.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, s.GetCentroid2d(), cs.FloorY+cs.CeilY)
+					centroid := volume.GetCentroid2d()
+					height := cs.FloorY + cs.CeilY
+					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, centroid, height)
 				}
 				totalPolygons++
 			}
@@ -189,20 +184,19 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 	}
 
 	// Risoluzione adiacenze
-	for _, seg := range fixFaces {
-		// already linked
-		if seg.GetKind() == config.DefinitionJoin || seg.GetKind() == config.DefinitionWall {
+	for _, face := range fixFaces {
+		if face.GetNeighbor() != nil { // already linked
 			continue
 		}
 		bestDistSq := math.MaxFloat64
 		var bestNeighborFace *Face
-		facesTree.QueryOverlaps(seg, func(object physics.IAABB) bool {
+		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
 			overlapFace, ok := object.(*Face)
-			if !ok || overlapFace.GetParent() == seg.GetParent() {
+			if !ok || overlapFace.GetParent() == face.GetParent() {
 				return false
 			}
-			start := seg.GetStart()
-			end := seg.GetEnd()
+			start := face.GetStart()
+			end := face.GetEnd()
 			overlapStart := overlapFace.GetStart()
 			overlapEnd := overlapFace.GetEnd()
 			dx1 := start.X - overlapEnd.X
@@ -218,16 +212,12 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 		})
 		if bestNeighborFace != nil {
 			// Link reciproco (O(N/2)
-			bestNeighborFace.SetKind(config.DefinitionJoin)
-			bestNeighborFace.SetNeighbor(seg.GetParent())
-			seg.SetKind(config.DefinitionJoin)
-			seg.SetNeighbor(bestNeighborFace.GetParent())
+			bestNeighborFace.SetNeighbor(face.GetParent())
+			face.SetNeighbor(bestNeighborFace.GetParent())
 		} else {
-			seg.SetKind(config.DefinitionWall)
-			seg.SetNeighbor(nil)
+			face.SetNeighbor(nil)
 		}
 	}
-
 	return NewVolumes(container), totalPolygons
 }
 
@@ -253,8 +243,7 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.GetFaces() {
-				if seg.GetKind() != config.DefinitionWall && seg.GetNeighbor() != nil {
-					n := seg.GetNeighbor()
+				if n := seg.GetNeighbor(); n != nil {
 					if !visited[n.GetId()] {
 						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
 						if n.GetCeilY() == curr.GetCeilY() && n.GetFloorY() == curr.GetFloorY() && n.Light.intensity == curr.Light.intensity {
@@ -263,7 +252,6 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 						}
 					}
 				}
-
 			}
 		}
 

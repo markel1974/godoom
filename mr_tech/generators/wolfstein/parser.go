@@ -20,11 +20,6 @@ func isDoor(cell uint16) bool {
 	return cell >= 90 && cell <= 101
 }
 
-// isThing determines if the given cell value represents a "thing" based on its range (108 to 143 inclusively).
-//func isThing(cell uint16) bool {
-//	return cell >= 108 && cell <= 143
-//}
-
 // isThing rileva nemici (108-143) e oggetti/decorazioni (23-79)
 func isThing(cell uint16) bool {
 	return (cell >= 108 && cell <= 143) || (cell >= 23 && cell <= 79)
@@ -66,18 +61,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 		return nil, err
 	}
 
-	isSolid := func(nx, ny int) bool {
-		if nx < 0 || nx >= width || ny < 0 || ny >= height {
-			return true
-		}
-		adj := wp.mapData[ny*width+nx]
-		return adj != 0 && !isDoor(adj) && !isThing(adj)
-	}
-
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			cell := wp.mapData[y*width+x]
-
 			if cell != 0 && !isDoor(cell) && !isThing(cell) {
 				continue
 			}
@@ -132,10 +118,6 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 			cs.CeilY = wp.sectorHeight
 			cs.Tag = "wolf_cell"
 
-			if isDoor(cell) {
-				cs.Tag = "door"
-			}
-
 			cs.Floor = config.NewConfigAnimation([]string{"image91.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
 			cs.Ceil = config.NewConfigAnimation([]string{"image89.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH)
 
@@ -147,8 +129,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 			pBL := geometry.XY{X: x0, Y: y1}
 
 			if isDoor(cell) {
-				solidN := isSolid(x, y-1)
-				solidS := isSolid(x, y+1)
+				cs.Tag = "door"
+				solidN := wp.isSolid(width, height, x, y-1)
+				solidS := wp.isSolid(width, height, x, y+1)
 
 				if solidN || solidS {
 					pMidT := geometry.XY{X: x0 + wp.tileSize/2, Y: y0}
@@ -162,7 +145,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
 
 					if !wp.openDoors {
-						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidT, pMidB, "")
+						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidT, pMidB)
 						anim := config.NewConfigAnimation([]string{"image99.png"}, config.AnimationKindLoop, 10.0, 10.0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
@@ -180,7 +163,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
 
 					if !wp.openDoors {
-						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidL, pMidR, "")
+						doorSeg := config.NewConfigSegment(cs.Id, config.DefinitionWall, pMidL, pMidR)
 						anim := config.NewConfigAnimation([]string{"image98.png"}, config.AnimationKindLoop, 10.0, 50.0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
@@ -225,30 +208,28 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 
 // addSegment adds a segment to the specified ConfigSector with geometry, texture, adjacency, and type information.
 func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
-	kind := config.DefinitionWall
-	neighborId := ""
+	kind := config.DefinitionUnknown
 	isAdjDoor := false
 	adj := uint16(1)
-
 	if nx >= 0 && nx < width && ny >= 0 && ny < height {
 		adj = wp.mapData[ny*width+nx]
 		if adj == 0 || isDoor(adj) || isThing(adj) {
-			kind = config.DefinitionJoin
-			neighborId = wp.sectorIds[ny][nx]
 			if isDoor(adj) {
 				isAdjDoor = true
 			}
+		} else {
+			kind = config.DefinitionWall
 		}
 	}
 
-	seg := config.NewConfigSegment(cs.Id, kind, start, end, neighborId)
+	seg := config.NewConfigSegment(cs.Id, kind, start, end)
 
 	// Calcolo normale: X costante -> Est/Ovest
 	isEW := math.Abs(start.X-end.X) < 0.001
 	var texName string
 
 	if isDoor(currentCell) {
-		if kind == config.DefinitionJoin {
+		if kind != config.DefinitionWall {
 			idx := 98
 			if isEW {
 				idx++
@@ -285,4 +266,12 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 	}
 
 	cs.Segments = append(cs.Segments, seg)
+}
+
+func (wp *Parser) isSolid(width, height, nx, ny int) bool {
+	if nx < 0 || nx >= width || ny < 0 || ny >= height {
+		return true
+	}
+	adj := wp.mapData[ny*width+nx]
+	return adj != 0 && !isDoor(adj) && !isThing(adj)
 }

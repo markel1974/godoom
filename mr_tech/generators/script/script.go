@@ -154,16 +154,11 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 			break
 		}
 		var d data
-		if word[0] == 'x' {
-			d.Val = config.DefinitionUnknown
-			d.Kind = config.DefinitionUnknown
-		} else {
-			if val, err := strconv.Atoi(word); err != nil {
-				d.Val = config.DefinitionUnknown
-				d.Kind = config.DefinitionUnknown
-			} else {
+		d.Val = config.DefinitionUnknown
+		d.Kind = config.DefinitionUnknown
+		if word[0] != 'x' {
+			if val, err := strconv.Atoi(word); err == nil {
 				d.Val = val
-				d.Kind = config.DefinitionJoin
 			}
 		}
 		numbers = append(numbers, d)
@@ -186,7 +181,7 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 		start := cfgVertices[v1Idx.Val]
 		end := cfgVertices[v2Idx.Val]
 
-		seg := config.NewConfigSegment("", neighborId.Kind, start, end, strconv.Itoa(neighborId.Val))
+		seg := config.NewConfigSegment("", neighborId.Kind, start, end)
 		seg.Middle = config.NewConfigAnimation([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
 		seg.Lower = config.NewConfigAnimation([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH)
 		seg.Upper = config.NewConfigAnimation([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH)

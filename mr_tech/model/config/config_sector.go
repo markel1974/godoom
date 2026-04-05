@@ -6,9 +6,6 @@ const (
 
 	// DefinitionWall represents a configuration segment identified as a wall within the level's geometry or structure.
 	DefinitionWall
-
-	// DefinitionJoin represents a constant used to define a join or connection segment within a configuration structure.
-	DefinitionJoin
 )
 
 // ConfigSector represents a Sector configuration in a level, including geometric, texture, and tag information.

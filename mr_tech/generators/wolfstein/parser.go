@@ -15,14 +15,19 @@ const floorCeilScaleW = 10.0
 // floorCeilScaleH defines the scale factor applied to the height of floor and ceiling textures in a sector.
 const floorCeilScaleH = 10.0
 
+func isWall(cell uint16) bool {
+	return cell >= 1 && cell <= 99
+}
+
 // isDoor checks if the given cell value corresponds to a door, defined by the range 90 to 101 inclusive.
 func isDoor(cell uint16) bool {
-	return cell >= 90 && cell <= 101
+	return cell >= 100 && cell <= 109
 }
 
 // isThing determines if a given cell value represents a "thing" based on predefined ranges of values.
 func isThing(cell uint16) bool {
-	return (cell >= 108 && cell <= 143) || (cell >= 23 && cell <= 79)
+	//136 - 183 objects | 183 - 197 enemies (with animation)
+	return (cell >= 136 && cell <= 183) || (cell >= 183 && cell <= 197)
 }
 
 // Parser represents a structure used for parsing and managing 2D grid-based map data, including sectors and entities.
@@ -269,6 +274,6 @@ func (wp *Parser) isSolid(width, height, nx, ny int) bool {
 	if nx < 0 || nx >= width || ny < 0 || ny >= height {
 		return true
 	}
-	adj := wp.mapData[ny*width+nx]
-	return adj != 0 && !isDoor(adj) && !isThing(adj)
+	cell := wp.mapData[ny*width+nx]
+	return cell != 0 && !isDoor(cell) && !isThing(cell)
 }

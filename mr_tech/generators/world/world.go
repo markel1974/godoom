@@ -74,7 +74,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		end := pts[(i+1)%4]
 
 		// Allocazione corretta tramite costruttore
-		seg := config.NewConfigSegment("", config.DefinitionUnknown, start, end)
+		seg := config.NewConfigSegment("", config.SegmentUnknown, start, end)
 
 		upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
 		lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
@@ -209,7 +209,7 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			}
 
 			for _, e := range edges {
-				kind := config.DefinitionUnknown
+				kind := config.SegmentUnknown
 				hasNeighbor := false
 				// Controllo adiacenze per aprire il portale
 				if e.nx >= 0 && e.nx < gridWidth && e.ny >= 0 && e.ny < gridHeight {
@@ -218,7 +218,7 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 					}
 				}
 				if !hasNeighbor {
-					kind = config.DefinitionWall
+					kind = config.SegmentWall
 				}
 
 				seg := config.NewConfigSegment("", kind, e.p1, e.p2)

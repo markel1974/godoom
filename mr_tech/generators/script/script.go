@@ -92,15 +92,15 @@ func (p *Parser) finalize(cfg *config.ConfigRoot) {
 	}
 	for _, sector := range cfg.Sectors {
 		for _, s := range sector.Segments {
-			if s.Kind != config.DefinitionWall {
+			if s.Kind != config.SegmentWall {
 				// Cerchiamo il segmento invertito (il "lato B" della linea)
 				revKey := edgeKey{p1: s.End, p2: s.Start}
 				if neighborSector, ok := lineDefsCache[revKey]; ok {
 					s.Tag = neighborSector.Id
-					s.Kind = config.DefinitionUnknown
+					s.Kind = config.SegmentUnknown
 				} else {
 					// Nessun segmento corrispondente trovato: la linea deve essere un muro
-					s.Kind = config.DefinitionWall
+					s.Kind = config.SegmentWall
 					s.Tag = "unknown"
 				}
 			}
@@ -154,8 +154,8 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 			break
 		}
 		var d data
-		d.Val = config.DefinitionUnknown
-		d.Kind = config.DefinitionUnknown
+		d.Val = config.SegmentUnknown
+		d.Kind = config.SegmentUnknown
 		if word[0] != 'x' {
 			if val, err := strconv.Atoi(word); err == nil {
 				d.Val = val

@@ -5,6 +5,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+const (
+	// SegmentUnknown represents an unspecified or undefined configuration type in the context of segment definition.
+	SegmentUnknown = iota
+
+	// SegmentWall represents a configuration segment identified as a wall within the level's geometry or structure.
+	SegmentWall
+)
+
 // ConfigSegment represents a segment of input data with spatial coordinates, type, and associated metadata.
 type ConfigSegment struct {
 	Parent string           `json:"parent"`

@@ -177,7 +177,7 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 
 // buildSegment constructs a ConfigSegment for a given edge within a sector, including wall textures and alignment adjustments.
 func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) *config.ConfigSegment {
-	seg := config.NewConfigSegment(sectorId, config.DefinitionUnknown, e.P1, e.P2)
+	seg := config.NewConfigSegment(sectorId, config.SegmentUnknown, e.P1, e.P2)
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
@@ -196,7 +196,7 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 		}
 	}
 	if !e.LineDef.HasFlag(2) {
-		seg.Kind = config.DefinitionWall
+		seg.Kind = config.SegmentWall
 	}
 	// Inversione Y per l'allineamento con il motore di rendering
 	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y

@@ -156,7 +156,7 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 					// Match topologico ESATTO
 					for _, cn := range cs.Segments {
 						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
-							isWall = cn.Kind == config.DefinitionWall
+							isWall = cn.Kind == config.SegmentWall
 							tag = cn.Tag
 							upper = anim.GetAnimation(cn.Upper)
 							middle = anim.GetAnimation(cn.Middle)

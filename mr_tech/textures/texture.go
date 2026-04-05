@@ -16,7 +16,7 @@ type Texture struct {
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
 func NewTexture(name string, id uint32, w int, h int) *Texture {
 	z := &Texture{
-		name: name, id: id, w: w, h: h, // Nessun w-1 o h-1!
+		name: name, id: id, w: w, h: h,
 		data: make([][]int, w),
 	}
 	for i := range z.data {

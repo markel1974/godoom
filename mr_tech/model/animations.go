@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
@@ -31,7 +32,7 @@ func (r *Animations) GetAnimation(ca *config.ConfigAnimation) *textures.Animatio
 	if ca == nil {
 		return textures.NewAnimation(nil, int(config.AnimationKindNone), 1, 1)
 	}
-	key := strings.Join(ca.Frames, ";")
+	key := fmt.Sprintf("%s|%d|%f|%f", strings.Join(ca.Frames, ";"), ca.Kind, ca.ScaleW, ca.ScaleH)
 	animation, ok := r.animations[key]
 	if ok {
 		return animation

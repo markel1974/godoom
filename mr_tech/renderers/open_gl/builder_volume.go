@@ -26,8 +26,8 @@ func NewBuilderVolume(tex *Textures) *BuilderVolume {
 	return &BuilderVolume{
 		tex:         tex,
 		dcRender:    NewDrawCommandsRender(),
-		fv:          NewFrameVertices(maxBatchVertices),
-		dc:          NewDrawCommands(maxFrameCommands),
+		fv:          NewFrameVertices(startBatchVertices),
+		dc:          NewDrawCommands(startFrameCommands),
 		fl:          NewFrameLights(256),
 		faceIndices: make([]uint32, 0, 128),
 		mapBuilt:    false,

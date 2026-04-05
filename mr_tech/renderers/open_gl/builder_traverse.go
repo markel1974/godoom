@@ -63,8 +63,8 @@ type BuilderTraverse struct {
 func NewBuilderTraverse(tex *Textures) *BuilderTraverse {
 	return &BuilderTraverse{
 		tex:               tex,
-		fv:                NewFrameVertices(maxBatchVertices),
-		dc:                NewDrawCommands(maxFrameCommands),
+		fv:                NewFrameVertices(startBatchVertices),
+		dc:                NewDrawCommands(startFrameCommands),
 		fl:                NewFrameLights(256),
 		dcRender:          NewDrawCommandsRender(),
 		visibleVolumes:    make(map[*model.Volume]bool, 256),

@@ -12,11 +12,8 @@ import (
 // maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
 // maxFrameCommands sets the limit on the number of commands that can be issued per frame.
 const (
-	scaleFactor = 1
-
-	maxBatchVertices = 65536 * 2
-
-	maxFrameCommands = 4096
+	startBatchVertices = 16384
+	startFrameCommands = 1024
 )
 
 type IBuilder interface {

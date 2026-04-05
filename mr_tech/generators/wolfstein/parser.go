@@ -68,51 +68,44 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				continue
 			}
 
-			/*
-				if isThing(cell) {
-					pos := geometry.XY{
-						X: float64(x)*wp.tileSize + wp.tileSize/2,
-						Y: float64(y)*wp.tileSize + wp.tileSize/2,
-					}
-
-					var angle float64 = 0
-					kind := config.ThingItemDef // Default per oggetti
-					object := "item"
-
-					// Se è un nemico, calcoliamo l'orientamento originale
-					if cell >= 108 {
-						object = "enemy"
-						kind = config.ThingEnemyDef
-						dir := (cell - 108) % 4
-						switch dir {
-						case 0:
-							angle = math.Pi / 2
-						case 1:
-							angle = 0
-						case 2:
-							angle = -math.Pi / 2
-						case 3:
-							angle = math.Pi
-						}
-					}
-
-					id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
-
-					fmt.Println("creating", id)
-					//sequence := []string{"image194.png", "image195.png", "image196.png", "image197.png"}
-					sequence := []string{"image91.png"}
-					const scaleW = 0.05
-					const scaleH = 0.05
-					anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleW, scaleH)
-
-					// Raggio e massa possono variare: i nemici sono solidi, i pickup no (gestito nel runtime)
-					thing := config.NewConfigThing(id, pos, angle, kind, 1.0, 0.0001, 0.00001, 0.0001, anim)
-					root.Things = append(root.Things, thing)
-
-					cell = 0 // Libera la cella per il compilatore topologico
+			if isThing(cell) {
+				pos := geometry.XY{
+					X: float64(x)*wp.tileSize + wp.tileSize/2,
+					Y: float64(y)*wp.tileSize + wp.tileSize/2,
 				}
 
-			*/
+				var angle float64 = 0
+				kind := config.ThingItemDef // Default per oggetti
+				object := "item"
+
+				// Se è un nemico, calcoliamo l'orientamento originale
+				if cell >= 108 {
+					object = "enemy"
+					kind = config.ThingEnemyDef
+					dir := (cell - 108) % 4
+					switch dir {
+					case 0:
+						angle = math.Pi / 2
+					case 1:
+						angle = 0
+					case 2:
+						angle = -math.Pi / 2
+					case 3:
+						angle = math.Pi
+					}
+				}
+
+				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
+				sequence := []string{"image194.png", "image195.png", "image196.png", "image197.png"}
+				const scaleH = 0.08
+				anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleH, scaleH*2)
+
+				// Raggio e massa possono variare: i nemici sono solidi, i pickup no (gestito nel runtime)
+				thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 0.01, anim)
+				root.Things = append(root.Things, thing)
+
+				cell = 0 // Libera la cella per il compilatore topologico
+			}
 
 			sid := wp.sectorIds[y][x]
 			lightIntensity := 0.5 //rnd.Float64()

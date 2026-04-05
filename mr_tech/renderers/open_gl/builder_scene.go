@@ -26,8 +26,8 @@ func NewBuilderScene(tex *Textures) *BuilderScene {
 	return &BuilderScene{
 		tex:         tex,
 		dcRender:    NewDrawCommandsRender(),
-		fv:          NewFrameVertices(maxBatchVertices),
-		dc:          NewDrawCommands(maxFrameCommands),
+		fv:          NewFrameVertices(startBatchVertices),
+		dc:          NewDrawCommands(startFrameCommands),
 		fl:          NewFrameLights(256),
 		flatIndices: make([]uint32, 0, 128),
 		mapBuilt:    false,

@@ -16,8 +16,8 @@ type FrameVertices struct {
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(maxVerts int) *FrameVertices {
 	return &FrameVertices{
-		vertices: make([]float32, maxVerts*5),
-		indices:  make([]uint32, maxVerts*6),
+		vertices: make([]float32, maxVerts),
+		indices:  make([]uint32, maxVerts),
 		stride:   6,
 	}
 }

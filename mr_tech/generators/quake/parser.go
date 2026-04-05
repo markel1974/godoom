@@ -124,13 +124,8 @@ func (p *Parser) Parse(filename string) (*config.ConfigRoot, error) {
 				} else {
 					v = vertexes[edges[-se].Vertex1]
 				}
-
 				// Conversione coordinate spaziali (Z è l'altezza in Quake)
-				points = append(points, geometry.XYZ{
-					X: float64(v.X),
-					Y: float64(v.Z),
-					Z: float64(-v.Y),
-				})
+				points = append(points, geometry.XYZ{X: float64(v.X), Y: float64(v.Z), Z: float64(-v.Y)})
 			}
 
 			// Creazione Faccia

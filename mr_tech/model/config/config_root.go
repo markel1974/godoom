@@ -15,6 +15,8 @@ type ConfigRoot struct {
 	ScaleFactor float64          `json:"scaleFactor"`
 	DisableLoop bool             `json:"disableLoop"`
 	Vertices    geometry.Polygon `json:"vertices"`
+	Volumes     []*ConfigVolume  `json:"volumes"`
+	Lights      []*ConfigLight   `json:"lights"`
 	textures    textures.ITextures
 }
 

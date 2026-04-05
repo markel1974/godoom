@@ -9,12 +9,12 @@ type ConfigVolume struct {
 }
 
 // NewConfigVolume creates and returns a new instance of ConfigVolume with specified ID, light settings, and tag.
-func NewConfigVolume(id string, lightIntensity float64, kind LightKind, tag string) *ConfigVolume {
+func NewConfigVolume(id string, tag string) *ConfigVolume {
 	return &ConfigVolume{
 		Id:    id,
 		Faces: make([]*ConfigFace, 0),
-		Light: NewConfigLight(lightIntensity, kind),
 		Tag:   tag,
+		Light: nil,
 	}
 }
 

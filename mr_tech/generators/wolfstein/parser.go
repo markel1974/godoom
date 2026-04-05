@@ -101,7 +101,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 					fmt.Println("creating", id)
 					//sequence := []string{"image194.png", "image195.png", "image196.png", "image197.png"}
 					sequence := []string{"image91.png"}
-					anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, 30, 40)
+					const scaleW = 0.05
+					const scaleH = 0.05
+					anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleW, scaleH)
 
 					// Raggio e massa possono variare: i nemici sono solidi, i pickup no (gestito nel runtime)
 					thing := config.NewConfigThing(id, pos, angle, kind, 1.0, 0.0001, 0.00001, 0.0001, anim)
@@ -109,6 +111,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 
 					cell = 0 // Libera la cella per il compilatore topologico
 				}
+
 			*/
 
 			sid := wp.sectorIds[y][x]

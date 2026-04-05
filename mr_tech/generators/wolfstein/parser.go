@@ -9,23 +9,23 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// floorCeilScaleW defines the scaling factor for floor and ceiling textures in the horizontal direction.
+// floorCeilScaleW defines the default scaling factor for floor and ceiling texture animations in the configuration.
 const floorCeilScaleW = 10.0
 
-// floorCeilScaleH defines the height scaling factor for floor and ceiling animations in the configuration.
+// floorCeilScaleH defines the scale factor applied to the height of floor and ceiling textures in a sector.
 const floorCeilScaleH = 10.0
 
-// isDoor determines if a given cell value represents a door based on its range in the map data.
+// isDoor checks if the given cell value corresponds to a door, defined by the range 90 to 101 inclusive.
 func isDoor(cell uint16) bool {
 	return cell >= 90 && cell <= 101
 }
 
-// isThing rileva nemici (108-143) e oggetti/decorazioni (23-79)
+// isThing determines if a given cell value represents a "thing" based on predefined ranges of values.
 func isThing(cell uint16) bool {
 	return (cell >= 108 && cell <= 143) || (cell >= 23 && cell <= 79)
 }
 
-// Parser represents a data structure used to parse and manage grid-based map configurations and their associated metadata.
+// Parser represents a structure used for parsing and managing 2D grid-based map data, including sectors and entities.
 type Parser struct {
 	tileSize     float64
 	sectorHeight float64
@@ -36,7 +36,7 @@ type Parser struct {
 	openDoors    bool
 }
 
-// NewParser initializes and returns a new instance of Parser with the specified tile size, sector height, and door state.
+// NewParser creates a new Parser instance with specified tile size, sector height, and door openness settings.
 func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 	return &Parser{
 		tileSize:     tileSize,
@@ -45,7 +45,7 @@ func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 	}
 }
 
-// Parse generates a ConfigRoot based on map dimensions and data, handling sectors, things, doors, and textures.
+// Parse constructs a ConfigRoot by processing a map grid of given dimensions and metadata, generating sectors and objects.
 func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot, error) {
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
@@ -184,7 +184,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	return root, nil
 }
 
-// prepare initializes the grid dimensions, map data, and sector IDs for the parser, preparing it for further processing.
+// prepare initializes the Parser with the given grid dimensions and map data, and generates sector IDs for relevant cells.
 func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	wp.gridWidth = width
 	wp.gridHeight = height
@@ -202,7 +202,7 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	return nil
 }
 
-// addSegment adds a segment to the specified ConfigSector with geometry, texture, adjacency, and type information.
+// addSegment adds a new segment to the specified ConfigSector using level geometry, neighbors, and texture information.
 func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
 	kind := config.DefinitionUnknown
 	isAdjDoor := false
@@ -264,6 +264,7 @@ func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, 
 	cs.Segments = append(cs.Segments, seg)
 }
 
+// isSolid checks if a given map cell is solid based on its position and attributes from the map data.
 func (wp *Parser) isSolid(width, height, nx, ny int) bool {
 	if nx < 0 || nx >= width || ny < 0 || ny >= height {
 		return true

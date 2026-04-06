@@ -13,11 +13,11 @@ type ConfigSector struct {
 }
 
 // NewConfigSector creates a new ConfigSector instance with the given id, initializing its fields with default values.
-func NewConfigSector(id string, lightIntensity float64, kind LightKind) *ConfigSector {
+func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff float64) *ConfigSector {
 	return &ConfigSector{
 		Id:    id,
 		Ceil:  nil,
 		Floor: nil,
-		Light: NewConfigLightSector(lightIntensity, kind),
+		Light: NewConfigLightSector(lightIntensity, kind, falloff),
 	}
 }

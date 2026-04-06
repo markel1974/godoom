@@ -158,7 +158,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.ConfigSector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
-	miSector := config.NewConfigSector(sectorId, bld.convertLight(lightLevel), config.LightKindAmbient)
+	const falloff = 250.0
+	miSector := config.NewConfigSector(sectorId, bld.convertLight(lightLevel), config.LightKindAmbient, falloff)
 	miSector.FloorY = floorY / ScaleFactorCeilFloorLineDef
 	miSector.CeilY = ceilY / ScaleFactorCeilFloorLineDef
 	miSector.Tag = sectorId

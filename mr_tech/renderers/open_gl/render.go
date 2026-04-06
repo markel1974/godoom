@@ -97,7 +97,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		calibration := w.engine.GetCalibration()
 		w.tex = NewTextures()
 		w.builderScene = NewBuilderScene(w.tex)
-		w.builderTraverse = NewBuilderTraverse(w.tex)
+		w.builderTraverse = NewBuilderTraverse(w.tex, calibration)
 		w.builder = w.builderTraverse
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()

@@ -112,10 +112,10 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				root.Things = append(root.Things, thing)
 				cell = 0 // Libera la cella per il compilatore topologico
 			}
-
+			const falloff = 250.0
 			sid := wp.sectorIds[y][x]
 			lightIntensity := 0.5 //rnd.Float64()
-			cs := config.NewConfigSector(sid, lightIntensity, config.LightKindAmbient)
+			cs := config.NewConfigSector(sid, lightIntensity, config.LightKindAmbient, falloff)
 			cs.FloorY = 0
 			cs.CeilY = wp.sectorHeight
 			cs.Tag = "wolf_cell"

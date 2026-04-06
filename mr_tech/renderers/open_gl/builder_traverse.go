@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -57,12 +58,14 @@ type BuilderTraverse struct {
 	visibleVolumes    map[*model.Volume]bool
 	processedPolygons map[PolyKey]bool
 	cSky              *textures.Texture
+	calibration       *model.Calibration
 }
 
 // NewBuilderTraverse creates and initializes a new BuilderTraverse with preallocated memory for vertices, commands, and lights.
-func NewBuilderTraverse(tex *Textures) *BuilderTraverse {
+func NewBuilderTraverse(tex *Textures, calibration *model.Calibration) *BuilderTraverse {
 	return &BuilderTraverse{
 		tex:               tex,
+		calibration:       calibration,
 		fv:                NewFrameVertices(startBatchVertices),
 		dc:                NewDrawCommands(startFrameCommands),
 		fl:                NewFrameLights(256),
@@ -163,7 +166,9 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 		}
 	}
 
-	w.pushLights(w.fl, lights.Get(), w.visibleVolumes)
+	frustum := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+
+	w.pushLights(w.fl, lights, frustum)
 
 	w.pushThings(w.fv, w.dc, vi, things.Get(), w.visibleVolumes)
 
@@ -323,15 +328,11 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 }
 
 // pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
-func (w *BuilderTraverse) pushLights(fl *FrameLights, lights []*model.Light, volume map[*model.Volume]bool) {
-	if len(lights) == 0 {
-		return
-	}
-
-	for _, l := range lights {
-		//if _, ok := sectors[l.GetVolume()]; !ok {
-		//	continue
-		//}
-		fl.Create(l)
-	}
+func (w *BuilderTraverse) pushLights(fl *FrameLights, lights *model.Lights, frustum *physics.Frustum) {
+	lights.QueryFrustum(frustum, func(object physics.IAABB) bool {
+		if l, ok := object.(*model.Light); ok {
+			fl.Create(l)
+		}
+		return false
+	})
 }

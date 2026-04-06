@@ -53,7 +53,8 @@ var availableWall = []string{"wall2.ppm"}
 
 // createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
 func createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.ConfigSector {
-	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient)
+	const falloff = 250.0
+	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient, falloff)
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
@@ -168,9 +169,9 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			if !grid[x][y] {
 				continue
 			}
-
+			const falloff = 250.0
 			id := fmt.Sprintf("cell_%d_%d", x, y)
-			sector := config.NewConfigSector(id, randomF(0.2, 1.0), config.LightKindAmbient)
+			sector := config.NewConfigSector(id, randomF(0.2, 1.0), config.LightKindAmbient, falloff)
 
 			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline
 			distFromCenter := math.Abs(float64(x-gridWidth/2)) + math.Abs(float64(y-gridHeight/2))

@@ -30,14 +30,16 @@ type ConfigLightSector struct {
 	Id        string    `json:"id"`
 	Intensity float64   `json:"Intensity"`
 	Kind      LightKind `json:"kind"`
+	Falloff   float64   `json:"falloff"`
 }
 
 // NewConfigLightSector creates a new ConfigLightSector instance with a unique ID, specified intensity, and LightKind.
-func NewConfigLightSector(intensity float64, kind LightKind) *ConfigLightSector {
+func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *ConfigLightSector {
 	return &ConfigLightSector{
 		Id:        utils.NextUUId(),
 		Intensity: intensity,
 		Kind:      kind,
+		Falloff:   falloff,
 	}
 }
 
@@ -47,14 +49,16 @@ type ConfigLightPos struct {
 	Pos       geometry.XYZ `json:"pos"`
 	Intensity float64      `json:"Intensity"`
 	Kind      LightKind    `json:"kind"`
+	Falloff   float64      `json:"falloff"`
 }
 
 // NewConfigLightPos creates and returns a new ConfigLightPos with the specified position, intensity, and light kind.
-func NewConfigLightPos(pos geometry.XYZ, intensity float64, kind LightKind) *ConfigLightPos {
+func NewConfigLightPos(pos geometry.XYZ, intensity float64, kind LightKind, falloff float64) *ConfigLightPos {
 	return &ConfigLightPos{
 		Id:        utils.NextUUId(),
 		Pos:       pos,
 		Intensity: intensity,
 		Kind:      kind,
+		Falloff:   falloff,
 	}
 }

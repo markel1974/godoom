@@ -136,3 +136,30 @@ func (a *AABB) CalculateSurfaceArea() float64 {
 	s := 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
 	return s
 }
+
+// IntersectFrustum controlla se l'AABB si trova all'interno (o interseca) il Frustum fornito.
+// Restituisce true se l'AABB è visibile.
+func (a *AABB) IntersectFrustum(f *Frustum) bool {
+	// Controlliamo l'AABB contro ogni piano del Frustum
+	for i := 0; i < 6; i++ {
+		plane := f.Planes[i]
+		// Troviamo il "Positive Vertex" (il vertice dell'AABB più allineato con la normale del piano)
+		pX, pY, pZ := a.minX, a.minY, a.minZ
+		if plane.NormalX > 0 {
+			pX = a.maxX
+		}
+		if plane.NormalY > 0 {
+			pY = a.maxY
+		}
+		if plane.NormalZ > 0 {
+			pZ = a.maxZ
+		}
+		// Calcolo della distanza del P-Vertex dal piano (Dot Product)
+		// Se la distanza è minore di 0, tutto l'AABB si trova nel semispazio negativo (fuori dal frustum)
+		if (plane.NormalX*pX + plane.NormalY*pY + plane.NormalZ*pZ + plane.D) < 0 {
+			return false // Scartato!
+		}
+	}
+	// Se nessun piano lo ha scartato, l'AABB è visibile (almeno parzialmente)
+	return true
+}

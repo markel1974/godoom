@@ -64,6 +64,38 @@ func (a *AABBTree) InsertObject(object IAABB) {
 	a.objectNodeIndexMap[object] = nodeIndex
 }
 
+// QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
+func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
+	a.stack = a.stack[:0]
+	a.stack = append(a.stack, a.rootNodeIndex)
+
+	for len(a.stack) > 0 {
+		lastIdx := len(a.stack) - 1
+		nodeIndex := a.stack[lastIdx]
+		a.stack = a.stack[:lastIdx]
+
+		if nodeIndex == AABBNullNode {
+			continue
+		}
+
+		node := a.nodes[nodeIndex]
+
+		// Test di intersezione tra l'AABB del nodo e il Frustum
+		if node.aabb.IntersectFrustum(frustum) {
+			if node.IsLeaf() {
+				if callback(node.object) {
+					break
+				}
+			} else {
+				// Il nodo è visibile o intersecato: continuiamo a scendere nei rami
+				a.stack = append(a.stack, node.leftNodeIndex)
+				a.stack = append(a.stack, node.rightNodeIndex)
+			}
+		}
+		// Altrimenti, se il nodo è fuori dal Frustum, l'intero ramo viene scartato! (Frustum Culling)
+	}
+}
+
 // RemoveObject removes the specified object from the AABBTree if it exists.
 func (a *AABBTree) RemoveObject(object IAABB) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
@@ -282,7 +314,6 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 		a.deallocateNode(leafNodeIndex)
 		return
 	}
-
 	leafNode := a.nodes[leafNodeIndex]
 	parentNodeIndex := leafNode.parentNodeIndex
 	parentNode := a.nodes[parentNodeIndex]
@@ -294,7 +325,6 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 		siblingNodeIndex = parentNode.leftNodeIndex
 	}
 	siblingNode := a.nodes[siblingNodeIndex]
-
 	if grandParentNodeIndex != AABBNullNode {
 		// if we have a grand parent (i.e. the parent is not the root) then destroy the parent and connect the sibling to the grandparent in its
 		// place
@@ -314,7 +344,6 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 		siblingNode.parentNodeIndex = AABBNullNode
 		a.deallocateNode(parentNodeIndex)
 	}
-
 	leafNode.parentNodeIndex = AABBNullNode
 }
 

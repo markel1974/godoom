@@ -218,6 +218,17 @@ func (e *Entity) Distance(collider *Entity) float64 {
 	return CalcDistance(c1x, c1y, c1z, c2x, c2y, c2z)
 }
 
+func (e *Entity) DistanceSq(other *Entity) float64 {
+	dx := e.rect.point.x + (e.rect.size.w / 2.0) - (other.rect.point.x + (other.rect.size.w / 2.0))
+	dy := e.rect.point.y + (e.rect.size.h / 2.0) - (other.rect.point.y + (other.rect.size.h / 2.0))
+	return dx*dx + dy*dy
+}
+
+// GetZRange restituisce la quota minima (piedi) e massima (testa) dell'entità.
+func (e *Entity) GetZRange() (float64, float64) {
+	return e.rect.point.z, e.rect.point.z + e.rect.size.d
+}
+
 // SetupCollision establishes a collision relationship between the current entity and another entity, resolving overlaps and forces.
 func (e *Entity) SetupCollision(otherEnt *Entity) {
 	e.collider = otherEnt

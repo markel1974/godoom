@@ -28,79 +28,81 @@ func NewEntities(maxEntities uint) *Entities {
 
 // Compute processes the physics and collision solving for the entities, returning a list of actively moving entities.
 func (em *Entities) Compute() []IThing {
-	// Kinematic integration (Movement and friction)
 	em.counter = 0
 	for _, thing := range em.entities {
 		ent := thing.GetEntity()
 		if ent.Update() {
-			// FIX: L'albero mappa istanze IThing, non *physics.Entity
 			em.tree.UpdateObject(thing)
 			em.moving[em.counter] = thing
 			em.counter++
 		}
 	}
+
 	if em.counter == 0 {
 		return nil
 	}
-	// Iterative solver for multiple collisions and propagation
-	const solverIterations = 4
 
+	const solverIterations = 4
 	for i := 0; i < solverIterations; i++ {
 		isStable := true
 
 		for x := 0; x < em.counter; x++ {
 			thing := em.moving[x]
-
-			// Se l'entità è stata disattivata nel loop precedente (es. proiettile esploso), ignoriamola
 			if !thing.IsActive() {
 				continue
 			}
 
 			ent := thing.GetEntity()
+
 			em.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
 				otherThing, ok := object.(IThing)
 				if !ok || otherThing == thing {
 					return false
 				}
 
-				// Early exit per entità morte
 				if !otherThing.IsActive() || !thing.IsActive() {
 					return false
 				}
 
 				otherEnt := otherThing.GetEntity()
 
-				// Apply the tie-breaker ONLY if otherEnt is also in motion.
-				// If otherEnt is stationary (sleeping), it's up to the active body (ent) to resolve the collision for both.
-				otherIsActive := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0
+				// Tie-breaker 3D: considera anche la velocità Z
+				otherIsActive := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
 				if otherIsActive && thing.GetIdentifier() > otherThing.GetIdentifier() {
 					return false
 				}
 
-				distance := ent.Distance(otherEnt)
+				// --- COLLISION CHECK 3D ---
+				// 1. Check Orizzontale usando DistanceSq (evita math.Sqrt)
+				distSq := ent.DistanceSq(otherEnt)
 				sumRadii := (ent.GetWidth() / 2.0) + (otherEnt.GetWidth() / 2.0)
 
-				if distance < sumRadii {
-					// 1. Risolviamo prima gli Eventi di Gioco (Callbacks, Danni, Pickup)
-					thing.OnCollide(otherThing)
-					otherThing.OnCollide(thing)
+				if distSq < sumRadii*sumRadii {
+					// 2. Check Verticale (Z-Overlap) usando GetZRange
+					z1Min, z1Max := ent.GetZRange()
+					z2Min, z2Max := otherEnt.GetZRange()
 
-					// 2. Risoluzione della compenetrazione FISICA.
-					// Viene eseguita SOLO SE entrambe le entità sono sopravvissute all'impatto (es. due mostri solidi)
-					if thing.IsActive() && otherThing.IsActive() {
-						ent.SetupCollision(otherEnt)
+					// Se le proiezioni Z si sovrappongono
+					if z1Max > z2Min && z1Min < z2Max {
+						// COLLISIONE CONFERMATA
+						thing.OnCollide(otherThing)
+						otherThing.OnCollide(thing)
+
+						if thing.IsActive() && otherThing.IsActive() {
+							// SetupCollision risolverà la compenetrazione
+							ent.SetupCollision(otherEnt)
+						}
+
+						// Aggiornamento immediato dell'albero per la prossima query
+						em.tree.UpdateObject(thing)
+						em.tree.UpdateObject(otherThing)
+						isStable = false
 					}
-
-					// FIX: Passare l'istanza corretta IThing per l'aggiornamento dell'albero
-					em.tree.UpdateObject(thing)
-					em.tree.UpdateObject(otherThing)
-					isStable = false
 				}
 				return false
 			})
 		}
 
-		// Early Exit: if the scene no longer presents overlaps, the solver stops saving CPU
 		if isStable {
 			break
 		}

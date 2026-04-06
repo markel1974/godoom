@@ -70,7 +70,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	r.volumes.CreateTree()
 
-	vLights, err := r.compileVolumesLights(r.volumes)
+	vLights, err := r.compileVolumesLights(r.volumes, true)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,8 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 	return NewVolumes(container), totalPolygons
 }
 
-func (r *Compiler) compileLights(cLights []*config.ConfigLightPos) ([]*Light, error) {
+// compileLights processes a list of configuration light positions and returns a slice of initialized Light objects.
+func (r *Compiler) compileLights(cLights []*config.ConfigLight) ([]*Light, error) {
 	var out []*Light
 	for _, cl := range cLights {
 		if cl == nil {
@@ -240,10 +241,18 @@ func (r *Compiler) compileLights(cLights []*config.ConfigLightPos) ([]*Light, er
 }
 
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileVolumesLights(volumes *Volumes) ([]*Light, error) {
+func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([]*Light, error) {
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
 	var out []*Light
+
+	addLight := func(z *Volume, intensity float64, falloff float64, kind config.LightKind, pos geometry.XYZ) {
+		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetFloorY() + z.GetCeilY()}
+		light := NewLight()
+		light.Setup(z, intensity, falloff, kind, lightPos)
+		out = append(out, light)
+	}
+
 	for idx, sect := range volumes.GetVolumes() {
 		if visited[sect.GetId()] {
 			continue
@@ -272,54 +281,52 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes) ([]*Light, error) {
 
 		// Se l'area è composta da più poligoni, calcoliamo un baricentro globale
 		if len(areaSectors) > 1 {
-			var sumX, sumY, totalArea float64
-			var intensity, falloff float64
-			for _, s := range areaSectors {
-				// Calcola l'area del triangolo (prodotto vettoriale)
-				area := 0.0
-				for _, face := range s.GetFaces() {
-					start := face.GetStart()
-					end := face.GetEnd()
-					x0, y0 := start.X, start.Y
-					x1, y1 := end.X, end.Y
-					area += (x0 * y1) - (x1 * y0)
+			if !computeCenter {
+				for _, s := range areaSectors {
+					addLight(s, s.Light.intensity, s.Light.falloff, s.Light.kind, s.GetCentroid2d())
 				}
-				area = math.Abs(area * 0.5)
-				sumX += s.Light.pos.X * area
-				sumY += s.Light.pos.Y * area
-				totalArea += area
-				intensity += s.Light.intensity
-				falloff += s.Light.falloff
+			} else {
+				var sumX, sumY, totalArea float64
+				var intensity, falloff float64
+				for _, s := range areaSectors {
+					// Calcola l'area del triangolo (prodotto vettoriale)
+					area := 0.0
+					for _, face := range s.GetFaces() {
+						start := face.GetStart()
+						end := face.GetEnd()
+						x0, y0 := start.X, start.Y
+						x1, y1 := end.X, end.Y
+						area += (x0 * y1) - (x1 * y0)
+					}
+					area = math.Abs(area * 0.5)
+					sumX += s.Light.pos.X * area
+					sumY += s.Light.pos.Y * area
+					totalArea += area
+					intensity += s.Light.intensity
+					falloff += s.Light.falloff
+				}
+				if totalArea == 0 {
+					fmt.Println("total area is zero")
+					continue
+				}
+				intensity /= float64(len(areaSectors))
+				falloff /= float64(len(areaSectors))
+				gc := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
+				// Legacy assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
+				for _, s := range areaSectors {
+					s.Light.pos.X = gc.X
+					s.Light.pos.Y = gc.Y
+				}
+				first := areaSectors[0]
+				cVolume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+				if cVolume == nil {
+					cVolume = first
+					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)
+				}
 			}
-			if totalArea == 0 {
-				fmt.Println("total area is zero")
-				continue
-			}
-			intensity /= float64(len(areaSectors))
-			falloff /= float64(len(areaSectors))
-			gc := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
-			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
-			//for _, s := range areaSectors {
-			//	s.Light.pos.X = gc.X
-			//	s.Light.pos.Y = gc.Y
-			//}
-			first := areaSectors[0]
-			cVolume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
-			if cVolume == nil {
-				cVolume = first
-				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)
-			}
-			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: cVolume.GetFloorY() + cVolume.GetCeilY()}
-			light := NewLight()
-			light.Setup(cVolume, intensity, falloff, cVolume.Light.kind, lightPos)
-			out = append(out, light)
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
-			gc := first.GetCentroid2d()
-			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: first.GetFloorY() + first.GetCeilY()}
-			light := NewLight()
-			light.Setup(first, first.Light.intensity, first.Light.falloff, first.Light.kind, lightPos)
-			out = append(out, light)
+			addLight(first, first.Light.intensity, first.Light.falloff, first.Light.kind, first.GetCentroid2d())
 		}
 	}
 	return out, nil

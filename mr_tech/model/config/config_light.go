@@ -44,7 +44,7 @@ func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *C
 }
 
 // ConfigLightPos represents the configuration for a light source's position, intensity, and kind.
-type ConfigLightPos struct {
+type ConfigLight struct {
 	Id        string       `json:"id"`
 	Pos       geometry.XYZ `json:"pos"`
 	Intensity float64      `json:"Intensity"`
@@ -53,8 +53,8 @@ type ConfigLightPos struct {
 }
 
 // NewConfigLightPos creates and returns a new ConfigLightPos with the specified position, intensity, and light kind.
-func NewConfigLightPos(pos geometry.XYZ, intensity float64, kind LightKind, falloff float64) *ConfigLightPos {
-	return &ConfigLightPos{
+func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff float64) *ConfigLight {
+	return &ConfigLight{
 		Id:        utils.NextUUId(),
 		Pos:       pos,
 		Intensity: intensity,

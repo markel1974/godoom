@@ -76,7 +76,6 @@ func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *text
 		points[i] = geometry.XYZ{X: 0, Y: 0, Z: 0}
 	}
 	out.pSize = len(out.points) - 1
-	out.ComputeNormal()
 	out.Rebuild()
 	return out
 }
@@ -174,12 +173,47 @@ func (s *Face) Scale2d(scale float64) {
 	}
 }
 
-// ComputeNormal calculates and sets the unit normal vector for the segment based on its first three points.
-func (s *Face) ComputeNormal() {
-	if len(s.points) < 3 {
-		s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
+// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
+func (s *Face) Rebuild() {
+	s.computeAABB()
+	s.computeNormal()
+}
+
+// GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
+func (s *Face) GetAABB() *physics.AABB {
+	return s.aabb
+}
+
+// MakeStraightEdgeKey generates an EdgeKey for the segment using its start and end points, based on a fixed precision.
+func (s *Face) MakeStraightEdgeKey() EdgeKey {
+	return makeEdgeKey(edgePrecision, s.GetStart(), s.GetEnd())
+}
+
+// MakeReverseEdgeKey generates an EdgeKey by reversing the start and end points of the segment with a fixed precision.
+func (s *Face) MakeReverseEdgeKey() EdgeKey {
+	return makeEdgeKey(edgePrecision, s.GetEnd(), s.GetStart())
+}
+
+// computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
+func (s *Face) computeNormal() {
+	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
+	if s.pSize < 1 {
 		return
 	}
+	if s.pSize == 1 {
+		// Vettore normale per un piano verticale (2.5D)
+		p0, p1 := s.points[0], s.points[1]
+		dx := p1.X - p0.X
+		dy := p1.Y - p0.Y
+		lenSq := dx*dx + dy*dy
+		if lenSq > 0 {
+			invLen := 1.0 / math.Sqrt(lenSq)
+			// Proiezione del vettore normale 2D nello spazio 3D
+			s.normal = geometry.XYZ{X: -dy * invLen, Y: dx * invLen, Z: 0}
+		}
+		return
+	}
+	// Prodotto vettoriale standard per poligoni 3D
 	p0, p1, p2 := s.points[0], s.points[1], s.points[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
@@ -192,8 +226,8 @@ func (s *Face) ComputeNormal() {
 	}
 }
 
-// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
-func (s *Face) Rebuild() {
+// computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
+func (s *Face) computeAABB() {
 	const eps = 0.001
 	minX, minY, minZ := s.points[0].X, s.points[0].Y, s.points[0].Z
 	maxX, maxY, maxZ := minX, minY, minZ
@@ -227,19 +261,4 @@ func (s *Face) Rebuild() {
 		}
 	}
 	s.aabb = physics.NewAABB(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
-}
-
-// GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
-func (s *Face) GetAABB() *physics.AABB {
-	return s.aabb
-}
-
-// MakeStraightEdgeKey generates an EdgeKey for the segment using its start and end points, based on a fixed precision.
-func (s *Face) MakeStraightEdgeKey() EdgeKey {
-	return makeEdgeKey(edgePrecision, s.GetStart(), s.GetEnd())
-}
-
-// MakeReverseEdgeKey generates an EdgeKey by reversing the start and end points of the segment with a fixed precision.
-func (s *Face) MakeReverseEdgeKey() EdgeKey {
-	return makeEdgeKey(edgePrecision, s.GetEnd(), s.GetStart())
 }

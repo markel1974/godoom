@@ -147,6 +147,19 @@ func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
 	return target
 }
 
+// QueryAABB performs a spatial query, invoking the callback for each Volume that overlaps with the specified AABB.
+func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
+	if s.tree == nil {
+		return
+	}
+	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
+		if vol, ok := object.(*Volume); ok {
+			callback(vol)
+		}
+		return false
+	})
+}
+
 // SearchVolume3d searches for the Volume containing the point (px, py, pz) starting from the given currentVolume.
 // Returns the located Volume if found, otherwise nil.
 func (s *Volumes) SearchVolume3d(currentVolume *Volume, px, py, pz float64) *Volume {

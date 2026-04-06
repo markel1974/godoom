@@ -94,21 +94,27 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.mapBuilt = true
 	}
 
-	// 1. Estrazione Frustum Dinamico
-	frustum := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
-
-	// 2. Frustum Culling sulla Geometria Statica (AABB Tree)
-	engine.QueryFrustum(frustum, func(object physics.IAABB) bool {
+	// Set per evitare duplicazione dei draw call per frame
+	processed := make(map[*model.Volume]bool)
+	queryGeom := func(object physics.IAABB) bool {
 		if vol, ok := object.(*model.Volume); ok {
-			if vr, exists := w.volRanges[vol]; exists {
-				w.dc.Compute(vr.start, vr.end)
+			if !processed[vol] {
+				processed[vol] = true
+				if vr, exists := w.volRanges[vol]; exists {
+					w.dc.Compute(vr.start, vr.end)
+				}
 			}
 		}
 		return false
-	})
+	}
+	frustumFront := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+	frustumRear := vi.GetRearFrustum(fbw, fbh, w.calibration.ZFarRoom)
+	// Doppio Culling sulla Geometria Statica
+	engine.QueryFrustum(frustumFront, queryGeom)
+	engine.QueryFrustum(frustumRear, queryGeom)
 
 	// 3. Frustum Culling sulle Luci
-	w.pushLights(w.fl, engine.GetLights(), frustum)
+	w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
 
 	// 4. Entità Dinamiche
 	w.pushThings(w.fv, w.dc, vi, engine.GetThings().Get())
@@ -237,11 +243,17 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 }
 
 // pushLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushLights(fl *FrameLights, lights *model.Lights, frustum *physics.Frustum) {
-	lights.QueryFrustum(frustum, func(object physics.IAABB) bool {
+func (w *BuilderVolume) pushLights(fl *FrameLights, lights *model.Lights, frustumFront, frustumRear *physics.Frustum) {
+	processedLights := make(map[*model.Light]bool)
+	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
-			fl.Create(l)
+			if !processedLights[l] {
+				processedLights[l] = true
+				fl.Create(l)
+			}
 		}
 		return false
-	})
+	}
+	lights.QueryFrustum(frustumFront, queryLights)
+	lights.QueryFrustum(frustumRear, queryLights)
 }

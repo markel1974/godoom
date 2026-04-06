@@ -8,6 +8,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+const defaultFalloff = 10.0
+
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
 	volume    *Volume
@@ -23,7 +25,7 @@ func NewLight() *Light {
 	l := &Light{
 		volume:    nil,
 		intensity: 0.0,
-		falloff:   250.0, // Default di sicurezza
+		falloff:   defaultFalloff,
 		kind:      config.LightKindNone,
 	}
 	return l
@@ -44,7 +46,7 @@ func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind 
 
 	cl.falloff = falloff
 	if cl.falloff <= 0 {
-		cl.falloff = 250.0 // Prevenzione per luci configurate senza falloff esplicito
+		cl.falloff = defaultFalloff
 	}
 
 	cl.kind = kind
@@ -56,8 +58,8 @@ func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind 
 func (cl *Light) Rebuild() {
 	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
 	// esattamente il raggio di influenza massimo della luce nel mondo.
-	radius := cl.falloff
-
+	const influence = 25.0
+	radius := cl.falloff * influence
 	cl.aabb = physics.NewAABB(
 		cl.pos.X-radius, cl.pos.Y-radius, cl.pos.Z-radius,
 		cl.pos.X+radius, cl.pos.Y+radius, cl.pos.Z+radius,

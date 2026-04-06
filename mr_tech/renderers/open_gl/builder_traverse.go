@@ -166,9 +166,10 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 		}
 	}
 
-	frustum := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+	frustumFront := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+	frustumRear := vi.GetRearFrustum(fbw, fbh, w.calibration.ZFarRoom)
 
-	w.pushLights(w.fl, lights, frustum)
+	w.pushLights(w.fl, lights, frustumFront, frustumRear)
 
 	w.pushThings(w.fv, w.dc, vi, things.Get(), w.visibleVolumes)
 
@@ -328,11 +329,18 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 }
 
 // pushLights adds the specified lights to the frame based on their type, position, and characteristics, filtering by sector.
-func (w *BuilderTraverse) pushLights(fl *FrameLights, lights *model.Lights, frustum *physics.Frustum) {
-	lights.QueryFrustum(frustum, func(object physics.IAABB) bool {
+// pushLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+func (w *BuilderTraverse) pushLights(fl *FrameLights, lights *model.Lights, frustumFront, frustumRear *physics.Frustum) {
+	processedLights := make(map[*model.Light]bool)
+	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
-			fl.Create(l)
+			if !processedLights[l] {
+				processedLights[l] = true
+				fl.Create(l)
+			}
 		}
 		return false
-	})
+	}
+	lights.QueryFrustum(frustumFront, queryLights)
+	lights.QueryFrustum(frustumRear, queryLights)
 }

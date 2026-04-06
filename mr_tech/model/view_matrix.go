@@ -152,7 +152,47 @@ func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frus
 		tx, ty, tz, 1,
 	}
 
-	// Moltiplicazione: VP = Proj * View
+	vp := matrixMultiply(proj, view)
+	// Crea il Frustum fisico estraendo i piani dalla matrice combinata
+	return physics.NewFrustum(vp)
+}
+
+// GetRearFrustum calcola il frustum posteriore invertendo i vettori direzionali.
+func (vi *ViewMatrix) GetRearFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
+	aspect := float32(fbw) / float32(fbh)
+	scaleX := (2.0 / aspect) * float32(HFov)
+	scaleY := 2.0 * float32(VFov)
+	// Inversione del pitch (se guardi in alto, dietro guardi in basso)
+	pitchShear := float32(vi.yaw)
+	zNear := float32(0.1)
+	zFar := zFarRoom
+	if zFar <= zNear {
+		zFar = 10000.0
+	}
+	proj := [16]float32{
+		-scaleX, 0, 0, 0,
+		0, scaleY, 0, 0,
+		0, pitchShear, (zFar + zNear) / (zNear - zFar), -1,
+		0, 0, (2 * zFar * zNear) / (zNear - zFar), 0,
+	}
+	// Inversione vettori Forward e Right
+	fX, fZ := float32(-vi.angleCos), float32(vi.angleSin)
+	rX, rZ := float32(-vi.angleSin), float32(-vi.angleCos)
+	ex, ey, ez := float32(vi.where.X), float32(vi.where.Z), float32(-vi.where.Y)
+	tx := -(rX*ex + rZ*ez)
+	ty := -ey
+	tz := fX*ex + fZ*ez
+	view := [16]float32{
+		rX, 0, -fX, 0,
+		0, 1, 0, 0,
+		rZ, 0, -fZ, 0,
+		tx, ty, tz, 1,
+	}
+	vp := matrixMultiply(proj, view)
+	return physics.NewFrustum(vp)
+}
+
+func matrixMultiply(proj, view [16]float32) [16]float32 {
 	var vp [16]float32
 	for col := 0; col < 4; col++ {
 		for row := 0; row < 4; row++ {
@@ -163,7 +203,5 @@ func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frus
 			vp[col*4+row] = sum
 		}
 	}
-
-	// Crea il Frustum fisico estraendo i piani dalla matrice combinata
-	return physics.NewFrustum(vp)
+	return vp
 }

@@ -119,6 +119,12 @@ func (v *Volume) GetAABB() *physics.AABB {
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
 func (v *Volume) Rebuild() {
+	if v.hasZ {
+		for _, face := range v.faces {
+			face.SetZ(v.minZ, v.maxZ)
+		}
+	}
+
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	if len(v.faces) == 0 {
@@ -224,6 +230,11 @@ func (v *Volume) LocatePoint2d(px, py float64) *Volume {
 
 // ContainsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
 func (v *Volume) ContainsPoint3d(px, py, pz float64) bool {
+	// Validazione dei limiti Z per volumi estrusi (2.5D)
+	if v.hasZ && (pz < v.minZ || pz > v.maxZ) {
+		return false
+	}
+
 	for _, face := range v.faces {
 		pts := face.GetPoints()
 		if len(pts) == 0 {

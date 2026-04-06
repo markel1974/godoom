@@ -41,10 +41,10 @@ type Entity struct {
 }
 
 // NewEntity creates and returns a new Entity instance with the specified position, dimensions, and mass.
-func NewEntity(x float64, y float64, w float64, h float64, mass float64) *Entity {
+func NewEntity(x float64, y float64, z float64, w float64, h float64, mass float64) *Entity {
 	a := &Entity{
 		id:       utils.NextUUId(),
-		rect:     NewRect(x, y, w, h, 1.0),
+		rect:     NewRect(x, y, w, h, z),
 		mass:     mass,
 		vx:       0.0,
 		vy:       0.0,

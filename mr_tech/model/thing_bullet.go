@@ -22,7 +22,7 @@ type ThingBullet struct {
 func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
 		ThingBase:   NewThingBase(cfg, anim, volume, sectors, entities),
-		wall:        physics.NewEntity(0, 0, 0, 0, 0),
+		wall:        physics.NewEntity(0, 0, 1.0, 0, 0, 0),
 		floorStartY: volume.GetFloorY(),
 	}
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante

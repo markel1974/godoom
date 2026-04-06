@@ -77,7 +77,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, sectors *Volumes, entities *Entiti
 		entities:       entities,
 		debug:          debug,
 		identifier:     -1,
-		entity:         physics.NewEntity(x, y, w, h, cfg.Mass),
+		entity:         physics.NewEntity(x, y, 1.0, w, h, cfg.Mass),
 	}
 	p.SetAngle(cfg.Angle)
 	p.entities.AddThing(p)

@@ -51,7 +51,7 @@ func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Vol
 		animation:  anim,
 		sectors:    sectors,
 		entities:   entities,
-		entity:     physics.NewEntity(x, y, w, h, cfg.Mass),
+		entity:     physics.NewEntity(x, y, 1.0, w, h, cfg.Mass),
 		isActive:   true,
 		identifier: -1,
 	}

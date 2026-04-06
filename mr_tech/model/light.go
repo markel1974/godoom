@@ -58,7 +58,7 @@ func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind 
 func (cl *Light) Rebuild() {
 	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
 	// esattamente il raggio di influenza massimo della luce nel mondo.
-	const influence = 25.0
+	const influence = 10
 	radius := cl.falloff * influence
 	cl.aabb = physics.NewAABB(
 		cl.pos.X-radius, cl.pos.Y-radius, cl.pos.Z-radius,

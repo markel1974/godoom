@@ -16,7 +16,7 @@ type Compiler struct {
 	volumes3d *Volumes
 	things    *Things
 	player    *ThingPlayer
-	lights    []*Light
+	lights    *Lights
 	entities  *Entities
 }
 
@@ -70,7 +70,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 
 	r.volumes.CreateTree()
 
-	r.lights, err = r.compileVolumesLights(r.volumes)
+	vLights, err := r.compileVolumesLights(r.volumes)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,9 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	if err != nil {
 		return err
 	}
-	r.lights = append(r.lights, lights...)
+	r.lights = NewLights()
+	r.lights.AddLights(vLights)
+	r.lights.AddLights(lights)
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
@@ -116,7 +118,7 @@ func (r *Compiler) GetPlayer() *ThingPlayer {
 }
 
 // GetLights retrieves the list of Light objects managed by the Compiler.
-func (r *Compiler) GetLights() []*Light {
+func (r *Compiler) GetLights() *Lights {
 	return r.lights
 }
 

@@ -66,7 +66,6 @@ func (w *BuilderScene) GetSkyTexture() *textures.Texture {
 }
 
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
-// Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.
 func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	// 1. Reset al Checkpoint Statico (azzeramento totale solo se mapBuilt è false)
 	w.fv.Reset()
@@ -109,7 +108,7 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 			}
 		}
 
-		w.pushLights(w.fl, engine.GetLights())
+		w.pushLights(w.fl, engine.GetLights().Get())
 
 		// Salvataggio dello stato statico!
 		w.fv.Freeze()
@@ -119,7 +118,7 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 	}
 
 	// 3. Geometria Dinamica (Ogni Frame)
-	w.pushThings(w.fv, w.dc, vi, engine.GetThings())
+	w.pushThings(w.fv, w.dc, vi, engine.GetThings().Get())
 
 	// 4. Sort Globale e Batching
 	w.dcRender.Prepare(w.dc.GetDrawCommands())

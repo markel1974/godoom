@@ -56,22 +56,16 @@ type RenderOpenGL struct {
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
 func NewRender(w, h int32) *RenderOpenGL {
-	tex := NewTextures()
-
 	r := &RenderOpenGL{
-		engine:          nil,
-		vi:              model.NewViewMatrix(),
-		player:          nil,
-		win:             nil,
-		enableClear:     false,
-		shaders:         nil,
-		builderScene:    NewBuilderScene(tex),
-		builderTraverse: NewBuilderTraverse(tex),
-		tex:             tex,
-		startWidth:      w,
-		startHeight:     h,
+		engine:      nil,
+		vi:          model.NewViewMatrix(),
+		player:      nil,
+		win:         nil,
+		enableClear: false,
+		shaders:     nil,
+		startWidth:  w,
+		startHeight: h,
 	}
-	r.builder = r.builderTraverse
 	return r
 }
 
@@ -79,7 +73,6 @@ func NewRender(w, h int32) *RenderOpenGL {
 func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 	w.engine = en
 	w.player = en.GetPlayer()
-	w.shaders = NewShaders()
 	return nil
 }
 
@@ -101,9 +94,14 @@ func (w *RenderOpenGL) doInitialize() error {
 	}
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
+		calibration := w.engine.GetCalibration()
+		w.tex = NewTextures()
+		w.builderScene = NewBuilderScene(w.tex)
+		w.builderTraverse = NewBuilderTraverse(w.tex)
+		w.builder = w.builderTraverse
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
-		calibration := w.engine.GetCalibration()
+		w.shaders = NewShaders()
 		if err := w.shaders.Setup(vStride, lStride, calibration, w.tex); err != nil {
 			return err
 		}

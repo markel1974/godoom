@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -16,7 +17,7 @@ type Engine struct {
 	entities   *model.Entities
 	player     *model.ThingPlayer
 	volumes    *model.Volumes
-	lights     []*model.Light
+	lights     *model.Lights
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -44,18 +45,23 @@ func (e *Engine) GetTextures() textures.ITextures {
 }
 
 // GetThings retrieves a slice of IThing instances managed by the Engine's Things component.
-func (e *Engine) GetThings() []model.IThing {
-	return e.things.GetThings()
+func (e *Engine) GetThings() *model.Things {
+	return e.things
 }
 
 // GetLights retrieves the list of light sources currently managed by the engine.
-func (e *Engine) GetLights() []*model.Light {
+func (e *Engine) GetLights() *model.Lights {
 	return e.lights
 }
 
 // VolumeAt returns the volume at the specified index from the portal within the engine.
 func (e *Engine) VolumeAt(idx int) *model.Volume {
 	return e.portal.VolumeAt(idx)
+}
+
+// QueryFrustum checks which objects intersect the provided frustum and invokes the callback for each intersecting object.
+func (e *Engine) QueryFrustum(frustum *physics.Frustum, callback func(object physics.IAABB) bool) {
+	e.volumes.QueryFrustum(frustum, callback)
 }
 
 // Len returns the number of volumes currently managed by the Engine.

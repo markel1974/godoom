@@ -42,8 +42,8 @@ func (r *Things) GetTextures() textures.ITextures {
 	return r.animations.GetTextures()
 }
 
-// GetThings retrieves the list of all IThing instances managed by the Things object.
-func (r *Things) GetThings() []IThing {
+// Get retrieves the list of all IThing instances managed by the Things object.
+func (r *Things) Get() []IThing {
 	return r.things
 }
 

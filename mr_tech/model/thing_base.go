@@ -184,11 +184,12 @@ func (t *ThingBase) SetActive(active bool) {
 }
 
 func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, float64, float64) {
+	// 1. Parametri fisici correnti
 	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
 	radius := t.entity.GetWidth() / 2
 
-	// IL FIX: bottom deve essere la base dei piedi.
-	// WallSlidingEffect deve testare la collisione dai piedi in su.
+	// Correzione: Il bottom deve essere la quota piedi reale per il wall-sliding.
+	// Usiamo il maxStep solo per "filtrare" cosa ignorare durante lo scivolamento orizzontale.
 	bottom := viewZ
 	top := viewZ + t.height
 
@@ -196,39 +197,52 @@ func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, f
 	pY := viewY + velY
 	pZ := viewZ + velZ
 
-	// 1. Wall Sliding
-	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
+	// 2. Wall Sliding (Collisione orizzontale)
+	// Se velX/velY portano contro uno scalino < maxStep, il sistema di sliding
+	// deve permettere l'avanzamento invece di azzerare il vettore.
+	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom+maxStep, radius)
 
-	// 2. Pre-fetch del settore con tolleranza per lo scalino
+	// 3. Pre-fetch del settore Target (Sonda avanzata)
 	targetVol := t.volume
-	// Usiamo viewZ + maxStep come "sonda" per vedere se il settore adiacente è valicabile
-	if nv := t.volumes.SearchVolume3d(t.volume, viewX+velX, viewY+velY, viewZ, viewZ+t.height, maxStep); nv != nil {
+
+	// Creiamo una sonda che guardi leggermente avanti rispetto alla posizione attuale
+	// per intercettare il settore dello scalino prima di sbatterci.
+	probeX := viewX + velX
+	probeY := viewY + velY
+	if math.Abs(velX) < 0.05 && math.Abs(velY) < 0.05 {
+		// Se quasi fermo, proietta una sonda minima nella direzione di sguardo
+		probeX += math.Cos(t.angle) * 0.1
+		probeY += math.Sin(t.angle) * 0.1
+	}
+
+	// Cerchiamo se la sonda finisce in un nuovo volume compatibile con il nostro maxStep
+	if nv := t.volumes.SearchVolume3d(t.volume, probeX, probeY, viewZ, viewZ+t.height, maxStep); nv != nil {
 		targetVol = nv
 	}
 
 	minZ := targetVol.GetMinZ()
 	maxZ := targetVol.GetMaxZ()
 	if maxZ <= minZ {
-		maxZ = math.MaxFloat64
+		maxZ = math.MaxFloat64 // Cielo aperto
 	}
 
 	nextZ := viewZ + velZ
 
-	// 3. Risoluzione Z
+	// 4. Risoluzione Vincoli Verticali (Salita, Discesa e Gravità)
 	if nextZ < minZ {
-		// STEP UP: Se il nuovo pavimento è più alto della nostra Z attuale
-		// ma entro il maxStep (gestito da SearchVolume3d), ci tiriamo su.
+		// STEP UP: Il nuovo pavimento è più alto (scalino in salita).
+		// Ci "tiriamo su" istantaneamente sulla quota del nuovo settore.
 		velZ = minZ - viewZ
 		t.entity.SetVz(0)
 	} else if nextZ+t.height > maxZ {
-		// COLLISIONE SOFFITTO
+		// COLLISIONE SOFFITTO: Abbassiamo la testa sotto il soffitto.
 		velZ = (maxZ - t.height) - viewZ
 		t.entity.SetVz(0)
 	} else if nextZ > minZ {
-		// GRAVITÀ: Se siamo sopra il suolo, dobbiamo scendere.
-		// Applichiamo una forza di caduta se non c'è già una velocità Z (es. salto)
-		if math.Abs(velZ) < 0.001 {
-			velZ = -0.1
+		// STEP DOWN / GRAVITÀ: Se siamo sopra il suolo, applichiamo forza di caduta.
+		// Se l'entità non ha una velocità di salto/caduta attiva, iniettiamo la gravità passiva.
+		if math.Abs(velZ) < 0.01 {
+			velZ = -0.15 // Valore leggermente superiore a minMovement per garantire il movimento
 		}
 	}
 

@@ -11,17 +11,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// EyeHeight defines the default height of the eyes relative to the ground in units.
-// DuckHeight specifies the height of a crouching or ducking position in units.
-// HeadMargin represents the extra margin space near the head in units.
-// KneeHeight denotes the height of the knees from the ground in units.
-const (
-// EyeHeight  = 6.0
-// DuckHeight = 2.5
-// HeadMargin = 2.0
-// KneeHeight = 2.0
-)
-
 // ThingPlayer represents a dynamic entity within a 3D environment capable of movement and interaction.
 type ThingPlayer struct {
 	id             string
@@ -48,9 +37,9 @@ type ThingPlayer struct {
 	slider         *Slider
 	debug          bool
 	height         float64
-	eyeHeight      float64 // Quota di riferimento per la vista/sonda
-	maxStep        float64 // Capacità di scavalco (es: 25% dell'altezza)
-	headMargin     float64 // Spazio sopra la "testa" per il clipping
+	eyeHeight      float64
+	maxStep        float64
+	headMargin     float64
 	kneeHeight     float64
 	duckHeight     float64
 }
@@ -66,14 +55,10 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 	h := diameter
 	x := cfg.Position.X - cfg.Radius
 	y := cfg.Position.Y - cfg.Radius
-
-	// Calcolo esatto dell'altezza fisica del giocatore (Pavimento -> Sommità della testa)
-	//d := EyeHeight + HeadMargin
 	height := 8.0
 	if cfg.Height > 0 {
 		height = cfg.Height
 	}
-
 	p := &ThingPlayer{
 		id:             "PLAYER",
 		kind:           0,
@@ -93,7 +78,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 		slider:         NewSlider(volumes),
 		height:         height,
 		eyeHeight:      height * 0.80,
-		maxStep:        height * 0.25,
+		maxStep:        height * 0.50,
 		headMargin:     height * 0.25,
 		kneeHeight:     height * 0.25,
 		duckHeight:     height * 0.25,
@@ -371,25 +356,25 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
 // Update updates the player's position and velocity based on movement and physics calculations.
 func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	p.verticalMovementApply()
-	// Esecuzione obbligatoria se il giocatore sta cadendo (velocity.Z != 0),
-	// altrimenti la gravità si congela quando rilasci WASD in aria.
-	if !p.IsMoving() {
+
+	// Se siamo fermi orizzontalmente ma stiamo cadendo, IsMoving deve essere true
+	if !p.IsMoving() && !p.falling {
 		return
 	}
-	// Utilizzo RIGOROSO delle coordinate logiche di classe, ignorando la ViewMatrix
+
 	viewX, viewY, viewZ := p.GetPosition()
 	velX, velY, velZ := p.GetVelocity()
+
+	// adjustPassage ora gestisce la risoluzione 3D completa
 	velX, velY, velZ = p.adjustPassage(viewX, viewY, viewZ, velX, velY, velZ)
-	if math.Abs(p.velocity.X) < 0.001 {
-		p.velocity.X = 0
-	}
-	if math.Abs(p.velocity.Y) < 0.001 {
-		p.velocity.Y = 0
-	}
-	if math.Abs(p.velocity.Z) < 0.001 {
+
+	// Applichiamo i delta finali filtrati
+	p.MoveApply(velX, velY, velZ)
+
+	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)
+	if !p.falling {
 		p.velocity.Z = 0
 	}
-	p.MoveApply(velX, velY, velZ)
 }
 
 // IsActive determines whether the ThingPlayer instance is currently active. Returns true if active, otherwise false.
@@ -462,22 +447,22 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 
 // verticalMovementApply handles the vertical movement logic for a player, applying gravity and collision constraints.
 func (p *ThingPlayer) verticalMovementApply() {
-	if p.falling {
-		eyeHeight := p.getEyeHeight()
-		p.velocity.Z -= 0.05
-		nextZ := p.where.Z + p.velocity.Z
-		if p.velocity.Z < 0 && nextZ < p.volume.GetMinZ()+eyeHeight {
-			// down
-			p.where.Z = p.volume.GetMinZ() + eyeHeight
-			p.velocity.Z = 0
-			p.falling = false
-		} else if p.velocity.Z > 0 && nextZ > p.volume.GetMaxZ() {
-			// up
-			p.velocity.Z = 0
-			p.falling = true
-		}
-		if p.falling {
-			p.where.Z += p.velocity.Z
-		}
+	eyeHeight := p.getEyeHeight()
+	floorZ := p.volume.GetMinZ() + eyeHeight
+	ceilZ := p.volume.GetMaxZ() - p.headMargin
+
+	// Applichiamo la gravità se non siamo appoggiati al suolo
+	if p.where.Z > floorZ || p.velocity.Z > 0 {
+		p.falling = true
+		p.velocity.Z -= 0.02 // Gravità ridotta per fluidità
+	}
+
+	// Clipping preventivo della velocità
+	nextZ := p.where.Z + p.velocity.Z
+	if nextZ < floorZ {
+		p.velocity.Z = floorZ - p.where.Z
+		p.falling = false
+	} else if nextZ > ceilZ {
+		p.velocity.Z = 0
 	}
 }

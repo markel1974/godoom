@@ -20,18 +20,22 @@ type AABB struct {
 	surfaceArea float64
 }
 
-// NewAABB creates a new axis-aligned bounding box (AABB) with the specified min and max coordinates.
+// NewAABB creates and initializes a new AABB instance with the provided minimum and maximum coordinates.
 func NewAABB(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) *AABB {
-	a := &AABB{
-		minX: minX,
-		minY: minY,
-		minZ: minZ,
-		maxX: maxX,
-		maxY: maxY,
-		maxZ: maxZ,
-	}
-	a.surfaceArea = a.CalculateSurfaceArea()
+	a := &AABB{}
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 	return a
+}
+
+// Rebuild updates the AABB's bounds and surface area using the provided minimum and maximum coordinates.
+func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
+	a.minX = minX
+	a.minY = minY
+	a.minZ = minZ
+	a.maxX = maxX
+	a.maxY = maxY
+	a.maxZ = maxZ
+	a.surfaceArea = a.CalculateSurfaceArea()
 }
 
 // Expand increases the size of the AABB by the given margin in all directions and returns a new expanded AABB.

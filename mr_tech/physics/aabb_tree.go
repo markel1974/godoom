@@ -64,38 +64,6 @@ func (a *AABBTree) InsertObject(object IAABB) {
 	a.objectNodeIndexMap[object] = nodeIndex
 }
 
-// QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
-func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
-
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
-
-		if nodeIndex == AABBNullNode {
-			continue
-		}
-
-		node := a.nodes[nodeIndex]
-
-		// Test di intersezione tra l'AABB del nodo e il Frustum
-		if node.aabb.IntersectFrustum(frustum) {
-			if node.IsLeaf() {
-				if callback(node.object) {
-					break
-				}
-			} else {
-				// Il nodo è visibile o intersecato: continuiamo a scendere nei rami
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
-			}
-		}
-		// Altrimenti, se il nodo è fuori dal Frustum, l'intero ramo viene scartato! (Frustum Culling)
-	}
-}
-
 // RemoveObject removes the specified object from the AABBTree if it exists.
 func (a *AABBTree) RemoveObject(object IAABB) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
@@ -160,6 +128,68 @@ func (a *AABBTree) QueryPoint(px, py float64, callback func(object IAABB) bool) 
 		node := a.nodes[nodeIndex]
 
 		if node.aabb.QueryPoint(px, py) {
+			if node.IsLeaf() {
+				if callback(node.object) {
+					break
+				}
+			} else {
+				a.stack = append(a.stack, node.leftNodeIndex)
+				a.stack = append(a.stack, node.rightNodeIndex)
+			}
+		}
+	}
+}
+
+// QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
+func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
+	a.stack = a.stack[:0]
+	a.stack = append(a.stack, a.rootNodeIndex)
+
+	for len(a.stack) > 0 {
+		lastIdx := len(a.stack) - 1
+		nodeIndex := a.stack[lastIdx]
+		a.stack = a.stack[:lastIdx]
+
+		if nodeIndex == AABBNullNode {
+			continue
+		}
+
+		node := a.nodes[nodeIndex]
+
+		// Test di intersezione tra l'AABB del nodo e il Frustum
+		if node.aabb.IntersectFrustum(frustum) {
+			if node.IsLeaf() {
+				if callback(node.object) {
+					break
+				}
+			} else {
+				// Il nodo è visibile o intersecato: continuiamo a scendere nei rami
+				a.stack = append(a.stack, node.leftNodeIndex)
+				a.stack = append(a.stack, node.rightNodeIndex)
+			}
+		}
+		// Altrimenti, se il nodo è fuori dal Frustum, l'intero ramo viene scartato! (Frustum Culling)
+	}
+}
+
+// QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
+func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bool) {
+	a.stack = a.stack[:0]
+	a.stack = append(a.stack, a.rootNodeIndex)
+
+	for len(a.stack) > 0 {
+		lastIdx := len(a.stack) - 1
+		nodeIndex := a.stack[lastIdx]
+		a.stack = a.stack[:lastIdx]
+
+		if nodeIndex == AABBNullNode {
+			continue
+		}
+
+		node := a.nodes[nodeIndex]
+
+		// Short-circuit evaluation: previene test doppi e invocazioni duplicate del callback
+		if node.aabb.IntersectFrustum(f1) || node.aabb.IntersectFrustum(f2) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break

@@ -109,6 +109,11 @@ func (s *Volumes) QueryFrustum(frustum *physics.Frustum, callback func(object ph
 	s.tree.QueryFrustum(frustum, callback)
 }
 
+// QueryMultiFrustum performs a spatial query using two frustums, invoking the callback for each overlapping object.
+func (s *Volumes) QueryMultiFrustum(front, rear *physics.Frustum, callback func(object physics.IAABB) bool) {
+	s.tree.QueryMultiFrustum(front, rear, callback)
+}
+
 // QueryOverlap2d checks for overlaps with the given 2D AABB and identifies which volume contains the specified point.
 func (s *Volumes) QueryOverlap2d(aabb physics.IAABB, px, py float64) *Volume {
 	var target *Volume = nil

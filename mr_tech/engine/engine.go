@@ -64,6 +64,11 @@ func (e *Engine) QueryFrustum(frustum *physics.Frustum, callback func(object phy
 	e.volumes.QueryFrustum(frustum, callback)
 }
 
+// QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
+func (e *Engine) QueryMultiFrustum(front, rear *physics.Frustum, callback func(object physics.IAABB) bool) {
+	e.volumes.QueryMultiFrustum(front, rear, callback)
+}
+
 // Len returns the number of volumes currently managed by the Engine.
 func (e *Engine) Len() int {
 	return e.portal.Len()

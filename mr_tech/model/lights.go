@@ -35,8 +35,12 @@ func (l *Lights) Get() []*Light {
 	return l.container
 }
 
-// QueryFrustum performs a frustum query to find all objects intersecting the given frustum.
-// The results are passed to the callback function for further processing.
-func (l *Lights) QueryFrustum(frustum *physics.Frustum, callback func(object physics.IAABB) bool) {
-	l.tree.QueryFrustum(frustum, callback)
+// QueryFrustum performs a spatial query using the specified frustum and invokes the callback for each intersected object.
+func (l *Lights) QueryFrustum(front *physics.Frustum, callback func(object physics.IAABB) bool) {
+	l.tree.QueryFrustum(front, callback)
+}
+
+// QueryMultiFrustum performs a query on the spatial tree using two frustums and invokes a callback for each intersected object.
+func (l *Lights) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {
+	l.tree.QueryMultiFrustum(rear, front, callback)
 }

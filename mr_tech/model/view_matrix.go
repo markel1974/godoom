@@ -113,9 +113,14 @@ func (vi *ViewMatrix) GetBobPhase() float64 {
 	return vi.bobPhase
 }
 
-// GetFrustum calculates and returns the camera's visual frustum based on the current ViewMatrix properties.
+// GetFrustum computes and returns the front and rear frustums using the given framebuffer dimensions and far plane distance.
+func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) (*physics.Frustum, *physics.Frustum) {
+	return vi.GetFrontFrustum(fbw, fbh, zFarRoom), vi.GetRearFrustum(fbw, fbh, zFarRoom)
+}
+
+// GetFrontFrustum calculates and returns the camera's visual frustum based on the current ViewMatrix properties.
 // It reconstructs the View and Projection matrices to accurately extract the 6 clipping planes for AABB culling.
-func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
+func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
 	// Calcolo Aspect Ratio e Scale per la Proiezione
 	aspect := float32(fbw) / float32(fbh)
 	scaleX := (2.0 / aspect) * float32(HFov)
@@ -192,6 +197,7 @@ func (vi *ViewMatrix) GetRearFrustum(fbw, fbh int32, zFarRoom float32) *physics.
 	return physics.NewFrustum(vp)
 }
 
+// matrixMultiply computes the product of two 4x4 matrices stored in column-major order and returns the resulting matrix.
 func matrixMultiply(proj, view [16]float32) [16]float32 {
 	var vp [16]float32
 	for col := 0; col < 4; col++ {

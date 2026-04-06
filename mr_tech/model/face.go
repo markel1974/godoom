@@ -167,8 +167,8 @@ func (s *Face) GetMaterial() *textures.Animation {
 	return s.material[0]
 }
 
-// Scale2D scales the starting and ending points of the segment by applying the given scale factor.
-func (s *Face) Scale2D(scale float64) {
+// Scale2d scales the starting and ending points of the segment by applying the given scale factor.
+func (s *Face) Scale2d(scale float64) {
 	for idx := range s.points {
 		s.points[idx].Scale(scale)
 	}

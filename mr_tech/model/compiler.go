@@ -12,21 +12,23 @@ import (
 
 // Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
 type Compiler struct {
-	volumes  *Volumes
-	things   *Things
-	player   *ThingPlayer
-	lights   []*Light
-	entities *Entities
+	volumes   *Volumes
+	volumes3d *Volumes
+	things    *Things
+	player    *ThingPlayer
+	lights    []*Light
+	entities  *Entities
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		volumes:  nil,
-		things:   nil,
-		player:   nil,
-		entities: nil,
-		lights:   nil,
+		volumes:   nil,
+		volumes3d: nil,
+		things:    nil,
+		player:    nil,
+		entities:  nil,
+		lights:    nil,
 	}
 }
 
@@ -48,33 +50,35 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		t.Position.Scale(scale)
 	}
 
-	//for _, l := range r.lights {
-	//	l.pos.Scale(scale)
-	//}
+	for _, t := range cfg.Lights {
+		t.Pos.Scale(scale)
+	}
 
 	for _, sect := range r.volumes.GetVolumes() {
 		//legacy lights scale
 		sect.Light.pos.Scale(scale)
-
-		//sect.CeilY /= scale
-		//sect.FloorY /= scale
-
-		//vertex scale
 		for _, face := range sect.GetFaces() {
-			face.Scale2D(scale)
+			face.Scale2d(scale)
 		}
 	}
 
 	//after scaling
 
+	r.volumes3d = r.upgrade3d(r.volumes)
+
 	var err error
 
 	r.volumes.CreateTree()
 
-	r.lights, err = r.compileSectorsLights(r.volumes)
+	r.lights, err = r.compileVolumesLights(r.volumes)
 	if err != nil {
 		return err
 	}
+	lights, err := r.compileLights(cfg.Lights)
+	if err != nil {
+		return err
+	}
+	r.lights = append(r.lights, lights...)
 
 	r.entities = NewEntities(uint(1 + len(cfg.Things)))
 
@@ -221,13 +225,25 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 	return NewVolumes(container), totalPolygons
 }
 
+func (r *Compiler) compileLights(cLights []*config.ConfigLightPos) ([]*Light, error) {
+	var out []*Light
+	for _, cl := range cLights {
+		if cl == nil {
+			continue
+		}
+		light := NewLight()
+		light.Setup(nil, cl.Intensity, cl.Kind, cl.Pos)
+
+	}
+	return out, nil
+}
+
 // compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
-func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
-	// --- RAGGRUPPAMENTO AREE (MERGE DEI CENTROIDI DI LUCE) ---
+func (r *Compiler) compileVolumesLights(volumes *Volumes) ([]*Light, error) {
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
 	var out []*Light
-	for sectIdx, sect := range sectors.GetVolumes() {
+	for idx, sect := range volumes.GetVolumes() {
 		if visited[sect.GetId()] {
 			continue
 		}
@@ -235,12 +251,10 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 		var areaSectors []*Volume
 		queue := []*Volume{sect}
 		visited[sect.GetId()] = true
-
 		for len(queue) > 0 {
 			curr := queue[0]
 			queue = queue[1:]
 			areaSectors = append(areaSectors, curr)
-
 			// Controlla i vicini di questo settore
 			for _, seg := range curr.GetFaces() {
 				if n := seg.GetNeighbor(); n != nil {
@@ -285,13 +299,13 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 			}
 			first := areaSectors[0]
 			light := NewLight()
-			sector := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
-			if sector == nil {
-				sector = first
-				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)
+			volume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+			if volume == nil {
+				volume = first
+				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)
 			}
-			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: sector.GetFloorY() + sector.GetCeilY()}
-			light.Setup(sector, first.Light.intensity, first.Light.kind, lightPos)
+			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: volume.GetFloorY() + volume.GetCeilY()}
+			light.Setup(volume, first.Light.intensity, first.Light.kind, lightPos)
 			out = append(out, light)
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
@@ -305,7 +319,8 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 	return out, nil
 }
 
-func (r *Compiler) Upgrade3D(vols2d *Volumes) *Volumes {
+// upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
+func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
 	var volumes3d []*Volume
 
 	// Mappa di traduzione: *Volume 2D -> *Volume 3D
@@ -315,39 +330,24 @@ func (r *Compiler) Upgrade3D(vols2d *Volumes) *Volumes {
 	for _, vol2d := range vols2d.GetVolumes() {
 		id := fmt.Sprintf("%s_3d", vol2d.GetId())
 		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
-
 		if vol2d.Light != nil {
 			vol3d.Light = vol2d.Light
 		}
-
 		faces2d := vol2d.GetFaces()
 		if len(faces2d) != 3 {
 			continue
 		}
-
 		p0 := faces2d[0].GetStart()
 		p1 := faces2d[1].GetStart()
 		p2 := faces2d[2].GetStart()
-
 		floorY := vol2d.GetFloorY()
 		ceilY := vol2d.GetCeilY()
-
 		// [Indice 0] Soffitto (Ceil)
-		ceilPts := []geometry.XYZ{
-			{X: p0.X, Y: ceilY, Z: p0.Y},
-			{X: p1.X, Y: ceilY, Z: p1.Y},
-			{X: p2.X, Y: ceilY, Z: p2.Y},
-		}
-		vol3d.AddFace(NewFace(nil, ceilPts, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
-
+		ceilP := []geometry.XYZ{{X: p0.X, Y: ceilY, Z: p0.Y}, {X: p1.X, Y: ceilY, Z: p1.Y}, {X: p2.X, Y: ceilY, Z: p2.Y}}
+		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
 		// [Indice 1] Pavimento (Floor)
-		floorPts := []geometry.XYZ{
-			{X: p0.X, Y: floorY, Z: p0.Y},
-			{X: p2.X, Y: floorY, Z: p2.Y},
-			{X: p1.X, Y: floorY, Z: p1.Y},
-		}
-		vol3d.AddFace(NewFace(nil, floorPts, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
-
+		floorP := []geometry.XYZ{{X: p0.X, Y: floorY, Z: p0.Y}, {X: p2.X, Y: floorY, Z: p2.Y}, {X: p1.X, Y: floorY, Z: p1.Y}}
+		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
 		// [Indici 2, 3, 4] Facce Laterali
 		for _, f2d := range faces2d {
 			start := f2d.GetStart()
@@ -360,10 +360,9 @@ func (r *Compiler) Upgrade3D(vols2d *Volumes) *Volumes {
 			}
 			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
 		}
-
 		vol3d.Rebuild()
 		volumes3d = append(volumes3d, vol3d)
-		volMap[vol2d] = vol3d // Registra l'associazione
+		volMap[vol2d] = vol3d
 	}
 
 	// 2. Seconda Passata: Link delle adiacenze (Portali)
@@ -371,7 +370,6 @@ func (r *Compiler) Upgrade3D(vols2d *Volumes) *Volumes {
 		vol3d := volumes3d[idx]
 		faces2d := vol2d.GetFaces()
 		faces3d := vol3d.GetFaces()
-
 		for i, f2d := range faces2d {
 			if neighbor2d := f2d.GetNeighbor(); neighbor2d != nil {
 				// Recupera il puntatore al nuovo volume 3D associato al vicino 2D

@@ -8,15 +8,15 @@ import (
 
 // ConfigRoot represents the root configuration for a level, including sectors, lights, player, scale, and loop settings.
 type ConfigRoot struct {
-	Id          string           `json:"id"`
-	Sectors     []*ConfigSector  `json:"sectors"`
-	Things      []*ConfigThing   `json:"things"`
-	Player      *ConfigPlayer    `json:"player"`
-	ScaleFactor float64          `json:"scaleFactor"`
-	DisableLoop bool             `json:"disableLoop"`
-	Vertices    geometry.Polygon `json:"vertices"`
-	Volumes     []*ConfigVolume  `json:"volumes"`
-	Lights      []*ConfigLight   `json:"lights"`
+	Id          string            `json:"id"`
+	Sectors     []*ConfigSector   `json:"sectors"`
+	Things      []*ConfigThing    `json:"things"`
+	Player      *ConfigPlayer     `json:"player"`
+	ScaleFactor float64           `json:"scaleFactor"`
+	DisableLoop bool              `json:"disableLoop"`
+	Vertices    geometry.Polygon  `json:"vertices"`
+	Volumes     []*ConfigVolume   `json:"volumes"`
+	Lights      []*ConfigLightPos `json:"lights"`
 	textures    textures.ITextures
 }
 

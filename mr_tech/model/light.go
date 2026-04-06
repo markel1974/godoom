@@ -25,19 +25,18 @@ func NewLight() *Light {
 }
 
 // Setup configures the Light object by setting its intensity, kind, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(volume *Volume, intensity float64, kind config.LightKind, coords geometry.XYZ, height float64) {
+func (cl *Light) Setup(volume *Volume, intensity float64, kind config.LightKind, coords geometry.XYZ) {
 	cl.volume = volume
-	lightZ := (height) * 1.0
+	lightZ := coords.Z * 1.0
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
 	if kind == config.LightKindOpenAir {
-		lightZ = math.Abs(height) * 1000 //50
+		lightZ = math.Abs(lightZ) * 1000 //50
 	} else {
 		//TODO TEST
 		//n := rand.Intn(2) + 1
 		//kind = LightKind(n)
 	}
 	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
-
 	cl.intensity = math.Max(0.0, math.Min(1.0, intensity))
 	cl.kind = kind
 	cl.pos = pos

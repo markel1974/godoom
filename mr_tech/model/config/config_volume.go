@@ -4,8 +4,8 @@ package config
 type ConfigVolume struct {
 	Id    string        `json:"id"`
 	Faces []*ConfigFace `json:"faces"`
-	Light *ConfigLight  `json:"light"`
-	Tag   string        `json:"tag"`
+	//Light *ConfigLight  `json:"light"`
+	Tag string `json:"tag"`
 }
 
 // NewConfigVolume creates and returns a new instance of ConfigVolume with specified ID, light settings, and tag.
@@ -14,7 +14,7 @@ func NewConfigVolume(id string, tag string) *ConfigVolume {
 		Id:    id,
 		Faces: make([]*ConfigFace, 0),
 		Tag:   tag,
-		Light: nil,
+		//Light: nil,
 	}
 }
 

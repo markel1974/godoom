@@ -175,8 +175,8 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 				volume.Light = NewLight()
 				if cs.Light != nil {
 					centroid := volume.GetCentroid2d()
-					height := cs.FloorY + cs.CeilY
-					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, centroid, height)
+					lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: cs.FloorY + cs.CeilY}
+					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Kind, lightPos)
 				}
 				totalPolygons++
 			}
@@ -277,13 +277,11 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 				fmt.Println("total area is zero")
 				continue
 			}
-
-			globalCenter := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
-
+			gc := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
 			// Assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
 			for _, s := range areaSectors {
-				s.Light.pos.X = globalCenter.X
-				s.Light.pos.Y = globalCenter.Y
+				s.Light.pos.X = gc.X
+				s.Light.pos.Y = gc.Y
 			}
 			first := areaSectors[0]
 			light := NewLight()
@@ -292,14 +290,98 @@ func (r *Compiler) compileSectorsLights(sectors *Volumes) ([]*Light, error) {
 				sector = first
 				fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", sectIdx, first.Light.pos.X, first.Light.pos.Y)
 			}
-			light.Setup(sector, first.Light.intensity, first.Light.kind, globalCenter, first.GetCeilY())
+			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: sector.GetFloorY() + sector.GetCeilY()}
+			light.Setup(sector, first.Light.intensity, first.Light.kind, lightPos)
 			out = append(out, light)
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
+			gc := first.GetCentroid2d()
+			lightPos := geometry.XYZ{X: gc.X, Y: gc.Y, Z: first.GetFloorY() + first.GetCeilY()}
 			light := NewLight()
-			light.Setup(first, first.Light.intensity, first.Light.kind, first.GetCentroid2d(), first.GetCeilY())
+			light.Setup(first, first.Light.intensity, first.Light.kind, lightPos)
 			out = append(out, light)
 		}
 	}
 	return out, nil
+}
+
+func (r *Compiler) Upgrade3D(vols2d *Volumes) *Volumes {
+	var volumes3d []*Volume
+
+	// Mappa di traduzione: *Volume 2D -> *Volume 3D
+	volMap := make(map[*Volume]*Volume)
+
+	// 1. Prima Passata: Generazione della topologia solida
+	for _, vol2d := range vols2d.GetVolumes() {
+		id := fmt.Sprintf("%s_3d", vol2d.GetId())
+		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
+
+		if vol2d.Light != nil {
+			vol3d.Light = vol2d.Light
+		}
+
+		faces2d := vol2d.GetFaces()
+		if len(faces2d) != 3 {
+			continue
+		}
+
+		p0 := faces2d[0].GetStart()
+		p1 := faces2d[1].GetStart()
+		p2 := faces2d[2].GetStart()
+
+		floorY := vol2d.GetFloorY()
+		ceilY := vol2d.GetCeilY()
+
+		// [Indice 0] Soffitto (Ceil)
+		ceilPts := []geometry.XYZ{
+			{X: p0.X, Y: ceilY, Z: p0.Y},
+			{X: p1.X, Y: ceilY, Z: p1.Y},
+			{X: p2.X, Y: ceilY, Z: p2.Y},
+		}
+		vol3d.AddFace(NewFace(nil, ceilPts, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
+
+		// [Indice 1] Pavimento (Floor)
+		floorPts := []geometry.XYZ{
+			{X: p0.X, Y: floorY, Z: p0.Y},
+			{X: p2.X, Y: floorY, Z: p2.Y},
+			{X: p1.X, Y: floorY, Z: p1.Y},
+		}
+		vol3d.AddFace(NewFace(nil, floorPts, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
+
+		// [Indici 2, 3, 4] Facce Laterali
+		for _, f2d := range faces2d {
+			start := f2d.GetStart()
+			end := f2d.GetEnd()
+			wallPts := []geometry.XYZ{
+				{X: start.X, Y: floorY, Z: start.Y},
+				{X: end.X, Y: floorY, Z: end.Y},
+				{X: end.X, Y: ceilY, Z: end.Y},
+				{X: start.X, Y: ceilY, Z: start.Y},
+			}
+			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
+		}
+
+		vol3d.Rebuild()
+		volumes3d = append(volumes3d, vol3d)
+		volMap[vol2d] = vol3d // Registra l'associazione
+	}
+
+	// 2. Seconda Passata: Link delle adiacenze (Portali)
+	for idx, vol2d := range vols2d.GetVolumes() {
+		vol3d := volumes3d[idx]
+		faces2d := vol2d.GetFaces()
+		faces3d := vol3d.GetFaces()
+
+		for i, f2d := range faces2d {
+			if neighbor2d := f2d.GetNeighbor(); neighbor2d != nil {
+				// Recupera il puntatore al nuovo volume 3D associato al vicino 2D
+				if neighbor3d, ok := volMap[neighbor2d]; ok {
+					// Mappa 1:1 traslata di 2 (saltando ceil e floor)
+					faces3d[i+2].SetNeighbor(neighbor3d)
+				}
+			}
+		}
+	}
+
+	return NewVolumes(volumes3d)
 }

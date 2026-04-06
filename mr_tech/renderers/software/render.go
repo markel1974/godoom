@@ -330,7 +330,7 @@ func (w *Render) doDebug(next int) {
 		return
 	}
 	w.debugIdx = idx
-	sector := w.engine.VolumeAt(idx)
+	sector := w.engine.PortalVolumeAt(idx)
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", sector.GetId())
 
 	/*
@@ -367,7 +367,7 @@ func (w *Render) doDebugMoveSector(forward bool) {
 // drawStub renders the debug sector if the current debug index is within the range of available sectors.
 func (w *Render) drawStub() {
 	if w.debugIdx >= 0 && w.debugIdx < w.engine.Len() {
-		sector := w.engine.VolumeAt(w.debugIdx)
+		sector := w.engine.PortalVolumeAt(w.debugIdx)
 		w.RenderSector(sector)
 	}
 }

@@ -54,8 +54,8 @@ func (e *Engine) GetLights() *model.Lights {
 	return e.lights
 }
 
-// VolumeAt returns the volume at the specified index from the portal within the engine.
-func (e *Engine) VolumeAt(idx int) *model.Volume {
+// PortalVolumeAt returns the volume at the specified index from the portal within the engine.
+func (e *Engine) PortalVolumeAt(idx int) *model.Volume {
 	return e.portal.VolumeAt(idx)
 }
 

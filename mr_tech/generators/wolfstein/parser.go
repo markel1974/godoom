@@ -80,9 +80,10 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				continue
 			}
 			if isThingOrEnemy(cell) {
-				pos := geometry.XY{
+				pos := geometry.XYZ{
 					X: float64(x)*wp.tileSize + wp.tileSize/2,
 					Y: float64(y)*wp.tileSize + wp.tileSize/2,
+					Z: 0,
 				}
 				var angle float64 = 0
 				kind := config.ThingItemDef

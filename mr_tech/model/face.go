@@ -85,11 +85,19 @@ func (s *Face) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
 	s.hasZ = true
+	for i := range s.points {
+		s.points[i].Z = minZ
+	}
 	s.Rebuild()
 }
 
 // ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (s *Face) ClearZ() {
+	if s.hasZ {
+		for i := range s.points {
+			s.points[i].Z = 0
+		}
+	}
 	s.minZ = 0
 	s.maxZ = 0
 	s.hasZ = false

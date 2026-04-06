@@ -230,8 +230,8 @@ func (w *RenderOpenGL) doRun() {
 
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
 func (w *RenderOpenGL) doPlayerFire() {
-	x, y := w.player.GetPosition()
-	w.engine.Fire(w.player.GetVolume(), x, y, w.player.GetRealAngle())
+	x, y, z := w.player.GetPosition()
+	w.engine.Fire(w.player.GetVolume(), x, y, z, w.player.GetRealAngle())
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.
@@ -260,5 +260,5 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	}
 	w.player.AddAngle(mouseX * 0.03)
 	w.player.SetYaw(mouseY)
-	w.player.MoveApply(0, 0)
+	w.player.MoveApply(0, 0, 0)
 }

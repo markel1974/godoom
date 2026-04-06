@@ -88,19 +88,19 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 				switch cp.Kind {
 				case model.IdWall, model.IdUpper, model.IdLower:
 					if cp.Kind == model.IdWall {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Volume.GetCeilY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
 					} else if cp.Kind == model.IdUpper {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Volume.GetCeilY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
 					} else {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
+						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
 					}
 				case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 					if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Volume.GetCeilY())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
 							w.cSky = sky
 						}
 					} else {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Volume.GetFloorY())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Volume.GetMinZ())); sky != nil {
 							w.cSky = sky
 						}
 					}
@@ -217,7 +217,7 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		if t.GetAnimation() == nil {
 			continue
 		}
-		tPosX, tPosY := t.GetPosition()
+		tPosX, tPosY, _ := t.GetPosition()
 		dx := tPosX - camX
 		dy := tPosY - camY
 		distSq := dx*dx + dy*dy
@@ -250,7 +250,7 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		v2x := float32(tPosX + rX)
 		v2y := float32(tPosY + rY)
 
-		zBottom := float32(t.GetFloorY())
+		zBottom := float32(t.GetMinZ())
 		zTop := zBottom + float32(height)
 
 		startIndices := fv.GetIndicesLen()

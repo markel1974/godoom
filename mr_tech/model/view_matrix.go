@@ -23,18 +23,23 @@ type ViewMatrix struct {
 	lightIntensity float64
 	volume         *Volume
 	bobPhase       float64
+	front          *physics.Frustum
+	rear           *physics.Frustum
 }
 
 // NewViewMatrix creates and returns a new instance of ViewMatrix with default values.
 func NewViewMatrix() *ViewMatrix {
-	return &ViewMatrix{}
+	return &ViewMatrix{
+		front: physics.NewFrustum(),
+		rear:  physics.NewFrustum(),
+	}
 }
 
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngle()
 	vi.volume = player.GetVolume()
-	vi.where.X, vi.where.Y, vi.where.Z = player.GetXYZ()
+	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = 0.0 //player.GetLightIntensity()
 	bob, bobPhase := player.GetBobPhase()
@@ -158,8 +163,10 @@ func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics
 	}
 
 	vp := matrixMultiply(proj, view)
+
+	vi.front.Rebuild(vp)
 	// Crea il Frustum fisico estraendo i piani dalla matrice combinata
-	return physics.NewFrustum(vp)
+	return vi.front
 }
 
 // GetRearFrustum calcola il frustum posteriore invertendo i vettori direzionali.
@@ -194,7 +201,8 @@ func (vi *ViewMatrix) GetRearFrustum(fbw, fbh int32, zFarRoom float32) *physics.
 		tx, ty, tz, 1,
 	}
 	vp := matrixMultiply(proj, view)
-	return physics.NewFrustum(vp)
+	vi.rear.Rebuild(vp)
+	return vi.rear
 }
 
 // matrixMultiply computes the product of two 4x4 matrices stored in column-major order and returns the resulting matrix.

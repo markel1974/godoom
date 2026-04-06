@@ -33,7 +33,8 @@ func (em *Entities) Compute() []IThing {
 	for _, thing := range em.entities {
 		ent := thing.GetEntity()
 		if ent.Update() {
-			em.tree.UpdateObject(ent)
+			// FIX: L'albero mappa istanze IThing, non *physics.Entity
+			em.tree.UpdateObject(thing)
 			em.moving[em.counter] = thing
 			em.counter++
 		}
@@ -49,12 +50,24 @@ func (em *Entities) Compute() []IThing {
 
 		for x := 0; x < em.counter; x++ {
 			thing := em.moving[x]
+
+			// Se l'entità è stata disattivata nel loop precedente (es. proiettile esploso), ignoriamola
+			if !thing.IsActive() {
+				continue
+			}
+
 			ent := thing.GetEntity()
 			em.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
 				otherThing, ok := object.(IThing)
 				if !ok || otherThing == thing {
 					return false
 				}
+
+				// Early exit per entità morte
+				if !otherThing.IsActive() || !thing.IsActive() {
+					return false
+				}
+
 				otherEnt := otherThing.GetEntity()
 
 				// Apply the tie-breaker ONLY if otherEnt is also in motion.
@@ -68,13 +81,19 @@ func (em *Entities) Compute() []IThing {
 				sumRadii := (ent.GetWidth() / 2.0) + (otherEnt.GetWidth() / 2.0)
 
 				if distance < sumRadii {
-					ent.SetupCollision(otherEnt)
-
+					// 1. Risolviamo prima gli Eventi di Gioco (Callbacks, Danni, Pickup)
 					thing.OnCollide(otherThing)
 					otherThing.OnCollide(thing)
 
-					em.tree.UpdateObject(ent)
-					em.tree.UpdateObject(otherEnt)
+					// 2. Risoluzione della compenetrazione FISICA.
+					// Viene eseguita SOLO SE entrambe le entità sono sopravvissute all'impatto (es. due mostri solidi)
+					if thing.IsActive() && otherThing.IsActive() {
+						ent.SetupCollision(otherEnt)
+					}
+
+					// FIX: Passare l'istanza corretta IThing per l'aggiornamento dell'albero
+					em.tree.UpdateObject(thing)
+					em.tree.UpdateObject(otherThing)
 					isStable = false
 				}
 				return false
@@ -90,10 +109,12 @@ func (em *Entities) Compute() []IThing {
 }
 
 // UpdateThing updates the position of the given IThing and adjusts its spatial data in the AABBTree.
-func (em *Entities) UpdateThing(thing IThing, px float64, py float64) {
+func (em *Entities) UpdateThing(thing IThing, px float64, py float64, pz float64) {
 	ent := thing.GetEntity()
 	eRadius := ent.GetWidth() / 2.0
-	ent.MoveTo(px-eRadius, py-eRadius)
+	// NOTA: Se hai aggiornato physics.Entity per tenere traccia della Z internamente,
+	// qui dovrai chiamare la versione 3D, es: ent.MoveTo3d(px-eRadius, py-eRadius, pz)
+	ent.MoveTo(px-eRadius, py-eRadius, pz)
 
 	em.tree.UpdateObject(thing)
 }

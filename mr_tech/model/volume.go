@@ -23,7 +23,7 @@ type Volume struct {
 	hasZ      bool
 }
 
-// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded sectors.
+// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded volumes.
 func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
 	v := &Volume{
 		modelId: modelId,
@@ -81,13 +81,13 @@ func (v *Volume) GetId() string {
 	return v.id
 }
 
-// GetFloorY returns the Y-coordinate of the floor. In 3D mode, it retrieves the minimum Z from the AABB if available.
-func (v *Volume) GetFloorY() float64 {
+// GetMinZ retrieves the minimum Z-coordinate of the volume's axis-aligned bounding box (AABB).
+func (v *Volume) GetMinZ() float64 {
 	return v.aabb.GetMinZ()
 }
 
-// GetCeilY returns the ceiling Y-coordinate of the volume. For 3D volumes with an AABB, it returns the maximum Z value.
-func (v *Volume) GetCeilY() float64 {
+// GetMaxZ retrieves the maximum Z-coordinate of the Volume's axis-aligned bounding box (AABB).
+func (v *Volume) GetMaxZ() float64 {
 	return v.aabb.GetMaxZ()
 }
 
@@ -173,33 +173,48 @@ func (v *Volume) GetTag() string {
 }
 
 // LocatePoint3d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
-func (v *Volume) LocatePoint3d(px, py, pz float64) *Volume {
-	curr := v
-	const maxSteps = 16
-	for step := 0; step < maxSteps; step++ {
-		inside := true
-		for _, face := range curr.faces {
-			pts := face.GetPoints()
-			if len(pts) == 0 {
-				continue
-			}
-			n := face.GetNormal()
-
-			if ((px-pts[0].X)*n.X + (py-pts[0].Y)*n.Y + (pz-pts[0].Z)*n.Z) > 0.001 {
-				neighbor := face.GetNeighbor()
-				if neighbor == nil {
-					return nil
-				}
-				curr = neighbor
-				inside = false
-				break
-			}
+func (v *Volume) LocatePoint3d(px, py, baseZ, topZ, maxStep float64) *Volume {
+	if v.ContainsPoint2d(px, py) {
+		if v.IsValidZ(baseZ, topZ, maxStep) {
+			return v
 		}
-		if inside {
-			return curr
+		return nil
+	}
+
+	for _, face := range v.GetFaces() {
+		neighbor := face.GetNeighbor()
+		if neighbor != nil {
+			if neighbor.ContainsPoint2d(px, py) {
+				if neighbor.IsValidZ(baseZ, topZ, maxStep) {
+					return neighbor
+				}
+			}
 		}
 	}
 	return nil
+}
+
+// IsValidZ verifica che la quota Z sia compatibile con il settore, gestendo i soffitti a cielo aperto.
+func (v *Volume) IsValidZ(baseZ, topZ, maxStep float64) bool {
+	minZ := v.GetMinZ()
+	maxZ := v.GetMaxZ()
+	// 1. Gestione soffitti a cielo aperto
+	if maxZ <= minZ {
+		maxZ = math.MaxFloat64
+	}
+	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
+	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
+	if baseZ+maxStep < minZ {
+		return false
+	}
+	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
+	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
+	expectedBase := math.Max(baseZ, minZ)
+	entityHeight := topZ - baseZ
+	if expectedBase+entityHeight > maxZ {
+		return false
+	}
+	return true
 }
 
 // LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
@@ -299,10 +314,10 @@ func (v *Volume) CheckFacesClearance2d(viewX, viewY, pX, pY, top float64, bottom
 			holeHigh := -9e9
 
 			if neighbor != nil {
-				floorY := v.GetFloorY()
-				ceilY := v.GetCeilY()
-				holeLow = mathematic.MaxF(floorY, neighbor.GetFloorY())
-				holeHigh = mathematic.MinF(ceilY, neighbor.GetCeilY())
+				floorY := v.GetMinZ()
+				ceilY := v.GetMaxZ()
+				holeLow = mathematic.MaxF(floorY, neighbor.GetMinZ())
+				holeHigh = mathematic.MinF(ceilY, neighbor.GetMaxZ())
 			}
 
 			if holeHigh < top || holeLow > bottom {
@@ -345,7 +360,7 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 		cx += (x0 + x1) * a
 		cy += (y0 + y1) * a
 	}
-	floorY := v.GetFloorY()
+	floorY := v.GetMinZ()
 	signedArea *= 0.5
 	if signedArea == 0 {
 		start := v.faces[0].GetStart()

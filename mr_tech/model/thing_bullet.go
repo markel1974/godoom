@@ -4,29 +4,23 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ThingBullet represents a specialized type of Thing designed to simulate projectile-like behavior in the environment.
 type ThingBullet struct {
 	*ThingBase
-	wall        *physics.Entity
 	floorStartY float64
 }
 
-// NewThingBullet creates and initializes a new ThingBullet instance with specific properties and links it to the game world.
-// cfg specifies the configuration of the bullet, anim defines its animation, and sector represents its initial sector.
-// sectors and entities provide references to all sectors and entities in the game world.
+// NewThingBullet creates and initializes a new ThingBullet instance.
 func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingBullet {
 	p := &ThingBullet{
 		ThingBase:   NewThingBase(cfg, anim, volume, sectors, entities),
-		wall:        physics.NewEntity(0, 0, 1.0, 0, 0, 0),
-		floorStartY: volume.GetFloorY(),
+		floorStartY: volume.GetMinZ(),
 	}
 	// Annulla il decadimento inerziale per mantenere una velocità lineare costante
-	p.entity.SetFriction(0.99)
+	p.entity.SetFriction(1.0) // 1.0 = nessuna perdita di velocità su X/Y
 	p.entity.SetGForce(1.0)
 	p.entities.AddThing(p)
 
@@ -41,170 +35,224 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 }
 
 func (t *ThingBullet) GetFloorY() float64 {
-	// 1. Magnitudo vettoriale corrente
 	velSq := (t.entity.GetVx() * t.entity.GetVx()) + (t.entity.GetVy() * t.entity.GetVy())
-	// Se l'energia cinetica è esaurita o malformata, il proiettile è a terra
 	if velSq <= 0.01 || t.speed <= 0 {
-		return t.volume.GetFloorY()
+		return t.volume.GetMinZ()
 	}
-	// 2. Fattore T di decadimento: velocità corrente normalizzata sulla velocità originale
 	ratio := math.Sqrt(velSq) / t.speed
-	// Clamping di sicurezza vettoriale in caso di impulsi esterni imprevisti
 	if ratio <= 0 {
-		return t.volume.GetFloorY()
+		return t.volume.GetMinZ()
 	}
 	if ratio > 1.0 {
 		ratio = 1.0
 	}
-	// 3. LERP tra la quota del suolo e la quota di sparo
-	currentY := t.floorStartY * ratio
-	return currentY
+	return t.floorStartY * ratio
 }
 
-// Compute updates the bullet's direction and handles its collision, potentially triggering its deallocation.
-func (t *ThingBullet) Compute(playerX float64, playerY float64) {
-	//if t.speed == 0 {
-	//	return
-	//}
-	//if math.Abs(t.entity.GetVx()) < 0.1 && math.Abs(t.entity.GetVy()) < 0.1 {
-	//	t.entity.SetVx(0)
-	//	t.entity.Vy = 0
-	//	t.speed = 0
-	//	t.entity.Invalidate()
-	//	//TODO REMOVE!!!!
-	//	return
-	//}
-
-	// Calculate the directional vector based on the original firing angle
-	//dirX := math.Cos(t.angle) * t.speed
-	//dirY := math.Sin(t.angle) * t.speed
-
-	//t.modifyDirection(dirX, dirY)
-
-	// Trigger for impact handling and subsequent deallocation
-	//if t.entity.Collider != nil {
-	//	t.entity.Vx = 0
-	//	t.entity.Vy = 0
-	// Hit/explosion logic, damage application and entity removal
-	//	t.speed = 0
-	//	t.entity.Invalidate()
-	//	//TODO REMOVE!!!!
-	//}
+func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64) {
+	// Logica eventuale di homing-missile o timeout qui
 }
 
-// PhysicsApply updates the entity's position based on passive and active deltas, ensuring movement exceeds a minimum threshold.
+// PhysicsApply updates the bullet's position based on physics deltas (X, Y, Z)
+// and synchronizes its state with the 3D spatial partitioning.
 func (t *ThingBullet) PhysicsApply() {
-	ex, ey := t.entity.GetCenterXY()
-	// Passive Delta (bounces computed by SetupCollision)
-	tx := ex - t.position.X
-	ty := ey - t.position.Y
-	// Active Delta (Kinematic Drive) added only if there is intentionality
-	//if t.entity.G > 0 {
-	tx += t.entity.GetVx()
-	ty += t.entity.GetVy()
-	//}
-	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
-		x, y := t.adjustPassage(tx, ty)
-		t.position.X += x
-		t.position.Y += y
-		if newSector := t.sectors.SearchVolume2d(t.volume, t.position.X, t.position.Y); newSector != nil {
-			t.volume = newSector
+	// 1. Recupero dal motore fisico (Baricentro Reale 3D)
+	eX, eY, eZ := t.entity.GetCenter()
+
+	// Calcolo quota base del proiettile
+	baseZ := eZ - (t.entity.GetDepth() / 2.0)
+
+	// 2. Calcolo dei delta completi
+	tx := (eX - t.position.X) + t.entity.GetVx()
+	ty := (eY - t.position.Y) + t.entity.GetVy()
+	tz := (baseZ - t.position.Z) + t.entity.GetVz()
+
+	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement || math.Abs(tz) > minMovement {
+		// 3. Risoluzione dei vincoli ambientali 3D (Bounces e Portali)
+		vx, vy, vz := t.adjustPassage(tx, ty, tz)
+
+		// 4. Aggiornamento posizione logica
+		t.position.X += vx
+		t.position.Y += vy
+		t.position.Z += vz
+
+		// 5. Aggiornamento AABB Tree (basato sul baricentro per prevenire cambi errati)
+		bulletBaseZ := t.position.Z
+		bulletTopZ := t.position.Z + t.height
+		const bulletStep = 0.0
+		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, bulletBaseZ, bulletTopZ, bulletStep); newVolume != nil && newVolume != t.volume {
+			t.volume = newVolume
 		}
-		t.entities.UpdateThing(t, t.position.X, t.position.Y)
+
+		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
 	}
 }
 
-// slidingMovement adjusts the movement velocity based on collisions and elevation differences in the current sector.
-func (t *ThingBullet) adjustPassage(velX float64, velY float64) (float64, float64) {
-	bottom := t.floorStartY
-	top := bottom + t.height
+// adjustPassage resolves the 3D trajectory of the bullet, handling bounces via the spatial tree.
+func (t *ThingBullet) adjustPassage(velX, velY, velZ float64) (float64, float64, float64) {
+	viewZ := t.position.Z
+	bottom := viewZ
+	top := viewZ + t.height
 	viewX, viewY := t.position.X, t.position.Y
 	pX := viewX + velX
 	pY := viewY + velY
-	velX, velY = t.EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom)
-	return velX, velY
+	pZ := viewZ + velZ
+
+	// Rimbalzo sui muri (Broad & Narrow phase)
+	velX, velY, velZ = t.EffectBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom)
+
+	// Clipping e Rimbalzo Pavimento/Soffitto
+	nextZ := viewZ + velZ
+	minZ := t.volume.GetMinZ()
+	maxZ := t.volume.GetMaxZ()
+
+	if nextZ < minZ {
+		// Rimbalzo sul pavimento
+		velZ = math.Abs(velZ) * 0.8 // Perde un 20% di energia
+		t.entity.SetVz(velZ)
+	} else if nextZ+t.height > maxZ {
+		// Rimbalzo sul soffitto
+		velZ = -math.Abs(velZ) * 0.8
+		t.entity.SetVz(velZ)
+	}
+
+	return velX, velY, velZ
 }
 
-// EffectBounce calculates the resulting direction of a projectile after collision and applies bounce physics adjustments.
-func (t *ThingBullet) EffectBounce(viewX, viewY, pX, pY, velX, velY, top, bottom float64) (float64, float64) {
-	moveX := pX - viewX
-	moveY := pY - viewY
-	minT := 1.0
-	var hit *Face = nil
+// EffectBounce calculates the resulting direction of a projectile after collision applying continuous 3D bounce physics.
+func (t *ThingBullet) EffectBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom float64) (float64, float64, float64) {
+	minX := math.Min(viewX, pX) - t.radius
+	maxX := math.Max(viewX, pX) + t.radius
+	minY := math.Min(viewY, pY) - t.radius
+	maxY := math.Max(viewY, pY) + t.radius
 
-	for _, face := range t.volume.GetFaces() {
-		neighbor := face.GetNeighbor()
-		if neighbor != nil {
-			if top > t.volume.GetCeilY() || bottom < t.volume.GetFloorY() {
-				continue
+	t.slider.GetAABB().Rebuild(minX, minY, bottom, maxX, maxY, top)
+
+	var closestFace *Face = nil
+	minT := 1.0 // Tempo di impatto (Continuous Collision)
+	var colNx, colNy float64
+
+	t.volumes.QueryAABB(t.slider, func(vol *Volume) {
+		for _, face := range vol.GetFaces() {
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				holeLow := math.Max(vol.GetMinZ(), neighbor.GetMinZ())
+				holeHigh := math.Min(vol.GetMaxZ(), neighbor.GetMaxZ())
+				if top <= holeHigh && bottom >= holeLow {
+					continue
+				}
+			}
+
+			n := face.GetNormal()
+			start := face.GetStart()
+			end := face.GetEnd()
+
+			edgeX := end.X - start.X
+			edgeY := end.Y - start.Y
+			edgeLenSq := edgeX*edgeX + edgeY*edgeY
+
+			distStart := (viewX-start.X)*n.X + (viewY-start.Y)*n.Y
+			distEnd := (pX-start.X)*n.X + (pY-start.Y)*n.Y
+
+			hit := false
+			var hitT float64
+			var cNx, cNy float64
+
+			// Fase A: Sweep Test (Previene il passaggio attraverso i muri)
+			if distStart >= -0.01 && distEnd < t.radius {
+				dotVel := distEnd - distStart
+				if dotVel < 0 {
+					timeHit := (t.radius - distStart) / dotVel
+					if timeHit < 0 {
+						timeHit = 0
+					}
+					if timeHit <= 1.0 {
+						hX := viewX + velX*timeHit
+						hY := viewY + velY*timeHit
+						vX := hX - start.X
+						vY := hY - start.Y
+						dotEdge := vX*edgeX + vY*edgeY
+
+						// Assicuriamoci che l'impatto avvenga tra l'inizio e la fine del segmento
+						if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
+							hit = true
+							hitT = timeHit
+							cNx, cNy = n.X, n.Y
+						}
+					}
+				}
+			}
+
+			// Fase B: Point-to-segment (Gestione spigoli vivi)
+			if !hit {
+				vX := pX - start.X
+				vY := pY - start.Y
+				tProj := 0.0
+				if edgeLenSq > 0 {
+					tProj = (vX*edgeX + vY*edgeY) / edgeLenSq
+					tProj = math.Max(0.0, math.Min(1.0, tProj))
+				}
+				closestX := start.X + (tProj * edgeX)
+				closestY := start.Y + (tProj * edgeY)
+
+				diffX := pX - closestX
+				diffY := pY - closestY
+				distSq := diffX*diffX + diffY*diffY
+
+				if distSq < t.radius*t.radius {
+					hit = true
+					hitT = 0.0
+					cDist := math.Sqrt(distSq)
+					if tProj > 0.0 && tProj < 1.0 {
+						cNx, cNy = n.X, n.Y
+					} else {
+						if cDist > 0.0001 {
+							cNx, cNy = diffX/cDist, diffY/cDist
+						} else {
+							cNx, cNy = n.X, n.Y
+						}
+					}
+				}
+			}
+
+			if hit && hitT <= minT {
+				minT = hitT
+				closestFace = face
+				colNx, colNy = cNx, cNy
 			}
 		}
-		start := face.GetStart()
-		end := face.GetEnd()
-		dx := end.X - start.X
-		dy := end.Y - start.Y
-		den := moveX*dy - moveY*dx
-		if den == 0 {
-			continue
-		}
-		// Calcolo parametrico
-		t1 := ((start.X-viewX)*dy - (start.Y-viewY)*dx) / den
-		u1 := ((start.X-viewX)*moveY - (start.Y-viewY)*moveX) / den
-		// CULLING: Memorizza l'impatto solo se è geometricamente il più vicino all'origine
-		if t1 >= 0 && t1 <= minT && u1 >= 0 && u1 <= 1 {
-			holeLow, holeHigh := 9e9, -9e9
-			if neighbor != nil {
-				holeLow = mathematic.MaxF(t.volume.GetFloorY(), neighbor.GetFloorY())
-				holeHigh = mathematic.MinF(t.volume.GetCeilY(), neighbor.GetCeilY())
-			}
-			if holeHigh < top || holeLow > bottom {
-				minT = t1
-				hit = face
-			}
+	})
+
+	if closestFace != nil {
+		// Riflessione Vettoriale Perfetta: V' = V - (1+e)(V·N)N
+		restitution := 1.0 // 1.0 = Rimbalzo perfettamente elastico (non perde energia sul muro)
+		dot := (velX * colNx) + (velY * colNy)
+
+		if dot < 0 {
+			velX = velX - (1.0+restitution)*dot*colNx
+			velY = velY - (1.0+restitution)*dot*colNy
+
+			// Trasmettiamo il nuovo vettore velocità al motore fisico per i calcoli successivi
+			t.entity.SetVx(velX)
+			t.entity.SetVy(velY)
+
+			// Se il proiettile esplode all'impatto invece di rimbalzare, decommentalo qui:
+			// t.OnCollide(closestFace)
 		}
 	}
-	// Risolvi l'impulso esclusivamente sulla faccia corretta
-	if hit != nil {
-		start := hit.GetStart()
-		end := hit.GetEnd()
-		dx := end.X - start.X
-		dy := end.Y - start.Y
-		lenSq := dx*dx + dy*dy
-		// 1. Proiezione Ortogonale (Closest Point on Line Face)
-		var cx, cy float64
-		if lenSq > 0 {
-			tProj := ((viewX-start.X)*dx + (viewY-start.Y)*dy) / lenSq
-			tProj = math.Max(0, math.Min(1, tProj))
-			cx = start.X + tProj*dx
-			cy = start.Y + tProj*dy
-		} else {
-			cx, cy = start.X, start.Y
-		}
-		// 2. Istanziazione Static Body
-		// cx, cy: Centro spoofato sul punto d'impatto per generare la normale perfetta
-		// 0, 0: Width/Height nulli affinché Baumgarte usi solo il raggio del proiettile
-		// 1e12: Massa infinita per assorbire l'impulso al 100% (InverseMass ~ 0)
-		t.wall.Reset(cx, cy, 0, 0, 0, 1e12)
-		// 3. Risoluzione Newton + Baumgarte
-		t.entity.SetupCollision(t.wall)
-		return t.entity.GetVx(), t.entity.GetVy()
-	}
-	return velX, velY
+
+	return velX, velY, velZ
 }
 
-// OnCollide handles the interaction when the bullet collides with another object, applying damage and deactivating itself.
+// OnCollide handles the interaction when the bullet collides with another object.
 func (t *ThingBullet) OnCollide(other IThing) {
-	//other.TakeDamage(t.damage)
 	if enemy, ok := other.(*ThingEnemy); ok {
-		// enemy.TakeDamage(...)
 		_ = enemy
-		// Marca il proiettile per la rimozione al prossimo frame
-		//t.SetActive(false)
-		// Spawn particellare / Suono impatto qui
+		// enemy.TakeDamage(...)
+		// t.SetActive(false)
 	}
 }
 
-// IsActive checks if the ThingBullet is currently active and operational. Returns true if active, false otherwise.
+// IsActive checks if the ThingBullet is currently active and operational.
 func (t *ThingBullet) IsActive() bool {
 	return t.isActive
 }

@@ -70,7 +70,7 @@ func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
 	return idx
 }
 
-// Construct builds the vertex and edge data structures from the provided configuration sectors.
+// Construct builds the vertex and edge data structures from the provided configuration volumes.
 func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.ConfigSector) {
 	// STEP 1: Priming dell'AABB Tree
 	for _, point := range vertices {

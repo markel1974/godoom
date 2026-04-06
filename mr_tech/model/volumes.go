@@ -162,24 +162,26 @@ func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
 
 // SearchVolume3d searches for the Volume containing the point (px, py, pz) starting from the given currentVolume.
 // Returns the located Volume if found, otherwise nil.
-func (s *Volumes) SearchVolume3d(currentVolume *Volume, px, py, pz float64) *Volume {
-	if newVolume := currentVolume.LocatePoint3d(px, py, pz); newVolume != nil {
+func (s *Volumes) SearchVolume3d(currentVolume *Volume, px, py, baseZ, topZ, maxStep float64) *Volume {
+	if newVolume := currentVolume.LocatePoint3d(px, py, baseZ, topZ, maxStep); newVolume != nil {
 		return newVolume
 	}
-	if newVolume := s.QueryPoint3d(px, py, pz); newVolume != nil {
+	if newVolume := s.QueryPoint3d(px, py, baseZ, topZ, maxStep); newVolume != nil {
 		return newVolume
 	}
 	return nil
 }
 
 // QueryPoint3d searches for a volume containing the specified 3D point (px, py, pz) and returns the matched Volume, or nil if not found.
-func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
+func (s *Volumes) QueryPoint3d(px, py, baseZ, topZ, maxStep float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint(px, py, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
-			if vol.ContainsPoint3d(px, py, pz) {
-				target = vol
-				return true
+			if vol.ContainsPoint2d(px, py) {
+				if vol.IsValidZ(baseZ, topZ, maxStep) {
+					target = vol
+					return true
+				}
 			}
 		}
 		return false
@@ -188,18 +190,19 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 }
 
 // QueryOverlap3d performs a spatial query to find the first volume overlapping the given AABB and containing the specified point.
-func (s *Volumes) QueryOverlap3d(aabb physics.IAABB, px, py, pz float64) *Volume {
+func (s *Volumes) QueryOverlap3d(aabb physics.IAABB, px, py, baseZ, topZ, maxStep float64) *Volume {
 	var target *Volume = nil
+
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
-		vol, ok := object.(*Volume)
-		if !ok {
-			return false
-		}
-		if t1 := vol.LocatePoint3d(px, py, pz); target != t1 {
-			target = t1
-			return true
+		if vol, ok := object.(*Volume); ok {
+			// Sfruttiamo il nuovo LocatePoint3d per il test di intrusione esatto
+			if t1 := vol.LocatePoint3d(px, py, baseZ, topZ, maxStep); t1 != nil {
+				target = t1
+				return true // Volume valido trovato, interrompe la ricerca
+			}
 		}
 		return false
 	})
+
 	return target
 }

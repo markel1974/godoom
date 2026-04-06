@@ -9,38 +9,47 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-//TODO
-//Dobbiamo far migrare thing_base.go affinché usi il nuovo Volumes.SearchVolume(v, x, y, z)
-//per l'aggiornamento spaziale e riscrivere il wall-sliding per operare contro i piani 3D.
-
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id         string
-	position   geometry.XY
+	position   geometry.XYZ
 	mass       float64
 	radius     float64
 	height     float64
 	angle      float64
+	maxStep    float64
 	kind       config.ThingType
 	speed      float64
 	volume     *Volume
 	animation  *textures.Animation
-	sectors    *Volumes
+	volumes    *Volumes
 	entities   *Entities
 	entity     *physics.Entity
 	isActive   bool
 	identifier int
+	lastTx     float64
+	lastTy     float64
+	slider     *Slider
 }
 
-// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, sectors, and entities.
-func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingBase {
-	w := cfg.Radius * 2
-	h := cfg.Radius * 2
+// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and entities.
+func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, volumes *Volumes, entities *Entities) *ThingBase {
+	diameter := cfg.Radius * 2
+	w := diameter
+	h := diameter
+	d := cfg.Height // In 3D, la profondità è l'altezza reale dell'entità
+	maxStep := cfg.Height * 0.5
+
 	x := cfg.Position.X - cfg.Radius
 	y := cfg.Position.Y - cfg.Radius
+	z := volume.GetMinZ() // Spawn esatto sul pavimento del settore
+
+	position := cfg.Position
+	position.Z = z // Forza la sincronizzazione della Z iniziale
+
 	thing := &ThingBase{
 		id:         cfg.Id,
-		position:   cfg.Position,
+		position:   position,
 		angle:      cfg.Angle,
 		kind:       cfg.Kind,
 		mass:       cfg.Mass,
@@ -49,11 +58,13 @@ func NewThingBase(cfg *config.ConfigThing, anim *textures.Animation, volume *Vol
 		speed:      cfg.Speed,
 		volume:     volume,
 		animation:  anim,
-		sectors:    sectors,
+		volumes:    volumes,
 		entities:   entities,
-		entity:     physics.NewEntity(x, y, 1.0, w, h, cfg.Mass),
+		maxStep:    maxStep,
+		entity:     physics.NewEntity(x, y, z, w, h, d, cfg.Mass),
 		isActive:   true,
 		identifier: -1,
+		slider:     NewSlider(volumes),
 	}
 	return thing
 }
@@ -88,8 +99,9 @@ func (t *ThingBase) GetVolume() *Volume {
 	return t.volume
 }
 
-func (t *ThingBase) GetPosition() (float64, float64) {
-	return t.position.X, t.position.Y
+// GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
+func (t *ThingBase) GetPosition() (float64, float64, float64) {
+	return t.position.X, t.position.Y, t.position.Z
 }
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
@@ -97,18 +109,18 @@ func (t *ThingBase) GetLight() *Light {
 	return t.volume.Light
 }
 
-// GetFloorY returns the floor Y-coordinate of the sector associated with the ThingBase instance.
-func (t *ThingBase) GetFloorY() float64 {
-	return t.volume.GetFloorY()
+// GetMinZ retrieves the minimum Z-coordinate (floor height) of the volume associated with the ThingBase instance.
+func (t *ThingBase) GetMinZ() float64 {
+	return t.volume.GetMinZ()
 }
 
-// GetCeilY returns the ceiling height of the sector associated with the ThingBase instance.
-func (t *ThingBase) GetCeilY() float64 {
-	return t.volume.GetCeilY()
+// GetMaxZ retrieves the maximum Z-coordinate (height) of the volume associated with the ThingBase instance.
+func (t *ThingBase) GetMaxZ() float64 {
+	return t.volume.GetMaxZ()
 }
 
 // Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
-func (t *ThingBase) Compute(playerX float64, playerY float64) {
+func (t *ThingBase) Compute(playerX float64, playerY float64, playerZ float64) {
 	//nothing to do
 }
 
@@ -124,23 +136,35 @@ func (t *ThingBase) GetIdentifier() int {
 
 // PhysicsApply updates the position of the object based on passive and active physics-driven deltas.
 func (t *ThingBase) PhysicsApply() {
-	ex, ey := t.entity.GetCenterXY()
-	// Passive Delta (bounces computed by SetupCollision)
-	tx := ex - t.position.X
-	ty := ey - t.position.Y
-	// Active Delta (Kinematic Drive) added only if there is intentionality
-	//if t.entity.G > 0 {
-	tx += t.entity.GetVx()
-	ty += t.entity.GetVy()
-	//}
-	if math.Abs(tx) > minMovement || math.Abs(ty) > minMovement {
-		x, y := t.adjustPassage(tx, ty)
-		t.position.X += x
-		t.position.Y += y
-		if newVolume := t.sectors.SearchVolume2d(t.volume, t.position.X, t.position.Y); newVolume != nil {
+	// 1. Recupero dati dal motore impulsivo
+	eX, eY, eZ := t.entity.GetCenter()
+	currentBaseZ := eZ - (t.entity.GetDepth() / 2.0)
+
+	// 2. Calcolo dei delta
+	tx := (eX - t.position.X) + t.entity.GetVx()
+	ty := (eY - t.position.Y) + t.entity.GetVy()
+	tz := (currentBaseZ - t.position.Z) + t.entity.GetVz()
+
+	// 3. ESECUZIONE SEMPRE ATTIVA (Rimosso il check minMovement per la logica Z)
+	// Dobbiamo calcolare adjustPassage per applicare gravità passiva e snapping
+	vx, vy, vz := t.adjustPassage(tx, ty, tz, t.maxStep)
+
+	// 4. Applichiamo il movimento se significativo
+	if math.Abs(vx) > minMovement || math.Abs(vy) > minMovement || math.Abs(vz) > minMovement {
+		t.position.X += vx
+		t.position.Y += vy
+		t.position.Z += vz
+
+		// Aggiornamento del Settore
+		feetZ := t.position.Z
+		topZ := t.position.Z + t.height
+
+		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, feetZ, topZ, t.maxStep); newVolume != nil && newVolume != t.volume {
 			t.volume = newVolume
 		}
-		t.entities.UpdateThing(t, t.position.X, t.position.Y)
+
+		// Sincronizzazione AABB Tree
+		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
 	}
 }
 
@@ -159,15 +183,54 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
-// adjustPassage adjusts X and Y velocities to account for wall collisions and elevation differences such as floor height.
-func (t *ThingBase) adjustPassage(velX float64, velY float64) (float64, float64) {
-	// Things rest on the floor. We simulate head/knee height for elevation differences
-	top := t.volume.GetFloorY() + t.height
-	bottom := t.volume.GetFloorY() + 2.0
-	viewX, viewY := t.position.X, t.position.Y
+func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, float64, float64) {
+	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
+	radius := t.entity.GetWidth() / 2
+
+	// IL FIX: bottom deve essere la base dei piedi.
+	// WallSlidingEffect deve testare la collisione dai piedi in su.
+	bottom := viewZ
+	top := viewZ + t.height
+
 	pX := viewX + velX
 	pY := viewY + velY
-	radius := t.entity.GetWidth() / 2
-	velX, velY = WallSlidingEffect(t.volume, viewX, viewY, pX, pY, velX, velY, top, bottom, radius)
-	return velX, velY
+	pZ := viewZ + velZ
+
+	// 1. Wall Sliding
+	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
+
+	// 2. Pre-fetch del settore con tolleranza per lo scalino
+	targetVol := t.volume
+	// Usiamo viewZ + maxStep come "sonda" per vedere se il settore adiacente è valicabile
+	if nv := t.volumes.SearchVolume3d(t.volume, viewX+velX, viewY+velY, viewZ, viewZ+t.height, maxStep); nv != nil {
+		targetVol = nv
+	}
+
+	minZ := targetVol.GetMinZ()
+	maxZ := targetVol.GetMaxZ()
+	if maxZ <= minZ {
+		maxZ = math.MaxFloat64
+	}
+
+	nextZ := viewZ + velZ
+
+	// 3. Risoluzione Z
+	if nextZ < minZ {
+		// STEP UP: Se il nuovo pavimento è più alto della nostra Z attuale
+		// ma entro il maxStep (gestito da SearchVolume3d), ci tiriamo su.
+		velZ = minZ - viewZ
+		t.entity.SetVz(0)
+	} else if nextZ+t.height > maxZ {
+		// COLLISIONE SOFFITTO
+		velZ = (maxZ - t.height) - viewZ
+		t.entity.SetVz(0)
+	} else if nextZ > minZ {
+		// GRAVITÀ: Se siamo sopra il suolo, dobbiamo scendere.
+		// Applichiamo una forza di caduta se non c'è già una velocità Z (es. salto)
+		if math.Abs(velZ) < 0.001 {
+			velZ = -0.1
+		}
+	}
+
+	return velX, velY, velZ
 }

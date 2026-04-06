@@ -222,7 +222,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	}
 	tId := fmt.Sprintf("t_%d", i)
 	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-	cfgThing := config.NewConfigThing(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 	return cfgThing
 }
 
@@ -235,7 +235,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 			break
 		}
 	}
-	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, 20.0/radiusF, 100.0)
+	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, _playerHeight, _playerRadius, _playerMass)
 	return player
 }
 

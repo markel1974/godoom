@@ -183,7 +183,7 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		if t.GetAnimation() == nil {
 			continue
 		}
-		tPosX, tPosY := t.GetPosition()
+		tPosX, tPosY, _ := t.GetPosition()
 		dx := tPosX - camX
 		dy := tPosY - camY
 		distSq := dx*dx + dy*dy
@@ -216,7 +216,7 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		v2x := float32(tPosX + rX)
 		v2y := float32(tPosY + rY)
 
-		zBottom := float32(t.GetFloorY())
+		zBottom := float32(t.GetMinZ())
 		zTop := zBottom + float32(height)
 
 		startIndices := fv.GetIndicesLen()

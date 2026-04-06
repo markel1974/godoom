@@ -118,13 +118,13 @@ func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
 
 		ceilT := cs.Volume.GetMaterialCeil()
 		floorT := cs.Volume.GetMaterialFloor()
-		sectorCeilY := volume.GetCeilY()
-		sectorFloorY := volume.GetFloorY()
+		sectorCeilY := volume.GetMaxZ()
+		sectorFloorY := volume.GetMinZ()
 
 		// 1. Muri di connessione (Portali verso altri settori)
 		if neighbor != nil {
-			neighborCeilY := neighbor.GetCeilY()
-			neighborFloorY := neighbor.GetFloorY()
+			neighborCeilY := neighbor.GetMaxZ()
+			neighborFloorY := neighbor.GetMinZ()
 			// Upper Wall (dal soffitto corrente scende al soffitto del vicino)
 			if sectorCeilY > neighborCeilY {
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, face.GetMaterialUpper(), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
@@ -274,8 +274,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			continue
 		}
 
-		sectorYCeil := vi.ZDistance(volume.GetCeilY())
-		sectorYFloor := vi.ZDistance(volume.GetFloorY())
+		sectorYCeil := vi.ZDistance(volume.GetMaxZ())
+		sectorYFloor := vi.ZDistance(volume.GetMinZ())
 
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
@@ -336,7 +336,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 		floorP.Rect(x1Max, ybStart, y1Floor, zStart, x2Min, ybStop, y2Floor, zStop)
 
 		if neighbor != nil {
-			neighborYCeil := vi.ZDistance(neighbor.GetCeilY())
+			neighborYCeil := vi.ZDistance(neighbor.GetMaxZ())
 			ny1a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz1) * yScale1)
 			ny2a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz2) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
@@ -349,7 +349,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
-			neighborYFloor := vi.ZDistance(neighbor.GetFloorY())
+			neighborYFloor := vi.ZDistance(neighbor.GetMinZ())
 			ny1b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz1) * yScale1)
 			ny2b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz2) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b

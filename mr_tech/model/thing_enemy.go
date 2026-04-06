@@ -24,22 +24,26 @@ func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Vo
 }
 
 // Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
-func (t *ThingEnemy) Compute(playerX float64, playerY float64) {
+func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
 	dx := playerX - t.position.X
 	dy := playerY - t.position.Y
-	dist := math.Sqrt(dx*dx + dy*dy)
-
+	dz := playerZ - t.position.Z
+	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
+	dist3D := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {
-		if dist < 25.0 {
+		if dist3D < 25.0 {
 			t.active = true
 		}
 		return
 	}
-
-	invDist := 1.0 / dist
-	dirX := dx * invDist * t.speed
-	dirY := dy * invDist * t.speed
-	t.modifyDirection(dirX, dirY)
+	// 2. Inseguimento Terrestre: Utilizza la proiezione cilindrica 2D
+	dist2D := math.Sqrt(dx*dx + dy*dy)
+	if dist2D > 0.001 {
+		invDist := 1.0 / dist2D
+		dirX := dx * invDist * t.speed
+		dirY := dy * invDist * t.speed
+		t.modifyDirection(dirX, dirY)
+	}
 }
 
 // modifyDirection adjusts the entity's velocity based on the provided direction vector and applies acceleration and friction.

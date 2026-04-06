@@ -99,9 +99,9 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	vi.Update(player)
 
 	// 2. AI & External Forces: Wake up entities BEFORE physics calculation
-	pX, pY := player.GetPosition()
+	pX, pY, pZ := player.GetPosition()
 
-	e.things.Compute(pX, pY)
+	e.things.Compute(pX, pY, pZ)
 
 	// 3. Static ThingPlayer Motion
 	player.Update(vi)
@@ -134,8 +134,8 @@ func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.
-func (e *Engine) Fire(volume *model.Volume, x float64, y float64, angle float64) {
-	e.things.CreateBullet(volume, x, y, angle)
+func (e *Engine) Fire(volume *model.Volume, x float64, y float64, z float64, angle float64) {
+	e.things.CreateBullet(volume, x, y, z, angle)
 }
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.

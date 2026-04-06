@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// Things manages a collection of game objects, their configurations, sectors, entities, and animations.
+// Things manages a collection of game objects, their configurations, volumes, entities, and animations.
 type Things struct {
 	things     []IThing
 	config     []*config.ConfigThing
@@ -18,7 +18,7 @@ type Things struct {
 	animations *Animations
 }
 
-// NewThings initializes a Things instance with the provided configurations, sectors, entities, and animations.
+// NewThings initializes a Things instance with the provided configurations, volumes, entities, and animations.
 // Returns the created Things instance or an error if initialization of any Thing fails.
 func NewThings(cfg []*config.ConfigThing, sectors *Volumes, entities *Entities, animations *Animations) (*Things, error) {
 	r := &Things{
@@ -80,19 +80,19 @@ func (r *Things) CreateThing(ct *config.ConfigThing) error {
 }
 
 // CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
-func (r *Things) CreateBullet(volume *Volume, x float64, y float64, angle float64) {
+func (r *Things) CreateBullet(volume *Volume, x float64, y float64, z float64, angle float64) {
 	//TODO now is an hack
 	//test zero index
 	c := r.config[2]
 	id := utils.NextUUId()
-	pos := geometry.XY{X: x, Y: y}
+	pos := geometry.XYZ{X: x, Y: y, Z: z}
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, 500.0, 1.0, 5.0, 5.0, c.Animation)
 	thing := NewThingBullet(cfg, r.animations.GetAnimation(cfg.Animation), volume, r.sectors, r.entities)
 	r.things = append(r.things, thing)
 }
 
 // Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
-func (r *Things) Compute(pX float64, pY float64) {
+func (r *Things) Compute(pX float64, pY float64, pZ float64) {
 	activeThings := r.things[:0] // Reslice reusing memory
 
 	for _, t := range r.things {
@@ -100,7 +100,7 @@ func (r *Things) Compute(pX float64, pY float64) {
 			r.entities.RemoveThing(t)
 			continue
 		}
-		t.Compute(pX, pY)
+		t.Compute(pX, pY, pZ)
 		activeThings = append(activeThings, t)
 	}
 

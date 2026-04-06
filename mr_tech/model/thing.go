@@ -23,17 +23,17 @@ type IThing interface {
 
 	GetAnimation() *textures.Animation
 
-	GetPosition() (float64, float64)
+	GetPosition() (float64, float64, float64)
 
 	GetLight() *Light
 
-	GetFloorY() float64
+	GetMinZ() float64
 
-	GetCeilY() float64
+	GetMaxZ() float64
 
 	GetEntity() *physics.Entity
 
-	Compute(playerX float64, playerY float64)
+	Compute(playerX float64, playerY float64, playerZ float64)
 
 	GetVolume() *Volume
 
@@ -46,43 +46,153 @@ type IThing interface {
 	OnCollide(other IThing)
 }
 
-// WallSlidingEffect adjusts the velocity when sliding along a wall to simulate a wall-sliding effect with slight separation.
-// Takes the current view coordinates, position, velocity, head and knee positions, and returns the modified velocity.
-func WallSlidingEffect(volume *Volume, viewX, viewY, pX, pY, velX, velY, top, bottom float64, radius float64) (float64, float64) {
-	const epsilon = 0.5
-	// 1. Trova il segmento più vicino (con padding per gli spigoli)
-	face := volume.CheckFacesClearance2d(viewX, viewY, pX, pY, top, bottom, radius)
-	if face == nil {
-		return velX, velY
+// Slider represents a control or mechanism that uses an axis-aligned bounding box (AABB) for its spatial definition.
+type Slider struct {
+	aabb    *physics.AABB
+	volumes *Volumes
+}
+
+// NewSlider creates and returns a pointer to a new Slider instance with an initialized AABB having default zero bounds.
+func NewSlider(volumes *Volumes) *Slider {
+	return &Slider{
+		volumes: volumes,
+		aabb:    physics.NewAABB(0, 0, 0, 0, 0, 0),
 	}
-	start := face.GetStart()
-	end := face.GetEnd()
-	xd := end.X - start.X
-	yd := end.Y - start.Y
-	if lenSq := xd*xd + yd*yd; lenSq > 0 {
-		// 2. Proiezione della velocità sul vettore tangenziale del muro
-		dot := (velX*xd + velY*yd) / lenSq
-		velX = xd * dot
-		velY = yd * dot
-		// 3. Calcolo della normale
-		invLen := 1.0 / math.Sqrt(lenSq)
-		nx := -yd * invLen
-		ny := xd * invLen
-		// 4. DIREZIONE DELLA NORMALE (Cruciale)
-		// Calcoliamo il vettore che va dal muro al giocatore.
-		// Se la normale calcolata punta nella direzione opposta, la invertiamo.
-		// Usiamo viewX/Y come riferimento sicuro (posizione pre-collisione).
-		midX := (start.X + end.X) * 0.5
-		midY := (start.Y + end.Y) * 0.5
-		toPlayerX := viewX - midX
-		toPlayerY := viewY - midY
-		if (toPlayerX*nx + toPlayerY*ny) < 0 {
-			nx = -nx
-			ny = -ny
+}
+
+// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the Slider instance.
+func (s *Slider) GetAABB() *physics.AABB {
+	return s.aabb
+}
+
+// WallSlidingEffect adjusts the 3D velocity when sliding along a face to simulate physical sliding with separation.
+// It implements Continuous Collision Detection (Sweep Test) and Discrete Point-to-Segment to prevent tunneling and corner snagging.
+func (s *Slider) WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64) {
+	// 1. Broad-phase: Estendiamo l'AABB per includere il raggio e il movimento
+	minX := math.Min(viewX, pX) - radius
+	maxX := math.Max(viewX, pX) + radius
+	minY := math.Min(viewY, pY) - radius
+	maxY := math.Max(viewY, pY) + radius
+
+	s.GetAABB().Rebuild(minX, minY, bottom, maxX, maxY, top)
+
+	var closestFace *Face
+	minT := 1.0 // Earliest Time of Impact (1.0 = nessun impatto in questo frame)
+	var colNx, colNy, colNz float64
+
+	s.volumes.QueryAABB(s, func(vol *Volume) {
+		for _, face := range vol.GetFaces() {
+			// Gestione Portali (Passaggio tra settori)
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				holeLow := math.Max(vol.GetMinZ(), neighbor.GetMinZ())
+				holeHigh := math.Min(vol.GetMaxZ(), neighbor.GetMaxZ())
+				// Se il giocatore passa attraverso il "buco" del portale, ignoriamo la collisione
+				if top <= holeHigh && bottom >= holeLow {
+					continue
+				}
+			}
+
+			n := face.GetNormal()
+			start := face.GetStart()
+			end := face.GetEnd()
+
+			edgeX := end.X - start.X
+			edgeY := end.Y - start.Y
+			edgeLenSq := edgeX*edgeX + edgeY*edgeY
+
+			// Distanze proiettate contro il piano del muro (infinita)
+			distStart := (viewX-start.X)*n.X + (viewY-start.Y)*n.Y
+			distEnd := (pX-start.X)*n.X + (pY-start.Y)*n.Y
+
+			hit := false
+			var hitT float64
+			var cNx, cNy float64
+
+			// Fase A: Sweep Test (Continuous Collision Detection) - Previene il tunneling ad alte velocità
+			// Verifichiamo se passiamo dal davanti al dietro (o dentro il raggio d'azione)
+			if distStart >= -0.01 && distEnd < radius {
+				dotVel := distEnd - distStart // Velocità proiettata sulla normale
+				if dotVel < 0 {
+					// Calcoliamo la frazione di tempo 't' in cui il cilindro tocca il piano
+					t := (radius - distStart) / dotVel
+					if t < 0 {
+						t = 0
+					} // Già in compenetrazione
+
+					if t <= 1.0 {
+						// Coordinate esatte al momento dell'impatto sul piano
+						hitX := viewX + velX*t
+						hitY := viewY + velY*t
+
+						// Proiezione sul segmento per assicurarci di aver colpito il muro reale, non il vuoto
+						vX := hitX - start.X
+						vY := hitY - start.Y
+						dotEdge := vX*edgeX + vY*edgeY
+
+						// Tolleranza per non perdere gli spigoli
+						if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
+							hit = true
+							hitT = t
+							cNx, cNy = n.X, n.Y
+						}
+					}
+				}
+			}
+
+			// Fase B: Discrete Point-to-Segment (Collision Detection sui Vertici) - Previene incagliamenti sugli spigoli
+			if !hit {
+				vX := pX - start.X
+				vY := pY - start.Y
+				tProj := 0.0
+				if edgeLenSq > 0 {
+					tProj = (vX*edgeX + vY*edgeY) / edgeLenSq
+					tProj = math.Max(0.0, math.Min(1.0, tProj)) // Clamp ai confini del segmento
+				}
+				closestX := start.X + (tProj * edgeX)
+				closestY := start.Y + (tProj * edgeY)
+
+				diffX := pX - closestX
+				diffY := pY - closestY
+				distSq := diffX*diffX + diffY*diffY
+
+				if distSq < radius*radius {
+					hit = true
+					hitT = 0.0 // Le collisioni discrete hanno priorità immediata (compenetrazione in atto)
+					cDist := math.Sqrt(distSq)
+
+					if tProj > 0.0 && tProj < 1.0 {
+						// Impatto sul lato piatto
+						cNx, cNy = n.X, n.Y
+					} else {
+						// Impatto sullo spigolo (Vertice): Creiamo una normale radiale per "scivolare" morbidamente attorno al cardine
+						if cDist > 0.0001 {
+							cNx, cNy = diffX/cDist, diffY/cDist
+						} else {
+							cNx, cNy = n.X, n.Y // Fallback di sicurezza
+						}
+					}
+				}
+			}
+
+			// Se abbiamo registrato un hit, salviamo quello che è avvenuto PRIMA temporalmente (minT)
+			if hit && hitT <= minT {
+				minT = hitT
+				closestFace = face
+				colNx, colNy, colNz = cNx, cNy, n.Z
+			}
 		}
-		// 5. Applica l'epsilon push per staccarsi fisicamente dal piano di collisione
-		velX += nx * epsilon
-		velY += ny * epsilon
+	})
+
+	// 2. Risoluzione Newtoniana sul muro più vicino (o più precoce)
+	if closestFace != nil {
+		// Proiezione del vettore velocità: eliminiamo solo la forza perpendicolare alla faccia
+		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
+		if dot < 0 {
+			velX = velX - (dot * colNx)
+			velY = velY - (dot * colNy)
+			velZ = velZ - (dot * colNz)
+		}
 	}
-	return velX, velY
+
+	return velX, velY, velZ
 }

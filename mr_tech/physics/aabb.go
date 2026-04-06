@@ -35,7 +35,7 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxX = maxX
 	a.maxY = maxY
 	a.maxZ = maxZ
-	a.surfaceArea = a.CalculateSurfaceArea()
+	a.surfaceArea = 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
 }
 
 // Expand increases the size of the AABB by the given margin in all directions and returns a new expanded AABB.
@@ -133,12 +133,6 @@ func (a *AABB) GetMaxZ() float64 {
 // GetDepth calculates and returns the depth of the axis-aligned bounding box (AABB) along the Z-axis.
 func (a *AABB) GetDepth() float64 {
 	return a.maxZ - a.minZ
-}
-
-// CalculateSurfaceArea computes and returns the surface area of the axis-aligned bounding box (AABB).
-func (a *AABB) CalculateSurfaceArea() float64 {
-	s := 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
-	return s
 }
 
 // IntersectFrustum controlla se l'AABB si trova all'interno (o interseca) il Frustum fornito.

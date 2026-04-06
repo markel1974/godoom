@@ -10,7 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Compiler represents a core game engine component for managing sectors, game objects, player interactions, and entities.
+// Compiler represents a core game engine component for managing volumes, game objects, player interactions, and entities.
 type Compiler struct {
 	volumes   *Volumes
 	volumes3d *Volumes
@@ -92,7 +92,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		return err
 	}
 
-	fmt.Printf("Scan complete sectors: %d, segments: %d\n", r.volumes.Len(), totalSegments)
+	fmt.Printf("Scan complete volumes: %d, segments: %d\n", r.volumes.Len(), totalSegments)
 
 	return nil
 }
@@ -122,7 +122,7 @@ func (r *Compiler) GetLights() *Lights {
 	return r.lights
 }
 
-// compile2d constructs and processes game sectors based on configuration data, animations, and geometry relationships.
+// compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
 	modelSectorId := 0
 	var container []*Volume
@@ -240,14 +240,14 @@ func (r *Compiler) compileLights(cLights []*config.ConfigLight) ([]*Light, error
 	return out, nil
 }
 
-// compileLights processes and merges adjacent sectors with similar properties into unified lighting areas.
+// compileLights processes and merges adjacent volumes with similar properties into unified lighting areas.
 func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([]*Light, error) {
 	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
 	visited := make(map[string]bool)
 	var out []*Light
 
 	addLight := func(z *Volume, intensity float64, falloff float64, kind config.LightKind, pos geometry.XYZ) {
-		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetFloorY() + z.GetCeilY()}
+		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
 		light := NewLight()
 		light.Setup(z, intensity, falloff, kind, lightPos)
 		out = append(out, light)
@@ -270,7 +270,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 				if n := seg.GetNeighbor(); n != nil {
 					if !visited[n.GetId()] {
 						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
-						if n.GetCeilY() == curr.GetCeilY() && n.GetFloorY() == curr.GetFloorY() && n.Light.intensity == curr.Light.intensity {
+						if n.GetMaxZ() == curr.GetMaxZ() && n.GetMinZ() == curr.GetMinZ() && n.Light.intensity == curr.Light.intensity {
 							visited[n.GetId()] = true
 							queue = append(queue, n)
 						}
@@ -353,8 +353,8 @@ func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
 		p0 := faces2d[0].GetStart()
 		p1 := faces2d[1].GetStart()
 		p2 := faces2d[2].GetStart()
-		floorY := vol2d.GetFloorY()
-		ceilY := vol2d.GetCeilY()
+		floorY := vol2d.GetMinZ()
+		ceilY := vol2d.GetMaxZ()
 		// [Indice 0] Soffitto (Ceil)
 		ceilP := []geometry.XYZ{{X: p0.X, Y: ceilY, Z: p0.Y}, {X: p1.X, Y: ceilY, Z: p1.Y}, {X: p2.X, Y: ceilY, Z: p2.Y}}
 		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))

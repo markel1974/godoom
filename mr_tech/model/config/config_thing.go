@@ -19,7 +19,7 @@ const (
 // ConfigThing represents a game entity with physical properties, animation, and positional data within a specific sector.
 type ConfigThing struct {
 	Id        string           `json:"id"`
-	Position  geometry.XY      `json:"position"`
+	Position  geometry.XYZ     `json:"position"`
 	Angle     float64          `json:"angle"`
 	Mass      float64          `json:"mass"`
 	Radius    float64          `json:"radius"`
@@ -38,7 +38,7 @@ type ConfigThing struct {
 // mass defines the weight of the thing, used in physics calculations.
 // radius and height define the dimensions of the thing for collision and spatial representation.
 // anim is the animation configuration associated with the thing, such as frames, kind, and scale.
-func NewConfigThing(id string, pos geometry.XY, angle float64, kind ThingType, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
+func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *ConfigAnimation) *ConfigThing {
 	return &ConfigThing{
 		Id:        id,
 		Position:  pos,

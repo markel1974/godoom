@@ -139,11 +139,11 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Volume.GetCeilY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetCeilY()), float32(cp.Volume.GetCeilY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
 				} else {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetFloorY()), float32(cp.Neighbor.GetFloorY()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -153,12 +153,12 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Volume.GetCeilY())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
 						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Volume.GetFloorY())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Volume.GetMinZ())); sky != nil {
 						w.cSky = sky
 					}
 				}
@@ -273,7 +273,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		if t.GetAnimation() == nil {
 			continue
 		}
-		tPosX, tPosY := t.GetPosition()
+		tPosX, tPosY, _ := t.GetPosition()
 		dx := tPosX - camX
 		dy := tPosY - camY
 		distSq := dx*dx + dy*dy
@@ -306,7 +306,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		v2x := float32(tPosX + rX)
 		v2y := float32(tPosY + rY)
 
-		zBottom := float32(t.GetFloorY())
+		zBottom := float32(t.GetMinZ())
 		zTop := zBottom + float32(height)
 
 		startIndices := fv.GetIndicesLen()

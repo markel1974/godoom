@@ -338,16 +338,13 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
 	feetZ := pz - p.getEyeHeight()
 	topZ := feetZ + p.entity.GetDepth() // o p.entity.GetDepth()
 	stepHeight := p.kneeHeight          // Definito come 2.0 nelle tue costanti
-
 	if newVolume := p.sectors.SearchVolume3d(p.volume, px, py, feetZ, topZ, stepHeight); newVolume != nil && newVolume != p.volume {
 		p.volume = newVolume
 	}
-
 	// 3. Sincronizzazione velocità nel motore impulsivo
 	p.entity.SetVx(p.velocity.X)
 	p.entity.SetVy(p.velocity.Y)
 	p.entity.SetVz(p.velocity.Z)
-
 	// 4. Update AABB Tree: passiamo la quota dei PIEDI (pz - eyeHeight)
 	// affinché il Rect.point.z (base) sia allineato al pavimento del settore.
 	p.entities.UpdateThing(p, px, py, pz-p.getEyeHeight())
@@ -356,21 +353,17 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
 // Update updates the player's position and velocity based on movement and physics calculations.
 func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	p.verticalMovementApply()
-
 	// Se siamo fermi orizzontalmente ma stiamo cadendo, IsMoving deve essere true
 	if !p.IsMoving() && !p.falling {
 		return
 	}
-
 	viewX, viewY, viewZ := p.GetPosition()
 	velX, velY, velZ := p.GetVelocity()
-
-	// adjustPassage ora gestisce la risoluzione 3D completa
-	velX, velY, velZ = p.adjustPassage(viewX, viewY, viewZ, velX, velY, velZ)
-
+	top := viewZ + p.headMargin
+	bottom := viewZ - p.getEyeHeight() + p.kneeHeight
+	velX, velY, velZ = p.adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom)
 	// Applichiamo i delta finali filtrati
 	p.MoveApply(velX, velY, velZ)
-
 	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)
 	if !p.falling {
 		p.velocity.Z = 0
@@ -392,38 +385,29 @@ func (p *ThingPlayer) OnCollide(other IThing) {
 }
 
 // adjustPassage adjusts the player's movement vector while accounting for collisions, wall sliding, and vertical clipping constraints.
-func (p *ThingPlayer) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ float64) (float64, float64, float64) {
+func (p *ThingPlayer) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom float64) (float64, float64, float64) {
 	// 1. Broad-phase vertical bounds (ingombro fisico del giocatore)
-	top := viewZ + p.headMargin
-	bottom := viewZ - p.getEyeHeight() + p.kneeHeight
-
 	// Coordinate target per il narrow-phase
 	pX := viewX + velX
 	pY := viewY + velY
 	pZ := viewZ + velZ
-	radius := p.entity.GetWidth() / 2
-
 	// 2. Wall Sliding 3D (via AABB Tree)
 	// Ora passiamo anche viewZ, pZ e velZ.
 	// Se colpiamo una superficie non verticale, velZ verrà influenzato dalla proiezione sulla normale.
-	velX, velY, velZ = p.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
-
+	velX, velY, velZ = p.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, p.radius)
 	// 3. Vertical Clipping (Floor/Ceiling)
 	// Limiti rigidi basati sul volume (settore) corrente.
 	nextZ := viewZ + velZ
-
 	// Floor: Gli occhi (viewZ) non possono scendere sotto il pavimento + altezza occhi.
-	floorLimit := p.volume.GetMinZ() + p.getEyeHeight()
-	if nextZ < floorLimit {
-		velZ = floorLimit - viewZ
+	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
+	if nextZ < zMinLimit {
+		velZ = zMinLimit - viewZ
 	}
-
 	// Ceiling: La testa (viewZ + HeadMargin) non può superare il soffitto.
-	ceilLimit := p.volume.GetMaxZ() - p.headMargin
-	if viewZ+velZ > ceilLimit {
-		velZ = ceilLimit - viewZ
+	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
+	if viewZ+velZ > zMaxLimit {
+		velZ = zMaxLimit - viewZ
 	}
-
 	return velX, velY, velZ
 }
 

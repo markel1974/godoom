@@ -144,11 +144,13 @@ func (t *ThingBase) PhysicsApply() {
 	tx := (eX - t.position.X) + t.entity.GetVx()
 	ty := (eY - t.position.Y) + t.entity.GetVy()
 	tz := (currentBaseZ - t.position.Z) + t.entity.GetVz()
+	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
+	bottom := viewZ
+	top := viewZ + t.height
 
 	// 3. ESECUZIONE SEMPRE ATTIVA (Rimosso il check minMovement per la logica Z)
 	// Dobbiamo calcolare adjustPassage per applicare gravità passiva e snapping
-	vx, vy, vz := t.adjustPassage(tx, ty, tz, t.maxStep)
-
+	vx, vy, vz := t.adjustPassage(viewX, viewY, viewZ, tx, ty, tz, top, bottom, t.maxStep)
 	// 4. Applichiamo il movimento se significativo
 	if math.Abs(vx) > minMovement || math.Abs(vy) > minMovement || math.Abs(vz) > minMovement {
 		t.position.X += vx
@@ -183,28 +185,19 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
-func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, float64, float64) {
+func (t *ThingBase) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom, maxStep float64) (float64, float64, float64) {
 	// 1. Parametri fisici correnti
-	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
-	radius := t.entity.GetWidth() / 2
-
 	// Correzione: Il bottom deve essere la quota piedi reale per il wall-sliding.
 	// Usiamo il maxStep solo per "filtrare" cosa ignorare durante lo scivolamento orizzontale.
-	bottom := viewZ
-	top := viewZ + t.height
-
 	pX := viewX + velX
 	pY := viewY + velY
 	pZ := viewZ + velZ
-
 	// 2. Wall Sliding (Collisione orizzontale)
 	// Se velX/velY portano contro uno scalino < maxStep, il sistema di sliding
 	// deve permettere l'avanzamento invece di azzerare il vettore.
-	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom+maxStep, radius)
-
+	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom+maxStep, t.radius)
 	// 3. Pre-fetch del settore Target (Sonda avanzata)
 	targetVol := t.volume
-
 	// Creiamo una sonda che guardi leggermente avanti rispetto alla posizione attuale
 	// per intercettare il settore dello scalino prima di sbatterci.
 	probeX := viewX + velX
@@ -214,20 +207,15 @@ func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, f
 		probeX += math.Cos(t.angle) * 0.1
 		probeY += math.Sin(t.angle) * 0.1
 	}
-
 	// Cerchiamo se la sonda finisce in un nuovo volume compatibile con il nostro maxStep
 	if nv := t.volumes.SearchVolume3d(t.volume, probeX, probeY, viewZ, viewZ+t.height, maxStep); nv != nil {
 		targetVol = nv
 	}
-
-	minZ := targetVol.GetMinZ()
-	maxZ := targetVol.GetMaxZ()
+	minZ, maxZ := targetVol.GetMinZ(), targetVol.GetMaxZ()
 	if maxZ <= minZ {
 		maxZ = math.MaxFloat64 // Cielo aperto
 	}
-
 	nextZ := viewZ + velZ
-
 	// 4. Risoluzione Vincoli Verticali (Salita, Discesa e Gravità)
 	if nextZ < minZ {
 		// STEP UP: Il nuovo pavimento è più alto (scalino in salita).
@@ -245,6 +233,5 @@ func (t *ThingBase) adjustPassage(velX, velY, velZ, maxStep float64) (float64, f
 			velZ = -0.15 // Valore leggermente superiore a minMovement per garantire il movimento
 		}
 	}
-
 	return velX, velY, velZ
 }

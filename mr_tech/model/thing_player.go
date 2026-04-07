@@ -34,7 +34,7 @@ type ThingPlayer struct {
 	identifier     int
 	bob            float64
 	bobPhase       float64
-	wallPhysics    *WallPhysics
+	wall           *ThingWall
 	debug          bool
 	height         float64
 	eyeHeight      float64
@@ -75,7 +75,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 		entities:       entities,
 		debug:          debug,
 		identifier:     -1,
-		wallPhysics:    NewWallPhysics(volumes),
+		wall:           NewThingWall(volumes),
 		height:         height,
 		eyeHeight:      height * 0.80,
 		maxStep:        height * 0.50,
@@ -363,7 +363,7 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	zBottom := viewZ - p.getEyeHeight() + p.kneeHeight
 	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
 	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
-	velX, velY, velZ, _ = p.wallPhysics.AdjustVelocity(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius, false)
+	velX, velY, velZ, _ = p.wall.Compute(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius, false)
 	// Applichiamo i delta finali filtrati
 	p.MoveApply(velX, velY, velZ)
 	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)

@@ -108,7 +108,7 @@ func (e *Entity) Update() bool {
 	if math.Abs(e.vz) < e.vzMin {
 		e.vz = 0.0
 	}
-	return e.isMoving()
+	return e.IsMoving()
 }
 
 // MoveTest calculates the new x, y, z coordinates of the Entity based on its current velocity (vx, vy, vz).
@@ -298,8 +298,8 @@ func (e *Entity) SetupCollision(otherEnt *Entity) {
 	}
 }
 
-// isMoving determines if the entity is in motion by checking if any of its velocity components (vx, vy, vz) are non-zero.
-func (e *Entity) isMoving() bool {
+// IsMoving determines if the entity is in motion by checking if any of its velocity components (vx, vy, vz) are non-zero.
+func (e *Entity) IsMoving() bool {
 	return e.vx != 0 || e.vy != 0 || e.vz != 0
 }
 

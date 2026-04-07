@@ -62,6 +62,9 @@ func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64)
 // PhysicsApply updates the bullet's position based on physics deltas (X, Y, Z)
 // and synchronizes its state with the 3D spatial partitioning.
 func (t *ThingBullet) PhysicsApply() {
+	if !t.entity.IsMoving() {
+		return
+	}
 	// 1. Recupero dal motore fisico (Baricentro Reale 3D)
 	eX, eY, eZ := t.entity.GetCenter()
 	// Calcolo quota base del proiettile
@@ -82,7 +85,7 @@ func (t *ThingBullet) PhysicsApply() {
 	zMinLimit := t.volume.GetMinZ()
 	zMaxLimit := t.volume.GetMaxZ()
 	// Rimbalzo sui muri (Broad & Narrow phase)
-	velX, velY, velZ, _ := t.wallPhysics.AdjustVelocity(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, true)
+	velX, velY, velZ, _ := t.wall.Compute(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, true)
 	if math.Abs(velX) > minMovement || math.Abs(velX) > minMovement || math.Abs(velX) > minMovement {
 		t.entity.SetVx(velX)
 		t.entity.SetVy(velY)

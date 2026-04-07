@@ -11,25 +11,25 @@ import (
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id          string
-	position    geometry.XYZ
-	mass        float64
-	radius      float64
-	height      float64
-	angle       float64
-	maxStep     float64
-	kind        config.ThingType
-	speed       float64
-	volume      *Volume
-	animation   *textures.Animation
-	volumes     *Volumes
-	entities    *Entities
-	entity      *physics.Entity
-	isActive    bool
-	identifier  int
-	lastTx      float64
-	lastTy      float64
-	wallPhysics *WallPhysics
+	id         string
+	position   geometry.XYZ
+	mass       float64
+	radius     float64
+	height     float64
+	angle      float64
+	maxStep    float64
+	kind       config.ThingType
+	speed      float64
+	volume     *Volume
+	animation  *textures.Animation
+	volumes    *Volumes
+	entities   *Entities
+	entity     *physics.Entity
+	isActive   bool
+	identifier int
+	lastTx     float64
+	lastTy     float64
+	wall       *ThingWall
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and entities.
@@ -42,23 +42,23 @@ func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Anim
 	entH := radius * 2
 	entD := cfg.Height // In 3D, la profondità è l'altezza reale dell'entità
 	thing := &ThingBase{
-		id:          cfg.Id,
-		position:    pos,
-		angle:       cfg.Angle,
-		kind:        cfg.Kind,
-		mass:        cfg.Mass,
-		radius:      cfg.Radius,
-		height:      cfg.Height,
-		speed:       cfg.Speed,
-		volume:      volume,
-		animation:   anim,
-		volumes:     volumes,
-		entities:    entities,
-		maxStep:     cfg.Height * 0.5,
-		entity:      physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass),
-		isActive:    true,
-		identifier:  -1,
-		wallPhysics: NewWallPhysics(volumes),
+		id:         cfg.Id,
+		position:   pos,
+		angle:      cfg.Angle,
+		kind:       cfg.Kind,
+		mass:       cfg.Mass,
+		radius:     cfg.Radius,
+		height:     cfg.Height,
+		speed:      cfg.Speed,
+		volume:     volume,
+		animation:  anim,
+		volumes:    volumes,
+		entities:   entities,
+		maxStep:    cfg.Height * 0.5,
+		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass),
+		isActive:   true,
+		identifier: -1,
+		wall:       NewThingWall(volumes),
 	}
 	return thing
 }
@@ -131,21 +131,24 @@ func (t *ThingBase) GetIdentifier() int {
 // PhysicsApply updates the position of the object based on passive and active physics-driven deltas.
 func (t *ThingBase) PhysicsApply() {
 	// 1. Recupero dati dal motore impulsivo
+	if !t.entity.IsMoving() {
+		return
+	}
 	eX, eY, eZ := t.entity.GetCenter()
 	currentBaseZ := eZ - (t.entity.GetDepth() / 2.0)
 	// 2. Calcolo dei delta
-	tx := (eX - t.position.X) + t.entity.GetVx()
-	ty := (eY - t.position.Y) + t.entity.GetVy()
-	tz := (currentBaseZ - t.position.Z) + t.entity.GetVz()
-	//if tx == 0 && ty == 0 && tz == 0 {
-	//	return
-	//}
+	deltaX := (eX - t.position.X) + t.entity.GetVx()
+	deltaY := (eY - t.position.Y) + t.entity.GetVy()
+	deltaZ := (currentBaseZ - t.position.Z) + t.entity.GetVz()
+	if deltaX == 0 && deltaY == 0 && deltaZ == 0 {
+		return
+	}
 	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
 	zBottom := viewZ
 	zTop := viewZ + t.height
 	zMinLimit := t.volume.GetMinZ()
 	zMaxLimit := t.volume.GetMaxZ() - t.height
-	velX, velY, velZ, _ := t.wallPhysics.AdjustVelocity(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, false)
+	velX, velY, velZ, _ := t.wall.Compute(viewX, viewY, viewZ, deltaX, deltaY, deltaZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, false)
 	// 4. Applichiamo il movimento se significativo
 	if math.Abs(velX) > minMovement || math.Abs(velY) > minMovement || math.Abs(velZ) > minMovement {
 		//t.entity.SetVx(velX)

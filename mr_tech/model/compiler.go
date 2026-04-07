@@ -338,10 +338,7 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 	var fixFaces []*Face
 	totalPolygons := 0
 	modelSectorId := 0
-
-	// Usiamo un albero bello capiente per i BSP di Quake
-	facesTree := physics.NewAABBTree(8192)
-
+	facesTree := physics.NewAABBTree(1024)
 	for _, cv := range cfg.Volumes {
 		// cv.Id e cv.Tag provengono dal parser BSP
 		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
@@ -353,11 +350,9 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 				continue
 			}
 			material := anim.GetAnimation(cf.Material)
-			// Triangle Fan: scompone il poligono convesso N-Gon in triangoli.
-			// Fissiamo il vertice 0 come perno e iteriamo sui successivi a coppie.
-			for i := 1; i < pLen-1; i++ {
-				// Manteniamo il Winding Order originale di Quake per le normali
-				tri := []geometry.XYZ{pts[0], pts[i], pts[i+1]}
+			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
+			triangles := geometry.Triangulate3DFace(pts)
+			for _, tri := range triangles {
 				face := NewFace(nil, tri, cf.Tag, material)
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)
@@ -367,7 +362,6 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 		}
 		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
 		volume.Light = NewLight()
-		// Genera l'AABB definitivo del volume 3D
 		volume.Rebuild()
 		container = append(container, volume)
 	}

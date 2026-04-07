@@ -151,7 +151,7 @@ func (t *ThingBase) PhysicsApply() {
 	zTop := viewZ + t.height
 	zMinLimit := t.volume.GetMinZ()            // + t.getEyeHeight()
 	zMaxLimit := t.volume.GetMaxZ() - t.height //.headMargin
-	vx, vy, vz, _ := t.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius)
+	vx, vy, vz, _ := t.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, t.height)
 	//vx, vy, vz := t.adjustPassage(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, t.maxStep)
 	// 4. Applichiamo il movimento se significativo
 	if math.Abs(vx) > minMovement || math.Abs(vy) > minMovement || math.Abs(vz) > minMovement {

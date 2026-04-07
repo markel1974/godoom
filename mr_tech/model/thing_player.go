@@ -363,12 +363,8 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	zBottom := viewZ - p.getEyeHeight() + p.kneeHeight
 	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
 	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
-
 	//var changed bool
-	velX, velY, velZ, _ = p.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius)
-	//if !changed {
-	//	return
-	//}
+	velX, velY, velZ, _ = p.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius, p.height)
 	// Applichiamo i delta finali filtrati
 	p.MoveApply(velX, velY, velZ)
 	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)

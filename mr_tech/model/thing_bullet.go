@@ -90,39 +90,34 @@ func (t *ThingBullet) PhysicsApply() {
 
 // adjustPassage resolves the 3D trajectory of the bullet, handling bounces via the spatial tree.
 func (t *ThingBullet) adjustPassage(velX, velY, velZ float64) (float64, float64, float64) {
+	viewX := t.position.X
+	viewY := t.position.Y
 	viewZ := t.position.Z
-	bottom := viewZ
-	top := viewZ + t.height
-	viewX, viewY := t.position.X, t.position.Y
-	pX := viewX + velX
-	pY := viewY + velY
-	pZ := viewZ + velZ
-
+	zBottom := viewZ
+	zTop := viewZ + t.height
+	zMinLimit := t.volume.GetMinZ()
+	zMaxLimit := t.volume.GetMaxZ()
 	// Rimbalzo sui muri (Broad & Narrow phase)
-	velX, velY, velZ, _ = t.slider.EffectBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, t.radius)
-	//if !changed {
-	//	return velX, velY, velZ
-	//}
-
+	//velX, velY, velZ, _ = t.slider.EffectWallBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, t.radius)
+	velX, velY, velZ, _ = t.slider.AdjustBounce(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, t.height)
 	t.entity.SetVx(velX)
 	t.entity.SetVy(velY)
 	t.entity.SetVz(velZ)
 
-	// Clipping e Rimbalzo Pavimento/Soffitto
-	nextZ := viewZ + velZ
-	minZ := t.volume.GetMinZ()
-	maxZ := t.volume.GetMaxZ()
+	/*
+		// Clipping e Rimbalzo Pavimento/Soffitto
+		nextZ := viewZ + velZ
+		if nextZ < minZ {
+			// Rimbalzo sul pavimento
+			velZ = math.Abs(velZ) * 0.8 // Perde un 20% di energia
+			t.entity.SetVz(velZ)
+		} else if nextZ+t.height > maxZ {
+			// Rimbalzo sul soffitto
+			velZ = -math.Abs(velZ) * 0.8
+			t.entity.SetVz(velZ)
+		}
 
-	if nextZ < minZ {
-		// Rimbalzo sul pavimento
-		velZ = math.Abs(velZ) * 0.8 // Perde un 20% di energia
-		t.entity.SetVz(velZ)
-	} else if nextZ+t.height > maxZ {
-		// Rimbalzo sul soffitto
-		velZ = -math.Abs(velZ) * 0.8
-		t.entity.SetVz(velZ)
-	}
-
+	*/
 	return velX, velY, velZ
 }
 

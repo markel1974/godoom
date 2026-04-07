@@ -7,7 +7,7 @@ import (
 )
 
 // vMin defines the minimum velocity threshold below which motion is considered negligible for an entity.
-const vMin = 0.001
+const vMin = 0.00001
 
 // CalcDistance calculates the Euclidean distance between two points in 3D space defined by their coordinates.
 func CalcDistance(x1, y1, z1, x2, y2, z2 float64) float64 {
@@ -79,8 +79,6 @@ func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, d 
 	e.impulse = vMin
 	e.rect.rebuild()
 }
-
-// Update applies motion updates to the entity and adjusts velocities based on friction. Returns true if movement occurs.
 func (e *Entity) Update() bool {
 	// Clearance esatto tramite AABB (Narrow-phase 3D)
 	if e.collider != nil {
@@ -89,14 +87,24 @@ func (e *Entity) Update() bool {
 		}
 	}
 
+	// 1. APPLICAZIONE DELLA GRAVITÀ COSTANTE
+	// Altera vz PRIMA del check di movimento. Un oggetto fermo in aria inizierà a cadere.
+	if e.gForce > 0.0 {
+		const baseGravity = 0.25 // Tarala in base alle metriche del tuo mondo (es. 0.25 unità/frame)
+		e.vz -= baseGravity * e.gForce
+	}
+
+	// 2. CHECK DI MOVIMENTO
 	if !e.isMoving() {
 		return false
 	}
 
+	// 3. APPLICAZIONE ATTRITO
 	e.vx *= e.friction
 	e.vy *= e.friction
 	e.vz *= e.frictionZ
 
+	// 4. CLAMPING DELLE VELOCITÀ MINIME
 	if math.Abs(e.vx) < e.vxMin {
 		e.vx = 0.0
 	}
@@ -107,12 +115,12 @@ func (e *Entity) Update() bool {
 		e.vz = 0.0
 	}
 
-	if !e.isMoving() {
-		return false
-	}
+	// 5. CALCOLO DELLA FORZA G (Impatto)
+	// Essendo calcolato sulla velocità finale, e.g misurerà la violenza del movimento.
+	// È perfetto da leggere all'esterno per calcolare i DANNI DA CADUTA o gli urti!
+	e.calcG()
 
-	e.g = e.calcG()
-	return true
+	return e.isMoving()
 }
 
 // MoveTest calculates the new x, y, z coordinates of the Entity based on its current velocity (vx, vy, vz).
@@ -321,10 +329,10 @@ func (e *Entity) clearCollider() {
 }
 
 // calcG computes and returns the total G-force acting on the entity based on its velocity vector and gForce value.
-func (e *Entity) calcG() float64 {
+func (e *Entity) calcG() {
 	if e.gForce == 0.0 {
-		return 0.0
+		return
 	}
 	// G-Force influenzata dal vettore velocità totale
-	return math.Sqrt(e.vx*e.vx+e.vy*e.vy+e.vz*e.vz) * e.gForce
+	e.g = math.Sqrt(e.vx*e.vx+e.vy*e.vy+e.vz*e.vz) * e.gForce
 }

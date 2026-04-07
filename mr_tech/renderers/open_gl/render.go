@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/pixels"
 	"github.com/markel1974/godoom/pixels/executor"
@@ -230,8 +231,9 @@ func (w *RenderOpenGL) doRun() {
 
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
 func (w *RenderOpenGL) doPlayerFire() {
-	x, y, z := w.player.GetPosition()
-	w.engine.Fire(w.player.GetVolume(), x, y, z, w.player.GetRealAngle())
+	x, y, _ := w.player.GetPosition()
+	pos := geometry.XYZ{X: x, Y: y, Z: 0}
+	w.engine.Fire(w.player.GetVolume(), pos, w.player.GetRealAngle(), w.player.GetYaw())
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.

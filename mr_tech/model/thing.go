@@ -8,8 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// IThing defines an interface for game objects with properties such as ID, position, animation, and lighting,
-// and methods for computation and movement handling.
+// IThing defines an interface for a game entity with methods for retrieving identifiers, position, and physics properties.
 type IThing interface {
 	GetId() string
 
@@ -46,102 +45,80 @@ type IThing interface {
 	OnCollide(other IThing)
 }
 
-// Slider represents a control or mechanism that uses an axis-aligned bounding box (AABB) for its spatial definition.
-type Slider struct {
+// WallPhysics represents a UI component or control typically used to select a value from a range by sliding a handle.
+type WallPhysics struct {
 	aabb    *physics.AABB
 	volumes *Volumes
 }
 
-// NewSlider creates and returns a pointer to a new Slider instance with an initialized AABB having default zero bounds.
-func NewSlider(volumes *Volumes) *Slider {
-	return &Slider{
+// NewWallPhysics initializes and returns a new WallPhysics instance, associating it with the provided Volumes object.
+func NewWallPhysics(volumes *Volumes) *WallPhysics {
+	return &WallPhysics{
 		volumes: volumes,
 		aabb:    physics.NewAABB(0, 0, 0, 0, 0, 0),
 	}
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the Slider instance.
-func (s *Slider) GetAABB() *physics.AABB {
+// GetAABB returns the axis-aligned bounding box (AABB) associated with the WallPhysics instance.
+func (s *WallPhysics) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
-// AdjustPassage adjusts the player's movement vector while accounting for collisions, wall sliding, and vertical clipping constraints.
-func (s *Slider) AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius, height float64) (float64, float64, float64, bool) {
-	// 1. Broad-phase vertical bounds (ingombro fisico del giocatore)
-	// Coordinate target per il narrow-phase
+// AdjustVelocity elabora dinamicamente lo scivolamento o il rimbalzo analizzando il modulo della velocità.
+func (s *WallPhysics) AdjustVelocity(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64, ballistic bool) (float64, float64, float64, bool) {
+	changed := false
 	pX := viewX + velX
 	pY := viewY + velY
 	pZ := viewZ + velZ
-	velX, velY, velZ, _ = s.effectWallSliding(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
-	// 3. Vertical Clipping (Floor/Ceiling)
-	// Limiti rigidi basati sul volume (settore) corrente.
-	nextZ := viewZ + velZ
-	if nextZ < zMinLimit {
-		velZ = zMinLimit - viewZ
-	}
-	if viewZ+velZ > zMaxLimit {
-		velZ = zMaxLimit - viewZ
-	}
-	return velX, velY, velZ, true
-}
 
-func (s *Slider) AdjustBounce(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius, height float64) (float64, float64, float64, bool) {
-	pX := viewX + velX
-	pY := viewY + velY
-	pZ := viewZ + velZ
-	velX, velY, velZ, _ = s.effectWallBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
-	nextZ := viewZ + velZ
-	if nextZ < zMinLimit {
-		// Rimbalzo sul pavimento
-		velZ = math.Abs(velZ) * 0.8 // Perde un 20% di energia
-		//t.entity.SetVz(velZ)
-	} else if nextZ+height > zMaxLimit {
-		// Rimbalzo sul soffitto
-		velZ = -math.Abs(velZ) * 0.8
-		//t.entity.SetVz(velZ)
-	}
+	const acceleration = 0.2 //2.0
+	const bounce = 0.1       //0.8
 
-	return velX, velY, velZ, true
-}
+	// 1. Risoluzione Planare/Arbitraria (Muri e Geometria 3D)
+	closestFace, colNx, colNy, colNz := s.closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
 
-// effectWallSliding adjusts the 3D velocity when sliding along a face to simulate physical sliding with separation.
-// It implements Continuous Collision Detection (Sweep Test) and Discrete Point-to-Segment to prevent tunneling and corner snagging.
-func (s *Slider) effectWallSliding(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64, bool) {
-	// 1. Broad-phase: Estendiamo l'AABB per includere il raggio e il movimento
-	closestFace, colNx, colNy, colNz := s.closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
-	// 2. Risoluzione Newtoniana sul muro più vicino (o più precoce)
 	if closestFace != nil {
-		// Proiezione del vettore velocità: eliminiamo solo la forza perpendicolare alla faccia
 		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
 		if dot < 0 {
-			velX = velX - (dot * colNx)
-			velY = velY - (dot * colNy)
-			velZ = velZ - (dot * colNz)
-			return velX, velY, velZ, true
+			changed = true
+			if ballistic {
+				// Comportamento Bouncing (Riflessione elastica pura per proiettili)
+				velX -= acceleration * dot * colNx
+				velY -= acceleration * dot * colNy
+				velZ -= acceleration * dot * colNz
+			} else {
+				// Comportamento Sliding (Assorbimento dell'impatto per Player/Mostri)
+				velX -= dot * colNx
+				velY -= dot * colNy
+				velZ -= dot * colNz
+			}
 		}
 	}
-	return velX, velY, velZ, false
-}
-
-// effectWallBounce calculates the resulting direction of a projectile after collision applying continuous 3D bounce physics.
-func (s *Slider) effectWallBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64, bool) {
-	closestFace, colNx, colNy, colNz := s.closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
-	// 2. Risoluzione Newtoniana (Riflessione Vettoriale 3D)
-	if closestFace != nil {
-		restitution := 1.0 // 1.0 = Elastico (rimbalza senza perdere forza)
-		// Prodotto scalare 3D completo
-		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
-		if dot < 0 {
-			velX -= (1.0 + restitution) * dot * colNx
-			velY -= (1.0 + restitution) * dot * colNy
-			velZ -= (1.0 + restitution) * dot * colNz
-			return velX, velY, velZ, true
+	nextZ := viewZ + velZ
+	if ballistic {
+		if nextZ < zMinLimit {
+			changed = true
+			velZ = math.Abs(velZ) * bounce // Proiettile che rimbalza sul pavimento
+		}
+		if nextZ > zMaxLimit {
+			changed = true
+			velZ = -math.Abs(velZ) * bounce // Proiettile che rimbalza sul soffitto
+		}
+	} else {
+		if nextZ < zMinLimit {
+			changed = true
+			velZ = zMinLimit - viewZ
+		}
+		if nextZ > zMaxLimit {
+			changed = true
+			velZ = zMaxLimit - viewZ
 		}
 	}
-	return velX, velY, velZ, false
+	return velX, velY, velZ, changed
 }
 
-func (s *Slider) closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
+// closestFace finds the nearest face a moving object collides with, given its trajectory and radius, using 3D collision detection.
+func (s *WallPhysics) closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
 	minX := math.Min(viewX, pX) - radius
 	maxX := math.Max(viewX, pX) + radius
 	minY := math.Min(viewY, pY) - radius

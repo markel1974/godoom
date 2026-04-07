@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -134,8 +135,8 @@ func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 }
 
 // Fire spawns a bullet in the specified sector at the given coordinates and angle.
-func (e *Engine) Fire(volume *model.Volume, x float64, y float64, z float64, angle float64) {
-	e.things.CreateBullet(volume, x, y, z, angle)
+func (e *Engine) Fire(volume *model.Volume, pos geometry.XYZ, angle float64, pitch float64) {
+	e.things.CreateBullet(volume, pos, angle, pitch)
 }
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.

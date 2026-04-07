@@ -12,8 +12,10 @@ type ThingItem struct {
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
 func NewThingItem(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingItem {
+	pos := cfg.Position
+	pos.Z = volume.GetMinZ()
 	thing := &ThingItem{
-		ThingBase: NewThingBase(cfg, anim, volume, sectors, entities),
+		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, entities),
 	}
 	thing.entities.AddThing(thing)
 	return thing

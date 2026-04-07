@@ -332,6 +332,90 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 	return out, nil
 }
 
+// compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
+func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
+	var container []*Volume
+	var fixFaces []*Face
+	totalPolygons := 0
+	modelSectorId := 0
+
+	// Usiamo un albero bello capiente per i BSP di Quake
+	facesTree := physics.NewAABBTree(8192)
+
+	for _, cv := range cfg.Volumes {
+		// cv.Id e cv.Tag provengono dal parser BSP
+		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
+		modelSectorId++
+		for _, cf := range cv.Faces {
+			pts := cf.Points
+			pLen := len(pts)
+			if pLen < 3 {
+				continue
+			}
+			material := anim.GetAnimation(cf.Material)
+			// Triangle Fan: scompone il poligono convesso N-Gon in triangoli.
+			// Fissiamo il vertice 0 come perno e iteriamo sui successivi a coppie.
+			for i := 1; i < pLen-1; i++ {
+				// Manteniamo il Winding Order originale di Quake per le normali
+				tri := []geometry.XYZ{pts[0], pts[i], pts[i+1]}
+				face := NewFace(nil, tri, cf.Tag, material)
+				volume.AddFace(face)
+				fixFaces = append(fixFaces, face)
+				facesTree.InsertObject(face)
+				totalPolygons++
+			}
+		}
+		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
+		volume.Light = NewLight()
+		// Genera l'AABB definitivo del volume 3D
+		volume.Rebuild()
+		container = append(container, volume)
+	}
+
+	// Risoluzione Adiacenze (Portali 3D)
+	for _, face := range fixFaces {
+		if face.GetNeighbor() != nil {
+			continue // Già linkato
+		}
+		bestDistSq := math.MaxFloat64
+		var bestNeighborFace *Face
+		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
+			overlapFace, ok := object.(*Face)
+			// Ignoriamo facce dello stesso volume o già linkate
+			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
+				return false
+			}
+			// Per trovare i portali 3D, confrontiamo la vicinanza dei baricentri dei triangoli
+			pts1 := face.GetPoints()
+			pts2 := overlapFace.GetPoints()
+			// Calcolo baricentro faccia corrente (3 punti)
+			cx1 := (pts1[0].X + pts1[1].X + pts1[2].X) / 3.0
+			cy1 := (pts1[0].Y + pts1[1].Y + pts1[2].Y) / 3.0
+			cz1 := (pts1[0].Z + pts1[1].Z + pts1[2].Z) / 3.0
+			// Calcolo baricentro faccia candidata
+			cx2 := (pts2[0].X + pts2[1].X + pts2[2].X) / 3.0
+			cy2 := (pts2[0].Y + pts2[1].Y + pts2[2].Y) / 3.0
+			cz2 := (pts2[0].Z + pts2[1].Z + pts2[2].Z) / 3.0
+			dx := cx1 - cx2
+			dy := cy1 - cy2
+			dz := cz1 - cz2
+			distSq := (dx * dx) + (dy * dy) + (dz * dz)
+			// Troviamo la faccia più perfettamente combaciante nello spazio
+			if distSq < bestDistSq {
+				bestDistSq = distSq
+				bestNeighborFace = overlapFace
+			}
+			return false
+		})
+		// Tolleranza per la saldatura dei portali (Epsilon)
+		if bestNeighborFace != nil && bestDistSq < 0.001 {
+			bestNeighborFace.SetNeighbor(face.GetParent())
+			face.SetNeighbor(bestNeighborFace.GetParent())
+		}
+	}
+	return NewVolumes(container), totalPolygons
+}
+
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
 func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
 	var volumes3d []*Volume

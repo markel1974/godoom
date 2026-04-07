@@ -196,6 +196,7 @@ func (t *ThingBase) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bo
 	// Se velX/velY portano contro uno scalino < maxStep, il sistema di sliding
 	// deve permettere l'avanzamento invece di azzerare il vettore.
 	velX, velY, velZ = t.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom+maxStep, t.radius)
+
 	// 3. Pre-fetch del settore Target (Sonda avanzata)
 	targetVol := t.volume
 	// Creiamo una sonda che guardi leggermente avanti rispetto alla posizione attuale

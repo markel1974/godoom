@@ -65,6 +65,29 @@ func (s *Slider) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
+// AdjustPassage adjusts the player's movement vector while accounting for collisions, wall sliding, and vertical clipping constraints.
+func (s *Slider) AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64) (float64, float64, float64) {
+	// 1. Broad-phase vertical bounds (ingombro fisico del giocatore)
+	// Coordinate target per il narrow-phase
+	pX := viewX + velX
+	pY := viewY + velY
+	pZ := viewZ + velZ
+	// 2. Wall Sliding 3D (via AABB Tree)
+	// Ora passiamo anche viewZ, pZ e velZ.
+	// Se colpiamo una superficie non verticale, velZ verrà influenzato dalla proiezione sulla normale.
+	velX, velY, velZ = s.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
+	// 3. Vertical Clipping (Floor/Ceiling)
+	// Limiti rigidi basati sul volume (settore) corrente.
+	nextZ := viewZ + velZ
+	if nextZ < zMinLimit {
+		velZ = zMinLimit - viewZ
+	}
+	if viewZ+velZ > zMaxLimit {
+		velZ = zMaxLimit - viewZ
+	}
+	return velX, velY, velZ
+}
+
 // WallSlidingEffect adjusts the 3D velocity when sliding along a face to simulate physical sliding with separation.
 // It implements Continuous Collision Detection (Sweep Test) and Discrete Point-to-Segment to prevent tunneling and corner snagging.
 func (s *Slider) WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64) {

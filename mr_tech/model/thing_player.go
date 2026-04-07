@@ -359,9 +359,12 @@ func (p *ThingPlayer) Update(vi *ViewMatrix) {
 	}
 	viewX, viewY, viewZ := p.GetPosition()
 	velX, velY, velZ := p.GetVelocity()
-	top := viewZ + p.headMargin
-	bottom := viewZ - p.getEyeHeight() + p.kneeHeight
-	velX, velY, velZ = p.adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom)
+	zTop := viewZ + p.headMargin
+	zBottom := viewZ - p.getEyeHeight() + p.kneeHeight
+	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
+	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
+
+	velX, velY, velZ = p.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius)
 	// Applichiamo i delta finali filtrati
 	p.MoveApply(velX, velY, velZ)
 	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)
@@ -382,33 +385,6 @@ func (p *ThingPlayer) SetActive(active bool) {
 // OnCollide handles the collision event between the current ThingPlayer and another object implementing IThing.
 func (p *ThingPlayer) OnCollide(other IThing) {
 	//TODO IMPLEMENT
-}
-
-// adjustPassage adjusts the player's movement vector while accounting for collisions, wall sliding, and vertical clipping constraints.
-func (p *ThingPlayer) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom float64) (float64, float64, float64) {
-	// 1. Broad-phase vertical bounds (ingombro fisico del giocatore)
-	// Coordinate target per il narrow-phase
-	pX := viewX + velX
-	pY := viewY + velY
-	pZ := viewZ + velZ
-	// 2. Wall Sliding 3D (via AABB Tree)
-	// Ora passiamo anche viewZ, pZ e velZ.
-	// Se colpiamo una superficie non verticale, velZ verrà influenzato dalla proiezione sulla normale.
-	velX, velY, velZ = p.slider.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, p.radius)
-	// 3. Vertical Clipping (Floor/Ceiling)
-	// Limiti rigidi basati sul volume (settore) corrente.
-	nextZ := viewZ + velZ
-	// Floor: Gli occhi (viewZ) non possono scendere sotto il pavimento + altezza occhi.
-	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
-	if nextZ < zMinLimit {
-		velZ = zMinLimit - viewZ
-	}
-	// Ceiling: La testa (viewZ + HeadMargin) non può superare il soffitto.
-	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
-	if viewZ+velZ > zMaxLimit {
-		velZ = zMaxLimit - viewZ
-	}
-	return velX, velY, velZ
 }
 
 // getHeadPosition calculates the player's head position by adding a fixed margin to the player's current Z coordinate.

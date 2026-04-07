@@ -159,8 +159,9 @@ func (t *ThingBase) PhysicsApply() {
 		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, baseZ, topZ, t.maxStep); newVolume != nil && newVolume != t.volume {
 			t.volume = newVolume
 		}
-		// Sincronizzazione AABB Tree
 		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
+	} else {
+		t.entity.Stop()
 	}
 }
 

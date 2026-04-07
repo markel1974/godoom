@@ -139,32 +139,30 @@ func (t *ThingBase) PhysicsApply() {
 	// 1. Recupero dati dal motore impulsivo
 	eX, eY, eZ := t.entity.GetCenter()
 	currentBaseZ := eZ - (t.entity.GetDepth() / 2.0)
-
 	// 2. Calcolo dei delta
-	tx := (eX - t.position.X) + t.entity.GetVx()
-	ty := (eY - t.position.Y) + t.entity.GetVy()
-	tz := (currentBaseZ - t.position.Z) + t.entity.GetVz()
+	velX := (eX - t.position.X) + t.entity.GetVx()
+	velY := (eY - t.position.Y) + t.entity.GetVy()
+	velZ := (currentBaseZ - t.position.Z) + t.entity.GetVz()
+	if velX == 0 && velY == 0 && velZ == 0 {
+		return
+	}
 	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
-	bottom := viewZ
-	top := viewZ + t.height
-
-	// 3. ESECUZIONE SEMPRE ATTIVA (Rimosso il check minMovement per la logica Z)
-	// Dobbiamo calcolare adjustPassage per applicare gravità passiva e snapping
-	vx, vy, vz := t.adjustPassage(viewX, viewY, viewZ, tx, ty, tz, top, bottom, t.maxStep)
+	zBottom := viewZ
+	zTop := viewZ + t.height
+	zMinLimit := t.volume.GetMinZ()            // + t.getEyeHeight()
+	zMaxLimit := t.volume.GetMaxZ() - t.height //.headMargin
+	vx, vy, vz, _ := t.slider.AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius)
+	//vx, vy, vz := t.adjustPassage(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, t.maxStep)
 	// 4. Applichiamo il movimento se significativo
 	if math.Abs(vx) > minMovement || math.Abs(vy) > minMovement || math.Abs(vz) > minMovement {
 		t.position.X += vx
 		t.position.Y += vy
 		t.position.Z += vz
-
-		// Aggiornamento del Settore
-		feetZ := t.position.Z
+		baseZ := t.position.Z
 		topZ := t.position.Z + t.height
-
-		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, feetZ, topZ, t.maxStep); newVolume != nil && newVolume != t.volume {
+		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, baseZ, topZ, t.maxStep); newVolume != nil && newVolume != t.volume {
 			t.volume = newVolume
 		}
-
 		// Sincronizzazione AABB Tree
 		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
 	}
@@ -185,6 +183,7 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
+/*
 func (t *ThingBase) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bottom, maxStep float64) (float64, float64, float64) {
 	// 1. Parametri fisici correnti
 	// Correzione: Il bottom deve essere la quota piedi reale per il wall-sliding.
@@ -192,6 +191,7 @@ func (t *ThingBase) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bo
 	pX := viewX + velX
 	pY := viewY + velY
 	pZ := viewZ + velZ
+
 	// 2. Wall Sliding (Collisione orizzontale)
 	// Se velX/velY portano contro uno scalino < maxStep, il sistema di sliding
 	// deve permettere l'avanzamento invece di azzerare il vettore.
@@ -236,3 +236,4 @@ func (t *ThingBase) adjustPassage(viewX, viewY, viewZ, velX, velY, velZ, top, bo
 	}
 	return velX, velY, velZ
 }
+*/

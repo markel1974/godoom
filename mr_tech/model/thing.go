@@ -66,16 +66,17 @@ func (s *Slider) GetAABB() *physics.AABB {
 }
 
 // AdjustPassage adjusts the player's movement vector while accounting for collisions, wall sliding, and vertical clipping constraints.
-func (s *Slider) AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64) (float64, float64, float64) {
+func (s *Slider) AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64) (float64, float64, float64, bool) {
 	// 1. Broad-phase vertical bounds (ingombro fisico del giocatore)
 	// Coordinate target per il narrow-phase
 	pX := viewX + velX
 	pY := viewY + velY
 	pZ := viewZ + velZ
-	// 2. Wall Sliding 3D (via AABB Tree)
-	// Ora passiamo anche viewZ, pZ e velZ.
-	// Se colpiamo una superficie non verticale, velZ verrà influenzato dalla proiezione sulla normale.
-	velX, velY, velZ = s.WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
+	var changed bool
+	velX, velY, velZ, changed = s.effectWallSliding(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
+	if !changed {
+		return velX, velY, velZ, false
+	}
 	// 3. Vertical Clipping (Floor/Ceiling)
 	// Limiti rigidi basati sul volume (settore) corrente.
 	nextZ := viewZ + velZ
@@ -85,12 +86,12 @@ func (s *Slider) AdjustPassage(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBot
 	if viewZ+velZ > zMaxLimit {
 		velZ = zMaxLimit - viewZ
 	}
-	return velX, velY, velZ
+	return velX, velY, velZ, true
 }
 
-// WallSlidingEffect adjusts the 3D velocity when sliding along a face to simulate physical sliding with separation.
+// effectWallSliding adjusts the 3D velocity when sliding along a face to simulate physical sliding with separation.
 // It implements Continuous Collision Detection (Sweep Test) and Discrete Point-to-Segment to prevent tunneling and corner snagging.
-func (s *Slider) WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64) {
+func (s *Slider) effectWallSliding(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64, bool) {
 	// 1. Broad-phase: Estendiamo l'AABB per includere il raggio e il movimento
 	minX := math.Min(viewX, pX) - radius
 	maxX := math.Max(viewX, pX) + radius
@@ -214,8 +215,143 @@ func (s *Slider) WallSlidingEffect(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, 
 			velX = velX - (dot * colNx)
 			velY = velY - (dot * colNy)
 			velZ = velZ - (dot * colNz)
+			return velX, velY, velZ, true
+		}
+	}
+	return velX, velY, velZ, false
+}
+
+// EffectBounce calculates the resulting direction of a projectile after collision applying continuous 3D bounce physics.
+func (s *Slider) EffectBounce(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (float64, float64, float64, bool) {
+	minX := math.Min(viewX, pX) - radius
+	maxX := math.Max(viewX, pX) + radius
+	minY := math.Min(viewY, pY) - radius
+	maxY := math.Max(viewY, pY) + radius
+
+	// Nel 3D puro, calcoliamo anche i bound Z generati dal movimento e dal raggio
+	minZ := math.Min(viewZ, pZ) - radius
+	maxZ := math.Max(viewZ, pZ) + radius
+
+	// Broad-phase: estendiamo l'AABB unendo i limiti logici (top/bottom) con la traiettoria sferica
+	s.GetAABB().Rebuild(minX, minY, math.Min(bottom, minZ), maxX, maxY, math.Max(top, maxZ))
+
+	var closestFace *Face = nil
+	minT := 1.0                     // Earliest Time of Impact
+	var colNx, colNy, colNz float64 // Aggiunto l'asse Z per la normale di impatto
+
+	s.volumes.QueryAABB(s, func(vol *Volume) {
+		for _, face := range vol.GetFaces() {
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				holeLow := math.Max(vol.GetMinZ(), neighbor.GetMinZ())
+				holeHigh := math.Min(vol.GetMaxZ(), neighbor.GetMaxZ())
+				if top <= holeHigh && bottom >= holeLow {
+					continue
+				}
+			}
+
+			n := face.GetNormal()
+			start := face.GetStart()
+			end := face.GetEnd()
+
+			// Vettori 3D del segmento
+			edgeX := end.X - start.X
+			edgeY := end.Y - start.Y
+			edgeZ := end.Z - start.Z // Calcolo Z
+			edgeLenSq := (edgeX * edgeX) + (edgeY * edgeY) + (edgeZ * edgeZ)
+
+			// Distanze proiettate contro il piano 3D (Include l'asse Z)
+			distStart := (viewX-start.X)*n.X + (viewY-start.Y)*n.Y + (viewZ-start.Z)*n.Z
+			distEnd := (pX-start.X)*n.X + (pY-start.Y)*n.Y + (pZ-start.Z)*n.Z
+
+			hit := false
+			var hitT float64
+			var cNx, cNy, cNz float64 // Variabili temporanee per la normale
+
+			// Fase A: Sweep Test (Continuous Collision Detection 3D)
+			if distStart >= -0.01 && distEnd < radius {
+				dotVel := distEnd - distStart
+				if dotVel < 0 {
+					timeHit := (radius - distStart) / dotVel
+					if timeHit < 0 {
+						timeHit = 0
+					}
+					if timeHit <= 1.0 {
+						hX := viewX + velX*timeHit
+						hY := viewY + velY*timeHit
+						hZ := viewZ + velZ*timeHit // Z d'impatto
+
+						vX := hX - start.X
+						vY := hY - start.Y
+						vZ := hZ - start.Z // Offset Z sul piano
+
+						dotEdge := (vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)
+
+						if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
+							hit = true
+							hitT = timeHit
+							cNx, cNy, cNz = n.X, n.Y, n.Z
+						}
+					}
+				}
+			}
+
+			// Fase B: Discrete Point-to-Segment 3D (Collision Detection sui Vertici)
+			if !hit {
+				vX := pX - start.X
+				vY := pY - start.Y
+				vZ := pZ - start.Z // Offset Z
+				tProj := 0.0
+				if edgeLenSq > 0 {
+					tProj = ((vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)) / edgeLenSq
+					tProj = math.Max(0.0, math.Min(1.0, tProj))
+				}
+				closestX := start.X + (tProj * edgeX)
+				closestY := start.Y + (tProj * edgeY)
+				closestZ := start.Z + (tProj * edgeZ) // Quota Z più vicina
+				diffX := pX - closestX
+				diffY := pY - closestY
+				diffZ := pZ - closestZ // Delta Z
+
+				// Distanza sferica 3D dallo spigolo
+				distSq := (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
+
+				if distSq < radius*radius {
+					hit = true
+					hitT = 0.0
+					cDist := math.Sqrt(distSq)
+					if tProj > 0.0 && tProj < 1.0 {
+						cNx, cNy, cNz = n.X, n.Y, n.Z
+					} else {
+						if cDist > 0.0001 {
+							// Normale radiale sferica 3D (Rimbalzo sullo spigolo vivo)
+							cNx, cNy, cNz = diffX/cDist, diffY/cDist, diffZ/cDist
+						} else {
+							cNx, cNy, cNz = n.X, n.Y, n.Z
+						}
+					}
+				}
+			}
+
+			if hit && hitT <= minT {
+				minT = hitT
+				closestFace = face
+				colNx, colNy, colNz = cNx, cNy, cNz
+			}
+		}
+	})
+
+	// 2. Risoluzione Newtoniana (Riflessione Vettoriale 3D)
+	if closestFace != nil {
+		restitution := 1.0 // 1.0 = Elastico (rimbalza senza perdere forza)
+		// Prodotto scalare 3D completo
+		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
+		if dot < 0 {
+			velX -= (1.0 + restitution) * dot * colNx
+			velY -= (1.0 + restitution) * dot * colNy
+			velZ -= (1.0 + restitution) * dot * colNz
+			return velX, velY, velZ, true
 		}
 	}
 
-	return velX, velY, velZ
+	return velX, velY, velZ, false
 }

@@ -71,8 +71,8 @@ func (s *WallPhysics) AdjustVelocity(viewX, viewY, viewZ, velX, velY, velZ, zTop
 	pY := viewY + velY
 	pZ := viewZ + velZ
 
-	const acceleration = 0.2 //2.0
-	const bounce = 0.1       //0.8
+	const acceleration = 0.8 //2.0
+	const bounce = 0.8       //0.8
 
 	// 1. Risoluzione Planare/Arbitraria (Muri e Geometria 3D)
 	closestFace, colNx, colNy, colNz := s.closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)

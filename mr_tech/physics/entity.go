@@ -23,44 +23,41 @@ func CalcDistance(x1, y1, z1, x2, y2, z2 float64) float64 {
 
 // Entity represents a physical object in a 3D space with properties like position, velocity, mass, and collision handling.
 type Entity struct {
-	rect             Rect
-	id               string
-	mass             float64
-	vx               float64
-	vy               float64
-	vz               float64
-	vxMin            float64
-	vyMin            float64
-	vzMin            float64
-	defaultFriction  float64
-	defaultFrictionZ float64
-	friction         float64
-	frictionZ        float64
-	g                float64
-	gForce           float64
-	impulse          float64
-	collider         *Entity
+	rect               Rect
+	id                 string
+	mass               float64
+	vx                 float64
+	vy                 float64
+	vz                 float64
+	vxMin              float64
+	vyMin              float64
+	vzMin              float64
+	defaultFriction    float64
+	friction           float64
+	defaultAirFriction float64
+	airFriction        float64
+	defaultGForce      float64
+	gForce             float64
+	impulse            float64
+	collider           *Entity
 }
 
 // NewEntity creates a new Entity instance with the specified position, dimensions, and mass. It initializes default properties.
 func NewEntity(x float64, y float64, z float64, w float64, h float64, d float64, mass float64) *Entity {
 	a := &Entity{
-		id:               utils.NextUUId(),
-		rect:             NewRect(x, y, w, h, z, d),
-		mass:             mass,
-		vx:               0.0,
-		vy:               0.0,
-		defaultFriction:  0.9,
-		defaultFrictionZ: 0.99,
-		g:                0.0,
-		gForce:           0.0,
-		vxMin:            vMin,
-		vyMin:            vMin,
-		vzMin:            vMin,
-		impulse:          vMin,
+		id:      utils.NextUUId(),
+		rect:    NewRect(x, y, w, h, z, d),
+		mass:    mass,
+		vx:      0.0,
+		vy:      0.0,
+		vxMin:   vMin,
+		vyMin:   vMin,
+		vzMin:   vMin,
+		impulse: vMin,
 	}
-	a.friction = a.defaultFriction
-	a.frictionZ = a.defaultFrictionZ
+	a.SetFriction(0.9)
+	a.SetAirFriction(0.2)
+	a.SetGForce(0.3)
 	return a
 }
 
@@ -71,38 +68,32 @@ func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, d 
 	e.vx = 0.0
 	e.vy = 0.0
 	e.friction = e.defaultFriction
-	e.frictionZ = e.defaultFrictionZ
-	e.g = 0.0
-	e.gForce = 0.0
+	e.airFriction = e.defaultAirFriction
+	e.gForce = e.defaultGForce
 	e.vxMin = vMin
 	e.vyMin = vMin
 	e.impulse = vMin
 	e.rect.rebuild()
 }
+
+// Stop halts all movement of the entity by setting its velocity components (vx, vy, vz) to zero.
+func (e *Entity) Stop() {
+	e.vx = 0.0
+	e.vy = 0.0
+	e.vz = 0.0
+}
+
 func (e *Entity) Update() bool {
-	// Clearance esatto tramite AABB (Narrow-phase 3D)
+	// Clearance esatto tramite AABB
 	if e.collider != nil {
 		if !e.HasCollision(e.collider) {
 			e.clearCollider()
 		}
 	}
-
-	// 1. APPLICAZIONE DELLA GRAVITÀ COSTANTE
-	// Altera vz PRIMA del check di movimento. Un oggetto fermo in aria inizierà a cadere.
-	if e.gForce > 0.0 {
-		const baseGravity = 0.25 // Tarala in base alle metriche del tuo mondo (es. 0.25 unità/frame)
-		e.vz -= baseGravity * e.gForce
-	}
-
-	// 2. CHECK DI MOVIMENTO
-	if !e.isMoving() {
-		return false
-	}
-
-	// 3. APPLICAZIONE ATTRITO
 	e.vx *= e.friction
 	e.vy *= e.friction
-	e.vz *= e.frictionZ
+	e.vz *= e.defaultAirFriction
+	e.vz -= e.gForce
 
 	// 4. CLAMPING DELLE VELOCITÀ MINIME
 	if math.Abs(e.vx) < e.vxMin {
@@ -114,12 +105,6 @@ func (e *Entity) Update() bool {
 	if math.Abs(e.vz) < e.vzMin {
 		e.vz = 0.0
 	}
-
-	// 5. CALCOLO DELLA FORZA G (Impatto)
-	// Essendo calcolato sulla velocità finale, e.g misurerà la violenza del movimento.
-	// È perfetto da leggere all'esterno per calcolare i DANNI DA CADUTA o gli urti!
-	e.calcG()
-
 	return e.isMoving()
 }
 
@@ -136,21 +121,18 @@ func (e *Entity) Move() {
 // SetFriction sets the default friction value for the entity, affecting its velocity decay over time.
 func (e *Entity) SetFriction(f float64) {
 	e.defaultFriction = f
+	e.friction = e.defaultFriction
 }
 
-// SetFrictionZ updates the default friction coefficient affecting movement along the Z-axis for the entity.
-func (e *Entity) SetFrictionZ(f float64) {
-	e.defaultFrictionZ = f
+func (e *Entity) SetAirFriction(f float64) {
+	e.defaultAirFriction = f
+	e.airFriction = e.defaultAirFriction
 }
 
 // SetGForce sets the gravitational force (G-Force) acting on the entity to the specified value.
 func (e *Entity) SetGForce(gForce float64) {
-	e.gForce = gForce
-}
-
-// SetG sets the gravitational constant (g) for the entity to the specified float64 value.
-func (e *Entity) SetG(g float64) {
-	e.g = g
+	e.defaultGForce = gForce
+	e.gForce = e.defaultGForce
 }
 
 // GetVx returns the current velocity along the X-axis (horizontal movement) for the entity.
@@ -326,13 +308,4 @@ func (e *Entity) clearCollider() {
 		}
 		e.collider = nil
 	}
-}
-
-// calcG computes and returns the total G-force acting on the entity based on its velocity vector and gForce value.
-func (e *Entity) calcG() {
-	if e.gForce == 0.0 {
-		return
-	}
-	// G-Force influenzata dal vettore velocità totale
-	e.g = math.Sqrt(e.vx*e.vx+e.vy*e.vy+e.vz*e.vz) * e.gForce
 }

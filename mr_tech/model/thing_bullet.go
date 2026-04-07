@@ -24,8 +24,7 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 	x, y, z := p.entity.GetCenter()
 	fmt.Println("Current bullet position: ", x, y, z, p.volume.GetMinZ(), p.volume.GetMaxZ())
 
-	p.entity.SetFriction(1.0)
-	p.entity.SetGForce(0.0)
+	//p.entity.SetFriction(1.0)
 	p.entities.AddThing(p)
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
 	// Supponiamo che 5.0 corrisponda a un'inclinazione massima desiderata di 60 gradi (1.047 radianti).
@@ -46,58 +45,14 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 }
 
 func (t *ThingBullet) GetMaxZ() float64 {
-	minZ := t.volume.GetMinZ()
-	maxZ := t.volume.GetMaxZ()
-	x, _, z := t.entity.GetCenter()
-	if z <= minZ || z >= maxZ {
-		t.entity.MoveTo(x, minZ, minZ)
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		t.entity.SetVz(0.0)
-		fmt.Println("Bullet: Arresting MaxZ", z)
-		return minZ
-	}
-	fmt.Println("Bullet MaxZ: ", z)
+	_, _, z := t.entity.GetCenter()
 	return z
 }
 
 func (t *ThingBullet) GetMinZ() float64 {
-	minZ := t.volume.GetMinZ()
-	maxZ := t.volume.GetMaxZ()
-	x, _, z := t.entity.GetCenter()
-	if z <= minZ || z >= maxZ {
-		t.entity.MoveTo(x, minZ, minZ)
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		t.entity.SetVz(0.0)
-		fmt.Println("Bullet: Arresting MinZ", z)
-		return minZ
-	}
-	fmt.Println("Bullet: MinZ", z)
+	_, _, z := t.entity.GetCenter()
 	return z
 }
-
-/*
-	if t.speed <= 0 {
-		return t.volume.GetMinZ()
-	}
-	vx := t.entity.GetVx()
-	vy := t.entity.GetVy()
-	velSq := (vx * vx) + (vy * vy)
-	if velSq <= 0.01 {
-		return t.volume.GetMinZ()
-	}
-	ratio := math.Sqrt(velSq) / t.speed
-	if ratio <= 0 {
-		return t.volume.GetMinZ()
-	}
-	if ratio > 1.0 {
-		ratio = 1.0
-	}
-	return t.floorStartY * ratio
-}
-
-*/
 
 func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
@@ -131,7 +86,6 @@ func (t *ThingBullet) PhysicsApply() {
 		t.entity.SetVx(velX)
 		t.entity.SetVy(velY)
 		t.entity.SetVz(velZ)
-
 		// 4. Aggiornamento posizione logica
 		t.position.X += velX
 		t.position.Y += velY
@@ -144,6 +98,8 @@ func (t *ThingBullet) PhysicsApply() {
 			t.volume = newVolume
 		}
 		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
+	} else {
+		t.entity.Stop()
 	}
 }
 

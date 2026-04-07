@@ -27,8 +27,6 @@ type ThingBase struct {
 	entity     *physics.Entity
 	isActive   bool
 	identifier int
-	lastTx     float64
-	lastTy     float64
 	wall       *ThingWall
 }
 
@@ -55,7 +53,7 @@ func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Anim
 		volumes:    volumes,
 		entities:   entities,
 		maxStep:    cfg.Height * 0.5,
-		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass),
+		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution),
 		isActive:   true,
 		identifier: -1,
 		wall:       NewThingWall(volumes),
@@ -151,9 +149,9 @@ func (t *ThingBase) PhysicsApply() {
 	velX, velY, velZ, _ := t.wall.Compute(viewX, viewY, viewZ, deltaX, deltaY, deltaZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, false)
 	// 4. Applichiamo il movimento se significativo
 	if math.Abs(velX) > minMovement || math.Abs(velY) > minMovement || math.Abs(velZ) > minMovement {
-		//t.entity.SetVx(velX)
-		//t.entity.SetVy(velY)
-		//t.entity.SetVz(velZ)
+		t.entity.SetVx(velX)
+		t.entity.SetVy(velY)
+		t.entity.SetVx(velX)
 		t.position.X += velX
 		t.position.Y += velY
 		t.position.Z += velZ

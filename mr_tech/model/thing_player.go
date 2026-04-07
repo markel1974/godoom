@@ -85,7 +85,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 	}
 	d := p.eyeHeight + p.headMargin
 	p.where = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: volume.GetMinZ() + p.eyeHeight}
-	p.entity = physics.NewEntity(x, y, volume.GetMinZ(), w, h, d, cfg.Mass)
+	p.entity = physics.NewEntity(x, y, volume.GetMinZ(), w, h, d, cfg.Mass, cfg.Restitution)
 	p.SetAngle(cfg.Angle)
 	p.entities.AddThing(p)
 	return p, nil

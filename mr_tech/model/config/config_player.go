@@ -7,12 +7,13 @@ import (
 
 // ConfigPlayer represents the configuration of a player in the game, including position, angle, and current sector.
 type ConfigPlayer struct {
-	Id       string      `json:"id"`
-	Position geometry.XY `json:"position"`
-	Angle    float64     `json:"angle"`
-	Height   float64     `json:"height"`
-	Radius   float64     `json:"radius"`
-	Mass     float64     `json:"mass"`
+	Id          string      `json:"id"`
+	Position    geometry.XY `json:"position"`
+	Angle       float64     `json:"angle"`
+	Height      float64     `json:"height"`
+	Radius      float64     `json:"radius"`
+	Mass        float64     `json:"mass"`
+	Restitution float64     `json:"restitution"`
 }
 
 // NewConfigPlayer creates and returns a new instance of ConfigPlayer with the specified position, angle, and sector.

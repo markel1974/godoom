@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
@@ -22,8 +21,8 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 	}
 
 	p.entity.SetGForce(0.1)
-	x, y, z := p.entity.GetCenter()
-	fmt.Println("Current bullet position: ", x, y, z, p.volume.GetMinZ(), p.volume.GetMaxZ())
+	//x, y, z := p.entity.GetCenter()
+	//fmt.Println("Current bullet position: ", x, y, z, p.volume.GetMinZ(), p.volume.GetMaxZ())
 
 	//p.entity.SetFriction(1.0)
 	p.entities.AddThing(p)
@@ -114,9 +113,4 @@ func (t *ThingBullet) OnCollide(other IThing) {
 		// enemy.TakeDamage(...)
 		// t.SetActive(false)
 	}
-}
-
-// IsActive checks if the ThingBullet is currently active and operational.
-func (t *ThingBullet) IsActive() bool {
-	return t.isActive
 }

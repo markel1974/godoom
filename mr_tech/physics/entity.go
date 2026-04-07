@@ -6,26 +6,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// vMin defines the minimum velocity threshold below which motion is considered negligible for an entity.
-const vMin = 0.00001
+// vMin defines the minimum threshold for velocity components to be considered negligible during calculations.
+const vMin = 0.001
 
-// CalcDistance calculates the Euclidean distance between two points in 3D space defined by their coordinates.
-func CalcDistance(x1, y1, z1, x2, y2, z2 float64) float64 {
-	dx := x2 - x1
-	dy := y2 - y1
-	dz := z2 - z1
-	d := dx*dx + dy*dy + dz*dz
-	if d < 0.0001 {
-		return 0.01
-	}
-	return math.Sqrt(d)
-}
-
-// Entity represents a physical object in a 3D space with properties like position, velocity, mass, and collision handling.
+// Entity represents a dynamic object with physical attributes, motion parameters, collision detection, and response data.
 type Entity struct {
 	rect               Rect
 	id                 string
 	mass               float64
+	invMass            float64
 	vx                 float64
 	vy                 float64
 	vz                 float64
@@ -39,35 +28,40 @@ type Entity struct {
 	defaultGForce      float64
 	gForce             float64
 	impulse            float64
+	restitution        float64
 	collider           *Entity
 }
 
-// NewEntity creates a new Entity instance with the specified position, dimensions, and mass. It initializes default properties.
-func NewEntity(x float64, y float64, z float64, w float64, h float64, d float64, mass float64) *Entity {
-	a := &Entity{
-		id:      utils.NextUUId(),
-		rect:    NewRect(x, y, w, h, z, d),
-		mass:    mass,
-		vx:      0.0,
-		vy:      0.0,
-		vxMin:   vMin,
-		vyMin:   vMin,
-		vzMin:   vMin,
-		impulse: vMin,
+// NewEntity initializes a new Entity with the specified position, dimensions, and mass, and sets default parameters.
+func NewEntity(x, y, z, w, h, d, mass, restitution float64) *Entity {
+	if restitution <= 0.0 {
+		restitution = 0.2
 	}
-	//defaultFriction:  0.9,
-	//defaultFrictionZ: 0.99,
-	//g:                0.0,
+	a := &Entity{
+		id:          utils.NextUUId(),
+		rect:        NewRect(x, y, w, h, z, d),
+		mass:        mass,
+		invMass:     1.0 / mass,
+		vx:          0.0,
+		vy:          0.0,
+		vxMin:       vMin,
+		vyMin:       vMin,
+		vzMin:       vMin,
+		impulse:     vMin,
+		restitution: restitution,
+	}
 	a.SetFriction(0.9)
 	a.SetAirFriction(0.98)
-	a.SetGForce(0.0)
+	//TODO BUG impostare gForce a 0.1 [con valori diversi da 0 non funziona il motore delle collisioni] anche thingbase.go
+	//a.SetGForce(0.1)
 	return a
 }
 
-// Reset reinitializes the Entity's position, size, depth, mass, and resets velocity, friction, and related properties to defaults.
-func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, d float64, mass float64) {
+// Reset initializes the entity's position, dimensions, velocity, and physics properties to their default states.
+func (e *Entity) Reset(x, y, w, h, z, d, mass, restitution float64) {
 	e.rect.Reset(x, y, w, h, z, d)
 	e.mass = mass
+	e.invMass = 1.0 / mass
 	e.vx = 0.0
 	e.vy = 0.0
 	e.friction = e.defaultFriction
@@ -76,16 +70,18 @@ func (e *Entity) Reset(x float64, y float64, w float64, h float64, z float64, d 
 	e.vxMin = vMin
 	e.vyMin = vMin
 	e.impulse = vMin
+	e.restitution = restitution
 	e.rect.rebuild()
 }
 
-// Stop halts all movement of the entity by setting its velocity components (vx, vy, vz) to zero.
+// Stop halts all movement by setting the velocities (vx, vy, vz) of the entity to zero.
 func (e *Entity) Stop() {
 	e.vx = 0.0
 	e.vy = 0.0
 	e.vz = 0.0
 }
 
+// Update adjusts the entity's velocity based on friction, gravity, and minimum velocity thresholds. Checks collision status.
 func (e *Entity) Update() bool {
 	// Clearance esatto tramite AABB
 	if e.collider != nil {
@@ -97,7 +93,6 @@ func (e *Entity) Update() bool {
 	e.vy *= e.friction
 	e.vz *= e.airFriction
 	e.vz -= e.gForce
-
 	// 4. CLAMPING DELLE VELOCITÀ MINIME
 	if math.Abs(e.vx) < e.vxMin {
 		e.vx = 0.0
@@ -111,118 +106,171 @@ func (e *Entity) Update() bool {
 	return e.IsMoving()
 }
 
-// MoveTest calculates the new x, y, z coordinates of the Entity based on its current velocity (vx, vy, vz).
+// MoveTest calculates potential movement based on current velocities and returns the resulting position deltas (dx, dy, dz).
 func (e *Entity) MoveTest() (float64, float64, float64) {
 	return e.rect.MoveTest(e.vx, e.vy, e.vz)
 }
 
-// Move adjusts the position of the Entity by adding its velocity components (vx, vy, vz) to its current Rect position.
+// Move updates the position of the entity by adding its velocity components (vx, vy, vz) to its current position.
 func (e *Entity) Move() {
 	e.rect.AddTo(e.vx, e.vy, e.vz)
 }
 
-// SetFriction sets the default friction value for the entity, affecting its velocity decay over time.
+// SetFriction updates the friction value of the entity and resets it to the default friction value.
 func (e *Entity) SetFriction(f float64) {
 	e.defaultFriction = f
 	e.friction = e.defaultFriction
 }
 
+// SetAirFriction updates the air friction values for the entity, affecting the rate of velocity reduction in the Z axis.
 func (e *Entity) SetAirFriction(f float64) {
 	e.defaultAirFriction = f
 	e.airFriction = e.defaultAirFriction
 }
 
-// SetGForce sets the gravitational force (G-Force) acting on the entity to the specified value.
+// SetGForce updates the gravitational force applied to the entity, resetting both gForce and defaultGForce.
 func (e *Entity) SetGForce(gForce float64) {
 	e.defaultGForce = gForce
 	e.gForce = e.defaultGForce
 }
 
-// GetVx returns the current velocity along the X-axis (horizontal movement) for the entity.
+// GetVx retrieves the current velocity of the entity along the x-axis.
 func (e *Entity) GetVx() float64 {
 	return e.vx
 }
 
-// GetVy retrieves the current vertical velocity (Vy) of the entity.
+// GetVy returns the current vertical velocity (vy) of the entity.
 func (e *Entity) GetVy() float64 {
 	return e.vy
 }
 
-// GetVz retrieves the current velocity of the entity along the Z-axis.
+// GetVz returns the current velocity of the entity along the Z-axis.
 func (e *Entity) GetVz() float64 { return e.vz }
 
-// SetVx sets the horizontal velocity (Vx) of the entity to the specified value.
+// SetVx sets the velocity along the x-axis for the entity.
 func (e *Entity) SetVx(vx float64) {
 	e.vx = vx
 }
 
-// SetVy sets the vertical velocity (vy) of the entity to the specified value.
+// SetVy updates the vertical velocity (vy) of the entity.
 func (e *Entity) SetVy(vy float64) {
 	e.vy = vy
 }
 
-// SetVz sets the z-axis velocity (vz) of the Entity to the specified value.
+// SetVz sets the entity's velocity along the Z-axis.
 func (e *Entity) SetVz(vz float64) { e.vz = vz }
 
-// GetId returns the unique identifier of the entity as a string.
+// GetId retrieves the unique identifier of the Entity.
 func (e *Entity) GetId() string {
 	return e.id
 }
 
-// Invalidate clears the current active collider associated with the entity.
+// Invalidate clears the currently associated collider of the entity.
 func (e *Entity) Invalidate() {
 	e.clearCollider()
 }
 
-// GetWidth returns the width of the Entity by retrieving the width of its Rect.
+// GetWidth returns the width of the entity based on its rectangular bounds.
 func (e *Entity) GetWidth() float64 {
 	return e.rect.GetWidth()
 }
 
-// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the entity's rectangular bounds.
+// GetInvMass returns the inverse mass of the entity, a precomputed value used in physics calculations.
+func (e *Entity) GetInvMass() float64 {
+	return e.invMass
+}
+
+// GetRestitution returns the restitution coefficient of the entity, representing its bounciness during collisions.
+func (e *Entity) GetRestitution() float64 {
+	return e.restitution
+}
+
+// GetAABB returns the axis-aligned bounding box (AABB) of the entity.
 func (e *Entity) GetAABB() *AABB {
 	return e.rect.GetAABB()
 }
 
-// MoveTo sets the Entity's position to the specified x, y, and z coordinates and updates its spatial data.
+// MoveTo sets the Entity's position to the specified x, y, and z coordinates.
 func (e *Entity) MoveTo(x float64, y float64, z float64) {
 	e.rect.MoveTo(x, y, z)
 }
 
-// GetCenter returns the 3D center coordinates (x, y, z) of the Entity based on its Rect's center.
+// GetCenter returns the center point of the entity as (x, y, z) coordinates.
 func (e *Entity) GetCenter() (float64, float64, float64) {
 	return e.rect.GetCenter()
 }
 
-// GetDepth returns the depth of the Entity by delegating to the underlying Rect's GetDepth method.
+// GetDepth returns the depth dimension of the entity, as defined by its rectangular bounds.
 func (e *Entity) GetDepth() float64 {
 	return e.rect.GetDepth()
 }
 
-// HasCollision checks if the current entity's rectangle intersects with another entity's rectangle and returns true if they overlap.
+// GetGForce returns the current gravitational force value acting on the Entity.
+func (e *Entity) GetGForce() float64 {
+	return e.gForce
+}
+
+// HasCollision checks if the current entity's bounding box intersects with the bounding box of the provided entity.
 func (e *Entity) HasCollision(obj2 *Entity) bool {
 	return e.rect.IntersectRect(obj2.rect)
 }
 
-// Distance calculates the 3D Euclidean distance between the calling Entity and the provided collider Entity.
+// Distance computes the Euclidean distance between the entity and another specified entity based on their center coordinates.
 func (e *Entity) Distance(collider *Entity) float64 {
-	c1x, c1y, c1z := e.rect.GetCenter()
-	c2x, c2y, c2z := collider.rect.GetCenter()
-	return CalcDistance(c1x, c1y, c1z, c2x, c2y, c2z)
+	x1, y1, z1 := e.rect.GetCenter()
+	x2, y2, z2 := collider.rect.GetCenter()
+	dx := x2 - x1
+	dy := y2 - y1
+	dz := z2 - z1
+	d := dx*dx + dy*dy + dz*dz
+	if d < 0.0001 {
+		return 0.01
+	}
+	return math.Sqrt(d)
 }
 
+// DistanceSq computes the squared distance between the centers of the current entity and another entity in 3D space.
 func (e *Entity) DistanceSq(other *Entity) float64 {
-	dx := e.rect.point.x + (e.rect.size.w / 2.0) - (other.rect.point.x + (other.rect.size.w / 2.0))
-	dy := e.rect.point.y + (e.rect.size.h / 2.0) - (other.rect.point.y + (other.rect.size.h / 2.0))
-	return dx*dx + dy*dy
+	// Centro X, Y
+	dx := (e.rect.point.x + e.rect.size.w/2.0) - (other.rect.point.x + other.rect.size.w/2.0)
+	dy := (e.rect.point.y + e.rect.size.h/2.0) - (other.rect.point.y + other.rect.size.h/2.0)
+	// Centro Z
+	dz := (e.rect.point.z + e.rect.size.d/2.0) - (other.rect.point.z + other.rect.size.d/2.0)
+	return dx*dx + dy*dy + dz*dz
 }
 
-// GetZRange restituisce la quota minima (piedi) e massima (testa) dell'entità.
+// GetXRange returns the minimum and maximum x-coordinates of the entity's rectangular bounds as a range.
+func (e *Entity) GetXRange() (float64, float64) {
+	return e.rect.point.x, e.rect.point.x + e.rect.size.w
+}
+
+// GetYRange returns the minimum and maximum Y values of the entity's rectangular bounds as a tuple.
+func (e *Entity) GetYRange() (float64, float64) {
+	return e.rect.point.y, e.rect.point.y + e.rect.size.h
+}
+
+// GetZRange returns the minimum and maximum Z values of the entity's rectangular bounds.
 func (e *Entity) GetZRange() (float64, float64) {
 	return e.rect.point.z, e.rect.point.z + e.rect.size.d
 }
 
-// SetupCollision establishes a collision relationship between the current entity and another entity, resolving overlaps and forces.
+// GetSweptZRange calculates the swept Z-axis range based on current vertical velocity and gravity force.
+func (e *Entity) GetSweptZRange() (float64, float64) {
+	minZ, maxZ := e.GetZRange()
+	// Se la velocità è quasi nulla (es. bloccata da wall.Compute),
+	// restituisci il range statico per evitare ghost-collisions sotto i piedi
+	if math.Abs(e.vz) < e.gForce {
+		return minZ, maxZ
+	}
+	if e.vz > 0 {
+		maxZ += e.vz
+	} else {
+		minZ += e.vz
+	}
+	return minZ, maxZ
+}
+
+// SetupCollision establishes a collision relationship between the current entity and another entity.
 func (e *Entity) SetupCollision(otherEnt *Entity) {
 	e.collider = otherEnt
 	otherEnt.collider = e
@@ -298,12 +346,12 @@ func (e *Entity) SetupCollision(otherEnt *Entity) {
 	}
 }
 
-// IsMoving determines if the entity is in motion by checking if any of its velocity components (vx, vy, vz) are non-zero.
+// IsMoving checks if the Entity is currently in motion by determining if any of its velocity components are non-zero.
 func (e *Entity) IsMoving() bool {
 	return e.vx != 0 || e.vy != 0 || e.vz != 0
 }
 
-// clearCollider removes the current collision reference from the entity and unlinks it bi-directionally if necessary.
+// clearCollider removes the current collider reference from the entity and ensures mutual disassociation between colliders.
 func (e *Entity) clearCollider() {
 	if e.collider != nil {
 		if e.collider.collider == e {

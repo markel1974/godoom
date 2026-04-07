@@ -55,9 +55,12 @@ func NewEntity(x float64, y float64, z float64, w float64, h float64, d float64,
 		vzMin:   vMin,
 		impulse: vMin,
 	}
+	//defaultFriction:  0.9,
+	//defaultFrictionZ: 0.99,
+	//g:                0.0,
 	a.SetFriction(0.9)
-	a.SetAirFriction(0.2)
-	a.SetGForce(0.3)
+	a.SetAirFriction(0.98)
+	a.SetGForce(0.0)
 	return a
 }
 
@@ -92,7 +95,7 @@ func (e *Entity) Update() bool {
 	}
 	e.vx *= e.friction
 	e.vy *= e.friction
-	e.vz *= e.defaultAirFriction
+	e.vz *= e.airFriction
 	e.vz -= e.gForce
 
 	// 4. CLAMPING DELLE VELOCITÀ MINIME

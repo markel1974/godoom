@@ -98,20 +98,21 @@ func (s *WallPhysics) AdjustVelocity(viewX, viewY, viewZ, velX, velY, velZ, zTop
 	if ballistic {
 		if nextZ < zMinLimit {
 			changed = true
-			velZ = math.Abs(velZ) * bounce // Proiettile che rimbalza sul pavimento
+			// Se l'impatto è superiore alla soglia, rimbalza
+			if math.Abs(velZ) > 1.0 { // Soglia: di solito 2x o 3x la forza di gravità
+				velZ = math.Abs(velZ) * bounce
+			} else {
+				// Resting contact: l'energia è troppo bassa, azzera il vettore
+				velZ = zMinLimit - viewZ
+			}
 		}
 		if nextZ > zMaxLimit {
 			changed = true
-			velZ = -math.Abs(velZ) * bounce // Proiettile che rimbalza sul soffitto
-		}
-	} else {
-		if nextZ < zMinLimit {
-			changed = true
-			velZ = zMinLimit - viewZ
-		}
-		if nextZ > zMaxLimit {
-			changed = true
-			velZ = zMaxLimit - viewZ
+			if math.Abs(velZ) > 1.0 {
+				velZ = -math.Abs(velZ) * bounce
+			} else {
+				velZ = zMaxLimit - viewZ
+			}
 		}
 	}
 	return velX, velY, velZ, changed

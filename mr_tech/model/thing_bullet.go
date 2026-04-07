@@ -21,6 +21,7 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, entities),
 	}
 
+	p.entity.SetGForce(0.1)
 	x, y, z := p.entity.GetCenter()
 	fmt.Println("Current bullet position: ", x, y, z, p.volume.GetMinZ(), p.volume.GetMaxZ())
 

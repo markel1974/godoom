@@ -103,10 +103,7 @@ func NewEntities(maxEntities uint) *Entities {
 func (em *Entities) UpdateThing(thing IThing, px float64, py float64, pz float64) {
 	ent := thing.GetEntity()
 	eRadius := ent.GetWidth() / 2.0
-	// NOTA: Se hai aggiornato physics.Entity per tenere traccia della Z internamente,
-	// qui dovrai chiamare la versione 3D, es: ent.MoveTo3d(px-eRadius, py-eRadius, pz)
 	ent.MoveTo(px-eRadius, py-eRadius, pz)
-
 	em.tree.UpdateObject(thing)
 }
 

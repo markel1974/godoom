@@ -347,7 +347,7 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
 	p.entity.SetVz(p.velocity.Z)
 	// 4. Update AABB Tree: passiamo la quota dei PIEDI (pz - eyeHeight)
 	// affinché il Rect.point.z (base) sia allineato al pavimento del settore.
-	p.entities.UpdateThing(p, px, py, pz-p.getEyeHeight())
+	p.entities.UpdateThing(p, px, py, feetZ)
 }
 
 // Update updates the player's position and velocity based on movement and physics calculations.

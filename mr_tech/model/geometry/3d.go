@@ -2,8 +2,8 @@ package geometry
 
 import "math"
 
-// Triangulate3DFace decomposes a 3D polygon into a set of non-overlapping triangles with 3D coordinates.
-func Triangulate3DFace(pts []XYZ) [][]XYZ {
+// Triangulate3d decomposes a 3D polygon into a set of non-overlapping triangles with 3D coordinates.
+func Triangulate3d(pts []XYZ) [][]XYZ {
 	pLen := len(pts)
 	if pLen == 3 {
 		return [][]XYZ{{pts[0], pts[1], pts[2]}}
@@ -52,7 +52,7 @@ func Triangulate3DFace(pts []XYZ) [][]XYZ {
 		}
 		tri3d := make([]XYZ, 3)
 		for i := 0; i < 3; i++ {
-			tri3d[i] = resolve3DPoint(t2d[i], pts, nx, ny, nz, axis)
+			tri3d[i] = resolve3dPoint(t2d[i], pts, nx, ny, nz, axis)
 		}
 		output = append(output, tri3d)
 	}
@@ -62,7 +62,7 @@ func Triangulate3DFace(pts []XYZ) [][]XYZ {
 
 // resolve3DPoint calculates the 3D coordinates of a point on a plane using its 2D projection and the plane's equation.
 // It preserves exact values if the point matches existing original points, avoiding floating-point drift over iterations.
-func resolve3DPoint(p2d XY, originalPts []XYZ, nx, ny, nz float64, axis int) XYZ {
+func resolve3dPoint(p2d XY, originalPts []XYZ, nx, ny, nz float64, axis int) XYZ {
 	// Phase A: Check against original vertices (Preserves exact floats and avoids numerical drift)
 	for _, op := range originalPts {
 		var u, v float64

@@ -160,6 +160,13 @@ func (e *Entity) SetVy(vy float64) {
 // SetVz sets the entity's velocity along the Z-axis.
 func (e *Entity) SetVz(vz float64) { e.vz = vz }
 
+// SetV updates the velocity components vx, vy, and vz of the entity.
+func (e *Entity) SetV(vx, vy, vz float64) {
+	e.vx = vx
+	e.vy = vy
+	e.vz = vz
+}
+
 // GetId retrieves the unique identifier of the Entity.
 func (e *Entity) GetId() string {
 	return e.id

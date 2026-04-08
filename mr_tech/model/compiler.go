@@ -351,7 +351,7 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 			}
 			material := anim.GetAnimation(cf.Material)
 			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
-			triangles := geometry.Triangulate3DFace(pts)
+			triangles := geometry.Triangulate3d(pts)
 			for _, tri := range triangles {
 				face := NewFace(nil, tri, cf.Tag, material)
 				volume.AddFace(face)

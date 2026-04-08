@@ -108,12 +108,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	player.Update(vi)
 
 	// 4. Dynamic Solver
-	entities := e.entities.Compute()
-
-	// 5. Sync Up (Physics -> Model) - Things
-	for _, ent := range entities {
-		ent.PhysicsApply()
-	}
+	e.entities.Compute()
 
 	// 6. Post-Sync ViewMatrix
 	vi.Update(player)

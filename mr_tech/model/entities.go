@@ -9,111 +9,106 @@ import (
 // minMovement defines the minimum threshold for movement to be considered significant in physics calculations.
 const minMovement = 0.001
 
-// Entities represent a collection of game objects managed within a spatial partitioning structure for efficient queries.
-type Entities struct {
-	tree       *physics.AABBTree
-	entities   map[int]IThing
-	moving     []IThing
-	counter    int
-	identifier int
+// Contact represents a physics collision contact point between two entities.
+// A and B are the entities involved in the collision.
+// Nx, Ny, Nz represent the normal vector of the contact.
+// Penetration denotes the depth of the intersection between entities.
+// AccumulatedImpulse tracks the accumulated impulse applied during resolution.
+type Contact struct {
+	A, B               *physics.Entity
+	Nx, Ny, Nz         float64
+	Penetration        float64
+	AccumulatedImpulse float64
 }
 
-// NewEntities initializes and returns a new Entities structure with a defined maximum capacity for the AABB tree.
+// Update updates the contact with new entities, normal vector components, and penetration depth, resetting impulse to zero.
+func (c *Contact) Update(a, b *physics.Entity, nx, ny, nz float64, penetration float64) {
+	c.A = a
+	c.B = b
+	c.Nx = nx
+	c.Ny = ny
+	c.Nz = nz
+	c.Penetration = penetration
+	c.AccumulatedImpulse = 0
+}
+
+// Resolve handles the collision response between two entities by resolving penetration and applying impulses.
+func (c *Contact) Resolve() {
+	// 1. Velocità relativa
+	rvX := c.A.GetVx() - c.B.GetVx()
+	rvY := c.A.GetVy() - c.B.GetVy()
+	rvZ := c.A.GetVz() - c.B.GetVz()
+	// 2. Velocità lungo la normale
+	velAlongNormal := (rvX * c.Nx) + (rvY * c.Ny) + (rvZ * c.Nz)
+	// Se si stanno già separando, il vincolo è soddisfatto
+	if velAlongNormal > 0 {
+		return
+	}
+	// BAUMGARTE STABILIZATION (Positional Bias)
+	const slop = 0.05   // Tolleranza: permette agli oggetti di penetrare leggermente senza vibrare
+	const percent = 0.2 // Corregge il 20% dell'errore ad ogni frame
+	// Calcoliamo la velocità extra necessaria per spingerli fuori
+	bias := math.Max(c.Penetration-slop, 0.0) * percent
+	// Se la velocità relativa (velAlongNormal) è già sufficiente a separarli, ignoriamo il bias
+	// altrimenti lo aggiungiamo al calcolo dell'impulso
+	e := math.Min(c.A.GetRestitution(), c.B.GetRestitution())
+	invMassA := c.A.GetInvMass()
+	invMassB := c.B.GetInvMass()
+
+	totalInvMass := invMassA + invMassB
+	// PREVIENI LA DIVISIONE PER ZERO (Entrambi gli oggetti statici)
+	if totalInvMass <= 0.00001 {
+		return
+	}
+	// Aggiungiamo il termine "bias" all'equazione di J
+	j := (-(1.0 + e) * velAlongNormal) + bias
+	j /= invMassA + invMassB
+	// PASSAGGIO PROIETTIVO (PGS)
+	// Conserviamo l'impulso calcolato e lo proiettiamo per non "tirare" i corpi
+	oldImpulse := c.AccumulatedImpulse
+	c.AccumulatedImpulse = math.Max(oldImpulse+j, 0.0)
+	// L'impulso effettivo da applicare in questa singola iterazione
+	jDelta := c.AccumulatedImpulse - oldImpulse
+	// 4. Applica il delta di velocità
+	impulseX := jDelta * c.Nx
+	impulseY := jDelta * c.Ny
+	impulseZ := jDelta * c.Nz
+
+	// Applica a entità A
+	c.A.SetVx(c.A.GetVx() + (impulseX * invMassA))
+	c.A.SetVy(c.A.GetVy() + (impulseY * invMassA))
+	c.A.SetVz(c.A.GetVz() + (impulseZ * invMassA))
+
+	// Sottrai da entità B
+	c.B.SetVx(c.B.GetVx() - (impulseX * invMassB))
+	c.B.SetVy(c.B.GetVy() - (impulseY * invMassB))
+	c.B.SetVz(c.B.GetVz() - (impulseZ * invMassB))
+}
+
+// Entities manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
+type Entities struct {
+	tree        *physics.AABBTree
+	entities    map[int]IThing
+	identifier  int
+	moving      []IThing
+	movingLen   int
+	contacts    []Contact
+	contactsLen int
+}
+
+// NewEntities initializes and returns an instance of Entities with the specified maximum number of entities.
 func NewEntities(maxEntities uint) *Entities {
 	return &Entities{
-		tree:       physics.NewAABBTree(maxEntities),
-		entities:   make(map[int]IThing),
-		identifier: 0,
-		counter:    0,
+		tree:        physics.NewAABBTree(maxEntities),
+		entities:    make(map[int]IThing),
+		identifier:  0,
+		movingLen:   0,
+		contacts:    make([]Contact, 1024),
+		contactsLen: 0,
 	}
 }
 
-// Compute processes the physics and collision solving for the entities, returning a list of actively moving entities.
-func (em *Entities) ComputeOld() []IThing {
-	em.counter = 0
-	for _, thing := range em.entities {
-		ent := thing.GetEntity()
-		if ent.Update() {
-			em.tree.UpdateObject(thing)
-			em.moving[em.counter] = thing
-			em.counter++
-		}
-	}
-
-	if em.counter == 0 {
-		return nil
-	}
-
-	const solverIterations = 4
-	for i := 0; i < solverIterations; i++ {
-		isStable := true
-
-		for x := 0; x < em.counter; x++ {
-			thing := em.moving[x]
-			if !thing.IsActive() {
-				continue
-			}
-
-			ent := thing.GetEntity()
-
-			em.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
-				otherThing, ok := object.(IThing)
-				if !ok || otherThing == thing {
-					return false
-				}
-
-				//if !otherThing.IsActive() || !thing.IsActive() {
-				//	return false
-				//}
-
-				otherEnt := otherThing.GetEntity()
-
-				// Tie-breaker 3D: considera anche la velocità Z
-				otherIsActive := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
-				if otherIsActive && thing.GetIdentifier() > otherThing.GetIdentifier() {
-					return false
-				}
-
-				// 1. Check Orizzontale Statico (Veloce)
-				x1Min, x1Max := ent.GetXRange()
-				x2Min, x2Max := otherEnt.GetXRange()
-				y1Min, y1Max := ent.GetYRange()
-				y2Min, y2Max := otherEnt.GetYRange()
-				if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
-					// 2. Check Verticale: Qui decidiamo se usare lo Swept
-					z1Min, z1Max := ent.GetZRange()
-					z2Min, z2Max := otherEnt.GetZRange()
-					// Se l'entità ha una velocità Z significativa, espandi il check
-					if math.Abs(ent.GetVz()) >= ent.GetGForce() {
-						z1Min, z1Max = ent.GetSweptZRange()
-					}
-					if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
-						z2Min, z2Max = otherEnt.GetSweptZRange()
-					}
-					if z1Max > z2Min && z1Min < z2Max {
-						// COLLISIONE CONFERMATA
-						thing.OnCollide(otherThing)
-						otherThing.OnCollide(thing)
-						//if thing.IsActive() && otherThing.IsActive() {
-						// SetupCollision risolverà la compenetrazione usando la logica degli impulsi
-						ent.SetupCollision(otherEnt)
-						//}
-						em.tree.UpdateObject(thing)
-						em.tree.UpdateObject(otherThing)
-						isStable = false
-					}
-				}
-				return false
-			})
-		}
-		if isStable {
-			break
-		}
-	}
-	return em.moving[:em.counter]
-}
-
-// UpdateThing updates the position of the given IThing and adjusts its spatial data in the AABBTree.
+// UpdateThing updates the position of the specified IThing in the entity manager and updates its spatial location in the tree.
 func (em *Entities) UpdateThing(thing IThing, px float64, py float64, pz float64) {
 	ent := thing.GetEntity()
 	eRadius := ent.GetWidth() / 2.0
@@ -124,7 +119,7 @@ func (em *Entities) UpdateThing(thing IThing, px float64, py float64, pz float64
 	em.tree.UpdateObject(thing)
 }
 
-// AddThing adds an IThing instance to the Entities collection, sets its identifier, and inserts it into the AABB tree.
+// AddThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
 func (em *Entities) AddThing(ent IThing) {
 	em.entities[em.identifier] = ent
 	ent.SetIdentifier(em.identifier)
@@ -135,50 +130,44 @@ func (em *Entities) AddThing(ent IThing) {
 	em.tree.InsertObject(ent)
 }
 
+// RemoveThing removes the specified IThing entity from the spatial tree and the entities map in Entities.
 func (em *Entities) RemoveThing(ent IThing) {
 	em.tree.RemoveObject(ent)
 	delete(em.entities, ent.GetIdentifier())
 }
 
-type Contact struct {
-	A, B               *physics.Entity
-	Nx, Ny, Nz         float64
-	Penetration        float64
-	AccumulatedImpulse float64
-}
-
-func (em *Entities) Compute() []IThing {
-	em.counter = 0
+// Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.
+func (em *Entities) Compute() {
+	em.movingLen = 0
 	for _, thing := range em.entities {
 		ent := thing.GetEntity()
 		if ent.Update() {
 			em.tree.UpdateObject(thing)
-			em.moving[em.counter] = thing
-			em.counter++
+			em.moving[em.movingLen] = thing
+			em.movingLen++
 		}
 	}
 
-	if em.counter == 0 {
-		return nil
+	if em.movingLen == 0 {
+		return
 	}
 
-	var contacts []Contact
+	em.contactsLen = 0
 
-	// FASE 1: DETECTION (Costruzione del Jacobiano)
-	for x := 0; x < em.counter; x++ {
+	// DETECTION (Costruzione del Jacobiano)
+	for x := 0; x < em.movingLen; x++ {
 		thing := em.moving[x]
 		ent := thing.GetEntity()
 
 		em.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
-			otherThing := object.(IThing)
-			otherEnt := otherThing.GetEntity()
+			// 1. CAST SAFE e check di auto-collisione
 			otherThing, ok := object.(IThing)
 			if !ok || otherThing == thing {
 				return false
 			}
+			otherEnt := otherThing.GetEntity()
 
-			// Tie-breaker 3D: considera anche la velocità Z
-			//otherIsActive := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
+			// 2. Tie-breaker 3D
 			otherIsMoving := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
 			if otherIsMoving && thing.GetIdentifier() > otherThing.GetIdentifier() {
 				return false
@@ -188,17 +177,20 @@ func (em *Entities) Compute() []IThing {
 			x2Min, x2Max := otherEnt.GetXRange()
 			y1Min, y1Max := ent.GetYRange()
 			y2Min, y2Max := otherEnt.GetYRange()
+
+			// SAT: Collisione AABB Planare Veloce
 			if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
-				// 2. Check Verticale: Qui decidiamo se usare lo Swept
 				z1Min, z1Max := ent.GetZRange()
 				z2Min, z2Max := otherEnt.GetZRange()
-				// Se l'entità ha una velocità Z significativa, espandi il check
+
+				// Supporto Swept Z per il Continuous Collision Detection verticale
 				if math.Abs(ent.GetVz()) >= ent.GetGForce() {
 					z1Min, z1Max = ent.GetSweptZRange()
 				}
 				if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
 					z2Min, z2Max = otherEnt.GetSweptZRange()
 				}
+
 				if z1Max > z2Min && z1Min < z2Max {
 					pX1 := x1Max - x2Min
 					pX2 := x2Max - x1Min
@@ -206,9 +198,11 @@ func (em *Entities) Compute() []IThing {
 					pY2 := y2Max - y1Min
 					pZ1 := z1Max - z2Min
 					pZ2 := z2Max - z1Min
-					// 3. INVERTI I SEGNI DELLE NORMALI
+
 					minPenetration := pX1
-					var normX, normY, normZ float64 = -1, 0, 0 // A è a sinistra, spingi a sinistra
+					var normX, normY, normZ float64 = -1, 0, 0
+
+					// Troviamo l'asse di minima compenetrazione
 					if pX2 < minPenetration {
 						minPenetration = pX2
 						normX, normY, normZ = 1, 0, 0
@@ -229,12 +223,17 @@ func (em *Entities) Compute() []IThing {
 						minPenetration = pZ2
 						normX, normY, normZ = 0, 0, 1
 					}
+
 					if minPenetration > 0.001 {
-						contacts = append(contacts, Contact{
-							A: ent, B: otherEnt,
-							Nx: normX, Ny: normY, Nz: normZ,
-							Penetration: minPenetration,
-						})
+						// Dynamic Growth della memoria pre-allocata
+						if em.contactsLen >= len(em.contacts) {
+							newContacts := make([]Contact, len(em.contacts)*2)
+							copy(newContacts, em.contacts)
+							em.contacts = newContacts
+						}
+						// Riciclo memoria
+						em.contacts[em.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
+						em.contactsLen++
 						thing.OnCollide(otherThing)
 						otherThing.OnCollide(thing)
 					}
@@ -247,64 +246,15 @@ func (em *Entities) Compute() []IThing {
 	// FASE 2: RESOLUTION (Il Solver PGS)
 	const solverIterations = 4
 	for i := 0; i < solverIterations; i++ {
-		for c := 0; c < len(contacts); c++ {
-			contacts[c].Resolve()
+		for c := 0; c < em.contactsLen; c++ {
+			em.contacts[c].Resolve()
 		}
 	}
-	for x := 0; x < em.counter; x++ {
-		em.tree.UpdateObject(em.moving[x])
+
+	// FASE 3: COMMIT SPAZIALE E INTEGRAZIONE
+	for x := 0; x < em.movingLen; x++ {
+		m := em.moving[x]
+		em.tree.UpdateObject(m)
+		m.PhysicsApply()
 	}
-	return em.moving[:em.counter]
-}
-
-func (c *Contact) Resolve() {
-	// 1. Velocità relativa
-	rvX := c.A.GetVx() - c.B.GetVx()
-	rvY := c.A.GetVy() - c.B.GetVy()
-	rvZ := c.A.GetVz() - c.B.GetVz()
-	// 2. Velocità lungo la normale
-	velAlongNormal := (rvX * c.Nx) + (rvY * c.Ny) + (rvZ * c.Nz)
-	// Se si stanno già separando, il vincolo è soddisfatto
-	if velAlongNormal > 0 {
-		return
-	}
-	// --- BAUMGARTE STABILIZATION (Positional Bias) ---
-	const slop = 0.05   // Tolleranza: permette agli oggetti di penetrare leggermente senza vibrare
-	const percent = 0.2 // Corregge il 20% dell'errore ad ogni frame
-	// Calcoliamo la velocità extra necessaria per spingerli fuori
-	bias := math.Max(c.Penetration-slop, 0.0) * percent
-	// Se la velocità relativa (velAlongNormal) è già sufficiente a separarli, ignoriamo il bias
-	// altrimenti lo aggiungiamo al calcolo dell'impulso
-	e := math.Min(c.A.GetRestitution(), c.B.GetRestitution())
-	invMassA := c.A.GetInvMass()
-	invMassB := c.B.GetInvMass()
-
-	totalInvMass := invMassA + invMassB
-	// PREVIENI LA DIVISIONE PER ZERO (Entrambi gli oggetti statici)
-	if totalInvMass <= 0.00001 {
-		return
-	}
-	// Aggiungiamo il termine "bias" all'equazione di J
-	j := (-(1.0 + e) * velAlongNormal) + bias
-	j /= invMassA + invMassB
-	// --- IL PASSAGGIO PROIETTIVO (PGS) ---
-	// Conserviamo l'impulso calcolato e lo proiettiamo per non "tirare" i corpi
-	oldImpulse := c.AccumulatedImpulse
-	c.AccumulatedImpulse = math.Max(oldImpulse+j, 0.0)
-	// L'impulso effettivo da applicare in questa singola iterazione
-	jDelta := c.AccumulatedImpulse - oldImpulse
-	// 4. Applica il delta di velocità
-	impulseX := jDelta * c.Nx
-	impulseY := jDelta * c.Ny
-	impulseZ := jDelta * c.Nz
-
-	// Applica a entità A
-	c.A.SetVx(c.A.GetVx() + (impulseX * invMassA))
-	c.A.SetVy(c.A.GetVy() + (impulseY * invMassA))
-	c.A.SetVz(c.A.GetVz() + (impulseZ * invMassA))
-
-	// Sottrai da entità B
-	c.B.SetVx(c.B.GetVx() - (impulseX * invMassB))
-	c.B.SetVy(c.B.GetVy() - (impulseY * invMassB))
-	c.B.SetVz(c.B.GetVz() - (impulseZ * invMassB))
 }

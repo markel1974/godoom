@@ -41,7 +41,7 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.volume = player.GetVolume()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
 	vi.yaw = player.GetYaw()
-	vi.lightIntensity = 0.0 //player.GetLightIntensity()
+	vi.lightIntensity = player.GetLightIntensity()
 	bob, bobPhase := player.GetBobPhase()
 	vi.bobPhase = bobPhase
 	vi.where.Z += bob
@@ -90,13 +90,13 @@ func (vi *ViewMatrix) GetLightIntensity() float64 {
 }
 
 // GetLightIntensityFactor computes the adjusted light intensity factor by reducing 1 with the product of input factor and light intensity.
-func (vi *ViewMatrix) GetLightIntensityFactor(factor float64) float64 {
-	l := 1 - (factor * vi.lightIntensity)
-	if l < 0 {
-		return 0
-	}
-	return l
-}
+//func (vi *ViewMatrix) GetLightIntensityFactor(factor float64) float64 {
+//	l := 1 - (factor * vi.lightIntensity)
+//	if l < 0 {
+//		return 0
+//	}
+//	return l
+//}
 
 // GetVolume retrieves the Volume instance associated with the ViewMatrix.
 func (vi *ViewMatrix) GetVolume() *Volume {
@@ -127,17 +127,15 @@ func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) (*physics.Fru
 // It reconstructs the View and Projection matrices to accurately extract the 6 clipping planes for AABB culling.
 func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
 	// Calcolo Aspect Ratio e Scale per la Proiezione
+	pitchShear := float32(-vi.yaw)
 	aspect := float32(fbw) / float32(fbh)
 	scaleX := (2.0 / aspect) * float32(HFov)
 	scaleY := 2.0 * float32(VFov)
-	pitchShear := float32(-vi.yaw)
-
 	zNear := float32(0.1)
 	zFar := zFarRoom
 	if zFar <= zNear {
 		zFar = 10000.0 // Fallback di sicurezza se zFarRoom non è valido
 	}
-
 	// Costruzione Matrice di Proiezione (Column-Major)
 	proj := [16]float32{
 		-scaleX, 0, 0, 0,
@@ -145,27 +143,21 @@ func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics
 		0, pitchShear, (zFar + zNear) / (zNear - zFar), -1,
 		0, 0, (2 * zFar * zNear) / (zNear - zFar), 0,
 	}
-
 	// Costruzione Matrice di View (Column-Major)
 	fX, fZ := float32(vi.angleCos), float32(-vi.angleSin)
 	rX, rZ := float32(vi.angleSin), float32(vi.angleCos)
 	ex, ey, ez := float32(vi.where.X), float32(vi.where.Z), float32(-vi.where.Y)
-
 	tx := -(rX*ex + rZ*ez)
 	ty := -ey
 	tz := fX*ex + fZ*ez
-
 	view := [16]float32{
 		rX, 0, -fX, 0,
 		0, 1, 0, 0,
 		rZ, 0, -fZ, 0,
 		tx, ty, tz, 1,
 	}
-
 	vp := matrixMultiply(proj, view)
-
 	vi.front.Rebuild(vp)
-	// Crea il Frustum fisico estraendo i piani dalla matrice combinata
 	return vi.front
 }
 

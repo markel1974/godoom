@@ -92,7 +92,7 @@ func (p *CompiledPolygon) Rect(x1 float64, y1 float64, y2 float64, z1 float64, x
 }
 
 /*
-// AddPoint adds two consecutive points to the polygon and increments the point length counter accordingly.
+// AddPoint adds two consecutive points to the polygon and increments the point length movingLen accordingly.
 func (p *CompiledPolygon) AddPoint(x1 float64, y1 float64, z1 float64, x2 float64, y2 float64, z2 float64) {
 	p.Points[p.PLen].X = x1
 	p.Points[p.PLen].Y = y1

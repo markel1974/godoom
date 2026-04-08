@@ -106,14 +106,23 @@ func (e *Entity) Update() bool {
 	return e.IsMoving()
 }
 
+//func (e *Entity) AddTo(x float64, y float64, z float64) {
+//	e.rect.AddTo(x, y, z)
+//}
+
 // MoveTest calculates potential movement based on current velocities and returns the resulting position deltas (dx, dy, dz).
-func (e *Entity) MoveTest() (float64, float64, float64) {
-	return e.rect.MoveTest(e.vx, e.vy, e.vz)
-}
+//func (e *Entity) MoveTest() (float64, float64, float64) {
+//	return e.rect.MoveTest(e.vx, e.vy, e.vz)
+//}
 
 // Move updates the position of the entity by adding its velocity components (vx, vy, vz) to its current position.
-func (e *Entity) Move() {
-	e.rect.AddTo(e.vx, e.vy, e.vz)
+//func (e *Entity) Move() {
+//	e.rect.AddTo(e.vx, e.vy, e.vz)
+//}
+
+// MoveTo sets the Entity's position to the specified x, y, and z coordinates.
+func (e *Entity) MoveTo(x float64, y float64, z float64) {
+	e.rect.MoveTo(x, y, z)
 }
 
 // SetFriction updates the friction value of the entity and resets it to the default friction value.
@@ -209,11 +218,6 @@ func (e *Entity) GetRestitution() float64 {
 // GetAABB returns the axis-aligned bounding box (AABB) of the entity.
 func (e *Entity) GetAABB() *AABB {
 	return e.rect.GetAABB()
-}
-
-// MoveTo sets the Entity's position to the specified x, y, and z coordinates.
-func (e *Entity) MoveTo(x float64, y float64, z float64) {
-	e.rect.MoveTo(x, y, z)
 }
 
 // GetCenter returns the center point of the entity as (x, y, z) coordinates.

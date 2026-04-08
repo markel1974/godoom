@@ -342,9 +342,7 @@ func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
 		p.volume = newVolume
 	}
 	// 3. Sincronizzazione velocità nel motore impulsivo
-	p.entity.SetVx(p.velocity.X)
-	p.entity.SetVy(p.velocity.Y)
-	p.entity.SetVz(p.velocity.Z)
+	p.entity.SetV(p.velocity.X, p.velocity.Y, p.velocity.Z)
 	// 4. Update AABB Tree: passiamo la quota dei PIEDI (pz - eyeHeight)
 	// affinché il Rect.point.z (base) sia allineato al pavimento del settore.
 	p.entities.UpdateThing(p, px, py, feetZ)

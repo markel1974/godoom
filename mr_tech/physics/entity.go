@@ -167,6 +167,20 @@ func (e *Entity) SetV(vx, vy, vz float64) {
 	e.vz = vz
 }
 
+// AddV adjusts the velocity of the entity by adding the provided vx, vy, and vz values to its current velocity components.
+func (e *Entity) AddV(vx, vy, vz float64) {
+	e.vx += vx
+	e.vy += vy
+	e.vz += vz
+}
+
+// SubV subtracts the given vx, vy, and vz values from the Entity's velocity components.
+func (e *Entity) SubV(vx, vy, vz float64) {
+	e.vx -= vx
+	e.vy -= vy
+	e.vz -= vz
+}
+
 // GetId retrieves the unique identifier of the Entity.
 func (e *Entity) GetId() string {
 	return e.id
@@ -277,6 +291,22 @@ func (e *Entity) GetSweptZRange() (float64, float64) {
 	return minZ, maxZ
 }
 
+// IsMoving checks if the Entity is currently in motion by determining if any of its velocity components are non-zero.
+func (e *Entity) IsMoving() bool {
+	return e.vx != 0 || e.vy != 0 || e.vz != 0
+}
+
+// clearCollider removes the current collider reference from the entity and ensures mutual disassociation between colliders.
+func (e *Entity) clearCollider() {
+	if e.collider != nil {
+		if e.collider.collider == e {
+			e.collider.collider = nil
+		}
+		e.collider = nil
+	}
+}
+
+/*
 // SetupCollision establishes a collision relationship between the current entity and another entity.
 func (e *Entity) SetupCollision(otherEnt *Entity) {
 	e.collider = otherEnt
@@ -353,17 +383,4 @@ func (e *Entity) SetupCollision(otherEnt *Entity) {
 	}
 }
 
-// IsMoving checks if the Entity is currently in motion by determining if any of its velocity components are non-zero.
-func (e *Entity) IsMoving() bool {
-	return e.vx != 0 || e.vy != 0 || e.vz != 0
-}
-
-// clearCollider removes the current collider reference from the entity and ensures mutual disassociation between colliders.
-func (e *Entity) clearCollider() {
-	if e.collider != nil {
-		if e.collider.collider == e {
-			e.collider.collider = nil
-		}
-		e.collider = nil
-	}
-}
+*/

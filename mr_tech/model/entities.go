@@ -15,31 +15,31 @@ const minMovement = 0.001
 // Penetration denotes the depth of the intersection between entities.
 // AccumulatedImpulse tracks the accumulated impulse applied during resolution.
 type Contact struct {
-	A, B               *physics.Entity
-	Nx, Ny, Nz         float64
-	Penetration        float64
-	AccumulatedImpulse float64
+	a, b               *physics.Entity
+	nx, ny, nz         float64
+	penetration        float64
+	accumulatedImpulse float64
 }
 
 // Update updates the contact with new entities, normal vector components, and penetration depth, resetting impulse to zero.
 func (c *Contact) Update(a, b *physics.Entity, nx, ny, nz float64, penetration float64) {
-	c.A = a
-	c.B = b
-	c.Nx = nx
-	c.Ny = ny
-	c.Nz = nz
-	c.Penetration = penetration
-	c.AccumulatedImpulse = 0
+	c.a = a
+	c.b = b
+	c.nx = nx
+	c.ny = ny
+	c.nz = nz
+	c.penetration = penetration
+	c.accumulatedImpulse = 0
 }
 
 // Resolve handles the collision response between two entities by resolving penetration and applying impulses.
 func (c *Contact) Resolve() {
 	// 1. Velocità relativa
-	rvX := c.A.GetVx() - c.B.GetVx()
-	rvY := c.A.GetVy() - c.B.GetVy()
-	rvZ := c.A.GetVz() - c.B.GetVz()
+	rvX := c.a.GetVx() - c.b.GetVx()
+	rvY := c.a.GetVy() - c.b.GetVy()
+	rvZ := c.a.GetVz() - c.b.GetVz()
 	// 2. Velocità lungo la normale
-	velAlongNormal := (rvX * c.Nx) + (rvY * c.Ny) + (rvZ * c.Nz)
+	velAlongNormal := (rvX * c.nx) + (rvY * c.ny) + (rvZ * c.nz)
 	// Se si stanno già separando, il vincolo è soddisfatto
 	if velAlongNormal > 0 {
 		return
@@ -48,13 +48,12 @@ func (c *Contact) Resolve() {
 	const slop = 0.05   // Tolleranza: permette agli oggetti di penetrare leggermente senza vibrare
 	const percent = 0.2 // Corregge il 20% dell'errore ad ogni frame
 	// Calcoliamo la velocità extra necessaria per spingerli fuori
-	bias := math.Max(c.Penetration-slop, 0.0) * percent
+	bias := math.Max(c.penetration-slop, 0.0) * percent
 	// Se la velocità relativa (velAlongNormal) è già sufficiente a separarli, ignoriamo il bias
 	// altrimenti lo aggiungiamo al calcolo dell'impulso
-	e := math.Min(c.A.GetRestitution(), c.B.GetRestitution())
-	invMassA := c.A.GetInvMass()
-	invMassB := c.B.GetInvMass()
-
+	e := math.Min(c.a.GetRestitution(), c.b.GetRestitution())
+	invMassA := c.a.GetInvMass()
+	invMassB := c.b.GetInvMass()
 	totalInvMass := invMassA + invMassB
 	// PREVIENI LA DIVISIONE PER ZERO (Entrambi gli oggetti statici)
 	if totalInvMass <= 0.00001 {
@@ -65,24 +64,16 @@ func (c *Contact) Resolve() {
 	j /= invMassA + invMassB
 	// PASSAGGIO PROIETTIVO (PGS)
 	// Conserviamo l'impulso calcolato e lo proiettiamo per non "tirare" i corpi
-	oldImpulse := c.AccumulatedImpulse
-	c.AccumulatedImpulse = math.Max(oldImpulse+j, 0.0)
+	oldImpulse := c.accumulatedImpulse
+	c.accumulatedImpulse = math.Max(oldImpulse+j, 0.0)
 	// L'impulso effettivo da applicare in questa singola iterazione
-	jDelta := c.AccumulatedImpulse - oldImpulse
+	jDelta := c.accumulatedImpulse - oldImpulse
 	// 4. Applica il delta di velocità
-	impulseX := jDelta * c.Nx
-	impulseY := jDelta * c.Ny
-	impulseZ := jDelta * c.Nz
-
-	// Applica a entità A
-	c.A.SetVx(c.A.GetVx() + (impulseX * invMassA))
-	c.A.SetVy(c.A.GetVy() + (impulseY * invMassA))
-	c.A.SetVz(c.A.GetVz() + (impulseZ * invMassA))
-
-	// Sottrai da entità B
-	c.B.SetVx(c.B.GetVx() - (impulseX * invMassB))
-	c.B.SetVy(c.B.GetVy() - (impulseY * invMassB))
-	c.B.SetVz(c.B.GetVz() - (impulseZ * invMassB))
+	impulseX := jDelta * c.nx
+	impulseY := jDelta * c.ny
+	impulseZ := jDelta * c.nz
+	c.a.AddV(impulseX*invMassA, impulseY*invMassA, impulseZ*invMassA)
+	c.b.SubV(impulseX*invMassB, impulseY*invMassB, impulseZ*invMassB)
 }
 
 // Entities manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
@@ -139,6 +130,8 @@ func (em *Entities) RemoveThing(ent IThing) {
 // Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.
 func (em *Entities) Compute() {
 	em.movingLen = 0
+	em.contactsLen = 0
+
 	for _, thing := range em.entities {
 		ent := thing.GetEntity()
 		if ent.Update() {
@@ -151,8 +144,6 @@ func (em *Entities) Compute() {
 	if em.movingLen == 0 {
 		return
 	}
-
-	em.contactsLen = 0
 
 	// DETECTION (Costruzione del Jacobiano)
 	for x := 0; x < em.movingLen; x++ {

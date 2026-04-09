@@ -8,79 +8,30 @@ import (
 
 // ThingWall represents a UI component or control typically used to select a value from a range by sliding a handle.
 type ThingWall struct {
-	aabb    *physics.AABB
+	wall    *physics.Entity
 	volumes *Volumes
 }
 
 // NewThingWall initializes and returns a new ThingWall instance, associating it with the provided Volumes object.
-func NewThingWall(volumes *Volumes) *ThingWall {
+func NewThingWall(volumes *Volumes, restitution, friction float64) *ThingWall {
 	return &ThingWall{
 		volumes: volumes,
-		aabb:    physics.NewAABB(0, 0, 0, 0, 0, 0),
+		wall:    physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
 	}
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the ThingWall instance.
 func (s *ThingWall) GetAABB() *physics.AABB {
-	return s.aabb
+	return s.wall.GetAABB()
 }
 
-// Compute calculates the resulting velocity and collision changes by simulating movement and impact within specified limits.
-func (s *ThingWall) Compute(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64, ballistic bool) (float64, float64, float64, bool) {
-	changed := false
-	pX := viewX + velX
-	pY := viewY + velY
-	pZ := viewZ + velZ
-
-	const acceleration = 0.8 //2.0
-	const bounce = 0.8       //0.8
-
-	// 1. Risoluzione Planare/Arbitraria (Muri e Geometria 3D)
-	closestFace, colNx, colNy, colNz := s.closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
-
-	if closestFace != nil {
-		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
-		if dot < 0 {
-			changed = true
-			if ballistic {
-				// Comportamento Bouncing (Riflessione elastica pura per proiettili)
-				velX -= acceleration * dot * colNx
-				velY -= acceleration * dot * colNy
-				velZ -= acceleration * dot * colNz
-			} else {
-				// Comportamento Sliding (Assorbimento dell'impatto per Player/Mostri)
-				velX -= dot * colNx
-				velY -= dot * colNy
-				velZ -= dot * colNz
-			}
-		}
-	}
-	nextZ := viewZ + velZ
-	if ballistic {
-		if nextZ < zMinLimit {
-			changed = true
-			// Se l'impatto è superiore alla soglia, rimbalza
-			if math.Abs(velZ) > 1.0 { // Soglia: di solito 2x o 3x la forza di gravità
-				velZ = math.Abs(velZ) * bounce
-			} else {
-				// Resting contact: l'energia è troppo bassa, azzera il vettore
-				velZ = zMinLimit - viewZ
-			}
-		}
-		if nextZ > zMaxLimit {
-			changed = true
-			if math.Abs(velZ) > 1.0 {
-				velZ = -math.Abs(velZ) * bounce
-			} else {
-				velZ = zMaxLimit - viewZ
-			}
-		}
-	}
-	return velX, velY, velZ, changed
+// GetEntity retrieves the underlying physics.Entity associated with the ThingWall instance.
+func (s *ThingWall) GetEntity() *physics.Entity {
+	return s.wall
 }
 
-// closestFace finds the nearest face a moving object collides with, given its trajectory and radius, using 3D collision detection.
-func (s *ThingWall) closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
+// ClosestFace finds the nearest face a moving object collides with, given its trajectory and radius, using 3D collision detection.
+func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
 	minX := math.Min(viewX, pX) - radius
 	maxX := math.Max(viewX, pX) + radius
 	minY := math.Min(viewY, pY) - radius
@@ -181,4 +132,58 @@ func (s *ThingWall) closestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, vel
 		}
 	})
 	return closestFace, colNx, colNy, colNz
+}
+
+// Compute calculates the resulting velocity and collision changes by simulating movement and impact within specified limits.
+func (s *ThingWall) Compute(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, radius float64, ballistic bool) (float64, float64, float64, bool) {
+	changed := false
+	pX := viewX + velX
+	pY := viewY + velY
+	pZ := viewZ + velZ
+
+	const acceleration = 0.8 //2.0
+	const bounce = 0.8       //0.8
+
+	// 1. Risoluzione Planare/Arbitraria (Muri e Geometria 3D)
+	closestFace, colNx, colNy, colNz := s.ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, zTop, zBottom, radius)
+
+	if closestFace != nil {
+		dot := (velX * colNx) + (velY * colNy) + (velZ * colNz)
+		if dot < 0 {
+			changed = true
+			if ballistic {
+				// Comportamento Bouncing (Riflessione elastica pura per proiettili)
+				velX -= acceleration * dot * colNx
+				velY -= acceleration * dot * colNy
+				velZ -= acceleration * dot * colNz
+			} else {
+				// Comportamento Sliding (Assorbimento dell'impatto per Player/Mostri)
+				velX -= dot * colNx
+				velY -= dot * colNy
+				velZ -= dot * colNz
+			}
+		}
+	}
+	nextZ := viewZ + velZ
+	if ballistic {
+		if nextZ < zMinLimit {
+			changed = true
+			// Se l'impatto è superiore alla soglia, rimbalza
+			if math.Abs(velZ) > 1.0 { // Soglia: di solito 2x o 3x la forza di gravità
+				velZ = math.Abs(velZ) * bounce
+			} else {
+				// Resting contact: l'energia è troppo bassa, azzera il vettore
+				velZ = zMinLimit - viewZ
+			}
+		}
+		if nextZ > zMaxLimit {
+			changed = true
+			if math.Abs(velZ) > 1.0 {
+				velZ = -math.Abs(velZ) * bounce
+			} else {
+				velZ = zMaxLimit - viewZ
+			}
+		}
+	}
+	return velX, velY, velZ, changed
 }

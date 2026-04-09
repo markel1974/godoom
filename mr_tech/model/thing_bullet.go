@@ -20,27 +20,29 @@ func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *V
 		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, entities),
 	}
 
-	p.entity.SetGForce(0.1)
-	//x, y, z := p.entity.GetCenter()
-	//fmt.Println("Current bullet position: ", x, y, z, p.volume.GetMinZ(), p.volume.GetMaxZ())
+	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
+	p.maxStep = 0.0
 
-	//p.entity.SetFriction(1.0)
 	p.entities.AddThing(p)
+
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
-	// Supponiamo che 5.0 corrisponda a un'inclinazione massima desiderata di 60 gradi (1.047 radianti).
-	// Formula: (rawPitch / maxValue) * maxRadian
-	maxRadian := 1.047 // Regola questo limite in base al FOV del tuo motore
+	maxRadian := 1.047
 	pitchRad := (rawPitch / 5.0) * maxRadian
 
-	// 2. Calcolo Sferico 3D VERO
-	dirX := math.Cos(p.angle) * math.Cos(pitchRad) * p.speed
-	dirY := math.Sin(p.angle) * math.Cos(pitchRad) * p.speed
-	dirZ := math.Sin(pitchRad) * p.speed
+	// 2. Vettore Direzionale 3D normalizzato
+	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
+	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
+	dirZ := math.Sin(pitchRad)
 
-	const acceleration = 0.15
-	p.entity.SetVx(p.entity.GetVx()*(1-acceleration) + (dirX * acceleration))
-	p.entity.SetVy(p.entity.GetVy()*(1-acceleration) + (dirY * acceleration))
-	p.entity.SetVz(p.entity.GetVz()*(1-acceleration) + (dirZ * acceleration))
+	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
+	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
+	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
+	muzzleVelocity := p.speed * 5.0
+
+	p.entity.SetVx(dirX * muzzleVelocity)
+	p.entity.SetVy(dirY * muzzleVelocity)
+	p.entity.SetVz(dirZ * muzzleVelocity)
+
 	return p
 }
 
@@ -56,54 +58,6 @@ func (t *ThingBullet) GetMinZ() float64 {
 
 func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
-}
-
-// PhysicsApply updates the bullet's position based on physics deltas (X, Y, Z)
-// and synchronizes its state with the 3D spatial partitioning.
-func (t *ThingBullet) PhysicsApply() {
-	if !t.entity.IsMoving() {
-		return
-	}
-	// 1. Recupero dal motore fisico (Baricentro Reale 3D)
-	eX, eY, eZ := t.entity.GetCenter()
-	// Calcolo quota base del proiettile
-	baseZ := eZ - (t.entity.GetDepth() / 2.0)
-	// 2. Calcolo dei delta completi
-	tx := (eX - t.position.X) + t.entity.GetVx()
-	ty := (eY - t.position.Y) + t.entity.GetVy()
-	tz := (baseZ - t.position.Z) + t.entity.GetVz()
-	if tx == 0 && ty == 0 && tz == 0 {
-		return
-	}
-	// 3. Risoluzione dei vincoli ambientali 3D (Bounces e Portali)
-	viewX := t.position.X
-	viewY := t.position.Y
-	viewZ := t.position.Z
-	zBottom := viewZ
-	zTop := viewZ + t.height
-	zMinLimit := t.volume.GetMinZ()
-	zMaxLimit := t.volume.GetMaxZ()
-	// Rimbalzo sui muri (Broad & Narrow phase)
-	velX, velY, velZ, _ := t.wall.Compute(viewX, viewY, viewZ, tx, ty, tz, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, true)
-	if math.Abs(velX) > minMovement || math.Abs(velX) > minMovement || math.Abs(velX) > minMovement {
-		t.entity.SetVx(velX)
-		t.entity.SetVy(velY)
-		t.entity.SetVz(velZ)
-		// 4. Aggiornamento posizione logica
-		t.position.X += velX
-		t.position.Y += velY
-		t.position.Z += velZ
-		// 5. Aggiornamento AABB Tree (basato sul baricentro per prevenire cambi errati)
-		bulletBaseZ := t.position.Z
-		bulletTopZ := t.position.Z + t.height
-		const bulletStep = 0.0
-		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, bulletBaseZ, bulletTopZ, bulletStep); newVolume != nil && newVolume != t.volume {
-			t.volume = newVolume
-		}
-		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
-	} else {
-		t.entity.Stop()
-	}
 }
 
 // OnCollide handles the interaction when the bullet collides with another object.

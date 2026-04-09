@@ -16,7 +16,6 @@ type ThingPlayer struct {
 	id             string
 	kind           int
 	where          geometry.XYZ
-	velocity       geometry.XYZ
 	angle          float64
 	angleSin       float64
 	angleCos       float64
@@ -26,21 +25,18 @@ type ThingPlayer struct {
 	mass           float64
 	volume         *Volume
 	ducking        bool
-	falling        bool
 	lightIntensity float64
 	sectors        *Volumes
 	entities       *Entities
 	entity         *physics.Entity
 	identifier     int
-	bob            float64
-	bobPhase       float64
+	bobbing        *Bobbing
 	wall           *ThingWall
 	debug          bool
 	height         float64
 	eyeHeight      float64
 	maxStep        float64
 	headMargin     float64
-	kneeHeight     float64
 	duckHeight     float64
 }
 
@@ -62,11 +58,9 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 	p := &ThingPlayer{
 		id:             "PLAYER",
 		kind:           0,
-		velocity:       geometry.XYZ{},
 		yaw:            0,
 		yawState:       0,
-		bob:            0,
-		bobPhase:       0,
+		bobbing:        NewBobbing(2.6, 0.9, 0.03, 0.015, 0.15, 0.10),
 		radius:         cfg.Radius,
 		mass:           cfg.Mass,
 		volume:         volume,
@@ -75,17 +69,19 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 		entities:       entities,
 		debug:          debug,
 		identifier:     -1,
-		wall:           NewThingWall(volumes),
+		wall:           NewThingWall(volumes, 0, 0),
 		height:         height,
 		eyeHeight:      height * 0.80,
 		maxStep:        height * 0.50,
 		headMargin:     height * 0.25,
-		kneeHeight:     height * 0.25,
 		duckHeight:     height * 0.25,
 	}
+	z := volume.GetMinZ()
 	d := p.eyeHeight + p.headMargin
-	p.where = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: volume.GetMinZ() + p.eyeHeight}
-	p.entity = physics.NewEntity(x, y, volume.GetMinZ(), w, h, d, cfg.Mass, cfg.Restitution)
+	restitution := cfg.Restitution
+	p.where = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: z} // volume.GetMinZ()+ p.eyeHeight}
+	p.entity = physics.NewEntity(x, y, z, w, h, d, cfg.Mass, restitution, 0.9)
+	//p.entity.SetGForce(0.2)
 	p.SetAngle(cfg.Angle)
 	p.entities.AddThing(p)
 	return p, nil
@@ -146,9 +142,9 @@ func (p *ThingPlayer) Compute(_ float64, _ float64, _ float64) {
 }
 
 // EntityUpdate updates the entity associated with the ThingPlayer and returns a boolean indicating success or failure.
-func (p *ThingPlayer) EntityUpdate() bool {
-	return p.entity.Update()
-}
+//func (p *ThingPlayer) EntityUpdate() bool {
+//	return p.entity.Update()
+//}
 
 // AddAngle adds the given angle (in degrees) to the current angle of the ThingPlayer object.
 func (p *ThingPlayer) AddAngle(angle float64) {
@@ -175,90 +171,55 @@ func (p *ThingPlayer) GetAngle() (float64, float64) {
 // SetYaw adjusts the yawState and yaw of the ThingPlayer based on the input value and current velocity.
 func (p *ThingPlayer) SetYaw(y float64) {
 	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
-	p.yaw = p.yawState - (p.velocity.Z * 0.5)
+	p.yaw = p.yawState - (p.entity.GetVz() * 0.5)
 }
 
-// Move applies movement to the ThingPlayer based on directional inputs and impulse.
-func (p *ThingPlayer) Move(impulse float64, up bool, down bool, left bool, right bool) {
-	var moveX float64
-	var moveY float64
-	var acceleration float64
-	if up || down || left || right {
-		if up {
-			moveX += p.angleCos * impulse
-			moveY += p.angleSin * impulse
-		}
-		if down {
-			moveX -= p.angleCos * impulse
-			moveY -= p.angleSin * impulse
-		}
-		if left {
-			moveX += p.angleSin * impulse
-			moveY -= p.angleCos * impulse
-		}
-		if right {
-			moveX -= p.angleSin * impulse
-			moveY += p.angleCos * impulse
-		}
-		acceleration = 0.4
-	} else {
-		acceleration = 0.2
+func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
+	if !up && !down && !left && !right {
+		return
 	}
-	vx := p.velocity.X*(1-acceleration) + (moveX * acceleration)
-	vy := p.velocity.Y*(1-acceleration) + (moveY * acceleration)
-	p.velocity.X = vx
-	p.velocity.Y = vy
-	if speed := math.Sqrt(vx*vx + vy*vy); speed > 0.05 {
-		p.bobPhase += speed * 0.7 // Frequenza dei passi legata alla velocità reale
-	} else {
-		p.bobPhase *= 0.85 // Smorzamento elastico quando ti fermi
+	var fx, fy float64
+	if up {
+		fx += p.angleCos
+		fy += p.angleSin
 	}
-	p.bob = math.Sin(p.bobPhase) * 0.9
+	if down {
+		fx -= p.angleCos
+		fy -= p.angleSin
+	}
+	if left {
+		fx += p.angleSin
+		fy -= p.angleCos
+	}
+	if right {
+		fx -= p.angleSin
+		fy += p.angleCos
+	}
+	mag := math.Sqrt(fx*fx + fy*fy)
+	if mag > 0 {
+		const forceScale = 100.0
+		p.entity.AddForce((fx/mag)*impulse*forceScale, (fy/mag)*impulse*forceScale, 0.0)
+	}
 }
 
 // SetJump modifies the player's vertical velocity to simulate a jump and marks the player as falling.
 func (p *ThingPlayer) SetJump() {
-	p.velocity.Z += 0.5
-	p.falling = true
+	p.entity.AddForce(0.0, 0.0, 100)
 }
 
 // SetDucking toggles the ducking state of the ThingPlayer and sets falling to true if ducking becomes active.
 func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
-	if p.ducking {
-		p.falling = true
-	}
 }
 
 // GetBobPhase returns the current bob value and bob phase of the ThingPlayer.
 func (p *ThingPlayer) GetBobPhase() (float64, float64) {
-	return p.bob, p.bobPhase
+	return p.bobbing.GetBob(), p.bobbing.GetPhase()
 }
 
 // GetPosition retrieves the X, Y, and Z coordinates of the ThingPlayer's current position.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	return p.where.X, p.where.Y, p.where.Z
-}
-
-// SetXYZ sets the X, Y, and Z coordinates of the ThingPlayer and marks it as falling.
-func (p *ThingPlayer) SetXYZ(x float64, y float64, z float64) {
-	p.where.X = x
-	p.where.Y = y
-	p.where.Z = z
-	p.falling = true
-}
-
-// AddXYZ updates the X, Y, and Z coordinates by the specified values and sets the falling state to true.
-func (p *ThingPlayer) AddXYZ(x float64, y float64, z float64) {
-	p.where.X += x
-	p.where.Y += y
-	p.where.Z += z
-	p.falling = true
-}
-
-// GetZ returns the Z coordinate of the ThingPlayer's current position.
-func (p *ThingPlayer) GetZ() float64 {
-	return p.where.Z
+	return p.where.X, p.where.Y, p.getEyeHeight(p.where.Z)
 }
 
 // GetLightIntensity retrieves the current light intensity value for the ThingPlayer instance.
@@ -283,7 +244,7 @@ func (p *ThingPlayer) GetMass() float64 {
 
 // GetVelocity returns the current velocity of the ThingPlayer as three float64 components: X, Y, and Z.
 func (p *ThingPlayer) GetVelocity() (float64, float64, float64) {
-	return p.velocity.X, p.velocity.Y, p.velocity.Z
+	return p.entity.GetVx(), p.entity.GetVy(), p.entity.GetVz()
 }
 
 // GetVolume returns the current volume associated with the ThingPlayer.
@@ -303,71 +264,61 @@ func (p *ThingPlayer) GetYaw() float64 {
 
 // IsMoving returns true if the ThingPlayer is currently moving in the X or Y direction, otherwise false.
 func (p *ThingPlayer) IsMoving() bool {
-	return !(p.velocity.X == 0 && p.velocity.Y == 0 && p.velocity.Z == 0)
+	return p.entity.IsMoving()
 }
 
-// PhysicsApply updates the player's position based on physics calculations relative to its associated entity.
 func (p *ThingPlayer) PhysicsApply() {
-	pX, pY, pZ := p.GetPosition()
-	eX, eY, eZ := p.entity.GetCenter()
+	headPos := p.getHeadHeight(p.where.Z)
+	feetPos := p.getFeetHeight(p.where.Z)
+	playerHeight := headPos - feetPos
 
-	dx := eX - pX
-	dy := eY - pY
+	dx, dy, dz := p.entity.GetDisplacement()
+	nextX := p.where.X + dx
+	nextY := p.where.Y + dy
+	nextZ := p.where.Z + dz
 
-	// Confronto rigoroso Base-su-Base per l'asse Z
-	entityBaseZ := eZ - (p.entity.GetDepth() / 2.0)
-	playerBaseZ := pZ - p.getEyeHeight()
-	dz := entityBaseZ - playerBaseZ
-
-	if math.Abs(dx) > minMovement || math.Abs(dy) > minMovement || math.Abs(dz) > minMovement {
-		p.MoveApply(dx, dy, dz)
+	// 2. CONTINUOUS COLLISION DETECTION (Sweep XY Elevato)
+	elevatedBaseZ := feetPos + p.maxStep
+	face, nx, ny, nz := p.wall.ClosestFace(p.where.X, p.where.Y, p.where.Z, nextX, nextY, nextZ, dx, dy, dz, headPos, elevatedBaseZ, p.radius)
+	if face != nil {
+		p.entity.ResolveImpact(p.wall.GetEntity(), nx, ny, nz)
+		dx, dy, dz = p.entity.GetDisplacement()
+		nextX, nextY, nextZ = p.where.X+dx, p.where.Y+dy, p.where.Z+dz
 	}
-}
 
-// MoveApply adjusts the player's position by the specified delta values and updates related systems accordingly.
-func (p *ThingPlayer) MoveApply(dx float64, dy float64, dz float64) {
-	if dx == 0 && dy == 0 && dz == 0 {
-		return
-	}
-	// 1. Aggiornamento posizione logica (Eye Level)
-	p.AddXYZ(dx, dy, dz)
-	px, py, pz := p.GetPosition()
+	// 3. TRANSIZIONE DI SETTORE
+	topZ := p.getHeadHeight(nextZ) //nextZ + playerHeight
 
-	// 2. Spatial stability check in 3D
-	// Usiamo il baricentro (metà altezza sotto gli occhi) per la query del volume
-	feetZ := pz - p.getEyeHeight()
-	topZ := feetZ + p.entity.GetDepth() // o p.entity.GetDepth()
-	stepHeight := p.kneeHeight          // Definito come 2.0 nelle tue costanti
-	if newVolume := p.sectors.SearchVolume3d(p.volume, px, py, feetZ, topZ, stepHeight); newVolume != nil && newVolume != p.volume {
+	newVolume := p.sectors.SearchVolume3d(p.volume, nextX, nextY, nextZ, topZ, p.maxStep)
+	if newVolume != nil && newVolume != p.volume {
+		if p.entity.GetVz() <= 0 {
+			actualStep := newVolume.GetMinZ() - p.volume.GetMinZ()
+			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < p.maxStep) {
+				// Snap diretto senza offset: la nostra Z coincide col pavimento!
+				nextZ = newVolume.GetMinZ()
+				p.entity.SetVz(0.0)
+			}
+		}
 		p.volume = newVolume
 	}
-	// 3. Sincronizzazione velocità nel motore impulsivo
-	p.entity.SetV(p.velocity.X, p.velocity.Y, p.velocity.Z)
-	// 4. Update AABB Tree: passiamo la quota dei PIEDI (pz - eyeHeight)
-	// affinché il Rect.point.z (base) sia allineato al pavimento del settore.
-	p.entities.UpdateThing(p, px, py, feetZ)
-}
 
-// Update updates the player's position and velocity based on movement and physics calculations.
-func (p *ThingPlayer) Update(vi *ViewMatrix) {
-	p.verticalMovementApply()
-	// Se siamo fermi orizzontalmente ma stiamo cadendo, IsMoving deve essere true
-	if !p.IsMoving() && !p.falling {
-		return
+	// 4. LIMITI TOPOLOGICI VERTICALI (Floor / Ceil Hard Clamp)
+	floorZ := p.volume.GetMinZ()
+	ceilZ := p.volume.GetMaxZ()
+	if nextZ < floorZ {
+		p.entity.ResolveImpact(p.wall.GetEntity(), 0, 0, 1)
+		nextZ = floorZ // Snap matematico ai piedi
+	} else if (nextZ + playerHeight) > ceilZ {
+		p.entity.ResolveImpact(p.wall.GetEntity(), 0, 0, -1)
+		nextZ = ceilZ - playerHeight // La Z torna giù lasciando lo spazio esatto per l'altezza
 	}
-	viewX, viewY, viewZ := p.GetPosition()
-	velX, velY, velZ := p.GetVelocity()
-	zTop := viewZ + p.headMargin
-	zBottom := viewZ - p.getEyeHeight() + p.kneeHeight
-	zMinLimit := p.volume.GetMinZ() + p.getEyeHeight()
-	zMaxLimit := p.volume.GetMaxZ() - p.headMargin
-	velX, velY, velZ, _ = p.wall.Compute(viewX, viewY, viewZ, velX, velY, velZ, zTop, zBottom, zMinLimit, zMaxLimit, p.radius, false)
-	// Applichiamo i delta finali filtrati
-	p.MoveApply(velX, velY, velZ)
-	// Smorzamento inerziale della velocità Z (opzionale per salti più naturali)
-	if !p.falling {
-		p.velocity.Z = 0
-	}
+
+	// 5. APPLICAZIONE FINALE
+	p.where.X, p.where.Y, p.where.Z = nextX, nextY, nextZ
+	//esegue anche il moveTo
+	p.entities.UpdateThing(p, p.where.X, p.where.Y, p.where.Z)
+
+	p.bobbing.Compute(p.entity.GetVx(), p.entity.GetVy())
 }
 
 // IsActive determines whether the ThingPlayer instance is currently active. Returns true if active, otherwise false.
@@ -385,41 +336,19 @@ func (p *ThingPlayer) OnCollide(other IThing) {
 }
 
 // getHeadPosition calculates the player's head position by adding a fixed margin to the player's current Z coordinate.
-func (p *ThingPlayer) getHeadPosition() float64 {
-	return p.where.Z + p.headMargin
+func (p *ThingPlayer) getFeetHeight(base float64) float64 {
+	return base
 }
 
-// getKneePosition calculates and returns the Z-coordinate of the player's knee position based on current attributes.
-func (p *ThingPlayer) getKneePosition() float64 {
-	return p.where.Z - p.getEyeHeight() + p.kneeHeight
+// getHeadPosition calculates the player's head position by adding a fixed margin to the player's current Z coordinate.
+func (p *ThingPlayer) getHeadHeight(base float64) float64 {
+	return p.getEyeHeight(base) + p.headMargin
 }
 
 // eyeHeight calculates the player's eye height based on their current state (e.g., ducking or standing).
-func (p *ThingPlayer) getEyeHeight() float64 {
+func (p *ThingPlayer) getEyeHeight(base float64) float64 {
 	if p.ducking {
-		return p.duckHeight
+		return base + p.duckHeight
 	}
-	return p.eyeHeight
-}
-
-// verticalMovementApply handles the vertical movement logic for a player, applying gravity and collision constraints.
-func (p *ThingPlayer) verticalMovementApply() {
-	eyeHeight := p.getEyeHeight()
-	floorZ := p.volume.GetMinZ() + eyeHeight
-	ceilZ := p.volume.GetMaxZ() - p.headMargin
-
-	// Applichiamo la gravità se non siamo appoggiati al suolo
-	if p.where.Z > floorZ || p.velocity.Z > 0 {
-		p.falling = true
-		p.velocity.Z -= 0.02 // Gravità ridotta per fluidità
-	}
-
-	// Clipping preventivo della velocità
-	nextZ := p.where.Z + p.velocity.Z
-	if nextZ < floorZ {
-		p.velocity.Z = floorZ - p.where.Z
-		p.falling = false
-	} else if nextZ > ceilZ {
-		p.velocity.Z = 0
-	}
+	return base + p.eyeHeight
 }

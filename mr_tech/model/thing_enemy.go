@@ -42,21 +42,12 @@ func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) 
 	dist2D := math.Sqrt(dx*dx + dy*dy)
 	if dist2D > 0.001 {
 		invDist := 1.0 / dist2D
-		dirX := dx * invDist * t.speed
-		dirY := dy * invDist * t.speed
-		t.modifyDirection(dirX, dirY)
+		// Vettore direzionale puro (Normalizzato -1.0 / 1.0)
+		nx := dx * invDist
+		ny := dy * invDist
+		const forceScale = 100.0
+		fx := nx * forceScale * t.speed
+		fy := ny * forceScale * t.speed
+		t.entity.AddForce(fx, fy, 0.0)
 	}
-}
-
-// modifyDirection adjusts the entity's velocity based on the provided direction vector and applies acceleration and friction.
-func (t *ThingEnemy) modifyDirection(dirX, dirY float64) {
-	const acceleration = 0.15
-	t.entity.SetVx(t.entity.GetVx()*(1-acceleration) + (dirX * acceleration))
-	t.entity.SetVy(t.entity.GetVy()*(1-acceleration) + (dirY * acceleration))
-	//if t.entity.GForce == 0 {
-	//	t.entity.GForce = 1.0
-	//}
-	//if t.entity.Friction < 0.2 {
-	//	t.entity.Friction = 0.99
-	//}
 }

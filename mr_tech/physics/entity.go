@@ -8,6 +8,10 @@ import (
 
 // vMin defines the minimum threshold for velocity components to be considered negligible during calculations.
 const vMin = 0.001
+const minThickness = 0.01
+const safetyMargin float64 = 0.90
+const dt60 float64 = 1.0 / 60.0
+const dt120 float64 = 1.0 / 120.0
 
 // Entity represents a dynamic object with physical attributes, motion parameters, collision detection, and response data.
 type Entity struct {
@@ -18,42 +22,62 @@ type Entity struct {
 	vx                 float64
 	vy                 float64
 	vz                 float64
-	vxMin              float64
-	vyMin              float64
-	vzMin              float64
+	ax                 float64
+	ay                 float64
+	az                 float64
+	vMin               float64
 	defaultFriction    float64
-	friction           float64
 	defaultAirFriction float64
 	airFriction        float64
-	defaultGForce      float64
 	gForce             float64
-	impulse            float64
 	restitution        float64
-	collider           *Entity
+	maxVelocitySq      float64
+	sleepThresholdSq   float64
+	dt                 float64
+	//depth              float64
+	terminalZVelocity float64
+	friction          float64
+	collider          *Entity
 }
 
 // NewEntity initializes a new Entity with the specified position, dimensions, and mass, and sets default parameters.
-func NewEntity(x, y, z, w, h, d, mass, restitution float64) *Entity {
+func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
 	}
 	a := &Entity{
-		id:          utils.NextUUId(),
-		rect:        NewRect(x, y, w, h, z, d),
-		mass:        mass,
-		invMass:     1.0 / mass,
-		vx:          0.0,
-		vy:          0.0,
-		vxMin:       vMin,
-		vyMin:       vMin,
-		vzMin:       vMin,
-		impulse:     vMin,
-		restitution: restitution,
+		id:               utils.NextUUId(),
+		rect:             NewRect(x, y, w, h, z, d),
+		mass:             0.0,
+		invMass:          0.0,
+		vx:               0.0,
+		vy:               0.0,
+		gForce:           0.2,
+		vMin:             vMin,
+		sleepThresholdSq: vMin * vMin,
+		dt:               dt60,
+		friction:         friction,
+		restitution:      restitution,
 	}
+	if mass <= 0.0 {
+		a.mass = 0.0
+		a.invMass = 0.0
+	} else {
+		a.mass = mass
+		a.invMass = 1.0 / a.mass
+	}
+
 	a.SetFriction(0.9)
 	a.SetAirFriction(0.98)
-	//TODO BUG impostare gForce a 0.1 [con valori diversi da 0 non funziona il motore delle collisioni] anche thingbase.go
-	//a.SetGForce(0.1)
+	a.SetMaxVelocity(minThickness, safetyMargin)
+
+	if damping := math.Pow(a.airFriction, a.dt); damping >= 1.0 {
+		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
+		a.terminalZVelocity = -math.MaxFloat64
+	} else {
+		// Calcolo dell'asintoto dell'integratore
+		a.terminalZVelocity = (-a.gForce * a.dt * damping) / (1.0 - damping)
+	}
 	return a
 }
 
@@ -66,10 +90,6 @@ func (e *Entity) Reset(x, y, w, h, z, d, mass, restitution float64) {
 	e.vy = 0.0
 	e.friction = e.defaultFriction
 	e.airFriction = e.defaultAirFriction
-	e.gForce = e.defaultGForce
-	e.vxMin = vMin
-	e.vyMin = vMin
-	e.impulse = vMin
 	e.restitution = restitution
 	e.rect.rebuild()
 }
@@ -81,8 +101,9 @@ func (e *Entity) Stop() {
 	e.vz = 0.0
 }
 
+/*
 // Update adjusts the entity's velocity based on friction, gravity, and minimum velocity thresholds. Checks collision status.
-func (e *Entity) Update() bool {
+func (e *Entity) Update2() bool {
 	// Clearance esatto tramite AABB
 	if e.collider != nil {
 		if !e.HasCollision(e.collider) {
@@ -91,34 +112,28 @@ func (e *Entity) Update() bool {
 	}
 	e.vx *= e.friction
 	e.vy *= e.friction
+	if e.vz > 0.0 {
+		e.vz = math.Max(0.0, e.vz-e.gForce)
+	} else if e.vz < 0.0 {
+		e.vz = math.Min(0.0, e.vz+e.gForce)
+	}
 	e.vz *= e.airFriction
-	e.vz -= e.gForce
 	// 4. CLAMPING DELLE VELOCITÀ MINIME
-	if math.Abs(e.vx) < e.vxMin {
+	if math.Abs(e.vx) < e.vMin {
 		e.vx = 0.0
 	}
-	if math.Abs(e.vy) < e.vyMin {
+	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	if math.Abs(e.vz) < e.vzMin {
+	if math.Abs(e.vz) < e.vMin {
 		e.vz = 0.0
 	}
-	return e.IsMoving()
+	if e.IsMoving() {
+		return true
+	}
+	return false
 }
-
-//func (e *Entity) AddTo(x float64, y float64, z float64) {
-//	e.rect.AddTo(x, y, z)
-//}
-
-// MoveTest calculates potential movement based on current velocities and returns the resulting position deltas (dx, dy, dz).
-//func (e *Entity) MoveTest() (float64, float64, float64) {
-//	return e.rect.MoveTest(e.vx, e.vy, e.vz)
-//}
-
-// Move updates the position of the entity by adding its velocity components (vx, vy, vz) to its current position.
-//func (e *Entity) Move() {
-//	e.rect.AddTo(e.vx, e.vy, e.vz)
-//}
+*/
 
 // MoveTo sets the Entity's position to the specified x, y, and z coordinates.
 func (e *Entity) MoveTo(x float64, y float64, z float64) {
@@ -137,10 +152,9 @@ func (e *Entity) SetAirFriction(f float64) {
 	e.airFriction = e.defaultAirFriction
 }
 
-// SetGForce updates the gravitational force applied to the entity, resetting both gForce and defaultGForce.
-func (e *Entity) SetGForce(gForce float64) {
-	e.defaultGForce = gForce
-	e.gForce = e.defaultGForce
+func (e *Entity) SetMaxVelocity(minThickness float64, safetyMargin float64) {
+	maxVelocity := (minThickness * safetyMargin) / e.dt
+	e.maxVelocitySq = maxVelocity * maxVelocity
 }
 
 // GetVx retrieves the current velocity of the entity along the x-axis.
@@ -297,7 +311,7 @@ func (e *Entity) GetSweptZRange() (float64, float64) {
 
 // IsMoving checks if the Entity is currently in motion by determining if any of its velocity components are non-zero.
 func (e *Entity) IsMoving() bool {
-	return e.vx != 0 || e.vy != 0 || e.vz != 0
+	return e.vx != 0 || e.vy != 0 || e.vz != 0 || e.ax != 0 || e.ay != 0 || e.az != 0
 }
 
 // clearCollider removes the current collider reference from the entity and ensures mutual disassociation between colliders.
@@ -310,81 +324,202 @@ func (e *Entity) clearCollider() {
 	}
 }
 
-/*
-// SetupCollision establishes a collision relationship between the current entity and another entity.
-func (e *Entity) SetupCollision(otherEnt *Entity) {
-	e.collider = otherEnt
-	otherEnt.collider = e
+func (e *Entity) GetVelocity() (float64, float64, float64) {
+	return e.vx, e.vy, e.vz
+}
 
-	c1x, c1y, c1z := e.rect.GetCenter()
-	c2x, c2y, c2z := otherEnt.rect.GetCenter()
+func (e *Entity) GetDisplacement() (float64, float64, float64) {
+	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
+}
 
-	dx := c2x - c1x
-	dy := c2y - c1y
-	dz := c2z - c1z
+// AddForce applies a force to the entity by adjusting its acceleration based on the given force components and its inverse mass.
+func (e *Entity) AddForce(fx, fy, fz float64) {
+	e.ax += fx * e.invMass
+	e.ay += fy * e.invMass
+	e.az += fz * e.invMass
+}
 
-	// 1. Calcolo delle semi-estensioni (Extents)
-	extX1, extY1, extZ1 := e.rect.GetWidth()/2.0, e.rect.GetHeight()/2.0, e.rect.GetDepth()/2.0
-	extX2, extY2, extZ2 := otherEnt.rect.GetWidth()/2.0, otherEnt.rect.GetHeight()/2.0, otherEnt.rect.GetDepth()/2.0
+// Update esegue unicamente l'integrazione balistica (Eulero Semi-Implicito).
+// L'attrito radente e l'assorbimento dell'impatto sono delegati al risolutore esterno.
+func (e *Entity) Update() bool {
+	// 1. INTEGRAZIONE
+	e.vx += e.ax * e.dt
+	e.vy += e.ay * e.dt
+	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
 
-	// 2. Calcolo delle penetrazioni assiali
-	overlapX := (extX1 + extX2) - math.Abs(dx)
-	overlapY := (extY1 + extY2) - math.Abs(dy)
-	overlapZ := (extZ1 + extZ2) - math.Abs(dz)
+	// 2. DAMPING (Smorzamento atmosferico)
+	airDamping := math.Pow(e.airFriction, e.dt)
+	e.vx *= airDamping
+	e.vy *= airDamping
+	e.vz *= airDamping
 
-	// Uscita anticipata di sicurezza (prevenzione edge-case se chiamati fuori fase)
-	if overlapX <= 0 || overlapY <= 0 || overlapZ <= 0 {
+	// 3. SLEEP PLANARE
+	// Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
+	if math.Abs(e.vx) < e.vMin {
+		e.vx = 0.0
+	}
+	if math.Abs(e.vy) < e.vMin {
+		e.vy = 0.0
+	}
+
+	// 4. CLAMPING VELOCITÀ TERMINALE (Asse Z)
+	if e.vz < e.terminalZVelocity {
+		e.vz = e.terminalZVelocity
+	}
+
+	//if e.vz != 0 {
+	//	fmt.Println("VZ", e.vz) // Ora vedrai la gravità accumularsi correttamente
+	//}
+
+	// 5. RESET ACCUMULATORE
+	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
+
+	return e.IsMoving()
+}
+
+func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
+	// 1. NORMALIZZAZIONE SICURA (Anti-Esplosione)
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen > 0.0 {
+		nx /= nLen
+		ny /= nLen
+		nz /= nLen
+	} else {
+		return // Vettore nullo, impossibile risolvere
+	}
+
+	// 2. VELOCITÀ RELATIVA E SOGLIE
+	// Assicuriamoci che un oggetto a massa infinita (es. il muro) non abbia mai velocità residua
+	if e2.invMass == 0.0 {
+		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
+	}
+
+	vrx := e.vx - e2.vx
+	vry := e.vy - e2.vy
+	vrz := e.vz - e2.vz
+
+	vRelDotN := vrx*nx + vry*ny + vrz*nz
+
+	// Se i corpi si stanno allontanando
+	if vRelDotN > 0.0 {
 		return
 	}
 
-	// 3. Determinazione dell'asse di minima penetrazione (Collision Normal)
-	var nx, ny, nz float64
-	var penetration float64
-
-	if overlapX < overlapY && overlapX < overlapZ {
-		nx = math.Copysign(1.0, dx)
-		ny, nz = 0, 0
-		penetration = overlapX
-	} else if overlapY < overlapZ {
-		nx, nz = 0, 0
-		ny = math.Copysign(1.0, dy)
-		penetration = overlapY
-	} else {
-		nx, ny = 0, 0
-		nz = math.Copysign(1.0, dz)
-		penetration = overlapZ
+	invMassSum := e.invMass + e2.invMass
+	if invMassSum == 0.0 {
+		return // Masse infinite contro masse infinite
 	}
 
-	// 4. Prodotto scalare per la velocità di avvicinamento lungo la normale esatta
-	relVx := otherEnt.vx - e.vx
-	relVy := otherEnt.vy - e.vy
-	relVz := otherEnt.vz - e.vz
-	vRelDotN := relVx*nx + relVy*ny + relVz*nz
-
-	// 5. Risoluzione Impulso (Newtonian Response)
-	if vRelDotN < 0 {
-		restitution := 1.0
-		j := -(1.0 + restitution) * vRelDotN
-		j /= (1.0 / e.mass) + (1.0 / otherEnt.mass)
-
-		e.vx -= (j / e.mass) * nx
-		e.vy -= (j / e.mass) * ny
-		e.vz -= (j / e.mass) * nz
-
-		otherEnt.vx += (j / otherEnt.mass) * nx
-		otherEnt.vy += (j / otherEnt.mass) * ny
-		otherEnt.vz += (j / otherEnt.mass) * nz
+	const restitutionSlop = 1.0
+	actualRestitution := e2.restitution
+	if math.Abs(vRelDotN) < restitutionSlop {
+		actualRestitution = 0.0
 	}
 
-	// 6. Stabilizzazione di Baumgarte (Positional Projection)
-	const percent = 0.2
-	const slop = 0.01
-	if penetration > slop {
-		correction := (math.Max(penetration-slop, 0.0) / (1.0/e.mass + 1.0/otherEnt.mass)) * percent
-		cx, cy, cz := nx*correction, ny*correction, nz*correction
-		e.rect.AddTo(-cx/e.mass, -cy/e.mass, -cz/e.mass)
-		otherEnt.rect.AddTo(cx/otherEnt.mass, cy/otherEnt.mass, cz/otherEnt.mass)
+	// 3. IMPULSO NORMALE
+	j := -(1.0 + actualRestitution) * vRelDotN
+	j /= invMassSum
+
+	e.vx += (j * nx) * e.invMass
+	e.vy += (j * ny) * e.invMass
+	e.vz += (j * nz) * e.invMass
+	e2.vx -= (j * nx) * e2.invMass
+	e2.vy -= (j * ny) * e2.invMass
+	e2.vz -= (j * nz) * e2.invMass
+
+	// 4. IMPULSO TANGENZIALE (ATTRITO)
+	vrx = e.vx - e2.vx
+	vry = e.vy - e2.vy
+	vrz = e.vz - e2.vz
+	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
+
+	tx := vrx - (vRelDotNPost * nx)
+	ty := vry - (vRelDotNPost * ny)
+	tz := vrz - (vRelDotNPost * nz)
+
+	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
+	if tLen > 1e-8 {
+		tx /= tLen
+		ty /= tLen
+		tz /= tLen
+
+		vRelDotT := vrx*tx + vry*ty + vrz*tz
+		jt := -vRelDotT / invMassSum
+
+		maxFriction := j * e2.friction
+		if math.Abs(jt) > maxFriction {
+			// math.Copysign copia il segno di jt su maxFriction, evitando branch
+			jt = math.Copysign(maxFriction, jt)
+		}
+
+		e.vx += (jt * tx) * e.invMass
+		e.vy += (jt * ty) * e.invMass
+		e.vz += (jt * tz) * e.invMass
+		e2.vx -= (jt * tx) * e2.invMass
+		e2.vy -= (jt * ty) * e2.invMass
+		e2.vz -= (jt * tz) * e2.invMass
 	}
 }
+
+/*
+// GetCollisionManifold calcola la normale di impatto e la profondità di compenetrazione tra due AABB.
+// La normale restituita punterà da 'other' verso 'e' (come richiesto da ResolveImpact).
+func (e *Entity) GetCollisionManifold(other *Entity) (nx, ny, nz, depth float64, hit bool) {
+	// Calcolo delle distanze tra i centri
+	cx1, cy1, cz1 := e.rect.GetCenter()
+	cx2, cy2, cz2 := other.rect.GetCenter()
+
+	dx := cx1 - cx2
+	dy := cy1 - cy2
+	dz := cz1 - cz2
+
+	// Calcolo delle semi-estensioni (extents)
+	extX1, extY1, extZ1 := e.rect.size.w/2, e.rect.size.h/2, e.rect.size.d/2
+	extX2, extY2, extZ2 := other.rect.size.w/2, other.rect.size.h/2, other.rect.size.d/2
+
+	// Calcolo degli overlap sugli assi
+	overlapX := (extX1 + extX2) - math.Abs(dx)
+	if overlapX <= 0 {
+		return 0, 0, 0, 0, false
+	} // Separazione su X
+
+	overlapY := (extY1 + extY2) - math.Abs(dy)
+	if overlapY <= 0 {
+		return 0, 0, 0, 0, false
+	} // Separazione su Y
+
+	overlapZ := (extZ1 + extZ2) - math.Abs(dz)
+	if overlapZ <= 0 {
+		return 0, 0, 0, 0, false
+	} // Separazione su Z
+
+	// Trova l'asse di minima penetrazione per risolvere la collisione spingendo fuori il meno possibile
+	hit = true
+	if overlapX < overlapY && overlapX < overlapZ {
+		depth = overlapX
+		if dx > 0 {
+			nx = 1.0
+		} else {
+			nx = -1.0
+		}
+	} else if overlapY < overlapZ {
+		depth = overlapY
+		if dy > 0 {
+			ny = 1.0
+		} else {
+			ny = -1.0
+		}
+	} else {
+		depth = overlapZ
+		if dz > 0 {
+			nz = 1.0
+		} else {
+			nz = -1.0
+		}
+	}
+
+	return nx, ny, nz, depth, hit
+}
+
 
 */

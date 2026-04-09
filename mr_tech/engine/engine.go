@@ -105,7 +105,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	e.things.Compute(pX, pY, pZ)
 
 	// 3. Static ThingPlayer Motion
-	player.Update(vi)
+	//player.Update(vi)
 
 	// 4. Dynamic Solver
 	e.entities.Compute()

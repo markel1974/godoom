@@ -53,10 +53,10 @@ func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Anim
 		volumes:    volumes,
 		entities:   entities,
 		maxStep:    cfg.Height * 0.5,
-		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution),
+		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.9),
 		isActive:   true,
 		identifier: -1,
-		wall:       NewThingWall(volumes),
+		wall:       NewThingWall(volumes, 0, 0),
 	}
 	return thing
 }
@@ -126,44 +126,56 @@ func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
 
-// PhysicsApply updates the position of the object based on passive and active physics-driven deltas.
+// PhysicsApply aggiorna la posizione topologica dell'oggetto usando il nuovo KCC vettoriale.
 func (t *ThingBase) PhysicsApply() {
-	// 1. Recupero dati dal motore impulsivo
-	if !t.entity.IsMoving() {
+	// 1. ESTRAZIONE DELTA E EARLY EXIT
+	dx, dy, dz := t.entity.GetDisplacement()
+	// Ottimizzazione CPU per entità statiche o a riposo termodinamico
+	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
 		return
 	}
-	eX, eY, eZ := t.entity.GetCenter()
-	currentBaseZ := eZ - (t.entity.GetDepth() / 2.0)
-	// 2. Calcolo dei delta
-	deltaX := (eX - t.position.X) + t.entity.GetVx()
-	deltaY := (eY - t.position.Y) + t.entity.GetVy()
-	deltaZ := (currentBaseZ - t.position.Z) + t.entity.GetVz()
-	if deltaX == 0 && deltaY == 0 && deltaZ == 0 {
-		return
+	nextX, nextY, nextZ := t.position.X+dx, t.position.Y+dy, t.position.Z+dz
+
+	//fmt.Println("NEXT THING", nextX, nextY, nextZ)
+	feetPos := t.position.Z
+	headPos := t.position.Z + t.height
+	// 2. CONTINUOUS COLLISION DETECTION (Sweep XY Elevato)
+	elevatedBaseZ := feetPos + t.maxStep
+	face, nx, ny, nz := t.wall.ClosestFace(t.position.X, t.position.Y, t.position.Z, nextX, nextY, nextZ, dx, dy, dz, headPos, elevatedBaseZ, t.radius)
+	if face != nil {
+		t.entity.ResolveImpact(t.wall.GetEntity(), nx, ny, nz)
+		dx, dy, dz = t.entity.GetDisplacement()
+		nextX, nextY, nextZ = t.position.X+dx, t.position.Y+dy, t.position.Z+dz
 	}
-	viewX, viewY, viewZ := t.position.X, t.position.Y, t.position.Z
-	zBottom := viewZ
-	zTop := viewZ + t.height
-	zMinLimit := t.volume.GetMinZ()
-	zMaxLimit := t.volume.GetMaxZ() - t.height
-	velX, velY, velZ, _ := t.wall.Compute(viewX, viewY, viewZ, deltaX, deltaY, deltaZ, zTop, zBottom, zMinLimit, zMaxLimit, t.radius, false)
-	// 4. Applichiamo il movimento se significativo
-	if math.Abs(velX) > minMovement || math.Abs(velY) > minMovement || math.Abs(velZ) > minMovement {
-		t.entity.SetVx(velX)
-		t.entity.SetVy(velY)
-		t.entity.SetVx(velX)
-		t.position.X += velX
-		t.position.Y += velY
-		t.position.Z += velZ
-		baseZ := t.position.Z
-		topZ := t.position.Z + t.height
-		if newVolume := t.volumes.SearchVolume3d(t.volume, t.position.X, t.position.Y, baseZ, topZ, t.maxStep); newVolume != nil && newVolume != t.volume {
-			t.volume = newVolume
+	// 3. TRANSIZIONE DI SETTORE
+	topZ := nextZ + t.height
+	newVolume := t.volumes.SearchVolume3d(t.volume, nextX, nextY, nextZ, topZ, t.maxStep)
+	if newVolume != nil && newVolume != t.volume {
+		// Scendiamo di settore o saliamo su gradino valido
+		if t.entity.GetVz() <= 0 {
+			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
+			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
+				nextZ = newVolume.GetMinZ()
+				t.entity.SetVz(0.0)
+			}
 		}
-		t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
-	} else {
-		t.entity.Stop()
+		t.volume = newVolume
 	}
+	// 4. LIMITI TOPOLOGICI VERTICALI (Floor / Ceil Hard Clamp)
+	floorZ := t.volume.GetMinZ()
+	ceilZ := t.volume.GetMaxZ()
+	if nextZ < floorZ {
+		// Atterraggio
+		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, 1)
+		nextZ = floorZ
+	} else if (nextZ + t.height) > ceilZ {
+		// Urto soffitto
+		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1)
+		nextZ = ceilZ - t.height
+	}
+	// 5. APPLICAZIONE FINALE E SINCRONIZZAZIONE
+	t.position.X, t.position.Y, t.position.Z = nextX, nextY, nextZ
+	t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
 }
 
 // OnCollide handles interactions when the current object collides with another object implementing the IThing interface.

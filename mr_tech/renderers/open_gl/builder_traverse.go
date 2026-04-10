@@ -170,7 +170,7 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 
 	w.pushLights(w.fl, lights, frustumFront, frustumRear)
 
-	w.pushThings(w.fv, w.dc, vi, things.Get(), w.visibleVolumes)
+	w.pushThings(w.fv, w.dc, vi, things.GetActiveThings(), w.visibleVolumes)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }

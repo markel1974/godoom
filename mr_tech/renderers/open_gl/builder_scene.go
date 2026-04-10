@@ -118,7 +118,7 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 	}
 
 	// 3. Geometria Dinamica (Ogni Frame)
-	w.pushThings(w.fv, w.dc, vi, engine.GetThings().Get())
+	w.pushThings(w.fv, w.dc, vi, engine.GetThings().GetActiveThings())
 
 	// 4. Sort Globale e Batching
 	w.dcRender.Prepare(w.dc.GetDrawCommands())

@@ -111,7 +111,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
 
 	// 4. Entità Dinamiche
-	w.pushThings(w.fv, w.dc, vi, engine.GetThings().Get())
+	w.pushThings(w.fv, w.dc, vi, engine.GetThings().GetActiveThings())
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }

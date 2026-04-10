@@ -11,9 +11,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// minMovement defines the minimum threshold for movement to be considered significant in physics calculations.
-const minMovement = 0.001
-
 // Contact represents a physics collision contact point between two things.
 // A and B are the things involved in the collision.
 // Nx, Ny, Nz represent the normal vector of the contact.
@@ -83,35 +80,35 @@ func (c *Contact) Resolve() {
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	things      []IThing
-	config      []*config.ConfigThing
-	sectors     *Volumes
-	animations  *Animations
-	tree        *physics.AABBTree
-	entities    map[int]IThing
-	identifier  int
-	moving      []IThing
-	movingLen   int
-	contacts    []Contact
-	contactsLen int
+	activeThings []IThing
+	config       []*config.ConfigThing
+	sectors      *Volumes
+	animations   *Animations
+	tree         *physics.AABBTree
+	entities     map[int]IThing
+	identifier   int
+	moving       []IThing
+	movingLen    int
+	contacts     []Contact
+	contactsLen  int
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxEntities uint, cfg []*config.ConfigThing, sectors *Volumes, entities *Things, animations *Animations) *Things {
+func NewThings(maxEntities uint, cfg []*config.ConfigThing, sectors *Volumes, animations *Animations) *Things {
 	e := &Things{
-		tree:        physics.NewAABBTree(maxEntities),
-		entities:    make(map[int]IThing),
-		identifier:  0,
-		movingLen:   0,
-		contacts:    make([]Contact, 1024),
-		contactsLen: 0,
-		config:      cfg,
-		sectors:     sectors,
-		animations:  animations,
-		things:      nil,
+		tree:         physics.NewAABBTree(maxEntities),
+		entities:     make(map[int]IThing),
+		identifier:   0,
+		movingLen:    0,
+		contacts:     make([]Contact, 1024),
+		contactsLen:  0,
+		config:       cfg,
+		sectors:      sectors,
+		animations:   animations,
+		activeThings: nil,
 	}
 	for _, ct := range cfg {
-		if err := e.CreateThing(ct); err != nil {
+		if err := e.createThing(ct); err != nil {
 			fmt.Println("Warning: ", err)
 			//return nil, err
 		}
@@ -124,13 +121,13 @@ func (th *Things) GetTextures() textures.ITextures {
 	return th.animations.GetTextures()
 }
 
-// Get retrieves the list of all IThing instances managed by the Things object.
-func (th *Things) Get() []IThing {
-	return th.things
+// GetActiveThings returns a slice of currently active IThing objects managed by the Things instance.
+func (th *Things) GetActiveThings() []IThing {
+	return th.activeThings
 }
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
-func (th *Things) CreateThing(ct *config.ConfigThing) error {
+func (th *Things) createThing(ct *config.ConfigThing) error {
 	sector := th.sectors.QueryPoint2d(ct.Position.X, ct.Position.Y)
 	if sector == nil {
 		return fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
@@ -157,7 +154,7 @@ func (th *Things) CreateThing(ct *config.ConfigThing) error {
 	} else {
 		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
 	}
-	th.things = append(th.things, thing)
+	th.activeThings = append(th.activeThings, thing)
 	return nil
 }
 
@@ -170,31 +167,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, mass, radius, radius, speed, c.Animation)
 	animation := th.animations.GetAnimation(cfg.Animation)
 	thing := NewThingBullet(cfg, animation, volume, th.sectors, th, pitch)
-	th.things = append(th.things, thing)
-}
-
-func (th *Things) Compute(pX float64, pY float64, pZ float64) {
-	th.computeThing(pX, pY, pZ)
-	th.processCollision()
-}
-
-// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
-func (th *Things) computeThing(pX float64, pY float64, pZ float64) {
-	activeThings := th.things[:0] // Reslice reusing memory
-	for _, t := range th.things {
-		if !t.IsActive() {
-			th.RemoveThing(t)
-			continue
-		}
-		t.Compute(pX, pY, pZ)
-		activeThings = append(activeThings, t)
-	}
-
-	// Clear dangling pointers per il GC
-	for i := len(activeThings); i < len(th.things); i++ {
-		th.things[i] = nil
-	}
-	th.things = activeThings
+	th.activeThings = append(th.activeThings, thing)
 }
 
 // UpdateThing updates the position of the specified IThing in the entity manager and updates its spatial location in the tree.
@@ -220,6 +193,29 @@ func (th *Things) AddThing(ent IThing) {
 func (th *Things) RemoveThing(ent IThing) {
 	th.tree.RemoveObject(ent)
 	delete(th.entities, ent.GetIdentifier())
+}
+
+func (th *Things) Compute(pX float64, pY float64, pZ float64) {
+	th.computeThing(pX, pY, pZ)
+	th.processCollision()
+}
+
+// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
+func (th *Things) computeThing(pX float64, pY float64, pZ float64) {
+	activeThings := th.activeThings[:0] // Reslice reusing memory
+	for _, t := range th.activeThings {
+		if !t.IsActive() {
+			th.RemoveThing(t)
+			continue
+		}
+		t.Compute(pX, pY, pZ)
+		activeThings = append(activeThings, t)
+	}
+	// Clear dangling pointers
+	for i := len(activeThings); i < len(th.activeThings); i++ {
+		th.activeThings[i] = nil
+	}
+	th.activeThings = activeThings
 }
 
 // Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.

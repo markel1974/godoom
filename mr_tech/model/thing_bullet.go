@@ -13,10 +13,10 @@ type ThingBullet struct {
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance.
-func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, things *Things, pitchRad float64) *ThingBullet {
+func NewThingBullet(things *Things, cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, pitchRad float64) *ThingBullet {
 	pos := cfg.Position
 	p := &ThingBullet{
-		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, things),
+		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
 	}
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	p.maxStep = 0.0

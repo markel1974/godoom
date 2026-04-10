@@ -34,7 +34,7 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Things, debug bool) (*ThingPlayer, error) {
+func NewThingPlayer(things *Things, cfg *config.ConfigPlayer, volumes *Volumes, debug bool) (*ThingPlayer, error) {
 	volume := volumes.QueryPoint2d(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
@@ -49,7 +49,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Things
 		kind:           0,
 		yaw:            0,
 		yawState:       0,
-		ThingBase:      NewThingBase(cfg.ConfigThing, cfg.Position, nil, volume, volumes, entities),
+		ThingBase:      NewThingBase(things, cfg.ConfigThing, cfg.Position, nil, volume),
 		bobbing:        NewBobbing(2.6, 0.9, 0.03, 0.015, 0.15, 0.10),
 		lightIntensity: 0.0039,
 		debug:          debug,

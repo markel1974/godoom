@@ -80,9 +80,9 @@ func (c *Contact) Resolve() {
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	activeThings []IThing
+	//activeThings []IThing
 	config       []*config.ConfigThing
-	sectors      *Volumes
+	volumes      *Volumes
 	animations   *Animations
 	tree         *physics.AABBTree
 	entities     map[int]IThing
@@ -91,10 +91,12 @@ type Things struct {
 	movingLen    int
 	contacts     []Contact
 	contactsLen  int
+	activeIdx    int
+	activeThings []IThing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxEntities uint, cfg []*config.ConfigThing, sectors *Volumes, animations *Animations) *Things {
+func NewThings(maxEntities uint, cfg []*config.ConfigThing, volumes *Volumes, animations *Animations) *Things {
 	e := &Things{
 		tree:         physics.NewAABBTree(maxEntities),
 		entities:     make(map[int]IThing),
@@ -103,12 +105,13 @@ func NewThings(maxEntities uint, cfg []*config.ConfigThing, sectors *Volumes, an
 		contacts:     make([]Contact, 1024),
 		contactsLen:  0,
 		config:       cfg,
-		sectors:      sectors,
+		volumes:      volumes,
 		animations:   animations,
-		activeThings: nil,
+		activeIdx:    0,
+		activeThings: make([]IThing, 1024),
 	}
 	for _, ct := range cfg {
-		if err := e.createThing(ct); err != nil {
+		if _, err := e.createThing(ct); err != nil {
 			fmt.Println("Warning: ", err)
 			//return nil, err
 		}
@@ -116,46 +119,43 @@ func NewThings(maxEntities uint, cfg []*config.ConfigThing, sectors *Volumes, an
 	return e
 }
 
+// GetVolumes returns the Volumes instance managed by the Things object.
+func (th *Things) GetVolumes() *Volumes {
+	return th.volumes
+}
+
 // GetTextures fetches the ITextures instance from the associated Animations object.
 func (th *Things) GetTextures() textures.ITextures {
 	return th.animations.GetTextures()
 }
 
-// GetActiveThings returns a slice of currently active IThing objects managed by the Things instance.
-func (th *Things) GetActiveThings() []IThing {
-	return th.activeThings
+// GetActive returns the slice of active IThing objects and the current index of active things.
+func (th *Things) GetActive() ([]IThing, int) {
+	return th.activeThings, th.activeIdx
 }
 
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
-func (th *Things) createThing(ct *config.ConfigThing) error {
-	sector := th.sectors.QueryPoint2d(ct.Position.X, ct.Position.Y)
-	if sector == nil {
-		return fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
+func (th *Things) createThing(ct *config.ConfigThing) (IThing, error) {
+	volume := th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
+	if volume == nil {
+		return nil, fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
 	}
 	var thing IThing
-
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingEnemy(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingBulletDef:
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingItemDef:
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	default:
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	}
-
-	if ct.Speed > 0 {
-		thing = NewThingEnemy(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
-	} else {
-		thing = NewThingItem(ct, th.animations.GetAnimation(ct.Animation), sector, th.sectors, th)
-	}
-	th.activeThings = append(th.activeThings, thing)
-	return nil
+	return thing, nil
 }
 
 // CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
@@ -166,8 +166,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	id := utils.NextUUId()
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, mass, radius, radius, speed, c.Animation)
 	animation := th.animations.GetAnimation(cfg.Animation)
-	thing := NewThingBullet(cfg, animation, volume, th.sectors, th, pitch)
-	th.activeThings = append(th.activeThings, thing)
+	NewThingBullet(th, cfg, animation, volume, pitch)
 }
 
 // UpdateThing updates the position of the specified IThing in the entity manager and updates its spatial location in the tree.
@@ -196,26 +195,27 @@ func (th *Things) RemoveThing(ent IThing) {
 }
 
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
-	th.computeThing(pX, pY, pZ)
+	th.computeActive(pX, pY, pZ)
 	th.processCollision()
 }
 
 // Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
-func (th *Things) computeThing(pX float64, pY float64, pZ float64) {
-	activeThings := th.activeThings[:0] // Reslice reusing memory
-	for _, t := range th.activeThings {
+func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
+	th.activeIdx = 0
+	for _, t := range th.entities {
 		if !t.IsActive() {
 			th.RemoveThing(t)
 			continue
 		}
 		t.Compute(pX, pY, pZ)
-		activeThings = append(activeThings, t)
+		if th.activeIdx >= len(th.activeThings) {
+			newThings := make([]IThing, len(th.activeThings)*2)
+			copy(newThings, th.activeThings)
+			th.activeThings = newThings
+		}
+		th.activeThings[th.activeIdx] = t
+		th.activeIdx++
 	}
-	// Clear dangling pointers
-	for i := len(activeThings); i < len(th.activeThings); i++ {
-		th.activeThings[i] = nil
-	}
-	th.activeThings = activeThings
 }
 
 // Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.

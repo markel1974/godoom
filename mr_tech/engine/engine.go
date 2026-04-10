@@ -80,7 +80,7 @@ func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	}
 	e.volumes = compiler.GetVolumes()
 	e.player = compiler.GetPlayer()
-	e.things = compiler.GetEntities()
+	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
 
 	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)

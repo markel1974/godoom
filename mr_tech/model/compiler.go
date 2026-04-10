@@ -16,7 +16,7 @@ type Compiler struct {
 	volumes3d *Volumes
 	player    *ThingPlayer
 	lights    *Lights
-	entities  *Things
+	things    *Things
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
@@ -25,7 +25,7 @@ func NewCompiler() *Compiler {
 		volumes:   nil,
 		volumes3d: nil,
 		player:    nil,
-		entities:  nil,
+		things:    nil,
 		lights:    nil,
 	}
 }
@@ -80,9 +80,9 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	r.lights.AddLights(vLights)
 	r.lights.AddLights(lights)
 
-	r.entities = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
+	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
 
-	if r.player, err = NewThingPlayer(cfg.Player, r.volumes, r.entities, false); err != nil {
+	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {
 		return err
 	}
 
@@ -91,9 +91,9 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	return nil
 }
 
-// GetEntities returns the Things instance managed by the Compiler.
-func (r *Compiler) GetEntities() *Things {
-	return r.entities
+// GetThings returns the Things instance managed by the Compiler.
+func (r *Compiler) GetThings() *Things {
+	return r.things
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.

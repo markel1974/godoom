@@ -118,7 +118,8 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 	}
 
 	// 3. Geometria Dinamica (Ogni Frame)
-	w.pushThings(w.fv, w.dc, vi, engine.GetThings().GetActiveThings())
+	tA, tC := engine.GetThings().GetActive()
+	w.pushThings(w.fv, w.dc, vi, tA, tC)
 
 	// 4. Sort Globale e Batching
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
@@ -206,14 +207,15 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 }
 
 // pushThings processes and pushes visible objects (things) into the rendering pipeline for the current frame.
-func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing) {
+func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
 	camX, camY := vi.GetXY()
 
-	for _, t := range things {
+	for idx := 0; idx < thingsCount; idx++ {
+		t := things[idx]
 		if t.GetAnimation() == nil {
 			continue
 		}

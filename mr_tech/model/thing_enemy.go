@@ -16,11 +16,11 @@ type ThingEnemy struct {
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
-func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, things *Things) *ThingEnemy {
+func NewThingEnemy(things *Things, cfg *config.ConfigThing, anim *textures.Animation, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
 	pos.Z = volume.GetMinZ()
 	e := &ThingEnemy{
-		ThingBase:    NewThingBase(cfg, pos, anim, volume, sectors, things),
+		ThingBase:    NewThingBase(things, cfg, pos, anim, volume),
 		active:       false,
 		fireCooldown: 0.0,
 	}

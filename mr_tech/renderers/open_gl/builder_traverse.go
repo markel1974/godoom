@@ -120,7 +120,6 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 	}
 
 	css, compiled := engine.Traverse(fbw, fbh, vi)
-	things := engine.GetThings()
 	lights := engine.GetLights()
 
 	w.cSky = nil
@@ -170,7 +169,9 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 
 	w.pushLights(w.fl, lights, frustumFront, frustumRear)
 
-	w.pushThings(w.fv, w.dc, vi, things.GetActiveThings(), w.visibleVolumes)
+	tA, tC := engine.GetThings().GetActive()
+
+	w.pushThings(w.fv, w.dc, vi, tA, tC, w.visibleVolumes)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
@@ -259,14 +260,15 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, sectors map[*model.Volume]bool) {
+func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int, sectors map[*model.Volume]bool) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
 	camX, camY := vi.GetXY()
 
-	for _, t := range things {
+	for idx := 0; idx < thingsCount; idx++ {
+		t := things[idx]
 		if !sectors[t.GetVolume()] {
 			continue
 		}

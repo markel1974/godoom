@@ -31,7 +31,8 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
-func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume, volumes *Volumes, things *Things) *ThingBase {
+func NewThingBase(things *Things, cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
+	volumes := things.GetVolumes()
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
 	entZ := pos.Z

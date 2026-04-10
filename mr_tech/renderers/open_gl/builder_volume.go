@@ -111,7 +111,9 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
 
 	// 4. Entità Dinamiche
-	w.pushThings(w.fv, w.dc, vi, engine.GetThings().GetActiveThings())
+	tA, tC := engine.GetThings().GetActive()
+
+	w.pushThings(w.fv, w.dc, vi, tA, tC)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
@@ -172,14 +174,15 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 }
 
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
-func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing) {
+func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
 	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
 	camX, camY := vi.GetXY()
 
-	for _, t := range things {
+	for idx := 0; idx < thingsCount; idx++ {
+		t := things[idx]
 		if t.GetAnimation() == nil {
 			continue
 		}

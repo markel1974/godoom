@@ -220,6 +220,11 @@ func (e *Entity) GetInvMass() float64 {
 	return e.invMass
 }
 
+// GetMass retrieves the mass of the entity. It returns the mass as a float64 value.
+func (e *Entity) GetMass() float64 {
+	return e.mass
+}
+
 // GetRestitution returns the restitution coefficient of the entity, which determines its bounciness upon collision.
 func (e *Entity) GetRestitution() float64 {
 	return e.restitution

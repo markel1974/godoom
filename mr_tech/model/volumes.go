@@ -114,6 +114,12 @@ func (s *Volumes) QueryMultiFrustum(front, rear *physics.Frustum, callback func(
 	s.tree.QueryMultiFrustum(front, rear, callback)
 }
 
+// QueryRay performs a raycasting query starting from origin (oX, oY, oZ) in direction (dirX, dirY, dirZ) up to maxDistance.
+// It invokes the callback for each intersected object, passing the object and intersection distance as arguments.
+func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object physics.IAABB, distance float64) float64) {
+	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
+}
+
 // QueryOverlap2d checks for overlaps with the given 2D AABB and identifies which volume contains the specified point.
 func (s *Volumes) QueryOverlap2d(aabb physics.IAABB, px, py float64) *Volume {
 	var target *Volume = nil
@@ -149,9 +155,6 @@ func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
 
 // QueryAABB performs a spatial query, invoking the callback for each Volume that overlaps with the specified AABB.
 func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
-	if s.tree == nil {
-		return
-	}
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
 			callback(vol)

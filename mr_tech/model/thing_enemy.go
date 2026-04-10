@@ -97,7 +97,6 @@ func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy float64) {
 }
 
 func (t *ThingEnemy) doFire(dist3d, dist2d, dz float64) {
-	// 4. Logica di Fuoco (Spara se è ricaricato e a portata)
 	if t.fireCooldown <= 0 && dist3d < 20.0 {
 		weaponForward := t.radius * 2.0
 		spawnX := t.pos.X + (math.Cos(t.angle) * weaponForward)
@@ -106,7 +105,6 @@ func (t *ThingEnemy) doFire(dist3d, dist2d, dz float64) {
 		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 		aimPitch := math.Atan2(dz, dist2d)
 		t.LaunchObject(bulletPos, t.angle, aimPitch)
-		//t.things.CreateBullet(t.volume, bulletPos, t.angle, aimPitch, 1.0, 1.0, 10)
 		// Resetta il timer
 		t.fireCooldown = 1.5
 	}

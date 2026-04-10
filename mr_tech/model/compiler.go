@@ -79,9 +79,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	r.lights = NewLights()
 	r.lights.AddLights(vLights)
 	r.lights.AddLights(lights)
-
 	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
-
 	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {
 		return err
 	}

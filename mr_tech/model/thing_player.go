@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
-// ThingPlayer represents a dynamic entity within a 3D environment capable of movement and interaction.
+// ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
 	id             string
 	kind           int
@@ -28,7 +28,9 @@ type ThingPlayer struct {
 	*ThingBase
 }
 
-// NewThingPlayer creates and initializes a new ThingPlayer instance using the provided configuration and environment data.
+// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and entities.
+// It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
+// Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
 func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entities, debug bool) (*ThingPlayer, error) {
 	volume := volumes.QueryPoint2d(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
@@ -57,38 +59,38 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 	return p, nil
 }
 
-// GetLight retrieves the current light source associated with the ThingPlayer instance.
+// GetLight retrieves the Light object associated with the ThingPlayer instance. Returns a pointer to the Light.
 func (p *ThingPlayer) GetLight() *Light {
 	return nil
 }
 
-// Compute performs a calculation or operation based on the given float64 input parameters.
+// Compute updates the player's internal state based on the input parameters.
 func (p *ThingPlayer) Compute(_ float64, _ float64, _ float64) {
 }
 
-// AddAngle adds the given angle (in degrees) to the current angle of the ThingPlayer object.
+// AddAngle updates the player's current angle by adding the given angle in radians.
 func (p *ThingPlayer) AddAngle(angle float64) {
 	p.SetAngle(p.angle + angle)
 }
 
-// SetAngle sets the angle of the ThingPlayer and calculates its sine and cosine values.
+// SetAngle sets the angle of the player and updates sine and cosine values based on the new angle.
 func (p *ThingPlayer) SetAngle(angle float64) {
 	p.angle = angle
 	p.angleSin = math.Sin(p.angle)
 	p.angleCos = math.Cos(p.angle)
 }
 
-// GetRealAngle returns the current angle of the ThingPlayer as a float64.
+// GetRealAngle returns the exact angular orientation of the ThingPlayer expressed as a float64 in radians.
 func (p *ThingPlayer) GetRealAngle() float64 {
 	return p.angle
 }
 
-// GetAngle returns the sine and cosine values of the player's angle as two float64 values.
+// GetAngle returns the sine and cosine of the current angle of the ThingPlayer.
 func (p *ThingPlayer) GetAngle() (float64, float64) {
 	return p.angleSin, p.angleCos
 }
 
-// SetYaw adjusts the yawState and yaw of the ThingPlayer based on the input value and current velocity.
+// SetYaw adjusts the player's yaw based on the given input, clamping the result within a predefined range.
 func (p *ThingPlayer) SetYaw(y float64) {
 	//p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
 	//p.yaw = p.yawState - (p.entity.GetVz() * 0.5)
@@ -98,6 +100,7 @@ func (p *ThingPlayer) SetYaw(y float64) {
 	p.yaw = p.yawState
 }
 
+// Move applies a directional impulse to the player based on input flags (up, down, left, right) and a given impulse magnitude.
 func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 	if !up && !down && !left && !right {
 		return
@@ -126,37 +129,40 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 	}
 }
 
-// SetJump modifies the player's vertical velocity to simulate a jump and marks the player as falling.
+// SetJump applies an upward force to make the ThingPlayer jump.
 func (p *ThingPlayer) SetJump() {
 	p.entity.AddForce(0.0, 0.0, 400)
+	p.entity.SetOnGround(false)
+	p.bobbing.InjectVerticalImpulse(-1.5)
 }
 
-// SetDucking toggles the ducking state of the ThingPlayer and sets falling to true if ducking becomes active.
+// SetDucking toggles the player's ducking state between true and false.
 func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
 }
 
-// GetBobPhase returns the current bob value and bob phase of the ThingPlayer.
+// GetBobPhase returns the current bobbing displacement and phase as a pair of float64 values from the Bobbing system.
 func (p *ThingPlayer) GetBobPhase() (float64, float64) {
 	return p.bobbing.GetBob(), p.bobbing.GetPhase()
 }
 
-// GetPosition retrieves the X, Y, and Z coordinates of the ThingPlayer's current position.
+// GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	return p.pos.X, p.pos.Y, p.getEyeHeight(p.pos.Z)
+	visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetBob() + p.bobbing.GetJumpBob()
+	return p.pos.X, p.pos.Y, visualZ
 }
 
-// GetLightIntensity retrieves the current light intensity value for the ThingPlayer instance.
+// GetLightIntensity retrieves the current light intensity value associated with the player.
 func (p *ThingPlayer) GetLightIntensity() float64 {
 	return p.lightIntensity
 }
 
-// SetLightIntensity sets the light intensity for the ThingPlayer to the specified value.
+// SetLightIntensity sets the light intensity level for the ThingPlayer instance.
 func (p *ThingPlayer) SetLightIntensity(lightIntensity float64) {
 	p.lightIntensity = lightIntensity
 }
 
-// GetRadius returns the radius of the ThingPlayer.
+// GetRadius returns the radius of the ThingPlayer entity.
 func (p *ThingPlayer) GetRadius() float64 {
 	return p.radius
 }
@@ -166,41 +172,52 @@ func (p *ThingPlayer) GetMass() float64 {
 	return p.mass
 }
 
-// GetVelocity returns the current velocity of the ThingPlayer as three float64 components: X, Y, and Z.
+// GetVelocity returns the current velocity components (vx, vy, vz) of the player as float64 values.
 func (p *ThingPlayer) GetVelocity() (float64, float64, float64) {
 	return p.entity.GetVx(), p.entity.GetVy(), p.entity.GetVz()
 }
 
-// GetYaw returns the current yaw angle of the ThingPlayer as a float64.
+// GetYaw returns the current yaw (rotation around the vertical axis) of the ThingPlayer.
 func (p *ThingPlayer) GetYaw() float64 {
 	return p.yaw
 }
 
-// IsMoving returns true if the ThingPlayer is currently moving in the X or Y direction, otherwise false.
+// IsMoving returns true if the ThingPlayer's associated entity is currently in motion, and false otherwise.
 func (p *ThingPlayer) IsMoving() bool {
 	return p.entity.IsMoving()
 }
 
+// PhysicsApply applies physics computations to the player by calculating the head position and updating its motion state.
 func (p *ThingPlayer) PhysicsApply() {
-	headPos := p.getHeadHeight(0)
-	p.doPhysics(headPos)
+	wasGrounded := p.entity.IsOnGround()
+	prevVz := p.entity.GetVz()
+
+	p.doPhysics(p.getHeadHeight())
+
+	// Trigger: Atterraggio rilevato dal solver
+	isGrounded := p.entity.IsOnGround()
+	if !wasGrounded && isGrounded {
+		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
+		p.bobbing.InjectVerticalImpulse(prevVz)
+	}
+
 	p.bobbing.Compute(p.entity.GetVx(), p.entity.GetVy())
 }
 
-// OnCollide handles the collision event between the current ThingPlayer and another object implementing IThing.
+// OnCollide handles the collision event between the current ThingPlayer and another object implementing the IThing interface.
 func (p *ThingPlayer) OnCollide(other IThing) {
 	//TODO IMPLEMENT
 }
 
-// getHeadPosition calculates the player's head position by adding a fixed margin to the player's current Z coordinate.
-func (p *ThingPlayer) getHeadHeight(base float64) float64 {
-	return p.getEyeHeight(base) + p.headMargin
+// getHeadHeight calculates the player's head height by adding headMargin to the eye height based on the given base height.
+func (p *ThingPlayer) getHeadHeight() float64 {
+	return p.getEyeHeight() + p.headMargin
 }
 
-// eyeHeight calculates the player's eye height based on their current state (e.g., ducking or standing).
-func (p *ThingPlayer) getEyeHeight(base float64) float64 {
+// getEyeHeight computes the eye height of the player by considering their base height and ducking state.
+func (p *ThingPlayer) getEyeHeight() float64 {
 	if p.ducking {
-		return base + p.duckHeight
+		return p.duckHeight
 	}
-	return base + p.eyeHeight
+	return p.eyeHeight
 }

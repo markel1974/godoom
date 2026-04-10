@@ -147,6 +147,11 @@ func (e *Entity) SetOnGround(onGround bool) {
 	}
 }
 
+// IsOnGround checks if the entity is currently on the ground and returns true if it is, otherwise false.
+func (e *Entity) IsOnGround() bool {
+	return e.onGround
+}
+
 // GetVx returns the current velocity component along the X-axis for the entity.
 func (e *Entity) GetVx() float64 {
 	return e.vx

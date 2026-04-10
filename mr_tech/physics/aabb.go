@@ -135,6 +135,30 @@ func (a *AABB) GetDepth() float64 {
 	return a.maxZ - a.minZ
 }
 
+// IntersectRay tests if a ray intersects the AABB and returns the hit distance and a boolean indicating intersection success.
+func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (float64, bool) {
+	t1 := (a.minX - oX) * invDirX
+	t2 := (a.maxX - oX) * invDirX
+	tMin := math.Min(t1, t2)
+	tMax := math.Max(t1, t2)
+
+	t1 = (a.minY - oY) * invDirY
+	t2 = (a.maxY - oY) * invDirY
+	tMin = math.Max(tMin, math.Min(t1, t2))
+	tMax = math.Min(tMax, math.Max(t1, t2))
+
+	t1 = (a.minZ - oZ) * invDirZ
+	t2 = (a.maxZ - oZ) * invDirZ
+	tMin = math.Max(tMin, math.Min(t1, t2))
+	tMax = math.Min(tMax, math.Max(t1, t2))
+
+	// Intersezione valida se tMax >= tMin e il volume è davanti al raggio (tMax >= 0)
+	if tMax >= math.Max(tMin, 0.0) {
+		return tMin, true
+	}
+	return 0.0, false
+}
+
 // IntersectFrustum controlla se l'AABB si trova all'interno (o interseca) il Frustum fornito.
 // Restituisce true se l'AABB è visibile.
 func (a *AABB) IntersectFrustum(f *Frustum) bool {

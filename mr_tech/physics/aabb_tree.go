@@ -202,6 +202,49 @@ func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB
 	}
 }
 
+// QueryRay performs a raycast query against the AABB tree, calling the callback for each intersected object within range.
+// oX, oY, oZ represent the origin of the ray.
+// dirX, dirY, dirZ represent the direction vector of the ray.
+// maxDistance specifies the maximum distance for the ray to query.
+// callback is invoked with each intersected object and its distance, and may update the maxDistance dynamically.
+func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) float64) {
+	// Pre-calcolo delle inverse per la vettorizzazione dello Slab Method
+	invDirX := 1.0 / dirX
+	invDirY := 1.0 / dirY
+	invDirZ := 1.0 / dirZ
+
+	a.stack = a.stack[:0]
+	a.stack = append(a.stack, a.rootNodeIndex)
+
+	for len(a.stack) > 0 {
+		lastIdx := len(a.stack) - 1
+		nodeIndex := a.stack[lastIdx]
+		a.stack = a.stack[:lastIdx]
+
+		if nodeIndex == AABBNullNode {
+			continue
+		}
+
+		node := a.nodes[nodeIndex]
+		tMin, hit := node.aabb.IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ)
+
+		// Ray Culling: scartiamo l'intero ramo se è più lontano del nostro limite attuale
+		if hit && tMin <= maxDistance {
+			if node.IsLeaf() {
+				// Segnaliamo l'oggetto e permettiamo alla logica di restringere il raggio
+				newMax := callback(node.object, tMin)
+				if newMax < maxDistance {
+					maxDistance = newMax
+				}
+			} else {
+				// Push dei figli
+				a.stack = append(a.stack, node.leftNodeIndex)
+				a.stack = append(a.stack, node.rightNodeIndex)
+			}
+		}
+	}
+}
+
 // allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
 func (a *AABBTree) allocateNode() (uint, *AABBNode) {
 	if a.nextFreeNodeIndex == AABBNullNode {

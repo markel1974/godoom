@@ -235,7 +235,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 			break
 		}
 	}
-	player := config.NewConfigPlayer(geometry.XY{X: pX, Y: -pY}, pAngle, _playerHeight, _playerRadius, _playerMass)
+	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, _playerHeight, _playerRadius, _playerMass)
 	return player
 }
 

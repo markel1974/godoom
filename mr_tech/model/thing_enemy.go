@@ -27,9 +27,9 @@ func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Vo
 
 // Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
 func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
-	dx := playerX - t.position.X
-	dy := playerY - t.position.Y
-	dz := playerZ - t.position.Z
+	dx := playerX - t.pos.X
+	dy := playerY - t.pos.Y
+	dz := playerZ - t.pos.Z
 	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
 	dist3D := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {

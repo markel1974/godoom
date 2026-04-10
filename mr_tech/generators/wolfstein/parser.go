@@ -178,7 +178,8 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	}
 
 	if len(root.Sectors) > 0 && len(root.Sectors[0].Segments) > 0 {
-		player.Position = root.Sectors[0].Segments[0].End
+		pos := root.Sectors[0].Segments[0].End
+		player.Position = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
 	}
 	return root, nil
 }

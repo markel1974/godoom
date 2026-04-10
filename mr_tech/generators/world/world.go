@@ -236,7 +236,7 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 	}
 
 	// 4. Spawn del Giocatore al centro esatto
-	cfg.Player.Position = geometry.XY{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2}
+	cfg.Player.Position = geometry.XYZ{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2, Z: 0}
 	cfg.Player.Angle = 0.0
 
 	return cfg, nil

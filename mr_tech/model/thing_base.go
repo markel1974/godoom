@@ -12,7 +12,7 @@ import (
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id         string
-	position   geometry.XYZ
+	pos        geometry.XYZ
 	mass       float64
 	radius     float64
 	height     float64
@@ -32,22 +32,21 @@ type ThingBase struct {
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and entities.
 func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume, volumes *Volumes, entities *Entities) *ThingBase {
-	radius := cfg.Radius
-	entX := pos.X - radius
-	entY := pos.Y - radius
+	entX := pos.X - cfg.Radius
+	entY := pos.Y - cfg.Radius
 	entZ := pos.Z
-	entW := radius * 2
-	entH := radius * 2
-	entD := cfg.Height // In 3D, la profondità è l'altezza reale dell'entità
+	entW := cfg.Radius * 2
+	entH := cfg.Radius * 2
+	entD := cfg.Height
 	thing := &ThingBase{
 		id:         cfg.Id,
-		position:   pos,
 		angle:      cfg.Angle,
 		kind:       cfg.Kind,
 		mass:       cfg.Mass,
 		radius:     cfg.Radius,
 		height:     cfg.Height,
 		speed:      cfg.Speed,
+		pos:        pos,
 		volume:     volume,
 		animation:  anim,
 		volumes:    volumes,
@@ -58,6 +57,7 @@ func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Anim
 		identifier: -1,
 		wall:       NewThingWall(volumes, 0, 0),
 	}
+	thing.entity.SetOnGround(false)
 	return thing
 }
 
@@ -93,7 +93,7 @@ func (t *ThingBase) GetVolume() *Volume {
 
 // GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
 func (t *ThingBase) GetPosition() (float64, float64, float64) {
-	return t.position.X, t.position.Y, t.position.Z
+	return t.pos.X, t.pos.Y, t.pos.Z
 }
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
@@ -126,71 +126,6 @@ func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
 
-// PhysicsApply aggiorna la posizione topologica dell'oggetto usando il nuovo KCC vettoriale.
-func (t *ThingBase) PhysicsApply() {
-	// 1. ESTRAZIONE DELTA E EARLY EXIT
-	dx, dy, dz := t.entity.GetDisplacement()
-	// Ottimizzazione CPU per entità statiche o a riposo termodinamico
-	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
-		return
-	}
-	nextX, nextY, nextZ := t.position.X+dx, t.position.Y+dy, t.position.Z+dz
-	//fmt.Println("NEXT THING", nextX, nextY, nextZ)
-	feetPos := t.position.Z
-	headPos := t.position.Z + t.height
-	// 2. CONTINUOUS COLLISION DETECTION (Sweep XY Elevato)
-	elevatedBaseZ := feetPos + t.maxStep
-	face, nx, ny, nz := t.wall.ClosestFace(t.position.X, t.position.Y, t.position.Z, nextX, nextY, nextZ, dx, dy, dz, headPos, elevatedBaseZ, t.radius)
-	if face != nil {
-		// 1. Risoluzione fisica standard (Gestisce rimbalzi e scambi di impulso)
-		t.entity.ResolveImpact(t.wall.GetEntity(), nx, ny, nz)
-		// 2. Raffinamento KCC: Clip della velocità residua
-		// Impedisce che la restitution o errori di precisione facciano "staccare" il player dalle rampe
-		vx, vy, vz := t.entity.GetVelocity()
-		// Se atterriamo su un piano calpestabile (nz >= 0.7) e stiamo cadendo
-		if nz >= 0.7 && vz < 0 {
-			vz = 0 // Stop verticale immediato
-		}
-		// Proiezione del vettore velocità per scivolare sulla normale
-		newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, nx, ny, nz)
-		t.entity.SetVx(newVx)
-		t.entity.SetVy(newVy)
-		t.entity.SetVz(newVz)
-		// 3. Ricalcolo del displacement finale per il frame corrente
-		dx, dy, dz = t.entity.GetDisplacement()
-		nextX, nextY, nextZ = t.position.X+dx, t.position.Y+dy, t.position.Z+dz
-	}
-	// 3. TRANSIZIONE DI SETTORE
-	topZ := nextZ + t.height
-	newVolume := t.volumes.SearchVolume3d(t.volume, nextX, nextY, nextZ, topZ, t.maxStep)
-	if newVolume != nil && newVolume != t.volume {
-		// Scendiamo di settore o saliamo su gradino valido
-		if t.entity.GetVz() <= 0 {
-			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
-			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
-				nextZ = newVolume.GetMinZ()
-				t.entity.SetVz(0.0)
-			}
-		}
-		t.volume = newVolume
-	}
-	// 4. LIMITI TOPOLOGICI VERTICALI (Floor / Ceil Hard Clamp)
-	floorZ := t.volume.GetMinZ()
-	ceilZ := t.volume.GetMaxZ()
-	if nextZ < floorZ {
-		// Atterraggio
-		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, 1)
-		nextZ = floorZ
-	} else if (nextZ + t.height) > ceilZ {
-		// Urto soffitto
-		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1)
-		nextZ = ceilZ - t.height
-	}
-	// 5. APPLICAZIONE FINALE E SINCRONIZZAZIONE
-	t.position.X, t.position.Y, t.position.Z = nextX, nextY, nextZ
-	t.entities.UpdateThing(t, t.position.X, t.position.Y, t.position.Z)
-}
-
 // OnCollide handles interactions when the current object collides with another object implementing the IThing interface.
 func (t *ThingBase) OnCollide(other IThing) {
 	//fmt.Println("COLLISION -> ", other.GetId())
@@ -204,4 +139,76 @@ func (t *ThingBase) IsActive() bool {
 // SetActive updates the activation state of the ThingBase instance and returns the updated state as a boolean.
 func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
+}
+
+// PhysicsApply applies physics calculations to the ThingBase instance using its height attribute.
+func (t *ThingBase) PhysicsApply() {
+	t.doPhysics(t.height)
+}
+
+// doPhysics handles the physics computations for movement, collision detection, and sector transitions for the entity.
+// doPhysics gestisce la cinematica del character controller, collisioni e portali.
+func (t *ThingBase) doPhysics(tHeight float64) {
+	// 1. ESTRAZIONE DEL DELTA SPOSTAMENTO
+	dx, dy, dz := t.entity.GetDisplacement()
+	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
+		return
+	}
+
+	isGrounded := false
+	pX, pY, pZ := t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
+	hPos := t.pos.Z + tHeight
+	elevBaseZ := t.pos.Z + t.maxStep
+
+	// 2. CONTINUOUS COLLISION DETECTION (CCD) & SLIDING
+	face, nX, nY, nZ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, t.radius)
+	if face != nil {
+		// Applica la risposta fisica all'entità
+		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ)
+		vx, vy, vz := t.entity.GetVelocity()
+		// Gestione atterraggio su piani calpestabili (Slope)
+		if nZ >= 0.7 && vz < 0 {
+			vz = 0
+			isGrounded = true
+		}
+		// Proiezione della velocità residua sul piano tangente (Sliding KCC)
+		newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, nX, nY, nZ)
+		t.entity.SetVx(newVx)
+		t.entity.SetVy(newVy)
+		t.entity.SetVz(newVz)
+		// Ricalcola lo spostamento effettivo per il frame corrente
+		dx, dy, dz = t.entity.GetDisplacement()
+		pX, pY, pZ = t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
+	}
+
+	// 3. TRANSIZIONE DI SETTORE (PORTALI 3D)
+	topZ := pZ + tHeight
+	newVolume := t.volumes.SearchVolume3d(t.volume, pX, pY, pZ, topZ, t.maxStep)
+	if newVolume != nil && newVolume != t.volume {
+		if t.entity.GetVz() <= 0 {
+			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
+			// Gestione automatica del dislivello (Step-up per scale)
+			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
+				pZ = newVolume.GetMinZ()
+				t.entity.SetVz(0.0)
+				isGrounded = true
+			}
+		}
+		t.volume = newVolume
+	}
+	// 4. LIMITI TOPOLOGICI VERTICALI
+	minZ, maxZ := t.volume.GetMinZ(), t.volume.GetMaxZ()
+	if pZ <= minZ {
+		pZ = minZ
+		isGrounded = true
+		t.entity.SetVz(0.0)
+	} else if (pZ + tHeight) > maxZ {
+		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1)
+		pZ = maxZ - tHeight
+	}
+	// 5. SINCRONIZZAZIONE STATO FISICO
+	t.entity.SetOnGround(isGrounded)
+	// 6. APPLICAZIONE FINALE
+	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
+	t.entities.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }

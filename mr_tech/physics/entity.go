@@ -34,16 +34,18 @@ type Entity struct {
 	ay                float64
 	az                float64
 	vMin              float64
-	airFriction       float64
-	airDamping        float64
+	frictionGround    float64
+	frictionAir       float64
+	frictionActive    float64
+	dampingAir        float64
+	dampingGround     float64
+	dampingActive     float64
 	gForce            float64
 	restitution       float64
 	maxVelocitySq     float64
 	sleepThresholdSq  float64
 	dt                float64
 	terminalZVelocity float64
-	friction          float64
-	frictionDumping   float64
 	onGround          bool
 	collider          *Entity
 }
@@ -65,7 +67,6 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 		sleepThresholdSq: vMin * vMin,
 		dt:               dt60,
 		restitution:      restitution,
-		onGround:         true,
 	}
 	if mass <= 0.0 {
 		a.mass = 0.0
@@ -77,6 +78,7 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 	a.SetFriction(friction)
 	a.SetAirFriction(0.98)
 	a.SetMaxVelocity(minThickness, safetyMargin)
+	a.SetOnGround(true)
 	return a
 }
 
@@ -105,21 +107,23 @@ func (e *Entity) MoveTo(x float64, y float64, z float64) {
 
 // SetFriction sets the friction coefficient for the entity and updates its current friction value.
 func (e *Entity) SetFriction(f float64) {
-	e.friction = f
-	e.frictionDumping = math.Pow(e.friction, e.dt)
+	e.frictionGround = f
+	e.dampingGround = math.Pow(e.frictionGround, e.dt)
+	e.SetOnGround(e.onGround)
 }
 
 // SetAirFriction sets the air friction value and updates the active air friction for the entity.
 func (e *Entity) SetAirFriction(f float64) {
-	e.airFriction = f
-	e.airDamping = math.Pow(e.airFriction, e.dt)
-	if e.airDamping >= 1.0 {
+	e.frictionAir = f
+	e.dampingAir = math.Pow(e.frictionAir, e.dt)
+	if e.dampingAir >= 1.0 {
 		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
 		e.terminalZVelocity = -math.MaxFloat64
 	} else {
 		// Calcolo dell'asintoto dell'integratore
-		e.terminalZVelocity = (-e.gForce * e.dt * e.airDamping) / (1.0 - e.airDamping)
+		e.terminalZVelocity = (-e.gForce * e.dt * e.dampingAir) / (1.0 - e.dampingAir)
 	}
+	e.SetOnGround(e.onGround)
 }
 
 // SetMaxVelocity calculates and sets the maximum velocity squared based on the entity's time step and given parameters.
@@ -131,6 +135,13 @@ func (e *Entity) SetMaxVelocity(minThickness float64, safetyMargin float64) {
 // SetOnGround sets the onGround state of the entity to the specified boolean value.
 func (e *Entity) SetOnGround(onGround bool) {
 	e.onGround = onGround
+	if e.onGround {
+		e.frictionActive = e.frictionGround
+		e.dampingActive = e.dampingGround
+	} else {
+		e.frictionActive = e.frictionAir
+		e.dampingActive = e.dampingAir
+	}
 }
 
 // GetVx returns the current velocity component along the X-axis for the entity.
@@ -317,26 +328,21 @@ func (e *Entity) AddForce(fx, fy, fz float64) {
 
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
 func (e *Entity) Update() bool {
-	// 1. INTEGRAZIONE
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
 	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
-	activeDamping := e.airDamping
-	if e.onGround {
-		activeDamping = math.Pow(e.friction, e.dt)
-	}
-	e.vx *= activeDamping
-	e.vy *= activeDamping
-	e.vz *= e.airDamping
-	// 3. SLEEP PLANARE
-	// Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
+
+	e.vx *= e.dampingActive
+	e.vy *= e.dampingActive
+	e.vz *= e.dampingAir
+	// SLEEP PLANARE Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
 	if math.Abs(e.vx) < e.vMin {
 		e.vx = 0.0
 	}
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	// 4. CLAMPING VELOCITÀ TERMINALE (Asse Z)
+	//CLAMPING VELOCITÀ TERMINALE
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}
@@ -410,7 +416,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 		vRelDotT := vrx*tx + vry*ty + vrz*tz
 		jt := -vRelDotT / invMassSum
 
-		maxFriction := j * e2.friction
+		maxFriction := j * e2.frictionActive
 		if math.Abs(jt) > maxFriction {
 			// math.Copysign copia il segno di jt su maxFriction, evitando branch
 			jt = math.Copysign(maxFriction, jt)
@@ -481,7 +487,7 @@ func (e *Entity) ComputeCollision(otherEnt *Entity) (float64, float64, float64, 
 }
 
 // ClipVelocity adjusts the velocity vector to prevent movement into a surface by negating the velocity component along the normal.
-// The method applies a slight overbounce to mitigate precision errors and ensure the entity does not get stuck on the surface.
+// The method applies a slight over-bounce to mitigate precision errors and ensure the entity does not get stuck on the surface.
 func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64, float64) {
 	// V · N (How much velocity is pushing against the plane)
 	backoff := vx*nx + vy*ny + vz*nz
@@ -489,7 +495,7 @@ func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64,
 	if backoff > 0.0 {
 		return vx, vy, vz
 	}
-	// Very slight overbounce (1.001) to absorb FP64 precision error
+	// Very slight over-bounce (1.001) to absorb FP64 precision error
 	// and prevent the entity from getting stuck in the plane on the next frame.
 	backoff *= 1.001
 	// V_new = V - N * (V · N)

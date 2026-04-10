@@ -91,6 +91,11 @@ func (t *ThingBase) GetVolume() *Volume {
 	return t.volume
 }
 
+// GetRadius retrieves the radius of the ThingBase instance as a float64 value.
+func (t *ThingBase) GetRadius() float64 {
+	return t.radius
+}
+
 // GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
 func (t *ThingBase) GetPosition() (float64, float64, float64) {
 	return t.pos.X, t.pos.Y, t.pos.Z

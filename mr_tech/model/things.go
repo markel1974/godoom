@@ -169,7 +169,6 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	id := utils.NextUUId()
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, mass, radius, radius, speed, c.Animation)
 	animation := th.animations.GetAnimation(cfg.Animation)
-	fmt.Println("CREATE BULLET", animation != nil)
 	thing := NewThingBullet(cfg, animation, volume, th.sectors, th, pitch)
 	th.things = append(th.things, thing)
 }

@@ -66,11 +66,14 @@ func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 	t.entity.AddForce(fx, fy, 0.0)
 	// 4. Logica di Fuoco (Spara se è ricaricato e a portata)
 	if t.fireCooldown <= 0 && dist3d < 20.0 {
-		// Alziamo il punto di spawn del proiettile ad altezza armi/petto (metà della sua altezza)
-		bulletPos := geometry.XYZ{X: t.pos.X, Y: t.pos.Y, Z: t.pos.Z + (t.height * 0.5)}
-		aimPitch := -math.Atan2(dz, dist2d)
+		weaponForward := t.radius * 2.0
+		spawnX := t.pos.X + (math.Cos(t.angle) * weaponForward)
+		spawnY := t.pos.Y + (math.Sin(t.angle) * weaponForward)
+		spawnZ := t.pos.Z + (t.height * 0.5)
+		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+		aimPitch := math.Atan2(dz, dist2d)
 		t.things.CreateBullet(t.volume, bulletPos, t.angle, aimPitch, 1.0, 1.0, 10)
-		// Resetta il timer (es. spara ogni 1.5 secondi)
+		// Resetta il timer
 		t.fireCooldown = 1.5
 	}
 }

@@ -232,11 +232,10 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 func (p *ThingPlayer) Fire() {
 	// Estrai la posizione esatta della telecamera (include il Bobbing)
 	camX, camY, camZ := p.GetPosition()
-	const weaponForward = 2.0
-	const weaponDown = 2.0
+	weaponForward := p.GetRadius() * 2
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
-	spawnZ := camZ - weaponDown
+	spawnZ := camZ - (p.getHeadHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 	p.things.CreateBullet(p.volume, spawnPos, p.angle, -p.yaw, 1.0, 1.0, 10)
 }

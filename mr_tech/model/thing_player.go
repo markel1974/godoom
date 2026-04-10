@@ -9,6 +9,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
+const minYaw = -5.0
+const maxYaw = 5.0
+
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
 	id             string
@@ -28,10 +31,10 @@ type ThingPlayer struct {
 	*ThingBase
 }
 
-// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and entities.
+// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entities, debug bool) (*ThingPlayer, error) {
+func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Things, debug bool) (*ThingPlayer, error) {
 	volume := volumes.QueryPoint2d(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
@@ -55,7 +58,7 @@ func NewThingPlayer(cfg *config.ConfigPlayer, volumes *Volumes, entities *Entiti
 		duckHeight:     cfg.Height * 0.25,
 	}
 	p.SetAngle(cfg.Angle)
-	p.entities.AddThing(p)
+	p.things.AddThing(p)
 	return p, nil
 }
 
@@ -92,10 +95,7 @@ func (p *ThingPlayer) GetAngle() (float64, float64) {
 
 // SetYaw adjusts the player's yaw based on the given input, clamping the result within a predefined range.
 func (p *ThingPlayer) SetYaw(y float64) {
-	//p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
-	//p.yaw = p.yawState - (p.entity.GetVz() * 0.5)
-	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
-
+	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), minYaw, maxYaw)
 	// Svincolamento totale dalla fisica: lo sguardo è assoluto
 	p.yaw = p.yawState
 }
@@ -226,4 +226,17 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 		return p.duckHeight
 	}
 	return p.eyeHeight
+}
+
+// Fire spawns a bullet in the specified sector at the given coordinates and angle.
+func (p *ThingPlayer) Fire() {
+	// Estrai la posizione esatta della telecamera (include il Bobbing)
+	camX, camY, camZ := p.GetPosition()
+	const weaponForward = 2.0
+	const weaponDown = 2.0
+	spawnX := camX + (p.angleCos * weaponForward)
+	spawnY := camY + (p.angleSin * weaponForward)
+	spawnZ := camZ - weaponDown
+	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+	p.things.CreateBullet(p.volume, spawnPos, p.angle, -p.yaw, 1.0, 1.0, 10)
 }

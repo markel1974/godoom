@@ -10,14 +10,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Compiler represents a core game engine component for managing volumes, game objects, player interactions, and entities.
+// Compiler represents a core game engine component for managing volumes, game objects, player interactions, and things.
 type Compiler struct {
 	volumes   *Volumes
 	volumes3d *Volumes
-	things    *Things
 	player    *ThingPlayer
 	lights    *Lights
-	entities  *Entities
+	entities  *Things
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
@@ -25,7 +24,6 @@ func NewCompiler() *Compiler {
 	return &Compiler{
 		volumes:   nil,
 		volumes3d: nil,
-		things:    nil,
 		player:    nil,
 		entities:  nil,
 		lights:    nil,
@@ -82,11 +80,7 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	r.lights.AddLights(vLights)
 	r.lights.AddLights(lights)
 
-	r.entities = NewEntities(uint(1 + len(cfg.Things)))
-
-	if r.things, err = NewThings(cfg.Things, r.volumes, r.entities, animations); err != nil {
-		return err
-	}
+	r.entities = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, r.entities, animations)
 
 	if r.player, err = NewThingPlayer(cfg.Player, r.volumes, r.entities, false); err != nil {
 		return err
@@ -97,19 +91,14 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	return nil
 }
 
-// GetEntities returns the Entities instance managed by the Compiler.
-func (r *Compiler) GetEntities() *Entities {
+// GetEntities returns the Things instance managed by the Compiler.
+func (r *Compiler) GetEntities() *Things {
 	return r.entities
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.
 func (r *Compiler) GetVolumes() *Volumes {
 	return r.volumes
-}
-
-// GetThings returns the Things instance managed by the Compiler.
-func (r *Compiler) GetThings() *Things {
-	return r.things
 }
 
 // GetPlayer returns the player object associated with the compiler instance.

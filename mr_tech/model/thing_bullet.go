@@ -13,36 +13,26 @@ type ThingBullet struct {
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance.
-func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities, rawPitch float64) *ThingBullet {
+func NewThingBullet(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, things *Things, pitchRad float64) *ThingBullet {
 	pos := cfg.Position
-	pos.Z = volume.GetMinZ() + 4.0
 	p := &ThingBullet{
-		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, entities),
+		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, things),
 	}
-
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	p.maxStep = 0.0
-
-	p.entities.AddThing(p)
-
+	p.things.AddThing(p)
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
-	maxRadian := 1.047
-	pitchRad := (rawPitch / 5.0) * maxRadian
-
 	// 2. Vettore Direzionale 3D normalizzato
 	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
 	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
-
 	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
 	muzzleVelocity := p.speed * 5.0
-
 	p.entity.SetVx(dirX * muzzleVelocity)
 	p.entity.SetVy(dirY * muzzleVelocity)
 	p.entity.SetVz(dirZ * muzzleVelocity)
-
 	return p
 }
 

@@ -23,15 +23,15 @@ type ThingBase struct {
 	volume     *Volume
 	animation  *textures.Animation
 	volumes    *Volumes
-	entities   *Entities
+	things     *Things
 	entity     *physics.Entity
 	isActive   bool
 	identifier int
 	wall       *ThingWall
 }
 
-// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and entities.
-func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume, volumes *Volumes, entities *Entities) *ThingBase {
+// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
+func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume, volumes *Volumes, things *Things) *ThingBase {
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
 	entZ := pos.Z
@@ -50,7 +50,7 @@ func NewThingBase(cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Anim
 		volume:     volume,
 		animation:  anim,
 		volumes:    volumes,
-		entities:   entities,
+		things:     things,
 		maxStep:    cfg.Height * 0.5,
 		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.9),
 		isActive:   true,
@@ -206,5 +206,5 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	t.entity.SetOnGround(isGrounded)
 	// final application
 	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
-	t.entities.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
+	t.things.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }

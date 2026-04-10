@@ -4,50 +4,73 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ThingEnemy represents a physical or logical entity in the environment with attributes like position, mass, and associated data.
 type ThingEnemy struct {
 	*ThingBase
-	active bool
+	active       bool
+	fireCooldown float64 // Timer per controllare il rateo di fuoco
 }
 
-// NewThingEnemy creates and initializes a new ThingEnemy instance with the specified configuration, animation, sector, and entities.
-func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, entities *Entities) *ThingEnemy {
+// NewThingEnemy creates and initializes a new ThingEnemy instance.
+func NewThingEnemy(cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, sectors *Volumes, things *Things) *ThingEnemy {
 	pos := cfg.Position
 	pos.Z = volume.GetMinZ()
 	e := &ThingEnemy{
-		ThingBase: NewThingBase(cfg, pos, anim, volume, sectors, entities),
-		active:    false,
+		ThingBase:    NewThingBase(cfg, pos, anim, volume, sectors, things),
+		active:       false,
+		fireCooldown: 0.0,
 	}
-	e.entities.AddThing(e)
+	e.things.AddThing(e)
 	return e
 }
 
-// Compute updates the Thing's direction and position based on the player's coordinates and its current speed.
-func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
-	dx := playerX - t.pos.X
-	dy := playerY - t.pos.Y
-	dz := playerZ - t.pos.Z
+// Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
+func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
+	dx := thingX - t.pos.X
+	dy := thingY - t.pos.Y
+	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
+	targetZ := thingZ + (t.height / 2)
+	dz := targetZ - t.pos.Z
 	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
-	dist3D := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	dist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {
-		if dist3D < 25.0 {
+		if dist3d < 25.0 { // Raggio di risveglio
 			t.active = true
+			t.fireCooldown = 1.0 // Pausa prima del primo colpo dopo essersi svegliato
 		}
 		return
 	}
-	// 2. Inseguimento Terrestre: Utilizza la proiezione cilindrica 2D
-	dist2D := math.Sqrt(dx*dx + dy*dy)
-	if dist2D > 0.001 {
-		invDist := 1.0 / dist2D
-		// Vettore direzionale puro (Normalizzato -1.0 / 1.0)
-		nx := dx * invDist
-		ny := dy * invDist
-		const forceScale = 100.0
-		fx := nx * forceScale * t.speed
-		fy := ny * forceScale * t.speed
-		t.entity.AddForce(fx, fy, 0.0)
+	// 2. Aggiornamento timer armi (assumendo dt fisso a 1/60)
+	if t.fireCooldown > 0 {
+		t.fireCooldown -= 1.0 / 60.0
+	}
+	// 3. Inseguimento Terrestre
+	dist2d := math.Sqrt(dx*dx + dy*dy)
+	if dist2d <= 0.001 {
+		return
+	}
+	// Calcolo degli angoli di mira verso il giocatore
+	// Aggiorniamo l'angolo del nemico affinché lo sprite o il modello si giri verso il bersaglio
+	t.angle = math.Atan2(dy, dx)
+	invDist := 1.0 / dist2d
+	nx := dx * invDist
+	ny := dy * invDist
+	const forceScale = 100.0
+	// Applica forza per muoversi verso il giocatore
+	fx := nx * forceScale * t.speed
+	fy := ny * forceScale * t.speed
+	t.entity.AddForce(fx, fy, 0.0)
+	// 4. Logica di Fuoco (Spara se è ricaricato e a portata)
+	if t.fireCooldown <= 0 && dist3d < 20.0 {
+		// Alziamo il punto di spawn del proiettile ad altezza armi/petto (metà della sua altezza)
+		bulletPos := geometry.XYZ{X: t.pos.X, Y: t.pos.Y, Z: t.pos.Z + (t.height * 0.5)}
+		aimPitch := -math.Atan2(dz, dist2d)
+		t.things.CreateBullet(t.volume, bulletPos, t.angle, aimPitch, 1.0, 1.0, 10)
+		// Resetta il timer (es. spara ogni 1.5 secondi)
+		t.fireCooldown = 1.5
 	}
 }

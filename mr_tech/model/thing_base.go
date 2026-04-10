@@ -11,23 +11,24 @@ import (
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id         string
-	pos        geometry.XYZ
-	mass       float64
-	radius     float64
-	height     float64
-	angle      float64
-	maxStep    float64
-	kind       config.ThingType
-	speed      float64
-	volume     *Volume
-	animation  *textures.Animation
-	volumes    *Volumes
-	things     *Things
-	entity     *physics.Entity
-	isActive   bool
-	identifier int
-	wall       *ThingWall
+	id           string
+	pos          geometry.XYZ
+	mass         float64
+	radius       float64
+	height       float64
+	angle        float64
+	maxStep      float64
+	kind         config.ThingType
+	speed        float64
+	acceleration float64
+	volume       *Volume
+	animation    *textures.Animation
+	volumes      *Volumes
+	things       *Things
+	entity       *physics.Entity
+	isActive     bool
+	identifier   int
+	wall         *ThingWall
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
@@ -40,23 +41,24 @@ func NewThingBase(things *Things, cfg *config.ConfigThing, pos geometry.XYZ, ani
 	entH := cfg.Radius * 2
 	entD := cfg.Height
 	thing := &ThingBase{
-		id:         cfg.Id,
-		angle:      cfg.Angle,
-		kind:       cfg.Kind,
-		mass:       cfg.Mass,
-		radius:     cfg.Radius,
-		height:     cfg.Height,
-		speed:      cfg.Speed,
-		pos:        pos,
-		volume:     volume,
-		animation:  anim,
-		volumes:    volumes,
-		things:     things,
-		maxStep:    cfg.Height * 0.5,
-		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2),
-		isActive:   true,
-		identifier: -1,
-		wall:       NewThingWall(volumes, 0, 0),
+		id:           cfg.Id,
+		angle:        cfg.Angle,
+		kind:         cfg.Kind,
+		mass:         cfg.Mass,
+		radius:       cfg.Radius,
+		height:       cfg.Height,
+		speed:        cfg.Speed,
+		acceleration: cfg.Acceleration,
+		pos:          pos,
+		volume:       volume,
+		animation:    anim,
+		volumes:      volumes,
+		things:       things,
+		maxStep:      cfg.Height * 0.5,
+		entity:       physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2),
+		isActive:     true,
+		identifier:   -1,
+		wall:         NewThingWall(volumes, 0, 0),
 	}
 	thing.entity.SetOnGround(false)
 	return thing
@@ -213,6 +215,15 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	// final application
 	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
 	t.things.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
+}
+
+func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
+	vx, vy, _ := t.entity.GetVelocity()
+	desiredVx := dirX * targetSpeed
+	desiredVy := dirY * targetSpeed
+	deltaVx := desiredVx - vx
+	deltaVy := desiredVy - vy
+	t.entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.

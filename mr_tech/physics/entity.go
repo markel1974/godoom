@@ -338,21 +338,6 @@ func (e *Entity) AddForce(fx, fy, fz float64) {
 	e.ax += fx * e.invMass
 	e.ay += fy * e.invMass
 	e.az += fz * e.invMass
-	//if e.az > 0 {
-	//	e.SetOnGround(false)
-	//}
-	/*
-		// Clamp radiale della magnitudo massima dell'accelerazione
-		// Il limite (es. 10000.0) andrebbe preferibilmente parametrizzato nella struct Entity
-		const maxAccSq = 10000.0 * 10000.0
-		accSq := e.ax*e.ax + e.ay*e.ay + e.az*e.az
-		if accSq > maxAccSq {
-			scale := math.Sqrt(maxAccSq / accSq)
-			e.ax *= scale
-			e.ay *= scale
-			e.az *= scale
-		}
-	*/
 }
 
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.

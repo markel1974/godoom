@@ -109,7 +109,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
 				const scaleH = 0.08
 				anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleH, scaleH*2)
-				thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 0.01, anim)
+				thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
 				root.Things = append(root.Things, thing)
 				cell = 0 // Libera la cella per il compilatore topologico
 			}

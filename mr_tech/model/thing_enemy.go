@@ -18,6 +18,13 @@ type ThingEnemy struct {
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
 func NewThingEnemy(things *Things, cfg *config.ConfigThing, anim *textures.Animation, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
+	//TODO REMOVE
+	if cfg.Speed <= 0 {
+		cfg.Speed = 6
+	}
+	if cfg.Acceleration <= 0 {
+		cfg.Acceleration = 3
+	}
 	pos.Z = volume.GetMinZ()
 	e := &ThingEnemy{
 		ThingBase:    NewThingBase(things, cfg, pos, anim, volume),
@@ -58,34 +65,51 @@ func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 	invDist := 1.0 / dist2d
 	nx := dx * invDist
 	ny := dy * invDist
-	const forceScale = 450.0
-	// Applica forza per muoversi verso il giocatore
-	fx := nx * t.speed * forceScale
-	fy := ny * t.speed * forceScale
-	fz := t.speed * forceScale
-	t.entity.AddForce(fx, fy, 0.0)
-	t.doJump(thingZ, dist2d, fx, fy, fz)
+
+	//const forceScale = 50.0
+	impulse := 1.0
+	// Distanza di stop (es. somma dei raggi per non compenetrare)
+	stopDistance := t.radius + 5.0
+	if dist2d < stopDistance {
+		impulse = 0.0
+	} else if dist3d < 20.0 && t.fireCooldown <= 0 {
+		impulse = 0.0
+	}
+	//const speedScale = 50.0
+	t.MoveTowards(nx, ny, t.speed*impulse, t.acceleration)
+
+	t.doJump(thingZ, dist2d, nx, ny)
 	t.doFire(dist3d, dist2d, dz)
 }
 
 // doJump applies a vertical and forward force to the entity if it is blocked or the target floor is higher than its current one.
-func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy, fz float64) {
-	if t.entity.IsOnGround() {
-		vx, vy, _ := t.entity.GetVelocity()
-		speedSq := (vx * vx) + (vy * vy)
-		// Euristica A: L'entità sta spingendo ma la sua velocità planare è quasi zero (ostacolo insuperabile col maxStep)
-		isBlocked := speedSq < 0.1
-		// Euristica B: Il pavimento del bersaglio (thingZ) è più in alto del pavimento del nemico (t.pos.Z)
-		floorDz := thingZ - t.pos.Z
-		playerIsHigher := floorDz > t.maxStep && dist2d < 20.0
-		if isBlocked || playerIsHigher {
-			// Impulso Z (Regola il 400.0 in base alla gravità e al peso del demone)
-			t.entity.AddForce(0.0, 0.0, fz)
-			// FONDAMENTALE: Svincola dall'attrito radente nel frame di stacco!
-			t.entity.SetOnGround(false)
-			// Bonus "Balzo": diamo un'extra spinta in avanti per aiutare a scavalcare i gap
-			t.entity.AddForce(fx*1.5, fy*1.5, 0.0)
-		}
+func (t *ThingEnemy) doJump(thingZ, dist2d, nx, ny float64) {
+	if !t.entity.IsOnGround() {
+		return
+	}
+
+	vx, vy, _ := t.entity.GetVelocity()
+	speedSq := (vx * vx) + (vy * vy)
+
+	// Euristica A: bloccato contro un muro/ostacolo
+	isBlocked := speedSq < 0.1
+	// Euristica B: il giocatore è più in alto
+	floorDz := thingZ - t.pos.Z
+	playerIsHigher := floorDz > t.maxStep && dist2d < 20.0
+
+	if isBlocked || playerIsHigher {
+		// 1. Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso
+		//    saltino in modo coerente. Regola l'800.0 in base alla tua gravità.
+		jumpForceZ := t.mass * 800.0
+		t.entity.AddForce(0.0, 0.0, jumpForceZ)
+
+		// Svincolo immediato dall'attrito
+		t.entity.SetOnGround(false)
+
+		// 2. Forza di slancio orizzontale (Leap) nella direzione del vettore nx, ny
+		//    Questo aiuta il demone a scavalcare l'ostacolo invece di saltare solo sul posto.
+		leapForceXY := t.mass * 200.0
+		t.entity.AddForce(nx*leapForceXY, ny*leapForceXY, 0.0)
 	}
 }
 

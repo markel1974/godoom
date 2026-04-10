@@ -41,7 +41,10 @@ func NewThingPlayer(things *Things, cfg *config.ConfigPlayer, volumes *Volumes, 
 	}
 	cfg.Kind = config.ThingPlayerDef
 	if cfg.Height <= 0 {
-		cfg.Height = 8
+		cfg.Height = 8.0
+	}
+	if cfg.Speed <= 0 {
+		cfg.Speed = 60.0
 	}
 	cfg.Position = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: volume.GetMinZ()}
 	p := &ThingPlayer{
@@ -123,8 +126,10 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 		fy += p.angleCos
 	}
 	if mag := math.Sqrt(fx*fx + fy*fy); mag > 0 {
-		forceScale := 600.0
-		p.entity.AddForce((fx/mag)*impulse*forceScale, (fy/mag)*impulse*forceScale, 0.0)
+		// 1. Vettore direzione puro (Normalizzato)
+		dirX := fx / mag
+		dirY := fy / mag
+		p.MoveTowards(dirX, dirY, p.speed*impulse, p.speed)
 	}
 }
 

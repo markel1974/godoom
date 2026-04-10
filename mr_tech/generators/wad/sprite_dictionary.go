@@ -14,7 +14,7 @@ type ThingDef struct {
 	Kind    config.ThingType
 }
 
-const sSpeed = 0.03
+const sSpeed = 6
 
 var _playerHeight = 80.0
 var _playerRadius = 20.0

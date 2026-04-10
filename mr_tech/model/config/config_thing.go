@@ -18,16 +18,17 @@ const (
 
 // ConfigThing represents a game entity with physical properties, animation, and positional data within a specific sector.
 type ConfigThing struct {
-	Id          string           `json:"id"`
-	Position    geometry.XYZ     `json:"position"`
-	Angle       float64          `json:"angle"`
-	Mass        float64          `json:"mass"`
-	Restitution float64          `json:"restitution"`
-	Radius      float64          `json:"radius"`
-	Height      float64          `json:"height"`
-	Kind        ThingType        `json:"kind"`
-	Speed       float64          `json:"speed"`
-	Animation   *ConfigAnimation `json:"animation"`
+	Id           string           `json:"id"`
+	Position     geometry.XYZ     `json:"position"`
+	Angle        float64          `json:"angle"`
+	Mass         float64          `json:"mass"`
+	Restitution  float64          `json:"restitution"`
+	Radius       float64          `json:"radius"`
+	Height       float64          `json:"height"`
+	Kind         ThingType        `json:"kind"`
+	Speed        float64          `json:"speed"`
+	Acceleration float64          `json:"acceleration"`
+	Animation    *ConfigAnimation `json:"animation"`
 }
 
 // NewConfigThing creates and initializes a new ConfigThing with the given properties representing an object in the game world.

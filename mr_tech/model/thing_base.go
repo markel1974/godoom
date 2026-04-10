@@ -146,48 +146,44 @@ func (t *ThingBase) PhysicsApply() {
 	t.doPhysics(t.height)
 }
 
-// doPhysics handles the physics computations for movement, collision detection, and sector transitions for the entity.
-// doPhysics gestisce la cinematica del character controller, collisioni e portali.
+// doPhysics handles the physics computations for movement, collision detection, and volume transitions for the entity.
 func (t *ThingBase) doPhysics(tHeight float64) {
-	// 1. ESTRAZIONE DEL DELTA SPOSTAMENTO
+	// extract displacement delta
 	dx, dy, dz := t.entity.GetDisplacement()
 	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
 		return
 	}
-
 	isGrounded := false
 	pX, pY, pZ := t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
 	hPos := t.pos.Z + tHeight
 	elevBaseZ := t.pos.Z + t.maxStep
-
-	// 2. CONTINUOUS COLLISION DETECTION (CCD) & SLIDING
+	// continuous collision detection (ccd) & sliding
 	face, nX, nY, nZ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, t.radius)
 	if face != nil {
-		// Applica la risposta fisica all'entità
+		// apply physical response to the entity
 		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ)
 		vx, vy, vz := t.entity.GetVelocity()
-		// Gestione atterraggio su piani calpestabili (Slope)
+		// handle landing on walkable planes (slope)
 		if nZ >= 0.7 && vz < 0 {
 			vz = 0
 			isGrounded = true
 		}
-		// Proiezione della velocità residua sul piano tangente (Sliding KCC)
+		// project residual velocity onto tangent plane (sliding kcc)
 		newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, nX, nY, nZ)
 		t.entity.SetVx(newVx)
 		t.entity.SetVy(newVy)
 		t.entity.SetVz(newVz)
-		// Ricalcola lo spostamento effettivo per il frame corrente
+		// recalculate effective displacement for current frame
 		dx, dy, dz = t.entity.GetDisplacement()
 		pX, pY, pZ = t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
 	}
-
-	// 3. TRANSIZIONE DI SETTORE (PORTALI 3D)
+	// volume transition (3d portals)
 	topZ := pZ + tHeight
 	newVolume := t.volumes.SearchVolume3d(t.volume, pX, pY, pZ, topZ, t.maxStep)
 	if newVolume != nil && newVolume != t.volume {
 		if t.entity.GetVz() <= 0 {
 			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
-			// Gestione automatica del dislivello (Step-up per scale)
+			// automatic handling of height difference (step-up for stairs)
 			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
 				pZ = newVolume.GetMinZ()
 				t.entity.SetVz(0.0)
@@ -196,7 +192,7 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 		}
 		t.volume = newVolume
 	}
-	// 4. LIMITI TOPOLOGICI VERTICALI
+	// vertical topological limits
 	minZ, maxZ := t.volume.GetMinZ(), t.volume.GetMaxZ()
 	if pZ <= minZ {
 		pZ = minZ
@@ -206,9 +202,9 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1)
 		pZ = maxZ - tHeight
 	}
-	// 5. SINCRONIZZAZIONE STATO FISICO
+	// physical state synchronization
 	t.entity.SetOnGround(isGrounded)
-	// 6. APPLICAZIONE FINALE
+	// final application
 	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
 	t.entities.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }

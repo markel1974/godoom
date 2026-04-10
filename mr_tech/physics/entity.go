@@ -141,7 +141,7 @@ func (e *Entity) SetOnGround(onGround bool) {
 	if e.onGround {
 		e.frictionActive = e.frictionGround
 		e.dampingActive = e.dampingGround
-		e.vz = 0.0
+		//e.vz = 0.0
 	} else {
 		e.frictionActive = e.frictionAir
 		e.dampingActive = e.dampingAir

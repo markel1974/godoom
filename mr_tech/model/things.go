@@ -134,6 +134,16 @@ func (th *Things) GetActive() ([]IThing, int) {
 	return th.activeThings, th.activeIdx
 }
 
+// QueryRay performs a raycast query within the spatial tree, invoking the callback for each intersected object.
+// Parameters:
+// - oX, oY, oZ: Origin coordinates of the ray.
+// - dirX, dirY, dirZ: Direction vector of the ray.
+// - maxDistance: Maximum distance the ray can travel.
+// - callback: Function invoked for each intersected object, receives the object and its distance as arguments.
+func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object physics.IAABB, distance float64) float64) {
+	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
+}
+
 // CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
 func (th *Things) createThing(ct *config.ConfigThing) (IThing, error) {
 	volume := th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
@@ -164,7 +174,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	//test zero index
 	c := th.config[2]
 	id := utils.NextUUId()
-	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, mass, radius, radius, speed, c.Animation)
+	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
 	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)
 }
 

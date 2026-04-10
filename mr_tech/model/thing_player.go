@@ -232,19 +232,31 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
 func (p *ThingPlayer) Throw() {
-	//camX, camY, camZ := p.GetPosition()
-	//p.LaunchObject(camX, camY, camZ, p.GetRadius()*2, p.getHeadHeight()*0.5, p.angle, -p.yaw)
-	// Estrai la posizione esatta della telecamera (include il Bobbing)
 	camX, camY, camZ := p.GetPosition()
 	weaponForward := p.GetRadius() * 2
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
 	spawnZ := camZ - (p.getHeadHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.things.CreateBullet(p.volume, spawnPos, p.angle, -p.yaw, 1.0, 1.0, 10)
+	p.LaunchObject(spawnPos, p.angle, -p.yaw)
 }
 
 func (p *ThingPlayer) Fire() {
+	// 1. Origine della vista (include Bobbing e Crouch)
 	camX, camY, camZ := p.GetPosition()
-	p.FireHitscan(camX, camY, camZ, p.angle, -p.yaw)
+	// 2. Calcolo del vettore direzione (Radianti)
+	// Usiamo lo yaw invertito per la telecamera e lo scaliamo per il FOV
+	pitchRad := -p.yaw
+	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
+	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
+	dirZ := math.Sin(pitchRad)
+	// 3. Punto di spawn fuori dalla hitbox del player
+	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
+	weaponForward := p.GetRadius() * 2.0
+	spawnX := camX + (p.angleCos * weaponForward)
+	spawnY := camY + (p.angleSin * weaponForward)
+	// Abbassiamo leggermente l'origine per simulare la posizione dell'arma
+	spawnZ := camZ - (p.getHeadHeight() * 0.5)
+	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+	p.FireHitscan(spawnPos, dirX, dirY, dirZ)
 }

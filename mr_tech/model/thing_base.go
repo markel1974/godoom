@@ -215,43 +215,47 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	t.things.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }
 
-func (t *ThingBase) LaunchObject(camX, camY, camZ, forward, height, angle, pitch float64) {
-	var pos geometry.XYZ
-	pos.X = camX + math.Cos(angle)*forward
-	pos.Y = camY + math.Sin(angle)*forward
-	pos.Z = camZ + height
-	t.things.CreateBullet(t.volume, pos, t.angle, pitch, 1.0, 1.0, 10)
+func (t *ThingBase) LaunchObject(pos geometry.XYZ, angle, pitch float64) {
+	t.things.CreateBullet(t.volume, pos, angle, pitch, 1.0, 1.0, 10)
 }
 
-func (t *ThingBase) FireHitscan(camX, camY, camZ, angle, pitchRad float64) {
-	dirX := math.Cos(angle) * math.Cos(pitchRad)
-	dirY := math.Sin(angle) * math.Cos(pitchRad)
-	dirZ := math.Sin(pitchRad)
+func (t *ThingBase) FireHitscan(pos geometry.XYZ, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
 	var closestObj physics.IAABB
-	t.volumes.QueryRay(camX, camY, camZ, dirX, dirY, dirZ, maxDistance, func(object physics.IAABB, distance float64) float64 {
+
+	// 1. Recuperiamo l'AABBTree delle entità
+	// Usiamo l'origine (pos) e il vettore direzione (dir) calcolato esternamente.
+	// QueryRay richiede invDir (1.0/dir) che viene calcolato internamente.
+	t.things.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, maxDistance, func(object physics.IAABB, distance float64) float64 {
+		// Self-hit culling: l'entità che spara non deve colpire se stessa
 		if object == t.entity {
 			return maxDistance
 		}
 		closestObj = object
 		closestDist = distance
-		return distance // Ray Shrinking per efficienza
+		// Ray Shrinking: restringiamo il raggio d'azione dell'albero alla distanza dell'impatto trovato.
+		return distance
 	})
 
 	if closestObj != nil {
-		impactX := camX + (dirX * closestDist)
-		impactY := camY + (dirY * closestDist)
-		impactZ := camZ + (dirZ * closestDist)
+		// 2. Calcolo del punto d'impatto reale (Origine + Direzione * Distanza)
+		impactX := pos.X + (dirX * closestDist)
+		impactY := pos.Y + (dirY * closestDist)
+		impactZ := pos.Z + (dirZ * closestDist)
+		// 3. Risoluzione dell'impatto
 		if enemy, ok := closestObj.(*ThingEnemy); ok {
-			//t.spawnBloodEffect(impactX, impactY, impactZ)
-			enemy.entity.AddForce(dirX*500, dirY*500, dirZ*500) // Knockback
+			// Trasferimento di impulso (Knockback)
+			// Moltiplichiamo il vettore direzione per la forza per spingere il nemico correttamente.
+			const force = 500.0
+			enemy.entity.AddForce(dirX*force, dirY*force, dirZ*force)
+			// t.spawnBloodEffect(impactX, impactY, impactZ)
 		} else {
+			// Impatto su geometria statica o altri oggetti
 			t.spawnBulletHole(impactX, impactY, impactZ, closestObj)
 		}
 	}
 }
-
 func (t *ThingBase) spawnBulletHole(x, y, z float64, target physics.IAABB) {
 	// Creiamo un'entità visiva temporanea tramite il gestore Things
 	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)

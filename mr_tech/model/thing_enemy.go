@@ -105,7 +105,8 @@ func (t *ThingEnemy) doFire(dist3d, dist2d, dz float64) {
 		spawnZ := t.pos.Z + (t.height * 0.5)
 		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 		aimPitch := math.Atan2(dz, dist2d)
-		t.things.CreateBullet(t.volume, bulletPos, t.angle, aimPitch, 1.0, 1.0, 10)
+		t.LaunchObject(bulletPos, t.angle, aimPitch)
+		//t.things.CreateBullet(t.volume, bulletPos, t.angle, aimPitch, 1.0, 1.0, 10)
 		// Resetta il timer
 		t.fireCooldown = 1.5
 	}

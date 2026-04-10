@@ -200,7 +200,7 @@ func (w *RenderOpenGL) doRun() {
 		w.doPlayerMoves(impulse, up, down, left, right)
 
 		if w.win.JustPressed(pixels.KeyF) {
-			w.doPlayerFire()
+			w.doPlayerThrow()
 		}
 		if w.win.JustPressed(pixels.KeyC) {
 			w.enableClear = true
@@ -232,8 +232,8 @@ func (w *RenderOpenGL) doRun() {
 }
 
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
-func (w *RenderOpenGL) doPlayerFire() {
-	w.player.Fire()
+func (w *RenderOpenGL) doPlayerThrow() {
+	w.player.Throw()
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.

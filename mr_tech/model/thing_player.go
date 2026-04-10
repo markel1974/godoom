@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
-	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 const minYaw = -5.0
@@ -231,8 +230,10 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 	return p.eyeHeight
 }
 
-// Fire spawns a bullet in the specified sector at the given coordinates and angle.
-func (p *ThingPlayer) Fire() {
+// Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
+func (p *ThingPlayer) Throw() {
+	//camX, camY, camZ := p.GetPosition()
+	//p.LaunchObject(camX, camY, camZ, p.GetRadius()*2, p.getHeadHeight()*0.5, p.angle, -p.yaw)
 	// Estrai la posizione esatta della telecamera (include il Bobbing)
 	camX, camY, camZ := p.GetPosition()
 	weaponForward := p.GetRadius() * 2
@@ -243,46 +244,7 @@ func (p *ThingPlayer) Fire() {
 	p.things.CreateBullet(p.volume, spawnPos, p.angle, -p.yaw, 1.0, 1.0, 10)
 }
 
-func (p *ThingPlayer) FireHitscan() {
+func (p *ThingPlayer) Fire() {
 	camX, camY, camZ := p.GetPosition()
-	// 1. Calcolo del Vettore Direzionale 3D normalizzato (Ray)
-	// Utilizziamo lo stesso pitchScale calibrato per i proiettili
-	const pitchScale = 0.85
-	pitchRad := -p.yaw * pitchScale
-	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
-	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
-	dirZ := math.Sin(pitchRad)
-	// Range operativo estremo per un Hitscan
-	const maxDistance = 4096.0
-	var hitTarget physics.IAABB
-	var hitDist = maxDistance
-	p.volumes.QueryRay(camX, camY, camZ, dirX, dirY, dirZ, maxDistance, func(object physics.IAABB, distance float64) float64 {
-		if object == p.entity {
-			return maxDistance
-		}
-		hitTarget = object
-		hitDist = distance
-		return distance
-	})
-
-	// 3. Risoluzione dell'Impatto Istantaneo
-	if hitTarget != nil {
-		// Calcolo esatto del punto d'impatto 3D
-		impactX := camX + (dirX * hitDist)
-		impactY := camY + (dirY * hitDist)
-		impactZ := camZ + (dirZ * hitDist)
-		fmt.Println("Hitscan: ", impactX, impactY, impactZ)
-		// Qui puoi generare un effetto visivo (es. particellare o decalcomania muro)
-		// p.things.SpawnSpark(impactX, impactY, impactZ)
-		// 4. Knockback e Danni
-		// Tramite Type Assertion capiamo chi o cosa abbiamo colpito
-		if enemy, ok := hitTarget.(*ThingEnemy); ok {
-			// Trasferimento di forza cinetica (Push-back) lungo il vettore direzionale
-			hitscanForce := 400.0 * enemy.entity.GetMass()
-			// Essendo l'hitscan istantaneo, passiamo l'impulso direttamente all'accumulatore dell'entità
-			enemy.entity.AddForce(dirX*hitscanForce, dirY*hitscanForce, dirZ*hitscanForce)
-			// Se il nemico è in volo, l'hitscan lo spingerà ancora più via senza attrito
-			// enemy.TakeDamage(10.0)
-		}
-	}
+	p.FireHitscan(camX, camY, camZ, p.angle, -p.yaw)
 }

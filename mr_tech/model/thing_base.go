@@ -135,7 +135,6 @@ func (t *ThingBase) PhysicsApply() {
 		return
 	}
 	nextX, nextY, nextZ := t.position.X+dx, t.position.Y+dy, t.position.Z+dz
-
 	//fmt.Println("NEXT THING", nextX, nextY, nextZ)
 	feetPos := t.position.Z
 	headPos := t.position.Z + t.height
@@ -143,7 +142,21 @@ func (t *ThingBase) PhysicsApply() {
 	elevatedBaseZ := feetPos + t.maxStep
 	face, nx, ny, nz := t.wall.ClosestFace(t.position.X, t.position.Y, t.position.Z, nextX, nextY, nextZ, dx, dy, dz, headPos, elevatedBaseZ, t.radius)
 	if face != nil {
+		// 1. Risoluzione fisica standard (Gestisce rimbalzi e scambi di impulso)
 		t.entity.ResolveImpact(t.wall.GetEntity(), nx, ny, nz)
+		// 2. Raffinamento KCC: Clip della velocità residua
+		// Impedisce che la restitution o errori di precisione facciano "staccare" il player dalle rampe
+		vx, vy, vz := t.entity.GetVelocity()
+		// Se atterriamo su un piano calpestabile (nz >= 0.7) e stiamo cadendo
+		if nz >= 0.7 && vz < 0 {
+			vz = 0 // Stop verticale immediato
+		}
+		// Proiezione del vettore velocità per scivolare sulla normale
+		newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, nx, ny, nz)
+		t.entity.SetVx(newVx)
+		t.entity.SetVy(newVy)
+		t.entity.SetVz(newVz)
+		// 3. Ricalcolo del displacement finale per il frame corrente
 		dx, dy, dz = t.entity.GetDisplacement()
 		nextX, nextY, nextZ = t.position.X+dx, t.position.Y+dy, t.position.Z+dz
 	}

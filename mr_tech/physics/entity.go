@@ -6,41 +6,49 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// vMin defines the minimum threshold for velocity components to be considered negligible during calculations.
+// vMin represents the minimum velocity threshold below which planar movement is considered negligible and set to zero.
 const vMin = 0.001
+
+// minThickness defines the minimum allowable thickness for specific calculations to ensure stability and prevent errors.
 const minThickness = 0.01
+
+// safetyMargin is a constant representing the safety factor to adjust calculations, typically used for threshold or limit scaling.
 const safetyMargin float64 = 0.90
+
+// dt60 represents a constant time step of 1/60th of a second, commonly used in simulation or frame-based systems.
 const dt60 float64 = 1.0 / 60.0
+
+// dt120 represents the fractional value equivalent to the reciprocal of 120 as a float64 constant.
 const dt120 float64 = 1.0 / 120.0
 
-// Entity represents a dynamic object with physical attributes, motion parameters, collision detection, and response data.
+// Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
 type Entity struct {
-	rect               Rect
-	id                 string
-	mass               float64
-	invMass            float64
-	vx                 float64
-	vy                 float64
-	vz                 float64
-	ax                 float64
-	ay                 float64
-	az                 float64
-	vMin               float64
-	defaultFriction    float64
-	defaultAirFriction float64
-	airFriction        float64
-	gForce             float64
-	restitution        float64
-	maxVelocitySq      float64
-	sleepThresholdSq   float64
-	dt                 float64
-	//depth              float64
+	rect              Rect
+	id                string
+	mass              float64
+	invMass           float64
+	vx                float64
+	vy                float64
+	vz                float64
+	ax                float64
+	ay                float64
+	az                float64
+	vMin              float64
+	airFriction       float64
+	airDamping        float64
+	gForce            float64
+	restitution       float64
+	maxVelocitySq     float64
+	sleepThresholdSq  float64
+	dt                float64
 	terminalZVelocity float64
 	friction          float64
+	frictionDumping   float64
+	onGround          bool
 	collider          *Entity
 }
 
-// NewEntity initializes a new Entity with the specified position, dimensions, and mass, and sets default parameters.
+// NewEntity creates and returns a pointer to a new Entity initialized with the given position, size, mass, and physical properties.
 func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
@@ -56,8 +64,8 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,
 		dt:               dt60,
-		friction:         friction,
 		restitution:      restitution,
+		onGround:         true,
 	}
 	if mass <= 0.0 {
 		a.mass = 0.0
@@ -66,165 +74,133 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 		a.mass = mass
 		a.invMass = 1.0 / a.mass
 	}
-
-	a.SetFriction(0.9)
+	a.SetFriction(friction)
 	a.SetAirFriction(0.98)
 	a.SetMaxVelocity(minThickness, safetyMargin)
-
-	if damping := math.Pow(a.airFriction, a.dt); damping >= 1.0 {
-		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
-		a.terminalZVelocity = -math.MaxFloat64
-	} else {
-		// Calcolo dell'asintoto dell'integratore
-		a.terminalZVelocity = (-a.gForce * a.dt * damping) / (1.0 - damping)
-	}
 	return a
 }
 
-// Reset initializes the entity's position, dimensions, velocity, and physics properties to their default states.
+// Reset initializes or updates the Entity's state including position, size, mass, and restitution.
 func (e *Entity) Reset(x, y, w, h, z, d, mass, restitution float64) {
 	e.rect.Reset(x, y, w, h, z, d)
 	e.mass = mass
 	e.invMass = 1.0 / mass
 	e.vx = 0.0
 	e.vy = 0.0
-	e.friction = e.defaultFriction
-	e.airFriction = e.defaultAirFriction
 	e.restitution = restitution
 	e.rect.rebuild()
 }
 
-// Stop halts all movement by setting the velocities (vx, vy, vz) of the entity to zero.
+// Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.
 func (e *Entity) Stop() {
 	e.vx = 0.0
 	e.vy = 0.0
 	e.vz = 0.0
 }
 
-/*
-// Update adjusts the entity's velocity based on friction, gravity, and minimum velocity thresholds. Checks collision status.
-func (e *Entity) Update2() bool {
-	// Clearance esatto tramite AABB
-	if e.collider != nil {
-		if !e.HasCollision(e.collider) {
-			e.clearCollider()
-		}
-	}
-	e.vx *= e.friction
-	e.vy *= e.friction
-	if e.vz > 0.0 {
-		e.vz = math.Max(0.0, e.vz-e.gForce)
-	} else if e.vz < 0.0 {
-		e.vz = math.Min(0.0, e.vz+e.gForce)
-	}
-	e.vz *= e.airFriction
-	// 4. CLAMPING DELLE VELOCITÀ MINIME
-	if math.Abs(e.vx) < e.vMin {
-		e.vx = 0.0
-	}
-	if math.Abs(e.vy) < e.vMin {
-		e.vy = 0.0
-	}
-	if math.Abs(e.vz) < e.vMin {
-		e.vz = 0.0
-	}
-	if e.IsMoving() {
-		return true
-	}
-	return false
-}
-*/
-
-// MoveTo sets the Entity's position to the specified x, y, and z coordinates.
+// MoveTo sets the entity's position to the specified x, y, and z coordinates.
 func (e *Entity) MoveTo(x float64, y float64, z float64) {
 	e.rect.MoveTo(x, y, z)
 }
 
-// SetFriction updates the friction value of the entity and resets it to the default friction value.
+// SetFriction sets the friction coefficient for the entity and updates its current friction value.
 func (e *Entity) SetFriction(f float64) {
-	e.defaultFriction = f
-	e.friction = e.defaultFriction
+	e.friction = f
+	e.frictionDumping = math.Pow(e.friction, e.dt)
 }
 
-// SetAirFriction updates the air friction values for the entity, affecting the rate of velocity reduction in the Z axis.
+// SetAirFriction sets the air friction value and updates the active air friction for the entity.
 func (e *Entity) SetAirFriction(f float64) {
-	e.defaultAirFriction = f
-	e.airFriction = e.defaultAirFriction
+	e.airFriction = f
+	e.airDamping = math.Pow(e.airFriction, e.dt)
+	if e.airDamping >= 1.0 {
+		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
+		e.terminalZVelocity = -math.MaxFloat64
+	} else {
+		// Calcolo dell'asintoto dell'integratore
+		e.terminalZVelocity = (-e.gForce * e.dt * e.airDamping) / (1.0 - e.airDamping)
+	}
 }
 
+// SetMaxVelocity calculates and sets the maximum velocity squared based on the entity's time step and given parameters.
 func (e *Entity) SetMaxVelocity(minThickness float64, safetyMargin float64) {
 	maxVelocity := (minThickness * safetyMargin) / e.dt
 	e.maxVelocitySq = maxVelocity * maxVelocity
 }
 
-// GetVx retrieves the current velocity of the entity along the x-axis.
+// SetOnGround sets the onGround state of the entity to the specified boolean value.
+func (e *Entity) SetOnGround(onGround bool) {
+	e.onGround = onGround
+}
+
+// GetVx returns the current velocity component along the X-axis for the entity.
 func (e *Entity) GetVx() float64 {
 	return e.vx
 }
 
-// GetVy returns the current vertical velocity (vy) of the entity.
+// GetVy returns the current vertical velocity (Vy) of the entity.
 func (e *Entity) GetVy() float64 {
 	return e.vy
 }
 
-// GetVz returns the current velocity of the entity along the Z-axis.
+// GetVz returns the current Z-axis velocity of the entity.
 func (e *Entity) GetVz() float64 { return e.vz }
 
-// SetVx sets the velocity along the x-axis for the entity.
+// SetVx sets the velocity of the entity along the X axis.
 func (e *Entity) SetVx(vx float64) {
 	e.vx = vx
 }
 
-// SetVy updates the vertical velocity (vy) of the entity.
+// SetVy updates the vertical velocity (vy) of the entity to the specified value.
 func (e *Entity) SetVy(vy float64) {
 	e.vy = vy
 }
 
-// SetVz sets the entity's velocity along the Z-axis.
+// SetVz sets the z-axis velocity (vz) of the entity to the specified value.
 func (e *Entity) SetVz(vz float64) { e.vz = vz }
 
-// SetV updates the velocity components vx, vy, and vz of the entity.
+// SetV sets the velocity components of the Entity along the x, y, and z axes.
 func (e *Entity) SetV(vx, vy, vz float64) {
 	e.vx = vx
 	e.vy = vy
 	e.vz = vz
 }
 
-// AddV adjusts the velocity of the entity by adding the provided vx, vy, and vz values to its current velocity components.
+// AddV increments the entity's velocity components by the specified vx, vy, and vz values.
 func (e *Entity) AddV(vx, vy, vz float64) {
 	e.vx += vx
 	e.vy += vy
 	e.vz += vz
 }
 
-// SubV subtracts the given vx, vy, and vz values from the Entity's velocity components.
+// SubV subtracts the given velocity components (vx, vy, vz) from the entity's velocity.
 func (e *Entity) SubV(vx, vy, vz float64) {
 	e.vx -= vx
 	e.vy -= vy
 	e.vz -= vz
 }
 
-// GetId retrieves the unique identifier of the Entity.
+// GetId returns the unique identifier of the entity as a string.
 func (e *Entity) GetId() string {
 	return e.id
 }
 
-// Invalidate clears the currently associated collider of the entity.
+// Invalidate clears the current collider of the entity by invoking the internal clearCollider method.
 func (e *Entity) Invalidate() {
 	e.clearCollider()
 }
 
-// GetWidth returns the width of the entity based on its rectangular bounds.
+// GetWidth returns the width of the entity by querying its internal rectangular representation.
 func (e *Entity) GetWidth() float64 {
 	return e.rect.GetWidth()
 }
 
-// GetInvMass returns the inverse mass of the entity, a precomputed value used in physics calculations.
+// GetInvMass returns the inverse mass of the entity, which is the reciprocal of its mass.
 func (e *Entity) GetInvMass() float64 {
 	return e.invMass
 }
 
-// GetRestitution returns the restitution coefficient of the entity, representing its bounciness during collisions.
+// GetRestitution returns the restitution coefficient of the entity, which determines its bounciness upon collision.
 func (e *Entity) GetRestitution() float64 {
 	return e.restitution
 }
@@ -234,27 +210,27 @@ func (e *Entity) GetAABB() *AABB {
 	return e.rect.GetAABB()
 }
 
-// GetCenter returns the center point of the entity as (x, y, z) coordinates.
+// GetCenter returns the 3D center coordinates (x, y, z) of the Entity's bounding rectangle.
 func (e *Entity) GetCenter() (float64, float64, float64) {
 	return e.rect.GetCenter()
 }
 
-// GetDepth returns the depth dimension of the entity, as defined by its rectangular bounds.
+// GetDepth returns the depth of the entity's bounding rectangle.
 func (e *Entity) GetDepth() float64 {
 	return e.rect.GetDepth()
 }
 
-// GetGForce returns the current gravitational force value acting on the Entity.
+// GetGForce returns the gravitational force acting on the entity.
 func (e *Entity) GetGForce() float64 {
 	return e.gForce
 }
 
-// HasCollision checks if the current entity's bounding box intersects with the bounding box of the provided entity.
+// HasCollision checks if the current entity's rectangular boundaries intersect with the specified entity's boundaries.
 func (e *Entity) HasCollision(obj2 *Entity) bool {
 	return e.rect.IntersectRect(obj2.rect)
 }
 
-// Distance computes the Euclidean distance between the entity and another specified entity based on their center coordinates.
+// Distance computes the Euclidean distance between the entity and a specified collider entity.
 func (e *Entity) Distance(collider *Entity) float64 {
 	x1, y1, z1 := e.rect.GetCenter()
 	x2, y2, z2 := collider.rect.GetCenter()
@@ -268,32 +244,30 @@ func (e *Entity) Distance(collider *Entity) float64 {
 	return math.Sqrt(d)
 }
 
-// DistanceSq computes the squared distance between the centers of the current entity and another entity in 3D space.
+// DistanceSq calculates the squared distance between the center points of the current entity and another entity.
 func (e *Entity) DistanceSq(other *Entity) float64 {
-	// Centro X, Y
 	dx := (e.rect.point.x + e.rect.size.w/2.0) - (other.rect.point.x + other.rect.size.w/2.0)
 	dy := (e.rect.point.y + e.rect.size.h/2.0) - (other.rect.point.y + other.rect.size.h/2.0)
-	// Centro Z
 	dz := (e.rect.point.z + e.rect.size.d/2.0) - (other.rect.point.z + other.rect.size.d/2.0)
 	return dx*dx + dy*dy + dz*dz
 }
 
-// GetXRange returns the minimum and maximum x-coordinates of the entity's rectangular bounds as a range.
+// GetXRange returns the min and max x-coordinates of the entity's rectangular bounds.
 func (e *Entity) GetXRange() (float64, float64) {
 	return e.rect.point.x, e.rect.point.x + e.rect.size.w
 }
 
-// GetYRange returns the minimum and maximum Y values of the entity's rectangular bounds as a tuple.
+// GetYRange returns the minimum and maximum Y coordinates of the entity's bounding rectangle as a tuple.
 func (e *Entity) GetYRange() (float64, float64) {
 	return e.rect.point.y, e.rect.point.y + e.rect.size.h
 }
 
-// GetZRange returns the minimum and maximum Z values of the entity's rectangular bounds.
+// GetZRange returns the minimum and maximum Z-coordinates of the entity's rectangular bounding box.
 func (e *Entity) GetZRange() (float64, float64) {
 	return e.rect.point.z, e.rect.point.z + e.rect.size.d
 }
 
-// GetSweptZRange calculates the swept Z-axis range based on current vertical velocity and gravity force.
+// GetSweptZRange computes the range of the entity's Z-axis considering its velocity to account for potential motion effects.
 func (e *Entity) GetSweptZRange() (float64, float64) {
 	minZ, maxZ := e.GetZRange()
 	// Se la velocità è quasi nulla (es. bloccata da wall.Compute),
@@ -309,12 +283,12 @@ func (e *Entity) GetSweptZRange() (float64, float64) {
 	return minZ, maxZ
 }
 
-// IsMoving checks if the Entity is currently in motion by determining if any of its velocity components are non-zero.
+// IsMoving checks if the entity is currently in motion based on its velocity or acceleration along any axis.
 func (e *Entity) IsMoving() bool {
 	return e.vx != 0 || e.vy != 0 || e.vz != 0 || e.ax != 0 || e.ay != 0 || e.az != 0
 }
 
-// clearCollider removes the current collider reference from the entity and ensures mutual disassociation between colliders.
+// clearCollider removes the association with the current collider, ensuring any mutual reference is also cleared.
 func (e *Entity) clearCollider() {
 	if e.collider != nil {
 		if e.collider.collider == e {
@@ -324,35 +298,36 @@ func (e *Entity) clearCollider() {
 	}
 }
 
+// GetVelocity retrieves the velocity components of the entity along the x, y, and z axes.
 func (e *Entity) GetVelocity() (float64, float64, float64) {
 	return e.vx, e.vy, e.vz
 }
 
+// GetDisplacement computes the displacement of an entity based on its velocity and time step. Returns dx, dy, dz.
 func (e *Entity) GetDisplacement() (float64, float64, float64) {
 	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
 }
 
-// AddForce applies a force to the entity by adjusting its acceleration based on the given force components and its inverse mass.
+// AddForce applies a force to the entity, altering its acceleration based on the inverse of its mass.
 func (e *Entity) AddForce(fx, fy, fz float64) {
 	e.ax += fx * e.invMass
 	e.ay += fy * e.invMass
 	e.az += fz * e.invMass
 }
 
-// Update esegue unicamente l'integrazione balistica (Eulero Semi-Implicito).
-// L'attrito radente e l'assorbimento dell'impatto sono delegati al risolutore esterno.
+// Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
 func (e *Entity) Update() bool {
 	// 1. INTEGRAZIONE
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
 	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
-
-	// 2. DAMPING (Smorzamento atmosferico)
-	airDamping := math.Pow(e.airFriction, e.dt)
-	e.vx *= airDamping
-	e.vy *= airDamping
-	e.vz *= airDamping
-
+	activeDamping := e.airDamping
+	if e.onGround {
+		activeDamping = math.Pow(e.friction, e.dt)
+	}
+	e.vx *= activeDamping
+	e.vy *= activeDamping
+	e.vz *= e.airDamping
 	// 3. SLEEP PLANARE
 	// Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
 	if math.Abs(e.vx) < e.vMin {
@@ -361,22 +336,16 @@ func (e *Entity) Update() bool {
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-
 	// 4. CLAMPING VELOCITÀ TERMINALE (Asse Z)
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}
-
-	//if e.vz != 0 {
-	//	fmt.Println("VZ", e.vz) // Ora vedrai la gravità accumularsi correttamente
-	//}
-
 	// 5. RESET ACCUMULATORE
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
-
 	return e.IsMoving()
 }
 
+// ResolveImpact calculates and applies the collision response between two entities based on their velocities, masses, and properties.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	// 1. NORMALIZZAZIONE SICURA (Anti-Esplosione)
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
@@ -387,24 +356,19 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	} else {
 		return // Vettore nullo, impossibile risolvere
 	}
-
 	// 2. VELOCITÀ RELATIVA E SOGLIE
 	// Assicuriamoci che un oggetto a massa infinita (es. il muro) non abbia mai velocità residua
 	if e2.invMass == 0.0 {
 		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
 	}
-
 	vrx := e.vx - e2.vx
 	vry := e.vy - e2.vy
 	vrz := e.vz - e2.vz
-
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
-
 	// Se i corpi si stanno allontanando
 	if vRelDotN > 0.0 {
 		return
 	}
-
 	invMassSum := e.invMass + e2.invMass
 	if invMassSum == 0.0 {
 		return // Masse infinite contro masse infinite
@@ -461,65 +425,73 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	}
 }
 
-/*
-// GetCollisionManifold calcola la normale di impatto e la profondità di compenetrazione tra due AABB.
-// La normale restituita punterà da 'other' verso 'e' (come richiesto da ResolveImpact).
-func (e *Entity) GetCollisionManifold(other *Entity) (nx, ny, nz, depth float64, hit bool) {
-	// Calcolo delle distanze tra i centri
-	cx1, cy1, cz1 := e.rect.GetCenter()
-	cx2, cy2, cz2 := other.rect.GetCenter()
-
-	dx := cx1 - cx2
-	dy := cy1 - cy2
-	dz := cz1 - cz2
-
-	// Calcolo delle semi-estensioni (extents)
-	extX1, extY1, extZ1 := e.rect.size.w/2, e.rect.size.h/2, e.rect.size.d/2
-	extX2, extY2, extZ2 := other.rect.size.w/2, other.rect.size.h/2, other.rect.size.d/2
-
-	// Calcolo degli overlap sugli assi
-	overlapX := (extX1 + extX2) - math.Abs(dx)
-	if overlapX <= 0 {
-		return 0, 0, 0, 0, false
-	} // Separazione su X
-
-	overlapY := (extY1 + extY2) - math.Abs(dy)
-	if overlapY <= 0 {
-		return 0, 0, 0, 0, false
-	} // Separazione su Y
-
-	overlapZ := (extZ1 + extZ2) - math.Abs(dz)
-	if overlapZ <= 0 {
-		return 0, 0, 0, 0, false
-	} // Separazione su Z
-
-	// Trova l'asse di minima penetrazione per risolvere la collisione spingendo fuori il meno possibile
-	hit = true
-	if overlapX < overlapY && overlapX < overlapZ {
-		depth = overlapX
-		if dx > 0 {
-			nx = 1.0
-		} else {
-			nx = -1.0
+// ComputeCollision checks for a collision between two entities and returns collision normal, penetration depth, and status.
+func (e *Entity) ComputeCollision(otherEnt *Entity) (float64, float64, float64, float64, bool) {
+	x1Min, x1Max := e.GetXRange()
+	x2Min, x2Max := otherEnt.GetXRange()
+	y1Min, y1Max := e.GetYRange()
+	y2Min, y2Max := otherEnt.GetYRange()
+	// SAT: Collisione AABB Planare Veloce
+	if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
+		z1Min, z1Max := e.GetZRange()
+		z2Min, z2Max := otherEnt.GetZRange()
+		// Supporto Swept Z per il Continuous Collision Detection verticale
+		if math.Abs(e.GetVz()) >= e.GetGForce() {
+			z1Min, z1Max = e.GetSweptZRange()
 		}
-	} else if overlapY < overlapZ {
-		depth = overlapY
-		if dy > 0 {
-			ny = 1.0
-		} else {
-			ny = -1.0
+		if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
+			z2Min, z2Max = otherEnt.GetSweptZRange()
 		}
-	} else {
-		depth = overlapZ
-		if dz > 0 {
-			nz = 1.0
-		} else {
-			nz = -1.0
+		if z1Max > z2Min && z1Min < z2Max {
+			pX1 := x1Max - x2Min
+			pX2 := x2Max - x1Min
+			pY1 := y1Max - y2Min
+			pY2 := y2Max - y1Min
+			pZ1 := z1Max - z2Min
+			pZ2 := z2Max - z1Min
+			minPenetration := pX1
+			var normX, normY, normZ float64 = -1, 0, 0
+			// Troviamo l'asse di minima compenetrazione
+			if pX2 < minPenetration {
+				minPenetration = pX2
+				normX, normY, normZ = 1, 0, 0
+			}
+			if pY1 < minPenetration {
+				minPenetration = pY1
+				normX, normY, normZ = 0, -1, 0
+			}
+			if pY2 < minPenetration {
+				minPenetration = pY2
+				normX, normY, normZ = 0, 1, 0
+			}
+			if pZ1 < minPenetration {
+				minPenetration = pZ1
+				normX, normY, normZ = 0, 0, -1
+			}
+			if pZ2 < minPenetration {
+				minPenetration = pZ2
+				normX, normY, normZ = 0, 0, 1
+			}
+			if minPenetration > 0.001 {
+				return normX, normY, normZ, minPenetration, true
+			}
 		}
 	}
-
-	return nx, ny, nz, depth, hit
+	return 0, 0, 0, 0, false
 }
 
-
-*/
+// ClipVelocity adjusts the velocity vector to prevent movement into a surface by negating the velocity component along the normal.
+// The method applies a slight overbounce to mitigate precision errors and ensure the entity does not get stuck on the surface.
+func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64, float64) {
+	// V · N (How much velocity is pushing against the plane)
+	backoff := vx*nx + vy*ny + vz*nz
+	// If positive, we are already moving away from the plane, no correction needed
+	if backoff > 0.0 {
+		return vx, vy, vz
+	}
+	// Very slight overbounce (1.001) to absorb FP64 precision error
+	// and prevent the entity from getting stuck in the plane on the next frame.
+	backoff *= 1.001
+	// V_new = V - N * (V · N)
+	return vx - (nx * backoff), vy - (ny * backoff), vz - (nz * backoff)
+}

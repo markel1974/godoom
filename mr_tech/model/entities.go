@@ -154,79 +154,24 @@ func (em *Entities) Compute() {
 				return false
 			}
 			otherEnt := otherThing.GetEntity()
-
 			// 2. Tie-breaker 3D
 			otherIsMoving := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
 			if otherIsMoving && thing.GetIdentifier() > otherThing.GetIdentifier() {
 				return false
 			}
-
-			x1Min, x1Max := ent.GetXRange()
-			x2Min, x2Max := otherEnt.GetXRange()
-			y1Min, y1Max := ent.GetYRange()
-			y2Min, y2Max := otherEnt.GetYRange()
-
-			// SAT: Collisione AABB Planare Veloce
-			if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
-				z1Min, z1Max := ent.GetZRange()
-				z2Min, z2Max := otherEnt.GetZRange()
-
-				// Supporto Swept Z per il Continuous Collision Detection verticale
-				if math.Abs(ent.GetVz()) >= ent.GetGForce() {
-					z1Min, z1Max = ent.GetSweptZRange()
-				}
-				if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
-					z2Min, z2Max = otherEnt.GetSweptZRange()
-				}
-
-				if z1Max > z2Min && z1Min < z2Max {
-					pX1 := x1Max - x2Min
-					pX2 := x2Max - x1Min
-					pY1 := y1Max - y2Min
-					pY2 := y2Max - y1Min
-					pZ1 := z1Max - z2Min
-					pZ2 := z2Max - z1Min
-
-					minPenetration := pX1
-					var normX, normY, normZ float64 = -1, 0, 0
-
-					// Troviamo l'asse di minima compenetrazione
-					if pX2 < minPenetration {
-						minPenetration = pX2
-						normX, normY, normZ = 1, 0, 0
-					}
-					if pY1 < minPenetration {
-						minPenetration = pY1
-						normX, normY, normZ = 0, -1, 0
-					}
-					if pY2 < minPenetration {
-						minPenetration = pY2
-						normX, normY, normZ = 0, 1, 0
-					}
-					if pZ1 < minPenetration {
-						minPenetration = pZ1
-						normX, normY, normZ = 0, 0, -1
-					}
-					if pZ2 < minPenetration {
-						minPenetration = pZ2
-						normX, normY, normZ = 0, 0, 1
-					}
-
-					if minPenetration > 0.001 {
-						// Dynamic Growth della memoria pre-allocata
-						if em.contactsLen >= len(em.contacts) {
-							newContacts := make([]Contact, len(em.contacts)*2)
-							copy(newContacts, em.contacts)
-							em.contacts = newContacts
-						}
-						// Riciclo memoria
-						em.contacts[em.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
-						em.contactsLen++
-						thing.OnCollide(otherThing)
-						otherThing.OnCollide(thing)
-					}
-				}
+			normX, normY, normZ, minPenetration, hasCollision := ent.ComputeCollision(otherEnt)
+			if !hasCollision {
+				return false
 			}
+			if em.contactsLen >= len(em.contacts) {
+				newContacts := make([]Contact, len(em.contacts)*2)
+				copy(newContacts, em.contacts)
+				em.contacts = newContacts
+			}
+			em.contacts[em.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
+			em.contactsLen++
+			thing.OnCollide(otherThing)
+			otherThing.OnCollide(thing)
 			return false
 		})
 	}

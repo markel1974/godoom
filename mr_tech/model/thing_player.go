@@ -268,27 +268,40 @@ func (p *ThingPlayer) IsMoving() bool {
 }
 
 func (p *ThingPlayer) PhysicsApply() {
+	//TODO UNIFICARE CON THINKBASE
 	headPos := p.getHeadHeight(p.where.Z)
 	feetPos := p.getFeetHeight(p.where.Z)
 	playerHeight := headPos - feetPos
-
 	dx, dy, dz := p.entity.GetDisplacement()
 	nextX := p.where.X + dx
 	nextY := p.where.Y + dy
 	nextZ := p.where.Z + dz
-
 	// 2. CONTINUOUS COLLISION DETECTION (Sweep XY Elevato)
 	elevatedBaseZ := feetPos + p.maxStep
 	face, nx, ny, nz := p.wall.ClosestFace(p.where.X, p.where.Y, p.where.Z, nextX, nextY, nextZ, dx, dy, dz, headPos, elevatedBaseZ, p.radius)
 	if face != nil {
+		//p.entity.ResolveImpact(p.wall.GetEntity(), nx, ny, nz)
+		//dx, dy, dz = p.entity.GetDisplacement()
+		//nextX, nextY, nextZ = p.where.X+dx, p.where.Y+dy, p.where.Z+dz
 		p.entity.ResolveImpact(p.wall.GetEntity(), nx, ny, nz)
+		// 2. Raffinamento KCC: Clip della velocità residua
+		// Impedisce che la restitution o errori di precisione facciano "staccare" il player dalle rampe
+		vx, vy, vz := p.entity.GetVelocity()
+		// Se atterriamo su un piano calpestabile (nz >= 0.7) e stiamo cadendo
+		if nz >= 0.7 && vz < 0 {
+			vz = 0 // Stop verticale immediato
+		}
+		// Proiezione del vettore velocità per scivolare sulla normale
+		newVx, newVy, newVz := p.entity.ClipVelocity(vx, vy, vz, nx, ny, nz)
+		p.entity.SetVx(newVx)
+		p.entity.SetVy(newVy)
+		p.entity.SetVz(newVz)
+		// 3. Ricalcolo del displacement finale per il frame corrente
 		dx, dy, dz = p.entity.GetDisplacement()
 		nextX, nextY, nextZ = p.where.X+dx, p.where.Y+dy, p.where.Z+dz
 	}
-
 	// 3. TRANSIZIONE DI SETTORE
 	topZ := p.getHeadHeight(nextZ) //nextZ + playerHeight
-
 	newVolume := p.sectors.SearchVolume3d(p.volume, nextX, nextY, nextZ, topZ, p.maxStep)
 	if newVolume != nil && newVolume != p.volume {
 		if p.entity.GetVz() <= 0 {
@@ -301,7 +314,6 @@ func (p *ThingPlayer) PhysicsApply() {
 		}
 		p.volume = newVolume
 	}
-
 	// 4. LIMITI TOPOLOGICI VERTICALI (Floor / Ceil Hard Clamp)
 	floorZ := p.volume.GetMinZ()
 	ceilZ := p.volume.GetMaxZ()
@@ -312,12 +324,10 @@ func (p *ThingPlayer) PhysicsApply() {
 		p.entity.ResolveImpact(p.wall.GetEntity(), 0, 0, -1)
 		nextZ = ceilZ - playerHeight // La Z torna giù lasciando lo spazio esatto per l'altezza
 	}
-
 	// 5. APPLICAZIONE FINALE
 	p.where.X, p.where.Y, p.where.Z = nextX, nextY, nextZ
 	//esegue anche il moveTo
 	p.entities.UpdateThing(p, p.where.X, p.where.Y, p.where.Z)
-
 	p.bobbing.Compute(p.entity.GetVx(), p.entity.GetVy())
 }
 

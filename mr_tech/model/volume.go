@@ -180,7 +180,6 @@ func (v *Volume) LocatePoint3d(px, py, baseZ, topZ, maxStep float64) *Volume {
 		}
 		return nil
 	}
-
 	for _, face := range v.GetFaces() {
 		neighbor := face.GetNeighbor()
 		if neighbor != nil {
@@ -273,60 +272,6 @@ func (v *Volume) ContainsPoint2d(px, py float64) bool {
 		}
 	}
 	return true
-}
-
-// CheckFacesClearance2d checks if a movement intersects any face in the volume and returns the closest obstructing face.
-func (v *Volume) CheckFacesClearance2d(viewX, viewY, pX, pY, top float64, bottom float64, radius float64) *Face {
-	moveX := pX - viewX
-	moveY := pY - viewY
-	minT := 1.0
-	var closestFace *Face = nil
-
-	for _, face := range v.faces {
-		//TODO COMPLETARE!!!!!
-		neighbor := face.GetNeighbor()
-		if neighbor != nil {
-			continue
-		}
-		start := face.GetStart()
-		end := face.GetEnd()
-		dx := end.X - start.X
-		dy := end.Y - start.Y
-		den := moveX*dy - moveY*dx
-
-		if den == 0 {
-			continue
-		}
-
-		t := ((start.X-viewX)*dy - (start.Y-viewY)*dx) / den
-		u := ((start.X-viewX)*moveY - (start.Y-viewY)*moveX) / den
-
-		uPadding := 0.0
-		if radius > 0 {
-			faceLenSq := dx*dx + dy*dy
-			if faceLenSq > 0 {
-				uPadding = radius / math.Sqrt(faceLenSq)
-			}
-		}
-
-		if t >= 0 && t <= minT && u >= -uPadding && u <= 1+uPadding {
-			holeLow := 9e9
-			holeHigh := -9e9
-
-			if neighbor != nil {
-				floorY := v.GetMinZ()
-				ceilY := v.GetMaxZ()
-				holeLow = mathematic.MaxF(floorY, neighbor.GetMinZ())
-				holeHigh = mathematic.MinF(ceilY, neighbor.GetMaxZ())
-			}
-
-			if holeHigh < top || holeLow > bottom {
-				minT = t
-				closestFace = face
-			}
-		}
-	}
-	return closestFace
 }
 
 // GetCentroid3d calculates and returns the geometric centroid of the volume based on its faces and 3D mode.

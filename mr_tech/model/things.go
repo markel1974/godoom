@@ -140,7 +140,7 @@ func (th *Things) GetActive() ([]IThing, int) {
 // - dirX, dirY, dirZ: Direction vector of the ray.
 // - maxDistance: Maximum distance the ray can travel.
 // - callback: Function invoked for each intersected object, receives the object and its distance as arguments.
-func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object physics.IAABB, distance float64) float64) {
+func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object physics.IAABB, distance float64) (float64, bool)) {
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 

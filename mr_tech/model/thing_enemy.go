@@ -67,6 +67,7 @@ func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 	t.doFire(dist3d, dist2d, dz)
 }
 
+// doJump applies a vertical and forward force to the entity if it is blocked or the target floor is higher than its current one.
 func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy float64) {
 	if t.entity.IsOnGround() {
 		vx, vy, _ := t.entity.GetVelocity()
@@ -87,6 +88,7 @@ func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy float64) {
 	}
 }
 
+// doFire enables the entity to fire a projectile if within range and off cooldown, calculating its spawn position and trajectory.
 func (t *ThingEnemy) doFire(dist3d, dist2d, dz float64) {
 	if t.fireCooldown <= 0 && dist3d < 20.0 {
 		weaponForward := t.radius * 2.0

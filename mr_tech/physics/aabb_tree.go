@@ -207,7 +207,7 @@ func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB
 // dirX, dirY, dirZ represent the direction vector of the ray.
 // maxDistance specifies the maximum distance for the ray to query.
 // callback is invoked with each intersected object and its distance, and may update the maxDistance dynamically.
-func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) float64) {
+func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) (float64, bool)) {
 	// Pre-calcolo delle inverse per la vettorizzazione dello Slab Method
 	invDirX := 1.0 / dirX
 	invDirY := 1.0 / dirY
@@ -232,9 +232,10 @@ func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance fl
 		if hit && tMin <= maxDistance {
 			if node.IsLeaf() {
 				// Segnaliamo l'oggetto e permettiamo alla logica di restringere il raggio
-				newMax := callback(node.object, tMin)
-				if newMax < maxDistance {
-					maxDistance = newMax
+				if newMax, ok := callback(node.object, tMin); ok {
+					if newMax < maxDistance {
+						maxDistance = newMax
+					}
 				}
 			} else {
 				// Push dei figli

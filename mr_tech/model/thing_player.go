@@ -122,8 +122,7 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 		fx -= p.angleSin
 		fy += p.angleCos
 	}
-	mag := math.Sqrt(fx*fx + fy*fy)
-	if mag > 0 {
+	if mag := math.Sqrt(fx*fx + fy*fy); mag > 0 {
 		const forceScale = 100.0
 		p.entity.AddForce((fx/mag)*impulse*forceScale, (fy/mag)*impulse*forceScale, 0.0)
 	}
@@ -247,16 +246,16 @@ func (p *ThingPlayer) Fire() {
 	// 2. Calcolo del vettore direzione (Radianti)
 	// Usiamo lo yaw invertito per la telecamera e lo scaliamo per il FOV
 	pitchRad := -p.yaw
-	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
-	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
+	dirX := p.angleCos * math.Cos(pitchRad)
+	dirY := p.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
 	// 3. Punto di spawn fuori dalla hitbox del player
 	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
 	weaponForward := p.GetRadius() * 2.0
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
-	// Abbassiamo leggermente l'origine per simulare la posizione dell'arma
 	spawnZ := camZ - (p.getHeadHeight() * 0.5)
+
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 	p.FireHitscan(spawnPos, dirX, dirY, dirZ)
 }

@@ -29,15 +29,12 @@ func NewThingEnemy(things *Things, cfg *config.ConfigThing, anim *textures.Anima
 }
 
 // Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
-// Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
 func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 	dx := thingX - t.pos.X
 	dy := thingY - t.pos.Y
-
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := thingZ + (t.height / 2)
 	dz := targetZ - t.pos.Z
-
 	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
 	dist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {
@@ -47,32 +44,26 @@ func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 		}
 		return
 	}
-
-	// 2. Aggiornamento timer armi (assumendo dt fisso a 1/60)
+	// Aggiornamento timer armi (assumendo dt fisso a 1/60)
 	if t.fireCooldown > 0 {
 		t.fireCooldown -= 1.0 / 60.0
 	}
-
-	// 3. Inseguimento Terrestre
+	// Inseguimento Terrestre
 	dist2d := math.Sqrt(dx*dx + dy*dy)
 	if dist2d <= 0.001 {
 		return
 	}
-
 	// Aggiorniamo l'angolo del nemico affinché lo sprite o il modello si giri verso il bersaglio
 	t.angle = math.Atan2(dy, dx)
 	invDist := 1.0 / dist2d
 	nx := dx * invDist
 	ny := dy * invDist
 	const forceScale = 100.0
-
 	// Applica forza per muoversi verso il giocatore
 	fx := nx * forceScale * t.speed
 	fy := ny * forceScale * t.speed
 	t.entity.AddForce(fx, fy, 0.0)
-
 	t.doJump(thingZ, dist2d, fx, fy)
-
 	t.doFire(dist3d, dist2d, dz)
 }
 

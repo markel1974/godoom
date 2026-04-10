@@ -165,8 +165,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	c := th.config[2]
 	id := utils.NextUUId()
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, mass, radius, radius, speed, c.Animation)
-	animation := th.animations.GetAnimation(cfg.Animation)
-	NewThingBullet(th, cfg, animation, volume, pitch)
+	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)
 }
 
 // UpdateThing updates the position of the specified IThing in the entity manager and updates its spatial location in the tree.

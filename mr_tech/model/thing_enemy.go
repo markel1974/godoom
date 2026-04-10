@@ -58,17 +58,18 @@ func (t *ThingEnemy) Compute(thingX float64, thingY float64, thingZ float64) {
 	invDist := 1.0 / dist2d
 	nx := dx * invDist
 	ny := dy * invDist
-	const forceScale = 100.0
+	const forceScale = 450.0
 	// Applica forza per muoversi verso il giocatore
-	fx := nx * forceScale * t.speed
-	fy := ny * forceScale * t.speed
+	fx := nx * t.speed * forceScale
+	fy := ny * t.speed * forceScale
+	fz := t.speed * forceScale
 	t.entity.AddForce(fx, fy, 0.0)
-	t.doJump(thingZ, dist2d, fx, fy)
+	t.doJump(thingZ, dist2d, fx, fy, fz)
 	t.doFire(dist3d, dist2d, dz)
 }
 
 // doJump applies a vertical and forward force to the entity if it is blocked or the target floor is higher than its current one.
-func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy float64) {
+func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy, fz float64) {
 	if t.entity.IsOnGround() {
 		vx, vy, _ := t.entity.GetVelocity()
 		speedSq := (vx * vx) + (vy * vy)
@@ -79,7 +80,7 @@ func (t *ThingEnemy) doJump(thingZ, dist2d, fx, fy float64) {
 		playerIsHigher := floorDz > t.maxStep && dist2d < 20.0
 		if isBlocked || playerIsHigher {
 			// Impulso Z (Regola il 400.0 in base alla gravità e al peso del demone)
-			t.entity.AddForce(0.0, 0.0, t.mass*1000)
+			t.entity.AddForce(0.0, 0.0, fz)
 			// FONDAMENTALE: Svincola dall'attrito radente nel frame di stacco!
 			t.entity.SetOnGround(false)
 			// Bonus "Balzo": diamo un'extra spinta in avanti per aiutare a scavalcare i gap
@@ -99,6 +100,6 @@ func (t *ThingEnemy) doFire(dist3d, dist2d, dz float64) {
 		aimPitch := math.Atan2(dz, dist2d)
 		t.LaunchObject(bulletPos, t.angle, aimPitch)
 		// Resetta il timer
-		t.fireCooldown = 1.5
+		t.fireCooldown = 5
 	}
 }

@@ -123,7 +123,7 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 		fy += p.angleCos
 	}
 	if mag := math.Sqrt(fx*fx + fy*fy); mag > 0 {
-		const forceScale = 100.0
+		forceScale := 600.0
 		p.entity.AddForce((fx/mag)*impulse*forceScale, (fy/mag)*impulse*forceScale, 0.0)
 	}
 }

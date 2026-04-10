@@ -12,7 +12,7 @@ const (
 	gForce = 9.8
 
 	// vMin represents the minimum velocity threshold below which motion is considered negligible.
-	vMin = 0.001
+	vMin = 0.1
 
 	// minThickness represents the minimum allowable thickness value to prevent calculations with near-zero dimensions.
 	minThickness = 0.01
@@ -338,6 +338,21 @@ func (e *Entity) AddForce(fx, fy, fz float64) {
 	e.ax += fx * e.invMass
 	e.ay += fy * e.invMass
 	e.az += fz * e.invMass
+	//if e.az > 0 {
+	//	e.SetOnGround(false)
+	//}
+	/*
+		// Clamp radiale della magnitudo massima dell'accelerazione
+		// Il limite (es. 10000.0) andrebbe preferibilmente parametrizzato nella struct Entity
+		const maxAccSq = 10000.0 * 10000.0
+		accSq := e.ax*e.ax + e.ay*e.ay + e.az*e.az
+		if accSq > maxAccSq {
+			scale := math.Sqrt(maxAccSq / accSq)
+			e.ax *= scale
+			e.ay *= scale
+			e.az *= scale
+		}
+	*/
 }
 
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
@@ -346,8 +361,8 @@ func (e *Entity) Update() bool {
 	e.vy += e.ay * e.dt
 	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
 
-	e.vx *= e.dampingActive
-	e.vy *= e.dampingActive
+	e.vx *= e.dampingGround //e.dampingActive
+	e.vy *= e.dampingGround //e.dampingActive
 	e.vz *= e.dampingAir
 	// SLEEP PLANARE Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
 	if math.Abs(e.vx) < e.vMin {

@@ -53,7 +53,7 @@ func NewThingBase(things *Things, cfg *config.ConfigThing, pos geometry.XYZ, ani
 		volumes:    volumes,
 		things:     things,
 		maxStep:    cfg.Height * 0.5,
-		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.9),
+		entity:     physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2),
 		isActive:   true,
 		identifier: -1,
 		wall:       NewThingWall(volumes, 0, 0),

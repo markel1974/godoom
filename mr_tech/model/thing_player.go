@@ -90,8 +90,12 @@ func (p *ThingPlayer) GetAngle() (float64, float64) {
 
 // SetYaw adjusts the yawState and yaw of the ThingPlayer based on the input value and current velocity.
 func (p *ThingPlayer) SetYaw(y float64) {
+	//p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
+	//p.yaw = p.yawState - (p.entity.GetVz() * 0.5)
 	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), -5, 5)
-	p.yaw = p.yawState - (p.entity.GetVz() * 0.5)
+
+	// Svincolamento totale dalla fisica: lo sguardo è assoluto
+	p.yaw = p.yawState
 }
 
 func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
@@ -124,7 +128,7 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 
 // SetJump modifies the player's vertical velocity to simulate a jump and marks the player as falling.
 func (p *ThingPlayer) SetJump() {
-	p.entity.AddForce(0.0, 0.0, 100)
+	p.entity.AddForce(0.0, 0.0, 400)
 }
 
 // SetDucking toggles the ducking state of the ThingPlayer and sets falling to true if ducking becomes active.

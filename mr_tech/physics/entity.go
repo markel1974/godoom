@@ -9,7 +9,7 @@ import (
 const (
 	airFriction = 0.99
 
-	gForce = 2.0
+	gForce = 9.8
 
 	// vMin represents the minimum velocity threshold below which motion is considered negligible.
 	vMin = 0.001

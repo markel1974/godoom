@@ -6,20 +6,26 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// vMin represents the minimum velocity threshold below which planar movement is considered negligible and set to zero.
-const vMin = 0.001
+const (
+	airFriction = 0.99
 
-// minThickness defines the minimum allowable thickness for specific calculations to ensure stability and prevent errors.
-const minThickness = 0.01
+	gForce = 2.0
 
-// safetyMargin is a constant representing the safety factor to adjust calculations, typically used for threshold or limit scaling.
-const safetyMargin float64 = 0.90
+	// vMin represents the minimum velocity threshold below which motion is considered negligible.
+	vMin = 0.001
 
-// dt60 represents a constant time step of 1/60th of a second, commonly used in simulation or frame-based systems.
-const dt60 float64 = 1.0 / 60.0
+	// minThickness represents the minimum allowable thickness value to prevent calculations with near-zero dimensions.
+	minThickness = 0.01
 
-// dt120 represents the fractional value equivalent to the reciprocal of 120 as a float64 constant.
-const dt120 float64 = 1.0 / 120.0
+	// safetyMargin defines a proportional buffer value, typically used to ensure numerical stability in calculations.
+	safetyMargin float64 = 0.90
+
+	// dt60 represents the fixed time step duration in seconds, commonly used for 60 frames per second simulations.
+	dt60 float64 = 1.0 / 60.0
+
+	// dt120 represents the fixed time step duration equivalent to 1/120th of a second.
+	dt120 float64 = 1.0 / 120.0
+)
 
 // Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
 type Entity struct {
@@ -55,28 +61,25 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
 	}
+	invMass := 0.0
+	if mass <= 0.0 {
+		mass = 0.0
+	} else {
+		invMass = 1.0 / mass
+	}
 	a := &Entity{
 		id:               utils.NextUUId(),
 		rect:             NewRect(x, y, w, h, z, d),
-		mass:             0.0,
-		invMass:          0.0,
-		vx:               0.0,
-		vy:               0.0,
-		gForce:           0.2,
+		gForce:           gForce,
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,
 		dt:               dt60,
+		mass:             mass,
+		invMass:          invMass,
 		restitution:      restitution,
 	}
-	if mass <= 0.0 {
-		a.mass = 0.0
-		a.invMass = 0.0
-	} else {
-		a.mass = mass
-		a.invMass = 1.0 / a.mass
-	}
 	a.SetFriction(friction)
-	a.SetAirFriction(0.98)
+	a.SetAirFriction(airFriction)
 	a.SetMaxVelocity(minThickness, safetyMargin)
 	a.SetOnGround(true)
 	return a

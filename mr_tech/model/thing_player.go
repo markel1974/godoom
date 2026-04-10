@@ -130,10 +130,16 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 }
 
 // SetJump applies an upward force to make the ThingPlayer jump.
-func (p *ThingPlayer) SetJump() {
-	p.entity.AddForce(0.0, 0.0, 400)
-	p.entity.SetOnGround(false)
-	p.bobbing.InjectVerticalImpulse(-1.5)
+func (p *ThingPlayer) SetJump(multi bool) {
+	onGround := true
+	if !multi {
+		onGround = p.entity.IsOnGround()
+	}
+	if onGround {
+		p.entity.AddForce(0.0, 0.0, 400)
+		p.entity.SetOnGround(false)
+		p.bobbing.InjectVerticalImpulse(-1.5)
+	}
 }
 
 // SetDucking toggles the player's ducking state between true and false.

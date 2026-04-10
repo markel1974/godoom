@@ -175,8 +175,11 @@ func (w *Render) doRun() {
 		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
 			w.doPlayerDuckingToggle()
 		}
-		if w.win.JustPressed(pixels.KeySpace) || w.win.Pressed(pixels.MouseButton1) {
-			w.doPlayerJump()
+		if w.win.JustPressed(pixels.KeySpace) {
+			w.doPlayerJump(false)
+		}
+		if w.win.Pressed(pixels.MouseButton1) {
+			w.doPlayerJump(true)
 		}
 		if w.win.JustPressed(pixels.Key8) {
 			w.doDebug(0)
@@ -288,8 +291,8 @@ func (w *Render) doPlayerDuckingToggle() {
 }
 
 // doPlayerJump triggers the player's jump behavior by calling the appropriate method on the player instance.
-func (w *Render) doPlayerJump() {
-	w.player.SetJump()
+func (w *Render) doPlayerJump(multi bool) {
+	w.player.SetJump(multi)
 }
 
 // doPlayerMoves handles movement for the player based on the directional and speed inputs provided.

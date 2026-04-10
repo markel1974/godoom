@@ -209,8 +209,11 @@ func (w *RenderOpenGL) doRun() {
 		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
 			w.doPlayerDuckingToggle()
 		}
-		if w.win.JustPressed(pixels.KeySpace) || w.win.Pressed(pixels.MouseButton1) {
-			w.doPlayerJump()
+		if w.win.JustPressed(pixels.KeySpace) {
+			w.doPlayerJump(false)
+		}
+		if w.win.Pressed(pixels.MouseButton1) {
+			w.doPlayerJump(true)
 		}
 		if w.win.JustPressed(pixels.KeyM) {
 			mouseConnected = !mouseConnected
@@ -240,7 +243,7 @@ func (w *RenderOpenGL) doPlayerFire() {
 func (w *RenderOpenGL) doPlayerDuckingToggle() { w.player.SetDucking() }
 
 // doPlayerJump triggers the player's jump action by invoking the SetJump method on the player instance.
-func (w *RenderOpenGL) doPlayerJump() { w.player.SetJump() }
+func (w *RenderOpenGL) doPlayerJump(multi bool) { w.player.SetJump(multi) }
 
 // doPlayerMoves moves the player based on the provided impulse and directional flags (up, down, left, right).
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {

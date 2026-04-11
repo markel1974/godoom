@@ -171,8 +171,11 @@ func (th *Things) createThing(ct *config.ConfigThing) (IThing, error) {
 // CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
 func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, mass, radius, speed float64) {
 	//TODO now is an hack
-	//test zero index
-	c := th.config[2]
+	const ammoIndex = 2
+	if len(th.config) <= ammoIndex {
+		return
+	}
+	c := th.config[ammoIndex]
 	id := utils.NextUUId()
 	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
 	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)

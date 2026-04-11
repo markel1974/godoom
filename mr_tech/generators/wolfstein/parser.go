@@ -61,6 +61,7 @@ func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 
 // Parse constructs a ConfigRoot by processing a map grid of given dimensions and metadata, generating sectors and objects.
 func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot, error) {
+	const useEnemy = true
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
 	}
@@ -68,7 +69,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	if tErr != nil {
 		return nil, tErr
 	}
-	player := &config.ConfigPlayer{}
+	player := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 0}, 0, 8, 4, 20)
 	root := config.NewConfigRoot(nil, player, nil, 1.0, false, texProvider)
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
@@ -109,8 +110,10 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
 				const scaleH = 0.08
 				anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleH, scaleH*2)
-				thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
-				root.Things = append(root.Things, thing)
+				if useEnemy {
+					thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
+					root.Things = append(root.Things, thing)
+				}
 				cell = 0 // Libera la cella per il compilatore topologico
 			}
 			const falloff = 10.0

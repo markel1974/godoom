@@ -329,7 +329,7 @@ func (w *Render) doDebug(next int) {
 	}
 	w.debug = true
 	idx := w.debugIdx + next
-	if idx < 0 || idx >= w.engine.Len() {
+	if idx < 0 || idx >= w.engine.PortalLen() {
 		return
 	}
 	w.debugIdx = idx
@@ -369,7 +369,7 @@ func (w *Render) doDebugMoveSector(forward bool) {
 
 // drawStub renders the debug sector if the current debug index is within the range of available sectors.
 func (w *Render) drawStub() {
-	if w.debugIdx >= 0 && w.debugIdx < w.engine.Len() {
+	if w.debugIdx >= 0 && w.debugIdx < w.engine.PortalLen() {
 		sector := w.engine.PortalVolumeAt(w.debugIdx)
 		w.RenderSector(sector)
 	}

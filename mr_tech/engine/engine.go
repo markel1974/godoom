@@ -17,6 +17,7 @@ type Engine struct {
 	player     *model.ThingPlayer
 	volumes    *model.Volumes
 	lights     *model.Lights
+	full3d     bool
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -29,6 +30,7 @@ func NewEngine(maxQueue int, viewFactor float64) *Engine {
 		volumes:    nil,
 		player:     nil,
 		lights:     nil,
+		full3d:     false,
 	}
 }
 
@@ -47,6 +49,11 @@ func (e *Engine) GetThings() *model.Things {
 	return e.things
 }
 
+// HasFull3d checks if the engine operates in full 3D mode and returns true if enabled.
+func (e *Engine) HasFull3d() bool {
+	return e.full3d
+}
+
 // GetLights retrieves the list of light sources currently managed by the engine.
 func (e *Engine) GetLights() *model.Lights {
 	return e.lights
@@ -54,6 +61,9 @@ func (e *Engine) GetLights() *model.Lights {
 
 // PortalVolumeAt returns the volume at the specified index from the portal within the engine.
 func (e *Engine) PortalVolumeAt(idx int) *model.Volume {
+	if e.portal == nil {
+		return nil
+	}
 	return e.portal.VolumeAt(idx)
 }
 
@@ -67,8 +77,11 @@ func (e *Engine) QueryMultiFrustum(front, rear *physics.Frustum, callback func(o
 	e.volumes.QueryMultiFrustum(front, rear, callback)
 }
 
-// Len returns the number of volumes currently managed by the Engine.
-func (e *Engine) Len() int {
+// PortalLen returns the number of volumes currently managed by the Engine.
+func (e *Engine) PortalLen() int {
+	if e.portal == nil {
+		return 0
+	}
 	return e.portal.Len()
 }
 
@@ -78,14 +91,19 @@ func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	if err := compiler.Compile(cfg); err != nil {
 		return err
 	}
-	e.volumes = compiler.GetVolumes()
 	e.player = compiler.GetPlayer()
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
-
-	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-	if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
-		return err
+	e.full3d = cfg.Full3d
+	if e.full3d {
+		e.volumes = compiler.GetVolumes3d()
+		e.portal = nil
+	} else {
+		e.volumes = compiler.GetVolumes()
+		e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
+		if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

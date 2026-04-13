@@ -28,6 +28,7 @@ func main() {
 	var showHelp bool
 	var showVersion bool
 	var softwareRender bool
+	var full3d bool
 	var mode int
 	var level int
 	var width int
@@ -37,6 +38,7 @@ func main() {
 	flag.BoolVar(&showHelp, "h", false, "show this help")
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.BoolVar(&softwareRender, "s", false, "enable software renderer")
+	flag.BoolVar(&full3d, "d", false, "show this help")
 	flag.IntVar(&mode, "m", 2, "mode 0 = legacy, 1 = Generate, 2 = Doom")
 	flag.IntVar(&level, "l", 1, "level number")
 	flag.IntVar(&width, "width", 640, "width")
@@ -66,7 +68,6 @@ func main() {
 		cfg, err = wb.Setup(wadFile, level)
 	case 3:
 		cfg, err = wolfstein.CreateLevel(level)
-
 	case 4:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder(0) //wad.NewBuilderNew()
@@ -79,7 +80,9 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-
+	if full3d {
+		cfg.Full3d = true
+	}
 	en := engine.NewEngine(maxQueue, 3.0)
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)

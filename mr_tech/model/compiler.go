@@ -99,6 +99,11 @@ func (r *Compiler) GetVolumes() *Volumes {
 	return r.volumes
 }
 
+// GetVolumes3d returns the 3D volumes instance managed by the Compiler.
+func (r *Compiler) GetVolumes3d() *Volumes {
+	return r.volumes3d
+}
+
 // GetPlayer returns the player object associated with the compiler instance.
 func (r *Compiler) GetPlayer() *ThingPlayer {
 	return r.player

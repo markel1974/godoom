@@ -29,7 +29,7 @@ type BuilderVolume struct {
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
-	return &BuilderVolume{
+	bv := &BuilderVolume{
 		tex:         tex,
 		dcRender:    NewDrawCommandsRender(),
 		fv:          NewFrameVertices(startBatchVertices),
@@ -41,6 +41,8 @@ func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVol
 		cSky:        nil,
 		calibration: calibration,
 	}
+
+	return bv
 }
 
 // GetVerticesStride returns the byte stride of the vertex data as an int32 by delegating to the underlying FrameVertices.

@@ -74,6 +74,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 	// Inizializzazione ConfigRoot con il riferimento al gestore texture popolato
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 8, 4, 20)
 	root := config.NewConfigRoot(nil, player, nil, p.scale, true, p.texManager)
+	root.Full3d = true
 
 	// 3. Parsing delle Entità (Luci, Player, Monsters)
 	for _, ent := range entities {

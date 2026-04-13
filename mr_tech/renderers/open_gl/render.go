@@ -48,10 +48,10 @@ type RenderOpenGL struct {
 	tex             *Textures
 	builder         IBuilder
 	enableClear     bool
-	builderScene    *BuilderScene
-	builderTraverse *BuilderTraverse
+	builders        []IBuilder
 	startWidth      int32
 	startHeight     int32
+	buildersCounter int
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
@@ -96,9 +96,14 @@ func (w *RenderOpenGL) doInitialize() error {
 		w.win.Begin()
 		calibration := w.engine.GetCalibration()
 		w.tex = NewTextures()
-		w.builderScene = NewBuilderScene(w.tex)
-		w.builderTraverse = NewBuilderTraverse(w.tex, calibration)
-		w.builder = w.builderTraverse
+		w.buildersCounter = 0
+		if w.engine.HasFull3d() {
+			w.builder = NewBuilderVolume(w.tex, calibration)
+			w.builders = append(w.builders, w.builder)
+		} else {
+			w.builder = NewBuilderTraverse(w.tex, calibration)
+			w.builders = append(w.builders, w.builder, NewBuilderScene(w.tex))
+		}
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		w.shaders = NewShaders()
@@ -224,11 +229,9 @@ func (w *RenderOpenGL) doRun() {
 			w.shaders.ToggleShadows()
 		}
 		if w.win.JustPressed(pixels.KeyT) {
-			if w.builder == w.builderScene {
-				w.builder = w.builderTraverse
-			} else {
-				w.builder = w.builderScene
-			}
+			w.buildersCounter++
+			index := w.buildersCounter % (len(w.builders))
+			w.builder = w.builders[index]
 		}
 		w.win.UpdateInputAndSwap()
 	}

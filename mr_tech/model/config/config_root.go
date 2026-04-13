@@ -17,6 +17,7 @@ type ConfigRoot struct {
 	Vertices    geometry.Polygon `json:"vertices"`
 	Volumes     []*ConfigVolume  `json:"volumes"`
 	Lights      []*ConfigLight   `json:"lights"`
+	Full3d      bool             `json:"full3d"`
 	textures    textures.ITextures
 }
 

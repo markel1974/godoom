@@ -173,34 +173,19 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-/*
-// LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
-func (v *Volume) LocatePoint2d(px, py float64) *Volume {
-	curr := v
-	const maxSteps = 16
-	for step := 0; step < maxSteps; step++ {
-		inside := true
-		for _, face := range curr.faces {
-			start := face.GetStart()
-			end := face.GetEnd()
-			if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
-				neighbor := face.GetNeighbor()
-				if neighbor == nil {
-					return nil
-				}
-				curr = neighbor
-				inside = false
-				break
+func (v *Volume) LocatePoint3d(px, py, pz float64) *Volume {
+	if v.ContainsPoint3d(px, py, pz) {
+		return v
+	}
+	for _, face := range v.GetFaces() {
+		if neighbor := face.GetNeighbor(); neighbor != nil {
+			if neighbor.ContainsPoint3d(px, py, pz) {
+				return neighbor
 			}
-		}
-		if inside {
-			return curr
 		}
 	}
 	return nil
 }
-
-*/
 
 // LocatePoint2d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
 func (v *Volume) LocatePoint2d(px, py float64) *Volume {
@@ -217,34 +202,15 @@ func (v *Volume) LocatePoint2d(px, py float64) *Volume {
 	return nil
 }
 
-// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the volume, considering maxStep.
-func (v *Volume) IsValidZ(baseZ, topZ, maxStep float64) bool {
-	minZ := v.GetMinZ()
-	maxZ := v.GetMaxZ()
-	// 1. Gestione soffitti a cielo aperto
-	if maxZ <= minZ {
-		maxZ = math.MaxFloat64
-	}
-	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
-	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
-	if baseZ+maxStep < minZ {
-		return false
-	}
-	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
-	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
-	expectedBase := math.Max(baseZ, minZ)
-	entityHeight := topZ - baseZ
-	if expectedBase+entityHeight > maxZ {
-		return false
-	}
-	return true
-}
-
 // ContainsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
 func (v *Volume) ContainsPoint3d(px, py, pz float64) bool {
 	// Validazione dei limiti Z per volumi estrusi (2.5D)
-	if v.hasZ && (pz < v.minZ || pz > v.maxZ) {
-		return false
+	if v.hasZ {
+		//TODO IMPLEMENT Z MARGIN!
+		//if pz < v.minZ || pz > v.maxZ {
+		//	return false
+		//}
+		return v.ContainsPoint2d(px, py)
 	}
 
 	for _, face := range v.faces {
@@ -315,3 +281,32 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 		Z: floorY,
 	}
 }
+
+/*
+// LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
+func (v *Volume) LocatePoint2d(px, py float64) *Volume {
+	curr := v
+	const maxSteps = 16
+	for step := 0; step < maxSteps; step++ {
+		inside := true
+		for _, face := range curr.faces {
+			start := face.GetStart()
+			end := face.GetEnd()
+			if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
+				neighbor := face.GetNeighbor()
+				if neighbor == nil {
+					return nil
+				}
+				curr = neighbor
+				inside = false
+				break
+			}
+		}
+		if inside {
+			return curr
+		}
+	}
+	return nil
+}
+
+*/

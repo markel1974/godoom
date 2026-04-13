@@ -187,7 +187,11 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	}
 	// volume transition (3d portals)
 	topZ := pZ + tHeight
-	newVolume := t.volumes.SearchVolume3d(t.volume, pX, pY, pZ, topZ, t.maxStep)
+	newVolume := t.volume.LocatePoint3d(pX, pY, pZ)
+	if newVolume == nil {
+		newVolume = t.volumes.QueryPoint3d(pX, pY, pZ)
+	}
+	newVolume = isValidZ(newVolume, pZ, topZ, t.maxStep)
 	if newVolume != nil && newVolume != t.volume {
 		if t.entity.GetVz() <= 0 {
 			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
@@ -276,6 +280,32 @@ func (t *ThingBase) FireHitscan(pos geometry.XYZ, dirX, dirY, dirZ float64) {
 		}
 		t.spawnBulletHole(impactX, impactY, impactZ, closestObj)
 	}
+}
+
+// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the volume, considering maxStep.
+func isValidZ(volume *Volume, baseZ, topZ, maxStep float64) *Volume {
+	if volume == nil {
+		return nil
+	}
+	minZ := volume.GetMinZ()
+	maxZ := volume.GetMaxZ()
+	// 1. Gestione soffitti a cielo aperto
+	if maxZ <= minZ {
+		maxZ = math.MaxFloat64
+	}
+	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
+	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
+	if baseZ+maxStep < minZ {
+		return nil
+	}
+	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
+	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
+	expectedBase := math.Max(baseZ, minZ)
+	entityHeight := topZ - baseZ
+	if expectedBase+entityHeight > maxZ {
+		return nil
+	}
+	return volume
 }
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.

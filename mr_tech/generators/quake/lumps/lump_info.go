@@ -3,6 +3,7 @@ package lumps
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -80,12 +81,12 @@ func getLumpName(index int) string {
 }
 
 // NewLumpInfos reads and parses header information from the given file, returning a slice of LumpInfo structs.
-func NewLumpInfos(f *os.File) ([]*LumpInfo, error) {
-	if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+func NewLumpInfos(rs io.ReadSeeker) ([]*LumpInfo, error) {
+	if _, err := rs.Seek(0, os.SEEK_SET); err != nil {
 		return nil, err
 	}
 	header := &Header{}
-	if err := binary.Read(f, binary.LittleEndian, header); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, header); err != nil {
 		return nil, err
 	}
 	if header.Version != 29 {

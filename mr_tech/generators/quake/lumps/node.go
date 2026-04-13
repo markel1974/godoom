@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -18,14 +18,15 @@ type Node struct {
 }
 
 // NewNodes reads node data from the provided file and returns a slice of pointers to Node structures.
-func NewNodes(f *os.File, lumpInfo *LumpInfo) ([]*Node, error) {
-	// Assicurati che il file point sia stato settato con Seek(lumpInfo.Filepos)
-
+func NewNodes(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Node, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pNode Node
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pNode))
 	pNodes := make([]Node, count)
 
-	if err := binary.Read(f, binary.LittleEndian, pNodes); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, pNodes); err != nil {
 		return nil, err
 	}
 

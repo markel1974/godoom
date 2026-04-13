@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -15,26 +15,21 @@ type Vertex struct {
 }
 
 // NewVertexes reads vertex data from the given file and lump information and returns an array of vertex pointers or an error.
-func NewVertexes(f *os.File, lumpInfo *LumpInfo) ([]*Vertex, error) {
-	// IMPORTANTE: Assicurarsi che il chiamante (il parser BSP) abbia già fatto
-	// il Seek all'offset corretto indicato dal lumpInfo prima di chiamare questa funzione!
-
+func NewVertexes(r io.ReadSeeker, lumpInfo *LumpInfo) ([]*Vertex, error) {
+	if err := Seek(r, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pVertex Vertex
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pVertex))
 	pVertexes := make([]Vertex, count)
 
-	if err := binary.Read(f, binary.LittleEndian, pVertexes); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, pVertexes); err != nil {
 		return nil, err
 	}
 
 	vertexes := make([]*Vertex, count)
 	for idx, v := range pVertexes {
-		// Ricreiamo i puntatori proprio come facevi per Doom
-		vertexes[idx] = &Vertex{
-			X: v.X,
-			Y: v.Y,
-			Z: v.Z,
-		}
+		vertexes[idx] = &Vertex{X: v.X, Y: v.Y, Z: v.Z}
 	}
 	return vertexes, nil
 }

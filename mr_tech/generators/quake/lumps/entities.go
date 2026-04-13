@@ -3,8 +3,7 @@ package lumps
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"strings"
+	"io"
 )
 
 // Entity represents a collection of properties, where each property is a key-value pair formatted as strings.
@@ -13,16 +12,16 @@ type Entity struct {
 }
 
 // NewEntities parses entity data from a lump in a file and returns a list of entities or an error if parsing fails.
-func NewEntities(f *os.File, lumpInfo *LumpInfo) ([]*Entity, error) {
-	if _, err := f.Seek(lumpInfo.Filepos, os.SEEK_SET); err != nil {
+func NewEntities(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Entity, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}
 	data := make([]byte, lumpInfo.Size)
-	if _, err := f.Read(data); err != nil {
+	if _, err := rs.Read(data); err != nil {
 		return nil, err
 	}
 	// Quake text lumps sono spesso null-terminated o con garbage alla fine
-	text := strings.TrimRight(string(data), "\x00")
+	text := FromNullTerminatingString(data)
 	return parseEntityText(text)
 }
 

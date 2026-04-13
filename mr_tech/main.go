@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/markel1974/godoom/mr_tech/engine"
+	"github.com/markel1974/godoom/mr_tech/generators/quake"
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
@@ -65,6 +66,11 @@ func main() {
 		cfg, err = wb.Setup(wadFile, level)
 	case 3:
 		cfg, err = wolfstein.CreateLevel(level)
+
+	case 4:
+		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
+		wb := quake.NewBuilder(0) //wad.NewBuilderNew()
+		cfg, err = wb.Setup(quakeFile, level)
 	default:
 		cfg, err = world.Generate()
 	}

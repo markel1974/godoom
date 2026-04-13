@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -18,11 +18,14 @@ type Leaf struct {
 }
 
 // NewLeaves reads and parses lump data from a file into a slice of Leaf pointers based on the provided LumpInfo meta information.
-func NewLeaves(f *os.File, lumpInfo *LumpInfo) ([]*Leaf, error) {
+func NewLeaves(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Leaf, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pLeaf Leaf
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pLeaf))
 	pLeaves := make([]Leaf, count)
-	if err := binary.Read(f, binary.LittleEndian, pLeaves); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, pLeaves); err != nil {
 		return nil, err
 	}
 	leaves := make([]*Leaf, count)

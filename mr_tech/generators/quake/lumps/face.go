@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -19,7 +19,7 @@ type Face struct {
 
 // NewFace reads face data from the provided file and converts it to a slice of Face structs based on lump metadata.
 // Returns a slice of Face structs or an error if reading or parsing fails.
-func NewFace(f *os.File, lumpInfo *LumpInfo) ([]*Face, error) {
+func NewFace(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Face, error) {
 	type privateFace struct {
 		PlaneID    uint16
 		Side       uint16
@@ -29,13 +29,16 @@ func NewFace(f *os.File, lumpInfo *LumpInfo) ([]*Face, error) {
 		LightTypes [4]uint8
 		Lightmap   int32
 	}
-	var pFace privateFace
-	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pFace))
-	pSectors := make([]privateFace, count, count)
-	if err := binary.Read(f, binary.LittleEndian, pSectors); err != nil {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}
-	sectors := make([]*Face, count, count)
+	var pFace privateFace
+	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pFace))
+	pSectors := make([]privateFace, count)
+	if err := binary.Read(rs, binary.LittleEndian, pSectors); err != nil {
+		return nil, err
+	}
+	sectors := make([]*Face, count)
 	for idx, p := range pSectors {
 		sectors[idx] = &Face{
 			PlaneID:    p.PlaneID,

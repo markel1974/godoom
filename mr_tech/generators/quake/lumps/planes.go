@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -14,12 +14,15 @@ type Plane struct {
 }
 
 // NewPlanes reads and parses plane data from the given file based on the provided lump information.
-func NewPlanes(f *os.File, lumpInfo *LumpInfo) ([]*Plane, error) {
+func NewPlanes(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Plane, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pPlane Plane
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pPlane))
 	pPlanes := make([]Plane, count)
 
-	if err := binary.Read(f, binary.LittleEndian, pPlanes); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, pPlanes); err != nil {
 		return nil, err
 	}
 

@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -13,11 +13,14 @@ type Edge struct {
 }
 
 // NewEdges reads and parses the edges lump data from a file.
-func NewEdges(f *os.File, lumpInfo *LumpInfo) ([]*Edge, error) {
+func NewEdges(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Edge, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pEdge Edge
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pEdge))
 	pEdges := make([]Edge, count)
-	if err := binary.Read(f, binary.LittleEndian, pEdges); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, pEdges); err != nil {
 		return nil, err
 	}
 	edges := make([]*Edge, count)

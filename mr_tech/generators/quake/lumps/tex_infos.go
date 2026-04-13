@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -14,11 +14,14 @@ type TexInfo struct {
 }
 
 // NewTexInfos reads texture information from the provided file based on lump metadata and returns a slice of TexInfo pointers.
-func NewTexInfos(f *os.File, lumpInfo *LumpInfo) ([]*TexInfo, error) {
+func NewTexInfos(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*TexInfo, error) {
+	if err := Seek(rs, lumpInfo.Filepos); err != nil {
+		return nil, err
+	}
 	var pTexInfo TexInfo
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pTexInfo))
 	pTexInfos := make([]TexInfo, count)
-	if err := binary.Read(f, binary.LittleEndian, pTexInfos); err != nil {
+	if err := binary.Read(rs, binary.LittleEndian, pTexInfos); err != nil {
 		return nil, err
 	}
 	texInfos := make([]*TexInfo, count)

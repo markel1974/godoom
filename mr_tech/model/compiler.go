@@ -37,21 +37,13 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	if scale < 1 {
 		scale = 1
 	}
-
 	animations := NewAnimations(cfg.GetTextures())
-
-	r.volumes, totalSegments = r.compile2d(cfg, animations)
-
-	cfg.Player.Position.Scale(scale)
-
-	for _, t := range cfg.Things {
-		t.Position.Scale(scale)
-	}
-
-	for _, t := range cfg.Lights {
-		t.Pos.Scale(scale)
-	}
-
+	volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+	upgraded3d := r.upgrade3d(volumes2d)
+	volumes3d := r.compile3d(cfg.Volumes, animations)
+	volumes3d = append(volumes3d, upgraded3d...)
+	r.volumes3d = NewVolumes(volumes3d)
+	r.volumes = NewVolumes(volumes2d)
 	for _, sect := range r.volumes.GetVolumes() {
 		//legacy lights scale
 		sect.Light.pos.Scale(scale)
@@ -60,11 +52,13 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		}
 	}
 
-	//after scaling
-
-	r.volumes3d = r.upgrade3d(r.volumes)
-
-	var err error
+	cfg.Player.Position.Scale(scale)
+	for _, t := range cfg.Things {
+		t.Position.Scale(scale)
+	}
+	for _, t := range cfg.Lights {
+		t.Pos.Scale(scale)
+	}
 
 	r.volumes.CreateTree()
 
@@ -110,7 +104,7 @@ func (r *Compiler) GetLights() *Lights {
 }
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
+func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.ConfigSector, anim *Animations) []*Volume {
 	modelSectorId := 0
 	var container []*Volume
 	totalPolygons := 0
@@ -118,9 +112,9 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 	facesTree := physics.NewAABBTree(1024)
 	emptyAnim := anim.GetAnimation(nil)
 	ve := NewVertexEdges(0.001)
-	ve.Construct(cfg.Vertices, cfg.Sectors)
+	ve.Construct(vertices, css)
 
-	for csIdx, cs := range cfg.Sectors {
+	for csIdx, cs := range css {
 		if len(cs.Segments) == 0 {
 			continue
 		}
@@ -211,7 +205,7 @@ func (r *Compiler) compile2d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 			face.SetNeighbor(nil)
 		}
 	}
-	return NewVolumes(container), totalPolygons
+	return container
 }
 
 // compileLights processes a list of configuration light positions and returns a slice of initialized Light objects.
@@ -310,6 +304,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)
 				}
+				addLight(cVolume, intensity, falloff, cVolume.Light.kind, gc)
 			}
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
@@ -320,13 +315,12 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 }
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
-func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes, int) {
+func (r *Compiler) compile3d(volumes []*config.ConfigVolume, anim *Animations) []*Volume {
 	var container []*Volume
 	var fixFaces []*Face
-	totalPolygons := 0
 	modelSectorId := 0
 	facesTree := physics.NewAABBTree(1024)
-	for _, cv := range cfg.Volumes {
+	for _, cv := range volumes {
 		// cv.Id e cv.Tag provengono dal parser BSP
 		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
 		modelSectorId++
@@ -344,7 +338,6 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)
 				facesTree.InsertObject(face)
-				totalPolygons++
 			}
 		}
 		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
@@ -394,18 +387,18 @@ func (r *Compiler) compile3d(cfg *config.ConfigRoot, anim *Animations) (*Volumes
 			face.SetNeighbor(bestNeighborFace.GetParent())
 		}
 	}
-	return NewVolumes(container), totalPolygons
+	return container
 }
 
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
-func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
+func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 	var volumes3d []*Volume
 
 	// Mappa di traduzione: *Volume 2D -> *Volume 3D
 	volMap := make(map[*Volume]*Volume)
 
 	// 1. Prima Passata: Generazione della topologia solida
-	for _, vol2d := range vols2d.GetVolumes() {
+	for _, vol2d := range vols2d {
 		id := fmt.Sprintf("%s_3d", vol2d.GetId())
 		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
 		if vol2d.Light != nil {
@@ -444,7 +437,7 @@ func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
 	}
 
 	// 2. Seconda Passata: Link delle adiacenze (Portali)
-	for idx, vol2d := range vols2d.GetVolumes() {
+	for idx, vol2d := range vols2d {
 		vol3d := volumes3d[idx]
 		faces2d := vol2d.GetFaces()
 		faces3d := vol3d.GetFaces()
@@ -458,6 +451,5 @@ func (r *Compiler) upgrade3d(vols2d *Volumes) *Volumes {
 			}
 		}
 	}
-
-	return NewVolumes(volumes3d)
+	return volumes3d
 }

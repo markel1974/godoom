@@ -72,7 +72,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 	}
 
 	// Inizializzazione ConfigRoot con il riferimento al gestore texture popolato
-	player := &config.ConfigPlayer{}
+	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 8, 4, 20)
 	root := config.NewConfigRoot(nil, player, nil, p.scale, true, p.texManager)
 
 	// 3. Parsing delle Entità (Luci, Player, Monsters)
@@ -100,6 +100,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 			if l, ok := ent.Properties["light"]; ok {
 				if val, err := strconv.ParseFloat(l, 64); err == nil {
 					intensity = val
+					falloff = intensity / 10.0
 				}
 			}
 			root.Lights = append(root.Lights, config.NewConfigLight(pos, intensity*p.scale, config.LightKindSpot, falloff))

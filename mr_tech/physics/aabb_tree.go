@@ -111,23 +111,44 @@ func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool)
 	}
 }
 
-// QueryPoint searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
-func (a *AABBTree) QueryPoint(px, py float64, callback func(object IAABB) bool) {
+// QueryPoint2d searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
+func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
 	a.stack = a.stack[:0]
 	a.stack = append(a.stack, a.rootNodeIndex)
-
 	for len(a.stack) > 0 {
 		lastIdx := len(a.stack) - 1
 		nodeIndex := a.stack[lastIdx]
 		a.stack = a.stack[:lastIdx]
-
 		if nodeIndex == AABBNullNode {
 			continue
 		}
-
 		node := a.nodes[nodeIndex]
+		if node.aabb.QueryPoint2d(px, py) {
+			if node.IsLeaf() {
+				if callback(node.object) {
+					break
+				}
+			} else {
+				a.stack = append(a.stack, node.leftNodeIndex)
+				a.stack = append(a.stack, node.rightNodeIndex)
+			}
+		}
+	}
+}
 
-		if node.aabb.QueryPoint(px, py) {
+// QueryPoint3d searches the tree for objects whose AABBs contain the given 3D point.
+func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool) {
+	a.stack = a.stack[:0]
+	a.stack = append(a.stack, a.rootNodeIndex)
+	for len(a.stack) > 0 {
+		lastIdx := len(a.stack) - 1
+		nodeIndex := a.stack[lastIdx]
+		a.stack = a.stack[:lastIdx]
+		if nodeIndex == AABBNullNode {
+			continue
+		}
+		node := a.nodes[nodeIndex]
+		if node.aabb.QueryPoint3d(px, py, pz) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break

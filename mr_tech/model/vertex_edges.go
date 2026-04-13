@@ -50,7 +50,7 @@ func NewVertexEdges(eps float64) *VertexEdges {
 
 func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
 	foundId := -1
-	t.tree.QueryPoint(p.X, p.Y, func(object physics.IAABB) bool {
+	t.tree.QueryPoint2d(p.X, p.Y, func(object physics.IAABB) bool {
 		if v, ok := object.(*VertexNode); ok {
 			if v.X == p.X && v.Y == p.Y {
 				foundId = v.Id

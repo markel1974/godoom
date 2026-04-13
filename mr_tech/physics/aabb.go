@@ -58,12 +58,19 @@ func (a *AABB) Overlaps(other *AABB) bool {
 		a.minZ < other.maxZ
 }
 
-// QueryPoint checks if the given point (pMinX, pMinY) lies within the bounds of the AABB.
-func (a *AABB) QueryPoint(pMinX, pMinY float64) bool {
-	return a.maxX >= pMinX &&
-		a.minX <= pMinX &&
-		a.maxY >= pMinY &&
-		a.minY <= pMinY
+// QueryPoint2d checks if the given point (pMinX, pMinY) lies within the bounds of the AABB.
+func (a *AABB) QueryPoint2d(px, py float64) bool {
+	return a.maxX >= px &&
+		a.minX <= px &&
+		a.maxY >= py &&
+		a.minY <= py
+}
+
+// QueryPoint3d checks if the 3D point (px, py, pz) is contained within the bounds of the AABB.
+func (a *AABB) QueryPoint3d(px, py, pz float64) bool {
+	return px >= a.minX && px <= a.maxX &&
+		py >= a.minY && py <= a.maxY &&
+		pz >= a.minZ && pz <= a.maxZ
 }
 
 // Contains checks if the other AABB is entirely contained within the current AABB.

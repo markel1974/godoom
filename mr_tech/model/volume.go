@@ -123,8 +123,8 @@ func (v *Volume) Rebuild() bool {
 		v.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
 		return false
 	}
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	for _, face := range v.faces {
 		if v.hasZ {
 			face.SetZ(v.minZ, v.maxZ)
@@ -142,19 +142,22 @@ func (v *Volume) Rebuild() bool {
 			if p.Y > maxY {
 				maxY = p.Y
 			}
-			if p.Z < minZ {
-				minZ = p.Z
+			if p.Z < calcMinZ {
+				calcMinZ = p.Z
 			}
-			if p.Z > maxZ {
-				maxZ = p.Z
+			if p.Z > calcMaxZ {
+				calcMaxZ = p.Z
 			}
 		}
 	}
 	if v.hasZ {
-		minZ = v.minZ
-		maxZ = v.maxZ
+		calcMinZ = v.minZ
+		calcMaxZ = v.maxZ
+	} else {
+		v.minZ = calcMinZ
+		v.maxZ = calcMaxZ
 	}
-	v.aabb = physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
+	v.aabb = physics.NewAABB(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
 	return true
 }
 
@@ -170,50 +173,7 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// LocatePoint3d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
-func (v *Volume) LocatePoint3d(px, py, baseZ, topZ, maxStep float64) *Volume {
-	if v.ContainsPoint2d(px, py) {
-		if v.IsValidZ(baseZ, topZ, maxStep) {
-			return v
-		}
-		return nil
-	}
-	for _, face := range v.GetFaces() {
-		neighbor := face.GetNeighbor()
-		if neighbor != nil {
-			if neighbor.ContainsPoint2d(px, py) {
-				if neighbor.IsValidZ(baseZ, topZ, maxStep) {
-					return neighbor
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// IsValidZ verifica che la quota Z sia compatibile con il settore, gestendo i soffitti a cielo aperto.
-func (v *Volume) IsValidZ(baseZ, topZ, maxStep float64) bool {
-	minZ := v.GetMinZ()
-	maxZ := v.GetMaxZ()
-	// 1. Gestione soffitti a cielo aperto
-	if maxZ <= minZ {
-		maxZ = math.MaxFloat64
-	}
-	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
-	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
-	if baseZ+maxStep < minZ {
-		return false
-	}
-	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
-	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
-	expectedBase := math.Max(baseZ, minZ)
-	entityHeight := topZ - baseZ
-	if expectedBase+entityHeight > maxZ {
-		return false
-	}
-	return true
-}
-
+/*
 // LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
 func (v *Volume) LocatePoint2d(px, py float64) *Volume {
 	curr := v
@@ -238,6 +198,46 @@ func (v *Volume) LocatePoint2d(px, py float64) *Volume {
 		}
 	}
 	return nil
+}
+
+*/
+
+// LocatePoint2d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
+func (v *Volume) LocatePoint2d(px, py float64) *Volume {
+	if v.ContainsPoint2d(px, py) {
+		return v
+	}
+	for _, face := range v.GetFaces() {
+		if neighbor := face.GetNeighbor(); neighbor != nil {
+			if neighbor.ContainsPoint2d(px, py) {
+				return neighbor
+			}
+		}
+	}
+	return nil
+}
+
+// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the volume, considering maxStep.
+func (v *Volume) IsValidZ(baseZ, topZ, maxStep float64) bool {
+	minZ := v.GetMinZ()
+	maxZ := v.GetMaxZ()
+	// 1. Gestione soffitti a cielo aperto
+	if maxZ <= minZ {
+		maxZ = math.MaxFloat64
+	}
+	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
+	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
+	if baseZ+maxStep < minZ {
+		return false
+	}
+	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
+	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
+	expectedBase := math.Max(baseZ, minZ)
+	entityHeight := topZ - baseZ
+	if expectedBase+entityHeight > maxZ {
+		return false
+	}
+	return true
 }
 
 // ContainsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.

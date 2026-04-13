@@ -37,7 +37,7 @@ type ThingPlayer struct {
 func NewThingPlayer(things *Things, cfg *config.ConfigPlayer, volumes *Volumes, debug bool) (*ThingPlayer, error) {
 	volume := volumes.QueryPoint2d(cfg.Position.X, cfg.Position.Y)
 	if volume == nil {
-		return nil, fmt.Errorf("can't find player sector at %f, %f", cfg.Position.X, cfg.Position.Y)
+		return nil, fmt.Errorf("can't find player volume at %f, %f", cfg.Position.X, cfg.Position.Y)
 	}
 	cfg.Kind = config.ThingPlayerDef
 	if cfg.Height <= 0 {

@@ -61,8 +61,13 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	}
 
 	r.volumes.CreateTree()
+	r.volumes3d.CreateTree()
 
-	vLights, err := r.compileVolumesLights(r.volumes, true)
+	vLights2d, err := r.compileVolumesLights(r.volumes, true)
+	if err != nil {
+		return err
+	}
+	vLights3d, err := r.compileVolumesLights(r.volumes3d, true)
 	if err != nil {
 		return err
 	}
@@ -71,7 +76,8 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 		return err
 	}
 	r.lights = NewLights()
-	r.lights.AddLights(vLights)
+	r.lights.AddLights(vLights2d)
+	r.lights.AddLights(vLights3d)
 	r.lights.AddLights(lights)
 	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
 	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {

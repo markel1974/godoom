@@ -34,8 +34,9 @@ func NewVolumes(container []*Volume) *Volumes {
 func (s *Volumes) CreateTree() {
 	s.tree = physics.NewAABBTree(uint(len(s.container)))
 	for _, sec := range s.container {
-		sec.Rebuild()
-		s.tree.InsertObject(sec)
+		if sec.Rebuild() {
+			s.tree.InsertObject(sec)
+		}
 	}
 }
 

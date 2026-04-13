@@ -118,38 +118,35 @@ func (v *Volume) GetAABB() *physics.AABB {
 }
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
-func (v *Volume) Rebuild() {
-	if v.hasZ {
-		for _, face := range v.faces {
+func (v *Volume) Rebuild() bool {
+	if len(v.faces) == 0 {
+		v.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
+		return false
+	}
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	for _, face := range v.faces {
+		if v.hasZ {
 			face.SetZ(v.minZ, v.maxZ)
 		}
-	}
-	var minX, minY, minZ float64
-	var maxX, maxY, maxZ float64
-	if len(v.faces) > 0 {
-		minX, minY, minZ = math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-		maxX, maxY, maxZ = -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
-		for _, face := range v.faces {
-			for _, p := range face.GetPoints() {
-				if p.X < minX {
-					minX = p.X
-				}
-				if p.X > maxX {
-					maxX = p.X
-				}
-				if p.Y < minY {
-					minY = p.Y
-				}
-				if p.Y > maxY {
-					maxY = p.Y
-				}
-				if p.Z < minZ {
-					minZ = p.Z
-				}
-				if p.Z > maxZ {
-					maxZ = p.Z
-				}
+		for _, p := range face.GetPoints() {
+			if p.X < minX {
+				minX = p.X
+			}
+			if p.X > maxX {
+				maxX = p.X
+			}
+			if p.Y < minY {
+				minY = p.Y
+			}
+			if p.Y > maxY {
+				maxY = p.Y
+			}
+			if p.Z < minZ {
+				minZ = p.Z
+			}
+			if p.Z > maxZ {
+				maxZ = p.Z
 			}
 		}
 	}
@@ -158,6 +155,7 @@ func (v *Volume) Rebuild() {
 		maxZ = v.maxZ
 	}
 	v.aabb = physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
+	return true
 }
 
 // AddTag appends the specified tags to the volume's existing tags, separated by a semicolon.

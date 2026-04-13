@@ -124,12 +124,12 @@ func (v *Volume) Rebuild() {
 			face.SetZ(v.minZ, v.maxZ)
 		}
 	}
+	var minX, minY, minZ float64
+	var maxX, maxY, maxZ float64
+	if len(v.faces) > 0 {
+		minX, minY, minZ = math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+		maxX, maxY, maxZ = -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-	if len(v.faces) == 0 {
-		minX, minY, minZ = 0, 0, 0
-	} else {
 		for _, face := range v.faces {
 			for _, p := range face.GetPoints() {
 				if p.X < minX {

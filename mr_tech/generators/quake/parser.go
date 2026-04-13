@@ -13,17 +13,12 @@ import (
 // Builder is a utility type that provides methods to construct and manage texture resources and scaling factors.
 type Builder struct {
 	texManager *Textures
-	scale      float64
 }
 
 // NewBuilder creates and returns a new Builder instance with the specified scale. Defaults to 1.0 if scale is non-positive.
-func NewBuilder(scale float64) *Builder {
-	if scale <= 0 {
-		scale = 1.0
-	}
+func NewBuilder() *Builder {
 	return &Builder{
 		texManager: NewTextures(),
-		scale:      scale,
 	}
 }
 
@@ -73,7 +68,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 
 	// Inizializzazione ConfigRoot con il riferimento al gestore texture popolato
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 8, 4, 20)
-	root := config.NewConfigRoot(nil, player, nil, p.scale, true, p.texManager)
+	root := config.NewConfigRoot(nil, player, nil, 1.0, true, p.texManager)
 	root.Full3d = true
 
 	// 3. Parsing delle Entità (Luci, Player, Monsters)
@@ -84,7 +79,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
 			// Conversione coordinate: Quake Z-up -> Engine Y-up
-			pos = geometry.XYZ{X: x * p.scale, Y: z * p.scale, Z: -y * p.scale}
+			pos = geometry.XYZ{X: x, Y: z, Z: -y}
 		}
 		switch {
 		case classname == "info_player_start":
@@ -104,7 +99,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 					falloff = intensity / 10.0
 				}
 			}
-			root.Lights = append(root.Lights, config.NewConfigLight(pos, intensity*p.scale, config.LightKindSpot, falloff))
+			root.Lights = append(root.Lights, config.NewConfigLight(pos, intensity, config.LightKindSpot, falloff))
 		}
 	}
 
@@ -140,11 +135,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 				} else {
 					v = vertexes[edges[-surfEdgeIdx].Vertex1]
 				}
-				points = append(points, geometry.XYZ{
-					X: float64(v.X) * p.scale,
-					Y: float64(v.Z) * p.scale,
-					Z: float64(-v.Y) * p.scale,
-				})
+				points = append(points, geometry.XYZ{X: float64(v.X), Y: float64(v.Z), Z: float64(-v.Y)})
 			}
 
 			// Creazione Animazione (Materiale) con l'ID texture registrato

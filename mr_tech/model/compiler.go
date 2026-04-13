@@ -12,62 +12,58 @@ import (
 
 // Compiler represents a core game engine component for managing volumes, game objects, player interactions, and things.
 type Compiler struct {
-	volumes   *Volumes
-	volumes3d *Volumes
-	player    *ThingPlayer
-	lights    *Lights
-	things    *Things
+	volumesN *Volumes
+	player   *ThingPlayer
+	lights   *Lights
+	things   *Things
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		volumes:   nil,
-		volumes3d: nil,
-		player:    nil,
-		things:    nil,
-		lights:    nil,
+		volumesN: nil,
+		player:   nil,
+		things:   nil,
+		lights:   nil,
 	}
 }
 
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
 func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
-	var totalSegments int
+	animations := NewAnimations(cfg.GetTextures())
+	if cfg.Full3d {
+		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+		volumes3d := r.compile3d(cfg.Volumes, animations)
+		volumes3d = append(volumes3d, r.upgrade3d(volumes2d)...)
+		r.volumesN = NewVolumes(volumes3d)
+	} else {
+		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+		r.volumesN = NewVolumes(volumes2d)
+	}
 	scale := cfg.ScaleFactor
-	if scale < 1 {
+	if scale == 0 {
 		scale = 1
 	}
-	animations := NewAnimations(cfg.GetTextures())
-	volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-	upgraded3d := r.upgrade3d(volumes2d)
-	volumes3d := r.compile3d(cfg.Volumes, animations)
-	volumes3d = append(volumes3d, upgraded3d...)
-	r.volumes3d = NewVolumes(volumes3d)
-	r.volumes = NewVolumes(volumes2d)
-	for _, sect := range r.volumes.GetVolumes() {
-		//legacy lights scale
-		sect.Light.pos.Scale(scale)
-		for _, face := range sect.GetFaces() {
-			face.Scale2d(scale)
+	if scale != 1 {
+		for _, volume := range r.volumesN.GetVolumes() {
+			//legacy lights scale
+			volume.Light.pos.Scale(scale)
+			for _, face := range volume.GetFaces() {
+				face.Scale2d(scale)
+			}
+		}
+		cfg.Player.Position.Scale(scale)
+		for _, t := range cfg.Things {
+			t.Position.Scale(scale)
+		}
+		for _, t := range cfg.Lights {
+			t.Pos.Scale(scale)
 		}
 	}
 
-	cfg.Player.Position.Scale(scale)
-	for _, t := range cfg.Things {
-		t.Position.Scale(scale)
-	}
-	for _, t := range cfg.Lights {
-		t.Pos.Scale(scale)
-	}
+	r.volumesN.CreateTree()
 
-	r.volumes.CreateTree()
-	r.volumes3d.CreateTree()
-
-	vLights2d, err := r.compileVolumesLights(r.volumes, true)
-	if err != nil {
-		return err
-	}
-	vLights3d, err := r.compileVolumesLights(r.volumes3d, true)
+	vLights2d, err := r.compileVolumesLights(r.volumesN, true)
 	if err != nil {
 		return err
 	}
@@ -77,14 +73,13 @@ func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
 	}
 	r.lights = NewLights()
 	r.lights.AddLights(vLights2d)
-	r.lights.AddLights(vLights3d)
 	r.lights.AddLights(lights)
-	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
-	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {
+	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumesN, animations)
+	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumesN, false); err != nil {
 		return err
 	}
 
-	fmt.Printf("Scan complete volumes: %d, segments: %d\n", r.volumes.Len(), totalSegments)
+	fmt.Printf("Scan complete volumes: %d\n", r.volumesN.Len())
 
 	return nil
 }
@@ -94,14 +89,9 @@ func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
-// GetVolumes retrieves the Volumes instance associated with the current Compiler object.
-func (r *Compiler) GetVolumes() *Volumes {
-	return r.volumes
-}
-
-// GetVolumes3d returns the 3D volumes instance managed by the Compiler.
-func (r *Compiler) GetVolumes3d() *Volumes {
-	return r.volumes3d
+// GetVolumesN retrieves the Volumes instance associated with the current Compiler object.
+func (r *Compiler) GetVolumesN() *Volumes {
+	return r.volumesN
 }
 
 // GetPlayer returns the player object associated with the compiler instance.
@@ -310,7 +300,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+				cVolume := r.volumesN.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)

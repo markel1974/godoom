@@ -70,7 +70,7 @@ func main() {
 		cfg, err = wolfstein.CreateLevel(level)
 	case 4:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
-		wb := quake.NewBuilder(0) //wad.NewBuilderNew()
+		wb := quake.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(quakeFile, level)
 	default:
 		cfg, err = world.Generate()

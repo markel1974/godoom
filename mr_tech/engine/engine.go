@@ -95,11 +95,8 @@ func (e *Engine) Setup(cfg *config.ConfigRoot) error {
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
 	e.full3d = cfg.Full3d
-	if e.full3d {
-		e.volumes = compiler.GetVolumes3d()
-		e.portal = nil
-	} else {
-		e.volumes = compiler.GetVolumes()
+	e.volumes = compiler.GetVolumesN()
+	if !e.full3d {
 		e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
 		if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
 			return err

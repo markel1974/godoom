@@ -75,21 +75,17 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.fv.DeepReset()
 		w.dc.DeepReset()
 		w.cSky = nil
-
 		volumes, _ := engine.Build()
-
 		for _, vol := range volumes {
 			startIdx := w.fv.GetIndicesLen()
 			for _, face := range vol.Volume.GetFaces() {
 				w.pushFace(w.fv, face)
 			}
 			endIdx := w.fv.GetIndicesLen()
-
 			if endIdx > startIdx {
 				w.volRanges[vol.Volume] = VolumeRange{start: startIdx, end: endIdx}
 			}
 		}
-
 		// Congeliamo SOLO Geometria e DrawCommands
 		w.fv.Freeze()
 		w.dc.Freeze()
@@ -108,15 +104,11 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	frustumFront, frustumRear := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
 	// Doppio Culling sulla Geometria Statica
 	engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
-
 	// 3. Frustum Culling sulle Luci
 	w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
-
 	// 4. Entità Dinamiche
 	tA, tC := engine.GetThings().GetActive()
-
 	w.pushThings(w.fv, w.dc, vi, tA, tC)
-
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
@@ -150,12 +142,9 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	absX := math.Abs(normal.X)
 	absY := math.Abs(normal.Y)
 	absZ := math.Abs(normal.Z)
-
 	w.faceIndices = w.faceIndices[:0]
-
 	for _, p := range points {
 		var u, v float32
-
 		if absZ >= absX && absZ >= absY {
 			u = float32(p.X) / fTexW
 			v = float32(-p.Y) / fTexH
@@ -166,10 +155,8 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 			u = float32(p.Y) / fTexW
 			v = float32(p.Z) / fTexH
 		}
-
 		w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer))
 	}
-
 	for i := 1; i < len(w.faceIndices)-1; i++ {
 		fv.AddTriangle(w.faceIndices[0], w.faceIndices[i], w.faceIndices[i+1])
 	}

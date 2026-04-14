@@ -1,8 +1,8 @@
 package engine
 
 import (
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -86,7 +86,7 @@ func (e *Engine) PortalLen() int {
 }
 
 // Setup initializes the Engine using the provided configuration, creating volumes, player, things, things, and the portal.
-func (e *Engine) Setup(cfg *config.ConfigRoot) error {
+func (e *Engine) Setup(cfg *config.Root) error {
 	compiler := model.NewCompiler()
 	if err := compiler.Compile(cfg); err != nil {
 		return err

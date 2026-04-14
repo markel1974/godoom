@@ -3,8 +3,8 @@ package open_gl
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 )
 
 // FrameLights manages light data for rendering, including position, color, intensity, and other attributes.

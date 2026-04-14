@@ -3,7 +3,7 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )

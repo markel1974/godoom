@@ -1,6 +1,6 @@
 package wolfstein
 
-import "github.com/markel1974/godoom/mr_tech/model/config"
+import "github.com/markel1974/godoom/mr_tech/config"
 
 // GetOriginalMapData restituisce un layout 16x16 per il WolfParser.
 // 0 = cella navigabile, >0 = muro solido, 90/91 = porte.
@@ -28,7 +28,7 @@ func GetOriginalMapData() (int, int, []uint16) {
 	return width, height, mapData
 }
 
-func CreateLevel(level int) (*config.ConfigRoot, error) {
+func CreateLevel(level int) (*config.Root, error) {
 	w, h, data := GetOriginalMapData()
 	wp := NewParser(8, 15, true)
 	return wp.Parse(w, h, data)

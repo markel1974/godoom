@@ -3,7 +3,7 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -13,7 +13,7 @@ type ThingBullet struct {
 }
 
 // NewThingBullet creates and initializes a new ThingBullet instance.
-func NewThingBullet(things *Things, cfg *config.ConfigThing, anim *textures.Animation, volume *Volume, pitchRad float64) *ThingBullet {
+func NewThingBullet(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume, pitchRad float64) *ThingBullet {
 	pos := cfg.Position
 	p := &ThingBullet{
 		ThingBase: NewThingBase(things, cfg, pos, anim, volume),

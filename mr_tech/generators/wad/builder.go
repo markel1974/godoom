@@ -5,8 +5,8 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -94,8 +94,8 @@ func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-// Setup initializes the configuration for a specific level in the WAD file and returns a ConfigRoot or an error.
-func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, error) {
+// Setup initializes the configuration for a specific level in the WAD file and returns a Root or an error.
+func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error) {
 	wad := New()
 	if err := wad.Load(wadFile); err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 	}
 
 	sectorsEdges := bld.createSectorsEdges(level, vertexes)
-	var sectors []*config.ConfigSector
+	var sectors []*config.Sector
 	for secIdx, edges := range sectorsEdges {
 		if edges == nil {
 			continue
@@ -140,7 +140,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 		sectors = append(sectors, cSector)
 	}
 
-	var things []*config.ConfigThing
+	var things []*config.Thing
 	for i, lThing := range level.Things {
 		if thing := bld.buildThings(lThing, i, texHandler); thing != nil {
 			things = append(things, thing)
@@ -154,8 +154,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.ConfigRoot, 
 	return cr, nil
 }
 
-// buildConfigSector constructs and returns a ConfigSector for a given level sector, including floor, ceiling, and lighting data.
-func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.ConfigSector {
+// buildConfigSector constructs and returns a Sector for a given level sector, including floor, ceiling, and lighting data.
+func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.Sector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
 	const falloff = 10.0
@@ -176,8 +176,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	return miSector
 }
 
-// buildSegment constructs a ConfigSegment for a given edge within a sector, including wall textures and alignment adjustments.
-func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) *config.ConfigSegment {
+// buildSegment constructs a Segment for a given edge within a sector, including wall textures and alignment adjustments.
+func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) *config.Segment {
 	seg := config.NewConfigSegment(sectorId, config.SegmentUnknown, e.P1, e.P2)
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
@@ -204,8 +204,8 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	return seg
 }
 
-// buildThings generates a list of config.ConfigThing objects from a level's things, excluding specific types (1, 2, 3, 4, 11).
-func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *config.ConfigThing {
+// buildThings generates a list of config.Thing objects from a level's things, excluding specific types (1, 2, 3, 4, 11).
+func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *config.Thing {
 	tX := float64(t.X)
 	tY := float64(t.Y)
 	tAngle := float64(t.Angle)
@@ -222,12 +222,12 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	}
 	tId := fmt.Sprintf("t_%d", i)
 	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+	cfgThing := config.NewConfigThing2d(tId, geometry.XY{X: tX, Y: -tY}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 	return cfgThing
 }
 
-// buildPlayer initializes and returns a ConfigPlayer instance based on the first thing of type 1 found in the level.
-func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
+// buildPlayer initializes and returns a Player instance based on the first thing of type 1 found in the level.
+func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	for _, t := range level.Things {
 		if t.Type == 1 {
@@ -235,7 +235,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.ConfigPlayer {
 			break
 		}
 	}
-	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, _playerHeight, _playerRadius, _playerMass)
+	player := config.NewConfigPlayer2d(geometry.XY{X: pX, Y: -pY}, pAngle, _playerHeight, _playerRadius, _playerMass)
 	return player
 }
 

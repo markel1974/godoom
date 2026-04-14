@@ -25,17 +25,17 @@ const (
 	LightKindParticle
 )
 
-// ConfigLightSector represents the configuration of a light sector, including its unique ID, intensity, and type.
-type ConfigLightSector struct {
+// LightSector represents the configuration of a light sector, including its unique ID, intensity, and type.
+type LightSector struct {
 	Id        string    `json:"id"`
 	Intensity float64   `json:"Intensity"`
 	Kind      LightKind `json:"kind"`
 	Falloff   float64   `json:"falloff"`
 }
 
-// NewConfigLightSector creates a new ConfigLightSector instance with a unique ID, specified intensity, and LightKind.
-func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *ConfigLightSector {
-	return &ConfigLightSector{
+// NewConfigLightSector creates a new LightSector instance with a unique ID, specified intensity, and LightKind.
+func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *LightSector {
+	return &LightSector{
 		Id:        utils.NextUUId(),
 		Intensity: intensity,
 		Kind:      kind,

@@ -5,8 +5,8 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -23,7 +23,7 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the Builder by loading resources from the specified PAK file and preparing the level configuration.
-func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
+func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	bpsPath := "maps" + lumps.PakSeparator + "e1m1.bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
 	pk := lumps.NewPak()
@@ -66,8 +66,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 		}
 	}
 
-	// Inizializzazione ConfigRoot con il riferimento al gestore texture popolato
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 8, 4, 20)
+	// Inizializzazione Root con il riferimento al gestore texture popolato
+	player := config.NewConfigPlayer3d(geometry.XYZ{}, 0, 8, 4, 20)
 	root := config.NewConfigRoot(nil, player, nil, 1.0, true, p.texManager)
 	root.Full3d = true
 
@@ -103,7 +103,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.ConfigRoot, error) {
 		}
 	}
 
-	// 4. Conversione Geometria: BSP Leaves -> ConfigVolume
+	// 4. Conversione Geometria: BSP Leaves -> Volume
 	for leafIdx, leaf := range leaves {
 		// Saltiamo la leaf 0 (solitamente spazio solido esterno)
 		if leafIdx == 0 {

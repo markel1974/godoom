@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
@@ -73,7 +73,7 @@ func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
 }
 
 // Construct builds the vertex and edge data structures from the provided configuration volumes.
-func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.ConfigSector) {
+func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.Sector) {
 	// STEP 1: Priming dell'AABB Tree
 	for _, point := range vertices {
 		idx := len(t.vertexes)

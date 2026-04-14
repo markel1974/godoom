@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/generators/world"
-	"github.com/markel1974/godoom/mr_tech/model/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/software"
 	"github.com/markel1974/godoom/mr_tech/version"
@@ -23,7 +23,7 @@ type IRender interface {
 }
 
 func main() {
-	var cfg *config.ConfigRoot
+	var cfg *config.Root
 	var err error
 	var showHelp bool
 	var showVersion bool

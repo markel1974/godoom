@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -29,13 +29,13 @@ func NewParser() *Parser {
 }
 
 // Parse parses the given script data, initializing and returning the game's configuration or an error if parsing fails.
-func (p *Parser) Parse(id string) (*config.ConfigRoot, error) {
+func (p *Parser) Parse(id string) (*config.Root, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, tErr := NewTextures(basePath)
 	if tErr != nil {
 		return nil, tErr
 	}
-	cfg := config.NewConfigRoot(nil, &config.ConfigPlayer{}, nil, 1.0, false, t)
+	cfg := config.NewConfigRoot(nil, &config.Player{}, nil, 1.0, false, t)
 
 	oldData := strings.Split(id, "\n")
 	configSectorIdx := 0
@@ -81,10 +81,10 @@ func (p *Parser) Parse(id string) (*config.ConfigRoot, error) {
 }
 
 // finalize processes and finalizes the sector definitions by scanning for reversed segments and updating their properties.
-func (p *Parser) finalize(cfg *config.ConfigRoot) {
+func (p *Parser) finalize(cfg *config.Root) {
 	// 2. Fase di Sigillatura (Rescan Topologico)
 	type edgeKey struct{ p1, p2 geometry.XY }
-	lineDefsCache := make(map[edgeKey]*config.ConfigSector)
+	lineDefsCache := make(map[edgeKey]*config.Sector)
 	for _, sector := range cfg.Sectors {
 		for _, s := range sector.Segments {
 			lineDefsCache[edgeKey{s.Start, s.End}] = sector
@@ -133,9 +133,9 @@ func (p *Parser) parseVertex(r io.Reader) ([]geometry.XY, error) {
 	return cfgVertices, nil
 }
 
-// parseSector parses sector data from the provided reader, using vertices and a sector index, and constructs a ConfigSector.
-// Returns the created ConfigSector or an error if parsing fails.
-func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSectorIdx int) (*config.ConfigSector, error) {
+// parseSector parses sector data from the provided reader, using vertices and a sector index, and constructs a Sector.
+// Returns the created Sector or an error if parsing fails.
+func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSectorIdx int) (*config.Sector, error) {
 	if cfgVertices == nil {
 		return nil, errors.New("nil vertices")
 	}
@@ -194,8 +194,8 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 	return cs, nil
 }
 
-// parsePlayer parses player position, angle, and updates the provided ConfigPlayer instance from the given io.Reader input.
-func (p *Parser) parsePlayer(r io.Reader, player *config.ConfigPlayer) error {
+// parsePlayer parses player position, angle, and updates the provided Player instance from the given io.Reader input.
+func (p *Parser) parsePlayer(r io.Reader, player *config.Player) error {
 	if _, err := fmt.Fscanf(r, "%f %f %f", &player.Position.X, &player.Position.Y, &player.Angle); err != nil {
 		return err
 	}

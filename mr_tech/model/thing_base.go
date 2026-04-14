@@ -3,7 +3,7 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -32,7 +32,7 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
-func NewThingBase(things *Things, cfg *config.ConfigThing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
+func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius

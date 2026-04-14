@@ -6,24 +6,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// ConfigRoot represents the root configuration for a level, including sectors, lights, player, scale, and loop settings.
-type ConfigRoot struct {
+// Root represents the root configuration for a level, including sectors, lights, player, scale, and loop settings.
+type Root struct {
 	Id          string           `json:"id"`
-	Sectors     []*ConfigSector  `json:"sectors"`
-	Things      []*ConfigThing   `json:"things"`
-	Player      *ConfigPlayer    `json:"player"`
+	Sectors     []*Sector        `json:"sectors"`
+	Things      []*Thing         `json:"things"`
+	Player      *Player          `json:"player"`
 	ScaleFactor float64          `json:"scaleFactor"`
 	DisableLoop bool             `json:"disableLoop"`
 	Vertices    geometry.Polygon `json:"vertices"`
-	Volumes     []*ConfigVolume  `json:"volumes"`
+	Volumes     []*Volume        `json:"volumes"`
 	Lights      []*ConfigLight   `json:"lights"`
 	Full3d      bool             `json:"full3d"`
 	textures    textures.ITextures
 }
 
-// NewConfigRoot creates a new ConfigRoot instance with specified sectors, player, lights, scale factor, and loop status.
-func NewConfigRoot(sectors []*ConfigSector, player *ConfigPlayer, things []*ConfigThing, scaleFactor float64, disableLoop bool, t textures.ITextures) *ConfigRoot {
-	return &ConfigRoot{
+// NewConfigRoot creates a new Root instance with specified sectors, player, lights, scale factor, and loop status.
+func NewConfigRoot(sectors []*Sector, player *Player, things []*Thing, scaleFactor float64, disableLoop bool, t textures.ITextures) *Root {
+	return &Root{
 		Id:          utils.NextUUId(),
 		Sectors:     sectors,
 		Player:      player,
@@ -35,6 +35,6 @@ func NewConfigRoot(sectors []*ConfigSector, player *ConfigPlayer, things []*Conf
 }
 
 // GetTextures retrieves the textures associated with the configuration root.
-func (r *ConfigRoot) GetTextures() textures.ITextures {
+func (r *Root) GetTextures() textures.ITextures {
 	return r.textures
 }

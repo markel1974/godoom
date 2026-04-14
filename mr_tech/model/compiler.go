@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
@@ -29,7 +29,7 @@ func NewCompiler() *Compiler {
 }
 
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
-func (r *Compiler) Compile(cfg *config.ConfigRoot) error {
+func (r *Compiler) Compile(cfg *config.Root) error {
 	animations := NewAnimations(cfg.GetTextures())
 	if cfg.Full3d {
 		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
@@ -105,7 +105,7 @@ func (r *Compiler) GetLights() *Lights {
 }
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.ConfigSector, anim *Animations) []*Volume {
+func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Animations) []*Volume {
 	modelSectorId := 0
 	var container []*Volume
 	totalPolygons := 0
@@ -316,7 +316,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 }
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
-func (r *Compiler) compile3d(volumes []*config.ConfigVolume, anim *Animations) []*Volume {
+func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volume {
 	var container []*Volume
 	var fixFaces []*Face
 	modelSectorId := 0

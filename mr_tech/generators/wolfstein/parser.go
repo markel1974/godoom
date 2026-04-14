@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -59,8 +59,8 @@ func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 	}
 }
 
-// Parse constructs a ConfigRoot by processing a map grid of given dimensions and metadata, generating sectors and objects.
-func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot, error) {
+// Parse constructs a Root by processing a map grid of given dimensions and metadata, generating sectors and objects.
+func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error) {
 	const useEnemy = true
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
@@ -69,8 +69,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 	if tErr != nil {
 		return nil, tErr
 	}
-	player := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 0}, 0, 8, 4, 20)
-	root := config.NewConfigRoot(nil, player, nil, 1.0, false, texProvider)
+	root := config.NewConfigRoot(nil, nil, nil, 1.0, false, texProvider)
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
 	}
@@ -81,10 +80,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				continue
 			}
 			if isThingOrEnemy(cell) {
-				pos := geometry.XYZ{
+				pos := geometry.XY{
 					X: float64(x)*wp.tileSize + wp.tileSize/2,
 					Y: float64(y)*wp.tileSize + wp.tileSize/2,
-					Z: 0,
 				}
 				var angle float64 = 0
 				kind := config.ThingItemDef
@@ -111,7 +109,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 				const scaleH = 0.08
 				anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleH, scaleH*2)
 				if useEnemy {
-					thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
+					thing := config.NewConfigThing2d(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
 					root.Things = append(root.Things, thing)
 				}
 				cell = 0 // Libera la cella per il compilatore topologico
@@ -180,10 +178,12 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.ConfigRoot,
 		}
 	}
 
+	var playerPos geometry.XY
 	if len(root.Sectors) > 0 && len(root.Sectors[0].Segments) > 0 {
 		pos := root.Sectors[0].Segments[0].End
-		player.Position = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
+		playerPos = pos
 	}
+	root.Player = config.NewConfigPlayer2d(playerPos, 0, 8, 4, 20)
 	return root, nil
 }
 
@@ -204,8 +204,8 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 	return nil
 }
 
-// addSegment adds a new segment to the specified ConfigSector using level geometry, neighbors, and texture information.
-func (wp *Parser) addSegment(cs *config.ConfigSector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
+// addSegment adds a new segment to the specified Sector using level geometry, neighbors, and texture information.
+func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
 	kind := config.SegmentUnknown
 	isAdjDoor := false
 	cell := uint16(1)

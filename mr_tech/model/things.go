@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -81,7 +81,7 @@ func (c *Contact) Resolve() {
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	//activeThings []IThing
-	config       []*config.ConfigThing
+	config       []*config.Thing
 	volumes      *Volumes
 	animations   *Animations
 	tree         *physics.AABBTree
@@ -96,7 +96,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxEntities uint, cfg []*config.ConfigThing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(maxEntities uint, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
 	e := &Things{
 		tree:         physics.NewAABBTree(maxEntities, 4.0),
 		entities:     make(map[int]IThing),
@@ -144,9 +144,14 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// CreateThing creates a new IThing instance based on the provided ConfigThing and adds it to the Things collection.
-func (th *Things) createThing(ct *config.ConfigThing) (IThing, error) {
-	volume := th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
+// CreateThing creates a new IThing instance based on the provided Thing and adds it to the Things collection.
+func (th *Things) createThing(ct *config.Thing) (IThing, error) {
+	var volume *Volume
+	if ct.HasZPos {
+		volume = th.volumes.QueryPoint3d(ct.Position.X, ct.Position.Y, ct.Position.Z)
+	} else {
+		volume = th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
+	}
 	if volume == nil {
 		return nil, fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
 	}
@@ -177,7 +182,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	}
 	c := th.config[ammoIndex]
 	id := utils.NextUUId()
-	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
+	cfg := config.NewConfigThing3d(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
 	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)
 }
 

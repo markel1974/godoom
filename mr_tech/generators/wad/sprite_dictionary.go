@@ -1,7 +1,7 @@
 package wad
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 )
 
 // ThingDef represents the definition of a physical or graphical object with its associated properties.

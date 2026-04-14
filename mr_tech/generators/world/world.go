@@ -7,7 +7,7 @@ import (
 	rnd "math/rand"
 	"os"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -27,9 +27,9 @@ func randomF(min float64, max float64) float64 {
 	return min + rnd.Float64()*(max-min)
 }
 
-// ParseJsonData parses a JSON-encoded byte array into a ConfigRoot struct and returns it or an error on failure.
-func ParseJsonData(source []byte) (*config.ConfigRoot, error) {
-	cfg := &config.ConfigRoot{}
+// ParseJsonData parses a JSON-encoded byte array into a Root struct and returns it or an error on failure.
+func ParseJsonData(source []byte) (*config.Root, error) {
+	cfg := &config.Root{}
 	if err := json.Unmarshal(source, cfg); err != nil {
 		return nil, err
 	}
@@ -51,8 +51,8 @@ var availableLower = []string{"wall2.ppm"}
 // availableWall holds a list of wall texture file names available for sector configurations.
 var availableWall = []string{"wall2.ppm"}
 
-// createCube initializes and returns a ConfigSector representing a cubical sector in a level with specified properties.
-func createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.ConfigSector {
+// createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.
+func createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.Sector {
 	const falloff = 10.0
 	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient, falloff)
 	sector.FloorY = floor
@@ -90,7 +90,7 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	return sector
 }
 
-func Generate() (*config.ConfigRoot, error) {
+func Generate() (*config.Root, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(basePath)
 
@@ -99,8 +99,8 @@ func Generate() (*config.ConfigRoot, error) {
 }
 
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
-func generateSimple(t *Textures, maxX int, maxY int) (*config.ConfigRoot, error) {
-	configPlayer := &config.ConfigPlayer{}
+func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
+	configPlayer := &config.Player{}
 	cfg := config.NewConfigRoot(nil, configPlayer, nil, 0, false, t)
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
@@ -127,8 +127,8 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.ConfigRoot, error)
 
 	return cfg, nil
 }
-func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.ConfigRoot, error) {
-	cfg := config.NewConfigRoot(nil, &config.ConfigPlayer{}, nil, 0, false, t)
+func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
+	cfg := config.NewConfigRoot(nil, &config.Player{}, nil, 0, false, t)
 
 	// 1. Generazione Logica (Drunkard's Walk)
 	grid := make([][]bool, gridWidth)
@@ -159,9 +159,9 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 	}
 
 	// 2. Creazione Settori e Altitudini
-	sectorGrid := make([][]*config.ConfigSector, gridWidth)
+	sectorGrid := make([][]*config.Sector, gridWidth)
 	for i := range sectorGrid {
-		sectorGrid[i] = make([]*config.ConfigSector, gridHeight)
+		sectorGrid[i] = make([]*config.Sector, gridHeight)
 	}
 
 	for x := 0; x < gridWidth; x++ {

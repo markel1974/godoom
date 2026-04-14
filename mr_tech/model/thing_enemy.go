@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -18,7 +18,7 @@ type ThingEnemy struct {
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
-func NewThingEnemy(things *Things, cfg *config.ConfigThing, anim *textures.Animation, volume *Volume) *ThingEnemy {
+func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
 	//TODO REMOVE
 	if cfg.Speed <= 0 {

@@ -3,7 +3,7 @@ package wad
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/config"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -15,15 +15,15 @@ type CellKey struct {
 // SpatialGrid represents a spatial partitioning system for efficient management of ConfigSectors in a 2D grid.
 type SpatialGrid struct {
 	cellSize float64
-	cells    map[CellKey][]*config.ConfigSector
-	all      []*config.ConfigSector // Retained for global fallback
+	cells    map[CellKey][]*config.Sector
+	all      []*config.Sector // Retained for global fallback
 }
 
-// NewSpatialGrid constructs a SpatialGrid, partitioning ConfigSector objects into cells based on the given cell size.
-func NewSpatialGrid(sectors []*config.ConfigSector, cellSize float64) *SpatialGrid {
+// NewSpatialGrid constructs a SpatialGrid, partitioning Sector objects into cells based on the given cell size.
+func NewSpatialGrid(sectors []*config.Sector, cellSize float64) *SpatialGrid {
 	grid := &SpatialGrid{
 		cellSize: cellSize,
-		cells:    make(map[CellKey][]*config.ConfigSector),
+		cells:    make(map[CellKey][]*config.Sector),
 		all:      sectors,
 	}
 

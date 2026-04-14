@@ -27,6 +27,7 @@ func NewLight() *Light {
 		intensity: 0.0,
 		falloff:   defaultFalloff,
 		kind:      config.LightKindNone,
+		aabb:      physics.NewAABB(),
 	}
 	return l
 }
@@ -59,11 +60,8 @@ func (cl *Light) Rebuild() {
 	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
 	// esattamente il raggio di influenza massimo della luce nel mondo.
 	const influence = 10
-	radius := cl.falloff * influence
-	cl.aabb = physics.NewAABB(
-		cl.pos.X-radius, cl.pos.Y-radius, cl.pos.Z-radius,
-		cl.pos.X+radius, cl.pos.Y+radius, cl.pos.Z+radius,
-	)
+	r := cl.falloff * influence
+	cl.aabb.Rebuild(cl.pos.X-r, cl.pos.Y-r, cl.pos.Z-r, cl.pos.X+r, cl.pos.Y+r, cl.pos.Z+r)
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) associated with the Light object. Returns a pointer to AABB.

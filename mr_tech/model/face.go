@@ -50,6 +50,7 @@ func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag strin
 		tag:      tag,
 		minZ:     0,
 		maxZ:     0,
+		aabb:     physics.NewAABB(),
 	}
 	out.material[0] = tUpper
 	out.material[1] = tMiddle
@@ -268,5 +269,5 @@ func (s *Face) computeAABB() {
 			maxZ += eps
 		}
 	}
-	s.aabb = physics.NewAABB(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
+	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }

@@ -21,9 +21,8 @@ type AABB struct {
 }
 
 // NewAABB creates and initializes a new AABB instance with the provided minimum and maximum coordinates.
-func NewAABB(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) *AABB {
+func NewAABB() *AABB {
 	a := &AABB{}
-	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 	return a
 }
 
@@ -40,10 +39,37 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 
 // Expand increases the size of the AABB by the given margin in all directions and returns a new expanded AABB.
 func (a *AABB) Expand(margin float64) *AABB {
-	return NewAABB(
-		a.minX-margin, a.minY-margin, a.minZ-margin,
-		a.maxX+margin, a.maxY+margin, a.maxZ+margin,
-	)
+	minX, minY, minZ := a.minX-margin, a.minY-margin, a.minZ-margin
+	maxX, maxY, maxZ := a.maxX+margin, a.maxY+margin, a.maxZ+margin
+	out := NewAABB()
+	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+	return out
+}
+
+// Merge combines the current AABB with another AABB to produce a new AABB that encapsulates both.
+func (a *AABB) Merge(other *AABB) *AABB {
+	minX := math.Min(a.minX, other.minX)
+	minY := math.Min(a.minY, other.minY)
+	minZ := math.Min(a.minZ, other.minZ)
+	maxX := math.Max(a.maxX, other.maxX)
+	maxY := math.Max(a.maxY, other.maxY)
+	maxZ := math.Max(a.maxZ, other.maxZ)
+	out := NewAABB()
+	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+	return out
+}
+
+// Intersection returns a new AABB representing the overlapping region of the two AABBs or nil if there is no intersection.
+func (a *AABB) Intersection(other *AABB) *AABB {
+	minX := math.Max(a.minX, other.minX)
+	minY := math.Max(a.minY, other.minY)
+	minZ := math.Max(a.minZ, other.minZ)
+	maxX := math.Min(a.maxX, other.maxX)
+	maxY := math.Min(a.maxY, other.maxY)
+	maxZ := math.Min(a.maxZ, other.maxZ)
+	out := NewAABB()
+	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+	return out
 }
 
 // Overlaps checks if the current AABB intersects with another AABB by comparing their bounds on all axes.
@@ -58,16 +84,16 @@ func (a *AABB) Overlaps(other *AABB) bool {
 		a.minZ < other.maxZ
 }
 
-// QueryPoint2d checks if the given point (pMinX, pMinY) lies within the bounds of the AABB.
-func (a *AABB) QueryPoint2d(px, py float64) bool {
+// ContainsPoint2d checks if the given 2D point (px, py) is inside the horizontal bounds of the AABB.
+func (a *AABB) ContainsPoint2d(px, py float64) bool {
 	return a.maxX >= px &&
 		a.minX <= px &&
 		a.maxY >= py &&
 		a.minY <= py
 }
 
-// QueryPoint3d checks if the 3D point (px, py, pz) is contained within the bounds of the AABB.
-func (a *AABB) QueryPoint3d(px, py, pz float64) bool {
+// ContainsPoint3d checks if the 3D point (px, py, pz) lies within the bounds of the AABB.
+func (a *AABB) ContainsPoint3d(px, py, pz float64) bool {
 	return px >= a.minX && px <= a.maxX &&
 		py >= a.minY && py <= a.maxY &&
 		pz >= a.minZ && pz <= a.maxZ
@@ -81,20 +107,6 @@ func (a *AABB) Contains(other *AABB) bool {
 		other.maxY <= a.maxY &&
 		other.minZ >= a.minZ &&
 		other.maxZ <= a.maxZ
-}
-
-// Merge combines the current AABB with another AABB to produce a new AABB that encapsulates both.
-func (a *AABB) Merge(other *AABB) *AABB {
-	b := NewAABB(math.Min(a.minX, other.minX), math.Min(a.minY, other.minY), math.Min(a.minZ, other.minZ),
-		math.Max(a.maxX, other.maxX), math.Max(a.maxY, other.maxY), math.Max(a.maxZ, other.maxZ))
-	return b
-}
-
-// Intersection returns a new AABB representing the overlapping region of the two AABBs or nil if there is no intersection.
-func (a *AABB) Intersection(other *AABB) *AABB {
-	b := NewAABB(math.Max(a.minX, other.minX), math.Max(a.minY, other.minY), math.Max(a.minZ, other.minZ),
-		math.Min(a.maxX, other.maxX), math.Min(a.maxY, other.maxY), math.Min(a.maxZ, other.maxZ))
-	return b
 }
 
 // GetWidth calculates and returns the width of the AABB along the x-axis.
@@ -169,7 +181,6 @@ func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (floa
 // IntersectFrustum controlla se l'AABB si trova all'interno (o interseca) il Frustum fornito.
 // Restituisce true se l'AABB è visibile.
 func (a *AABB) IntersectFrustum(f *Frustum) bool {
-	// Controlliamo l'AABB contro ogni piano del Frustum
 	for i := 0; i < 6; i++ {
 		plane := f.Planes[i]
 		// Troviamo il "Positive Vertex" (il vertice dell'AABB più allineato con la normale del piano)

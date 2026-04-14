@@ -123,7 +123,7 @@ func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool
 			continue
 		}
 		node := a.nodes[nodeIndex]
-		if node.aabb.QueryPoint2d(px, py) {
+		if node.aabb.ContainsPoint2d(px, py) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break
@@ -148,7 +148,7 @@ func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) 
 			continue
 		}
 		node := a.nodes[nodeIndex]
-		if node.aabb.QueryPoint3d(px, py, pz) {
+		if node.aabb.ContainsPoint3d(px, py, pz) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break

@@ -32,6 +32,7 @@ func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation
 		minZ:    minZ,
 		maxZ:    maxZ,
 		hasZ:    true,
+		aabb:    physics.NewAABB(),
 	}
 	v.materials[0] = floor
 	v.materials[1] = ceil
@@ -120,7 +121,7 @@ func (v *Volume) GetAABB() *physics.AABB {
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
 func (v *Volume) Rebuild() bool {
 	if len(v.faces) == 0 {
-		v.aabb = physics.NewAABB(0, 0, 0, 0, 0, 0)
+		v.aabb.Rebuild(0, 0, 0, 0, 0, 0)
 		return false
 	}
 	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
@@ -157,7 +158,7 @@ func (v *Volume) Rebuild() bool {
 		v.minZ = calcMinZ
 		v.maxZ = calcMaxZ
 	}
-	v.aabb = physics.NewAABB(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
+	v.aabb.Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
 	return true
 }
 

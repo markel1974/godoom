@@ -18,11 +18,13 @@ type VertexNode struct {
 // NewVertexNode creates and returns a new VertexNode with the specified ID and 2D coordinates (XY) initialized with an AABB.
 func NewVertexNode(id int, xy geometry.XY, eps float64) *VertexNode {
 	//const eps = 0.001
-	return &VertexNode{
+	vn := &VertexNode{
 		Id:   id,
 		XY:   xy,
-		aabb: physics.NewAABB(xy.X-eps, xy.Y-eps, 0, xy.X+eps, xy.Y+eps, 0),
+		aabb: physics.NewAABB(),
 	}
+	vn.aabb.Rebuild(xy.X-eps, xy.Y-eps, 0, xy.X+eps, xy.Y+eps, 0)
+	return vn
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the VertexNode.

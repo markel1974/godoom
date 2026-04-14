@@ -128,7 +128,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			for _, tri := range triangles {
 				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
-				container = append(container, volume)
+
 				// Mantiene il Winding Order consistente per ContainsPoint
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
@@ -166,6 +166,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: cs.FloorY + cs.CeilY}
 					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Falloff, cs.Light.Kind, lightPos)
 				}
+				volume.Rebuild()
+				container = append(container, volume)
 				totalPolygons++
 			}
 		}
@@ -206,6 +208,152 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			face.SetNeighbor(nil)
 		}
 	}
+	return container
+}
+
+// upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
+func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
+	var volumes3d []*Volume
+
+	// Mappa di traduzione: *Volume 2D -> *Volume 3D
+	volMap := make(map[*Volume]*Volume)
+
+	// 1. Prima Passata: Generazione della topologia solida
+	for _, vol2d := range vols2d {
+		id := fmt.Sprintf("%s_3d", vol2d.GetId())
+		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
+		if vol2d.Light != nil {
+			vol3d.Light = vol2d.Light
+		}
+		faces2d := vol2d.GetFaces()
+		if len(faces2d) != 3 {
+			continue
+		}
+		p0 := faces2d[0].GetStart()
+		p1 := faces2d[1].GetStart()
+		p2 := faces2d[2].GetStart()
+		floorY := vol2d.GetMinZ()
+		ceilY := vol2d.GetMaxZ()
+		// [Indice 0] Soffitto (Ceil)
+		ceilP := []geometry.XYZ{{X: p0.X, Y: ceilY, Z: p0.Y}, {X: p1.X, Y: ceilY, Z: p1.Y}, {X: p2.X, Y: ceilY, Z: p2.Y}}
+		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
+		// [Indice 1] Pavimento (Floor)
+		floorP := []geometry.XYZ{{X: p0.X, Y: floorY, Z: p0.Y}, {X: p2.X, Y: floorY, Z: p2.Y}, {X: p1.X, Y: floorY, Z: p1.Y}}
+		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
+		// [Indici 2, 3, 4] Facce Laterali
+		for _, f2d := range faces2d {
+			start := f2d.GetStart()
+			end := f2d.GetEnd()
+			wallPts := []geometry.XYZ{
+				{X: start.X, Y: floorY, Z: start.Y},
+				{X: end.X, Y: floorY, Z: end.Y},
+				{X: end.X, Y: ceilY, Z: end.Y},
+				{X: start.X, Y: ceilY, Z: start.Y},
+			}
+			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
+		}
+		vol3d.Rebuild()
+		volumes3d = append(volumes3d, vol3d)
+		volMap[vol2d] = vol3d
+	}
+
+	// 2. Seconda Passata: Link delle adiacenze (Portali)
+	for idx, vol2d := range vols2d {
+		vol3d := volumes3d[idx]
+		faces2d := vol2d.GetFaces()
+		faces3d := vol3d.GetFaces()
+		for i, f2d := range faces2d {
+			if neighbor2d := f2d.GetNeighbor(); neighbor2d != nil {
+				// Recupera il puntatore al nuovo volume 3D associato al vicino 2D
+				if neighbor3d, ok := volMap[neighbor2d]; ok {
+					// Mappa 1:1 traslata di 2 (saltando ceil e floor)
+					faces3d[i+2].SetNeighbor(neighbor3d)
+				}
+			}
+		}
+	}
+	return volumes3d
+}
+
+// compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
+func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volume {
+	totalFaces := 0
+	var container []*Volume
+	var fixFaces []*Face
+	modelSectorId := 0
+	facesTree := physics.NewAABBTree(1024, 4.0)
+	for _, cv := range volumes {
+		// cv.Id e cv.Tag provengono dal parser BSP
+		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
+		modelSectorId++
+		for _, cf := range cv.Faces {
+			pts := cf.Points
+			pLen := len(pts)
+			if pLen < 3 {
+				continue
+			}
+			material := anim.GetAnimation(cf.Material)
+			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
+			triangles := geometry.Triangulate3d(pts)
+			for _, tri := range triangles {
+				face := NewFace(nil, tri, cf.Tag, material)
+				volume.AddFace(face)
+				fixFaces = append(fixFaces, face)
+				facesTree.InsertObject(face)
+				totalFaces++
+			}
+		}
+		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
+		volume.Light = NewLight()
+		volume.Rebuild()
+		container = append(container, volume)
+	}
+
+	foundFaces := 0
+	// Risoluzione Adiacenze (Portali 3D)
+	for _, face := range fixFaces {
+		if face.GetNeighbor() != nil {
+			continue
+		}
+		bestDistSq := math.MaxFloat64
+		var bestNeighborFace *Face
+		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
+			overlapFace, ok := object.(*Face)
+			// Ignore already linked
+			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
+				return false
+			}
+			// Per trovare i portali 3D, confrontiamo la vicinanza dei baricentri dei triangoli
+			pts1 := face.GetPoints()
+			pts2 := overlapFace.GetPoints()
+			// Calcolo baricentro faccia corrente (3 punti)
+			cx1 := (pts1[0].X + pts1[1].X + pts1[2].X) / 3.0
+			cy1 := (pts1[0].Y + pts1[1].Y + pts1[2].Y) / 3.0
+			cz1 := (pts1[0].Z + pts1[1].Z + pts1[2].Z) / 3.0
+			// Calcolo baricentro faccia candidata
+			cx2 := (pts2[0].X + pts2[1].X + pts2[2].X) / 3.0
+			cy2 := (pts2[0].Y + pts2[1].Y + pts2[2].Y) / 3.0
+			cz2 := (pts2[0].Z + pts2[1].Z + pts2[2].Z) / 3.0
+			dx := cx1 - cx2
+			dy := cy1 - cy2
+			dz := cz1 - cz2
+			distSq := (dx * dx) + (dy * dy) + (dz * dz)
+			// Troviamo la faccia più perfettamente combaciante nello spazio
+			if distSq < bestDistSq {
+				bestDistSq = distSq
+				bestNeighborFace = overlapFace
+			}
+			return false
+		})
+		if bestNeighborFace != nil {
+			if bestDistSq < 0.001 {
+				bestNeighborFace.SetNeighbor(face.GetParent())
+				face.SetNeighbor(bestNeighborFace.GetParent())
+				foundFaces++
+			}
+		}
+	}
+	//fmt.Printf("Total faces: %d, not found faces: %d\n", totalFaces, totalFaces-foundFaces)
 	return container
 }
 
@@ -313,150 +461,4 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 		}
 	}
 	return out, nil
-}
-
-// compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
-func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volume {
-	totalFaces := 0
-	var container []*Volume
-	var fixFaces []*Face
-	modelSectorId := 0
-	facesTree := physics.NewAABBTree(1024, 4.0)
-	for _, cv := range volumes {
-		// cv.Id e cv.Tag provengono dal parser BSP
-		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
-		modelSectorId++
-		for _, cf := range cv.Faces {
-			pts := cf.Points
-			pLen := len(pts)
-			if pLen < 3 {
-				continue
-			}
-			material := anim.GetAnimation(cf.Material)
-			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
-			triangles := geometry.Triangulate3d(pts)
-			for _, tri := range triangles {
-				face := NewFace(nil, tri, cf.Tag, material)
-				volume.AddFace(face)
-				fixFaces = append(fixFaces, face)
-				facesTree.InsertObject(face)
-				totalFaces++
-			}
-		}
-		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
-		volume.Light = NewLight()
-		volume.Rebuild()
-		container = append(container, volume)
-	}
-
-	foundFaces := 0
-	// Risoluzione Adiacenze (Portali 3D)
-	for _, face := range fixFaces {
-		if face.GetNeighbor() != nil {
-			continue
-		}
-		bestDistSq := math.MaxFloat64
-		var bestNeighborFace *Face
-		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
-			overlapFace, ok := object.(*Face)
-			// Ignore already linked
-			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
-				return false
-			}
-			// Per trovare i portali 3D, confrontiamo la vicinanza dei baricentri dei triangoli
-			pts1 := face.GetPoints()
-			pts2 := overlapFace.GetPoints()
-			// Calcolo baricentro faccia corrente (3 punti)
-			cx1 := (pts1[0].X + pts1[1].X + pts1[2].X) / 3.0
-			cy1 := (pts1[0].Y + pts1[1].Y + pts1[2].Y) / 3.0
-			cz1 := (pts1[0].Z + pts1[1].Z + pts1[2].Z) / 3.0
-			// Calcolo baricentro faccia candidata
-			cx2 := (pts2[0].X + pts2[1].X + pts2[2].X) / 3.0
-			cy2 := (pts2[0].Y + pts2[1].Y + pts2[2].Y) / 3.0
-			cz2 := (pts2[0].Z + pts2[1].Z + pts2[2].Z) / 3.0
-			dx := cx1 - cx2
-			dy := cy1 - cy2
-			dz := cz1 - cz2
-			distSq := (dx * dx) + (dy * dy) + (dz * dz)
-			// Troviamo la faccia più perfettamente combaciante nello spazio
-			if distSq < bestDistSq {
-				bestDistSq = distSq
-				bestNeighborFace = overlapFace
-			}
-			return false
-		})
-		if bestNeighborFace != nil {
-			if bestDistSq < 0.001 {
-				bestNeighborFace.SetNeighbor(face.GetParent())
-				face.SetNeighbor(bestNeighborFace.GetParent())
-				foundFaces++
-			}
-		}
-	}
-	//fmt.Printf("Total faces: %d, not found faces: %d\n", totalFaces, totalFaces-foundFaces)
-	return container
-}
-
-// upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
-func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
-	var volumes3d []*Volume
-
-	// Mappa di traduzione: *Volume 2D -> *Volume 3D
-	volMap := make(map[*Volume]*Volume)
-
-	// 1. Prima Passata: Generazione della topologia solida
-	for _, vol2d := range vols2d {
-		id := fmt.Sprintf("%s_3d", vol2d.GetId())
-		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
-		if vol2d.Light != nil {
-			vol3d.Light = vol2d.Light
-		}
-		faces2d := vol2d.GetFaces()
-		if len(faces2d) != 3 {
-			continue
-		}
-		p0 := faces2d[0].GetStart()
-		p1 := faces2d[1].GetStart()
-		p2 := faces2d[2].GetStart()
-		floorY := vol2d.GetMinZ()
-		ceilY := vol2d.GetMaxZ()
-		// [Indice 0] Soffitto (Ceil)
-		ceilP := []geometry.XYZ{{X: p0.X, Y: ceilY, Z: p0.Y}, {X: p1.X, Y: ceilY, Z: p1.Y}, {X: p2.X, Y: ceilY, Z: p2.Y}}
-		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
-		// [Indice 1] Pavimento (Floor)
-		floorP := []geometry.XYZ{{X: p0.X, Y: floorY, Z: p0.Y}, {X: p2.X, Y: floorY, Z: p2.Y}, {X: p1.X, Y: floorY, Z: p1.Y}}
-		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
-		// [Indici 2, 3, 4] Facce Laterali
-		for _, f2d := range faces2d {
-			start := f2d.GetStart()
-			end := f2d.GetEnd()
-			wallPts := []geometry.XYZ{
-				{X: start.X, Y: floorY, Z: start.Y},
-				{X: end.X, Y: floorY, Z: end.Y},
-				{X: end.X, Y: ceilY, Z: end.Y},
-				{X: start.X, Y: ceilY, Z: start.Y},
-			}
-			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
-		}
-		vol3d.Rebuild()
-		volumes3d = append(volumes3d, vol3d)
-		volMap[vol2d] = vol3d
-	}
-
-	// 2. Seconda Passata: Link delle adiacenze (Portali)
-	for idx, vol2d := range vols2d {
-		vol3d := volumes3d[idx]
-		faces2d := vol2d.GetFaces()
-		faces3d := vol3d.GetFaces()
-		for i, f2d := range faces2d {
-			if neighbor2d := f2d.GetNeighbor(); neighbor2d != nil {
-				// Recupera il puntatore al nuovo volume 3D associato al vicino 2D
-				if neighbor3d, ok := volMap[neighbor2d]; ok {
-					// Mappa 1:1 traslata di 2 (saltando ceil e floor)
-					faces3d[i+2].SetNeighbor(neighbor3d)
-				}
-			}
-		}
-	}
-	return volumes3d
 }

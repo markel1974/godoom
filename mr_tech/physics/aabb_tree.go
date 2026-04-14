@@ -26,7 +26,7 @@ func NewAABBTree(initialSize uint, margin float64) *AABBTree {
 		growthSize:         initialSize,
 		nodes:              make([]*AABBNode, initialSize),
 		objectNodeIndexMap: make(map[IAABB]uint),
-		stack:              make([]uint, 0, 256),
+		stack:              make([]uint, initialSize),
 		margin:             margin,
 	}
 	var nodeIndex uint
@@ -82,14 +82,13 @@ func (a *AABBTree) UpdateObject(object IAABB) {
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
 func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
 	testAabb := object.GetAABB()
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
 
-	for len(a.stack) > 0 {
-		// Pop (LIFO) dall'ultima posizione della slice
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
@@ -102,9 +101,14 @@ func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool)
 					}
 				}
 			} else {
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
 				// Push dei nodi figli
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 	}
@@ -112,12 +116,13 @@ func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool)
 
 // QueryPoint2d searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
 func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
+
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
@@ -128,8 +133,13 @@ func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool
 					break
 				}
 			} else {
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 	}
@@ -137,12 +147,13 @@ func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool
 
 // QueryPoint3d searches the tree for objects whose AABBs contain the given 3D point.
 func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool) {
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
+
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
@@ -153,8 +164,13 @@ func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) 
 					break
 				}
 			} else {
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 	}
@@ -162,30 +178,30 @@ func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) 
 
 // QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
 func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
 
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
-
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
-
 		node := a.nodes[nodeIndex]
-
-		// Test di intersezione tra l'AABB del nodo e il Frustum
 		if node.aabb.IntersectFrustum(frustum) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break
 				}
 			} else {
-				// Il nodo è visibile o intersecato: continuiamo a scendere nei rami
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 		// Altrimenti, se il nodo è fuori dal Frustum, l'intero ramo viene scartato! (Frustum Culling)
@@ -194,20 +210,17 @@ func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bo
 
 // QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
 func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bool) {
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
 
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
-
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
-
 		node := a.nodes[nodeIndex]
-
 		// Short-circuit evaluation: previene test doppi e invocazioni duplicate del callback
 		if node.aabb.IntersectFrustum(f1) || node.aabb.IntersectFrustum(f2) {
 			if node.IsLeaf() {
@@ -215,8 +228,13 @@ func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB
 					break
 				}
 			} else {
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 	}
@@ -233,21 +251,18 @@ func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance fl
 	invDirY := 1.0 / dirY
 	invDirZ := 1.0 / dirZ
 
-	a.stack = a.stack[:0]
-	a.stack = append(a.stack, a.rootNodeIndex)
+	stackIndex := 0
+	a.stack[stackIndex] = a.rootNodeIndex
+	stackIndex++
 
-	for len(a.stack) > 0 {
-		lastIdx := len(a.stack) - 1
-		nodeIndex := a.stack[lastIdx]
-		a.stack = a.stack[:lastIdx]
-
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := a.stack[stackIndex]
 		if nodeIndex == AABBNullNode {
 			continue
 		}
-
 		node := a.nodes[nodeIndex]
 		tMin, hit := node.aabb.IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ)
-
 		// Ray Culling: scartiamo l'intero ramo se è più lontano del nostro limite attuale
 		if hit && tMin <= maxDistance {
 			if node.IsLeaf() {
@@ -258,9 +273,13 @@ func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance fl
 					}
 				}
 			} else {
-				// Push dei figli
-				a.stack = append(a.stack, node.leftNodeIndex)
-				a.stack = append(a.stack, node.rightNodeIndex)
+				if (stackIndex + 2) > len(a.stack) {
+					a.stackGrow()
+				}
+				a.stack[stackIndex] = node.leftNodeIndex
+				stackIndex++
+				a.stack[stackIndex] = node.rightNodeIndex
+				stackIndex++
 			}
 		}
 	}
@@ -269,13 +288,10 @@ func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance fl
 // allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
 func (a *AABBTree) allocateNode() (uint, *AABBNode) {
 	if a.nextFreeNodeIndex == AABBNullNode {
-		//assert(a.allocatedNodeCount == a.nodeCapacity)
 		a.nodeCapacity += a.growthSize
-
 		nodes := make([]*AABBNode, a.nodeCapacity)
 		copy(nodes, a.nodes)
 		a.nodes = nodes
-
 		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
 			node := NewAABBNode()
 			a.nodes[nodeIndex] = node
@@ -471,4 +487,10 @@ func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
 
 		treeNodeIndex = treeNode.parentNodeIndex
 	}
+}
+
+func (a *AABBTree) stackGrow() {
+	newStack := make([]uint, len(a.stack)*2)
+	copy(newStack, a.stack)
+	a.stack = newStack
 }

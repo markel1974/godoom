@@ -26,19 +26,8 @@ func NewAABB() *AABB {
 	return a
 }
 
-// Rebuild updates the AABB's bounds and surface area using the provided minimum and maximum coordinates.
-func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
-	a.minX = minX
-	a.minY = minY
-	a.minZ = minZ
-	a.maxX = maxX
-	a.maxY = maxY
-	a.maxZ = maxZ
-	a.surfaceArea = 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
-}
-
-// Expand increases the size of the AABB by the given margin in all directions and returns a new expanded AABB.
-func (a *AABB) Expand(margin float64) *AABB {
+// NewAABBExpand creates a new AABB by expanding the given AABB by the specified margin in all directions.
+func NewAABBExpand(a *AABB, margin float64) *AABB {
 	minX, minY, minZ := a.minX-margin, a.minY-margin, a.minZ-margin
 	maxX, maxY, maxZ := a.maxX+margin, a.maxY+margin, a.maxZ+margin
 	out := NewAABB()
@@ -46,8 +35,8 @@ func (a *AABB) Expand(margin float64) *AABB {
 	return out
 }
 
-// Merge combines the current AABB with another AABB to produce a new AABB that encapsulates both.
-func (a *AABB) Merge(other *AABB) *AABB {
+// NewAABBMerge combines the current AABB with another AABB to produce a new AABB that encapsulates both.
+func NewAABBMerge(a, other *AABB) *AABB {
 	minX := math.Min(a.minX, other.minX)
 	minY := math.Min(a.minY, other.minY)
 	minZ := math.Min(a.minZ, other.minZ)
@@ -59,8 +48,8 @@ func (a *AABB) Merge(other *AABB) *AABB {
 	return out
 }
 
-// Intersection returns a new AABB representing the overlapping region of the two AABBs or nil if there is no intersection.
-func (a *AABB) Intersection(other *AABB) *AABB {
+// NewAABBIntersection returns a new AABB representing the overlapping region of the two AABBs or nil if there is no intersection.
+func NewAABBIntersection(a, other *AABB) *AABB {
 	minX := math.Max(a.minX, other.minX)
 	minY := math.Max(a.minY, other.minY)
 	minZ := math.Max(a.minZ, other.minZ)
@@ -70,6 +59,17 @@ func (a *AABB) Intersection(other *AABB) *AABB {
 	out := NewAABB()
 	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 	return out
+}
+
+// Rebuild updates the AABB's bounds and surface area using the provided minimum and maximum coordinates.
+func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
+	a.minX = minX
+	a.minY = minY
+	a.minZ = minZ
+	a.maxX = maxX
+	a.maxY = maxY
+	a.maxZ = maxZ
+	a.surfaceArea = 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
 }
 
 // Overlaps checks if the current AABB intersects with another AABB by comparing their bounds on all axes.
@@ -178,8 +178,7 @@ func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (floa
 	return 0.0, false
 }
 
-// IntersectFrustum controlla se l'AABB si trova all'interno (o interseca) il Frustum fornito.
-// Restituisce true se l'AABB è visibile.
+// IntersectFrustum tests whether the AABB intersects with the specified view frustum, returning true if they overlap.
 func (a *AABB) IntersectFrustum(f *Frustum) bool {
 	for i := 0; i < 6; i++ {
 		plane := f.Planes[i]

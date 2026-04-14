@@ -58,8 +58,7 @@ func (a *AABBTree) Nodes() map[IAABB]uint {
 func (a *AABBTree) InsertObject(object IAABB) {
 	nodeIndex, node := a.allocateNode()
 	node.object = object
-	node.aabb = object.GetAABB().Expand(aabbMargin)
-
+	node.aabb = NewAABBExpand(object.GetAABB(), aabbMargin)
 	a.insertLeaf(nodeIndex)
 	a.objectNodeIndexMap[object] = nodeIndex
 }
@@ -332,7 +331,7 @@ func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
 		leftNode := a.nodes[leftNodeIndex]
 		rightNode := a.nodes[rightNodeIndex]
 
-		combinedAabb := treeNode.aabb.Merge(leafNode.aabb)
+		combinedAabb := NewAABBMerge(treeNode.aabb, leafNode.aabb)
 
 		newParentNodeCost := 2.0 * combinedAabb.surfaceArea
 		minimumPushDownCost := 2.0 * (combinedAabb.surfaceArea - treeNode.aabb.surfaceArea)
@@ -340,17 +339,17 @@ func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
 		// use the costs to figure out whether to create a new parent here or descend
 		var costLeft float64
 		var costRight float64
+		leftMerge := NewAABBMerge(leafNode.aabb, leftNode.aabb)
+		rightMerge := NewAABBMerge(leafNode.aabb, rightNode.aabb)
 		if leftNode.IsLeaf() {
-			costLeft = leafNode.aabb.Merge(leftNode.aabb).surfaceArea + minimumPushDownCost
+			costLeft = leftMerge.surfaceArea + minimumPushDownCost
 		} else {
-			newLeftAabb := leafNode.aabb.Merge(leftNode.aabb)
-			costLeft = (newLeftAabb.surfaceArea - leftNode.aabb.surfaceArea) + minimumPushDownCost
+			costLeft = (leftMerge.surfaceArea - leftNode.aabb.surfaceArea) + minimumPushDownCost
 		}
 		if rightNode.IsLeaf() {
-			costRight = leafNode.aabb.Merge(rightNode.aabb).surfaceArea + minimumPushDownCost
+			costRight = rightMerge.surfaceArea + minimumPushDownCost
 		} else {
-			newRightAabb := leafNode.aabb.Merge(rightNode.aabb)
-			costRight = (newRightAabb.surfaceArea - rightNode.aabb.surfaceArea) + minimumPushDownCost
+			costRight = (rightMerge.surfaceArea - rightNode.aabb.surfaceArea) + minimumPushDownCost
 		}
 
 		// if the cost of creating a new parent node here is less than descending in either direction then
@@ -375,7 +374,7 @@ func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
 
 	newParentIndex, newParent := a.allocateNode()
 	newParent.parentNodeIndex = oldParentIndex
-	newParent.aabb = leafNode.aabb.Merge(leafSibling.aabb) // the new parents aabb is the leaf aabb combined with it's siblings aabb
+	newParent.aabb = NewAABBMerge(leafNode.aabb, leafSibling.aabb) // the new parents aabb is the leaf aabb combined with it's siblings aabb
 	newParent.leftNodeIndex = leafSiblingIndex
 	newParent.rightNodeIndex = leafNodeIndex
 
@@ -452,7 +451,7 @@ func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	}
 	// Boundary violato: mutazione dell'albero necessaria
 	a.removeLeaf(leafNodeIndex)
-	node.aabb = newAABB.Expand(aabbMargin) // Rigenera il Fat Margin centrato sulla nuova posizione
+	node.aabb = NewAABBExpand(newAABB, aabbMargin)
 	a.insertLeaf(leafNodeIndex)
 }
 
@@ -464,7 +463,7 @@ func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
 		// fix height and area
 		leftNode := a.nodes[treeNode.leftNodeIndex]
 		rightNode := a.nodes[treeNode.rightNodeIndex]
-		treeNode.aabb = leftNode.aabb.Merge(rightNode.aabb)
+		treeNode.aabb = NewAABBMerge(leftNode.aabb, rightNode.aabb)
 
 		treeNodeIndex = treeNode.parentNodeIndex
 	}

@@ -123,7 +123,7 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
-			if vol.containsPoint3d(px, py, pz) {
+			if vol.PointInVolume(px, py, pz) {
 				target = vol
 				return true
 			}
@@ -160,7 +160,7 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 		if volume, ok := object.(*Volume); ok {
-			if volume.containsPoint2d(px, py) {
+			if volume.PointInLineSide(px, py) {
 				target = volume
 				return true
 			}

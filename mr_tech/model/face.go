@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -169,6 +170,17 @@ func (s *Face) GetMaterialLower() *textures.Animation {
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
 func (s *Face) GetPoints() []geometry.XYZ {
 	return s.points
+}
+
+// PointInLineSide determines if a 2D point (px, py) lies on or to the right of the directed line segment of the Face.
+func (s *Face) PointInLineSide(px, py float64) bool {
+	start := s.GetStart()
+	end := s.GetEnd()
+	dir := mathematic.PointInLineDirectionF(px, py, start.X, start.Y, end.X, end.Y)
+	if dir < 0 {
+		return false
+	}
+	return true
 }
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.

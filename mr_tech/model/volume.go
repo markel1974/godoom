@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -55,6 +54,56 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 	v.materials[1] = nil
 	v.Rebuild()
 	return v
+}
+
+// Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
+func (v *Volume) Rebuild() bool {
+	if len(v.faces) == 0 {
+		//fmt.Println("Volume has empty faces", v.id, v.tag)
+		v.aabb.Rebuild(0, 0, 0, 0, 0, 0)
+		return false
+	}
+	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	for _, face := range v.faces {
+		if v.hasFixedZ {
+			face.SetZ(v.minZ, v.maxZ)
+		}
+		for _, p := range face.GetPoints() {
+			if p.X < minX {
+				minX = p.X
+			}
+			if p.X > maxX {
+				maxX = p.X
+			}
+			if p.Y < minY {
+				minY = p.Y
+			}
+			if p.Y > maxY {
+				maxY = p.Y
+			}
+			if p.Z < calcMinZ {
+				calcMinZ = p.Z
+			}
+			if p.Z > calcMaxZ {
+				calcMaxZ = p.Z
+			}
+		}
+	}
+	if v.hasFixedZ {
+		calcMinZ = v.minZ
+		calcMaxZ = v.maxZ
+	} else {
+		v.minZ = calcMinZ
+		v.maxZ = calcMaxZ
+	}
+	v.aabb.Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
+	return true
+}
+
+// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the volume, representing its 3D bounds.
+func (v *Volume) GetAABB() *physics.AABB {
+	return v.aabb
 }
 
 // SetZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
@@ -114,56 +163,6 @@ func (v *Volume) GetFaces() []*Face {
 	return v.faces
 }
 
-// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the volume, representing its 3D bounds.
-func (v *Volume) GetAABB() *physics.AABB {
-	return v.aabb
-}
-
-// Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
-func (v *Volume) Rebuild() bool {
-	if len(v.faces) == 0 {
-		//fmt.Println("Volume has empty faces", v.id, v.tag)
-		v.aabb.Rebuild(0, 0, 0, 0, 0, 0)
-		return false
-	}
-	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-	for _, face := range v.faces {
-		if v.hasFixedZ {
-			face.SetZ(v.minZ, v.maxZ)
-		}
-		for _, p := range face.GetPoints() {
-			if p.X < minX {
-				minX = p.X
-			}
-			if p.X > maxX {
-				maxX = p.X
-			}
-			if p.Y < minY {
-				minY = p.Y
-			}
-			if p.Y > maxY {
-				maxY = p.Y
-			}
-			if p.Z < calcMinZ {
-				calcMinZ = p.Z
-			}
-			if p.Z > calcMaxZ {
-				calcMaxZ = p.Z
-			}
-		}
-	}
-	if v.hasFixedZ {
-		calcMinZ = v.minZ
-		calcMaxZ = v.maxZ
-	} else {
-		v.minZ = calcMinZ
-		v.maxZ = calcMaxZ
-	}
-	v.aabb.Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
-	return true
-}
-
 // AddTag appends the specified tags to the volume's existing tags, separated by a semicolon.
 func (v *Volume) AddTag(tags string) {
 	if len(tags) > 0 {
@@ -176,26 +175,27 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
+// Neighbor returns the neighboring volume that contains the specified point (px, py, pz), or nil if no such volume exists.
 func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	if v.hasFixedZ {
-		if v.containsPoint2d(px, py) {
+		if v.PointInLineSide(px, py) {
 			return v
 		}
 		for _, face := range v.GetFaces() {
 			if neighbor := face.GetNeighbor(); neighbor != nil {
-				if neighbor.containsPoint2d(px, py) {
+				if neighbor.PointInLineSide(px, py) {
 					return neighbor
 				}
 			}
 		}
 		return nil
 	}
-	if v.containsPoint3d(px, py, pz) {
+	if v.PointInVolume(px, py, pz) {
 		return v
 	}
 	for _, face := range v.GetFaces() {
 		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.containsPoint3d(px, py, pz) {
+			if neighbor.PointInVolume(px, py, pz) {
 				return neighbor
 			}
 		}
@@ -203,14 +203,14 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	return nil
 }
 
-// containsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
-func (v *Volume) containsPoint3d(px, py, pz float64) bool {
+// PointInVolume determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
+func (v *Volume) PointInVolume(px, py, pz float64) bool {
 	const epsilon = 0.01
 	if v.hasFixedZ {
 		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
 			return false
 		}
-		return v.containsPoint2d(px, py)
+		return v.PointInLineSide(px, py)
 	}
 
 	for _, face := range v.faces {
@@ -225,13 +225,10 @@ func (v *Volume) containsPoint3d(px, py, pz float64) bool {
 	return true
 }
 
-// ContainsPoint2d determines if a 2D point (px, py) lies within the bounds of the Volume.
-func (v *Volume) containsPoint2d(px, py float64) bool {
+// PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the volume.
+func (v *Volume) PointInLineSide(px, py float64) bool {
 	for _, face := range v.faces {
-		start := face.GetStart()
-		end := face.GetEnd()
-		ps := mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y)
-		if ps < 0 {
+		if !face.PointInLineSide(px, py) {
 			return false
 		}
 	}
@@ -281,32 +278,3 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 		Z: floorY,
 	}
 }
-
-/*
-// LocatePoint2d attempts to locate the 2D point (px, py) within the mesh and returns the containing Volume or nil.
-func (v *Volume) LocatePoint2d(px, py float64) *Volume {
-	curr := v
-	const maxSteps = 16
-	for step := 0; step < maxSteps; step++ {
-		inside := true
-		for _, face := range curr.faces {
-			start := face.GetStart()
-			end := face.GetEnd()
-			if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
-				neighbor := face.GetNeighbor()
-				if neighbor == nil {
-					return nil
-				}
-				curr = neighbor
-				inside = false
-				break
-			}
-		}
-		if inside {
-			return curr
-		}
-	}
-	return nil
-}
-
-*/

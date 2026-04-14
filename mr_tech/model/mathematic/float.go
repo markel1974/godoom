@@ -40,13 +40,13 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 	return OverlapF(x0, x1, x2, x3) && OverlapF(y0, y1, y2, y3)
 }
 
-// PointSideF returns a normalized value indicating the direction of a point.
-// Restituisce -1.0, 0.0, o 1.0.
-func PointSideF(px, py, x0, y0, x1, y1 float64) float64 {
-	const sideEpsilon = 1e-5 // 0.00001
+// PointInLineDirectionF determines the relative position of point (px, py) to a directed line segment (x0, y0) -> (x1, y1).
+// Returns 0 if the point lies on the line, -1 if it's to the left, and 1 if it's to the right.
+func PointInLineDirectionF(px, py, x0, y0, x1, y1 float64) float64 {
+	const epsilon = 1e-5 // 0.00001
 	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
 	// Difesa contro l'imprecisione del floating point
-	if math.Abs(v) <= sideEpsilon {
+	if math.Abs(v) <= epsilon {
 		return 0
 	}
 	if v < 0 {
@@ -81,8 +81,8 @@ func IntersectFn(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 
 // IntersectLineSegmentsF determines if two 2D line segments intersect using their endpoint coordinates.
 func IntersectLineSegmentsF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64) bool {
 	return IntersectBoxF(x0, y0, x1, y1, x2, y2, x3, y3) &&
-		math.Abs(PointSideF(x2, y2, x0, y0, x1, y1)+PointSideF(x3, y3, x0, y0, x1, y1)) != 2 &&
-		math.Abs(PointSideF(x0, y0, x2, y2, x3, y3)+PointSideF(x1, y1, x2, y2, x3, y3)) != 2
+		math.Abs(PointInLineDirectionF(x2, y2, x0, y0, x1, y1)+PointInLineDirectionF(x3, y3, x0, y0, x1, y1)) != 2 &&
+		math.Abs(PointInLineDirectionF(x0, y0, x2, y2, x3, y3)+PointInLineDirectionF(x1, y1, x2, y2, x3, y3)) != 2
 }
 
 // FindMinAndMaxF finds and returns the minimum and maximum values in a slice of float64.

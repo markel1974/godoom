@@ -18,8 +18,8 @@ type Calibration struct {
 type Volumes struct {
 	container []*Volume
 	tree      *physics.AABBTree
-	floorTree *physics.AABBTree
 	cache     map[string]*Volume
+	fullZ     bool
 }
 
 // NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
@@ -32,10 +32,9 @@ func NewVolumes(container []*Volume, fullZ bool) *Volumes {
 		container: container,
 		cache:     cache,
 		tree:      physics.NewAABBTree(uint(len(container)), 4.0),
+		fullZ:     fullZ,
 	}
-	if fullZ {
-		vs.floorTree = physics.NewAABBTree(uint(len(container)), 0.0)
-	}
+
 	return vs
 
 }
@@ -45,14 +44,6 @@ func (s *Volumes) Setup() {
 	for _, volume := range s.container {
 		if volume.Rebuild() {
 			s.tree.InsertObject(volume)
-			if s.floorTree != nil {
-				for _, face := range volume.GetFaces() {
-					normal := face.GetNormal()
-					if normal.Z == -1 {
-						s.floorTree.InsertObject(face)
-					}
-				}
-			}
 		}
 	}
 }
@@ -142,17 +133,25 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	return target
 }
 
-// Locate2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
-func (s *Volumes) Locate2d(px, py float64) *Volume {
+// LocateVolume2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
+func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 	var target *Volume = nil
-	if s.floorTree != nil {
-		s.floorTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			if face, ok := object.(*Face); ok {
-				if face.PointInTriangle(px, py) {
-					target = face.GetParent()
-					return true
-				}
+	if s.fullZ {
+		s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+			volume, ok := object.(*Volume)
+			if !ok {
 				return false
+			}
+			for _, face := range volume.GetFaces() {
+				//Floor test
+				if face.GetNormal().Z != -1 {
+					continue
+				}
+				if !face.PointInTriangle(px, py) {
+					return false
+				}
+				target = face.GetParent()
+				return true
 			}
 			return false
 		})

@@ -177,7 +177,8 @@ func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
 		return 0, false
 	}
 	n := s.GetNormal()
-	pointInVolume := (px-s.points[0].X)*n.X + (py-s.points[0].Y)*n.Y + (pz-s.points[0].Z)*n.Z
+	target := s.points[0]
+	pointInVolume := (px-target.X)*n.X + (py-target.Y)*n.Y + (pz-target.Z)*n.Z
 	return pointInVolume, true
 }
 

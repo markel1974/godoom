@@ -236,7 +236,8 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
+		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil())
+		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
@@ -269,7 +270,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		}
 	}
 
-	return volumes3d //, floorTree
+	return volumes3d
 }
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
@@ -445,7 +446,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumes.Locate2d(first.Light.pos.X, first.Light.pos.Y)
+				cVolume := r.volumes.LocateVolume2d(first.Light.pos.X, first.Light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)

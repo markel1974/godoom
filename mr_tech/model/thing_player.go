@@ -39,7 +39,7 @@ func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug 
 	if cfg.HasZPos {
 		volume = volumes.QueryPoint3d(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	} else {
-		volume = volumes.Locate2d(cfg.Position.X, cfg.Position.Y)
+		volume = volumes.LocateVolume2d(cfg.Position.X, cfg.Position.Y)
 	}
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player volume at %f, %f", cfg.Position.X, cfg.Position.Y)

@@ -32,7 +32,7 @@ func NewVolumes(container []*Volume) *Volumes {
 
 // CreateTree constructs a new AABB tree based on the current container and populates it with rebuilt volume objects.
 func (s *Volumes) CreateTree() {
-	s.tree = physics.NewAABBTree(uint(len(s.container)))
+	s.tree = physics.NewAABBTree(uint(len(s.container)), 4.0)
 	for _, volume := range s.container {
 		if volume.Rebuild() {
 			s.tree.InsertObject(volume)

@@ -43,7 +43,7 @@ type VertexEdges struct {
 // NewVertexEdges creates and initializes a new instance of VertexEdges with an empty vertex list and a new AABBTree.
 func NewVertexEdges(eps float64) *VertexEdges {
 	return &VertexEdges{
-		tree:         physics.NewAABBTree(1024),
+		tree:         physics.NewAABBTree(1024, 4.0),
 		vertexes:     nil,
 		sectorsEdges: nil,
 		eps:          eps,

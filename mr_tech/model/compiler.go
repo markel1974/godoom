@@ -110,7 +110,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.ConfigSect
 	var container []*Volume
 	totalPolygons := 0
 	var fixFaces []*Face
-	facesTree := physics.NewAABBTree(1024)
+	facesTree := physics.NewAABBTree(1024, 4.0)
 	emptyAnim := anim.GetAnimation(nil)
 	ve := NewVertexEdges(0.001)
 	ve.Construct(vertices, css)
@@ -320,7 +320,7 @@ func (r *Compiler) compile3d(volumes []*config.ConfigVolume, anim *Animations) [
 	var container []*Volume
 	var fixFaces []*Face
 	modelSectorId := 0
-	facesTree := physics.NewAABBTree(1024)
+	facesTree := physics.NewAABBTree(1024, 4.0)
 	for _, cv := range volumes {
 		// cv.Id e cv.Tag provengono dal parser BSP
 		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)

@@ -12,7 +12,7 @@ type Lights struct {
 func NewLights() *Lights {
 	l := &Lights{
 		container: make([]*Light, 0),
-		tree:      physics.NewAABBTree(1024),
+		tree:      physics.NewAABBTree(1024, 4.0),
 	}
 	return l
 }

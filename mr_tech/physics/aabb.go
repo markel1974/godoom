@@ -4,64 +4,29 @@ import (
 	"math"
 )
 
-// IAABB represents an interface for objects that can provide their Axis-Aligned Bounding Box (AABB).
+// IAABB represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
+// GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
 type IAABB interface {
 	GetAABB() *AABB
 }
 
 // AABB represents an axis-aligned bounding box in 3D space, defined by its minimum and maximum coordinates.
 type AABB struct {
-	minX        float64
-	minY        float64
-	minZ        float64
-	maxX        float64
-	maxY        float64
-	maxZ        float64
-	surfaceArea float64
+	minX float64
+	minY float64
+	minZ float64
+	maxX float64
+	maxY float64
+	maxZ float64
 }
 
-// NewAABB creates and initializes a new AABB instance with the provided minimum and maximum coordinates.
+// NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
 func NewAABB() *AABB {
 	a := &AABB{}
 	return a
 }
 
-// NewAABBExpand creates a new AABB by expanding the given AABB by the specified margin in all directions.
-func NewAABBExpand(a *AABB, margin float64) *AABB {
-	minX, minY, minZ := a.minX-margin, a.minY-margin, a.minZ-margin
-	maxX, maxY, maxZ := a.maxX+margin, a.maxY+margin, a.maxZ+margin
-	out := NewAABB()
-	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-	return out
-}
-
-// NewAABBMerge combines the current AABB with another AABB to produce a new AABB that encapsulates both.
-func NewAABBMerge(a, other *AABB) *AABB {
-	minX := math.Min(a.minX, other.minX)
-	minY := math.Min(a.minY, other.minY)
-	minZ := math.Min(a.minZ, other.minZ)
-	maxX := math.Max(a.maxX, other.maxX)
-	maxY := math.Max(a.maxY, other.maxY)
-	maxZ := math.Max(a.maxZ, other.maxZ)
-	out := NewAABB()
-	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-	return out
-}
-
-// NewAABBIntersection returns a new AABB representing the overlapping region of the two AABBs or nil if there is no intersection.
-func NewAABBIntersection(a, other *AABB) *AABB {
-	minX := math.Max(a.minX, other.minX)
-	minY := math.Max(a.minY, other.minY)
-	minZ := math.Max(a.minZ, other.minZ)
-	maxX := math.Min(a.maxX, other.maxX)
-	maxY := math.Min(a.maxY, other.maxY)
-	maxZ := math.Min(a.maxZ, other.maxZ)
-	out := NewAABB()
-	out.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-	return out
-}
-
-// Rebuild updates the AABB's bounds and surface area using the provided minimum and maximum coordinates.
+// Rebuild recalculates and sets the bounds of the AABB using the specified minimum and maximum coordinates.
 func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
 	a.minX = minX
 	a.minY = minY
@@ -69,10 +34,42 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxX = maxX
 	a.maxY = maxY
 	a.maxZ = maxZ
-	a.surfaceArea = 2.0 * (a.GetWidth()*a.GetHeight() + a.GetWidth()*a.GetDepth() + a.GetHeight()*a.GetDepth())
 }
 
-// Overlaps checks if the current AABB intersects with another AABB by comparing their bounds on all axes.
+// MergeInPlace updates the current AABB to encompass the union of the specified source and other AABBs.
+func (a *AABB) MergeInPlace(src, other *AABB) {
+	minX := math.Min(src.minX, other.minX)
+	minY := math.Min(src.minY, other.minY)
+	minZ := math.Min(src.minZ, other.minZ)
+	maxX := math.Max(src.maxX, other.maxX)
+	maxY := math.Max(src.maxY, other.maxY)
+	maxZ := math.Max(src.maxZ, other.maxZ)
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+}
+
+// ExpandInPlace recalculates and updates the AABB by expanding it in all directions by the specified margin.
+func (a *AABB) ExpandInPlace(src *AABB, margin float64) {
+	minX := src.minX - margin
+	minY := src.minY - margin
+	minZ := src.minZ - margin
+	maxX := src.maxX + margin
+	maxY := src.maxY + margin
+	maxZ := src.maxZ + margin
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+}
+
+// IntersectInPlace updates the AABB in place to represent the intersection volume of the source and other AABB.
+func (a *AABB) IntersectInPlace(src, other *AABB) {
+	minX := math.Max(src.minX, other.minX)
+	minY := math.Max(src.minY, other.minY)
+	minZ := math.Max(src.minZ, other.minZ)
+	maxX := math.Min(src.maxX, other.maxX)
+	maxY := math.Min(src.maxY, other.maxY)
+	maxZ := math.Min(src.maxZ, other.maxZ)
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+}
+
+// Overlaps checks if the current AABB intersects with another AABB and returns true if an overlap exists.
 func (a *AABB) Overlaps(other *AABB) bool {
 	// y is deliberately first in the list of checks below as it is seen as more likely than things
 	// collide on x,z but not on y than they do on y, thus we drop sooner on a y fail
@@ -84,7 +81,7 @@ func (a *AABB) Overlaps(other *AABB) bool {
 		a.minZ < other.maxZ
 }
 
-// ContainsPoint2d checks if the given 2D point (px, py) is inside the horizontal bounds of the AABB.
+// ContainsPoint2d checks if the given 2D point (px, py) lies within the bounds of the AABB instance.
 func (a *AABB) ContainsPoint2d(px, py float64) bool {
 	return a.maxX >= px &&
 		a.minX <= px &&
@@ -92,14 +89,14 @@ func (a *AABB) ContainsPoint2d(px, py float64) bool {
 		a.minY <= py
 }
 
-// ContainsPoint3d checks if the 3D point (px, py, pz) lies within the bounds of the AABB.
+// ContainsPoint3d checks if the AABB contains the specified 3D point (px, py, pz) and returns true if it does.
 func (a *AABB) ContainsPoint3d(px, py, pz float64) bool {
 	return px >= a.minX && px <= a.maxX &&
 		py >= a.minY && py <= a.maxY &&
 		pz >= a.minZ && pz <= a.maxZ
 }
 
-// Contains checks if the other AABB is entirely contained within the current AABB.
+// Contains checks if the given AABB is fully enclosed within the boundaries of the current AABB.
 func (a *AABB) Contains(other *AABB) bool {
 	return other.minX >= a.minX &&
 		other.maxX <= a.maxX &&
@@ -109,52 +106,76 @@ func (a *AABB) Contains(other *AABB) bool {
 		other.maxZ <= a.maxZ
 }
 
-// GetWidth calculates and returns the width of the AABB along the x-axis.
+// GetWidth calculates and returns the width of the AABB by subtracting minX from maxX.
 func (a *AABB) GetWidth() float64 {
 	return a.maxX - a.minX
 }
 
-// GetHeight returns the height of the AABB by calculating the difference between maxY and minY.
+// GetHeight calculates and returns the height of the AABB by subtracting minY from maxY.
 func (a *AABB) GetHeight() float64 {
 	return a.maxY - a.minY
 }
 
-// GetMinY returns the minimum Y-coordinate of the axis-aligned bounding box (AABB).
+// GetMinY returns the minimum Y-coordinate (minY) of the AABB.
 func (a *AABB) GetMinY() float64 {
 	return a.minY
 }
 
-// GetMaxY retrieves the maximum Y-coordinate (maxY) of the axis-aligned bounding box (AABB).
+// GetMaxY returns the maximum Y-coordinate value (maxY) of the AABB instance.
 func (a *AABB) GetMaxY() float64 {
 	return a.maxY
 }
 
-// GetMinX returns the minimum X-coordinate of the axis-aligned bounding box (AABB).
+// GetMinX returns the minimum X coordinate of the AABB.
 func (a *AABB) GetMinX() float64 {
 	return a.minX
 }
 
-// GetMaxX returns the maximum X-coordinate (maxX) of the axis-aligned bounding box (AABB).
+// GetMaxX returns the maximum x-coordinate (maxX) of the AABB.
 func (a *AABB) GetMaxX() float64 {
 	return a.maxX
 }
 
-// GetMinZ returns the minimum Z-coordinate of the axis-aligned bounding box (AABB).
+// GetSurfaceArea calculates and returns the total surface area of the axis-aligned bounding box (AABB).
+func (a *AABB) GetSurfaceArea() float64 {
+	w := a.maxX - a.minX
+	h := a.maxY - a.minY
+	d := a.maxZ - a.minZ
+	out := 2.0 * ((w * h) + (w * d) + (h * d))
+	return out
+}
+
+// GetSurfaceAreaMerged calculates the surface area of the bounding box formed by merging two AABBs.
+func (a *AABB) GetSurfaceAreaMerged(other *AABB) float64 {
+	minX := math.Min(a.minX, other.minX)
+	minY := math.Min(a.minY, other.minY)
+	minZ := math.Min(a.minZ, other.minZ)
+	maxX := math.Max(a.maxX, other.maxX)
+	maxY := math.Max(a.maxY, other.maxY)
+	maxZ := math.Max(a.maxZ, other.maxZ)
+	w := maxX - minX
+	h := maxY - minY
+	d := maxZ - minZ
+	out := 2.0 * ((w * h) + (w * d) + (h * d))
+	return out
+}
+
+// GetMinZ returns the minimum Z-coordinate of the AABB.
 func (a *AABB) GetMinZ() float64 {
 	return a.minZ
 }
 
-// GetMaxZ returns the maximum Z-coordinate (maxZ) of the axis-aligned bounding box (AABB).
+// GetMaxZ returns the maximum Z-coordinate of the axis-aligned bounding box.
 func (a *AABB) GetMaxZ() float64 {
 	return a.maxZ
 }
 
-// GetDepth calculates and returns the depth of the axis-aligned bounding box (AABB) along the Z-axis.
+// GetDepth calculates and returns the depth of the AABB as the difference between maxZ and minZ.
 func (a *AABB) GetDepth() float64 {
 	return a.maxZ - a.minZ
 }
 
-// IntersectRay tests if a ray intersects the AABB and returns the hit distance and a boolean indicating intersection success.
+// IntersectRay checks if a ray intersects the AABB and calculates the intersection distance if applicable.
 func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (float64, bool) {
 	t1 := (a.minX - oX) * invDirX
 	t2 := (a.maxX - oX) * invDirX
@@ -178,7 +199,7 @@ func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (floa
 	return 0.0, false
 }
 
-// IntersectFrustum tests whether the AABB intersects with the specified view frustum, returning true if they overlap.
+// IntersectFrustum determines whether the AABB intersects with or is partially contained within the given Frustum.
 func (a *AABB) IntersectFrustum(f *Frustum) bool {
 	for i := 0; i < 6; i++ {
 		plane := f.Planes[i]

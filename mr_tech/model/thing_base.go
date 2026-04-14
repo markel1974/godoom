@@ -187,7 +187,7 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	}
 	// volume transition (3d portals)
 	topZ := pZ + tHeight
-	newVolume := t.volume.LocatePoint(pX, pY, pZ)
+	newVolume := t.volume.Neighbor(pX, pY, pZ)
 	if newVolume == nil {
 		newVolume = t.volumes.QueryPoint3d(pX, pY, pZ)
 	}

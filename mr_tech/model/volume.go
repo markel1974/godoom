@@ -176,7 +176,7 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
+func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	if v.hasFixedZ {
 		if v.containsPoint2d(px, py) {
 			return v

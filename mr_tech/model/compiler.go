@@ -233,12 +233,13 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		p2 := faces2d[2].GetStart()
 		floorZ := vol2d.GetMinZ()
 		ceilZ := vol2d.GetMaxZ()
-		// [Indice 0] Soffitto (Ceil)
+
 		ceilP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
 		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
-		// [Indice 1] Pavimento (Floor)
+
 		floorP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
 		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
+
 		// [Indici 2, 3, 4] Facce Laterali
 		for _, f2d := range faces2d {
 			start := f2d.GetStart()

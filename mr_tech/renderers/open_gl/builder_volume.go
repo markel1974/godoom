@@ -92,20 +92,28 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.mapBuilt = true
 	}
 
-	queryGeom := func(object physics.IAABB) bool {
-		if vol, ok := object.(*model.Volume); ok {
-			if vr, exists := w.volRanges[vol]; exists {
-				w.dc.Compute(vr.start, vr.end)
-			}
-		}
-		return false
-	}
+	const usFrustum = false
 
-	frustumFront, frustumRear := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
-	// Doppio Culling sulla Geometria Statica
-	engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
-	// 3. Frustum Culling sulle Luci
-	w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
+	if usFrustum {
+		queryGeom := func(object physics.IAABB) bool {
+			if vol, ok := object.(*model.Volume); ok {
+				if vr, exists := w.volRanges[vol]; exists {
+					w.dc.Compute(vr.start, vr.end)
+				}
+			}
+			return false
+		}
+		frustumFront, frustumRear := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+		engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
+		w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
+	} else {
+		for _, vr := range w.volRanges {
+			w.dc.Compute(vr.start, vr.end)
+		}
+		for _, vl := range engine.GetLights().Get() {
+			w.fl.Create(vl)
+		}
+	}
 	// 4. Entità Dinamiche
 	tA, tC := engine.GetThings().GetActive()
 	w.pushThings(w.fv, w.dc, vi, tA, tC)

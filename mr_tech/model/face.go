@@ -28,29 +28,29 @@ func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKe
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	parent   *Volume
-	neighbor *Volume
-	tag      string
-	aabb     *physics.AABB
-	points   []geometry.XYZ
-	pSize    int
-	normal   geometry.XYZ
-	material [3]*textures.Animation
-	minZ     float64
-	maxZ     float64
-	hasZ     bool
+	parent    *Volume
+	neighbor  *Volume
+	tag       string
+	aabb      *physics.AABB
+	points    []geometry.XYZ
+	pSize     int
+	normal    geometry.XYZ
+	material  [3]*textures.Animation
+	minZ      float64
+	maxZ      float64
+	hasFixedZ bool
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
 func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
 	out := &Face{
-		hasZ:     true,
-		points:   make([]geometry.XYZ, 2),
-		neighbor: neighbor,
-		tag:      tag,
-		minZ:     0,
-		maxZ:     0,
-		aabb:     physics.NewAABB(),
+		hasFixedZ: true,
+		points:    make([]geometry.XYZ, 2),
+		neighbor:  neighbor,
+		tag:       tag,
+		minZ:      0,
+		maxZ:      0,
+		aabb:      physics.NewAABB(),
 	}
 	out.material[0] = tUpper
 	out.material[1] = tMiddle
@@ -65,10 +65,11 @@ func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag strin
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
 func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
-		hasZ:     false,
-		points:   points,
-		neighbor: neighbor,
-		tag:      tag,
+		hasFixedZ: false,
+		points:    points,
+		neighbor:  neighbor,
+		tag:       tag,
+		aabb:      physics.NewAABB(),
 	}
 	out.material[0] = material
 	out.material[1] = material
@@ -85,7 +86,7 @@ func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *text
 func (s *Face) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
-	s.hasZ = true
+	s.hasFixedZ = true
 	for i := range s.points {
 		s.points[i].Z = minZ
 	}
@@ -94,14 +95,14 @@ func (s *Face) SetZ(minZ, maxZ float64) {
 
 // ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (s *Face) ClearZ() {
-	if s.hasZ {
+	if s.hasFixedZ {
 		for i := range s.points {
 			s.points[i].Z = 0
 		}
 	}
 	s.minZ = 0
 	s.maxZ = 0
-	s.hasZ = false
+	s.hasFixedZ = false
 	s.Rebuild()
 }
 
@@ -168,6 +169,15 @@ func (s *Face) GetMaterialLower() *textures.Animation {
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
 func (s *Face) GetPoints() []geometry.XYZ {
 	return s.points
+}
+
+func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
+	if len(s.points) == 0 {
+		return 0, false
+	}
+	n := s.GetNormal()
+	pointInVolume := (px-s.points[0].X)*n.X + (py-s.points[0].Y)*n.Y + (pz-s.points[0].Z)*n.Z
+	return pointInVolume, true
 }
 
 // GetMaterial retrieves the first material (upper texture) of the segment from the material slice.
@@ -260,7 +270,7 @@ func (s *Face) computeAABB() {
 			maxZ = p.Z
 		}
 	}
-	if s.hasZ {
+	if s.hasFixedZ {
 		minZ = s.minZ
 		maxZ = s.maxZ
 	} else {

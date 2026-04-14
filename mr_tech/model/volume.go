@@ -20,19 +20,19 @@ type Volume struct {
 	aabb      *physics.AABB
 	minZ      float64
 	maxZ      float64
-	hasZ      bool
+	hasFixedZ bool
 }
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded volumes.
 func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
 	v := &Volume{
-		modelId: modelId,
-		id:      id,
-		tag:     tag,
-		minZ:    minZ,
-		maxZ:    maxZ,
-		hasZ:    true,
-		aabb:    physics.NewAABB(),
+		modelId:   modelId,
+		id:        id,
+		tag:       tag,
+		minZ:      minZ,
+		maxZ:      maxZ,
+		hasFixedZ: true,
+		aabb:      physics.NewAABB(),
 	}
 	v.materials[0] = floor
 	v.materials[1] = ceil
@@ -43,12 +43,13 @@ func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
 	v := &Volume{
-		modelId: modelId,
-		id:      id,
-		tag:     tag,
-		minZ:    0,
-		maxZ:    0,
-		hasZ:    false,
+		modelId:   modelId,
+		id:        id,
+		tag:       tag,
+		minZ:      0,
+		maxZ:      0,
+		hasFixedZ: false,
+		aabb:      physics.NewAABB(),
 	}
 	v.materials[0] = nil
 	v.materials[1] = nil
@@ -60,7 +61,7 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 func (v *Volume) SetZ(minZ, maxZ float64) {
 	v.minZ = minZ
 	v.maxZ = maxZ
-	v.hasZ = true
+	v.hasFixedZ = true
 	v.Rebuild()
 }
 
@@ -68,7 +69,7 @@ func (v *Volume) SetZ(minZ, maxZ float64) {
 func (v *Volume) ClearZ() {
 	v.minZ = 0
 	v.maxZ = 0
-	v.hasZ = false
+	v.hasFixedZ = false
 	v.Rebuild()
 }
 
@@ -121,13 +122,14 @@ func (v *Volume) GetAABB() *physics.AABB {
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
 func (v *Volume) Rebuild() bool {
 	if len(v.faces) == 0 {
+		//fmt.Println("Volume has empty faces", v.id, v.tag)
 		v.aabb.Rebuild(0, 0, 0, 0, 0, 0)
 		return false
 	}
 	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	for _, face := range v.faces {
-		if v.hasZ {
+		if v.hasFixedZ {
 			face.SetZ(v.minZ, v.maxZ)
 		}
 		for _, p := range face.GetPoints() {
@@ -151,7 +153,7 @@ func (v *Volume) Rebuild() bool {
 			}
 		}
 	}
-	if v.hasZ {
+	if v.hasFixedZ {
 		calcMinZ = v.minZ
 		calcMaxZ = v.maxZ
 	} else {
@@ -175,7 +177,7 @@ func (v *Volume) GetTag() string {
 }
 
 func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
-	if v.hasZ {
+	if v.hasFixedZ {
 		if v.containsPoint2d(px, py) {
 			return v
 		}
@@ -203,22 +205,20 @@ func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
 
 // containsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
 func (v *Volume) containsPoint3d(px, py, pz float64) bool {
-	// Validazione dei limiti Z per volumi estrusi (2.5D)
-	if v.hasZ {
-		//TODO IMPLEMENT Z MARGIN!
-		//if pz < v.minZ || pz > v.maxZ {
-		//	return false
-		//}
+	const epsilon = 0.01
+	if v.hasFixedZ {
+		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
+			return false
+		}
 		return v.containsPoint2d(px, py)
 	}
 
 	for _, face := range v.faces {
-		pts := face.GetPoints()
-		if len(pts) == 0 {
+		pointInVolume, ok := face.PointInVolume(px, py, pz)
+		if !ok {
 			continue
 		}
-		n := face.GetNormal()
-		if ((px-pts[0].X)*n.X + (py-pts[0].Y)*n.Y + (pz-pts[0].Z)*n.Z) > 0.001 {
+		if pointInVolume > epsilon {
 			return false
 		}
 	}

@@ -153,7 +153,7 @@ func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 		volume = th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
 	}
 	if volume == nil {
-		return nil, fmt.Errorf("can't find thing sector at %f, %f", ct.Position.X, ct.Position.Y)
+		return nil, fmt.Errorf("can't find thing volume at %f, %f", ct.Position.X, ct.Position.Y)
 	}
 	var thing IThing
 	switch ct.Kind {

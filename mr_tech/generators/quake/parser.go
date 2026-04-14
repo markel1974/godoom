@@ -67,8 +67,9 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 
 	// Inizializzazione Root con il riferimento al gestore texture popolato
-	player := config.NewConfigPlayer3d(geometry.XYZ{}, 0, 8, 4, 20)
-	root := config.NewConfigRoot(nil, player, nil, 1.0, true, p.texManager)
+	var playerAngle float64
+	var playerPos geometry.XYZ
+	root := config.NewConfigRoot(nil, nil, nil, 1.0, true, p.texManager)
 	root.Full3d = true
 
 	// 3. Parsing delle Entità (Luci, Player, Monsters)
@@ -78,15 +79,14 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		if origin, ok := ent.Properties["origin"]; ok {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
-			// Conversione coordinate: Quake Z-up -> Engine Y-up
-			pos = geometry.XYZ{X: x, Y: z, Z: -y}
+			pos = CreateXYZ(x, y, z)
 		}
 		switch {
 		case classname == "info_player_start":
-			player.Position = pos
+			playerPos = pos
 			if angle, ok := ent.Properties["angle"]; ok {
 				if val, err := strconv.ParseFloat(angle, 64); err == nil {
-					player.Angle = val * (math.Pi / 180.0)
+					playerAngle = val * (math.Pi / 180.0)
 				}
 			}
 
@@ -113,6 +113,10 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		volId := fmt.Sprintf("leaf_%d", leafIdx)
 		volume := config.NewConfigVolume(volId, "quake_bsp")
 
+		if leaf.NumFaces == 0 {
+			fmt.Println("EMPTY VOLUME")
+		}
+
 		for i := uint16(0); i < leaf.NumFaces; i++ {
 			faceIdx := marks.Surfaces[leaf.FirstFace+i]
 			bspFace := faces[faceIdx]
@@ -135,7 +139,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 				} else {
 					v = vertexes[edges[-surfEdgeIdx].Vertex1]
 				}
-				points = append(points, geometry.XYZ{X: float64(v.X), Y: float64(v.Z), Z: float64(-v.Y)})
+				pos := CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+				points = append(points, pos)
 			}
 
 			// Creazione Animazione (Materiale) con l'ID texture registrato
@@ -152,6 +157,14 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			root.Volumes = append(root.Volumes, volume)
 		}
 	}
-
+	root.Player = config.NewConfigPlayer3d(playerPos, playerAngle, 8, 4, 20)
 	return root, nil
+}
+
+func CreateXYZ(x, y, z float64) geometry.XYZ {
+	// Conversione coordinate: Quake Z-up -> Engine Y-up
+	//return geometry.XYZ{X: x, Y: z, Z: -y}
+	pos := geometry.XYZ{X: x, Y: z, Z: -y}
+	//fmt.Println("POS:", pos)
+	return pos
 }

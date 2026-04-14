@@ -61,6 +61,7 @@ func (a *AABBTree) InsertObject(object IAABB) {
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
 	a.insertLeaf(nodeIndex)
 	a.objectNodeIndexMap[object] = nodeIndex
+	//fmt.Println("INSERTING OBJECT", object.GetAABB().GetMinZ(), object.GetAABB().GetMaxZ())
 }
 
 // RemoveObject removes the specified object from the AABBTree if it exists.
@@ -489,6 +490,7 @@ func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
 	}
 }
 
+// stackGrow doubles the size of the internal stack and copies existing elements into the expanded stack.
 func (a *AABBTree) stackGrow() {
 	newStack := make([]uint, len(a.stack)*2)
 	copy(newStack, a.stack)

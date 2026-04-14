@@ -18,7 +18,7 @@ type Compiler struct {
 	things   *Things
 }
 
-// NewCompiler initializes and returns a new instance of Compiler with default nil-initialized fields.
+// NewCompiler initializes and returns a new instance of Compiler with default-nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
 		volumesN: nil,
@@ -317,6 +317,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
 func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volume {
+	totalFaces := 0
 	var container []*Volume
 	var fixFaces []*Face
 	modelSectorId := 0
@@ -339,6 +340,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)
 				facesTree.InsertObject(face)
+				totalFaces++
 			}
 		}
 		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
@@ -347,16 +349,17 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 		container = append(container, volume)
 	}
 
+	foundFaces := 0
 	// Risoluzione Adiacenze (Portali 3D)
 	for _, face := range fixFaces {
 		if face.GetNeighbor() != nil {
-			continue // Già linkato
+			continue
 		}
 		bestDistSq := math.MaxFloat64
 		var bestNeighborFace *Face
 		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
 			overlapFace, ok := object.(*Face)
-			// Ignoriamo facce dello stesso volume o già linkate
+			// Ignore already linked
 			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
 				return false
 			}
@@ -382,12 +385,15 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			}
 			return false
 		})
-		// Tolleranza per la saldatura dei portali (Epsilon)
-		if bestNeighborFace != nil && bestDistSq < 0.001 {
-			bestNeighborFace.SetNeighbor(face.GetParent())
-			face.SetNeighbor(bestNeighborFace.GetParent())
+		if bestNeighborFace != nil {
+			if bestDistSq < 0.001 {
+				bestNeighborFace.SetNeighbor(face.GetParent())
+				face.SetNeighbor(bestNeighborFace.GetParent())
+				foundFaces++
+			}
 		}
 	}
+	//fmt.Printf("Total faces: %d, not found faces: %d\n", totalFaces, totalFaces-foundFaces)
 	return container
 }
 

@@ -171,6 +171,7 @@ func (s *Face) GetPoints() []geometry.XYZ {
 	return s.points
 }
 
+// PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.
 func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
 	if len(s.points) == 0 {
 		return 0, false
@@ -178,6 +179,21 @@ func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
 	n := s.GetNormal()
 	pointInVolume := (px-s.points[0].X)*n.X + (py-s.points[0].Y)*n.Y + (pz-s.points[0].Z)*n.Z
 	return pointInVolume, true
+}
+
+// PointInTriangle determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
+func (s *Face) PointInTriangle(px, py float64) bool {
+	if len(s.points) < 3 {
+		return false
+	}
+	p0, p1, p2 := s.points[0], s.points[1], s.points[2]
+	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
+	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
+	d3 := (px-p2.X)*(p0.Y-p2.Y) - (py-p2.Y)*(p0.X-p2.X)
+	const eps = -0.001
+	hasNeg := (d1 < eps) || (d2 < eps) || (d3 < eps)
+	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
+	return !(hasNeg && hasPos)
 }
 
 // GetMaterial retrieves the first material (upper texture) of the segment from the material slice.
@@ -190,6 +206,7 @@ func (s *Face) Scale2d(scale float64) {
 	for idx := range s.points {
 		s.points[idx].Scale(scale)
 	}
+	s.Rebuild()
 }
 
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.

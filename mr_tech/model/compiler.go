@@ -34,11 +34,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	if cfg.Full3d {
 		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
 		volumes3d := r.compile3d(cfg.Volumes, animations)
-		volumes3d = append(volumes3d, r.upgrade3d(volumes2d)...)
-		r.volumes = NewVolumes(volumes3d)
+		upgraded3d := r.upgrade3d(volumes2d)
+		volumes3d = append(volumes3d, upgraded3d...)
+		r.volumes = NewVolumes(volumes3d, cfg.Full3d)
 	} else {
 		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-		r.volumes = NewVolumes(volumes2d)
+		r.volumes = NewVolumes(volumes2d, cfg.Full3d)
 	}
 	scale := cfg.ScaleFactor
 	if scale == 0 {
@@ -61,7 +62,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		}
 	}
 
-	r.volumes.CreateTree()
+	r.volumes.Setup()
 
 	vLights2d, err := r.compileVolumesLights(r.volumes, true)
 	if err != nil {
@@ -213,7 +214,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
 func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 	var volumes3d []*Volume
-
+	//floorTree := physics.NewAABBTree(1024, 0.0)
 	// Mappa di traduzione: *Volume 2D -> *Volume 3D
 	volMap := make(map[*Volume]*Volume)
 
@@ -226,53 +227,49 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		}
 		faces2d := vol2d.GetFaces()
 		if len(faces2d) != 3 {
+			fmt.Println("wrong face count", len(faces2d))
 			continue
 		}
 		p0 := faces2d[0].GetStart()
 		p1 := faces2d[1].GetStart()
 		p2 := faces2d[2].GetStart()
-		floorZ := vol2d.GetMinZ()
-		ceilZ := vol2d.GetMaxZ()
 
+		ceilZ := vol2d.GetMaxZ()
 		ceilP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
 		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
 
+		floorZ := vol2d.GetMinZ()
 		floorP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
+		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor())
+		vol3d.AddFace(floorFace)
 
-		// [Indici 2, 3, 4] Facce Laterali
 		for _, f2d := range faces2d {
 			start := f2d.GetStart()
 			end := f2d.GetEnd()
-			wallPts := []geometry.XYZ{
-				{X: start.X, Y: start.Y, Z: floorZ},
-				{X: end.X, Y: end.Y, Z: floorZ},
-				{X: end.X, Y: end.Y, Z: ceilZ},
-				{X: start.X, Y: start.Y, Z: ceilZ},
-			}
-			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
+			v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: floorZ} // Bottom-Start
+			v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: floorZ}     // Bottom-End
+			v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: ceilZ}      // Top-End
+			v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: ceilZ}  // Top-Start
+			faceT1 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v1, v2}, f2d.GetTag(), f2d.GetMaterialMiddle())
+			faceT2 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v2, v3}, f2d.GetTag(), f2d.GetMaterialMiddle())
+			vol3d.AddFace(faceT1)
+			vol3d.AddFace(faceT2)
 		}
 		vol3d.Rebuild()
 		volumes3d = append(volumes3d, vol3d)
 		volMap[vol2d] = vol3d
 	}
 
-	// 2. Seconda Passata: Link delle adiacenze (Portali)
-	for idx, vol2d := range vols2d {
-		vol3d := volumes3d[idx]
-		faces2d := vol2d.GetFaces()
-		faces3d := vol3d.GetFaces()
-		for i, f2d := range faces2d {
-			if neighbor2d := f2d.GetNeighbor(); neighbor2d != nil {
-				// Recupera il puntatore al nuovo volume 3D associato al vicino 2D
-				if neighbor3d, ok := volMap[neighbor2d]; ok {
-					// Mappa 1:1 traslata di 2 (saltando ceil e floor)
-					faces3d[i+2].SetNeighbor(neighbor3d)
-				}
+	for _, vol := range volumes3d {
+		for _, face := range vol.GetFaces() {
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				newNeighbor := volMap[neighbor]
+				face.SetNeighbor(newNeighbor)
 			}
 		}
 	}
-	return volumes3d
+
+	return volumes3d //, floorTree
 }
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
@@ -448,7 +445,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+				cVolume := r.volumes.Locate2d(first.Light.pos.X, first.Light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)

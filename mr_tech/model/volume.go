@@ -230,7 +230,8 @@ func (v *Volume) containsPoint2d(px, py float64) bool {
 	for _, face := range v.faces {
 		start := face.GetStart()
 		end := face.GetEnd()
-		if mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y) < 0 {
+		ps := mathematic.PointSideF(px, py, start.X, start.Y, end.X, end.Y)
+		if ps < 0 {
 			return false
 		}
 	}

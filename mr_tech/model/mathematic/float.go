@@ -42,9 +42,11 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 
 // PointSideF returns a normalized value indicating the direction of a point.
 // Restituisce -1.0, 0.0, o 1.0.
-func PointSideF(px float64, py float64, x0 float64, y0 float64, x1 float64, y1 float64) float64 {
+func PointSideF(px, py, x0, y0, x1, y1 float64) float64 {
+	const sideEpsilon = 1e-5 // 0.00001
 	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
-	if v == 0 {
+	// Difesa contro l'imprecisione del floating point
+	if math.Abs(v) <= sideEpsilon {
 		return 0
 	}
 	if v < 0 {
@@ -85,17 +87,17 @@ func IntersectLineSegmentsF(x0 float64, y0 float64, x1 float64, y1 float64, x2 f
 
 // FindMinAndMaxF finds and returns the minimum and maximum values in a slice of float64.
 func FindMinAndMaxF(a []float64) (float64, float64) {
-	min := a[0]
-	max := a[0]
+	minA := a[0]
+	maxA := a[0]
 	for _, value := range a {
-		if value < min {
-			min = value
+		if value < minA {
+			minA = value
 		}
-		if value > max {
-			max = value
+		if value > maxA {
+			maxA = value
 		}
 	}
-	return min, max
+	return minA, maxA
 }
 
 // SwapF swaps the values of two float64 variables and returns the swapped values.

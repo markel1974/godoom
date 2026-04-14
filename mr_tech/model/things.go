@@ -150,7 +150,7 @@ func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	if ct.HasZPos {
 		volume = th.volumes.QueryPoint3d(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	} else {
-		volume = th.volumes.QueryPoint2d(ct.Position.X, ct.Position.Y)
+		volume = th.volumes.Locate2d(ct.Position.X, ct.Position.Y)
 	}
 	if volume == nil {
 		return nil, fmt.Errorf("can't find thing volume at %f, %f", ct.Position.X, ct.Position.Y)

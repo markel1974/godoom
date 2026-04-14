@@ -18,24 +18,41 @@ type Calibration struct {
 type Volumes struct {
 	container []*Volume
 	tree      *physics.AABBTree
+	floorTree *physics.AABBTree
 	cache     map[string]*Volume
 }
 
 // NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
-func NewVolumes(container []*Volume) *Volumes {
+func NewVolumes(container []*Volume, fullZ bool) *Volumes {
 	cache := make(map[string]*Volume)
 	for _, sec := range container {
 		cache[sec.GetId()] = sec
 	}
-	return &Volumes{container: container, tree: nil, cache: cache}
+	vs := &Volumes{
+		container: container,
+		cache:     cache,
+		tree:      physics.NewAABBTree(uint(len(container)), 4.0),
+	}
+	if fullZ {
+		vs.floorTree = physics.NewAABBTree(uint(len(container)), 0.0)
+	}
+	return vs
+
 }
 
-// CreateTree constructs a new AABB tree based on the current container and populates it with rebuilt volume objects.
-func (s *Volumes) CreateTree() {
-	s.tree = physics.NewAABBTree(uint(len(s.container)), 4.0)
+// Setup constructs a new AABB tree based on the current container and populates it with rebuilt volume objects.
+func (s *Volumes) Setup() {
 	for _, volume := range s.container {
 		if volume.Rebuild() {
 			s.tree.InsertObject(volume)
+			if s.floorTree != nil {
+				for _, face := range volume.GetFaces() {
+					normal := face.GetNormal()
+					if normal.Z == -1 {
+						s.floorTree.InsertObject(face)
+					}
+				}
+			}
 		}
 	}
 }
@@ -125,10 +142,23 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	return target
 }
 
-// QueryPoint2d performs a 2D query to find a Volume containing the point (px, py).
-// Returns the first matching Volume or nil if no match is found.
-func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
+// Locate2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
+func (s *Volumes) Locate2d(px, py float64) *Volume {
 	var target *Volume = nil
+	if s.floorTree != nil {
+		s.floorTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+			if face, ok := object.(*Face); ok {
+				if face.PointInTriangle(px, py) {
+					target = face.GetParent()
+					return true
+				}
+				return false
+			}
+			return false
+		})
+		return target
+	}
+
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 		if volume, ok := object.(*Volume); ok {
 			if volume.containsPoint2d(px, py) {

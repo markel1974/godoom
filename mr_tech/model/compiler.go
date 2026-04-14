@@ -12,19 +12,19 @@ import (
 
 // Compiler represents a core game engine component for managing volumes, game objects, player interactions, and things.
 type Compiler struct {
-	volumesN *Volumes
-	player   *ThingPlayer
-	lights   *Lights
-	things   *Things
+	volumes *Volumes
+	player  *ThingPlayer
+	lights  *Lights
+	things  *Things
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default-nil-initialized fields.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		volumesN: nil,
-		player:   nil,
-		things:   nil,
-		lights:   nil,
+		volumes: nil,
+		player:  nil,
+		things:  nil,
+		lights:  nil,
 	}
 }
 
@@ -35,17 +35,17 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
 		volumes3d := r.compile3d(cfg.Volumes, animations)
 		volumes3d = append(volumes3d, r.upgrade3d(volumes2d)...)
-		r.volumesN = NewVolumes(volumes3d)
+		r.volumes = NewVolumes(volumes3d)
 	} else {
 		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-		r.volumesN = NewVolumes(volumes2d)
+		r.volumes = NewVolumes(volumes2d)
 	}
 	scale := cfg.ScaleFactor
 	if scale == 0 {
 		scale = 1
 	}
 	if scale != 1 {
-		for _, volume := range r.volumesN.GetVolumes() {
+		for _, volume := range r.volumes.GetVolumes() {
 			//legacy lights scale
 			volume.Light.pos.Scale(scale)
 			for _, face := range volume.GetFaces() {
@@ -61,9 +61,9 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		}
 	}
 
-	r.volumesN.CreateTree()
+	r.volumes.CreateTree()
 
-	vLights2d, err := r.compileVolumesLights(r.volumesN, true)
+	vLights2d, err := r.compileVolumesLights(r.volumes, true)
 	if err != nil {
 		return err
 	}
@@ -74,12 +74,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	r.lights = NewLights()
 	r.lights.AddLights(vLights2d)
 	r.lights.AddLights(lights)
-	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumesN, animations)
-	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumesN, false); err != nil {
+	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
+	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {
 		return err
 	}
 
-	fmt.Printf("Scan complete volumes: %d\n", r.volumesN.Len())
+	fmt.Printf("Scan complete volumes: %d\n", r.volumes.Len())
 
 	return nil
 }
@@ -89,9 +89,9 @@ func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
-// GetVolumesN retrieves the Volumes instance associated with the current Compiler object.
-func (r *Compiler) GetVolumesN() *Volumes {
-	return r.volumesN
+// GetVolumes retrieves the Volumes instance associated with the current Compiler object.
+func (r *Compiler) GetVolumes() *Volumes {
+	return r.volumes
 }
 
 // GetPlayer returns the player object associated with the compiler instance.
@@ -128,7 +128,6 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			for _, tri := range triangles {
 				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
-
 				// Mantiene il Winding Order consistente per ContainsPoint
 				if mathematic.PointSideF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
@@ -232,23 +231,23 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		p0 := faces2d[0].GetStart()
 		p1 := faces2d[1].GetStart()
 		p2 := faces2d[2].GetStart()
-		floorY := vol2d.GetMinZ()
-		ceilY := vol2d.GetMaxZ()
+		floorZ := vol2d.GetMinZ()
+		ceilZ := vol2d.GetMaxZ()
 		// [Indice 0] Soffitto (Ceil)
-		ceilP := []geometry.XYZ{{X: p0.X, Y: ceilY, Z: p0.Y}, {X: p1.X, Y: ceilY, Z: p1.Y}, {X: p2.X, Y: ceilY, Z: p2.Y}}
+		ceilP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
 		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil()))
 		// [Indice 1] Pavimento (Floor)
-		floorP := []geometry.XYZ{{X: p0.X, Y: floorY, Z: p0.Y}, {X: p2.X, Y: floorY, Z: p2.Y}, {X: p1.X, Y: floorY, Z: p1.Y}}
+		floorP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
 		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor()))
 		// [Indici 2, 3, 4] Facce Laterali
 		for _, f2d := range faces2d {
 			start := f2d.GetStart()
 			end := f2d.GetEnd()
 			wallPts := []geometry.XYZ{
-				{X: start.X, Y: floorY, Z: start.Y},
-				{X: end.X, Y: floorY, Z: end.Y},
-				{X: end.X, Y: ceilY, Z: end.Y},
-				{X: start.X, Y: ceilY, Z: start.Y},
+				{X: start.X, Y: start.Y, Z: floorZ},
+				{X: end.X, Y: end.Y, Z: floorZ},
+				{X: end.X, Y: end.Y, Z: ceilZ},
+				{X: start.X, Y: start.Y, Z: ceilZ},
 			}
 			vol3d.AddFace(NewFace(nil, wallPts, f2d.GetTag(), f2d.GetMaterialMiddle()))
 		}
@@ -448,7 +447,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumesN.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
+				cVolume := r.volumes.QueryPoint2d(first.Light.pos.X, first.Light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)

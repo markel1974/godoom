@@ -61,9 +61,6 @@ func (e *Engine) GetLights() *model.Lights {
 
 // PortalVolumeAt returns the volume at the specified index from the portal within the engine.
 func (e *Engine) PortalVolumeAt(idx int) *model.Volume {
-	if e.portal == nil {
-		return nil
-	}
 	return e.portal.VolumeAt(idx)
 }
 
@@ -79,9 +76,6 @@ func (e *Engine) QueryMultiFrustum(front, rear *physics.Frustum, callback func(o
 
 // PortalLen returns the number of volumes currently managed by the Engine.
 func (e *Engine) PortalLen() int {
-	if e.portal == nil {
-		return 0
-	}
 	return e.portal.Len()
 }
 
@@ -95,12 +89,10 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
 	e.full3d = cfg.Full3d
-	e.volumes = compiler.GetVolumesN()
-	if !e.full3d {
-		e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-		if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
-			return err
-		}
+	e.volumes = compiler.GetVolumes()
+	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
+	if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
+		return err
 	}
 	return nil
 }
@@ -141,4 +133,8 @@ func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.
 func (e *Engine) GetCalibration() *model.Calibration {
 	return e.volumes.GetCalibration()
+}
+
+func (e *Engine) GetVolumes() *model.Volumes {
+	return e.volumes
 }

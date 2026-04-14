@@ -75,15 +75,15 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.fv.DeepReset()
 		w.dc.DeepReset()
 		w.cSky = nil
-		volumes, _ := engine.Build()
-		for _, vol := range volumes {
+		volumes := engine.GetVolumes()
+		for _, vol := range volumes.GetVolumes() {
 			startIdx := w.fv.GetIndicesLen()
-			for _, face := range vol.Volume.GetFaces() {
+			for _, face := range vol.GetFaces() {
 				w.pushFace(w.fv, face)
 			}
 			endIdx := w.fv.GetIndicesLen()
 			if endIdx > startIdx {
-				w.volRanges[vol.Volume] = VolumeRange{start: startIdx, end: endIdx}
+				w.volRanges[vol] = VolumeRange{start: startIdx, end: endIdx}
 			}
 		}
 		// Congeliamo SOLO Geometria e DrawCommands

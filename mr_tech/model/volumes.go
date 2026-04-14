@@ -94,17 +94,6 @@ func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 	return target
 }
 
-// SearchVolume2d searches for a 2D volume in the provided sector or the tree using the given x and y coordinates.
-func (s *Volumes) SearchVolume2d(sector *Volume, px, py float64) *Volume {
-	if newSector := sector.LocatePoint2d(px, py); newSector != nil {
-		return newSector
-	}
-	if newSector := s.QueryPoint2d(px, py); newSector != nil {
-		return newSector
-	}
-	return nil
-}
-
 // QueryFrustum performs a spatial query using a frustum, invoking the callback for each intersected object in the tree.
 func (s *Volumes) QueryFrustum(frustum *physics.Frustum, callback func(object physics.IAABB) bool) {
 	s.tree.QueryFrustum(frustum, callback)
@@ -121,30 +110,15 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// QueryOverlap2d checks for overlaps with the given 2D AABB and identifies which volume contains the specified point.
-func (s *Volumes) QueryOverlap2d(aabb physics.IAABB, px, py float64) *Volume {
-	var target *Volume = nil
-	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
-		volume, ok := object.(*Volume)
-		if !ok {
-			return false
-		}
-		if t1 := volume.LocatePoint2d(px, py); target != t1 {
-			target = t1
-			return true
-		}
-		return false
-	})
-	return target
-}
-
 // QueryPoint3d searches for a volume containing the specified 3D point (px, py, pz) and returns the matched Volume, or nil if not found.
 func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
-			target = vol
-			return true
+			if vol.containsPoint3d(px, py, pz) {
+				target = vol
+				return true
+			}
 		}
 		return false
 	})
@@ -157,7 +131,7 @@ func (s *Volumes) QueryPoint2d(px, py float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 		if volume, ok := object.(*Volume); ok {
-			if volume.ContainsPoint2d(px, py) {
+			if volume.containsPoint2d(px, py) {
 				target = volume
 				return true
 			}
@@ -176,23 +150,3 @@ func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
 		return false
 	})
 }
-
-/*
-// QueryOverlap3d performs a spatial query to find the first volume overlapping the given AABB and containing the specified point.
-func (s *Volumes) QueryOverlap3d(aabb physics.IAABB, px, py, baseZ, topZ, maxStep float64) *Volume {
-	var target *Volume = nil
-
-	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
-		if vol, ok := object.(*Volume); ok {
-			// Sfruttiamo il nuovo LocatePoint3d per il test di intrusione esatto
-			if t1 := vol.LocatePoint3d(px, py, baseZ, topZ, maxStep); t1 != nil {
-				target = t1
-				return true // Volume valido trovato, interrompe la ricerca
-			}
-		}
-		return false
-	})
-
-	return target
-}
-*/

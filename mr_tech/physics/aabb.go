@@ -91,9 +91,12 @@ func (a *AABB) ContainsPoint2d(px, py float64) bool {
 
 // ContainsPoint3d checks if the AABB contains the specified 3D point (px, py, pz) and returns true if it does.
 func (a *AABB) ContainsPoint3d(px, py, pz float64) bool {
-	return px >= a.minX && px <= a.maxX &&
-		py >= a.minY && py <= a.maxY &&
-		pz >= a.minZ && pz <= a.maxZ
+	return px >= a.minX &&
+		px <= a.maxX &&
+		py >= a.minY &&
+		py <= a.maxY &&
+		pz >= a.minZ &&
+		pz <= a.maxZ
 }
 
 // Contains checks if the given AABB is fully enclosed within the boundaries of the current AABB.

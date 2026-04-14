@@ -174,13 +174,26 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-func (v *Volume) LocatePoint3d(px, py, pz float64) *Volume {
-	if v.ContainsPoint3d(px, py, pz) {
+func (v *Volume) LocatePoint(px, py, pz float64) *Volume {
+	if v.hasZ {
+		if v.containsPoint2d(px, py) {
+			return v
+		}
+		for _, face := range v.GetFaces() {
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				if neighbor.containsPoint2d(px, py) {
+					return neighbor
+				}
+			}
+		}
+		return nil
+	}
+	if v.containsPoint3d(px, py, pz) {
 		return v
 	}
 	for _, face := range v.GetFaces() {
 		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.ContainsPoint3d(px, py, pz) {
+			if neighbor.containsPoint3d(px, py, pz) {
 				return neighbor
 			}
 		}
@@ -188,30 +201,15 @@ func (v *Volume) LocatePoint3d(px, py, pz float64) *Volume {
 	return nil
 }
 
-// LocatePoint2d determines the volume containing the given 3D point (px, py, pz) using BSP traversal in a 3D convex space.
-func (v *Volume) LocatePoint2d(px, py float64) *Volume {
-	if v.ContainsPoint2d(px, py) {
-		return v
-	}
-	for _, face := range v.GetFaces() {
-		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.ContainsPoint2d(px, py) {
-				return neighbor
-			}
-		}
-	}
-	return nil
-}
-
-// ContainsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
-func (v *Volume) ContainsPoint3d(px, py, pz float64) bool {
+// containsPoint3d determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
+func (v *Volume) containsPoint3d(px, py, pz float64) bool {
 	// Validazione dei limiti Z per volumi estrusi (2.5D)
 	if v.hasZ {
 		//TODO IMPLEMENT Z MARGIN!
 		//if pz < v.minZ || pz > v.maxZ {
 		//	return false
 		//}
-		return v.ContainsPoint2d(px, py)
+		return v.containsPoint2d(px, py)
 	}
 
 	for _, face := range v.faces {
@@ -228,7 +226,7 @@ func (v *Volume) ContainsPoint3d(px, py, pz float64) bool {
 }
 
 // ContainsPoint2d determines if a 2D point (px, py) lies within the bounds of the Volume.
-func (v *Volume) ContainsPoint2d(px, py float64) bool {
+func (v *Volume) containsPoint2d(px, py float64) bool {
 	for _, face := range v.faces {
 		start := face.GetStart()
 		end := face.GetEnd()

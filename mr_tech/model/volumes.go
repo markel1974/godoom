@@ -123,7 +123,7 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
-			if vol.PointInVolume(px, py, pz) {
+			if vol.PointInside(px, py, pz) {
 				target = vol
 				return true
 			}
@@ -147,7 +147,7 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 				if face.GetNormal().Z != -1 {
 					continue
 				}
-				if !face.PointInTriangle2d(px, py) {
+				if !face.PointInside2d(px, py) {
 					return false
 				}
 				target = face.GetParent()
@@ -170,47 +170,40 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 	return target
 }
 
+// LocateVolume3d identifies the 3D volume and specific face at the given point (px, py, pz) in world coordinates.
 func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
 	var targetVol *Volume
 	var targetFace *Face
 
-	// 1. Broad-Phase Globale: troviamo l'AABB del volume 3D
+	// Broad-Phase Globale: troviamo l'AABB del volume 3D
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		volume, volumeOk := object.(*Volume)
 		if !volumeOk {
 			return false
 		}
-
-		// FONDAMENTALE PER QUAKE/BSP: Narrow-Phase del poliedro 3D!
-		// Verifica che il punto sia matematicamente DENTRO i piani inclinati del settore.
-		if !volume.PointInVolume(px, py, pz) {
+		if !volume.PointInside(px, py, pz) {
 			return false
 		}
-
-		// 2. Broad-Phase Locale: cerchiamo la faccia sotto ai piedi
+		// Broad-Phase Locale: cerchiamo la faccia sotto ai piedi
 		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 			face, faceOk := object.(*Face)
 			if !faceOk {
 				return false
 			}
-
 			// Filtro Topologico: Selezioniamo solo le facce che fungono da pavimento (Normal Z negativa)
 			if face.GetNormal().Z >= -0.001 {
 				return false // Scarta muri e soffitti
 			}
-
 			// CRITICO: Usiamo la proiezione 2D!
 			// Vogliamo sapere se la coordinata XY del player è sovrapposta al triangolo,
 			// ignorando quanto in alto (Z) si trovi la testa del player rispetto al pavimento.
-			if face.PointInTriangle2d(px, py) {
+			if face.PointInside2d(px, py) {
 				targetVol = volume
 				targetFace = face
 				return true
 			}
 			return false
 		})
-
-		// Se abbiamo trovato la faccia, propaghiamo l'uscita
 		if targetFace != nil {
 			return true
 		}

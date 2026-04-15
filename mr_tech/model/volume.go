@@ -189,12 +189,12 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 		}
 		return nil
 	}
-	if v.PointInVolume(px, py, pz) {
+	if v.PointInside(px, py, pz) {
 		return v
 	}
 	for _, face := range v.GetFaces() {
 		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.PointInVolume(px, py, pz) {
+			if neighbor.PointInside(px, py, pz) {
 				return neighbor
 			}
 		}
@@ -202,8 +202,8 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	return nil
 }
 
-// PointInVolume determines if the given point (px, py, pz) is inside the volume. Works for both 2D and 3D volumes.
-func (v *Volume) PointInVolume(px, py, pz float64) bool {
+// PointInside determines if the point (px, py, pz) lies inside the 3D volume, considering optional fixed Z bounds.
+func (v *Volume) PointInside(px, py, pz float64) bool {
 	const epsilon = 0.01
 	if v.hasFixedZ {
 		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
@@ -211,17 +211,14 @@ func (v *Volume) PointInVolume(px, py, pz float64) bool {
 		}
 		return v.PointInLineSide(px, py)
 	}
-
+	intersections := 0
 	for _, face := range v.faces {
-		pointInVolume, ok := face.PointInVolume(px, py, pz)
-		if !ok {
-			continue
-		}
-		if pointInVolume > epsilon {
-			return false
+		if face.RayIntersect(px, py, pz) {
+			intersections++
 		}
 	}
-	return true
+	// Se buca un numero dispari di triangoli, il punto è DENTRO
+	return intersections%2 != 0
 }
 
 // PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the volume.

@@ -164,14 +164,56 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 }
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.
-func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
-	target := s.triangle[0]
-	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z
-	return pointInVolume, true
+//func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
+//	target := s.triangle[0]
+//	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z
+//	return pointInVolume, true
+//}
+
+// RayIntersect determines if a ray starting at the origin (1, 0, 0) intersects with the triangle of the face.
+// The method uses the Möller-Trumbore intersection algorithm for precise calculations.
+// px, py, pz parameters specify the coordinates of the point relative to which the intersection occurs.
+// Returns true if the ray intersects the triangle and false otherwise.
+func (s *Face) RayIntersect(px, py, pz float64) bool {
+	const eps = 0.000001
+	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	// 1. Estrai gli edge del triangolo
+	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+	// 2. Cross Product tra Raggio(1,0,0) ed Edge2.
+	// Dir x E2 = (0, -E2z, E2y)
+	hy, hz := -e2z, e2y
+	// 3. Determinante (a = Edge1 dot h)
+	a := e1y*hy + e1z*hz
+	if math.Abs(a) < eps {
+		return false // Il raggio è esattamente parallelo al triangolo (o triangolo degenere)
+	}
+	invDet := 1.0 / a
+	// 4. Distanza del punto P dal vertice 0 (s = P - P0)
+	sx, sy, sz := px-p0.X, py-p0.Y, pz-p0.Z
+	// 5. Parametro Baricentrico U
+	u := invDet * (sy*hy + sz*hz)
+	if u < 0.0 || u > 1.0 {
+		return false // L'intersezione manca il triangolo su questo asse
+	}
+	// 6. Cross Product s x Edge1 (q)
+	qx := sy*e1z - sz*e1y
+	qy := sz*e1x - sx*e1z
+	qz := sx*e1y - sy*e1x
+	// 7. Parametro Baricentrico V
+	// v = invDet * (Dir dot q). Poiché Dir = (1,0,0), il dot è semplicemente qx!
+	v := invDet * qx
+	if v < 0.0 || u+v > 1.0 {
+		return false // L'intersezione manca il triangolo
+	}
+	// 8. Calcolo del Time Of Impact (t) lungo il raggio
+	t := invDet * (e2x*qx + e2y*qy + e2z*qz)
+	// Se t > eps, il triangolo è davanti a noi e l'abbiamo colpito
+	return t > eps
 }
 
-// PointInTriangle2d determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
-func (s *Face) PointInTriangle2d(px, py float64) bool {
+// PointInside2d determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
+func (s *Face) PointInside2d(px, py float64) bool {
 	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
 	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
 	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
@@ -182,9 +224,9 @@ func (s *Face) PointInTriangle2d(px, py float64) bool {
 	return !(hasNeg && hasPos)
 }
 
-// PointInTriangle3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
+// PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
 // Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
-func (s *Face) PointInTriangle3d(px, py, pz float64) bool {
+func (s *Face) PointInside3d(px, py, pz float64) bool {
 	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
 	// 1. Calcolo dei vettori degli spigoli (v0, v1) e del vettore verso il punto (v2)
 	v0x, v0y, v0z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
@@ -196,22 +238,17 @@ func (s *Face) PointInTriangle3d(px, py, pz float64) bool {
 	d02 := v0x*v2x + v0y*v2y + v0z*v2z
 	d11 := v1x*v1x + v1y*v1y + v1z*v1z
 	d12 := v1x*v2x + v1y*v2y + v1z*v2z
-
 	// 3. Calcolo del denominatore
 	denom := (d00 * d11) - (d01 * d01)
 	if denom == 0 {
 		return false // Sicurezza: Triangolo degenere (linea o punto)
 	}
-
 	invDenom := 1.0 / denom
-
 	// 4. Calcolo delle coordinate baricentriche (u, v)
 	u := ((d11 * d02) - (d01 * d12)) * invDenom
 	v := ((d00 * d12) - (d01 * d02)) * invDenom
-
 	// 5. Verifica tolleranza (eps) per la virgola mobile
 	const eps = -0.001
-
 	// Il punto è DENTRO il triangolo se u >= 0, v >= 0 e u+v <= 1
 	// (usiamo la tua tolleranza eps per prevenire errori di arrotondamento sui bordi)
 	return (u >= eps) && (v >= eps) && (u+v <= 1.0-eps)

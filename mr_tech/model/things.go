@@ -148,9 +148,9 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	var volume *Volume
 	if ct.HasZPos {
-		volume = th.volumes.QueryPoint3d(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		volume = th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	} else {
-		volume = th.volumes.LocateVolume2d(ct.Position.X, ct.Position.Y)
+		volume = th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, 0)
 	}
 	if volume == nil {
 		return nil, fmt.Errorf("can't find thing volume at %f, %f", ct.Position.X, ct.Position.Y)

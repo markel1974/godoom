@@ -37,9 +37,9 @@ type ThingPlayer struct {
 func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) (*ThingPlayer, error) {
 	var volume *Volume
 	if cfg.HasZPos {
-		volume, _ = volumes.LocateVolume3d(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
+		volume = volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	} else {
-		volume = volumes.LocateVolume2d(cfg.Position.X, cfg.Position.Y)
+		volume = volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, 0)
 	}
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player volume at %f, %f", cfg.Position.X, cfg.Position.Y)

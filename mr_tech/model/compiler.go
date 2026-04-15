@@ -496,10 +496,10 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumes.LocateVolume2d(first.Light.pos.X, first.Light.pos.Y)
+				cVolume := r.volumes.LocateVolume(first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
 				if cVolume == nil {
 					cVolume = first
-					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y)
+					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
 				}
 				addLight(cVolume, intensity, falloff, cVolume.Light.kind, gc)
 			}

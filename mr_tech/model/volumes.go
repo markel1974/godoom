@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
@@ -133,45 +135,58 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	return target
 }
 
-// LocateVolume2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
-func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
-	var target *Volume = nil
+func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
 	if s.fullZ {
-		s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			volume, ok := object.(*Volume)
-			if !ok {
+		v, _ := s.locateVolume3d(px, py, pz)
+		return v
+	}
+	return s.locateVolume2d(px, py)
+}
+
+// LocateVolume2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
+func (s *Volumes) locateVolume2d(px, py float64) *Volume {
+	if s.fullZ {
+		fmt.Println("LocateVolume2d: non supportato")
+		return nil
+	}
+	var target *Volume = nil
+	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+		volume, ok := object.(*Volume)
+		if !ok {
+			return false
+		}
+		for _, face := range volume.GetFaces() {
+			//Floor test
+			if face.GetNormal().Z != -1 {
+				continue
+			}
+			if !face.PointInside2d(px, py) {
 				return false
 			}
-			for _, face := range volume.GetFaces() {
-				//Floor test
-				if face.GetNormal().Z != -1 {
-					continue
-				}
-				if !face.PointInside2d(px, py) {
-					return false
-				}
-				target = face.GetParent()
-				return true
-			}
-			return false
-		})
-		return target
-	}
-
-	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-		if volume, ok := object.(*Volume); ok {
-			if volume.PointInLineSide(px, py) {
-				target = volume
-				return true
-			}
+			target = face.GetParent()
+			return true
 		}
 		return false
 	})
 	return target
+
+	/*
+		s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+			if volume, ok := object.(*Volume); ok {
+				if volume.PointInLineSide(px, py) {
+					target = volume
+					return true
+				}
+			}
+			return false
+		})
+		return target
+
+	*/
 }
 
 // LocateVolume3d identifies the 3D volume and specific face at the given point (px, py, pz) in world coordinates.
-func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
+func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
 	var targetVol *Volume
 	var targetFace *Face
 

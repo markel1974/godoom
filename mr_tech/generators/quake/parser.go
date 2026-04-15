@@ -24,7 +24,7 @@ func NewBuilder() *Builder {
 
 // Setup initializes the Builder by loading resources from the specified PAK file and preparing the level configuration.
 func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
-	bpsPath := "maps" + lumps.PakSeparator + "e1m1.bsp"
+	bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
 	pk := lumps.NewPak()
 	if err := pk.Setup(pakPath); err != nil {

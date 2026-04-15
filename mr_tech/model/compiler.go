@@ -133,8 +133,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					fmt.Println("wrong triangle", tri)
 					continue
 				}
-				materials := []*textures.Animation{anim.GetAnimation(cs.Floor), anim.GetAnimation(cs.Ceil)}
-				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, materials, cs.Tag)
+				volumeMaterials := []*textures.Animation{anim.GetAnimation(cs.Floor), anim.GetAnimation(cs.Ceil)}
+				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
 				modelSectorId++
 				// Maintains consistent Winding Order for ContainsPoint
 				if mathematic.PointInLineDirectionF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
@@ -159,8 +159,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 							break
 						}
 					}
-					materials := []*textures.Animation{upper, middle, lower}
-					face := NewFace2d(nil, start, end, tag, materials)
+					faceMaterials := []*textures.Animation{upper, middle, lower}
+					face := NewFace2d(nil, start, end, tag, faceMaterials)
 					volume.AddFace(face)
 					volume.AddTag(tag)
 					if !isWall {

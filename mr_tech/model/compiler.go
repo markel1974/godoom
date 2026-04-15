@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Compiler represents a core game engine component for managing volumes, game objects, player interactions, and things.
@@ -214,7 +215,6 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
 func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 	var volumes3d []*Volume
-	//floorTree := physics.NewAABBTree(1024, 0.0)
 	// Mappa di traduzione: *Volume 2D -> *Volume 3D
 	volMap := make(map[*Volume]*Volume)
 
@@ -247,14 +247,50 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		for _, f2d := range faces2d {
 			start := f2d.GetStart()
 			end := f2d.GetEnd()
-			v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: floorZ} // Bottom-Start
-			v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: floorZ}     // Bottom-End
-			v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: ceilZ}      // Top-End
-			v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: ceilZ}  // Top-Start
-			faceT1 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v1, v2}, f2d.GetTag(), f2d.GetMaterialMiddle())
-			faceT2 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v2, v3}, f2d.GetTag(), f2d.GetMaterialMiddle())
-			vol3d.AddFace(faceT1)
-			vol3d.AddFace(faceT2)
+			neighbor := f2d.GetNeighbor()
+
+			buildQuad := func(zBottom, zTop float64, n *Volume, tag string, material *textures.Animation) {
+				v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBottom} // Bottom-Start
+				v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBottom}     // Bottom-End
+				v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
+				v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
+
+				faceT1 := NewFace(n, []geometry.XYZ{v0, v1, v2}, tag, material)
+				faceT2 := NewFace(n, []geometry.XYZ{v0, v2, v3}, tag, material)
+				vol3d.AddFace(faceT1)
+				vol3d.AddFace(faceT2)
+			}
+			if neighbor == nil {
+				buildQuad(floorZ, ceilZ, nil, f2d.GetTag(), f2d.GetMaterialMiddle())
+				continue
+			}
+			// Esiste un adiacenza: dobbiamo calcolare i differenziali di quota
+			nFloorZ := neighbor.GetMinZ()
+			nCeilZ := neighbor.GetMaxZ()
+			// 1. Lower Wall (Muro in basso: il pavimento del vicino è più in alto del nostro)
+			if nFloorZ > floorZ {
+				// Usa nil come neighbor: la fisica deve impattare su questo dislivello!
+				buildQuad(floorZ, nFloorZ, nil, f2d.GetTag()+"_lower", f2d.GetMaterialLower())
+			}
+			// 2. Upper Wall (Muro in alto: il soffitto del vicino scende sotto il nostro)
+			if nCeilZ < ceilZ {
+				// Usa nil come neighbor: muro solido non attraversabile
+				buildQuad(nCeilZ, ceilZ, nil, f2d.GetTag()+"_upper", f2d.GetMaterialUpper())
+			}
+			// 3. Middle Portal (L'apertura attraverso cui il player può navigare e guardare)
+			portalBottom := floorZ
+			if nFloorZ > floorZ {
+				portalBottom = nFloorZ
+			}
+			portalTop := ceilZ
+			if nCeilZ < ceilZ {
+				portalTop = nCeilZ
+			}
+			// Se l'apertura esiste fisicamente (evita glitch se due settori sono totalmente sfalsati)
+			if portalTop > portalBottom {
+				// SOLO QUESTA faccia riceve il neighbor, agendo come collegamento nel grafo 3D
+				buildQuad(portalBottom, portalTop, neighbor, f2d.GetTag()+"_portal", f2d.GetMaterialMiddle())
+			}
 		}
 		vol3d.Rebuild()
 		volumes3d = append(volumes3d, vol3d)

@@ -122,7 +122,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushFace generates vertices and triangle fans for an arbitrary 3D face, applying Triplanar UV mapping.
 func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
-	anim := face.GetMaterial()
+	anim := face.GetRootMaterial()
 	if anim == nil {
 		return
 	}
@@ -139,9 +139,6 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 		return
 	}
 	points := face.GetPoints()
-	if len(points) < 3 {
-		return
-	}
 	texW, texH := tex.Size()
 	scaleW, scaleH := anim.ScaleFactor()
 	fTexW := float32(texW) * float32(scaleW)

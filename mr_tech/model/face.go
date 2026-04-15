@@ -9,24 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// edgePrecision defines the scaling factor used to convert floating-point coordinates into integer-based EdgeKey components.
-const edgePrecision = 1000.0
-
-// EdgeKey represents a unique identifier for an edge in 2D space, defined by the rounded coordinates of its endpoints.
-type EdgeKey struct {
-	x1, y1, x2, y2 int64
-}
-
-// makeEdgeKey generates an EdgeKey by scaling and rounding the start and end coordinates using the given precision.
-func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKey {
-	return EdgeKey{
-		x1: int64(math.Round(start.X * precision)),
-		y1: int64(math.Round(start.Y * precision)),
-		x2: int64(math.Round(end.X * precision)),
-		y2: int64(math.Round(end.Y * precision)),
-	}
-}
-
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	parent    *Volume
@@ -35,14 +17,14 @@ type Face struct {
 	aabb      *physics.AABB
 	triangle  [3]geometry.XYZ
 	normal    geometry.XYZ
-	material  [3]*textures.Animation
+	materials []*textures.Animation
 	minZ      float64
 	maxZ      float64
 	hasFixedZ bool
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, material []*textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: true,
 		neighbor:  neighbor,
@@ -50,10 +32,11 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 		minZ:      0,
 		maxZ:      0,
 		aabb:      physics.NewAABB(),
+		materials: []*textures.Animation{nil},
 	}
-	out.material[0] = tUpper
-	out.material[1] = tMiddle
-	out.material[2] = tLower
+	if len(material) > 0 {
+		out.materials = material
+	}
 	out.triangle[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
 	out.triangle[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
 	out.triangle[2] = geometry.XYZ{X: end.X, Y: end.Y, Z: 0}
@@ -62,17 +45,18 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, points [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, points [3]geometry.XYZ, tag string, materials []*textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: false,
 		triangle:  points,
 		neighbor:  neighbor,
 		tag:       tag,
+		materials: []*textures.Animation{nil},
 		aabb:      physics.NewAABB(),
 	}
-	out.material[0] = material
-	out.material[1] = material
-	out.material[2] = material
+	if len(materials) > 0 {
+		out.materials = materials
+	}
 	out.Rebuild()
 	return out
 }
@@ -151,19 +135,16 @@ func (s *Face) GetEnd() geometry.XYZ {
 	return s.triangle[2]
 }
 
-// GetMaterialUpper retrieves the upper texture animation for the segment, typically used for rendering upper walls.
-func (s *Face) GetMaterialUpper() *textures.Animation {
-	return s.material[0]
+// GetRootMaterial returns the first material (textures.Animation) in the materials slice of the Face instance.
+func (s *Face) GetRootMaterial() *textures.Animation {
+	return s.materials[0]
 }
 
-// GetMaterialMiddle retrieves the middle texture animation of the segment.
-func (s *Face) GetMaterialMiddle() *textures.Animation {
-	return s.material[1]
-}
-
-// GetMaterialLower returns the lower animation material of the segment located at index 2 in the material list.
-func (s *Face) GetMaterialLower() *textures.Animation {
-	return s.material[2]
+// GetMaterial retrieves the first material (upper texture) of the segment from the material slice.
+func (s *Face) GetMaterial(m int) *textures.Animation {
+	//0 Upper, 1 Middle, 2 Lower
+	idx := m % len(s.materials)
+	return s.materials[idx]
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
@@ -200,11 +181,6 @@ func (s *Face) PointInTriangle(px, py float64) bool {
 	hasNeg := (d1 < eps) || (d2 < eps) || (d3 < eps)
 	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
 	return !(hasNeg && hasPos)
-}
-
-// GetMaterial retrieves the first material (upper texture) of the segment from the material slice.
-func (s *Face) GetMaterial() *textures.Animation {
-	return s.material[0]
 }
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
@@ -300,3 +276,22 @@ func (s *Face) computeAABB() {
 //func (s *Face) MakeReverseEdgeKey() EdgeKey {
 //	return makeEdgeKey(edgePrecision, s.GetEnd(), s.GetStart())
 //}
+
+/*
+// edgePrecision defines the scaling factor used to convert floating-point coordinates into integer-based EdgeKey components.
+const edgePrecision = 1000.0
+
+// EdgeKey represents a unique identifier for an edge in 2D space, defined by the rounded coordinates of its endpoints.
+type EdgeKey struct {
+	x1, y1, x2, y2 int64
+}
+
+// makeEdgeKey generates an EdgeKey by scaling and rounding the start and end coordinates using the given precision.
+func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKey {
+	return EdgeKey{
+		x1: int64(math.Round(start.X * precision)),
+		y1: int64(math.Round(start.Y * precision)),
+		x2: int64(math.Round(end.X * precision)),
+		y2: int64(math.Round(end.Y * precision)),
+	}
+}*/

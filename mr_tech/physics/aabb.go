@@ -2,6 +2,8 @@ package physics
 
 import (
 	"math"
+
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // IAABB represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
@@ -206,7 +208,7 @@ func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (floa
 func (a *AABB) IntersectFrustum(f *Frustum) bool {
 	for i := 0; i < 6; i++ {
 		plane := f.Planes[i]
-		// Troviamo il "Positive Vertex" (il vertice dell'AABB più allineato con la normale del piano)
+		// Find the "Positive Vertex" (the AABB vertex most aligned with the plane normal)
 		pX, pY, pZ := a.minX, a.minY, a.minZ
 		if plane.NormalX > 0 {
 			pX = a.maxX
@@ -217,12 +219,108 @@ func (a *AABB) IntersectFrustum(f *Frustum) bool {
 		if plane.NormalZ > 0 {
 			pZ = a.maxZ
 		}
-		// Calcolo della distanza del P-Vertex dal piano (Dot Product)
-		// Se la distanza è minore di 0, tutto l'AABB si trova nel semispazio negativo (fuori dal frustum)
+		// Calculate the distance of the P-Vertex from the plane (Dot Product)
+		// If the distance is less than 0, the entire AABB is in the negative half-space (outside the frustum)
 		if (plane.NormalX*pX + plane.NormalY*pY + plane.NormalZ*pZ + plane.D) < 0 {
-			return false // Scartato!
+			return false // Rejected!
 		}
 	}
-	// Se nessun piano lo ha scartato, l'AABB è visibile (almeno parzialmente)
+	// If no plane has rejected it, the AABB is visible (at least partially)
 	return true
+}
+
+// SweepAABB performs a Continuous Collision Detection (CCD) sweep of a moving AABB against a 3D triangle.
+// It uses the Minkowski sum approach to expand the triangle by the AABB's half-extents.
+// Returns:
+// - tHit: Time of impact in range [0.0, 1.0]. Returns 1.0 if no collision occurs.
+// - hitNormal: The normal vector to be used for sliding (matches the triangle normal).
+// - hit: Boolean indicating if a collision occurred in this frame.
+func (a *AABB) SweepAABB(vx, vy, vz float64, p0, p1, p2, normal geometry.XYZ) (float64, geometry.XYZ, bool) {
+	cx := (a.minX + a.maxX) * 0.5
+	cy := (a.minY + a.maxY) * 0.5
+	cz := (a.minZ + a.maxZ) * 0.5
+	ex := (a.maxX - a.minX) * 0.5
+	ey := (a.maxY - a.minY) * 0.5
+	ez := (a.maxZ - a.minZ) * 0.5
+	// 2. Project the AABB onto the plane normal (Minkowski Radius)
+	// This is the "thickness" that the plane acquires from the perspective of the AABB center
+	r := ex*math.Abs(normal.X) + ey*math.Abs(normal.Y) + ez*math.Abs(normal.Z)
+	// 3. Distance from the AABB center to the plane at time t=0
+	distStart := (cx-p0.X)*normal.X + (cy-p0.Y)*normal.Y + (cz-p0.Z)*normal.Z
+	// Projection of velocity onto the normal
+	vDotN := vx*normal.X + vy*normal.Y + vz*normal.Z
+	// 4. Directional broad-phase on the plane
+	if math.Abs(vDotN) < 1e-8 {
+		// Movement perfectly parallel to the plane.
+		// If distStart <= r we would already be in penetration (handled by the static un-stuck routine),
+		// but there is no frontal impact along V.
+		return 1.0, normal, false
+	}
+	// 5. Calculate the intersection times (Time of Impact) with the upper and lower "crust" of the expanded plane
+	t0 := (r - distStart) / vDotN
+	t1 := (-r - distStart) / vDotN
+	if t0 > t1 {
+		t0, t1 = t1, t0
+	}
+	// If the intersection occurs entirely in the past or future, no hit in this frame
+	if t0 > 1.0 || t1 < 0.0 {
+		return 1.0, normal, false
+	}
+	// Clamp tHit to 0.0 in case of slight pre-existing penetration
+	tHit := t0
+	if tHit < 0.0 {
+		tHit = 0.0
+	}
+	// 6. SAT (Separating Axis Theorem) Testing: Does the impact point fall INSIDE the triangle?
+	// Move the AABB center to the theoretical contact point on the plane
+	hitCx := cx + vx*tHit
+	hitCy := cy + vy*tHit
+	hitCz := cz + vz*tHit
+	// Inline Edge 1 (p0 -> p1)
+	edge1X, edge1Y, edge1Z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	nx1 := edge1Y*normal.Z - edge1Z*normal.Y
+	ny1 := edge1Z*normal.X - edge1X*normal.Z
+	nz1 := edge1X*normal.Y - edge1Y*normal.X
+	l1 := math.Sqrt(nx1*nx1 + ny1*ny1 + nz1*nz1)
+	if l1 > 0 {
+		nx1 /= l1
+		ny1 /= l1
+		nz1 /= l1
+	}
+	er1 := ex*math.Abs(nx1) + ey*math.Abs(ny1) + ez*math.Abs(nz1)
+	if (hitCx-p0.X)*nx1+(hitCy-p0.Y)*ny1+(hitCz-p0.Z)*nz1 > er1 {
+		return 1.0, normal, false
+	}
+	// Inline Edge 2 (p1 -> p2)
+	edge2X, edge2Y, edge2Z := p2.X-p1.X, p2.Y-p1.Y, p2.Z-p1.Z
+	nx2 := edge2Y*normal.Z - edge2Z*normal.Y
+	ny2 := edge2Z*normal.X - edge2X*normal.Z
+	nz2 := edge2X*normal.Y - edge2Y*normal.X
+	l2 := math.Sqrt(nx2*nx2 + ny2*ny2 + nz2*nz2)
+	if l2 > 0 {
+		nx2 /= l2
+		ny2 /= l2
+		nz2 /= l2
+	}
+	er2 := ex*math.Abs(nx2) + ey*math.Abs(ny2) + ez*math.Abs(nz2)
+	if (hitCx-p1.X)*nx2+(hitCy-p1.Y)*ny2+(hitCz-p1.Z)*nz2 > er2 {
+		return 1.0, normal, false
+	}
+	// Inline Edge 3 (p2 -> p0)
+	edge3X, edge3Y, edge3Z := p0.X-p2.X, p0.Y-p2.Y, p0.Z-p2.Z
+	nx3 := edge3Y*normal.Z - edge3Z*normal.Y
+	ny3 := edge3Z*normal.X - edge3X*normal.Z
+	nz3 := edge3X*normal.Y - edge3Y*normal.X
+	l3 := math.Sqrt(nx3*nx3 + ny3*ny3 + nz3*nz3)
+	if l3 > 0 {
+		nx3 /= l3
+		ny3 /= l3
+		nz3 /= l3
+	}
+	er3 := ex*math.Abs(nx3) + ey*math.Abs(ny3) + ez*math.Abs(nz3)
+	if (hitCx-p2.X)*nx3+(hitCy-p2.Y)*ny3+(hitCz-p2.Z)*nz3 > er3 {
+		return 1.0, normal, false
+	}
+	// return frontal hit.
+	return tHit, normal, true
 }

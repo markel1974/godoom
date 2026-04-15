@@ -48,7 +48,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	if scale != 1 {
 		for _, volume := range r.volumes.GetVolumes() {
-			//legacy lights scale
+			// legacy lights scale
 			volume.Light.pos.Scale(scale)
 			for _, face := range volume.GetFaces() {
 				face.Scale2d(scale)
@@ -130,7 +130,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			for _, tri := range triangles {
 				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
-				// Mantiene il Winding Order consistente per ContainsPoint
+				// Maintains consistent Winding Order for ContainsPoint
 				if mathematic.PointInLineDirectionF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
@@ -142,7 +142,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					isWall := false
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
 					tag := "unknown"
-					// Match topologico ESATTO
+					// EXACT topological match
 					for _, cn := range cs.Segments {
 						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
 							isWall = cn.Kind == config.SegmentWall
@@ -174,7 +174,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		}
 	}
 
-	// Risoluzione adiacenze
+	// Adjacency resolution
 	for _, face := range fixFaces {
 		if face.GetNeighbor() != nil { // already linked
 			continue
@@ -202,7 +202,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			return false
 		})
 		if bestNeighborFace != nil {
-			// Link reciproco (O(N/2)
+			// Bidirectional link (O(N/2))
 			bestNeighborFace.SetNeighbor(face.GetParent())
 			face.SetNeighbor(bestNeighborFace.GetParent())
 		} else {
@@ -231,7 +231,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		vol3d.AddFace(faceT2)
 	}
 
-	// 1. Prima Passata: Generazione della topologia solida
+	// 1. First Pass: Solid topology generation
 	for _, vol2d := range vols2d {
 		id := fmt.Sprintf("%s_3d", vol2d.GetId())
 		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
@@ -263,18 +263,18 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetMaterialMiddle())
 				continue
 			}
-			// Esiste un adiacenza: dobbiamo calcolare i differenziali di quota
+			// Adjacent sector exists: we need to calculate height differentials
 			nFloorZ := neighbor.GetMinZ()
 			nCeilZ := neighbor.GetMaxZ()
-			// 1. Lower Wall (Muro in basso: il pavimento del vicino è più in alto del nostro)
+			// 1. Lower Wall (bottom wall: neighbor's floor is higher than ours)
 			if nFloorZ > floorZ {
 				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetMaterialLower())
 			}
-			// 2. Upper Wall (Muro in alto: il soffitto del vicino scende sotto il nostro)
+			// 2. Upper Wall (top wall: neighbor's ceiling drops below ours)
 			if nCeilZ < ceilZ {
 				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetMaterialUpper())
 			}
-			// 3. Middle Portal (L'apertura attraverso cui il player può navigare e guardare)
+			// 3. Middle Portal (the opening through which the player can navigate and look)
 			portalBottom := floorZ
 			if nFloorZ > floorZ {
 				portalBottom = nFloorZ
@@ -283,7 +283,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			if nCeilZ < ceilZ {
 				portalTop = nCeilZ
 			}
-			// Se l'apertura esiste fisicamente (evita glitch se due settori sono totalmente sfalsati)
+			// If the opening physically exists (avoids glitches if two sectors are completely misaligned)
 			if portalTop > portalBottom {
 				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetMaterialMiddle())
 			}
@@ -313,7 +313,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 	modelSectorId := 0
 	facesTree := physics.NewAABBTree(1024, 4.0)
 	for _, cv := range volumes {
-		// cv.Id e cv.Tag provengono dal parser BSP
+		// cv.Id and cv.Tag come from the BSP parser
 		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
 		modelSectorId++
 		for _, cf := range cv.Faces {
@@ -323,7 +323,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 				continue
 			}
 			material := anim.GetAnimation(cf.Material)
-			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
+			// Robust polygon decomposition (Supports concave N-Gons)
 			triangles := geometry.Triangulate3d(pts)
 			for _, t := range triangles {
 				if len(t) != 3 {
@@ -338,14 +338,14 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 				totalFaces++
 			}
 		}
-		// Inizializza luce di default (verrà poi calcolata in compileVolumesLights)
+		// Initialize default light (will be calculated later in compileVolumesLights)
 		volume.Light = NewLight()
 		volume.Rebuild()
 		container = append(container, volume)
 	}
 
 	foundFaces := 0
-	// Risoluzione Adiacenze (Portali 3D)
+	// Adjacency Resolution (3D Portals)
 	for _, face := range fixFaces {
 		if face.GetNeighbor() != nil {
 			continue
@@ -358,14 +358,14 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
 				return false
 			}
-			// Per trovare i portali 3D, confrontiamo la vicinanza dei baricentri dei triangoli
+			// To find 3D portals, we compare the proximity of triangle centroids
 			pts1 := face.GetPoints()
 			pts2 := overlapFace.GetPoints()
-			// Calcolo baricentro faccia corrente (3 punti)
+			// Calculate current face centroid (3 points)
 			cx1 := (pts1[0].X + pts1[1].X + pts1[2].X) / 3.0
 			cy1 := (pts1[0].Y + pts1[1].Y + pts1[2].Y) / 3.0
 			cz1 := (pts1[0].Z + pts1[1].Z + pts1[2].Z) / 3.0
-			// Calcolo baricentro faccia candidata
+			// Calculate candidate face centroid
 			cx2 := (pts2[0].X + pts2[1].X + pts2[2].X) / 3.0
 			cy2 := (pts2[0].Y + pts2[1].Y + pts2[2].Y) / 3.0
 			cz2 := (pts2[0].Z + pts2[1].Z + pts2[2].Z) / 3.0
@@ -373,7 +373,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			dy := cy1 - cy2
 			dz := cz1 - cz2
 			distSq := (dx * dx) + (dy * dy) + (dz * dz)
-			// Troviamo la faccia più perfettamente combaciante nello spazio
+			// Find the most perfectly matching face in space
 			if distSq < bestDistSq {
 				bestDistSq = distSq
 				bestNeighborFace = overlapFace
@@ -407,7 +407,7 @@ func (r *Compiler) compileLights(cLights []*config.ConfigLight) ([]*Light, error
 
 // compileLights processes and merges adjacent volumes with similar properties into unified lighting areas.
 func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([]*Light, error) {
-	// Unifica i triangoli adiacenti che appartengono allo stesso settore macroscopico.
+	// Unifies adjacent triangles that belong to the same macroscopic sector.
 	visited := make(map[string]bool)
 	var out []*Light
 
@@ -422,7 +422,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 		if visited[sect.GetId()] {
 			continue
 		}
-		// Utilizziamo un algoritmo di Flood Fill per trovare tutti i settori connessi
+		// We use a Flood Fill algorithm to find all connected sectors
 		var areaSectors []*Volume
 		queue := []*Volume{sect}
 		visited[sect.GetId()] = true
@@ -430,11 +430,11 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 			curr := queue[0]
 			queue = queue[1:]
 			areaSectors = append(areaSectors, curr)
-			// Controlla i vicini di questo settore
+			// Check neighbors of this sector
 			for _, seg := range curr.GetFaces() {
 				if n := seg.GetNeighbor(); n != nil {
 					if !visited[n.GetId()] {
-						// Condizione di "Stessa Area": adiacenti e con stesse quote/luci
+						// "Same Area" condition: adjacent and with same heights/lights
 						if n.GetMaxZ() == curr.GetMaxZ() && n.GetMinZ() == curr.GetMinZ() && n.Light.intensity == curr.Light.intensity {
 							visited[n.GetId()] = true
 							queue = append(queue, n)
@@ -444,7 +444,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 			}
 		}
 
-		// Se l'area è composta da più poligoni, calcoliamo un baricentro globale
+		// If the area is composed of multiple polygons, we calculate a global centroid
 		if len(areaSectors) > 1 {
 			if !computeCenter {
 				for _, s := range areaSectors {
@@ -454,7 +454,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 				var sumX, sumY, totalArea float64
 				var intensity, falloff float64
 				for _, s := range areaSectors {
-					// Calcola l'area del triangolo (prodotto vettoriale)
+					// Calculate triangle area (cross product)
 					area := 0.0
 					for _, face := range s.GetFaces() {
 						start := face.GetStart()
@@ -477,7 +477,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 				intensity /= float64(len(areaSectors))
 				falloff /= float64(len(areaSectors))
 				gc := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
-				// Legacy assegniamo il nuovo centro luce globale a tutti i frammenti dell'area
+				// Legacy: assign the new global light center to all area fragments
 				for _, s := range areaSectors {
 					s.Light.pos.X = gc.X
 					s.Light.pos.Y = gc.Y

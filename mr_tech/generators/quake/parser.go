@@ -158,7 +158,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 8, 4, 20)
-	root.Player.Speed = 600
+	root.Player.Speed = 400
 	return root, nil
 }
 

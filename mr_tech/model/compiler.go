@@ -299,7 +299,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 	var container []*Volume
 	var fixFaces []*Face
 	modelSectorId := 0
-	facesTree := physics.NewAABBTree(1024, 4.0)
+	facesTree := physics.NewAABBTree(1024, 0.001)
 	for _, cv := range volumes {
 		// cv.Id and cv.Tag come from the BSP parser
 		volume := NewVolume3d(modelSectorId, cv.Id, cv.Tag)
@@ -308,6 +308,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			pts := cf.Points
 			pLen := len(pts)
 			if pLen < 3 {
+				fmt.Println("wrong points configuration", cf.Points)
 				continue
 			}
 			material := []*textures.Animation{anim.GetAnimation(cf.Material)}
@@ -332,7 +333,6 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 		container = append(container, volume)
 	}
 
-	foundFaces := 0
 	// Adjacency Resolution (3D Portals)
 	for _, face := range fixFaces {
 		if face.GetNeighbor() != nil {
@@ -372,7 +372,6 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			if bestDistSq < 0.001 {
 				bestNeighborFace.SetNeighbor(face.GetParent())
 				face.SetNeighbor(bestNeighborFace.GetParent())
-				foundFaces++
 			}
 		}
 	}

@@ -123,7 +123,7 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		if vol, ok := object.(*Volume); ok {
-			if vol.PointInside(px, py, pz) {
+			if vol.PointInside3d(px, py, pz) {
 				target = vol
 				return true
 			}
@@ -181,7 +181,7 @@ func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
 		if !volumeOk {
 			return false
 		}
-		if !volume.PointInside(px, py, pz) {
+		if !volume.PointInside3d(px, py, pz) {
 			return false
 		}
 		// Broad-Phase Locale: cerchiamo la faccia sotto ai piedi

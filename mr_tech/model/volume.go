@@ -189,12 +189,12 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 		}
 		return nil
 	}
-	if v.PointInside(px, py, pz) {
+	if v.PointInside3d(px, py, pz) {
 		return v
 	}
 	for _, face := range v.GetFaces() {
 		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.PointInside(px, py, pz) {
+			if neighbor.PointInside3d(px, py, pz) {
 				return neighbor
 			}
 		}
@@ -203,9 +203,10 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 }
 
 // PointInside determines if the point (px, py, pz) lies inside the 3D volume, considering optional fixed Z bounds.
-func (v *Volume) PointInside(px, py, pz float64) bool {
-	const epsilon = 0.01
+func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	if v.hasFixedZ {
+		const epsilon = 0.01
+		//panic("Fixed Z bounds are enabled, cannot check 3D point inside without Z coordinate")
 		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
 			return false
 		}

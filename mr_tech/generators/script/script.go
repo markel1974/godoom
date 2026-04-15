@@ -35,7 +35,7 @@ func (p *Parser) Parse(id string) (*config.Root, error) {
 	if tErr != nil {
 		return nil, tErr
 	}
-	cfg := config.NewConfigRoot(nil, &config.Player{}, nil, 1.0, false, t)
+	cfg := config.NewConfigRoot(nil, &config.Player{}, nil, 1.0, t)
 
 	oldData := strings.Split(id, "\n")
 	configSectorIdx := 0

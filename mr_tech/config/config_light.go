@@ -5,16 +5,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// LightKind represents the type of light source, defined as an integer-based enumeration.
+// LightKind represents the type or classification of a light source, typically defined by an integer value.
 type LightKind int
 
-// LightKindNone represents the absence of a light source.
-// LightKindSpot represents a focused spotlight effect.
-// LightKindAmbient represents ambient light with no specific source or direction.
-// LightKindOpenAir represents light evenly distributed in an outdoor environment.
-// LightKindDiffuse represents light scattered and softened from a source.
-// LightKindDirectional represents light coming from a specific direction, like sunlight.
-// LightKindParticle represents light emitted from particles or small sources.
+// LightKindNone represents an undefined or absent type of light.
+// LightKindSpot represents a spotlight type of light.
+// LightKindAmbient represents ambient light, providing overall illumination.
+// LightKindOpenAir represents open-air light, simulating outdoor lighting conditions.
+// LightKindDiffuse represents diffused light, typically scattered and soft.
+// LightKindDirectional represents directional light, coming from a specific direction.
+// LightKindParticle represents particle-based light, often used for effects.
 const (
 	LightKindNone LightKind = iota
 	LightKindSpot
@@ -25,7 +25,7 @@ const (
 	LightKindParticle
 )
 
-// LightSector represents the configuration of a light sector, including its unique ID, intensity, and type.
+// LightSector represents a lighting configuration within a sector, including properties like intensity and falloff.
 type LightSector struct {
 	Id        string    `json:"id"`
 	Intensity float64   `json:"Intensity"`
@@ -33,7 +33,7 @@ type LightSector struct {
 	Falloff   float64   `json:"falloff"`
 }
 
-// NewConfigLightSector creates a new LightSector instance with a unique ID, specified intensity, and LightKind.
+// NewConfigLightSector initializes and returns a new LightSector instance with specified intensity, kind, and falloff values.
 func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *LightSector {
 	return &LightSector{
 		Id:        utils.NextUUId(),
@@ -43,8 +43,8 @@ func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *L
 	}
 }
 
-// ConfigLightPos represents the configuration for a light source's position, intensity, and kind.
-type ConfigLight struct {
+// Light represents a light source with position, intensity, type, and falloff properties for rendering or simulation.
+type Light struct {
 	Id        string       `json:"id"`
 	Pos       geometry.XYZ `json:"pos"`
 	Intensity float64      `json:"Intensity"`
@@ -52,13 +52,18 @@ type ConfigLight struct {
 	Falloff   float64      `json:"falloff"`
 }
 
-// NewConfigLightPos creates and returns a new ConfigLightPos with the specified position, intensity, and light kind.
-func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff float64) *ConfigLight {
-	return &ConfigLight{
+// NewConfigLight creates and returns a new Light configured with the specified position, intensity, type, and falloff values.
+func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff float64) *Light {
+	return &Light{
 		Id:        utils.NextUUId(),
 		Pos:       pos,
 		Intensity: intensity,
 		Kind:      kind,
 		Falloff:   falloff,
 	}
+}
+
+// Scale adjusts the position of the light by scaling its X, Y, and Z coordinates with the provided scale factor.
+func (t *Light) Scale(scale float64) {
+	t.Pos.Scale(scale)
 }

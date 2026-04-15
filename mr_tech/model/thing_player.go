@@ -34,10 +34,11 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) (*ThingPlayer, error) {
+func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
 	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	if volume == nil {
-		return nil, fmt.Errorf("can't find player volume at %f, %f", cfg.Position.X, cfg.Position.Y)
+		fmt.Printf("can't find player volume at %f, %f\n", cfg.Position.X, cfg.Position.Y)
+		return nil
 	}
 	cfg.Kind = config.ThingPlayerDef
 	if cfg.Height <= 0 {
@@ -62,7 +63,7 @@ func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug 
 	}
 	p.SetAngle(cfg.Angle)
 	p.things.AddThing(p)
-	return p, nil
+	return p
 }
 
 // GetLight retrieves the Light object associated with the ThingPlayer instance. Returns a pointer to the Light.

@@ -148,7 +148,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 	}
 
 	player := bld.buildPlayer(level)
-	cr := config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, false, texHandler)
+	cr := config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, texHandler)
 	cr.Vertices = vertexes
 
 	return cr, nil

@@ -31,58 +31,33 @@ func NewCompiler() *Compiler {
 
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
 func (r *Compiler) Compile(cfg *config.Root) error {
+	cfg.Scale(cfg.ScaleFactor)
 	animations := NewAnimations(cfg.GetTextures())
-	if cfg.Full3d {
-		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-		volumes3d := r.compile3d(cfg.Volumes, animations)
-		upgraded3d := r.upgrade3d(volumes2d)
-		volumes3d = append(volumes3d, upgraded3d...)
-		r.volumes = NewVolumes(volumes3d, cfg.Full3d)
-	} else {
-		volumes2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-		r.volumes = NewVolumes(volumes2d, cfg.Full3d)
-	}
-	scale := cfg.ScaleFactor
-	if scale == 0 {
-		scale = 1
-	}
-	if scale != 1 {
-		for _, volume := range r.volumes.GetVolumes() {
-			// legacy lights scale
-			volume.Light.pos.Scale(scale)
-			for _, face := range volume.GetFaces() {
-				face.Scale2d(scale)
-			}
-		}
-		cfg.Player.Position.Scale(scale)
-		for _, t := range cfg.Things {
-			t.Position.Scale(scale)
-		}
-		for _, t := range cfg.Lights {
-			t.Pos.Scale(scale)
-		}
-	}
 
+	var allVolumes []*Volume
+	//2d - 2.5d
+	container2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+	volumes2d := NewVolumes(container2d, false)
+	volumes2d.Setup()
+
+	if cfg.Full3d {
+		allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
+		allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
+	} else {
+		allVolumes = append(allVolumes, container2d...)
+	}
+	r.volumes = NewVolumes(allVolumes, cfg.Full3d)
 	r.volumes.Setup()
 
-	vLights2d, err := r.compileVolumesLights(r.volumes, true)
-	if err != nil {
-		return err
-	}
-	lights, err := r.compileLights(cfg.Lights)
-	if err != nil {
-		return err
-	}
 	r.lights = NewLights()
-	r.lights.AddLights(vLights2d)
-	r.lights.AddLights(lights)
+	r.lights.AddLights(r.compileLights2d(volumes2d))
+	r.lights.AddLights(r.compileLights(cfg.Lights))
 	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
-	if r.player, err = NewThingPlayer(r.things, cfg.Player, r.volumes, false); err != nil {
-		return err
+	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
+	if r.player == nil {
+		return fmt.Errorf("player not found")
 	}
-
 	fmt.Printf("Scan complete volumes: %d\n", r.volumes.Len())
-
 	return nil
 }
 
@@ -406,7 +381,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 }
 
 // compileLights processes a list of configuration light positions and returns a slice of initialized Light objects.
-func (r *Compiler) compileLights(cLights []*config.ConfigLight) ([]*Light, error) {
+func (r *Compiler) compileLights(cLights []*config.Light) []*Light {
 	var out []*Light
 	for _, cl := range cLights {
 		if cl == nil {
@@ -414,13 +389,15 @@ func (r *Compiler) compileLights(cLights []*config.ConfigLight) ([]*Light, error
 		}
 		light := NewLight()
 		light.Setup(nil, cl.Intensity, cl.Falloff, cl.Kind, cl.Pos)
+		out = append(out, light)
 	}
-	return out, nil
+	return out
 }
 
 // compileLights processes and merges adjacent volumes with similar properties into unified lighting areas.
-func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([]*Light, error) {
+func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
 	// Unifies adjacent triangles that belong to the same macroscopic sector.
+	const computeCenter = true
 	visited := make(map[string]bool)
 	var out []*Light
 
@@ -496,7 +473,7 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := r.volumes.LocateVolume(first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
+				cVolume := volumes.LocateVolume(first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
@@ -508,5 +485,5 @@ func (r *Compiler) compileVolumesLights(volumes *Volumes, computeCenter bool) ([
 			addLight(first, first.Light.intensity, first.Light.falloff, first.Light.kind, first.GetCentroid2d())
 		}
 	}
-	return out, nil
+	return out
 }

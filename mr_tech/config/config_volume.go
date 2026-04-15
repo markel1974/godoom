@@ -4,7 +4,7 @@ package config
 type Volume struct {
 	Id    string  `json:"id"`
 	Faces []*Face `json:"faces"`
-	//Light *ConfigLight  `json:"light"`
+	//Light *Light  `json:"light"`
 	Tag string `json:"tag"`
 }
 
@@ -21,4 +21,13 @@ func NewConfigVolume(id string, tag string) *Volume {
 // AddFace adds a Face instance to the Faces slice of the Volume.
 func (cv *Volume) AddFace(face *Face) {
 	cv.Faces = append(cv.Faces, face)
+}
+
+// Scale uniformly scales the geometry of all faces in the Volume by the given scale factor.
+func (cv *Volume) Scale(scale float64) {
+	for _, face := range cv.Faces {
+		for i := range face.Points {
+			face.Points[i].Scale(scale)
+		}
+	}
 }

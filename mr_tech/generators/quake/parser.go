@@ -69,7 +69,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	// Inizializzazione Root con il riferimento al gestore texture popolato
 	var playerAngle float64
 	var playerPos geometry.XYZ
-	root := config.NewConfigRoot(nil, nil, nil, 1.0, true, p.texManager)
+	root := config.NewConfigRoot(nil, nil, nil, 1.0, p.texManager)
 	root.Full3d = true
 
 	// 3. Parsing delle Entità (Luci, Player, Monsters)

@@ -54,3 +54,8 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Restitution: 0.0,
 	}
 }
+
+// Scale scales the position of the Thing by dividing each coordinate of its Position by the given scale factor.
+func (t *Thing) Scale(scale float64) {
+	t.Position.Scale(scale)
+}

@@ -175,7 +175,7 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 // px, py, pz parameters specify the coordinates of the point relative to which the intersection occurs.
 // Returns true if the ray intersects the triangle and false otherwise.
 func (s *Face) RayIntersect(px, py, pz float64) bool {
-	const eps = 0.000001
+	const eps = 0.001
 	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
 	// 1. Estrai gli edge del triangolo
 	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z

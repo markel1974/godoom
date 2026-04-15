@@ -35,12 +35,7 @@ type ThingPlayer struct {
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
 func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) (*ThingPlayer, error) {
-	var volume *Volume
-	if cfg.HasZPos {
-		volume = volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
-	} else {
-		volume = volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, 0)
-	}
+	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	if volume == nil {
 		return nil, fmt.Errorf("can't find player volume at %f, %f", cfg.Position.X, cfg.Position.Y)
 	}

@@ -157,7 +157,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			root.Volumes = append(root.Volumes, volume)
 		}
 	}
-	root.Player = config.NewConfigPlayer3d(playerPos, playerAngle, 8, 4, 20)
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 8, 4, 20)
 	return root, nil
 }
 

@@ -37,28 +37,10 @@ type Thing struct {
 	Speed        float64      `json:"speed"`
 	Acceleration float64      `json:"acceleration"`
 	Animation    *Animation   `json:"animation"`
-	HasZPos      bool         `json:"hasZPos"`
 }
 
-// NewConfigThing2d creates a 2D Thing object with the specified properties such as position, angle, kind, and animation.
-func NewConfigThing2d(id string, pos geometry.XY, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
-	return &Thing{
-		Id:          id,
-		Position:    geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0},
-		Angle:       angle,
-		Kind:        kind,
-		Mass:        mass,
-		Radius:      radius,
-		Height:      height,
-		Speed:       speed,
-		Animation:   anim,
-		Restitution: 0.0,
-		HasZPos:     false,
-	}
-}
-
-// NewConfigThing3d initializes and returns a pointer to a Thing with the provided parameters.
-func NewConfigThing3d(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
+// NewConfigThing creates Thing object with the specified properties such as position, angle, kind, and animation.
+func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
 	return &Thing{
 		Id:          id,
 		Position:    pos,
@@ -70,6 +52,5 @@ func NewConfigThing3d(id string, pos geometry.XYZ, angle float64, kind ThingType
 		Speed:       speed,
 		Animation:   anim,
 		Restitution: 0.0,
-		HasZPos:     true,
 	}
 }

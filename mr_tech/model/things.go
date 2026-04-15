@@ -146,14 +146,9 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 
 // CreateThing creates a new IThing instance based on the provided Thing and adds it to the Things collection.
 func (th *Things) createThing(ct *config.Thing) (IThing, error) {
-	var volume *Volume
-	if ct.HasZPos {
-		volume = th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
-	} else {
-		volume = th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, 0)
-	}
+	volume := th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	if volume == nil {
-		return nil, fmt.Errorf("can't find thing volume at %f, %f", ct.Position.X, ct.Position.Y)
+		return nil, fmt.Errorf("can't find thing volume at %f, %f, %f", ct.Position.X, ct.Position.Y, ct.Position.Z)
 	}
 
 	const disableEnemies = false
@@ -190,7 +185,7 @@ func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, m
 	}
 	c := th.config[ammoIndex]
 	id := utils.NextUUId()
-	cfg := config.NewConfigThing3d(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
+	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
 	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)
 }
 

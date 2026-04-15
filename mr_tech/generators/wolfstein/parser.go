@@ -80,9 +80,10 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				continue
 			}
 			if isThingOrEnemy(cell) {
-				pos := geometry.XY{
+				pos := geometry.XYZ{
 					X: float64(x)*wp.tileSize + wp.tileSize/2,
 					Y: float64(y)*wp.tileSize + wp.tileSize/2,
+					Z: 0,
 				}
 				var angle float64 = 0
 				kind := config.ThingItemDef
@@ -109,7 +110,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				const scaleH = 0.08
 				anim := config.NewConfigAnimation(sequence, config.AnimationKindLoop, scaleH, scaleH*2)
 				if useEnemy {
-					thing := config.NewConfigThing2d(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
+					thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
 					root.Things = append(root.Things, thing)
 				}
 				cell = 0 // Libera la cella per il compilatore topologico
@@ -178,12 +179,12 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 		}
 	}
 
-	var playerPos geometry.XY
+	var playerPos geometry.XYZ
 	if len(root.Sectors) > 0 && len(root.Sectors[0].Segments) > 0 {
 		pos := root.Sectors[0].Segments[0].End
-		playerPos = pos
+		playerPos = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
 	}
-	root.Player = config.NewConfigPlayer2d(playerPos, 0, 8, 4, 20)
+	root.Player = config.NewConfigPlayer(playerPos, 0, 8, 4, 20)
 	return root, nil
 }
 

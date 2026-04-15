@@ -155,6 +155,14 @@ func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	if volume == nil {
 		return nil, fmt.Errorf("can't find thing volume at %f, %f", ct.Position.X, ct.Position.Y)
 	}
+
+	const disableEnemies = false
+	if disableEnemies {
+		if ct.Kind == config.ThingEnemyDef {
+			ct.Kind = config.ThingItemDef
+		}
+	}
+
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:

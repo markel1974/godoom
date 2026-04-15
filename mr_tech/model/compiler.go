@@ -108,13 +108,14 @@ func (r *Compiler) GetLights() *Lights {
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Animations) []*Volume {
+	const epsilon = 0.001
 	modelSectorId := 0
 	var container []*Volume
-	totalPolygons := 0
 	var fixFaces []*Face
 	facesTree := physics.NewAABBTree(1024, 4.0)
 	emptyAnim := anim.GetAnimation(nil)
-	ve := NewVertexEdges(0.001)
+
+	ve := NewVertexEdges(epsilon)
 	ve.Construct(vertices, css)
 
 	for csIdx, cs := range css {
@@ -128,6 +129,10 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		}
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
+				if len(tri) != 3 {
+					fmt.Println("wrong triangle", tri)
+					continue
+				}
 				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
 				modelSectorId++
 				// Maintains consistent Winding Order for ContainsPoint
@@ -169,7 +174,6 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				}
 				volume.Rebuild()
 				container = append(container, volume)
-				totalPolygons++
 			}
 		}
 	}
@@ -183,7 +187,10 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		var bestNeighborFace *Face
 		facesTree.QueryOverlaps(face, func(object physics.IAABB) bool {
 			overlapFace, ok := object.(*Face)
-			if !ok || overlapFace.GetParent() == face.GetParent() {
+			if !ok {
+				return false
+			}
+			if overlapFace.GetParent() == face.GetParent() {
 				return false
 			}
 			start := face.GetStart()

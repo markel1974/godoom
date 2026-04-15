@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -37,7 +38,6 @@ func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation
 	}
 	v.materials[0] = floor
 	v.materials[1] = ceil
-	v.Rebuild()
 	return v
 }
 
@@ -55,16 +55,13 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 	}
 	v.materials[0] = nil
 	v.materials[1] = nil
-	v.Rebuild()
 	return v
 }
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
 func (v *Volume) Rebuild() bool {
 	if len(v.faces) == 0 {
-		//fmt.Println("Volume has empty faces", v.id, v.tag)
-		v.aabb.Rebuild(0, 0, 0, 0, 0, 0)
-		return false
+		fmt.Println("Volume has empty faces", v.id, v.tag)
 	}
 	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64

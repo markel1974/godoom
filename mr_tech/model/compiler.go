@@ -133,7 +133,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					fmt.Println("wrong triangle", tri)
 					continue
 				}
-				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, anim.GetAnimation(cs.Floor), cs.CeilY, anim.GetAnimation(cs.Ceil), cs.Tag)
+				materials := []*textures.Animation{anim.GetAnimation(cs.Floor), anim.GetAnimation(cs.Ceil)}
+				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, materials, cs.Tag)
 				modelSectorId++
 				// Maintains consistent Winding Order for ContainsPoint
 				if mathematic.PointInLineDirectionF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
@@ -259,13 +260,13 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		ceilMaterial := []*textures.Animation{vol2d.GetMaterialCeil()}
+		ceilMaterial := []*textures.Animation{vol2d.GetMaterial(1)}
 		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", ceilMaterial)
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		floorMaterial := []*textures.Animation{vol2d.GetMaterialFloor()}
+		floorMaterial := []*textures.Animation{vol2d.GetMaterial(0)}
 		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", floorMaterial)
 		vol3d.AddFace(floorFace)
 

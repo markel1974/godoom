@@ -10,50 +10,51 @@ import (
 
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
 type Volume struct {
-	modelId   int
-	id        string
-	faces     []*Face
-	tag       string
-	materials [2]*textures.Animation
-	Light     *Light
-	aabb      *physics.AABB
-	minZ      float64
-	maxZ      float64
-	hasFixedZ bool
-	facesTree *physics.AABBTree
+	modelId    int
+	id         string
+	faces      []*Face
+	tag        string
+	materials2 []*textures.Animation
+	Light      *Light
+	aabb       *physics.AABB
+	minZ       float64
+	maxZ       float64
+	hasFixedZ  bool
+	facesTree  *physics.AABBTree
 }
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded volumes.
-func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation, maxZ float64, ceil *textures.Animation, tag string) *Volume {
+func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Animation, tag string) *Volume {
 	v := &Volume{
-		modelId:   modelId,
-		id:        id,
-		tag:       tag,
-		minZ:      minZ,
-		maxZ:      maxZ,
-		hasFixedZ: true,
-		aabb:      physics.NewAABB(),
-		facesTree: physics.NewAABBTree(64, 0.0),
+		modelId:    modelId,
+		id:         id,
+		tag:        tag,
+		minZ:       minZ,
+		maxZ:       maxZ,
+		hasFixedZ:  true,
+		materials2: materials,
+		aabb:       physics.NewAABB(),
+		facesTree:  physics.NewAABBTree(64, 0.0),
 	}
-	v.materials[0] = floor
-	v.materials[1] = ceil
+	if len(v.materials2) == 0 {
+		v.materials2 = []*textures.Animation{nil}
+	}
 	return v
 }
 
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
 	v := &Volume{
-		modelId:   modelId,
-		id:        id,
-		tag:       tag,
-		minZ:      0,
-		maxZ:      0,
-		hasFixedZ: false,
-		aabb:      physics.NewAABB(),
-		facesTree: physics.NewAABBTree(64, 0.0),
+		modelId:    modelId,
+		id:         id,
+		tag:        tag,
+		minZ:       0,
+		maxZ:       0,
+		hasFixedZ:  false,
+		materials2: []*textures.Animation{nil},
+		aabb:       physics.NewAABB(),
+		facesTree:  physics.NewAABBTree(64, 0.0),
 	}
-	v.materials[0] = nil
-	v.materials[1] = nil
 	return v
 }
 
@@ -143,14 +144,11 @@ func (v *Volume) GetMaxZ() float64 {
 	return v.aabb.GetMaxZ()
 }
 
-// GetMaterialFloor returns the material used for the floor of the volume, based on 3D state and face normals.
-func (v *Volume) GetMaterialFloor() *textures.Animation {
-	return v.materials[0]
-}
-
-// GetMaterialCeil returns the material used for the ceiling of the volume. Prioritizes 3D faces if the volume is 3D.
-func (v *Volume) GetMaterialCeil() *textures.Animation {
-	return v.materials[1]
+// GetMaterial retrieves a material animation from the volume's materials list based on the provided index modulo the list size.
+func (v *Volume) GetMaterial(m int) *textures.Animation {
+	//floor 0, ceil 1
+	idx := m % len(v.materials2)
+	return v.materials2[idx]
 }
 
 // AddFace adds a new face to the volume and sets the volume as the parent of the face.

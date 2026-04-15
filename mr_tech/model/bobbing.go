@@ -51,22 +51,27 @@ func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 // Compute updates the procedural bobbing motion based on the given 2D velocity components (v2x, v2y).
 func (p *Bobbing) Compute(v2x float64, v2y float64) {
 	rawSpeed := math.Sqrt(v2x*v2x + v2y*v2y)
-	if rawSpeed > p.maxSpeed && rawSpeed < 5.0 {
+	if rawSpeed > p.maxSpeed {
 		p.maxSpeed = (p.maxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
 	p.smoothedSpeed = (p.smoothedSpeed * (1.0 - p.speedLerp)) + (rawSpeed * p.speedLerp)
 	p.phase += p.idleDrift + (p.smoothedSpeed * p.strideLength)
-
-	targetAmp := (p.smoothedSpeed / p.maxSpeed) * p.maxAmplitude
-	if targetAmp > p.maxAmplitude {
-		targetAmp = p.maxAmplitude
+	ratio := 0.0
+	if p.maxSpeed > 0 {
+		ratio = p.smoothedSpeed / p.maxSpeed
 	}
+	if ratio > 1.0 {
+		ratio = 1.0
+	}
+	// Impediamo all'ampiezza di scendere a zero. Da fermo (ratio=0), l'ampiezza
+	// sarà 0.3 (respiro corto). In corsa (ratio=1), scala fluidamente fino a maxAmplitude.
+	const idleAmp = 0.3
+	targetAmp := idleAmp + (ratio * (p.maxAmplitude - idleAmp))
 	p.amp = (p.amp * (1.0 - p.ampLerp)) + (targetAmp * p.ampLerp)
 	p.bob = math.Sin(p.phase) * p.amp
-
-	const springTension = 0.15 // Forza di richiamo elastico (più alto = torna su più in fretta)
-	const springDamping = 0.75 // Smorzamento (evita che la telecamera continui a rimbalzare)
-
+	// --- Jump/Fall Bob (Procedural Spring) ---
+	const springTension = 0.15
+	const springDamping = 0.75
 	p.jumpBobVelocity -= p.jumpBobOffset * springTension
 	p.jumpBobVelocity *= springDamping
 	p.jumpBobOffset += p.jumpBobVelocity

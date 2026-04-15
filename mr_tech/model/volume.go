@@ -214,7 +214,7 @@ func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	}
 	intersections := 0
 	for _, face := range v.faces {
-		if face.RayIntersect(px, py, pz) {
+		if face.RayIntersect(px, py, pz, 1.0, 0.000123, 0.000456) {
 			intersections++
 		}
 	}

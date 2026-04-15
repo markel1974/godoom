@@ -170,6 +170,7 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 //	return pointInVolume, true
 //}
 
+/*
 // RayIntersect determines if a ray starting at the origin (1, 0, 0) intersects with the triangle of the face.
 // The method uses the Möller-Trumbore intersection algorithm for precise calculations.
 // px, py, pz parameters specify the coordinates of the point relative to which the intersection occurs.
@@ -209,6 +210,45 @@ func (s *Face) RayIntersect(px, py, pz float64) bool {
 	// 8. Calcolo del Time Of Impact (t) lungo il raggio
 	t := invDet * (e2x*qx + e2y*qy + e2z*qz)
 	// Se t > eps, il triangolo è davanti a noi e l'abbiamo colpito
+	return t > eps
+}*/
+
+// RayIntersect lancia un raggio. Per evitare singolarità nei BSP,
+// chiamala con direzioni irrazionali, es: s.RayIntersect(px, py, pz, 1.0, 0.000123, 0.000456)
+func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
+	const eps = 1e-8
+	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+
+	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+
+	hx := dy*e2z - dz*e2y
+	hy := dz*e2x - dx*e2z
+	hz := dx*e2y - dy*e2x
+
+	a := e1x*hx + e1y*hy + e1z*hz
+	if a > -eps && a < eps {
+		return false
+	}
+
+	invDet := 1.0 / a
+	sx, sy, sz := px-p0.X, py-p0.Y, pz-p0.Z
+
+	u := (sx*hx + sy*hy + sz*hz) * invDet
+	if u < 0.0 || u > 1.0 {
+		return false
+	}
+
+	qx := sy*e1z - sz*e1y
+	qy := sz*e1x - sx*e1z
+	qz := sx*e1y - sy*e1x
+
+	v := (dx*qx + dy*qy + dz*qz) * invDet
+	if v < 0.0 || u+v > 1.0 {
+		return false
+	}
+
+	t := (e2x*qx + e2y*qy + e2z*qz) * invDet
 	return t > eps
 }
 

@@ -215,8 +215,21 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
 func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 	var volumes3d []*Volume
-	// Mappa di traduzione: *Volume 2D -> *Volume 3D
 	volMap := make(map[*Volume]*Volume)
+
+	buildQuad := func(vol3d *Volume, f2d *Face, zBottom, zTop float64, tag string, material *textures.Animation) {
+		start := f2d.GetStart()
+		end := f2d.GetEnd()
+		v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBottom} // Bottom-Start
+		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBottom}     // Bottom-End
+		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
+		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
+
+		faceT1 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v2, v3}, tag, material)
+		vol3d.AddFace(faceT1)
+		vol3d.AddFace(faceT2)
+	}
 
 	// 1. Prima Passata: Generazione della topologia solida
 	for _, vol2d := range vols2d {
@@ -245,23 +258,9 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		vol3d.AddFace(floorFace)
 
 		for _, f2d := range faces2d {
-			start := f2d.GetStart()
-			end := f2d.GetEnd()
 			neighbor := f2d.GetNeighbor()
-
-			buildQuad := func(zBottom, zTop float64, n *Volume, tag string, material *textures.Animation) {
-				v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBottom} // Bottom-Start
-				v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBottom}     // Bottom-End
-				v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
-				v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
-
-				faceT1 := NewFace(n, []geometry.XYZ{v0, v1, v2}, tag, material)
-				faceT2 := NewFace(n, []geometry.XYZ{v0, v2, v3}, tag, material)
-				vol3d.AddFace(faceT1)
-				vol3d.AddFace(faceT2)
-			}
 			if neighbor == nil {
-				buildQuad(floorZ, ceilZ, nil, f2d.GetTag(), f2d.GetMaterialMiddle())
+				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetMaterialMiddle())
 				continue
 			}
 			// Esiste un adiacenza: dobbiamo calcolare i differenziali di quota
@@ -269,13 +268,11 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			nCeilZ := neighbor.GetMaxZ()
 			// 1. Lower Wall (Muro in basso: il pavimento del vicino è più in alto del nostro)
 			if nFloorZ > floorZ {
-				// Usa nil come neighbor: la fisica deve impattare su questo dislivello!
-				buildQuad(floorZ, nFloorZ, nil, f2d.GetTag()+"_lower", f2d.GetMaterialLower())
+				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetMaterialLower())
 			}
 			// 2. Upper Wall (Muro in alto: il soffitto del vicino scende sotto il nostro)
 			if nCeilZ < ceilZ {
-				// Usa nil come neighbor: muro solido non attraversabile
-				buildQuad(nCeilZ, ceilZ, nil, f2d.GetTag()+"_upper", f2d.GetMaterialUpper())
+				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetMaterialUpper())
 			}
 			// 3. Middle Portal (L'apertura attraverso cui il player può navigare e guardare)
 			portalBottom := floorZ
@@ -288,8 +285,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			}
 			// Se l'apertura esiste fisicamente (evita glitch se due settori sono totalmente sfalsati)
 			if portalTop > portalBottom {
-				// SOLO QUESTA faccia riceve il neighbor, agendo come collegamento nel grafo 3D
-				buildQuad(portalBottom, portalTop, neighbor, f2d.GetTag()+"_portal", f2d.GetMaterialMiddle())
+				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetMaterialMiddle())
 			}
 		}
 		vol3d.Rebuild()

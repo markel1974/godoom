@@ -20,6 +20,7 @@ type Volume struct {
 	minZ      float64
 	maxZ      float64
 	hasFixedZ bool
+	facesTree *physics.AABBTree
 }
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded volumes.
@@ -32,6 +33,7 @@ func NewVolume2d(modelId int, id string, minZ float64, floor *textures.Animation
 		maxZ:      maxZ,
 		hasFixedZ: true,
 		aabb:      physics.NewAABB(),
+		facesTree: physics.NewAABBTree(64, 0.0),
 	}
 	v.materials[0] = floor
 	v.materials[1] = ceil
@@ -49,6 +51,7 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 		maxZ:      0,
 		hasFixedZ: false,
 		aabb:      physics.NewAABB(),
+		facesTree: physics.NewAABBTree(64, 0.0),
 	}
 	v.materials[0] = nil
 	v.materials[1] = nil
@@ -98,6 +101,11 @@ func (v *Volume) Rebuild() bool {
 		v.maxZ = calcMaxZ
 	}
 	v.aabb.Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
+
+	v.facesTree.Clear()
+	for _, face := range v.faces {
+		v.facesTree.InsertObject(face)
+	}
 	return true
 }
 
@@ -278,3 +286,25 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 		Z: floorY,
 	}
 }
+
+/*
+// KCC Sweep Target AABB
+targetAABB := physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
+
+// 1. Interroga l'albero Globale per trovare in quali volumi stiamo entrando
+globalTree.QueryOverlaps(targetAABB, func(volObj physics.IAABB) bool {
+    volume := volObj.(*Volume)
+
+    // 2. Interroga l'albero Locale del volume trovato per estrarre SOLO i triangoli vicini
+    volume.facesTree.QueryOverlaps(targetAABB, func(faceObj physics.IAABB) bool {
+        face := faceObj.(*Face)
+
+        // 3. Narrow-Phase e Sweep
+        // Aggiungi la faccia alla lista dei candidati per il test raggio/sfera-triangolo
+        // e calcolo del V_slide
+        candidates = append(candidates, face)
+        return false // Continua la ricerca nell'albero locale
+    })
+    return false // Continua la ricerca nell'albero globale
+})
+*/

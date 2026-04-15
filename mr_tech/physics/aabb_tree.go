@@ -54,6 +54,26 @@ func (a *AABBTree) Nodes() map[IAABB]uint {
 	return a.objectNodeIndexMap
 }
 
+// Clear resets the AABBTree to its initial empty state without deallocating the underlying structures.
+// It rebuilds the internal free-node list and clears the object map, making it ready for reuse.
+func (a *AABBTree) Clear() {
+	a.rootNodeIndex = AABBNullNode
+	a.allocatedNodeCount = 0
+	a.nextFreeNodeIndex = 0
+	var nodeIndex uint
+	for nodeIndex = 0; nodeIndex < a.nodeCapacity; nodeIndex++ {
+		a.nodes[nodeIndex].object = nil
+		a.nodes[nodeIndex].parentNodeIndex = AABBNullNode
+		a.nodes[nodeIndex].leftNodeIndex = AABBNullNode
+		a.nodes[nodeIndex].rightNodeIndex = AABBNullNode
+		a.nodes[nodeIndex].nextNodeIndex = nodeIndex + 1
+	}
+	if a.nodeCapacity > 0 {
+		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
+	}
+	a.objectNodeIndexMap = make(map[IAABB]uint)
+}
+
 // InsertObject inserts a new object into the AABBTree, updates its AABB, and associates it with a node index.
 func (a *AABBTree) InsertObject(object IAABB) {
 	nodeIndex, node := a.allocateNode()

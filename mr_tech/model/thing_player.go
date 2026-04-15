@@ -37,7 +37,7 @@ type ThingPlayer struct {
 func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) (*ThingPlayer, error) {
 	var volume *Volume
 	if cfg.HasZPos {
-		volume = volumes.QueryPoint3d(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
+		volume, _ = volumes.LocateVolume3d(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	} else {
 		volume = volumes.LocateVolume2d(cfg.Position.X, cfg.Position.Y)
 	}

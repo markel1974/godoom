@@ -147,7 +147,7 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 				if face.GetNormal().Z != -1 {
 					continue
 				}
-				if !face.PointInTriangle(px, py) {
+				if !face.PointInTriangle2d(px, py) {
 					return false
 				}
 				target = face.GetParent()
@@ -169,6 +169,97 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 	})
 	return target
 }
+
+func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
+	var targetVol *Volume
+	var targetFace *Face
+
+	// 1. Broad-Phase Globale: troviamo l'AABB del volume 3D
+	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
+		volume, volumeOk := object.(*Volume)
+		if !volumeOk {
+			return false
+		}
+
+		// FONDAMENTALE PER QUAKE/BSP: Narrow-Phase del poliedro 3D!
+		// Verifica che il punto sia matematicamente DENTRO i piani inclinati del settore.
+		if !volume.PointInVolume(px, py, pz) {
+			return false
+		}
+
+		// 2. Broad-Phase Locale: cerchiamo la faccia sotto ai piedi
+		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+			face, faceOk := object.(*Face)
+			if !faceOk {
+				return false
+			}
+
+			// Filtro Topologico: Selezioniamo solo le facce che fungono da pavimento (Normal Z negativa)
+			if face.GetNormal().Z >= -0.001 {
+				return false // Scarta muri e soffitti
+			}
+
+			// CRITICO: Usiamo la proiezione 2D!
+			// Vogliamo sapere se la coordinata XY del player è sovrapposta al triangolo,
+			// ignorando quanto in alto (Z) si trovi la testa del player rispetto al pavimento.
+			if face.PointInTriangle2d(px, py) {
+				targetVol = volume
+				targetFace = face
+				return true
+			}
+			return false
+		})
+
+		// Se abbiamo trovato la faccia, propaghiamo l'uscita
+		if targetFace != nil {
+			return true
+		}
+		return false
+	})
+
+	return targetVol, targetFace
+}
+
+/*
+// LocateVolume3d trova il volume 3D che contiene il punto (px, py, pz) e
+// restituisce sia il Volume che la Faccia di riferimento (es. il pavimento sotto al punto).
+func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
+	var targetVol *Volume
+	var targetFace *Face
+
+	// 1. Broad-Phase Globale: troviamo il volume 3D
+	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
+		volume, volumeOk := object.(*Volume)
+		if !volumeOk {
+			return false
+		}
+		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+			face, faceOk := object.(*Face)
+			if !faceOk {
+				return false
+			}
+			// Filtro Topologico: Selezioniamo solo le facce che fungono da pavimento.
+			// Nei poliedri convessi con normali rivolte verso l'esterno,
+			// il pavimento ha la normale Z rivolta verso il basso (negativa).
+			if face.GetNormal().Z >= -0.001 {
+				return false // Scarta muri (Z≈0) e soffitti (Z>0)
+			}
+			// Verifica Esatta: il punto cade verticalmente dentro questo specifico triangolo?
+			if face.PointInTriangle3d(px, py, pz) {
+				targetVol = volume
+				targetFace = face
+				return true
+			}
+			return false
+		})
+		if targetFace != nil {
+			return true
+		}
+		return false
+	})
+	return targetVol, targetFace
+}
+*/
 
 // QueryAABB performs a spatial query, invoking the callback for each Volume that overlaps with the specified AABB.
 func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {

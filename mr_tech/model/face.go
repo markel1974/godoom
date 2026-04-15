@@ -165,14 +165,13 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.
 func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
-	n := s.GetNormal()
 	target := s.triangle[0]
-	pointInVolume := (px-target.X)*n.X + (py-target.Y)*n.Y + (pz-target.Z)*n.Z
+	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z
 	return pointInVolume, true
 }
 
-// PointInTriangle determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
-func (s *Face) PointInTriangle(px, py float64) bool {
+// PointInTriangle2d determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
+func (s *Face) PointInTriangle2d(px, py float64) bool {
 	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
 	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
 	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
@@ -181,6 +180,41 @@ func (s *Face) PointInTriangle(px, py float64) bool {
 	hasNeg := (d1 < eps) || (d2 < eps) || (d3 < eps)
 	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
 	return !(hasNeg && hasPos)
+}
+
+// PointInTriangle3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
+// Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
+func (s *Face) PointInTriangle3d(px, py, pz float64) bool {
+	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	// 1. Calcolo dei vettori degli spigoli (v0, v1) e del vettore verso il punto (v2)
+	v0x, v0y, v0z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	v2x, v2y, v2z := px-p0.X, py-p0.Y, pz-p0.Z
+	// 2. Calcolo dei Prodotti Scalari (Dot Products)
+	d00 := v0x*v0x + v0y*v0y + v0z*v0z
+	d01 := v0x*v1x + v0y*v1y + v0z*v1z
+	d02 := v0x*v2x + v0y*v2y + v0z*v2z
+	d11 := v1x*v1x + v1y*v1y + v1z*v1z
+	d12 := v1x*v2x + v1y*v2y + v1z*v2z
+
+	// 3. Calcolo del denominatore
+	denom := (d00 * d11) - (d01 * d01)
+	if denom == 0 {
+		return false // Sicurezza: Triangolo degenere (linea o punto)
+	}
+
+	invDenom := 1.0 / denom
+
+	// 4. Calcolo delle coordinate baricentriche (u, v)
+	u := ((d11 * d02) - (d01 * d12)) * invDenom
+	v := ((d00 * d12) - (d01 * d02)) * invDenom
+
+	// 5. Verifica tolleranza (eps) per la virgola mobile
+	const eps = -0.001
+
+	// Il punto è DENTRO il triangolo se u >= 0, v >= 0 e u+v <= 1
+	// (usiamo la tua tolleranza eps per prevenire errori di arrotondamento sui bordi)
+	return (u >= eps) && (v >= eps) && (u+v <= 1.0-eps)
 }
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.

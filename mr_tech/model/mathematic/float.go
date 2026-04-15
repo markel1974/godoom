@@ -40,7 +40,6 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 	return OverlapF(x0, x1, x2, x3) && OverlapF(y0, y1, y2, y3)
 }
 
-/*
 // PointInLineDirectionF determines the relative position of point (px, py) to a directed line segment (x0, y0) -> (x1, y1).
 // Returns 0 if the point lies on the line, -1 if it's to the left, and 1 if it's to the right.
 func PointInLineDirectionF(px, py, x0, y0, x1, y1 float64) float64 {
@@ -48,19 +47,6 @@ func PointInLineDirectionF(px, py, x0, y0, x1, y1 float64) float64 {
 	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
 	// Difesa contro l'imprecisione del floating point
 	if math.Abs(v) <= epsilon {
-		return 0
-	}
-	if v < 0 {
-		return -1
-	}
-	return 1
-}
-
-*/
-
-func PointInLineDirectionF(px float64, py float64, x0 float64, y0 float64, x1 float64, y1 float64) float64 {
-	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
-	if v == 0 {
 		return 0
 	}
 	if v < 0 {

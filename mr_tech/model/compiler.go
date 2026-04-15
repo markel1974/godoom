@@ -112,7 +112,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	modelSectorId := 0
 	var container []*Volume
 	var fixFaces []*Face
-	facesTree := physics.NewAABBTree(1024, 4.0)
+	//TODO Viste le ultime modifiche capire perche siamo passati da un margine di 4 a un margine di 20, altrimenti non risolve
+	facesTree := physics.NewAABBTree(1024, 20)
 	emptyAnim := anim.GetAnimation(nil)
 
 	ve := NewVertexEdges(epsilon)

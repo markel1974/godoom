@@ -108,12 +108,12 @@ func (r *Compiler) GetLights() *Lights {
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
 func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Animations) []*Volume {
-	const epsilon = 0.001
+	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Volume
 	var fixFaces []*Face
 	//TODO Viste le ultime modifiche capire perche siamo passati da un margine di 4 a un margine di 20, altrimenti non risolve
-	facesTree := physics.NewAABBTree(1024, 20)
+	facesTree := physics.NewAABBTree(1024, epsilon)
 	emptyAnim := anim.GetAnimation(nil)
 
 	ve := NewVertexEdges(epsilon)
@@ -162,7 +162,6 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					face := NewFace2d(nil, start, end, tag, upper, middle, lower)
 					volume.AddFace(face)
 					volume.AddTag(tag)
-					facesTree.InsertObject(face)
 					if !isWall {
 						fixFaces = append(fixFaces, face)
 					}
@@ -174,6 +173,9 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Falloff, cs.Light.Kind, lightPos)
 				}
 				volume.Rebuild()
+				for _, face := range volume.GetFaces() {
+					facesTree.InsertObject(face)
+				}
 				container = append(container, volume)
 			}
 		}

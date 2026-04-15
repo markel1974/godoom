@@ -137,8 +137,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				for k := 0; k < 3; k++ {
 					p1 := tri[k]
 					p2 := tri[(k+1)%3]
-					start := geometry.XYZ{X: p1.X, Y: p1.Y, Z: 0}
-					end := geometry.XYZ{X: p2.X, Y: p2.Y, Z: 0}
+					start := geometry.XY{X: p1.X, Y: p1.Y}
+					end := geometry.XY{X: p2.X, Y: p2.Y}
 					isWall := false
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
 					tag := "unknown"
@@ -225,8 +225,8 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
 		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
 
-		faceT1 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v1, v2}, tag, material)
-		faceT2 := NewFace(f2d.GetNeighbor(), []geometry.XYZ{v0, v2, v3}, tag, material)
+		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
 		vol3d.AddFace(faceT1)
 		vol3d.AddFace(faceT2)
 	}
@@ -248,12 +248,12 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		p2 := faces2d[2].GetStart()
 
 		ceilZ := vol2d.GetMaxZ()
-		ceilP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
+		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
 		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialCeil())
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
-		floorP := []geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
+		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
 		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialFloor())
 		vol3d.AddFace(floorFace)
 
@@ -325,7 +325,12 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			material := anim.GetAnimation(cf.Material)
 			// Scomposizione poligonale robusta (Supporta N-Gon concavi)
 			triangles := geometry.Triangulate3d(pts)
-			for _, tri := range triangles {
+			for _, t := range triangles {
+				if len(t) != 3 {
+					fmt.Println("wrong triangle", t)
+					continue
+				}
+				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
 				face := NewFace(nil, tri, cf.Tag, material)
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)

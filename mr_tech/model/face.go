@@ -33,8 +33,7 @@ type Face struct {
 	neighbor  *Volume
 	tag       string
 	aabb      *physics.AABB
-	points    []geometry.XYZ
-	pSize     int
+	points2   [3]geometry.XYZ
 	normal    geometry.XYZ
 	material  [3]*textures.Animation
 	minZ      float64
@@ -43,10 +42,9 @@ type Face struct {
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, tUpper, tMiddle, tLower *textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: true,
-		points:    make([]geometry.XYZ, 2),
 		neighbor:  neighbor,
 		tag:       tag,
 		minZ:      0,
@@ -56,18 +54,18 @@ func NewFace2d(neighbor *Volume, start geometry.XYZ, end geometry.XYZ, tag strin
 	out.material[0] = tUpper
 	out.material[1] = tMiddle
 	out.material[2] = tLower
-	out.points[0] = start
-	out.points[1] = end
-	out.pSize = len(out.points) - 1
+	out.points2[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
+	out.points2[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
+	out.points2[2] = geometry.XYZ{X: end.X, Y: end.Y, Z: 0}
 	out.Rebuild()
 	return out
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, points [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: false,
-		points:    points,
+		points2:   points,
 		neighbor:  neighbor,
 		tag:       tag,
 		aabb:      physics.NewAABB(),
@@ -75,10 +73,6 @@ func NewFace(neighbor *Volume, points []geometry.XYZ, tag string, material *text
 	out.material[0] = material
 	out.material[1] = material
 	out.material[2] = material
-	for i := len(points); i < 3; i++ {
-		points[i] = geometry.XYZ{X: 0, Y: 0, Z: 0}
-	}
-	out.pSize = len(out.points) - 1
 	out.Rebuild()
 	return out
 }
@@ -88,18 +82,20 @@ func (s *Face) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
 	s.hasFixedZ = true
-	for i := range s.points {
-		s.points[i].Z = minZ
-	}
+
+	s.points2[0].Z = minZ
+	s.points2[1].Z = minZ
+	s.points2[2].Z = minZ
+
 	s.Rebuild()
 }
 
 // ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (s *Face) ClearZ() {
 	if s.hasFixedZ {
-		for i := range s.points {
-			s.points[i].Z = 0
-		}
+		s.points2[0].Z = 0
+		s.points2[1].Z = 0
+		s.points2[2].Z = 0
 	}
 	s.minZ = 0
 	s.maxZ = 0
@@ -144,12 +140,17 @@ func (s *Face) GetNormal() geometry.XYZ {
 
 // GetStart returns the first point of the segment as a geometry.XYZ value.
 func (s *Face) GetStart() geometry.XYZ {
-	return s.points[0]
+	return s.points2[0]
+}
+
+// GetMiddle retrieves the middle point (geometry.XYZ) of the Face from its predefined points array.
+func (s *Face) GetMiddle() geometry.XYZ {
+	return s.points2[1]
 }
 
 // GetEnd returns the last point of the segment as a geometry.XYZ value.
 func (s *Face) GetEnd() geometry.XYZ {
-	return s.points[s.pSize]
+	return s.points2[2]
 }
 
 // GetMaterialUpper retrieves the upper texture animation for the segment, typically used for rendering upper walls.
@@ -168,8 +169,8 @@ func (s *Face) GetMaterialLower() *textures.Animation {
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
-func (s *Face) GetPoints() []geometry.XYZ {
-	return s.points
+func (s *Face) GetPoints() [3]geometry.XYZ {
+	return s.points2
 }
 
 // PointInLineSide determines if a 2D point (px, py) lies on or to the right of the directed line segment of the Face.
@@ -185,21 +186,15 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.
 func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
-	if len(s.points) == 0 {
-		return 0, false
-	}
 	n := s.GetNormal()
-	target := s.points[0]
+	target := s.points2[0]
 	pointInVolume := (px-target.X)*n.X + (py-target.Y)*n.Y + (pz-target.Z)*n.Z
 	return pointInVolume, true
 }
 
 // PointInTriangle determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
 func (s *Face) PointInTriangle(px, py float64) bool {
-	if len(s.points) < 3 {
-		return false
-	}
-	p0, p1, p2 := s.points[0], s.points[1], s.points[2]
+	p0, p1, p2 := s.points2[0], s.points2[1], s.points2[2]
 	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
 	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
 	d3 := (px-p2.X)*(p0.Y-p2.Y) - (py-p2.Y)*(p0.X-p2.X)
@@ -216,9 +211,9 @@ func (s *Face) GetMaterial() *textures.Animation {
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
 func (s *Face) Scale2d(scale float64) {
-	for idx := range s.points {
-		s.points[idx].Scale(scale)
-	}
+	s.points2[0].Scale(scale)
+	s.points2[1].Scale(scale)
+	s.points2[2].Scale(scale)
 	s.Rebuild()
 }
 
@@ -246,12 +241,8 @@ func (s *Face) MakeReverseEdgeKey() EdgeKey {
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
 func (s *Face) computeNormal() {
 	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
-	if s.pSize < 1 {
-		return
-	}
-	if s.pSize == 1 {
-		// Vettore normale per un piano verticale (2.5D)
-		p0, p1 := s.points[0], s.points[1]
+	if s.hasFixedZ {
+		p0, p1 := s.points2[0], s.points2[2]
 		dx := p1.X - p0.X
 		dy := p1.Y - p0.Y
 		lenSq := dx*dx + dy*dy
@@ -263,7 +254,7 @@ func (s *Face) computeNormal() {
 		return
 	}
 	// Prodotto vettoriale standard per poligoni 3D
-	p0, p1, p2 := s.points[0], s.points[1], s.points[2]
+	p0, p1, p2 := s.points2[0], s.points2[1], s.points2[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
 	nx := v1y*v2z - v1z*v2y
@@ -278,9 +269,9 @@ func (s *Face) computeNormal() {
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
 func (s *Face) computeAABB() {
 	const eps = 0.001
-	minX, minY, minZ := s.points[0].X, s.points[0].Y, s.points[0].Z
+	minX, minY, minZ := s.points2[0].X, s.points2[0].Y, s.points2[0].Z
 	maxX, maxY, maxZ := minX, minY, minZ
-	for _, p := range s.points {
+	for _, p := range s.points2 {
 		if p.X < minX {
 			minX = p.X
 		}

@@ -176,60 +176,79 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 	camX, camY := vi.GetXY()
 
 	for idx := 0; idx < thingsCount; idx++ {
-		t := things[idx]
-		if t.GetAnimation() == nil {
+		thing := things[idx]
+		vertices := thing.GetVertices(camX, camY)
+		if vertices == nil {
 			continue
 		}
-		tPosX, tPosY, _ := t.GetPosition()
-		dx := tPosX - camX
-		dy := tPosY - camY
-		distSq := dx*dx + dy*dy
-
-		tex := t.GetAnimation().CurrentFrame()
-		if tex == nil {
-			continue
-		}
-		layer, ok := w.tex.Get(tex)
-		if !ok {
-			continue
-		}
-
-		texW, texH := tex.Size()
-		scaleW, scaleH := t.GetAnimation().ScaleFactor()
-		width := float64(texW) * scaleW
-		height := float64(texH) * scaleH
-
-		dist := math.Sqrt(distSq)
-		if dist < minDist {
-			dist = minDist
-		}
-
-		halfW := width / 2.0
-		rX := -((camY - tPosY) / dist) * halfW
-		rY := ((camX - tPosX) / dist) * halfW
-
-		v1x := float32(tPosX - rX)
-		v1y := float32(tPosY - rY)
-		v2x := float32(tPosX + rX)
-		v2y := float32(tPosY + rY)
-
-		zBottom := float32(t.GetMinZ())
-		zTop := zBottom + float32(height)
-
 		startIndices := fv.GetIndicesLen()
-		u0, u1 := float32(0.0), float32(1.0)
-		vTop, vBottom := float32(0.0), float32(1.0)
-
-		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
-		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
-		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
-		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
-
-		fv.AddTriangle(idx0, idx1, idx2)
-		fv.AddTriangle(idx0, idx2, idx3)
-
+		for _, tri := range vertices {
+			layer, _ := w.tex.Get(tri[0].Material)
+			// tri è un array di 3 vertici: [3]model.Vertex
+			p0, p1, p2 := tri[0], tri[1], tri[2]
+			// 1. Farci dare gli ID dei vertici aggiungendoli al VBO globale
+			// AddVertex(x, y, z, u, v, layer) -> restituisce l'indice univoco
+			id0 := fv.AddVertex(float32(p0.X), float32(p0.Y), float32(p0.Z), float32(p0.U), float32(p0.V), layer)
+			id1 := fv.AddVertex(float32(p1.X), float32(p1.Y), float32(p1.Z), float32(p1.U), float32(p1.V), layer)
+			id2 := fv.AddVertex(float32(p2.X), float32(p2.Y), float32(p2.Z), float32(p2.U), float32(p2.V), layer)
+			// 2. Definire il triangolo nell'IBO (Index Buffer) usando gli ID ottenuti
+			fv.AddTriangle(id0, id1, id2)
+		}
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)
+
+		/*
+
+			animation := thing.GetAnimation()
+			if animation == nil {
+				continue
+			}
+			tex := animation.CurrentFrame()
+			if tex == nil {
+				continue
+			}
+			layer, ok := w.tex.Get(tex)
+			if !ok {
+				continue
+			}
+			tPosX, tPosY, _ := thing.GetPosition()
+			dx := tPosX - camX
+			dy := tPosY - camY
+			distSq := dx*dx + dy*dy
+			dist := math.Sqrt(distSq)
+			if dist < minDist {
+				dist = minDist
+			}
+			texW, texH := tex.Size()
+			scaleW, scaleH := animation.ScaleFactor()
+			width := float64(texW) * scaleW
+			height := float64(texH) * scaleH
+			halfW := width / 2.0
+			rX := -((camY - tPosY) / dist) * halfW
+			rY := ((camX - tPosX) / dist) * halfW
+			v1x := float32(tPosX - rX)
+			v1y := float32(tPosY - rY)
+			v2x := float32(tPosX + rX)
+			v2y := float32(tPosY + rY)
+			zBottom := float32(thing.GetMinZ())
+			zTop := zBottom + float32(height)
+
+			startIndices := fv.GetIndicesLen()
+			u0, u1 := float32(0.0), float32(1.0)
+			vTop, vBottom := float32(0.0), float32(1.0)
+
+			idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
+			idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
+			idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
+			idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
+
+			fv.AddTriangle(idx0, idx1, idx2)
+			fv.AddTriangle(idx0, idx2, idx3)
+
+			currentIndices := fv.GetIndicesLen()
+			dc.Compute(startIndices, currentIndices)
+
+		*/
 	}
 }
 

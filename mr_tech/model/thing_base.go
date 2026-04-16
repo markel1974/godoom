@@ -29,6 +29,7 @@ type ThingBase struct {
 	isActive     bool
 	identifier   int
 	wall         *ThingWall
+	triangles    [][3]Vertex
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
@@ -59,9 +60,70 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		isActive:     true,
 		identifier:   -1,
 		wall:         NewThingWall(volumes, 0, 0),
+		triangles:    make([][3]Vertex, 2),
 	}
 	thing.entity.SetOnGround(false)
 	return thing
+}
+
+// GetVertices calculates and returns the transformed vertex data for rendering the ThingBase instance.
+func (t *ThingBase) GetVertices(camX, camY float64) [][3]Vertex {
+	animation := t.GetAnimation()
+	if animation == nil {
+		return nil
+	}
+	tex := animation.CurrentFrame()
+	if tex == nil {
+		return nil
+	}
+	const minDist = 0.0001
+	tPosX, tPosY, _ := t.GetPosition()
+	dx := tPosX - camX
+	dy := tPosY - camY
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist < minDist {
+		dist = minDist
+	}
+	texW, texH := tex.Size()
+	scaleW, scaleH := animation.ScaleFactor()
+	width := float64(texW) * scaleW
+	height := float64(texH) * scaleH
+	halfW := width / 2.0
+	rX := -((camY - tPosY) / dist) * halfW
+	rY := ((camX - tPosX) / dist) * halfW
+
+	v1x, v1y := tPosX-rX, tPosY-rY
+	v2x, v2y := tPosX+rX, tPosY+rY
+	zBottom := t.GetMinZ()
+	zTop := zBottom + height
+
+	// Triangolo 0 (Top-Left, Bottom-Left, Bottom-Right)
+	t.triangles[0][0].X, t.triangles[0][0].Y, t.triangles[0][0].Z = v1x, zTop, -v1y
+	t.triangles[0][0].U, t.triangles[0][0].V = 0.0, 0.0
+	t.triangles[0][0].Material = tex
+
+	t.triangles[0][1].X, t.triangles[0][1].Y, t.triangles[0][1].Z = v1x, zBottom, -v1y
+	t.triangles[0][1].U, t.triangles[0][1].V = 0.0, 1.0
+	t.triangles[0][1].Material = tex
+
+	t.triangles[0][2].X, t.triangles[0][2].Y, t.triangles[0][2].Z = v2x, zBottom, -v2y
+	t.triangles[0][2].U, t.triangles[0][2].V = 1.0, 1.0
+	t.triangles[0][2].Material = tex
+
+	// Triangolo 1 (Top-Left, Bottom-Right, Top-Right)
+	t.triangles[1][0].X, t.triangles[1][0].Y, t.triangles[1][0].Z = v1x, zTop, -v1y
+	t.triangles[1][0].U, t.triangles[1][0].V = 0.0, 0.0
+	t.triangles[1][0].Material = tex
+
+	t.triangles[1][1].X, t.triangles[1][1].Y, t.triangles[1][1].Z = v2x, zBottom, -v2y
+	t.triangles[1][1].U, t.triangles[1][1].V = 1.0, 1.0
+	t.triangles[1][1].Material = tex
+
+	t.triangles[1][2].X, t.triangles[1][2].Y, t.triangles[1][2].Z = v2x, zTop, -v2y
+	t.triangles[1][2].U, t.triangles[1][2].V = 1.0, 0.0
+	t.triangles[1][2].Material = tex
+
+	return t.triangles
 }
 
 // GetId returns the identifier string of the ThingBase instance.
@@ -221,6 +283,7 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	t.things.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }
 
+// MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 	vx, vy, _ := t.entity.GetVelocity()
 	desiredVx := dirX * targetSpeed

@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -260,70 +258,26 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int, sectors map[*model.Volume]bool) {
-	const minDist = 0.0001
+func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int, volumes map[*model.Volume]bool) {
 	if len(things) == 0 {
 		return
 	}
 	camX, camY := vi.GetXY()
-
 	for idx := 0; idx < thingsCount; idx++ {
-		t := things[idx]
-		if !sectors[t.GetVolume()] {
+		thing := things[idx]
+		vertices := thing.GetVertices(camX, camY)
+		if vertices == nil {
 			continue
 		}
-		if t.GetAnimation() == nil {
-			continue
-		}
-		tPosX, tPosY, _ := t.GetPosition()
-		dx := tPosX - camX
-		dy := tPosY - camY
-		distSq := dx*dx + dy*dy
-		tex := t.GetAnimation().CurrentFrame()
-		if tex == nil {
-			continue
-		}
-		layer, ok := w.tex.Get(tex)
-		if !ok {
-			continue
-		}
-
-		texW, texH := tex.Size()
-		scaleW, scaleH := t.GetAnimation().ScaleFactor()
-		width := float64(texW) * scaleW
-		height := float64(texH) * scaleH
-
-		dist := math.Sqrt(distSq)
-		if dist < minDist {
-			dist = minDist
-		}
-
-		halfW := width / 2.0
-		rX := -((camY - tPosY) / dist) * halfW
-		rY := ((camX - tPosX) / dist) * halfW
-
-		// Vettori spigoli in spazio assoluto
-		v1x := float32(tPosX - rX)
-		v1y := float32(tPosY - rY)
-		v2x := float32(tPosX + rX)
-		v2y := float32(tPosY + rY)
-
-		zBottom := float32(t.GetMinZ())
-		zTop := zBottom + float32(height)
-
 		startIndices := fv.GetIndicesLen()
-
-		u0, u1 := float32(0.0), float32(1.0)
-		vTop, vBottom := float32(0.0), float32(1.0)
-
-		idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
-		idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
-		idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
-		idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
-
-		fv.AddTriangle(idx0, idx1, idx2)
-		fv.AddTriangle(idx0, idx2, idx3)
-
+		for _, tri := range vertices {
+			layer, _ := w.tex.Get(tri[0].Material)
+			p0, p1, p2 := tri[0], tri[1], tri[2]
+			id0 := fv.AddVertex(float32(p0.X), float32(p0.Y), float32(p0.Z), float32(p0.U), float32(p0.V), layer)
+			id1 := fv.AddVertex(float32(p1.X), float32(p1.Y), float32(p1.Z), float32(p1.U), float32(p1.V), layer)
+			id2 := fv.AddVertex(float32(p2.X), float32(p2.Y), float32(p2.Z), float32(p2.U), float32(p2.V), layer)
+			fv.AddTriangle(id0, id1, id2)
+		}
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)
 	}

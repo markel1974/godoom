@@ -76,20 +76,21 @@ func (w *Textures) RegisterPixels(name string, width, height int, indices []byte
 	return nil
 }
 
-// loadFromPixels creates a texture from raw pixel data, applying optional alpha transparency for specific cases.
 func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32) (*textures.Texture, error) {
 	tex := textures.NewTexture(name, uint32(idx), width, height)
-	// In Quake, le texture il cui nome inizia per '{' (come le grate) usano l'indice 255 per la trasparenza
 	hasAlpha := false
 	if len(name) > 0 && name[0] == '{' {
 		hasAlpha = true
 	}
 
 	for y := 0; y < height; y++ {
+		// Inversione asse Y per hardware grafico (Bottom-Left)
+		flippedY := height - 1 - y
+
 		for x := 0; x < width; x++ {
 			colorIdx := indices[y*width+x]
 			if hasAlpha && colorIdx == 255 {
-				tex.Set(x, y, 0x00000000)
+				tex.Set(x, flippedY, 0x00000000)
 				continue
 			}
 			palOffset := int(colorIdx) * 3
@@ -98,13 +99,15 @@ func (w *Textures) loadFromPixels(name string, width, height int, indices []byte
 			b := int(palette[palOffset+2])
 			a := 255
 			color := (r << 24) | (g << 16) | (b << 8) | a
-			tex.Set(x, y, color)
+
+			tex.Set(x, flippedY, color) // Scrive sulla riga ribaltata
 		}
 	}
 	return tex, nil
 }
 
 // loadFromFile loads a texture from an image reader, decodes it, and populates texture data with pixel colors.
+// Converte automaticamente il sistema di coordinate da Top-Left (Immagine) a Bottom-Left (OpenGL).
 func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*textures.Texture, error) {
 	img, _, err := image.Decode(reader)
 	if err != nil {
@@ -116,14 +119,20 @@ func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*text
 
 	tex := textures.NewTexture(name, uint32(idx), width, height)
 	for y := 0; y < height; y++ {
+		// Calcolo della riga invertita per il memory layout di OpenGL
+		flippedY := height - 1 - y
+
 		for x := 0; x < width; x++ {
+			// Leggiamo dall'immagine sorgente usando la 'y' normale (Top-Left)
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			r8 := int(r >> 8)
 			g8 := int(g >> 8)
 			b8 := int(b >> 8)
 			a8 := int(a >> 8)
 			color := (r8 << 24) | (g8 << 16) | (b8 << 8) | a8
-			tex.Set(x, y, color)
+
+			// Scriviamo nel nostro buffer usando la 'flippedY' (Bottom-Left)
+			tex.Set(x, flippedY, color)
 		}
 	}
 	return tex, nil

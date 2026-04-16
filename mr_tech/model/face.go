@@ -45,14 +45,14 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, points [3]geometry.XYZ, tag string, materials []*textures.Animation) *Face {
+func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, materials []*textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: false,
-		triangle:  points,
 		neighbor:  neighbor,
 		tag:       tag,
 		materials: []*textures.Animation{nil},
 		aabb:      physics.NewAABB(),
+		triangle:  tri,
 	}
 	if len(materials) > 0 {
 		out.materials = materials

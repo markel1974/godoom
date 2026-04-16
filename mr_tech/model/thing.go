@@ -9,9 +9,10 @@ import (
 
 // Vertex represents a point in 3D space with additional 2D texture coordinates U and V.
 type Vertex struct {
+	Material *textures.Texture
 	geometry.XYZ
 	U, V        float64
-	Material    *textures.Texture
+	Origin      geometry.XYZ
 	IsBillboard float64
 }
 
@@ -31,7 +32,7 @@ type IThing interface {
 
 	GetPosition() (float64, float64, float64)
 
-	GetVertices(camX, camY float64) [][3]Vertex
+	GetVertices() [][3]Vertex
 
 	GetLight() *Light
 

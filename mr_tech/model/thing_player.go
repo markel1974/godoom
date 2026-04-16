@@ -65,7 +65,7 @@ func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Vo
 		kind:           0,
 		yaw:            0,
 		yawState:       0,
-		ThingBase:      NewThingBase(things, cfg.Thing, cfg.Position, nil, volume),
+		ThingBase:      NewThingBaseSprite(things, cfg.Thing, cfg.Position, nil, volume),
 		bobbing:        NewBobbing(2.6, 0.9, 0.03, 0.015, 0.15, 0.10),
 		lightIntensity: 0.0039,
 		debug:          debug,

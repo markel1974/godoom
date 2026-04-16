@@ -160,7 +160,7 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 			u = float32(p.Y) / fTexW
 			v = float32(p.Z) / fTexH
 		}
-		w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer))
+		w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer, 0, 0, 0, 0))
 	}
 	for i := 1; i < len(w.faceIndices)-1; i++ {
 		fv.AddTriangle(w.faceIndices[0], w.faceIndices[i], w.faceIndices[i+1])
@@ -169,86 +169,45 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
 func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
-	const minDist = 0.0001
 	if len(things) == 0 {
 		return
 	}
-	camX, camY := vi.GetXY()
-
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		vertices := thing.GetVertices(camX, camY)
+		vertices := thing.GetVertices()
 		if vertices == nil {
 			continue
 		}
 		startIndices := fv.GetIndicesLen()
 		for _, tri := range vertices {
-			layer, _ := w.tex.Get(tri[0].Material)
-			// tri è un array di 3 vertici: [3]model.Vertex
+			layer, ok := w.tex.Get(tri[0].Material)
+			if !ok {
+				continue
+			}
 			p0, p1, p2 := tri[0], tri[1], tri[2]
-			// 1. Farci dare gli ID dei vertici aggiungendoli al VBO globale
-			// AddVertex(x, y, z, u, v, layer) -> restituisce l'indice univoco
-			id0 := fv.AddVertex(float32(p0.X), float32(p0.Y), float32(p0.Z), float32(p0.U), float32(p0.V), layer)
-			id1 := fv.AddVertex(float32(p1.X), float32(p1.Y), float32(p1.Z), float32(p1.U), float32(p1.V), layer)
-			id2 := fv.AddVertex(float32(p2.X), float32(p2.Y), float32(p2.Z), float32(p2.U), float32(p2.V), layer)
-			// 2. Definire il triangolo nell'IBO (Index Buffer) usando gli ID ottenuti
+			// AddVertex ora accetta 10 parametri (Pos[3], Tex[3], Origin[3], IsBB[1])
+			id0 := fv.AddVertex(
+				float32(p0.X), float32(p0.Y), float32(p0.Z),
+				float32(p0.U), float32(p0.V), layer,
+				float32(p0.Origin.X), float32(p0.Origin.Y), float32(p0.Origin.Z),
+				float32(p0.IsBillboard),
+			)
+			id1 := fv.AddVertex(
+				float32(p1.X), float32(p1.Y), float32(p1.Z),
+				float32(p1.U), float32(p1.V), layer,
+				float32(p1.Origin.X), float32(p1.Origin.Y), float32(p1.Origin.Z),
+				float32(p1.IsBillboard),
+			)
+			id2 := fv.AddVertex(
+				float32(p2.X), float32(p2.Y), float32(p2.Z),
+				float32(p2.U), float32(p2.V), layer,
+				float32(p2.Origin.X), float32(p2.Origin.Y), float32(p2.Origin.Z),
+				float32(p2.IsBillboard),
+			)
 			fv.AddTriangle(id0, id1, id2)
 		}
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)
-
-		/*
-
-			animation := thing.GetAnimation()
-			if animation == nil {
-				continue
-			}
-			tex := animation.CurrentFrame()
-			if tex == nil {
-				continue
-			}
-			layer, ok := w.tex.Get(tex)
-			if !ok {
-				continue
-			}
-			tPosX, tPosY, _ := thing.GetPosition()
-			dx := tPosX - camX
-			dy := tPosY - camY
-			distSq := dx*dx + dy*dy
-			dist := math.Sqrt(distSq)
-			if dist < minDist {
-				dist = minDist
-			}
-			texW, texH := tex.Size()
-			scaleW, scaleH := animation.ScaleFactor()
-			width := float64(texW) * scaleW
-			height := float64(texH) * scaleH
-			halfW := width / 2.0
-			rX := -((camY - tPosY) / dist) * halfW
-			rY := ((camX - tPosX) / dist) * halfW
-			v1x := float32(tPosX - rX)
-			v1y := float32(tPosY - rY)
-			v2x := float32(tPosX + rX)
-			v2y := float32(tPosY + rY)
-			zBottom := float32(thing.GetMinZ())
-			zTop := zBottom + float32(height)
-
-			startIndices := fv.GetIndicesLen()
-			u0, u1 := float32(0.0), float32(1.0)
-			vTop, vBottom := float32(0.0), float32(1.0)
-
-			idx0 := fv.AddVertex(v1x, zTop, -v1y, u0, vTop, layer)
-			idx1 := fv.AddVertex(v1x, zBottom, -v1y, u0, vBottom, layer)
-			idx2 := fv.AddVertex(v2x, zBottom, -v2y, u1, vBottom, layer)
-			idx3 := fv.AddVertex(v2x, zTop, -v2y, u1, vTop, layer)
-
-			fv.AddTriangle(idx0, idx1, idx2)
-			fv.AddTriangle(idx0, idx2, idx3)
-
-			currentIndices := fv.GetIndicesLen()
-			dc.Compute(startIndices, currentIndices)
-
-		*/
 	}
 }
 

@@ -14,11 +14,12 @@ type FrameVertices struct {
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
+// Lo stride è impostato a 10 per ospitare: Pos(3), Tex(3), Origin(3), IsBB(1).
 func NewFrameVertices(maxVerts int) *FrameVertices {
 	return &FrameVertices{
 		vertices: make([]float32, maxVerts),
 		indices:  make([]uint32, maxVerts),
-		stride:   6,
+		stride:   10,
 	}
 }
 
@@ -54,20 +55,33 @@ func (w *FrameVertices) VerticesStride() int32 {
 	return w.stride * 4
 }
 
-// AddVertex adds a vertex to the FrameVertices at the specified coordinates and texture mapping values.
-// It returns the index of the added vertex.
-func (w *FrameVertices) AddVertex(x, y, z, u, v, texLayer float32) uint32 {
+// AddVertex aggiunge un vertice completo di dati per il billboarding GPU.
+// ox, oy, oz rappresentano l'origine dell'entità nel mondo.
+// isBB è il flag (1.0 = billboard, 0.0 = mesh statica).
+func (w *FrameVertices) AddVertex(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount > int32(len(w.vertices)) {
 		w.growVertices()
 	}
+
+	// Location 0: aPos
 	w.vertices[head] = x
 	w.vertices[head+1] = y
 	w.vertices[head+2] = z
+
+	// Location 1: aTexCoords
 	w.vertices[head+3] = u
 	w.vertices[head+4] = v
 	w.vertices[head+5] = texLayer
+
+	// Location 2: aOrigin
+	w.vertices[head+6] = ox
+	w.vertices[head+7] = oy
+	w.vertices[head+8] = oz
+
+	// Location 3: aIsBillboard
+	w.vertices[head+9] = isBB
 
 	slot := w.verticesSlot
 	w.verticesSlot++
@@ -78,7 +92,6 @@ func (w *FrameVertices) AddVertex(x, y, z, u, v, texLayer float32) uint32 {
 func (w *FrameVertices) AddTriangle(i0, i1, i2 uint32) {
 	head := w.indicesCount
 	w.indicesCount += 3
-	// FIX: Controllo di overflow corretto
 	if w.indicesCount > int32(len(w.indices)) {
 		w.growIndices()
 	}

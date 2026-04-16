@@ -203,10 +203,10 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 
 	startIndices := w.fv.GetIndicesLen()
 
-	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop, layer)
-	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom, layer)
-	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom, layer)
-	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop, layer)
+	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop, layer, 0, 0, 0, 0)
+	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom, layer, 0, 0, 0, 0)
+	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom, layer, 0, 0, 0, 0)
+	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop, layer, 0, 0, 0, 0)
 
 	fv.AddTriangle(idx0, idx1, idx2)
 	fv.AddTriangle(idx0, idx2, idx3)
@@ -245,7 +245,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute
-		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer)
+		indices[i] = fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer, 0, 0, 0, 0)
 	}
 
 	for i := 1; i < len(faces)-1; i++ {
@@ -262,22 +262,42 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 	if len(things) == 0 {
 		return
 	}
-	camX, camY := vi.GetXY()
+
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		vertices := thing.GetVertices(camX, camY)
+		vertices := thing.GetVertices()
 		if vertices == nil {
 			continue
 		}
 		startIndices := fv.GetIndicesLen()
 		for _, tri := range vertices {
-			layer, _ := w.tex.Get(tri[0].Material)
+			layer, ok := w.tex.Get(tri[0].Material)
+			if !ok {
+				continue
+			}
 			p0, p1, p2 := tri[0], tri[1], tri[2]
-			id0 := fv.AddVertex(float32(p0.X), float32(p0.Y), float32(p0.Z), float32(p0.U), float32(p0.V), layer)
-			id1 := fv.AddVertex(float32(p1.X), float32(p1.Y), float32(p1.Z), float32(p1.U), float32(p1.V), layer)
-			id2 := fv.AddVertex(float32(p2.X), float32(p2.Y), float32(p2.Z), float32(p2.U), float32(p2.V), layer)
+			// AddVertex ora accetta 10 parametri (Pos[3], Tex[3], Origin[3], IsBB[1])
+			id0 := fv.AddVertex(
+				float32(p0.X), float32(p0.Y), float32(p0.Z),
+				float32(p0.U), float32(p0.V), layer,
+				float32(p0.Origin.X), float32(p0.Origin.Y), float32(p0.Origin.Z),
+				float32(p0.IsBillboard),
+			)
+			id1 := fv.AddVertex(
+				float32(p1.X), float32(p1.Y), float32(p1.Z),
+				float32(p1.U), float32(p1.V), layer,
+				float32(p1.Origin.X), float32(p1.Origin.Y), float32(p1.Origin.Z),
+				float32(p1.IsBillboard),
+			)
+			id2 := fv.AddVertex(
+				float32(p2.X), float32(p2.Y), float32(p2.Z),
+				float32(p2.U), float32(p2.V), layer,
+				float32(p2.Origin.X), float32(p2.Origin.Y), float32(p2.Origin.Z),
+				float32(p2.IsBillboard),
+			)
 			fv.AddTriangle(id0, id1, id2)
 		}
+
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)
 	}

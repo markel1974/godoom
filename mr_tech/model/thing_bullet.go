@@ -16,7 +16,7 @@ type ThingBullet struct {
 func NewThingBullet(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume, pitchRad float64) *ThingBullet {
 	pos := cfg.Position
 	p := &ThingBullet{
-		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
+		ThingBase: NewThingBaseSprite(things, cfg, pos, anim, volume),
 	}
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	p.maxStep = 0.0

@@ -32,8 +32,8 @@ type ThingBase struct {
 	triangles    [][3]Vertex
 }
 
-// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
-func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
+// NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
+func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
@@ -41,7 +41,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	entW := cfg.Radius * 2
 	entH := cfg.Radius * 2
 	entD := cfg.Height
-	thing := &ThingBase{
+	t := &ThingBase{
 		id:           cfg.Id,
 		angle:        cfg.Angle,
 		kind:         cfg.Kind,
@@ -62,12 +62,51 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		wall:         NewThingWall(volumes, 0, 0),
 		triangles:    make([][3]Vertex, 2),
 	}
-	thing.entity.SetOnGround(false)
-	return thing
+	t.entity.SetOnGround(false)
+
+	height := 0.0
+	halfW := 0.0
+	if animation := t.GetAnimation(); animation != nil {
+		tex := animation.CurrentFrame()
+		if tex != nil {
+			texW, texH := tex.Size()
+			scaleW, scaleH := animation.ScaleFactor()
+			width := float64(texW) * scaleW
+			height = float64(texH) * scaleH
+			halfW = width / 2.0
+		}
+	}
+
+	t.triangles[0][0].X, t.triangles[0][0].Y, t.triangles[0][0].Z = -halfW, height, 0.0
+	t.triangles[0][0].U, t.triangles[0][0].V = 0.0, 0.0
+	t.triangles[0][0].IsBillboard = 1.0
+
+	t.triangles[0][1].X, t.triangles[0][1].Y, t.triangles[0][1].Z = -halfW, 0.0, 0.0
+	t.triangles[0][1].U, t.triangles[0][1].V = 0.0, 1.0
+	t.triangles[0][1].IsBillboard = 1.0
+
+	t.triangles[0][2].X, t.triangles[0][2].Y, t.triangles[0][2].Z = halfW, 0.0, 0.0
+	t.triangles[0][2].U, t.triangles[0][2].V = 1.0, 1.0
+	t.triangles[0][2].IsBillboard = 1.0
+
+	t.triangles[1][0].X, t.triangles[1][0].Y, t.triangles[1][0].Z = -halfW, height, 0.0
+	t.triangles[1][0].U, t.triangles[1][0].V = 0.0, 0.0
+	t.triangles[1][0].IsBillboard = 1.0
+
+	t.triangles[1][1].X, t.triangles[1][1].Y, t.triangles[1][1].Z = halfW, 0.0, 0.0
+	t.triangles[1][1].U, t.triangles[1][1].V = 1.0, 1.0
+	t.triangles[1][1].IsBillboard = 1.0
+
+	t.triangles[1][2].X, t.triangles[1][2].Y, t.triangles[1][2].Z = halfW, height, 0.0
+	t.triangles[1][2].U, t.triangles[1][2].V = 1.0, 0.0
+	t.triangles[1][2].IsBillboard = 1.0
+
+	return t
 }
 
-// GetVertices calculates and returns the transformed vertex data for rendering the ThingBase instance.
-func (t *ThingBase) GetVertices(camX, camY float64) [][3]Vertex {
+// GetVertices prepara i triangoli per il rendering delegando il billboarding alla GPU.
+// Non richiede più camX e camY, rendendo la pipeline più pulita e performante.
+func (t *ThingBase) GetVertices() [][3]Vertex {
 	animation := t.GetAnimation()
 	if animation == nil {
 		return nil
@@ -76,58 +115,28 @@ func (t *ThingBase) GetVertices(camX, camY float64) [][3]Vertex {
 	if tex == nil {
 		return nil
 	}
-	const minDist = 0.0001
-	tPosX, tPosY, _ := t.GetPosition()
-	dx := tPosX - camX
-	dy := tPosY - camY
-	dist := math.Sqrt(dx*dx + dy*dy)
-	if dist < minDist {
-		dist = minDist
-	}
-	texW, texH := tex.Size()
-	scaleW, scaleH := animation.ScaleFactor()
-	width := float64(texW) * scaleW
-	height := float64(texH) * scaleH
-	halfW := width / 2.0
-	rX := -((camY - tPosY) / dist) * halfW
-	rY := ((camX - tPosX) / dist) * halfW
+	tPosX, tPosY, zBot := t.GetPosition()
+	worldOriginX := tPosX
+	worldOriginY := zBot
+	worldOriginZ := -tPosY
 
-	v1x, v1y := tPosX-rX, tPosY-rY
-	v2x, v2y := tPosX+rX, tPosY+rY
-	zBottom := t.GetMinZ()
-	zTop := zBottom + height
-
-	// Triangolo 0 (Top-Left, Bottom-Left, Bottom-Right)
-	t.triangles[0][0].X, t.triangles[0][0].Y, t.triangles[0][0].Z = v1x, zTop, -v1y
-	t.triangles[0][0].U, t.triangles[0][0].V = 0.0, 0.0
+	t.triangles[0][0].Origin.X, t.triangles[0][0].Origin.Y, t.triangles[0][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][0].Material = tex
-	t.triangles[0][0].IsBillboard = 1.0
 
-	t.triangles[0][1].X, t.triangles[0][1].Y, t.triangles[0][1].Z = v1x, zBottom, -v1y
-	t.triangles[0][1].U, t.triangles[0][1].V = 0.0, 1.0
+	t.triangles[0][1].Origin.X, t.triangles[0][1].Origin.Y, t.triangles[0][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][1].Material = tex
-	t.triangles[0][1].IsBillboard = 1.0
 
-	t.triangles[0][2].X, t.triangles[0][2].Y, t.triangles[0][2].Z = v2x, zBottom, -v2y
-	t.triangles[0][2].U, t.triangles[0][2].V = 1.0, 1.0
+	t.triangles[0][2].Origin.X, t.triangles[0][2].Origin.Y, t.triangles[0][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][2].Material = tex
-	t.triangles[0][2].IsBillboard = 1.0
 
-	// Triangolo 1 (Top-Left, Bottom-Right, Top-Right)
-	t.triangles[1][0].X, t.triangles[1][0].Y, t.triangles[1][0].Z = v1x, zTop, -v1y
-	t.triangles[1][0].U, t.triangles[1][0].V = 0.0, 0.0
+	t.triangles[1][0].Origin.X, t.triangles[1][0].Origin.Y, t.triangles[1][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][0].Material = tex
-	t.triangles[1][0].IsBillboard = 1.0
 
-	t.triangles[1][1].X, t.triangles[1][1].Y, t.triangles[1][1].Z = v2x, zBottom, -v2y
-	t.triangles[1][1].U, t.triangles[1][1].V = 1.0, 1.0
+	t.triangles[1][1].Origin.X, t.triangles[1][1].Origin.Y, t.triangles[1][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][1].Material = tex
-	t.triangles[1][1].IsBillboard = 1.0
 
-	t.triangles[1][2].X, t.triangles[1][2].Y, t.triangles[1][2].Z = v2x, zTop, -v2y
-	t.triangles[1][2].U, t.triangles[1][2].V = 1.0, 0.0
+	t.triangles[1][2].Origin.X, t.triangles[1][2].Origin.Y, t.triangles[1][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][2].Material = tex
-	t.triangles[1][2].IsBillboard = 1.0
 
 	return t.triangles
 }

@@ -30,7 +30,7 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, 
 	pos.Z = volume.GetMinZ()
 	const throwMin, throwMax = 5, 10
 	e := &ThingEnemy{
-		ThingBase:     NewThingBase(things, cfg, pos, anim, volume),
+		ThingBase:     NewThingBaseSprite(things, cfg, pos, anim, volume),
 		active:        false,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		throwCooldown: 0.0,

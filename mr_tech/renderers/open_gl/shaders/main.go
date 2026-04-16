@@ -77,7 +77,6 @@ func (s *Main) Init() error {
 	gl.GenBuffers(mainDoubleBuffer, &s.mainEBO[0])
 
 	for i := 0; i < mainDoubleBuffer; i++ {
-		// Salva la capacità iniziale
 		s.vboBytesCap[i] = vboBytesSize
 		s.eboBytesCap[i] = eboBytesSize
 
@@ -89,11 +88,24 @@ func (s *Main) Init() error {
 		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
 		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, gl.DYNAMIC_DRAW)
 
+		// Il valore s.stride ora deve essere 40 (10 float * 4 byte)
 		strideBytes := s.stride
+
+		// Location 0: aPos (x, y, z) - 3 float
 		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
 		gl.EnableVertexAttribArray(0)
+
+		// Location 1: aTexCoords (u, v, layer) - 3 float
 		gl.VertexAttribPointer(1, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
 		gl.EnableVertexAttribArray(1)
+
+		// NUOVO - Location 2: aOrigin (worldX, worldY, worldZ) - 3 float
+		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(6*4))
+		gl.EnableVertexAttribArray(2)
+
+		// NUOVO - Location 3: aIsBillboard (flag) - 1 float
+		gl.VertexAttribPointer(3, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(9*4))
+		gl.EnableVertexAttribArray(3)
 	}
 
 	gl.Enable(gl.DEPTH_TEST)

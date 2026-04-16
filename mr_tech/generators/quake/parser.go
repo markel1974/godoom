@@ -95,8 +95,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			}
 
 		case classname == "light":
-			intensity := 200.0
-			falloff := 128.0
+			intensity := 400.0
+			falloff := 256.0
 			if l, ok := ent.Properties["light"]; ok {
 				if val, err := strconv.ParseFloat(l, 64); err == nil {
 					intensity = val

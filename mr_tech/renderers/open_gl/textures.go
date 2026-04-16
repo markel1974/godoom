@@ -96,7 +96,16 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(normalPixels))
 		// Upload Emissive Layer (Black by default)
 		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.emissiveArray)
-		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+
+		if len(id) > 0 && (id[0] == '*' || id[0] == '+') {
+			// Inietta i pixel diffuse direttamente nel canale emissivo
+			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
+		} else {
+			// Default (Nero)
+			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+		}
+
+		//gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
 
 		tx.textures[tex] = float32(layer)
 		layer++

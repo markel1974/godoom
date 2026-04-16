@@ -101,27 +101,33 @@ func (t *ThingBase) GetVertices(camX, camY float64) [][3]Vertex {
 	t.triangles[0][0].X, t.triangles[0][0].Y, t.triangles[0][0].Z = v1x, zTop, -v1y
 	t.triangles[0][0].U, t.triangles[0][0].V = 0.0, 0.0
 	t.triangles[0][0].Material = tex
+	t.triangles[0][0].IsBillboard = 1.0
 
 	t.triangles[0][1].X, t.triangles[0][1].Y, t.triangles[0][1].Z = v1x, zBottom, -v1y
 	t.triangles[0][1].U, t.triangles[0][1].V = 0.0, 1.0
 	t.triangles[0][1].Material = tex
+	t.triangles[0][1].IsBillboard = 1.0
 
 	t.triangles[0][2].X, t.triangles[0][2].Y, t.triangles[0][2].Z = v2x, zBottom, -v2y
 	t.triangles[0][2].U, t.triangles[0][2].V = 1.0, 1.0
 	t.triangles[0][2].Material = tex
+	t.triangles[0][2].IsBillboard = 1.0
 
 	// Triangolo 1 (Top-Left, Bottom-Right, Top-Right)
 	t.triangles[1][0].X, t.triangles[1][0].Y, t.triangles[1][0].Z = v1x, zTop, -v1y
 	t.triangles[1][0].U, t.triangles[1][0].V = 0.0, 0.0
 	t.triangles[1][0].Material = tex
+	t.triangles[1][0].IsBillboard = 1.0
 
 	t.triangles[1][1].X, t.triangles[1][1].Y, t.triangles[1][1].Z = v2x, zBottom, -v2y
 	t.triangles[1][1].U, t.triangles[1][1].V = 1.0, 1.0
 	t.triangles[1][1].Material = tex
+	t.triangles[1][1].IsBillboard = 1.0
 
 	t.triangles[1][2].X, t.triangles[1][2].Y, t.triangles[1][2].Z = v2x, zTop, -v2y
 	t.triangles[1][2].U, t.triangles[1][2].V = 1.0, 0.0
 	t.triangles[1][2].Material = tex
+	t.triangles[1][2].IsBillboard = 1.0
 
 	return t.triangles
 }

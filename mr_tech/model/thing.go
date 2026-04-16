@@ -10,8 +10,9 @@ import (
 // Vertex represents a point in 3D space with additional 2D texture coordinates U and V.
 type Vertex struct {
 	geometry.XYZ
-	U, V     float64
-	Material *textures.Texture
+	U, V        float64
+	Material    *textures.Texture
+	IsBillboard float64
 }
 
 // IThing defines an interface for a game entity with methods for retrieving identifiers, position, and physics properties.

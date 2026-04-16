@@ -14,19 +14,19 @@ import (
 //model is Z up
 //model is CCW
 
-// Builder is a utility type that provides methods to construct and manage texture resources and scaling factors.
+// Builder is responsible for constructing and managing graphical elements with the aid of a Textures manager.
 type Builder struct {
 	texManager *Textures
 }
 
-// NewBuilder creates and returns a new Builder instance with the specified scale. Defaults to 1.0 if scale is non-positive.
+// NewBuilder creates and initializes a new Builder instance with a default Textures manager.
 func NewBuilder() *Builder {
 	return &Builder{
 		texManager: NewTextures(),
 	}
 }
 
-// Setup initializes the Builder by loading resources from the specified PAK file and preparing the level configuration.
+// Setup initializes the Builder by loading level data and assets from the specified PAK file and level index.
 func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
@@ -71,7 +71,6 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 	}
 
-	// Inizializzazione Root con il riferimento al gestore texture popolato
 	var playerAngle float64
 	var playerPos geometry.XYZ
 	root := config.NewConfigRoot(nil, nil, nil, 1.0, p.texManager)
@@ -96,8 +95,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			}
 
 		case classname == "light":
-			intensity := 500.0
-			falloff := 256.0
+			intensity := 200.0
+			falloff := 128.0
 			if l, ok := ent.Properties["light"]; ok {
 				if val, err := strconv.ParseFloat(l, 64); err == nil {
 					intensity = val
@@ -119,13 +118,11 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		faceIdx := worldModel.FirstFace + i
 		bspFace := faces[faceIdx]
 		texInfo := texInfos[bspFace.TexInfo]
-
 		texName := "default"
 		isSky := (texInfo.Flags & 4) != 0
 		if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
 			texName = mipTextures[texInfo.MipTex].Name
 		}
-
 		var points []geometry.XYZ
 		for j := uint16(0); j < bspFace.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
@@ -138,28 +135,25 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			pos := CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, pos)
 		}
-
 		animKind := config.AnimationKindLoop
 		if isSky {
 			animKind = config.AnimationKindSky
 		}
 		material := config.NewConfigAnimation([]string{texName}, animKind, 1.0, 1.0)
-
 		triangles := TriangulateConvex3d(points)
-
 		for _, tri := range triangles {
 			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
 		}
 	}
-
 	if len(volume.Faces) > 0 {
 		root.Volumes = append(root.Volumes, volume)
 	}
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 20, 4, 80)
-	root.Player.Speed = 400
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
+	root.Player.Speed = 800
 	return root, nil
 }
 
+// CreateXYZ constructs a geometry.XYZ object using the provided x, y, and z coordinate values.
 func CreateXYZ(x, y, z float64) geometry.XYZ {
 	// Conversione coordinate: Quake Z-up -> Engine Z-up
 	//pos := geometry.XYZ{X: x, Y: z, Z: -y}
@@ -167,8 +161,8 @@ func CreateXYZ(x, y, z float64) geometry.XYZ {
 	return pos
 }
 
-// TriangulateConvex3d decompone un poligono convesso (es. Quake BSP) in triangoli.
-// L'algoritmo a ventaglio preserva al 100% il Winding Order per il back-face culling.
+// TriangulateConvex3d splits a convex 3D polygon into triangles, using the first vertex as a common anchor point.
+// pts is a slice of 3D points representing the convex polygon. Returns a slice of triangle slices or nil if invalid.
 func TriangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
 	pLen := len(pts)
 	if pLen < 3 {
@@ -185,6 +179,9 @@ func TriangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
 	return output
 }
 
+// TriangulateConvex3dInverted generates inverted triangle definitions for a 3D convex polygon.
+// Accepts a slice of geometry.XYZ points and returns a slice of triangle slices.
+// Returns nil if fewer than 3 points are provided.
 func TriangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.XYZ {
 	pLen := len(pts)
 	if pLen < 3 {

@@ -377,13 +377,13 @@ func (poly Polygon) SanitizePSLG(constraints [][2]XY) (Polygon, [][2]XY) {
 
 // MaxPointsX returns the maximum X-coordinate among all points in the polygon.
 func (poly Polygon) MaxPointsX() float64 {
-	max := poly[0].X
+	maxA := poly[0].X
 	for _, p := range poly {
-		if p.X > max {
-			max = p.X
+		if p.X > maxA {
+			maxA = p.X
 		}
 	}
-	return max
+	return maxA
 }
 
 // BuildConstraints generates a list of line segments representing the edges of the polygon in a cyclic order.

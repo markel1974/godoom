@@ -58,9 +58,10 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	faces, _ := lumps.NewFace(rs, infos[lumps.LumpFaces])
 	texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfo])
 	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
-	leaves, _ := lumps.NewLeaves(rs, infos[lumps.LumpLeaves])
+	//leaves, _ := lumps.NewLeaves(rs, infos[lumps.LumpLeaves])
 	entities, _ := lumps.NewEntities(rs, infos[lumps.LumpEntities])
-	marks, _ := lumps.NewMarks(rs, infos[lumps.LumpMarkSurfaces])
+	//marks, _ := lumps.NewMarks(rs, infos[lumps.LumpMarkSurfaces])
+	bspModels, _ := lumps.NewModels(rs, infos[lumps.LumpModels])
 
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
@@ -95,118 +96,77 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			}
 
 		case classname == "light":
-			intensity := 300.0
-			falloff := 32.0
+			intensity := 500.0
+			falloff := 256.0
 			if l, ok := ent.Properties["light"]; ok {
 				if val, err := strconv.ParseFloat(l, 64); err == nil {
 					intensity = val
 					falloff = intensity / 10.0
 				}
 			}
-			root.Lights = append(root.Lights, config.NewConfigLight(pos, intensity, config.LightKindSpot, falloff))
+			root.Lights = append(root.Lights, config.NewConfigLight(pos, intensity, config.LightKindAmbient, falloff))
 		}
 	}
 
-	// 4. Conversione Geometria: BSP Leaves -> Volume
-	for leafIdx, leaf := range leaves {
-		// Saltiamo la leaf 0 (solitamente spazio solido esterno)
-		if leafIdx == 0 {
-			continue
+	// 4. Conversione Geometria Statica: BSP Faces -> Volume
+	// Creiamo un singolo volume globale, senza duplicazioni.
+	volume := config.NewConfigVolume("quake_world", "quake_bsp")
+
+	worldModel := bspModels[0]
+
+	// Iteriamo ESCLUSIVAMENTE sulle facce che appartengono al mondo
+	for i := int32(0); i < worldModel.NumFaces; i++ {
+		faceIdx := worldModel.FirstFace + i
+		bspFace := faces[faceIdx]
+		texInfo := texInfos[bspFace.TexInfo]
+
+		texName := "default"
+		isSky := (texInfo.Flags & 4) != 0
+		if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
+			texName = mipTextures[texInfo.MipTex].Name
 		}
 
-		volId := fmt.Sprintf("leaf_%d", leafIdx)
-		volume := config.NewConfigVolume(volId, "quake_bsp")
-
-		if leaf.NumFaces == 0 {
-			// Un volume vuoto è normale per foglie che non contengono geometria visibile
-			continue
+		var points []geometry.XYZ
+		for j := uint16(0); j < bspFace.NumEdges; j++ {
+			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
+			var v *lumps.Vertex
+			if surfEdgeIdx >= 0 {
+				v = vertexes[edges[surfEdgeIdx].Vertex0]
+			} else {
+				v = vertexes[edges[-surfEdgeIdx].Vertex1]
+			}
+			pos := CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+			points = append(points, pos)
 		}
 
-		for i := uint16(0); i < leaf.NumFaces; i++ {
-			faceIdx := marks.Surfaces[leaf.FirstFace+i]
-			bspFace := faces[faceIdx]
-			texInfo := texInfos[bspFace.TexInfo]
-
-			// Risoluzione ID Materiale
-			texName := "default"
-			isSky := (texInfo.Flags & 4) != 0
-			if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
-				texName = mipTextures[texInfo.MipTex].Name
-			}
-
-			// Ricostruzione Poligono 3D (Perimetro ordinato) dai SurfEdges
-			var points []geometry.XYZ
-			for j := uint16(0); j < bspFace.NumEdges; j++ {
-				surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
-				var v *lumps.Vertex
-				if surfEdgeIdx >= 0 {
-					v = vertexes[edges[surfEdgeIdx].Vertex0]
-				} else {
-					v = vertexes[edges[-surfEdgeIdx].Vertex1]
-				}
-				pos := CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
-				points = append(points, pos)
-			}
-
-			// Creazione Animazione (Materiale) con l'ID texture registrato
-			animKind := config.AnimationKindLoop
-			if isSky {
-				animKind = config.AnimationKindSky
-			}
-			material := config.NewConfigAnimation([]string{texName}, animKind, 1.0, 1.0)
-
-			// TRIANGOLAZIONE CONVESSA: Bypassiamo la routine CDT complessa e preserviamo il Winding Order.
-			// points contiene il poligono completo. triangles conterrà N-2 triangoli esatti.
-			triangles := TriangulateConvex3d(points)
-
-			// Inserimento rigoroso: 1 Face = 1 Triangolo
-			for _, tri := range triangles {
-				volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
-			}
+		animKind := config.AnimationKindLoop
+		if isSky {
+			animKind = config.AnimationKindSky
 		}
+		material := config.NewConfigAnimation([]string{texName}, animKind, 1.0, 1.0)
 
-		if len(volume.Faces) > 0 {
-			root.Volumes = append(root.Volumes, volume)
+		triangles := TriangulateConvex3d(points)
+
+		for _, tri := range triangles {
+			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
 		}
 	}
 
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 8, 4, 20)
+	if len(volume.Faces) > 0 {
+		root.Volumes = append(root.Volumes, volume)
+	}
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 20, 4, 80)
 	root.Player.Speed = 400
 	return root, nil
 }
 
 func CreateXYZ(x, y, z float64) geometry.XYZ {
 	// Conversione coordinate: Quake Z-up -> Engine Z-up
-	pos := geometry.XYZ{X: x, Y: z, Z: -y}
-	//pos := geometry.XYZ{X: x, Y: y, Z: z}
-	//fmt.Println("POS:", pos)
+	//pos := geometry.XYZ{X: x, Y: z, Z: -y}
+	pos := geometry.XYZ{X: x, Y: y, Z: z}
 	return pos
 }
 
-/*
-// TriangulateConvex3d esegue un rapido Triangle Fan invertito per OpenGL (CCW).
-func TriangulateConvex3d(pts []XYZ) [][]XYZ {
-	pLen := len(pts)
-	if pLen < 3 {
-		return nil
-	}
-	if pLen == 3 {
-		// INVERTITO: da (0, 1, 2) a (0, 2, 1)
-		return [][]XYZ{{pts[0], pts[2], pts[1]}}
-	}
-
-	output := make([][]XYZ, 0, pLen-2)
-	for i := 1; i < pLen-1; i++ {
-		// INVERTITO: pts[i+1] viene PRIMA di pts[i]
-		output = append(output, []XYZ{pts[0], pts[i+1], pts[i]})
-	}
-	return output
-}
-
-
-*/
-
-/*
 // TriangulateConvex3d decompone un poligono convesso (es. Quake BSP) in triangoli.
 // L'algoritmo a ventaglio preserva al 100% il Winding Order per il back-face culling.
 func TriangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
@@ -217,19 +177,15 @@ func TriangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
 	if pLen == 3 {
 		return [][]geometry.XYZ{{pts[0], pts[1], pts[2]}}
 	}
-
 	output := make([][]geometry.XYZ, 0, pLen-2)
-
 	// Triangle Fan ancorato a pts[0]
 	for i := 1; i < pLen-1; i++ {
 		output = append(output, []geometry.XYZ{pts[0], pts[i], pts[i+1]})
 	}
-
 	return output
 }
-*/
 
-func TriangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
+func TriangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.XYZ {
 	pLen := len(pts)
 	if pLen < 3 {
 		return nil

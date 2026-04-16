@@ -4,16 +4,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// ThingType represents an enumeration for categorizing the type or kind of a Thing in the system.
+// ThingType defines an enumeration type representing different kinds of objects or entities in the system.
 type ThingType int
 
-// ThingUnknownDef represents an unknown thing type.
-// ThingPlayerDef represents a player thing type.
-// ThingEnemyDef represents an enemy thing type.
-// ThingWeaponDef represents a weapon thing type.
-// ThingBulletDef represents a bullet thing type.
-// ThingKeyDef represents a key thing type.
-// ThingItemDef represents an item thing type.
+// ThingUnknownDef represents an unknown or default type of Thing.
+// ThingPlayerDef represents a player Thing type.
+// ThingEnemyDef represents an enemy Thing type.
+// ThingWeaponDef represents a weapon Thing type.
+// ThingBulletDef represents a bullet Thing type.
+// ThingKeyDef represents a key Thing type.
+// ThingItemDef represents an item Thing type.
 const (
 	ThingUnknownDef = ThingType(iota)
 	ThingPlayerDef
@@ -24,7 +24,24 @@ const (
 	ThingItemDef
 )
 
-// Thing represents a game object with physical and visual properties for simulation and rendering.
+// Vertex3d represents a 3D vertex with position (XYZ) and texture coordinates (U, V).
+type Vertex3d struct {
+	Pos geometry.XYZ
+	U   float32
+	V   float32
+}
+
+// Frame3d represents a 3D frame composed of a collection of triangles, where each triangle contains three Vertex3d points.
+type Frame3d struct {
+	Triangles [][3]Vertex3d
+}
+
+// Model3d represents a 3D model consisting of multiple frames, where each frame is composed of 3D triangles.
+type Model3d struct {
+	Frames []Frame3d
+}
+
+// Thing represents a physical or logical entity with position, dimensions, motion properties, and optional animations or models.
 type Thing struct {
 	Id           string       `json:"id"`
 	Position     geometry.XYZ `json:"position"`
@@ -37,9 +54,10 @@ type Thing struct {
 	Speed        float64      `json:"speed"`
 	Acceleration float64      `json:"acceleration"`
 	Animation    *Animation   `json:"animation"`
+	Model3D      *Model3d     `json:"model3d"`
 }
 
-// NewConfigThing creates Thing object with the specified properties such as position, angle, kind, and animation.
+// NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
 func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
 	return &Thing{
 		Id:          id,
@@ -55,7 +73,12 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 	}
 }
 
-// Scale scales the position of the Thing by dividing each coordinate of its Position by the given scale factor.
+// Scale adjusts the position of the Thing by scaling its X, Y, and Z components using the specified scale factor.
 func (t *Thing) Scale(scale float64) {
 	t.Position.Scale(scale)
+}
+
+// SetModel3d assigns the provided 3D model to the Thing's Model3D field.
+func (t *Thing) SetModel3d(model *Model3d) {
+	t.Model3D = model
 }

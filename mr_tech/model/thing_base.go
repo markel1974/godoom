@@ -122,19 +122,14 @@ func (t *ThingBase) GetVertices() [][3]Vertex {
 
 	t.triangles[0][0].Origin.X, t.triangles[0][0].Origin.Y, t.triangles[0][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][0].Material = tex
-
 	t.triangles[0][1].Origin.X, t.triangles[0][1].Origin.Y, t.triangles[0][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][1].Material = tex
-
 	t.triangles[0][2].Origin.X, t.triangles[0][2].Origin.Y, t.triangles[0][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[0][2].Material = tex
-
 	t.triangles[1][0].Origin.X, t.triangles[1][0].Origin.Y, t.triangles[1][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][0].Material = tex
-
 	t.triangles[1][1].Origin.X, t.triangles[1][1].Origin.Y, t.triangles[1][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][1].Material = tex
-
 	t.triangles[1][2].Origin.X, t.triangles[1][2].Origin.Y, t.triangles[1][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
 	t.triangles[1][2].Material = tex
 

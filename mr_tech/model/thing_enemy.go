@@ -20,7 +20,6 @@ type ThingEnemy struct {
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
 func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
-	//TODO REMOVE
 	if cfg.Speed <= 0 {
 		cfg.Speed = 6
 	}
@@ -41,15 +40,15 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, 
 
 // Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
 func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
-	dx := playerX - t.pos.X
-	dy := playerY - t.pos.Y
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := playerZ + (t.height / 2)
+	dx := playerX - t.pos.X
+	dy := playerY - t.pos.Y
 	dz := targetZ - t.pos.Z
 	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
-	dist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	playerDist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {
-		if dist3d < 25.0 { // Raggio di risveglio
+		if playerDist3d < 25.0 { // Raggio di risveglio
 			t.active = true
 			t.throwCooldown = t.throwMin
 		}
@@ -60,43 +59,42 @@ func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) 
 		t.throwCooldown -= 1.0 / 60.0
 	}
 	// Inseguimento Terrestre
-	dist2d := math.Sqrt(dx*dx + dy*dy)
-	if dist2d <= 0.001 {
+	playerDist2d := math.Sqrt(dx*dx + dy*dy)
+	if playerDist2d <= 0.001 {
 		return
 	}
 	// Aggiorniamo l'angolo del nemico affinché lo sprite o il modello si giri verso il bersaglio
 	t.angle = math.Atan2(dy, dx)
-	invDist := 1.0 / dist2d
+	invDist := 1.0 / playerDist2d
 	nx := dx * invDist
 	ny := dy * invDist
 	impulse := 1.0
 	// Distanza di stop (es. somma dei raggi per non compenetrare)
 	stopDistance := t.radius + 5.0
-	if dist2d < stopDistance {
+	if playerDist2d < stopDistance {
 		impulse = 0.0
-	} else if dist3d < 20.0 && t.throwCooldown <= 0 {
+	} else if playerDist3d < 20.0 && t.throwCooldown <= 0 {
 		impulse = 0.0
 	}
+	thingZ := t.pos.Z
 	t.MoveTowards(nx, ny, t.speed*impulse, t.acceleration)
-
-	t.doJump(playerZ, dist2d, nx, ny)
-	t.doThrow(dist3d, dist2d, dz)
+	t.doJump(playerZ, thingZ, playerDist2d, nx, ny)
+	t.doThrow(playerDist3d, playerDist2d, dz)
 }
 
 // doJump applies a vertical and forward force to the entity if it is blocked or the target floor is higher than its current one.
-func (t *ThingEnemy) doJump(thingZ, dist2d, nx, ny float64) {
+func (t *ThingEnemy) doJump(playerZ, thingZ, playerDist2d, nx, ny float64) {
 	if !t.entity.IsOnGround() {
 		return
 	}
 
 	vx, vy, _ := t.entity.GetVelocity()
 	speedSq := (vx * vx) + (vy * vy)
-
 	// Euristica A: bloccato contro un muro/ostacolo
 	isBlocked := speedSq < 0.1
 	// Euristica B: il giocatore è più in alto
-	floorDz := thingZ - t.pos.Z
-	playerIsHigher := floorDz > t.maxStep && dist2d < 20.0
+	floorDz := float64(int(playerZ) - int(thingZ))
+	playerIsHigher := floorDz > t.maxStep && playerDist2d < 20.0
 
 	if isBlocked || playerIsHigher {
 		//1. Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso

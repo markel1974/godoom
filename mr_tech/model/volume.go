@@ -14,9 +14,9 @@ type Volume struct {
 	id         string
 	faces      []*Face
 	tag        string
-	materials2 []*textures.Animation
+	animations []*textures.Animation
 	Light      *Light
-	aabb       *physics.AABB
+	entity     *physics.Entity
 	minZ       float64
 	maxZ       float64
 	hasFixedZ  bool
@@ -24,27 +24,28 @@ type Volume struct {
 	billboard  float64
 }
 
+const solidRestitution = 0.0
+const solidFriction = 0.2
+
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
-func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Animation, tag string) *Volume {
-	v := &Volume{
-		modelId:    modelId,
-		id:         id,
-		tag:        tag,
-		minZ:       minZ,
-		maxZ:       maxZ,
-		hasFixedZ:  true,
-		materials2: materials,
-		aabb:       physics.NewAABB(),
-		facesTree:  physics.NewAABBTree(64, 0.0),
-	}
-	if len(v.materials2) == 0 {
-		v.materials2 = []*textures.Animation{nil}
+func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, animations []*textures.Animation, tag string) *Volume {
+	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction)
+	v.hasFixedZ = true
+	v.minZ = minZ
+	v.maxZ = maxZ
+	if len(animations) > 0 {
+		v.animations = animations
 	}
 	return v
 }
 
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
+	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction)
+	return v
+}
+
+func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
 		id:         id,
@@ -52,8 +53,8 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 		minZ:       0,
 		maxZ:       0,
 		hasFixedZ:  false,
-		materials2: []*textures.Animation{nil},
-		aabb:       physics.NewAABB(),
+		animations: []*textures.Animation{nil},
+		entity:     physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction),
 		facesTree:  physics.NewAABBTree(64, 0.0),
 	}
 	return v
@@ -95,7 +96,7 @@ func (v *Volume) Rebuild() bool {
 		v.minZ = calcMinZ
 		v.maxZ = calcMaxZ
 	}
-	v.aabb.Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
+	v.entity.GetAABB().Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
 
 	v.facesTree.Clear()
 	for _, face := range v.faces {
@@ -115,9 +116,13 @@ func (v *Volume) SetBillboard(billboard float64) {
 	v.billboard = billboard
 }
 
+func (v *Volume) GetEntity() *physics.Entity {
+	return v.entity
+}
+
 // GetAABB returns the Axis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
 func (v *Volume) GetAABB() *physics.AABB {
-	return v.aabb
+	return v.entity.GetAABB()
 }
 
 // SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
@@ -148,19 +153,19 @@ func (v *Volume) GetId() string {
 
 // GetMinZ retrieves the minimum Z-coordinate of the location's axis-aligned bounding box (AABB).
 func (v *Volume) GetMinZ() float64 {
-	return v.aabb.GetMinZ()
+	return v.entity.GetAABB().GetMinZ()
 }
 
 // GetMaxZ retrieves the maximum Z-coordinate of the Volume's axis-aligned bounding box (AABB).
 func (v *Volume) GetMaxZ() float64 {
-	return v.aabb.GetMaxZ()
+	return v.entity.GetAABB().GetMaxZ()
 }
 
-// GetMaterial retrieves a material animation from the location's materials list based on the provided index modulo the list size.
-func (v *Volume) GetMaterial(m int) *textures.Animation {
+// GetAnimation retrieves a material animation from the location's materials list based on the provided index modulo the list size.
+func (v *Volume) GetAnimation(m int) *textures.Animation {
 	//floor 0, ceil 1
-	idx := m % len(v.materials2)
-	return v.materials2[idx]
+	idx := m % len(v.animations)
+	return v.animations[idx]
 }
 
 // AddFace adds a new face to the location and sets the location as the parent of the face.

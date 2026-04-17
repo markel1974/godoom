@@ -234,12 +234,12 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterial(1))
+		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetAnimation(1))
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterial(0))
+		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetAnimation(0))
 		vol3d.AddFace(floorFace)
 
 		for _, f2d := range faces2d {

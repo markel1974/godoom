@@ -25,15 +25,15 @@ type ThingBase struct {
 	animation    *textures.Animation
 	world        *Volumes
 	things       *Things
-	entity       *physics.Entity
 	isActive     bool
 	identifier   int
 	wall         *ThingWall
 	volume       *Volume
+	entity       *physics.Entity
 }
 
 // NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
-func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
+func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
@@ -41,7 +41,10 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	entW := cfg.Radius * 2
 	entH := cfg.Radius * 2
 	entD := cfg.Height
+	volume := NewVolumeDetails3d(0, cfg.Id, "thing", entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
 	t := &ThingBase{
+		volume:       volume,
+		entity:       volume.GetEntity(),
 		id:           cfg.Id,
 		angle:        cfg.Angle,
 		kind:         cfg.Kind,
@@ -51,16 +54,14 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 		speed:        cfg.Speed,
 		acceleration: cfg.Acceleration,
 		pos:          pos,
-		location:     volume,
+		location:     location,
 		animation:    anim,
 		world:        volumes,
 		things:       things,
 		maxStep:      cfg.Height * 0.5,
-		entity:       physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2),
 		isActive:     true,
 		identifier:   -1,
 		wall:         NewThingWall(volumes, 0, 0),
-		volume:       NewVolume3d(0, cfg.Id, "thing"),
 	}
 	t.entity.SetOnGround(false)
 
@@ -81,16 +82,15 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	face0 := NewFace(nil, t1, "", t.animation)
 	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
 	face0.LockUV(true)
-	t.volume.AddFace(face0)
 
 	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
 	face1 := NewFace(nil, t2, "", t.animation)
 	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
 	face1.LockUV(true)
+
+	t.volume.AddFace(face0)
 	t.volume.AddFace(face1)
-
 	t.volume.SetBillboard(1.0)
-
 	t.volume.Rebuild()
 
 	return t

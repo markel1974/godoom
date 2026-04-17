@@ -11,35 +11,36 @@ import (
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	parent    *Volume
-	neighbor  *Volume
-	tag       string
-	aabb      *physics.AABB
-	triangle  [3]geometry.XYZ
-	normal    geometry.XYZ
-	materials []*textures.Animation
-	minZ      float64
-	maxZ      float64
-	hasFixedZ bool
-	u         [3]float64
-	v         [3]float64
-	origin    geometry.XYZ
-	billboard float64
+	parent     *Volume
+	neighbor   *Volume
+	tag        string
+	aabb       *physics.AABB
+	triangle   [3]geometry.XYZ
+	normal     geometry.XYZ
+	animations []*textures.Animation
+	material   *textures.Animation
+	minZ       float64
+	maxZ       float64
+	hasFixedZ  bool
+	u          [3]float64
+	v          [3]float64
+	origin     geometry.XYZ
+	billboard  float64
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
 func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
 	out := &Face{
-		hasFixedZ: true,
-		neighbor:  neighbor,
-		tag:       tag,
-		minZ:      0,
-		maxZ:      0,
-		aabb:      physics.NewAABB(),
-		materials: []*textures.Animation{nil},
+		hasFixedZ:  true,
+		neighbor:   neighbor,
+		tag:        tag,
+		minZ:       0,
+		maxZ:       0,
+		aabb:       physics.NewAABB(),
+		animations: []*textures.Animation{nil},
 	}
 	if len(animations) > 0 {
-		out.materials = animations
+		out.animations = animations
 	}
 	out.triangle[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
 	out.triangle[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
@@ -49,12 +50,12 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, animation *textures.Animation) *Face {
+func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: false,
 		neighbor:  neighbor,
 		tag:       tag,
-		materials: []*textures.Animation{animation},
+		material:  material,
 		aabb:      physics.NewAABB(),
 		triangle:  tri,
 	}
@@ -168,25 +169,28 @@ func (s *Face) GetEnd() geometry.XYZ {
 	return s.triangle[2]
 }
 
-// GetRootAnimation retrieves the root animation associated with the first material in the Face. It may return nil if unavailable.
-func (s *Face) GetRootAnimation() *textures.Animation {
-	return s.materials[0]
+// GetAnimationIndex retrieves the Animation object corresponding to the given material index.
+func (s *Face) GetAnimationIndex(m int) *textures.Animation {
+	//0 Upper, 1 Middle, 2 Lower
+	idx := m % len(s.animations)
+	return s.animations[idx]
 }
 
-// GetAnimation retrieves the Animation object corresponding to the given material index.
-func (s *Face) GetAnimation(m int) *textures.Animation {
-	//0 Upper, 1 Middle, 2 Lower
-	idx := m % len(s.materials)
-	return s.materials[idx]
+// GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.
+func (s *Face) GetMaterialDetails() (*textures.Texture, int, float64, float64) {
+	if s.material == nil {
+		return nil, 0, 0, 0
+	}
+	w, h := s.material.ScaleFactor()
+	return s.material.CurrentFrame(), s.material.Kind(), w, h
 }
 
 // GetMaterial returns the root texture material of the face, or nil if it does not exist.
 func (s *Face) GetMaterial() *textures.Texture {
-	anim := s.materials[0]
-	if anim == nil {
+	if s.material == nil {
 		return nil
 	}
-	return anim.CurrentFrame()
+	return s.material.CurrentFrame()
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.

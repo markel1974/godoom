@@ -120,16 +120,12 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushFace generates vertices and triangle fans for an arbitrary 3D face, applying Triplanar UV mapping.
 func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
-	anim := face.GetRootAnimation()
-	if anim == nil {
-		return
-	}
-	if anim.Kind() == int(config.AnimationKindSky) {
-		w.cSky = anim.CurrentFrame()
-		return
-	}
-	tex := anim.CurrentFrame()
+	tex, texKind, texScaleW, texScaleH := face.GetMaterialDetails()
 	if tex == nil {
+		return
+	}
+	if texKind == int(config.AnimationKindSky) {
+		w.cSky = tex
 		return
 	}
 	layer, ok := w.tex.Get(tex)
@@ -139,9 +135,8 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 
 	//TODO COMPLETAMENTE SBAGLIATO!!!
 	texW, texH := tex.Size()
-	scaleW, scaleH := anim.ScaleFactor()
-	fTexW := float32(texW) * float32(scaleW)
-	fTexH := float32(texH) * float32(scaleH)
+	fTexW := float32(texW) * float32(texScaleW)
+	fTexH := float32(texH) * float32(texScaleH)
 	normal := face.GetNormal()
 	absX := math.Abs(normal.X)
 	absY := math.Abs(normal.Y)
@@ -180,28 +175,6 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	id3 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), u2, v2, layer, 0, 0, 0, 0)
 
 	fv.AddTriangle(id1, id2, id3)
-
-	/*
-		w.faceIndices = w.faceIndices[:0]
-		for _, p := range face.GetPoints() {
-			var u, v float32
-			if absZ >= absX && absZ >= absY {
-				u = float32(p.X) / fTexW
-				v = float32(-p.Y) / fTexH
-			} else if absY >= absX && absY >= absZ {
-				u = float32(p.X) / fTexW
-				v = float32(p.Z) / fTexH
-			} else {
-				u = float32(p.Y) / fTexW
-				v = float32(p.Z) / fTexH
-			}
-			w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer, 0, 0, 0, 0))
-		}
-		for i := 1; i < len(w.faceIndices)-1; i++ {
-			fv.AddTriangle(w.faceIndices[0], w.faceIndices[i], w.faceIndices[i+1])
-		}
-
-	*/
 }
 
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
@@ -211,12 +184,12 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		vertices := thing.GetVertices()
-		if vertices == nil {
+		volume := thing.GetVertices()
+		if volume == nil {
 			continue
 		}
 		startIndices := fv.GetIndicesLen()
-		for _, f := range vertices.GetFaces() {
+		for _, f := range volume.GetFaces() {
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue

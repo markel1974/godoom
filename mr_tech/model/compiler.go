@@ -245,7 +245,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		for _, f2d := range faces2d {
 			neighbor := f2d.GetNeighbor()
 			if neighbor == nil {
-				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetAnimation(1))
+				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetAnimationIndex(1))
 				continue
 			}
 			// Adjacent sector exists: we need to calculate height differentials
@@ -253,11 +253,11 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			nCeilZ := neighbor.GetMaxZ()
 			// 1. Lower Wall (bottom wall: neighbor's floor is higher than ours)
 			if nFloorZ > floorZ {
-				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetAnimation(2))
+				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetAnimationIndex(2))
 			}
 			// 2. Upper Wall (top wall: neighbor's ceiling drops below ours)
 			if nCeilZ < ceilZ {
-				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetAnimation(0))
+				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetAnimationIndex(0))
 			}
 			// 3. Middle Portal (the opening through which the player can navigate and look)
 			portalBottom := floorZ
@@ -270,7 +270,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			}
 			// If the opening physically exists (avoids glitches if two sectors are completely misaligned)
 			if portalTop > portalBottom {
-				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimation(1))
+				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimationIndex(1))
 			}
 		}
 		vol3d.Rebuild()

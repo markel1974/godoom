@@ -202,11 +202,10 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	return nil
 }
 
-// PointInside determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
+// PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
 func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	if v.hasFixedZ {
 		const epsilon = 0.01
-		//panic("Fixed Z bounds are enabled, cannot check 3D point inside without Z coordinate")
 		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
 			return false
 		}

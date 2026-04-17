@@ -28,7 +28,7 @@ type Face struct {
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, material []*textures.Animation) *Face {
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: true,
 		neighbor:  neighbor,
@@ -38,8 +38,8 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 		aabb:      physics.NewAABB(),
 		materials: []*textures.Animation{nil},
 	}
-	if len(material) > 0 {
-		out.materials = material
+	if len(animations) > 0 {
+		out.materials = animations
 	}
 	out.triangle[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
 	out.triangle[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
@@ -49,17 +49,14 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, materials []*textures.Animation) *Face {
+func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, animation *textures.Animation) *Face {
 	out := &Face{
 		hasFixedZ: false,
 		neighbor:  neighbor,
 		tag:       tag,
-		materials: []*textures.Animation{nil},
+		materials: []*textures.Animation{animation},
 		aabb:      physics.NewAABB(),
 		triangle:  tri,
-	}
-	if len(materials) > 0 {
-		out.materials = materials
 	}
 	out.Rebuild()
 	return out
@@ -171,25 +168,25 @@ func (s *Face) GetEnd() geometry.XYZ {
 	return s.triangle[2]
 }
 
-// TODO REMOVE
+// GetRootAnimation retrieves the root animation associated with the first material in the Face. It may return nil if unavailable.
 func (s *Face) GetRootAnimation() *textures.Animation {
 	return s.materials[0]
 }
 
-// GetRootMaterial returns the root texture material of the face, or nil if it does not exist.
-func (s *Face) GetRootMaterial() (*textures.Texture, int) {
-	anim := s.materials[0]
-	if anim == nil {
-		return nil, 0
-	}
-	return anim.CurrentFrame(), anim.Kind()
-}
-
-// GetMaterial retrieves the first material (upper texture) of the segment from the material slice.
-func (s *Face) GetMaterial(m int) *textures.Animation {
+// GetAnimation retrieves the Animation object corresponding to the given material index.
+func (s *Face) GetAnimation(m int) *textures.Animation {
 	//0 Upper, 1 Middle, 2 Lower
 	idx := m % len(s.materials)
 	return s.materials[idx]
+}
+
+// GetMaterial returns the root texture material of the face, or nil if it does not exist.
+func (s *Face) GetMaterial() *textures.Texture {
+	anim := s.materials[0]
+	if anim == nil {
+		return nil
+	}
+	return anim.CurrentFrame()
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.

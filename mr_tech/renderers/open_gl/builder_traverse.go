@@ -271,7 +271,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		}
 		startIndices := fv.GetIndicesLen()
 		for _, f := range vertices.GetFaces() {
-			mat, _ := f.GetRootMaterial()
+			mat := f.GetMaterial()
 			if mat == nil {
 				continue
 			}

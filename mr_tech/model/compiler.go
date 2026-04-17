@@ -210,9 +210,8 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBottom}     // Bottom-End
 		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
 		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
-		materials := []*textures.Animation{material}
-		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, materials)
-		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, materials)
+		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
 		vol3d.AddFace(faceT1)
 		vol3d.AddFace(faceT2)
 	}
@@ -235,20 +234,18 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		ceilMaterial := []*textures.Animation{vol2d.GetMaterial(1)}
-		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", ceilMaterial)
+		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterial(1))
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		floorMaterial := []*textures.Animation{vol2d.GetMaterial(0)}
-		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", floorMaterial)
+		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterial(0))
 		vol3d.AddFace(floorFace)
 
 		for _, f2d := range faces2d {
 			neighbor := f2d.GetNeighbor()
 			if neighbor == nil {
-				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetMaterial(1))
+				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetAnimation(1))
 				continue
 			}
 			// Adjacent sector exists: we need to calculate height differentials
@@ -256,11 +253,11 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			nCeilZ := neighbor.GetMaxZ()
 			// 1. Lower Wall (bottom wall: neighbor's floor is higher than ours)
 			if nFloorZ > floorZ {
-				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetMaterial(2))
+				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetAnimation(2))
 			}
 			// 2. Upper Wall (top wall: neighbor's ceiling drops below ours)
 			if nCeilZ < ceilZ {
-				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetMaterial(0))
+				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetAnimation(0))
 			}
 			// 3. Middle Portal (the opening through which the player can navigate and look)
 			portalBottom := floorZ
@@ -273,7 +270,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 			}
 			// If the opening physically exists (avoids glitches if two sectors are completely misaligned)
 			if portalTop > portalBottom {
-				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetMaterial(1))
+				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimation(1))
 			}
 		}
 		vol3d.Rebuild()
@@ -311,7 +308,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 				fmt.Println("wrong points configuration", cf.Points)
 				continue
 			}
-			material := []*textures.Animation{anim.GetAnimation(cf.Material)}
+			material := anim.GetAnimation(cf.Material)
 			// Robust polygon decomposition (Supports concave N-Gons)
 			triangles := geometry.Triangulate3d(pts)
 			for _, t := range triangles {

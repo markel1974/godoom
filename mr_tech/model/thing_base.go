@@ -66,12 +66,11 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 
 	height := 0.0
 	halfW := 0.0
-	animation := t.GetAnimation()
-	if animation != nil {
-		tex := animation.CurrentFrame()
+	if t.animation != nil {
+		tex := t.animation.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
-			scaleW, scaleH := animation.ScaleFactor()
+			scaleW, scaleH := t.animation.ScaleFactor()
 			width := float64(texW) * scaleW
 			height = float64(texH) * scaleH
 			halfW = width / 2.0
@@ -79,13 +78,13 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	}
 
 	t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-	face0 := NewFace(nil, t1, "", []*textures.Animation{animation})
+	face0 := NewFace(nil, t1, "", t.animation)
 	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
 	face0.SetBillboard(1.0)
 	t.volume.AddFace(face0)
 
 	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
-	face1 := NewFace(nil, t2, "", []*textures.Animation{animation})
+	face1 := NewFace(nil, t2, "", t.animation)
 	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
 	face1.SetBillboard(1.0)
 	t.volume.AddFace(face1)

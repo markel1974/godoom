@@ -217,7 +217,7 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		}
 		startIndices := fv.GetIndicesLen()
 		for _, f := range vertices.GetFaces() {
-			mat, _ := f.GetRootMaterial()
+			mat := f.GetMaterial()
 			if mat == nil {
 				continue
 			}

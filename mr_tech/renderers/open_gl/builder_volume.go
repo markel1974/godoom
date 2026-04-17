@@ -177,7 +177,7 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		}
 		startIndices := fv.GetIndicesLen()
 		for _, f := range vertices.GetFaces() {
-			mat, _ := f.GetRootMaterial()
+			mat := f.GetMaterial()
 			if mat == nil {
 				continue
 			}

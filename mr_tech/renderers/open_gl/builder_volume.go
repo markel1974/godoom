@@ -16,26 +16,26 @@ type VolumeRange struct {
 }
 
 type BuilderVolume struct {
-	tex         *Textures
-	fv          *FrameVertices
-	dc          *DrawCommands
-	fl          *FrameLights
-	dcRender    *DrawCommandsRender
-	mapBuilt    bool
-	cSky        *textures.Texture
-	faceIndices []uint32
+	tex      *Textures
+	fv       *FrameVertices
+	dc       *DrawCommands
+	fl       *FrameLights
+	dcRender *DrawCommandsRender
+	mapBuilt bool
+	cSky     *textures.Texture
+	//faceIndices []uint32
 	volRanges   map[*model.Volume]VolumeRange // CACHE DI CULLING
 	calibration *model.Calibration
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		tex:         tex,
-		dcRender:    NewDrawCommandsRender(),
-		fv:          NewFrameVertices(startBatchVertices),
-		dc:          NewDrawCommands(startFrameCommands),
-		fl:          NewFrameLights(256),
-		faceIndices: make([]uint32, 0, 128),
+		tex:      tex,
+		dcRender: NewDrawCommandsRender(),
+		fv:       NewFrameVertices(startBatchVertices),
+		dc:       NewDrawCommands(startFrameCommands),
+		fl:       NewFrameLights(256),
+		//faceIndices: make([]uint32, 0, 128),
 		volRanges:   make(map[*model.Volume]VolumeRange), // Inizializzazione
 		mapBuilt:    false,
 		cSky:        nil,
@@ -136,6 +136,8 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	if !ok {
 		return
 	}
+
+	//TODO COMPLETAMENTE SBAGLIATO!!!
 	texW, texH := tex.Size()
 	scaleW, scaleH := anim.ScaleFactor()
 	fTexW := float32(texW) * float32(scaleW)
@@ -144,24 +146,62 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	absX := math.Abs(normal.X)
 	absY := math.Abs(normal.Y)
 	absZ := math.Abs(normal.Z)
-	w.faceIndices = w.faceIndices[:0]
-	for _, p := range face.GetPoints() {
-		var u, v float32
-		if absZ >= absX && absZ >= absY {
-			u = float32(p.X) / fTexW
-			v = float32(-p.Y) / fTexH
-		} else if absY >= absX && absY >= absZ {
-			u = float32(p.X) / fTexW
-			v = float32(p.Z) / fTexH
-		} else {
-			u = float32(p.Y) / fTexW
-			v = float32(p.Z) / fTexH
+	p := face.GetPoints()
+
+	var u0, v0 float32
+	var u1, v1 float32
+	var u2, v2 float32
+
+	if absZ >= absX && absZ >= absY {
+		u0 = float32(p[0].X) / fTexW
+		v0 = float32(-p[0].Y) / fTexH
+		u1 = float32(p[1].X) / fTexW
+		v1 = float32(-p[1].Y) / fTexH
+		u2 = float32(p[2].X) / fTexW
+		v2 = float32(-p[2].Y) / fTexH
+	} else if absY >= absX && absY >= absZ {
+		u0 = float32(p[0].X) / fTexW
+		v0 = float32(p[0].Z) / fTexH
+		u1 = float32(p[1].X) / fTexW
+		v1 = float32(p[1].Z) / fTexH
+		u2 = float32(p[2].X) / fTexW
+		v2 = float32(p[2].Z) / fTexH
+	} else {
+		u0 = float32(p[0].Y) / fTexW
+		v0 = float32(p[0].Z) / fTexH
+		u1 = float32(p[1].Y) / fTexW
+		v1 = float32(p[1].Z) / fTexH
+		u2 = float32(p[2].Y) / fTexW
+		v2 = float32(p[2].Z) / fTexH
+	}
+
+	id1 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), u0, v0, layer, 0, 0, 0, 0)
+	id2 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), u1, v1, layer, 0, 0, 0, 0)
+	id3 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), u2, v2, layer, 0, 0, 0, 0)
+
+	fv.AddTriangle(id1, id2, id3)
+
+	/*
+		w.faceIndices = w.faceIndices[:0]
+		for _, p := range face.GetPoints() {
+			var u, v float32
+			if absZ >= absX && absZ >= absY {
+				u = float32(p.X) / fTexW
+				v = float32(-p.Y) / fTexH
+			} else if absY >= absX && absY >= absZ {
+				u = float32(p.X) / fTexW
+				v = float32(p.Z) / fTexH
+			} else {
+				u = float32(p.Y) / fTexW
+				v = float32(p.Z) / fTexH
+			}
+			w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer, 0, 0, 0, 0))
 		}
-		w.faceIndices = append(w.faceIndices, fv.AddVertex(float32(p.X), float32(p.Z), float32(-p.Y), u, v, layer, 0, 0, 0, 0))
-	}
-	for i := 1; i < len(w.faceIndices)-1; i++ {
-		fv.AddTriangle(w.faceIndices[0], w.faceIndices[i], w.faceIndices[i+1])
-	}
+		for i := 1; i < len(w.faceIndices)-1; i++ {
+			fv.AddTriangle(w.faceIndices[0], w.faceIndices[i], w.faceIndices[i+1])
+		}
+
+	*/
 }
 
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.

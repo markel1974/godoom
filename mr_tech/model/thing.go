@@ -22,6 +22,8 @@ type IThing interface {
 
 	GetPosition() (float64, float64, float64)
 
+	GetAngle() float64
+
 	GetVertices() ([]*Face, float64)
 
 	GetLight() *Light

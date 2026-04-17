@@ -11,11 +11,13 @@ type ThingItem struct {
 }
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
-func NewThingItem(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingItem {
+func NewThingItem(full3d bool, things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingItem {
 	pos := cfg.Position
-	pos.Z = volume.GetMinZ()
+	if !full3d {
+		pos.Z = volume.GetMinZ()
+	}
 	thing := &ThingItem{
-		ThingBase: NewThingBaseSprite(things, cfg, pos, anim, volume),
+		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
 	}
 	thing.things.AddThing(thing)
 	return thing

@@ -33,9 +33,10 @@ type ThingBase struct {
 	frames       [][]*Face
 }
 
-// NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
-func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, location *Volume) *ThingBase {
+// NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
+func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
+	radAngle := cfg.Angle // * (math.Pi / 180.0)
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
 	entZ := pos.Z
@@ -47,7 +48,7 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 		volume:       volume,
 		entity:       volume.GetEntity(),
 		id:           cfg.Id,
-		angle:        cfg.Angle,
+		angle:        radAngle,
 		kind:         cfg.Kind,
 		mass:         cfg.Mass,
 		radius:       cfg.Radius,
@@ -67,7 +68,7 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	t.entity.SetOnGround(false)
 
 	if cfg.Model3D != nil && len(cfg.Model3D.Frames) > 0 {
-		t.volume.SetBillboard(0.0)
+		t.volume.SetBillboard(2.0)
 		t.frames = make([][]*Face, len(cfg.Model3D.Frames))
 
 		for frameIdx, cfgFrame := range cfg.Model3D.Frames {
@@ -88,6 +89,7 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 			}
 		}
 	} else {
+		t.volume.SetBillboard(1.0)
 		height := 0.0
 		halfW := 0.0
 		if t.animation != nil {
@@ -113,17 +115,22 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 
 		t.volume.AddFace(face0)
 		t.volume.AddFace(face1)
-		t.volume.SetBillboard(1.0)
 	}
 	t.volume.Rebuild()
 
 	return t
 }
 
+// GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
+func (t *ThingBase) GetAngle() float64 {
+	return t.angle
+}
+
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
 func (t *ThingBase) GetVertices() ([]*Face, float64) {
 	if len(t.frames) > 0 {
-		idx := textures.CurrentTick() % uint64(len(t.frames))
+		groupSize := uint64(6) // Per 5 tick consecutivi sullo stesso frame
+		idx := (textures.CurrentTick() / groupSize) % uint64(len(t.frames))
 		return t.frames[idx], t.volume.GetBillboard()
 	}
 	return t.volume.GetFaces(), t.volume.GetBillboard()
@@ -216,6 +223,7 @@ func (t *ThingBase) SetActive(active bool) {
 
 // PhysicsApply applies physics calculations to the ThingBase instance using its height attribute.
 func (t *ThingBase) PhysicsApply() {
+	//TODO TOO SLOOW!!!!!!!
 	t.doPhysics(t.height)
 }
 
@@ -223,9 +231,30 @@ func (t *ThingBase) PhysicsApply() {
 func (t *ThingBase) doPhysics(tHeight float64) {
 	// extract displacement delta
 	dx, dy, dz := t.entity.GetDisplacement()
-	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
+	//if dx == 0.0 && dy == 0.0 && dz == 0.0 {
+	//	return
+	//}
+	// FIX 1: LA SONDA GRAVITAZIONALE (Stick-to-Ground)
+	// Se siamo a terra, forziamo un micro-vettore verso il basso.
+	// Questo obbliga il raycast (Sweep) a sbattere sempre contro il pavimento
+	// anche quando stiamo solo camminando in orizzontale, impedendo la finta caduta.
+
+	if t.entity.IsOnGround() && math.Abs(dz) < 0.0001 {
+		dz = -0.002
+	}
+
+	// DEADZONE (Sleep Epsilon)
+	const sleepEpsilon = 0.005
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		t.entity.SetVx(0.0)
+		t.entity.SetVy(0.0)
+		if t.entity.IsOnGround() {
+			t.entity.SetVz(0.0)
+		}
 		return
 	}
+
+	//fmt.Printf("thing %s is moving x:%f y:%f z:%f\n", t.id, dx, dy, dz)
 	isGrounded := false
 	pX, pY, pZ := t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
 	hPos := t.pos.Z + tHeight

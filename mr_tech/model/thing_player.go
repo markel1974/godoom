@@ -14,7 +14,6 @@ const maxYaw = 5.0
 
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
-	id             string
 	kind           int
 	angle          float64
 	angleSin       float64
@@ -61,11 +60,10 @@ func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Vo
 	}
 	cfg.Position = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: currentZ}
 	p := &ThingPlayer{
-		id:             "PLAYER",
 		kind:           0,
 		yaw:            0,
 		yawState:       0,
-		ThingBase:      NewThingBaseSprite(things, cfg.Thing, cfg.Position, nil, volume),
+		ThingBase:      NewThingBase(things, cfg.Thing, cfg.Position, nil, volume),
 		bobbing:        NewBobbing(2.6, 0.9, 0.03, 0.015, 0.15, 0.10),
 		lightIntensity: 0.0039,
 		debug:          debug,
@@ -73,6 +71,7 @@ func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Vo
 		headMargin:     cfg.Height * 0.25,
 		duckHeight:     cfg.Height * 0.25,
 	}
+	p.id = "PLAYER"
 	p.SetAngle(cfg.Angle)
 	p.things.AddThing(p)
 	return p
@@ -99,13 +98,8 @@ func (p *ThingPlayer) SetAngle(angle float64) {
 	p.angleCos = math.Cos(p.angle)
 }
 
-// GetRealAngle returns the exact angular orientation of the ThingPlayer expressed as a float64 in radians.
-func (p *ThingPlayer) GetRealAngle() float64 {
-	return p.angle
-}
-
-// GetAngle returns the sine and cosine of the current angle of the ThingPlayer.
-func (p *ThingPlayer) GetAngle() (float64, float64) {
+// GetAngleFull returns the sine and cosine of the player's current angle as two float64 values.
+func (p *ThingPlayer) GetAngleFull() (float64, float64) {
 	return p.angleSin, p.angleCos
 }
 

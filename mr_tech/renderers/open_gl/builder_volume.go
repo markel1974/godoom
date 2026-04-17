@@ -143,26 +143,80 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		}
 
 		tPosX, tPosY, zBot := thing.GetPosition()
+		//fmt.Printf("Entity %s -> X: %f, Y: %f, Z: %f\n", thing.GetId(), tPosX, tPosY, zBot)
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+		//oX, oY, oZ := float32(tPosX), float32(tPosY), float32(zBot)
 		b := float32(billboard)
+		//oY = -600
+		//oX, oY, oZ = float32(800), float32(-600), float32(-700)
 
 		startIndices := fv.GetIndicesLen()
 		for _, f := range faces {
 			mat := f.GetMaterial()
-			if mat == nil {
-				continue
-			}
 			l, ok := w.tex.Get(mat)
 			if !ok {
 				continue
 			}
+
+			/*
+				p := f.GetPoints()
+				u, v := f.GetUV()
+				id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+				id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+				id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+				fv.AddTriangle(id0, id1, id2)
+
+			*/
+
 			p := f.GetPoints()
 			u, v := f.GetUV()
+			if b == 2.0 {
+				// --- MODELLI 3D DINAMICI (Flag 2.0) ---
+				id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+				id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+				id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+				fv.AddTriangle(id0, id1, id2)
+			} else if b == 1.0 {
+				// --- SPRITE BILLBOARD (Flag 1.0) ---
+				id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+				id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+				id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+				fv.AddTriangle(id0, id1, id2)
+			}
 
-			id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
-			id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
-			id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
-			fv.AddTriangle(id0, id1, id2)
+			//TODO COMPLETARE!!!!
+			/*
+				if b == 0.0 {
+					// --- MODELLI 3D AGNOSTICI ---
+					// 1. Calcoliamo seno e coseno per l'angolo dell'entità
+					angle := thing.GetAngle()
+					cosA := math.Cos(angle)
+					sinA := math.Sin(angle)
+
+					var wp [3]geometry.XYZ
+					for i := 0; i < 3; i++ {
+						// 2. Ruotiamo il vertice locale (da -30 a +30) sull'asse Z di Quake
+						rx := p[i].X*cosA - p[i].Y*sinA
+						ry := p[i].X*sinA + p[i].Y*cosA
+						// 3. Trasliamo alla posizione assoluta dell'entità (Spazio Quake)
+						wp[i].X = rx + tPosX
+						wp[i].Y = ry + tPosY
+						wp[i].Z = p[i].Z + zBot
+					}
+					// 4. Inviamo al VBO.
+					// Usiamo il TUO routing degli assi esatto (X, Z, -Y) per passare da Quake a OpenGL!
+					id0 := fv.AddVertex(float32(wp[0].X), float32(wp[0].Z), float32(-wp[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+					id1 := fv.AddVertex(float32(wp[1].X), float32(wp[1].Z), float32(-wp[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+					id2 := fv.AddVertex(float32(wp[2].X), float32(wp[2].Z), float32(-wp[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+					fv.AddTriangle(id0, id1, id2)
+				} else {
+					// --- SPRITE BILLBOARD / BMODELS (Codice originale intatto) ---
+					id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+					id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+					id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+					fv.AddTriangle(id0, id1, id2)
+				}
+			*/
 		}
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)

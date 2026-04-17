@@ -197,7 +197,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		root.Volumes = append(root.Volumes, volume)
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
-	root.Player.Speed = 800
+	root.Player.Speed = 2000
 	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
 	//root.Things = nil
 	return root, nil

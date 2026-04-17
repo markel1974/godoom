@@ -21,18 +21,17 @@ void main()
     TexCoords = aTexCoords;
 
     vec4 worldPos;
-    if (aIsBillboard > 0.5) {
-        // Estrazione dei vettori Right e Up dalla View Matrix
-        // In una matrice View, le righe (o le colonne della trasposta)
-        // rappresentano gli assi della camera nello spazio del mondo.
+    if (aIsBillboard == 1.0) {
+        // Sprite 2.5D (Billboard classico)
         vec3 right = vec3(u_view[0][0], u_view[1][0], u_view[2][0]);
         vec3 up    = vec3(u_view[0][1], u_view[1][1], u_view[2][1]);
-
-        // Calcolo della posizione assoluta: Origin + (Right * x_local) + (Up * y_local)
-        // aPos.x e aPos.y contengono gli scostamenti definiti in GetVertices()
         worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
+    } else if (aIsBillboard > 1.5) {
+        // Flag 2.0: Modelli 3D dinamici (MD2/MDL)
+        // La GPU somma la posizione locale (ruotata su CPU) all'origine assoluta
+        worldPos = vec4(aOrigin + aPos, 1.0);
     } else {
-        // Geometria statica o mesh dinamica (MD2) già trasformata
+        // Flag 0.0: Geometria BSP della mappa (coordinate già assolute)
         worldPos = vec4(aPos, 1.0);
     }
 

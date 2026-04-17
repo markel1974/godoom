@@ -31,14 +31,14 @@ type ThingPlayer struct {
 	*ThingBase
 }
 
-// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, volumes, and things.
+// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
 func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
 	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 
 	if volume == nil {
-		fmt.Printf("can't find player volume at %f, %f\n", cfg.Position.X, cfg.Position.Y)
+		fmt.Printf("can't find player location at %f, %f\n", cfg.Position.X, cfg.Position.Y)
 		//TODO PATCH SISTEMARE
 		for _, v := range volumes.GetVolumes() {
 			volume = v

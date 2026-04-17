@@ -38,7 +38,7 @@ func NewViewMatrix() *ViewMatrix {
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngle()
-	vi.volume = player.GetVolume()
+	vi.volume = player.GetLocation()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()

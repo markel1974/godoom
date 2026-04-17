@@ -21,9 +21,9 @@ type ThingBase struct {
 	kind         config.ThingType
 	speed        float64
 	acceleration float64
-	volume       *Volume
+	location     *Volume
 	animation    *textures.Animation
-	volumes      *Volumes
+	world        *Volumes
 	things       *Things
 	entity       *physics.Entity
 	isActive     bool
@@ -32,7 +32,7 @@ type ThingBase struct {
 	triangles    [][3]Vertex
 }
 
-// NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, volumes, and things.
+// NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
 func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *textures.Animation, volume *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	entX := pos.X - cfg.Radius
@@ -51,9 +51,9 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 		speed:        cfg.Speed,
 		acceleration: cfg.Acceleration,
 		pos:          pos,
-		volume:       volume,
+		location:     volume,
 		animation:    anim,
-		volumes:      volumes,
+		world:        volumes,
 		things:       things,
 		maxStep:      cfg.Height * 0.5,
 		entity:       physics.NewEntity(entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2),
@@ -161,9 +161,9 @@ func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
-// GetVolume retrieves the current volume associated with the ThingBase instance.
-func (t *ThingBase) GetVolume() *Volume {
-	return t.volume
+// GetVolume retrieves the current location associated with the ThingBase instance.
+func (t *ThingBase) GetLocation() *Volume {
+	return t.location
 }
 
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
@@ -178,17 +178,17 @@ func (t *ThingBase) GetPosition() (float64, float64, float64) {
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
 func (t *ThingBase) GetLight() *Light {
-	return t.volume.Light
+	return t.location.Light
 }
 
-// GetMinZ retrieves the minimum Z-coordinate (floor height) of the volume associated with the ThingBase instance.
+// GetMinZ retrieves the minimum Z-coordinate (floor height) of the location associated with the ThingBase instance.
 func (t *ThingBase) GetMinZ() float64 {
-	return t.volume.GetMinZ()
+	return t.location.GetMinZ()
 }
 
-// GetMaxZ retrieves the maximum Z-coordinate (height) of the volume associated with the ThingBase instance.
+// GetMaxZ retrieves the maximum Z-coordinate (height) of the location associated with the ThingBase instance.
 func (t *ThingBase) GetMaxZ() float64 {
-	return t.volume.GetMaxZ()
+	return t.location.GetMaxZ()
 }
 
 // Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
@@ -226,7 +226,7 @@ func (t *ThingBase) PhysicsApply() {
 	t.doPhysics(t.height)
 }
 
-// doPhysics handles the physics computations for movement, collision detection, and volume transitions for the entity.
+// doPhysics handles the physics computations for movement, collision detection, and location transitions for the entity.
 func (t *ThingBase) doPhysics(tHeight float64) {
 	// extract displacement delta
 	dx, dy, dz := t.entity.GetDisplacement()
@@ -257,16 +257,16 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 		dx, dy, dz = t.entity.GetDisplacement()
 		pX, pY, pZ = t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
 	}
-	// volume transition (3d portals)
+	// location transition (3d portals)
 	topZ := pZ + tHeight
-	newVolume := t.volume.Neighbor(pX, pY, pZ)
+	newVolume := t.location.Neighbor(pX, pY, pZ)
 	if newVolume == nil {
-		newVolume = t.volumes.QueryPoint3d(pX, pY, pZ)
+		newVolume = t.world.QueryPoint3d(pX, pY, pZ)
 	}
 	newVolume = isValidZ(newVolume, pZ, topZ, t.maxStep)
-	if newVolume != nil && newVolume != t.volume {
+	if newVolume != nil && newVolume != t.location {
 		if t.entity.GetVz() <= 0 {
-			actualStep := newVolume.GetMinZ() - t.volume.GetMinZ()
+			actualStep := newVolume.GetMinZ() - t.location.GetMinZ()
 			// automatic handling of height difference (step-up for stairs)
 			if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
 				pZ = newVolume.GetMinZ()
@@ -274,10 +274,10 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 				isGrounded = true
 			}
 		}
-		t.volume = newVolume
+		t.location = newVolume
 	}
 	// vertical topological limits
-	minZ, maxZ := t.volume.GetMinZ(), t.volume.GetMaxZ()
+	minZ, maxZ := t.location.GetMinZ(), t.location.GetMaxZ()
 	if pZ <= minZ {
 		pZ = minZ
 		isGrounded = true
@@ -305,7 +305,7 @@ func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
 func (t *ThingBase) LaunchObject(pos geometry.XYZ, angle, pitch float64) {
-	t.things.CreateBullet(t.volume, pos, angle, pitch, 1.0, 1.0, 10)
+	t.things.CreateBullet(t.location, pos, angle, pitch, 1.0, 1.0, 10)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
@@ -355,7 +355,7 @@ func (t *ThingBase) FireHitscan(pos geometry.XYZ, dirX, dirY, dirZ float64) {
 	}
 }
 
-// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the volume, considering maxStep.
+// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the location, considering maxStep.
 func isValidZ(volume *Volume, baseZ, topZ, maxStep float64) *Volume {
 	if volume == nil {
 		return nil

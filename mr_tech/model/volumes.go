@@ -14,7 +14,7 @@ type Calibration struct {
 	ZFarRoom   float32
 }
 
-// Volumes represents a collection of 3D or 2D volumes, utilizing a hierarchical spatial structure and caching for efficiency.
+// Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
 type Volumes struct {
 	container []*Volume
 	tree      *physics.AABBTree
@@ -39,7 +39,7 @@ func NewVolumes(container []*Volume, fullZ bool) *Volumes {
 
 }
 
-// Setup constructs a new AABB tree based on the current container and populates it with rebuilt volume objects.
+// Setup constructs a new AABB tree based on the current container and populates it with rebuilt location objects.
 func (s *Volumes) Setup() {
 	for _, volume := range s.container {
 		if volume.Rebuild() {
@@ -88,7 +88,7 @@ func (s *Volumes) Len() int {
 	return len(s.container)
 }
 
-// Query retrieves a list of volumes that overlap with the specified axis-aligned bounding box (AABB).
+// Query retrieves a list of world that overlap with the specified axis-aligned bounding box (AABB).
 func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 	var target []*Volume
 	s.tree.QueryOverlaps(aabb, func(object physics.IAABB) bool {
@@ -118,7 +118,7 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// QueryPoint3d searches for a volume containing the specified 3D point (px, py, pz) and returns the matched Volume, or nil if not found.
+// QueryPoint3d searches for a location containing the specified 3D point (px, py, pz) and returns the matched Volume, or nil if not found.
 func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
@@ -141,7 +141,7 @@ func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
 	return s.locateVolume2d(px, py)
 }
 
-// LocateVolume2d searches for a 2D point (px, py) within the managed volumes and returns the corresponding Volume, or nil if not found.
+// LocateVolume2d searches for a 2D point (px, py) within the managed world and returns the corresponding Volume, or nil if not found.
 func (s *Volumes) locateVolume2d(px, py float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
@@ -157,9 +157,9 @@ func (s *Volumes) locateVolume2d(px, py float64) *Volume {
 
 	/*
 		s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			if volume, ok := object.(*Volume); ok {
-				if volume.PointInLineSide(px, py) {
-					target = volume
+			if location, ok := object.(*Volume); ok {
+				if location.PointInLineSide(px, py) {
+					target = location
 					return true
 				}
 			}
@@ -170,12 +170,12 @@ func (s *Volumes) locateVolume2d(px, py float64) *Volume {
 	*/
 }
 
-// LocateVolume3d identifies the 3D volume and specific face at the given point (px, py, pz) in world coordinates.
+// LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
 func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
 	var targetVol *Volume
 	var targetFace *Face
 
-	// Broad-Phase Globale: troviamo l'AABB del volume 3D
+	// Broad-Phase Globale: troviamo l'AABB del location 3D
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		volume, volumeOk := object.(*Volume)
 		if !volumeOk {
@@ -214,19 +214,19 @@ func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
 }
 
 /*
-// LocateVolume3d trova il volume 3D che contiene il punto (px, py, pz) e
+// LocateVolume3d trova il location 3D che contiene il punto (px, py, pz) e
 // restituisce sia il Volume che la Faccia di riferimento (es. il pavimento sotto al punto).
 func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
 	var targetVol *Volume
 	var targetFace *Face
 
-	// 1. Broad-Phase Globale: troviamo il volume 3D
+	// 1. Broad-Phase Globale: troviamo il location 3D
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
-		volume, volumeOk := object.(*Volume)
+		location, volumeOk := object.(*Volume)
 		if !volumeOk {
 			return false
 		}
-		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+		location.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 			face, faceOk := object.(*Face)
 			if !faceOk {
 				return false
@@ -239,7 +239,7 @@ func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
 			}
 			// Verifica Esatta: il punto cade verticalmente dentro questo specifico triangolo?
 			if face.PointInTriangle3d(px, py, pz) {
-				targetVol = volume
+				targetVol = location
 				targetFace = face
 				return true
 			}

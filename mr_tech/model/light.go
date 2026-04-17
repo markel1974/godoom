@@ -74,7 +74,7 @@ func (cl *Light) GetKind() config.LightKind {
 	return cl.kind
 }
 
-// GetVolume retrieves the volume associated with the Light instance. Returns a pointer to a Sector object.
+// GetVolume retrieves the location associated with the Light instance. Returns a pointer to a Sector object.
 func (cl *Light) GetVolume() *Volume {
 	return cl.volume
 }

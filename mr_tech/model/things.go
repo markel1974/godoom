@@ -148,7 +148,7 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	volume := th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	if volume == nil {
-		return nil, fmt.Errorf("can't find thing volume at %f, %f, %f", ct.Position.X, ct.Position.Y, ct.Position.Z)
+		return nil, fmt.Errorf("can't find thing location at %f, %f, %f", ct.Position.X, ct.Position.Y, ct.Position.Z)
 	}
 
 	const disableEnemies = false

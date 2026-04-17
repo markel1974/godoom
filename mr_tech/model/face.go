@@ -61,7 +61,7 @@ func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, materials []*tex
 	return out
 }
 
-// SetZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
+// SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
 func (s *Face) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
@@ -72,7 +72,7 @@ func (s *Face) SetZ(minZ, maxZ float64) {
 	s.Rebuild()
 }
 
-// ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
+// ClearZ resets the Z-coordinate bounds of the location, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (s *Face) ClearZ() {
 	if s.hasFixedZ {
 		s.triangle[0].Z = 0
@@ -163,7 +163,7 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 	return true
 }
 
-// PointInVolume checks if a point (px, py, pz) lies within the Face's volume. Returns distance and a boolean status.
+// PointInVolume checks if a point (px, py, pz) lies within the Face's location. Returns distance and a boolean status.
 //func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
 //	target := s.triangle[0]
 //	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z

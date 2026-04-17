@@ -11,7 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Compiler represents a core game engine component for managing volumes, game objects, player interactions, and things.
+// Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
 type Compiler struct {
 	volumes *Volumes
 	player  *ThingPlayer
@@ -57,7 +57,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	if r.player == nil {
 		return fmt.Errorf("player not found")
 	}
-	fmt.Printf("Scan complete volumes: %d\n", r.volumes.Len())
+	fmt.Printf("Scan complete world: %d\n", r.volumes.Len())
 	return nil
 }
 

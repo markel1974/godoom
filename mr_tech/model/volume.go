@@ -23,7 +23,7 @@ type Volume struct {
 	facesTree  *physics.AABBTree
 }
 
-// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded volumes.
+// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
 func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Animation, tag string) *Volume {
 	v := &Volume{
 		modelId:    modelId,
@@ -58,7 +58,7 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 	return v
 }
 
-// Rebuild recalculates the axis-aligned bounding box (AABB) for the volume based on its faces and dimensions.
+// Rebuild recalculates the axis-aligned bounding box (AABB) for the location based on its faces and dimensions.
 func (v *Volume) Rebuild() bool {
 	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -103,12 +103,12 @@ func (v *Volume) Rebuild() bool {
 	return true
 }
 
-// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the volume, representing its 3D bounds.
+// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
 func (v *Volume) GetAABB() *physics.AABB {
 	return v.aabb
 }
 
-// SetZ sets the minimum and maximum Z coordinates for the volume, marks it as having custom Z bounds, and rebuilds its AABB.
+// SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
 func (v *Volume) SetZ(minZ, maxZ float64) {
 	v.minZ = minZ
 	v.maxZ = maxZ
@@ -116,7 +116,7 @@ func (v *Volume) SetZ(minZ, maxZ float64) {
 	v.Rebuild()
 }
 
-// ClearZ resets the Z-coordinate bounds of the volume, marks it as lacking custom Z bounds, and triggers a rebuild.
+// ClearZ resets the Z-coordinate bounds of the location, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (v *Volume) ClearZ() {
 	v.minZ = 0
 	v.maxZ = 0
@@ -129,12 +129,12 @@ func (v *Volume) GetModelId() int {
 	return v.modelId
 }
 
-// GetId retrieves the unique identifier of the volume.
+// GetId retrieves the unique identifier of the location.
 func (v *Volume) GetId() string {
 	return v.id
 }
 
-// GetMinZ retrieves the minimum Z-coordinate of the volume's axis-aligned bounding box (AABB).
+// GetMinZ retrieves the minimum Z-coordinate of the location's axis-aligned bounding box (AABB).
 func (v *Volume) GetMinZ() float64 {
 	return v.aabb.GetMinZ()
 }
@@ -144,25 +144,25 @@ func (v *Volume) GetMaxZ() float64 {
 	return v.aabb.GetMaxZ()
 }
 
-// GetMaterial retrieves a material animation from the volume's materials list based on the provided index modulo the list size.
+// GetMaterial retrieves a material animation from the location's materials list based on the provided index modulo the list size.
 func (v *Volume) GetMaterial(m int) *textures.Animation {
 	//floor 0, ceil 1
 	idx := m % len(v.materials2)
 	return v.materials2[idx]
 }
 
-// AddFace adds a new face to the volume and sets the volume as the parent of the face.
+// AddFace adds a new face to the location and sets the location as the parent of the face.
 func (v *Volume) AddFace(face *Face) {
 	face.SetParent(v)
 	v.faces = append(v.faces, face)
 }
 
-// GetFaces retrieves the list of face objects associated with the volume.
+// GetFaces retrieves the list of face objects associated with the location.
 func (v *Volume) GetFaces() []*Face {
 	return v.faces
 }
 
-// AddTag appends the specified tags to the volume's existing tags, separated by a semicolon.
+// AddTag appends the specified tags to the location's existing tags, separated by a semicolon.
 func (v *Volume) AddTag(tags string) {
 	if len(tags) > 0 {
 		v.tag += ";" + tags
@@ -174,7 +174,7 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// Neighbor returns the neighboring volume that contains the specified point (px, py, pz), or nil if no such volume exists.
+// Neighbor returns the neighboring location that contains the specified point (px, py, pz), or nil if no such location exists.
 func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	if v.hasFixedZ {
 		if v.PointInLineSide(px, py) {
@@ -202,7 +202,7 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 	return nil
 }
 
-// PointInside determines if the point (px, py, pz) lies inside the 3D volume, considering optional fixed Z bounds.
+// PointInside determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
 func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	if v.hasFixedZ {
 		const epsilon = 0.01
@@ -222,7 +222,7 @@ func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	return intersections%2 != 0
 }
 
-// PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the volume.
+// PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.
 func (v *Volume) PointInLineSide(px, py float64) bool {
 	for _, face := range v.faces {
 		if !face.PointInLineSide(px, py) {
@@ -232,7 +232,7 @@ func (v *Volume) PointInLineSide(px, py float64) bool {
 	return true
 }
 
-// GetCentroid3d calculates and returns the geometric centroid of the volume based on its faces and 3D mode.
+// GetCentroid3d calculates and returns the geometric centroid of the location based on its faces and 3D mode.
 func (v *Volume) GetCentroid3d() geometry.XYZ {
 	var cx, cy, cz, count float64
 	for _, face := range v.faces {
@@ -249,7 +249,7 @@ func (v *Volume) GetCentroid3d() geometry.XYZ {
 	return geometry.XYZ{}
 }
 
-// GetCentroid2d calculates and returns the 2D centroid of the volume projected onto the XY plane.
+// GetCentroid2d calculates and returns the 2D centroid of the location projected onto the XY plane.
 func (v *Volume) GetCentroid2d() geometry.XYZ {
 	var signedArea, cx, cy float64
 	for i := range v.faces {
@@ -282,10 +282,10 @@ targetAABB := physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
 
 // 1. Interroga l'albero Globale per trovare in quali volumi stiamo entrando
 globalTree.QueryOverlaps(targetAABB, func(volObj physics.IAABB) bool {
-    volume := volObj.(*Volume)
+    location := volObj.(*Volume)
 
-    // 2. Interroga l'albero Locale del volume trovato per estrarre SOLO i triangoli vicini
-    volume.facesTree.QueryOverlaps(targetAABB, func(faceObj physics.IAABB) bool {
+    // 2. Interroga l'albero Locale del location trovato per estrarre SOLO i triangoli vicini
+    location.facesTree.QueryOverlaps(targetAABB, func(faceObj physics.IAABB) bool {
         face := faceObj.(*Face)
 
         // 3. Narrow-Phase e Sweep

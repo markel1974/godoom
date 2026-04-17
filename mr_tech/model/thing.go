@@ -44,7 +44,7 @@ type IThing interface {
 
 	Compute(playerX float64, playerY float64, playerZ float64)
 
-	GetVolume() *Volume
+	GetLocation() *Volume
 
 	PhysicsApply()
 

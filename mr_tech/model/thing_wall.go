@@ -31,7 +31,7 @@ func (s *ThingWall) GetEntity() *physics.Entity {
 }
 
 // ClosestFace trova la faccia più vicina con cui l'oggetto collide,
-// testando rigorosamente la traiettoria e il volume sferico contro tutti i bordi del poligono.
+// testando rigorosamente la traiettoria e il location sferico contro tutti i bordi del poligono.
 func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
 	minX := math.Min(viewX, pX) - radius
 	maxX := math.Max(viewX, pX) + radius
@@ -191,7 +191,7 @@ func (s *ThingWall) ClosestFaceOld(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, 
 	var closestFace *Face = nil
 	minT := 1.0                     // Earliest Time of Impact
 	var colNx, colNy, colNz float64 // Aggiunto l'asse Z per la normale di impatto
-	s.volumes.QueryAABB(s, func(vol *Volume) {
+	s.world.QueryAABB(s, func(vol *Volume) {
 		for _, face := range vol.GetFaces() {
 			if neighbor := face.GetNeighbor(); neighbor != nil {
 				holeLow := math.Max(vol.GetMinZ(), neighbor.GetMinZ())
@@ -298,7 +298,7 @@ func (s *ThingWall) ClosestFace3d(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, v
 	minT := 1.0
 	var colNx, colNy, colNz float64
 
-	s.volumes.QueryAABB(s, func(vol *Volume) {
+	s.world.QueryAABB(s, func(vol *Volume) {
 		for _, face := range vol.GetFaces() {
 			// Skip sui portali attraversabili (se in modalità 2.5D) o ignoriamo le transizioni perfette
 			if neighbor := face.GetNeighbor(); neighbor != nil {

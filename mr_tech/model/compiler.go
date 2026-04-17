@@ -105,7 +105,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
 				if len(tri) != 3 {
-					fmt.Println("wrong triangle", tri)
+					fmt.Println("wrong tri", tri)
 					continue
 				}
 				volumeMaterials := []*textures.Animation{anim.GetAnimation(cs.Floor), anim.GetAnimation(cs.Ceil)}
@@ -313,7 +313,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			triangles := geometry.Triangulate3d(pts)
 			for _, t := range triangles {
 				if len(t) != 3 {
-					fmt.Println("wrong triangle", t)
+					fmt.Println("wrong tri", t)
 					continue
 				}
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
@@ -343,7 +343,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 			if !ok || overlapFace.GetParent() == face.GetParent() || overlapFace.GetNeighbor() != nil {
 				return false
 			}
-			// To find 3D portals, we compare the proximity of triangle centroids
+			// To find 3D portals, we compare the proximity of tri centroids
 			pts1 := face.GetPoints()
 			pts2 := overlapFace.GetPoints()
 			// Calculate current face centroid (3 points)
@@ -440,7 +440,7 @@ func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
 				var sumX, sumY, totalArea float64
 				var intensity, falloff float64
 				for _, s := range areaSectors {
-					// Calculate triangle area (cross product)
+					// Calculate tri area (cross product)
 					area := 0.0
 					for _, face := range s.GetFaces() {
 						start := face.GetStart()

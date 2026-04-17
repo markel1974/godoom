@@ -80,14 +80,16 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
 	face0 := NewFace(nil, t1, "", t.animation)
 	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-	face0.SetBillboard(1.0)
+	face0.LockUV(true)
 	t.volume.AddFace(face0)
 
 	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
 	face1 := NewFace(nil, t2, "", t.animation)
 	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
-	face1.SetBillboard(1.0)
+	face1.LockUV(true)
 	t.volume.AddFace(face1)
+
+	t.volume.SetBillboard(1.0)
 
 	t.volume.Rebuild()
 
@@ -96,9 +98,6 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
 func (t *ThingBase) GetVertices() *Volume {
-	tPosX, tPosY, zBot := t.GetPosition()
-	t.volume.faces[0].SetOrigin(tPosX, tPosY, zBot)
-	t.volume.faces[1].SetOrigin(tPosX, tPosY, zBot)
 	return t.volume
 }
 

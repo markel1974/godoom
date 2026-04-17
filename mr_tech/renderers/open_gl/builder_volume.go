@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -16,32 +14,29 @@ type VolumeRange struct {
 }
 
 type BuilderVolume struct {
-	tex      *Textures
-	fv       *FrameVertices
-	dc       *DrawCommands
-	fl       *FrameLights
-	dcRender *DrawCommandsRender
-	mapBuilt bool
-	cSky     *textures.Texture
-	//faceIndices []uint32
+	tex         *Textures
+	fv          *FrameVertices
+	dc          *DrawCommands
+	fl          *FrameLights
+	dcRender    *DrawCommandsRender
+	mapBuilt    bool
+	cSky        *textures.Texture
 	volRanges   map[*model.Volume]VolumeRange // CACHE DI CULLING
 	calibration *model.Calibration
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		tex:      tex,
-		dcRender: NewDrawCommandsRender(),
-		fv:       NewFrameVertices(startBatchVertices),
-		dc:       NewDrawCommands(startFrameCommands),
-		fl:       NewFrameLights(256),
-		//faceIndices: make([]uint32, 0, 128),
+		tex:         tex,
+		dcRender:    NewDrawCommandsRender(),
+		fv:          NewFrameVertices(startBatchVertices),
+		dc:          NewDrawCommands(startFrameCommands),
+		fl:          NewFrameLights(256),
 		volRanges:   make(map[*model.Volume]VolumeRange), // Inizializzazione
 		mapBuilt:    false,
 		cSky:        nil,
 		calibration: calibration,
 	}
-
 	return bv
 }
 
@@ -77,7 +72,24 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		for _, vol := range volumes.GetVolumes() {
 			startIdx := w.fv.GetIndicesLen()
 			for _, face := range vol.GetFaces() {
-				w.pushFace(w.fv, face)
+				tex, texKind := face.GetMaterialDetails()
+				if tex == nil {
+					continue
+				}
+				if texKind == int(config.AnimationKindSky) {
+					w.cSky = tex
+					continue
+				}
+				layer, ok := w.tex.Get(tex)
+				if !ok {
+					continue
+				}
+				p := face.GetPoints()
+				u, v := face.GetUV()
+				id1 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), layer, 0, 0, 0, 0)
+				id2 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), layer, 0, 0, 0, 0)
+				id3 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), layer, 0, 0, 0, 0)
+				w.fv.AddTriangle(id1, id2, id3)
 			}
 			endIdx := w.fv.GetIndicesLen()
 			if endIdx > startIdx {
@@ -118,65 +130,6 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
-// pushFace generates vertices and triangle fans for an arbitrary 3D face, applying Triplanar UV mapping.
-func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
-	tex, texKind, texScaleW, texScaleH := face.GetMaterialDetails()
-	if tex == nil {
-		return
-	}
-	if texKind == int(config.AnimationKindSky) {
-		w.cSky = tex
-		return
-	}
-	layer, ok := w.tex.Get(tex)
-	if !ok {
-		return
-	}
-
-	//TODO COMPLETAMENTE SBAGLIATO!!!
-	texW, texH := tex.Size()
-	fTexW := float32(texW) * float32(texScaleW)
-	fTexH := float32(texH) * float32(texScaleH)
-	normal := face.GetNormal()
-	absX := math.Abs(normal.X)
-	absY := math.Abs(normal.Y)
-	absZ := math.Abs(normal.Z)
-	p := face.GetPoints()
-
-	var u0, v0 float32
-	var u1, v1 float32
-	var u2, v2 float32
-
-	if absZ >= absX && absZ >= absY {
-		u0 = float32(p[0].X) / fTexW
-		v0 = float32(-p[0].Y) / fTexH
-		u1 = float32(p[1].X) / fTexW
-		v1 = float32(-p[1].Y) / fTexH
-		u2 = float32(p[2].X) / fTexW
-		v2 = float32(-p[2].Y) / fTexH
-	} else if absY >= absX && absY >= absZ {
-		u0 = float32(p[0].X) / fTexW
-		v0 = float32(p[0].Z) / fTexH
-		u1 = float32(p[1].X) / fTexW
-		v1 = float32(p[1].Z) / fTexH
-		u2 = float32(p[2].X) / fTexW
-		v2 = float32(p[2].Z) / fTexH
-	} else {
-		u0 = float32(p[0].Y) / fTexW
-		v0 = float32(p[0].Z) / fTexH
-		u1 = float32(p[1].Y) / fTexW
-		v1 = float32(p[1].Z) / fTexH
-		u2 = float32(p[2].Y) / fTexW
-		v2 = float32(p[2].Z) / fTexH
-	}
-
-	id1 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), u0, v0, layer, 0, 0, 0, 0)
-	id2 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), u1, v1, layer, 0, 0, 0, 0)
-	id3 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), u2, v2, layer, 0, 0, 0, 0)
-
-	fv.AddTriangle(id1, id2, id3)
-}
-
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
 func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
 	if len(things) == 0 {
@@ -188,6 +141,11 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		if volume == nil {
 			continue
 		}
+
+		tPosX, tPosY, zBot := thing.GetPosition()
+		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+		b := float32(volume.GetBillboard())
+
 		startIndices := fv.GetIndicesLen()
 		for _, f := range volume.GetFaces() {
 			mat := f.GetMaterial()
@@ -200,11 +158,6 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 			}
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			o := f.GetOrigin()
-			oX := float32(o.X)
-			oY := float32(o.Z)
-			oZ := float32(-o.Y)
-			b := float32(f.GetBillboard())
 			id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Y), float32(p[0].Z), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
 			id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Y), float32(p[1].Z), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
 			id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Y), float32(p[2].Z), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)

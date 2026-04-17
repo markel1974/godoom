@@ -15,7 +15,7 @@ type Face struct {
 	neighbor   *Volume
 	tag        string
 	aabb       *physics.AABB
-	triangle   [3]geometry.XYZ
+	tri        [3]geometry.XYZ
 	normal     geometry.XYZ
 	animations []*textures.Animation
 	material   *textures.Animation
@@ -24,8 +24,7 @@ type Face struct {
 	hasFixedZ  bool
 	u          [3]float64
 	v          [3]float64
-	origin     geometry.XYZ
-	billboard  float64
+	lockUV     bool
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
@@ -38,13 +37,14 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 		maxZ:       0,
 		aabb:       physics.NewAABB(),
 		animations: []*textures.Animation{nil},
+		lockUV:     false,
 	}
 	if len(animations) > 0 {
 		out.animations = animations
 	}
-	out.triangle[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
-	out.triangle[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
-	out.triangle[2] = geometry.XYZ{X: end.X, Y: end.Y, Z: 0}
+	out.tri[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
+	out.tri[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
+	out.tri[2] = geometry.XYZ{X: end.X, Y: end.Y, Z: 0}
 	out.Rebuild()
 	return out
 }
@@ -57,10 +57,15 @@ func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textur
 		tag:       tag,
 		material:  material,
 		aabb:      physics.NewAABB(),
-		triangle:  tri,
+		tri:       tri,
 	}
 	out.Rebuild()
 	return out
+}
+
+// LockUV locks or unlocks the UV coordinates of a Face based on the provided staticUV parameter.
+func (s *Face) LockUV(lockUV bool) {
+	s.lockUV = lockUV
 }
 
 // SetUV sets the UV texture coordinates for the three vertices of the face.
@@ -75,43 +80,23 @@ func (s *Face) GetUV() ([3]float64, [3]float64) {
 	return s.u, s.v
 }
 
-// SetBillboard sets the billboard value for the Face instance.
-func (s *Face) SetBillboard(billboard float64) {
-	s.billboard = billboard
-}
-
-// GetBillboard retrieves the billboard value associated with the Face instance.
-func (s *Face) GetBillboard() float64 {
-	return s.billboard
-}
-
-// SetOrigin updates the origin coordinates of the Face to the specified x, y, and z values.
-func (s *Face) SetOrigin(x, y, z float64) {
-	s.origin.X, s.origin.Y, s.origin.Z = x, y, z
-}
-
-// GetOrigin returns the origin coordinates of the Face as a geometry.XYZ structure.
-func (s *Face) GetOrigin() geometry.XYZ {
-	return s.origin
-}
-
 // SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
 func (s *Face) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
 	s.hasFixedZ = true
-	s.triangle[0].Z = minZ
-	s.triangle[1].Z = minZ
-	s.triangle[2].Z = minZ
+	s.tri[0].Z = minZ
+	s.tri[1].Z = minZ
+	s.tri[2].Z = minZ
 	s.Rebuild()
 }
 
 // ClearZ resets the Z-coordinate bounds of the location, marks it as lacking custom Z bounds, and triggers a rebuild.
 func (s *Face) ClearZ() {
 	if s.hasFixedZ {
-		s.triangle[0].Z = 0
-		s.triangle[1].Z = 0
-		s.triangle[2].Z = 0
+		s.tri[0].Z = 0
+		s.tri[1].Z = 0
+		s.tri[2].Z = 0
 	}
 	s.minZ = 0
 	s.maxZ = 0
@@ -156,17 +141,17 @@ func (s *Face) GetNormal() geometry.XYZ {
 
 // GetStart returns the first point of the segment as a geometry.XYZ value.
 func (s *Face) GetStart() geometry.XYZ {
-	return s.triangle[0]
+	return s.tri[0]
 }
 
 // GetMiddle retrieves the middle point (geometry.XYZ) of the Face from its predefined points array.
 func (s *Face) GetMiddle() geometry.XYZ {
-	return s.triangle[1]
+	return s.tri[1]
 }
 
 // GetEnd returns the last point of the segment as a geometry.XYZ value.
 func (s *Face) GetEnd() geometry.XYZ {
-	return s.triangle[2]
+	return s.tri[2]
 }
 
 // GetAnimationIndex retrieves the Animation object corresponding to the given material index.
@@ -177,12 +162,11 @@ func (s *Face) GetAnimationIndex(m int) *textures.Animation {
 }
 
 // GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.
-func (s *Face) GetMaterialDetails() (*textures.Texture, int, float64, float64) {
+func (s *Face) GetMaterialDetails() (*textures.Texture, int) {
 	if s.material == nil {
-		return nil, 0, 0, 0
+		return nil, 0
 	}
-	w, h := s.material.ScaleFactor()
-	return s.material.CurrentFrame(), s.material.Kind(), w, h
+	return s.material.CurrentFrame(), s.material.Kind()
 }
 
 // GetMaterial returns the root texture material of the face, or nil if it does not exist.
@@ -195,7 +179,7 @@ func (s *Face) GetMaterial() *textures.Texture {
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
 func (s *Face) GetPoints() [3]geometry.XYZ {
-	return s.triangle
+	return s.tri
 }
 
 // PointInLineSide determines if a 2D point (px, py) lies on or to the right of the directed line segment of the Face.
@@ -213,7 +197,7 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 // chiamala con direzioni irrazionali, es: s.RayIntersect(px, py, pz, 1.0, 0.000123, 0.000456)
 func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
 	const eps = 1e-8
-	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 
 	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
@@ -248,9 +232,9 @@ func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
 	return t > eps
 }
 
-// PointInside2d determines if the provided 2D point (px, py) lies inside the triangle defined by the Face's first three points.
+// PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
 func (s *Face) PointInside2d(px, py float64) bool {
-	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
 	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
 	d3 := (px-p2.X)*(p0.Y-p2.Y) - (py-p2.Y)*(p0.X-p2.X)
@@ -263,7 +247,7 @@ func (s *Face) PointInside2d(px, py float64) bool {
 // PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
 // Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
 func (s *Face) PointInside3d(px, py, pz float64) bool {
-	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	// 1. Calcolo dei vettori degli spigoli (v0, v1) e del vettore verso il punto (v2)
 	v0x, v0y, v0z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
@@ -292,16 +276,17 @@ func (s *Face) PointInside3d(px, py, pz float64) bool {
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
 func (s *Face) Scale2d(scale float64) {
-	s.triangle[0].Scale(scale)
-	s.triangle[1].Scale(scale)
-	s.triangle[2].Scale(scale)
+	s.tri[0].Scale(scale)
+	s.tri[1].Scale(scale)
+	s.tri[2].Scale(scale)
 	s.Rebuild()
 }
 
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
 func (s *Face) Rebuild() {
 	s.computeAABB()
-	s.computeNormal()
+	normal := s.computeNormal()
+	s.computeUV(normal)
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
@@ -310,10 +295,10 @@ func (s *Face) GetAABB() *physics.AABB {
 }
 
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
-func (s *Face) computeNormal() {
+func (s *Face) computeNormal() geometry.XYZ {
 	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
 	if s.hasFixedZ {
-		p0, p1 := s.triangle[0], s.triangle[2]
+		p0, p1 := s.tri[0], s.tri[2]
 		dx := p1.X - p0.X
 		dy := p1.Y - p0.Y
 		lenSq := dx*dx + dy*dy
@@ -322,10 +307,10 @@ func (s *Face) computeNormal() {
 			// Proiezione del vettore normale 2D nello spazio 3D
 			s.normal = geometry.XYZ{X: -dy * invLen, Y: dx * invLen, Z: 0}
 		}
-		return
+		return s.normal
 	}
 	// Prodotto vettoriale standard per poligoni 3D
-	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
 	nx := v1y*v2z - v1z*v2y
@@ -335,14 +320,15 @@ func (s *Face) computeNormal() {
 	if l > 0 {
 		s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
 	}
+	return s.normal
 }
 
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
 func (s *Face) computeAABB() {
 	const eps = 0.001
-	minX, minY, minZ := s.triangle[0].X, s.triangle[0].Y, s.triangle[0].Z
+	minX, minY, minZ := s.tri[0].X, s.tri[0].Y, s.tri[0].Z
 	maxX, maxY, maxZ := minX, minY, minZ
-	for _, p := range s.triangle {
+	for _, p := range s.tri {
 		if p.X < minX {
 			minX = p.X
 		}
@@ -374,21 +360,47 @@ func (s *Face) computeAABB() {
 	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 
+// computeUV calculates and sets the UV texture coordinates for the face based on its normal and associated material.
+func (s *Face) computeUV(normal geometry.XYZ) {
+	if s.lockUV {
+		return
+	}
+	var w, h float64
+	if s.material != nil {
+		if tex := s.material.CurrentFrame(); tex != nil {
+			texW, texH := tex.Size()
+			texScaleW, texScaleH := s.material.ScaleFactor()
+			w = float64(texW) * texScaleW
+			h = float64(texH) * texScaleH
+		}
+	}
+	absX := math.Abs(normal.X)
+	absY := math.Abs(normal.Y)
+	absZ := math.Abs(normal.Z)
+	if absZ >= absX && absZ >= absY {
+		s.SetUV(s.tri[0].X/w, -s.tri[0].Y/h, s.tri[1].X/w, -s.tri[1].Y/h, s.tri[2].X/w, -s.tri[2].Y/h)
+	} else if absY >= absX && absY >= absZ {
+		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
+	} else {
+		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
+	}
+}
+
 // PointInVolume checks if a point (px, py, pz) lies within the Face's location. Returns distance and a boolean status.
 //func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
-//	target := s.triangle[0]
+//	target := s.tri[0]
 //	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z
 //	return pointInVolume, true
 //}
 
 /*
-// RayIntersect determines if a ray starting at the origin (1, 0, 0) intersects with the triangle of the face.
+// RayIntersect determines if a ray starting at the origin (1, 0, 0) intersects with the tri of the face.
 // The method uses the Möller-Trumbore intersection algorithm for precise calculations.
 // px, py, pz parameters specify the coordinates of the point relative to which the intersection occurs.
-// Returns true if the ray intersects the triangle and false otherwise.
+// Returns true if the ray intersects the tri and false otherwise.
 func (s *Face) RayIntersect(px, py, pz float64) bool {
 	const eps = 0.00001
-	p0, p1, p2 := s.triangle[0], s.triangle[1], s.triangle[2]
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	// 1. Estrai gli edge del triangolo
 	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z

@@ -97,7 +97,7 @@ func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.Sector)
 }
 
 // GetTriangles returns a collection of triangulated polygons for the specified sector index or an error if the index is invalid.
-// The returned polygons represent non-overlapping triangle groups derived from the sector's edges.
+// The returned polygons represent non-overlapping tri groups derived from the sector's edges.
 func (t *VertexEdges) GetTriangles(configIdx int) ([][]geometry.Polygon, []geometry.Edge, error) {
 	if configIdx < 0 || configIdx >= len(t.sectorsEdges) {
 		return nil, nil, fmt.Errorf("invalid sector index %d", configIdx)

@@ -21,6 +21,7 @@ type Volume struct {
 	maxZ       float64
 	hasFixedZ  bool
 	facesTree  *physics.AABBTree
+	billboard  float64
 }
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
@@ -98,9 +99,20 @@ func (v *Volume) Rebuild() bool {
 
 	v.facesTree.Clear()
 	for _, face := range v.faces {
+		face.Rebuild()
 		v.facesTree.InsertObject(face)
 	}
 	return true
+}
+
+// GetBillboard retrieves the billboard value associated with the Face instance.
+func (v *Volume) GetBillboard() float64 {
+	return v.billboard
+}
+
+// SetBillboard sets the billboard value for the Face instance.
+func (v *Volume) SetBillboard(billboard float64) {
+	v.billboard = billboard
 }
 
 // GetAABB returns the Axis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.

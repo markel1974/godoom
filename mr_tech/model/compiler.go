@@ -395,7 +395,7 @@ func (r *Compiler) compileLights(cLights []*config.Light) []*Light {
 
 // compileLights processes and merges adjacent volumes with similar properties into unified lighting areas.
 func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
-	// Unifies adjacent triangles that belong to the same macroscopic sector.
+	// Unifies adjacent volume that belong to the same macroscopic sector.
 	const computeCenter = true
 	visited := make(map[string]bool)
 	var out []*Light

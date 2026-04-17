@@ -270,31 +270,25 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 			continue
 		}
 		startIndices := fv.GetIndicesLen()
-		for _, tri := range vertices {
-			layer, ok := w.tex.Get(tri[0].Material)
+		for _, f := range vertices.GetFaces() {
+			mat, _ := f.GetRootMaterial()
+			if mat == nil {
+				continue
+			}
+			l, ok := w.tex.Get(mat)
 			if !ok {
 				continue
 			}
-			p0, p1, p2 := tri[0], tri[1], tri[2]
-			// AddVertex ora accetta 10 parametri (Pos[3], Tex[3], Origin[3], IsBB[1])
-			id0 := fv.AddVertex(
-				float32(p0.X), float32(p0.Y), float32(p0.Z),
-				float32(p0.U), float32(p0.V), layer,
-				float32(p0.Origin.X), float32(p0.Origin.Y), float32(p0.Origin.Z),
-				float32(p0.IsBillboard),
-			)
-			id1 := fv.AddVertex(
-				float32(p1.X), float32(p1.Y), float32(p1.Z),
-				float32(p1.U), float32(p1.V), layer,
-				float32(p1.Origin.X), float32(p1.Origin.Y), float32(p1.Origin.Z),
-				float32(p1.IsBillboard),
-			)
-			id2 := fv.AddVertex(
-				float32(p2.X), float32(p2.Y), float32(p2.Z),
-				float32(p2.U), float32(p2.V), layer,
-				float32(p2.Origin.X), float32(p2.Origin.Y), float32(p2.Origin.Z),
-				float32(p2.IsBillboard),
-			)
+			p := f.GetPoints()
+			u, v := f.GetUV()
+			o := f.GetOrigin()
+			oX := float32(o.X)
+			oY := float32(o.Z)
+			oZ := float32(-o.Y)
+			b := float32(f.GetBillboard())
+			id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Y), float32(p[0].Z), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+			id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Y), float32(p[1].Z), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+			id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Y), float32(p[2].Z), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
 			fv.AddTriangle(id0, id1, id2)
 		}
 

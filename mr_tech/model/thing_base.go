@@ -29,7 +29,7 @@ type ThingBase struct {
 	isActive     bool
 	identifier   int
 	wall         *ThingWall
-	triangles    [][3]Vertex
+	volume       *Volume
 }
 
 // NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -60,13 +60,14 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 		isActive:     true,
 		identifier:   -1,
 		wall:         NewThingWall(volumes, 0, 0),
-		triangles:    make([][3]Vertex, 2),
+		volume:       NewVolume3d(0, cfg.Id, "thing"),
 	}
 	t.entity.SetOnGround(false)
 
 	height := 0.0
 	halfW := 0.0
-	if animation := t.GetAnimation(); animation != nil {
+	animation := t.GetAnimation()
+	if animation != nil {
 		tex := animation.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
@@ -77,63 +78,29 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 		}
 	}
 
-	t.triangles[0][0].X, t.triangles[0][0].Y, t.triangles[0][0].Z = -halfW, height, 0.0
-	t.triangles[0][0].U, t.triangles[0][0].V = 0.0, 0.0
-	t.triangles[0][0].IsBillboard = 1.0
+	t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
+	face0 := NewFace(nil, t1, "", []*textures.Animation{animation})
+	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+	face0.SetBillboard(1.0)
+	t.volume.AddFace(face0)
 
-	t.triangles[0][1].X, t.triangles[0][1].Y, t.triangles[0][1].Z = -halfW, 0.0, 0.0
-	t.triangles[0][1].U, t.triangles[0][1].V = 0.0, 1.0
-	t.triangles[0][1].IsBillboard = 1.0
+	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
+	face1 := NewFace(nil, t2, "", []*textures.Animation{animation})
+	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
+	face1.SetBillboard(1.0)
+	t.volume.AddFace(face1)
 
-	t.triangles[0][2].X, t.triangles[0][2].Y, t.triangles[0][2].Z = halfW, 0.0, 0.0
-	t.triangles[0][2].U, t.triangles[0][2].V = 1.0, 1.0
-	t.triangles[0][2].IsBillboard = 1.0
-
-	t.triangles[1][0].X, t.triangles[1][0].Y, t.triangles[1][0].Z = -halfW, height, 0.0
-	t.triangles[1][0].U, t.triangles[1][0].V = 0.0, 0.0
-	t.triangles[1][0].IsBillboard = 1.0
-
-	t.triangles[1][1].X, t.triangles[1][1].Y, t.triangles[1][1].Z = halfW, 0.0, 0.0
-	t.triangles[1][1].U, t.triangles[1][1].V = 1.0, 1.0
-	t.triangles[1][1].IsBillboard = 1.0
-
-	t.triangles[1][2].X, t.triangles[1][2].Y, t.triangles[1][2].Z = halfW, height, 0.0
-	t.triangles[1][2].U, t.triangles[1][2].V = 1.0, 0.0
-	t.triangles[1][2].IsBillboard = 1.0
+	t.volume.Rebuild()
 
 	return t
 }
 
-// GetVertices prepara i triangoli per il rendering delegando il billboarding alla GPU.
-// Non richiede più camX e camY, rendendo la pipeline più pulita e performante.
-func (t *ThingBase) GetVertices() [][3]Vertex {
-	animation := t.GetAnimation()
-	if animation == nil {
-		return nil
-	}
-	tex := animation.CurrentFrame()
-	if tex == nil {
-		return nil
-	}
+// GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
+func (t *ThingBase) GetVertices() *Volume {
 	tPosX, tPosY, zBot := t.GetPosition()
-	worldOriginX := tPosX
-	worldOriginY := zBot
-	worldOriginZ := -tPosY
-
-	t.triangles[0][0].Origin.X, t.triangles[0][0].Origin.Y, t.triangles[0][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[0][0].Material = tex
-	t.triangles[0][1].Origin.X, t.triangles[0][1].Origin.Y, t.triangles[0][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[0][1].Material = tex
-	t.triangles[0][2].Origin.X, t.triangles[0][2].Origin.Y, t.triangles[0][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[0][2].Material = tex
-	t.triangles[1][0].Origin.X, t.triangles[1][0].Origin.Y, t.triangles[1][0].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[1][0].Material = tex
-	t.triangles[1][1].Origin.X, t.triangles[1][1].Origin.Y, t.triangles[1][1].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[1][1].Material = tex
-	t.triangles[1][2].Origin.X, t.triangles[1][2].Origin.Y, t.triangles[1][2].Origin.Z = worldOriginX, worldOriginY, worldOriginZ
-	t.triangles[1][2].Material = tex
-
-	return t.triangles
+	t.volume.faces[0].SetOrigin(tPosX, tPosY, zBot)
+	t.volume.faces[1].SetOrigin(tPosX, tPosY, zBot)
+	return t.volume
 }
 
 // GetId returns the identifier string of the ThingBase instance.
@@ -161,7 +128,7 @@ func (t *ThingBase) GetAnimation() *textures.Animation {
 	return t.animation
 }
 
-// GetVolume retrieves the current location associated with the ThingBase instance.
+// GetLocation retrieves the current location associated with the ThingBase instance.
 func (t *ThingBase) GetLocation() *Volume {
 	return t.location
 }

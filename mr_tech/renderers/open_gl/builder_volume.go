@@ -67,10 +67,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	// Ripristina VBO e Comandi allo stato congelato
 	w.fv.Reset()
 	w.dc.Reset()
-
 	// Reset TOTALE del buffer luci ogni frame (le calcoliamo dinamicamente)
 	w.fl.DeepReset()
-
 	if !w.mapBuilt {
 		w.fv.DeepReset()
 		w.dc.DeepReset()
@@ -122,7 +120,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushFace generates vertices and triangle fans for an arbitrary 3D face, applying Triplanar UV mapping.
 func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
-	anim := face.GetRootMaterial()
+	anim := face.GetRootAnimation()
 	if anim == nil {
 		return
 	}
@@ -138,7 +136,6 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	if !ok {
 		return
 	}
-	points := face.GetPoints()
 	texW, texH := tex.Size()
 	scaleW, scaleH := anim.ScaleFactor()
 	fTexW := float32(texW) * float32(scaleW)
@@ -148,7 +145,7 @@ func (w *BuilderVolume) pushFace(fv *FrameVertices, face *model.Face) {
 	absY := math.Abs(normal.Y)
 	absZ := math.Abs(normal.Z)
 	w.faceIndices = w.faceIndices[:0]
-	for _, p := range points {
+	for _, p := range face.GetPoints() {
 		var u, v float32
 		if absZ >= absX && absZ >= absY {
 			u = float32(p.X) / fTexW
@@ -179,31 +176,25 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 			continue
 		}
 		startIndices := fv.GetIndicesLen()
-		for _, tri := range vertices {
-			layer, ok := w.tex.Get(tri[0].Material)
+		for _, f := range vertices.GetFaces() {
+			mat, _ := f.GetRootMaterial()
+			if mat == nil {
+				continue
+			}
+			l, ok := w.tex.Get(mat)
 			if !ok {
 				continue
 			}
-			p0, p1, p2 := tri[0], tri[1], tri[2]
-			// AddVertex ora accetta 10 parametri (Pos[3], Tex[3], Origin[3], IsBB[1])
-			id0 := fv.AddVertex(
-				float32(p0.X), float32(p0.Y), float32(p0.Z),
-				float32(p0.U), float32(p0.V), layer,
-				float32(p0.Origin.X), float32(p0.Origin.Y), float32(p0.Origin.Z),
-				float32(p0.IsBillboard),
-			)
-			id1 := fv.AddVertex(
-				float32(p1.X), float32(p1.Y), float32(p1.Z),
-				float32(p1.U), float32(p1.V), layer,
-				float32(p1.Origin.X), float32(p1.Origin.Y), float32(p1.Origin.Z),
-				float32(p1.IsBillboard),
-			)
-			id2 := fv.AddVertex(
-				float32(p2.X), float32(p2.Y), float32(p2.Z),
-				float32(p2.U), float32(p2.V), layer,
-				float32(p2.Origin.X), float32(p2.Origin.Y), float32(p2.Origin.Z),
-				float32(p2.IsBillboard),
-			)
+			p := f.GetPoints()
+			u, v := f.GetUV()
+			o := f.GetOrigin()
+			oX := float32(o.X)
+			oY := float32(o.Z)
+			oZ := float32(-o.Y)
+			b := float32(f.GetBillboard())
+			id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Y), float32(p[0].Z), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+			id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Y), float32(p[1].Z), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+			id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Y), float32(p[2].Z), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
 			fv.AddTriangle(id0, id1, id2)
 		}
 		currentIndices := fv.GetIndicesLen()

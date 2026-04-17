@@ -2,11 +2,11 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+/*
 // Vertex represents a point in 3D space with additional 2D texture coordinates U and V.
 type Vertex struct {
 	Material *textures.Texture
@@ -15,6 +15,7 @@ type Vertex struct {
 	Origin      geometry.XYZ
 	IsBillboard float64
 }
+*/
 
 // IThing defines an interface for a game entity with methods for retrieving identifiers, position, and physics properties.
 type IThing interface {
@@ -32,7 +33,7 @@ type IThing interface {
 
 	GetPosition() (float64, float64, float64)
 
-	GetVertices() [][3]Vertex
+	GetVertices() *Volume
 
 	GetLight() *Light
 

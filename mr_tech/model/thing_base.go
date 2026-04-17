@@ -30,6 +30,7 @@ type ThingBase struct {
 	wall         *ThingWall
 	volume       *Volume
 	entity       *physics.Entity
+	frames       [][]*Face
 }
 
 // NewThingBaseSprite creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -65,40 +66,67 @@ func NewThingBaseSprite(things *Things, cfg *config.Thing, pos geometry.XYZ, ani
 	}
 	t.entity.SetOnGround(false)
 
-	height := 0.0
-	halfW := 0.0
-	if t.animation != nil {
-		tex := t.animation.CurrentFrame()
-		if tex != nil {
-			texW, texH := tex.Size()
-			scaleW, scaleH := t.animation.ScaleFactor()
-			width := float64(texW) * scaleW
-			height = float64(texH) * scaleH
-			halfW = width / 2.0
+	if cfg.Model3D != nil && len(cfg.Model3D.Frames) > 0 {
+		t.volume.SetBillboard(0.0)
+		t.frames = make([][]*Face, len(cfg.Model3D.Frames))
+
+		for frameIdx, cfgFrame := range cfg.Model3D.Frames {
+			frameFaces := make([]*Face, len(cfgFrame.Triangles))
+			for triIdx, tri := range cfgFrame.Triangles {
+				points := [3]geometry.XYZ{tri[0].Pos, tri[1].Pos, tri[2].Pos}
+				// TODO Manca l'animazione specifica per faccia, passiamo quella globale della Thing
+				face := NewFace(nil, points, cfg.Id, anim)
+				face.SetUV(float64(tri[0].U), float64(tri[0].V), float64(tri[1].U), float64(tri[1].V), float64(tri[2].U), float64(tri[2].V))
+				face.LockUV(true)
+				frameFaces[triIdx] = face
+			}
+			t.frames[frameIdx] = frameFaces
 		}
+		if len(t.frames) > 0 {
+			for _, f := range t.frames[0] {
+				t.volume.AddFace(f)
+			}
+		}
+	} else {
+		height := 0.0
+		halfW := 0.0
+		if t.animation != nil {
+			tex := t.animation.CurrentFrame()
+			if tex != nil {
+				texW, texH := tex.Size()
+				scaleW, scaleH := t.animation.ScaleFactor()
+				width := float64(texW) * scaleW
+				height = float64(texH) * scaleH
+				halfW = width / 2.0
+			}
+		}
+
+		t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
+		face0 := NewFace(nil, t1, "", t.animation)
+		face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+		face0.LockUV(true)
+
+		t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
+		face1 := NewFace(nil, t2, "", t.animation)
+		face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
+		face1.LockUV(true)
+
+		t.volume.AddFace(face0)
+		t.volume.AddFace(face1)
+		t.volume.SetBillboard(1.0)
 	}
-
-	t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-	face0 := NewFace(nil, t1, "", t.animation)
-	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-	face0.LockUV(true)
-
-	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
-	face1 := NewFace(nil, t2, "", t.animation)
-	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
-	face1.LockUV(true)
-
-	t.volume.AddFace(face0)
-	t.volume.AddFace(face1)
-	t.volume.SetBillboard(1.0)
 	t.volume.Rebuild()
 
 	return t
 }
 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() *Volume {
-	return t.volume
+func (t *ThingBase) GetVertices() ([]*Face, float64) {
+	if len(t.frames) > 0 {
+		idx := textures.CurrentTick() % uint64(len(t.frames))
+		return t.frames[idx], t.volume.GetBillboard()
+	}
+	return t.volume.GetFaces(), t.volume.GetBillboard()
 }
 
 // GetId returns the identifier string of the ThingBase instance.

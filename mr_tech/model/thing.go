@@ -6,17 +6,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-/*
-// Vertex represents a point in 3D space with additional 2D texture coordinates U and V.
-type Vertex struct {
-	Material *textures.Texture
-	geometry.XYZ
-	U, V        float64
-	Origin      geometry.XYZ
-	IsBillboard float64
-}
-*/
-
 // IThing defines an interface for a game entity with methods for retrieving identifiers, position, and physics properties.
 type IThing interface {
 	GetId() string
@@ -33,7 +22,7 @@ type IThing interface {
 
 	GetPosition() (float64, float64, float64)
 
-	GetVertices() *Volume
+	GetVertices() ([]*Face, float64)
 
 	GetLight() *Light
 

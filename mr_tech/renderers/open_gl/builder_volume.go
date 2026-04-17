@@ -137,17 +137,17 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		volume := thing.GetVertices()
-		if volume == nil {
+		faces, billboard := thing.GetVertices()
+		if faces == nil {
 			continue
 		}
 
 		tPosX, tPosY, zBot := thing.GetPosition()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		b := float32(volume.GetBillboard())
+		b := float32(billboard)
 
 		startIndices := fv.GetIndicesLen()
-		for _, f := range volume.GetFaces() {
+		for _, f := range faces {
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue
@@ -158,9 +158,10 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 			}
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Y), float32(p[0].Z), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
-			id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Y), float32(p[1].Z), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
-			id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Y), float32(p[2].Z), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+
+			id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
+			id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
+			id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
 			fv.AddTriangle(id0, id1, id2)
 		}
 		currentIndices := fv.GetIndicesLen()

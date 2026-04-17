@@ -16,6 +16,10 @@ func Tick() {
 	_globalTick++
 }
 
+func CurrentTick() uint64 {
+	return _globalTick
+}
+
 // Animation represents a collection of 2D texture frames used for rendering animations.
 type Animation struct {
 	frame       *Texture

@@ -211,16 +211,16 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		volume := thing.GetVertices()
-		if volume == nil {
+		faces, billBoard := thing.GetVertices()
+		if faces == nil {
 			continue
 		}
 		tPosX, tPosY, zBot := thing.GetPosition()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		b := float32(volume.GetBillboard())
+		b := float32(billBoard)
 
 		startIndices := fv.GetIndicesLen()
-		for _, f := range volume.GetFaces() {
+		for _, f := range faces {
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue

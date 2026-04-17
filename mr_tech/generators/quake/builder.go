@@ -198,8 +198,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 800
-	fmt.Println("TODO REACTIVATE ROOT THINGS!")
-	root.Things = nil
+	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
+	//root.Things = nil
 	return root, nil
 }
 

@@ -307,11 +307,9 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 				if tri.FacesFront == 0 && tc.OnSeam == 1 {
 					s += skinW / 2.0
 				}
-
 				// Mappatura UV finale.
 				// 1.0 - V è obbligatorio se la texture in RAM è capovolta (byte 0 in basso)
 				normV := 1.0 - (t / skinH)
-
 				cFrame.Triangles[tIdx][v] = config.Vertex3d{
 					Pos: p.createXYZ(frame[vIdx][0], frame[vIdx][1], frame[vIdx][2]),
 					U:   s / skinW,
@@ -322,6 +320,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		cModel.Frames[fIdx] = cFrame
 	}
 
+	thingCfg.WakeUpDistance = 400
 	thingCfg.SetModel3d(cModel)
 	return thingCfg, nil
 }

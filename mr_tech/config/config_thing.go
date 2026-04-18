@@ -43,33 +43,35 @@ type Model3d struct {
 
 // Thing represents a physical or logical entity with position, dimensions, motion properties, and optional animations or models.
 type Thing struct {
-	Id           string       `json:"id"`
-	Position     geometry.XYZ `json:"position"`
-	Kind         ThingType    `json:"kind"`
-	Angle        float64      `json:"angle"`
-	Mass         float64      `json:"mass"`
-	Restitution  float64      `json:"restitution"`
-	Radius       float64      `json:"radius"`
-	Height       float64      `json:"height"`
-	Speed        float64      `json:"speed"`
-	Acceleration float64      `json:"acceleration"`
-	Animation    *Animation   `json:"animation"`
-	Model3D      *Model3d     `json:"model3d"`
+	Id             string       `json:"id"`
+	Position       geometry.XYZ `json:"position"`
+	Kind           ThingType    `json:"kind"`
+	Angle          float64      `json:"angle"`
+	Mass           float64      `json:"mass"`
+	Restitution    float64      `json:"restitution"`
+	Radius         float64      `json:"radius"`
+	Height         float64      `json:"height"`
+	Speed          float64      `json:"speed"`
+	Acceleration   float64      `json:"acceleration"`
+	WakeUpDistance float64      `json:"wakeUpDistance"`
+	Model3D        *Model3d     `json:"model3d"`
+	Animation      *Animation   `json:"animation"`
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
 func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
 	return &Thing{
-		Id:          id,
-		Position:    pos,
-		Angle:       angle,
-		Kind:        kind,
-		Mass:        mass,
-		Radius:      radius,
-		Height:      height,
-		Speed:       speed,
-		Animation:   anim,
-		Restitution: 0.0,
+		Id:             id,
+		Position:       pos,
+		Angle:          angle,
+		Kind:           kind,
+		Mass:           mass,
+		Radius:         radius,
+		Height:         height,
+		Speed:          speed,
+		Animation:      anim,
+		Restitution:    0.0,
+		WakeUpDistance: 25.0,
 	}
 }
 

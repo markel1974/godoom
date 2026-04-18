@@ -14,30 +14,33 @@ type IVertices interface {
 	GetVertices(uint64) []*Face
 
 	GetVolume() *Volume
+
+	SetAngle(angle float64)
 }
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id           string
-	pos          geometry.XYZ
-	mass         float64
-	radius       float64
-	height       float64
-	angle        float64
-	maxStep      float64
-	kind         config.ThingType
-	speed        float64
-	acceleration float64
-	location     *Volume
-	animation    *textures.Animation
-	world        *Volumes
-	things       *Things
-	isActive     bool
-	identifier   int
-	wall         *ThingWall
-	volume       *Volume
-	entity       *physics.Entity
-	vertices     IVertices
+	id             string
+	pos            geometry.XYZ
+	kind           config.ThingType
+	mass           float64
+	radius         float64
+	height         float64
+	angle          float64
+	maxStep        float64
+	speed          float64
+	acceleration   float64
+	wakeUpDistance float64
+	location       *Volume
+	animation      *textures.Animation
+	world          *Volumes
+	things         *Things
+	isActive       bool
+	identifier     int
+	wall           *ThingWall
+	volume         *Volume
+	entity         *physics.Entity
+	vertices       IVertices
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -59,26 +62,27 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	}
 	volume := vertices.GetVolume()
 	t := &ThingBase{
-		vertices:     vertices,
-		volume:       volume,
-		entity:       volume.GetEntity(),
-		id:           cfg.Id,
-		angle:        radAngle,
-		kind:         cfg.Kind,
-		mass:         cfg.Mass,
-		radius:       cfg.Radius,
-		height:       cfg.Height,
-		speed:        cfg.Speed,
-		acceleration: cfg.Acceleration,
-		pos:          pos,
-		location:     location,
-		animation:    anim,
-		world:        volumes,
-		things:       things,
-		maxStep:      cfg.Height * 0.5,
-		isActive:     true,
-		identifier:   -1,
-		wall:         NewThingWall(volumes, 0, 0),
+		vertices:       vertices,
+		volume:         volume,
+		entity:         volume.GetEntity(),
+		id:             cfg.Id,
+		angle:          radAngle,
+		kind:           cfg.Kind,
+		mass:           cfg.Mass,
+		radius:         cfg.Radius,
+		height:         cfg.Height,
+		speed:          cfg.Speed,
+		acceleration:   cfg.Acceleration,
+		wakeUpDistance: cfg.WakeUpDistance,
+		pos:            pos,
+		location:       location,
+		animation:      anim,
+		world:          volumes,
+		things:         things,
+		maxStep:        cfg.Height * 0.5,
+		isActive:       true,
+		identifier:     -1,
+		wall:           NewThingWall(volumes, 0, 0),
 	}
 	t.entity.SetOnGround(false)
 
@@ -93,6 +97,11 @@ func (t *ThingBase) GetVertices() ([]*Face, float64) {
 // GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetAngle() float64 {
 	return t.angle
+}
+
+func (t *ThingBase) SetAngle(angle float64) {
+	t.angle = angle
+	t.vertices.SetAngle(angle)
 }
 
 // GetId returns the identifier string of the ThingBase instance.

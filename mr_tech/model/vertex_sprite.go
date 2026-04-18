@@ -5,13 +5,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VertexSprite represents a 2D or 3D sprite derived from a Volume, commonly used for rendering in a graphics context.
+// VertexSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
 type VertexSprite struct {
 	volume *Volume
 }
 
-// NewVertexSprite creates a new VertexSprite instance with faces defined based on the provided volume and animation.
-// The volume is configured with a billboard property, and the faces are initialized using the animation's texture data.
+// NewVertexSprite creates a new VertexSprite with the given animation, position, dimensions, and physical properties.
 func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
 	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, w, h, d, mass, restitution, friction)
 	f := &VertexSprite{
@@ -48,12 +47,18 @@ func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restituti
 	return f
 }
 
-// GetVolume returns the Volume instance associated with the VertexSprite object.
+// GetVolume returns the Volume instance associated with the VertexSprite.
 func (v *VertexSprite) GetVolume() *Volume {
 	return v.volume
 }
 
-// GetVertices retrieves the set of visible faces from the associated volume for the given simulation tick.
+// SetAngle modifies the angle of the VertexSprite based on the provided directional changes dx and dy.
+func (v *VertexSprite) SetAngle(angle float64) {
+
+}
+
+// GetVertices retrieves the collection of visible faces for the specified simulation tick.
+// The returned faces represent the geometry of the vertex sprite at the given moment in time.
 func (v *VertexSprite) GetVertices(tick uint64) []*Face {
 	return v.volume.GetFaces()
 }

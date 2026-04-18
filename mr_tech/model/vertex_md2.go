@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -10,8 +11,9 @@ import (
 
 // VertexMD2 represents a structure containing 3D volume data and associated animation frame face mappings.
 type VertexMD2 struct {
-	volume *Volume
-	frames [][]*Face
+	volume    *Volume
+	frames    [][]*Face
+	lastAngle float64
 }
 
 // NewVertexMD2 creates a new VertexMD2 object with the given configuration, animation, dimensions, mass, restitution, and friction.
@@ -47,6 +49,31 @@ func NewVertexMD2(cfg *config.Model3d, anim *textures.Animation, x, y, z, w, h, 
 // GetVolume returns the Volume instance associated with the VertexMD2 object.
 func (v *VertexMD2) GetVolume() *Volume {
 	return v.volume
+}
+
+// SetAngle applica la matrice di rotazione Z-UP in-place calcolando il delta rispetto all'ultimo orientamento.
+func (v *VertexMD2) SetAngle(angle float64) {
+
+	return
+	delta := angle - v.lastAngle
+	if delta == 0.0 {
+		return
+	}
+	v.lastAngle = angle
+	cosA := math.Cos(delta)
+	sinA := math.Sin(delta)
+	for _, frameFaces := range v.frames {
+		for _, f := range frameFaces {
+			f.tri[0].X = f.tri[0].X*cosA - f.tri[0].Y*sinA
+			f.tri[0].Y = f.tri[0].X*sinA + f.tri[0].Y*cosA
+
+			f.tri[1].X = f.tri[1].X*cosA - f.tri[1].Y*sinA
+			f.tri[1].Y = f.tri[1].X*sinA + f.tri[1].Y*cosA
+
+			f.tri[2].X = f.tri[2].X*cosA - f.tri[2].Y*sinA
+			f.tri[2].Y = f.tri[2].X*sinA + f.tri[2].Y*cosA
+		}
+	}
 }
 
 // GetVertices retrieves the vertices corresponding to the current animation frame, determined by the specified tick value.

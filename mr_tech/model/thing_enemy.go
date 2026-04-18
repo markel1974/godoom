@@ -51,7 +51,7 @@ func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) 
 	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
 	playerDist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !t.active {
-		if playerDist3d < 25.0 { // Raggio di risveglio
+		if playerDist3d < t.wakeUpDistance { // Raggio di risveglio
 			t.active = true
 			t.throwCooldown = t.throwMin
 		}
@@ -67,7 +67,7 @@ func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) 
 		return
 	}
 	// Aggiorniamo l'angolo del nemico affinché lo sprite o il modello si giri verso il bersaglio
-	t.angle = math.Atan2(dy, dx)
+	t.SetAngle(math.Atan2(dy, dx))
 	invDist := 1.0 / playerDist2d
 	nx := dx * invDist
 	ny := dy * invDist

@@ -30,18 +30,20 @@ func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restituti
 		}
 	}
 
-	t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-	face0 := NewFace(nil, t1, "", anim)
-	face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-	face0.LockUV(true)
+	//t0 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
+	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
+	f0 := NewFace(nil, t0, "", anim)
+	f0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+	f0.LockUV(true)
+	f.volume.AddFace(f0)
 
-	t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
-	face1 := NewFace(nil, t2, "", anim)
-	face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
-	face1.LockUV(true)
+	//t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
+	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: height}}
+	f1 := NewFace(nil, t1, "", anim)
+	f1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
+	f1.LockUV(true)
+	f.volume.AddFace(f1)
 
-	f.volume.AddFace(face0)
-	f.volume.AddFace(face1)
 	f.volume.Rebuild()
 
 	return f

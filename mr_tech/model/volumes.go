@@ -133,16 +133,17 @@ func (s *Volumes) QueryPoint3d(px, py, pz float64) *Volume {
 	return target
 }
 
+// LocateVolume finds and returns the volume containing the point (px, py, pz). It uses 3D or 2D lookup based on the fullZ flag.
 func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
 	if s.fullZ {
 		v, _ := s.locateVolume3d(px, py, pz)
 		return v
 	}
-	return s.locateVolume2d(px, py)
+	return s.LocateVolume2d(px, py)
 }
 
 // LocateVolume2d searches for a 2D point (px, py) within the managed world and returns the corresponding Volume, or nil if not found.
-func (s *Volumes) locateVolume2d(px, py float64) *Volume {
+func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 	var target *Volume = nil
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 		if volume, ok := object.(*Volume); ok {
@@ -154,20 +155,6 @@ func (s *Volumes) locateVolume2d(px, py float64) *Volume {
 		return false
 	})
 	return target
-
-	/*
-		s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			if location, ok := object.(*Volume); ok {
-				if location.PointInLineSide(px, py) {
-					target = location
-					return true
-				}
-			}
-			return false
-		})
-		return target
-
-	*/
 }
 
 // LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.

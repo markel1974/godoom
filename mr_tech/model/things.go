@@ -161,17 +161,17 @@ func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingEnemy(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingBulletDef:
-		thing = NewThingItem(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingItemDef:
-		thing = NewThingItem(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	default:
-		thing = NewThingItem(th.volumes.fullZ, th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	}
 	return thing, nil
 }

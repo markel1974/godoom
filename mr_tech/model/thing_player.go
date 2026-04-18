@@ -33,9 +33,8 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
+func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
 	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
-
 	if volume == nil {
 		fmt.Printf("can't find player location at %f, %f\n", cfg.Position.X, cfg.Position.Y)
 		//TODO PATCH SISTEMARE
@@ -47,10 +46,7 @@ func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Vo
 	if volume == nil {
 		return nil
 	}
-	currentZ := volume.GetMinZ()
-	if full3d {
-		currentZ = cfg.Position.Z
-	}
+
 	cfg.Kind = config.ThingPlayerDef
 	if cfg.Height <= 0 {
 		cfg.Height = 8.0
@@ -58,7 +54,7 @@ func NewThingPlayer(full3d bool, things *Things, cfg *config.Player, volumes *Vo
 	if cfg.Speed <= 0 {
 		cfg.Speed = 60.0
 	}
-	cfg.Position = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: currentZ}
+	cfg.Position = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: cfg.Position.Z}
 	p := &ThingPlayer{
 		kind:           0,
 		yaw:            0,

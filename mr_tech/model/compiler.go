@@ -33,27 +33,49 @@ func NewCompiler() *Compiler {
 func (r *Compiler) Compile(cfg *config.Root) error {
 	cfg.Scale(cfg.ScaleFactor)
 	animations := NewAnimations(cfg.GetTextures())
-
+	r.lights = NewLights()
 	var allVolumes []*Volume
-	//2d - 2.5d
-	container2d := r.compile2d(cfg.Vertices, cfg.Sectors, animations)
-	volumes2d := NewVolumes(container2d, false)
-	volumes2d.Setup()
+	var container2d []*Volume
+
+	if !cfg.Full3d {
+		container2d = r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+		if len(container2d) == 0 {
+			return fmt.Errorf("no 2D volumes compiled")
+		}
+		volumes2d := NewVolumes(container2d, false)
+		volumes2d.Setup()
+		//player Z
+		pv := volumes2d.LocateVolume2d(cfg.Player.Position.X, cfg.Player.Position.Y)
+		if pv == nil {
+			return fmt.Errorf("can't find player location at %f, %f", cfg.Player.Position.X, cfg.Player.Position.X)
+		}
+		cfg.Player.Position.Z = pv.GetMinZ()
+		//things Z
+		for idx := range cfg.Things {
+			tv := volumes2d.LocateVolume2d(cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y)
+			if tv == nil {
+				fmt.Println("can't find thing location at", cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y)
+				continue
+			}
+			cfg.Things[idx].Position.Z = tv.GetMinZ()
+		}
+		//light 2d
+		r.lights.AddLights(r.compileLights2d(volumes2d, true))
+
+		allVolumes = append(allVolumes, container2d...)
+	}
 
 	if cfg.Full3d {
 		allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
 		allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
-	} else {
-		allVolumes = append(allVolumes, container2d...)
 	}
+
 	r.volumes = NewVolumes(allVolumes, cfg.Full3d)
 	r.volumes.Setup()
 
-	r.lights = NewLights()
-	r.lights.AddLights(r.compileLights2d(volumes2d))
 	r.lights.AddLights(r.compileLights(cfg.Lights))
 	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
-	r.player = NewThingPlayer(cfg.Full3d, r.things, cfg.Player, r.volumes, false)
+	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")
 	}
@@ -391,9 +413,8 @@ func (r *Compiler) compileLights(cLights []*config.Light) []*Light {
 }
 
 // compileLights processes and merges adjacent volumes with similar properties into unified lighting areas.
-func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
+func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Light {
 	// Unifies adjacent volume that belong to the same macroscopic sector.
-	const computeCenter = true
 	visited := make(map[string]bool)
 	var out []*Light
 
@@ -404,7 +425,7 @@ func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
 		out = append(out, light)
 	}
 
-	for idx, sect := range volumes.GetVolumes() {
+	for idx, sect := range volumes2d.GetVolumes() {
 		if visited[sect.GetId()] {
 			continue
 		}
@@ -469,7 +490,7 @@ func (r *Compiler) compileLights2d(volumes *Volumes) []*Light {
 					s.Light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := volumes.LocateVolume(first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
+				cVolume := volumes2d.LocateVolume2d(first.Light.pos.X, first.Light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)

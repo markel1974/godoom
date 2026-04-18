@@ -15,15 +15,11 @@ type ThingEnemy struct {
 	active        bool
 	throwCooldown float64
 	throwMin      float64
-	full3d        bool
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
-func NewThingEnemy(full3d bool, things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingEnemy {
+func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
-	if !full3d {
-		pos.Z = volume.GetMinZ()
-	}
 	if cfg.Speed <= 0 {
 		cfg.Speed = 6
 	}
@@ -32,7 +28,6 @@ func NewThingEnemy(full3d bool, things *Things, cfg *config.Thing, anim *texture
 	}
 	const throwMin, throwMax = 5, 10
 	e := &ThingEnemy{
-		full3d:        full3d,
 		ThingBase:     NewThingBase(things, cfg, pos, anim, volume),
 		active:        false,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
@@ -43,19 +38,11 @@ func NewThingEnemy(full3d bool, things *Things, cfg *config.Thing, anim *texture
 }
 
 func (t *ThingEnemy) PhysicsApply() {
-	//TODO REMOVE
-	if t.full3d {
-		return
-	}
 	t.doPhysics(t.height)
 }
 
 // Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
 func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
-	//TODO REMOVE
-	if t.full3d {
-		return
-	}
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := playerZ + (t.height / 2)
 	dx := playerX - t.pos.X

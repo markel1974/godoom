@@ -16,6 +16,10 @@ const TextureScaleW = 4.0
 // TextureScaleH defines the horizontal scaling factor for textures, typically used to adjust their visual dimensions.
 const TextureScaleH = 10.0
 
+const ThingsScaleW = TextureScaleW / 70
+
+const ThingsScaleH = TextureScaleH / 70
+
 // ScaleFactorLineDef defines the scaling factor applied to line definitions during level configuration processing.
 const ScaleFactorLineDef = 25.0
 
@@ -221,7 +225,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		frames = sd.Sprites
 	}
 	tId := fmt.Sprintf("t_%d", i)
-	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, TextureScaleW/70, TextureScaleH/70)
+	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, ThingsScaleW, ThingsScaleH)
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 	return cfgThing
 }

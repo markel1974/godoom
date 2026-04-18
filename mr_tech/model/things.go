@@ -96,9 +96,9 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxEntities uint, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
 	e := &Things{
-		tree:         physics.NewAABBTree(maxEntities, 4.0),
+		tree:         physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:     make(map[int]IThing),
 		identifier:   0,
 		movingLen:    0,
@@ -113,7 +113,6 @@ func NewThings(maxEntities uint, cfg []*config.Thing, volumes *Volumes, animatio
 	for _, ct := range cfg {
 		if _, err := e.createThing(ct); err != nil {
 			fmt.Println("Warning: ", err)
-			//return nil, err
 		}
 	}
 	return e

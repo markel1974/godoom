@@ -37,7 +37,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	var allVolumes []*Volume
 	var container2d []*Volume
 
-	if !cfg.Full3d {
+	if len(cfg.Sectors) > 0 {
 		container2d = r.compile2d(cfg.Vertices, cfg.Sectors, animations)
 		if len(container2d) == 0 {
 			return fmt.Errorf("no 2D volumes compiled")
@@ -74,7 +74,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	r.volumes.Setup()
 
 	r.lights.AddLights(r.compileLights(cfg.Lights))
-	r.things = NewThings(uint(1+len(cfg.Things)), cfg.Things, r.volumes, animations)
+	r.things = NewThings(cfg.Things, r.volumes, animations)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")

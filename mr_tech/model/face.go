@@ -360,8 +360,48 @@ func (s *Face) computeAABB() {
 	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 
-// computeUV calculates and sets the UV texture coordinates for the face based on its normal and associated material.
+// computeUV computes the UV mapping for the current face based on its normal, material, and texture scaling factors.
 func (s *Face) computeUV(normal geometry.XYZ) {
+	if s.lockUV {
+		return
+	}
+	if s.material == nil {
+		return
+	}
+	tex := s.material.CurrentFrame()
+	if tex == nil {
+		return
+	}
+	texW, texH := tex.Size()
+	texScaleW, texScaleH := s.material.ScaleFactor()
+	if texScaleW == 0 {
+		texScaleW = 1.0
+	}
+	if texScaleH == 0 {
+		texScaleH = 1.0
+	}
+	//gScale := 128.0
+	gScale := 1.0
+	baseW := float64(texW) / gScale
+	baseH := float64(texH) / gScale
+	w := baseW * texScaleW
+	h := baseH * texScaleH
+	absX := math.Abs(normal.X)
+	absY := math.Abs(normal.Y)
+	absZ := math.Abs(normal.Z)
+	// Pure Triplanar Projection (Z-UP native)
+	if absZ >= absX && absZ >= absY {
+		//Upper / Lower
+		s.SetUV(s.tri[0].X/w, -s.tri[0].Y/h, s.tri[1].X/w, -s.tri[1].Y/h, s.tri[2].X/w, -s.tri[2].Y/h)
+	} else if absY >= absX && absY >= absZ {
+		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
+	} else {
+		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
+	}
+}
+
+// computeUV calculates and sets the UV texture coordinates for the face based on its normal and associated material.
+func (s *Face) computeUVOld(normal geometry.XYZ) {
 	if s.lockUV {
 		return
 	}
@@ -370,8 +410,8 @@ func (s *Face) computeUV(normal geometry.XYZ) {
 		if tex := s.material.CurrentFrame(); tex != nil {
 			texW, texH := tex.Size()
 			texScaleW, texScaleH := s.material.ScaleFactor()
-			w = float64(texW) * texScaleW
-			h = float64(texH) * texScaleH
+			w = float64(texW) / texScaleW
+			h = float64(texH) / texScaleH
 		}
 	}
 	absX := math.Abs(normal.X)

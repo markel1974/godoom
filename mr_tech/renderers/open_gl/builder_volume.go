@@ -143,13 +143,8 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 		}
 
 		tPosX, tPosY, zBot := thing.GetPosition()
-		//fmt.Printf("Entity %s -> X: %f, Y: %f, Z: %f\n", thing.GetId(), tPosX, tPosY, zBot)
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		//oX, oY, oZ := float32(tPosX), float32(tPosY), float32(zBot)
 		b := float32(billboard)
-		//oY = -600
-		//oX, oY, oZ = float32(800), float32(-600), float32(-700)
-
 		startIndices := fv.GetIndicesLen()
 		for _, f := range faces {
 			mat := f.GetMaterial()

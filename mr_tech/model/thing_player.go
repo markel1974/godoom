@@ -37,16 +37,8 @@ func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug 
 	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
 	if volume == nil {
 		fmt.Printf("can't find player location at %f, %f\n", cfg.Position.X, cfg.Position.Y)
-		//TODO PATCH SISTEMARE
-		for _, v := range volumes.GetVolumes() {
-			volume = v
-		}
-		//return nil
-	}
-	if volume == nil {
 		return nil
 	}
-
 	cfg.Kind = config.ThingPlayerDef
 	if cfg.Height <= 0 {
 		cfg.Height = 8.0

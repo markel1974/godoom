@@ -64,14 +64,17 @@ func (v *VertexMD2) SetAngle(angle float64) {
 	sinA := math.Sin(delta)
 	for _, frameFaces := range v.frames {
 		for _, f := range frameFaces {
-			f.tri[0].X = f.tri[0].X*cosA - f.tri[0].Y*sinA
-			f.tri[0].Y = f.tri[0].X*sinA + f.tri[0].Y*cosA
+			tx, ty := f.tri[0].X, f.tri[0].Y
+			f.tri[0].X = tx*cosA - ty*sinA
+			f.tri[0].Y = tx*sinA + ty*cosA
 
-			f.tri[1].X = f.tri[1].X*cosA - f.tri[1].Y*sinA
-			f.tri[1].Y = f.tri[1].X*sinA + f.tri[1].Y*cosA
+			tx, ty = f.tri[1].X, f.tri[1].Y
+			f.tri[1].X = tx*cosA - ty*sinA
+			f.tri[1].Y = tx*sinA + ty*cosA
 
-			f.tri[2].X = f.tri[2].X*cosA - f.tri[2].Y*sinA
-			f.tri[2].Y = f.tri[2].X*sinA + f.tri[2].Y*cosA
+			tx, ty = f.tri[2].X, f.tri[2].Y
+			f.tri[2].X = tx*cosA - ty*sinA
+			f.tri[2].Y = tx*sinA + ty*cosA
 		}
 	}
 }

@@ -55,8 +55,6 @@ func (v *VertexMD2) GetVolume() *Volume {
 
 // SetAngle applica la matrice di rotazione Z-UP in-place calcolando il delta rispetto all'ultimo orientamento.
 func (v *VertexMD2) SetAngle(angle float64) {
-
-	return
 	delta := angle - v.lastAngle
 	if delta == 0.0 {
 		return

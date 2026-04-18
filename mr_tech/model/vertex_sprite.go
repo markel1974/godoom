@@ -7,13 +7,15 @@ import (
 
 // VertexSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
 type VertexSprite struct {
+	gScale float64
 	volume *Volume
 }
 
 // NewVertexSprite creates a new VertexSprite with the given animation, position, dimensions, and physical properties.
-func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
+func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
 	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, w, h, d, mass, restitution, friction)
 	f := &VertexSprite{
+		gScale: gScale,
 		volume: volume,
 	}
 	f.volume.SetBillboard(1.0)
@@ -32,14 +34,14 @@ func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restituti
 
 	//t0 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
 	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-	f0 := NewFace(nil, t0, "", anim)
+	f0 := NewFace(f.gScale, nil, t0, "", anim)
 	f0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
 	f0.LockUV(true)
 	f.volume.AddFace(f0)
 
 	//t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
 	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: height}}
-	f1 := NewFace(nil, t1, "", anim)
+	f1 := NewFace(f.gScale, nil, t1, "", anim)
 	f1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
 	f1.LockUV(true)
 	f.volume.AddFace(f1)

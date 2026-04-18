@@ -80,7 +80,7 @@ func (c *Contact) Resolve() {
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	//activeThings []IThing
+	gScale       float64
 	config       []*config.Thing
 	volumes      *Volumes
 	animations   *Animations
@@ -96,8 +96,9 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(gScale float64, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
 	e := &Things{
+		gScale:       gScale,
 		tree:         physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:     make(map[int]IThing),
 		identifier:   0,
@@ -116,6 +117,11 @@ func NewThings(cfg []*config.Thing, volumes *Volumes, animations *Animations) *T
 		}
 	}
 	return e
+}
+
+// GetGlobalScale retrieves the global scaling factor applied to all objects managed by the Things instance.
+func (th *Things) GetGlobalScale() float64 {
+	return th.gScale
 }
 
 // GetVolumes returns the Volumes instance managed by the Things object.

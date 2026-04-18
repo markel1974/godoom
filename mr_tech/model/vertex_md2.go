@@ -11,15 +11,17 @@ import (
 
 // VertexMD2 represents a structure containing 3D volume data and associated animation frame face mappings.
 type VertexMD2 struct {
+	gScale    float64
 	volume    *Volume
 	frames    [][]*Face
 	lastAngle float64
 }
 
 // NewVertexMD2 creates a new VertexMD2 object with the given configuration, animation, dimensions, mass, restitution, and friction.
-func NewVertexMD2(cfg *config.Model3d, anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexMD2 {
+func NewVertexMD2(gScale float64, cfg *config.Model3d, anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexMD2 {
 	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, mass, restitution, friction)
 	v := &VertexMD2{
+		gScale: gScale,
 		volume: volume,
 		frames: make([][]*Face, len(cfg.Frames)),
 	}
@@ -30,7 +32,7 @@ func NewVertexMD2(cfg *config.Model3d, anim *textures.Animation, x, y, z, w, h, 
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
 			points := [3]geometry.XYZ{tri[0].Pos, tri[1].Pos, tri[2].Pos}
-			face := NewFace(nil, points, tag, anim)
+			face := NewFace(v.gScale, nil, points, tag, anim)
 			face.SetUV(float64(tri[0].U), float64(tri[0].V), float64(tri[1].U), float64(tri[1].V), float64(tri[2].U), float64(tri[2].V))
 			face.LockUV(true)
 			frameFaces[triIdx] = face

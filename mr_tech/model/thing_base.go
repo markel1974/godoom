@@ -53,12 +53,13 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	entW := cfg.Radius * 2
 	entH := cfg.Radius * 2
 	entD := cfg.Height
+	gScale := things.GetGlobalScale()
 
 	var vertices IVertices
 	if cfg.Model3D != nil {
-		vertices = NewVertexMD2(cfg.Model3D, anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
+		vertices = NewVertexMD2(gScale, cfg.Model3D, anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
 	} else {
-		vertices = NewVertexSprite(anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
+		vertices = NewVertexSprite(gScale, anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
 	}
 	volume := vertices.GetVolume()
 	t := &ThingBase{

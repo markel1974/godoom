@@ -13,6 +13,7 @@ import (
 type Face struct {
 	parent     *Volume
 	neighbor   *Volume
+	gScale     float64
 	tag        string
 	aabb       *physics.AABB
 	tri        [3]geometry.XYZ
@@ -28,8 +29,9 @@ type Face struct {
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
+func NewFace2d(gScale float64, neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
 	out := &Face{
+		gScale:     gScale,
 		hasFixedZ:  true,
 		neighbor:   neighbor,
 		tag:        tag,
@@ -50,8 +52,9 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(gScale float64, neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
+		gScale:    gScale,
 		hasFixedZ: false,
 		neighbor:  neighbor,
 		tag:       tag,
@@ -380,9 +383,8 @@ func (s *Face) computeUV(normal geometry.XYZ) {
 	if texScaleH == 0 {
 		texScaleH = 1.0
 	}
-	gScale := 1.0
-	baseW := float64(texW) / gScale
-	baseH := float64(texH) / gScale
+	baseW := float64(texW) / s.gScale
+	baseH := float64(texH) / s.gScale
 	w := baseW * texScaleW
 	h := baseH * texScaleH
 	absX := math.Abs(normal.X)

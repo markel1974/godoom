@@ -60,7 +60,7 @@ func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug 
 		yaw:            0,
 		yawState:       0,
 		ThingBase:      NewThingBase(things, cfg.Thing, cfg.Position, nil, volume),
-		bobbing:        NewBobbing(2.6, 0.9, 0.03, 0.015, 0.15, 0.10),
+		bobbing:        NewBobbing(cfg.BobbingMaxAmplitude, cfg.BobbingIdleDrift, cfg.BobbingStrideLength, cfg.BobbingSpeedLerp, cfg.BobbingAmpLerp),
 		lightIntensity: 0.0039,
 		debug:          debug,
 		eyeHeight:      cfg.Height * 0.80,
@@ -216,7 +216,7 @@ func (p *ThingPlayer) PhysicsApply() {
 		p.bobbing.InjectVerticalImpulse(prevVz)
 	}
 
-	p.bobbing.Compute(p.entity.GetVx(), p.entity.GetVy())
+	p.bobbing.Compute(p.speed, p.entity.GetVx(), p.entity.GetVy())
 }
 
 // OnCollide handles the collision event between the current ThingPlayer and another object implementing the IThing interface.

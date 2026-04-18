@@ -4,7 +4,6 @@ import "math"
 
 // Bobbing represents a procedural motion system for simulating walking and vertical head movement effects.
 type Bobbing struct {
-	maxSpeed      float64
 	maxAmplitude  float64
 	idleDrift     float64
 	strideLength  float64
@@ -21,9 +20,8 @@ type Bobbing struct {
 }
 
 // NewBobbing initializes and returns a new Bobbing instance with the given parameters for motion and amplitude behavior.
-func NewBobbing(maxSpeed, maxAmplitude, idleDrift, strideLength, speedLerp, ampLerp float64) *Bobbing {
+func NewBobbing(maxAmplitude, idleDrift, strideLength, speedLerp, ampLerp float64) *Bobbing {
 	return &Bobbing{
-		maxSpeed:     maxSpeed,
 		maxAmplitude: maxAmplitude,
 		idleDrift:    idleDrift,
 		strideLength: strideLength,
@@ -49,16 +47,16 @@ func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 }
 
 // Compute updates the procedural bobbing motion based on the given 2D velocity components (v2x, v2y).
-func (p *Bobbing) Compute(v2x float64, v2y float64) {
+func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
 	rawSpeed := math.Sqrt(v2x*v2x + v2y*v2y)
-	if rawSpeed > p.maxSpeed {
-		p.maxSpeed = (p.maxSpeed * 0.95) + (rawSpeed * 0.05)
+	if rawSpeed > maxSpeed {
+		maxSpeed = (maxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
 	p.smoothedSpeed = (p.smoothedSpeed * (1.0 - p.speedLerp)) + (rawSpeed * p.speedLerp)
 	p.phase += p.idleDrift + (p.smoothedSpeed * p.strideLength)
 	ratio := 0.0
-	if p.maxSpeed > 0 {
-		ratio = p.smoothedSpeed / p.maxSpeed
+	if maxSpeed > 0 {
+		ratio = p.smoothedSpeed / maxSpeed
 	}
 	if ratio > 1.0 {
 		ratio = 1.0

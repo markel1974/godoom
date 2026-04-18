@@ -394,40 +394,45 @@ func (s *Face) computeUV(normal geometry.XYZ) {
 
 	//todo invertire U/V nel modello, poi il renderer utilizzera il metodo migliore per visualizzare
 
+	// Proiezione Triplanare Pura.
+	// Nessuna inversione, nessuna compensazione OpenGL.
+	if absZ >= absX && absZ >= absY {
+		// Upper / Lower (Pavimenti e Soffitti)
+		u0, v0 := s.tri[0].X/w, s.tri[0].Y/h
+		u1, v1 := s.tri[1].X/w, s.tri[1].Y/h
+		u2, v2 := s.tri[2].X/w, s.tri[2].Y/h
+		s.SetUV(u0, v0, u1, v1, u2, v2)
+	} else if absY >= absX && absY >= absZ {
+		// Muri rivolti su Y
+		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
+	} else {
+		// Muri rivolti su X
+		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
+	}
 	/*
-			// Proiezione Triplanare Pura.
-			    // Nessuna inversione, nessuna compensazione OpenGL.
-			    if absZ >= absX && absZ >= absY {
-			       // Upper / Lower (Pavimenti e Soffitti)
-			       s.SetUV(s.tri[0].X/w, s.tri[0].Y/h, s.tri[1].X/w, s.tri[1].Y/h, s.tri[2].X/w, s.tri[2].Y/h)
-			    } else if absY >= absX && absY >= absZ {
-			       // Muri rivolti su Y
-			       s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
-			    } else {
-			       // Muri rivolti su X
-			       s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
-			    }
 		NEL RENDERER
 		id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b)
 		id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b)
 		id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b)
 	*/
 
-	// Proiezione Triplanare Z-UP compensata per OpenGL (X, Z, -Y)
-	if absZ >= absX && absZ >= absY {
-		// Upper / Lower (Pavimenti e Soffitti)
-		// L'asse Y nel mondo logico diventa la profondità (Z) in OpenGL,
-		// invertiamo Y per mantenere l'orientamento della texture.
-		s.SetUV(s.tri[0].X/w, -s.tri[0].Y/h, s.tri[1].X/w, -s.tri[1].Y/h, s.tri[2].X/w, -s.tri[2].Y/h)
-	} else if absY >= absX && absY >= absZ {
-		// Muri rivolti su Y
-		// L'asse Z è l'altezza. Mettiamo il meno (-Z) in modo che quando Z sale, V scenda.
-		s.SetUV(s.tri[0].X/w, -s.tri[0].Z/h, s.tri[1].X/w, -s.tri[1].Z/h, s.tri[2].X/w, -s.tri[2].Z/h)
-	} else {
-		// Muri rivolti su X
-		// L'asse Z è l'altezza. Mettiamo il meno (-Z).
-		s.SetUV(s.tri[0].Y/w, -s.tri[0].Z/h, s.tri[1].Y/w, -s.tri[1].Z/h, s.tri[2].Y/w, -s.tri[2].Z/h)
-	}
+	/*
+		// Proiezione Triplanare Z-UP compensata per OpenGL (X, Z, -Y)
+		if absZ >= absX && absZ >= absY {
+			// Upper / Lower (Pavimenti e Soffitti)
+			// L'asse Y nel mondo logico diventa la profondità (Z) in OpenGL,
+			// invertiamo Y per mantenere l'orientamento della texture.
+			s.SetUV(s.tri[0].X/w, -s.tri[0].Y/h, s.tri[1].X/w, -s.tri[1].Y/h, s.tri[2].X/w, -s.tri[2].Y/h)
+		} else if absY >= absX && absY >= absZ {
+			// Muri rivolti su Y
+			// L'asse Z è l'altezza. Mettiamo il meno (-Z) in modo che quando Z sale, V scenda.
+			s.SetUV(s.tri[0].X/w, -s.tri[0].Z/h, s.tri[1].X/w, -s.tri[1].Z/h, s.tri[2].X/w, -s.tri[2].Z/h)
+		} else {
+			// Muri rivolti su X
+			// L'asse Z è l'altezza. Mettiamo il meno (-Z).
+			s.SetUV(s.tri[0].Y/w, -s.tri[0].Z/h, s.tri[1].Y/w, -s.tri[1].Z/h, s.tri[2].Y/w, -s.tri[2].Z/h)
+		}
+	*/
 }
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's location. Returns distance and a boolean status.

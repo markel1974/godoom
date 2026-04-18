@@ -86,10 +86,13 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 				}
 				p := face.GetPoints()
 				u, v := face.GetUV()
-				id1 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), layer, 0, 0, 0, 0)
-				id2 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), layer, 0, 0, 0, 0)
-				id3 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), layer, 0, 0, 0, 0)
-				w.fv.AddTriangle(id1, id2, id3)
+				id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer, 0, 0, 0, 0)
+				id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer, 0, 0, 0, 0)
+				id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer, 0, 0, 0, 0)
+				//id1 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), layer, 0, 0, 0, 0)
+				//id2 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), layer, 0, 0, 0, 0)
+				//id3 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), layer, 0, 0, 0, 0)
+				w.fv.AddTriangle(id0, id1, id2)
 			}
 			endIdx := w.fv.GetIndicesLen()
 			if endIdx > startIdx {
@@ -152,47 +155,12 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 			if !ok {
 				continue
 			}
-
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
-			id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
-			id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
+			id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b)
+			id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b)
+			id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b)
 			fv.AddTriangle(id0, id1, id2)
-
-			//TODO COMPLETARE!!!!
-			/*
-				if b == 0.0 {
-					// --- MODELLI 3D AGNOSTICI ---
-					// 1. Calcoliamo seno e coseno per l'angolo dell'entità
-					angle := thing.GetAngle()
-					cosA := math.Cos(angle)
-					sinA := math.Sin(angle)
-
-					var wp [3]geometry.XYZ
-					for i := 0; i < 3; i++ {
-						// 2. Ruotiamo il vertice locale (da -30 a +30) sull'asse Z di Quake
-						rx := p[i].X*cosA - p[i].Y*sinA
-						ry := p[i].X*sinA + p[i].Y*cosA
-						// 3. Trasliamo alla posizione assoluta dell'entità (Spazio Quake)
-						wp[i].X = rx + tPosX
-						wp[i].Y = ry + tPosY
-						wp[i].Z = p[i].Z + zBot
-					}
-					// 4. Inviamo al VBO.
-					// Usiamo il TUO routing degli assi esatto (X, Z, -Y) per passare da Quake a OpenGL!
-					id0 := fv.AddVertex(float32(wp[0].X), float32(wp[0].Z), float32(-wp[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
-					id1 := fv.AddVertex(float32(wp[1].X), float32(wp[1].Z), float32(-wp[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
-					id2 := fv.AddVertex(float32(wp[2].X), float32(wp[2].Z), float32(-wp[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
-					fv.AddTriangle(id0, id1, id2)
-				} else {
-					// --- SPRITE BILLBOARD / BMODELS (Codice originale intatto) ---
-					id0 := fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), l, oX, oY, oZ, b)
-					id1 := fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), l, oX, oY, oZ, b)
-					id2 := fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), l, oX, oY, oZ, b)
-					fv.AddTriangle(id0, id1, id2)
-				}
-			*/
 		}
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)

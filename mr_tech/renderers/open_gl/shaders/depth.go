@@ -15,6 +15,7 @@ type DepthLoc int
 const (
 	DepthLocLightSpaceMatrix = DepthLoc(iota)
 	DepthLocTexture
+	DepthLocView
 	DepthLocLast
 )
 
@@ -30,6 +31,7 @@ type Depth struct {
 	flashShadowTex uint32
 	roomMatrix     [16]float32
 	flashMatrix    [16]float32
+	viewMatrix     [16]float32
 	shadows        bool
 	metrics        *MapMetrics
 }
@@ -100,6 +102,7 @@ func (s *Depth) Compile(assets IAssets) error {
 	}
 	s.table[DepthLocLightSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_lightSpaceMatrix\x00"))
 	s.table[DepthLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
+	s.table[DepthLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -110,9 +113,10 @@ func (s *Depth) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32) {
+func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32) {
 	s.roomMatrix = roomSpaceMatrix
 	s.flashMatrix = flashSpaceMatrix
+	s.viewMatrix = viewMatrix
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
@@ -143,6 +147,8 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(s.GetProgram())
+	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0]) // <-- Aggiunto
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
 	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()

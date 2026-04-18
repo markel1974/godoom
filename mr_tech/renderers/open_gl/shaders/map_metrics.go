@@ -9,6 +9,20 @@ import (
 // The 2.0 is the extent of OpenGL's NDC range [-1.0, +1.0]
 const ndcRange = 2.0
 
+// Helper inline per evitare boilerplate matematico
+func cross(ax, ay, az, bx, by, bz float32) (float32, float32, float32) {
+	return ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx
+}
+
+func normalize(x, y, z float32) (float32, float32, float32) {
+	invLen := float32(1.0 / math.Sqrt(float64(x*x+y*y+z*z)))
+	return x * invLen, y * invLen, z * invLen
+}
+
+func dot(ax, ay, az, bx, by, bz float32) float32 {
+	return ax*bx + ay*by + az*bz
+}
+
 // MapMetrics is a structure that defines various metrics and configurations for room projection and flashlight rendering.
 type MapMetrics struct {
 	orthoSize      float32
@@ -204,60 +218,48 @@ func (m *MapMetrics) updateFlashProj(flashFov, flashAspect, zNearFlash, zFarFlas
 	}
 }
 
-// CreateSpaces generates two transformation matrices: room space and flashlight space, based on the given parameters.
-func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32) {
-	// 1. Setup Camera
+// CreateSpaces generates and returns the room space matrix, flashlight space matrix, and main view matrix based on input parameters.
+func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngle()
-	camX, camY := vi.GetXY()
-	camZ := vi.GetZ()
-	pitchShear := float32(-vi.GetYaw())
-	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
-
+	// Clean extraction (World Space: Z-UP)
+	wX, wY, wZ := vi.GetXYZ()
+	// Spatial mapping for OpenGL (X, Z, -Y)
+	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
-	eX, eY, eZ := float32(camX), float32(camZ), float32(-camY)
-
-	tx := -(rX*eX + rY*eY + rZ*eZ)
-	ty := -(uX*eX + uY*eY + uZ*eZ)
-	tz := fX*eX + fY*eY + fZ*eZ
-
 	mainView := [16]float32{
-		rX, uX, -fX, 0, rY, uY, -fY, 0, rZ, uZ, -fZ, 0, tx, ty, tz, 1,
+		rX, uX, -fX, 0,
+		rY, uY, -fY, 0,
+		rZ, uZ, -fZ, 0,
+		-dot(rX, rY, rZ, camX, camY, camZ),
+		-dot(uX, uY, uZ, camX, camY, camZ),
+		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
-
-	// 2. Local Flashlight Space
+	// Local Flashlight Space (LookAt calculation)
+	pitchShear := float32(-vi.GetYaw())
+	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	targetViewX, targetViewY, targetViewZ := float32(0.0), flashDirY*m.flashZFar, -m.flashZFar
-
-	ffX, ffY, ffZ := targetViewX-posViewX, targetViewY-posViewY, targetViewZ-posViewZ
-	invLenF := float32(1.0 / math.Sqrt(float64(ffX*ffX+ffY*ffY+ffZ*ffZ)))
-	ffX, ffY, ffZ = ffX*invLenF, ffY*invLenF, ffZ*invLenF
-
-	upViewX, upViewY, upViewZ := float32(0.0), float32(1.0), float32(0.0)
-
-	rrX := ffY*upViewZ - ffZ*upViewY
-	rrY := ffZ*upViewX - ffX*upViewZ
-	rrZ := ffX*upViewY - ffY*upViewX
-	invLenR := float32(1.0 / math.Sqrt(float64(rrX*rrX+rrY*rrY+rrZ*rrZ)))
-	rrX, rrY, rrZ = rrX*invLenR, rrY*invLenR, rrZ*invLenR
-
-	uuX := rrY*ffZ - rrZ*ffY
-	uuY := rrZ*ffX - rrX*ffZ
-	uuZ := rrX*ffY - rrY*ffX
-
-	tLocX := -(rrX*posViewX + rrY*posViewY + rrZ*posViewZ)
-	tLocY := -(uuX*posViewX + uuY*posViewY + uuZ*posViewZ)
-	tLocZ := ffX*posViewX + ffY*posViewY + ffZ*posViewZ
-
-	// 3. Flashlight Matrix (Dynamic)
+	targetX, targetY, targetZ := float32(0.0), flashDirY*m.flashZFar, -m.flashZFar
+	// Forward, Right, Up for the flashlight
+	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
+	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
+	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+	// Local Translation
+	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
+	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
+	tLocZ := dot(ffX, ffY, ffZ, posViewX, posViewY, posViewZ)
 	flashViewLocal := [16]float32{
-		rrX, uuX, -ffX, 0, rrY, uuY, -ffY, 0, rrZ, uuZ, -ffZ, 0, tLocX, tLocY, tLocZ, 1,
+		rrX, uuX, -ffX, 0,
+		rrY, uuY, -ffY, 0,
+		rrZ, uuZ, -ffZ, 0,
+		tLocX, tLocY, tLocZ, 1,
 	}
+	// Final Matrices
 	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
-
-	return m.roomSpace, flashSpace
+	return m.roomSpace, flashSpace, mainView
 }
 
 // MatrixMultiply4x4 multiplies two 4x4 matrices represented as 1D arrays of 16 floats and returns the resulting matrix.

@@ -32,17 +32,27 @@ func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d,
 		}
 	}
 
-	//t0 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
+	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
+	t0 := [3]geometry.XYZ{
+		{X: -halfW, Y: 0.0, Z: height}, // TL
+		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
+		{X: halfW, Y: 0.0, Z: 0.0},     // BR
+	}
 	f0 := NewFace(f.gScale, nil, t0, "", anim)
-	f0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
+	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
 	f.volume.AddFace(f0)
 
-	//t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
-	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: height}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: height}}
+	// Triangolo 1: Top-Left, Bottom-Right, Top-Right
+	t1 := [3]geometry.XYZ{
+		{X: -halfW, Y: 0.0, Z: height}, // TL
+		{X: halfW, Y: 0.0, Z: 0.0},     // BR
+		{X: halfW, Y: 0.0, Z: height},  // TR
+	}
 	f1 := NewFace(f.gScale, nil, t1, "", anim)
-	f1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
+	// TL: (0,0), BR: (1,-1), TR: (1,0)
+	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
 	f.volume.AddFace(f1)
 

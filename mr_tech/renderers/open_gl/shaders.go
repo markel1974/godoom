@@ -141,10 +141,10 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	bob := vi.GetBobPhase()
 	swayX := w.flashlight.GetOffsetX(bob)
 	swayY := w.flashlight.GetOffsetY(bob)
-	roomSpaceMatrix, flashSpaceMatrix := w.metrics.CreateSpaces(vi, swayX, swayY)
+	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, swayX, swayY)
 
 	proj, view, invView := w.main.UpdateUniforms(vi, w.scaleX, w.scaleY)
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainView)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)

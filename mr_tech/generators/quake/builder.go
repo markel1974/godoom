@@ -289,35 +289,26 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
 
 	cModel := &config.Model3d{Frames: make([]config.Frame3d, mdl.Header.NumFrames)}
-	for fIdx, frame := range mdl.Frames {
+	for idx, f := range mdl.Frames {
 		cFrame := config.Frame3d{Triangles: make([][3]config.Vertex3d, mdl.Header.NumTris)}
 		skinW := float32(mdl.Header.SkinWidth)
 		skinH := float32(mdl.Header.SkinHeight)
-
 		for tIdx, tri := range mdl.Triangles {
 			for v := 0; v < 3; v++ {
-				vIdx := tri.Vertices[v]
-				tc := mdl.TexCoords[vIdx]
-
-				// +0.5 per il campionamento esatto del centro del pixel
-				s := float32(tc.S) + 0.5
-				t := float32(tc.T) + 0.5
-
-				// Se il triangolo è sul retro (FacesFront == 0) e il vertice è sulla cucitura
-				if tri.FacesFront == 0 && tc.OnSeam == 1 {
+				vx := tri.Vertices[v]
+				tc := mdl.TexCoords[vx]
+				s := float32(tc.S)
+				t := float32(tc.T)
+				if tri.FacesFront == 0 && tc.OnSeam != 0 {
 					s += skinW / 2.0
 				}
-				// Mappatura UV finale.
-				// 1.0 - V è obbligatorio se la texture in RAM è capovolta (byte 0 in basso)
-				normV := 1.0 - (t / skinH)
-				cFrame.Triangles[tIdx][v] = config.Vertex3d{
-					Pos: p.createXYZ(frame[vIdx][0], frame[vIdx][1], frame[vIdx][2]),
-					U:   s / skinW,
-					V:   normV,
-				}
+				nU := s / skinW
+				nV := 1.0 - (t / skinH)
+				cFrame.Triangles[tIdx][v] = config.Vertex3d{Pos: p.createXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 		}
-		cModel.Frames[fIdx] = cFrame
+		cModel.Frames[idx] = cFrame
+		cModel.Frames[idx] = cFrame
 	}
 
 	thingCfg.WakeUpDistance = 400

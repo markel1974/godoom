@@ -10,72 +10,28 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// TextureScaleW defines the horizontal scaling factor for textures, used in rendering and configuration processes.
-const TextureScaleW = 4.0
+// WorldScaleFactor defines a constant scaling factor used to standardize and convert game world dimensions to real-world units.
+const WorldScaleFactor = 25.0
 
-// TextureScaleH defines the horizontal scaling factor for textures, typically used to adjust their visual dimensions.
-const TextureScaleH = 10.0
+// WallScaleW is a constant scaling factor applied to the width of wall textures in the game world rendering system.
+const WallScaleW = WorldScaleFactor * 0.16
 
-const ThingsScaleW = TextureScaleW / 70
+// ScaleCeilFloorLineDef is a constant used to scale ceiling and floor heights relative to WorldScaleFactor.
+const ScaleCeilFloorLineDef = WorldScaleFactor * 0.32
 
-const ThingsScaleH = TextureScaleH / 70
+// ScaleWallH defines the vertical scaling factor for wall height, determined as 40% of the global WorldScaleFactor.
+const ScaleWallH = WorldScaleFactor * 0.4
 
-// ScaleFactorLineDef defines the scaling factor applied to line definitions during level configuration processing.
-const ScaleFactorLineDef = 25.0
+// ScaleWThings is a constant representing a factor for scaling the width of "thing" objects in the game world.
+const ScaleWThings = WorldScaleFactor * 0.002
 
-// ScaleFactorCeilFloorLineDef defines the scaling factor for converting ceiling and floor heights in level configurations.
-const ScaleFactorCeilFloorLineDef = 8.0
+// ScaleHThings defines the height scale factor for things in the game world, derived from WorldScaleFactor.
+const ScaleHThings = WorldScaleFactor * 0.006
 
 // SkyPicture represents the identifier for sky-related ceiling or floor textures in the game's level configuration.
 const SkyPicture = "F_SKY1"
 
 const openAllDoors = true
-
-// _doors is a map that associates specific action special IDs (int16) with corresponding door behaviors (string descriptions).
-var _doors = map[int16]string{
-	1:   "DR	Door Open, Wait, Close",
-	2:   "W1	Door Stay Open",
-	3:   "W1	Door Close",
-	4:   "W1	Door",
-	16:  "W1	Door Close and Open",
-	26:  "DR	Door Blue Key",
-	27:  "DR	Door Yellow Key",
-	28:  "DR	Door Red Key",
-	29:  "S1	Door",
-	31:  "D1	Door Stay Open",
-	32:  "D1	Door Blue Key",
-	33:  "D1	Door Red Key",
-	34:  "D1	Door Yellow Key",
-	42:  "SR	Door Close",
-	46:  "GR	Door Also Monsters",
-	50:  "S1	Door Close",
-	63:  "SR	Door",
-	117: "GR	Door Wait Raise Fast",
-	118: "GR	Door Wait Close Fast",
-	150: "S1	Door Wait Raise",
-	151: "S1	Door Close Wait Open",
-	175: "S1	Door Close and Open",
-	196: "SR	Door Close then Open",
-	197: "SR	Door Wait Close",
-	198: "SR	Door Raise",
-	199: "SR	Door Wait Raise",
-	200: "SR	Door Close Wait Open",
-	201: "SR	Door Wait Raise Silent",
-	202: "SR	Door Wait Raise Fast",
-	203: "SR	Door Wait Close Fast",
-	204: "SR	Door Raise Fast",
-	205: "SR	Door Close Fast",
-	206: "SR	Door Open Fast",
-	207: "SR	Door Close Wait Open Fast",
-	323: "UNK   Door Raise (fast 150)",
-	324: "UNK   Door Close (fast 150)",
-	325: "UNK   Door Raise (slow 300)",
-	326: "UNK   Door Close (slow 300)",
-	327: "UNK   Door Closest (fast 150)",
-	328: "UNK   Door Closest (slow 300)",
-	329: "UNK   Door Locked Raise",
-	330: "UNK   Door Locked Closest",
-}
 
 // Edge represents a connection between two points (P1 and P2) with metadata such as Sidedef, Linedef, and associated Sectors.
 type Edge struct {
@@ -152,7 +108,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 	}
 
 	player := bld.buildPlayer(level)
-	cr := config.NewConfigRoot(sectors, player, things, ScaleFactorLineDef, texHandler)
+	cr := config.NewConfigRoot(sectors, player, things, WorldScaleFactor, texHandler)
 	cr.Vertices = vertexes
 
 	return cr, nil
@@ -164,8 +120,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	floorType := config.AnimationKindLoop
 	const falloff = 10.0
 	miSector := config.NewConfigSector(sectorId, bld.convertLight(lightLevel), config.LightKindAmbient, falloff)
-	miSector.FloorY = floorY / ScaleFactorCeilFloorLineDef
-	miSector.CeilY = ceilY / ScaleFactorCeilFloorLineDef
+	miSector.FloorY = floorY / ScaleCeilFloorLineDef
+	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
 	miSector.Tag = sectorId
 	if ceilPic == SkyPicture {
 		ceilingType = config.AnimationKindSky
@@ -175,8 +131,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 		floorType = config.AnimationKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	miSector.Ceil = config.NewConfigAnimation(texHandler.FlatCreateAnimation(ceilPic), ceilingType, TextureScaleW, TextureScaleH)
-	miSector.Floor = config.NewConfigAnimation(texHandler.FlatCreateAnimation(floorPic), floorType, TextureScaleW, TextureScaleH)
+	miSector.Ceil = config.NewConfigAnimation(texHandler.FlatCreateAnimation(ceilPic), ceilingType, WallScaleW, ScaleWallH)
+	miSector.Floor = config.NewConfigAnimation(texHandler.FlatCreateAnimation(floorPic), floorType, WallScaleW, ScaleWallH)
 	return miSector
 }
 
@@ -186,18 +142,18 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
-	seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-	seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
-	seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, TextureScaleW, TextureScaleH)
+	seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, WallScaleW, ScaleWallH)
+	seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, WallScaleW, ScaleWallH)
+	seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, WallScaleW, ScaleWallH)
 	// vertical sky hack
 	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 		if e.Sector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
-			seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
+			seg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, WallScaleW, ScaleWallH)
 		}
 		// Extension for floors (e.g. moats that show sky at the bottom)
 		if e.Sector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
-			seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, TextureScaleW, TextureScaleH)
+			seg.Lower = config.NewConfigAnimation(nil, config.AnimationKindNone, WallScaleW, ScaleWallH)
 		}
 	}
 	if !e.LineDef.HasFlag(2) {
@@ -225,7 +181,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		frames = sd.Sprites
 	}
 	tId := fmt.Sprintf("t_%d", i)
-	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, ThingsScaleW, ThingsScaleH)
+	anim := config.NewConfigAnimation(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, ScaleWThings, ScaleHThings)
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
 	return cfgThing
 }

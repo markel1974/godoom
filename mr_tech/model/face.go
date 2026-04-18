@@ -383,8 +383,9 @@ func (s *Face) computeUV(normal geometry.XYZ) {
 	if texScaleH == 0 {
 		texScaleH = 1.0
 	}
-	baseW := float64(texW) / s.gScale
-	baseH := float64(texH) / s.gScale
+	gScale := s.gScale
+	baseW := float64(texW) / gScale
+	baseH := float64(texH) / gScale
 	w := baseW * texScaleW
 	h := baseH * texScaleH
 	absX := math.Abs(normal.X)

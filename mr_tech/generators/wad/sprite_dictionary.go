@@ -156,6 +156,52 @@ var _animationsBase = [][]string{
 	{"GSTFONT1", "GSTFONT2", "GSTFONT3"},
 }
 
+// _doors is a map that associates specific action special IDs (int16) with corresponding door behaviors (string descriptions).
+var _doors = map[int16]string{
+	1:   "DR	Door Open, Wait, Close",
+	2:   "W1	Door Stay Open",
+	3:   "W1	Door Close",
+	4:   "W1	Door",
+	16:  "W1	Door Close and Open",
+	26:  "DR	Door Blue Key",
+	27:  "DR	Door Yellow Key",
+	28:  "DR	Door Red Key",
+	29:  "S1	Door",
+	31:  "D1	Door Stay Open",
+	32:  "D1	Door Blue Key",
+	33:  "D1	Door Red Key",
+	34:  "D1	Door Yellow Key",
+	42:  "SR	Door Close",
+	46:  "GR	Door Also Monsters",
+	50:  "S1	Door Close",
+	63:  "SR	Door",
+	117: "GR	Door Wait Raise Fast",
+	118: "GR	Door Wait Close Fast",
+	150: "S1	Door Wait Raise",
+	151: "S1	Door Close Wait Open",
+	175: "S1	Door Close and Open",
+	196: "SR	Door Close then Open",
+	197: "SR	Door Wait Close",
+	198: "SR	Door Raise",
+	199: "SR	Door Wait Raise",
+	200: "SR	Door Close Wait Open",
+	201: "SR	Door Wait Raise Silent",
+	202: "SR	Door Wait Raise Fast",
+	203: "SR	Door Wait Close Fast",
+	204: "SR	Door Raise Fast",
+	205: "SR	Door Close Fast",
+	206: "SR	Door Open Fast",
+	207: "SR	Door Close Wait Open Fast",
+	323: "UNK   Door Raise (fast 150)",
+	324: "UNK   Door Close (fast 150)",
+	325: "UNK   Door Raise (slow 300)",
+	326: "UNK   Door Close (slow 300)",
+	327: "UNK   Door Closest (fast 150)",
+	328: "UNK   Door Closest (slow 300)",
+	329: "UNK   Door Locked Raise",
+	330: "UNK   Door Locked Closest",
+}
+
 func init() {
 	_playerRadius /= 20.0
 	_playerMass /= 20.0

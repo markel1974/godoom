@@ -45,12 +45,12 @@ type Model3d struct {
 type Thing struct {
 	Id           string       `json:"id"`
 	Position     geometry.XYZ `json:"position"`
+	Kind         ThingType    `json:"kind"`
 	Angle        float64      `json:"angle"`
 	Mass         float64      `json:"mass"`
 	Restitution  float64      `json:"restitution"`
 	Radius       float64      `json:"radius"`
 	Height       float64      `json:"height"`
-	Kind         ThingType    `json:"kind"`
 	Speed        float64      `json:"speed"`
 	Acceleration float64      `json:"acceleration"`
 	Animation    *Animation   `json:"animation"`

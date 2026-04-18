@@ -9,6 +9,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// IVertices represents an interface for managing and retrieving geometric vertices and their associated volume data.
+type IVertices interface {
+	GetVertices(uint64) []*Face
+
+	GetVolume() *Volume
+}
+
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id           string
@@ -30,7 +37,7 @@ type ThingBase struct {
 	wall         *ThingWall
 	volume       *Volume
 	entity       *physics.Entity
-	frames       [][]*Face
+	vertices     IVertices
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -43,8 +50,16 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	entW := cfg.Radius * 2
 	entH := cfg.Radius * 2
 	entD := cfg.Height
-	volume := NewVolumeDetails3d(0, cfg.Id, "thing", entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
+
+	var vertices IVertices
+	if cfg.Model3D != nil {
+		vertices = NewVertexMD2(cfg.Model3D, anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
+	} else {
+		vertices = NewVertexSprite(anim, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, 0.2)
+	}
+	volume := vertices.GetVolume()
 	t := &ThingBase{
+		vertices:     vertices,
 		volume:       volume,
 		entity:       volume.GetEntity(),
 		id:           cfg.Id,
@@ -67,73 +82,17 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	}
 	t.entity.SetOnGround(false)
 
-	if cfg.Model3D != nil && len(cfg.Model3D.Frames) > 0 {
-		t.volume.SetBillboard(2.0)
-		t.frames = make([][]*Face, len(cfg.Model3D.Frames))
-
-		for frameIdx, cfgFrame := range cfg.Model3D.Frames {
-			frameFaces := make([]*Face, len(cfgFrame.Triangles))
-			for triIdx, tri := range cfgFrame.Triangles {
-				points := [3]geometry.XYZ{tri[0].Pos, tri[1].Pos, tri[2].Pos}
-				// TODO Manca l'animazione specifica per faccia, passiamo quella globale della Thing
-				face := NewFace(nil, points, cfg.Id, anim)
-				face.SetUV(float64(tri[0].U), float64(tri[0].V), float64(tri[1].U), float64(tri[1].V), float64(tri[2].U), float64(tri[2].V))
-				face.LockUV(true)
-				frameFaces[triIdx] = face
-			}
-			t.frames[frameIdx] = frameFaces
-		}
-		if len(t.frames) > 0 {
-			for _, f := range t.frames[0] {
-				t.volume.AddFace(f)
-			}
-		}
-	} else {
-		t.volume.SetBillboard(1.0)
-		height := 0.0
-		halfW := 0.0
-		if t.animation != nil {
-			tex := t.animation.CurrentFrame()
-			if tex != nil {
-				texW, texH := tex.Size()
-				scaleW, scaleH := t.animation.ScaleFactor()
-				width := float64(texW) * scaleW
-				height = float64(texH) * scaleH
-				halfW = width / 2.0
-			}
-		}
-
-		t1 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: -halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}}
-		face0 := NewFace(nil, t1, "", t.animation)
-		face0.SetUV(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
-		face0.LockUV(true)
-
-		t2 := [3]geometry.XYZ{{X: -halfW, Y: height, Z: 0.0}, {X: halfW, Y: 0.0, Z: 0.0}, {X: halfW, Y: height, Z: 0.0}}
-		face1 := NewFace(nil, t2, "", t.animation)
-		face1.SetUV(0.0, 0.0, 1.0, 1.0, 1.0, 0.0)
-		face1.LockUV(true)
-
-		t.volume.AddFace(face0)
-		t.volume.AddFace(face1)
-	}
-	t.volume.Rebuild()
-
 	return t
+}
+
+// GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
+func (t *ThingBase) GetVertices() ([]*Face, float64) {
+	return t.vertices.GetVertices(textures.CurrentTick()), t.volume.GetBillboard()
 }
 
 // GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetAngle() float64 {
 	return t.angle
-}
-
-// GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() ([]*Face, float64) {
-	if len(t.frames) > 0 {
-		groupSize := uint64(6) // Per 5 tick consecutivi sullo stesso frame
-		idx := (textures.CurrentTick() / groupSize) % uint64(len(t.frames))
-		return t.frames[idx], t.volume.GetBillboard()
-	}
-	return t.volume.GetFaces(), t.volume.GetBillboard()
 }
 
 // GetId returns the identifier string of the ThingBase instance.

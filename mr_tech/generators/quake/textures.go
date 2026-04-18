@@ -63,12 +63,12 @@ func (w *Textures) RegisterFile(name string, rs io.Reader) error {
 }
 
 // RegisterPixels registers a texture using raw pixel data, a palette, dimensions, and a unique name. If the name already exists, it skips registration. Returns an error if the data cannot be processed.
-func (w *Textures) RegisterPixels(name string, width, height int, indices []byte, palette []byte) error {
+func (w *Textures) RegisterPixels(name string, width, height int, indices []byte, palette []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	if _, ok := w.resources[name]; ok {
 		return nil
 	}
 	idx := int32(len(w.resources))
-	tex, err := w.loadFromPixels(name, width, height, indices, palette, idx)
+	tex, err := w.loadFromPixels(name, width, height, indices, palette, idx, isTransparent, transIndex, invertY)
 	if err != nil {
 		return err
 	}
@@ -76,11 +76,48 @@ func (w *Textures) RegisterPixels(name string, width, height int, indices []byte
 	return nil
 }
 
-func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32) (*textures.Texture, error) {
+func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
 	tex := textures.NewTexture(name, uint32(idx), width, height)
-	hasAlpha := false
+	// Gestione unificata dell'Alpha (HL BSP + Override esplicito)
+	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
+	transparentColor := transIndex
+
 	if len(name) > 0 && name[0] == '{' {
-		hasAlpha = true
+		transparentColor = 255
+	}
+
+	for y := 0; y < height; y++ {
+		// L'inversione Y avviene solo se il formato lo richiede esplicitamente
+		targetY := y
+		if invertY {
+			targetY = height - 1 - y
+		}
+		for x := 0; x < width; x++ {
+			colorIdx := indices[y*width+x]
+			if hasAlpha && colorIdx == transparentColor {
+				tex.Set(x, targetY, 0x00000000)
+				continue
+			}
+			palOffset := int(colorIdx) * 3
+			r := uint32(palette[palOffset])
+			g := uint32(palette[palOffset+1])
+			b := uint32(palette[palOffset+2])
+			a := uint32(255)
+			color := (r << 24) | (g << 16) | (b << 8) | a
+			tex.Set(x, targetY, int(color))
+		}
+	}
+	return tex, nil
+}
+
+func (w *Textures) loadFromPixelsOld(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte) (*textures.Texture, error) {
+	tex := textures.NewTexture(name, uint32(idx), width, height)
+
+	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
+	transparentColor := transIndex
+
+	if len(name) > 0 && name[0] == '{' {
+		transparentColor = 255
 	}
 
 	for y := 0; y < height; y++ {
@@ -89,8 +126,9 @@ func (w *Textures) loadFromPixels(name string, width, height int, indices []byte
 
 		for x := 0; x < width; x++ {
 			colorIdx := indices[y*width+x]
-			if hasAlpha && colorIdx == 255 {
-				tex.Set(x, flippedY, 0x00000000)
+			if hasAlpha && colorIdx == transparentColor {
+				// Trasparenza assoluta
+				tex.Set(x, y, 0x00000000)
 				continue
 			}
 			palOffset := int(colorIdx) * 3

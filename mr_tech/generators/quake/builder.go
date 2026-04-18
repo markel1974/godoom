@@ -66,7 +66,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
-			if err = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette); err != nil {
+			if err = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false); err != nil {
 				fmt.Printf("Warning: texture %s error: %s\n", mt.Name, err.Error())
 			}
 		}
@@ -260,7 +260,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		texName := fmt.Sprintf("%s_skin_%d", classname, sIdx)
 		w := int(mdl.Header.SkinWidth)
 		h := int(mdl.Header.SkinHeight)
-		if err = p.texManager.RegisterPixels(texName, w, h, skin.Data, palette); err != nil {
+		if err = p.texManager.RegisterPixels(texName, w, h, skin.Data, palette, false, 255, false); err != nil {
 			fmt.Printf("Warning: texture %s error: %s\n", texName, err.Error())
 			continue
 		}
@@ -338,7 +338,7 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
-			_ = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette)
+			_ = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false)
 		}
 	}
 	// 3. Traduzione Geometria in Model3d Agnostico

@@ -5,19 +5,28 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+type Bobbing struct {
+	MaxAmplitude  float64
+	IdleDrift     float64
+	StrideLength  float64
+	SpeedLerp     float64
+	AmpLerp       float64
+	ImpactMax     float64
+	ImpactScale   float64
+	IdleAmp       float64
+	SpringTension float64
+	SpringDamping float64
+}
+
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
 type Player struct {
 	*Thing
-	BobbingMaxAmplitude float64
-	BobbingIdleDrift    float64
-	BobbingStrideLength float64
-	BobbingSpeedLerp    float64
-	BobbingAmpLerp      float64
+	Bobbing *Bobbing
 }
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
 func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radius float64, mass float64) *Player {
-	return &Player{
+	p := &Player{
 		Thing: &Thing{
 			Id:       utils.NextUUId(),
 			Position: position,
@@ -26,10 +35,19 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 			Radius:   radius,
 			Mass:     mass,
 		},
-		BobbingMaxAmplitude: 0.9,
-		BobbingIdleDrift:    0.03,
-		BobbingStrideLength: 0.015,
-		BobbingSpeedLerp:    0.15,
-		BobbingAmpLerp:      0.10,
+		Bobbing: &Bobbing{},
 	}
+
+	p.Bobbing.MaxAmplitude = 0.9
+	p.Bobbing.IdleDrift = 0.03
+	p.Bobbing.StrideLength = 0.015
+	p.Bobbing.SpeedLerp = 0.15
+	p.Bobbing.AmpLerp = 0.10
+	p.Bobbing.ImpactMax = 20.0
+	p.Bobbing.ImpactScale = 0.05
+	p.Bobbing.IdleAmp = 0.3
+	p.Bobbing.SpringTension = 0.15
+	p.Bobbing.SpringDamping = 0.75
+
+	return p
 }

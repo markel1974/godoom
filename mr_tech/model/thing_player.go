@@ -33,34 +33,35 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(things *Things, cfg *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
-	volume := volumes.LocateVolume(cfg.Position.X, cfg.Position.Y, cfg.Position.Z)
+func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
+	volume := volumes.LocateVolume(c.Position.X, c.Position.Y, c.Position.Z)
 	if volume == nil {
-		fmt.Printf("can't find player location at %f, %f\n", cfg.Position.X, cfg.Position.Y)
+		fmt.Printf("can't find player location at %f, %f\n", c.Position.X, c.Position.Y)
 		return nil
 	}
-	cfg.Kind = config.ThingPlayerDef
-	if cfg.Height <= 0 {
-		cfg.Height = 8.0
+	c.Kind = config.ThingPlayerDef
+	if c.Height <= 0 {
+		c.Height = 8.0
+
 	}
-	if cfg.Speed <= 0 {
-		cfg.Speed = 60.0
+	if c.Speed <= 0 {
+		c.Speed = 60.0
 	}
-	cfg.Position = geometry.XYZ{X: cfg.Position.X, Y: cfg.Position.Y, Z: cfg.Position.Z}
+	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
 	p := &ThingPlayer{
 		kind:           0,
 		yaw:            0,
 		yawState:       0,
-		ThingBase:      NewThingBase(things, cfg.Thing, cfg.Position, nil, volume),
-		bobbing:        NewBobbing(cfg.BobbingMaxAmplitude, cfg.BobbingIdleDrift, cfg.BobbingStrideLength, cfg.BobbingSpeedLerp, cfg.BobbingAmpLerp),
+		ThingBase:      NewThingBase(things, c.Thing, c.Position, nil, volume),
+		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
-		eyeHeight:      cfg.Height * 0.80,
-		headMargin:     cfg.Height * 0.25,
-		duckHeight:     cfg.Height * 0.25,
+		eyeHeight:      c.Height * 0.80,
+		headMargin:     c.Height * 0.25,
+		duckHeight:     c.Height * 0.25,
 	}
 	p.id = "PLAYER"
-	p.SetAngle(cfg.Angle)
+	p.SetAngle(c.Angle)
 	p.things.AddThing(p)
 	return p
 }

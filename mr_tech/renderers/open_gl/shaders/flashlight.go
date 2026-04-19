@@ -92,6 +92,7 @@ func (s *Flashlight) GetFactor() float32 {
 // GetOffsetXY calculates and returns the flashlight's offset in X and Y directions, adjusted for bobbing movement.
 func (s *Flashlight) GetOffsetXY(bob float64) (float32, float32) {
 	if s.shadows {
+		//float32 dynamicParallax = float32(math.Cos(bob * 0.5) * (1.1 * gScale))
 		return s.offsetX + float32(math.Cos(bob*0.5)*1.1), s.offsetY - float32(math.Abs(math.Sin(bob))*1.2)
 	}
 	return s.offsetX, s.offsetY

@@ -281,13 +281,12 @@ func (th *Things) processCollision() {
 		ent := thing.GetEntity()
 
 		th.tree.QueryOverlaps(thing, func(object physics.IAABB) bool {
-			// 1. CAST SAFE e check di auto-collisione
 			otherThing, ok := object.(IThing)
 			if !ok || otherThing == thing {
 				return false
 			}
 			otherEnt := otherThing.GetEntity()
-			// 2. Tie-breaker 3D
+			// Tie-breaker 3D
 			otherIsMoving := otherEnt.GetVx() != 0 || otherEnt.GetVy() != 0 || otherEnt.GetVz() != 0
 			if otherIsMoving && thing.GetIdentifier() > otherThing.GetIdentifier() {
 				return false

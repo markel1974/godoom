@@ -60,9 +60,9 @@ func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, vel
 			n := face.GetNormal()
 			pts := face.GetPoints()
 			pLen := len(pts)
-			if pLen < 2 {
-				continue
-			}
+			//if pLen < 2 {
+			//	continue
+			//}
 
 			// Utilizziamo il primo vertice per definire il piano 3D infinito (Fase A)
 			p0 := pts[0]
@@ -99,9 +99,9 @@ func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, vel
 				nextIdx := (i + 1) % pLen
 
 				// Ottimizzazione 2.5D: se è un segmento singolo (2 punti), evitiamo di testare il ritorno
-				if pLen == 2 && i == 1 {
-					continue
-				}
+				//if pLen == 2 && i == 1 {
+				//	continue
+				//}
 				end := pts[nextIdx]
 
 				// Vettori 3D del segmento corrente

@@ -288,7 +288,6 @@ func (th *Things) processCollision() {
 			}
 			th.contacts[th.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
 			th.contactsLen++
-			//TODO MESSAGES!!!!!
 			t2.OnCollide(otherThing)
 			otherThing.OnCollide(t2)
 			return false
@@ -309,8 +308,6 @@ func (th *Things) processCollision() {
 		t2 := th.active[x]
 		th.event.wg.Add(1)
 		t2.PostMessage(th.event)
-		//tx, ty, tz := m.PhysicsApply()
-		//th.UpdateThing(m, tx, ty, tz)
 	}
 	th.event.wg.Wait()
 

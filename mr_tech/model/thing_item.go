@@ -19,3 +19,32 @@ func NewThingItem(things *Things, cfg *config.Thing, anim *textures.Animation, v
 	thing.things.AddThing(thing)
 	return thing
 }
+
+// PostMessage sends an ThingEvent instance to the ThingItem's inbox channel for processing.
+func (t *ThingItem) PostMessage(ec *ThingEvent) {
+	t.inbox <- ec
+}
+
+// StartLoop begins a goroutine that processes incoming events or signals termination via the 'done' channel.
+func (t *ThingItem) StartLoop() {
+	go func() {
+		for {
+			select {
+			case evt := <-t.inbox:
+				switch evt.GetKind() {
+				case StageThinking:
+					t.Compute(evt.GetCoords())
+				case StagePhysics:
+					t.PhysicsApply()
+				}
+				evt.Done()
+			case <-t.done:
+				return
+			}
+		}
+	}()
+}
+
+// Compute updates the state of the ThingItem instance based on the provided player coordinates (X, Y, Z).
+func (t *ThingItem) Compute(playerX float64, playerY float64, playerZ float64) {
+}

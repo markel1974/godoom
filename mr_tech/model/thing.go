@@ -34,9 +34,9 @@ type IThing interface {
 
 	GetEntity() *physics.Entity
 
-	Compute(playerX float64, playerY float64, playerZ float64)
-
 	GetLocation() *Volume
+
+	Compute(playerX float64, playerY float64, playerZ float64)
 
 	PhysicsApply()
 
@@ -45,4 +45,8 @@ type IThing interface {
 	SetActive(active bool)
 
 	OnCollide(other IThing)
+
+	StartLoop()
+
+	PostMessage(ec *ThingEvent)
 }

@@ -51,7 +51,7 @@ func NewFace2d(gScale float64, neighbor *Volume, start geometry.XY, end geometry
 	return out
 }
 
-// NewFace creates a new 3D segment with specified neighbor, kind, points, tag, and material, and computes its normal and AABB.
+// NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its normal and AABB.
 func NewFace(gScale float64, neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
 		gScale:    gScale,

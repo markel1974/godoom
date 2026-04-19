@@ -93,6 +93,7 @@ type Things struct {
 	contactsLen  int
 	activeIdx    int
 	activeThings []IThing
+	event        *ThingEvent
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -110,6 +111,7 @@ func NewThings(gScale float64, cfg []*config.Thing, volumes *Volumes, animations
 		animations:   animations,
 		activeIdx:    0,
 		activeThings: make([]IThing, 1024),
+		event:        NewThingEvent(),
 	}
 	for _, ct := range cfg {
 		if _, err := e.createThing(ct); err != nil {
@@ -211,6 +213,7 @@ func (th *Things) AddThing(ent IThing) {
 		th.moving = make([]IThing, len(th.entities)*2)
 	}
 	th.tree.InsertObject(ent)
+	ent.StartLoop()
 }
 
 // RemoveThing removes the specified IThing entity from the spatial tree and the things map in Things.
@@ -227,20 +230,29 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 // Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
 func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	th.activeIdx = 0
-	for _, t := range th.entities {
-		if !t.IsActive() {
-			th.RemoveThing(t)
+
+	th.event.SetStage(StageThinking)
+	th.event.SetCoords(pX, pY, pZ)
+
+	for _, t2 := range th.entities {
+		if !t2.IsActive() {
+			th.RemoveThing(t2)
 			continue
 		}
-		t.Compute(pX, pY, pZ)
+		th.event.wg.Add(1)
+		t2.PostMessage(th.event)
+
+		//t.Compute(pX, pY, pZ)
 		if th.activeIdx >= len(th.activeThings) {
 			newThings := make([]IThing, len(th.activeThings)*2)
 			copy(newThings, th.activeThings)
 			th.activeThings = newThings
 		}
-		th.activeThings[th.activeIdx] = t
+		th.activeThings[th.activeIdx] = t2
 		th.activeIdx++
 	}
+
+	th.event.wg.Wait()
 }
 
 // Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.
@@ -248,6 +260,7 @@ func (th *Things) processCollision() {
 	th.movingLen = 0
 	th.contactsLen = 0
 
+	//ACQUIRING
 	for _, thing := range th.entities {
 		ent := thing.GetEntity()
 		if ent.Update() {
@@ -261,6 +274,7 @@ func (th *Things) processCollision() {
 		return
 	}
 
+	th.event.SetStage(StageCollision)
 	// DETECTION (Costruzione del Jacobiano)
 	for x := 0; x < th.movingLen; x++ {
 		thing := th.moving[x]
@@ -289,13 +303,14 @@ func (th *Things) processCollision() {
 			}
 			th.contacts[th.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
 			th.contactsLen++
+			//TODO MESSAGES!!!!!
 			thing.OnCollide(otherThing)
 			otherThing.OnCollide(thing)
 			return false
 		})
 	}
 
-	// FASE 2: RESOLUTION (Il Solver PGS)
+	// RESOLUTION (Il Solver PGS)
 	const solverIterations = 4
 	for i := 0; i < solverIterations; i++ {
 		for c := 0; c < th.contactsLen; c++ {
@@ -303,10 +318,22 @@ func (th *Things) processCollision() {
 		}
 	}
 
-	// FASE 3: COMMIT SPAZIALE E INTEGRAZIONE
+	th.event.SetStage(StagePhysics)
+	// PHYSYCS APPLY
 	for x := 0; x < th.movingLen; x++ {
-		m := th.moving[x]
-		th.tree.UpdateObject(m)
-		m.PhysicsApply()
+		t2 := th.moving[x]
+		th.event.wg.Add(1)
+		t2.PostMessage(th.event)
+		//tx, ty, tz := m.PhysicsApply()
+		//th.UpdateThing(m, tx, ty, tz)
+	}
+	th.event.wg.Wait()
+
+	// COMMIT SPAZIALE E INTEGRAZIONE
+	for x := 0; x < th.movingLen; x++ {
+		t2 := th.moving[x]
+		th.tree.UpdateObject(t2)
+		tx, ty, tz := t2.GetPosition()
+		th.UpdateThing(t2, tx, ty, tz)
 	}
 }

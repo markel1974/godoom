@@ -20,7 +20,7 @@ type Light struct {
 	aabb      *physics.AABB
 }
 
-// NewLight creates and returns a new Light instance with default values for intensity, falloff, and kind.
+// NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
 func NewLight() *Light {
 	l := &Light{
 		volume:    nil,
@@ -32,7 +32,7 @@ func NewLight() *Light {
 	return l
 }
 
-// Setup configures the Light object by setting its intensity, falloff, kind, and position. Normalizes intensity between 0.0 and 1.0.
+// Setup configures the Light object by setting its intensity, falloff, stage, and position. Normalizes intensity between 0.0 and 1.0.
 func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind config.LightKind, coords geometry.XYZ) {
 	cl.volume = volume
 	lightZ := coords.Z * 1.0

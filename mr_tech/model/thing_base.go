@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -41,6 +42,9 @@ type ThingBase struct {
 	volume         *Volume
 	entity         *physics.Entity
 	vertices       IVertices
+
+	inbox chan *ThingEvent
+	done  chan struct{} // Per il teardown
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -84,6 +88,8 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		isActive:       true,
 		identifier:     -1,
 		wall:           NewThingWall(volumes, 0, 0),
+		inbox:          make(chan *ThingEvent, 16),
+		done:           make(chan struct{}),
 	}
 	t.entity.SetOnGround(false)
 
@@ -163,6 +169,7 @@ func (t *ThingBase) GetMaxZ() float64 {
 // Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
 func (t *ThingBase) Compute(playerX float64, playerY float64, playerZ float64) {
 	//nothing to do
+	fmt.Println("You MUST to implement Compute method")
 }
 
 // SetIdentifier sets the unique identifier for the ThingBase instance.
@@ -281,7 +288,6 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 	t.entity.SetOnGround(isGrounded)
 	// final application
 	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
-	t.things.UpdateThing(t, t.pos.X, t.pos.Y, t.pos.Z)
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

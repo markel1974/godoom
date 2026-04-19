@@ -37,6 +37,29 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, 
 	return e
 }
 
+func (t *ThingEnemy) PostMessage(ec *ThingEvent) {
+	t.inbox <- ec
+}
+
+func (t *ThingEnemy) StartLoop() {
+	go func() {
+		for {
+			select {
+			case evt := <-t.inbox:
+				switch evt.GetKind() {
+				case StageThinking:
+					t.Compute(evt.GetCoords())
+				case StagePhysics:
+					t.PhysicsApply()
+				}
+				evt.Done()
+			case <-t.done:
+				return
+			}
+		}
+	}()
+}
+
 func (t *ThingEnemy) PhysicsApply() {
 	t.doPhysics(t.height)
 }

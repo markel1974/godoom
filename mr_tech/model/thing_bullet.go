@@ -33,7 +33,31 @@ func NewThingBullet(things *Things, cfg *config.Thing, anim *textures.Animation,
 	p.entity.SetVx(dirX * muzzleVelocity)
 	p.entity.SetVy(dirY * muzzleVelocity)
 	p.entity.SetVz(dirZ * muzzleVelocity)
+
 	return p
+}
+
+func (t *ThingBullet) PostMessage(ec *ThingEvent) {
+	t.inbox <- ec
+}
+
+func (t *ThingBullet) StartLoop() {
+	go func() {
+		for {
+			select {
+			case evt := <-t.inbox:
+				switch evt.GetKind() {
+				case StageThinking:
+					t.Compute(evt.GetCoords())
+				case StagePhysics:
+					t.PhysicsApply()
+				}
+				evt.Done()
+			case <-t.done:
+				return
+			}
+		}
+	}()
 }
 
 func (t *ThingBullet) GetMaxZ() float64 {

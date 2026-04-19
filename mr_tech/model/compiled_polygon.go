@@ -52,7 +52,7 @@ func NewCompiledPolygon() *CompiledPolygon {
 	}
 }
 
-// Init initializes the CompiledPolygon with the specified kind and resets the PLen field to 0.
+// Init initializes the CompiledPolygon with the specified stage and resets the PLen field to 0.
 func (p *CompiledPolygon) Init(kind int) {
 	p.Kind = kind
 	p.PLen = 0

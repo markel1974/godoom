@@ -66,13 +66,40 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	return p
 }
 
+func (p *ThingPlayer) IsActive() bool {
+	return true
+}
+
+func (p *ThingPlayer) PostMessage(ec *ThingEvent) {
+	p.inbox <- ec
+}
+
+func (p *ThingPlayer) StartLoop() {
+	go func() {
+		for {
+			select {
+			case evt := <-p.inbox:
+				switch evt.GetKind() {
+				case StageThinking:
+					p.Compute(evt.GetCoords())
+				case StagePhysics:
+					p.PhysicsApply()
+				}
+				evt.Done()
+			case <-p.done:
+				return
+			}
+		}
+	}()
+}
+
 // GetLight retrieves the Light object associated with the ThingPlayer instance. Returns a pointer to the Light.
 func (p *ThingPlayer) GetLight() *Light {
 	return nil
 }
 
-// Compute updates the player's internal state based on the input parameters.
-func (p *ThingPlayer) Compute(_ float64, _ float64, _ float64) {
+func (p *ThingPlayer) Compute(playerX float64, playerY float64, playerZ float64) {
+	//nothing to do
 }
 
 // AddAngle updates the player's current angle by adding the given angle in radians.

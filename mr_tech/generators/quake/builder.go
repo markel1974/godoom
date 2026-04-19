@@ -198,7 +198,9 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 1000
-	root.Player.Bobbing.SwayScale = 8.0
+	root.Player.Bobbing.SwayScale = 5.0
+	root.Player.Bobbing.SwayOffsetX = 0.5
+	root.Player.Bobbing.SwayOffsetY = -0.1
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
 	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.

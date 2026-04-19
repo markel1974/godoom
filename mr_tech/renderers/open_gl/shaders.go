@@ -137,11 +137,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	px, _, pz := vi.GetXYZ()
 	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
 
-	swayX, swayY := vi.GetSway()
-	flashX, flashY := w.flashlight.GetOffsetXY()
-	flashX += float32(swayX)
-	flashY -= float32(swayY)
-
+	flashX, flashY := float32(0), float32(0)
+	if w.flashlight.HasShadow() {
+		swayX, swayY := vi.GetSway()
+		flashX, flashY = float32(swayX), float32(swayY)
+	}
 	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, flashX, flashY)
 
 	proj, view, invView := w.main.UpdateUniforms(vi, w.scaleX, w.scaleY)

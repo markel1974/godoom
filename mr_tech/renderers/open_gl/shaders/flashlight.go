@@ -61,8 +61,6 @@ type Flashlight struct {
 	prg        uint32
 	table      [FlashLocLast]int32
 	factor     float32
-	offsetX    float32
-	offsetY    float32
 	shadows    bool
 	shadowsInt int32
 	metrics    *MapMetrics
@@ -73,8 +71,6 @@ func NewShaderFlashlight(metrics *MapMetrics) *Flashlight {
 	const defaultFactor = 80.0
 	f := &Flashlight{
 		factor:     defaultFactor,
-		offsetX:    0.0,
-		offsetY:    0.0,
 		shadows:    false,
 		shadowsInt: 0,
 		metrics:    metrics,
@@ -86,21 +82,6 @@ func NewShaderFlashlight(metrics *MapMetrics) *Flashlight {
 // GetFactor returns the current intensity factor of the flashlight.
 func (s *Flashlight) GetFactor() float32 {
 	return s.factor
-}
-
-/*
-// GetOffsetXY calculates and returns the flashlight's offset in X and Y directions, adjusted for bobbing movement.
-func (s *Flashlight) GetOffsetXY(bobX, bobY float64) (float32, float32) {
-	if s.shadows {
-		//float32 dynamicParallax = float32(math.Cos(bob * 0.5) * (1.1 * gScale))
-		return s.offsetX + float32(math.Cos(bob*0.5)*1.1), s.offsetY - float32(math.Abs(math.Sin(bob))*1.2)
-	}
-	return s.offsetX, s.offsetY
-}
-*/
-
-func (s *Flashlight) GetOffsetXY() (float32, float32) {
-	return s.offsetX, s.offsetY
 }
 
 // IncreaseFlashFactor increments the flashlight's intensity factor by increasing the `factor` field by 1.
@@ -119,12 +100,15 @@ func (s *Flashlight) DecreaseFlashFactor() {
 func (s *Flashlight) EnableShadows(e bool) {
 	s.shadows = e
 	if s.shadows {
-		s.offsetX, s.offsetY = 0.5, -0.1
 		s.shadowsInt = 1
 	} else {
-		s.offsetX, s.offsetY = 0.0, 0.0
 		s.shadowsInt = 0
 	}
+}
+
+// HasShadow checks if the flashlight has shadows enabled and returns true if shadows are active.
+func (s *Flashlight) HasShadow() bool {
+	return s.shadows
 }
 
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.

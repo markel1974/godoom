@@ -44,7 +44,6 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()
 	bobX, bobY, _ := player.GetBob()
-	vi.swayX, vi.swayY = player.GetSway()
 	// Vertical Bounce (Z Axis)
 	vi.where.Z += bobY
 	// Horizontal Sway (Local X/Y Axes)
@@ -55,6 +54,8 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	rightY := -vi.angleCos
 	vi.where.X += bobX * rightX
 	vi.where.Y += bobX * rightY
+
+	vi.swayX, vi.swayY = player.GetSway()
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewMatrix's position and orientation.

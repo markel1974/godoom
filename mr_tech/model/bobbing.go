@@ -22,7 +22,8 @@ type Bobbing struct {
 	ampY            float64
 	impactMax       float64
 	impactScale     float64
-	idleAmp         float64
+	idleAmpX        float64
+	idleAmpY        float64
 	springTension   float64
 	springDamping   float64
 	jumpBobOffset   float64 // L'offset verticale reale applicato alla telecamera
@@ -30,25 +31,30 @@ type Bobbing struct {
 	swayScale       float64
 	swayOffsetX     float64
 	swayOffsetY     float64
+	swayMultiplierX float64
+	swayMultiplierY float64
 }
 
 // NewBobbing initializes and returns a new Bobbing instance with the given parameters for motion and amplitude behavior.
 func NewBobbing(cfg *config.Bobbing) *Bobbing {
 	return &Bobbing{
-		swayOffsetX:   cfg.SwayOffsetX,
-		swayOffsetY:   cfg.SwayOffsetY,
-		swayScale:     cfg.SwayScale,
-		maxAmplitudeX: cfg.MaxAmplitudeX,
-		maxAmplitudeY: cfg.MaxAmplitudeY,
-		idleDrift:     cfg.IdleDrift,
-		strideLength:  cfg.StrideLength,
-		speedLerp:     cfg.SpeedLerp,
-		ampLerp:       cfg.AmpLerp,
-		impactMax:     cfg.ImpactMax,
-		impactScale:   cfg.ImpactScale,
-		idleAmp:       cfg.IdleAmp,
-		springTension: cfg.SpringTension,
-		springDamping: cfg.SpringDamping,
+		swayMultiplierX: cfg.SwayMultiplierX,
+		swayMultiplierY: cfg.SwayMultiplierY,
+		swayOffsetX:     cfg.SwayOffsetX,
+		swayOffsetY:     cfg.SwayOffsetY,
+		swayScale:       cfg.SwayScale,
+		maxAmplitudeX:   cfg.MaxAmplitudeX,
+		maxAmplitudeY:   cfg.MaxAmplitudeY,
+		idleDrift:       cfg.IdleDrift,
+		strideLength:    cfg.StrideLength,
+		speedLerp:       cfg.SpeedLerp,
+		ampLerp:         cfg.AmpLerp,
+		impactMax:       cfg.ImpactMax,
+		impactScale:     cfg.ImpactScale,
+		idleAmpX:        cfg.IdleAmpX,
+		idleAmpY:        cfg.IdleAmpY,
+		springTension:   cfg.SpringTension,
+		springDamping:   cfg.SpringDamping,
 	}
 }
 
@@ -83,10 +89,10 @@ func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
 		ratio = 1.0
 	}
 
-	targetAmpX := p.idleAmp + (ratio * (p.maxAmplitudeX - p.idleAmp))
+	targetAmpX := p.idleAmpX + (ratio * (p.maxAmplitudeX - p.idleAmpX))
 	p.ampX = (p.ampX * (1.0 - p.ampLerp)) + (targetAmpX * p.ampLerp)
 
-	targetAmpY := p.idleAmp + (ratio * (p.maxAmplitudeY - p.idleAmp))
+	targetAmpY := p.idleAmpY + (ratio * (p.maxAmplitudeY - p.idleAmpY))
 	p.ampY = (p.ampY * (1.0 - p.ampLerp)) + (targetAmpY * p.ampLerp)
 
 	// Lissajous Curve
@@ -127,8 +133,8 @@ func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }
 
 // GetSway calculates and returns the horizontal and vertical sway offsets as adjusted by bobbing motion and sway scale.
 func (p *Bobbing) GetSway() (float64, float64) {
-	x := p.swayOffsetX + ((p.bobX * 1.1) * p.swayScale)
-	y := p.swayOffsetY - ((p.bobY * 1.2) * p.swayScale)
+	x := p.swayOffsetX + ((p.bobX * p.swayMultiplierX) * p.swayScale)
+	y := p.swayOffsetY - ((p.bobY * p.swayMultiplierY) * p.swayScale)
 	//fmt.Printf("DEBUG BOB -> amp: %f | maxAmp: %f | idleAmp: %f\n", p.amp, p.maxAmplitude, p.idleAmp)
 	return x, y
 }

@@ -214,11 +214,12 @@ func (p *ThingPlayer) PhysicsApply() {
 		p.bobbing.InjectVerticalImpulse(prevVz)
 	}
 	// Fattore di allineamento per portare il 2.9 a ~60.0 fps o 120 fps...
-	frameMaxSpeed := p.speed / 20.0
+
+	const dt = 0.016 //0.016 per 60fps
 
 	//fmt.Printf("Vx: %f, Vy: %f, Speed: %f\n", p.entity.GetVx(), p.entity.GetVy(), p.speed)
 
-	p.bobbing.Compute(frameMaxSpeed, p.entity.GetVx(), p.entity.GetVy())
+	p.bobbing.Compute(dt, p.speed, p.entity.GetVx(), p.entity.GetVy())
 }
 
 // OnCollide handles the collision event between the current ThingPlayer and another object implementing the IThing interface.

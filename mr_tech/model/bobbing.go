@@ -71,41 +71,39 @@ func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 	p.jumpBobVelocity += vz * p.impactScale
 }
 
-// Compute updates the procedural bobbing motion based on the given 2D velocity components (v2x, v2y).
-func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
+// Compute updates the bobbing motion based on delta time, speed, and velocity components, smoothing transitions and physics effects.
+func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
+	frameMaxSpeed := maxSpeed * dt * 3.0
 	rawSpeed := math.Sqrt(v2x*v2x + v2y*v2y)
-	if rawSpeed > maxSpeed {
-		maxSpeed = (maxSpeed * 0.95) + (rawSpeed * 0.05)
+	if rawSpeed > frameMaxSpeed {
+		frameMaxSpeed = (frameMaxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
-
-	p.smoothedSpeed = (p.smoothedSpeed * (1.0 - p.speedLerp)) + (rawSpeed * p.speedLerp)
-	p.phase += p.idleDrift + (p.smoothedSpeed * p.strideLength)
-
+	timeLerpSpeed := math.Min(p.speedLerp*dt*60.0, 1.0)
+	timeLerpAmp := math.Min(p.ampLerp*dt*60.0, 1.0)
+	// Time-corrected lerp protetto
+	p.smoothedSpeed = p.smoothedSpeed + (rawSpeed-p.smoothedSpeed)*timeLerpSpeed
+	// La fase deve accumularsi in base al tempo, non ai frame
+	p.phase += (p.idleDrift + (p.smoothedSpeed * p.strideLength)) * dt * 60.0
 	ratio := 0.0
-	if maxSpeed > 0 {
-		ratio = p.smoothedSpeed / maxSpeed
+	if frameMaxSpeed > 0 {
+		ratio = p.smoothedSpeed / frameMaxSpeed
 	}
 	if ratio > 1.0 {
 		ratio = 1.0
 	}
-
+	// Lerp delle ampiezze protetto
 	targetAmpX := p.idleAmpX + (ratio * (p.maxAmplitudeX - p.idleAmpX))
-	p.ampX = (p.ampX * (1.0 - p.ampLerp)) + (targetAmpX * p.ampLerp)
-
+	p.ampX = p.ampX + (targetAmpX-p.ampX)*timeLerpAmp
 	targetAmpY := p.idleAmpY + (ratio * (p.maxAmplitudeY - p.idleAmpY))
-	p.ampY = (p.ampY * (1.0 - p.ampLerp)) + (targetAmpY * p.ampLerp)
-
-	// Lissajous Curve
-	// Orizzontale: Spostamento del peso (Coseno della fase base)
+	p.ampY = p.ampY + (targetAmpY-p.ampY)*timeLerpAmp
 	p.bobX = math.Cos(p.phase*0.5) * p.ampX
-	// Verticale: Rimbalzo ad ogni passo (Valore assoluto del seno, o Seno con fase doppia)
-	// Usiamo Abs(Sin) perché crea quell'impatto "duro" del tallone a terra
 	p.bobY = math.Abs(math.Sin(p.phase)) * p.ampY
-
-	// --- Jump/Fall Bob (Procedural Spring) ---
-	p.jumpBobVelocity -= p.jumpBobOffset * p.springTension
-	p.jumpBobVelocity *= p.springDamping
-	p.jumpBobOffset += p.jumpBobVelocity
+	// Integrazione di Eulero scalata nel tempo per la molla
+	accel := -(p.jumpBobOffset * p.springTension)
+	p.jumpBobVelocity += accel * dt * 60.0
+	// Damping applicato come esponenziale negativo per essere framerate-independent
+	p.jumpBobVelocity *= math.Pow(p.springDamping, dt*60.0)
+	p.jumpBobOffset += p.jumpBobVelocity * dt * 60.0
 }
 
 // Get returns the current horizontal bob offset, vertical bob offset, and phase of the procedural bobbing motion.

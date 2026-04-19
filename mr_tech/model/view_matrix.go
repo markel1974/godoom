@@ -41,17 +41,19 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngleFull()
 	vi.volume = player.GetLocation()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetVisualPosition()
-	bobX, bobY, _ := player.GetBob()
-	// Vertical Bounce (Z Axis)
-	vi.where.Z += bobY
-	// Horizontal Sway (Local X/Y Axes)
-	// To move the camera laterally relative to the view direction,
-	// we translate the absolute coordinates along the camera's "Right" vector.
-	// (Note: invert signs if your system has a different angle winding)
-	rightX := vi.angleSin
-	rightY := -vi.angleCos
-	vi.where.X += bobX * rightX
-	vi.where.Y += bobX * rightY
+	/*
+		bobX, bobY, _ := player.GetBob()
+		// Vertical Bounce (Z Axis)
+		vi.where.Z += bobY
+		// Horizontal Sway (Local X/Y Axes)
+		// To move the camera laterally relative to the view direction,
+		// we translate the absolute coordinates along the camera's "Right" vector.
+		// (Note: invert signs if your system has a different angle winding)
+		rightX := vi.angleSin
+		rightY := -vi.angleCos
+		vi.where.X += bobX * rightX
+		vi.where.Y += bobX * rightY
+	*/
 
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()

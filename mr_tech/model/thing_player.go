@@ -182,15 +182,20 @@ func (p *ThingPlayer) GetSway() (float64, float64) {
 
 // GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	//visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetY() + p.bobbing.GetJump()
 	return p.pos.X, p.pos.Y, p.pos.Z
 }
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (p *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
-	eyeHeight := p.getEyeHeight()
-	visualZ := p.pos.Z + eyeHeight + p.bobbing.GetY() + p.bobbing.GetJump()
-	return p.pos.X, p.pos.Y, visualZ
+	visualX, visualY, visualZ := p.pos.X, p.pos.Y, p.pos.Z
+	angleSin, angleCos := p.GetAngleFull()
+	bobX, bobY, _ := p.GetBob()
+	visualZ += p.getEyeHeight() + bobY + p.bobbing.GetJump()
+	rightX := angleSin
+	rightY := -angleCos
+	visualX += bobX * rightX
+	visualY += bobX * rightY
+	return visualX, visualY, visualZ
 }
 
 // GetLightIntensity retrieves the current light intensity value associated with the player.

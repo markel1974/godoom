@@ -76,12 +76,8 @@ func (w *Shaders) Setup(vStride, lStride int32, calibration *model.Calibration, 
 	a := &Assets{}
 	w.tex = tex
 	w.metrics = shaders.NewMapMetrics()
-	//shadowWidth := width   //1024
-	//shadowHeight := height //1024
-	if calibration != nil {
-		w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
-		w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
-	}
+	w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
+	w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
 
 	w.main = shaders.NewMain(vStride, w.metrics)
 	w.sky = shaders.NewSky()
@@ -138,9 +134,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	gl.ActiveTexture(gl.TEXTURE5)
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetEmissiveArray())
 
+	px, _, pz := vi.GetXYZ()
+	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
+
 	bob := vi.GetBobPhase()
-	swayX := w.flashlight.GetOffsetX(bob)
-	swayY := w.flashlight.GetOffsetY(bob)
+	swayX, swayY := w.flashlight.GetOffsetXY(bob)
 	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, swayX, swayY)
 
 	proj, view, invView := w.main.UpdateUniforms(vi, w.scaleX, w.scaleY)
@@ -149,7 +147,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)
 
-	// MAIN PREPARE (Ora invia sia VBO che EBO)
+	// MAIN PREPARE (VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen, fbW, fbH)
 	// LIGHTS PREPARE
 	w.lights.Prepare(frameLights, numLights)

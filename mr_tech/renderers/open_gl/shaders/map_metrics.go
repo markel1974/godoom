@@ -111,9 +111,10 @@ func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash float32, width,
 	m.flashAspect = float32(width) / float32(height)
 	fovFlashRad := (m.flashFovDeg * math.Pi) / 180.0
 	m.flashFov = float32(1.0 / math.Tan(float64(fovFlashRad/ndcRange)))
-	m.updateFlashProj(m.flashFov, m.flashAspect, m.flashZNear, m.flashZFar)
 	m.flashConeStart = float32(math.Cos(float64(m.flashFovDeg)/ndcRange*math.Pi/180.0)) + 0.01
 	m.flashConeEnd = float32(math.Cos(float64(m.flashFovDeg) / ndcRange * 0.6 * math.Pi / 180.0))
+
+	m.updateFlashProj(m.flashFov, m.flashAspect, m.flashZNear, m.flashZFar)
 }
 
 // GetFlashZFar returns the far clipping distance of the flashlight projection matrix.
@@ -124,8 +125,8 @@ func (m *MapMetrics) GetFlashZFar() float32 {
 // SetMapCenter sets the map center coordinates and light camera Y position, updating the view matrix accordingly.
 func (m *MapMetrics) SetMapCenter(cx float32, cz float32, lightCamY float32) {
 	m.mapCenterX = cx
-	m.mapCenterZ = cz
 	m.lightCamY = lightCamY
+	m.mapCenterZ = cz
 	m.updateRoomView(m.mapCenterX, m.lightCamY, m.mapCenterZ)
 }
 
@@ -149,11 +150,6 @@ func (m *MapMetrics) GetFovFlashDeg() float32 {
 	return m.flashFovDeg
 }
 
-// GetFovScaleFactor retrieves the scaling factor applied to the field of view (FOV) for perspective calculations.
-//func (m *MapMetrics) GetFovScaleFactor() float32 {
-//	return m.fovScaleFactor
-//}
-
 // GetFlashConeStart retrieves the starting angle's cosine value for the flashlight cone, used for defining its shape.
 func (m *MapMetrics) GetFlashConeStart() float32 {
 	return m.flashConeStart
@@ -163,12 +159,6 @@ func (m *MapMetrics) GetFlashConeStart() float32 {
 func (m *MapMetrics) GetFlashConeEnd() float32 {
 	return m.flashConeEnd
 }
-
-// SetFovScaleFactor sets the field-of-view (FOV) scale factor and updates the scaled FOV value.
-//func (m *MapMetrics) SetFovScaleFactor(value float32) {
-//	m.fovScaleFactor = value
-//	m.scaleFovY = m.fovScaleFactor * float32(model.VFov)
-//}
 
 // updateRoomProj updates the orthographic projection matrix (roomProj) and combined matrix (roomSpace) for the room space.
 // It recalculates these matrices based on the provided orthoSize, zNearRoom, and zFarRoom values.
@@ -220,15 +210,15 @@ func (m *MapMetrics) updateFlashProj(flashFov, flashAspect, zNearFlash, zFarFlas
 
 // CreateSpaces generates and returns the room space matrix, flashlight space matrix, and main view matrix based on input parameters.
 func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngle()
-	// Clean extraction (World Space: Z-UP)
-	wX, wY, wZ := vi.GetXYZ()
-	// Spatial mapping for OpenGL (X, Z, -Y)
-	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
+	wX, wY, wZ := vi.GetXYZ()
+	// Spatial mapping for OpenGL (X, Z, -Y)
+	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
 	mainView := [16]float32{
 		rX, uX, -fX, 0,
 		rY, uY, -fY, 0,
@@ -310,3 +300,14 @@ func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
 	}
 	return inv, true
 }
+
+// GetFovScaleFactor retrieves the scaling factor applied to the field of view (FOV) for perspective calculations.
+//func (m *MapMetrics) GetFovScaleFactor() float32 {
+//	return m.fovScaleFactor
+//}
+
+// SetFovScaleFactor sets the field-of-view (FOV) scale factor and updates the scaled FOV value.
+//func (m *MapMetrics) SetFovScaleFactor(value float32) {
+//	m.fovScaleFactor = value
+//	m.scaleFovY = m.fovScaleFactor * float32(model.VFov)
+//}

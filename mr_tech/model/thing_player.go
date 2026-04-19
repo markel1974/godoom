@@ -154,6 +154,11 @@ func (p *ThingPlayer) GetBob() (float64, float64, float64) {
 	return p.bobbing.Get()
 }
 
+// GetSway retrieves the flashlight's current state as two float64 values.
+func (p *ThingPlayer) GetSway() (float64, float64) {
+	return p.bobbing.GetSway()
+}
+
 // GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
 	visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetY() + p.bobbing.GetJump()
@@ -208,8 +213,12 @@ func (p *ThingPlayer) PhysicsApply() {
 		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
 		p.bobbing.InjectVerticalImpulse(prevVz)
 	}
+	// Fattore di allineamento per portare il 2.9 a ~60.0 fps o 120 fps...
+	frameMaxSpeed := p.speed / 20.0
 
-	p.bobbing.Compute(p.speed, p.entity.GetVx(), p.entity.GetVy())
+	//fmt.Printf("Vx: %f, Vy: %f, Speed: %f\n", p.entity.GetVx(), p.entity.GetVy(), p.speed)
+
+	p.bobbing.Compute(frameMaxSpeed, p.entity.GetVx(), p.entity.GetVy())
 }
 
 // OnCollide handles the collision event between the current ThingPlayer and another object implementing the IThing interface.

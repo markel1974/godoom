@@ -8,7 +8,8 @@ import (
 
 // Bobbing represents a procedural motion system for simulating walking and vertical head movement effects.
 type Bobbing struct {
-	maxAmplitude  float64
+	maxAmplitudeX float64
+	maxAmplitudeY float64
 	idleDrift     float64
 	strideLength  float64
 	speedLerp     float64
@@ -17,24 +18,25 @@ type Bobbing struct {
 	bobX          float64
 	bobY          float64
 	phase         float64
-	amp           float64
-
-	impactMax   float64
-	impactScale float64
-	idleAmp     float64
-
+	ampX          float64
+	ampY          float64
+	impactMax     float64
+	impactScale   float64
+	idleAmp       float64
 	springTension float64
 	springDamping float64
-
 	// --- Jump/Fall Bob (Procedural Spring) ---
 	jumpBobOffset   float64 // L'offset verticale reale applicato alla telecamera
 	jumpBobVelocity float64 // La velocità accumulata della molla
+	swayScale       float64
 }
 
 // NewBobbing initializes and returns a new Bobbing instance with the given parameters for motion and amplitude behavior.
 func NewBobbing(cfg *config.Bobbing) *Bobbing {
 	return &Bobbing{
-		maxAmplitude:  cfg.MaxAmplitude,
+		swayScale:     cfg.SwayScale,
+		maxAmplitudeX: cfg.MaxAmplitudeX,
+		maxAmplitudeY: cfg.MaxAmplitudeY,
 		idleDrift:     cfg.IdleDrift,
 		strideLength:  cfg.StrideLength,
 		speedLerp:     cfg.SpeedLerp,
@@ -78,16 +80,18 @@ func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
 		ratio = 1.0
 	}
 
-	targetAmp := p.idleAmp + (ratio * (p.maxAmplitude - p.idleAmp))
-	p.amp = (p.amp * (1.0 - p.ampLerp)) + (targetAmp * p.ampLerp)
+	targetAmpX := p.idleAmp + (ratio * (p.maxAmplitudeX - p.idleAmp))
+	p.ampX = (p.ampX * (1.0 - p.ampLerp)) + (targetAmpX * p.ampLerp)
+
+	targetAmpY := p.idleAmp + (ratio * (p.maxAmplitudeY - p.idleAmp))
+	p.ampY = (p.ampY * (1.0 - p.ampLerp)) + (targetAmpY * p.ampLerp)
 
 	// --- LA MATEMATICA DEL VIEW-BOBBING (Lissajous Curve) ---
 	// Orizzontale: Spostamento del peso (Coseno della fase base)
-	p.bobX = math.Cos(p.phase) * p.amp
-
+	p.bobX = math.Cos(p.phase*0.5) * p.ampX
 	// Verticale: Rimbalzo ad ogni passo (Valore assoluto del seno, o Seno con fase doppia)
 	// Usiamo Abs(Sin) perché crea quell'impatto "duro" del tallone a terra
-	p.bobY = math.Abs(math.Sin(p.phase)) * p.amp
+	p.bobY = math.Abs(math.Sin(p.phase)) * p.ampY
 
 	// --- Jump/Fall Bob (Procedural Spring) ---
 	p.jumpBobVelocity -= p.jumpBobOffset * p.springTension
@@ -117,3 +121,10 @@ func (p *Bobbing) Phase() float64 {
 
 // GetJump returns the current vertical offset from the jump or fall bob effect.
 func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }
+
+func (p *Bobbing) GetSway() (float64, float64) {
+	x := (p.bobX * 1.1) * p.swayScale
+	y := (p.bobY * 1.2) * p.swayScale
+	//fmt.Printf("DEBUG BOB -> amp: %f | maxAmp: %f | idleAmp: %f\n", p.amp, p.maxAmplitude, p.idleAmp)
+	return x, y
+}

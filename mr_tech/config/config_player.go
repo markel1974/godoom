@@ -6,7 +6,9 @@ import (
 )
 
 type Bobbing struct {
-	MaxAmplitude  float64
+	SwayScale     float64
+	MaxAmplitudeX float64
+	MaxAmplitudeY float64
 	IdleDrift     float64
 	StrideLength  float64
 	SpeedLerp     float64
@@ -37,8 +39,9 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 		},
 		Bobbing: &Bobbing{},
 	}
-
-	p.Bobbing.MaxAmplitude = 0.50
+	p.Bobbing.SwayScale = 4.0
+	p.Bobbing.MaxAmplitudeX = 0.05
+	p.Bobbing.MaxAmplitudeY = 0.80
 	p.Bobbing.StrideLength = 0.015
 	p.Bobbing.IdleAmp = 0.02
 	p.Bobbing.IdleDrift = 0.03

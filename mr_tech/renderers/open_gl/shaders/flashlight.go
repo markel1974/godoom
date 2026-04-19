@@ -2,7 +2,6 @@ package shaders
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -89,12 +88,18 @@ func (s *Flashlight) GetFactor() float32 {
 	return s.factor
 }
 
+/*
 // GetOffsetXY calculates and returns the flashlight's offset in X and Y directions, adjusted for bobbing movement.
-func (s *Flashlight) GetOffsetXY(bob float64) (float32, float32) {
+func (s *Flashlight) GetOffsetXY(bobX, bobY float64) (float32, float32) {
 	if s.shadows {
 		//float32 dynamicParallax = float32(math.Cos(bob * 0.5) * (1.1 * gScale))
 		return s.offsetX + float32(math.Cos(bob*0.5)*1.1), s.offsetY - float32(math.Abs(math.Sin(bob))*1.2)
 	}
+	return s.offsetX, s.offsetY
+}
+*/
+
+func (s *Flashlight) GetOffsetXY() (float32, float32) {
 	return s.offsetX, s.offsetY
 }
 
@@ -114,7 +119,7 @@ func (s *Flashlight) DecreaseFlashFactor() {
 func (s *Flashlight) EnableShadows(e bool) {
 	s.shadows = e
 	if s.shadows {
-		s.offsetX, s.offsetY = 0.1, -0.05
+		s.offsetX, s.offsetY = 0.5, -0.1
 		s.shadowsInt = 1
 	} else {
 		s.offsetX, s.offsetY = 0.0, 0.0

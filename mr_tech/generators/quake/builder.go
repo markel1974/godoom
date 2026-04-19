@@ -198,11 +198,13 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 1000
-	root.Player.Bobbing.IdleAmp = 0.9 // Respiro
-	root.Player.Bobbing.IdleDrift = 0.01
-	root.Player.Bobbing.MaxAmplitude = 60.0   // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	root.Player.Bobbing.SwayScale = 8.0
+	root.Player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	root.Player.Bobbing.MaxAmplitudeY = 5.5
 	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
-	root.Player.Bobbing.SpeedLerp = 0.30      // Reattività istantanea alla velocità
+	root.Player.Bobbing.IdleAmp = 0.9         // Respiro
+	root.Player.Bobbing.IdleDrift = 0.01
+	root.Player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
 	root.Player.Bobbing.AmpLerp = 0.20
 	root.Player.Bobbing.ImpactMax = 1000.0
 	root.Player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale

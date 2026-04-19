@@ -22,7 +22,8 @@ type ViewMatrix struct {
 	yaw            float64
 	lightIntensity float64
 	volume         *Volume
-	bobPhase       float64
+	swayX          float64
+	swayY          float64
 	front          *physics.Frustum
 	rear           *physics.Frustum
 }
@@ -42,14 +43,14 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()
-	bobX, bobY, bobPhase := player.GetBob()
-	vi.bobPhase = bobPhase
-	// 2. Bounce Verticale (Asse Z)
+	bobX, bobY, _ := player.GetBob()
+	vi.swayX, vi.swayY = player.GetSway()
+	// Vertical Bounce (Z Axis)
 	vi.where.Z += bobY
-	// 3. Sway Orizzontale (Asse X/Y locali)
-	// Per muovere la telecamera lateralmente rispetto a dove guardi,
-	// trasliamo le coordinate assolute lungo il vettore "Right" della camera.
-	// (Nota: inverti i segni se il tuo sistema ha un winding dell'angolo diverso)
+	// Horizontal Sway (Local X/Y Axes)
+	// To move the camera laterally relative to the view direction,
+	// we translate the absolute coordinates along the camera's "Right" vector.
+	// (Note: invert signs if your system has a different angle winding)
 	rightX := vi.angleSin
 	rightY := -vi.angleCos
 	vi.where.X += bobX * rightX
@@ -122,9 +123,9 @@ func (vi *ViewMatrix) ZDistance(v float64) float64 {
 	return v - vi.where.Z
 }
 
-// GetBobPhase returns the current bob phase value of the ViewMatrix as a float64 for use in animation or rendering calculations.
-func (vi *ViewMatrix) GetBobPhase() float64 {
-	return vi.bobPhase
+// GetSway returns the horizontal and vertical sway values of the ViewMatrix as two float64 values.
+func (vi *ViewMatrix) GetSway() (float64, float64) {
+	return vi.swayX, vi.swayY
 }
 
 // GetFrustum computes and returns the front and rear frustums using the given framebuffer dimensions and far plane distance.

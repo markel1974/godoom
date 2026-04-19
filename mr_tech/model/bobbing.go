@@ -14,7 +14,8 @@ type Bobbing struct {
 	speedLerp     float64
 	ampLerp       float64
 	smoothedSpeed float64
-	bob           float64
+	bobX          float64
+	bobY          float64
 	phase         float64
 	amp           float64
 
@@ -65,8 +66,10 @@ func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
 	if rawSpeed > maxSpeed {
 		maxSpeed = (maxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
+
 	p.smoothedSpeed = (p.smoothedSpeed * (1.0 - p.speedLerp)) + (rawSpeed * p.speedLerp)
 	p.phase += p.idleDrift + (p.smoothedSpeed * p.strideLength)
+
 	ratio := 0.0
 	if maxSpeed > 0 {
 		ratio = p.smoothedSpeed / maxSpeed
@@ -74,22 +77,43 @@ func (p *Bobbing) Compute(maxSpeed, v2x, v2y float64) {
 	if ratio > 1.0 {
 		ratio = 1.0
 	}
-	// Impediamo all'ampiezza di scendere a zero. Da fermo (ratio=0), l'ampiezza
-	// sarà 0.3 (respiro corto). In corsa (ratio=1), scala fluidamente fino a maxAmplitude.
+
 	targetAmp := p.idleAmp + (ratio * (p.maxAmplitude - p.idleAmp))
 	p.amp = (p.amp * (1.0 - p.ampLerp)) + (targetAmp * p.ampLerp)
-	p.bob = math.Sin(p.phase) * p.amp
+
+	// --- LA MATEMATICA DEL VIEW-BOBBING (Lissajous Curve) ---
+	// Orizzontale: Spostamento del peso (Coseno della fase base)
+	p.bobX = math.Cos(p.phase) * p.amp
+
+	// Verticale: Rimbalzo ad ogni passo (Valore assoluto del seno, o Seno con fase doppia)
+	// Usiamo Abs(Sin) perché crea quell'impatto "duro" del tallone a terra
+	p.bobY = math.Abs(math.Sin(p.phase)) * p.amp
+
 	// --- Jump/Fall Bob (Procedural Spring) ---
 	p.jumpBobVelocity -= p.jumpBobOffset * p.springTension
 	p.jumpBobVelocity *= p.springDamping
 	p.jumpBobOffset += p.jumpBobVelocity
 }
 
-// GetBob returns the current vertical bobbing displacement as a float64 value.
-func (p *Bobbing) GetBob() float64 { return p.bob }
+// Get returns the current horizontal bob offset, vertical bob offset, and phase of the procedural bobbing motion.
+func (p *Bobbing) Get() (float64, float64, float64) {
+	return p.bobX, p.bobY, p.phase
+}
 
-// GetPhase returns the current phase of the bobbing motion as a float64.
-func (p *Bobbing) GetPhase() float64 { return p.phase }
+// GetX returns the current horizontal bob offset as a float64 value.
+func (p *Bobbing) GetX() float64 {
+	return p.bobX
+}
 
-// GetJumpBob returns the current vertical offset applied to the camera due to procedural spring-based jumping effects.
-func (p *Bobbing) GetJumpBob() float64 { return p.jumpBobOffset }
+// GetY returns the current vertical component of the procedural bobbing motion.
+func (p *Bobbing) GetY() float64 {
+	return p.bobY
+}
+
+// Phase returns the current phase of the procedural bobbing motion.
+func (p *Bobbing) Phase() float64 {
+	return p.phase
+}
+
+// GetJump returns the current vertical offset from the jump or fall bob effect.
+func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }

@@ -38,14 +38,15 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 		Bobbing: &Bobbing{},
 	}
 
-	p.Bobbing.MaxAmplitude = 0.9
-	p.Bobbing.IdleDrift = 0.03
+	p.Bobbing.MaxAmplitude = 0.50
 	p.Bobbing.StrideLength = 0.015
+	p.Bobbing.IdleAmp = 0.02
+	p.Bobbing.IdleDrift = 0.03
 	p.Bobbing.SpeedLerp = 0.15
-	p.Bobbing.AmpLerp = 0.10
+	p.Bobbing.AmpLerp = 0.30
+
 	p.Bobbing.ImpactMax = 20.0
 	p.Bobbing.ImpactScale = 0.05
-	p.Bobbing.IdleAmp = 0.3
 	p.Bobbing.SpringTension = 0.15
 	p.Bobbing.SpringDamping = 0.75
 

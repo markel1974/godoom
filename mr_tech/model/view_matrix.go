@@ -42,9 +42,18 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
 	vi.yaw = player.GetYaw()
 	vi.lightIntensity = player.GetLightIntensity()
-	bob, bobPhase := player.GetBobPhase()
+	bobX, bobY, bobPhase := player.GetBob()
 	vi.bobPhase = bobPhase
-	vi.where.Z += bob
+	// 2. Bounce Verticale (Asse Z)
+	vi.where.Z += bobY
+	// 3. Sway Orizzontale (Asse X/Y locali)
+	// Per muovere la telecamera lateralmente rispetto a dove guardi,
+	// trasliamo le coordinate assolute lungo il vettore "Right" della camera.
+	// (Nota: inverti i segni se il tuo sistema ha un winding dell'angolo diverso)
+	rightX := vi.angleSin
+	rightY := -vi.angleCos
+	vi.where.X += bobX * rightX
+	vi.where.Y += bobX * rightY
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewMatrix's position and orientation.

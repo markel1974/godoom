@@ -149,14 +149,14 @@ func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
 }
 
-// GetBobPhase returns the current bobbing displacement and phase as a pair of float64 values from the Bobbing system.
-func (p *ThingPlayer) GetBobPhase() (float64, float64) {
-	return p.bobbing.GetBob(), p.bobbing.GetPhase()
+// GetBob retrieves the current bobbing values of the ThingPlayer as three float64 components (x, y, z).
+func (p *ThingPlayer) GetBob() (float64, float64, float64) {
+	return p.bobbing.Get()
 }
 
 // GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetBob() + p.bobbing.GetJumpBob()
+	visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetY() + p.bobbing.GetJump()
 	return p.pos.X, p.pos.Y, visualZ
 }
 

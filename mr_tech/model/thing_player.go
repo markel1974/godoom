@@ -15,7 +15,6 @@ const maxYaw = 5.0
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
 	kind           int
-	angle          float64
 	angleSin       float64
 	angleCos       float64
 	yaw            float64
@@ -24,9 +23,6 @@ type ThingPlayer struct {
 	lightIntensity float64
 	bobbing        *Bobbing
 	debug          bool
-	eyeHeight      float64
-	headMargin     float64
-	duckHeight     float64
 	*ThingBase
 }
 
@@ -56,9 +52,6 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
-		eyeHeight:      c.Height * 0.80,
-		headMargin:     c.Height * 0.25,
-		duckHeight:     c.Height * 0.25,
 	}
 	p.id = "PLAYER"
 	p.SetAngle(c.Angle)
@@ -159,10 +152,11 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 // SetJump applies an upward force to make the ThingPlayer jump.
 func (p *ThingPlayer) SetJump(multi bool) {
 	onGround := true
-	fz := p.mass * 100
+	mass := p.entity.GetMass()
+	fz := mass * 100
 	if !multi {
 		onGround = p.entity.IsOnGround()
-		fz = p.mass * 1000
+		fz = mass * 1000
 	}
 	if onGround {
 		p.entity.AddForce(0.0, 0.0, fz)
@@ -188,7 +182,14 @@ func (p *ThingPlayer) GetSway() (float64, float64) {
 
 // GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetY() + p.bobbing.GetJump()
+	//visualZ := p.pos.Z + p.getEyeHeight() + p.bobbing.GetY() + p.bobbing.GetJump()
+	return p.pos.X, p.pos.Y, p.pos.Z
+}
+
+// GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
+func (p *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
+	eyeHeight := p.getEyeHeight()
+	visualZ := p.pos.Z + eyeHeight + p.bobbing.GetY() + p.bobbing.GetJump()
 	return p.pos.X, p.pos.Y, visualZ
 }
 
@@ -204,12 +205,12 @@ func (p *ThingPlayer) SetLightIntensity(lightIntensity float64) {
 
 // GetRadius returns the radius of the ThingPlayer entity.
 func (p *ThingPlayer) GetRadius() float64 {
-	return p.radius
+	return p.entity.GetWidth() / 2
 }
 
 // GetMass returns the mass of the ThingPlayer as a float64.
 func (p *ThingPlayer) GetMass() float64 {
-	return p.mass
+	return p.entity.GetMass()
 }
 
 // GetVelocity returns the current velocity components (vx, vy, vz) of the player as float64 values.
@@ -232,7 +233,7 @@ func (p *ThingPlayer) PhysicsApply() {
 	wasGrounded := p.entity.IsOnGround()
 	prevVz := p.entity.GetVz()
 
-	p.doPhysics(p.getHeadHeight())
+	p.doPhysics()
 
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := p.entity.IsOnGround()
@@ -249,38 +250,29 @@ func (p *ThingPlayer) PhysicsApply() {
 	p.bobbing.Compute(dt, p.speed, p.entity.GetVx(), p.entity.GetVy())
 }
 
-// OnCollide handles the collision event between the current ThingPlayer and another object implementing the IThing interface.
-func (p *ThingPlayer) OnCollide(other IThing) {
-	//TODO IMPLEMENT
-}
-
-// getHeadHeight calculates the player's head height by adding headMargin to the eye height based on the given base height.
-func (p *ThingPlayer) getHeadHeight() float64 {
-	return p.getEyeHeight() + p.headMargin
-}
-
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.
 func (p *ThingPlayer) getEyeHeight() float64 {
 	if p.ducking {
-		return p.duckHeight
+		return p.entity.GetDepth() * 0.25
 	}
-	return p.eyeHeight
+	return p.entity.GetDepth() * 0.80
 }
 
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
 func (p *ThingPlayer) Throw() {
-	camX, camY, camZ := p.GetPosition()
-	weaponForward := p.GetRadius() * 2
-	spawnX := camX + (p.angleCos * weaponForward)
-	spawnY := camY + (p.angleSin * weaponForward)
-	spawnZ := camZ - (p.getHeadHeight() * 0.5)
+	camX, camY, camZ := p.GetVisualPosition()
+	diameter := p.entity.GetWidth()
+	spawnX := camX + (p.angleCos * diameter)
+	spawnY := camY + (p.angleSin * diameter)
+	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 	p.LaunchObject(spawnPos, p.angle, -p.yaw)
 }
 
+// Fire triggers a hitscan action from the player's position along a calculated direction vector.
 func (p *ThingPlayer) Fire() {
 	// 1. Origine della vista (include Bobbing e Crouch)
-	camX, camY, camZ := p.GetPosition()
+	camX, camY, camZ := p.GetVisualPosition()
 	// 2. Calcolo del vettore direzione (Radianti)
 	// Usiamo lo yaw invertito per la telecamera e lo scaliamo per il FOV
 	pitchRad := -p.yaw
@@ -292,7 +284,7 @@ func (p *ThingPlayer) Fire() {
 	weaponForward := p.GetRadius() * 2.0
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
-	spawnZ := camZ - (p.getHeadHeight() * 0.5)
+	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 	p.FireHitscan(spawnPos, dirX, dirY, dirZ)

@@ -215,6 +215,11 @@ func (e *Entity) GetWidth() float64 {
 	return e.rect.GetWidth()
 }
 
+// GetHeight returns the height of the entity by retrieving it from the associated rectangle object.
+func (e *Entity) GetHeight() float64 {
+	return e.rect.GetHeight()
+}
+
 // GetInvMass returns the inverse mass of the entity, which is the reciprocal of its mass.
 func (e *Entity) GetInvMass() float64 {
 	return e.invMass

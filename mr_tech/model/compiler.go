@@ -117,7 +117,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	facesTree := physics.NewAABBTree(1024, epsilon)
 	emptyAnim := anim.GetAnimation(nil)
 
-	ve := NewVertexEdges(epsilon)
+	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
 
 	for csIdx, cs := range css {

@@ -17,12 +17,7 @@ type VertexNode struct {
 
 // NewVertexNode creates and returns a new VertexNode with the specified ID and 2D coordinates (XY) initialized with an AABB.
 func NewVertexNode(id int, xy geometry.XY, eps float64) *VertexNode {
-	//const eps = 0.001
-	vn := &VertexNode{
-		Id:   id,
-		XY:   xy,
-		aabb: physics.NewAABB(),
-	}
+	vn := &VertexNode{Id: id, XY: xy, aabb: physics.NewAABB()}
 	vn.aabb.Rebuild(xy.X-eps, xy.Y-eps, 0, xy.X+eps, xy.Y+eps, 0)
 	return vn
 }
@@ -32,17 +27,17 @@ func (v *VertexNode) GetAABB() *physics.AABB {
 	return v.aabb
 }
 
-// VertexEdges represents a structure that associates a polygon with an AABB tree and its corresponding sector edges.
-type VertexEdges struct {
+// SectorEdges represents a structure that associates a polygon with an AABB tree and its corresponding sector edges.
+type SectorEdges struct {
 	vertexes     geometry.Polygon
 	tree         *physics.AABBTree
 	sectorsEdges [][]geometry.Edge
 	eps          float64
 }
 
-// NewVertexEdges creates and initializes a new instance of VertexEdges with an empty vertex list and a new AABBTree.
-func NewVertexEdges(eps float64) *VertexEdges {
-	return &VertexEdges{
+// NewSectorsEdges creates and initializes a new instance of SectorEdges with an empty vertex list and a new AABBTree.
+func NewSectorsEdges(eps float64) *SectorEdges {
+	return &SectorEdges{
 		tree:         physics.NewAABBTree(1024, 4.0),
 		vertexes:     nil,
 		sectorsEdges: nil,
@@ -50,7 +45,8 @@ func NewVertexEdges(eps float64) *VertexEdges {
 	}
 }
 
-func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
+// getOrAddVertex retrieves the ID of an existing vertex matching the given point or adds a new vertex and returns its ID.
+func (t *SectorEdges) getOrAddVertex(p geometry.XY) int {
 	foundId := -1
 	t.tree.QueryPoint2d(p.X, p.Y, func(object physics.IAABB) bool {
 		if v, ok := object.(*VertexNode); ok {
@@ -73,18 +69,16 @@ func (t *VertexEdges) getOrAddVertex(p geometry.XY) int {
 }
 
 // Construct builds the vertex and edge data structures from the provided configuration world.
-func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.Sector) {
-	// STEP 1: Priming dell'AABB Tree
+func (t *SectorEdges) Construct(vertices geometry.Polygon, css []*config.Sector) {
+	// Priming dell'AABB Tree
 	for _, point := range vertices {
 		idx := len(t.vertexes)
 		t.vertexes = append(t.vertexes, point)
 		vNode := NewVertexNode(idx, point, t.eps)
 		t.tree.InsertObject(vNode)
 	}
-
-	// STEP 2: Costruzione degli Edges (Constraints)
+	// Costruzione degli Edges (Constraints)
 	t.sectorsEdges = make([][]geometry.Edge, len(css))
-
 	for configIdx, cs := range css {
 		var edges []geometry.Edge
 		for i, cn := range cs.Segments {
@@ -98,7 +92,7 @@ func (t *VertexEdges) Construct(vertices geometry.Polygon, css []*config.Sector)
 
 // GetTriangles returns a collection of triangulated polygons for the specified sector index or an error if the index is invalid.
 // The returned polygons represent non-overlapping tri groups derived from the sector's edges.
-func (t *VertexEdges) GetTriangles(configIdx int) ([][]geometry.Polygon, []geometry.Edge, error) {
+func (t *SectorEdges) GetTriangles(configIdx int) ([][]geometry.Polygon, []geometry.Edge, error) {
 	if configIdx < 0 || configIdx >= len(t.sectorsEdges) {
 		return nil, nil, fmt.Errorf("invalid sector index %d", configIdx)
 	}

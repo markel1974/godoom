@@ -20,7 +20,6 @@ type ComputeStage uint8
 const (
 	StageThinking ComputeStage = iota //  0 (AI, Aggro)
 	StagePhysics                      //  1 (Sweep, Collision)
-	StageCollision
 )
 
 // ThingEvent represents an event associated with a Thing, containing position data, a compute stage, and synchronization.

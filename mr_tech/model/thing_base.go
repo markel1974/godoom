@@ -21,30 +21,27 @@ type IVertices interface {
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id             string
-	pos            geometry.XYZ
-	kind           config.ThingType
-	mass           float64
-	radius         float64
-	height         float64
-	angle          float64
-	maxStep        float64
-	speed          float64
-	acceleration   float64
-	wakeUpDistance float64
-	location       *Volume
-	animation      *textures.Animation
-	world          *Volumes
-	things         *Things
-	isActive       bool
-	identifier     int
-	wall           *ThingWall
-	volume         *Volume
-	entity         *physics.Entity
-	vertices       IVertices
-
-	inbox chan *ThingEvent
-	done  chan struct{} // Per il teardown
+	id            string
+	pos           geometry.XYZ
+	kind          config.ThingType
+	angle         float64
+	maxStep       float64
+	speed         float64
+	acceleration  float64
+	location      *Volume
+	animation     *textures.Animation
+	world         *Volumes
+	things        *Things
+	isActive      bool
+	identifier    int
+	wall          *ThingWall
+	volume        *Volume
+	entity        *physics.Entity
+	vertices      IVertices
+	collisions    []IThing
+	collisionsIdx int
+	inbox         chan *ThingEvent
+	done          chan struct{} // Per il teardown
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -67,29 +64,27 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 	}
 	volume := vertices.GetVolume()
 	t := &ThingBase{
-		vertices:       vertices,
-		volume:         volume,
-		entity:         volume.GetEntity(),
-		id:             cfg.Id,
-		angle:          radAngle,
-		kind:           cfg.Kind,
-		mass:           cfg.Mass,
-		radius:         cfg.Radius,
-		height:         cfg.Height,
-		speed:          cfg.Speed,
-		acceleration:   cfg.Acceleration,
-		wakeUpDistance: cfg.WakeUpDistance,
-		pos:            pos,
-		location:       location,
-		animation:      anim,
-		world:          volumes,
-		things:         things,
-		maxStep:        cfg.Height * 0.5,
-		isActive:       true,
-		identifier:     -1,
-		wall:           NewThingWall(volumes, 0, 0),
-		inbox:          make(chan *ThingEvent, 16),
-		done:           make(chan struct{}),
+		vertices:      vertices,
+		volume:        volume,
+		entity:        volume.GetEntity(),
+		id:            cfg.Id,
+		angle:         radAngle,
+		kind:          cfg.Kind,
+		speed:         cfg.Speed,
+		acceleration:  cfg.Acceleration,
+		pos:           pos,
+		location:      location,
+		animation:     anim,
+		world:         volumes,
+		things:        things,
+		maxStep:       cfg.Height * 0.5,
+		isActive:      true,
+		identifier:    -1,
+		wall:          NewThingWall(volumes, 0, 0),
+		inbox:         make(chan *ThingEvent, 16),
+		done:          make(chan struct{}),
+		collisions:    make([]IThing, 128),
+		collisionsIdx: 0,
 	}
 	t.entity.SetOnGround(false)
 
@@ -143,7 +138,7 @@ func (t *ThingBase) GetLocation() *Volume {
 
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetRadius() float64 {
-	return t.radius
+	return t.entity.GetWidth() / 2.0
 }
 
 // GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
@@ -184,6 +179,11 @@ func (t *ThingBase) GetIdentifier() int {
 
 // OnCollide handles interactions when the current object collides with another object implementing the IThing interface.
 func (t *ThingBase) OnCollide(other IThing) {
+	if t.collisionsIdx >= len(t.collisions) {
+		return
+	}
+	t.collisions[t.collisionsIdx] = other
+	t.collisionsIdx++
 	//fmt.Println("COLLISION -> ", other.GetId())
 }
 
@@ -200,11 +200,22 @@ func (t *ThingBase) SetActive(active bool) {
 // PhysicsApply applies physics calculations to the ThingBase instance using its height attribute.
 func (t *ThingBase) PhysicsApply() {
 	//TODO TOO SLOOW!!!!!!!
-	t.doPhysics(t.height)
+	t.doPhysics()
 }
 
 // doPhysics handles the physics computations for movement, collision detection, and location transitions for the entity.
-func (t *ThingBase) doPhysics(tHeight float64) {
+func (t *ThingBase) doPhysics() {
+	for i := 0; i < t.collisionsIdx; i++ {
+		//other := t.collisions[i]
+		//if enemy, ok := other.(*ThingEnemy); ok {
+		//	_ = enemy
+		// enemy.TakeDamage(...)
+		// t.SetActive(false)
+		//}
+		t.collisions[i] = nil
+	}
+	t.collisionsIdx = 0
+
 	// extract displacement delta
 	dx, dy, dz := t.entity.GetDisplacement()
 	//if dx == 0.0 && dy == 0.0 && dz == 0.0 {
@@ -230,13 +241,15 @@ func (t *ThingBase) doPhysics(tHeight float64) {
 		return
 	}
 
+	tHeight := t.entity.GetDepth()
 	//fmt.Printf("thing %s is moving x:%f y:%f z:%f\n", t.id, dx, dy, dz)
 	isGrounded := false
 	pX, pY, pZ := t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
 	hPos := t.pos.Z + tHeight
 	elevBaseZ := t.pos.Z + t.maxStep
 	// continuous collision detection (ccd) & sliding
-	face, nX, nY, nZ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, t.radius)
+	radius := t.GetRadius()
+	face, nX, nY, nZ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, radius)
 	if face != nil {
 		// apply physical response to the entity
 		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ)

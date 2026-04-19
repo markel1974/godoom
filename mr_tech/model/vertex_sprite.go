@@ -13,24 +13,26 @@ type VertexSprite struct {
 
 // NewVertexSprite creates a new VertexSprite with the given animation, position, dimensions, and physical properties.
 func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
-	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, w, h, d, mass, restitution, friction)
-	f := &VertexSprite{
-		gScale: gScale,
-		volume: volume,
-	}
-	f.volume.SetBillboard(1.0)
-	height := 0.0
-	halfW := 0.0
+	height := h
+	width := w
+	halfW := width / 2.0
 	if anim != nil {
 		tex := anim.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
 			scaleW, scaleH := anim.ScaleFactor()
-			width := float64(texW) * scaleW
+			width = float64(texW) * scaleW
 			height = float64(texH) * scaleH
 			halfW = width / 2.0
 		}
 	}
+
+	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, width, height, d, mass, restitution, friction)
+	f := &VertexSprite{
+		gScale: gScale,
+		volume: volume,
+	}
+	f.volume.SetBillboard(1.0)
 
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
 	t0 := [3]geometry.XYZ{

@@ -40,9 +40,7 @@ func NewViewMatrix() *ViewMatrix {
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngleFull()
 	vi.volume = player.GetLocation()
-	vi.where.X, vi.where.Y, vi.where.Z = player.GetPosition()
-	vi.yaw = player.GetYaw()
-	vi.lightIntensity = player.GetLightIntensity()
+	vi.where.X, vi.where.Y, vi.where.Z = player.GetVisualPosition()
 	bobX, bobY, _ := player.GetBob()
 	// Vertical Bounce (Z Axis)
 	vi.where.Z += bobY
@@ -54,6 +52,9 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	rightY := -vi.angleCos
 	vi.where.X += bobX * rightX
 	vi.where.Y += bobX * rightY
+
+	vi.yaw = player.GetYaw()
+	vi.lightIntensity = player.GetLightIntensity()
 
 	vi.swayX, vi.swayY = player.GetSway()
 }

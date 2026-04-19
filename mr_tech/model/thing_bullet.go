@@ -73,12 +73,3 @@ func (t *ThingBullet) GetMinZ() float64 {
 func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
 }
-
-// OnCollide handles the interaction when the bullet collides with another object.
-func (t *ThingBullet) OnCollide(other IThing) {
-	if enemy, ok := other.(*ThingEnemy); ok {
-		_ = enemy
-		// enemy.TakeDamage(...)
-		// t.SetActive(false)
-	}
-}

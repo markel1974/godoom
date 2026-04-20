@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
-	"github.com/markel1974/godoom/mr_tech/model"
 )
 
 // FlashlightLoc represents a uniform location identifier used in the Flashlight's shader program.
@@ -198,7 +197,7 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 		return
 	}
 
-	flashDirY := pitchShear / (2.0 * float32(model.VFov))
+	//flashDirY := pitchShear / (2.0 * float32(model.VFov))
 
 	gl.UseProgram(s.prg)
 
@@ -208,7 +207,7 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &flashSpace[0])
 
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
-	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), 0.0, flashDirY, -1.0)
+	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), 0.0, 0.0, -1.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
 	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), s.metrics.GetFlashConeStart())

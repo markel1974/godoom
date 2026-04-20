@@ -75,7 +75,7 @@ func (m *MapMetrics) GetScale3d(width, height int32) (float32, float32) {
 	f := float32(1.0 / math.Tan(float64(fovYRad)/2.0))
 	// 4. Mappatura canonica OpenGL (Perspective Projection)
 	// L'asse Y usa la focale pura. L'asse X viene corretto (diviso) dall'aspect ratio.
-	scaleY := f * 0.4
+	scaleY := f * 0.3
 	scaleX := f / aspect
 	return scaleX, scaleY
 }
@@ -225,8 +225,8 @@ func (m *MapMetrics) updateFlashProj(flashFov, flashAspect, zNearFlash, zFarFlas
 	}
 }
 
-// CreateSpaces generates and returns the room space matrix, flashlight space matrix, and main view matrix based on input parameters.
-func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+// CreateSpaces2d generates and returns the room space matrix, flashlight space matrix, and main view matrix based on input parameters.
+func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngle()
@@ -253,6 +253,56 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
 	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+	// Local Translation
+	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
+	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
+	tLocZ := dot(ffX, ffY, ffZ, posViewX, posViewY, posViewZ)
+	flashViewLocal := [16]float32{
+		rrX, uuX, -ffX, 0,
+		rrY, uuY, -ffY, 0,
+		rrZ, uuZ, -ffZ, 0,
+		tLocX, tLocY, tLocZ, 1,
+	}
+	// Final Matrices
+	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
+	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
+	return m.roomSpace, flashSpace, mainView
+}
+
+func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+	// Clean extraction (World Space: Z-UP)
+	// Setup Camera (Main View)
+	sinA, cosA := vi.GetAngle()
+	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
+	rX, rY, rZ := -fZ, float32(0.0), fX
+	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
+	wX, wY, wZ := vi.GetXYZ()
+	// Spatial mapping for OpenGL (X, Z, -Y)
+	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
+	mainView := [16]float32{
+		rX, uX, -fX, 0,
+		rY, uY, -fY, 0,
+		rZ, uZ, -fZ, 0,
+		-dot(rX, rY, rZ, camX, camY, camZ),
+		-dot(uX, uY, uZ, camX, camY, camZ),
+		dot(fX, fY, fZ, camX, camY, camZ), 1,
+	}
+	// Local Flashlight Space (LookAt calculation)
+	//pitchShear := float32(-vi.GetPitch())
+	//flashDirY := pitchShear / (ndcRange * float32(model.VFov))
+
+	// Local Flashlight Space (LookAt calculation)
+	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
+
+	// FIX: La torcia punta sempre perfettamente dritto lungo -Z in View Space!
+	// Niente più pitchShear o flashDirY.
+	targetX, targetY, targetZ := float32(0.0), float32(0.0), -m.flashZFar
+
+	// Forward, Right, Up for the flashlight
+	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
+	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
+	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+
 	// Local Translation
 	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
 	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)

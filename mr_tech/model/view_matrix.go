@@ -19,7 +19,7 @@ type ViewMatrix struct {
 	where          geometry.XYZ
 	angleSin       float64
 	angleCos       float64
-	yaw            float64
+	pitch          float64
 	lightIntensity float64
 	volume         *Volume
 	swayX          float64
@@ -55,7 +55,7 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 		vi.where.Y += bobX * rightY
 	*/
 
-	vi.yaw = player.GetYaw()
+	vi.pitch = player.GetPitch()
 	vi.lightIntensity = player.GetLightIntensity()
 
 	vi.swayX, vi.swayY = player.GetSway()
@@ -93,9 +93,9 @@ func (vi *ViewMatrix) GetAngle() (float64, float64) {
 	return vi.angleSin, vi.angleCos
 }
 
-// GetYaw returns the yaw angle of the ViewMatrix as a float64 value.
-func (vi *ViewMatrix) GetYaw() float64 {
-	return vi.yaw
+// GetPitch retrieves the pitch value of the ViewMatrix, representing its vertical orientation angle in radians.
+func (vi *ViewMatrix) GetPitch() float64 {
+	return vi.pitch
 }
 
 // GetLightIntensity retrieves the light intensity property of the ViewMatrix as a float64 value.
@@ -118,9 +118,9 @@ func (vi *ViewMatrix) GetVolume() *Volume {
 }
 
 // ComputeYaw calculates a new yaw value based on the input parameters and the ViewMatrix's current yaw attribute.
-func (vi *ViewMatrix) ComputeYaw(y float64, z float64) float64 {
-	return y + (z * vi.yaw)
-}
+//func (vi *ViewMatrix) ComputeYaw(y float64, z float64) float64 {
+//	return y + (z * vi.yaw)
+//}
 
 // ZDistance calculates the distance between the given value and the Z-coordinate of the ViewMatrix's position.
 func (vi *ViewMatrix) ZDistance(v float64) float64 {
@@ -141,7 +141,7 @@ func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) (*physics.Fru
 // It reconstructs the View and Projection matrices to accurately extract the 6 clipping planes for AABB culling.
 func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
 	// Calcolo Aspect Ratio e Scale per la Proiezione
-	pitchShear := float32(-vi.yaw)
+	pitchShear := float32(-vi.pitch)
 	aspect := float32(fbw) / float32(fbh)
 	scaleX := (2.0 / aspect) * float32(HFov)
 	scaleY := 2.0 * float32(VFov)
@@ -181,7 +181,7 @@ func (vi *ViewMatrix) GetRearFrustum(fbw, fbh int32, zFarRoom float32) *physics.
 	scaleX := (2.0 / aspect) * float32(HFov)
 	scaleY := 2.0 * float32(VFov)
 	// Inversione del pitch (se guardi in alto, dietro guardi in basso)
-	pitchShear := float32(vi.yaw)
+	pitchShear := float32(vi.pitch)
 	zNear := float32(0.1)
 	zFar := zFarRoom
 	if zFar <= zNear {

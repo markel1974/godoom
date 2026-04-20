@@ -315,9 +315,7 @@ func (w *Render) doPlayerMouseMove(mouseX float64, mouseY float64) {
 	}
 
 	w.player.AddAngle(mouseX * 0.03)
-	w.player.SetYaw(mouseY)
-
-	//w.player.MoveApply(0, 0, 0)
+	w.player.SetPitch(mouseY)
 }
 
 // doDebug toggles the debug mode or enables it while navigating through sectors based on the `next` parameter value.
@@ -488,25 +486,25 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
-		viYaw := vi.GetYaw()
+		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloor:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
-		viYaw := vi.GetYaw()
+		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
-		viYaw := vi.GetYaw()
+		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
 		_, scaleH := cp.Animation.ScaleFactor()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngle()
-		viYaw := vi.GetYaw()
+		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	default:
 		dr.DrawWireFrame(true)

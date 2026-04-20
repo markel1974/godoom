@@ -201,6 +201,11 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 	first := false
 	outIdx := 0
 
+	pitch := vi.GetPitch()
+	computePitch := func(y float64, z float64) float64 {
+		return y + (z * pitch)
+	}
+
 	for _, face := range volume.GetFaces() {
 		neighbor := face.GetNeighbor()
 		if neighbor == volume {
@@ -280,10 +285,10 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 		x1Max := mathematic.MaxF(x1, qi.x1)
 		x2Min := mathematic.MinF(x2, qi.x2)
 
-		y1a := screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz1) * yScale1)
-		y2a := screenHeightHalf + (-vi.ComputeYaw(sectorYCeil, tz2) * yScale2)
-		y1b := screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz1) * yScale1)
-		y2b := screenHeightHalf + (-vi.ComputeYaw(sectorYFloor, tz2) * yScale2)
+		y1a := screenHeightHalf + (-computePitch(sectorYCeil, tz1) * yScale1)
+		y2a := screenHeightHalf + (-computePitch(sectorYCeil, tz2) * yScale2)
+		y1b := screenHeightHalf + (-computePitch(sectorYFloor, tz1) * yScale1)
+		y2b := screenHeightHalf + (-computePitch(sectorYFloor, tz2) * yScale2)
 
 		yaStart := (x1Max-x1)*(y2a-y1a)/(x2-x1) + y1a
 		yaStop := (x2Min-x1)*(y2a-y1a)/(x2-x1) + y1a
@@ -337,8 +342,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 
 		if neighbor != nil {
 			neighborYCeil := vi.ZDistance(neighbor.GetMaxZ())
-			ny1a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz1) * yScale1)
-			ny2a := screenHeightHalf + (-vi.ComputeYaw(neighborYCeil, tz2) * yScale2)
+			ny1a := screenHeightHalf + (-computePitch(neighborYCeil, tz1) * yScale1)
+			ny2a := screenHeightHalf + (-computePitch(neighborYCeil, tz2) * yScale2)
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
@@ -350,8 +355,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
 
 			neighborYFloor := vi.ZDistance(neighbor.GetMinZ())
-			ny1b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz1) * yScale1)
-			ny2b := screenHeightHalf + (-vi.ComputeYaw(neighborYFloor, tz2) * yScale2)
+			ny1b := screenHeightHalf + (-computePitch(neighborYFloor, tz1) * yScale1)
+			ny2b := screenHeightHalf + (-computePitch(neighborYFloor, tz2) * yScale2)
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {

@@ -9,16 +9,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
-const minYaw = -5.0
-const maxYaw = 5.0
+const minPitch = -5.0
+const maxPitch = 5.0
 
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
 	kind           int
 	angleSin       float64
 	angleCos       float64
-	yaw            float64
-	yawState       float64
+	pitch          float64
+	pitchState     float64
 	ducking        bool
 	lightIntensity float64
 	bobbing        *Bobbing
@@ -46,8 +46,8 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
 	p := &ThingPlayer{
 		kind:           0,
-		yaw:            0,
-		yawState:       0,
+		pitch:          0,
+		pitchState:     0,
 		ThingBase:      NewThingBase(things, c.Thing, c.Position, nil, volume),
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
@@ -112,11 +112,11 @@ func (p *ThingPlayer) GetAngleFull() (float64, float64) {
 	return p.angleSin, p.angleCos
 }
 
-// SetYaw adjusts the player's yaw based on the given input, clamping the result within a predefined range.
-func (p *ThingPlayer) SetYaw(y float64) {
-	p.yawState = mathematic.ClampF(p.yawState-(y*0.05), minYaw, maxYaw)
+// SetPitch adjusts the player's pitch angle within a defined range and updates the current pitch state.
+func (p *ThingPlayer) SetPitch(y float64) {
+	p.pitchState = mathematic.ClampF(p.pitchState-(y*0.05), minPitch, maxPitch)
 	// Svincolamento totale dalla fisica: lo sguardo è assoluto
-	p.yaw = p.yawState
+	p.pitch = p.pitchState
 }
 
 // Move applies a directional impulse to the player based on input flags (up, down, left, right) and a given impulse magnitude.
@@ -223,9 +223,9 @@ func (p *ThingPlayer) GetVelocity() (float64, float64, float64) {
 	return p.entity.GetVx(), p.entity.GetVy(), p.entity.GetVz()
 }
 
-// GetYaw returns the current yaw (rotation around the vertical axis) of the ThingPlayer.
-func (p *ThingPlayer) GetYaw() float64 {
-	return p.yaw
+// GetPitch returns the current pitch angle of the ThingPlayer as a float64 value.
+func (p *ThingPlayer) GetPitch() float64 {
+	return p.pitch
 }
 
 // IsMoving returns true if the ThingPlayer's associated entity is currently in motion, and false otherwise.
@@ -271,7 +271,7 @@ func (p *ThingPlayer) Throw() {
 	spawnY := camY + (p.angleSin * diameter)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.LaunchObject(spawnPos, p.angle, -p.yaw)
+	p.LaunchObject(spawnPos, p.angle, -p.pitch)
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
@@ -280,7 +280,7 @@ func (p *ThingPlayer) Fire() {
 	camX, camY, camZ := p.GetVisualPosition()
 	// 2. Calcolo del vettore direzione (Radianti)
 	// Usiamo lo yaw invertito per la telecamera e lo scaliamo per il FOV
-	pitchRad := -p.yaw
+	pitchRad := -p.pitch
 	dirX := p.angleCos * math.Cos(pitchRad)
 	dirY := p.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)

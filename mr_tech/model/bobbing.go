@@ -58,6 +58,45 @@ func NewBobbing(cfg *config.Bobbing) *Bobbing {
 	}
 }
 
+// Get returns the current horizontal bob offset, vertical bob offset, and phase of the procedural bobbing motion.
+func (p *Bobbing) Get() (float64, float64, float64) {
+	return p.bobX, p.bobY, p.phase
+}
+
+// GetX returns the current horizontal bob offset as a float64 value.
+func (p *Bobbing) GetX() float64 {
+	return p.bobX
+}
+
+// GetY returns the current vertical component of the procedural bobbing motion.
+func (p *Bobbing) GetY() float64 {
+	return p.bobY
+}
+
+// GetPhase returns the current phase of the procedural bobbing motion.
+func (p *Bobbing) GetPhase() float64 {
+	return p.phase
+}
+
+// GetJump returns the current vertical offset from the jump or fall bob effect.
+func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }
+
+// GetSway calculates and returns the horizontal and vertical sway offsets as adjusted by bobbing motion and sway scale.
+func (p *Bobbing) GetSway() (float64, float64) {
+	x := p.swayOffsetX + ((p.bobX * p.swayMultiplierX) * p.swayScale)
+	y := p.swayOffsetY - ((p.bobY * p.swayMultiplierY) * p.swayScale)
+	//fmt.Printf("DEBUG BOB -> amp: %f | maxAmp: %f | idleAmp: %f\n", p.amp, p.maxAmplitude, p.idleAmp)
+	return x, y
+}
+
+func (p *Bobbing) GetTilt() float64 {
+	// b.x è l'onda sinusoidale orizzontale (calcolata in Compute in base alla velocità)
+	// Moltiplichiamo per un piccolo fattore scalare per convertirlo in radianti
+	// (es. 0.05 rad sono circa 2.8 gradi)
+	const tiltAmplitude = 0.035
+	return p.bobX * tiltAmplitude
+}
+
 // InjectVerticalImpulse applies a vertical impulse to the jump bob effect, clamping extreme values to avoid excessive motion.
 func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 	// Cappiamo l'impulso per evitare che cadute estreme portino la telecamera nel petto
@@ -104,35 +143,4 @@ func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	// Damping applicato come esponenziale negativo per essere framerate-independent
 	p.jumpBobVelocity *= math.Pow(p.springDamping, dt*60.0)
 	p.jumpBobOffset += p.jumpBobVelocity * dt * 60.0
-}
-
-// Get returns the current horizontal bob offset, vertical bob offset, and phase of the procedural bobbing motion.
-func (p *Bobbing) Get() (float64, float64, float64) {
-	return p.bobX, p.bobY, p.phase
-}
-
-// GetX returns the current horizontal bob offset as a float64 value.
-func (p *Bobbing) GetX() float64 {
-	return p.bobX
-}
-
-// GetY returns the current vertical component of the procedural bobbing motion.
-func (p *Bobbing) GetY() float64 {
-	return p.bobY
-}
-
-// Phase returns the current phase of the procedural bobbing motion.
-func (p *Bobbing) Phase() float64 {
-	return p.phase
-}
-
-// GetJump returns the current vertical offset from the jump or fall bob effect.
-func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }
-
-// GetSway calculates and returns the horizontal and vertical sway offsets as adjusted by bobbing motion and sway scale.
-func (p *Bobbing) GetSway() (float64, float64) {
-	x := p.swayOffsetX + ((p.bobX * p.swayMultiplierX) * p.swayScale)
-	y := p.swayOffsetY - ((p.bobY * p.swayMultiplierY) * p.swayScale)
-	//fmt.Printf("DEBUG BOB -> amp: %f | maxAmp: %f | idleAmp: %f\n", p.amp, p.maxAmplitude, p.idleAmp)
-	return x, y
 }

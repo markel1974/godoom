@@ -228,7 +228,7 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
 	// Local Flashlight Space (LookAt calculation)
-	pitchShear := float32(-vi.GetYaw())
+	pitchShear := float32(-vi.GetPitch())
 	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetX, targetY, targetZ := float32(0.0), flashDirY*m.flashZFar, -m.flashZFar

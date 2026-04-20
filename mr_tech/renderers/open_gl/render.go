@@ -272,6 +272,6 @@ func (w *RenderOpenGL) doPlayerMouseMove(mouseX float64, mouseY float64) {
 		mouseY = -offset
 	}
 	w.player.AddAngle(mouseX * 0.03)
-	w.player.SetYaw(mouseY)
+	w.player.SetPitch(mouseY)
 	//w.player.MoveApply(0, 0, 0)
 }

@@ -16,7 +16,6 @@ func NewThingItem(things *Things, cfg *config.Thing, anim *textures.Animation, v
 	thing := &ThingItem{
 		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
 	}
-	thing.things.AddThing(thing)
 	return thing
 }
 

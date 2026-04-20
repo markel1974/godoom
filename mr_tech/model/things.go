@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -85,40 +86,59 @@ type Things struct {
 	volumes      *Volumes
 	animations   *Animations
 	tree         *physics.AABBTree
+	pending      []IThing
+	pendingIdx   atomic.Int32
 	entities     map[int]IThing
 	identifier   int
 	active       []IThing
 	activeIdx    int
+	inactive     []IThing
+	inactiveIdx  int
 	contacts     []Contact
 	contactsLen  int
 	containerIdx int
 	container    []IThing
+	hasPending   bool
 	event        *ThingEvent
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
 func NewThings(gScale float64, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+	const defaultLen = 1024
 	e := &Things{
 		gScale:       gScale,
 		tree:         physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:     make(map[int]IThing),
 		identifier:   0,
+		active:       make([]IThing, defaultLen),
+		contacts:     make([]Contact, defaultLen),
+		container:    make([]IThing, defaultLen),
+		pending:      make([]IThing, defaultLen),
 		activeIdx:    0,
-		contacts:     make([]Contact, 1024),
 		contactsLen:  0,
+		containerIdx: 0,
+		hasPending:   false,
 		config:       cfg,
 		volumes:      volumes,
 		animations:   animations,
-		containerIdx: 0,
-		container:    make([]IThing, 1024),
 		event:        NewThingEvent(),
 	}
+	e.pendingIdx.Store(0)
 	for _, ct := range cfg {
-		if _, err := e.createThing(ct); err != nil {
-			fmt.Println("Warning: ", err)
+		volume := e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		if volume == nil {
+			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
+			continue
 		}
+		t2 := e.createThing(ct, volume)
+		e.addThing(t2)
 	}
 	return e
+}
+
+// SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
+func (th *Things) SetPlayer(p *ThingPlayer) {
+	th.addThing(p)
 }
 
 // GetGlobalScale retrieves the global scaling factor applied to all objects managed by the Things instance.
@@ -152,27 +172,21 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 }
 
 // CreateThing creates a new IThing instance based on the provided Thing and adds it to the Things collection.
-func (th *Things) createThing(ct *config.Thing) (IThing, error) {
-	volume := th.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
-	if volume == nil {
-		return nil, fmt.Errorf("can't find thing location at %f, %f, %f", ct.Position.X, ct.Position.Y, ct.Position.Z)
-	}
-
+func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	const disableEnemies = false
 	if disableEnemies {
 		if ct.Kind == config.ThingEnemyDef {
 			ct.Kind = config.ThingItemDef
 		}
 	}
-
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
 		thing = NewThingEnemy(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingWeaponDef:
 		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
-	case config.ThingBulletDef:
-		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+	case config.ThingThrowableDef:
+		thing = NewThingThrowable(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingKeyDef:
 		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	case config.ThingItemDef:
@@ -180,38 +194,27 @@ func (th *Things) createThing(ct *config.Thing) (IThing, error) {
 	default:
 		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
 	}
-	return thing, nil
+	return thing
 }
 
-// CreateBullet creates a new bullet in the specified sector at the given position (x, y) with the given angle.
-func (th *Things) CreateBullet(volume *Volume, pos geometry.XYZ, angle, pitch, mass, radius, speed float64) {
+// CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
+func (th *Things) CreateThrowable(volume *Volume, pos geometry.XYZ, angle, pitch, mass, radius, speed float64) {
 	//TODO now is an hack
-	const ammoIndex = 2
-	if len(th.config) <= ammoIndex {
+	const throwableIndex = 2
+	if len(th.config) <= throwableIndex {
 		return
 	}
-	c := th.config[ammoIndex]
+	c := th.config[throwableIndex]
 	id := utils.NextUUId()
-	cfg := config.NewConfigThing(id, pos, angle, config.ThingBulletDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
-	NewThingBullet(th, cfg, th.animations.GetAnimation(cfg.Animation), volume, pitch)
-}
-
-// AddThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
-func (th *Things) AddThing(ent IThing) {
-	th.entities[th.identifier] = ent
-	ent.SetIdentifier(th.identifier)
-	th.identifier++
-	if len(th.entities) > cap(th.active) {
-		th.active = make([]IThing, len(th.entities)*2)
+	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
+	ct.Pitch = pitch
+	slot := th.pendingIdx.Add(1) - 1
+	if slot >= int32(len(th.pending)) {
+		fmt.Println("max slot reached!")
+		return
 	}
-	th.tree.InsertObject(ent)
-	ent.StartLoop()
-}
-
-// RemoveThing removes the specified IThing entity from the spatial tree and the things map in Things.
-func (th *Things) RemoveThing(ent IThing) {
-	th.tree.RemoveObject(ent)
-	delete(th.entities, ent.GetIdentifier())
+	th.pending[slot] = th.createThing(ct, volume)
+	th.hasPending = true
 }
 
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
@@ -224,27 +227,39 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	th.containerIdx = 0
 	th.activeIdx = 0
-
+	th.inactiveIdx = 0
 	th.event.SetStage(StageThinking)
 	th.event.SetCoords(pX, pY, pZ)
 
 	for _, t2 := range th.entities {
 		if !t2.IsActive() {
-			th.RemoveThing(t2)
+			th.inactive[th.inactiveIdx] = t2
+			th.inactiveIdx++
 			continue
-		}
-		th.event.wg.Add(1)
-		t2.PostMessage(th.event)
-		//t.Compute(pX, pY, pZ)
-		if th.containerIdx >= len(th.container) {
-			newThings := make([]IThing, len(th.container)*2)
-			copy(newThings, th.container)
-			th.container = newThings
 		}
 		th.container[th.containerIdx] = t2
 		th.containerIdx++
+
+		th.event.wg.Add(1)
+		t2.PostMessage(th.event)
 	}
 	th.event.wg.Wait()
+
+	if th.inactiveIdx > 0 {
+		for x := 0; x < th.inactiveIdx; x++ {
+			th.removeThing(th.inactive[x])
+		}
+		th.inactiveIdx = 0
+	}
+
+	if th.hasPending {
+		pendingIdx := int(th.pendingIdx.Load())
+		for x := 0; x < pendingIdx; x++ {
+			th.addThing(th.pending[x])
+		}
+		th.pendingIdx.Store(0)
+		th.hasPending = false
+	}
 
 	for x := 0; x < th.containerIdx; x++ {
 		thing := th.container[x]
@@ -281,11 +296,6 @@ func (th *Things) processCollision() {
 			if !hasCollision {
 				return false
 			}
-			if th.contactsLen >= len(th.contacts) {
-				newContacts := make([]Contact, len(th.contacts)*2)
-				copy(newContacts, th.contacts)
-				th.contacts = newContacts
-			}
 			th.contacts[th.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
 			th.contactsLen++
 			t2.OnCollide(otherThing)
@@ -320,4 +330,25 @@ func (th *Things) processCollision() {
 		ent.MoveTo(px-eRadius, py-eRadius, pz)
 		th.tree.UpdateObject(t2)
 	}
+}
+
+// addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
+func (th *Things) addThing(ent IThing) {
+	th.entities[th.identifier] = ent
+	ent.SetIdentifier(th.identifier)
+	th.identifier++
+	if len(th.entities) > cap(th.active) {
+		th.active = make([]IThing, len(th.entities)*2)
+		th.inactive = make([]IThing, len(th.entities)*2)
+		th.pending = make([]IThing, len(th.entities)*2)
+		th.contacts = make([]Contact, len(th.entities)*2)
+	}
+	th.tree.InsertObject(ent)
+	ent.StartLoop()
+}
+
+// removeThing removes an IThing instance from the spatial tree and the entities map.
+func (th *Things) removeThing(ent IThing) {
+	th.tree.RemoveObject(ent)
+	delete(th.entities, ent.GetIdentifier())
 }

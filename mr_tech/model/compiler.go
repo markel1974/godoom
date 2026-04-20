@@ -84,6 +84,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	if r.player == nil {
 		return fmt.Errorf("player not found")
 	}
+	r.things.SetPlayer(r.player)
 	fmt.Printf("Scan complete world: %d\n", r.volumes.Len())
 	return nil
 }

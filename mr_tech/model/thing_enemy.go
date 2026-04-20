@@ -35,7 +35,6 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, 
 		throwMin:       float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		throwCooldown:  0.0,
 	}
-	e.things.AddThing(e)
 	return e
 }
 

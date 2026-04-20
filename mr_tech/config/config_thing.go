@@ -20,6 +20,7 @@ const (
 	ThingEnemyDef
 	ThingWeaponDef
 	ThingBulletDef
+	ThingThrowableDef
 	ThingKeyDef
 	ThingItemDef
 )
@@ -53,6 +54,7 @@ type Thing struct {
 	Height         float64      `json:"height"`
 	Speed          float64      `json:"speed"`
 	Acceleration   float64      `json:"acceleration"`
+	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	Model3D        *Model3d     `json:"model3d"`
 	Animation      *Animation   `json:"animation"`

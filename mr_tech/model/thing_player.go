@@ -38,7 +38,6 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	c.Kind = config.ThingPlayerDef
 	if c.Height <= 0 {
 		c.Height = 8.0
-
 	}
 	if c.Speed <= 0 {
 		c.Speed = 60.0
@@ -55,7 +54,6 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	}
 	p.id = "PLAYER"
 	p.SetAngle(c.Angle)
-	p.things.AddThing(p)
 	return p
 }
 

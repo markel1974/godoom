@@ -7,25 +7,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ThingBullet represents a specialized type of Thing designed to simulate projectile-like behavior in the environment.
-type ThingBullet struct {
+// ThingThrowable represents a throwable object in the system, extending the base functionality of ThingBase.
+type ThingThrowable struct {
 	*ThingBase
 }
 
-// NewThingBullet creates and initializes a new ThingBullet instance.
-func NewThingBullet(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume, pitchRad float64) *ThingBullet {
+// NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
+func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingThrowable {
 	pos := cfg.Position
-	p := &ThingBullet{
+	p := &ThingThrowable{
 		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
 	}
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	p.maxStep = 0.0
-	p.things.AddThing(p)
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
 	// 2. Vettore Direzionale 3D normalizzato
-	dirX := math.Cos(p.angle) * math.Cos(pitchRad)
-	dirY := math.Sin(p.angle) * math.Cos(pitchRad)
-	dirZ := math.Sin(pitchRad)
+	dirX := math.Cos(p.angle) * math.Cos(cfg.Pitch)
+	dirY := math.Sin(p.angle) * math.Cos(cfg.Pitch)
+	dirZ := math.Sin(cfg.Pitch)
 	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
@@ -37,11 +36,13 @@ func NewThingBullet(things *Things, cfg *config.Thing, anim *textures.Animation,
 	return p
 }
 
-func (t *ThingBullet) PostMessage(ec *ThingEvent) {
+// PostMessage sends a ThingEvent to the ThingThrowable's inbox channel for processing in the event loop.
+func (t *ThingThrowable) PostMessage(ec *ThingEvent) {
 	t.inbox <- ec
 }
 
-func (t *ThingBullet) StartLoop() {
+// StartLoop initializes a goroutine to process events from the inbox channel or terminate when signaled via the done channel.
+func (t *ThingThrowable) StartLoop() {
 	go func() {
 		for {
 			select {
@@ -60,16 +61,19 @@ func (t *ThingBullet) StartLoop() {
 	}()
 }
 
-func (t *ThingBullet) GetMaxZ() float64 {
+// GetMaxZ retrieves the maximum Z-coordinate of the center for the associated entity.
+func (t *ThingThrowable) GetMaxZ() float64 {
 	_, _, z := t.entity.GetCenter()
 	return z
 }
 
-func (t *ThingBullet) GetMinZ() float64 {
+// GetMinZ returns the minimum Z value of the ThingThrowable's entity center's position.
+func (t *ThingThrowable) GetMinZ() float64 {
 	_, _, z := t.entity.GetCenter()
 	return z
 }
 
-func (t *ThingBullet) Compute(playerX float64, playerY float64, playerZ float64) {
+// Compute calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
+func (t *ThingThrowable) Compute(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
 }

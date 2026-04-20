@@ -57,14 +57,17 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	return p
 }
 
+// IsActive determines whether the ThingPlayer instance is currently active, returning true if active, otherwise false.
 func (p *ThingPlayer) IsActive() bool {
 	return true
 }
 
+// PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.
 func (p *ThingPlayer) PostMessage(ec *ThingEvent) {
 	p.inbox <- ec
 }
 
+// StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.
 func (p *ThingPlayer) StartLoop() {
 	go func() {
 		for {
@@ -84,33 +87,34 @@ func (p *ThingPlayer) StartLoop() {
 	}()
 }
 
-// GetLight retrieves the Light object associated with the ThingPlayer instance. Returns a pointer to the Light.
+// GetLight retrieves the light object associated with the ThingPlayer.
 func (p *ThingPlayer) GetLight() *Light {
 	return nil
 }
 
+// Compute processes the player's position or performs calculations based on the provided X, Y, and Z coordinates.
 func (p *ThingPlayer) Compute(playerX float64, playerY float64, playerZ float64) {
 	//nothing to do
 }
 
-// AddAngle updates the player's current angle by adding the given angle in radians.
+// AddAngle adjusts the player's current angle by the specified value in radians, updating related trigonometric properties.
 func (p *ThingPlayer) AddAngle(angle float64) {
 	p.SetAngle(p.angle + angle)
 }
 
-// SetAngle sets the angle of the player and updates sine and cosine values based on the new angle.
+// SetAngle updates the player's orientation angle and recalculates the sine and cosine of the angle.
 func (p *ThingPlayer) SetAngle(angle float64) {
 	p.angle = angle
 	p.angleSin = math.Sin(p.angle)
 	p.angleCos = math.Cos(p.angle)
 }
 
-// GetAngleFull returns the sine and cosine of the player's current angle as two float64 values.
+// GetAngleFull returns the sine and cosine of the current angle of the ThingPlayer as two float64 values.
 func (p *ThingPlayer) GetAngleFull() (float64, float64) {
 	return p.angleSin, p.angleCos
 }
 
-// SetPitch adjusts the player's pitch angle within a defined range and updates the current pitch state.
+// SetPitch adjusts the player's pitch angle within the allowed range, affecting vertical view orientation.
 func (p *ThingPlayer) SetPitch(y float64) {
 	p.pitchState = mathematic.ClampF(p.pitchState-(y*0.05), minPitch, maxPitch)
 	// Svincolamento totale dalla fisica: lo sguardo è assoluto
@@ -181,6 +185,11 @@ func (p *ThingPlayer) GetSway() (float64, float64) {
 // GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
 func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
 	return p.pos.X, p.pos.Y, p.pos.Z
+}
+
+// GetTilt retrieves the tilt value from the ThingPlayer's bobbing component as a float64.
+func (p *ThingPlayer) GetTilt() float64 {
+	return p.bobbing.GetTilt()
 }
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.

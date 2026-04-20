@@ -294,7 +294,7 @@ func (th *Things) processCollision() {
 		})
 	}
 
-	// RESOLUTION (Il Solver PGS)
+	// RESOLUTION (PGS Solver)
 	const solverIterations = 4
 	for i := 0; i < solverIterations; i++ {
 		for c := 0; c < th.contactsLen; c++ {

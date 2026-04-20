@@ -100,6 +100,7 @@ func (t *ThingBase) GetAngle() float64 {
 	return t.angle
 }
 
+// SetAngle updates the rotation angle of the ThingBase instance to the specified float64 value.
 func (t *ThingBase) SetAngle(angle float64) {
 	t.angle = angle
 }

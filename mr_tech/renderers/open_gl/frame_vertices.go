@@ -14,12 +14,12 @@ type FrameVertices struct {
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
-// Lo stride è impostato a 10 per ospitare: Pos(3), Tex(3), Origin(3), IsBB(1).
 func NewFrameVertices(maxVerts int) *FrameVertices {
+	const maxStride = 15
 	return &FrameVertices{
 		vertices: make([]float32, maxVerts),
 		indices:  make([]uint32, maxVerts),
-		stride:   10,
+		stride:   maxStride,
 	}
 }
 
@@ -55,34 +55,45 @@ func (w *FrameVertices) VerticesStride() int32 {
 	return w.stride * 4
 }
 
-// AddVertex aggiunge un vertice completo di dati per il billboarding GPU.
-// ox, oy, oz rappresentano l'origine dell'entità nel mondo.
-// isBB è il flag (1.0 = billboard, 0.0 = mesh statica).
-func (w *FrameVertices) AddVertex(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32) uint32 {
+// AddVertex6 adds a vertex with position (x, y, z), texture coordinates (u, v), and texture layer (texLayer) to the buffer.
+func (w *FrameVertices) AddVertex6(x, y, z, u, v, texLayer float32) uint32 {
+	return w.AddVertex15(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+
+// AddVertex10 adds a vertex with position, texture coordinates, origin, and a billboard flag to the vertex buffer.
+func (w *FrameVertices) AddVertex10(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32) uint32 {
+	return w.AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0)
+}
+
+// AddVertex15 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
+func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount > int32(len(w.vertices)) {
 		w.growVertices()
 	}
-
 	// Location 0: aPos
 	w.vertices[head] = x
 	w.vertices[head+1] = y
 	w.vertices[head+2] = z
-
 	// Location 1: aTexCoords
 	w.vertices[head+3] = u
 	w.vertices[head+4] = v
 	w.vertices[head+5] = texLayer
-
 	// Location 2: aOrigin
 	w.vertices[head+6] = ox
 	w.vertices[head+7] = oy
 	w.vertices[head+8] = oz
-
 	// Location 3: aIsBillboard
 	w.vertices[head+9] = isBB
-
+	// Location 4: aPosNext
+	w.vertices[head+10] = nx
+	w.vertices[head+11] = ny
+	w.vertices[head+12] = nz
+	// Location 5: aLerp
+	w.vertices[head+13] = lerp
+	// Location 6: aYaw
+	w.vertices[head+14] = yaw
 	slot := w.verticesSlot
 	w.verticesSlot++
 	return slot

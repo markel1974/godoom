@@ -12,7 +12,7 @@ import (
 
 // IVertices represents an interface for managing and retrieving geometric vertices and their associated volume data.
 type IVertices interface {
-	GetVertices(uint64) []*Face
+	GetVertices(uint64) ([]*Face, []*Face, float64)
 
 	GetVolume() *Volume
 
@@ -92,8 +92,9 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 }
 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() ([]*Face, float64) {
-	return t.vertices.GetVertices(textures.CurrentTick()), t.volume.GetBillboard()
+func (t *ThingBase) GetVertices() ([]*Face, []*Face, float64, float64) {
+	vCurr, vNext, lerp := t.vertices.GetVertices(textures.CurrentTick())
+	return vCurr, vNext, lerp, t.volume.GetBillboard()
 }
 
 // GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.

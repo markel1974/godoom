@@ -255,7 +255,7 @@ func (w *RenderOpenGL) doPlayerJump(multi bool) { w.player.SetJump(multi) }
 
 // doPlayerMoves moves the player based on the provided impulse and directional flags (up, down, left, right).
 func (w *RenderOpenGL) doPlayerMoves(impulse float64, up bool, down bool, left bool, right bool) {
-	w.player.Move(impulse, up, down, left, right)
+	w.player.Move(impulse, up, down, right, left)
 }
 
 // doPlayerMouseMove adjusts the player's angle and yaw based on mouse movement, clamping the values within a defined offset range.

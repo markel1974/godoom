@@ -92,21 +92,33 @@ func (s *Main) Init() error {
 		// Il valore s.stride ora deve essere 40 (10 float * 4 byte)
 		strideBytes := s.stride
 
-		// Location 0: aPos (x, y, z) - 3 float
+		//  aPos (x, y, z) - 3 float
 		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
 		gl.EnableVertexAttribArray(0)
 
-		// Location 1: aTexCoords (u, v, layer) - 3 float
+		//  aTexCoords (u, v, layer) - 3 float
 		gl.VertexAttribPointer(1, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
 		gl.EnableVertexAttribArray(1)
 
-		// NUOVO - Location 2: aOrigin (worldX, worldY, worldZ) - 3 float
+		// Location 2: aOrigin (worldX, worldY, worldZ) - 3 float
 		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(6*4))
 		gl.EnableVertexAttribArray(2)
 
-		// NUOVO - Location 3: aIsBillboard (flag) - 1 float
+		// Location 3: aIsBillboard (flag) - 1 float
 		gl.VertexAttribPointer(3, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(9*4))
 		gl.EnableVertexAttribArray(3)
+
+		// Location 4: nextPos (x, y, z) - 3 float
+		gl.VertexAttribPointer(4, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(10*4))
+		gl.EnableVertexAttribArray(4)
+
+		//  Location 5: aLerp (t) - 1 float
+		gl.VertexAttribPointer(5, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(13*4))
+		gl.EnableVertexAttribArray(5)
+
+		// NUOVO - Location 6: aYaw (angolo) - 1 float
+		gl.VertexAttribPointer(6, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(14*4))
+		gl.EnableVertexAttribArray(6)
 	}
 
 	gl.Enable(gl.DEPTH_TEST)

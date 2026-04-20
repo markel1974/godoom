@@ -150,10 +150,10 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	startIndices := fv.GetIndicesLen()
 
 	// Invertiamo l'asse Z, OpenGL guarda in -Z
-	idx0 := fv.AddVertex(wx1, zTop, -wy1, u0, vTop, layer, 0, 0, 0, 0)
-	idx1 := fv.AddVertex(wx1, zBottom, -wy1, u0, vBottom, layer, 0, 0, 0, 0)
-	idx2 := fv.AddVertex(wx2, zBottom, -wy2, u1, vBottom, layer, 0, 0, 0, 0)
-	idx3 := fv.AddVertex(wx2, zTop, -wy2, u1, vTop, layer, 0, 0, 0, 0)
+	idx0 := fv.AddVertex6(wx1, zTop, -wy1, u0, vTop, layer)
+	idx1 := fv.AddVertex6(wx1, zBottom, -wy1, u0, vBottom, layer)
+	idx2 := fv.AddVertex6(wx2, zBottom, -wy2, u1, vBottom, layer)
+	idx3 := fv.AddVertex6(wx2, zTop, -wy2, u1, vTop, layer)
 
 	fv.AddTriangle(idx0, idx1, idx2)
 	fv.AddTriangle(idx0, idx2, idx3)
@@ -192,7 +192,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
-		w.flatIndices = append(w.flatIndices, fv.AddVertex(float32(v.X), zF, float32(-v.Y), u, vV, layer, 0, 0, 0, 0))
+		w.flatIndices = append(w.flatIndices, fv.AddVertex6(float32(v.X), zF, float32(-v.Y), u, vV, layer))
 	}
 
 	for i := 1; i < len(faces)-1; i++ {
@@ -211,16 +211,17 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces, billBoard := thing.GetVertices()
+		faces, nextFaces, lp, billBoard := thing.GetVertices()
 		if faces == nil {
 			continue
 		}
+		lerp := float32(lp)
+		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetPosition()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		b := float32(billBoard)
-
 		startIndices := fv.GetIndicesLen()
-		for _, f := range faces {
+		for fx, f := range faces {
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue
@@ -231,12 +232,12 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 			}
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b)
-			id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b)
-			id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b)
+			np := nextFaces[fx].GetPoints()
+			id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+			id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+			id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
 			fv.AddTriangle(id0, id1, id2)
 		}
-
 		currentIndices := fv.GetIndicesLen()
 		dc.Compute(startIndices, currentIndices)
 	}

@@ -53,6 +53,7 @@ func (v *VertexMD2) GetVolume() *Volume {
 	return v.volume
 }
 
+/*
 // SetAngle applica la matrice di rotazione Z-UP in-place calcolando il delta rispetto all'ultimo orientamento.
 func (v *VertexMD2) SetAngle(angle float64) {
 	delta := angle - v.lastAngle
@@ -79,9 +80,20 @@ func (v *VertexMD2) SetAngle(angle float64) {
 	}
 }
 
+*/
+
+func (v *VertexMD2) SetAngle(angle float64) {
+	v.lastAngle = angle
+}
+
 // GetVertices retrieves the vertices corresponding to the current animation frame, determined by the specified tick value.
-func (v *VertexMD2) GetVertices(tick uint64) []*Face {
-	groupSize := uint64(6)
-	idx := (tick / groupSize) % uint64(len(v.frames))
-	return v.frames[idx]
+func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
+	const groupSize = 6.0
+	// Calcolo preciso del frame decimale
+	frameFloat := float64(tick) / groupSize
+	idxA := int(frameFloat) % len(v.frames)
+	idxB := (idxA + 1) % len(v.frames)
+	// Parte frazionaria per l'interpolazione fluida
+	lerpT := frameFloat - math.Floor(frameFloat)
+	return v.frames[idxA], v.frames[idxB], lerpT
 }

@@ -86,12 +86,9 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 				}
 				p := face.GetPoints()
 				u, v := face.GetUV()
-				id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer, 0, 0, 0, 0)
-				id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer, 0, 0, 0, 0)
-				id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer, 0, 0, 0, 0)
-				//id1 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(v[0]), layer, 0, 0, 0, 0)
-				//id2 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(v[1]), layer, 0, 0, 0, 0)
-				//id3 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(v[2]), layer, 0, 0, 0, 0)
+				id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
+				id1 := w.fv.AddVertex6(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer)
+				id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
 				w.fv.AddTriangle(id0, id1, id2)
 			}
 			endIdx := w.fv.GetIndicesLen()
@@ -140,26 +137,31 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces, billboard := thing.GetVertices()
+		faces, nextFaces, lp, billBoard := thing.GetVertices()
 		if faces == nil {
 			continue
 		}
-
+		lerp := float32(lp)
+		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetPosition()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		b := float32(billboard)
+		b := float32(billBoard)
 		startIndices := fv.GetIndicesLen()
-		for _, f := range faces {
+		for fx, f := range faces {
 			mat := f.GetMaterial()
+			if mat == nil {
+				continue
+			}
 			l, ok := w.tex.Get(mat)
 			if !ok {
 				continue
 			}
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b)
-			id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b)
-			id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b)
+			np := nextFaces[fx].GetPoints()
+			id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+			id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+			id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
 			fv.AddTriangle(id0, id1, id2)
 		}
 		currentIndices := fv.GetIndicesLen()

@@ -75,6 +75,7 @@ func (v *VertexSprite) SetAngle(angle float64) {
 
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex sprite at the given moment in time.
-func (v *VertexSprite) GetVertices(tick uint64) []*Face {
-	return v.volume.GetFaces()
+func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
+	f := v.volume.GetFaces()
+	return f, f, 0.0
 }

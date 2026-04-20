@@ -24,7 +24,7 @@ type IThing interface {
 
 	GetAngle() float64
 
-	GetVertices() ([]*Face, float64)
+	GetVertices() ([]*Face, []*Face, float64, float64)
 
 	GetLight() *Light
 

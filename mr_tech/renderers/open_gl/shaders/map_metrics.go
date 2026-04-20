@@ -229,7 +229,7 @@ func (m *MapMetrics) updateFlashProj(flashFov, flashAspect, zNearFlash, zFarFlas
 func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
-	sinA, cosA := vi.GetAngle()
+	sinA, cosA := vi.GetAngleFull()
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
@@ -272,7 +272,7 @@ func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOff
 func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
-	sinA, cosA := vi.GetAngle()
+	sinA, cosA := vi.GetAngleFull()
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)

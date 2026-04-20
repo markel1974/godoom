@@ -102,7 +102,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.mapBuilt = true
 	}
 
-	const usFrustum = false
+	const usFrustum = true
 
 	if usFrustum {
 		queryGeom := func(object physics.IAABB) bool {
@@ -113,7 +113,10 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 			}
 			return false
 		}
-		frustumFront, frustumRear := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+		px, py, pz := vi.GetXYZ()
+		angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
+		fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), w.calibration.ZFarRoom, float32(px), float32(py), float32(pz), angle, pitch, roll)
+		frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 		engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
 		w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
 	} else {

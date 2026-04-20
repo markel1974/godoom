@@ -305,7 +305,7 @@ func (p *ThingPlayer) Fire() {
 	// 1. Origine della vista (include Bobbing e Crouch)
 	camX, camY, camZ := p.GetVisualPosition()
 	// 2. Calcolo del vettore direzione (Radianti)
-	// Usiamo lo yaw invertito per la telecamera e lo scaliamo per il FOV
+	// Usiamo lo angle invertito per la telecamera e lo scaliamo per il FOV
 	pitchRad := -p.pitch
 	dirX := p.angleCos * math.Cos(pitchRad)
 	dirY := p.angleSin * math.Cos(pitchRad)

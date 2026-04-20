@@ -226,7 +226,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 // UpdateUniforms3d calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
 func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	// Acquire angles
-	sinY, cosY := vi.GetAngle()
+	sinY, cosY := vi.GetAngleFull()
 	pitch := -vi.GetPitch()
 	roll := vi.GetRoll()
 	// Sine and Cosine of Pitch and Roll
@@ -292,7 +292,7 @@ func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 
 func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	pitchShear := float32(-vi.GetPitch())
-	sinA, cosA := vi.GetAngle()
+	sinA, cosA := vi.GetAngleFull()
 	// Base Forward (Z) and Right (X) vectors from Yaw only
 	fX, fZ := float32(cosA), float32(-sinA)
 	rX, rZ := float32(sinA), float32(cosA)

@@ -19,7 +19,7 @@ type ViewMatrix struct {
 	where          geometry.XYZ
 	angleSin       float64
 	angleCos       float64
-	yaw            float64
+	angle          float64
 	roll           float64
 	pitch          float64
 	lightIntensity float64
@@ -44,7 +44,7 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.volume = player.GetLocation()
 	vi.where.X, vi.where.Y, vi.where.Z = player.GetVisualPosition()
 	vi.pitch = player.GetPitch()
-	vi.yaw = player.GetAngle()
+	vi.angle = player.GetAngle()
 	vi.roll = player.GetTilt()
 	vi.lightIntensity = player.GetLightIntensity()
 	vi.swayX, vi.swayY = player.GetSway()
@@ -77,9 +77,14 @@ func (vi *ViewMatrix) GetZ() float64 {
 	return vi.where.Z
 }
 
-// GetAngle returns the sine and cosine of the ViewMatrix's rotation angle for transformations and calculations.
-func (vi *ViewMatrix) GetAngle() (float64, float64) {
+// GetAngleFull returns the sine and cosine of the ViewMatrix's angle as two float64 values.
+func (vi *ViewMatrix) GetAngleFull() (float64, float64) {
 	return vi.angleSin, vi.angleCos
+}
+
+// GetAngle retrieves the current yaw angle (orientation) of the ViewMatrix in radians.
+func (vi *ViewMatrix) GetAngle() float64 {
+	return vi.angle
 }
 
 // GetRoll returns the roll angle of the ViewMatrix, representing its sideways tilt in radians.
@@ -97,24 +102,10 @@ func (vi *ViewMatrix) GetLightIntensity() float64 {
 	return vi.lightIntensity
 }
 
-// GetLightIntensityFactor computes the adjusted light intensity factor by reducing 1 with the product of input factor and light intensity.
-//func (vi *ViewMatrix) GetLightIntensityFactor(factor float64) float64 {
-//	l := 1 - (factor * vi.lightIntensity)
-//	if l < 0 {
-//		return 0
-//	}
-//	return l
-//}
-
 // GetVolume retrieves the Volume instance associated with the ViewMatrix.
 func (vi *ViewMatrix) GetVolume() *Volume {
 	return vi.volume
 }
-
-// ComputeYaw calculates a new yaw value based on the input parameters and the ViewMatrix's current yaw attribute.
-//func (vi *ViewMatrix) ComputeYaw(y float64, z float64) float64 {
-//	return y + (z * vi.yaw)
-//}
 
 // ZDistance calculates the distance between the given value and the Z-coordinate of the ViewMatrix's position.
 func (vi *ViewMatrix) ZDistance(v float64) float64 {
@@ -126,96 +117,19 @@ func (vi *ViewMatrix) GetSway() (float64, float64) {
 	return vi.swayX, vi.swayY
 }
 
-// GetFrustum computes and returns the front and rear frustums using the given framebuffer dimensions and far plane distance.
-func (vi *ViewMatrix) GetFrustum(fbw, fbh int32, zFarRoom float32) (*physics.Frustum, *physics.Frustum) {
-	return vi.GetFrontFrustum(fbw, fbh, zFarRoom), vi.GetRearFrustum(fbw, fbh, zFarRoom)
+// GetFrustum computes and returns the front and rear frustums of the ViewMatrix based on the provided matrices.
+func (vi *ViewMatrix) GetFrustum(f [16]float32, r [16]float32) (*physics.Frustum, *physics.Frustum) {
+	return vi.GetFrontFrustum(f), vi.GetRearFrustum(r)
 }
 
-// GetFrontFrustum calculates and returns the camera's visual frustum based on the current ViewMatrix properties.
-// It reconstructs the View and Projection matrices to accurately extract the 6 clipping planes for AABB culling.
-func (vi *ViewMatrix) GetFrontFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
-	// Calcolo Aspect Ratio e Scale per la Proiezione
-	pitchShear := float32(-vi.pitch)
-	aspect := float32(fbw) / float32(fbh)
-	scaleX := (2.0 / aspect) * float32(HFov)
-	scaleY := 2.0 * float32(VFov)
-	zNear := float32(0.1)
-	zFar := zFarRoom
-	if zFar <= zNear {
-		zFar = 10000.0 // Fallback di sicurezza se zFarRoom non è valido
-	}
-	// Costruzione Matrice di Proiezione (Column-Major)
-	proj := [16]float32{
-		-scaleX, 0, 0, 0,
-		0, scaleY, 0, 0,
-		0, pitchShear, (zFar + zNear) / (zNear - zFar), -1,
-		0, 0, (2 * zFar * zNear) / (zNear - zFar), 0,
-	}
-	// Costruzione Matrice di View (Column-Major)
-	fX, fZ := float32(vi.angleCos), float32(-vi.angleSin)
-	rX, rZ := float32(vi.angleSin), float32(vi.angleCos)
-	ex, ey, ez := float32(vi.where.X), float32(vi.where.Z), float32(-vi.where.Y)
-	tx := -(rX*ex + rZ*ez)
-	ty := -ey
-	tz := fX*ex + fZ*ez
-	view := [16]float32{
-		rX, 0, -fX, 0,
-		0, 1, 0, 0,
-		rZ, 0, -fZ, 0,
-		tx, ty, tz, 1,
-	}
-	vp := matrixMultiply(proj, view)
-	vi.front.Rebuild(vp)
+// GetFrontFrustum computes and returns the front frustum based on the given 4x4 view-projection matrix.
+func (vi *ViewMatrix) GetFrontFrustum(f [16]float32) *physics.Frustum {
+	vi.front.Rebuild(f)
 	return vi.front
 }
 
-// GetRearFrustum calcola il frustum posteriore invertendo i vettori direzionali.
-func (vi *ViewMatrix) GetRearFrustum(fbw, fbh int32, zFarRoom float32) *physics.Frustum {
-	aspect := float32(fbw) / float32(fbh)
-	scaleX := (2.0 / aspect) * float32(HFov)
-	scaleY := 2.0 * float32(VFov)
-	// Inversione del pitch (se guardi in alto, dietro guardi in basso)
-	pitchShear := float32(vi.pitch)
-	zNear := float32(0.1)
-	zFar := zFarRoom
-	if zFar <= zNear {
-		zFar = 10000.0
-	}
-	proj := [16]float32{
-		-scaleX, 0, 0, 0,
-		0, scaleY, 0, 0,
-		0, pitchShear, (zFar + zNear) / (zNear - zFar), -1,
-		0, 0, (2 * zFar * zNear) / (zNear - zFar), 0,
-	}
-	// Inversione vettori Forward e Right
-	fX, fZ := float32(-vi.angleCos), float32(vi.angleSin)
-	rX, rZ := float32(-vi.angleSin), float32(-vi.angleCos)
-	ex, ey, ez := float32(vi.where.X), float32(vi.where.Z), float32(-vi.where.Y)
-	tx := -(rX*ex + rZ*ez)
-	ty := -ey
-	tz := fX*ex + fZ*ez
-	view := [16]float32{
-		rX, 0, -fX, 0,
-		0, 1, 0, 0,
-		rZ, 0, -fZ, 0,
-		tx, ty, tz, 1,
-	}
-	vp := matrixMultiply(proj, view)
-	vi.rear.Rebuild(vp)
+// GetRearFrustum rebuilds and returns the rear frustum using the provided 4x4 column-major matrix.
+func (vi *ViewMatrix) GetRearFrustum(f [16]float32) *physics.Frustum {
+	vi.rear.Rebuild(f)
 	return vi.rear
-}
-
-// matrixMultiply computes the product of two 4x4 matrices stored in column-major order and returns the resulting matrix.
-func matrixMultiply(proj, view [16]float32) [16]float32 {
-	var vp [16]float32
-	for col := 0; col < 4; col++ {
-		for row := 0; row < 4; row++ {
-			sum := float32(0.0)
-			for i := 0; i < 4; i++ {
-				sum += proj[i*4+row] * view[col*4+i]
-			}
-			vp[col*4+row] = sum
-		}
-	}
-	return vp
 }

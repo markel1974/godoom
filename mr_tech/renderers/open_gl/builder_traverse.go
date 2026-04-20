@@ -163,7 +163,10 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 		}
 	}
 
-	frustumFront, frustumRear := vi.GetFrustum(fbw, fbh, w.calibration.ZFarRoom)
+	px, py, pz := vi.GetXYZ()
+	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
+	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), w.calibration.ZFarRoom, float32(px), float32(py), float32(pz), angle, pitch, roll)
+	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 
 	w.pushLights(w.fl, lights, frustumFront, frustumRear)
 
@@ -194,7 +197,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 	vBottom := ((zTop - zBottom) / float32(texH)) * float32(scaleH)
 
 	// Back-transformation: View-Space -> World-Space
-	sin, cos := vi.GetAngle()
+	sin, cos := vi.GetAngleFull()
 	viX, vizY := vi.GetXY()
 	wx1 := (cp.tx1 * float32(sin)) + (cp.tz1 * float32(cos)) + float32(viX)
 	wy1 := -(cp.tx1 * float32(cos)) + (cp.tz1 * float32(sin)) + float32(vizY)

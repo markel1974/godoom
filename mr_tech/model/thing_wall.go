@@ -30,151 +30,17 @@ func (s *ThingWall) GetEntity() *physics.Entity {
 	return s.wall
 }
 
-// ClosestFace trova la faccia più vicina con cui l'oggetto collide,
-// testando rigorosamente la traiettoria e il location sferico contro tutti i bordi del poligono.
-func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64) {
+// ClosestFace finds the nearest face in a 3D space based on the given positions, velocity, top, bottom, and radius constraints.
+// It updates the axis-aligned bounding box (AABB) and queries the volumes for the closest face intersection.
+func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64, float64) {
 	minX := math.Min(viewX, pX) - radius
 	maxX := math.Max(viewX, pX) + radius
 	minY := math.Min(viewY, pY) - radius
 	maxY := math.Max(viewY, pY) + radius
 	minZ := math.Min(viewZ, pZ) - radius
 	maxZ := math.Max(viewZ, pZ) + radius
-
-	// Broad-phase: estendiamo l'AABB unendo i limiti logici (top/bottom) con la traiettoria sferica
 	s.GetAABB().Rebuild(minX, minY, math.Min(bottom, minZ), maxX, maxY, math.Max(top, maxZ))
-
-	var closestFace *Face = nil
-	minT := 1.0                     // Earliest Time of Impact
-	var colNx, colNy, colNz float64 // Asse Z incluso per la normale di impatto
-
-	s.volumes.QueryAABB(s, func(vol *Volume) {
-		for _, face := range vol.GetFaces() {
-			if neighbor := face.GetNeighbor(); neighbor != nil {
-				holeLow := math.Max(vol.GetMinZ(), neighbor.GetMinZ())
-				holeHigh := math.Min(vol.GetMaxZ(), neighbor.GetMaxZ())
-				if top <= holeHigh && bottom >= holeLow {
-					continue
-				}
-			}
-
-			n := face.GetNormal()
-			pts := face.GetPoints()
-			pLen := len(pts)
-			//if pLen < 2 {
-			//	continue
-			//}
-
-			// Utilizziamo il primo vertice per definire il piano 3D infinito (Fase A)
-			p0 := pts[0]
-			distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
-			distEnd := (pX-p0.X)*n.X + (pY-p0.Y)*n.Y + (pZ-p0.Z)*n.Z
-
-			hit := false
-			var hitT float64
-			var cNx, cNy, cNz float64
-
-			// Fase A preliminare: Sweep Test (Continuous Collision Detection 3D) contro il piano
-			hitPlane := false
-			var hX, hY, hZ float64
-
-			if distStart >= -0.01 && distEnd < radius {
-				dotVel := distEnd - distStart
-				if dotVel < 0 {
-					timeHit := (radius - distStart) / dotVel
-					if timeHit < 0 {
-						timeHit = 0
-					}
-					if timeHit <= 1.0 {
-						hX = viewX + velX*timeHit
-						hY = viewY + velY*timeHit
-						hZ = viewZ + velZ*timeHit // Z d'impatto sul piano
-						hitPlane = true
-					}
-				}
-			}
-
-			// Iteriamo dinamicamente sugli spigoli della faccia
-			for i := 0; i < pLen; i++ {
-				start := pts[i]
-				nextIdx := (i + 1) % pLen
-
-				// Ottimizzazione 2.5D: se è un segmento singolo (2 punti), evitiamo di testare il ritorno
-				//if pLen == 2 && i == 1 {
-				//	continue
-				//}
-				end := pts[nextIdx]
-
-				// Vettori 3D del segmento corrente
-				edgeX := end.X - start.X
-				edgeY := end.Y - start.Y
-				edgeZ := end.Z - start.Z
-				edgeLenSq := (edgeX * edgeX) + (edgeY * edgeY) + (edgeZ * edgeZ)
-
-				// Validazione Fase A: Il punto d'impatto sul piano cade nei limiti di questo spigolo?
-				if hitPlane && !hit {
-					vX := hX - start.X
-					vY := hY - start.Y
-					vZ := hZ - start.Z
-					dotEdge := (vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)
-					if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
-						hit = true
-						dotVel := distEnd - distStart
-						timeHit := (radius - distStart) / dotVel
-						if timeHit < 0 {
-							timeHit = 0
-						}
-						hitT = timeHit
-						cNx, cNy, cNz = n.X, n.Y, n.Z
-					}
-				}
-
-				// Fase B: Discrete Point-to-Segment 3D (Collision Detection sui Vertici e Spigoli)
-				if !hit {
-					vX := pX - start.X
-					vY := pY - start.Y
-					vZ := pZ - start.Z
-					tProj := 0.0
-					if edgeLenSq > 0 {
-						tProj = ((vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)) / edgeLenSq
-						tProj = math.Max(0.0, math.Min(1.0, tProj))
-					}
-					closestX := start.X + (tProj * edgeX)
-					closestY := start.Y + (tProj * edgeY)
-					closestZ := start.Z + (tProj * edgeZ)
-
-					diffX := pX - closestX
-					diffY := pY - closestY
-					diffZ := pZ - closestZ
-
-					// Distanza sferica 3D dallo spigolo
-					distSq := (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
-					if distSq < radius*radius {
-						hit = true
-						hitT = 0.0
-						cDist := math.Sqrt(distSq)
-						if tProj > 0.0 && tProj < 1.0 {
-							cNx, cNy, cNz = n.X, n.Y, n.Z
-						} else {
-							if cDist > 0.0001 {
-								// Normale radiale sferica 3D (Rimbalzo sullo spigolo vivo)
-								cNx, cNy, cNz = diffX/cDist, diffY/cDist, diffZ/cDist
-							} else {
-								cNx, cNy, cNz = n.X, n.Y, n.Z
-							}
-						}
-					}
-				}
-			}
-
-			if hit && hitT <= minT {
-				minT = hitT
-				closestFace = face
-				colNx, colNy, colNz = cNx, cNy, cNz
-			}
-		}
-	})
-
-	return closestFace, colNx, colNy, colNz
+	return s.volumes.QueryClosestFace(s, viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
 }
 
 /*

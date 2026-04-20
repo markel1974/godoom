@@ -248,7 +248,7 @@ func (t *ThingBase) doPhysics() {
 	elevBaseZ := t.pos.Z + t.maxStep
 	// continuous collision detection (ccd) & sliding
 	radius := t.GetRadius()
-	face, nX, nY, nZ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, radius)
+	face, nX, nY, nZ, _ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, radius)
 	if face != nil {
 		// apply physical response to the entity
 		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ)

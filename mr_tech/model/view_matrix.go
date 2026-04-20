@@ -82,6 +82,11 @@ func (vi *ViewMatrix) GetAngle() (float64, float64) {
 	return vi.angleSin, vi.angleCos
 }
 
+// GetRoll returns the roll angle of the ViewMatrix, representing its sideways tilt in radians.
+func (vi *ViewMatrix) GetRoll() float64 {
+	return vi.roll
+}
+
 // GetPitch retrieves the pitch value of the ViewMatrix, representing its vertical orientation angle in radians.
 func (vi *ViewMatrix) GetPitch() float64 {
 	return vi.pitch

@@ -23,6 +23,7 @@ type Bobbing struct {
 	IdleAmpY        float64
 	SpringTension   float64
 	SpringDamping   float64
+	TiltAmp         float64
 }
 
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
@@ -44,6 +45,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 		},
 		Bobbing: &Bobbing{},
 	}
+	p.Speed = 90
 	p.Bobbing.SwayScale = 2.0
 	p.Bobbing.SwayOffsetX = 0.5
 	p.Bobbing.SwayOffsetY = -0.1
@@ -62,6 +64,8 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 	p.Bobbing.ImpactScale = 0.05
 	p.Bobbing.SpringTension = 0.15
 	p.Bobbing.SpringDamping = 0.75
+
+	p.Bobbing.TiltAmp = 0.03
 
 	return p
 }

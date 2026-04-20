@@ -6,6 +6,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
+const full3d = true
+
 // enableAdditiveLights configures OpenGL to use additive blending for rendering by adjusting depth and blend settings.
 func enableAdditiveLights() {
 	gl.DepthMask(false)
@@ -125,7 +127,12 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.w = fbW
 		w.h = fbH
 		w.metrics.SetFlash(85.0, 0.1, 2048.0, fbW, fbH)
-		w.scaleX, w.scaleY = w.metrics.GetScale(fbW, fbH)
+		if full3d {
+			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH)
+		} else {
+			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
+		}
+
 	}
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
@@ -143,8 +150,13 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		flashX, flashY = float32(swayX), float32(swayY)
 	}
 	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, flashX, flashY)
+	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
+	if full3d {
+		proj, view, invView = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
+	} else {
+		proj, view, invView = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
+	}
 
-	proj, view, invView := w.main.UpdateUniforms(vi, w.scaleX, w.scaleY)
 	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainView)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)

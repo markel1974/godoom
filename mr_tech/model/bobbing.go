@@ -33,6 +33,7 @@ type Bobbing struct {
 	swayOffsetY     float64
 	swayMultiplierX float64
 	swayMultiplierY float64
+	tiltAmp         float64
 }
 
 // NewBobbing initializes and returns a new Bobbing instance with the given parameters for motion and amplitude behavior.
@@ -55,6 +56,7 @@ func NewBobbing(cfg *config.Bobbing) *Bobbing {
 		idleAmpY:        cfg.IdleAmpY,
 		springTension:   cfg.SpringTension,
 		springDamping:   cfg.SpringDamping,
+		tiltAmp:         cfg.TiltAmp,
 	}
 }
 
@@ -93,8 +95,8 @@ func (p *Bobbing) GetTilt() float64 {
 	// b.x è l'onda sinusoidale orizzontale (calcolata in Compute in base alla velocità)
 	// Moltiplichiamo per un piccolo fattore scalare per convertirlo in radianti
 	// (es. 0.05 rad sono circa 2.8 gradi)
-	const tiltAmplitude = 0.035
-	return p.bobX * tiltAmplitude
+	//const tiltAmplitude = 0.01
+	return p.bobX * p.tiltAmp
 }
 
 // InjectVerticalImpulse applies a vertical impulse to the jump bob effect, clamping extreme values to avoid excessive motion.

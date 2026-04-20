@@ -55,11 +55,28 @@ func NewMapMetrics() *MapMetrics {
 	return m
 }
 
-// GetScale calculates and returns the X and Y scaling factors based on the provided screen width and height.
-func (m *MapMetrics) GetScale(width, height int32) (float32, float32) {
+// GetScale2d calculates and returns the scaled horizontal and vertical 2D projection factors based on input dimensions.
+func (m *MapMetrics) GetScale2d(width, height int32) (float32, float32) {
 	aspect := float32(width) / float32(height)
 	scaleX := (ndcRange / aspect) * float32(model.HFov)
 	scaleY := ndcRange * float32(model.VFov)
+	return scaleX, scaleY
+}
+
+// GetScale3d calculates and returns the X and Y scaling factors based on horizontal FOV.
+func (m *MapMetrics) GetScale3d(width, height int32) (float32, float32) {
+	// 1. Aspect ratio della finestra (es. 1280/960 = 1.333)
+	aspect := float32(width) / float32(height)
+	// 2. Field of View Verticale (75.0 è lo standard Quake/Retro per schermi 4:3)
+	// Se su schermi 16:9 ti sembra troppo "zoomato", alzalo a 80 o 90.
+	const fovVerticalDegrees = 80.0
+	fovYRad := (fovVerticalDegrees * math.Pi) / 180.0
+	// 3. Focale base derivata dall'angolo visivo
+	f := float32(1.0 / math.Tan(float64(fovYRad)/2.0))
+	// 4. Mappatura canonica OpenGL (Perspective Projection)
+	// L'asse Y usa la focale pura. L'asse X viene corretto (diviso) dall'aspect ratio.
+	scaleY := f * 0.4
+	scaleX := f / aspect
 	return scaleX, scaleY
 }
 

@@ -187,9 +187,28 @@ func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
 	return p.pos.X, p.pos.Y, p.pos.Z
 }
 
-// GetTilt retrieves the tilt value from the ThingPlayer's bobbing component as a float64.
 func (p *ThingPlayer) GetTilt() float64 {
-	return p.bobbing.GetTilt()
+	//if !p.entity.IsOnGround() {
+	//	return 0.0
+	//}
+
+	rawTilt := p.bobbing.GetTilt()
+	// 3. Calcoliamo la velocità reale sul piano
+	vx := p.entity.GetVx()
+	vy := p.entity.GetVy()
+	currentSpeed := math.Sqrt(vx*vx + vy*vy)
+	// 4. Creiamo la maschera (Ratio)
+	// p.speed è la tua velocità massima (es. 60.0).
+	// Vogliamo che il tilt sia al 100% già quando siamo a mezza velocità
+	ratio := currentSpeed / (p.speed * 0.5)
+	if ratio > 1.0 {
+		ratio = 1.0
+	} else if ratio < 0.05 {
+		// Deadzone: Ignoriamo le micro-vibrazioni del solutore PGS quando siamo "fermi"
+		ratio = 0.0
+	}
+	// 5. Applichiamo la maschera! Da fermo, ratio sarà 0.0 annullando l'idleDrift.
+	return rawTilt * ratio
 }
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.

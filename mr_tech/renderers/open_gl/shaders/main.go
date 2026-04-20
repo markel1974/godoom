@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -210,20 +211,102 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 	gl.BufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, iTotal, gl.Ptr(indices))
 }
 
-// UpdateUniforms calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
-func (s *Main) UpdateUniforms(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
+// UpdateUniforms3d calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
+func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
+	// Acquire angles
+	sinY, cosY := vi.GetAngle()
+	pitch := -vi.GetPitch()
+	roll := vi.GetRoll()
+	// Sine and Cosine of Pitch and Roll
+	sinP, cosP := math.Sin(pitch), math.Cos(pitch)
+	sinR, cosR := math.Sin(roll), math.Cos(roll)
+	// Calculate camera base vectors (Quake-style True 3D)
+	// Start from pure Yaw orientation mapped for OpenGL, and apply Pitch (up/down)
+	// Forward vector (The direction the camera is looking)
+	fX := float32(cosY * cosP)
+	fY := float32(sinP)
+	fZ := float32(-sinY * cosP)
+	// Temporary Up vector (Tilted by Pitch, but without Roll)
+	upX := float32(-cosY * sinP)
+	upY := float32(cosP)
+	upZ := float32(sinY * sinP)
+	// Temporary Right vector (Always parallel to the floor before Roll)
+	rightX := float32(sinY)
+	rightY := float32(0)
+	rightZ := float32(cosY)
+	// Apply Roll (Bobbing/Tilt), rotate Right and Up vectors around the Forward axis
+	rX := rightX*float32(cosR) + upX*float32(sinR)
+	rY := rightY*float32(cosR) + upY*float32(sinR)
+	rZ := rightZ*float32(cosR) + upZ*float32(sinR)
+
+	uX := upX*float32(cosR) - rightX*float32(sinR)
+	uY := upY*float32(cosR) - rightY*float32(sinR)
+	uZ := upZ*float32(cosR) - rightZ*float32(sinR)
+
+	// Spatial Mapping and Translation
+	// Transform position from Model (Z-Up) to OpenGL space (Y-Up)
+	viX, viY := vi.GetXY()
+	viZ := vi.GetZ()
+	ex := float32(viX)
+	ey := float32(viZ)
+	ez := float32(-viY)
+	// View Matrix Translation (Inverse dot product)
+	tx := -(rX*ex + rY*ey + rZ*ez)
+	ty := -(uX*ex + uY*ey + uZ*ez)
+	tz := fX*ex + fY*ey + fZ*ez // Note: positive because OpenGL looks toward -F
+	// Pure Projection Matrix (No Pitch Shearing)
+	zFarRoom := s.metrics.GetRoomZFar()
+	zNearRoom := s.metrics.GetRoomZNear()
+	s.proj = [16]float32{
+		scaleX, 0, 0, 0,
+		0, scaleY, 0, 0,
+		0, 0, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
+		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
+	}
+	// View Matrix (Standard OpenGL Column-Major Layout)
+	s.view = [16]float32{
+		rX, uX, -fX, 0, // Column 0 (Screen X vector)
+		rY, uY, -fY, 0, // Column 1 (Screen Y vector)
+		rZ, uZ, -fZ, 0, // Column 2 (Screen Z vector)
+		tx, ty, tz, 1, // Column 3 (Positional translation)
+	}
+	// Matrix inversion (Useful for dynamic Skyboxes or advanced Frustum Culling)
+	var invView [16]float32
+	if inv, ok := MatrixInverse4x4(s.view); ok {
+		invView = inv
+	}
+	return s.proj, s.view, invView
+}
+
+func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	pitchShear := float32(-vi.GetPitch())
 	sinA, cosA := vi.GetAngle()
+	// Base Forward (Z) and Right (X) vectors from Yaw only
 	fX, fZ := float32(cosA), float32(-sinA)
 	rX, rZ := float32(sinA), float32(cosA)
+	// Roll
+	roll := float32(vi.GetRoll())
+	sinR, cosR := float32(math.Sin(float64(roll))), float32(math.Cos(float64(roll)))
+	// Rotate Right (X) and Up (Y) vectors around the Forward (Z) axis
+	// Original local Up was (0, 1, 0)
+	// Original local Right was (rX, 0, rZ)
+	// New Right vector (X)
+	newRx := rX * cosR
+	newRy := sinR
+	newRz := rZ * cosR
+	// New Up vector (Y)
+	newUx := -rX * sinR
+	newUy := cosR
+	newUz := -rZ * sinR
+
 	viX, viY := vi.GetXY()
 	viZ := vi.GetZ()
 	ex, ey, ez := float32(viX), float32(viZ), float32(-viY)
-
-	tx := -(rX*ex + rZ*ez)
-	ty := -ey
-	tz := fX*ex + fZ*ez
-
+	// Translation uses the new oriented vectors to shift the world
+	tx := -(newRx*ex + newRy*ey + newRz*ez)
+	ty := -(newUx*ex + newUy*ey + newUz*ez)
+	// Up/Right rotate around Forward, Dir is unchanged
+	tz := -((-fX)*ex + (-fZ)*ez)
 	zFarRoom := s.metrics.GetRoomZFar()
 	zNearRoom := s.metrics.GetRoomZNear()
 	s.proj = [16]float32{
@@ -232,18 +315,17 @@ func (s *Main) UpdateUniforms(vi *model.ViewMatrix, scaleX float32, scaleY float
 		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
 		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}
+	// Updated View Matrix (Column-Major)
 	s.view = [16]float32{
-		rX, 0, -fX, 0,
-		0, 1, 0, 0,
-		rZ, 0, -fZ, 0,
-		tx, ty, tz, 1,
+		newRx, newUx, -fX, 0, // Col 0
+		newRy, newUy, 0, 0, // Col 1
+		newRz, newUz, -fZ, 0, // Col 2
+		tx, ty, tz, 1, // Col 3
 	}
-
 	var invView [16]float32
 	if inv, ok := MatrixInverse4x4(s.view); ok {
 		invView = inv
 	}
-
 	return s.proj, s.view, invView
 }
 

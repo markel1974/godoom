@@ -11,10 +11,9 @@ import (
 
 // VertexMD2 represents a structure containing 3D volume data and associated animation frame face mappings.
 type VertexMD2 struct {
-	gScale    float64
-	volume    *Volume
-	frames    [][]*Face
-	lastAngle float64
+	gScale float64
+	volume *Volume
+	frames [][]*Face
 }
 
 // NewVertexMD2 creates a new VertexMD2 object with the given configuration, animation, dimensions, mass, restitution, and friction.
@@ -51,39 +50,6 @@ func NewVertexMD2(gScale float64, cfg *config.Model3d, anim *textures.Animation,
 // GetVolume returns the Volume instance associated with the VertexMD2 object.
 func (v *VertexMD2) GetVolume() *Volume {
 	return v.volume
-}
-
-/*
-// SetAngle applica la matrice di rotazione Z-UP in-place calcolando il delta rispetto all'ultimo orientamento.
-func (v *VertexMD2) SetAngle(angle float64) {
-	delta := angle - v.lastAngle
-	if delta == 0.0 {
-		return
-	}
-	v.lastAngle = angle
-	cosA := math.Cos(delta)
-	sinA := math.Sin(delta)
-	for _, frameFaces := range v.frames {
-		for _, f := range frameFaces {
-			tx, ty := f.tri[0].X, f.tri[0].Y
-			f.tri[0].X = tx*cosA - ty*sinA
-			f.tri[0].Y = tx*sinA + ty*cosA
-
-			tx, ty = f.tri[1].X, f.tri[1].Y
-			f.tri[1].X = tx*cosA - ty*sinA
-			f.tri[1].Y = tx*sinA + ty*cosA
-
-			tx, ty = f.tri[2].X, f.tri[2].Y
-			f.tri[2].X = tx*cosA - ty*sinA
-			f.tri[2].Y = tx*sinA + ty*cosA
-		}
-	}
-}
-
-*/
-
-func (v *VertexMD2) SetAngle(angle float64) {
-	v.lastAngle = angle
 }
 
 // GetVertices retrieves the vertices corresponding to the current animation frame, determined by the specified tick value.

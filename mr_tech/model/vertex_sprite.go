@@ -68,11 +68,6 @@ func (v *VertexSprite) GetVolume() *Volume {
 	return v.volume
 }
 
-// SetAngle modifies the angle of the VertexSprite based on the provided directional changes dx and dy.
-func (v *VertexSprite) SetAngle(angle float64) {
-
-}
-
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex sprite at the given moment in time.
 func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {

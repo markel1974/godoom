@@ -47,3 +47,8 @@ func (t *ThingItem) StartLoop() {
 // Compute updates the state of the ThingItem instance based on the provided player coordinates (X, Y, Z).
 func (t *ThingItem) Compute(playerX float64, playerY float64, playerZ float64) {
 }
+
+// PhysicsApply executes physics-related calculations and updates for the ThingItem instance by invoking the doPhysics method.
+func (t *ThingItem) PhysicsApply() {
+	t.doPhysics()
+}

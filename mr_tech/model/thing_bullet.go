@@ -73,6 +73,10 @@ func (t *ThingThrowable) GetMinZ() float64 {
 	return z
 }
 
+func (t *ThingThrowable) PhysicsApply() {
+	t.doPhysics()
+}
+
 // Compute calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
 func (t *ThingThrowable) Compute(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui

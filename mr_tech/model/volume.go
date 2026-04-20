@@ -192,7 +192,7 @@ func (v *Volume) GetTag() string {
 }
 
 // Neighbor returns the neighboring location that contains the specified point (px, py, pz), or nil if no such location exists.
-func (v *Volume) Neighbor(px, py, pz float64) *Volume {
+func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
 	if v.hasFixedZ {
 		if v.PointInLineSide(px, py) {
 			return v
@@ -206,17 +206,28 @@ func (v *Volume) Neighbor(px, py, pz float64) *Volume {
 		}
 		return nil
 	}
-	if v.PointInside3d(px, py, pz) {
+	if v.PointInside2d(px, py, pz) {
 		return v
 	}
 	for _, face := range v.GetFaces() {
 		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.PointInside3d(px, py, pz) {
+			if neighbor.PointInside2d(px, py, pz) {
 				return neighbor
 			}
 		}
 	}
 	return nil
+}
+
+func (v *Volume) PointInside2d(px, py, pz float64) bool {
+	if v.hasFixedZ {
+		const epsilon = 0.01
+		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
+			return false
+		}
+		return v.PointInLineSide(px, py)
+	}
+	return false
 }
 
 // PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
@@ -228,14 +239,31 @@ func (v *Volume) PointInside3d(px, py, pz float64) bool {
 		}
 		return v.PointInLineSide(px, py)
 	}
-	intersections := 0
-	for _, face := range v.faces {
-		if face.RayIntersect(px, py, pz, 1.0, 0.000123, 0.000456) {
-			intersections++
+
+	// MULTI-RAY CASTING (Correzione del Parity Flaw)
+	// Tre raggi asimmetrici in 3 ottanti diversi.
+	rays := [3][3]float64{
+		{1.0, 0.000123, 0.000456},
+		{-0.000321, 1.0, -0.000654},
+		{-0.000456, -0.000123, 1.0},
+	}
+
+	insideCount := 0
+	for _, ray := range rays {
+		intersections := 0
+		for _, face := range v.faces {
+			if face.RayIntersect(px, py, pz, ray[0], ray[1], ray[2]) {
+				intersections++
+			}
+		}
+		// Se buca un numero dispari di triangoli, il punto per questo raggio è DENTRO
+		if intersections%2 != 0 {
+			insideCount++
 		}
 	}
-	// Se buca un numero dispari di triangoli, il punto è DENTRO
-	return intersections%2 != 0
+
+	// La maggioranza vince: se almeno 2 raggi su 3 dicono che sei dentro, sei dentro.
+	return insideCount >= 2
 }
 
 // PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.

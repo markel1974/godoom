@@ -79,7 +79,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	r.volumes.Setup()
 
 	r.lights.AddLights(r.compileLights(cfg.Lights))
-	r.things = NewThings(r.gScale, cfg.Things, r.volumes, animations)
+	r.things = NewThings(r.gScale, cfg.Full3d, cfg.Things, r.volumes, animations)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")

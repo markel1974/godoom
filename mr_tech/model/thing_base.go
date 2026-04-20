@@ -39,6 +39,7 @@ type ThingBase struct {
 	collisions    []IThing
 	collisionsIdx int
 	inbox         chan *ThingEvent
+	full3d        bool
 	done          chan struct{} // Per il teardown
 }
 
@@ -83,6 +84,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		done:          make(chan struct{}),
 		collisions:    make([]IThing, 128),
 		collisionsIdx: 0,
+		full3d:        things.full3d,
 	}
 	t.entity.SetOnGround(false)
 
@@ -197,20 +199,158 @@ func (t *ThingBase) SetActive(active bool) {
 }
 
 // PhysicsApply applies physics calculations to the ThingBase instance using its height attribute.
-func (t *ThingBase) PhysicsApply() {
-	//TODO TOO SLOOW!!!!!!!
-	t.doPhysics()
+//func (t *ThingBase) PhysicsApply() {
+//	t.doPhysics()
+//}
+
+func (t *ThingBase) doPhysics() {
+	if t.full3d {
+		t.doPhysics3d()
+		return
+	}
+	t.doPhysics2d()
 }
 
 // doPhysics handles the physics computations for movement, collision detection, and location transitions for the entity.
-func (t *ThingBase) doPhysics() {
+func (t *ThingBase) doPhysics3d() {
 	for i := 0; i < t.collisionsIdx; i++ {
-		//other := t.collisions[i]
-		//if enemy, ok := other.(*ThingEnemy); ok {
-		//	_ = enemy
-		// enemy.TakeDamage(...)
-		// t.SetActive(false)
-		//}
+		t.collisions[i] = nil
+	}
+	t.collisionsIdx = 0
+	dx, dy, dz := t.entity.GetDisplacement()
+	// 1. DEADZONE
+	const sleepEpsilon = 0.005
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		t.entity.SetVx(0.0)
+		t.entity.SetVy(0.0)
+		if t.entity.IsOnGround() {
+			t.entity.SetVz(0.0)
+		}
+		return
+	}
+	// 2. STICK-TO-GROUND
+	if t.entity.IsOnGround() && dz <= 0 {
+		dz -= 0.06
+	}
+	pX, pY, pZ := t.pos.X, t.pos.Y, t.pos.Z
+	tHeight := t.entity.GetDepth()
+	radius := t.GetRadius()
+	isGrounded := false
+	// ==========================================
+	// FASE A: MOVIMENTO VERTICALE (Z) + CAPSULA
+	// ==========================================
+	var sphereZ float64
+	if dz > 0 {
+		sphereZ = pZ + tHeight - radius // Check Soffitto
+	} else {
+		sphereZ = pZ + radius // Check Pavimento
+	}
+	// Sweep test verticale con offset sfera (Capsula)
+	zFace, znX, znY, znZ, zHitT := t.wall.ClosestFace(pX, pY, sphereZ, pX, pY, sphereZ+dz, 0, 0, dz, pZ+tHeight+math.Abs(dz), pZ-math.Abs(dz), radius)
+	if zFace != nil {
+		pZ += dz * zHitT
+		t.entity.ResolveImpact(t.wall.GetEntity(), znX, znY, znZ)
+		if znZ >= 0.7 { // Pavimento
+			isGrounded = true
+			pZ += 0.001
+			// AGGIORNAMENTO SETTORE: La faccia del pavimento ci dice dove siamo
+			if parent := zFace.GetParent(); parent != nil {
+				t.location = parent
+			}
+			if t.entity.GetVz() < 0 {
+				t.entity.SetVz(0.0)
+			}
+		} else if znZ <= -0.7 { // Soffitto
+			pZ -= 0.001
+			if t.entity.GetVz() > 0 {
+				t.entity.SetVz(0.0)
+			}
+		}
+		dz = 0
+	} else {
+		pZ += dz
+	}
+
+	// ==========================================
+	// FASE B: MOVIMENTO ORIZZONTALE E STEP-UP
+	// ==========================================
+	if math.Abs(dx) > 0 || math.Abs(dy) > 0 {
+		hSphereZ := pZ + radius
+		hFace, hnX, hnY, hnZ, hHitT := t.wall.ClosestFace(pX, pY, hSphereZ, pX+dx, pY+dy, hSphereZ, dx, dy, 0, pZ+tHeight, pZ, radius)
+		if hFace != nil {
+			stepUpSuccess := false
+			stepUpZ := pZ + t.maxStep
+			_, _, _, _, sHitT := t.wall.ClosestFace(pX, pY, stepUpZ+radius, pX+dx, pY+dy, stepUpZ+radius, dx, dy, 0, stepUpZ+tHeight, stepUpZ, radius)
+			if sHitT > hHitT+0.01 { // È un gradino
+				stepTravelX := dx * sHitT
+				stepTravelY := dy * sHitT
+				dropZ := -t.maxStep - 0.1
+				// Snap al suolo del gradino
+				dropFace, _, _, dnZ, dropT := t.wall.ClosestFace(pX+stepTravelX, pY+stepTravelY, stepUpZ+radius, pX+stepTravelX, pY+stepTravelY, stepUpZ+radius+dropZ, 0, 0, dropZ, stepUpZ+tHeight, stepUpZ+dropZ, radius)
+				if dropFace != nil && dnZ >= 0.7 {
+					pX += stepTravelX
+					pY += stepTravelY
+					pZ = (stepUpZ + radius) + (dropZ * dropT) - radius + 0.001
+					isGrounded = true
+					stepUpSuccess = true
+					// AGGIORNAMENTO SETTORE: Cambio volume dopo lo Step-Up
+					if parent := dropFace.GetParent(); parent != nil {
+						t.location = parent
+					}
+				}
+			}
+
+			if !stepUpSuccess {
+				// Sliding standard contro il muro
+				pX += dx * hHitT
+				pY += dy * hHitT
+				vx, vy, vz := t.entity.GetVelocity()
+				newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, hnX, hnY, hnZ)
+				t.entity.SetVx(newVx)
+				t.entity.SetVy(newVy)
+				t.entity.SetVz(newVz)
+
+				remTime := 1.0 - hHitT
+				if remTime > 0 {
+					rdx, rdy, rdz := t.entity.ClipVelocity(dx*remTime, dy*remTime, 0, hnX, hnY, hnZ)
+					pX += rdx
+					pY += rdy
+					pZ += rdz // Supporto rampe
+				}
+			}
+		} else {
+			// Percorso libero
+			pX += dx
+			pY += dy
+		}
+	}
+
+	/*
+		// --- FASE C: PASSAGGIO PORTALI (No Collision) ---
+		// Se non abbiamo colpito nulla, ma abbiamo attraversato un portale (Face con Neighbor),
+		// dobbiamo aggiornare t.location senza usare QueryPoint3d.
+		// Lo facciamo solo se il volume corrente non contiene più il centro dell'entità.
+		if !t.location.PointInside3d(pX, pY, pZ + radius) {
+			// Cerchiamo tra i vicini del volume attuale (Portali)
+			if newVol := t.location.Neighbor(pX, pY, pZ + radius); newVol != nil {
+				t.location = newVol
+			} else {
+				// Fallback estremo se siamo "usciti" dalla mesh (solo se necessario)
+				if newVol := t.world.QueryPoint3d(pX, pY, pZ + radius); newVol != nil {
+					t.location = newVol
+				}
+			}
+		}
+
+	*/
+
+	t.entity.SetOnGround(isGrounded)
+	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
+}
+
+// doPhysics handles the physics computations for movement, collision detection, and location transitions for the entity.
+func (t *ThingBase) doPhysics2d() {
+	for i := 0; i < t.collisionsIdx; i++ {
 		t.collisions[i] = nil
 	}
 	t.collisionsIdx = 0
@@ -269,9 +409,9 @@ func (t *ThingBase) doPhysics() {
 	}
 	// location transition (3d portals)
 	topZ := pZ + tHeight
-	newVolume := t.location.Neighbor(pX, pY, pZ)
+	newVolume := t.location.Neighbor2d(pX, pY, pZ)
 	if newVolume == nil {
-		newVolume = t.world.QueryPoint3d(pX, pY, pZ)
+		newVolume = t.world.QueryPoint2d(pX, pY, pZ)
 	}
 	newVolume = isValidZ(newVolume, pZ, topZ, t.maxStep)
 	if newVolume != nil && newVolume != t.location {

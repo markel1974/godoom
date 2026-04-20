@@ -82,6 +82,7 @@ func (c *Contact) Resolve() {
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	gScale       float64
+	full3d       bool
 	config       []*config.Thing
 	volumes      *Volumes
 	animations   *Animations
@@ -103,10 +104,11 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(gScale float64, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(gScale float64, full3d bool, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:       gScale,
+		full3d:       false,
 		tree:         physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:     make(map[int]IThing),
 		identifier:   0,

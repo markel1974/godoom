@@ -1,6 +1,8 @@
 package model
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
@@ -115,6 +117,23 @@ func (vi *ViewMatrix) ZDistance(v float64) float64 {
 // GetSway returns the horizontal and vertical sway values of the ViewMatrix as two float64 values.
 func (vi *ViewMatrix) GetSway() (float64, float64) {
 	return vi.swayX, vi.swayY
+}
+
+func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
+	// Calcoliamo il seno e coseno del pitch (inclinazione verticale)
+	pitchCos := math.Cos(vi.pitch)
+	pitchSin := math.Sin(vi.pitch)
+
+	// Conversione da coordinate sferiche a cartesiane 3D.
+	// Assumendo che Y sia l'asse verticale (Up) nel tuo shader:
+	dirX := pitchCos * vi.angleCos
+	dirY := pitchSin
+	dirZ := pitchCos * vi.angleSin
+
+	// Nota: a seconda se il tuo engine è Right-Handed o Left-Handed,
+	// potresti dover invertire il segno di uno degli assi (es. -dirZ o -dirX)
+	// per allinearlo perfettamente con il Frustum.
+	return float32(dirX), float32(dirY), float32(dirZ)
 }
 
 // GetFrustum computes and returns the front and rear frustums of the ViewMatrix based on the provided matrices.

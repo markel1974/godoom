@@ -24,6 +24,7 @@ type Calibration struct {
 	BeamRatio          float64
 	VolSteps           float64
 	FlashFactor        float64
+	FlashFalloff       float64
 	volumes            *Volumes
 }
 
@@ -50,6 +51,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
 		FlashFactor:        cfg.FlashFactor,
+		FlashFalloff:       cfg.FlashFalloff,
 		volumes:            volumes,
 	}
 	c.init()

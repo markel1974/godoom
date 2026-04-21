@@ -40,6 +40,7 @@ type MapMetrics struct {
 	flashConeStart float32
 	flashConeEnd   float32
 	flashAspect    float32
+	flashFalloff   float32
 	roomProj       [16]float32
 	roomView       [16]float32
 	roomSpace      [16]float32
@@ -50,7 +51,7 @@ type MapMetrics struct {
 func NewMapMetrics() *MapMetrics {
 	m := &MapMetrics{}
 	m.SetOrthoSize(float32(640), 0.0, 8192.0)
-	m.SetFlash(85.0, 0.1, 2048.0, 1024, 1024)
+	m.SetFlash(85.0, 10, 0.1, 2048.0, 1024, 1024)
 	m.SetMapCenter(0.0, 0.0, 0.0)
 	return m
 }
@@ -119,10 +120,11 @@ func (m *MapMetrics) GetFlashAspect() float32 {
 }
 
 // SetFlash configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
-func (m *MapMetrics) SetFlash(flashFovDeg, zNearFlash, zFarFlash float32, width, height int32) {
+func (m *MapMetrics) SetFlash(flashFovDeg, flashFalloff, zNearFlash, zFarFlash float32, width, height int32) {
 	m.shadowWidth = width
 	m.shadowHeight = height
 	m.flashFovDeg = flashFovDeg
+	m.flashFalloff = flashFalloff
 	m.flashZNear = zNearFlash
 	m.flashZFar = zFarFlash
 	m.flashAspect = float32(width) / float32(height)
@@ -175,6 +177,11 @@ func (m *MapMetrics) GetFlashConeStart() float32 {
 // GetFlashConeEnd returns the ending value of the flashlight cone's angle, used for cone-based illumination calculations.
 func (m *MapMetrics) GetFlashConeEnd() float32 {
 	return m.flashConeEnd
+}
+
+// GetFlashFalloff retrieves the falloff value used for flashlight intensity attenuation calculations.
+func (m *MapMetrics) GetFlashFalloff() float32 {
+	return m.flashFalloff
 }
 
 // updateRoomProj updates the orthographic projection matrix (roomProj) and combined matrix (roomSpace) for the room space.

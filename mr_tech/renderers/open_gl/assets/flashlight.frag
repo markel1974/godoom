@@ -18,6 +18,7 @@ uniform mat4 u_flashSpaceMatrix;
 
 uniform vec2 u_screenResolution;
 uniform vec3 u_flashDir;
+uniform float u_flashFalloff;
 uniform float u_flashIntensityFactor;
 uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
@@ -150,12 +151,35 @@ void main()
         shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
     }
 
-    //float diffFlash = max((dot(finalNormal, L_flash) * 0.5) + u_flashBase, 0.0);
-    //float diffFlash = max(dot(finalNormal, L_flash) + u_flashBase, 0.0);
+    // Calcolo della proiezione della luce direttamente nel main
+    vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
+    projMain = projMain * 0.5 + 0.5;
     float diffFlash = max(dot(finalNormal, L_flash), 0.0);
+    // Se stiamo uscendo dal Frustum della luce (vicini al Far Plane o oltre)
+    // forziamo l'ombra a 1.0 (che si tradurrà in occlusione totale = 0.0 luce)
+    if (projMain.z > 0.9) {
+        shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
+    }
 
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-    float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
+    //float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
+
+    float flashFalloff = u_flashFalloff;
+    //flashFalloff = 10;
+    //float flashFalloff = 10;//5000;
+    //float u_flashInvRadiusSq = 100.0; // 1.0 / (Radius * Radius)
+    //float distSq = FragDepth * FragDepth;
+    // Forza l'attenuazione esattamente a 0.0 quando la distanza raggiunge il Radius
+    //float window = clamp(1.0 - pow(distSq * u_flashInvRadiusSq, 2.0), 0.0, 1.0);
+    //float flashFalloff = (window * window) / (distSq + 1.0);
+
+    //uniform float u_falloffLinear;
+    //uniform float u_falloffQuadratic;
+    //float u_falloffLinear = 0.01;
+    //float u_falloffQuadratic = 0.001;
+    //float flashFalloff = 1.0 / (1.0 + (u_falloffLinear * FragDepth) + u_falloffQuadratic * (FragDepth * FragDepth));
+
+
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
     float volFlash = 0.0;

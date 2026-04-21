@@ -75,8 +75,16 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	var playerAngle float64
 	var playerPos geometry.XYZ
 	cal := config.NewConfigCalibration(true, 0, 0, 0, 0, 0, 0, true)
+	//cal.Auto = false
+	//cal.OrthoSize = 32092
+	//cal.LightCamY = 8000
+	//cal.ZNearRoom = 0.1
+	//cal.ZFarRoom = 16000
+	cal.ZFarFlash = 8192
 	cal.ScaleFactor = 1.0
 	cal.FlashFactor = 250
+	cal.FlashFalloff = 5000
+
 	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)
 
 	for _, ent := range entities {
@@ -201,8 +209,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 1200
 	root.Player.Bobbing.SwayScale = 2.0
-	root.Player.Bobbing.SwayOffsetX = 10
-	root.Player.Bobbing.SwayOffsetY = -5
+	root.Player.Bobbing.SwayOffsetX = 50
+	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
 	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.

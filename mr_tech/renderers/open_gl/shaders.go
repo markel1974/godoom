@@ -128,7 +128,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
-		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), fbW, fbH)
+		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.FlashFalloff), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), fbW, fbH)
 		if full3d {
 			// 2. Field of View Verticale (75.0 è lo standard Quake/Retro per schermi 4:3)
 			// schermi 16:9 si puo alzare a 80 o 90.
@@ -148,6 +148,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	px, _, pz := vi.GetXYZ()
 	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
 
+	dirX, dirY, dirZ := vi.GetForwardVector()
 	flashX, flashY := float32(0), float32(0)
 	if w.flashlight.HasShadow() {
 		swayX, swayY := vi.GetSway()
@@ -185,7 +186,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, float32(fbW), float32(fbH))
+	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, dirX, dirY, dirZ, flashX, flashY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 	// SKYBOX

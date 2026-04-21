@@ -46,6 +46,7 @@ const (
 	FlashLocFlashOffset
 	FlashLocFlashConeStart
 	FlashLocFlashConeEnd
+	FlashLocFalloff
 	FlashLocEnableShadows
 	FlashLocShininessWall
 	FlashLocShininessFloor
@@ -169,6 +170,7 @@ func (s *Flashlight) Compile(a IAssets) error {
 	s.table[FlashLocFlashOffset] = gl.GetUniformLocation(s.prg, gl.Str("u_flashOffset\x00"))
 	s.table[FlashLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
 	s.table[FlashLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
+	s.table[FlashLocFalloff] = gl.GetUniformLocation(s.prg, gl.Str("u_flashFalloff\x00"))
 	//s.table[FlashLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
 	s.table[FlashLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
 	s.table[FlashLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
@@ -186,7 +188,7 @@ func (s *Flashlight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY float32, screenW, screenH float32) {
+func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, dirX, dirY, dirZ, fSwayX, fSwayY float32, screenW, screenH float32) {
 	if s.factor <= 0 {
 		return
 	}
@@ -198,7 +200,15 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &flashSpace[0])
 
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
-	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), 0.0, 0.0, -1.0)
+	const swaySensitivity = 0.01
+
+	// Calcola la direzione perturbata nello spazio di vista
+	// Partiamo dalla costante (-0.4, 0.1, -1.0) e aggiungiamo lo sway
+	targetDirX := 0.2 - (fSwayX * swaySensitivity)
+	targetDirY := 0.1 + (fSwayY * swaySensitivity)
+
+	//gl.Uniform3f(s.GetUniform(FlashLocFlashDir), dirX, dirY, -float32(math.Abs(float64(dirZ))))
+	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), targetDirX, targetDirY, -1.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
 	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), s.metrics.GetFlashConeStart())
@@ -212,6 +222,8 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
+
+	gl.Uniform1f(s.GetUniform(FlashLocFalloff), float32(s.cal.FlashFalloff))
 
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)

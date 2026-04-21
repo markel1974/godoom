@@ -469,46 +469,35 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 	}
 	lightAmbient := vi.GetLightIntensity()
 	lightArtificial := cp.Volume.Light.GetIntensity()
+	tex := cp.Animation.CurrentFrame()
+	scaleH := tex.GetScaleFactorH()
+
 	switch cp.Kind {
 	case model.IdWall:
-		tex := cp.Animation.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		yRef := (cp.Volume.GetMaxZ() - cp.Volume.GetMinZ()) * scaleH
 		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdUpper:
-		tex := cp.Animation.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		yRef := math.Abs((cp.Volume.GetMaxZ() - cp.Neighbor.GetMaxZ()) * scaleH)
 		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdLower:
-		tex := cp.Animation.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		yRef := math.Abs((cp.Neighbor.GetMinZ() - cp.Volume.GetMinZ()) * scaleH)
 		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
-		tex := cp.AnimationCeil.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloor:
-		tex := cp.AnimationFloor.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
-		tex := cp.AnimationFloor.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
-		tex := cp.AnimationCeil.CurrentFrame()
-		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()

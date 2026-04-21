@@ -117,9 +117,10 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				}
 				cell = 0 // Libera la cella per il compilatore topologico
 			}
+
 			const falloff = 10.0
+			const lightIntensity = 1.5
 			sid := wp.sectorIds[y][x]
-			lightIntensity := 0.5 //rnd.Float64()
 			cs := config.NewConfigSector(sid, lightIntensity, config.LightKindAmbient, falloff)
 			cs.FloorY = 0
 			cs.CeilY = wp.sectorHeight

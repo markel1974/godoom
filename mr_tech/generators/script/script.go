@@ -145,7 +145,8 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 		return nil, errors.New("nil vertices")
 	}
 	const falloff = 10.0
-	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), 0.3, config.LightKindAmbient, falloff)
+	const lightIntensity = 1.5
+	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), lightIntensity, config.LightKindAmbient, falloff)
 	if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 		return nil, err
 	}

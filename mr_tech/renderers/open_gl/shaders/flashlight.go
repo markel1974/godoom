@@ -186,14 +186,10 @@ func (s *Flashlight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, pitchShear float32, fSwayX, fSwayY float32, screenW, screenH float32) {
-
+func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY float32, screenW, screenH float32) {
 	if s.factor <= 0 {
 		return
 	}
-
-	//flashDirY := pitchShear / (2.0 * float32(model.VFov))
-
 	gl.UseProgram(s.prg)
 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])

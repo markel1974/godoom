@@ -185,7 +185,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, float32(-vi.GetPitch()), flashX, flashY, float32(fbW), float32(fbH))
+	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 	// SKYBOX

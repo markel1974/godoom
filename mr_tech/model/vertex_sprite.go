@@ -7,12 +7,11 @@ import (
 
 // VertexSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
 type VertexSprite struct {
-	gScale float64
 	volume *Volume
 }
 
 // NewVertexSprite creates a new VertexSprite with the given animation, position, dimensions, and physical properties.
-func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
+func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
 	height := h
 	width := w
 	halfW := width / 2.0
@@ -20,7 +19,7 @@ func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d,
 		tex := anim.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
-			scaleW, scaleH := anim.ScaleFactor()
+			_, scaleW, scaleH := tex.GetScaleFactor()
 			width = float64(texW) * scaleW
 			height = float64(texH) * scaleH
 			halfW = width / 2.0
@@ -28,10 +27,7 @@ func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d,
 	}
 
 	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, width, height, d, mass, restitution, friction)
-	f := &VertexSprite{
-		gScale: gScale,
-		volume: volume,
-	}
+	f := &VertexSprite{volume: volume}
 	f.volume.SetBillboard(1.0)
 
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
@@ -40,7 +36,7 @@ func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d,
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
-	f0 := NewFace(f.gScale, nil, t0, "", anim)
+	f0 := NewFace(nil, t0, "", anim)
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
@@ -52,7 +48,7 @@ func NewVertexSprite(gScale float64, anim *textures.Animation, x, y, z, w, h, d,
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
-	f1 := NewFace(f.gScale, nil, t1, "", anim)
+	f1 := NewFace(nil, t1, "", anim)
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)

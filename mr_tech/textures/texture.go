@@ -6,11 +6,16 @@ package textures
 // w and h define the width and height of the texture in pixels.
 // data holds the actual pixel information as a 2D array of integers.
 type Texture struct {
-	name string
-	id   uint32
-	w    int
-	h    int
-	data [][]int
+	name    string
+	id      uint32
+	w       int
+	h       int
+	data    [][]int
+	gScale  float64
+	scaleW  float64
+	scaleH  float64
+	wScaled float64
+	hScaled float64
 }
 
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
@@ -23,6 +28,35 @@ func NewTexture(name string, id uint32, w int, h int) *Texture {
 		z.data[i] = make([]int, h)
 	}
 	return z
+}
+
+// SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.
+func (t *Texture) SetScaleFactor(gScale, scaleW, scaleH float64) {
+	t.gScale = gScale
+	t.scaleW = scaleW
+	t.scaleH = scaleH
+	t.wScaled, t.hScaled = float64(t.w), float64(t.h)
+	if t.gScale != 1.0 || t.scaleW != 1.0 || t.scaleH != 1.0 {
+		//TODO CAPIRE PERCHE BISOGNA MOLTIPLICARE PER 5 in DOOM!!!!!
+		t.gScale *= 5
+		t.wScaled *= t.scaleW / t.gScale
+		t.hScaled *= t.scaleH / t.gScale
+	}
+}
+
+// GetSizeScaled returns the scaled width and height of the texture as two float64 values.
+func (t *Texture) GetSizeScaled() (float64, float64) {
+	return t.wScaled, t.hScaled
+}
+
+// GetScaleFactor returns the global scale factor and the width and height scale values of the texture as floats.
+func (t *Texture) GetScaleFactor() (float64, float64, float64) {
+	return t.gScale, t.scaleW, t.scaleH
+}
+
+// GetScaleFactorH retrieves the height scaling factor of the Texture as a float64.
+func (t *Texture) GetScaleFactorH() float64 {
+	return t.scaleH
 }
 
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).

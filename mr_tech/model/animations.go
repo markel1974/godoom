@@ -12,12 +12,17 @@ import (
 type Animations struct {
 	animations map[string]*textures.Animation
 	tex        textures.ITextures
+	gScale     float64
 }
 
 // NewAnimations creates a new Animations instance with the provided textures and initializes its animation map.
-func NewAnimations(tex textures.ITextures) *Animations {
+func NewAnimations(tex textures.ITextures, gScale float64) *Animations {
+	if gScale == 0 {
+		gScale = 1
+	}
 	return &Animations{
 		tex:        tex,
+		gScale:     gScale,
 		animations: make(map[string]*textures.Animation),
 	}
 }
@@ -30,7 +35,7 @@ func (r *Animations) GetTextures() textures.ITextures {
 // GetAnimation retrieves or creates an animation based on the given configuration and caches it for reuse.
 func (r *Animations) GetAnimation(ca *config.Animation) *textures.Animation {
 	if ca == nil {
-		return textures.NewAnimation(nil, int(config.AnimationKindNone), 1, 1)
+		return textures.NewAnimation(nil, int(config.AnimationKindNone), r.gScale, 1, 1)
 	}
 	key := fmt.Sprintf("%s|%d|%f|%f", strings.Join(ca.Frames, ";"), ca.Kind, ca.ScaleW, ca.ScaleH)
 	animation, ok := r.animations[key]
@@ -38,7 +43,7 @@ func (r *Animations) GetAnimation(ca *config.Animation) *textures.Animation {
 		return animation
 	}
 	tex := r.tex.Get(ca.Frames)
-	animation = textures.NewAnimation(tex, int(ca.Kind), ca.ScaleW, ca.ScaleH)
+	animation = textures.NewAnimation(tex, int(ca.Kind), r.gScale, ca.ScaleW, ca.ScaleH)
 	r.animations[key] = animation
 	return animation
 }

@@ -471,41 +471,48 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 	lightArtificial := cp.Volume.Light.GetIntensity()
 	switch cp.Kind {
 	case model.IdWall:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.Animation.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		yRef := (cp.Volume.GetMaxZ() - cp.Volume.GetMinZ()) * scaleH
-		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdUpper:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.Animation.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		yRef := math.Abs((cp.Volume.GetMaxZ() - cp.Neighbor.GetMaxZ()) * scaleH)
-		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdLower:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.Animation.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		yRef := math.Abs((cp.Neighbor.GetMinZ() - cp.Volume.GetMinZ()) * scaleH)
-		dr.DrawTexture(cp.Animation.CurrentFrame(), cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
+		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.AnimationCeil.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloor:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.AnimationFloor.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.AnimationFloor.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationFloor.CurrentFrame(), cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
-		_, scaleH := cp.Animation.ScaleFactor()
+		tex := cp.AnimationCeil.CurrentFrame()
+		scaleH := tex.GetScaleFactorH()
 		viX, viY, viZ := vi.GetXYZ()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
-		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, cp.AnimationCeil.CurrentFrame(), cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
+		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	default:
 		dr.DrawWireFrame(true)
 	}

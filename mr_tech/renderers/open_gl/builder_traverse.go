@@ -188,7 +188,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 		return
 	}
 	texW, texH := tex.Size()
-	scaleW, scaleH := anim.ScaleFactor()
+	_, scaleW, scaleH := tex.GetScaleFactor()
 
 	u0 := cp.u0 / (float32(texW) * float32(scaleW))
 	u1 := cp.u1 / (float32(texW) * float32(scaleW))
@@ -238,7 +238,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		return nil
 	}
 	texW, texH := tex.Size()
-	_, scaleH := anim.ScaleFactor()
+	scaleH := tex.GetScaleFactorH()
 
 	startIndices := fv.GetIndicesLen()
 

@@ -134,7 +134,7 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		return
 	}
 	texW, texH := tex.Size()
-	scaleW, scaleH := anim.ScaleFactor()
+	_, scaleW, scaleH := tex.GetScaleFactor()
 
 	u0 := float32(cp.U0) / (float32(texW) * float32(scaleW))
 	u1 := float32(cp.U1) / (float32(texW) * float32(scaleW))
@@ -183,7 +183,7 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		return nil
 	}
 	texW, texH := tex.Size()
-	_, scaleH := anim.ScaleFactor()
+	scaleH := tex.GetScaleFactorH()
 
 	startIndices := fv.GetIndicesLen()
 

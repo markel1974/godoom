@@ -41,7 +41,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	full3d := cfg.Calibration.Full3d
 
 	cfg.Scale(r.gScale)
-	animations := NewAnimations(cfg.GetTextures())
+	animations := NewAnimations(cfg.GetTextures(), r.gScale)
 	r.lights = NewLights()
 	var allVolumes []*Volume
 	var container2d []*Volume
@@ -173,7 +173,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 						}
 					}
 					faceMaterials := []*textures.Animation{upper, middle, lower}
-					face := NewFace2d(r.gScale, nil, start, end, tag, faceMaterials)
+					face := NewFace2d(nil, start, end, tag, faceMaterials)
 					volume.AddFace(face)
 					volume.AddTag(tag)
 					if !isWall {
@@ -248,8 +248,8 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBottom}     // Bottom-End
 		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTop}        // Top-End
 		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTop}    // Top-Start
-		faceT1 := NewFace(r.gScale, f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
-		faceT2 := NewFace(r.gScale, f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
+		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
 		vol3d.AddFace(faceT1)
 		vol3d.AddFace(faceT2)
 	}
@@ -272,12 +272,12 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		ceilFace := NewFace(r.gScale, nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetAnimation(1))
+		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetAnimation(1))
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		floorFace := NewFace(r.gScale, nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetAnimation(0))
+		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetAnimation(0))
 		vol3d.AddFace(floorFace)
 
 		for _, f2d := range faces2d {
@@ -355,7 +355,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 					continue
 				}
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
-				face := NewFace(r.gScale, nil, tri, cf.Tag, material)
+				face := NewFace(nil, tri, cf.Tag, material)
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)
 				facesTree.InsertObject(face)

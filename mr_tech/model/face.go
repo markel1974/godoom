@@ -13,11 +13,11 @@ import (
 type Face struct {
 	parent     *Volume
 	neighbor   *Volume
-	gScale     float64
 	tag        string
 	aabb       *physics.AABB
 	tri        [3]geometry.XYZ
 	normal     geometry.XYZ
+	normalAbs  geometry.XYZ
 	animations []*textures.Animation
 	material   *textures.Animation
 	minZ       float64
@@ -29,9 +29,8 @@ type Face struct {
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(gScale float64, neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
 	out := &Face{
-		gScale:     gScale,
 		hasFixedZ:  true,
 		neighbor:   neighbor,
 		tag:        tag,
@@ -52,9 +51,8 @@ func NewFace2d(gScale float64, neighbor *Volume, start geometry.XY, end geometry
 }
 
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its normal and AABB.
-func NewFace(gScale float64, neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
 	out := &Face{
-		gScale:    gScale,
 		hasFixedZ: false,
 		neighbor:  neighbor,
 		tag:       tag,
@@ -310,18 +308,21 @@ func (s *Face) computeNormal() geometry.XYZ {
 			// Proiezione del vettore normale 2D nello spazio 3D
 			s.normal = geometry.XYZ{X: -dy * invLen, Y: dx * invLen, Z: 0}
 		}
-		return s.normal
+	} else {
+		// Prodotto vettoriale standard per poligoni 3D
+		p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+		v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+		v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+		nx := v1y*v2z - v1z*v2y
+		ny := v1z*v2x - v1x*v2z
+		nz := v1x*v2y - v1y*v2x
+		l := math.Sqrt(nx*nx + ny*ny + nz*nz)
+		if l > 0 {
+			s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
+		}
 	}
-	// Prodotto vettoriale standard per poligoni 3D
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
-	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-	nx := v1y*v2z - v1z*v2y
-	ny := v1z*v2x - v1x*v2z
-	nz := v1x*v2y - v1y*v2x
-	l := math.Sqrt(nx*nx + ny*ny + nz*nz)
-	if l > 0 {
-		s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
+	s.normalAbs = geometry.XYZ{
+		X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z),
 	}
 	return s.normal
 }
@@ -375,64 +376,24 @@ func (s *Face) computeUV(normal geometry.XYZ) {
 	if tex == nil {
 		return
 	}
-	texW, texH := tex.Size()
-	texScaleW, texScaleH := s.material.ScaleFactor()
-	if texScaleW == 0 {
-		texScaleW = 1.0
-	}
-	if texScaleH == 0 {
-		texScaleH = 1.0
-	}
-	gScale := s.gScale
-	baseW := float64(texW) / gScale
-	baseH := float64(texH) / gScale
-	w := baseW * texScaleW
-	h := baseH * texScaleH
-	absX := math.Abs(normal.X)
-	absY := math.Abs(normal.Y)
-	absZ := math.Abs(normal.Z)
-
-	//todo invertire U/V nel modello, poi il renderer utilizzera il metodo migliore per visualizzare
-
-	// Proiezione Triplanare Pura.
-	// Nessuna inversione, nessuna compensazione OpenGL.
+	w, h := tex.GetSizeScaled()
+	absX := s.normalAbs.X
+	absY := s.normalAbs.Y
+	absZ := s.normalAbs.Z
+	// Pure Triplanar Projection.
 	if absZ >= absX && absZ >= absY {
-		// Upper / Lower (Pavimenti e Soffitti)
+		// Upper / Lower (Floors and Ceilings)
 		u0, v0 := s.tri[0].X/w, s.tri[0].Y/h
 		u1, v1 := s.tri[1].X/w, s.tri[1].Y/h
 		u2, v2 := s.tri[2].X/w, s.tri[2].Y/h
 		s.SetUV(u0, v0, u1, v1, u2, v2)
 	} else if absY >= absX && absY >= absZ {
-		// Muri rivolti su Y
+		// Walls facing Y
 		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
 	} else {
-		// Muri rivolti su X
+		// Walls facing X
 		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
 	}
-	/*
-		NEL RENDERER
-		id0 := w.fv.AddVertex(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b)
-		id1 := w.fv.AddVertex(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b)
-		id2 := w.fv.AddVertex(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b)
-	*/
-
-	/*
-		// Proiezione Triplanare Z-UP compensata per OpenGL (X, Z, -Y)
-		if absZ >= absX && absZ >= absY {
-			// Upper / Lower (Pavimenti e Soffitti)
-			// L'asse Y nel mondo logico diventa la profondità (Z) in OpenGL,
-			// invertiamo Y per mantenere l'orientamento della texture.
-			s.SetUV(s.tri[0].X/w, -s.tri[0].Y/h, s.tri[1].X/w, -s.tri[1].Y/h, s.tri[2].X/w, -s.tri[2].Y/h)
-		} else if absY >= absX && absY >= absZ {
-			// Muri rivolti su Y
-			// L'asse Z è l'altezza. Mettiamo il meno (-Z) in modo che quando Z sale, V scenda.
-			s.SetUV(s.tri[0].X/w, -s.tri[0].Z/h, s.tri[1].X/w, -s.tri[1].Z/h, s.tri[2].X/w, -s.tri[2].Z/h)
-		} else {
-			// Muri rivolti su X
-			// L'asse Z è l'altezza. Mettiamo il meno (-Z).
-			s.SetUV(s.tri[0].Y/w, -s.tri[0].Z/h, s.tri[1].Y/w, -s.tri[1].Z/h, s.tri[2].Y/w, -s.tri[2].Z/h)
-		}
-	*/
 }
 
 // PointInVolume checks if a point (px, py, pz) lies within the Face's location. Returns distance and a boolean status.

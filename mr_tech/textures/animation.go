@@ -26,20 +26,34 @@ type Animation struct {
 	frames      []*Texture
 	totalFrames uint64
 	kind        int
+	gScale      float64
 	scaleW      float64
 	scaleH      float64
 }
 
 // NewAnimation creates a new Animation instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewAnimation(frames []*Texture, kind int, scaleW float64, scaleH float64) *Animation {
+func NewAnimation(frames []*Texture, kind int, gScale float64, scaleW float64, scaleH float64) *Animation {
+	if gScale == 0 {
+		gScale = 1
+	}
+	if scaleW == 0 {
+		scaleW = 1
+	}
+	if scaleH == 0 {
+		scaleH = 1
+	}
 	a := &Animation{
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
 		kind:        kind,
+		gScale:      gScale,
 		scaleW:      scaleW,
 		scaleH:      scaleH,
+	}
+	for _, v := range frames {
+		v.SetScaleFactor(gScale, scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]
@@ -59,9 +73,4 @@ func (a *Animation) CurrentFrame() *Texture {
 		return a.frames[frameIdx]
 	}
 	return a.frame
-}
-
-// ScaleFactor returns the scaling factors for width and height of the animation as two float64 values.
-func (a *Animation) ScaleFactor() (float64, float64) {
-	return a.scaleW, a.scaleH
 }

@@ -118,7 +118,13 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 		frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 		engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
+
 		w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
+
+		f := engine.GetThings()
+		w.pushQThings(f, frustumFront, frustumRear)
+
+		w.dcRender.Prepare(w.dc.GetDrawCommands())
 	} else {
 		for _, vr := range w.volRanges {
 			w.dc.Compute(vr.start, vr.end)
@@ -126,11 +132,11 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		for _, vl := range engine.GetLights().Get() {
 			w.fl.Create(vl)
 		}
+		// 4. Entità Dinamiche
+		tA, tC := engine.GetThings().GetActive()
+		w.pushThings(w.fv, w.dc, vi, tA, tC)
+		w.dcRender.Prepare(w.dc.GetDrawCommands())
 	}
-	// 4. Entità Dinamiche
-	tA, tC := engine.GetThings().GetActive()
-	w.pushThings(w.fv, w.dc, vi, tA, tC)
-	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
 // pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
@@ -140,35 +146,7 @@ func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mode
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces, nextFaces, lp, billBoard := thing.GetVertices()
-		if faces == nil {
-			continue
-		}
-		lerp := float32(lp)
-		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetPosition()
-		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		b := float32(billBoard)
-		startIndices := fv.GetIndicesLen()
-		for fx, f := range faces {
-			mat := f.GetMaterial()
-			if mat == nil {
-				continue
-			}
-			l, ok := w.tex.Get(mat)
-			if !ok {
-				continue
-			}
-			p := f.GetPoints()
-			u, v := f.GetUV()
-			np := nextFaces[fx].GetPoints()
-			id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
-			id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
-			id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
-			fv.AddTriangle(id0, id1, id2)
-		}
-		currentIndices := fv.GetIndicesLen()
-		dc.Compute(startIndices, currentIndices)
+		w.pushThing(thing, fv, dc)
 	}
 }
 
@@ -181,4 +159,47 @@ func (w *BuilderVolume) pushLights(fl *FrameLights, lights *model.Lights, frustu
 		return false
 	}
 	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
+}
+
+// pushLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront, frustumRear *physics.Frustum) {
+	q := func(object physics.IAABB) bool {
+		if l, ok := object.(model.IThing); ok {
+			w.pushThing(l, w.fv, w.dc)
+		}
+		return false
+	}
+	things.QueryFrustum(frustumFront, q)
+}
+
+func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *DrawCommands) {
+	faces, nextFaces, lp, billBoard := thing.GetVertices()
+	if faces == nil {
+		return
+	}
+	lerp := float32(lp)
+	yaw := float32(thing.GetAngle())
+	tPosX, tPosY, zBot := thing.GetPosition()
+	oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+	b := float32(billBoard)
+	startIndices := fv.GetIndicesLen()
+	for fx, f := range faces {
+		mat := f.GetMaterial()
+		if mat == nil {
+			continue
+		}
+		l, ok := w.tex.Get(mat)
+		if !ok {
+			continue
+		}
+		p := f.GetPoints()
+		u, v := f.GetUV()
+		np := nextFaces[fx].GetPoints()
+		id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+		id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+		id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
+		fv.AddTriangle(id0, id1, id2)
+	}
+	currentIndices := fv.GetIndicesLen()
+	dc.Compute(startIndices, currentIndices)
 }

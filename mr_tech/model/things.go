@@ -138,6 +138,16 @@ func NewThings(gScale float64, full3d bool, cfg []*config.Thing, volumes *Volume
 	return e
 }
 
+// QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
+func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {
+	th.tree.QueryMultiFrustum(rear, front, callback)
+}
+
+// QueryFrustum performs a spatial query within the specified frustum, invoking the callback for each intersected object.
+func (th *Things) QueryFrustum(front *physics.Frustum, callback func(object physics.IAABB) bool) {
+	th.tree.QueryFrustum(front, callback)
+}
+
 // SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
 func (th *Things) SetPlayer(p *ThingPlayer) {
 	th.addThing(p)

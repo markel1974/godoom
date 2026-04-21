@@ -198,20 +198,12 @@ void main()
             vec3 diff = lightPosView - ViewPos;
             dist = length(diff);
 
-            // EARLY-OUT: Culling per-pixel. Se siamo oltre il raggio, la luce non ha effetto.
-            // Risparmia tonnellate di calcoli su mappe grandi.
-            //if (dist > falloffFactor) continue;
-            //L = diff / dist;
-            // Reintegro del tuo falloff esponenziale, ma ora è delimitato dal raggio
-            //falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
-
             float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
             // EARLY-OUT: Ora scartiamo i pixel solo se sono VERAMENTE fuori portata
             if (dist > effectiveRadius) continue;
             L = diff / dist;
             // Il tuo decadimento esponenziale HDR originale
             falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
-
             if (lightType == 1) {
                 // --- LIMITATORE CONO SPOT ---
                 float theta = dot(-L, spotDirView);

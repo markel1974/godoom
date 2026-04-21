@@ -180,7 +180,6 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
 	const spotIntensity = 10.0
 	const beamRatio = 0.05
-	const volSteps = 16
 
 	gl.UseProgram(s.prg)
 
@@ -195,7 +194,7 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
 	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
-	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
+	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
 
 	const shininessWall = 10.0

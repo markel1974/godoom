@@ -23,7 +23,6 @@ uniform float u_flashIntensityFactor;
 uniform vec3 u_flashOffset;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
-//uniform float u_flashBase;
 uniform int u_enableShadows;
 
 uniform float u_shininessWall;
@@ -35,22 +34,8 @@ uniform int u_volumetricSteps;
 
 const float PI = 3.14159265359;
 
-float phaseHG(float cosTheta, float g) {
-    float g2 = g * g;
-    return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
-}
-
 float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
-}
-
-float sampleVolumetricShadow(vec3 posView, mat4 lightSpaceMatrix, sampler2DShadow shadowMap) {
-    vec4 worldPos = u_invView * vec4(posView, 1.0);
-    vec4 shadowPos = lightSpaceMatrix * worldPos;
-    vec3 proj = shadowPos.xyz / shadowPos.w;
-    proj = proj * 0.5 + 0.5;
-    if(proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) return 1.0;
-    return texture(shadowMap, vec3(proj.xy, proj.z - 0.005));
 }
 
 float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
@@ -62,18 +47,18 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     float currentDepth = projCoords.z;
     float shadow = 0.0;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
-    const int SAMPLES = 16;
+    //const int SAMPLES = u_volumetricSteps;
     const float GOLDEN_ANGLE = 2.39996323;
     float noise = randomNoise(gl_FragCoord.xy) * 6.2831853;
     float spread = 2.0;
 
-    for(int i = 0; i < SAMPLES; ++i) {
-        float r = sqrt(float(i) + 0.5) / sqrt(float(SAMPLES));
+    for(int i = 0; i < u_volumetricSteps; ++i) {
+        float r = sqrt(float(i) + 0.5) / sqrt(float(u_volumetricSteps));
         float theta = float(i) * GOLDEN_ANGLE + noise;
         vec2 offset = vec2(cos(theta), sin(theta)) * r * spread;
         shadow += texture(shadowMap, vec3(projCoords.xy + offset * texelSize, currentDepth - bias));
     }
-    return 1.0 - (shadow / float(SAMPLES));
+    return 1.0 - (shadow / float(u_volumetricSteps));
 }
 
 vec3 calculateNormal() {
@@ -81,15 +66,8 @@ vec3 calculateNormal() {
     vec3 dp2 = dFdy(ViewPos);
     vec3 geoNormal = normalize(cross(dp1, dp2));
 
-    // Sicurezza Anti-Backface antisfarfallio
-    if (geoNormal.z < 0.0) {
-        geoNormal = -geoNormal;
-    }
-
-    // Sicurezza Anti-Backface: forza la normale a guardare la camera
-    if (dot(geoNormal, ViewPos) > 0.0) {
-        geoNormal = -geoNormal;
-    }
+    if (geoNormal.z < 0.0) geoNormal = -geoNormal;
+    if (dot(geoNormal, ViewPos) > 0.0) geoNormal = -geoNormal;
 
     vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
     if (length(mapColor) < 0.1) return geoNormal;
@@ -99,7 +77,6 @@ vec3 calculateNormal() {
 
     vec2 duv1 = dFdx(TexCoords.xy);
     vec2 duv2 = dFdy(TexCoords.xy);
-
     vec3 dp2perp = cross(dp2, geoNormal);
     vec3 dp1perp = cross(geoNormal, dp1);
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
@@ -143,57 +120,81 @@ void main()
     vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
+    // Calcolo unificato della proiezione
+    vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
+    projMain = projMain * 0.5 + 0.5;
+
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {
-        // Bias più conservativo, legato strettamente all'inclinazione
         vec3 geoNormal = normalize(cross(dFdx(ViewPos), dFdy(ViewPos)));
-        if (geoNormal.z < 0.0) geoNormal = -geoNormal; // Anti-backface
+        if (geoNormal.z < 0.0) geoNormal = -geoNormal;
         float cosTheta = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
-        // Nuova formula Slope-Scale: usa un offset di base minuscolo e un moltiplicatore ridotto.
-        // Il clamp impedisce al bias di superare il limite critico ad angoli estremi (sul pavimento).
         float bias = clamp(0.0005 * tan(acos(cosTheta)), 0.00002, 0.0003);
-        // Calcolo della proiezione della luce
-        vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
-        projMain = projMain * 0.5 + 0.5;
-        // Verifica rigorosa che le coordinate siano DENTRO la Shadow Map
+
         if(projMain.z > 1.0 || projMain.x < 0.0 || projMain.x > 1.0 || projMain.y < 0.0 || projMain.y > 1.0) {
-            shadowFlash = 0.0; // Fuori dalla mappa = luce piena, non ombra!
+            shadowFlash = 0.0;
         } else {
             shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, bias);
-            // Dissolvenza morbida ai bordi del cono per evitare tagli netti
             float edgeFadeDist = smoothstep(0.0, 0.1, projMain.x) * smoothstep(1.0, 0.9, projMain.x) *
             smoothstep(0.0, 0.1, projMain.y) * smoothstep(1.0, 0.9, projMain.y);
             shadowFlash = mix(0.0, shadowFlash, edgeFadeDist);
         }
     }
-    // Calcolo della proiezione della luce direttamente nel main
-    vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
-    projMain = projMain * 0.5 + 0.5;
-    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
-    // Se stiamo uscendo dal Frustum della luce (vicini al Far Plane o oltre)
-    // forziamo l'ombra a 1.0 (che si tradurrà in occlusione totale = 0.0 luce)
+
     if (projMain.z > 0.9) {
         shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
     }
+
+    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-    float flashFalloff = u_flashFalloff;
-    float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
+    float flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor);
+
+    // --- SETUP OTTIMIZZATO PER IL VOLUMETRICO ---
     float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
     vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
+
+    // Matrice pre-calcolata per mappare da View a Shadow Space
+    mat4 viewToLight = u_flashSpaceMatrix * u_invView;
+    // Trasformazione del punto di partenza e del vettore di avanzamento in spazio omogeneo 4D
+    vec4 currentShadowPos4 = viewToLight * vec4(currentPos, 1.0);
+    vec4 shadowStep4 = viewToLight * vec4(rayStep, 0.0);
+
+    // Costante pre-calcolata per PhaseHG con g=0.5
+    // (1.0 - 0.25) / (4.0 * PI) = 0.75 / 12.56637 = 0.0596831
+    const float hgConst = 0.0596831;
+
     for(int i = 0; i < u_volumetricSteps * 2; i++) {
         vec3 lDirFlash = normalize(flashPosView - currentPos);
         float inConeFlash = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-lDirFlash, flashSpotDir));
+
         if(inConeFlash > 0.01) {
-            float sFlash = sampleVolumetricShadow(currentPos, u_flashSpaceMatrix, u_flashShadowMap);
-            volFlash += inConeFlash * sFlash * phaseHG(dot(V, -lDirFlash), 0.5);
+            // Divisione prospettica essenziale, senza moltiplicazioni di matrici
+            vec3 proj = currentShadowPos4.xyz / currentShadowPos4.w;
+            proj = proj * 0.5 + 0.5;
+
+            float sFlash = 1.0;
+            if(proj.z <= 1.0 && proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0) {
+                sFlash = texture(u_flashShadowMap, vec3(proj.xy, proj.z - 0.005));
+            }
+
+            // PhaseHG Inlinata e Ottimizzata
+            float cosThetaHG = dot(V, -lDirFlash);
+            float phase = hgConst / pow(1.25 - cosThetaHG, 1.5);
+
+            volFlash += inConeFlash * sFlash * phase;
         }
+
         currentPos += rayStep;
+        currentShadowPos4 += shadowStep4; // Avanzamento vettoriale a costo quasi zero
     }
+
     float beamRatio = u_beamRatioFactor / float(u_volumetricSteps);
     vec3 flashBeam = vec3(0.9, 0.95, 1.0) * volFlash * u_flashIntensityFactor * beamRatio * edgeFade;
+
     float flashLightOcclusion = (1.0 - shadowFlash);
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * 2.5) * flashLightOcclusion * vec3(1.0, 0.98, 0.9);
+
     FragColor = vec4(litFlash + flashBeam, 0.0);
     BrightColor = vec4(dot(litFlash + flashBeam, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? (litFlash + flashBeam) : vec3(0.0), 1.0);
 }

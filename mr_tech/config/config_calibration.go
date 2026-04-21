@@ -55,7 +55,7 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	c.SpecBoostWall = 0.05
 	c.SpecBoostFloor = 0.1
 	c.BeamRatio = 0.05
-	c.VolSteps = 16
+	c.VolSteps = 8
 	c.FlashFactor = 80
 	c.FlashFalloff = 10
 	c.FlashOffsetX = 0.2

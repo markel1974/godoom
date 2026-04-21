@@ -145,12 +145,27 @@ void main()
 
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {
-        // Usa la normale geometrica già fusa dal TBN
-        vec3 geoNormal = finalNormal;
-        float flashBias = max(0.005 * (1.0 - clamp(dot(geoNormal, L_flash), 0.0, 1.0)), 0.001);
-        shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, flashBias);
+        // Bias più conservativo, legato strettamente all'inclinazione
+        vec3 geoNormal = normalize(cross(dFdx(ViewPos), dFdy(ViewPos)));
+        if (geoNormal.z < 0.0) geoNormal = -geoNormal; // Anti-backface
+        float cosTheta = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
+        // Nuova formula Slope-Scale: usa un offset di base minuscolo e un moltiplicatore ridotto.
+        // Il clamp impedisce al bias di superare il limite critico ad angoli estremi (sul pavimento).
+        float bias = clamp(0.0005 * tan(acos(cosTheta)), 0.00002, 0.0003);
+        // Calcolo della proiezione della luce
+        vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
+        projMain = projMain * 0.5 + 0.5;
+        // Verifica rigorosa che le coordinate siano DENTRO la Shadow Map
+        if(projMain.z > 1.0 || projMain.x < 0.0 || projMain.x > 1.0 || projMain.y < 0.0 || projMain.y > 1.0) {
+            shadowFlash = 0.0; // Fuori dalla mappa = luce piena, non ombra!
+        } else {
+            shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, bias);
+            // Dissolvenza morbida ai bordi del cono per evitare tagli netti
+            float edgeFadeDist = smoothstep(0.0, 0.1, projMain.x) * smoothstep(1.0, 0.9, projMain.x) *
+            smoothstep(0.0, 0.1, projMain.y) * smoothstep(1.0, 0.9, projMain.y);
+            shadowFlash = mix(0.0, shadowFlash, edgeFadeDist);
+        }
     }
-
     // Calcolo della proiezione della luce direttamente nel main
     vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
     projMain = projMain * 0.5 + 0.5;
@@ -160,17 +175,9 @@ void main()
     if (projMain.z > 0.9) {
         shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
     }
-
     float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-    //float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
-
     float flashFalloff = u_flashFalloff;
-    //float distSq = FragDepth * FragDepth;
-    // Si azzera matematicamente ed elegantemente al raggiungimento del raggio
-    //float window = clamp(1.0 - pow(distSq * u_flashFalloff, 2.0), 0.0, 1.0);
-    //float flashFalloff = (window * window) / (distSq + 1.0);
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
-
     float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
     vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
@@ -183,13 +190,10 @@ void main()
         }
         currentPos += rayStep;
     }
-
     float beamRatio = u_beamRatioFactor / float(u_volumetricSteps);
     vec3 flashBeam = vec3(0.9, 0.95, 1.0) * volFlash * u_flashIntensityFactor * beamRatio * edgeFade;
-
     float flashLightOcclusion = (1.0 - shadowFlash);
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * 2.5) * flashLightOcclusion * vec3(1.0, 0.98, 0.9);
-
     FragColor = vec4(litFlash + flashBeam, 0.0);
     BrightColor = vec4(dot(litFlash + flashBeam, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? (litFlash + flashBeam) : vec3(0.0), 1.0);
 }

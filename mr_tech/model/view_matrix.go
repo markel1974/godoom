@@ -18,18 +18,19 @@ const (
 
 // ViewMatrix represents a view configuration with position, orientation, zoom level, and lighting intensity for rendering.
 type ViewMatrix struct {
-	where          geometry.XYZ
-	angleSin       float64
-	angleCos       float64
-	angle          float64
-	roll           float64
-	pitch          float64
-	lightIntensity float64
-	volume         *Volume
-	swayX          float64
-	swayY          float64
-	front          *physics.Frustum
-	rear           *physics.Frustum
+	where           geometry.XYZ
+	angleSin        float64
+	angleCos        float64
+	angle           float64
+	roll            float64
+	pitch           float64
+	lightIntensity  float64
+	volume          *Volume
+	swayX           float64
+	swayY           float64
+	swaySensitivity float64
+	front           *physics.Frustum
+	rear            *physics.Frustum
 }
 
 // NewViewMatrix creates and returns a new instance of ViewMatrix with default values.
@@ -49,7 +50,7 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angle = player.GetAngle()
 	vi.roll = player.GetTilt()
 	vi.lightIntensity = player.GetLightIntensity()
-	vi.swayX, vi.swayY = player.GetSway()
+	vi.swayX, vi.swayY, vi.swaySensitivity = player.GetSway()
 }
 
 // TranslateXY applies a translation and rotation to a given (x, y) point relative to the ViewMatrix's position and orientation.
@@ -115,8 +116,8 @@ func (vi *ViewMatrix) ZDistance(v float64) float64 {
 }
 
 // GetSway returns the horizontal and vertical sway values of the ViewMatrix as two float64 values.
-func (vi *ViewMatrix) GetSway() (float64, float64) {
-	return vi.swayX, vi.swayY
+func (vi *ViewMatrix) GetSway() (float64, float64, float64) {
+	return vi.swayX, vi.swayY, vi.swaySensitivity
 }
 
 func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {

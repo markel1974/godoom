@@ -188,7 +188,7 @@ func (s *Flashlight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, dirX, dirY, dirZ, fSwayX, fSwayY float32, screenW, screenH float32) {
+func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY, fSwaySensitivity float32, screenW, screenH float32) {
 	if s.factor <= 0 {
 		return
 	}
@@ -200,12 +200,9 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &flashSpace[0])
 
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
-	const swaySensitivity = 0.01
-
 	// Calcola la direzione perturbata nello spazio di vista
-	// Partiamo dalla costante (-0.4, 0.1, -1.0) e aggiungiamo lo sway
-	targetDirX := 0.2 - (fSwayX * swaySensitivity)
-	targetDirY := 0.1 + (fSwayY * swaySensitivity)
+	targetDirX := float32(s.cal.FlashOffsetX) - (fSwayX * fSwaySensitivity)
+	targetDirY := float32(s.cal.FlashOffsetY) + (fSwayY * fSwaySensitivity)
 
 	//gl.Uniform3f(s.GetUniform(FlashLocFlashDir), dirX, dirY, -float32(math.Abs(float64(dirZ))))
 	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), targetDirX, targetDirY, -1.0)

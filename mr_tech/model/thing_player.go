@@ -178,7 +178,7 @@ func (p *ThingPlayer) GetBob() (float64, float64, float64) {
 }
 
 // GetSway retrieves the flashlight's current state as two float64 values.
-func (p *ThingPlayer) GetSway() (float64, float64) {
+func (p *ThingPlayer) GetSway() (float64, float64, float64) {
 	return p.bobbing.GetSway()
 }
 

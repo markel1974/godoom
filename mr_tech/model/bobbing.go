@@ -29,6 +29,7 @@ type Bobbing struct {
 	jumpBobOffset   float64 // L'offset verticale reale applicato alla telecamera
 	jumpBobVelocity float64 // La velocità accumulata della molla
 	swayScale       float64
+	swaySensitivity float64
 	swayOffsetX     float64
 	swayOffsetY     float64
 	swayMultiplierX float64
@@ -44,6 +45,7 @@ func NewBobbing(cfg *config.Bobbing) *Bobbing {
 		swayOffsetX:     cfg.SwayOffsetX,
 		swayOffsetY:     cfg.SwayOffsetY,
 		swayScale:       cfg.SwayScale,
+		swaySensitivity: cfg.SwaySensitivity,
 		maxAmplitudeX:   cfg.MaxAmplitudeX,
 		maxAmplitudeY:   cfg.MaxAmplitudeY,
 		idleDrift:       cfg.IdleDrift,
@@ -84,11 +86,11 @@ func (p *Bobbing) GetPhase() float64 {
 func (p *Bobbing) GetJump() float64 { return p.jumpBobOffset }
 
 // GetSway calculates and returns the horizontal and vertical sway offsets as adjusted by bobbing motion and sway scale.
-func (p *Bobbing) GetSway() (float64, float64) {
+func (p *Bobbing) GetSway() (float64, float64, float64) {
 	x := p.swayOffsetX + ((p.bobX * p.swayMultiplierX) * p.swayScale)
 	y := p.swayOffsetY - ((p.bobY * p.swayMultiplierY) * p.swayScale)
 	//fmt.Printf("DEBUG BOB -> amp: %f | maxAmp: %f | idleAmp: %f\n", p.amp, p.maxAmplitude, p.idleAmp)
-	return x, y
+	return x, y, p.swaySensitivity
 }
 
 func (p *Bobbing) GetTilt() float64 {

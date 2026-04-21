@@ -25,6 +25,8 @@ type Calibration struct {
 	VolSteps           float64
 	FlashFactor        float64
 	FlashFalloff       float64
+	FlashOffsetX       float64
+	FlashOffsetY       float64
 	volumes            *Volumes
 }
 
@@ -52,6 +54,8 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		VolSteps:           cfg.VolSteps,
 		FlashFactor:        cfg.FlashFactor,
 		FlashFalloff:       cfg.FlashFalloff,
+		FlashOffsetX:       cfg.FlashOffsetX,
+		FlashOffsetY:       cfg.FlashOffsetY,
 		volumes:            volumes,
 	}
 	c.init()

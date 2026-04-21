@@ -21,7 +21,9 @@ type Calibration struct {
 	BeamRatio          float64 `json:"beamRatio"`
 	VolSteps           float64 `json:"volSteps"`
 	FlashFactor        float64 `json:"flashFactor"`
-	FlashFalloff       float64 `json:"FlashFalloff"`
+	FlashFalloff       float64 `json:"flashFalloff"`
+	FlashOffsetX       float64 `json:"flashOffsetX"`
+	FlashOffsetY       float64 `json:"flashOffsetY"`
 	Auto               bool    `json:"auto"`
 }
 
@@ -56,5 +58,7 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	c.VolSteps = 16
 	c.FlashFactor = 80
 	c.FlashFalloff = 10
+	c.FlashOffsetX = 0.2
+	c.FlashOffsetY = 0.1
 	return c
 }

@@ -148,11 +148,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	px, _, pz := vi.GetXYZ()
 	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
 
-	dirX, dirY, dirZ := vi.GetForwardVector()
-	flashX, flashY := float32(0), float32(0)
+	//dirX, dirY, dirZ := vi.GetForwardVector()
+	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
 	if w.flashlight.HasShadow() {
-		swayX, swayY := vi.GetSway()
-		flashX, flashY = float32(swayX), float32(swayY)
+		swayX, swayY, swaySensitivity := vi.GetSway()
+		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
 	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, flashX, flashY)
 	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
@@ -186,7 +186,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, dirX, dirY, dirZ, flashX, flashY, float32(fbW), float32(fbH))
+	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, flashSensitivity, float32(fbW), float32(fbH))
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 	// SKYBOX

@@ -83,7 +83,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	cal.ZFarFlash = 8192
 	cal.ScaleFactor = 1.0
 	cal.FlashFactor = 250
-	cal.FlashFalloff = 5000
+	cal.FlashFalloff = 2000
 
 	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)
 
@@ -245,24 +245,22 @@ func (p *Builder) createPlayerProps(entity *lumps.Entity, pos geometry.XYZ) (geo
 
 // createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
 func (p *Builder) createLight(entity *lumps.Entity, pos geometry.XYZ, isSpot bool) *config.Light {
-	intensity := 400.0
-	falloff := 128.0
-	kind := config.LightKindAmbient
+	intensity := 0.0
+	falloff := 0.0
+	val := 0.0
+	var kind config.LightKind
+	if l, ok := entity.Properties["light"]; ok {
+		val, _ = strconv.ParseFloat(l, 64)
+	}
 	if isSpot {
 		kind = config.LightKindSpot
-	}
-	if l, ok := entity.Properties["light"]; ok {
-		if val, err := strconv.ParseFloat(l, 64); err == nil {
-			intensity = val * 1.7
-			falloff = intensity / 5.0
-		}
+		intensity = val * 0.9
+		falloff = intensity * 0.2
 	} else {
-		intensity = 750.0
-		falloff = 128.0
 		kind = config.LightKindAmbient
-		//fmt.Println("LIGHT UNKNOWN: classname", entity.Properties["classname"])
+		intensity = val * 0.05
+		falloff = intensity
 	}
-
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
 	return cl
 }

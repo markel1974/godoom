@@ -119,8 +119,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.Sector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
-	const falloff = 10.0
-	miSector := config.NewConfigSector(sectorId, bld.convertLight(lightLevel), config.LightKindAmbient, falloff)
+	light, kind, falloff := bld.convertLight(lightLevel)
+	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
 	miSector.FloorY = floorY / ScaleCeilFloorLineDef
 	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
 	miSector.Tag = sectorId
@@ -292,12 +292,8 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 
 // convertLight converts a light level from an integer value to a normalized float intensity ranging from 0.0 to 1.0.
 // If the light level is below the ambient threshold (16), it returns -1.0 to indicate insufficient illumination.
-func (bld *Builder) convertLight(lightLevel int16) float64 {
-	rawLight := float64(lightLevel)
-	// Ambient threshold
-	if rawLight < 16 {
-		return -1.0
-	}
-	// Returns normalized linear intensity
-	return rawLight / 255.0
+func (bld *Builder) convertLight(lightLevel int16) (float64, config.LightKind, float64) {
+	const falloff = 10.0
+	kind := config.LightKindAmbient
+	return float64(lightLevel) * 0.015, kind, falloff
 }

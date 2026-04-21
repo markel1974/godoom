@@ -152,7 +152,7 @@ void main()
 
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
-        float intensity = clamp(u_lights[i].color_intensity.w, 0.0, 1.0);
+        float intensity = max(u_lights[i].color_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
 
         vec3 lightColor = u_lights[i].color_intensity.xyz;
@@ -170,8 +170,6 @@ void main()
         if (lightType == 2) {
             // --- LUCE DIREZIONALE ---
             L = -spotDirView;
-            //PATCH
-            intensity = intensity * 1.0;
         } else {
             // --- POINT & SPOT ---
             L = lightPosView - ViewPos;
@@ -186,9 +184,6 @@ void main()
                 float outerCutOff = u_lights[i].spot_params.y;
                 spotEffect = smoothstep(outerCutOff, cutOff, theta);
             }
-
-            //PATCH
-            intensity = intensity * 50;
         }
 
         float NdotL = max(dot(finalNormal, L), 0.0);

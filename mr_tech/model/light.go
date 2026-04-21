@@ -43,7 +43,7 @@ func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind 
 	}
 
 	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
-	cl.intensity = math.Max(0.0, math.Min(1.0, intensity))
+	cl.intensity = intensity //math.Max(0.0, math.Min(1.0, intensity))
 
 	cl.falloff = falloff
 	if cl.falloff <= 0 {

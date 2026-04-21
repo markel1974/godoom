@@ -58,30 +58,25 @@ func (f *FrameLights) Create(light *model.Light) {
 	dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
 	cutOff := float32(0)
 	outerCutOff := float32(0)
-
 	pos := light.GetPos()
 	intensity := float32(light.GetIntensity())
-
-	// Estrazione diretta del falloff configurato nel modello
 	falloff := float32(light.GetFalloff())
-
 	lightType := float32(-1)
 
 	switch light.GetKind() {
 	case config.LightKindOpenAir:
-		return
 		// pos.Z = 100
-		// r, g, b = float32(1.0), float32(1.0), float32(1.0)
 		// lightType = 0
+		return
 	case config.LightKindAmbient:
-		r, g, b = float32(1.0), float32(1.0), float32(1.0)
 		lightType = 0
 	case config.LightKindSpot:
+		const baseCutoff = 30.0
+		const baseOuterCutOff = 40.0
 		lightType = 1
-		r, g, b = float32(1.0), float32(1.0), float32(1.0)
 		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
+		cutOff = float32(math.Cos(baseCutoff * math.Pi / 180.0))
+		outerCutOff = float32(math.Cos(baseOuterCutOff * math.Pi / 180.0))
 	case config.LightKindNone:
 		return
 	default:

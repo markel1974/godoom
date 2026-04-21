@@ -286,8 +286,8 @@ func (s *Face) Scale2d(scale float64) {
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
 func (s *Face) Rebuild() {
 	s.computeAABB()
-	normal := s.computeNormal()
-	s.computeUV(normal)
+	s.computeNormal()
+	s.computeUV()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
@@ -296,7 +296,7 @@ func (s *Face) GetAABB() *physics.AABB {
 }
 
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
-func (s *Face) computeNormal() geometry.XYZ {
+func (s *Face) computeNormal() {
 	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
 	if s.hasFixedZ {
 		p0, p1 := s.tri[0], s.tri[2]
@@ -324,7 +324,6 @@ func (s *Face) computeNormal() geometry.XYZ {
 	s.normalAbs = geometry.XYZ{
 		X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z),
 	}
-	return s.normal
 }
 
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
@@ -365,7 +364,7 @@ func (s *Face) computeAABB() {
 }
 
 // computeUV computes the UV mapping for the current face based on its normal, material, and texture scaling factors.
-func (s *Face) computeUV(normal geometry.XYZ) {
+func (s *Face) computeUV() {
 	if s.lockUV {
 		return
 	}

@@ -129,12 +129,9 @@ void main()
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
     }
-
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
-    //float shadowFactor = (0.3 + 0.7 * (1.0 - shadowRoom));
     float shadowFactor = 1.0 - shadowRoom;
     vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
-
     // NEBBIA VOLUMETRICA
     float volRoom = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
@@ -149,24 +146,19 @@ void main()
 
     // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);
-
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
         float intensity = max(u_lights[i].color_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
-
         vec3 lightColor = u_lights[i].color_intensity.xyz;
         vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
-
         // La direzione viene passata da Go in coordinate World, quindi la trasformiamo in View-Space
         vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
         float falloffFactor = u_lights[i].dir_falloff.w;
-
         vec3 L;
         float dist;
         float falloff = 1.0;
         float spotEffect = 1.0;
-
         if (lightType == 2) {
             // --- LUCE DIREZIONALE ---
             L = -spotDirView;
@@ -176,7 +168,6 @@ void main()
             dist = length(L);
             L = L / dist;
             falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
-
             if (lightType == 1) {
                 // --- LIMITATORE CONO SPOT ---
                 float theta = dot(-L, spotDirView);
@@ -185,12 +176,8 @@ void main()
                 spotEffect = smoothstep(outerCutOff, cutOff, theta);
             }
         }
-
-        float NdotL = max(dot(finalNormal, L), 0.0);
-        //float wrapLight = max(NdotL, 0.4);
         float wrapLight = max(dot(finalNormal, L), 0.0);
         float power = intensity;
-
         dynamicLights += albedo * lightColor * wrapLight * power * falloff * spotEffect;
     }
 

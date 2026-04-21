@@ -13,7 +13,14 @@ type Calibration struct {
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	FlashFovDeg        float64 `json:"flashFovDeg"`
 	ZNearFlash         float64 `json:"zNearFlash"`
-	ZFarFlash          float64 `json:"ZFarFlash"`
+	ZFarFlash          float64 `json:"zFarFlash"`
+	ShininessWall      float64 `json:"shininessWall"`
+	ShininessFloor     float64 `json:"shininessFloor"`
+	SpecBoostWall      float64 `json:"specBoostWall"`
+	SpecBoostFloor     float64 `json:"specBoostFloor"`
+	BeamRatio          float64 `json:"beamRatio"`
+	VolSteps           float64 `json:"volSteps"`
+	FlashFactor        float64 `json:"flashFactor"`
 	Auto               bool    `json:"auto"`
 }
 
@@ -39,5 +46,13 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	c.FlashFovDeg = 85.0
 	c.ZNearFlash = 0.1
 	c.ZFarFlash = 2048.0
+
+	c.ShininessWall = 128.0
+	c.ShininessFloor = 64.0
+	c.SpecBoostWall = 0.05
+	c.SpecBoostFloor = 0.1
+	c.BeamRatio = 0.05
+	c.VolSteps = 16
+	c.FlashFactor = 80
 	return c
 }

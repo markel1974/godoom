@@ -17,6 +17,13 @@ type Calibration struct {
 	FlashFovDeg        float64
 	ZNearFlash         float64
 	ZFarFlash          float64
+	ShininessWall      float64
+	ShininessFloor     float64
+	SpecBoostWall      float64
+	SpecBoostFloor     float64
+	BeamRatio          float64
+	VolSteps           float64
+	FlashFactor        float64
 	volumes            *Volumes
 }
 
@@ -36,6 +43,13 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		FlashFovDeg:        cfg.FlashFovDeg,
 		ZNearFlash:         cfg.ZNearFlash,
 		ZFarFlash:          cfg.ZFarFlash,
+		ShininessWall:      cfg.ShininessWall,
+		ShininessFloor:     cfg.ShininessFloor,
+		SpecBoostWall:      cfg.SpecBoostWall,
+		SpecBoostFloor:     cfg.SpecBoostFloor,
+		BeamRatio:          cfg.BeamRatio,
+		VolSteps:           cfg.VolSteps,
+		FlashFactor:        cfg.FlashFactor,
 		volumes:            volumes,
 	}
 	c.init()

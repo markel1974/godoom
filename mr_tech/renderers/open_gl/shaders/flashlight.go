@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/model"
 )
 
 // FlashlightLoc represents a uniform location identifier used in the Flashlight's shader program.
@@ -63,16 +64,17 @@ type Flashlight struct {
 	shadows    bool
 	shadowsInt int32
 	metrics    *MapMetrics
+	cal        *model.Calibration
 }
 
 // NewShaderFlashlight creates and returns a new instance of Flashlight with default values and shadows disabled.
-func NewShaderFlashlight(metrics *MapMetrics) *Flashlight {
-	const defaultFactor = 80.0
+func NewShaderFlashlight(metrics *MapMetrics, cal *model.Calibration) *Flashlight {
 	f := &Flashlight{
-		factor:     defaultFactor,
+		metrics:    metrics,
+		cal:        cal,
+		factor:     float32(cal.FlashFactor),
 		shadows:    false,
 		shadowsInt: 0,
-		metrics:    metrics,
 	}
 	f.EnableShadows(false)
 	return f
@@ -185,13 +187,6 @@ func (s *Flashlight) Compile(a IAssets) error {
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
 func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, pitchShear float32, fSwayX, fSwayY float32, screenW, screenH float32) {
-	const shininessWall = 128.0
-	const shininessFloor = 64.0
-	const specBoostWall = 0.05
-	const specBoostFloor = 0.1
-	const beamRatio = 0.05
-	//const fBase = 0.9
-	const volSteps = 16
 
 	if s.factor <= 0 {
 		return
@@ -215,12 +210,12 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	//gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
 	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
-	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), shininessWall)
-	gl.Uniform1f(s.GetUniform(FlashLocShininessFloor), shininessFloor)
-	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostWall), specBoostWall)
-	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), specBoostFloor)
-	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), beamRatio)
-	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), volSteps)
+	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))
+	gl.Uniform1f(s.GetUniform(FlashLocShininessFloor), float32(s.cal.ShininessFloor))
+	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
+	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
 
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)

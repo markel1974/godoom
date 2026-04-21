@@ -90,7 +90,7 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth(w.metrics)
 	w.lights = shaders.NewLights(lStride)
-	w.flashlight = shaders.NewShaderFlashlight(w.metrics)
+	w.flashlight = shaders.NewShaderFlashlight(w.metrics, w.cal)
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()
 	w.enableShadows = false

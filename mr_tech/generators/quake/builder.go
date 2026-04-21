@@ -76,6 +76,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	var playerPos geometry.XYZ
 	cal := config.NewConfigCalibration(true, 0, 0, 0, 0, 0, 0, true)
 	cal.ScaleFactor = 1.0
+	cal.FlashFactor = 200
 	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)
 
 	for _, ent := range entities {

@@ -89,7 +89,7 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth(w.metrics)
-	w.lights = shaders.NewLights(lStride)
+	w.lights = shaders.NewLights(lStride, w.cal)
 	w.flashlight = shaders.NewShaderFlashlight(w.metrics, w.cal)
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()

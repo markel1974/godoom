@@ -23,6 +23,13 @@ uniform int u_volumetricSteps;
 uniform float u_beamRatioFactor;
 uniform int u_numLights;
 
+uniform float u_shininessWall;
+uniform float u_shininessFloor;
+uniform float u_specBoostWall;
+uniform float u_specBoostFloor;
+
+const float PI = 3.14159265359;
+
 // --- NUOVO UBO PER LUCI MULTIPLE (Allineamento std140 rigoroso a 16 byte) ---
 struct Light {
     vec4 pos_type;       // xyz: Posizione World, w: Tipo (0.0=Point, 1.0=Spot, 2.0=Directional)
@@ -109,6 +116,18 @@ vec3 calculateNormal() {
     return geoNormal;
 }
 
+float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizontal) {
+    vec3 H = normalize(lightDir + viewDir);
+    float NdotH = max(dot(normal, H), 0.0);
+    float shininess = mix(u_shininessWall, u_shininessFloor, float(isHorizontal));
+    float specBoost = mix(u_specBoostWall, u_specBoostFloor, float(isHorizontal));
+
+    if (shininess <= 0.01) return 0.0;
+
+    float energyConservation = (shininess + 2.0) / (8.0 * PI);
+    return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
+}
+
 void main()
 {
     vec4 texColor = texture(u_texture, TexCoords);
@@ -119,6 +138,11 @@ void main()
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 
     vec3 finalNormal = calculateNormal();
+
+    // VARIABILI NECESSARIE PER LO SPECULARE
+    bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
+    vec3 V = normalize(-ViewPos); // View Direction
+
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
 
     // OMBRE STANZA
@@ -146,28 +170,48 @@ void main()
 
     // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);
+
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
         float intensity = max(u_lights[i].color_intensity.w, 0.0);
+
+        // Se la luce è spenta, salta
         if (intensity <= 0.001) continue;
+
         vec3 lightColor = u_lights[i].color_intensity.xyz;
         vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
-        // La direzione viene passata da Go in coordinate World, quindi la trasformiamo in View-Space
         vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
-        float falloffFactor = u_lights[i].dir_falloff.w;
+
+        // Trattiamo falloffFactor come il raggio d'azione massimo della luce
+        float falloffFactor = max(u_lights[i].dir_falloff.w, 1.0);
+
         vec3 L;
         float dist;
         float falloff = 1.0;
         float spotEffect = 1.0;
+
         if (lightType == 2) {
             // --- LUCE DIREZIONALE ---
             L = -spotDirView;
         } else {
             // --- POINT & SPOT ---
-            L = lightPosView - ViewPos;
-            dist = length(L);
-            L = L / dist;
+            vec3 diff = lightPosView - ViewPos;
+            dist = length(diff);
+
+            // EARLY-OUT: Culling per-pixel. Se siamo oltre il raggio, la luce non ha effetto.
+            // Risparmia tonnellate di calcoli su mappe grandi.
+            //if (dist > falloffFactor) continue;
+            //L = diff / dist;
+            // Reintegro del tuo falloff esponenziale, ma ora è delimitato dal raggio
+            //falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+
+            float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
+            // EARLY-OUT: Ora scartiamo i pixel solo se sono VERAMENTE fuori portata
+            if (dist > effectiveRadius) continue;
+            L = diff / dist;
+            // Il tuo decadimento esponenziale HDR originale
             falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+
             if (lightType == 1) {
                 // --- LIMITATORE CONO SPOT ---
                 float theta = dot(-L, spotDirView);
@@ -176,12 +220,18 @@ void main()
                 spotEffect = smoothstep(outerCutOff, cutOff, theta);
             }
         }
-        float wrapLight = max(dot(finalNormal, L), 0.0);
-        float power = intensity;
-        dynamicLights += albedo * lightColor * wrapLight * power * falloff * spotEffect;
+
+        // CALCOLO DIFFUSIONE E SPECULARE
+        float NdotL = max(dot(finalNormal, L), 0.0);
+        float specularPower = calculateSpecular(finalNormal, L, V, isHorizontal);
+        vec3 diffuse = albedo * lightColor * NdotL;
+        vec3 specular = vec3(specularPower) * lightColor;
+
+        // ACCUMULO FINALE
+        dynamicLights += (diffuse + specular) * intensity * falloff * spotEffect;
     }
 
     vec3 finalLight = litRoom + roomBeam + dynamicLights;
-    FragColor = vec4(finalLight, 0.0);
+    FragColor = vec4(finalLight, 1.0); // Forzato a 1.0 per sicurezza sul frame buffer
     BrightColor = vec4(dot(finalLight, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? finalLight : vec3(0.0), 1.0);
 }

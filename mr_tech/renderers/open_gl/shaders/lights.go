@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/model"
 )
 
 const (
@@ -41,6 +42,10 @@ const (
 	LightLocVolumetricSteps
 	LightLocBeamRatioFactor
 	LightLocNumLights
+	LightLocShininessWall
+	LightLocShininessFloor
+	LightLocSpecBoostWall
+	LightLocSpecBoostFloor
 	LightLocLast
 )
 
@@ -53,11 +58,13 @@ type Lights struct {
 	activeLights int32
 	shadows      int32
 	stride       int32
+	cal          *model.Calibration
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
-func NewLights(stride int32) *Lights {
+func NewLights(stride int32, cal *model.Calibration) *Lights {
 	return &Lights{
+		cal:      cal,
 		stride:   stride,
 		frameIdx: 0,
 	}
@@ -138,6 +145,10 @@ func (s *Lights) Compile(a IAssets) error {
 	s.table[LightLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 	s.table[LightLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
 	s.table[LightLocNumLights] = gl.GetUniformLocation(s.prg, gl.Str("u_numLights\x00"))
+	s.table[LightLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
+	s.table[LightLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
+	s.table[LightLocSpecBoostWall] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostWall\x00"))
+	s.table[LightLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -186,6 +197,11 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
 	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
+
+	gl.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
+	gl.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
+	gl.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	gl.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 

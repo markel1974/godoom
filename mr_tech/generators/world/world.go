@@ -101,7 +101,8 @@ func Generate() (*config.Root, error) {
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
-	cfg := config.NewConfigRoot(nil, player, nil, 0, t)
+	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
 	s1 := createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)
@@ -129,7 +130,8 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 }
 func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
-	cfg := config.NewConfigRoot(nil, player, nil, 0, t)
+	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
 
 	// 1. Generazione Logica (Drunkard's Walk)
 	grid := make([][]bool, gridWidth)

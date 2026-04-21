@@ -108,7 +108,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 	}
 
 	player := bld.buildPlayer(level)
-	cr := config.NewConfigRoot(sectors, player, things, WorldScaleFactor, texHandler)
+	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cr := config.NewConfigRoot(cal, sectors, player, things, WorldScaleFactor, texHandler)
 	cr.Vertices = vertexes
 
 	return cr, nil
@@ -196,6 +197,8 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 		}
 	}
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, _playerHeight, _playerRadius, _playerMass)
+	//player.Height = 7
+	//player.Radius = 20
 	return player
 }
 

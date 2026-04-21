@@ -6,16 +6,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Calibration represents calibration parameters for rendering and spatial configuration.
-type Calibration struct {
-	OrthoSize  float32
-	MapCenterX float32
-	MapCenterZ float32
-	LightCamY  float32
-	ZNearRoom  float32
-	ZFarRoom   float32
-}
-
 // Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
 type Volumes struct {
 	container []*Volume
@@ -53,31 +43,6 @@ func (s *Volumes) Setup() {
 // GetVolume retrieves a Volume from the cache using the provided unique identifier.
 func (s *Volumes) GetVolume(id string) *Volume {
 	return s.cache[id]
-}
-
-// GetCalibration computes calibration details based on the spatial properties of the root node in the AABB tree.
-func (s *Volumes) GetCalibration() *Calibration {
-	root, ok := s.tree.GetRoot()
-	if !ok {
-		return nil
-	}
-	c := &Calibration{}
-	// 2. OrthoSize è esattamente la metà dell'asse maggiore
-	width := root.GetWidth()
-	depth := root.GetDepth()
-	if width > depth {
-		c.OrthoSize = float32(width / 2.0)
-	} else {
-		c.OrthoSize = float32(depth / 2.0)
-	}
-	c.MapCenterX = float32(root.GetMinX() + (width / 2.0))
-	c.MapCenterZ = float32(root.GetMinZ() + (depth / 2.0))
-	// La telecamera si posiziona appena sopra il punto più alto della mappa
-	c.LightCamY = float32(root.GetMaxY()) //+ 2.0
-	// Distanze di proiezione relative dalla telecamera
-	c.ZNearRoom = 1.0
-	c.ZFarRoom = float32(root.GetMaxY() - root.GetMinY())
-	return c
 }
 
 // GetVolumes returns all Volume objects managed by the Volumes instance.

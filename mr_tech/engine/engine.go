@@ -10,14 +10,14 @@ import (
 
 // Engine represents a core game simulation system, managing things, volumes, player, and rendering configurations.
 type Engine struct {
-	portal     *portal.Portal
-	maxQueue   int
-	viewFactor float64
-	things     *model.Things
-	player     *model.ThingPlayer
-	volumes    *model.Volumes
-	lights     *model.Lights
-	full3d     bool
+	portal      *portal.Portal
+	maxQueue    int
+	viewFactor  float64
+	things      *model.Things
+	player      *model.ThingPlayer
+	volumes     *model.Volumes
+	lights      *model.Lights
+	calibration *model.Calibration
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -30,7 +30,6 @@ func NewEngine(maxQueue int, viewFactor float64) *Engine {
 		volumes:    nil,
 		player:     nil,
 		lights:     nil,
-		full3d:     false,
 	}
 }
 
@@ -47,11 +46,6 @@ func (e *Engine) GetTextures() textures.ITextures {
 // GetThings returns the Things instance managed by the Engine.
 func (e *Engine) GetThings() *model.Things {
 	return e.things
-}
-
-// HasFull3d checks if the engine operates in full 3D mode and returns true if enabled.
-func (e *Engine) HasFull3d() bool {
-	return e.full3d
 }
 
 // GetLights retrieves the list of light sources currently managed by the engine.
@@ -88,7 +82,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.player = compiler.GetPlayer()
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
-	e.full3d = cfg.Full3d
+	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
 	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
 	if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
@@ -132,7 +126,7 @@ func (e *Engine) Build() ([]*model.CompiledVolume, int) {
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.
 func (e *Engine) GetCalibration() *model.Calibration {
-	return e.volumes.GetCalibration()
+	return e.calibration
 }
 
 func (e *Engine) GetVolumes() *model.Volumes {

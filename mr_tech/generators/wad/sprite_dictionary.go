@@ -16,7 +16,7 @@ type ThingDef struct {
 
 const sSpeed = 12
 
-var _playerHeight = 80.0
+var _playerHeight = 70.0
 var _playerRadius = 20.0
 var _playerMass = 100.0
 

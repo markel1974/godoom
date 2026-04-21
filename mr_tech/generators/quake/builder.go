@@ -74,8 +74,9 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 
 	var playerAngle float64
 	var playerPos geometry.XYZ
-	root := config.NewConfigRoot(nil, nil, nil, 1.0, p.texManager)
-	root.Full3d = true
+	cal := config.NewConfigCalibration(true, 0, 0, 0, 0, 0, 0, true)
+	cal.ScaleFactor = 1.0
+	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)
 
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
@@ -197,9 +198,9 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		root.Volumes = append(root.Volumes, volume)
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
-	root.Player.Speed = 1000
-	root.Player.Bobbing.SwayScale = 5.0
-	root.Player.Bobbing.SwayOffsetX = 0.5
+	root.Player.Speed = 1200
+	root.Player.Bobbing.SwayScale = 2.0
+	root.Player.Bobbing.SwayOffsetX = 0.9
 	root.Player.Bobbing.SwayOffsetY = -0.1
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
@@ -213,6 +214,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	root.Player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale
 	root.Player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
 	root.Player.Bobbing.SpringDamping = 0.80
+	root.Player.Bobbing.TiltAmp = 0.05
 	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
 	//root.Things = nil
 	return root, nil

@@ -9,6 +9,7 @@ import (
 // Root represents the top-level configuration container, including sectors, things, player, and rendering properties.
 type Root struct {
 	Id          string           `json:"id"`
+	Calibration *Calibration     `json:"calibration"`
 	Sectors     []*Sector        `json:"sectors"`
 	Things      []*Thing         `json:"things"`
 	Player      *Player          `json:"player"`
@@ -16,14 +17,14 @@ type Root struct {
 	Vertices    geometry.Polygon `json:"vertices"`
 	Volumes     []*Volume        `json:"volumes"`
 	Lights      []*Light         `json:"lights"`
-	Full3d      bool             `json:"full3d"`
 	textures    textures.ITextures
 }
 
 // NewConfigRoot creates and initializes a new Root object with the specified sectors, player, things, and configuration.
-func NewConfigRoot(sectors []*Sector, player *Player, things []*Thing, scaleFactor float64, t textures.ITextures) *Root {
+func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, things []*Thing, scaleFactor float64, t textures.ITextures) *Root {
 	return &Root{
 		Id:          utils.NextUUId(),
+		Calibration: calibration,
 		Sectors:     sectors,
 		Player:      player,
 		Things:      things,

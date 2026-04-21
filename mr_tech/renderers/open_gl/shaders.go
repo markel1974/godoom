@@ -46,6 +46,7 @@ type Shaders struct {
 	container     []IShader
 	enableShadows bool
 	metrics       *shaders.MapMetrics
+	cal           *model.Calibration
 	w             int32
 	h             int32
 	scaleX        float32
@@ -72,14 +73,15 @@ func NewShaders() *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(vStride, lStride int32, calibration *model.Calibration, tex *Textures) error {
+func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Textures) error {
 	gl.Enable(gl.MULTISAMPLE)
 	//gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
 	w.tex = tex
+	w.cal = cal
 	w.metrics = shaders.NewMapMetrics()
-	w.metrics.SetOrthoSize(calibration.OrthoSize, calibration.ZNearRoom, calibration.ZFarRoom+4.0)
-	w.metrics.SetMapCenter(calibration.MapCenterX, calibration.MapCenterZ, calibration.LightCamY+2.0)
+	w.metrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
+	w.metrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
 
 	w.main = shaders.NewMain(vStride, w.metrics)
 	w.sky = shaders.NewSky()
@@ -126,9 +128,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
-		w.metrics.SetFlash(85.0, 0.1, 2048.0, fbW, fbH)
+		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), fbW, fbH)
 		if full3d {
-			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH)
+			// 2. Field of View Verticale (75.0 è lo standard Quake/Retro per schermi 4:3)
+			// schermi 16:9 si puo alzare a 80 o 90.
+			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
 		} else {
 			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
 		}

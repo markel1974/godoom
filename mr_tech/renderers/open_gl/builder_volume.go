@@ -14,28 +14,28 @@ type VolumeRange struct {
 }
 
 type BuilderVolume struct {
-	tex         *Textures
-	fv          *FrameVertices
-	dc          *DrawCommands
-	fl          *FrameLights
-	dcRender    *DrawCommandsRender
-	mapBuilt    bool
-	cSky        *textures.Texture
-	volRanges   map[*model.Volume]VolumeRange // CACHE DI CULLING
-	calibration *model.Calibration
+	tex       *Textures
+	fv        *FrameVertices
+	dc        *DrawCommands
+	fl        *FrameLights
+	dcRender  *DrawCommandsRender
+	mapBuilt  bool
+	cSky      *textures.Texture
+	volRanges map[*model.Volume]VolumeRange // CACHE DI CULLING
+	cal       *model.Calibration
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		tex:         tex,
-		dcRender:    NewDrawCommandsRender(),
-		fv:          NewFrameVertices(startBatchVertices),
-		dc:          NewDrawCommands(startFrameCommands),
-		fl:          NewFrameLights(256),
-		volRanges:   make(map[*model.Volume]VolumeRange), // Inizializzazione
-		mapBuilt:    false,
-		cSky:        nil,
-		calibration: calibration,
+		tex:       tex,
+		dcRender:  NewDrawCommandsRender(),
+		fv:        NewFrameVertices(startBatchVertices),
+		dc:        NewDrawCommands(startFrameCommands),
+		fl:        NewFrameLights(256),
+		volRanges: make(map[*model.Volume]VolumeRange), // Inizializzazione
+		mapBuilt:  false,
+		cSky:      nil,
+		cal:       calibration,
 	}
 	return bv
 }
@@ -115,7 +115,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		}
 		px, py, pz := vi.GetXYZ()
 		angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-		fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), w.calibration.ZFarRoom, float32(px), float32(py), float32(pz), angle, pitch, roll)
+		fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 		frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 		engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
 		w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)

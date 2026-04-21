@@ -94,20 +94,20 @@ func (w *RenderOpenGL) doInitialize() error {
 	}
 	thErr := executor.Thread.CallErr(func() error {
 		w.win.Begin()
-		calibration := w.engine.GetCalibration()
+		cal := w.engine.GetCalibration()
 		w.tex = NewTextures()
 		w.buildersCounter = 0
-		if w.engine.HasFull3d() {
-			w.builder = NewBuilderVolume(w.tex, calibration)
+		if cal.Full3d {
+			w.builder = NewBuilderVolume(w.tex, cal)
 			w.builders = append(w.builders, w.builder)
 		} else {
-			w.builder = NewBuilderTraverse(w.tex, calibration)
+			w.builder = NewBuilderTraverse(w.tex, cal)
 			w.builders = append(w.builders, w.builder, NewBuilderScene(w.tex))
 		}
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		w.shaders = NewShaders()
-		if err := w.shaders.Setup(vStride, lStride, calibration, w.tex); err != nil {
+		if err := w.shaders.Setup(vStride, lStride, cal, w.tex); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {

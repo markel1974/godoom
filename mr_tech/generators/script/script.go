@@ -39,7 +39,8 @@ func (p *Parser) Parse(id string) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
 	player.Speed = 60
 
-	cfg := config.NewConfigRoot(nil, player, nil, 1.0, t)
+	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cfg := config.NewConfigRoot(cal, nil, player, nil, 1.0, t)
 
 	oldData := strings.Split(id, "\n")
 	configSectorIdx := 0

@@ -13,11 +13,12 @@ import (
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
 type Compiler struct {
-	gScale  float64
-	volumes *Volumes
-	player  *ThingPlayer
-	lights  *Lights
-	things  *Things
+	gScale      float64
+	volumes     *Volumes
+	player      *ThingPlayer
+	lights      *Lights
+	things      *Things
+	calibration *Calibration
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default-nil-initialized fields.
@@ -36,6 +37,9 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	if r.gScale == 0 {
 		r.gScale = 1
 	}
+
+	full3d := cfg.Calibration.Full3d
+
 	cfg.Scale(r.gScale)
 	animations := NewAnimations(cfg.GetTextures())
 	r.lights = NewLights()
@@ -70,21 +74,22 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		allVolumes = append(allVolumes, container2d...)
 	}
 
-	if cfg.Full3d {
+	if cfg.Calibration.Full3d {
 		allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
 		allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
 	}
 
-	r.volumes = NewVolumes(allVolumes, cfg.Full3d)
+	r.volumes = NewVolumes(allVolumes, full3d)
 	r.volumes.Setup()
 
 	r.lights.AddLights(r.compileLights(cfg.Lights))
-	r.things = NewThings(r.gScale, cfg.Full3d, cfg.Things, r.volumes, animations)
+	r.things = NewThings(r.gScale, full3d, cfg.Things, r.volumes, animations)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")
 	}
 	r.things.SetPlayer(r.player)
+	r.calibration = NewCalibration(cfg.Calibration, r.volumes)
 	fmt.Printf("Scan complete world: %d\n", r.volumes.Len())
 	return nil
 }
@@ -107,6 +112,11 @@ func (r *Compiler) GetPlayer() *ThingPlayer {
 // GetLights retrieves the list of Light objects managed by the Compiler.
 func (r *Compiler) GetLights() *Lights {
 	return r.lights
+}
+
+// GetCalibration returns the Calibration instance associated with the Compiler.
+func (r *Compiler) GetCalibration() *Calibration {
+	return r.calibration
 }
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.

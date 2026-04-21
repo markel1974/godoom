@@ -81,7 +81,7 @@ func main() {
 		return
 	}
 	if full3d {
-		cfg.Full3d = true
+		cfg.Calibration.Full3d = true
 	}
 	en := engine.NewEngine(maxQueue, 3.0)
 	if err = en.Setup(cfg); err != nil {

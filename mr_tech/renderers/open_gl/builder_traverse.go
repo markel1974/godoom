@@ -56,14 +56,14 @@ type BuilderTraverse struct {
 	visibleVolumes    map[*model.Volume]bool
 	processedPolygons map[PolyKey]bool
 	cSky              *textures.Texture
-	calibration       *model.Calibration
+	cal               *model.Calibration
 }
 
 // NewBuilderTraverse creates and initializes a new BuilderTraverse with preallocated memory for vertices, commands, and lights.
 func NewBuilderTraverse(tex *Textures, calibration *model.Calibration) *BuilderTraverse {
 	return &BuilderTraverse{
 		tex:               tex,
-		calibration:       calibration,
+		cal:               calibration,
 		fv:                NewFrameVertices(startBatchVertices),
 		dc:                NewDrawCommands(startFrameCommands),
 		fl:                NewFrameLights(256),
@@ -165,7 +165,7 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 
 	px, py, pz := vi.GetXYZ()
 	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), w.calibration.ZFarRoom, float32(px), float32(py), float32(pz), angle, pitch, roll)
+	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 
 	w.pushLights(w.fl, lights, frustumFront, frustumRear)

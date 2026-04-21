@@ -128,10 +128,10 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
-		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.FlashFalloff), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), fbW, fbH)
+		shadowW := fbW
+		shadowH := fbW
+		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.FlashFalloff), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), shadowW, shadowH)
 		if full3d {
-			// 2. Field of View Verticale (75.0 è lo standard Quake/Retro per schermi 4:3)
-			// schermi 16:9 si puo alzare a 80 o 90.
 			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
 		} else {
 			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)

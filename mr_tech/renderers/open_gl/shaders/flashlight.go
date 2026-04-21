@@ -192,18 +192,18 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	if s.factor <= 0 {
 		return
 	}
+	// Calcola la direzione perturbata nello spazio di vista
+	targetDirX := float32(s.cal.FlashOffsetX) - (fSwayX * fSwaySensitivity)
+	targetDirY := float32(s.cal.FlashOffsetY) + (fSwayY * fSwaySensitivity)
+	//invRadiusSq := 1.0 / (s.cal.FlashFalloff * s.cal.FlashFalloff)
+
 	gl.UseProgram(s.prg)
 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, &view[0])
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, &invView[0])
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &flashSpace[0])
-
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
-	// Calcola la direzione perturbata nello spazio di vista
-	targetDirX := float32(s.cal.FlashOffsetX) - (fSwayX * fSwaySensitivity)
-	targetDirY := float32(s.cal.FlashOffsetY) + (fSwayY * fSwaySensitivity)
-
 	//gl.Uniform3f(s.GetUniform(FlashLocFlashDir), dirX, dirY, -float32(math.Abs(float64(dirZ))))
 	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), targetDirX, targetDirY, -1.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
@@ -219,8 +219,8 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
-
 	gl.Uniform1f(s.GetUniform(FlashLocFalloff), float32(s.cal.FlashFalloff))
+	//gl.Uniform1f(s.GetUniform(FlashLocFalloff), float32(invRadiusSq))
 
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)

@@ -165,21 +165,10 @@ void main()
     //float flashFalloff = 1.0 / (1.0 + (0.05 * FragDepth) + 0.005 * (FragDepth * FragDepth));
 
     float flashFalloff = u_flashFalloff;
-    //flashFalloff = 10;
-    //float flashFalloff = 10;//5000;
-    //float u_flashInvRadiusSq = 100.0; // 1.0 / (Radius * Radius)
     //float distSq = FragDepth * FragDepth;
-    // Forza l'attenuazione esattamente a 0.0 quando la distanza raggiunge il Radius
-    //float window = clamp(1.0 - pow(distSq * u_flashInvRadiusSq, 2.0), 0.0, 1.0);
+    // Si azzera matematicamente ed elegantemente al raggiungimento del raggio
+    //float window = clamp(1.0 - pow(distSq * u_flashFalloff, 2.0), 0.0, 1.0);
     //float flashFalloff = (window * window) / (distSq + 1.0);
-
-    //uniform float u_falloffLinear;
-    //uniform float u_falloffQuadratic;
-    //float u_falloffLinear = 0.01;
-    //float u_falloffQuadratic = 0.001;
-    //float flashFalloff = 1.0 / (1.0 + (u_falloffLinear * FragDepth) + u_falloffQuadratic * (FragDepth * FragDepth));
-
-
     float flashIntensity = flashCone * (flashFalloff * u_flashIntensityFactor);
 
     float volFlash = 0.0;

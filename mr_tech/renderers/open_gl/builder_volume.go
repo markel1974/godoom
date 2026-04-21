@@ -64,6 +64,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dc.Reset()
 	// Reset TOTALE del buffer luci ogni frame (le calcoliamo dinamicamente)
 	w.fl.DeepReset()
+
 	if !w.mapBuilt {
 		w.fv.DeepReset()
 		w.dc.DeepReset()
@@ -102,66 +103,56 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		w.mapBuilt = true
 	}
 
-	const usFrustum = true
+	//const usFrustum = true
 
-	if usFrustum {
-		queryGeom := func(object physics.IAABB) bool {
-			if vol, ok := object.(*model.Volume); ok {
-				if vr, exists := w.volRanges[vol]; exists {
-					w.dc.Compute(vr.start, vr.end)
-				}
+	//if usFrustum {
+	px, py, pz := vi.GetXYZ()
+	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
+	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
+	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
+	w.pushQVolumes(engine.GetVolumes(), frustumFront, frustumRear)
+	w.pushQLights(engine.GetLights(), frustumFront, frustumRear)
+	w.pushQThings(engine.GetThings(), frustumFront, frustumRear)
+	//} else {
+	//	for _, vr := range w.volRanges {
+	//		w.dc.Compute(vr.start, vr.end)
+	//	}
+	//	for _, vl := range engine.GetLights().Get() {
+	//		w.fl.Create(vl)
+	//	}
+	//	tA, tC := engine.GetThings().GetActive()
+	//	for idx := 0; idx < tC; idx++ {
+	//		w.pushThing(tA[idx], w.fv, w.dc)
+	//	}
+	//}
+	w.dcRender.Prepare(w.dc.GetDrawCommands())
+}
+
+// pushQVolumes queries geometry volumes within the specified frustums and processes them using the associated draw commands.
+func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront, frustumRear *physics.Frustum) {
+	queryGeom := func(object physics.IAABB) bool {
+		if vol, ok := object.(*model.Volume); ok {
+			if vr, exists := w.volRanges[vol]; exists {
+				w.dc.Compute(vr.start, vr.end)
 			}
-			return false
 		}
-		px, py, pz := vi.GetXYZ()
-		angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-		fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
-		frustumFront, frustumRear := vi.GetFrustum(fm, fr)
-		engine.QueryMultiFrustum(frustumFront, frustumRear, queryGeom)
-
-		w.pushLights(w.fl, engine.GetLights(), frustumFront, frustumRear)
-
-		f := engine.GetThings()
-		w.pushQThings(f, frustumFront, frustumRear)
-
-		w.dcRender.Prepare(w.dc.GetDrawCommands())
-	} else {
-		for _, vr := range w.volRanges {
-			w.dc.Compute(vr.start, vr.end)
-		}
-		for _, vl := range engine.GetLights().Get() {
-			w.fl.Create(vl)
-		}
-		// 4. Entità Dinamiche
-		tA, tC := engine.GetThings().GetActive()
-		w.pushThings(w.fv, w.dc, vi, tA, tC)
-		w.dcRender.Prepare(w.dc.GetDrawCommands())
+		return false
 	}
+	volumes.QueryFrustum(frustumFront, queryGeom)
 }
 
-// pushThings processes and adds the given list of things to the frame vertices and draw commands for rendering.
-func (w *BuilderVolume) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
-	if len(things) == 0 {
-		return
-	}
-	for idx := 0; idx < thingsCount; idx++ {
-		thing := things[idx]
-		w.pushThing(thing, fv, dc)
-	}
-}
-
-// pushLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushLights(fl *FrameLights, lights *model.Lights, frustumFront, frustumRear *physics.Frustum) {
+// pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum) {
 	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
-			fl.Create(l)
+			w.fl.Create(l)
 		}
 		return false
 	}
 	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
 }
 
-// pushLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+// pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront, frustumRear *physics.Frustum) {
 	q := func(object physics.IAABB) bool {
 		if l, ok := object.(model.IThing); ok {
@@ -172,6 +163,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront, frustumR
 	things.QueryFrustum(frustumFront, q)
 }
 
+// pushThing processes a single IThing instance, extracts its vertex and material data, and appends it to frame vertices and draw commands.
 func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *DrawCommands) {
 	faces, nextFaces, lp, billBoard := thing.GetVertices()
 	if faces == nil {

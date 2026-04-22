@@ -23,8 +23,8 @@ type FrameLights struct {
 	index             int
 	freezeIndex       int
 	stride            int32
-	shadowLights      []*Light
-	shadowLightsIndex int
+	shadowLights      [8]*Light
+	shadowLightsIndex int32
 	camX              float32
 	camY              float32
 	camZ              float32
@@ -35,7 +35,6 @@ func NewFrameLights(maxLights int) *FrameLights {
 	const stride = 16
 	fl := &FrameLights{
 		data:              make([]float32, maxLights*stride),
-		shadowLights:      make([]*Light, 8),
 		index:             0,
 		freezeIndex:       0,
 		shadowLightsIndex: 0,
@@ -72,6 +71,11 @@ func (f *FrameLights) LightsStride() int32 {
 // GetLights retrieves the current light data as a slice of float32 and the total number of lights as an int32 value.
 func (f *FrameLights) GetLights() ([]float32, int32) {
 	return f.data[:f.index], int32(f.index) / f.stride
+}
+
+// GetLights retrieves the current light data as a slice of float32 and the total number of lights as an int32 value.
+func (f *FrameLights) GetShadowLights() ([8]*Light, int32) {
+	return f.shadowLights, f.shadowLightsIndex
 }
 
 // Prepare initializes the camera position and resets the shadow lights index for the FrameLights instance.
@@ -167,7 +171,7 @@ func (f *FrameLights) addShadowLight(
 
 	return false
 
-	if f.shadowLightsIndex >= len(f.shadowLights) {
+	if f.shadowLightsIndex >= int32(len(f.shadowLights)) {
 		fmt.Println("Shadow light limit reached")
 		return false
 	}

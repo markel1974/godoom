@@ -30,6 +30,8 @@ type IBuilder interface {
 	GetVertices() ([]float32, int32, []uint32, int32)
 
 	GetLights() ([]float32, int32)
+
+	GetShadowLights() ([8]*Light, int32)
 }
 
 // SpriteNode represents a renderable entity in a scene, including its associated model and squared distance from the camera.
@@ -138,12 +140,14 @@ func (w *RenderOpenGL) doRender() {
 		commands := w.builder.GetDrawCommands()
 		vert, vertLen, indices, indicesLen := w.builder.GetVertices()
 		light, lightsCount := w.builder.GetLights()
+
+		shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 		skyLayer := float32(-1.0)
 		skyEnabled := false
 		if cSky != nil {
 			skyLayer, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyLayer, light, lightsCount)
+		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyLayer, light, lightsCount, shadowLights, shadowLightsCount)
 	})
 }
 

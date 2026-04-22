@@ -33,6 +33,11 @@ func NewBuilderScene(tex *Textures) *BuilderScene {
 	}
 }
 
+// GetShadowLights retrieves up to 8 shadow-casting lights and their count from the current frame lighting configuration.
+func (w *BuilderScene) GetShadowLights() ([8]*Light, int32) {
+	return w.fl.GetShadowLights()
+}
+
 // GetVerticesStride returns the byte stride of vertex data in the buffer, calculated as the vertex attribute group size multiplied by 4.
 func (w *BuilderScene) GetVerticesStride() int32 {
 	return w.fv.VerticesStride()

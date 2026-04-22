@@ -74,6 +74,11 @@ func NewBuilderTraverse(tex *Textures, calibration *model.Calibration) *BuilderT
 	}
 }
 
+// GetShadowLights retrieves up to 8 shadow-casting lights and their count from the current frame's light data.
+func (w *BuilderTraverse) GetShadowLights() ([8]*Light, int32) {
+	return w.fl.GetShadowLights()
+}
+
 // GetVerticesStride returns the byte stride of vertex data in the buffer, computed as the attribute group size multiplied by 4.
 func (w *BuilderTraverse) GetVerticesStride() int32 {
 	return w.fv.VerticesStride()

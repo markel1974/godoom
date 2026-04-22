@@ -40,6 +40,10 @@ func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVol
 	return bv
 }
 
+func (w *BuilderVolume) GetShadowLights() ([8]*Light, int32) {
+	return w.fl.GetShadowLights()
+}
+
 // GetVerticesStride returns the byte stride of the vertex data as an int32 by delegating to the underlying FrameVertices.
 func (w *BuilderVolume) GetVerticesStride() int32 { return w.fv.VerticesStride() }
 
@@ -144,7 +148,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront, frust
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
 func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, camX, camY, camZ float32) {
-	w.fl.Prepare(camX, camZ, camY)
+	w.fl.Prepare(camX, camY, camZ)
 	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
 			w.fl.Create(l)

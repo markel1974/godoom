@@ -19,27 +19,82 @@ const (
 	DepthLocLast
 )
 
+// DepthMap represents a structure for managing depth framebuffers and textures for shadow mapping and depth rendering.
+type DepthMap struct {
+	fbo    uint32
+	tex    uint32
+	matrix [16]float32
+}
+
+func NewDepthMap() *DepthMap {
+	return &DepthMap{
+		fbo: 0,
+		tex: 0,
+	}
+}
+
+// Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
+func (d *DepthMap) Update(width, height int32) {
+	d.Shutdown()
+	var fbo, tex uint32
+	borderColor := []float32{1.0, 1.0, 1.0, 1.0}
+	gl.GenFramebuffers(1, &fbo)
+	gl.GenTextures(1, &tex)
+	gl.BindTexture(gl.TEXTURE_2D, tex)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
+
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
+	gl.TexParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, &borderColor[0])
+
+	gl.BindFramebuffer(gl.FRAMEBUFFER, fbo)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0)
+	gl.DrawBuffer(gl.NONE)
+	gl.ReadBuffer(gl.NONE)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	d.fbo = fbo
+	d.tex = tex
+}
+
+// SetMatrix assigns a 4x4 transformation matrix to the DepthMap instance.
+func (d *DepthMap) SetMatrix(matrix [16]float32) {
+	d.matrix = matrix
+}
+
+// Shutdown releases OpenGL resources associated with the framebuffer and texture of the DepthMap.
+func (d *DepthMap) Shutdown() {
+	if d.fbo != 0 {
+		gl.DeleteFramebuffers(1, &d.fbo)
+		return
+	}
+	if d.tex != 0 {
+		gl.DeleteTextures(1, &d.tex)
+	}
+}
+
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
-	prg            uint32
-	table          [DepthLocLast]int32
-	sWidth         int32
-	sHeight        int32
-	roomShadowFbo  uint32
-	roomShadowTex  uint32
-	flashShadowFbo uint32
-	flashShadowTex uint32
-	roomMatrix     [16]float32
-	flashMatrix    [16]float32
-	viewMatrix     [16]float32
-	shadows        bool
-	metrics        *MapMetrics
+	prg        uint32
+	table      [DepthLocLast]int32
+	sWidth     int32
+	sHeight    int32
+	roomMap    *DepthMap
+	flashMap   *DepthMap
+	viewMatrix [16]float32
+	shadows    bool
+	metrics    *MapMetrics
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
 func NewDepth(m *MapMetrics) *Depth {
 	return &Depth{
-		metrics: m,
+		metrics:  m,
+		roomMap:  NewDepthMap(),
+		flashMap: NewDepthMap(),
 	}
 }
 
@@ -70,12 +125,12 @@ func (s *Depth) GetUniform(id DepthLoc) int32 {
 
 // GetRoomShadowTextures retrieves the texture ID associated with the room shadow map.
 func (s *Depth) GetRoomShadowTextures() uint32 {
-	return s.roomShadowTex
+	return s.roomMap.tex
 }
 
 // GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight's shadow map.
 func (s *Depth) GetFlashShadowTextures() uint32 {
-	return s.flashShadowTex
+	return s.flashMap.tex
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
@@ -114,8 +169,8 @@ func (s *Depth) Compile(assets IAssets) error {
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
 func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32) {
-	s.roomMatrix = roomSpaceMatrix
-	s.flashMatrix = flashSpaceMatrix
+	s.roomMap.SetMatrix(roomSpaceMatrix)
+	s.flashMap.SetMatrix(flashSpaceMatrix)
 	s.viewMatrix = viewMatrix
 }
 
@@ -124,12 +179,10 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	if !s.shadows {
 		return
 	}
-
 	sWidth, sHeight := s.metrics.GetShadowSize()
 	if sWidth != s.sWidth || sHeight != s.sHeight {
 		s.allocate(sWidth, sHeight)
 	}
-
 	gl.BindVertexArray(mainVao)
 
 	gl.Disable(gl.CULL_FACE)
@@ -144,20 +197,22 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 
 	// --- 1. OMBRE STANZA (Ortografica) ---
 	gl.PolygonOffset(2.0, 4.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomShadowFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomMap.fbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(s.GetProgram())
 	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0]) // <-- Aggiunto
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMatrix[0])
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
+
+	//ROOM
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
 	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
 	// --- 2. OMBRE TORCIA (Prospettica) ---
 	gl.PolygonOffset(0.5, 1.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashShadowFbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashMap.fbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMatrix[0])
+	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMap.matrix[0])
 	renderScene()
 
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
@@ -166,50 +221,12 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	gl.Viewport(0, 0, fbw, fbh)
 }
 
+// allocate configures the internal shadow map dimensions and updates the associated depth maps for rendering.
 func (s *Depth) allocate(width, height int32) {
 	s.sWidth = width
 	s.sHeight = height
-	// 1. PULIZIA PREVENTIVA (Prevenzione Memory Leak)
-	if s.roomShadowFbo != 0 {
-		gl.DeleteFramebuffers(1, &s.roomShadowFbo)
-		gl.DeleteTextures(1, &s.roomShadowTex)
-	}
-	if s.flashShadowFbo != 0 {
-		gl.DeleteFramebuffers(1, &s.flashShadowFbo)
-		gl.DeleteTextures(1, &s.flashShadowTex)
-	}
-
-	// 2. CREAZIONE DELLE NUOVE RISORSE
 	// roomShadowFbo e roomShadowTex gestiscono le ombre delle luci ambientali.
-	s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.sWidth, s.sHeight)
+	s.roomMap.Update(s.sWidth, s.sHeight)
 	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (Flashlight).
-	s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.sWidth, s.sHeight)
-}
-
-// createDepthMap initializes a depth map with given width and height and returns the framebuffer and texture IDs.
-func (s *Depth) createDepthMap(width, height int32) (uint32, uint32) {
-	var fbo, tex uint32
-	borderColor := []float32{1.0, 1.0, 1.0, 1.0}
-
-	gl.GenFramebuffers(1, &fbo)
-	gl.GenTextures(1, &tex)
-
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
-
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
-	gl.TexParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, &borderColor[0])
-
-	gl.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0)
-	gl.DrawBuffer(gl.NONE)
-	gl.ReadBuffer(gl.NONE)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
-
-	return fbo, tex
+	s.flashMap.Update(s.sWidth, s.sHeight)
 }

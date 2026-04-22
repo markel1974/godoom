@@ -129,7 +129,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.w = fbW
 		w.h = fbH
 		shadowW := fbW
-		shadowH := fbW
+		shadowH := fbH
 		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.FlashFalloff), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), shadowW, shadowH)
 		if full3d {
 			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
@@ -154,7 +154,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		swayX, swayY, swaySensitivity := vi.GetSway()
 		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
-	roomSpaceMatrix, flashSpaceMatrix, mainView := w.metrics.CreateSpaces(vi, flashX, flashY)
+	roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix := w.metrics.CreateSpaces(vi, flashX, flashY)
 	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
 	if full3d {
 		proj, view, invView = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
@@ -162,7 +162,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		proj, view, invView = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
 	}
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainView)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)

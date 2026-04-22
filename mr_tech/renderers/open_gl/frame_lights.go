@@ -1,58 +1,86 @@
 package open_gl
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
-// FrameLights manages light data for rendering, including position, color, intensity, and other attributes.
-type FrameLights struct {
-	data        []float32
-	index       int
-	freezeIndex int
-	stride      int32
+// Light represents a light source with position, color, intensity, direction, and attenuation properties.
+type Light struct {
+	X, Y, Z                   float32
+	Kind                      float32
+	R, G, B, Intensity        float32
+	DirX, DirY, DirZ, Falloff float32
+	CutOff, OuterCutOff       float32
 }
 
-// NewFrameLights creates and returns a new instance of FrameLights with a specified maximum number of lights.
+// FrameLights represents a structure used for managing and storing light data for rendering frameworks.
+type FrameLights struct {
+	data              []float32
+	index             int
+	freezeIndex       int
+	stride            int32
+	shadowLights      []*Light
+	shadowLightsIndex int
+	camX              float32
+	camY              float32
+	camZ              float32
+}
+
+// NewFrameLights initializes and returns a new FrameLights instance with preallocated memory for light data and shadow lights.
 func NewFrameLights(maxLights int) *FrameLights {
 	const stride = 16
-	return &FrameLights{
-		data:        make([]float32, maxLights*stride),
-		index:       0,
-		freezeIndex: 0,
-		stride:      stride,
+	fl := &FrameLights{
+		data:              make([]float32, maxLights*stride),
+		shadowLights:      make([]*Light, 8),
+		index:             0,
+		freezeIndex:       0,
+		shadowLightsIndex: 0,
+		stride:            stride,
 	}
+	for idx := range fl.shadowLights {
+		fl.shadowLights[idx] = &Light{}
+	}
+	return fl
 }
 
-// DeepReset resets the freezeIndex and calls Reset to clear the stored light data and prepare for new inputs.
+// DeepReset fully resets the frame lights, including dynamic and shadow light indices, to prepare for new calculations.
 func (f *FrameLights) DeepReset() {
 	f.freezeIndex = 0
+	f.shadowLightsIndex = 0
 	f.Reset()
 }
 
-// Reset clears all previously stored light data and resets the count to prepare for new light data.
+// Reset sets the current index of FrameLights to the freeze index, effectively resetting the state to the last saved point.
 func (f *FrameLights) Reset() {
 	f.index = f.freezeIndex
 }
 
-// Freeze sets the freezeIndex to the current index, marking the current state for later resets.
+// Freeze captures the current state by storing the current index into the freezeIndex field.
 func (f *FrameLights) Freeze() {
 	f.freezeIndex = f.index
 }
 
-// LightsStride returns the total stride value for lights, calculated as the internal stride multiplied by 4.
+// LightsStride calculates and returns the stride of light data, scaled by 4 to represent the size in bytes per light entry.
 func (f *FrameLights) LightsStride() int32 {
 	return f.stride * 4
 }
 
-// GetLights retrieves the current list of light data and the count of lights in the frame as a slice and an integer.
+// GetLights retrieves the current light data as a slice of float32 and the total number of lights as an int32 value.
 func (f *FrameLights) GetLights() ([]float32, int32) {
 	return f.data[:f.index], int32(f.index) / f.stride
 }
 
-// Create processes the given light and adds its data to the FrameLights if the light type is supported.
+// Prepare initializes the camera position and resets the shadow lights index for the FrameLights instance.
+func (f *FrameLights) Prepare(camX, camY, camZ float32) {
+	f.camX, f.camY, f.camZ = camX, camY, camZ
+	f.shadowLightsIndex = 0
+}
+
+// Create processes a Light object and adds it to the FrameLights based on its type, position, and properties.
 func (f *FrameLights) Create(light *model.Light) {
 	r, g, b := float32(1.0), float32(1.0), float32(1.0)
 	dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
@@ -77,6 +105,13 @@ func (f *FrameLights) Create(light *model.Light) {
 		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
 		cutOff = float32(math.Cos(baseCutoff * math.Pi / 180.0))
 		outerCutOff = float32(math.Cos(baseOuterCutOff * math.Pi / 180.0))
+		added := f.addShadowLight(float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
+			r, g, b, intensity,
+			dirGlX, dirGlY, dirGlZ, falloff,
+			cutOff, outerCutOff)
+		if added {
+			return
+		}
 	case config.LightKindNone:
 		return
 	default:
@@ -91,7 +126,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	)
 }
 
-// Add appends properties of a light source (position, color, direction, etc.) to the FrameLights storage.
+// add updates the light data buffer with position, color, type, intensity, direction, and attenuation properties.
 func (f *FrameLights) add(
 	posX, posY, posZ, lightType float32,
 	colR, colG, colB, intensity float32,
@@ -100,7 +135,7 @@ func (f *FrameLights) add(
 ) {
 	idx := f.index
 	if idx+int(f.stride) > len(f.data) {
-		f.Grow()
+		f.grow()
 	}
 	f.index += int(f.stride)
 
@@ -122,8 +157,41 @@ func (f *FrameLights) add(
 	f.data[idx+15] = pad2
 }
 
-// Grow doubles the size of the internal data slice or initializes it if empty to accommodate additional elements.
-func (f *FrameLights) Grow() {
+// addShadowLight adds a shadow-casting light to the shadowLights array with specified properties. Returns false if limit is reached.
+func (f *FrameLights) addShadowLight(
+	posX, posY, posZ, lightType float32,
+	colR, colG, colB, intensity float32,
+	dirX, dirY, dirZ, falloff float32,
+	cutOff, outerCutOff float32,
+) bool {
+
+	return false
+
+	if f.shadowLightsIndex >= len(f.shadowLights) {
+		fmt.Println("Shadow light limit reached")
+		return false
+	}
+	light := f.shadowLights[f.shadowLightsIndex]
+	f.shadowLightsIndex++
+	light.X = posX
+	light.Y = posY
+	light.Z = posZ
+	light.Kind = lightType
+	light.R = colR
+	light.G = colG
+	light.B = colB
+	light.Intensity = intensity
+	light.DirX = dirX
+	light.DirY = dirY
+	light.DirZ = dirZ
+	light.Falloff = falloff
+	light.CutOff = cutOff
+	light.OuterCutOff = outerCutOff
+	return true
+}
+
+// grow dynamically increases the size of the internal data slice to accommodate new elements when capacity is exceeded.
+func (f *FrameLights) grow() {
 	newSize := len(f.data) * 2
 	if newSize == 0 {
 		newSize = 128 * int(f.stride)
@@ -132,3 +200,66 @@ func (f *FrameLights) Grow() {
 	copy(newData, f.data)
 	f.data = newData
 }
+
+/*
+type ScoredLight struct {
+	Light Light
+	Score float32
+}
+
+func (w *FrameLights) UpdateDynamicShadows(camX, camY, camZ float32) [][16]float32 {
+	var candidates []ScoredLight
+	for _, l := range w.lights {
+		// Filtriamo solo i faretti (Spot Lights)
+		if l.Kind != float32(config.LightKindSpot) {
+			continue
+		}
+		// Calcolo distanza al quadrato (risparmiamo la radice)
+		dx, dy, dz := l.X-camX, l.Y-camY, l.Z-camZ
+		distSq := dx*dx + dy*dy + dz*dz
+		// Heuristic: Scarta a priori le luci la cui distanza supera di molto il loro falloff
+		if distSq > (l.Falloff * l.Falloff * 4.0) {
+			continue
+		}
+		// Calcolo dello Score: più è vicina e luminosa, più alto è il punteggio
+		intensity := l.Intensity
+		score := intensity / (distSq + 1.0) // +1.0 evita divisioni per zero
+		candidates = append(candidates, ScoredLight{Light: l, Score: score})
+	}
+
+	// Sorting decrescente per Score
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	// Prendiamo solo i primi 8 (o meno)
+	limit := 8
+	if len(candidates) < limit {
+		limit = len(candidates)
+	}
+	return candidates
+}
+
+/*
+
+		var dynaMatrices [][16]float32
+		for i := 0; i < limit; i++ {
+			l := candidates[i].Light
+			pos := l.GetPos()
+			dir := l.GetDir() // Assumendo che ritorni il vettore direzionale
+
+			// Mappatura coordinate OpenGL (X, Z, -Y)
+			pX, pY, pZ := float32(pos.X), float32(pos.Z), float32(-pos.Y)
+			dX, dY, dZ := float32(dir.X), float32(dir.Z), float32(-dir.Y)
+
+			// FOV a 90° per coprire interamente un tipico outer-cutoff di 40-45°
+			//mat := w.metrics.CreateSpotLightSpaceMatrix(pX, pY, pZ, dX, dY, dZ, 90.0, 1.0, float32(l.GetFalloff()))
+			dynaMatrices = append(dynaMatrices, mat)
+		}
+
+
+	return dynaMatrices
+}
+
+
+*/

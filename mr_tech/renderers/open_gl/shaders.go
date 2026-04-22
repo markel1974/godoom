@@ -1,6 +1,8 @@
 package open_gl
 
 import (
+	"fmt"
+
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -154,7 +156,31 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		swayX, swayY, swaySensitivity := vi.GetSway()
 		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
-	roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix := w.metrics.CreateSpaces(vi, flashX, flashY)
+	flashDirX := float32(w.cal.FlashOffsetX) - (flashX * flashSensitivity)
+	flashDirY := float32(w.cal.FlashOffsetY) + (flashY * flashSensitivity)
+	flashTex := w.depth.GetFlashShadowTextures()
+	roomTex := w.depth.GetRoomShadowTextures()
+
+	roomSpaceMatrix, mainViewMatrix := w.metrics.CreateRoomSpace(vi)
+	flashSpaceMatrix := w.metrics.CreateFlashSpace(mainViewMatrix, flashX, flashY)
+
+	var dynaLightMatrices [][16]float32
+
+	/*
+		//var bestLights []model.ILight = CullingManager(allLights, vi)
+		for _, light := range bestLights {
+			pX, pY, pZ := light.GetGLPos()
+			dX, dY, dZ := light.GetGLDir()
+			// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
+			// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
+			fovDeg := float32(90.0)
+			near := float32(1.0)
+			far := float32(light.GetFalloff()) // La profondità massima dell'ombra è la portata della luce
+			matrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, far)
+			dynaLightMatrices = append(dynaLightMatrices, matrix)
+		}
+	*/
+
 	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
 	if full3d {
 		proj, view, invView = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
@@ -162,7 +188,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		proj, view, invView = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
 	}
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, nil)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, dynaLightMatrices)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)
@@ -184,20 +210,27 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
-	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dc.Render, roomTex, view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.shadowLight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, flashSensitivity, float32(fbW), float32(fbH))
+	w.shadowLight.Render(dc.Render, flashTex, view, proj, invView, flashSpaceMatrix, flashX, flashY, 0.0, flashDirX, flashDirY, -1.0, w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), float32(fbW), float32(fbH))
 
-	/*
-		for x := uint32(0); x < w.depth.GetShadowLightCount(); x++ {
-			// Recupera la texture e la matrice specifica per questo faretto
-			tex, _, mat := w.depth.GetShadowLightTextures(x)
-			// Recupera i dati del faretto (direzione, posizione, intensità) dal tuo manager
-			// dX, dY, dZ, posX, posY, posZ, factor := manager.GetShadowLightData(x)
-			// Richiama il render usando lo shader della torcia!
-			w.shadowLight.Render(dc.Render, tex, view, proj, invView, mat, posX, posY, posZ, dX, dY, dZ, factor, float32(fbW), float32(fbH))
-		}
-	*/
+	for lx := uint32(0); lx < w.depth.GetShadowLightCount(); lx++ {
+		lTex, _, lMat := w.depth.GetShadowLightTextures(lx)
+		// World Space
+		/*
+			wPosX, wPosY, wPosZ, wDirX, wDirY, wDirZ, factor, falloff := manager.GetShadowLightData(lx)
+			// Moltiplicazione Posizione World * View Matrix
+			vPosX := view[0]*wPosX + view[4]*wPosY + view[8]*wPosZ + view[12]
+			vPosY := view[1]*wPosX + view[5]*wPosY + view[9]*wPosZ + view[13]
+			vPosZ := view[2]*wPosX + view[6]*wPosY + view[10]*wPosZ + view[14]
+			// Moltiplicazione Direzione World * mat3(View Matrix)
+			vDirX := view[0]*wDirX + view[4]*wDirY + view[8]*wDirZ
+			vDirY := view[1]*wDirX + view[5]*wDirY + view[9]*wDirZ
+			vDirZ := view[2]*wDirX + view[6]*wDirY + view[10]*wDirZ
+			w.shadowLight.Render(dc.Render, lTex, view, proj, invView, lMat, vPosX, vPosY, vPosZ, vDirX, vDirY, vDirZ, factor, falloff, float32(fbW), float32(fbH))
+		*/
+		fmt.Println(lTex, lMat)
+	}
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()

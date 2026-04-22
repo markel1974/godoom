@@ -276,7 +276,8 @@ func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOff
 	return m.roomSpace, flashSpace, mainView
 }
 
-func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+// CreateRoomSpace generates the room's spatial configuration and main view matrix based on the provided view matrix parameters.
+func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngleFull()
@@ -294,22 +295,19 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 		-dot(uX, uY, uZ, camX, camY, camZ),
 		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
-	// Local ShadowLight Space (LookAt calculation)
-	//pitchShear := float32(-vi.GetPitch())
-	//flashDirY := pitchShear / (ndcRange * float32(model.VFov))
+	return m.roomSpace, mainView
+}
 
+// CreateFlashSpace generates a 4x4 transformation matrix for the flashlight's view space based on input parameters.
+// It calculates the local flashlight position, orientation, and combines it with the main view and projection matrices.
+func (m *MapMetrics) CreateFlashSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) [16]float32 {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-
-	// FIX: La torcia punta sempre perfettamente dritto lungo -Z in View Space!
-	// Niente più pitchShear o flashDirY.
 	targetX, targetY, targetZ := float32(0.0), float32(0.0), -m.flashZFar
-
 	// Forward, Right, Up for the flashlight
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
 	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
-
 	// Local Translation
 	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
 	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
@@ -323,7 +321,53 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 	// Final Matrices
 	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
 	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
-	return m.roomSpace, flashSpace, mainView
+	return flashSpace
+}
+
+// CreateSpotLightSpace calculates the light-space transformation matrix for a spotlight.
+// It combines a perspective projection matrix and a view matrix based on the position, direction, and frustum parameters.
+func (m *MapMetrics) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) [16]float32 {
+	// 1. Matrice di Proiezione (Perspective)
+	// Per una mappa delle ombre, l'aspect ratio è rigorosamente 1.0 (è quadrata)
+	fovRad := fovDeg * math.Pi / 180.0
+	f := float32(1.0 / math.Tan(float64(fovRad)/2.0))
+	proj := [16]float32{
+		f, 0, 0, 0,
+		0, f, 0, 0,
+		0, 0, (far + near) / (near - far), -1.0,
+		0, 0, (2.0 * far * near) / (near - far), 0,
+	}
+
+	// 2. Matrice di Vista (LookAt)
+	ffX, ffY, ffZ := normalize(dirX, dirY, dirZ)
+
+	// Vettore UP standard (Y-up in OpenGL)
+	upX, upY, upZ := float32(0.0), float32(1.0), float32(0.0)
+
+	// Sicurezza Anti-Gimbal-Lock: se il faretto punta dritto in alto o in basso (pavimento/soffitto)
+	// il prodotto incrociato fallirebbe. Usiamo -Z come UP alternativo.
+	if math.Abs(float64(ffY)) > 0.999 {
+		upX, upY, upZ = 0.0, 0.0, -1.0
+	}
+
+	// R = Right, U = Upricalcolato
+	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, upX, upY, upZ))
+	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Già normalizzato
+
+	// Traslazione negativa (dot product tra assi invertiti e posizione)
+	tX := -dot(rrX, rrY, rrZ, posX, posY, posZ)
+	tY := -dot(uuX, uuY, uuZ, posX, posY, posZ)
+	tZ := dot(ffX, ffY, ffZ, posX, posY, posZ)
+
+	view := [16]float32{
+		rrX, uuX, -ffX, 0,
+		rrY, uuY, -ffY, 0,
+		rrZ, uuZ, -ffZ, 0,
+		tX, tY, tZ, 1,
+	}
+
+	// 3. Spazio Finale della Luce (Proj * View)
+	return MatrixMultiply4x4(proj, view)
 }
 
 // MatrixMultiply4x4 multiplies two 4x4 matrices represented as 1D arrays of 16 floats and returns the resulting matrix.

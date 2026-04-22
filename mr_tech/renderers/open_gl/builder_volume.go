@@ -107,11 +107,12 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 	//if usFrustum {
 	px, py, pz := vi.GetXYZ()
+	camX, camY, camZ := float32(px), float32(pz), float32(-py)
 	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
 	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, frustumRear)
-	w.pushQLights(engine.GetLights(), frustumFront, frustumRear)
+	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, camX, camY, camZ)
 	w.pushQThings(engine.GetThings(), frustumFront, frustumRear)
 	//} else {
 	//	for _, vr := range w.volRanges {
@@ -142,7 +143,8 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront, frust
 }
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum) {
+func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, camX, camY, camZ float32) {
+	w.fl.Prepare(camX, camZ, camY)
 	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
 			w.fl.Create(l)

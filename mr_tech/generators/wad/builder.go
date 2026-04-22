@@ -304,7 +304,6 @@ func (bld *Builder) convertLight(lightLevel int16) (float64, config.LightKind, f
 func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY, ceilY float64, edges []Edge) (float64, config.LightKind, float64) {
 	intensity := float64(lightLevel) * 0.015
 	kind := config.LightKindAmbient
-	//falloff := 10.0
 	falloff := ((ceilY - floorY) / ScaleCeilFloorLineDef) * 0.4 // Falloff proporzionale all'altezza
 	// 1. Calcolo Area Approssimativa (Bounding Box)
 	var minX, maxX, minY, maxY = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
@@ -328,7 +327,7 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY,
 	height := maxY - minY
 	// 2. CRITERI EURISTICI
 	// A. Il settore è piccolo (tipico di una plafoniera o faretto nel WAD)
-	isSmall := width < 128 && height < 128
+	isSmall := width <= 128 && height <= 128
 	// B. La texture del soffitto suggerisce una lampada (pattern matching tipico di Doom)
 	isLightTexture := false
 	lightTextures := []string{"LITE", "TLITE", "CEIL1_1", "CEIL1_2", "GLOW", "LAMP"}
@@ -343,9 +342,9 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY,
 	// 3. DECISIONE
 	if (isSmall && isLightTexture) || (isSmall && isBright) {
 		kind = config.LightKindSpot
-		intensity *= 2.0 // Potenziamo la luce spot rispetto all'ambientale
+		intensity *= 4.0 // Potenziamo la luce spot rispetto all'ambientale
 		if falloff < 10.0 {
-			falloff = 10.0
+			falloff = 100.0
 		} // Garantiamo una gittata minima
 	}
 	return intensity, kind, falloff

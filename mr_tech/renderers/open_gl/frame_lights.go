@@ -7,29 +7,35 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
-// Light represents a light source with position, color, intensity, direction, and attenuation properties.
+//Omnidirezionali/CubeMaps
+
+// ShadowLightNumber defines the maximum number of shadow-casting lights supported in the frame lighting system.
+const ShadowLightNumber = 8
+
+// Light represents the properties and attributes of a light source in 3D space, including position, direction, and intensity.
 type Light struct {
 	X, Y, Z                   float32
 	Kind                      float32
 	R, G, B, Intensity        float32
 	DirX, DirY, DirZ, Falloff float32
 	CutOff, OuterCutOff       float32
+	Score                     float32
 }
 
-// FrameLights represents a structure used for managing and storing light data for rendering frameworks.
+// FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
 	data              []float32
 	index             int
 	freezeIndex       int
 	stride            int32
-	shadowLights      [8]*Light
+	shadowLights      [ShadowLightNumber]*Light
 	shadowLightsIndex int32
 	camX              float32
 	camY              float32
 	camZ              float32
 }
 
-// NewFrameLights initializes and returns a new FrameLights instance with preallocated memory for light data and shadow lights.
+// NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
 func NewFrameLights(maxLights int) *FrameLights {
 	const stride = 16
 	fl := &FrameLights{
@@ -45,45 +51,45 @@ func NewFrameLights(maxLights int) *FrameLights {
 	return fl
 }
 
-// DeepReset fully resets the frame lights, including dynamic and shadow light indices, to prepare for new calculations.
+// DeepReset resets the freezeIndex, shadowLightsIndex, and calls the Reset method to perform a full reset of the FrameLights.
 func (f *FrameLights) DeepReset() {
 	f.freezeIndex = 0
 	f.shadowLightsIndex = 0
 	f.Reset()
 }
 
-// Reset sets the current index of FrameLights to the freeze index, effectively resetting the state to the last saved point.
+// Reset sets the current light index to the previously saved freeze index, effectively discarding added lights beyond that point.
 func (f *FrameLights) Reset() {
 	f.index = f.freezeIndex
 }
 
-// Freeze captures the current state by storing the current index into the freezeIndex field.
+// Freeze locks the current state of the FrameLights by saving the current index to the freezeIndex.
 func (f *FrameLights) Freeze() {
 	f.freezeIndex = f.index
 }
 
-// LightsStride calculates and returns the stride of light data, scaled by 4 to represent the size in bytes per light entry.
+// LightsStride returns the stride of the light data, scaled by 4, representing the total number of float32 per light.
 func (f *FrameLights) LightsStride() int32 {
 	return f.stride * 4
 }
 
-// GetLights retrieves the current light data as a slice of float32 and the total number of lights as an int32 value.
+// GetLights retrieves the current light data as a slice of float32 and the count of lights as an int32.
 func (f *FrameLights) GetLights() ([]float32, int32) {
 	return f.data[:f.index], int32(f.index) / f.stride
 }
 
-// GetLights retrieves the current light data as a slice of float32 and the total number of lights as an int32 value.
-func (f *FrameLights) GetShadowLights() ([8]*Light, int32) {
+// GetShadowLights retrieves the shadow-casting lights and their count from the current frame's lighting configuration.
+func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*Light, int32) {
 	return f.shadowLights, f.shadowLightsIndex
 }
 
-// Prepare initializes the camera position and resets the shadow lights index for the FrameLights instance.
+// Prepare resets the shadow lights index and updates the camera position values (camX, camY, camZ).
 func (f *FrameLights) Prepare(camX, camY, camZ float32) {
 	f.camX, f.camY, f.camZ = camX, camY, camZ
 	f.shadowLightsIndex = 0
 }
 
-// Create processes a Light object and adds it to the FrameLights based on its type, position, and properties.
+// Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
 func (f *FrameLights) Create(light *model.Light) {
 	r, g, b := float32(1.0), float32(1.0), float32(1.0)
 	dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
@@ -106,7 +112,6 @@ func (f *FrameLights) Create(light *model.Light) {
 		//const baseOuterCutOff = 40.0
 		lightType = 1
 		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-		spotDirX, SpotDirY, spotDirZ := float32(0.0), float32(-1.0), float32(0.0)
 		r, g, b = float32(1.0), float32(1.0), float32(1.0)
 		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
 		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
@@ -118,13 +123,12 @@ func (f *FrameLights) Create(light *model.Light) {
 		added := f.addShadowLight(
 			float32(pos.X), float32(pos.Z), float32(-pos.Y),
 			lightType, r, g, b, intensity,
-			spotDirX, SpotDirY, spotDirZ, falloff,
+			dirGlX, dirGlY, dirGlZ, falloff,
 			cutOff, outerCutOff,
 		)
 		if added {
 			return
 		}
-
 	case config.LightKindNone:
 		return
 	default:
@@ -139,7 +143,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	)
 }
 
-// add updates the light data buffer with position, color, type, intensity, direction, and attenuation properties.
+// add adds a light's parameters to the data buffer and updates the index, expanding storage if necessary.
 func (f *FrameLights) add(
 	posX, posY, posZ, lightType float32,
 	colR, colG, colB, intensity float32,
@@ -170,31 +174,62 @@ func (f *FrameLights) add(
 	f.data[idx+15] = pad2
 }
 
-// addShadowLight adds a shadow-casting light to the shadowLights array with specified properties. Returns false if limit is reached.
+// addShadowLight adds a shadow-casting light to the list of frame lights based on its attributes and distance to the camera.
+// Returns true if the light was successfully added, or false if it didn't qualify or was replaced in the min-heap.
 func (f *FrameLights) addShadowLight(
 	posX, posY, posZ, lightType float32,
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 ) bool {
-	//return false
-	if f.shadowLightsIndex >= int32(len(f.shadowLights)) {
-		//fmt.Println("Shadow light limit reached")
+	dx, dy, dz := posX-f.camX, posY-f.camY, posZ-f.camZ
+	distSq := dx*dx + dy*dy + dz*dz
+	if distSq > (falloff * falloff * 4.0) {
 		return false
 	}
-	light := f.shadowLights[f.shadowLightsIndex]
-	f.shadowLightsIndex++
-	light.Intensity = intensity
-	light.Kind = lightType
-	light.X, light.Y, light.Z = posX, posY, posZ
-	light.R, light.G, light.B = colR, colG, colB
-	light.DirX, light.DirY, light.DirZ = dirX, dirY, dirZ
-	light.Falloff = falloff
-	light.CutOff, light.OuterCutOff = cutOff, outerCutOff
+	score := intensity / (distSq + 1.0)
+	// Fase 1: Riempimento iniziale (0-7)
+	if f.shadowLightsIndex < ShadowLightNumber {
+		light := f.shadowLights[f.shadowLightsIndex]
+		f.fillLightStruct(light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+		f.shadowLightsIndex++
+		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
+		if f.shadowLightsIndex == ShadowLightNumber {
+			f.buildMinHeap()
+		}
+		return true
+	}
+	// La luce peggiore è SEMPRE all'indice 0. Ricerca O(1).
+	if score <= f.shadowLights[0].Score {
+		return false
+	}
+	// Sostituzione: declassiamo la radice (la peggiore) e inseriamo la nuova
+	worst := f.shadowLights[0]
+	f.add(
+		worst.X, worst.Y, worst.Z, worst.Kind,
+		worst.R, worst.G, worst.B, worst.Intensity,
+		worst.DirX, worst.DirY, worst.DirZ, worst.Falloff,
+		worst.CutOff, worst.OuterCutOff, 0.0, 0.0,
+	)
+	f.fillLightStruct(worst, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+	// Ripristiniamo l'ordine dell'heap in O(log N)
+	f.minHeapFixDown(0, ShadowLightNumber)
 	return true
 }
 
-// grow dynamically increases the size of the internal data slice to accommodate new elements when capacity is exceeded.
+// fillLightStruct populates the given Light struct with the provided positional, directional, and light-related properties.
+func (f *FrameLights) fillLightStruct(l *Light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score float32) {
+	l.X, l.Y, l.Z = posX, posY, posZ
+	l.Kind = lightType
+	l.R, l.G, l.B = colR, colG, colB
+	l.Intensity = intensity
+	l.DirX, l.DirY, l.DirZ = dirX, dirY, dirZ
+	l.Falloff = falloff
+	l.CutOff, l.OuterCutOff = cutOff, outerCutOff
+	l.Score = score
+}
+
+// grow dynamically expands the size of the underlying data slice when more capacity is needed.
 func (f *FrameLights) grow() {
 	newSize := len(f.data) * 2
 	if newSize == 0 {
@@ -205,65 +240,29 @@ func (f *FrameLights) grow() {
 	f.data = newData
 }
 
-/*
-type ScoredLight struct {
-	Light Light
-	Score float32
-}
-
-func (w *FrameLights) UpdateDynamicShadows(camX, camY, camZ float32) [][16]float32 {
-	var candidates []ScoredLight
-	for _, l := range w.lights {
-		// Filtriamo solo i faretti (Spot Lights)
-		if l.Kind != float32(config.LightKindSpot) {
-			continue
-		}
-		// Calcolo distanza al quadrato (risparmiamo la radice)
-		dx, dy, dz := l.X-camX, l.Y-camY, l.Z-camZ
-		distSq := dx*dx + dy*dy + dz*dz
-		// Heuristic: Scarta a priori le luci la cui distanza supera di molto il loro falloff
-		if distSq > (l.Falloff * l.Falloff * 4.0) {
-			continue
-		}
-		// Calcolo dello Score: più è vicina e luminosa, più alto è il punteggio
-		intensity := l.Intensity
-		score := intensity / (distSq + 1.0) // +1.0 evita divisioni per zero
-		candidates = append(candidates, ScoredLight{Light: l, Score: score})
+// buildMinHeap constructs a min-heap for the shadowLights array based on their scores in O(n) time complexity.
+func (f *FrameLights) buildMinHeap() {
+	for i := (ShadowLightNumber / 2) - 1; i >= 0; i-- {
+		f.minHeapFixDown(i, ShadowLightNumber)
 	}
-
-	// Sorting decrescente per Score
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].Score > candidates[j].Score
-	})
-
-	// Prendiamo solo i primi 8 (o meno)
-	limit := 8
-	if len(candidates) < limit {
-		limit = len(candidates)
-	}
-	return candidates
 }
 
-/*
-
-		var dynaMatrices [][16]float32
-		for i := 0; i < limit; i++ {
-			l := candidates[i].Light
-			pos := l.GetPos()
-			dir := l.GetDir() // Assumendo che ritorni il vettore direzionale
-
-			// Mappatura coordinate OpenGL (X, Z, -Y)
-			pX, pY, pZ := float32(pos.X), float32(pos.Z), float32(-pos.Y)
-			dX, dY, dZ := float32(dir.X), float32(dir.Z), float32(-dir.Y)
-
-			// FOV a 90° per coprire interamente un tipico outer-cutoff di 40-45°
-			//mat := w.metrics.CreateSpotLightSpaceMatrix(pX, pY, pZ, dX, dY, dZ, 90.0, 1.0, float32(l.GetFalloff()))
-			dynaMatrices = append(dynaMatrices, mat)
+// minHeapFixDown restores the min-heap property for a subtree rooted at index i within a heap of size n.
+func (f *FrameLights) minHeapFixDown(i, n int) {
+	for {
+		left := 2*i + 1
+		if left >= n || left < 0 {
+			break
 		}
-
-
-	return dynaMatrices
+		smallest := left
+		if right := left + 1; right < n && f.shadowLights[right].Score < f.shadowLights[left].Score {
+			smallest = right
+		}
+		if f.shadowLights[smallest].Score >= f.shadowLights[i].Score {
+			break
+		}
+		// Swap pointers
+		f.shadowLights[i], f.shadowLights[smallest] = f.shadowLights[smallest], f.shadowLights[i]
+		i = smallest
+	}
 }
-
-
-*/

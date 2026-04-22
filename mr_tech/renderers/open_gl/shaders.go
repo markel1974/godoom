@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
-
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -166,17 +164,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 	var dynaLightMatrices [][16]float32
 
-	for lx := int32(0); lx < shadowLightsNum; lx++ {
-		light := shadowLights[lx]
-		pX, pY, pZ := light.X, light.Y, light.Z
-		dX, dY, dZ := light.DirX, light.DirY, light.DirZ
-		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
-		// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
-		fovDeg := float32(90.0)
-		near := float32(1.0)
-		matrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, light.Falloff)
-		dynaLightMatrices = append(dynaLightMatrices, matrix)
-	}
+	/*
+		for lx := int32(0); lx < shadowLightsNum; lx++ {
+			light := shadowLights[lx]
+			pX, pY, pZ := light.X, light.Y, light.Z
+			dX, dY, dZ := light.DirX, light.DirY, light.DirZ
+			// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
+			// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
+			fovDeg := float32(90.0)
+			near := float32(1.0)
+			matrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, light.Falloff)
+			dynaLightMatrices = append(dynaLightMatrices, matrix)
+		}
+	*/
 
 	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
 	if full3d {
@@ -211,26 +211,30 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// FLASHLIGHTS
 	w.shadowLight.Render(dc.Render, flashTex, view, proj, invView, flashSpaceMatrix, flashX, flashY, 0.0, flashDirX, flashDirY, -1.0, w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), float32(fbW), float32(fbH))
 
-	for lx := int32(0); lx < shadowLightsNum; lx++ {
-		light := shadowLights[lx]
-		lTex, _, lMat := w.depth.GetShadowLightTextures(uint32(lx))
-		// World Space
-		wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
-		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
-		//TODO MANCA FACTOR
-		factor, falloff := light.Intensity, light.Falloff
-		// Moltiplicazione Posizione World * View Matrix
-		vPosX := view[0]*wPosX + view[4]*wPosY + view[8]*wPosZ + view[12]
-		vPosY := view[1]*wPosX + view[5]*wPosY + view[9]*wPosZ + view[13]
-		vPosZ := view[2]*wPosX + view[6]*wPosY + view[10]*wPosZ + view[14]
-		// Moltiplicazione Direzione World * mat3(View Matrix)
-		vDirX := view[0]*wDirX + view[4]*wDirY + view[8]*wDirZ
-		vDirY := view[1]*wDirX + view[5]*wDirY + view[9]*wDirZ
-		vDirZ := view[2]*wDirX + view[6]*wDirY + view[10]*wDirZ
-		w.shadowLight.Render(dc.Render, lTex, view, proj, invView, lMat, vPosX, vPosY, vPosZ, vDirX, vDirY, vDirZ, factor, falloff, float32(fbW), float32(fbH))
+	/*
+		for lx := int32(0); lx < shadowLightsNum; lx++ {
+			light := shadowLights[lx]
+			lTex, _, lMat := w.depth.GetShadowLightTextures(uint32(lx))
+			factor := light.Intensity
+			factor = 2
+			falloff := light.Falloff
+			// Coordinate World-GL (già salvate correttamente da FrameLights.Create)
+			wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
+			wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
+			// TRASFORMAZIONE IN VIEW-SPACE:
+			// Lo shader ShadowLight/Flashlight lavora in View-Space (Normali e Posizioni)
+			vPosX := view[0]*wPosX + view[4]*wPosY + view[8]*wPosZ + view[12]
+			vPosY := view[1]*wPosX + view[5]*wPosY + view[9]*wPosZ + view[13]
+			vPosZ := view[2]*wPosX + view[6]*wPosY + view[10]*wPosZ + view[14]
+			vDirX := view[0]*wDirX + view[4]*wDirY + view[8]*wDirZ
+			vDirY := view[1]*wDirX + view[5]*wDirY + view[9]*wDirZ
+			vDirZ := view[2]*wDirX + view[6]*wDirY + view[10]*wDirZ
+			// ESECUZIONE PASSAGGIO ADDITIVO
+			// lMat è la matrice specifica calcolata in precedenza per la ShadowMap di questa luce
+			w.shadowLight.Render(dc.Render, lTex, view, proj, invView, lMat, vPosX, vPosY, vPosZ, vDirX, vDirY, vDirZ, factor, falloff, float32(fbW), float32(fbH))
+		}
 
-		fmt.Println(lTex, lMat)
-	}
+	*/
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()

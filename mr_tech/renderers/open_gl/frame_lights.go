@@ -1,7 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -107,15 +106,24 @@ func (f *FrameLights) Create(light *model.Light) {
 		const baseOuterCutOff = 40.0
 		lightType = 1
 		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-		cutOff = float32(math.Cos(baseCutoff * math.Pi / 180.0))
-		outerCutOff = float32(math.Cos(baseOuterCutOff * math.Pi / 180.0))
-		added := f.addShadowLight(float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
-			r, g, b, intensity,
+		// FIX CUTOFF: Usiamo i valori reali del faretto
+		// Convertiamo in radianti e poi in Coseno (come richiesto dallo shader)
+		const toRad = math.Pi / 180.0
+		cutOff2 := float32(math.Cos(baseCutoff * toRad))
+		outerCutOff2 := float32(math.Cos(baseOuterCutOff * toRad))
+		added := f.addShadowLight(
+			float32(pos.X), float32(pos.Z), float32(-pos.Y),
+			lightType, r, g, b, intensity,
 			dirGlX, dirGlY, dirGlZ, falloff,
-			cutOff, outerCutOff)
+			cutOff2, outerCutOff2,
+		)
 		if added {
 			return
 		}
+		r, g, b = float32(1.0), float32(1.0), float32(1.0)
+		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
+
 	case config.LightKindNone:
 		return
 	default:
@@ -168,29 +176,20 @@ func (f *FrameLights) addShadowLight(
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 ) bool {
-
 	return false
-
 	if f.shadowLightsIndex >= int32(len(f.shadowLights)) {
-		fmt.Println("Shadow light limit reached")
+		//fmt.Println("Shadow light limit reached")
 		return false
 	}
 	light := f.shadowLights[f.shadowLightsIndex]
 	f.shadowLightsIndex++
-	light.X = posX
-	light.Y = posY
-	light.Z = posZ
-	light.Kind = lightType
-	light.R = colR
-	light.G = colG
-	light.B = colB
 	light.Intensity = intensity
-	light.DirX = dirX
-	light.DirY = dirY
-	light.DirZ = dirZ
+	light.Kind = lightType
+	light.X, light.Y, light.Z = posX, posY, posZ
+	light.R, light.G, light.B = colR, colG, colB
+	light.DirX, light.DirY, light.DirZ = dirX, dirY, dirZ
 	light.Falloff = falloff
-	light.CutOff = cutOff
-	light.OuterCutOff = outerCutOff
+	light.CutOff, light.OuterCutOff = cutOff, outerCutOff
 	return true
 }
 

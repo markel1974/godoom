@@ -166,13 +166,28 @@ void main()
         }
     }
 
-    if (projMain.z > 0.9) {
-        shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
-    }
+    float flashIntensity;
+    float diffFlash;
+    float specularFlash;
 
-    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
-    float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-    float flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor);
+    if (u_isAbsolute == 1) {
+        diffFlash = max(dot(finalNormal, L_flash), 0.0);
+        specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
+        // Calcolo della distanza reale dal faretto al frammento sul muro/pavimento
+        float distToLight = length(flashPosView - ViewPos);
+        // Attenuazione morbida: inizia a svanire all'80% del falloff e si spegne al 100%
+        float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
+        // La nuova intensità usa la distanza, evitando moltiplicazioni esplosive
+        flashIntensity = flashCone * u_flashIntensityFactor * distanceFade;
+        //flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
+    } else {
+        if (projMain.z > 0.9) {
+            shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
+        }
+        diffFlash = max(dot(finalNormal, L_flash), 0.0);
+        specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
+        flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor);
+    }
 
     // --- SETUP VOLUMETRICO ---
     float volFlash = 0.0;

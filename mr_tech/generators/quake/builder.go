@@ -255,7 +255,7 @@ func (p *Builder) createLight(entity *lumps.Entity, pos geometry.XYZ, isSpot boo
 	if isSpot {
 		kind = config.LightKindSpot
 		intensity = val * 0.9
-		falloff = intensity * 0.2
+		falloff = intensity * 10
 	} else {
 		kind = config.LightKindAmbient
 		intensity = val * 0.05

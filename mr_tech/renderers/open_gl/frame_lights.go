@@ -177,7 +177,7 @@ func (f *FrameLights) addShadowLight(
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 ) bool {
-	return false
+	//return false
 	if f.shadowLightsIndex >= int32(len(f.shadowLights)) {
 		//fmt.Println("Shadow light limit reached")
 		return false

@@ -88,7 +88,7 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 	w.geometry = shaders.NewGeometry()
 	w.ssao = shaders.NewSSAO()
 	w.blur = shaders.NewBlur()
-	w.depth = shaders.NewDepth(w.metrics)
+	w.depth = shaders.NewDepth(w.metrics, 8)
 	w.lights = shaders.NewLights(lStride, w.cal)
 	w.flashlight = shaders.NewShaderFlashlight(w.metrics, w.cal)
 	w.post = shaders.NewPost()
@@ -162,7 +162,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		proj, view, invView = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
 	}
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, nil)
 	w.geometry.UpdateUniforms(view, proj)
 	w.ssao.UpdateUniforms(view, proj)
 	w.sky.UpdateUniforms(view, proj)

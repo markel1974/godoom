@@ -78,24 +78,31 @@ func (d *DepthMap) Shutdown() {
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
-	prg        uint32
-	table      [DepthLocLast]int32
-	sWidth     int32
-	sHeight    int32
-	roomMap    *DepthMap
-	flashMap   *DepthMap
-	viewMatrix [16]float32
-	shadows    bool
-	metrics    *MapMetrics
+	prg              uint32
+	table            [DepthLocLast]int32
+	sWidth           int32
+	sHeight          int32
+	roomMap          *DepthMap
+	flashMap         *DepthMap
+	shadowLightsMap  []*DepthMap
+	viewMatrix       [16]float32
+	shadows          bool
+	metrics          *MapMetrics
+	shadowLightCount uint32
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(m *MapMetrics) *Depth {
-	return &Depth{
-		metrics:  m,
-		roomMap:  NewDepthMap(),
-		flashMap: NewDepthMap(),
+func NewDepth(m *MapMetrics, shadowLightMax int) *Depth {
+	d := &Depth{
+		metrics:          m,
+		roomMap:          NewDepthMap(),
+		flashMap:         NewDepthMap(),
+		shadowLightCount: 0,
 	}
+	for i := 0; i < shadowLightMax; i++ {
+		d.shadowLightsMap = append(d.shadowLightsMap, NewDepthMap())
+	}
+	return d
 }
 
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
@@ -133,6 +140,14 @@ func (s *Depth) GetFlashShadowTextures() uint32 {
 	return s.flashMap.tex
 }
 
+// GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
+func (s *Depth) GetShadowLightTextures(idx uint32) uint32 {
+	if idx >= s.shadowLightCount {
+		return 0
+	}
+	return s.shadowLightsMap[idx].tex
+}
+
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
 func (s *Depth) Compile(assets IAssets) error {
 	const vertId = "depth.vert"
@@ -168,10 +183,17 @@ func (s *Depth) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32) {
+func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32, dynaLight [][16]float32) {
+	s.viewMatrix = viewMatrix
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
-	s.viewMatrix = viewMatrix
+	s.shadowLightCount = uint32(len(dynaLight))
+	if s.shadowLightCount >= uint32(len(s.shadowLightsMap)) {
+		s.shadowLightCount = uint32(len(s.shadowLightsMap)) - 1
+	}
+	for x := uint32(0); x < s.shadowLightCount; x++ {
+		s.shadowLightsMap[x].SetMatrix(dynaLight[x])
+	}
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
@@ -215,6 +237,14 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMap.matrix[0])
 	renderScene()
 
+	for x := 0; x < int(s.shadowLightCount); x++ {
+		gl.PolygonOffset(0.5, 1.0)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, s.shadowLightsMap[x].fbo)
+		gl.Clear(gl.DEPTH_BUFFER_BIT)
+		gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLightsMap[x].matrix[0])
+		renderScene()
+	}
+
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
 	gl.Disable(gl.DEPTH_CLAMP)
 	gl.Disable(gl.POLYGON_OFFSET_FILL)
@@ -229,4 +259,7 @@ func (s *Depth) allocate(width, height int32) {
 	s.roomMap.Update(s.sWidth, s.sHeight)
 	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (Flashlight).
 	s.flashMap.Update(s.sWidth, s.sHeight)
+	for _, dm := range s.shadowLightsMap {
+		dm.Update(s.sWidth, s.sHeight)
+	}
 }

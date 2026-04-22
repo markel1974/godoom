@@ -189,7 +189,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace [16]float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace [16]float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
 	if intensity <= 0 {
 		return
 	}
@@ -210,8 +210,8 @@ func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), intensity)
 	gl.Uniform1f(s.GetUniform(FlashLocFalloff), falloff)
 
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), s.metrics.GetFlashConeStart())
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), s.metrics.GetFlashConeEnd())
+	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), coneStart)
+	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), coneEnd)
 	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
 	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))

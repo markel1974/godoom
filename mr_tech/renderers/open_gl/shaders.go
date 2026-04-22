@@ -175,17 +175,17 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		dynaLightMatrices = append(dynaLightMatrices, lightMatrix)
 	}
 
-	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
+	var projMatrix, viewMatrix, invViewMatrix = [16]float32{}, [16]float32{}, [16]float32{}
 	if full3d {
-		proj, view, invView = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
+		projMatrix, viewMatrix, invViewMatrix = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
 	} else {
-		proj, view, invView = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
+		projMatrix, viewMatrix, invViewMatrix = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
 	}
 
 	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, dynaLightMatrices)
-	w.geometry.UpdateUniforms(view, proj)
-	w.ssao.UpdateUniforms(view, proj)
-	w.sky.UpdateUniforms(view, proj)
+	w.geometry.UpdateUniforms(viewMatrix, projMatrix)
+	w.ssao.UpdateUniforms(viewMatrix, projMatrix)
+	w.sky.UpdateUniforms(viewMatrix, projMatrix)
 
 	// MAIN PREPARE (VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen, fbW, fbH)
@@ -204,33 +204,28 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// LIGHTS
-	w.lights.Render(dc.Render, roomTex, view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dc.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.shadowLight.Render(dc.Render, flashTex, view, proj, invView, flashSpaceMatrix, 0, flashX, flashY, 0.0, flashDirX, flashDirY, -1.0, w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), float32(fbW), float32(fbH))
+	fConeStart := w.metrics.GetFlashConeStart()
+	fConeEnd := w.metrics.GetFlashConeEnd()
+	w.shadowLight.Render(
+		dc.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
+		0, flashX, flashY, 0.0,
+		flashDirX, flashDirY, -1.0,
+		w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), fConeStart, fConeEnd, float32(fbW), float32(fbH))
 
 	for lx := int32(0); lx < shadowLightsNum; lx++ {
 		light := shadowLights[lx]
-		lTex, _, lMat := w.depth.GetShadowLightTextures(uint32(lx))
-
+		lTex, _, lMatrix := w.depth.GetShadowLightTextures(uint32(lx))
 		factor := light.Intensity
 		falloff := light.Falloff
-
-		// USIAMO DIRETTAMENTE I DATI GL-WORLD SPACE
-		// Non toccarli! Sono già pronti per essere usati con lMat e invView
 		wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
-		wDirX, wDirY, wDirZ := light.DirY, light.DirX, light.DirZ //float32(0.0), float32(-1.0), float32(0.0) //
-
-		// Ritorna alla funzione Render passandogli i dati mondiali
-		// Lo shader userà questi contro la posizione ricostruita tramite invView
+		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		w.shadowLight.Render(
-			dc.Render, lTex,
-			view, proj, invView,
-			lMat, // Trasforma World -> Light Space
-			1,
-			wPosX, wPosY, wPosZ, // Posizione FISSA nel mondo
-			wDirX, wDirY, wDirZ, // Direzione FISSA nel mondo
-			factor, falloff,
-			float32(fbW), float32(fbH),
+			dc.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
+			1, wPosX, wPosY, wPosZ,
+			wDirX, wDirY, wDirZ,
+			factor, falloff, 0.7, 0.9, float32(fbW), float32(fbH),
 		)
 	}
 

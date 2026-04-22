@@ -251,7 +251,7 @@ func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOff
 		-dot(uX, uY, uZ, camX, camY, camZ),
 		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
-	// Local Flashlight Space (LookAt calculation)
+	// Local ShadowLight Space (LookAt calculation)
 	pitchShear := float32(-vi.GetPitch())
 	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
@@ -294,11 +294,11 @@ func (m *MapMetrics) CreateSpaces(vi *model.ViewMatrix, flashOffsetX, flashOffse
 		-dot(uX, uY, uZ, camX, camY, camZ),
 		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
-	// Local Flashlight Space (LookAt calculation)
+	// Local ShadowLight Space (LookAt calculation)
 	//pitchShear := float32(-vi.GetPitch())
 	//flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 
-	// Local Flashlight Space (LookAt calculation)
+	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 
 	// FIX: La torcia punta sempre perfettamente dritto lungo -Z in View Space!

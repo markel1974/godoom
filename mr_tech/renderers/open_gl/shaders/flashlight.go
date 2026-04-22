@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
-// FlashlightLoc represents a uniform location identifier used in the Flashlight's shader program.
+// FlashlightLoc represents a uniform location identifier used in the ShadowLight's shader program.
 type FlashlightLoc int
 
 // FlashLocProjection specifies the location of the projection matrix for the flashlight.
@@ -57,8 +57,8 @@ const (
 	FlashLocLast
 )
 
-// Flashlight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
-type Flashlight struct {
+// ShadowLight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
+type ShadowLight struct {
 	prg        uint32
 	table      [FlashLocLast]int32
 	factor     float32
@@ -68,9 +68,9 @@ type Flashlight struct {
 	cal        *model.Calibration
 }
 
-// NewShaderFlashlight creates and returns a new instance of Flashlight with default values and shadows disabled.
-func NewShaderFlashlight(metrics *MapMetrics, cal *model.Calibration) *Flashlight {
-	f := &Flashlight{
+// NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
+func NewShaderShadowLight(metrics *MapMetrics, cal *model.Calibration) *ShadowLight {
+	f := &ShadowLight{
 		metrics:    metrics,
 		cal:        cal,
 		factor:     float32(cal.FlashFactor),
@@ -82,24 +82,24 @@ func NewShaderFlashlight(metrics *MapMetrics, cal *model.Calibration) *Flashligh
 }
 
 // GetFactor returns the current intensity factor of the flashlight.
-func (s *Flashlight) GetFactor() float32 {
+func (s *ShadowLight) GetFactor() float32 {
 	return s.factor
 }
 
 // IncreaseFlashFactor increments the flashlight's intensity factor by increasing the `factor` field by 1.
-func (s *Flashlight) IncreaseFlashFactor() {
+func (s *ShadowLight) IncreaseFlashFactor() {
 	s.factor++
 }
 
 // DecreaseFlashFactor reduces the flashlight's intensity factor by 1, ensuring it does not drop below 0.
-func (s *Flashlight) DecreaseFlashFactor() {
+func (s *ShadowLight) DecreaseFlashFactor() {
 	if s.factor > 0 {
 		s.factor--
 	}
 }
 
 // EnableShadows toggles shadow rendering for the flashlight and updates related shadow parameters.
-func (s *Flashlight) EnableShadows(e bool) {
+func (s *ShadowLight) EnableShadows(e bool) {
 	s.shadows = e
 	if s.shadows {
 		s.shadowsInt = 1
@@ -109,12 +109,12 @@ func (s *Flashlight) EnableShadows(e bool) {
 }
 
 // HasShadow checks if the flashlight has shadows enabled and returns true if shadows are active.
-func (s *Flashlight) HasShadow() bool {
+func (s *ShadowLight) HasShadow() bool {
 	return s.shadows
 }
 
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
-func (s *Flashlight) SetupSamplers() error {
+func (s *ShadowLight) SetupSamplers() error {
 	gl.UseProgram(s.prg)
 	gl.Uniform1i(s.GetUniform(FlashLocTexture), 0)
 	gl.Uniform1i(s.GetUniform(FlashLocNormalMap), 1)
@@ -123,17 +123,17 @@ func (s *Flashlight) SetupSamplers() error {
 }
 
 // Init initializes the Depth instance by setting up necessary resources and ensuring its readiness for rendering.
-func (s *Flashlight) Init() error {
+func (s *ShadowLight) Init() error {
 	return nil
 }
 
 // GetUniform retrieves the uniform location associated with the given FlashlightLoc ID from the internal table.
-func (s *Flashlight) GetUniform(id FlashlightLoc) int32 {
+func (s *ShadowLight) GetUniform(id FlashlightLoc) int32 {
 	return s.table[id]
 }
 
 // Compile builds and links the shader program for the flashlight, resolving uniforms and handling shader errors.
-func (s *Flashlight) Compile(a IAssets) error {
+func (s *ShadowLight) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragId = "flashlight.frag"
 
@@ -171,7 +171,6 @@ func (s *Flashlight) Compile(a IAssets) error {
 	s.table[FlashLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
 	s.table[FlashLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
 	s.table[FlashLocFalloff] = gl.GetUniformLocation(s.prg, gl.Str("u_flashFalloff\x00"))
-	//s.table[FlashLocFlashBase] = gl.GetUniformLocation(s.prg, gl.Str("u_flashBase\x00"))
 	s.table[FlashLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
 	s.table[FlashLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
 	s.table[FlashLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
@@ -188,14 +187,13 @@ func (s *Flashlight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY, fSwaySensitivity float32, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY, fSwaySensitivity float32, screenW, screenH float32) {
 	if s.factor <= 0 {
 		return
 	}
 	// Calcola la direzione perturbata nello spazio di vista
 	targetDirX := float32(s.cal.FlashOffsetX) - (fSwayX * fSwaySensitivity)
 	targetDirY := float32(s.cal.FlashOffsetY) + (fSwayY * fSwaySensitivity)
-	//invRadiusSq := 1.0 / (s.cal.FlashFalloff * s.cal.FlashFalloff)
 
 	gl.UseProgram(s.prg)
 
@@ -204,13 +202,11 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, &invView[0])
 	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &flashSpace[0])
 	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
-	//gl.Uniform3f(s.GetUniform(FlashLocFlashDir), dirX, dirY, -float32(math.Abs(float64(dirZ))))
 	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), targetDirX, targetDirY, -1.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), s.factor)
 	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), fSwayX, fSwayY, 0.0)
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), s.metrics.GetFlashConeStart())
 	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), s.metrics.GetFlashConeEnd())
-	//gl.Uniform1f(s.GetUniform(FlashLocFlashBase), fBase)
 	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
 	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))
@@ -220,7 +216,6 @@ func (s *Flashlight) Render(renderGeometry func(), flashShadowTex uint32, view, 
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
 	gl.Uniform1f(s.GetUniform(FlashLocFalloff), float32(s.cal.FlashFalloff))
-	//gl.Uniform1f(s.GetUniform(FlashLocFalloff), float32(invRadiusSq))
 
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)

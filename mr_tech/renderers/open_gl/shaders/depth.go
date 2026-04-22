@@ -257,7 +257,7 @@ func (s *Depth) allocate(width, height int32) {
 	s.sHeight = height
 	// roomShadowFbo e roomShadowTex gestiscono le ombre delle luci ambientali.
 	s.roomMap.Update(s.sWidth, s.sHeight)
-	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (Flashlight).
+	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (ShadowLight).
 	s.flashMap.Update(s.sWidth, s.sHeight)
 	for _, dm := range s.shadowLightsMap {
 		dm.Update(s.sWidth, s.sHeight)

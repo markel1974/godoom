@@ -31,6 +31,7 @@ uniform float u_specBoostWall;
 uniform float u_specBoostFloor;
 uniform float u_beamRatioFactor;
 uniform int u_volumetricSteps;
+uniform int u_isAbsolute;
 
 const float PI = 3.14159265359;
 
@@ -115,9 +116,17 @@ void main()
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos);
 
-    vec3 flashPosView = u_flashOffset;
+    vec3 flashPosView;
+    vec3 flashSpotDir;
+
+    if (u_isAbsolute == 1) {
+        flashPosView = (u_view * vec4(u_flashOffset, 1.0)).xyz;
+        flashSpotDir = normalize(u_flashDir);
+    } else {
+        flashPosView = u_flashOffset;
+        flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
+    }
     vec3 L_flash = normalize(flashPosView - ViewPos);
-    vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
     // Calcolo unificato della proiezione
@@ -129,7 +138,8 @@ void main()
         vec3 geoNormal = normalize(cross(dFdx(ViewPos), dFdy(ViewPos)));
         if (geoNormal.z < 0.0) geoNormal = -geoNormal;
         float cosTheta = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
-        float bias = clamp(0.0005 * tan(acos(cosTheta)), 0.00002, 0.0003);
+        //float bias = clamp(0.0005 * tan(acos(cosTheta)), 0.00002, 0.0003);
+        float bias = max(0.005 * (1.0 - cosTheta), 0.002);
 
         if(projMain.z > 1.0 || projMain.x < 0.0 || projMain.x > 1.0 || projMain.y < 0.0 || projMain.y > 1.0) {
             shadowFlash = 0.0;

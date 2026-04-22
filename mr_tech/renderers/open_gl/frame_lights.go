@@ -102,27 +102,28 @@ func (f *FrameLights) Create(light *model.Light) {
 	case config.LightKindAmbient:
 		lightType = 0
 	case config.LightKindSpot:
-		const baseCutoff = 30.0
-		const baseOuterCutOff = 40.0
+		//const baseCutoff = 30.0
+		//const baseOuterCutOff = 40.0
 		lightType = 1
 		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
+		spotDirX, SpotDirY, spotDirZ := float32(0.0), float32(-1.0), float32(0.0)
+		r, g, b = float32(1.0), float32(1.0), float32(1.0)
+		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
 		// FIX CUTOFF: Usiamo i valori reali del faretto
 		// Convertiamo in radianti e poi in Coseno (come richiesto dallo shader)
-		const toRad = math.Pi / 180.0
-		cutOff2 := float32(math.Cos(baseCutoff * toRad))
-		outerCutOff2 := float32(math.Cos(baseOuterCutOff * toRad))
+		//const toRad = math.Pi / 180.0
+		//cutOff2 := float32(math.Cos(baseCutoff * toRad))
+		//outerCutOff2 := float32(math.Cos(baseOuterCutOff * toRad))
 		added := f.addShadowLight(
 			float32(pos.X), float32(pos.Z), float32(-pos.Y),
 			lightType, r, g, b, intensity,
-			dirGlX, dirGlY, dirGlZ, falloff,
-			cutOff2, outerCutOff2,
+			spotDirX, SpotDirY, spotDirZ, falloff,
+			cutOff, outerCutOff,
 		)
 		if added {
 			return
 		}
-		r, g, b = float32(1.0), float32(1.0), float32(1.0)
-		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
 
 	case config.LightKindNone:
 		return
@@ -177,6 +178,7 @@ func (f *FrameLights) addShadowLight(
 	cutOff, outerCutOff float32,
 ) bool {
 	return false
+	//return false
 	if f.shadowLightsIndex >= int32(len(f.shadowLights)) {
 		//fmt.Println("Shadow light limit reached")
 		return false

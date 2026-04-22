@@ -136,7 +136,6 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		} else {
 			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
 		}
-
 	}
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
@@ -164,19 +163,17 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 	var dynaLightMatrices [][16]float32
 
-	/*
-		for lx := int32(0); lx < shadowLightsNum; lx++ {
-			light := shadowLights[lx]
-			pX, pY, pZ := light.X, light.Y, light.Z
-			dX, dY, dZ := light.DirX, light.DirY, light.DirZ
-			// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
-			// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
-			fovDeg := float32(90.0)
-			near := float32(1.0)
-			matrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, light.Falloff)
-			dynaLightMatrices = append(dynaLightMatrices, matrix)
-		}
-	*/
+	for lx := int32(0); lx < shadowLightsNum; lx++ {
+		light := shadowLights[lx]
+		pX, pY, pZ := light.X, light.Y, light.Z
+		dX, dY, dZ := light.DirX, light.DirY, light.DirZ
+		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
+		// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
+		fovDeg := float32(90.0)
+		near := float32(1.0)
+		lightMatrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, light.Falloff)
+		dynaLightMatrices = append(dynaLightMatrices, lightMatrix)
+	}
 
 	var proj, view, invView = [16]float32{}, [16]float32{}, [16]float32{}
 	if full3d {
@@ -209,32 +206,33 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, roomTex, view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.shadowLight.Render(dc.Render, flashTex, view, proj, invView, flashSpaceMatrix, flashX, flashY, 0.0, flashDirX, flashDirY, -1.0, w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), float32(fbW), float32(fbH))
+	w.shadowLight.Render(dc.Render, flashTex, view, proj, invView, flashSpaceMatrix, 0, flashX, flashY, 0.0, flashDirX, flashDirY, -1.0, w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), float32(fbW), float32(fbH))
 
-	/*
-		for lx := int32(0); lx < shadowLightsNum; lx++ {
-			light := shadowLights[lx]
-			lTex, _, lMat := w.depth.GetShadowLightTextures(uint32(lx))
-			factor := light.Intensity
-			factor = 2
-			falloff := light.Falloff
-			// Coordinate World-GL (già salvate correttamente da FrameLights.Create)
-			wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
-			wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
-			// TRASFORMAZIONE IN VIEW-SPACE:
-			// Lo shader ShadowLight/Flashlight lavora in View-Space (Normali e Posizioni)
-			vPosX := view[0]*wPosX + view[4]*wPosY + view[8]*wPosZ + view[12]
-			vPosY := view[1]*wPosX + view[5]*wPosY + view[9]*wPosZ + view[13]
-			vPosZ := view[2]*wPosX + view[6]*wPosY + view[10]*wPosZ + view[14]
-			vDirX := view[0]*wDirX + view[4]*wDirY + view[8]*wDirZ
-			vDirY := view[1]*wDirX + view[5]*wDirY + view[9]*wDirZ
-			vDirZ := view[2]*wDirX + view[6]*wDirY + view[10]*wDirZ
-			// ESECUZIONE PASSAGGIO ADDITIVO
-			// lMat è la matrice specifica calcolata in precedenza per la ShadowMap di questa luce
-			w.shadowLight.Render(dc.Render, lTex, view, proj, invView, lMat, vPosX, vPosY, vPosZ, vDirX, vDirY, vDirZ, factor, falloff, float32(fbW), float32(fbH))
-		}
+	for lx := int32(0); lx < shadowLightsNum; lx++ {
+		light := shadowLights[lx]
+		lTex, _, lMat := w.depth.GetShadowLightTextures(uint32(lx))
 
-	*/
+		factor := light.Intensity
+		falloff := light.Falloff
+
+		// USIAMO DIRETTAMENTE I DATI GL-WORLD SPACE
+		// Non toccarli! Sono già pronti per essere usati con lMat e invView
+		wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
+		wDirX, wDirY, wDirZ := light.DirY, light.DirX, light.DirZ //float32(0.0), float32(-1.0), float32(0.0) //
+
+		// Ritorna alla funzione Render passandogli i dati mondiali
+		// Lo shader userà questi contro la posizione ricostruita tramite invView
+		w.shadowLight.Render(
+			dc.Render, lTex,
+			view, proj, invView,
+			lMat, // Trasforma World -> Light Space
+			1,
+			wPosX, wPosY, wPosZ, // Posizione FISSA nel mondo
+			wDirX, wDirY, wDirZ, // Direzione FISSA nel mondo
+			factor, falloff,
+			float32(fbW), float32(fbH),
+		)
+	}
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()

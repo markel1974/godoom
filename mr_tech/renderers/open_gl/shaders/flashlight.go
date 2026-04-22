@@ -54,6 +54,7 @@ const (
 	FlashLocSpecBoostFloor
 	FlashLocBeamRatioFactor
 	FlashLocVolumetricSteps
+	FlashLocIsAbsolute
 	FlashLocLast
 )
 
@@ -178,6 +179,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 	s.table[FlashLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
 	s.table[FlashLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
 	s.table[FlashLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
+	s.table[FlashLocIsAbsolute] = gl.GetUniformLocation(s.prg, gl.Str("u_isAbsolute\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("unused uniform location in flashlight: %d\n", idx)
@@ -187,7 +189,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace [16]float32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace [16]float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, screenW, screenH float32) {
 	if intensity <= 0 {
 		return
 	}
@@ -218,7 +220,7 @@ func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj
 	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
-
+	gl.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)
 		gl.BindTexture(gl.TEXTURE_2D, shadowTex)

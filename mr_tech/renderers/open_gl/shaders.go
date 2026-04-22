@@ -40,7 +40,7 @@ type Shaders struct {
 	blur          *shaders.Blur
 	depth         *shaders.Depth
 	lights        *shaders.Lights
-	flashlight    *shaders.ShadowLight
+	shadowLight   *shaders.ShadowLight
 	post          *shaders.Post
 	bloom         *shaders.Bloom
 	container     []IShader
@@ -64,7 +64,7 @@ func NewShaders() *Shaders {
 		blur:          nil,
 		depth:         nil,
 		lights:        nil,
-		flashlight:    nil,
+		shadowLight:   nil,
 		post:          nil,
 		bloom:         nil,
 		enableShadows: false,
@@ -90,11 +90,11 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth(w.metrics, 8)
 	w.lights = shaders.NewLights(lStride, w.cal)
-	w.flashlight = shaders.NewShaderShadowLight(w.metrics, w.cal)
+	w.shadowLight = shaders.NewShaderShadowLight(w.metrics, w.cal)
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()
 	w.enableShadows = false
-	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom)
+	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom)
 	w.SetShadowEnabled(true)
 
 	for _, s := range w.container {
@@ -118,7 +118,7 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 // SetShadowEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
 func (w *Shaders) SetShadowEnabled(v bool) {
 	w.enableShadows = v
-	w.flashlight.EnableShadows(w.enableShadows)
+	w.shadowLight.EnableShadows(w.enableShadows)
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)
 }
@@ -150,7 +150,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 	//dirX, dirY, dirZ := vi.GetForwardVector()
 	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
-	if w.flashlight.HasShadow() {
+	if w.shadowLight.HasShadow() {
 		swayX, swayY, swaySensitivity := vi.GetSway()
 		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
@@ -186,7 +186,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, w.depth.GetRoomShadowTextures(), view, proj, invView, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	w.flashlight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, flashSensitivity, float32(fbW), float32(fbH))
+	w.shadowLight.Render(dc.Render, w.depth.GetFlashShadowTextures(), view, proj, invView, flashSpaceMatrix, flashX, flashY, flashSensitivity, float32(fbW), float32(fbH))
+
+	/*
+		for x := uint32(0); x < w.depth.GetShadowLightCount(); x++ {
+			// Recupera la texture e la matrice specifica per questo faretto
+			tex, _, mat := w.depth.GetShadowLightTextures(x)
+			// Recupera i dati del faretto (direzione, posizione, intensità) dal tuo manager
+			// dX, dY, dZ, posX, posY, posZ, factor := manager.GetShadowLightData(x)
+			// Richiama il render usando lo shader della torcia!
+			w.shadowLight.Render(dc.Render, tex, view, proj, invView, mat, posX, posY, posZ, dX, dY, dZ, factor, float32(fbW), float32(fbH))
+		}
+	*/
+
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()
 	// SKYBOX
@@ -199,14 +211,14 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.post.Render(w.bloom.GetBloomTexture(), fbW, fbH)
 }
 
-// IncreaseFlashFactor increases the flashlight's intensity factor, enhancing the brightness of the flashlight effect.
+// IncreaseFlashFactor increases the shadowLight's intensity factor, enhancing the brightness of the shadowLight effect.
 func (w *Shaders) IncreaseFlashFactor() {
-	w.flashlight.IncreaseFlashFactor()
+	w.shadowLight.IncreaseFlashFactor()
 }
 
-// DecreaseFlashFactor reduces the flashlight's intensity factor, ensuring the value does not fall below the minimum limit.
+// DecreaseFlashFactor reduces the shadowLight's intensity factor, ensuring the value does not fall below the minimum limit.
 func (w *Shaders) DecreaseFlashFactor() {
-	w.flashlight.DecreaseFlashFactor()
+	w.shadowLight.DecreaseFlashFactor()
 }
 
 // ToggleShadows toggles the state of shadow rendering in the shader system.

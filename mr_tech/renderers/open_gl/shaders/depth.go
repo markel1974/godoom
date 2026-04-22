@@ -135,17 +135,22 @@ func (s *Depth) GetRoomShadowTextures() uint32 {
 	return s.roomMap.tex
 }
 
+// GetShadowLightCount returns the count of dynamic shadow lights currently managed by the Depth instance.
+func (s *Depth) GetShadowLightCount() uint32 {
+	return s.shadowLightCount
+}
+
 // GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight's shadow map.
 func (s *Depth) GetFlashShadowTextures() uint32 {
 	return s.flashMap.tex
 }
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
-func (s *Depth) GetShadowLightTextures(idx uint32) uint32 {
+func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, [16]float32) {
 	if idx >= s.shadowLightCount {
-		return 0
+		return 0, 0, [16]float32{}
 	}
-	return s.shadowLightsMap[idx].tex
+	return s.shadowLightsMap[idx].tex, s.shadowLightsMap[idx].fbo, s.shadowLightsMap[idx].matrix
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.

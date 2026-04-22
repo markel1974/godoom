@@ -187,7 +187,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *ShadowLight) Render(renderGeometry func(), flashShadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY, fSwaySensitivity float32, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, flashSpace [16]float32, fSwayX, fSwayY, fSwaySensitivity float32, screenW, screenH float32) {
 	if s.factor <= 0 {
 		return
 	}
@@ -219,7 +219,7 @@ func (s *ShadowLight) Render(renderGeometry func(), flashShadowTex uint32, view,
 
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE4)
-		gl.BindTexture(gl.TEXTURE_2D, flashShadowTex)
+		gl.BindTexture(gl.TEXTURE_2D, shadowTex)
 	}
 
 	renderGeometry()

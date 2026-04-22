@@ -92,7 +92,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 			ceilY = bld.calculateOpenDoorCeil(level, uint16(secIdx), lSector, edges)
 		}
 		sectorId := strconv.Itoa(secIdx)
-		cSector := bld.buildSector(sectorId, light, floorPic, floorY, ceilPic, ceilY, texHandler)
+		cSector := bld.buildSector(sectorId, light, floorPic, floorY, ceilPic, ceilY, texHandler, edges)
+
 		for _, edge := range edges {
 			cSeg := bld.buildSegment(sectorId, edge, texHandler)
 			cSector.Segments = append(cSector.Segments, cSeg)
@@ -116,10 +117,12 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 }
 
 // buildConfigSector constructs and returns a Sector for a given level sector, including floor, ceiling, and lighting data.
-func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures) *config.Sector {
+func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures, edges []Edge) *config.Sector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
-	light, kind, falloff := bld.convertLight(lightLevel)
+	//light, kind, falloff := bld.convertLight(lightLevel)
+	light, kind, falloff := bld.heuristicSpotlight(lightLevel, ceilPic, floorY, ceilY, edges)
+
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
 	miSector.FloorY = floorY / ScaleCeilFloorLineDef
 	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
@@ -296,4 +299,58 @@ func (bld *Builder) convertLight(lightLevel int16) (float64, config.LightKind, f
 	const falloff = 10.0
 	kind := config.LightKindAmbient
 	return float64(lightLevel) * 0.015, kind, falloff
+}
+
+func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY, ceilY float64, edges []Edge) (float64, config.LightKind, float64) {
+	intensity := float64(lightLevel) * 0.015
+	kind := config.LightKindAmbient
+	//falloff := 10.0
+	falloff := ((ceilY - floorY) / ScaleCeilFloorLineDef) * 0.4 // Falloff proporzionale all'altezza
+	// 1. Calcolo Area Approssimativa (Bounding Box)
+	var minX, maxX, minY, maxY = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
+	for _, e := range edges {
+		for _, p := range []geometry.XY{e.P1, e.P2} {
+			if p.X < minX {
+				minX = p.X
+			}
+			if p.X > maxX {
+				maxX = p.X
+			}
+			if p.Y < minY {
+				minY = p.Y
+			}
+			if p.Y > maxY {
+				maxY = p.Y
+			}
+		}
+	}
+	width := maxX - minX
+	height := maxY - minY
+	// 2. CRITERI EURISTICI
+	// A. Il settore è piccolo (tipico di una plafoniera o faretto nel WAD)
+	isSmall := width < 128 && height < 128
+	// B. La texture del soffitto suggerisce una lampada (pattern matching tipico di Doom)
+	isLightTexture := false
+	lightTextures := []string{"LITE", "TLITE", "CEIL1_1", "CEIL1_2", "GLOW", "LAMP"}
+	for _, t := range lightTextures {
+		if stringContains(ceilPic, t) {
+			isLightTexture = true
+			break
+		}
+	}
+	// C. Intensità alta
+	isBright := lightLevel > 192
+	// 3. DECISIONE
+	if (isSmall && isLightTexture) || (isSmall && isBright) {
+		kind = config.LightKindSpot
+		intensity *= 2.0 // Potenziamo la luce spot rispetto all'ambientale
+		if falloff < 10.0 {
+			falloff = 10.0
+		} // Garantiamo una gittata minima
+	}
+	return intensity, kind, falloff
+}
+
+func stringContains(s, substr string) bool {
+	return len(s) >= len(substr) && s[:len(substr)] == substr // Semplificato per l'esempio
 }

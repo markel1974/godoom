@@ -1,5 +1,7 @@
 package textures
 
+import "fmt"
+
 // _tickInterval defines the number of global ticks between frame updates in animations.
 var _tickInterval = uint64(32)
 
@@ -53,6 +55,12 @@ func NewAnimation(frames []*Texture, kind int, gScale float64, scaleW float64, s
 		scaleH:      scaleH,
 	}
 	for _, v := range frames {
+		if v == nil {
+			a.totalFrames = 0
+			a.frames = nil
+			fmt.Println("nil frame")
+			break
+		}
 		v.SetScaleFactor(gScale, scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {

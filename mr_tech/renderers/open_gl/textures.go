@@ -118,6 +118,9 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.normalArray)
 	gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
 
+	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.emissiveArray)
+	gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
+
 	return nil
 }
 

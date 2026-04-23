@@ -154,7 +154,7 @@ void main()
 
         // BIAS corretto per sconfiggere l'auto-ombreggiatura sul pavimento
         float cosTheta = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
-        float bias = max(0.005 * (1.0 - cosTheta), 0.002);
+        float bias = max(0.0005 * (1.0 - cosTheta), 0.00005);
 
         if(projMain.z > 1.0 || projMain.x < 0.0 || projMain.x > 1.0 || projMain.y < 0.0 || projMain.y > 1.0) {
             shadowFlash = 0.0;
@@ -167,26 +167,17 @@ void main()
     }
 
     float flashIntensity;
-    float diffFlash;
-    float specularFlash;
-
+    float diffFlash = max(dot(finalNormal, L_flash), 0.0);
+    float specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);;
+    float distToLight = length(flashPosView - ViewPos);
+    float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
     if (u_isAbsolute == 1) {
-        diffFlash = max(dot(finalNormal, L_flash), 0.0);
-        specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-        // Calcolo della distanza reale dal faretto al frammento sul muro/pavimento
-        float distToLight = length(flashPosView - ViewPos);
-        // Attenuazione morbida: inizia a svanire all'80% del falloff e si spegne al 100%
-        float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
-        // La nuova intensità usa la distanza, evitando moltiplicazioni esplosive
+        // Ripristiniamo il fattore energetico u_flashFalloff se necessario alla calibrazione
         flashIntensity = flashCone * u_flashIntensityFactor * distanceFade;
-        //flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
     } else {
-        if (projMain.z > 0.9) {
-            shadowFlash = mix(shadowFlash, 1.0, smoothstep(0.9, 1.0, projMain.z));
-        }
-        diffFlash = max(dot(finalNormal, L_flash), 0.0);
-        specularFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
-        flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor);
+        float test = u_flashIntensityFactor;
+        //test = 0.1;
+        flashIntensity = flashCone * (u_flashFalloff * test) * distanceFade;
     }
 
     // --- SETUP VOLUMETRICO ---
@@ -209,7 +200,8 @@ void main()
 
             float sFlash = 1.0;
             if(proj.z <= 1.0 && proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0) {
-                sFlash = texture(u_flashShadowMap, vec3(proj.xy, proj.z - 0.005));
+                // Bias ridotto per allinearsi a quello di superficie
+                sFlash = texture(u_flashShadowMap, vec3(proj.xy, proj.z - 0.0001));
             }
 
             float cosThetaHG = dot(V, -lDirFlash);

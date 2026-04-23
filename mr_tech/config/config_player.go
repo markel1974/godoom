@@ -47,10 +47,10 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 		Bobbing: &Bobbing{},
 	}
 	p.Speed = 90
-	p.Bobbing.SwayScale = 2.0
-	p.Bobbing.SwaySensitivity = 0.01
 	p.Bobbing.SwayOffsetX = 0.5
 	p.Bobbing.SwayOffsetY = -0.1
+	p.Bobbing.SwayScale = 2.0
+	p.Bobbing.SwaySensitivity = 0.01
 	p.Bobbing.SwayMultiplierX = 1.1
 	p.Bobbing.SwayMultiplierY = 1.2
 	p.Bobbing.MaxAmplitudeX = 0.05

@@ -46,7 +46,7 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	}
 	c.ScaleFactor = 0.4
 	c.FovVerticalDegrees = 90
-	c.FlashFovDeg = 85.0
+
 	c.ZNearFlash = 0.1
 	c.ZFarFlash = 2048.0
 
@@ -56,8 +56,10 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	c.SpecBoostFloor = 0.1
 	c.BeamRatio = 0.05
 	c.VolSteps = 8
-	c.FlashFactor = 80
-	c.FlashFalloff = 10
+	c.FlashFovDeg = 80.0
+
+	c.FlashFalloff = 200
+	c.FlashFactor = 0.5
 	c.FlashOffsetX = 0.2
 	c.FlashOffsetY = 0.1
 	return c

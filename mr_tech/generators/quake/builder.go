@@ -82,7 +82,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	//cal.ZFarRoom = 16000
 	cal.ZFarFlash = 8192
 	cal.ScaleFactor = 1.0
-	cal.FlashFactor = 250
+	cal.FlashFactor = 0.05
 	cal.FlashFalloff = 2000
 
 	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)

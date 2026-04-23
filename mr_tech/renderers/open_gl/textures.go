@@ -7,8 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-//TODO TEXTURE BUCKETS
-
 // Bucket represents a container for texture arrays and related metadata used in texture management systems.
 type Bucket struct {
 	Size          int

@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 const defaultFalloff = 10.0
@@ -26,6 +27,7 @@ type Light struct {
 	dirZ        float64
 	cutOff      float64
 	outerCutOff float64
+	style       []float64
 }
 
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
@@ -69,6 +71,10 @@ func (cl *Light) Setup(volume *Volume, c *config.Light, coords geometry.XYZ) {
 		cl.falloff = defaultFalloff
 	}
 	cl.kind = c.Kind
+	cl.style = c.Style
+	if len(cl.style) == 0 {
+		cl.style = []float64{1.0}
+	}
 	cl.pos = pos
 	cl.Rebuild()
 }
@@ -100,6 +106,14 @@ func (cl *Light) GetVolume() *Volume {
 // GetIntensity returns the current intensity of the light as a float64 value normalized between 0.0 and 1.0.
 func (cl *Light) GetIntensity() float64 {
 	return cl.intensity
+}
+
+// GetIntensityStyled calculates the styled intensity of the light at
+func (cl *Light) GetIntensityStyled(tick uint64) float64 {
+	const groupSize = 6.0
+	frameFloat := textures.TickGrouped(tick, int(groupSize))
+	idx := int(frameFloat) % len(cl.style)
+	return cl.intensity * cl.style[idx]
 }
 
 // GetFalloff returns the attenuation distance (radius of influence) of the light.

@@ -53,8 +53,7 @@ func (v *VertexMD2) GetVolume() *Volume {
 // GetVertices retrieves the vertices corresponding to the current animation frame, determined by the specified tick value.
 func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	const groupSize = 6.0
-	// Calcolo preciso del frame decimale
-	frameFloat := float64(tick) / groupSize
+	frameFloat := textures.TickGrouped(tick, int(groupSize))
 	idxA := int(frameFloat) % len(v.frames)
 	idxB := (idxA + 1) % len(v.frames)
 	// Parte frazionaria per l'interpolazione fluida

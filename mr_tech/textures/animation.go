@@ -1,6 +1,8 @@
 package textures
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // _tickInterval defines the number of global ticks between frame updates in animations.
 var _tickInterval = uint64(32)
@@ -20,6 +22,12 @@ func Tick() {
 
 func CurrentTick() uint64 {
 	return _globalTick
+}
+
+// TickGrouped calculates the tick grouped by the specified group size and returns the result as an integer.
+func TickGrouped(tick uint64, groupSize int) float64 {
+	frameFloat := float64(tick) / float64(groupSize)
+	return frameFloat
 }
 
 // Animation represents a collection of 2D texture frames used for rendering animations.

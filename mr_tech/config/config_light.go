@@ -38,23 +38,7 @@ type Light struct {
 	DirX      float64      `json:"dirX"`
 	DirY      float64      `json:"dirY"`
 	DirZ      float64      `json:"dirZ"`
-}
-
-// NewConfigLightSector initializes and returns a new LightSector instance with specified intensity, kind, and falloff values.
-func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *Light {
-	return &Light{
-		Id:        utils.NextUUId(),
-		Pos:       geometry.XYZ{},
-		Intensity: intensity,
-		Kind:      kind,
-		Falloff:   falloff,
-		R:         1.0,
-		G:         1.0,
-		B:         1.0,
-		DirX:      0.0,
-		DirY:      0.0,
-		DirZ:      0.0,
-	}
+	Style     []float64    `json:"style"`
 }
 
 // NewConfigLight creates and returns a new Light configured with the specified position, intensity, type, and falloff values.
@@ -68,6 +52,10 @@ func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff
 		R:         1.0,
 		G:         1.0,
 		B:         1.0,
+		DirX:      0.0,
+		DirY:      0.0,
+		DirZ:      0.0,
+		Style:     []float64{1.0},
 	}
 }
 

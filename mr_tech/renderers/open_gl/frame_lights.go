@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 //Omnidirezionali/CubeMaps
@@ -93,7 +94,8 @@ func (f *FrameLights) Create(light *model.Light) {
 	dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
-	intensity := float32(light.GetIntensity())
+	intensity := float32(light.GetIntensityStyled(textures.CurrentTick()))
+
 	falloff := float32(light.GetFalloff())
 	lightType := float32(-1)
 	posX, posY, posZ := light.GetPosXYZ()

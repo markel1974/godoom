@@ -1,5 +1,7 @@
 package config
 
+import "github.com/markel1974/godoom/mr_tech/model/geometry"
+
 // Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type Sector struct {
 	Id       string     `json:"id"`
@@ -18,7 +20,7 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff 
 		Id:    id,
 		Ceil:  nil,
 		Floor: nil,
-		Light: NewConfigLightSector(lightIntensity, kind, falloff),
+		Light: NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
 	}
 }
 

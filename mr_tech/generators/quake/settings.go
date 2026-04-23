@@ -55,7 +55,7 @@ var lightStyle7 = []float64{
 }
 
 // LightStyle8 defines an array of float64 values representing light intensity patterns for a predefined lighting style.
-var LightStyle8 = []float64{
+var lightStyle8 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0,
 	0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.08, 0.17, 0.25, 0.33,
 	0.42, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
@@ -91,7 +91,7 @@ var lightStyles = [][]float64{
 	lightStyle5,
 	lightStyle6,
 	lightStyle7,
-	LightStyle8,
+	lightStyle8,
 	lightStyle9,
 	lightStyle10,
 	lightStyle11,

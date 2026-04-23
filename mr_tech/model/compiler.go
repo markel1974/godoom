@@ -434,12 +434,13 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 	visited := make(map[string]bool)
 	var out []*Light
 
-	addLight := func(z *Volume, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, pos geometry.XYZ) {
+	addLight := func(z *Volume, pos geometry.XYZ, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, style []float64) {
 		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
 		cl := config.NewConfigLight(pos, intensity, kind, falloff)
 		cl.R = r
 		cl.G = g
 		cl.B = b
+		cl.Style = style
 		light := NewLight()
 		light.Setup(z, cl, lightPos)
 		out = append(out, light)
@@ -475,7 +476,7 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 		if len(areaSectors) > 1 {
 			if !computeCenter {
 				for _, s := range areaSectors {
-					addLight(s, s.Light.intensity, s.Light.falloff, s.Light.kind, s.Light.r, s.Light.g, s.Light.b, s.GetCentroid2d())
+					addLight(s, s.GetCentroid2d(), s.Light.intensity, s.Light.falloff, s.Light.kind, s.Light.r, s.Light.g, s.Light.b, s.Light.style)
 				}
 			} else {
 				var sumX, sumY, totalArea float64
@@ -516,12 +517,12 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.Light.pos.X, first.Light.pos.Y, first.Light.pos.Z)
 				}
 				light := cVolume.Light
-				addLight(cVolume, intensity, falloff, light.kind, light.r, light.g, light.b, gc)
+				addLight(cVolume, gc, intensity, falloff, light.kind, light.r, light.g, light.b, light.style)
 			}
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
 			light := first.Light
-			addLight(first, light.intensity, light.falloff, light.kind, light.r, light.g, light.b, first.GetCentroid2d())
+			addLight(first, first.GetCentroid2d(), light.intensity, light.falloff, light.kind, light.r, light.g, light.b, light.style)
 		}
 	}
 	return out

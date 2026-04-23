@@ -115,7 +115,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 				continue
 			}
 		case classname == "light":
-			light := p.createLight(ent, angle, mangleStr, colorStr, pos, false)
+			light := p.createLight(ent, angle, mangleStr, colorStr, pos, lightStyle0, false)
 			if light == nil {
 				continue
 			}
@@ -132,8 +132,14 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			continue
 
 		case strings.HasPrefix(classname, "light"):
+			style := lightStyle0
+			if sIndex, ok := ent.Properties["style"]; ok {
+				if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(lightStyles) {
+					style = lightStyles[index]
+				}
+			}
 			// Gestisce light, light_fluoro, light_fluorospark
-			light := p.createLight(ent, angle, mangleStr, colorStr, pos, true)
+			light := p.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
 			if light == nil {
 				continue
 			}
@@ -248,7 +254,7 @@ func (p *Builder) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.X
 }
 
 // createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
-func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, isSpot bool) *config.Light {
+func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
 	var kind config.LightKind
@@ -309,6 +315,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 	cl.DirX = dirX
 	cl.DirY = dirY
 	cl.DirZ = dirZ
+	cl.Style = style
 
 	return cl
 }

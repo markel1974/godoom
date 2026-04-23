@@ -38,6 +38,7 @@ func NewFlash(c *config.Flash) *Flash {
 	return f
 }
 
+// Rebuild recalculates the field of view and cone boundaries based on the given normalized device coordinate range.
 func (p *Flash) Rebuild(ndcRange float64) {
 	p.fov = 1.0 / math.Tan(p.fovRad/ndcRange)
 	p.coneStart = math.Cos(p.fovDeg/ndcRange*math.Pi/180.0) + 0.01

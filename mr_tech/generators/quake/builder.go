@@ -95,6 +95,13 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 		modelProp := ent.Properties["model"]
 
+		var angle float64
+		if a, ok := ent.Properties["angle"]; ok {
+			angle, _ = strconv.ParseFloat(a, 64)
+		}
+		mangleStr, _ := ent.Properties["mangle"]
+		colorStr, _ := ent.Properties["_color"]
+
 		externalBSPPath := GetExternalBModelFileName(classname)
 
 		switch {
@@ -102,13 +109,13 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			// Ignoriamo: è la mappa base, la geometria è già gestita da worldModel
 			continue
 		case classname == "info_player_start":
-			playerPos, playerAngle, err = p.createPlayerProps(ent, pos)
+			playerPos, playerAngle, err = p.createPlayerProps(angle, pos)
 			if err != nil {
 				fmt.Printf("Warning: %s\n", err.Error())
 				continue
 			}
 		case classname == "light":
-			light := p.createLight(ent, pos, false)
+			light := p.createLight(ent, angle, mangleStr, colorStr, pos, false)
 			if light == nil {
 				continue
 			}
@@ -126,7 +133,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 
 		case strings.HasPrefix(classname, "light"):
 			// Gestisce light, light_fluoro, light_fluorospark
-			light := p.createLight(ent, pos, true)
+			light := p.createLight(ent, angle, mangleStr, colorStr, pos, true)
 			if light == nil {
 				continue
 			}
@@ -235,38 +242,74 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 }
 
 // createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
-func (p *Builder) createPlayerProps(entity *lumps.Entity, pos geometry.XYZ) (geometry.XYZ, float64, error) {
-	angle, ok := entity.Properties["angle"]
-	if !ok {
-		return geometry.XYZ{}, 0, fmt.Errorf("missing angle property")
-	}
-	val, err := strconv.ParseFloat(angle, 64)
-	if err != nil {
-		return geometry.XYZ{}, 0, fmt.Errorf("can' parse angle %s", err.Error())
-	}
-	playerAngle := val * (math.Pi / 180.0)
+func (p *Builder) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
+	playerAngle := angle * (math.Pi / 180.0)
 	return pos, playerAngle, nil
 }
 
 // createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
-func (p *Builder) createLight(entity *lumps.Entity, pos geometry.XYZ, isSpot bool) *config.Light {
+func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
-	val := 0.0
 	var kind config.LightKind
+
+	// 1. INTENSITÀ DI BASE
 	if l, ok := entity.Properties["light"]; ok {
-		val, _ = strconv.ParseFloat(l, 64)
+		intensity, _ = strconv.ParseFloat(l, 64)
+	} else {
+		intensity = 300.0 // Default fallback tipico di Quake
 	}
+
+	// COLORE (Standard Quake 2 / Modern Quake 1)
+	r, g, b := 1.0, 1.0, 1.0 // Default Bianco
+	if len(colorStr) > 0 {
+		if cr, cg, cb, valid := p.parseVector(colorStr); valid {
+			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
+				r, g, b = cr/255.0, cg/255.0, cb/255.0
+			} else {
+				r, g, b = cr, cg, cb
+			}
+		}
+	}
+
+	// DIREZIONE DELLO SPOTLIGHT
+	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: guarda in basso
 	if isSpot {
 		kind = config.LightKindSpot
-		intensity = val * 0.9
+		intensity = intensity * 0.9
 		falloff = intensity * 10
+		if len(mangleStr) > 0 {
+			if yaw, pitch, _, valid := p.parseVector(mangleStr); valid {
+				dirX, dirY, dirZ = p.calcDirection(yaw, pitch)
+			}
+		} else {
+			if angle == -1 {
+				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Guarda in alto
+			} else if angle == -2 {
+				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Guarda in basso
+			} else {
+				dirX, dirY, dirZ = p.calcDirection(angle, 0)
+			}
+		}
 	} else {
 		kind = config.LightKindAmbient
-		intensity = val * 0.05
+		intensity = intensity * 0.05
 		falloff = intensity
 	}
+
+	// 4. CREAZIONE CONFIGURAZIONE
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
+	cl.R = r
+	cl.G = g
+	cl.B = b
+
+	// Applica il fix al sistema di coordinate se il tuo motore trasforma Z in Y
+	// Se nel tuo builder.go trasformi le posizioni con XYZ{X: x, Y: -y, Z: 0},
+	// assicurati che anche la direzione segua la stessa swizzle logic.
+	cl.DirX = dirX
+	cl.DirY = dirY
+	cl.DirZ = dirZ
+
 	return cl
 }
 
@@ -458,4 +501,26 @@ func (p *Builder) triangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.X
 		output = append(output, []geometry.XYZ{pts[0], pts[i+1], pts[i]})
 	}
 	return output
+}
+
+// parseVector estrae 3 float da una stringa stile Quake (es. "1.0 0.5 0.0")
+func (p *Builder) parseVector(s string) (float64, float64, float64, bool) {
+	parts := strings.Fields(s)
+	if len(parts) >= 3 {
+		v1, _ := strconv.ParseFloat(parts[0], 64)
+		v2, _ := strconv.ParseFloat(parts[1], 64)
+		v3, _ := strconv.ParseFloat(parts[2], 64)
+		return v1, v2, v3, true
+	}
+	return 0, 0, 0, false
+}
+
+// calcDirection converte gli angoli Quake (yaw, pitch) in un vettore direzionale normalizzato
+func (p *Builder) calcDirection(yaw, pitch float64) (float64, float64, float64) {
+	yawRad := yaw * math.Pi / 180.0
+	pitchRad := pitch * math.Pi / 180.0
+	dirX := math.Cos(pitchRad) * math.Cos(yawRad)
+	dirY := math.Sin(pitchRad)
+	dirZ := math.Cos(pitchRad) * math.Sin(yawRad)
+	return dirX, dirY, dirZ
 }

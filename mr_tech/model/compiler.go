@@ -184,7 +184,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				if cs.Light != nil {
 					centroid := volume.GetCentroid2d()
 					lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: cs.FloorY + cs.CeilY}
-					volume.Light.Setup(nil, cs.Light.Intensity, cs.Light.Falloff, cs.Light.Kind, lightPos)
+					volume.Light.Setup(nil, cs.Light, lightPos)
 				}
 				volume.Rebuild()
 				for _, face := range volume.GetFaces() {
@@ -422,7 +422,7 @@ func (r *Compiler) compileLights(cLights []*config.Light) []*Light {
 			continue
 		}
 		light := NewLight()
-		light.Setup(nil, cl.Intensity, cl.Falloff, cl.Kind, cl.Pos)
+		light.Setup(nil, cl, cl.Pos)
 		out = append(out, light)
 	}
 	return out
@@ -436,8 +436,9 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 
 	addLight := func(z *Volume, intensity float64, falloff float64, kind config.LightKind, pos geometry.XYZ) {
 		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
+		cl := config.NewConfigLight(pos, intensity, kind, falloff)
 		light := NewLight()
-		light.Setup(z, intensity, falloff, kind, lightPos)
+		light.Setup(z, cl, lightPos)
 		out = append(out, light)
 	}
 

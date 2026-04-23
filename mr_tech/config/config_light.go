@@ -25,24 +25,6 @@ const (
 	LightKindParticle
 )
 
-// LightSector represents a lighting configuration within a sector, including properties like intensity and falloff.
-type LightSector struct {
-	Id        string    `json:"id"`
-	Intensity float64   `json:"Intensity"`
-	Kind      LightKind `json:"kind"`
-	Falloff   float64   `json:"falloff"`
-}
-
-// NewConfigLightSector initializes and returns a new LightSector instance with specified intensity, kind, and falloff values.
-func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *LightSector {
-	return &LightSector{
-		Id:        utils.NextUUId(),
-		Intensity: intensity,
-		Kind:      kind,
-		Falloff:   falloff,
-	}
-}
-
 // Light represents a light source with position, intensity, type, and falloff properties for rendering or simulation.
 type Light struct {
 	Id        string       `json:"id"`
@@ -50,6 +32,29 @@ type Light struct {
 	Intensity float64      `json:"Intensity"`
 	Kind      LightKind    `json:"kind"`
 	Falloff   float64      `json:"falloff"`
+	R         float64      `json:"red"`
+	G         float64      `json:"green"`
+	B         float64      `json:"blue"`
+	DirX      float64      `json:"dirX"`
+	DirY      float64      `json:"dirY"`
+	DirZ      float64      `json:"dirZ"`
+}
+
+// NewConfigLightSector initializes and returns a new LightSector instance with specified intensity, kind, and falloff values.
+func NewConfigLightSector(intensity float64, kind LightKind, falloff float64) *Light {
+	return &Light{
+		Id:        utils.NextUUId(),
+		Pos:       geometry.XYZ{},
+		Intensity: intensity,
+		Kind:      kind,
+		Falloff:   falloff,
+		R:         1.0,
+		G:         1.0,
+		B:         1.0,
+		DirX:      0.0,
+		DirY:      0.0,
+		DirZ:      0.0,
+	}
 }
 
 // NewConfigLight creates and returns a new Light configured with the specified position, intensity, type, and falloff values.
@@ -60,6 +65,9 @@ func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff
 		Intensity: intensity,
 		Kind:      kind,
 		Falloff:   falloff,
+		R:         1.0,
+		G:         1.0,
+		B:         1.0,
 	}
 }
 

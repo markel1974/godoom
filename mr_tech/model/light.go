@@ -12,12 +12,20 @@ const defaultFalloff = 10.0
 
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
-	volume    *Volume
-	intensity float64
-	falloff   float64
-	kind      config.LightKind
-	pos       geometry.XYZ
-	aabb      *physics.AABB
+	volume      *Volume
+	intensity   float64
+	falloff     float64
+	kind        config.LightKind
+	pos         geometry.XYZ
+	aabb        *physics.AABB
+	r           float64
+	g           float64
+	b           float64
+	dirX        float64
+	dirY        float64
+	dirZ        float64
+	cutOff      float64
+	outerCutOff float64
 }
 
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
@@ -28,29 +36,39 @@ func NewLight() *Light {
 		falloff:   defaultFalloff,
 		kind:      config.LightKindNone,
 		aabb:      physics.NewAABB(),
+		r:         1.0,
+		g:         1.0,
+		b:         1.0,
 	}
 	return l
 }
 
 // Setup configures the Light object by setting its intensity, falloff, stage, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(volume *Volume, intensity float64, falloff float64, kind config.LightKind, coords geometry.XYZ) {
+func (cl *Light) Setup(volume *Volume, c *config.Light, coords geometry.XYZ) {
 	cl.volume = volume
+	cl.r = c.R
+	cl.g = c.G
+	cl.b = c.B
+	cl.dirX = c.DirX
+	cl.dirY = c.DirY
+	cl.dirZ = c.DirZ
 	lightZ := coords.Z * 1.0
-
 	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
-	if kind == config.LightKindOpenAir {
+	if c.Kind == config.LightKindOpenAir {
 		lightZ = math.Abs(lightZ) * 1000 //50
+	} else if c.Kind == config.LightKindSpot {
+		//TODO DINAMIC
+		cl.dirX, cl.dirY, cl.dirZ = 0.0, -1.0, 0.0
+		cl.cutOff = math.Cos(35.0 * math.Pi / 180.0)
+		cl.outerCutOff = math.Cos(40 * math.Pi / 180.0)
 	}
-
 	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
-	cl.intensity = intensity //math.Max(0.0, math.Min(1.0, intensity))
-
-	cl.falloff = falloff
+	cl.intensity = c.Intensity //math.Max(0.0, math.Min(1.0, intensity))
+	cl.falloff = c.Falloff
 	if cl.falloff <= 0 {
 		cl.falloff = defaultFalloff
 	}
-
-	cl.kind = kind
+	cl.kind = c.Kind
 	cl.pos = pos
 	cl.Rebuild()
 }
@@ -89,7 +107,52 @@ func (cl *Light) GetFalloff() float64 {
 	return cl.falloff
 }
 
-// GetPos returns the position of the Light as an XYZ struct.
+// GetPos retrieves the position of the light in 3D space as a geometry.XYZ value.
 func (cl *Light) GetPos() geometry.XYZ {
 	return cl.pos
+}
+
+// GetPosXYZ retrieves the X, Y, and Z coordinates of the light's position as separate float64 values.
+func (cl *Light) GetPosXYZ() (float64, float64, float64) {
+	return cl.pos.X, cl.pos.Y, cl.pos.Z
+}
+
+// GetRed returns the red color component of the light.
+func (cl *Light) GetRed() float64 {
+	return cl.r
+}
+
+// GetGreen returns the green color component of the light.
+func (cl *Light) GetGreen() float64 {
+	return cl.g
+}
+
+// GetBlue returns the blue color component of the light.
+func (cl *Light) GetBlue() float64 {
+	return cl.b
+}
+
+// GetDirX returns the X component of the light's direction vector.
+func (cl *Light) GetDirX() float64 {
+	return cl.dirX
+}
+
+// GetDirY returns the Y component of the light's direction vector.
+func (cl *Light) GetDirY() float64 {
+	return cl.dirY
+}
+
+// GetDirZ returns the Z component of the light's direction vector.
+func (cl *Light) GetDirZ() float64 {
+	return cl.dirZ
+}
+
+// GetCutOff returns the inner cutoff angle (in cosine) for spotlight calculations.
+func (cl *Light) GetCutOff() float64 {
+	return cl.cutOff
+}
+
+// GetOuterCutOff returns the outer cutoff angle (in cosine) for spotlight calculations.
+func (cl *Light) GetOuterCutOff() float64 {
+	return cl.outerCutOff
 }

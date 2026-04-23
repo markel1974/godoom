@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 )
@@ -91,14 +89,14 @@ func (f *FrameLights) Prepare(camX, camY, camZ float32) {
 
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
 func (f *FrameLights) Create(light *model.Light) {
-	r, g, b := float32(1.0), float32(1.0), float32(1.0)
-	dirGlX, dirGlY, dirGlZ := float32(0.0), float32(0.0), float32(0.0)
-	cutOff := float32(0)
-	outerCutOff := float32(0)
-	pos := light.GetPos()
+	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
+	dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
+	cutOff := float32(light.GetCutOff())
+	outerCutOff := float32(light.GetOuterCutOff())
 	intensity := float32(light.GetIntensity())
 	falloff := float32(light.GetFalloff())
 	lightType := float32(-1)
+	posX, posY, posZ := light.GetPosXYZ()
 
 	switch light.GetKind() {
 	case config.LightKindOpenAir:
@@ -111,17 +109,11 @@ func (f *FrameLights) Create(light *model.Light) {
 		//const baseCutoff = 30.0
 		//const baseOuterCutOff = 40.0
 		lightType = 1
-		dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-		r, g, b = float32(1.0), float32(1.0), float32(1.0)
-		cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-		outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
-		// FIX CUTOFF: Usiamo i valori reali del faretto
-		// Convertiamo in radianti e poi in Coseno (come richiesto dallo shader)
-		//const toRad = math.Pi / 180.0
-		//cutOff2 := float32(math.Cos(baseCutoff * toRad))
-		//outerCutOff2 := float32(math.Cos(baseOuterCutOff * toRad))
+		//dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
+		//cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
+		//outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
 		added := f.addShadowLight(
-			float32(pos.X), float32(pos.Z), float32(-pos.Y),
+			float32(posX), float32(posZ), float32(-posY),
 			lightType, r, g, b, intensity,
 			dirGlX, dirGlY, dirGlZ, falloff,
 			cutOff, outerCutOff,
@@ -136,7 +128,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	}
 
 	f.add(
-		float32(pos.X), float32(pos.Z), float32(-pos.Y), lightType,
+		float32(posX), float32(posZ), float32(-posY), lightType,
 		r, g, b, intensity,
 		dirGlX, dirGlY, dirGlZ, falloff,
 		cutOff, outerCutOff, 0.0, 0.0,

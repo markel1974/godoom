@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
@@ -121,9 +122,13 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
 	//light, kind, falloff := bld.convertLight(lightLevel)
-	light, kind, falloff := bld.heuristicSpotlight(lightLevel, ceilPic, floorY, ceilY, edges)
+	light, kind, falloff, r, g, b := bld.heuristicSpotlight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
 
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
+	miSector.Light.R = r
+	miSector.Light.G = g
+	miSector.Light.B = b
+
 	miSector.FloorY = floorY / ScaleCeilFloorLineDef
 	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
 	miSector.Tag = sectorId
@@ -301,12 +306,34 @@ func (bld *Builder) convertLight(lightLevel int16) (float64, config.LightKind, f
 	return float64(lightLevel) * 0.015, kind, falloff
 }
 
-func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY, ceilY float64, edges []Edge) (float64, config.LightKind, float64) {
-	intensity := float64(lightLevel) * 0.015
+// Estendiamo l'euristica per restituire anche R, G, B
+func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
+	intensity := float64(lightLevel) * 0.008
 	kind := config.LightKindAmbient
-	falloff := ((ceilY - floorY) / ScaleCeilFloorLineDef) * 0.4 // Falloff proporzionale all'altezza
-	// 1. Calcolo Area Approssimativa (Bounding Box)
-	var minX, maxX, minY, maxY = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
+	falloff := (ceilY - floorY) / ScaleCeilFloorLineDef * 1.5
+
+	// Default: Luce bianca/calda
+	r, g, b := 1.0, 0.95, 0.9
+
+	// --- EURISTICA DEL COLORE ---
+	// 1. Acido / Radioattività (Nukage, Slime) -> Verde
+	if strings.Contains(floorPic, "NUKAGE") || strings.Contains(floorPic, "SLIME") {
+		r, g, b = 0.2, 1.0, 0.2
+		// Se c'è acido a terra, illuminiamo l'ambiente di verde!
+	}
+
+	// 2. Lava / Sangue -> Rosso
+	if strings.Contains(floorPic, "LAVA") || strings.Contains(floorPic, "BLOOD") || strings.Contains(ceilPic, "RED") {
+		r, g, b = 1.0, 0.3, 0.1
+	}
+
+	// 3. Acqua / Computer -> Blu
+	if strings.Contains(floorPic, "FWATER") || strings.Contains(ceilPic, "BLUE") || strings.Contains(ceilPic, "COMP") {
+		r, g, b = 0.2, 0.5, 1.0
+	}
+
+	// --- EURISTICA SPOTLIGHT ---
+	var minX, maxX, minY, maxY float64 = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
 	for _, e := range edges {
 		for _, p := range []geometry.XY{e.P1, e.P2} {
 			if p.X < minX {
@@ -325,29 +352,28 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, floorY,
 	}
 	width := maxX - minX
 	height := maxY - minY
-	// 2. CRITERI EURISTICI
-	// A. Il settore è piccolo (tipico di una plafoniera o faretto nel WAD)
-	isSmall := width <= 128 && height <= 128
-	// B. La texture del soffitto suggerisce una lampada (pattern matching tipico di Doom)
+
+	isSmall := width < 128 && height < 128
+	isBright := lightLevel > 192
+
 	isLightTexture := false
 	lightTextures := []string{"LITE", "TLITE", "CEIL1_1", "CEIL1_2", "GLOW", "LAMP"}
 	for _, t := range lightTextures {
-		if stringContains(ceilPic, t) {
+		if strings.Contains(ceilPic, t) {
 			isLightTexture = true
 			break
 		}
 	}
-	// C. Intensità alta
-	isBright := lightLevel > 192
-	// 3. DECISIONE
+
 	if (isSmall && isLightTexture) || (isSmall && isBright) {
 		kind = config.LightKindSpot
-		intensity *= 4.0 // Potenziamo la luce spot rispetto all'ambientale
+		intensity *= 2.0
 		if falloff < 10.0 {
-			falloff = 100.0
-		} // Garantiamo una gittata minima
+			falloff = 10.0
+		}
 	}
-	return intensity, kind, falloff
+
+	return intensity, kind, falloff, r, g, b
 }
 
 func stringContains(s, substr string) bool {

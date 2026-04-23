@@ -58,9 +58,9 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 	p.Flash.Falloff = 200
 	p.Flash.Factor = 0.5
 	p.Flash.OffsetX = 0.2
-	p.Flash.OffsetY = 0.1
-	p.Bobbing.SwayOffsetX = 0.5
-	p.Bobbing.SwayOffsetY = -0.1
+	p.Flash.OffsetY = -0.4
+	p.Bobbing.SwayOffsetX = 3.0
+	p.Bobbing.SwayOffsetY = 0.2
 	p.Bobbing.SwayScale = 2.0
 	p.Bobbing.SwaySensitivity = 0.01
 	p.Bobbing.SwayMultiplierX = 1.1

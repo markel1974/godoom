@@ -96,7 +96,14 @@ func (a *AABBTree) RemoveObject(object IAABB) {
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
 func (a *AABBTree) UpdateObject(object IAABB) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
-		a.updateLeaf(nodeIndex, object.GetAABB())
+		node := a.nodes[nodeIndex]
+		// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
+		if node.aabb.Contains(object.GetAABB()) {
+			return
+		}
+		// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
+		a.RemoveObject(object)
+		a.InsertObject(object)
 	}
 }
 

@@ -250,7 +250,7 @@ func (t *ThingBase) doPhysics3d() {
 	zFace, znX, znY, znZ, zHitT := t.wall.ClosestFace(pX, pY, sphereZ, pX, pY, sphereZ+dz, 0, 0, dz, pZ+tHeight+math.Abs(dz), pZ-math.Abs(dz), radius)
 	if zFace != nil {
 		pZ += dz * zHitT
-		t.entity.ResolveImpact(t.wall.GetEntity(), znX, znY, znZ)
+		t.entity.ResolveImpact(t.wall.GetEntity(), znX, znY, znZ, 0.0)
 		if znZ >= 0.7 { // Pavimento
 			isGrounded = true
 			pZ += 0.001
@@ -392,7 +392,7 @@ func (t *ThingBase) doPhysics2d() {
 	face, nX, nY, nZ, _ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, radius)
 	if face != nil {
 		// apply physical response to the entity
-		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ)
+		t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ, 0.0)
 		vx, vy, vz := t.entity.GetVelocity()
 		// handle landing on walkable planes (slope)
 		if nZ >= 0.7 && vz < 0 {
@@ -434,7 +434,8 @@ func (t *ThingBase) doPhysics2d() {
 		isGrounded = true
 		t.entity.SetVz(0.0)
 	} else if (pZ + tHeight) > maxZ {
-		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1)
+		penetration := (pZ + tHeight) - maxZ
+		t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1, penetration)
 		pZ = maxZ - tHeight
 	}
 	// physical state synchronization

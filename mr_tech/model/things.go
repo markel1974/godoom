@@ -11,6 +11,27 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+// Contact represents a physics collision contact point between two things.
+// A and B are the things involved in the collision.
+// Nx, Ny, Nz represent the normal vector of the contact.
+// Penetration denotes the depth of the intersection between things.
+// AccumulatedImpulse tracks the accumulated impulse applied during resolution.
+type Contact struct {
+	a, b        *physics.Entity
+	nx, ny, nz  float64
+	penetration float64
+}
+
+// Update aggiornato
+func (c *Contact) Update(a, b *physics.Entity, nx, ny, nz float64, penetration float64) {
+	c.a = a
+	c.b = b
+	c.nx = nx
+	c.ny = ny
+	c.nz = nz
+	c.penetration = penetration
+}
+
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	gScale           float64
@@ -27,7 +48,7 @@ type Things struct {
 	activeIdx        int
 	inactive         []IThing
 	inactiveIdx      int
-	contacts         []physics.Contact
+	contacts         []Contact
 	contactsLen      int
 	containerIdx     int
 	container        []IThing
@@ -47,7 +68,7 @@ func NewThings(gScale float64, solverIterations int, cfg []*config.Thing, volume
 		entities:         make(map[int]IThing),
 		identifier:       0,
 		active:           make([]IThing, defaultLen),
-		contacts:         make([]physics.Contact, defaultLen),
+		contacts:         make([]Contact, defaultLen),
 		container:        make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
 		activeIdx:        0,
@@ -253,7 +274,9 @@ func (th *Things) processCollision() {
 	// RESOLUTION (PGS Solver)
 	for i := 0; i < th.solverIterations; i++ {
 		for c := 0; c < th.contactsLen; c++ {
-			th.contacts[c].Resolve()
+			contact := &th.contacts[c]
+			// Deleghiamo la risoluzione alla fisica dell'entità
+			contact.a.ResolveImpact(contact.b, contact.nx, contact.ny, contact.nz, contact.penetration)
 		}
 	}
 
@@ -286,7 +309,7 @@ func (th *Things) addThing(ent IThing) {
 		th.active = make([]IThing, len(th.entities)*2)
 		th.inactive = make([]IThing, len(th.entities)*2)
 		th.pending = make([]IThing, len(th.entities)*2)
-		th.contacts = make([]physics.Contact, len(th.entities)*2)
+		th.contacts = make([]Contact, len(th.entities)*2)
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()

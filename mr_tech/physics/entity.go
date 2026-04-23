@@ -300,9 +300,8 @@ func (e *Entity) GetZRange() (float64, float64) {
 // GetSweptZRange computes the range of the entity's Z-axis considering its velocity to account for potential motion effects.
 func (e *Entity) GetSweptZRange() (float64, float64) {
 	minZ, maxZ := e.GetZRange()
-	// Se la velocità è quasi nulla (es. bloccata da wall.Compute),
-	// restituisci il range statico per evitare ghost-collisions sotto i piedi
-	if math.Abs(e.vz) < e.gForce {
+	// Usiamo la soglia di velocità minima definita nell'entità
+	if math.Abs(e.vz) < e.vMin {
 		return minZ, maxZ
 	}
 	if e.vz > 0 {
@@ -371,7 +370,7 @@ func (e *Entity) Update() bool {
 }
 
 // ResolveImpact calculates and applies the collision response between two entities based on their velocities, masses, and properties.
-func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
+func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
 	// 1. NORMALIZZAZIONE SICURA (Anti-Esplosione)
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen > 0.0 {
@@ -382,7 +381,6 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 		return // Vettore nullo, impossibile risolvere
 	}
 	// 2. VELOCITÀ RELATIVA E SOGLIE
-	// Assicuriamoci che un oggetto a massa infinita (es. il muro) non abbia mai velocità residua
 	if e2.invMass == 0.0 {
 		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
 	}
@@ -390,13 +388,14 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	vry := e.vy - e2.vy
 	vrz := e.vz - e2.vz
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
+
 	// Se i corpi si stanno allontanando
 	if vRelDotN > 0.0 {
 		return
 	}
 	invMassSum := e.invMass + e2.invMass
 	if invMassSum == 0.0 {
-		return // Masse infinite contro masse infinite
+		return
 	}
 
 	const restitutionSlop = 1.0
@@ -405,8 +404,13 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 		actualRestitution = 0.0
 	}
 
-	// 3. IMPULSO NORMALE
-	j := -(1.0 + actualRestitution) * vRelDotN
+	// --- NUOVO: BAUMGARTE STABILIZATION ---
+	const slop = 0.05
+	const percent = 0.2
+	bias := math.Max(penetration-slop, 0.0) * percent
+
+	// 3. IMPULSO NORMALE (con bias applicato)
+	j := (-(1.0 + actualRestitution) * vRelDotN) + bias
 	j /= invMassSum
 
 	e.vx += (j * nx) * e.invMass
@@ -417,6 +421,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	e2.vz -= (j * nz) * e2.invMass
 
 	// 4. IMPULSO TANGENZIALE (ATTRITO)
+	vrx = e.vx - e2.vx
 	vrx = e.vx - e2.vx
 	vry = e.vy - e2.vy
 	vrz = e.vz - e2.vz

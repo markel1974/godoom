@@ -206,6 +206,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 1200
+	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Factor = 0.02

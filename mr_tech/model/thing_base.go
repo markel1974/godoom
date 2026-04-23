@@ -26,6 +26,7 @@ type ThingBase struct {
 	maxStep       float64
 	speed         float64
 	acceleration  float64
+	jumpForce     float64
 	location      *Volume
 	animation     *textures.Animation
 	world         *Volumes
@@ -70,6 +71,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		kind:          cfg.Kind,
 		speed:         cfg.Speed,
 		acceleration:  cfg.Acceleration,
+		jumpForce:     cfg.JumpForce,
 		pos:           pos,
 		location:      location,
 		animation:     anim,

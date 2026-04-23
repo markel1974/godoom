@@ -100,6 +100,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		w.tex = NewTextures()
 		w.buildersCounter = 0
 		if cal.Full3d {
+			w.player.SetPitchOptions(-1.5, 1.5, 0.01)
 			w.builder = NewBuilderVolume(w.tex, cal)
 			w.builders = append(w.builders, w.builder)
 		} else {

@@ -81,7 +81,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.flash = p.GetFlash()
 	w.tex = tex
 	w.cal = cal
-	w.metrics = shaders.NewMapMetrics()
+	w.metrics = shaders.NewMapMetrics(w.flash)
 	w.metrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
 	w.metrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
 
@@ -130,13 +130,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
-		shadowW := fbW
-		shadowH := fbH
-		flashFovDeg := float32(w.flash.GetFovDeg())
-		flashFalloff := float32(w.flash.GetFalloff())
-		flashZNear := float32(w.flash.GetZNear())
-		flashZFar := float32(w.flash.GetZFar())
-		w.metrics.SetFlash(flashFovDeg, flashFalloff, flashZNear, flashZFar, shadowW, shadowH)
+		w.metrics.Rebuild(w.w, w.h)
+
 		if full3d {
 			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
 		} else {
@@ -212,8 +207,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// LIGHTS
 	w.lights.Render(dc.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
-	fConeStart := w.metrics.GetFlashConeStart()
-	fConeEnd := w.metrics.GetFlashConeEnd()
+	fConeStart := float32(w.flash.GetConeStart())
+	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
 		dc.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
 		0, flashX, flashY, 0.0,

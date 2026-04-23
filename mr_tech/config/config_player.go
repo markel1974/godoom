@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
 type Bobbing struct {
@@ -46,19 +45,13 @@ type Player struct {
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
 func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radius float64, mass float64) *Player {
+	speed := 90.0
+	thing := NewConfigThing("PLAYER", position, angle, -1, mass, radius, height, speed, nil)
 	p := &Player{
-		Thing: &Thing{
-			Id:       utils.NextUUId(),
-			Position: position,
-			Angle:    angle,
-			Height:   height,
-			Radius:   radius,
-			Mass:     mass,
-		},
+		Thing:   thing,
 		Bobbing: &Bobbing{},
 		Flash:   &Flash{},
 	}
-	p.Speed = 90
 	p.Flash.FovDeg = 80.0
 	p.Flash.ZNear = 0.1
 	p.Flash.ZFar = 2048.0

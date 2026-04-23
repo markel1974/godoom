@@ -25,33 +25,29 @@ func dot(ax, ay, az, bx, by, bz float32) float32 {
 
 // MapMetrics is a structure that defines various metrics and configurations for room projection and flashlight rendering.
 type MapMetrics struct {
-	orthoSize      float32
-	roomZNear      float32
-	roomZFar       float32
-	lightCamY      float32
-	mapCenterX     float32
-	mapCenterZ     float32
-	shadowWidth    int32
-	shadowHeight   int32
-	flashZNear     float32
-	flashZFar      float32
-	flashFovDeg    float32
-	flashFov       float32
-	flashConeStart float32
-	flashConeEnd   float32
-	flashAspect    float32
-	flashFalloff   float32
-	roomProj       [16]float32
-	roomView       [16]float32
-	roomSpace      [16]float32
-	flashProj      [16]float32
+	orthoSize    float32
+	roomZNear    float32
+	roomZFar     float32
+	lightCamY    float32
+	mapCenterX   float32
+	mapCenterZ   float32
+	shadowWidth  int32
+	shadowHeight int32
+	shadowAspect float32
+	roomProj     [16]float32
+	roomView     [16]float32
+	roomSpace    [16]float32
+	flashProj    [16]float32
+	flash        *model.Flash
 }
 
 // NewMapMetrics initializes and returns a new instance of MapMetrics with predefined settings.
-func NewMapMetrics() *MapMetrics {
-	m := &MapMetrics{}
+func NewMapMetrics(flash *model.Flash) *MapMetrics {
+	m := &MapMetrics{
+		flash: flash,
+	}
 	m.SetOrthoSize(float32(640), 0.0, 8192.0)
-	m.SetFlash(85.0, 10, 0.1, 2048.0, 1024, 1024)
+	m.Rebuild(1024, 1024)
 	m.SetMapCenter(0.0, 0.0, 0.0)
 	return m
 }
@@ -109,36 +105,21 @@ func (m *MapMetrics) GetRoomZFar() float32 {
 	return m.roomZFar
 }
 
-// GetFlashZNear returns the near clipping distance for the flashlight projection.
-func (m *MapMetrics) GetFlashZNear() float32 {
-	return m.flashZNear
-}
-
 // GetFlashAspect retrieves the aspect ratio used for the flash projection.
 func (m *MapMetrics) GetFlashAspect() float32 {
-	return m.flashAspect
+	return m.shadowAspect
 }
 
-// SetFlash configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
-func (m *MapMetrics) SetFlash(flashFovDeg, flashFalloff, zNearFlash, zFarFlash float32, width, height int32) {
+// Rebuild configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
+func (m *MapMetrics) Rebuild(width, height int32) {
 	m.shadowWidth = width
 	m.shadowHeight = height
-	m.flashFovDeg = flashFovDeg
-	m.flashFalloff = flashFalloff
-	m.flashZNear = zNearFlash
-	m.flashZFar = zFarFlash
-	m.flashAspect = float32(width) / float32(height)
-	fovFlashRad := (m.flashFovDeg * math.Pi) / 180.0
-	m.flashFov = float32(1.0 / math.Tan(float64(fovFlashRad/ndcRange)))
-	m.flashConeStart = float32(math.Cos(float64(m.flashFovDeg)/ndcRange*math.Pi/180.0)) + 0.01
-	m.flashConeEnd = float32(math.Cos(float64(m.flashFovDeg) / ndcRange * 0.6 * math.Pi / 180.0))
-
-	m.updateFlashProj(m.flashFov, m.flashAspect, m.flashZNear, m.flashZFar)
-}
-
-// GetFlashZFar returns the far clipping distance of the flashlight projection matrix.
-func (m *MapMetrics) GetFlashZFar() float32 {
-	return m.flashZFar
+	m.shadowAspect = float32(width) / float32(height)
+	if m.shadowAspect == 0 {
+		m.shadowAspect = 1.0
+	}
+	m.flash.Rebuild(ndcRange)
+	m.updateFlashProj()
 }
 
 // SetMapCenter sets the map center coordinates and light camera Y position, updating the view matrix accordingly.
@@ -162,26 +143,6 @@ func (m *MapMetrics) GetMapCenterX() float32 {
 // GetMapCenterZ returns the Z-coordinate of the center of the map stored in the MapMetrics instance.
 func (m *MapMetrics) GetMapCenterZ() float32 {
 	return m.mapCenterZ
-}
-
-// GetFovFlashDeg returns the field of view (FOV) of the flashlight in degrees.
-func (m *MapMetrics) GetFovFlashDeg() float32 {
-	return m.flashFovDeg
-}
-
-// GetFlashConeStart retrieves the starting angle's cosine value for the flashlight cone, used for defining its shape.
-func (m *MapMetrics) GetFlashConeStart() float32 {
-	return m.flashConeStart
-}
-
-// GetFlashConeEnd returns the ending value of the flashlight cone's angle, used for cone-based illumination calculations.
-func (m *MapMetrics) GetFlashConeEnd() float32 {
-	return m.flashConeEnd
-}
-
-// GetFlashFalloff retrieves the falloff value used for flashlight intensity attenuation calculations.
-func (m *MapMetrics) GetFlashFalloff() float32 {
-	return m.flashFalloff
 }
 
 // updateRoomProj updates the orthographic projection matrix (roomProj) and combined matrix (roomSpace) for the room space.
@@ -216,16 +177,14 @@ func (m *MapMetrics) updateRoomView(lX, lY, lZ float32) {
 }
 
 // updateFlashProj updates the flash projection matrix based on field of view, aspect ratio, and near/far clipping planes.
-func (m *MapMetrics) updateFlashProj(flashFov, flashAspect, zNearFlash, zFarFlash float32) {
+func (m *MapMetrics) updateFlashProj() {
+	flashFov, zNearFlash, zFarFlash := float32(m.flash.GetFov()), float32(m.flash.GetZNear()), float32(m.flash.GetZFar())
 	diffZ := zNearFlash - zFarFlash
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	if flashAspect == 0 {
-		flashAspect = 1.0
-	}
 	m.flashProj = [16]float32{
-		flashFov / flashAspect, 0, 0, 0,
+		flashFov / m.shadowAspect, 0, 0, 0,
 		0, flashFov, 0, 0,
 		0, 0, (zFarFlash + zNearFlash) / diffZ, -1,
 		0, 0, (2 * zFarFlash * zNearFlash) / diffZ, 0,
@@ -255,7 +214,7 @@ func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOff
 	pitchShear := float32(-vi.GetPitch())
 	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	targetX, targetY, targetZ := float32(0.0), flashDirY*m.flashZFar, -m.flashZFar
+	targetX, targetY, targetZ := float32(0.0), flashDirY*float32(m.flash.GetZFar()), -float32(m.flash.GetZFar())
 	// Forward, Right, Up for the flashlight
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
@@ -303,7 +262,7 @@ func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]flo
 func (m *MapMetrics) CreateFlashSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) [16]float32 {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	targetX, targetY, targetZ := float32(0.0), float32(0.0), -m.flashZFar
+	targetX, targetY, targetZ := float32(0.0), float32(0.0), -float32(m.flash.GetZFar())
 	// Forward, Right, Up for the flashlight
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))

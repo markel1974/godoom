@@ -9,9 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
-const minPitch = -5.0
-const maxPitch = 5.0
-
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
 type ThingPlayer struct {
 	kind           int
@@ -19,6 +16,9 @@ type ThingPlayer struct {
 	angleCos       float64
 	pitch          float64
 	pitchState     float64
+	pitchMin       float64
+	pitchMax       float64
+	pitchSens      float64
 	ducking        bool
 	lightIntensity float64
 	bobbing        *Bobbing
@@ -53,6 +53,9 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		lightIntensity: 0.0039,
 		debug:          debug,
 		flash:          NewFlash(c.Flash),
+		pitchMin:       -5.0,
+		pitchMax:       5.0,
+		pitchSens:      0.05,
 	}
 	p.id = "PLAYER"
 	p.SetAngle(c.Angle)
@@ -118,9 +121,15 @@ func (p *ThingPlayer) GetAngleFull() (float64, float64) {
 
 // SetPitch adjusts the player's pitch angle within the allowed range, affecting vertical view orientation.
 func (p *ThingPlayer) SetPitch(y float64) {
-	p.pitchState = mathematic.ClampF(p.pitchState-(y*0.05), minPitch, maxPitch)
-	// Svincolamento totale dalla fisica: lo sguardo è assoluto
+	p.pitchState = mathematic.ClampF(p.pitchState-(y*p.pitchSens), p.pitchMin, p.pitchMax)
 	p.pitch = p.pitchState
+}
+
+// SetPitchOptions configures the minimum, maximum, and sensitivity values for pitch adjustment.
+func (p *ThingPlayer) SetPitchOptions(min, max, sens float64) {
+	p.pitchMin = min
+	p.pitchMax = max
+	p.pitchSens = sens
 }
 
 // Move applies a directional impulse to the player based on input flags (up, down, left, right) and a given impulse magnitude.
@@ -146,7 +155,7 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 		fy += p.angleCos
 	}
 	if mag := math.Sqrt(fx*fx + fy*fy); mag > 0 {
-		// 1. Vettore direzione puro (Normalizzato)
+		// Vettore direzione puro (Normalizzato)
 		dirX := fx / mag
 		dirY := fy / mag
 		p.MoveTowards(dirX, dirY, p.speed*impulse, p.speed)
@@ -157,10 +166,11 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 func (p *ThingPlayer) SetJump(multi bool) {
 	onGround := true
 	mass := p.entity.GetMass()
-	fz := mass * 100
+	fz := mass * p.jumpForce
 	if !multi {
 		onGround = p.entity.IsOnGround()
-		fz = mass * 1000
+	} else {
+		fz *= 0.2
 	}
 	if onGround {
 		p.entity.AddForce(0.0, 0.0, fz)
@@ -270,9 +280,7 @@ func (p *ThingPlayer) IsMoving() bool {
 func (p *ThingPlayer) PhysicsApply() {
 	wasGrounded := p.entity.IsOnGround()
 	prevVz := p.entity.GetVz()
-
 	p.doPhysics()
-
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := p.entity.IsOnGround()
 	if !wasGrounded && isGrounded {
@@ -280,11 +288,8 @@ func (p *ThingPlayer) PhysicsApply() {
 		p.bobbing.InjectVerticalImpulse(prevVz)
 	}
 	// Fattore di allineamento per portare il 2.9 a ~60.0 fps o 120 fps...
-
 	const dt = 0.016 //0.016 per 60fps
-
 	//fmt.Printf("Vx: %f, Vy: %f, Speed: %f\n", p.entity.GetVx(), p.entity.GetVy(), p.speed)
-
 	p.bobbing.Compute(dt, p.speed, p.entity.GetVx(), p.entity.GetVy())
 }
 

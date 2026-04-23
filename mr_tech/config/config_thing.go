@@ -54,6 +54,7 @@ type Thing struct {
 	Height         float64      `json:"height"`
 	Speed          float64      `json:"speed"`
 	Acceleration   float64      `json:"acceleration"`
+	JumpForce      float64      `json:"jumpForce"`
 	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	Model3D        *Model3d     `json:"model3d"`
@@ -74,6 +75,7 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Animation:      anim,
 		Restitution:    0.0,
 		WakeUpDistance: 25.0,
+		JumpForce:      200,
 	}
 }
 

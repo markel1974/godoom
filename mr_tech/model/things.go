@@ -11,18 +11,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// Contact represents a physics collision contact point between two things.
-// A and B are the things involved in the collision.
-// Nx, Ny, Nz represent the normal vector of the contact.
-// Penetration denotes the depth of the intersection between things.
-// AccumulatedImpulse tracks the accumulated impulse applied during resolution.
+// Contact represents collision contact data between two entities in a physics simulation.
 type Contact struct {
 	a, b        *physics.Entity
 	nx, ny, nz  float64
 	penetration float64
 }
 
-// Update aggiornato
+// Update updates the contact with two entities, collision normal components, and penetration depth.
 func (c *Contact) Update(a, b *physics.Entity, nx, ny, nz float64, penetration float64) {
 	c.a = a
 	c.b = b
@@ -48,7 +44,7 @@ type Things struct {
 	activeIdx        int
 	inactive         []IThing
 	inactiveIdx      int
-	contacts         []Contact
+	contacts         []*Contact
 	contactsLen      int
 	containerIdx     int
 	container        []IThing
@@ -68,7 +64,7 @@ func NewThings(gScale float64, solverIterations int, cfg []*config.Thing, volume
 		entities:         make(map[int]IThing),
 		identifier:       0,
 		active:           make([]IThing, defaultLen),
-		contacts:         make([]Contact, defaultLen),
+		contacts:         make([]*Contact, defaultLen),
 		container:        make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
 		activeIdx:        0,
@@ -79,6 +75,9 @@ func NewThings(gScale float64, solverIterations int, cfg []*config.Thing, volume
 		volumes:          volumes,
 		animations:       animations,
 		event:            NewThingEvent(),
+	}
+	for idx := range e.contacts {
+		e.contacts[idx] = &Contact{}
 	}
 	e.pendingIdx.Store(0)
 	for _, ct := range cfg {
@@ -259,7 +258,7 @@ func (th *Things) processCollision() {
 				return false
 			}
 			ent := t2.GetEntity()
-			normX, normY, normZ, minPenetration, hasCollision := ent.ComputeCollision(otherEnt)
+			normX, normY, normZ, minPenetration, hasCollision := ent.ComputeImpact(otherEnt)
 			if !hasCollision {
 				return false
 			}
@@ -274,8 +273,7 @@ func (th *Things) processCollision() {
 	// RESOLUTION (PGS Solver)
 	for i := 0; i < th.solverIterations; i++ {
 		for c := 0; c < th.contactsLen; c++ {
-			contact := &th.contacts[c]
-			// Deleghiamo la risoluzione alla fisica dell'entità
+			contact := th.contacts[c]
 			contact.a.ResolveImpact(contact.b, contact.nx, contact.ny, contact.nz, contact.penetration)
 		}
 	}
@@ -309,7 +307,10 @@ func (th *Things) addThing(ent IThing) {
 		th.active = make([]IThing, len(th.entities)*2)
 		th.inactive = make([]IThing, len(th.entities)*2)
 		th.pending = make([]IThing, len(th.entities)*2)
-		th.contacts = make([]Contact, len(th.entities)*2)
+		th.contacts = make([]*Contact, len(th.entities)*2)
+		for idx := range th.contacts {
+			th.contacts[idx] = &Contact{}
+		}
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()

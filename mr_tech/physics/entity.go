@@ -369,94 +369,9 @@ func (e *Entity) Update() bool {
 	return e.IsMoving()
 }
 
-// ResolveImpact calculates and applies the collision response between two entities based on their velocities, masses, and properties.
-func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
-	// 1. NORMALIZZAZIONE SICURA (Anti-Esplosione)
-	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
-	if nLen > 0.0 {
-		nx /= nLen
-		ny /= nLen
-		nz /= nLen
-	} else {
-		return // Vettore nullo, impossibile risolvere
-	}
-	// 2. VELOCITÀ RELATIVA E SOGLIE
-	if e2.invMass == 0.0 {
-		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
-	}
-	vrx := e.vx - e2.vx
-	vry := e.vy - e2.vy
-	vrz := e.vz - e2.vz
-	vRelDotN := vrx*nx + vry*ny + vrz*nz
-
-	// Se i corpi si stanno allontanando
-	if vRelDotN > 0.0 {
-		return
-	}
-	invMassSum := e.invMass + e2.invMass
-	if invMassSum == 0.0 {
-		return
-	}
-
-	const restitutionSlop = 1.0
-	actualRestitution := e2.restitution
-	if math.Abs(vRelDotN) < restitutionSlop {
-		actualRestitution = 0.0
-	}
-
-	// --- NUOVO: BAUMGARTE STABILIZATION ---
-	const slop = 0.05
-	const percent = 0.2
-	bias := math.Max(penetration-slop, 0.0) * percent
-
-	// 3. IMPULSO NORMALE (con bias applicato)
-	j := (-(1.0 + actualRestitution) * vRelDotN) + bias
-	j /= invMassSum
-
-	e.vx += (j * nx) * e.invMass
-	e.vy += (j * ny) * e.invMass
-	e.vz += (j * nz) * e.invMass
-	e2.vx -= (j * nx) * e2.invMass
-	e2.vy -= (j * ny) * e2.invMass
-	e2.vz -= (j * nz) * e2.invMass
-
-	// 4. IMPULSO TANGENZIALE (ATTRITO)
-	vrx = e.vx - e2.vx
-	vrx = e.vx - e2.vx
-	vry = e.vy - e2.vy
-	vrz = e.vz - e2.vz
-	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
-
-	tx := vrx - (vRelDotNPost * nx)
-	ty := vry - (vRelDotNPost * ny)
-	tz := vrz - (vRelDotNPost * nz)
-
-	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
-	if tLen > 1e-8 {
-		tx /= tLen
-		ty /= tLen
-		tz /= tLen
-
-		vRelDotT := vrx*tx + vry*ty + vrz*tz
-		jt := -vRelDotT / invMassSum
-
-		maxFriction := j * e2.frictionActive
-		if math.Abs(jt) > maxFriction {
-			// math.Copysign copia il segno di jt su maxFriction, evitando branch
-			jt = math.Copysign(maxFriction, jt)
-		}
-
-		e.vx += (jt * tx) * e.invMass
-		e.vy += (jt * ty) * e.invMass
-		e.vz += (jt * tz) * e.invMass
-		e2.vx -= (jt * tx) * e2.invMass
-		e2.vy -= (jt * ty) * e2.invMass
-		e2.vz -= (jt * tz) * e2.invMass
-	}
-}
-
-// ComputeCollision checks for a collision between two entities and returns collision normal, penetration depth, and status.
-func (e *Entity) ComputeCollision(otherEnt *Entity) (float64, float64, float64, float64, bool) {
+// ComputeImpact determines the collision state and calculates the collision normal and penetration depth between two entities.
+// Returns the normal vector (normX, normY, normZ), penetration depth, and a boolean indicating whether a collision occurred.
+func (e *Entity) ComputeImpact(otherEnt *Entity) (float64, float64, float64, float64, bool) {
 	x1Min, x1Max := e.GetXRange()
 	x2Min, x2Max := otherEnt.GetXRange()
 	y1Min, y1Max := e.GetYRange()
@@ -508,6 +423,92 @@ func (e *Entity) ComputeCollision(otherEnt *Entity) (float64, float64, float64, 
 		}
 	}
 	return 0, 0, 0, 0, false
+}
+
+// ResolveImpact resolves the collision impact between two entities, applying forces based on restitution, friction, and penetration.
+func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
+	// NORMALIZZAZIONE SICURA (Anti-Esplosione)
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen > 0.0 {
+		nx /= nLen
+		ny /= nLen
+		nz /= nLen
+	} else {
+		return // Vettore nullo, impossibile risolvere
+	}
+	// VELOCITÀ RELATIVA E SOGLIE
+	if e2.invMass == 0.0 {
+		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
+	}
+	vrx := e.vx - e2.vx
+	vry := e.vy - e2.vy
+	vrz := e.vz - e2.vz
+	vRelDotN := vrx*nx + vry*ny + vrz*nz
+
+	// Se i corpi si stanno allontanando
+	if vRelDotN > 0.0 {
+		return
+	}
+	invMassSum := e.invMass + e2.invMass
+	if invMassSum == 0.0 {
+		return
+	}
+
+	const restitutionSlop = 1.0
+	actualRestitution := e2.restitution
+	if math.Abs(vRelDotN) < restitutionSlop {
+		actualRestitution = 0.0
+	}
+
+	// BAUMGARTE STABILIZATION ---
+	const slop = 0.05
+	const percent = 0.2
+	bias := math.Max(penetration-slop, 0.0) * percent
+
+	// IMPULSO NORMALE (con bias applicato)
+	j := (-(1.0 + actualRestitution) * vRelDotN) + bias
+	j /= invMassSum
+
+	e.vx += (j * nx) * e.invMass
+	e.vy += (j * ny) * e.invMass
+	e.vz += (j * nz) * e.invMass
+	e2.vx -= (j * nx) * e2.invMass
+	e2.vy -= (j * ny) * e2.invMass
+	e2.vz -= (j * nz) * e2.invMass
+
+	// IMPULSO TANGENZIALE (ATTRITO)
+	vrx = e.vx - e2.vx
+	vrx = e.vx - e2.vx
+	vry = e.vy - e2.vy
+	vrz = e.vz - e2.vz
+	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
+
+	tx := vrx - (vRelDotNPost * nx)
+	ty := vry - (vRelDotNPost * ny)
+	tz := vrz - (vRelDotNPost * nz)
+
+	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
+	if tLen > 1e-8 {
+		tx /= tLen
+		ty /= tLen
+		tz /= tLen
+
+		vRelDotT := vrx*tx + vry*ty + vrz*tz
+		jt := -vRelDotT / invMassSum
+
+		maxFriction := j * e2.frictionActive
+		if math.Abs(jt) > maxFriction {
+			// math.Copysign copia il segno di jt su maxFriction, evitando branch
+			jt = math.Copysign(maxFriction, jt)
+		}
+
+		e.vx += (jt * tx) * e.invMass
+		e.vy += (jt * ty) * e.invMass
+		e.vz += (jt * tz) * e.invMass
+		e2.vx -= (jt * tx) * e2.invMass
+		e2.vy -= (jt * ty) * e2.invMass
+		e2.vz -= (jt * tz) * e2.invMass
+	}
 }
 
 // ClipVelocity adjusts the velocity vector to prevent movement into a surface by negating the velocity component along the normal.

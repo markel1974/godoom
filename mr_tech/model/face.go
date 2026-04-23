@@ -194,9 +194,9 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 	return true
 }
 
-// RayIntersect lancia un raggio. Per evitare singolarità nei BSP,
-// chiamala con direzioni irrazionali, es: s.RayIntersect(px, py, pz, 1.0, 0.000123, 0.000456)
-func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
+/*
+// RayIntersectDist calculates if a ray intersects the triangle and returns a boolean and the distance to the intersection.
+func (s *Face) RayIntersectDist(px, py, pz, dx, dy, dz float64) (bool, float64) {
 	const eps = 1e-8
 	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 
@@ -208,8 +208,9 @@ func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
 	hz := dx*e2y - dy*e2x
 
 	a := e1x*hx + e1y*hy + e1z*hz
+	// Culling dei raggi paralleli al triangolo
 	if a > -eps && a < eps {
-		return false
+		return false, 0.0
 	}
 
 	invDet := 1.0 / a
@@ -217,7 +218,7 @@ func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
 
 	u := (sx*hx + sy*hy + sz*hz) * invDet
 	if u < 0.0 || u > 1.0 {
-		return false
+		return false, 0.0
 	}
 
 	qx := sy*e1z - sz*e1y
@@ -226,12 +227,17 @@ func (s *Face) RayIntersect(px, py, pz, dx, dy, dz float64) bool {
 
 	v := (dx*qx + dy*qy + dz*qz) * invDet
 	if v < 0.0 || u+v > 1.0 {
-		return false
+		return false, 0.0
 	}
-
+	// t è la distanza dall'origine del raggio al punto di intersezione
 	t := (e2x*qx + e2y*qy + e2z*qz) * invDet
-	return t > eps
+	// Ritorna true e la distanza solo se l'impatto è in avanti (davanti al raggio)
+	if t > eps {
+		return true, t
+	}
+	return false, 0.0
 }
+*/
 
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
 func (s *Face) PointInside2d(px, py float64) bool {
@@ -244,6 +250,8 @@ func (s *Face) PointInside2d(px, py float64) bool {
 	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
 	return !(hasNeg && hasPos)
 }
+
+/*
 
 // PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
 // Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
@@ -274,6 +282,8 @@ func (s *Face) PointInside3d(px, py, pz float64) bool {
 	// (usiamo la tua tolleranza eps per prevenire errori di arrotondamento sui bordi)
 	return (u >= eps) && (v >= eps) && (u+v <= 1.0-eps)
 }
+
+*/
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
 func (s *Face) Scale2d(scale float64) {
@@ -394,82 +404,3 @@ func (s *Face) computeUV() {
 		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
 	}
 }
-
-// PointInVolume checks if a point (px, py, pz) lies within the Face's location. Returns distance and a boolean status.
-//func (s *Face) PointInVolume(px, py, pz float64) (float64, bool) {
-//	target := s.tri[0]
-//	pointInVolume := (px-target.X)*s.normal.X + (py-target.Y)*s.normal.Y + (pz-target.Z)*s.normal.Z
-//	return pointInVolume, true
-//}
-
-/*
-// RayIntersect determines if a ray starting at the origin (1, 0, 0) intersects with the tri of the face.
-// The method uses the Möller-Trumbore intersection algorithm for precise calculations.
-// px, py, pz parameters specify the coordinates of the point relative to which the intersection occurs.
-// Returns true if the ray intersects the tri and false otherwise.
-func (s *Face) RayIntersect(px, py, pz float64) bool {
-	const eps = 0.00001
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
-	// 1. Estrai gli edge del triangolo
-	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-	// 2. Cross Product tra Raggio(1,0,0) ed Edge2.
-	// Dir x E2 = (0, -E2z, E2y)
-	hy, hz := -e2z, e2y
-	// 3. Determinante (a = Edge1 dot h)
-	a := e1y*hy + e1z*hz
-	if math.Abs(a) < eps {
-		return false // Il raggio è esattamente parallelo al triangolo (o triangolo degenere)
-	}
-	invDet := 1.0 / a
-	// 4. Distanza del punto P dal vertice 0 (s = P - P0)
-	sx, sy, sz := px-p0.X, py-p0.Y, pz-p0.Z
-	// 5. Parametro Baricentrico U
-	u := invDet * (sy*hy + sz*hz)
-	if u < 0.0 || u > 1.0 {
-		return false // L'intersezione manca il triangolo su questo asse
-	}
-	// 6. Cross Product s x Edge1 (q)
-	qx := sy*e1z - sz*e1y
-	qy := sz*e1x - sx*e1z
-	qz := sx*e1y - sy*e1x
-	// 7. Parametro Baricentrico V
-	// v = invDet * (Dir dot q). Poiché Dir = (1,0,0), il dot è semplicemente qx!
-	v := invDet * qx
-	if v < 0.0 || u+v > 1.0 {
-		return false // L'intersezione manca il triangolo
-	}
-	// 8. Calcolo del Time Of Impact (t) lungo il raggio
-	t := invDet * (e2x*qx + e2y*qy + e2z*qz)
-	// Se t > eps, il triangolo è davanti a noi e l'abbiamo colpito
-	return t > eps
-}*/
-
-// MakeStraightEdgeKey generates an EdgeKey for the segment using its start and end points, based on a fixed precision.
-//func (s *Face) MakeStraightEdgeKey() EdgeKey {
-//	return makeEdgeKey(edgePrecision, s.GetStart(), s.GetEnd())
-//}
-
-// MakeReverseEdgeKey generates an EdgeKey by reversing the start and end points of the segment with a fixed precision.
-//func (s *Face) MakeReverseEdgeKey() EdgeKey {
-//	return makeEdgeKey(edgePrecision, s.GetEnd(), s.GetStart())
-//}
-
-/*
-// edgePrecision defines the scaling factor used to convert floating-point coordinates into integer-based EdgeKey components.
-const edgePrecision = 1000.0
-
-// EdgeKey represents a unique identifier for an edge in 2D space, defined by the rounded coordinates of its endpoints.
-type EdgeKey struct {
-	x1, y1, x2, y2 int64
-}
-
-// makeEdgeKey generates an EdgeKey by scaling and rounding the start and end coordinates using the given precision.
-func makeEdgeKey(precision float64, start geometry.XYZ, end geometry.XYZ) EdgeKey {
-	return EdgeKey{
-		x1: int64(math.Round(start.X * precision)),
-		y1: int64(math.Round(start.Y * precision)),
-		x2: int64(math.Round(end.X * precision)),
-		y2: int64(math.Round(end.Y * precision)),
-	}
-}*/

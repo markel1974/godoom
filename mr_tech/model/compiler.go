@@ -61,9 +61,10 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		cfg.Player.Position.Z = pv.GetMinZ()
 		//things Z
 		for idx := range cfg.Things {
-			tv := volumes2d.LocateVolume2d(cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y)
+			tx, ty := cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y
+			tv := volumes2d.LocateVolume2d(tx, ty)
 			if tv == nil {
-				fmt.Println("can't find thing location at", cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y)
+				fmt.Println("can't find thing location at", tx, ty)
 				continue
 			}
 			cfg.Things[idx].Position.Z = tv.GetMinZ()

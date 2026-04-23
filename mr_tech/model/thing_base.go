@@ -326,25 +326,6 @@ func (t *ThingBase) doPhysics3d() {
 		}
 	}
 
-	/*
-		// --- FASE C: PASSAGGIO PORTALI (No Collision) ---
-		// Se non abbiamo colpito nulla, ma abbiamo attraversato un portale (Face con Neighbor),
-		// dobbiamo aggiornare t.location senza usare QueryPoint3d.
-		// Lo facciamo solo se il volume corrente non contiene più il centro dell'entità.
-		if !t.location.PointInside3d(pX, pY, pZ + radius) {
-			// Cerchiamo tra i vicini del volume attuale (Portali)
-			if newVol := t.location.Neighbor(pX, pY, pZ + radius); newVol != nil {
-				t.location = newVol
-			} else {
-				// Fallback estremo se siamo "usciti" dalla mesh (solo se necessario)
-				if newVol := t.world.QueryPoint3d(pX, pY, pZ + radius); newVol != nil {
-					t.location = newVol
-				}
-			}
-		}
-
-	*/
-
 	t.entity.SetOnGround(isGrounded)
 	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
 }

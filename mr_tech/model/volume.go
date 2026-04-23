@@ -191,7 +191,7 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// Neighbor returns the neighboring location that contains the specified point (px, py, pz), or nil if no such location exists.
+// Neighbor2d returns the neighboring location that contains the specified point (px, py, pz), or nil if no such location exists.
 func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
 	if v.hasFixedZ {
 		if v.PointInLineSide(px, py) {
@@ -230,6 +230,7 @@ func (v *Volume) PointInside2d(px, py, pz float64) bool {
 	return false
 }
 
+/*
 // PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
 func (v *Volume) PointInside3d(px, py, pz float64) bool {
 	if v.hasFixedZ {
@@ -240,31 +241,38 @@ func (v *Volume) PointInside3d(px, py, pz float64) bool {
 		return v.PointInLineSide(px, py)
 	}
 
-	// MULTI-RAY CASTING (Correzione del Parity Flaw)
-	// Tre raggi asimmetrici in 3 ottanti diversi.
-	rays := [3][3]float64{
-		{1.0, 0.000123, 0.000456},
-		{-0.000321, 1.0, -0.000654},
-		{-0.000456, -0.000123, 1.0},
-	}
+	// Spara UN SOLO raggio (una direzione asimmetrica per evitare parallelismi perfetti)
+	dirX, dirY, dirZ := 0.312, 0.945, 0.111
 
-	insideCount := 0
-	for _, ray := range rays {
-		intersections := 0
-		for _, face := range v.faces {
-			if face.RayIntersect(px, py, pz, ray[0], ray[1], ray[2]) {
-				intersections++
-			}
-		}
-		// Se buca un numero dispari di triangoli, il punto per questo raggio è DENTRO
-		if intersections%2 != 0 {
-			insideCount++
+	minT := math.MaxFloat64
+	var closestFace *Face // Sostituisci col tuo tipo Faccia esatto
+
+	// 1. Trova l'intersezione più vicina in assoluto
+	for _, face := range v.faces {
+		hit, t := face.RayIntersectDist(px, py, pz, dirX, dirY, dirZ)
+
+		// t > 0.0001 evita l'auto-intersezione se il punto è esattamente sul bordo
+		if hit && t > 0.0001 && t < minT {
+			minT = t
+			closestFace = face
 		}
 	}
 
-	// La maggioranza vince: se almeno 2 raggi su 3 dicono che sei dentro, sei dentro.
-	return insideCount >= 2
+	// 2. Se non colpiamo nulla verso l'infinito, siamo chiaramente fuori
+	if closestFace == nil {
+		return false
+	}
+
+	// 3. Risoluzione tramite Dot Product
+	// closestFace.nx, ny, nz devono essere la NORMALE USCENTE (Outward Normal) del triangolo
+	normal := closestFace.GetNormal()
+	dot := normal.X*dirX + normal.Y*dirY + normal.Z*dirZ
+
+	// Se il dot è > 0, raggio e normale vanno nella stessa direzione.
+	// Significa che stai "sfondando" la parete da dentro verso fuori.
+	return dot > 0.0
 }
+*/
 
 // PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.
 func (v *Volume) PointInLineSide(px, py float64) bool {

@@ -249,45 +249,53 @@ func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
 
 // LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
 func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
-	var targetVol *Volume
-	var targetFace *Face
-
-	// Broad-Phase Globale: troviamo l'AABB del location 3D
+	var bestVol *Volume
+	var bestFace *Face
+	var minZDist = math.MaxFloat64 // Per trovare il pavimento più vicino sotto ai piedi
+	// Broad-Phase Globale: troviamo i volumi il cui AABB 3D contiene il punto
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
 		volume, volumeOk := object.(*Volume)
 		if !volumeOk {
 			return false
 		}
-		if !volume.PointInside3d(px, py, pz) {
-			return false
-		}
-		// Broad-Phase Locale: cerchiamo la faccia sotto ai piedi
+		// Broad-Phase Locale
 		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
 			face, faceOk := object.(*Face)
 			if !faceOk {
 				return false
 			}
-			// Filtro Topologico: Selezioniamo solo le facce che fungono da pavimento (Normal Z negativa)
-			if face.GetNormal().Z >= -0.001 {
-				return false // Scarta muri e soffitti
+			norm := face.GetNormal()
+			// Filtro Topologico: Selezioniamo solo i pavimenti (Normal Z negativa)
+			if norm.Z >= -0.001 {
+				return false
 			}
-			// CRITICO: Usiamo la proiezione 2D!
-			// Vogliamo sapere se la coordinata XY del player è sovrapposta al triangolo,
-			// ignorando quanto in alto (Z) si trovi la testa del player rispetto al pavimento.
+			// Proiezione 2D
 			if face.PointInside2d(px, py) {
-				targetVol = volume
-				targetFace = face
-				return true
+				// CALCOLO Z ESATTO SUL TRIANGOLO (Plane Equation)
+				// Z = V.z - (Nx*(Px - V.x) + Ny*(Py - V.y)) / Nz
+				// Assumiamo che tu possa recuperare un vertice della faccia, es. face.GetVertex(0)
+				v0 := face.tri[0] // <--- Adattalo al tuo metodo reale per prendere un Vector3 del triangolo
+				floorZ := v0.Z - (norm.X*(px-v0.X)+norm.Y*(py-v0.Y))/norm.Z
+				// Distanza verticale dal player al pavimento
+				zDist := pz - floorZ
+				// Se il pavimento è SOTTO il player (o entro un piccolo margine di compenetrazione/step)
+				// E se è il più vicino che abbiamo trovato finora
+				if zDist >= -0.5 && zDist < minZDist {
+					minZDist = zDist
+					bestVol = volume
+					bestFace = face
+				}
+				// Ritorniamo false per far finire il ciclo locale e testare altri eventuali pavimenti sovrapposti
+				return false
 			}
 			return false
 		})
-		if targetFace != nil {
-			return true
-		}
+
+		// Continuiamo sempre la query globale per coprire il caso di AABB di volumi sovrapposti
 		return false
 	})
 
-	return targetVol, targetFace
+	return bestVol, bestFace
 }
 
 /*

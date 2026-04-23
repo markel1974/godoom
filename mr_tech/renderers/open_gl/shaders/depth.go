@@ -107,6 +107,9 @@ func NewDepth(m *MapMetrics, shadowLightMax int) *Depth {
 
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
 func (s *Depth) SetupSamplers() error {
+	gl.UseProgram(s.prg)
+	diffuseUnits := []int32{0, 1, 2, 3}
+	gl.Uniform1iv(s.GetUniform(DepthLocTexture), 4, &diffuseUnits[0])
 	return nil
 }
 
@@ -232,7 +235,7 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 
 	//ROOM
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
-	gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
+	//gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
 	// --- 2. OMBRE TORCIA (Prospettica) ---

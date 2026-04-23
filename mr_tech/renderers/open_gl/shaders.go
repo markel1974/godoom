@@ -138,12 +138,17 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
 		}
 	}
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetDiffuseArray())
-	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetNormalArray())
-	gl.ActiveTexture(gl.TEXTURE5)
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, w.tex.GetEmissiveArray())
+
+	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
+	for i := 0; i < w.tex.GetBucketsLen(); i++ {
+		diffuse, normal, emissive := w.tex.GetBucket(i)
+		gl.ActiveTexture(gl.TEXTURE0 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, diffuse)
+		gl.ActiveTexture(gl.TEXTURE4 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, normal)
+		gl.ActiveTexture(gl.TEXTURE8 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, emissive)
+	}
 
 	px, _, pz := vi.GetXYZ()
 	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
@@ -192,6 +197,9 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.main.Prepare(vert, vertLen, indices, indicesLen, fbW, fbH)
 	// LIGHTS PREPARE
 	w.lights.Prepare(lights, lightsNum)
+
+	w.bindTextureBuckets()
+
 	// OMBRE
 	w.depth.Render(dc.Render, w.main.GetVAO(), fbW, fbH)
 	// SSAO PREPARE
@@ -244,3 +252,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 // ToggleShadows toggles the state of shadow rendering in the shader system.
 func (w *Shaders) ToggleShadows() { w.SetShadowEnabled(!w.enableShadows) }
+
+func (w *Shaders) bindTextureBuckets() {
+	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
+	for i := 0; i < w.tex.GetBucketsLen(); i++ {
+		diffuse, normal, emissive := w.tex.GetBucket(i)
+
+		gl.ActiveTexture(gl.TEXTURE0 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, diffuse)
+
+		gl.ActiveTexture(gl.TEXTURE4 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, normal)
+
+		gl.ActiveTexture(gl.TEXTURE8 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, emissive)
+	}
+}

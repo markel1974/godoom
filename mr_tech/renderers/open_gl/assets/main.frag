@@ -8,17 +8,36 @@ in float FragDepth;
 in vec3 ViewPos;
 in vec3 NormalView;
 
-uniform sampler2DArray u_texture;
-uniform sampler2DArray u_normalMap;
-uniform sampler2DArray u_emissiveMap;
 uniform sampler2D u_ssao;
 uniform vec2 u_screenResolution;
 uniform float u_emissiveIntensity;
 uniform float u_aoFactor;
 
+uniform sampler2DArray u_texture[4];
+uniform sampler2DArray u_normalMap[4];
+uniform sampler2DArray u_emissiveMap[4];
+
+vec4 getDiffuse(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_texture[0], vec3(tc.xy, l));
+    if (b == 1) return texture(u_texture[1], vec3(tc.xy, l));
+    if (b == 2) return texture(u_texture[2], vec3(tc.xy, l));
+    return texture(u_texture[3], vec3(tc.xy, l));
+}
+
+vec3 getEmissive(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_emissiveMap[0], vec3(tc.xy, l)).rgb;
+    if (b == 1) return texture(u_emissiveMap[1], vec3(tc.xy, l)).rgb;
+    if (b == 2) return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
+    return texture(u_emissiveMap[3], vec3(tc.xy, l)).rgb;
+}
+
 void main()
 {
-    vec4 texColor = texture(u_texture, TexCoords);
+    vec4 texColor = getDiffuse(TexCoords);
     if(texColor.a < 0.5) discard;
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
@@ -34,7 +53,7 @@ void main()
     //float linearAmbient = max(ambientOcclusion, 0.6);
     float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.05);
 
-    vec3 emissive = texture(u_emissiveMap, TexCoords).rgb * u_emissiveIntensity * edgeFade;
+    vec3 emissive = getEmissive(TexCoords) * u_emissiveIntensity * edgeFade;
     // Colore base pulito senza poligoni anneriti
     vec3 baseColor = (albedo * linearAmbient) + emissive;
 

@@ -129,9 +129,13 @@ func (s *Main) Init() error {
 // SetupSamplers initializes and binds sampler uniforms for texture, SSAO, and emissive maps to the shader program.
 func (s *Main) SetupSamplers() error {
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(MainLocTexture), 0)
-	gl.Uniform1i(s.GetUniform(MainLocSSAO), 2)
-	gl.Uniform1i(s.GetUniform(MainLocEmissiveMap), 5)
+	diffuseUnits := []int32{0, 1, 2, 3}
+	emissiveUnits := []int32{8, 9, 10, 11}
+
+	gl.Uniform1iv(s.GetUniform(MainLocTexture), 4, &diffuseUnits[0])
+	gl.Uniform1iv(s.GetUniform(MainLocEmissiveMap), 4, &emissiveUnits[0])
+
+	gl.Uniform1i(s.GetUniform(MainLocSSAO), 14) // Spostato su unit 14
 	return nil
 }
 
@@ -362,7 +366,7 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint3
 
 	gl.BindVertexArray(s.mainVAO[s.frameIdx])
 
-	gl.ActiveTexture(gl.TEXTURE2)
+	gl.ActiveTexture(gl.TEXTURE14)
 	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
 
 	// enable Alpha To Coverage only for the main geometry

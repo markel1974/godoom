@@ -38,6 +38,9 @@ func NewGeometry() *Geometry {
 
 // SetupSamplers initializes and configures texture samplers for the Geometry instance.
 func (s *Geometry) SetupSamplers() error {
+	gl.UseProgram(s.prg)
+	diffuseUnits := []int32{0, 1, 2, 3}
+	gl.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
 	return nil
 }
 
@@ -98,7 +101,7 @@ func (s *Geometry) UpdateUniforms(view, proj [16]float32) {
 // Render applies shader program, updates uniform values, and executes the provided rendering function.
 func (s *Geometry) Render(renderScene func()) {
 	gl.UseProgram(s.GetProgram())
-	gl.Uniform1i(s.GetUniform(GeometryLocTexture), 0)
+	// RIMOSSO: gl.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
 	gl.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])
 	gl.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, &s.proj[0])
 	renderScene()

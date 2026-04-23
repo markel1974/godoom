@@ -7,120 +7,147 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Textures provides methods and structures for managing a collection of 2D texture layers used in rendering operations.
-// It organizes textures in a map and handles creation and allocation of texture arrays for diffuse, normal, and emissive data.
-type Textures struct {
-	textures      map[*textures.Texture]float32
-	diffuseArray  uint32
-	normalArray   uint32
-	emissiveArray uint32
+//TODO TEXTURE BUCKETS
+
+// Bucket represents a container for texture arrays and related metadata used in texture management systems.
+type Bucket struct {
+	Size          int
+	Count         int32
+	Layer         int32
+	DiffuseArray  uint32
+	NormalArray   uint32
+	EmissiveArray uint32
 }
 
-// NewTextures creates and initializes a new instance of Textures with an empty texture-to-glTexture mapping.
+// Textures manages a collection of 2D textures and organizes them into fixed-size buckets for efficient rendering.
+type Textures struct {
+	textures map[*textures.Texture]float32
+	buckets  []Bucket
+}
+
+// NewTextures creates and returns a new instance of Textures with an initialized map for texture storage.
 func NewTextures() *Textures {
 	return &Textures{
 		textures: make(map[*textures.Texture]float32),
 	}
 }
 
-// Get retrieves the texture layer associated with the given texture and returns a boolean indicating its presence.
+// Get retrieves the float32 value and existence status for the given texture key from the textures map.
 func (tx *Textures) Get(tex *textures.Texture) (float32, bool) {
 	t, ok := tx.textures[tex]
 	return t, ok
 }
 
-// GetDiffuseArray returns the OpenGL texture ID of the diffuse texture array stored in the Textures instance.
-func (tx *Textures) GetDiffuseArray() uint32 { return tx.diffuseArray }
+// GetBucketsLen returns the number of buckets in the Textures instance as an integer.
+func (tx *Textures) GetBucketsLen() int {
+	return len(tx.buckets)
+}
 
-// GetNormalArray returns the texture array ID used for storing normal maps as a uint32.
-func (tx *Textures) GetNormalArray() uint32 { return tx.normalArray }
+// GetBucket retrieves the DiffuseArray, NormalArray, and EmissiveArray texture IDs for the specified bucket index.
+func (tx *Textures) GetBucket(b int) (uint32, uint32, uint32) {
+	return tx.buckets[b].DiffuseArray, tx.buckets[b].NormalArray, tx.buckets[b].EmissiveArray
+}
 
-// GetEmissiveArray retrieves the OpenGL ID of the emissive texture 2D array used for rendering.
-func (tx *Textures) GetEmissiveArray() uint32 { return tx.emissiveArray }
-
-// Setup initializes the texture arrays and maps, allocates memory for texture storage, and uploads texture data to the GPU.
+// Setup initializes texture buckets, allocates VRAM, resizes textures, generates mipmaps, and populates texture data.
 func (tx *Textures) Setup(t textures.ITextures) error {
 	const stride = 4
 	tx.textures = make(map[*textures.Texture]float32)
 	names := t.GetNames()
-	layerCount := int32(len(names))
 
-	if layerCount == 0 {
+	if len(names) == 0 {
 		return nil
 	}
 
-	// 1. FIND MAXIMUM DIMENSIONS (or set a fixed 256x256)
-	var maxW, maxH int
+	slots := []int{64, 128, 256, 1024}
+
+	idxByDim := func(maxDim int) int {
+		bIdx := len(slots) - 1
+		for x := 0; x < bIdx; x++ {
+			if maxDim <= slots[x] {
+				return x
+			}
+		}
+		return bIdx
+	}
+
+	tx.buckets = make([]Bucket, len(slots))
+	for i := range slots {
+		tx.buckets[i] = Bucket{Size: slots[i], Count: 0}
+	}
+
 	for _, id := range names {
 		tn := t.Get([]string{id})
-		if tn != nil && len(tn) > 0 {
-			w, h := tn[0].Size()
-			if w > maxW {
-				maxW = w
-			}
-			if h > maxH {
-				maxH = h
-			}
+		if len(tn) == 0 {
+			continue
+		}
+		w, h := tn[0].Size()
+		maxDim := w
+		if h > maxDim {
+			maxDim = h
+		}
+		idx := idxByDim(maxDim)
+		tx.buckets[idx].Count++
+	}
+
+	// 3. Allocazione VRAM selettiva
+	for i := range tx.buckets {
+		if tx.buckets[i].Count > 0 {
+			tx.buckets[i].DiffuseArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].NormalArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].EmissiveArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
 		}
 	}
 
-	// Avoid odd dimensions, force power of two for mipmap safety
-	maxW = nextPowerOfTwo(maxW)
-	maxH = nextPowerOfTwo(maxH)
-
-	// 2. VRAM ALLOCATION OF THE 3 ARRAYS
-	tx.diffuseArray = createTextureArray(maxW, maxH, layerCount)
-	tx.normalArray = createTextureArray(maxW, maxH, layerCount)
-	tx.emissiveArray = createTextureArray(maxW, maxH, layerCount)
-
-	blackPixels := createBlackPixels(maxW, maxH, stride)
-
-	// 3. LAYER POPULATION
-	layer := int32(0)
+	// 4. Popolamento e Packing
 	for _, id := range names {
 		tn := t.Get([]string{id})
-		if tn == nil || len(tn) == 0 {
+		if len(tn) == 0 {
 			continue
 		}
 		tex := tn[0]
-		origW, origH, pixels := tex.RGBA()
-		// CPU pixel resize if texture is smaller than the layer
-		resizedPixels := resizePixelsFixedPoint(pixels, origW, origH, maxW, maxH, stride)
-		// Normal generation
-		normalPixels := generateNormalMap(resizedPixels, maxW, maxH, stride, 3.0)
-		// Upload Diffuse Layer
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.diffuseArray)
-		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
-		// Upload Normal Layer
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.normalArray)
-		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(normalPixels))
-		// Upload Emissive Layer (Black by default)
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.emissiveArray)
-
-		if len(id) > 0 && (id[0] == '*' || id[0] == '+') {
-			// Inietta i pixel diffuse direttamente nel canale emissivo
-			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
-		} else {
-			// Default (Nero)
-			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+		w, h := tex.Size()
+		maxDim := w
+		if h > maxDim {
+			maxDim = h
 		}
 
-		//gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(maxW), int32(maxH), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+		bIdx := idxByDim(maxDim)
+		size := tx.buckets[bIdx].Size
+		layer := tx.buckets[bIdx].Layer
+		origW, origH, pixels := tex.RGBA()
+		resizedPixels := resizePixelsFixedPoint(pixels, origW, origH, size, size, stride)
+		normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
+		blackPixels := createBlackPixels(size, size, stride)
 
-		tx.textures[tex] = float32(layer)
-		layer++
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
+		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
+
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
+		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(normalPixels))
+
+		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
+		if len(id) > 0 && (id[0] == '*' || id[0] == '+') {
+			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
+		} else {
+			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+		}
+		//Impacchettiamo Bucket e Layer in un solo Float
+		packedValue := float32(bIdx*1000) + float32(layer)
+		tx.textures[tex] = packedValue
+		tx.buckets[bIdx].Layer++
 	}
 
-	// 4. GLOBAL MIPMAP GENERATION (Now safe)
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.diffuseArray)
-	gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
-
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.normalArray)
-	gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
-
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.emissiveArray)
-	gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
-
+	// 5. Generazione MipMaps globali (aggiunto l'emissivo!)
+	for i, l := range tx.buckets {
+		if l.Layer > 0 {
+			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].DiffuseArray)
+			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
+			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].NormalArray)
+			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
+			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].EmissiveArray)
+			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
+		}
+	}
 	return nil
 }
 

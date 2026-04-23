@@ -9,8 +9,8 @@ in vec3 ViewPos;
 in vec3 NormalView;
 in vec4 FragPosLightFlash;
 
-uniform sampler2DArray u_texture;
-uniform sampler2DArray u_normalMap;
+uniform sampler2DArray u_texture[4];
+uniform sampler2DArray u_normalMap[4];
 uniform sampler2DShadow u_flashShadowMap;
 uniform mat4 u_view;
 uniform mat4 u_invView;
@@ -34,6 +34,24 @@ uniform int u_volumetricSteps;
 uniform int u_isAbsolute;
 
 const float PI = 3.14159265359;
+
+vec4 getDiffuse(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_texture[0], vec3(tc.xy, l));
+    if (b == 1) return texture(u_texture[1], vec3(tc.xy, l));
+    if (b == 2) return texture(u_texture[2], vec3(tc.xy, l));
+    return texture(u_texture[3], vec3(tc.xy, l));
+}
+
+vec3 getNormal(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
+    if (b == 1) return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
+    if (b == 2) return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
+    return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
+}
 
 float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
@@ -70,7 +88,7 @@ vec3 calculateNormal() {
     if (geoNormal.z < 0.0) geoNormal = -geoNormal;
     if (dot(geoNormal, ViewPos) > 0.0) geoNormal = -geoNormal;
 
-    vec3 mapColor = texture(u_normalMap, TexCoords).rgb;
+    vec3 mapColor = getNormal(TexCoords);
     if (length(mapColor) < 0.1) return geoNormal;
 
     vec3 unpacked = (mapColor * 2.0) - 1.0;
@@ -105,7 +123,7 @@ void main()
 {
     if (u_flashIntensityFactor <= 0.01) discard;
 
-    vec4 texColor = texture(u_texture, TexCoords);
+    vec4 texColor = getDiffuse(TexCoords);
     if(texColor.a < 0.5) discard;
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));

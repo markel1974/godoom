@@ -97,9 +97,11 @@ func (s *Lights) Init() error {
 // SetupSamplers configures shader samplers for texture, normal map, and room shadow map locations.
 func (s *Lights) SetupSamplers() error {
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(LightLocTexture), 0)
-	gl.Uniform1i(s.GetUniform(LightLocNormalMap), 1)
-	gl.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 3)
+	diffuseUnits := []int32{0, 1, 2, 3}
+	normalUnits := []int32{4, 5, 6, 7}
+	gl.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in flashlight.go
+	gl.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
+	gl.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl.TEXTURE12 per Room, gl.TEXTURE13 per Flash
 
 	return nil
 }
@@ -210,7 +212,7 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 
 	if s.shadows != 0 {
-		gl.ActiveTexture(gl.TEXTURE3)
+		gl.ActiveTexture(gl.TEXTURE12)
 		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
 	}
 

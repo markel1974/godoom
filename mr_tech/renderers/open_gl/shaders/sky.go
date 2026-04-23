@@ -40,6 +40,11 @@ func NewSky() *Sky {
 
 // SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
 func (s *Sky) SetupSamplers() error {
+	gl.UseProgram(s.prg)
+
+	skyUnits := []int32{0, 1, 2, 3}
+	gl.Uniform1iv(s.GetUniform(ShaderSkyLocSky), 4, &skyUnits[0])
+
 	gl.GenVertexArrays(1, &s.skyVAO)
 	gl.BindVertexArray(s.skyVAO)
 	gl.GenBuffers(1, &s.skyVBO)

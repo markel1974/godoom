@@ -96,9 +96,11 @@ func (s *ShadowLight) HasShadow() bool {
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
 func (s *ShadowLight) SetupSamplers() error {
 	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(FlashLocTexture), 0)
-	gl.Uniform1i(s.GetUniform(FlashLocNormalMap), 1)
-	gl.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 4)
+	diffuseUnits := []int32{0, 1, 2, 3}
+	normalUnits := []int32{4, 5, 6, 7}
+	gl.Uniform1iv(s.GetUniform(FlashLocTexture), 4, &diffuseUnits[0])
+	gl.Uniform1iv(s.GetUniform(FlashLocNormalMap), 4, &normalUnits[0])
+	gl.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 13)
 	return nil
 }
 
@@ -201,7 +203,7 @@ func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
 	gl.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
 	if s.shadows {
-		gl.ActiveTexture(gl.TEXTURE4)
+		gl.ActiveTexture(gl.TEXTURE13)
 		gl.BindTexture(gl.TEXTURE_2D, shadowTex)
 	}
 

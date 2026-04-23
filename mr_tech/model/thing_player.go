@@ -22,13 +22,7 @@ type ThingPlayer struct {
 	ducking        bool
 	lightIntensity float64
 	bobbing        *Bobbing
-	flashFovDeg    float64
-	flashZNear     float64
-	flashZFar      float64
-	flashFactor    float64
-	flashFalloff   float64
-	flashOffsetX   float64
-	flashOffsetY   float64
+	flash          *Flash
 	debug          bool
 	*ThingBase
 }
@@ -58,13 +52,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
-		flashFovDeg:    c.Flash.FovDeg,
-		flashZNear:     c.Flash.ZNear,
-		flashZFar:      c.Flash.ZFar,
-		flashFactor:    c.Flash.Factor,
-		flashFalloff:   c.Flash.Falloff,
-		flashOffsetX:   c.Flash.OffsetX,
-		flashOffsetY:   c.Flash.OffsetY,
+		flash:          NewFlash(c.Flash),
 	}
 	p.id = "PLAYER"
 	p.SetAngle(c.Angle)
@@ -184,6 +172,11 @@ func (p *ThingPlayer) SetJump(multi bool) {
 // SetDucking toggles the player's ducking state between true and false.
 func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
+}
+
+// GetFlash retrieves the flash instance associated with the ThingPlayer.
+func (p *ThingPlayer) GetFlash() *Flash {
+	return p.flash
 }
 
 // GetBob retrieves the current bobbing values of the ThingPlayer as three float64 components (x, y, z).
@@ -333,39 +326,4 @@ func (p *ThingPlayer) Fire() {
 
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 	p.FireHitscan(spawnPos, dirX, dirY, dirZ)
-}
-
-// GetFlashFovDeg returns the field of view in degrees for the flash light.
-func (p *ThingPlayer) GetFlashFovDeg() float64 {
-	return p.flashFovDeg
-}
-
-// GetFlashZNear returns the near clipping plane distance for the flash light.
-func (p *ThingPlayer) GetFlashZNear() float64 {
-	return p.flashZNear
-}
-
-// GetFlashZFar returns the far clipping plane distance for the flash light.
-func (p *ThingPlayer) GetFlashZFar() float64 {
-	return p.flashZFar
-}
-
-// GetFlashFactor returns the intensity factor for the flash light.
-func (p *ThingPlayer) GetFlashFactor() float64 {
-	return p.flashFactor
-}
-
-// GetFlashFalloff returns the falloff distance for the flash light.
-func (p *ThingPlayer) GetFlashFalloff() float64 {
-	return p.flashFalloff
-}
-
-// GetFlashOffsetX returns the horizontal offset for the flash light position.
-func (p *ThingPlayer) GetFlashOffsetX() float64 {
-	return p.flashOffsetX
-}
-
-// GetFlashOffsetY returns the vertical offset for the flash light position.
-func (p *ThingPlayer) GetFlashOffsetY() float64 {
-	return p.flashOffsetY
 }

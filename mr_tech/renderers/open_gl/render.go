@@ -200,9 +200,9 @@ func (w *RenderOpenGL) doRun() {
 			case pixels.KeyRight:
 				right = true
 			case pixels.KeyL:
-				w.shaders.IncreaseFlashFactor()
+				w.player.GetFlash().IncreaseFlashFactor()
 			case pixels.KeyH:
-				w.shaders.DecreaseFlashFactor()
+				w.player.GetFlash().DecreaseFlashFactor()
 			}
 		}
 

@@ -62,41 +62,20 @@ const (
 type ShadowLight struct {
 	prg        uint32
 	table      [FlashLocLast]int32
-	factor     float32
 	shadows    bool
 	shadowsInt int32
-	metrics    *MapMetrics
 	cal        *model.Calibration
 }
 
 // NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
-func NewShaderShadowLight(metrics *MapMetrics, cal *model.Calibration, factor float32) *ShadowLight {
+func NewShaderShadowLight(cal *model.Calibration) *ShadowLight {
 	f := &ShadowLight{
-		metrics:    metrics,
 		cal:        cal,
-		factor:     factor,
 		shadows:    false,
 		shadowsInt: 0,
 	}
 	f.EnableShadows(false)
 	return f
-}
-
-// GetFactor returns the current intensity factor of the flashlight.
-func (s *ShadowLight) GetFactor() float32 {
-	return s.factor
-}
-
-// IncreaseFlashFactor increments the flashlight's intensity factor by increasing the `factor` field by 1.
-func (s *ShadowLight) IncreaseFlashFactor() {
-	s.factor++
-}
-
-// DecreaseFlashFactor reduces the flashlight's intensity factor by 1, ensuring it does not drop below 0.
-func (s *ShadowLight) DecreaseFlashFactor() {
-	if s.factor > 0 {
-		s.factor--
-	}
 }
 
 // EnableShadows toggles shadow rendering for the flashlight and updates related shadow parameters.

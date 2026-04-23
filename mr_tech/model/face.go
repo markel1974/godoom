@@ -194,51 +194,6 @@ func (s *Face) PointInLineSide(px, py float64) bool {
 	return true
 }
 
-/*
-// RayIntersectDist calculates if a ray intersects the triangle and returns a boolean and the distance to the intersection.
-func (s *Face) RayIntersectDist(px, py, pz, dx, dy, dz float64) (bool, float64) {
-	const eps = 1e-8
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
-
-	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-
-	hx := dy*e2z - dz*e2y
-	hy := dz*e2x - dx*e2z
-	hz := dx*e2y - dy*e2x
-
-	a := e1x*hx + e1y*hy + e1z*hz
-	// Culling dei raggi paralleli al triangolo
-	if a > -eps && a < eps {
-		return false, 0.0
-	}
-
-	invDet := 1.0 / a
-	sx, sy, sz := px-p0.X, py-p0.Y, pz-p0.Z
-
-	u := (sx*hx + sy*hy + sz*hz) * invDet
-	if u < 0.0 || u > 1.0 {
-		return false, 0.0
-	}
-
-	qx := sy*e1z - sz*e1y
-	qy := sz*e1x - sx*e1z
-	qz := sx*e1y - sy*e1x
-
-	v := (dx*qx + dy*qy + dz*qz) * invDet
-	if v < 0.0 || u+v > 1.0 {
-		return false, 0.0
-	}
-	// t è la distanza dall'origine del raggio al punto di intersezione
-	t := (e2x*qx + e2y*qy + e2z*qz) * invDet
-	// Ritorna true e la distanza solo se l'impatto è in avanti (davanti al raggio)
-	if t > eps {
-		return true, t
-	}
-	return false, 0.0
-}
-*/
-
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
 func (s *Face) PointInside2d(px, py float64) bool {
 	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
@@ -250,40 +205,6 @@ func (s *Face) PointInside2d(px, py float64) bool {
 	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
 	return !(hasNeg && hasPos)
 }
-
-/*
-
-// PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
-// Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
-func (s *Face) PointInside3d(px, py, pz float64) bool {
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
-	// 1. Calcolo dei vettori degli spigoli (v0, v1) e del vettore verso il punto (v2)
-	v0x, v0y, v0z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	v2x, v2y, v2z := px-p0.X, py-p0.Y, pz-p0.Z
-	// 2. Calcolo dei Prodotti Scalari (Dot Products)
-	d00 := v0x*v0x + v0y*v0y + v0z*v0z
-	d01 := v0x*v1x + v0y*v1y + v0z*v1z
-	d02 := v0x*v2x + v0y*v2y + v0z*v2z
-	d11 := v1x*v1x + v1y*v1y + v1z*v1z
-	d12 := v1x*v2x + v1y*v2y + v1z*v2z
-	// 3. Calcolo del denominatore
-	denom := (d00 * d11) - (d01 * d01)
-	if denom == 0 {
-		return false // Sicurezza: Triangolo degenere (linea o punto)
-	}
-	invDenom := 1.0 / denom
-	// 4. Calcolo delle coordinate baricentriche (u, v)
-	u := ((d11 * d02) - (d01 * d12)) * invDenom
-	v := ((d00 * d12) - (d01 * d02)) * invDenom
-	// 5. Verifica tolleranza (eps) per la virgola mobile
-	const eps = -0.001
-	// Il punto è DENTRO il triangolo se u >= 0, v >= 0 e u+v <= 1
-	// (usiamo la tua tolleranza eps per prevenire errori di arrotondamento sui bordi)
-	return (u >= eps) && (v >= eps) && (u+v <= 1.0-eps)
-}
-
-*/
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
 func (s *Face) Scale2d(scale float64) {
@@ -303,6 +224,97 @@ func (s *Face) Rebuild() {
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
 func (s *Face) GetAABB() *physics.AABB {
 	return s.aabb
+}
+
+func (s *Face) SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radius float64) (float64, float64, float64, float64, bool) {
+	n := s.normal
+	p0 := s.tri[0]
+	// Distanza con segno dal piano
+	distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
+	distEnd := (pX-p0.X)*n.X + (pY-p0.Y)*n.Y + (pZ-p0.Z)*n.Z
+
+	// --- FIX: DETERMINAZIONE DEL LATO (Double-Sided) ---
+	side := 1.0
+	if distStart < 0 {
+		side = -1.0
+	}
+
+	// Normalizziamo le distanze rispetto al lato di approccio
+	sDistStart := distStart * side
+	sDistEnd := distEnd * side
+
+	hit := false
+	var hitT float64
+	var cNx, cNy, cNz float64
+
+	// Fase A: Sweep Test (ora usa sDist)
+	hitPlane := false
+	var hX, hY, hZ float64
+	if sDistStart >= -0.01 && sDistEnd < radius {
+		dotVel := sDistEnd - sDistStart
+		if dotVel < 0 {
+			timeHit := (radius - sDistStart) / dotVel
+			if timeHit < 0 {
+				timeHit = 0
+			}
+			if timeHit <= 1.0 {
+				hX = viewX + velX*timeHit
+				hY = viewY + velY*timeHit
+				hZ = viewZ + velZ*timeHit
+				hitPlane = true
+			}
+		}
+	}
+
+	pLen := len(s.tri)
+	for i := 0; i < pLen; i++ {
+		start, end := s.tri[i], s.tri[(i+1)%pLen]
+		edgeX, edgeY, edgeZ := end.X-start.X, end.Y-start.Y, end.Z-start.Z
+		edgeLenSq := (edgeX * edgeX) + (edgeY * edgeY) + (edgeZ * edgeZ)
+
+		if hitPlane && !hit {
+			vX, vY, vZ := hX-start.X, hY-start.Y, hZ-start.Z
+			dotEdge := (vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)
+			if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
+				hit = true
+				dotVel := sDistEnd - sDistStart
+				timeHit := (radius - sDistStart) / dotVel
+				hitT = math.Max(0, timeHit)
+				// INVERTIAMO LA NORMALE se colpiamo dal retro (side = -1)
+				cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+			}
+		}
+
+		// Fase B: Spigoli/Vertici (Double-Sided)
+		if !hit {
+			vX, vY, vZ := pX-start.X, pY-start.Y, pZ-start.Z
+			tProj := 0.0
+			if edgeLenSq > 0 {
+				tProj = math.Max(0.0, math.Min(1.0, (vX*edgeX+vY*edgeY+vZ*edgeZ)/edgeLenSq))
+			}
+			diffX := pX - (start.X + tProj*edgeX)
+			diffY := pY - (start.Y + tProj*edgeY)
+			diffZ := pZ - (start.Z + tProj*edgeZ)
+
+			distSq := (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
+			if distSq < radius*radius {
+				hit = true
+				hitT = 0.0
+				cDist := math.Sqrt(distSq)
+				if tProj > 0.0 && tProj < 1.0 {
+					// Anche qui, normale relativa al lato di approccio
+					cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+				} else {
+					if cDist > 0.0001 {
+						cNx, cNy, cNz = diffX/cDist, diffY/cDist, diffZ/cDist
+					} else {
+						cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+					}
+				}
+			}
+		}
+	}
+	return hitT, cNx, cNy, cNz, hit
 }
 
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
@@ -404,3 +416,80 @@ func (s *Face) computeUV() {
 		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
 	}
 }
+
+/*
+// PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.
+// Utilizza il calcolo delle Coordinate Baricentriche per la massima efficienza.
+func (s *Face) PointInside3d(px, py, pz float64) bool {
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+	// 1. Calcolo dei vettori degli spigoli (v0, v1) e del vettore verso il punto (v2)
+	v0x, v0y, v0z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	v2x, v2y, v2z := px-p0.X, py-p0.Y, pz-p0.Z
+	// 2. Calcolo dei Prodotti Scalari (Dot Products)
+	d00 := v0x*v0x + v0y*v0y + v0z*v0z
+	d01 := v0x*v1x + v0y*v1y + v0z*v1z
+	d02 := v0x*v2x + v0y*v2y + v0z*v2z
+	d11 := v1x*v1x + v1y*v1y + v1z*v1z
+	d12 := v1x*v2x + v1y*v2y + v1z*v2z
+	// 3. Calcolo del denominatore
+	denom := (d00 * d11) - (d01 * d01)
+	if denom == 0 {
+		return false // Sicurezza: Triangolo degenere (linea o punto)
+	}
+	invDenom := 1.0 / denom
+	// 4. Calcolo delle coordinate baricentriche (u, v)
+	u := ((d11 * d02) - (d01 * d12)) * invDenom
+	v := ((d00 * d12) - (d01 * d02)) * invDenom
+	// 5. Verifica tolleranza (eps) per la virgola mobile
+	const eps = -0.001
+	// Il punto è DENTRO il triangolo se u >= 0, v >= 0 e u+v <= 1
+	// (usiamo la tua tolleranza eps per prevenire errori di arrotondamento sui bordi)
+	return (u >= eps) && (v >= eps) && (u+v <= 1.0-eps)
+}
+*/
+
+/*
+// RayIntersectDist calculates if a ray intersects the triangle and returns a boolean and the distance to the intersection.
+func (s *Face) RayIntersectDist(px, py, pz, dx, dy, dz float64) (bool, float64) {
+	const eps = 1e-8
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+
+	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+
+	hx := dy*e2z - dz*e2y
+	hy := dz*e2x - dx*e2z
+	hz := dx*e2y - dy*e2x
+
+	a := e1x*hx + e1y*hy + e1z*hz
+	// Culling dei raggi paralleli al triangolo
+	if a > -eps && a < eps {
+		return false, 0.0
+	}
+
+	invDet := 1.0 / a
+	sx, sy, sz := px-p0.X, py-p0.Y, pz-p0.Z
+
+	u := (sx*hx + sy*hy + sz*hz) * invDet
+	if u < 0.0 || u > 1.0 {
+		return false, 0.0
+	}
+
+	qx := sy*e1z - sz*e1y
+	qy := sz*e1x - sx*e1z
+	qz := sx*e1y - sy*e1x
+
+	v := (dx*qx + dy*qy + dz*qz) * invDet
+	if v < 0.0 || u+v > 1.0 {
+		return false, 0.0
+	}
+	// t è la distanza dall'origine del raggio al punto di intersezione
+	t := (e2x*qx + e2y*qy + e2z*qz) * invDet
+	// Ritorna true e la distanza solo se l'impatto è in avanti (davanti al raggio)
+	if t > eps {
+		return true, t
+	}
+	return false, 0.0
+}
+*/

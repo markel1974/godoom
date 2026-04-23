@@ -90,95 +90,100 @@ func (s *Volumes) QueryClosestFace(z physics.IAABB, viewX, viewY, viewZ, pX, pY,
 				}
 			}
 
-			n := face.GetNormal()
-			pts := face.GetPoints()
-			p0 := pts[0]
+			hitT, cNx, cNy, cNz, hit := face.SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radius)
 
-			// Distanza con segno dal piano
-			distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
-			distEnd := (pX-p0.X)*n.X + (pY-p0.Y)*n.Y + (pZ-p0.Z)*n.Z
+			/*
+				n := face.GetNormal()
+				pts := face.GetPoints()
+				p0 := pts[0]
 
-			// --- FIX: DETERMINAZIONE DEL LATO (Double-Sided) ---
-			side := 1.0
-			if distStart < 0 {
-				side = -1.0
-			}
+				// Distanza con segno dal piano
+				distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
+				distEnd := (pX-p0.X)*n.X + (pY-p0.Y)*n.Y + (pZ-p0.Z)*n.Z
 
-			// Normalizziamo le distanze rispetto al lato di approccio
-			sDistStart := distStart * side
-			sDistEnd := distEnd * side
-
-			hit := false
-			var hitT float64
-			var cNx, cNy, cNz float64
-
-			// Fase A: Sweep Test (ora usa sDist)
-			hitPlane := false
-			var hX, hY, hZ float64
-			if sDistStart >= -0.01 && sDistEnd < radius {
-				dotVel := sDistEnd - sDistStart
-				if dotVel < 0 {
-					timeHit := (radius - sDistStart) / dotVel
-					if timeHit < 0 {
-						timeHit = 0
-					}
-					if timeHit <= 1.0 {
-						hX = viewX + velX*timeHit
-						hY = viewY + velY*timeHit
-						hZ = viewZ + velZ*timeHit
-						hitPlane = true
-					}
+				// --- FIX: DETERMINAZIONE DEL LATO (Double-Sided) ---
+				side := 1.0
+				if distStart < 0 {
+					side = -1.0
 				}
-			}
 
-			pLen := len(pts)
-			for i := 0; i < pLen; i++ {
-				start, end := pts[i], pts[(i+1)%pLen]
-				edgeX, edgeY, edgeZ := end.X-start.X, end.Y-start.Y, end.Z-start.Z
-				edgeLenSq := (edgeX * edgeX) + (edgeY * edgeY) + (edgeZ * edgeZ)
+				// Normalizziamo le distanze rispetto al lato di approccio
+				sDistStart := distStart * side
+				sDistEnd := distEnd * side
 
-				if hitPlane && !hit {
-					vX, vY, vZ := hX-start.X, hY-start.Y, hZ-start.Z
-					dotEdge := (vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)
-					if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
-						hit = true
-						dotVel := sDistEnd - sDistStart
+				hit := false
+				var hitT float64
+				var cNx, cNy, cNz float64
+
+				// Fase A: Sweep Test (ora usa sDist)
+				hitPlane := false
+				var hX, hY, hZ float64
+				if sDistStart >= -0.01 && sDistEnd < radius {
+					dotVel := sDistEnd - sDistStart
+					if dotVel < 0 {
 						timeHit := (radius - sDistStart) / dotVel
-						hitT = math.Max(0, timeHit)
-						// INVERTIAMO LA NORMALE se colpiamo dal retro (side = -1)
-						cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+						if timeHit < 0 {
+							timeHit = 0
+						}
+						if timeHit <= 1.0 {
+							hX = viewX + velX*timeHit
+							hY = viewY + velY*timeHit
+							hZ = viewZ + velZ*timeHit
+							hitPlane = true
+						}
 					}
 				}
 
-				// Fase B: Spigoli/Vertici (Double-Sided)
-				if !hit {
-					vX, vY, vZ := pX-start.X, pY-start.Y, pZ-start.Z
-					tProj := 0.0
-					if edgeLenSq > 0 {
-						tProj = math.Max(0.0, math.Min(1.0, (vX*edgeX+vY*edgeY+vZ*edgeZ)/edgeLenSq))
-					}
-					diffX := pX - (start.X + tProj*edgeX)
-					diffY := pY - (start.Y + tProj*edgeY)
-					diffZ := pZ - (start.Z + tProj*edgeZ)
+				pLen := len(pts)
+				for i := 0; i < pLen; i++ {
+					start, end := pts[i], pts[(i+1)%pLen]
+					edgeX, edgeY, edgeZ := end.X-start.X, end.Y-start.Y, end.Z-start.Z
+					edgeLenSq := (edgeX * edgeX) + (edgeY * edgeY) + (edgeZ * edgeZ)
 
-					distSq := (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
-					if distSq < radius*radius {
-						hit = true
-						hitT = 0.0
-						cDist := math.Sqrt(distSq)
-						if tProj > 0.0 && tProj < 1.0 {
-							// Anche qui, normale relativa al lato di approccio
+					if hitPlane && !hit {
+						vX, vY, vZ := hX-start.X, hY-start.Y, hZ-start.Z
+						dotEdge := (vX * edgeX) + (vY * edgeY) + (vZ * edgeZ)
+						if dotEdge >= -0.1 && dotEdge <= edgeLenSq+0.1 {
+							hit = true
+							dotVel := sDistEnd - sDistStart
+							timeHit := (radius - sDistStart) / dotVel
+							hitT = math.Max(0, timeHit)
+							// INVERTIAMO LA NORMALE se colpiamo dal retro (side = -1)
 							cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
-						} else {
-							if cDist > 0.0001 {
-								cNx, cNy, cNz = diffX/cDist, diffY/cDist, diffZ/cDist
-							} else {
+						}
+					}
+
+					// Fase B: Spigoli/Vertici (Double-Sided)
+					if !hit {
+						vX, vY, vZ := pX-start.X, pY-start.Y, pZ-start.Z
+						tProj := 0.0
+						if edgeLenSq > 0 {
+							tProj = math.Max(0.0, math.Min(1.0, (vX*edgeX+vY*edgeY+vZ*edgeZ)/edgeLenSq))
+						}
+						diffX := pX - (start.X + tProj*edgeX)
+						diffY := pY - (start.Y + tProj*edgeY)
+						diffZ := pZ - (start.Z + tProj*edgeZ)
+
+						distSq := (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
+						if distSq < radius*radius {
+							hit = true
+							hitT = 0.0
+							cDist := math.Sqrt(distSq)
+							if tProj > 0.0 && tProj < 1.0 {
+								// Anche qui, normale relativa al lato di approccio
 								cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+							} else {
+								if cDist > 0.0001 {
+									cNx, cNy, cNz = diffX/cDist, diffY/cDist, diffZ/cDist
+								} else {
+									cNx, cNy, cNz = n.X*side, n.Y*side, n.Z*side
+								}
 							}
 						}
 					}
 				}
-			}
+
+			*/
 
 			if hit && hitT <= minT {
 				minT = hitT

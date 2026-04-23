@@ -45,6 +45,7 @@ func NewVolume3d(modelId int, id string, tag string) *Volume {
 	return v
 }
 
+// NewVolumeDetails3d creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
 func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
@@ -219,6 +220,7 @@ func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
 	return nil
 }
 
+// PointInside2d checks if a 3D point (px, py, pz) lies inside the 2D bounds of the Volume, accounting for fixed Z bounds.
 func (v *Volume) PointInside2d(px, py, pz float64) bool {
 	if v.hasFixedZ {
 		const epsilon = 0.01
@@ -229,50 +231,6 @@ func (v *Volume) PointInside2d(px, py, pz float64) bool {
 	}
 	return false
 }
-
-/*
-// PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
-func (v *Volume) PointInside3d(px, py, pz float64) bool {
-	if v.hasFixedZ {
-		const epsilon = 0.01
-		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
-			return false
-		}
-		return v.PointInLineSide(px, py)
-	}
-
-	// Spara UN SOLO raggio (una direzione asimmetrica per evitare parallelismi perfetti)
-	dirX, dirY, dirZ := 0.312, 0.945, 0.111
-
-	minT := math.MaxFloat64
-	var closestFace *Face // Sostituisci col tuo tipo Faccia esatto
-
-	// 1. Trova l'intersezione più vicina in assoluto
-	for _, face := range v.faces {
-		hit, t := face.RayIntersectDist(px, py, pz, dirX, dirY, dirZ)
-
-		// t > 0.0001 evita l'auto-intersezione se il punto è esattamente sul bordo
-		if hit && t > 0.0001 && t < minT {
-			minT = t
-			closestFace = face
-		}
-	}
-
-	// 2. Se non colpiamo nulla verso l'infinito, siamo chiaramente fuori
-	if closestFace == nil {
-		return false
-	}
-
-	// 3. Risoluzione tramite Dot Product
-	// closestFace.nx, ny, nz devono essere la NORMALE USCENTE (Outward Normal) del triangolo
-	normal := closestFace.GetNormal()
-	dot := normal.X*dirX + normal.Y*dirY + normal.Z*dirZ
-
-	// Se il dot è > 0, raggio e normale vanno nella stessa direzione.
-	// Significa che stai "sfondando" la parete da dentro verso fuori.
-	return dot > 0.0
-}
-*/
 
 // PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.
 func (v *Volume) PointInLineSide(px, py float64) bool {
@@ -329,23 +287,45 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 }
 
 /*
-// KCC Sweep Target AABB
-targetAABB := physics.NewAABB(minX, minY, minZ, maxX, maxY, maxZ)
+// PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
+func (v *Volume) PointInside3d(px, py, pz float64) bool {
+	if v.hasFixedZ {
+		const epsilon = 0.01
+		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
+			return false
+		}
+		return v.PointInLineSide(px, py)
+	}
 
-// 1. Interroga l'albero Globale per trovare in quali volumi stiamo entrando
-globalTree.QueryOverlaps(targetAABB, func(volObj physics.IAABB) bool {
-    location := volObj.(*Volume)
+	// Spara UN SOLO raggio (una direzione asimmetrica per evitare parallelismi perfetti)
+	dirX, dirY, dirZ := 0.312, 0.945, 0.111
 
-    // 2. Interroga l'albero Locale del location trovato per estrarre SOLO i triangoli vicini
-    location.facesTree.QueryOverlaps(targetAABB, func(faceObj physics.IAABB) bool {
-        face := faceObj.(*Face)
+	minT := math.MaxFloat64
+	var closestFace *Face // Sostituisci col tuo tipo Faccia esatto
 
-        // 3. Narrow-Phase e Sweep
-        // Aggiungi la faccia alla lista dei candidati per il test raggio/sfera-triangolo
-        // e calcolo del V_slide
-        candidates = append(candidates, face)
-        return false // Continua la ricerca nell'albero locale
-    })
-    return false // Continua la ricerca nell'albero globale
-})
+	// 1. Trova l'intersezione più vicina in assoluto
+	for _, face := range v.faces {
+		hit, t := face.RayIntersectDist(px, py, pz, dirX, dirY, dirZ)
+
+		// t > 0.0001 evita l'auto-intersezione se il punto è esattamente sul bordo
+		if hit && t > 0.0001 && t < minT {
+			minT = t
+			closestFace = face
+		}
+	}
+
+	// 2. Se non colpiamo nulla verso l'infinito, siamo chiaramente fuori
+	if closestFace == nil {
+		return false
+	}
+
+	// 3. Risoluzione tramite Dot Product
+	// closestFace.nx, ny, nz devono essere la NORMALE USCENTE (Outward Normal) del triangolo
+	normal := closestFace.GetNormal()
+	dot := normal.X*dirX + normal.Y*dirY + normal.Z*dirZ
+
+	// Se il dot è > 0, raggio e normale vanno nella stessa direzione.
+	// Significa che stai "sfondando" la parete da dentro verso fuori.
+	return dot > 0.0
+}
 */

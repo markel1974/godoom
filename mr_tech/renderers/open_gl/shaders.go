@@ -33,6 +33,7 @@ type IShader interface {
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
 	tex           *Textures
+	player        *model.ThingPlayer
 	main          *shaders.Main
 	sky           *shaders.Sky
 	geometry      *shaders.Geometry
@@ -73,10 +74,11 @@ func NewShaders() *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Textures) error {
+func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model.Calibration, tex *Textures) error {
 	gl.Enable(gl.MULTISAMPLE)
 	//gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
+	w.player = p
 	w.tex = tex
 	w.cal = cal
 	w.metrics = shaders.NewMapMetrics()
@@ -90,7 +92,7 @@ func (w *Shaders) Setup(vStride, lStride int32, cal *model.Calibration, tex *Tex
 	w.blur = shaders.NewBlur()
 	w.depth = shaders.NewDepth(w.metrics, 8)
 	w.lights = shaders.NewLights(lStride, w.cal)
-	w.shadowLight = shaders.NewShaderShadowLight(w.metrics, w.cal)
+	w.shadowLight = shaders.NewShaderShadowLight(w.metrics, w.cal, float32(p.GetFlashFactor()))
 	w.post = shaders.NewPost()
 	w.bloom = shaders.NewBloom()
 	w.enableShadows = false
@@ -130,7 +132,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.h = fbH
 		shadowW := fbW
 		shadowH := fbH
-		w.metrics.SetFlash(float32(w.cal.FlashFovDeg), float32(w.cal.FlashFalloff), float32(w.cal.ZNearFlash), float32(w.cal.ZFarFlash), shadowW, shadowH)
+		flashFovDeg := float32(w.player.GetFlashFovDeg())
+		flashFalloff := float32(w.player.GetFlashFalloff())
+		flashZNear := float32(w.player.GetFlashZNear())
+		flashZFar := float32(w.player.GetFlashZFar())
+		w.metrics.SetFlash(flashFovDeg, flashFalloff, flashZNear, flashZFar, shadowW, shadowH)
 		if full3d {
 			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
 		} else {
@@ -153,8 +159,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		swayX, swayY, swaySensitivity := vi.GetSway()
 		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
-	flashDirX := float32(w.cal.FlashOffsetX) - (flashX * flashSensitivity)
-	flashDirY := float32(w.cal.FlashOffsetY) + (flashY * flashSensitivity)
+	flashDirX := float32(w.player.GetFlashOffsetX()) - (flashX * flashSensitivity)
+	flashDirY := float32(w.player.GetFlashOffsetY()) + (flashY * flashSensitivity)
 	flashTex := w.depth.GetFlashShadowTextures()
 	roomTex := w.depth.GetRoomShadowTextures()
 
@@ -212,7 +218,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		dc.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
-		w.shadowLight.GetFactor(), float32(w.cal.FlashFalloff), fConeStart, fConeEnd, float32(fbW), float32(fbH))
+		w.shadowLight.GetFactor(), float32(w.player.GetFlashFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
 
 	for lx := int32(0); lx < shadowLightsNum; lx++ {
 		light := shadowLights[lx]

@@ -14,19 +14,12 @@ type Calibration struct {
 	Full3d             bool
 	ScaleFactor        float64
 	FovVerticalDegrees float64
-	FlashFovDeg        float64
-	ZNearFlash         float64
-	ZFarFlash          float64
 	ShininessWall      float64
 	ShininessFloor     float64
 	SpecBoostWall      float64
 	SpecBoostFloor     float64
 	BeamRatio          float64
 	VolSteps           float64
-	FlashFactor        float64
-	FlashFalloff       float64
-	FlashOffsetX       float64
-	FlashOffsetY       float64
 	volumes            *Volumes
 }
 
@@ -43,19 +36,12 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		Full3d:             cfg.Full3d,
 		ScaleFactor:        cfg.ScaleFactor,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
-		FlashFovDeg:        cfg.FlashFovDeg,
-		ZNearFlash:         cfg.ZNearFlash,
-		ZFarFlash:          cfg.ZFarFlash,
 		ShininessWall:      cfg.ShininessWall,
 		ShininessFloor:     cfg.ShininessFloor,
 		SpecBoostWall:      cfg.SpecBoostWall,
 		SpecBoostFloor:     cfg.SpecBoostFloor,
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
-		FlashFactor:        cfg.FlashFactor,
-		FlashFalloff:       cfg.FlashFalloff,
-		FlashOffsetX:       cfg.FlashOffsetX,
-		FlashOffsetY:       cfg.FlashOffsetY,
 		volumes:            volumes,
 	}
 	c.init()

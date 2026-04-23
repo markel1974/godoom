@@ -6,31 +6,42 @@ import (
 )
 
 type Bobbing struct {
-	SwayScale       float64
-	SwaySensitivity float64
-	SwayMultiplierX float64
-	SwayMultiplierY float64
-	SwayOffsetX     float64
-	SwayOffsetY     float64
-	MaxAmplitudeX   float64
-	MaxAmplitudeY   float64
-	IdleDrift       float64
-	StrideLength    float64
-	SpeedLerp       float64
-	AmpLerp         float64
-	ImpactMax       float64
-	ImpactScale     float64
-	IdleAmpX        float64
-	IdleAmpY        float64
-	SpringTension   float64
-	SpringDamping   float64
-	TiltAmp         float64
+	SwayScale       float64 `json:"swayScale"`
+	SwaySensitivity float64 `json:"swaySensitivity"`
+	SwayMultiplierX float64 `json:"swayMultiplierX"`
+	SwayMultiplierY float64 `json:"swayMultiplierY"`
+	SwayOffsetX     float64 `json:"swayOffsetX"`
+	SwayOffsetY     float64 `json:"swayOffsetY"`
+	MaxAmplitudeX   float64 `json:"maxAmplitudeX"`
+	MaxAmplitudeY   float64 `json:"maxAmplitudeY"`
+	IdleDrift       float64 `json:"idleDrift"`
+	StrideLength    float64 `json:"strideLength"`
+	SpeedLerp       float64 `json:"speedLerp"`
+	AmpLerp         float64 `json:"ampLerp"`
+	ImpactMax       float64 `json:"impactMax"`
+	ImpactScale     float64 `json:"impactScale"`
+	IdleAmpX        float64 `json:"idleAmpX"`
+	IdleAmpY        float64 `json:"idleAmpY"`
+	SpringTension   float64 `json:"springTension"`
+	SpringDamping   float64 `json:"springDamping"`
+	TiltAmp         float64 `json:"tiltAmp"`
+}
+
+type Flash struct {
+	FovDeg  float64 `json:"flashFovDeg"`
+	ZNear   float64 `json:"flashZNear"`
+	ZFar    float64 `json:"flashZFar"`
+	Factor  float64 `json:"flashFactor"`
+	Falloff float64 `json:"flashFalloff"`
+	OffsetX float64 `json:"flashOffsetX"`
+	OffsetY float64 `json:"flashOffsetY"`
 }
 
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
 type Player struct {
 	*Thing
-	Bobbing *Bobbing
+	Bobbing *Bobbing `json:"bobbing"`
+	Flash   *Flash   `json:"flash"`
 }
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
@@ -45,8 +56,16 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 			Mass:     mass,
 		},
 		Bobbing: &Bobbing{},
+		Flash:   &Flash{},
 	}
 	p.Speed = 90
+	p.Flash.FovDeg = 80.0
+	p.Flash.ZNear = 0.1
+	p.Flash.ZFar = 2048.0
+	p.Flash.Falloff = 200
+	p.Flash.Factor = 0.5
+	p.Flash.OffsetX = 0.2
+	p.Flash.OffsetY = 0.1
 	p.Bobbing.SwayOffsetX = 0.5
 	p.Bobbing.SwayOffsetY = -0.1
 	p.Bobbing.SwayScale = 2.0
@@ -61,12 +80,10 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, height float64, radiu
 	p.Bobbing.IdleDrift = 0.03
 	p.Bobbing.SpeedLerp = 0.15
 	p.Bobbing.AmpLerp = 0.30
-
 	p.Bobbing.ImpactMax = 20.0
 	p.Bobbing.ImpactScale = 0.05
 	p.Bobbing.SpringTension = 0.15
 	p.Bobbing.SpringDamping = 0.75
-
 	p.Bobbing.TiltAmp = 0.03
 
 	return p

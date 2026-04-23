@@ -109,7 +109,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		w.shaders = NewShaders()
-		if err := w.shaders.Setup(vStride, lStride, cal, w.tex); err != nil {
+		if err := w.shaders.Setup(vStride, lStride, w.player, cal, w.tex); err != nil {
 			return err
 		}
 		if err := w.tex.Setup(w.engine.GetTextures()); err != nil {

@@ -80,10 +80,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	//cal.LightCamY = 8000
 	//cal.ZNearRoom = 0.1
 	//cal.ZFarRoom = 16000
-	cal.ZFarFlash = 8192
+
 	cal.ScaleFactor = 1.0
-	cal.FlashFactor = 0.05
-	cal.FlashFalloff = 2000
 
 	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, p.texManager)
 
@@ -208,6 +206,12 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
 	root.Player.Speed = 1200
+
+	root.Player.Flash.ZFar = 8192
+	root.Player.Flash.Factor = 0.02
+	root.Player.Flash.Falloff = 2000
+	root.Player.Flash.OffsetX = 0.2
+	root.Player.Flash.OffsetY = 0.1
 	root.Player.Bobbing.SwayScale = 2.0
 	root.Player.Bobbing.SwayOffsetX = 50
 	root.Player.Bobbing.SwayOffsetY = -0.9

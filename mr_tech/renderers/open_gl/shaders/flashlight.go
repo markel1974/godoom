@@ -70,11 +70,11 @@ type ShadowLight struct {
 }
 
 // NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
-func NewShaderShadowLight(metrics *MapMetrics, cal *model.Calibration) *ShadowLight {
+func NewShaderShadowLight(metrics *MapMetrics, cal *model.Calibration, factor float32) *ShadowLight {
 	f := &ShadowLight{
 		metrics:    metrics,
 		cal:        cal,
-		factor:     float32(cal.FlashFactor),
+		factor:     factor,
 		shadows:    false,
 		shadowsInt: 0,
 	}

@@ -226,78 +226,103 @@ func (s *Face) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
-func (s *Face) SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radius float64) (float64, float64, float64, float64, bool) {
+func (s *Face) SweepTest(viewX, viewY, viewZ, px, py, pz, velX, velY, velZ, radius float64) (float64, float64, float64, float64, bool) {
 	n := s.normal
 	p0 := s.tri[0]
+	p1 := s.tri[1]
+	p2 := s.tri[2]
 
-	// 1. Double-Sided Normal Setup
+	vDotN := velX*n.X + velY*n.Y + velZ*n.Z
 	distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
-	side := 1.0
-	if distStart < 0 {
-		side = -1.0
+
+	// ==========================================
+	// FIX DEFINITIVO: DOUBLE-SIDED DINAMICO
+	// ==========================================
+	invertNormal := false
+
+	// Se la velocità va nella stessa direzione della normale, colpiamo da dietro (Faccia Interna)
+	if vDotN > 1e-6 {
+		invertNormal = true
+	} else if math.Abs(vDotN) <= 1e-6 && distStart < 0.0 {
+		// Scivolamento parallelo dal lato posteriore
+		invertNormal = true
 	}
 
-	nX, nY, nZ := n.X*side, n.Y*side, n.Z*side
-	sDistStart := distStart * side
+	nx, ny, nz := n.X, n.Y, n.Z
 
-	vDotN := velX*nX + velY*nY + velZ*nZ
+	if invertNormal {
+		// Capovolge il mondo localmente per far rimbalzare l'entità anche dai muri "al contrario"
+		nx, ny, nz = -nx, -ny, -nz
+		distStart = -distStart
+		vDotN = -vDotN
+		p1, p2 = p2, p1 // Winding flip
+	}
+
+	// Backface Culling (Ora è relativo al lato corretto, non scarterà mai un pavimento!)
+	if distStart < -radius {
+		return 0, 0, 0, 0, false
+	}
 
 	var minT = 1.0
 	var hit = false
 	var cNx, cNy, cNz float64
+	const epsilon = 1e-4 // Time-Of-Impact Back-off per scivolare sui bordi senza incastrarsi
 
 	// ==========================================
-	// FASE A: IMPATTO SUL PIANO (Frontale)
+	// FASE A: IMPATTO SUL PIANO
 	// ==========================================
-	if vDotN < 0.0 {
-		// Calcoliamo i due tempi di intersezione (ingresso e uscita dalla crosta del piano)
-		t0 := (radius - sDistStart) / vDotN
-		t1 := (-radius - sDistStart) / vDotN
+	var t0, t1 float64
+	isParallel := false
 
+	if math.Abs(vDotN) < 1e-6 {
+		if distStart >= -radius && distStart <= radius {
+			t0, t1 = 0.0, 1.0
+			isParallel = true
+		} else {
+			t0, t1 = 2.0, 2.0
+		}
+	} else {
+		t0 = (radius - distStart) / vDotN
+		t1 = (-radius - distStart) / vDotN
 		if t0 > t1 {
 			t0, t1 = t1, t0
 		}
+	}
 
-		// Assicuriamoci che l'intersezione avvenga in questo frame
-		if t0 <= 1.0 && t1 >= 0.0 {
-			// FIX 1: MICRO-PENETRATION CLAMP
-			// Se siamo già "leggermente incastrati" (t0 < 0), clampiamo l'impatto a t=0.0
-			tPlane := math.Max(0.0, t0)
+	if (vDotN < 0.0 || isParallel) && t0 <= 1.0 && t1 >= 0.0 {
+		tPlane := math.Max(0.0, t0) // Micro-penetration clamp
 
-			if tPlane <= 1.0 {
-				cx := viewX + velX*tPlane
-				cy := viewY + velY*tPlane
-				cz := viewZ + velZ*tPlane
+		if tPlane <= 1.0 {
+			cx := viewX + velX*tPlane
+			cy := viewY + velY*tPlane
+			cz := viewZ + velZ*tPlane
 
-				hX := cx - nX*radius
-				hY := cy - nY*radius
-				hZ := cz - nZ*radius
+			hX := cx - nx*radius
+			hY := cy - ny*radius
+			hZ := cz - nz*radius
 
-				p1, p2 := s.tri[1], s.tri[2]
+			e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+			e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+			vX, vY, vZ := hX-p0.X, hY-p0.Y, hZ-p0.Z
 
-				e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-				e2x, e2y, e2z := p2.X-p1.X, p2.Y-p1.Y, p2.Z-p1.Z
-				e3x, e3y, e3z := p0.X-p2.X, p0.Y-p2.Y, p0.Z-p2.Z
+			d00 := e1x*e1x + e1y*e1y + e1z*e1z
+			d01 := e1x*e2x + e1y*e2y + e1z*e2z
+			d11 := e2x*e2x + e2y*e2y + e2z*e2z
+			d20 := vX*e1x + vY*e1y + vZ*e1z
+			d21 := vX*e2x + vY*e2y + vZ*e2z
 
-				c1x, c1y, c1z := e1y*(hZ-p0.Z)-e1z*(hY-p0.Y), e1z*(hX-p0.X)-e1x*(hZ-p0.Z), e1x*(hY-p0.Y)-e1y*(hX-p0.X)
-				c2x, c2y, c2z := e2y*(hZ-p1.Z)-e2z*(hY-p1.Y), e2z*(hX-p1.X)-e2x*(hZ-p1.Z), e2x*(hY-p1.Y)-e2y*(hX-p1.X)
-				c3x, c3y, c3z := e3y*(hZ-p2.Z)-e3z*(hY-p2.Y), e3z*(hX-p2.X)-e3x*(hZ-p2.Z), e3x*(hY-p2.Y)-e3y*(hX-p2.X)
+			denom := d00*d11 - d01*d01
 
-				d1 := c1x*nX + c1y*nY + c1z*nZ
-				d2 := c2x*nX + c2y*nY + c2z*nZ
-				d3 := c3x*nX + c3y*nY + c3z*nZ
+			if math.Abs(denom) > 1e-8 {
+				v := (d11*d20 - d01*d21) / denom
+				w := (d00*d21 - d01*d20) / denom
+				u := 1.0 - v - w
 
-				// FIX 2: WINDING AGNOSTIC TEST
-				// Verifichiamo se il punto ha lo stesso orientamento (stesso segno)
-				// rispetto a tutti e 3 gli spigoli, ignorando se il triangolo è CCW o CW!
-				const eps = -1e-4
-				const epsP = 1e-4
-
-				isCCW := d1 >= eps && d2 >= eps && d3 >= eps
-				isCW := d1 <= epsP && d2 <= epsP && d3 <= epsP
-
-				if isCCW || isCW {
-					return tPlane, nX, nY, nZ, true
+				// Saldatura Baricentrica per tappare i micro-buchi della griglia 3D
+				const baryEps = -1e-4
+				if v >= baryEps && w >= baryEps && u >= baryEps {
+					safeT := math.Max(0.0, tPlane-epsilon)
+					return safeT, nx, ny, nz, true // Ritorno rapido
 				}
 			}
 		}
@@ -312,6 +337,10 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radi
 	}
 
 	solveQuad := func(a, b, c float64) (float64, bool) {
+		// Anti-Tunneling: Se la sfera tocca GIÀ il bordo, fermala istantaneamente.
+		if c <= 0.0 {
+			return 0.0, true
+		}
 		det := b*b - 4.0*a*c
 		if det < 0.0 {
 			return 1.0, false
@@ -319,24 +348,27 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radi
 		sqD := math.Sqrt(det)
 		r1 := (-b - sqD) / (2.0 * a)
 		r2 := (-b + sqD) / (2.0 * a)
+
 		if r1 > r2 {
 			r1, r2 = r2, r1
 		}
-		if r1 >= 0.0 && r1 < minT {
+		if r1 >= 0.0 && r1 <= 1.0 && r1 < minT {
 			return r1, true
 		}
-		if r2 >= 0.0 && r2 < minT {
+		if r2 >= 0.0 && r2 <= 1.0 && r2 < minT {
 			return r2, true
 		}
 		return 1.0, false
 	}
 
-	// 1. Test Vertici (Punto Sweep vs 3 Sfere)
-	for _, p := range s.tri {
+	// Test Vertici
+	pts := [3]geometry.XYZ{p0, p1, p2}
+	for _, p := range pts {
 		vx, vy, vz := viewX-p.X, viewY-p.Y, viewZ-p.Z
 		a := velSq
 		b := 2.0 * (velX*vx + velY*vy + velZ*vz)
 		c := (vx*vx + vy*vy + vz*vz) - radius*radius
+
 		if t, ok := solveQuad(a, b, c); ok {
 			minT = t
 			hit = true
@@ -344,48 +376,52 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, radi
 		}
 	}
 
-	// 2. Test Spigoli (Punto Sweep vs 3 Cilindri Infiniti)
+	// Test Spigoli
 	for i := 0; i < 3; i++ {
-		pA := s.tri[i]
-		pB := s.tri[(i+1)%3]
-		ex, ey, ez := pB.X-pA.X, pB.Y-pA.Y, pB.Z-pA.Z
-		eSq := ex*ex + ey*ey + ez*ez
+		pA := pts[i]
+		pB := pts[(i+1)%3]
 
-		dx, dy, dz := viewX-pA.X, viewY-pA.Y, viewZ-pA.Z
+		edgeX, edgeY, edgeZ := pB.X-pA.X, pB.Y-pA.Y, pB.Z-pA.Z
+		edgeLenSq := edgeX*edgeX + edgeY*edgeY + edgeZ*edgeZ
 
-		invEs := 1.0 / eSq
-		vDotE := (velX*ex + velY*ey + velZ*ez) * invEs
-		dDotE := (dx*ex + dy*ey + dz*ez) * invEs
-
-		ax, ay, az := velX-vDotE*ex, velY-vDotE*ey, velZ-vDotE*ez
-		bx, by, bz := dx-dDotE*ex, dy-dDotE*ey, dz-dDotE*ez
-
-		A := ax*ax + ay*ay + az*az
-		B := 2.0 * (ax*bx + ay*by + az*bz)
-		C := (bx*bx + by*by + bz*bz) - radius*radius
-
-		if A == 0.0 {
+		if edgeLenSq < 1e-8 {
 			continue
 		}
 
-		if t, ok := solveQuad(A, B, C); ok {
-			f := dDotE + t*vDotE
+		vx, vy, vz := viewX-pA.X, viewY-pA.Y, viewZ-pA.Z
+
+		edgeDotVel := velX*edgeX + velY*edgeY + velZ*edgeZ
+		edgeDotOrig := vx*edgeX + vy*edgeY + vz*edgeZ
+
+		a := edgeLenSq*velSq - edgeDotVel*edgeDotVel
+		b := edgeLenSq*2.0*(velX*vx+velY*vy+velZ*vz) - 2.0*edgeDotVel*edgeDotOrig
+		c := edgeLenSq*((vx*vx+vy*vy+vz*vz)-radius*radius) - edgeDotOrig*edgeDotOrig
+
+		if a == 0.0 {
+			continue
+		}
+
+		if t, ok := solveQuad(a, b, c); ok {
+			f := (edgeDotOrig + edgeDotVel*t) / edgeLenSq
 			if f >= 0.0 && f <= 1.0 {
 				minT = t
 				hit = true
-				closestX, closestY, closestZ := pA.X+f*ex, pA.Y+f*ey, pA.Z+f*ez
+				closestX := pA.X + f*edgeX
+				closestY := pA.Y + f*edgeY
+				closestZ := pA.Z + f*edgeZ
 				cNx, cNy, cNz = viewX+velX*t-closestX, viewY+velY*t-closestY, viewZ+velZ*t-closestZ
 			}
 		}
 	}
 
 	if hit {
+		safeT := math.Max(0.0, minT-epsilon)
 		l := math.Sqrt(cNx*cNx + cNy*cNy + cNz*cNz)
 		if l > 1e-8 {
-			return minT, cNx / l, cNy / l, cNz / l, true
+			return safeT, cNx / l, cNy / l, cNz / l, true
 		}
-		// Ritorno di sicurezza
-		return minT, nX, nY, nZ, true
+		// Fallback se la normale dello spigolo degenera
+		return safeT, nx, ny, nz, true
 	}
 
 	return 0, 0, 0, 0, false

@@ -54,12 +54,12 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
 		solverIterations: solverIterations,
-		full3d:           false,
+		full3d:           full3d,
 		tree:             physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:         make(map[int]IThing),
 		identifier:       0,

@@ -85,15 +85,9 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 	return a
 }
 
-// Reset initializes or updates the Entity's state including position, size, mass, and restitution.
-func (e *Entity) Reset(x, y, w, h, z, d, mass, restitution float64) {
+// Rebuild updates the entity's rectangular attributes and triggers a rebuild operation.
+func (e *Entity) Rebuild(x, y, w, h, z, d float64) {
 	e.rect.Reset(x, y, w, h, z, d)
-	e.mass = mass
-	e.invMass = 1.0 / mass
-	e.vx = 0.0
-	e.vy = 0.0
-	e.restitution = restitution
-	e.rect.rebuild()
 }
 
 // Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.

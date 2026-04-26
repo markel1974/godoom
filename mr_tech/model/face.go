@@ -226,207 +226,6 @@ func (s *Face) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
-func (s *Face) SweepTest(viewX, viewY, viewZ, px, py, pz, velX, velY, velZ, radius float64) (float64, float64, float64, float64, bool) {
-	n := s.normal
-	p0 := s.tri[0]
-	p1 := s.tri[1]
-	p2 := s.tri[2]
-
-	vDotN := velX*n.X + velY*n.Y + velZ*n.Z
-	distStart := (viewX-p0.X)*n.X + (viewY-p0.Y)*n.Y + (viewZ-p0.Z)*n.Z
-
-	// ==========================================
-	// FIX DEFINITIVO: DOUBLE-SIDED DINAMICO
-	// ==========================================
-	invertNormal := false
-
-	// Se la velocità va nella stessa direzione della normale, colpiamo da dietro (Faccia Interna)
-	if vDotN > 1e-6 {
-		invertNormal = true
-	} else if math.Abs(vDotN) <= 1e-6 && distStart < 0.0 {
-		// Scivolamento parallelo dal lato posteriore
-		invertNormal = true
-	}
-
-	nx, ny, nz := n.X, n.Y, n.Z
-
-	if invertNormal {
-		// Capovolge il mondo localmente per far rimbalzare l'entità anche dai muri "al contrario"
-		nx, ny, nz = -nx, -ny, -nz
-		distStart = -distStart
-		vDotN = -vDotN
-		p1, p2 = p2, p1 // Winding flip
-	}
-
-	// Backface Culling (Ora è relativo al lato corretto, non scarterà mai un pavimento!)
-	if distStart < -radius {
-		return 0, 0, 0, 0, false
-	}
-
-	var minT = 1.0
-	var hit = false
-	var cNx, cNy, cNz float64
-	const epsilon = 1e-4 // Time-Of-Impact Back-off per scivolare sui bordi senza incastrarsi
-
-	// ==========================================
-	// FASE A: IMPATTO SUL PIANO
-	// ==========================================
-	var t0, t1 float64
-	isParallel := false
-
-	if math.Abs(vDotN) < 1e-6 {
-		if distStart >= -radius && distStart <= radius {
-			t0, t1 = 0.0, 1.0
-			isParallel = true
-		} else {
-			t0, t1 = 2.0, 2.0
-		}
-	} else {
-		t0 = (radius - distStart) / vDotN
-		t1 = (-radius - distStart) / vDotN
-		if t0 > t1 {
-			t0, t1 = t1, t0
-		}
-	}
-
-	if (vDotN < 0.0 || isParallel) && t0 <= 1.0 && t1 >= 0.0 {
-		tPlane := math.Max(0.0, t0) // Micro-penetration clamp
-
-		if tPlane <= 1.0 {
-			cx := viewX + velX*tPlane
-			cy := viewY + velY*tPlane
-			cz := viewZ + velZ*tPlane
-
-			hX := cx - nx*radius
-			hY := cy - ny*radius
-			hZ := cz - nz*radius
-
-			e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-			e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-			vX, vY, vZ := hX-p0.X, hY-p0.Y, hZ-p0.Z
-
-			d00 := e1x*e1x + e1y*e1y + e1z*e1z
-			d01 := e1x*e2x + e1y*e2y + e1z*e2z
-			d11 := e2x*e2x + e2y*e2y + e2z*e2z
-			d20 := vX*e1x + vY*e1y + vZ*e1z
-			d21 := vX*e2x + vY*e2y + vZ*e2z
-
-			denom := d00*d11 - d01*d01
-
-			if math.Abs(denom) > 1e-8 {
-				v := (d11*d20 - d01*d21) / denom
-				w := (d00*d21 - d01*d20) / denom
-				u := 1.0 - v - w
-
-				// Saldatura Baricentrica per tappare i micro-buchi della griglia 3D
-				const baryEps = -1e-4
-				if v >= baryEps && w >= baryEps && u >= baryEps {
-					safeT := math.Max(0.0, tPlane-epsilon)
-					return safeT, nx, ny, nz, true // Ritorno rapido
-				}
-			}
-		}
-	}
-
-	// ==========================================
-	// FASE B: SWEEP CONTINUO SU VERTICI E SPIGOLI
-	// ==========================================
-	velSq := velX*velX + velY*velY + velZ*velZ
-	if velSq < 1e-8 {
-		return 0, 0, 0, 0, false
-	}
-
-	solveQuad := func(a, b, c float64) (float64, bool) {
-		// Anti-Tunneling: Se la sfera tocca GIÀ il bordo, fermala istantaneamente.
-		if c <= 0.0 {
-			return 0.0, true
-		}
-		det := b*b - 4.0*a*c
-		if det < 0.0 {
-			return 1.0, false
-		}
-		sqD := math.Sqrt(det)
-		r1 := (-b - sqD) / (2.0 * a)
-		r2 := (-b + sqD) / (2.0 * a)
-
-		if r1 > r2 {
-			r1, r2 = r2, r1
-		}
-		if r1 >= 0.0 && r1 <= 1.0 && r1 < minT {
-			return r1, true
-		}
-		if r2 >= 0.0 && r2 <= 1.0 && r2 < minT {
-			return r2, true
-		}
-		return 1.0, false
-	}
-
-	// Test Vertici
-	pts := [3]geometry.XYZ{p0, p1, p2}
-	for _, p := range pts {
-		vx, vy, vz := viewX-p.X, viewY-p.Y, viewZ-p.Z
-		a := velSq
-		b := 2.0 * (velX*vx + velY*vy + velZ*vz)
-		c := (vx*vx + vy*vy + vz*vz) - radius*radius
-
-		if t, ok := solveQuad(a, b, c); ok {
-			minT = t
-			hit = true
-			cNx, cNy, cNz = viewX+velX*t-p.X, viewY+velY*t-p.Y, viewZ+velZ*t-p.Z
-		}
-	}
-
-	// Test Spigoli
-	for i := 0; i < 3; i++ {
-		pA := pts[i]
-		pB := pts[(i+1)%3]
-
-		edgeX, edgeY, edgeZ := pB.X-pA.X, pB.Y-pA.Y, pB.Z-pA.Z
-		edgeLenSq := edgeX*edgeX + edgeY*edgeY + edgeZ*edgeZ
-
-		if edgeLenSq < 1e-8 {
-			continue
-		}
-
-		vx, vy, vz := viewX-pA.X, viewY-pA.Y, viewZ-pA.Z
-
-		edgeDotVel := velX*edgeX + velY*edgeY + velZ*edgeZ
-		edgeDotOrig := vx*edgeX + vy*edgeY + vz*edgeZ
-
-		a := edgeLenSq*velSq - edgeDotVel*edgeDotVel
-		b := edgeLenSq*2.0*(velX*vx+velY*vy+velZ*vz) - 2.0*edgeDotVel*edgeDotOrig
-		c := edgeLenSq*((vx*vx+vy*vy+vz*vz)-radius*radius) - edgeDotOrig*edgeDotOrig
-
-		if a == 0.0 {
-			continue
-		}
-
-		if t, ok := solveQuad(a, b, c); ok {
-			f := (edgeDotOrig + edgeDotVel*t) / edgeLenSq
-			if f >= 0.0 && f <= 1.0 {
-				minT = t
-				hit = true
-				closestX := pA.X + f*edgeX
-				closestY := pA.Y + f*edgeY
-				closestZ := pA.Z + f*edgeZ
-				cNx, cNy, cNz = viewX+velX*t-closestX, viewY+velY*t-closestY, viewZ+velZ*t-closestZ
-			}
-		}
-	}
-
-	if hit {
-		safeT := math.Max(0.0, minT-epsilon)
-		l := math.Sqrt(cNx*cNx + cNy*cNy + cNz*cNz)
-		if l > 1e-8 {
-			return safeT, cNx / l, cNy / l, cNz / l, true
-		}
-		// Fallback se la normale dello spigolo degenera
-		return safeT, nx, ny, nz, true
-	}
-
-	return 0, 0, 0, 0, false
-}
-
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
 func (s *Face) computeNormal() {
 	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
@@ -440,22 +239,40 @@ func (s *Face) computeNormal() {
 			// Proiezione del vettore normale 2D nello spazio 3D
 			s.normal = geometry.XYZ{X: -dy * invLen, Y: dx * invLen, Z: 0}
 		}
-	} else {
-		// Prodotto vettoriale standard per poligoni 3D
-		p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
-		v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-		v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
-		nx := v1y*v2z - v1z*v2y
-		ny := v1z*v2x - v1x*v2z
-		nz := v1x*v2y - v1y*v2x
-		l := math.Sqrt(nx*nx + ny*ny + nz*nz)
-		if l > 0 {
-			s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
-		}
+		s.normalAbs = geometry.XYZ{X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z)}
+		return
 	}
-	s.normalAbs = geometry.XYZ{
-		X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z),
+	// Prodotto vettoriale standard per poligoni 3D
+	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+	nx := v1y*v2z - v1z*v2y
+	ny := v1z*v2x - v1x*v2z
+	nz := v1x*v2y - v1y*v2x
+	const snapToZero = 1e-15
+	const areaCulling = 1e-12
+	// 1. SNAP TO ZERO: Puliamo il rumore di fondo prima della magnitudo
+	if math.Abs(nx) < snapToZero {
+		nx = 0
 	}
+	if math.Abs(ny) < snapToZero {
+		ny = 0
+	}
+	if math.Abs(nz) < snapToZero {
+		nz = 0
+	}
+	l := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	// 2. AREA CULLING: Se la magnitudo (area) è troppo piccola,
+	// il triangolo è un "Sliver" degenere prodotto dal clipping.
+	if l < areaCulling {
+		// Lo marchiamo con normale nulla: la QueryCollisionCage lo scarterà
+		s.normal = geometry.XYZ{X: 0, Y: 0, Z: 0}
+		s.normalAbs = geometry.XYZ{X: 0, Y: 0, Z: 0}
+		//fmt.Printf("Ignorato triangolo degenere (Sliver) %f\n", l)
+		return
+	}
+	s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
+	s.normalAbs = geometry.XYZ{X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z)}
 }
 
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
@@ -526,6 +343,248 @@ func (s *Face) computeUV() {
 		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
 	}
 }
+
+/*
+func (s *Face) SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eRadZ float64) (float64, float64, float64, float64, bool) {
+	// ==========================================
+	// 1. TRASFORMAZIONE E-SPACE ASSOLUTA
+	// ==========================================
+	eVX, eVY, eVZ := viewX/eRadX, viewY/eRadY, viewZ/eRadZ
+	eVelX, eVelY, eVelZ := velX/eRadX, velY/eRadY, velZ/eRadZ
+
+	p0x, p0y, p0z := s.tri[0].X/eRadX, s.tri[0].Y/eRadY, s.tri[0].Z/eRadZ
+	p1x, p1y, p1z := s.tri[1].X/eRadX, s.tri[1].Y/eRadY, s.tri[1].Z/eRadZ
+	p2x, p2y, p2z := s.tri[2].X/eRadX, s.tri[2].Y/eRadY, s.tri[2].Z/eRadZ
+
+	// Ricalcoliamo la normale RIGOROSAMENTE in e-space basandoci sui vertici deformati.
+	// Questo garantisce perfetta coplanarità matematica a prescindere da come
+	// il map-exporter aveva salvato s.normal.
+	e1x, e1y, e1z := p1x-p0x, p1y-p0y, p1z-p0z
+	e2x, e2y, e2z := p2x-p0x, p2y-p0y, p2z-p0z
+
+	enX := e1y*e2z - e1z*e2y
+	enY := e1z*e2x - e1x*e2z
+	enZ := e1x*e2y - e1y*e2x
+
+	lenN := math.Sqrt(enX*enX + enY*enY + enZ*enZ)
+	if lenN < 1e-8 {
+		return 0, 0, 0, 0, false // Scarta poligoni degeneri a scala microscopica
+	}
+	enX, enY, enZ = enX/lenN, enY/lenN, enZ/lenN
+
+	// ==========================================
+	// 2. GESTIONE UNIVERSALE DOUBLE-SIDED
+	// ==========================================
+	// Qualunque sia l'orientamento originale del triangolo, per calcolare l'impatto
+	// forziamo il piano matematico a opporsi alla velocità dell'entità.
+	// Nessun vertex flip. Cramer's Rule è immune a questa inversione.
+	vDotN := eVelX*enX + eVelY*enY + eVelZ*enZ
+
+	if vDotN > 0.0 {
+		enX, enY, enZ = -enX, -enY, -enZ
+		vDotN = -vDotN
+	}
+
+	const radius = 1.0
+	const epsilon = 1e-4 // TOI Back-off
+
+	distStart := (eVX-p0x)*enX + (eVY-p0y)*enY + (eVZ-p0z)*enZ
+
+	// Culling dinamico: scartiamo solo se l'entità è GIA' affondata oltre il proprio raggio
+	// rispetto al lato che stiamo colpendo.
+	if distStart < -radius {
+		return 0, 0, 0, 0, false
+	}
+
+	var minT = 1.0
+	var hit = false
+	var cNx, cNy, cNz float64
+
+	// ==========================================
+	// FASE A: IMPATTO SUL PIANO (Slab Intersection)
+	// ==========================================
+	var t0, t1 float64
+	isParallel := false
+
+	if math.Abs(vDotN) < 1e-6 {
+		if distStart >= -radius && distStart <= radius {
+			t0, t1 = 0.0, 1.0
+			isParallel = true
+		} else {
+			t0, t1 = 2.0, 2.0
+		}
+	} else {
+		t0 = (radius - distStart) / vDotN
+		t1 = (-radius - distStart) / vDotN
+		if t0 > t1 {
+			t0, t1 = t1, t0
+		}
+	}
+
+	if (vDotN < 0.0 || isParallel) && t0 <= 1.0 && t1 >= 0.0 {
+		tPlane := math.Max(0.0, t0) // Micro-penetration clamp
+
+		if tPlane <= 1.0 {
+			cx := eVX + eVelX*tPlane
+			cy := eVY + eVelY*tPlane
+			cz := eVZ + eVelZ*tPlane
+
+			hX := cx - enX*radius
+			hY := cy - enY*radius
+			hZ := cz - enZ*radius
+
+			vX, vY, vZ := hX-p0x, hY-p0y, hZ-p0z
+
+			d00 := e1x*e1x + e1y*e1y + e1z*e1z
+			d01 := e1x*e2x + e1y*e2y + e1z*e2z
+			d11 := e2x*e2x + e2y*e2y + e2z*e2z
+			d20 := vX*e1x + vY*e1y + vZ*e1z
+			d21 := vX*e2x + vY*e2y + vZ*e2z
+
+			denom := d00*d11 - d01*d01
+
+			if math.Abs(denom) > 1e-8 {
+				v := (d11*d20 - d01*d21) / denom
+				w := (d00*d21 - d01*d20) / denom
+				u := 1.0 - v - w
+
+				// Tolleranza per fessure a scala sub-millimetrica
+				const baryEps = -1e-3
+				if v >= baryEps && w >= baryEps && u >= baryEps {
+					safeT := math.Max(0.0, tPlane-epsilon)
+					hit = true
+					minT = safeT
+					cNx, cNy, cNz = enX, enY, enZ
+					goto RESOLVE
+				}
+			}
+		}
+	}
+
+	// ==========================================
+	// FASE B: SWEEP CONTINUO SU VERTICI E SPIGOLI
+	// ==========================================
+	{
+		velSq := eVelX*eVelX + eVelY*eVelY + eVelZ*eVelZ
+		if velSq < 1e-8 {
+			goto RESOLVE
+		}
+
+		solveQuad := func(a, b, c float64) (float64, bool) {
+			if c <= 0.0 {
+				// Anti-Tunneling: blocca solo se premiamo attivamente contro la geometria (b < 0)
+				if b < -1e-6 {
+					return 0.0, true
+				}
+				return 1.0, false
+			}
+			det := b*b - 4.0*a*c
+			if det < 0.0 {
+				return 1.0, false
+			}
+			sqD := math.Sqrt(det)
+			r1 := (-b - sqD) / (2.0 * a)
+			r2 := (-b + sqD) / (2.0 * a)
+
+			if r1 > r2 {
+				r1, r2 = r2, r1
+			}
+			if r1 >= 0.0 && r1 <= 1.0 && r1 < minT {
+				return r1, true
+			}
+			if r2 >= 0.0 && r2 <= 1.0 && r2 < minT {
+				return r2, true
+			}
+			return 1.0, false
+		}
+
+		pts := [3][3]float64{{p0x, p0y, p0z}, {p1x, p1y, p1z}, {p2x, p2y, p2z}}
+		for _, p := range pts {
+			vx, vy, vz := eVX-p[0], eVY-p[1], eVZ-p[2]
+			a := velSq
+			b := 2.0 * (eVelX*vx + eVelY*vy + eVelZ*vz)
+			c := (vx*vx + vy*vy + vz*vz) - radius*radius
+
+			if t, ok := solveQuad(a, b, c); ok {
+				minT = t
+				hit = true
+				cNx, cNy, cNz = eVX+eVelX*t-p[0], eVY+eVelY*t-p[1], eVZ+eVelZ*t-p[2]
+			}
+		}
+
+		for i := 0; i < 3; i++ {
+			pA := pts[i]
+			pB := pts[(i+1)%3]
+
+			edgeX, edgeY, edgeZ := pB[0]-pA[0], pB[1]-pA[1], pB[2]-pA[2]
+			edgeLenSq := edgeX*edgeX + edgeY*edgeY + edgeZ*edgeZ
+
+			if edgeLenSq < 1e-8 {
+				continue
+			}
+
+			vx, vy, vz := eVX-pA[0], eVY-pA[1], eVZ-pA[2]
+
+			edgeDotVel := eVelX*edgeX + eVelY*edgeY + eVelZ*edgeZ
+			edgeDotOrig := vx*edgeX + vy*edgeY + vz*edgeZ
+
+			a := edgeLenSq*velSq - edgeDotVel*edgeDotVel
+			b := edgeLenSq*2.0*(eVelX*vx+eVelY*vy+eVelZ*vz) - 2.0*edgeDotVel*edgeDotOrig
+			c := edgeLenSq*((vx*vx+vy*vy+vz*vz)-radius*radius) - edgeDotOrig*edgeDotOrig
+
+			if a == 0.0 {
+				continue
+			}
+
+			if t, ok := solveQuad(a, b, c); ok {
+				f := (edgeDotOrig + edgeDotVel*t) / edgeLenSq
+				if f >= 0.0 && f <= 1.0 {
+					minT = t
+					hit = true
+					closestX := pA[0] + f*edgeX
+					closestY := pA[1] + f*edgeY
+					closestZ := pA[2] + f*edgeZ
+					cNx, cNy, cNz = eVX+eVelX*t-closestX, eVY+eVelY*t-closestY, eVZ+eVelZ*t-closestZ
+				}
+			}
+		}
+	}
+
+RESOLVE:
+	if hit {
+		safeT := math.Max(0.0, minT-epsilon)
+
+		// 3. RIPRISTINO SCALA EUCLIDEA
+		realNx := cNx / eRadX
+		realNy := cNy / eRadY
+		realNz := cNz / eRadZ
+
+		l := math.Sqrt(realNx*realNx + realNy*realNy + realNz*realNz)
+		if l > 1e-8 {
+			realNx, realNy, realNz = realNx/l, realNy/l, realNz/l
+		} else {
+			realNx = enX / eRadX
+			realNy = enY / eRadY
+			realNz = enZ / eRadZ
+			l = math.Sqrt(realNx*realNx + realNy*realNy + realNz*realNz)
+			if l > 1e-8 {
+				realNx, realNy, realNz = realNx/l, realNy/l, realNz/l
+			}
+		}
+
+		// 4. FILTRO ANTI-HIJACKING (Impedisce alle superfici parallele di bloccare lo sweep)
+		dotVelNorm := velX*realNx + velY*realNy + velZ*realNz
+		if dotVelNorm >= -1e-5 {
+			return 0, 0, 0, 0, false
+		}
+
+		return safeT, realNx, realNy, realNz, true
+	}
+
+	return 0, 0, 0, 0, false
+}
+
+*/
 
 /*
 // PointInside3d determina se il punto 3D (px, py, pz) giace all'interno del triangolo.

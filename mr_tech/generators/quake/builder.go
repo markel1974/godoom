@@ -217,8 +217,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	if len(volume.Faces) > 0 {
 		root.Volumes = append(root.Volumes, volume)
 	}
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 40, 4, 80)
-	root.Player.Speed = 1200
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
+	//root.Player.Speed = 1200
 	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192

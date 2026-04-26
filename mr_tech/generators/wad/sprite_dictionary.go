@@ -16,10 +16,6 @@ type ThingDef struct {
 
 const sSpeed = 12
 
-var _playerHeight = 70.0
-var _playerRadius = 20.0
-var _playerMass = 100.0
-
 // _spriteDictionary is a map that associates integer keys with ThingDef structures, defining game objects and their properties.
 var _spriteDictionary = map[int]ThingDef{
 	// --- MOSTRI ---
@@ -203,10 +199,6 @@ var _doors = map[int16]string{
 }
 
 func init() {
-	_playerRadius /= 20.0
-	_playerMass /= 20.0
-	_playerHeight /= 10
-
 	for k, v := range _spriteDictionary {
 		v.Mass /= 20.0
 		v.Speed /= 1.0

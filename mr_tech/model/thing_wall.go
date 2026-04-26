@@ -1,5 +1,6 @@
 package model
 
+/*
 import (
 	"math"
 
@@ -30,15 +31,22 @@ func (s *ThingWall) GetEntity() *physics.Entity {
 	return s.wall
 }
 
-// ClosestFace finds the nearest face in a 3D space based on the given positions, velocity, top, bottom, and radius constraints.
+// ClosestFace finds the nearest face in a 3D space based on the given positions, velocity, top, bottom, and ellipsoid dimensions (eRadX, eRadY, eRadZ).
 // It updates the axis-aligned bounding box (AABB) and queries the volumes for the closest face intersection.
-func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius float64) (*Face, float64, float64, float64, float64) {
-	minX := math.Min(viewX, pX) - radius
-	maxX := math.Max(viewX, pX) + radius
-	minY := math.Min(viewY, pY) - radius
-	maxY := math.Max(viewY, pY) + radius
-	minZ := math.Min(viewZ, pZ) - radius
-	maxZ := math.Max(viewZ, pZ) + radius
+func (s *ThingWall) ClosestFace(viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, eRadX, eRadY, eRadZ float64) (*Face, float64, float64, float64, float64) {
+	// L'AABB di ricerca ora viene espanso usando le corrette proporzioni dell'ellissoide (capsula)
+	// Note:
+	// In e-space, l'origine dello sweep (viewZ, pZ) è il CENTRO della capsula.
+	// L'espansione Z verso l'alto e verso il basso usa eRadZ (metà altezza).
+	minX := math.Min(viewX, pX) - eRadX
+	maxX := math.Max(viewX, pX) + eRadX
+	minY := math.Min(viewY, pY) - eRadY
+	maxY := math.Max(viewY, pY) + eRadY
+	minZ := math.Min(viewZ, pZ) - eRadZ
+	maxZ := math.Max(viewZ, pZ) + eRadZ
 	s.GetAABB().Rebuild(minX, minY, math.Min(bottom, minZ), maxX, maxY, math.Max(top, maxZ))
-	return s.volumes.QueryClosestFace(s, viewX, viewY, viewZ, pX, pY, pZ, velX, velY, velZ, top, bottom, radius)
+	return s.volumes.QueryClosestFace(s, viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eRadZ)
 }
+
+
+*/

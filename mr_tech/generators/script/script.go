@@ -36,7 +36,7 @@ func (p *Parser) Parse(id string) (*config.Root, error) {
 		return nil, tErr
 	}
 
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
+	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 90, 1.0, 20)
 	player.Speed = 60
 
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)

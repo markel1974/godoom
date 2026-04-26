@@ -7,10 +7,41 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+type BucketType int
+
+const (
+	BucketWallWest  = BucketType(0) // -X
+	BucketWallEast  = BucketType(1) // +X
+	BucketWallNorth = BucketType(2) // -Y
+	BucketWallSouth = BucketType(3) // +Y
+	BucketCeiling   = BucketType(4) // -Z
+	BucketFloor     = BucketType(5) // +Z
+)
+
+// String returns the string representation of the BucketType value. For unrecognized values, it returns "BucketType(%d)".
+func (p BucketType) String() string {
+	switch p {
+	case BucketWallWest:
+		return "BucketWallWest"
+	case BucketWallEast:
+		return "BucketWallEast"
+	case BucketWallNorth:
+		return "BucketWallNorth"
+	case BucketWallSouth:
+		return "BucketWallSouth"
+	case BucketCeiling:
+		return "BucketCeiling"
+	case BucketFloor:
+		return "BucketFloor"
+	default:
+		return "BucketUnknown"
+	}
+}
+
 // BucketSize defines the size of a bucket used in the operation.
 // FacesPerBucket specifies the number of faces contained within a single bucket.
 const (
-	BucketSize     = 6
+	BucketSize     = BucketFloor + 1
 	FacesPerBucket = 4
 )
 
@@ -83,7 +114,7 @@ func NewCollisionCage(margin float64, restitution, friction float64) *CollisionC
 		margin:    margin,
 		ellipsoid: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
 	}
-	for i := 0; i < BucketSize; i++ {
+	for i := BucketType(0); i < BucketSize; i++ {
 		for j := 0; j < FacesPerBucket; j++ {
 			c.spare[i][j] = NewCollisionFace()
 		}
@@ -97,17 +128,22 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	s.d.X, s.d.Y, s.d.Z = dx, dy, dz
 	s.eRad.X, s.eRad.Y, s.eRad.Z = eRadX, eRadY, eRadZ
 	s.t.X, s.t.Y, s.t.Z = cx+dx, cy+dy, cz+dz
-
+	// Calculate absolute extremes (Broad-Phase Swept Volume)
 	minX := cx - eRadX + math.Min(0, dx) - s.margin
 	maxX := cx + eRadX + math.Max(0, dx) + s.margin
 	minY := cy - eRadY + math.Min(0, dy) - s.margin
 	maxY := cy + eRadY + math.Max(0, dy) + s.margin
 	minZ := cz - eRadZ + math.Min(0, dz) - s.margin
 	maxZ := cz + eRadZ + math.Max(0, dz) + s.margin
-
-	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
-
-	// Reset veloce dei buffer
+	// Canonical mapping for Rect/AABB
+	x := minX
+	y := minY
+	z := minZ
+	w := maxX - minX
+	h := maxY - minY
+	d := maxZ - minZ
+	s.ellipsoid.Rebuild(x, y, w, h, z, d)
+	// Fast reset
 	for i := 0; i < 6; i++ {
 		s.counts[i] = 0
 		copy(s.faces[i][:], _emptyBucketFaces[:])
@@ -115,7 +151,7 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 }
 
 // AddFace adds a new face to the specified bucket or replaces the farthest face if the bucket is full and the new face is closer.
-func (s *CollisionCage) AddFace(bucket int, face *Face, dist, rEff, normalX, normalY, normalZ float64) {
+func (s *CollisionCage) AddFace(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ float64) {
 	if count := s.counts[bucket]; count < FacesPerBucket {
 		target := s.spare[bucket][count]
 		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ)
@@ -164,7 +200,7 @@ func (s *CollisionCage) GetT() (float64, float64, float64) {
 }
 
 // GetFaces returns a 2D array representing the faces of the collision cage, organized by buckets.
-func (s *CollisionCage) GetFaces() [6][FacesPerBucket]*CageEntry {
+func (s *CollisionCage) GetFaces() [BucketSize][FacesPerBucket]*CageEntry {
 	return s.faces
 }
 

@@ -187,7 +187,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 		pos := root.Sectors[0].Segments[0].End
 		playerPos = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
 	}
-	root.Player = config.NewConfigPlayer(playerPos, 0, 8, 4, 20)
+	root.Player = config.NewConfigPlayer(playerPos, 0, 20, 90, 1, 8)
 	return root, nil
 }
 

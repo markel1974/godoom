@@ -121,8 +121,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures, edges []Edge) *config.Sector {
 	ceilingType := config.AnimationKindLoop
 	floorType := config.AnimationKindLoop
-	//light, kind, falloff := bld.convertLight(lightLevel)
-	light, kind, falloff, r, g, b := bld.heuristicSpotlight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
+	light, kind, falloff, r, g, b := bld.heuristicLight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
 
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
 	miSector.Light.R = r
@@ -204,9 +203,15 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 			break
 		}
 	}
-	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, _playerHeight, _playerRadius, _playerMass)
-	//player.Height = 7
-	//player.Radius = 20
+
+	const playerHeight = 175.0 / WorldScaleFactor
+	//const playerRadius = 2 / WorldScaleFactor
+	//const playerHeight = 25 / WorldScaleFactor
+	const playerRadius = 2 / WorldScaleFactor
+	const playerSpeed = 2000 / WorldScaleFactor
+	const playerMass = 8
+
+	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
 	return player
 }
 
@@ -298,16 +303,8 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 	return sectorsEdges
 }
 
-// convertLight converts a light level from an integer value to a normalized float intensity ranging from 0.0 to 1.0.
-// If the light level is below the ambient threshold (16), it returns -1.0 to indicate insufficient illumination.
-func (bld *Builder) convertLight(lightLevel int16) (float64, config.LightKind, float64) {
-	const falloff = 10.0
-	kind := config.LightKindAmbient
-	return float64(lightLevel) * 0.015, kind, falloff
-}
-
 // Estendiamo l'euristica per restituire anche R, G, B
-func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
+func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
 	intensity := float64(lightLevel) * 0.008
 	kind := config.LightKindAmbient
 	falloff := (ceilY - floorY) / ScaleCeilFloorLineDef * 1.5
@@ -321,19 +318,16 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY f
 		r, g, b = 0.2, 1.0, 0.2
 		// Se c'è acido a terra, illuminiamo l'ambiente di verde!
 	}
-
 	// 2. Lava / Sangue -> Rosso
 	if strings.Contains(floorPic, "LAVA") || strings.Contains(floorPic, "BLOOD") || strings.Contains(ceilPic, "RED") {
 		r, g, b = 1.0, 0.3, 0.1
 	}
-
 	// 3. Acqua / Computer -> Blu
 	if strings.Contains(floorPic, "FWATER") || strings.Contains(ceilPic, "BLUE") || strings.Contains(ceilPic, "COMP") {
 		r, g, b = 0.2, 0.5, 1.0
 	}
-
 	// --- EURISTICA SPOTLIGHT ---
-	var minX, maxX, minY, maxY float64 = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
+	minX, maxX, minY, maxY := math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
 	for _, e := range edges {
 		for _, p := range []geometry.XY{e.P1, e.P2} {
 			if p.X < minX {
@@ -355,7 +349,6 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY f
 
 	isSmall := width < 128 && height < 128
 	isBright := lightLevel > 192
-
 	isLightTexture := false
 	lightTextures := []string{"LITE", "TLITE", "CEIL1_1", "CEIL1_2", "GLOW", "LAMP"}
 	for _, t := range lightTextures {
@@ -364,7 +357,6 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY f
 			break
 		}
 	}
-
 	if (isSmall && isLightTexture) || (isSmall && isBright) {
 		kind = config.LightKindSpot
 		intensity *= 2.0
@@ -372,10 +364,5 @@ func (bld *Builder) heuristicSpotlight(lightLevel int16, ceilPic string, ceilY f
 			falloff = 10.0
 		}
 	}
-
 	return intensity, kind, falloff, r, g, b
-}
-
-func stringContains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr // Semplificato per l'esempio
 }

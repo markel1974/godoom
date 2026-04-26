@@ -38,17 +38,21 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	}
 	c.Kind = config.ThingPlayerDef
 	if c.Height <= 0 {
-		c.Height = 8.0
+		panic("player height must be positive")
 	}
 	if c.Speed <= 0 {
-		c.Speed = 60.0
+		panic("player speed must be positive")
+	}
+	if c.Mass <= 0 {
+		panic("player mass must be positive")
 	}
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
+	base := NewThingBase(things, c.Thing, c.Position, nil, volume)
 	p := &ThingPlayer{
 		kind:           0,
 		pitch:          0,
 		pitchState:     0,
-		ThingBase:      NewThingBase(things, c.Thing, c.Position, nil, volume),
+		ThingBase:      base,
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,

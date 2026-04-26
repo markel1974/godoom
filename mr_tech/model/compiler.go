@@ -43,7 +43,6 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	cfg.Scale(r.gScale)
 	animations := NewAnimations(cfg.GetTextures(), r.gScale)
 	r.lights = NewLights()
-	var allVolumes []*Volume
 	var container2d []*Volume
 
 	if len(cfg.Sectors) > 0 {
@@ -71,13 +70,18 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		}
 		//light 2d
 		r.lights.AddLights(r.compileLights2d(volumes2d, true))
-
-		allVolumes = append(allVolumes, container2d...)
 	}
 
+	var allVolumes []*Volume
 	if cfg.Calibration.Full3d {
-		allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
-		allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
+		if len(container2d) > 0 {
+			allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
+		}
+		if len(cfg.Volumes) > 0 {
+			allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
+		}
+	} else {
+		allVolumes = append(allVolumes, container2d...)
 	}
 
 	r.volumes = NewVolumes(allVolumes, full3d)
@@ -132,6 +136,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
 
+	unknownCounter := 0
 	for csIdx, cs := range css {
 		if len(cs.Segments) == 0 {
 			continue
@@ -161,7 +166,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					end := geometry.XY{X: p2.X, Y: p2.Y}
 					isWall := false
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
-					tag := "unknown"
+					tag := fmt.Sprintf("unknown_%d", unknownCounter)
+					unknownCounter++
 					// EXACT topological match
 					for _, cn := range cs.Segments {
 						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
@@ -238,7 +244,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 }
 
 // upgrade3d converts a collection of 2D volumes into their corresponding 3D representations with updated topology and adjacency links.
-func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
+func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	var volumes3d []*Volume
 	volMap := make(map[*Volume]*Volume)
 
@@ -256,7 +262,7 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 	}
 
 	// 1. First Pass: Solid topology generation
-	for _, vol2d := range vols2d {
+	for _, vol2d := range volumes2d {
 		id := fmt.Sprintf("%s_3d", vol2d.GetId())
 		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
 		if vol2d.Light != nil {
@@ -299,18 +305,18 @@ func (r *Compiler) upgrade3d(vols2d []*Volume) []*Volume {
 				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetAnimationIndex(0))
 			}
 			// 3. Middle Portal (the opening through which the player can navigate and look)
-			portalBottom := floorZ
-			if nFloorZ > floorZ {
-				portalBottom = nFloorZ
-			}
-			portalTop := ceilZ
-			if nCeilZ < ceilZ {
-				portalTop = nCeilZ
-			}
+			//portalBottom := floorZ
+			//if nFloorZ > floorZ {
+			//	portalBottom = nFloorZ
+			//}
+			//portalTop := ceilZ
+			//if nCeilZ < ceilZ {
+			//	portalTop = nCeilZ
+			//}
 			// If the opening physically exists (avoids glitches if two sectors are completely misaligned)
-			if portalTop > portalBottom {
-				buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimationIndex(1))
-			}
+			//if portalTop > portalBottom {
+			//buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimationIndex(1))
+			//}
 		}
 		vol3d.Rebuild()
 		volumes3d = append(volumes3d, vol3d)

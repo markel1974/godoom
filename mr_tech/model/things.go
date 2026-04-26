@@ -80,14 +80,19 @@ func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.
 		e.contacts[idx] = &Contact{}
 	}
 	e.pendingIdx.Store(0)
-	for _, ct := range cfg {
-		volume := e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
-		if volume == nil {
-			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
-			continue
+
+	const enableThingsCreation = true
+
+	if enableThingsCreation {
+		for _, ct := range cfg {
+			volume := e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
+			if volume == nil {
+				fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
+				continue
+			}
+			t2 := e.createThing(ct, volume)
+			e.addThing(t2)
 		}
-		t2 := e.createThing(ct, volume)
-		e.addThing(t2)
 	}
 	return e
 }

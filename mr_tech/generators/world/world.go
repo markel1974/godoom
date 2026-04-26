@@ -100,7 +100,7 @@ func Generate() (*config.Root, error) {
 
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
+	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
 	s1 := createCube(0, 0, 8, 0, 20)
@@ -129,7 +129,7 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	return cfg, nil
 }
 func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 3, 20)
+	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
 

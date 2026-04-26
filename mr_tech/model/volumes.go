@@ -67,6 +67,7 @@ func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 	return target
 }
 
+// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 	margin := cage.GetMargin()
 	self := cage.GetAABB()

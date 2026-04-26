@@ -251,6 +251,7 @@ func (t *ThingBase) doPhysics3d() {
 	// 3. SOLVER ITERATIVO DEI VINCOLI
 	// ==========================================
 	const solverIterations = 4
+	const solverJitter = 1e-6 // 1e-04
 
 	for si := 0; si < solverIterations; si++ {
 		for bucket := BucketType(0); bucket < BucketSize; bucket++ {
@@ -270,11 +271,10 @@ func (t *ThingBase) doPhysics3d() {
 
 				if distTarget < rEff {
 					// Risoluzione Posizionale (Push-Back con Baumgarte stabilization)
-					penetration := (rEff - distTarget) + 1e-4
+					penetration := (rEff - distTarget) + solverJitter
 					tX += nX * penetration
 					tY += nY * penetration
 					tZ += nZ * penetration
-
 					// Risoluzione Cinematica (Sliding vector projection)
 					dotVel := vx*nX + vy*nY + vz*nZ
 					if dotVel < 0 {
@@ -282,7 +282,6 @@ func (t *ThingBase) doPhysics3d() {
 						vy -= nY * dotVel
 						vz -= nZ * dotVel
 					}
-
 					// Tracking Pavimento (Threshold 0.7 rads per i piani inclinati)
 					if nZ >= 0.7 {
 						isGrounded = true

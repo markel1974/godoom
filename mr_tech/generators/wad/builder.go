@@ -207,7 +207,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	const playerHeight = 175.0 / WorldScaleFactor
 	//const playerRadius = 2 / WorldScaleFactor
 	//const playerHeight = 25 / WorldScaleFactor
-	const playerRadius = 2 / WorldScaleFactor
+	const playerRadius = 30 / WorldScaleFactor
 	const playerSpeed = 2000 / WorldScaleFactor
 	const playerMass = 8
 

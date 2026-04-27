@@ -86,8 +86,8 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
 }
 
 // Rebuild updates the entity's rectangular attributes and triggers a rebuild operation.
-func (e *Entity) Rebuild(x, y, w, h, z, d float64) {
-	e.rect.Reset(x, y, w, h, z, d)
+func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
+	e.rect.Reset(x, y, z, w, h, d)
 }
 
 // SetSize updates the dimensions of the entity with the specified width, height, and depth.

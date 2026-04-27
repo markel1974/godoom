@@ -62,6 +62,9 @@ type CageEntry struct {
 	normalX float64
 	normalY float64
 	normalZ float64
+	p0X     float64
+	p0Y     float64
+	p0Z     float64
 }
 
 // GetFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
@@ -90,22 +93,28 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry instance with new face and attributes: distance, effective radius, and normal vector components.
-func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ float64) {
+func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z float64) {
 	s.face = face
 	s.dist = dist
 	s.rEff = rEff
 	s.normalX = normalX
 	s.normalY = normalY
 	s.normalZ = normalZ
+	s.p0X = p0x
+	s.p0Y = p0y
+	s.p0Z = p0z
 }
 
 // CollisionCage represents a structure for handling collision constraints in a 3D space through a bucketed system.
 // It tracks faces, active constraints, and spatial properties of an ellipsoid with associated margins.
 type CollisionCage struct {
+	id                  string
+	volume              *Volume
 	faces               [BucketSize][FacesPerBucket]*CageEntry
 	counts              [BucketSize]int // Quanti vincoli attivi per bucket
 	spare               [BucketSize][FacesPerBucket]*CageEntry
 	ellipsoid           *physics.Entity
+	ellipsoidLocal      *physics.Entity
 	margin              float64
 	cX, cY, cZ          float64
 	dX, dY, dZ          float64
@@ -114,10 +123,13 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
-func NewCollisionCage(margin float64, restitution, friction float64) *CollisionCage {
+func NewCollisionCage(id string, volume *Volume, margin float64, restitution, friction float64) *CollisionCage {
 	c := &CollisionCage{
-		margin:    margin,
-		ellipsoid: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
+		id:             id,
+		volume:         volume,
+		margin:         margin,
+		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
+		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, 1000, 5, 0.2),
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		for j := 0; j < FacesPerBucket; j++ {
@@ -147,12 +159,17 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	w := maxX - minX
 	h := maxY - minY
 	d := maxZ - minZ
-	s.ellipsoid.Rebuild(x, y, w, h, z, d)
+	s.ellipsoid.Rebuild(x, y, z, w, h, d)
 	// Fast reset
 	for i := 0; i < 6; i++ {
 		s.counts[i] = 0
 		copy(s.faces[i][:], _emptyBucketFaces[:])
 	}
+}
+
+// GetVolume returns the volume associated with the CollisionCage as a pointer to a Volume object.
+func (s *CollisionCage) GetVolume() *Volume {
+	return s.volume
 }
 
 // GetMargin returns the margin value associated with the CollisionCage.
@@ -195,30 +212,43 @@ func (s *CollisionCage) GetEntity() *physics.Entity {
 	return s.ellipsoid
 }
 
+// Translate updates the local ellipsoid's bounds relative to the specified target coordinates and returns the updated entity.
+func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.Entity {
+	cageAABB := s.ellipsoid.GetAABB()
+	lMinX := cageAABB.GetMinX() - targetX
+	lMaxX := cageAABB.GetMaxX() - targetX
+	lMinY := cageAABB.GetMinY() - targetY
+	lMaxY := cageAABB.GetMaxY() - targetY
+	lMinZ := cageAABB.GetMinZ() - targetZ
+	lMaxZ := cageAABB.GetMaxZ() - targetZ
+	s.ellipsoidLocal.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return s.ellipsoidLocal
+}
+
 // AddFace adds a face to a suitable collision bucket based on constraints such as orientation, distance, and margin.
-func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
-	//TODO MOVE IN REBUILD
+func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) {
 	baseCliff := s.cZ - s.eRadZ
 
 	absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
 	other := face.GetAABB()
-	fMaxZ := other.GetMaxZ()
+	fMaxZ := other.GetMaxZ() + offZ
 
-	// CLIFF CULLING
 	wallWE := absX > absY && absX > absZ
 	wallNS := absY > absZ
 	isWall := wallWE || wallNS
 
 	if isWall && fMaxZ <= baseCliff+maxCliff {
-		//fmt.Println("FILTRO WALL ATTIVO, RETURNING", fMaxZ, baseCliff+maxCliff)
 		return
 	}
-	p0x, p0y, p0z := face.tri[0].X, face.tri[0].Y, face.tri[0].Z
+
+	// TRASLAZIONE AL VOLO (Da Local a World Space)
+	p0x := face.tri[0].X + offX
+	p0y := face.tri[0].Y + offY
+	p0z := face.tri[0].Z + offZ
+
 	nX, nY, nZ := face.normal.X, face.normal.Y, face.normal.Z
 
-	// ==========================================
-	// ORIENTAMENTO E ASSEGNAZIONE BUCKET SIMULTANEA
-	// ==========================================
+	// distStart usa le nuove p0 traslate!
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
 
@@ -271,7 +301,7 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 		return
 	}
 
-	s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
+	s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ, p0x, p0y, p0z)
 
 	/*
 		self := s.ellipsoid.GetAABB()
@@ -288,15 +318,14 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 }
 
 // add inserts a face into the specified bucket or replaces the furthest face if the bucket is full and the new face is closer.
-func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ float64) {
+func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z float64) {
 	if count := s.counts[bucket]; count < FacesPerBucket {
 		target := s.spare[bucket][count]
-		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ)
+		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
 		s.faces[bucket][count] = target
 		s.counts[bucket]++
 		return
 	}
-	// Buffer full: find the weakest constraint (farthest)
 	maxIdx := 0
 	maxDist := s.faces[bucket][0].dist
 	for i := 1; i < FacesPerBucket; i++ {
@@ -305,8 +334,7 @@ func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, 
 			maxIdx = i
 		}
 	}
-	// Replace it if this new plane is closer (more dangerous)
 	if dist < maxDist {
-		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ)
+		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
 	}
 }

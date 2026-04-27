@@ -11,22 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
-// Contact represents collision contact data between two entities in a physics simulation.
-type Contact struct {
-	a, b        *physics.Entity
-	nx, ny, nz  float64
-	penetration float64
-}
-
-// Update updates the contact with two entities, collision normal components, and penetration depth.
-func (c *Contact) Update(a, b *physics.Entity, nx, ny, nz float64, penetration float64) {
-	c.a = a
-	c.b = b
-	c.nx = nx
-	c.ny = ny
-	c.nz = nz
-	c.penetration = penetration
-}
+const solverJitter = 1e-6
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
@@ -44,8 +29,6 @@ type Things struct {
 	activeIdx        int
 	inactive         []IThing
 	inactiveIdx      int
-	contacts         []*Contact
-	contactsLen      int
 	containerIdx     int
 	container        []IThing
 	hasPending       bool
@@ -64,20 +47,15 @@ func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.
 		entities:         make(map[int]IThing),
 		identifier:       0,
 		active:           make([]IThing, defaultLen),
-		contacts:         make([]*Contact, defaultLen),
 		container:        make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
 		activeIdx:        0,
-		contactsLen:      0,
 		containerIdx:     0,
 		hasPending:       false,
 		config:           cfg,
 		volumes:          volumes,
 		animations:       animations,
-		event:            NewThingEvent(),
-	}
-	for idx := range e.contacts {
-		e.contacts[idx] = &Contact{}
+		event:            NewThingEvent(solverJitter),
 	}
 	e.pendingIdx.Store(0)
 
@@ -100,16 +78,21 @@ func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
-		vol, volOk := object.(*Volume)
+		thing, volOk := object.(IThing)
 		if !volOk {
 			return false
 		}
-		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
+		if cage.GetVolume() == thing.GetVolume() {
+			return false
+		}
+		targetX, targetY, targetZ := thing.GetPosition()
+		localAABB := cage.Translate(targetX, targetY, targetZ)
+		thing.GetVolume().QueryOverlaps(localAABB, func(otherEnt physics.IAABB) bool {
 			face, faceOk := otherEnt.(*Face)
 			if !faceOk {
 				return false
 			}
-			cage.AddFace(face, maxCliff)
+			cage.AddFace(face, maxCliff, targetX, targetY, targetZ)
 			return false
 		})
 		return false
@@ -267,46 +250,28 @@ func (th *Things) processCollision() {
 	if th.activeIdx == 0 {
 		return
 	}
-	th.contactsLen = 0
-	// DETECTION (Costruzione del Jacobiano)
+
+	th.event.SetStage(StageCompute)
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
-		th.tree.QueryOverlaps(t2, func(object physics.IAABB) bool {
-			otherThing, ok := object.(IThing)
-			if !ok || otherThing == t2 {
-				return false
-			}
-			otherEnt := otherThing.GetEntity()
-			// Tie-breaker 3D
-			if otherEnt.IsMoving() && t2.GetIdentifier() > otherThing.GetIdentifier() {
-				return false
-			}
-			ent := t2.GetEntity()
-			normX, normY, normZ, minPenetration, hasCollision := ent.ComputeImpact(otherEnt)
-			if !hasCollision {
-				return false
-			}
-			if th.contactsLen >= len(th.contacts) {
-				fmt.Println("MAX CONTACT REACHEAD", th.contactsLen, len(th.contacts))
-				return false
-			}
-			th.contacts[th.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
-			th.contactsLen++
-			t2.OnCollide(otherThing)
-			otherThing.OnCollide(t2)
-			return false
-		})
+		th.event.wg.Add(1)
+		t2.PostMessage(th.event)
 	}
+	th.event.wg.Wait()
 
-	// RESOLUTION (PGS Solver)
-	for i := 0; i < th.solverIterations; i++ {
-		for c := 0; c < th.contactsLen; c++ {
-			contact := th.contacts[c]
-			contact.a.ResolveImpact(contact.b, contact.nx, contact.ny, contact.nz, contact.penetration)
+	for si := 0; si < th.solverIterations; si++ {
+		//th.event.SetStage(StageResolve)
+		for x := 0; x < th.activeIdx; x++ {
+			t2 := th.active[x]
+			//th.event.wg.Add(1)
+			//t2.PostMessage(th.event)
+			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
+			t2.StageResolve(solverJitter)
 		}
+		//th.event.wg.Wait()
 	}
 
-	th.event.SetStage(StagePhysics)
+	th.event.SetStage(StageApply)
 	// PHYSYCS APPLY
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
@@ -335,10 +300,10 @@ func (th *Things) addThing(ent IThing) {
 		th.active = make([]IThing, len(th.entities)*4)
 		th.inactive = make([]IThing, len(th.entities)*4)
 		th.pending = make([]IThing, len(th.entities)*4)
-		th.contacts = make([]*Contact, len(th.entities)*4)
-		for idx := range th.contacts {
-			th.contacts[idx] = &Contact{}
-		}
+		//th.contacts = make([]*Contact, len(th.entities)*4)
+		//for idx := range th.contacts {
+		//	th.contacts[idx] = &Contact{}
+		//}
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()

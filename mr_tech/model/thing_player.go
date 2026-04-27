@@ -46,6 +46,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	if c.Mass <= 0 {
 		panic("player mass must be positive")
 	}
+	c.Id = "PLAYER"
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
 	base := NewThingBase(things, c.Thing, c.Position, nil, volume)
 	p := &ThingPlayer{
@@ -61,7 +62,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	p.id = "PLAYER"
+	//p.id = "PLAYER"
 	p.SetAngle(c.Angle)
 	return p
 }
@@ -84,9 +85,13 @@ func (p *ThingPlayer) StartLoop() {
 			case evt := <-p.inbox:
 				switch evt.GetKind() {
 				case StageThinking:
-					p.Compute(evt.GetCoords())
-				case StagePhysics:
-					p.PhysicsApply()
+					p.StageThinking(evt.GetCoords())
+				case StageCompute:
+					p.StageCompute()
+				case StageResolve:
+					p.StageResolve(evt.GetSolverJitter())
+				case StageApply:
+					p.StageApply()
 				}
 				evt.Done()
 			case <-p.done:
@@ -99,11 +104,6 @@ func (p *ThingPlayer) StartLoop() {
 // GetLight retrieves the light object associated with the ThingPlayer.
 func (p *ThingPlayer) GetLight() *Light {
 	return nil
-}
-
-// Compute processes the player's position or performs calculations based on the provided X, Y, and Z coordinates.
-func (p *ThingPlayer) Compute(playerX float64, playerY float64, playerZ float64) {
-	//nothing to do
 }
 
 // AddAngle adjusts the player's current angle by the specified value in radians, updating related trigonometric properties.
@@ -287,11 +287,16 @@ func (p *ThingPlayer) IsMoving() bool {
 	return p.entity.IsMoving()
 }
 
-// PhysicsApply applies physics computations to the player by calculating the head position and updating its motion state.
-func (p *ThingPlayer) PhysicsApply() {
+// StageThinking updates the player's internal state based on the provided x, y, and z coordinates.
+func (p *ThingPlayer) StageThinking(playerX float64, playerY float64, playerZ float64) {
+	//
+}
+
+// StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
+func (p *ThingPlayer) StageApply() {
 	wasGrounded := p.entity.IsOnGround()
 	prevVz := p.entity.GetVz()
-	p.doPhysics()
+	p.ThingBase.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := p.entity.IsOnGround()
 	if !wasGrounded && isGrounded {

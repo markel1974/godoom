@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -82,7 +81,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, anim *tex
 		maxStep:       cfg.Height * 0.5,
 		isActive:      true,
 		identifier:    -1,
-		cage:          NewCollisionCage(cageMargin, 0, 0),
+		cage:          NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0),
 		inbox:         make(chan *ThingEvent, 16),
 		done:          make(chan struct{}),
 		collisions:    make([]IThing, 128),
@@ -125,6 +124,10 @@ func (t *ThingBase) GetAABB() *physics.AABB {
 	return t.entity.GetAABB()
 }
 
+func (t *ThingBase) GetCage() *CollisionCage {
+	return t.cage
+}
+
 // GetEntity returns the physics.Entity associated with the current ThingBase instance.
 func (t *ThingBase) GetEntity() *physics.Entity {
 	return t.entity
@@ -165,10 +168,9 @@ func (t *ThingBase) GetMaxZ() float64 {
 	return t.location.GetMaxZ()
 }
 
-// Compute performs computations or updates related to the ThingBase object based on the player's coordinates.
-func (t *ThingBase) Compute(playerX float64, playerY float64, playerZ float64) {
-	//nothing to do
-	fmt.Println("You MUST to implement Compute method")
+// GetVolume retrieves the volume associated with the ThingBase instance.
+func (t *ThingBase) GetVolume() *Volume {
+	return t.volume
 }
 
 // SetIdentifier sets the unique identifier for the ThingBase instance.
@@ -201,226 +203,67 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
-// PhysicsApply applies physics calculations to the ThingBase instance using its height attribute.
-//func (t *ThingBase) PhysicsApply() {
-//	t.doPhysics()
-//}
-
-func (t *ThingBase) doPhysics() {
-	if t.full3d {
-		t.doPhysics3d()
-		return
-	}
-	t.doPhysics2d()
-}
-
-func (t *ThingBase) doPhysics3d() {
+// StageCompute calculates the displacement and updates the entity's collision cage for collision detection and resolution.
+func (t *ThingBase) StageCompute() {
 	dx, dy, dz := t.entity.GetDisplacement()
-
 	// 1. DEADZONE
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		if t.entity.IsOnGround() {
-			t.entity.SetVz(0.0)
-		}
-		return
-	}
-
-	// 2. STICK-TO-GROUND
-	if t.entity.IsOnGround() && dz <= 0 {
-		dz -= 0.06
-	}
-
+	//const sleepEpsilon = 0.005
+	//if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+	//	return
+	//}
 	pX, pY, pZ := t.pos.X, t.pos.Y, t.pos.Z
 	eRadX := t.entity.GetWidth() * 0.5
 	eRadY := t.entity.GetHeight() * 0.5
 	eRadZ := t.entity.GetDepth() * 0.5
-
 	cX, cY, cZ := pX, pY, pZ+eRadZ
-	tX, tY, tZ := cX+dx, cY+dy, cZ+dz
-
+	//tX, tY, tZ := cX+dx, cY+dy, cZ+dz
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
 	t.world.QueryCollisionCage(t.cage, t.maxStep)
-
-	isGrounded := false
-	vx, vy, vz := t.entity.GetVelocity()
-
-	// ==========================================
-	// 3. SOLVER ITERATIVO DEI VINCOLI
-	// ==========================================
-	const solverIterations = 4
-	const solverJitter = 1e-6 // 1e-04
-
-	for si := 0; si < solverIterations; si++ {
-		for bucket := BucketType(0); bucket < BucketSize; bucket++ {
-			count := t.cage.counts[bucket]
-			if count == 0 {
-				continue // Branch prediction optimization
-			}
-
-			for j := 0; j < count; j++ {
-				cFace := t.cage.faces[bucket][j]
-				nX, nY, nZ := cFace.GetNormal()
-				face := cFace.GetFace()
-				rEff := cFace.GetREff()
-				p0 := face.tri[0]
-
-				distTarget := (tX-p0.X)*nX + (tY-p0.Y)*nY + (tZ-p0.Z)*nZ
-
-				if distTarget < rEff {
-					// Risoluzione Posizionale (Push-Back con Baumgarte stabilization)
-					penetration := (rEff - distTarget) + solverJitter
-					tX += nX * penetration
-					tY += nY * penetration
-					tZ += nZ * penetration
-					// Risoluzione Cinematica (Sliding vector projection)
-					dotVel := vx*nX + vy*nY + vz*nZ
-					if dotVel < 0 {
-						vx -= nX * dotVel
-						vy -= nY * dotVel
-						vz -= nZ * dotVel
-					}
-					// Tracking Pavimento (Threshold 0.7 rads per i piani inclinati)
-					if nZ >= 0.7 {
-						isGrounded = true
-						if parent := face.GetParent(); parent != nil {
-							t.location = parent
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 4. APPLICAZIONE STATO FINALE
-	t.entity.SetVx(vx)
-	t.entity.SetVy(vy)
-	t.entity.SetVz(vz)
-	t.entity.SetOnGround(isGrounded)
-
-	t.pos.X, t.pos.Y, t.pos.Z = tX, tY, tZ-eRadZ
+	t.things.QueryCollisionCage(t.cage, t.maxStep)
 }
 
-/*
-// doPhysics3d risolve il movimento dell'entità proiettando e confinando
-// la sua traiettoria all'interno della CollisionCage locale.
-func (t *ThingBase) doPhysics3d() {
-	dx, dy, dz := t.entity.GetDisplacement()
-
-	// 1. DEADZONE
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		if t.entity.IsOnGround() {
-			t.entity.SetVz(0.0)
+// StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
+// solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
+func (t *ThingBase) StageResolve(solverJitter float64) {
+	tX, tY, tZ := t.cage.GetT()
+	for bucket := BucketType(0); bucket < BucketSize; bucket++ {
+		count := t.cage.counts[bucket]
+		if count == 0 {
+			continue
 		}
-		return
-	}
+		for j := 0; j < count; j++ {
+			entry := t.cage.faces[bucket][j]
+			otherFace := entry.GetFace()
+			nX, nY, nZ := entry.GetNormal()
+			rEff := entry.GetREff()
 
-	// 2. STICK-TO-GROUND
-	if t.entity.IsOnGround() && dz <= 0 {
-		dz -= 0.06
-	}
+			// Lettura delle coordinate in WORLD SPACE tradotte dalla Cage
+			p0X := entry.p0X
+			p0Y := entry.p0Y
+			p0Z := entry.p0Z
 
-	// Pivot ai piedi, trasformiamo in Centro
-	pX, pY, pZ := t.pos.X, t.pos.Y, t.pos.Z
-	eRadX := t.entity.GetWidth() * 0.5
-	eRadY := t.entity.GetHeight() * 0.5
-	eRadZ := t.entity.GetDepth() * 0.5
-
-	cX, cY, cZ := pX, pY, pZ+eRadZ
-
-	// Target provvisorio (dove l'entità vuole arrivare)
-	tX, tY, tZ := cX+dx, cY+dy, cZ+dz
-
-	// Costruiamo e popoliamo la gabbia spaziale attorno al vettore di movimento
-	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
-	t.world.QueryCollisionCage(t.cage, t.maxStep)
-
-	isGrounded := false
-	vx, vy, vz := t.entity.GetVelocity()
-
-	// ==========================================
-	// 3. SOLVER ITERATIVO DEI VINCOLI
-	// ==========================================
-	const solverIterations = 4
-
-	for i := 0; i < solverIterations; i++ {
-		//TODO QUI DEVONO ARRIVARE SOLO I BUCKET SETTATI....
-		for bucket := BucketType(0); bucket < 6; bucket++ {
-			count := t.cage.counts[bucket]
-			if count == 0 {
+			distTarget := (tX-p0X)*nX + (tY-p0Y)*nY + (tZ-p0Z)*nZ
+			if distTarget >= rEff {
 				continue
 			}
-			for j := 0; j < count; j++ {
-				cFace := t.cage.faces[bucket][j]
-				nX, nY, nZ := cFace.GetNormal()
-				face := cFace.GetFace()
-				rEff := cFace.GetREff()
-				p0 := face.tri[0]
-				distTarget := (tX-p0.X)*nX + (tY-p0.Y)*nY + (tZ-p0.Z)*nZ
-				if distTarget < rEff {
-					// STEP-UP NATIVO
-					if bucket <= 3 && t.entity.IsOnGround() {
-						fMaxZ := face.aabb.GetMaxZ()
-						if fMaxZ > pZ && fMaxZ <= pZ+t.maxStep {
-							tZ = fMaxZ + eRadZ + 0.001
-							isGrounded = true
-							continue
-						}
-					}
-					// Risoluzione Posizionale (Push-Back)
-					penetration := (rEff - distTarget) + 1e-4
-					tX += nX * penetration
-					tY += nY * penetration
-					tZ += nZ * penetration
-					// Risoluzione Cinematica (Sliding)
-					dotVel := vx*nX + vy*nY + vz*nZ
-					if dotVel < 0 {
-						vx -= nX * dotVel
-						vy -= nY * dotVel
-						vz -= nZ * dotVel
-					}
-					// Tracking Pavimento
-					if nZ >= 0.7 {
-						isGrounded = true
-						if parent := face.GetParent(); parent != nil {
-							t.location = parent
-						}
-					}
-				}
-			}
+
+			penetration := (rEff - distTarget) + solverJitter
+			otherParentEnt := otherFace.GetParent().GetEntity()
+
+			// Delega totale e assoluta al solutore interno di physics
+			t.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 		}
 	}
-
-	// 4. APPLICAZIONE STATO FINALE
-	t.entity.SetVx(vx)
-	t.entity.SetVy(vy)
-	t.entity.SetVz(vz)
-	t.entity.SetOnGround(isGrounded)
-
-	// Riportiamo le coordinate dal Centro al Pivot dei Piedi
-	t.pos.X, t.pos.Y, t.pos.Z = tX, tY, tZ-eRadZ
 }
-*/
 
-/*
-func (t *ThingBase) doPhysics3d() {
-	const microStep = 0.001
-	const sleepEpsilon = 0.005
-
-	//do collision
-	for i := 0; i < t.collisionsIdx; i++ {
-		t.collisions[i] = nil
-	}
-	t.collisionsIdx = 0
-
+// StageApply updates the entity's state by processing movement, grounding, and positional integration based on displacement.
+func (t *ThingBase) StageApply() {
+	// 1. DEADZONE
+	// NOTA: Assicurati che GetDisplacement() calcoli il delta usando le
+	// velocità AGGIORNATE dal solver (dopo ResolveImpact).
 	dx, dy, dz := t.entity.GetDisplacement()
 
-	// 1. DEADZONE
+	const sleepEpsilon = 0.005
 	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 		t.entity.SetVx(0.0)
 		t.entity.SetVy(0.0)
@@ -430,222 +273,24 @@ func (t *ThingBase) doPhysics3d() {
 		return
 	}
 
-	// 2. STICK-TO-GROUND
-	if t.entity.IsOnGround() && dz <= 0 {
-		dz -= 0.06
-	}
-
-	// pZ è il CENTRO dell'entità
-	pX, pY, pZ := t.pos.X, t.pos.Y, t.pos.Z
-
-	// ==========================================
-	// DEFINIZIONE VINCOLI ELLISSOIDE
-	// ==========================================
-	eRadX := t.entity.GetWidth() * 0.5
-	eRadY := t.entity.GetHeight() * 0.5
-	eRadZ := t.entity.GetDepth() * 0.5
-
+	// 2. TRACKING PAVIMENTO (Grounding & Location)
 	isGrounded := false
-	dxAbs, dyAbs, dzAbs := math.Abs(dx), math.Abs(dy), math.Abs(dz)
-
-	// ==========================================
-	// FASE A: MOVIMENTO VERTICALE (Z)
-	// ==========================================
-	if dzAbs > 0 {
-		// Con Pivot Centrale, srcZ è direttamente pZ
-		srcX, srcY, srcZ := pX, pY, pZ
-		dstX, dstY, dstZ := pX, pY, pZ+dz
-		// Vincoli AABB per la query spaziale
-		topC := pZ + eRadZ + dzAbs
-		bottomC := pZ - eRadZ - dzAbs
-		zFace, znX, znY, znZ, zHitT := t.wall.ClosestFace(srcX, srcY, srcZ, dstX, dstY, dstZ, 0, 0, dz, topC, bottomC, eRadX, eRadY, eRadZ)
-		if zFace != nil {
-			t.entity.ResolveImpact(t.wall.GetEntity(), znX, znY, znZ, 0.0)
-			// Aggiorniamo la posizione del centro
-			pZ += dz * zHitT
-			if znZ >= 0.7 { // Pavimento
-				isGrounded = true
-				pZ += microStep
-				if parent := zFace.GetParent(); parent != nil {
-					t.location = parent
-				}
-				if t.entity.GetVz() < 0 {
-					t.entity.SetVz(0.0)
-				}
-			} else if znZ <= -0.7 { // Soffitto
-				pZ -= microStep
-				if t.entity.GetVz() > 0 {
-					t.entity.SetVz(0.0)
-				}
-			}
-			dz = 0
-		} else {
-			pZ += dz
+	if count := t.cage.counts[BucketFloor]; count > 0 {
+		isGrounded = true
+		// Aggiorniamo la location prendendo il parent della prima faccia calpestata
+		if parent := t.cage.faces[BucketFloor][0].GetFace().GetParent(); parent != nil {
+			t.location = parent
 		}
 	}
 
-	// ==========================================
-	// FASE B: MOVIMENTO ORIZZONTALE E STEP-UP
-	// ==========================================
-	if dxAbs > 0 || dyAbs > 0 {
-		srcX, srcY, srcZ := pX, pY, pZ
-		dstX, dstY, dstZ := pX+dx, pY+dy, pZ
-		topC := pZ + eRadZ
-		bottomC := pZ - eRadZ
-		hFace, hnX, hnY, hnZ, hHitT := t.wall.ClosestFace(srcX, srcY, srcZ, dstX, dstY, dstZ, dx, dy, 0, topC, bottomC, eRadX, eRadY, eRadZ)
-		if hFace != nil {
-			stepUpSuccess := false
-			// Step-Up: alziamo il centro di maxStep
-			stepUpZ := pZ + t.maxStep
-			srcSX, srcSY, srcSZ := pX, pY, stepUpZ
-			dstSX, dstSY, dstSZ := pX+dx, pY+dy, stepUpZ
-
-			_, _, _, _, sHitT := t.wall.ClosestFace(srcSX, srcSY, srcSZ, dstSX, dstSY, dstSZ, dx, dy, 0, stepUpZ+eRadZ, stepUpZ-eRadZ, eRadX, eRadY, eRadZ)
-			//fmt.Println("TARGET HIT", sHitT, hHitT+0.01, srcSX, srcSY, srcSZ, dstSX, dstSY, dstSZ, eRadX, eRadY, eRadZ)
-			if sHitT > hHitT+0.01 {
-				stepTravelX := dx * sHitT
-				stepTravelY := dy * sHitT
-				dropZ := -t.maxStep - 0.1
-				srcTX, srcTY, srcTZ := pX+stepTravelX, pY+stepTravelY, stepUpZ
-				dstTX, dstTY, dstTZ := pX+stepTravelX, pY+stepTravelY, stepUpZ+dropZ
-				dropFace, _, _, dnZ, dropT := t.wall.ClosestFace(srcTX, srcTY, srcTZ, dstTX, dstTY, dstTZ, 0, 0, dropZ, stepUpZ+eRadZ, stepUpZ+dropZ-eRadZ, eRadX, eRadY, eRadZ)
-				if dropFace != nil && dnZ >= 0.7 {
-					pX += stepTravelX
-					pY += stepTravelY
-					pZ = stepUpZ + (dropZ * dropT) + microStep
-					isGrounded = true
-					stepUpSuccess = true
-					if parent := dropFace.GetParent(); parent != nil {
-						t.location = parent
-					}
-				}
-			}
-
-			if !stepUpSuccess {
-				pX += dx * hHitT
-				pY += dy * hHitT
-				vx, vy, vz := t.entity.GetVelocity()
-				newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, hnX, hnY, hnZ)
-				t.entity.SetVx(newVx)
-				t.entity.SetVy(newVy)
-				t.entity.SetVz(newVz)
-
-				remTime := 1.0 - hHitT
-				if remTime > 0 {
-					rdx, rdy, rdz := t.entity.ClipVelocity(dx*remTime, dy*remTime, 0, hnX, hnY, hnZ)
-					pX += rdx
-					pY += rdy
-					pZ += rdz
-				}
-			}
-		} else {
-			pX += dx
-			pY += dy
-		}
-	}
-
+	// 3. APPLICAZIONE STATO
 	t.entity.SetOnGround(isGrounded)
-	t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
-}
 
-*/
-
-// doPhysics handles the physics computations for movement, collision detection, and location transitions for the entity.
-func (t *ThingBase) doPhysics2d() {
-	/*
-		for i := 0; i < t.collisionsIdx; i++ {
-			t.collisions[i] = nil
-		}
-		t.collisionsIdx = 0
-
-		// extract displacement delta
-		dx, dy, dz := t.entity.GetDisplacement()
-		//if dx == 0.0 && dy == 0.0 && dz == 0.0 {
-		//	return
-		//}
-		// FIX 1: LA SONDA GRAVITAZIONALE (Stick-to-Ground)
-		// Se siamo a terra, forziamo un micro-vettore verso il basso.
-		// Questo obbliga il raycast (Sweep) a sbattere sempre contro il pavimento
-		// anche quando stiamo solo camminando in orizzontale, impedendo la finta caduta.
-
-		if t.entity.IsOnGround() && math.Abs(dz) < 0.0001 {
-			dz = -0.002
-		}
-
-		// DEADZONE (Sleep Epsilon)
-		const sleepEpsilon = 0.005
-		if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-			t.entity.SetVx(0.0)
-			t.entity.SetVy(0.0)
-			if t.entity.IsOnGround() {
-				t.entity.SetVz(0.0)
-			}
-			return
-		}
-
-		tHeight := t.entity.GetDepth()
-		//fmt.Printf("thing %s is moving x:%f y:%f z:%f\n", t.id, dx, dy, dz)
-		isGrounded := false
-		pX, pY, pZ := t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
-		hPos := t.pos.Z + tHeight
-		elevBaseZ := t.pos.Z + t.maxStep
-		// continuous collision detection (ccd) & sliding
-		radius := t.GetRadius()
-		face, nX, nY, nZ, _ := t.wall.ClosestFace(t.pos.X, t.pos.Y, t.pos.Z, pX, pY, pZ, dx, dy, dz, hPos, elevBaseZ, radius)
-		if face != nil {
-			// apply physical response to the entity
-			t.entity.ResolveImpact(t.wall.GetEntity(), nX, nY, nZ, 0.0)
-			vx, vy, vz := t.entity.GetVelocity()
-			// handle landing on walkable planes (slope)
-			if nZ >= 0.7 && vz < 0 {
-				vz = 0
-				isGrounded = true
-			}
-			// project residual velocity onto tangent plane (sliding kcc)
-			newVx, newVy, newVz := t.entity.ClipVelocity(vx, vy, vz, nX, nY, nZ)
-			t.entity.SetVx(newVx)
-			t.entity.SetVy(newVy)
-			t.entity.SetVz(newVz)
-			// recalculate effective displacement for current frame
-			dx, dy, dz = t.entity.GetDisplacement()
-			pX, pY, pZ = t.pos.X+dx, t.pos.Y+dy, t.pos.Z+dz
-		}
-		// location transition (3d portals)
-		topZ := pZ + tHeight
-		newVolume := t.location.Neighbor2d(pX, pY, pZ)
-		if newVolume == nil {
-			newVolume = t.world.QueryPoint2d(pX, pY, pZ)
-		}
-		newVolume = isValidZ(newVolume, pZ, topZ, t.maxStep)
-		if newVolume != nil && newVolume != t.location {
-			if t.entity.GetVz() <= 0 {
-				actualStep := newVolume.GetMinZ() - t.location.GetMinZ()
-				// automatic handling of height difference (step-up for stairs)
-				if actualStep > 0 || (actualStep < 0 && math.Abs(actualStep) < t.maxStep) {
-					pZ = newVolume.GetMinZ()
-					t.entity.SetVz(0.0)
-					isGrounded = true
-				}
-			}
-			t.location = newVolume
-		}
-		// vertical topological limits
-		minZ, maxZ := t.location.GetMinZ(), t.location.GetMaxZ()
-		if pZ <= minZ {
-			pZ = minZ
-			isGrounded = true
-			t.entity.SetVz(0.0)
-		} else if (pZ + tHeight) > maxZ {
-			penetration := (pZ + tHeight) - maxZ
-			t.entity.ResolveImpact(t.wall.GetEntity(), 0, 0, -1, penetration)
-			pZ = maxZ - tHeight
-		}
-		// physical state synchronization
-		t.entity.SetOnGround(isGrounded)
-		// final application
-		t.pos.X, t.pos.Y, t.pos.Z = pX, pY, pZ
-
-	*/
+	// 4. INTEGRAZIONE POSIZIONALE PURA
+	// La posizione è il risultato diretto del displacement fisico.
+	t.pos.X += dx
+	t.pos.Y += dy
+	t.pos.Z += dz
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

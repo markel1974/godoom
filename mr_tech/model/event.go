@@ -19,23 +19,32 @@ type ComputeStage uint8
 // StagePhysics represents the compute stage for Sweep and Collision-related calculations.
 const (
 	StageThinking ComputeStage = iota //  0 (AI, Aggro)
-	StagePhysics                      //  1 (Sweep, Collision)
+	StageCompute
+	StageResolve
+	StageApply //  1 (Sweep, Collision)
 )
 
 // ThingEvent represents an event associated with a Thing, containing position data, a compute stage, and synchronization.
 type ThingEvent struct {
-	playerX float64
-	playerY float64
-	playerZ float64
-	stage   ComputeStage
-	wg      *sync.WaitGroup
+	solverJitter float64
+	playerX      float64
+	playerY      float64
+	playerZ      float64
+	stage        ComputeStage
+	wg           *sync.WaitGroup
 }
 
 // NewThingEvent initializes and returns a new instance of ThingEvent with an embedded sync.WaitGroup.
-func NewThingEvent() *ThingEvent {
+func NewThingEvent(solverJitter float64) *ThingEvent {
 	return &ThingEvent{
-		wg: &sync.WaitGroup{},
+		solverJitter: solverJitter,
+		wg:           &sync.WaitGroup{},
 	}
+}
+
+// GetSolverJitter returns the solver jitter value associated with the ThingEvent instance.
+func (e *ThingEvent) GetSolverJitter() float64 {
+	return e.solverJitter
 }
 
 // SetStage updates the ComputeStage of the ThingEvent to the specified stage.

@@ -20,7 +20,7 @@ func NewRect(x, y, w, h, z, d float64) Rect {
 }
 
 // Reset updates the position, size, and depth of the Rect to the specified values and recalculates its properties.
-func (r *Rect) Reset(x, y, w, h, z, d float64) {
+func (r *Rect) Reset(x, y, z, w, h, d float64) {
 	r.point.x = x
 	r.point.y = y
 	r.point.z = z

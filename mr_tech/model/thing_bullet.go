@@ -49,9 +49,13 @@ func (t *ThingThrowable) StartLoop() {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
 				case StageThinking:
-					t.Compute(evt.GetCoords())
-				case StagePhysics:
-					t.PhysicsApply()
+					t.StageThinking(evt.GetCoords())
+				case StageCompute:
+					t.StageCompute()
+				case StageResolve:
+					t.StageResolve(evt.GetSolverJitter())
+				case StageApply:
+					t.StageApply()
 				}
 				evt.Done()
 			case <-t.done:
@@ -73,11 +77,7 @@ func (t *ThingThrowable) GetMinZ() float64 {
 	return z
 }
 
-func (t *ThingThrowable) PhysicsApply() {
-	t.doPhysics()
-}
-
-// Compute calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
-func (t *ThingThrowable) Compute(playerX float64, playerY float64, playerZ float64) {
+// StageThinking calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
+func (t *ThingThrowable) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
 }

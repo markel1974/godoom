@@ -79,7 +79,7 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 			if !faceOk {
 				return false
 			}
-			cage.AddFace(face, maxCliff)
+			cage.AddFace(face, maxCliff, 0.0, 0.0, 0.0)
 			return false
 		})
 		return false

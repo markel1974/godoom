@@ -32,9 +32,13 @@ func (t *ThingItem) StartLoop() {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
 				case StageThinking:
-					t.Compute(evt.GetCoords())
-				case StagePhysics:
-					t.PhysicsApply()
+					t.StageThinking(evt.GetCoords())
+				case StageCompute:
+					t.StageCompute()
+				case StageResolve:
+					t.StageResolve(evt.GetSolverJitter())
+				case StageApply:
+					t.StageApply()
 				}
 				evt.Done()
 			case <-t.done:
@@ -44,11 +48,6 @@ func (t *ThingItem) StartLoop() {
 	}()
 }
 
-// Compute updates the state of the ThingItem instance based on the provided player coordinates (X, Y, Z).
-func (t *ThingItem) Compute(playerX float64, playerY float64, playerZ float64) {
-}
-
-// PhysicsApply executes physics-related calculations and updates for the ThingItem instance by invoking the doPhysics method.
-func (t *ThingItem) PhysicsApply() {
-	t.doPhysics()
+// StageThinking updates the state of the ThingItem instance based on the provided player coordinates (X, Y, Z).
+func (t *ThingItem) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }

@@ -32,13 +32,21 @@ type IThing interface {
 
 	GetMaxZ() float64
 
+	GetVolume() *Volume
+
+	GetCage() *CollisionCage
+
 	GetEntity() *physics.Entity
 
 	GetLocation() *Volume
 
-	Compute(playerX float64, playerY float64, playerZ float64)
+	StageThinking(playerX float64, playerY float64, playerZ float64)
 
-	PhysicsApply()
+	StageCompute()
+
+	StageResolve(solverJitter float64)
+
+	StageApply()
 
 	IsActive() bool
 

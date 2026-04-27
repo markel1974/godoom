@@ -49,9 +49,13 @@ func (t *ThingEnemy) StartLoop() {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
 				case StageThinking:
-					t.Compute(evt.GetCoords())
-				case StagePhysics:
-					t.PhysicsApply()
+					t.StageThinking(evt.GetCoords())
+				case StageCompute:
+					t.StageCompute()
+				case StageResolve:
+					t.StageResolve(evt.GetSolverJitter())
+				case StageApply:
+					t.StageApply()
 				}
 				evt.Done()
 			case <-t.done:
@@ -61,12 +65,8 @@ func (t *ThingEnemy) StartLoop() {
 	}()
 }
 
-func (t *ThingEnemy) PhysicsApply() {
-	t.doPhysics()
-}
-
-// Compute updates the Thing's direction, position, and attack logic based on the player's coordinates.
-func (t *ThingEnemy) Compute(playerX float64, playerY float64, playerZ float64) {
+// StageThinking updates the Thing's direction, position, and attack logic based on the player's coordinates.
+func (t *ThingEnemy) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := playerZ + (t.entity.GetDepth() / 2)
 	dx := playerX - t.pos.X

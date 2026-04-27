@@ -129,7 +129,7 @@ func NewCollisionCage(id string, volume *Volume, margin float64, restitution, fr
 		volume:         volume,
 		margin:         margin,
 		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
-		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, 1000, 5, 0.2),
+		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction),
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		for j := 0; j < FacesPerBucket; j++ {

@@ -18,21 +18,20 @@ type IVertices interface {
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id           string
-	pos          geometry.XYZ
-	kind         config.ThingType
-	angle        float64
-	maxStep      float64
-	speed        float64
-	acceleration float64
-	jumpForce    float64
-	location     *Volume
-	animation    *textures.Animation
-	world        *Volumes
-	things       *Things
-	isActive     bool
-	identifier   int
-	//wall          *ThingWall
+	id            string
+	pos           geometry.XYZ
+	kind          config.ThingType
+	angle         float64
+	maxStep       float64
+	speed         float64
+	acceleration  float64
+	jumpForce     float64
+	location      *Volume
+	animation     *textures.Animation
+	world         *Volumes
+	things        *Things
+	isActive      bool
+	identifier    int
 	cage          *CollisionCage
 	volume        *Volume
 	entity        *physics.Entity
@@ -41,7 +40,7 @@ type ThingBase struct {
 	collisionsIdx int
 	inbox         chan *ThingEvent
 	full3d        bool
-	done          chan struct{} // Per il teardown
+	done          chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, animation, sector, world, and things.
@@ -258,11 +257,9 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 
 // StageApply updates the entity's state by processing movement, grounding, and positional integration based on displacement.
 func (t *ThingBase) StageApply() {
-	// 1. DEADZONE
-	// NOTA: Assicurati che GetDisplacement() calcoli il delta usando le
-	// velocità AGGIORNATE dal solver (dopo ResolveImpact).
 	dx, dy, dz := t.entity.GetDisplacement()
 
+	// DEADZONE
 	const sleepEpsilon = 0.005
 	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 		t.entity.SetVx(0.0)
@@ -273,17 +270,16 @@ func (t *ThingBase) StageApply() {
 		return
 	}
 
-	// 2. TRACKING PAVIMENTO (Grounding & Location)
+	// TRACKING PAVIMENTO (Grounding & Location)
 	isGrounded := false
 	if count := t.cage.counts[BucketFloor]; count > 0 {
 		isGrounded = true
-		// Aggiorniamo la location prendendo il parent della prima faccia calpestata
 		if parent := t.cage.faces[BucketFloor][0].GetFace().GetParent(); parent != nil {
 			t.location = parent
 		}
 	}
 
-	// 3. APPLICAZIONE STATO
+	// APPLICAZIONE STATO
 	t.entity.SetOnGround(isGrounded)
 
 	// 4. INTEGRAZIONE POSIZIONALE PURA

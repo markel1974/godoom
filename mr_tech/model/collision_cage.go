@@ -274,12 +274,6 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 	if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
 		maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
 		maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
-		//fmt.Println("###########################")
-		//fmt.Printf("OUR %v\n", cage.GetAABB())
-		//fmt.Printf("OTHER ID %v\n", face.GetTag())
-		//fmt.Printf("OTHER %v\n", otherEnt.GetAABB())
-		//fmt.Printf("OTHER triangle %v\n", face.tri)
-		//fmt.Printf("%v distSurfTarget %f Eff %f\n", bucket, distSurfTarget, rEff)
 		s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
 	} else {
 		//fmt.Println("FILTRO OUTSIDE ATTIVO RETURNING", margin)

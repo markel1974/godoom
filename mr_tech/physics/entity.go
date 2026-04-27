@@ -90,6 +90,11 @@ func (e *Entity) Rebuild(x, y, w, h, z, d float64) {
 	e.rect.Reset(x, y, w, h, z, d)
 }
 
+// SetSize updates the dimensions of the entity with the specified width, height, and depth.
+func (e *Entity) SetSize(w, h, d float64) {
+	e.rect.SetSize(w, h, d)
+}
+
 // Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.
 func (e *Entity) Stop() {
 	e.vx = 0.0

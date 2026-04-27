@@ -267,6 +267,10 @@ func (th *Things) processCollision() {
 			if !hasCollision {
 				return false
 			}
+			if th.contactsLen >= len(th.contacts) {
+				fmt.Println("MAX CONTACT REACHEAD", th.contactsLen, len(th.contacts))
+				return false
+			}
 			th.contacts[th.contactsLen].Update(ent, otherEnt, normX, normY, normZ, minPenetration)
 			th.contactsLen++
 			t2.OnCollide(otherThing)
@@ -309,10 +313,10 @@ func (th *Things) addThing(ent IThing) {
 	ent.SetIdentifier(th.identifier)
 	th.identifier++
 	if len(th.entities) > cap(th.active) {
-		th.active = make([]IThing, len(th.entities)*2)
-		th.inactive = make([]IThing, len(th.entities)*2)
-		th.pending = make([]IThing, len(th.entities)*2)
-		th.contacts = make([]*Contact, len(th.entities)*2)
+		th.active = make([]IThing, len(th.entities)*4)
+		th.inactive = make([]IThing, len(th.entities)*4)
+		th.pending = make([]IThing, len(th.entities)*4)
+		th.contacts = make([]*Contact, len(th.entities)*4)
 		for idx := range th.contacts {
 			th.contacts[idx] = &Contact{}
 		}

@@ -186,6 +186,13 @@ func (p *ThingPlayer) SetJump(multi bool) {
 // SetDucking toggles the player's ducking state between true and false.
 func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
+	if p.ducking {
+		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*0.5)
+		p.pos.Z -= p.entity.GetDepth() * 0.25
+	} else {
+		p.pos.Z += p.entity.GetDepth() * 0.25
+		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*2.0)
+	}
 }
 
 // GetFlash retrieves the flash instance associated with the ThingPlayer.

@@ -44,8 +44,16 @@ func (r *Rect) rebuild() {
 	r.aabb.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
-// SetSize adjusts the dimensions of the Rect by adding the given width, height, and depth values.
+// SetSize updates the width, height, and depth of the Rect and recalculates its properties by invoking rebuild.
 func (r *Rect) SetSize(w, h, d float64) {
+	r.size.w = w
+	r.size.h = h
+	r.size.d = d
+	r.rebuild()
+}
+
+// AddSize adjusts the dimensions of the Rect by adding the given width, height, and depth values.
+func (r *Rect) AddSize(w, h, d float64) {
 	r.size.w += w
 	r.size.h += h
 	r.size.d += d

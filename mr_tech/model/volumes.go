@@ -69,114 +69,20 @@ func (s *Volumes) Query(aabb physics.IAABB) []*Volume {
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
-	margin := cage.GetMargin()
-	self := cage.GetAABB()
-	cX, cY, cZ := cage.GetC()
-	tX, tY, tZ := cage.GetT()
-	eRadX, eRadY, eRadZ := cage.GetRad()
-	minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
-	maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
-	baseCliff := cZ - eRadZ
-
-	s.QueryAABB(cage, func(vol *Volume) {
-		vol.facesTree.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
-			face, ok := otherEnt.(*Face)
-			if !ok {
+	s.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
+		vol, volOk := object.(*Volume)
+		if !volOk {
+			return false
+		}
+		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
+			face, faceOk := otherEnt.(*Face)
+			if !faceOk {
 				return false
 			}
-			absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
-			fAABB := otherEnt.GetAABB()
-			fMaxZ := fAABB.GetMaxZ()
-
-			// CLIFF CULLING
-			wallWE := absX > absY && absX > absZ
-			wallNS := absY > absZ
-			isWall := wallWE || wallNS
-
-			if isWall && fMaxZ <= baseCliff+maxCliff {
-				//fmt.Println("FILTRO WALL ATTIVO, RETURNING", fMaxZ, baseCliff+maxCliff)
-				return false
-			}
-			p0x, p0y, p0z := face.tri[0].X, face.tri[0].Y, face.tri[0].Z
-			nX, nY, nZ := face.normal.X, face.normal.Y, face.normal.Z
-
-			// ==========================================
-			// ORIENTAMENTO E ASSEGNAZIONE BUCKET SIMULTANEA
-			// ==========================================
-			distStart := (cX-p0x)*nX + (cY-p0y)*nY + (cZ-p0z)*nZ
-			var bucket BucketType
-
-			if isWall {
-				// MURI
-				//height := fAABB.GetMaxZ() - fAABB.GetMinZ()
-				//fmt.Println("CURRENT HEIGHT", height)
-
-				if distStart < 0 {
-					nX, nY, nZ = -nX, -nY, -nZ
-					distStart = -distStart
-				}
-				// Assegnazione bucket per i muri in base alla normale finale
-				if wallWE {
-					if nX < 0 {
-						bucket = BucketWallWest
-					} else {
-						bucket = BucketWallEast
-					}
-				} else {
-					if nY < 0 {
-						bucket = BucketWallNorth
-					} else {
-						bucket = BucketWallSouth
-					}
-				}
-			} else {
-				// PIANI ORIZZONTALI
-				planeZ := p0z
-				if math.Abs(nZ) > 1e-5 {
-					planeZ = p0z - (nX*(cX-p0x)+nY*(cY-p0y))/nZ
-				}
-				if cZ >= planeZ-maxCliff {
-					bucket = BucketFloor // È matematicamente un Pavimento
-					if nZ < 0 {
-						nX, nY, nZ = -nX, -nY, -nZ
-						distStart = -distStart
-					}
-				} else {
-					bucket = BucketCeiling // È matematicamente un Soffitto
-					if nZ > 0 {
-						nX, nY, nZ = -nX, -nY, -nZ
-						distStart = -distStart
-					}
-				}
-			}
-
-			rEff := math.Sqrt((nX*eRadX)*(nX*eRadX) + (nY*eRadY)*(nY*eRadY) + (nZ*eRadZ)*(nZ*eRadZ))
-			distTarget := (tX-p0x)*nX + (tY-p0y)*nY + (tZ-p0z)*nZ
-			distSurfTarget := distTarget - rEff
-
-			if distSurfTarget > margin {
-				//fmt.Println("FILTRO MARGIN ATTIVO, RETURNING", distSurfTarget, margin)
-				return false
-			}
-
-			fMinX, fMinY, fMinZ := fAABB.GetMinX(), fAABB.GetMinY(), fAABB.GetMinZ()
-			fMaxX, fMaxY := fAABB.GetMaxX(), fAABB.GetMaxY()
-
-			if maxX >= fMinX-margin && minX <= fMaxX+margin &&
-				maxY >= fMinY-margin && minY <= fMaxY+margin &&
-				maxZ >= fMinZ-margin && minZ <= fMaxZ+margin {
-				//fmt.Println("###########################")
-				//fmt.Printf("OUR %v\n", cage.GetAABB())
-				//fmt.Printf("OTHER ID %v\n", face.GetTag())
-				//fmt.Printf("OTHER %v\n", otherEnt.GetAABB())
-				//fmt.Printf("OTHER triangle %v\n", face.tri)
-				//fmt.Printf("%v distSurfTarget %f Eff %f\n", bucket, distSurfTarget, rEff)
-				cage.AddFace(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
-			} else {
-				//fmt.Println("FILTRO OUTSIDE ATTIVO RETURNING", margin)
-			}
+			cage.AddFace(face, maxCliff)
 			return false
 		})
+		return false
 	})
 }
 

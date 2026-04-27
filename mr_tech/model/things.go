@@ -97,6 +97,25 @@ func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.
 	return e
 }
 
+// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
+func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
+	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
+		vol, volOk := object.(*Volume)
+		if !volOk {
+			return false
+		}
+		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
+			face, faceOk := otherEnt.(*Face)
+			if !faceOk {
+				return false
+			}
+			cage.AddFace(face, maxCliff)
+			return false
+		})
+		return false
+	})
+}
+
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
 func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {
 	th.tree.QueryMultiFrustum(rear, front, callback)

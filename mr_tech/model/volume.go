@@ -286,6 +286,11 @@ func (v *Volume) GetCentroid2d() geometry.XYZ {
 	}
 }
 
+// QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.
+func (v *Volume) QueryOverlaps(object physics.IAABB, callback func(object physics.IAABB) bool) {
+	v.facesTree.QueryOverlaps(object, callback)
+}
+
 /*
 // PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
 func (v *Volume) PointInside3d(px, py, pz float64) bool {

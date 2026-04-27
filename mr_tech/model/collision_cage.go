@@ -150,30 +150,6 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	}
 }
 
-// AddFace adds a new face to the specified bucket or replaces the farthest face if the bucket is full and the new face is closer.
-func (s *CollisionCage) AddFace(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ float64) {
-	if count := s.counts[bucket]; count < FacesPerBucket {
-		target := s.spare[bucket][count]
-		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ)
-		s.faces[bucket][count] = target
-		s.counts[bucket]++
-		return
-	}
-	// Buffer full: find the weakest constraint (farthest)
-	maxIdx := 0
-	maxDist := s.faces[bucket][0].dist
-	for i := 1; i < FacesPerBucket; i++ {
-		if s.faces[bucket][i].dist > maxDist {
-			maxDist = s.faces[bucket][i].dist
-			maxIdx = i
-		}
-	}
-	// Replace it if this new plane is closer (more dangerous)
-	if dist < maxDist {
-		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ)
-	}
-}
-
 // GetMargin retrieves the margin value of the CollisionCage, used in collision and constraint calculations.
 func (s *CollisionCage) GetMargin() float64 {
 	return s.margin
@@ -212,4 +188,124 @@ func (s *CollisionCage) GetAABB() *physics.AABB {
 // GetEntity returns the physics.Entity instance associated with the CollisionCage.
 func (s *CollisionCage) GetEntity() *physics.Entity {
 	return s.ellipsoid
+}
+
+func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
+	//TODO MOVE IN REBUILD
+	baseCliff := s.c.Z - s.eRad.Z
+	self := s.ellipsoid.GetAABB()
+	minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
+	maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
+
+	absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
+	other := face.GetAABB()
+	fMaxZ := other.GetMaxZ()
+
+	// CLIFF CULLING
+	wallWE := absX > absY && absX > absZ
+	wallNS := absY > absZ
+	isWall := wallWE || wallNS
+
+	if isWall && fMaxZ <= baseCliff+maxCliff {
+		//fmt.Println("FILTRO WALL ATTIVO, RETURNING", fMaxZ, baseCliff+maxCliff)
+		return
+	}
+	p0x, p0y, p0z := face.tri[0].X, face.tri[0].Y, face.tri[0].Z
+	nX, nY, nZ := face.normal.X, face.normal.Y, face.normal.Z
+
+	// ==========================================
+	// ORIENTAMENTO E ASSEGNAZIONE BUCKET SIMULTANEA
+	// ==========================================
+	distStart := (s.c.X-p0x)*nX + (s.c.Y-p0y)*nY + (s.c.Z-p0z)*nZ
+	var bucket BucketType
+
+	if isWall {
+		if distStart < 0 {
+			nX, nY, nZ = -nX, -nY, -nZ
+			distStart = -distStart
+		}
+		// Assegnazione bucket per i muri in base alla normale finale
+		if wallWE {
+			if nX < 0 {
+				bucket = BucketWallWest
+			} else {
+				bucket = BucketWallEast
+			}
+		} else {
+			if nY < 0 {
+				bucket = BucketWallNorth
+			} else {
+				bucket = BucketWallSouth
+			}
+		}
+	} else {
+		// PIANI ORIZZONTALI
+		planeZ := p0z
+		if math.Abs(nZ) > 1e-5 {
+			planeZ = p0z - (nX*(s.c.X-p0x)+nY*(s.c.Y-p0y))/nZ
+		}
+		if s.c.Z >= planeZ-maxCliff {
+			bucket = BucketFloor // È matematicamente un Pavimento
+			if nZ < 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+				distStart = -distStart
+			}
+		} else {
+			bucket = BucketCeiling // È matematicamente un Soffitto
+			if nZ > 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+				distStart = -distStart
+			}
+		}
+	}
+
+	rEff := math.Sqrt((nX*s.eRad.X)*(nX*s.eRad.X) + (nY*s.eRad.Y)*(nY*s.eRad.Y) + (nZ*s.eRad.Z)*(nZ*s.eRad.Z))
+	distTarget := (s.t.X-p0x)*nX + (s.t.Y-p0y)*nY + (s.t.Z-p0z)*nZ
+	distSurfTarget := distTarget - rEff
+
+	if distSurfTarget > s.margin {
+		//fmt.Println("FILTRO MARGIN ATTIVO, RETURNING", distSurfTarget, margin)
+		return
+	}
+
+	fMinX, fMinY, fMinZ := other.GetMinX(), other.GetMinY(), other.GetMinZ()
+	fMaxX, fMaxY := other.GetMaxX(), other.GetMaxY()
+
+	if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
+		maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
+		maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
+		//fmt.Println("###########################")
+		//fmt.Printf("OUR %v\n", cage.GetAABB())
+		//fmt.Printf("OTHER ID %v\n", face.GetTag())
+		//fmt.Printf("OTHER %v\n", otherEnt.GetAABB())
+		//fmt.Printf("OTHER triangle %v\n", face.tri)
+		//fmt.Printf("%v distSurfTarget %f Eff %f\n", bucket, distSurfTarget, rEff)
+		s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
+	} else {
+		//fmt.Println("FILTRO OUTSIDE ATTIVO RETURNING", margin)
+	}
+}
+
+// AddFace adds a new face to the specified bucket or replaces the farthest face if the bucket is full and the new face is closer.
+func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ float64) {
+	if count := s.counts[bucket]; count < FacesPerBucket {
+		target := s.spare[bucket][count]
+		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ)
+		s.faces[bucket][count] = target
+		s.counts[bucket]++
+		return
+	}
+	// Buffer full: find the weakest constraint (farthest)
+	maxIdx := 0
+	maxDist := s.faces[bucket][0].dist
+	for i := 1; i < FacesPerBucket; i++ {
+		if s.faces[bucket][i].dist > maxDist {
+			maxDist = s.faces[bucket][i].dist
+			maxIdx = i
+		}
+	}
+	// Replace it if this new plane is closer (more dangerous)
+	if dist < maxDist {
+		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ)
+	}
 }

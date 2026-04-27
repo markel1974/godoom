@@ -277,18 +277,13 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 		self := s.ellipsoid.GetAABB()
 		minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
 		maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
-
 		fMinX, fMinY, fMinZ := other.GetMinX(), other.GetMinY(), other.GetMinZ()
 		fMaxX, fMaxY := other.GetMaxX(), other.GetMaxY()
-
 		if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
 			maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
 			maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
 			s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
-		} else {
-			fmt.Println("HEREE!!!!!!")
 		}
-
 	*/
 }
 

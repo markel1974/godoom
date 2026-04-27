@@ -199,9 +199,6 @@ func (s *CollisionCage) GetEntity() *physics.Entity {
 func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 	//TODO MOVE IN REBUILD
 	baseCliff := s.cZ - s.eRadZ
-	self := s.ellipsoid.GetAABB()
-	minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
-	maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
 
 	absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
 	other := face.GetAABB()
@@ -274,16 +271,25 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff float64) {
 		return
 	}
 
-	fMinX, fMinY, fMinZ := other.GetMinX(), other.GetMinY(), other.GetMinZ()
-	fMaxX, fMaxY := other.GetMaxX(), other.GetMaxY()
+	s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
 
-	if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
-		maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
-		maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
-		s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
-	} else {
-		//fmt.Println("FILTRO OUTSIDE ATTIVO RETURNING", margin)
-	}
+	/*
+		self := s.ellipsoid.GetAABB()
+		minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
+		maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
+
+		fMinX, fMinY, fMinZ := other.GetMinX(), other.GetMinY(), other.GetMinZ()
+		fMaxX, fMaxY := other.GetMaxX(), other.GetMaxY()
+
+		if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
+			maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
+			maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
+			s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
+		} else {
+			fmt.Println("HEREE!!!!!!")
+		}
+
+	*/
 }
 
 // add inserts a face into the specified bucket or replaces the furthest face if the bucket is full and the new face is closer.

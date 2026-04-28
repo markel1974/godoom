@@ -110,8 +110,8 @@ func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p
 type CollisionCage struct {
 	id                  string
 	volume              *Volume
+	counts              [BucketSize]int // How many active constraints per bucket
 	faces               [BucketSize][FacesPerBucket]*CageEntry
-	counts              [BucketSize]int // Quanti vincoli attivi per bucket
 	spare               [BucketSize][FacesPerBucket]*CageEntry
 	ellipsoid           *physics.Entity
 	ellipsoidLocal      *physics.Entity
@@ -241,14 +241,10 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 		return
 	}
 
-	// TRASLAZIONE AL VOLO (Da Local a World Space)
-	p0x := face.tri[0].X + offX
-	p0y := face.tri[0].Y + offY
-	p0z := face.tri[0].Z + offZ
-
+	// Translation (from Local to World Space)
+	p0x, p0y, p0z := face.tri[0].X+offX, face.tri[0].Y+offY, face.tri[0].Z+offZ
 	nX, nY, nZ := face.normal.X, face.normal.Y, face.normal.Z
 
-	// distStart usa le nuove p0 traslate!
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
 
@@ -257,7 +253,7 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
-		// Assegnazione bucket per i muri in base alla normale finale
+		// Bucket assignment for walls based on final normal
 		if wallWE {
 			if nX < 0 {
 				bucket = BucketWallWest
@@ -272,19 +268,19 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 			}
 		}
 	} else {
-		// PIANI ORIZZONTALI
+		// Horizontal Planes
 		planeZ := p0z
 		if math.Abs(nZ) > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
 		}
 		if s.cZ >= planeZ-maxCliff {
-			bucket = BucketFloor // È matematicamente un Pavimento
+			bucket = BucketFloor // is mathematically a Floor
 			if nZ < 0 {
 				nX, nY, nZ = -nX, -nY, -nZ
 				distStart = -distStart
 			}
 		} else {
-			bucket = BucketCeiling // È matematicamente un Soffitto
+			bucket = BucketCeiling // is mathematically a Ceiling
 			if nZ > 0 {
 				nX, nY, nZ = -nX, -nY, -nZ
 				distStart = -distStart
@@ -297,32 +293,19 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 	distSurfTarget := distTarget - rEff
 
 	if distSurfTarget > s.margin {
-		//fmt.Println("FILTRO MARGIN ATTIVO, RETURNING", distSurfTarget, margin)
+		//fmt.Println("MARGIN FILTER ACTIVE, RETURNING", distSurfTarget, margin)
 		return
 	}
 
 	s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ, p0x, p0y, p0z)
-
-	/*
-		self := s.ellipsoid.GetAABB()
-		minX, minY, minZ := self.GetMinX(), self.GetMinY(), self.GetMinZ()
-		maxX, maxY, maxZ := self.GetMaxX(), self.GetMaxY(), self.GetMaxZ()
-		fMinX, fMinY, fMinZ := other.GetMinX(), other.GetMinY(), other.GetMinZ()
-		fMaxX, fMaxY := other.GetMaxX(), other.GetMaxY()
-		if maxX >= fMinX-s.margin && minX <= fMaxX+s.margin &&
-			maxY >= fMinY-s.margin && minY <= fMaxY+s.margin &&
-			maxZ >= fMinZ-s.margin && minZ <= fMaxZ+s.margin {
-			s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ)
-		}
-	*/
 }
 
 // add inserts a face into the specified bucket or replaces the furthest face if the bucket is full and the new face is closer.
 func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z float64) {
-	if count := s.counts[bucket]; count < FacesPerBucket {
-		target := s.spare[bucket][count]
+	if idx := s.counts[bucket]; idx < FacesPerBucket {
+		target := s.spare[bucket][idx]
 		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
-		s.faces[bucket][count] = target
+		s.faces[bucket][idx] = target
 		s.counts[bucket]++
 		return
 	}

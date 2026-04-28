@@ -1,38 +1,14 @@
 package jedi
 
 import (
+	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
-
-// LevAST represents the Abstract Syntax Tree (AST) of a level, containing a slice of sectors that define the level's structure.
-type LevAST struct {
-	Sectors []LevSector
-}
-
-// LevSector represents a sector in a level, defining its geometry, textures, light level, and associated walls.
-type LevSector struct {
-	Id             int
-	FloorY         float64
-	CeilingY       float64
-	FloorTexture   string
-	CeilingTexture string
-	LightLevel     float64
-	Vertices       []geometry.XY
-	Walls          []LevWall
-}
-
-// LevWall represents a wall in a sector, defined by its vertex index, adjacency, and associated textures.
-type LevWall struct {
-	VertexIndex int
-	Adjoin      int
-	MidTexture  string
-	TopTexture  string
-	BotTexture  string
-}
 
 // Builder is a type for constructing configuration objects by interpreting level ASTs with a specified scale factor.
 type Builder struct {
@@ -45,23 +21,63 @@ func NewJediBuilder(scale float64) *Builder {
 }
 
 // Build converte l'AST del livello e l'AST degli oggetti nel config.Root universale
-func (b *Builder) Build(file string, levelNumber int) (*config.Root, error) {
+// Definizione sequenziale dei livelli di Dark Forces (Index 1 = SECBASE)
+var levelNames = []string{
+	"SECBASE", "TALAY", "SEWERS", "TEST", "GROMAS", "DTENTION",
+	"RAMSHEAD", "ROBOTICS", "NARSHADA", "JABBSHIP", "IMPCITY",
+	"FUELSTAT", "EXECUTOR", "ARC",
+}
 
-	Decompress(file)
+// Build converte l'AST del livello e l'AST degli oggetti nel config.Root universale
+func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
+	d := NewGobHandler()
+	if err := d.Parse(dir); err != nil {
+		return nil, err
+	}
+	defer d.Close()
+	if levelNumber < 1 || levelNumber > len(levelNames) {
+		return nil, fmt.Errorf("indice di livello %d fuori scala (1-%d)", levelNumber, len(levelNames))
+	}
+	baseName := levelNames[levelNumber-1]
 
-	//TODO READ
-	var levAst *LevAST
+	// -------------------------------------------------------------------------
+	// LETTURA PAYLOAD DAL VFS E PARSING DEGLI AST
+	// -------------------------------------------------------------------------
+
+	levelData, err := d.GetPayload(baseName + ".LEV")
+	if err != nil {
+		return nil, fmt.Errorf("geometria %s.LEV mancante: %w", baseName, err)
+	}
+
+	level := NewLevel()
+	if err = level.Parse(bytes.NewReader(levelData)); err != nil {
+		return nil, fmt.Errorf("errore sintattico in %s.LEV: %w", baseName, err)
+	}
+
+	// 2. Estrazione e Parsing Entità (.O)
 	var objAst *ObjAST
+	if objData, err := d.GetPayload(baseName + ".O"); err == nil {
+		objAst, err = ParseObjects(bytes.NewReader(objData))
+		if err != nil {
+			return nil, fmt.Errorf("errore sintattico in %s.O: %w", baseName, err)
+		}
+	} else {
+		fmt.Printf("Warning: file %s.O non trovato nel VFS, livello privo di entità.\n", baseName)
+	}
 
-	configSectors := make([]*config.Sector, 0, len(levAst.Sectors))
+	// -------------------------------------------------------------------------
+	// COSTRUZIONE TOPOLOGIA
+	// -------------------------------------------------------------------------
+
+	configSectors := make([]*config.Sector, 0, len(level.Sectors))
 	totalVertices := 0
-	for _, sec := range levAst.Sectors {
+	for _, sec := range level.Sectors {
 		totalVertices += len(sec.Walls)
 	}
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 
 	// 1. INGESTIONE GEOMETRICA (.LEV)
-	for _, levSec := range levAst.Sectors {
+	for _, levSec := range level.Sectors {
 		if levSec.Id < 0 {
 			continue
 		}
@@ -93,17 +109,20 @@ func (b *Builder) Build(file string, levelNumber int) (*config.Root, error) {
 
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall
-					if wall.MidTexture != "" {
-						cSeg.Middle = config.NewConfigAnimation([]string{wall.MidTexture}, config.AnimationKindLoop, 1.0, 1.0)
+					if wall.MidTexture != -1 {
+						texName := level.GetTexture(wall.MidTexture)
+						cSeg.Middle = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
 					}
 				} else {
 					cSeg.Kind = config.SegmentUnknown
-					adjSec := levAst.Sectors[wall.Adjoin]
-					if levSec.CeilingY > adjSec.CeilingY && wall.TopTexture != "" {
-						cSeg.Upper = config.NewConfigAnimation([]string{wall.TopTexture}, config.AnimationKindLoop, 1.0, 1.0)
+					adjSec := level.Sectors[wall.Adjoin]
+					if levSec.CeilingY > adjSec.CeilingY && wall.TopTexture != -1 {
+						texName := level.GetTexture(wall.TopTexture)
+						cSeg.Upper = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
 					}
-					if levSec.FloorY < adjSec.FloorY && wall.BotTexture != "" {
-						cSeg.Lower = config.NewConfigAnimation([]string{wall.BotTexture}, config.AnimationKindLoop, 1.0, 1.0)
+					if levSec.FloorY < adjSec.FloorY && wall.BotTexture != -1 {
+						texName := level.GetTexture(wall.BotTexture)
+						cSeg.Lower = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)
@@ -118,8 +137,13 @@ func (b *Builder) Build(file string, levelNumber int) (*config.Root, error) {
 
 	if objAst != nil {
 		for i, obj := range objAst.Objects {
-			// Mapping coordinate: X, Z planari, Y altitudine (scalate)
-			pos := geometry.XYZ{X: obj.X, Y: -obj.Z, Z: obj.Y}
+			// Mapping coordinate: X, Z planari, Y altitudine (con ripristino della scalatura)
+			pos := geometry.XYZ{
+				X: obj.X / b.scaleFactor,
+				Y: -obj.Z / b.scaleFactor,
+				Z: obj.Y / b.scaleFactor,
+			}
+
 			// In Dark Forces "SPIRIT" è il marker per lo start del giocatore o la telecamera
 			if strings.ToUpper(obj.Class) == "SPIRIT" || strings.ToUpper(obj.Class) == "PLAYER" {
 				// Il primo player trovato vince (supporto limitato al single-player per i .O standard)
@@ -131,8 +155,7 @@ func (b *Builder) Build(file string, levelNumber int) (*config.Root, error) {
 					Id:       obj.Class + "_" + strconv.Itoa(i),
 					Position: pos,
 					Angle:    obj.Yaw,
-					//Sprite:   obj.Data, // Referenza al file WAX o FME da pre-caricare
-					// Kind: config.ThingTypeEnemy / Item etc. verrebbe risolto qui tramite una mappa o un dizionario esterno
+					//Sprite:   obj.Data,
 				}
 				configThings = append(configThings, cThing)
 			}

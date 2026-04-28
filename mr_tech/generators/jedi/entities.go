@@ -7,14 +7,6 @@ import (
 	"strings"
 )
 
-// ObjAST represents a parsed structure for storing level data and associated objects in the AST (Abstract Syntax Tree).
-// LevelName specifies the name of the level associated with the objects.
-// Objects holds a list of LevObject entities, defining individual objects and their properties.
-type ObjAST struct {
-	LevelName string
-	Objects   []LevObject
-}
-
 // LevObject represents an object in a level with positional, rotational, and classification data.
 type LevObject struct {
 	Class            string
@@ -22,6 +14,14 @@ type LevObject struct {
 	X, Y, Z          float64
 	Yaw, Pitch, Roll float64
 	Diff             int // Difficulty flag
+}
+
+// ObjAST represents a parsed structure for storing level data and associated objects in the AST (Abstract Syntax Tree).
+// LevelName specifies the name of the level associated with the objects.
+// Objects holds a list of LevObject entities, defining individual objects and their properties.
+type ObjAST struct {
+	LevelName string
+	Objects   []LevObject
 }
 
 // ParseObjects parses object data from the provided io.Reader and returns an ObjAST structure or an error if parsing fails.

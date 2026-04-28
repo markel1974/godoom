@@ -102,8 +102,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector.FloorY = sector.FloorY
 		cSector.CeilY = sector.CeilingY
 
-		fmt.Println("---------------------------------------")
-		fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
+		//fmt.Println("---------------------------------------")
+		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)

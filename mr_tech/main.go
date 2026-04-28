@@ -7,6 +7,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
+	"github.com/markel1974/godoom/mr_tech/generators/jedi"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
@@ -63,12 +64,16 @@ func main() {
 	case 1:
 		cfg, err = world.Generate()
 	case 2:
+		cfg, err = wolfstein.CreateLevel(level)
+	case 3:
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(wadFile, level)
-	case 3:
-		cfg, err = wolfstein.CreateLevel(level)
 	case 4:
+		jFile := "resources" + string(os.PathSeparator) + "jedi" + string(os.PathSeparator) + "JEDI.ZLB"
+		jf := jedi.NewJediBuilder(1)
+		cfg, err = jf.Build(jFile, level)
+	case 5:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(quakeFile, level)

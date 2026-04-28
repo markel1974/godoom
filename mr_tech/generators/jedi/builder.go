@@ -45,7 +45,14 @@ func NewJediBuilder(scale float64) *Builder {
 }
 
 // Build converte l'AST del livello e l'AST degli oggetti nel config.Root universale
-func (b *Builder) Build(levAst *LevAST, objAst *ObjAST) (*config.Root, error) {
+func (b *Builder) Build(file string, levelNumber int) (*config.Root, error) {
+
+	Decompress(file)
+
+	//TODO READ
+	var levAst *LevAST
+	var objAst *ObjAST
+
 	configSectors := make([]*config.Sector, 0, len(levAst.Sectors))
 	totalVertices := 0
 	for _, sec := range levAst.Sectors {

@@ -32,9 +32,9 @@ type GOB struct {
 
 // NewGOB opens and parses a GOB file, returning a GOB structure for interaction or an error if the process fails.
 func NewGOB(filename string) (*GOB, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
+	f, fErr := os.Open(filename)
+	if fErr != nil {
+		return nil, fErr
 	}
 
 	var header GobHeader

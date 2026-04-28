@@ -23,79 +23,127 @@ type BMHeader struct {
 	Padding     [12]byte // Spazio riservato/padding per allineamento a 32 byte
 }
 
+func NewHeader() *BMHeader {
+	return &BMHeader{}
+}
+
 // ParseBM legge un flusso di byte in formato BM e lo converte in un'immagine RGBA,
 // mappando i valori a 8-bit sulla palette fornita in input.
-func ParseBM(r io.Reader, palette [256]color.RGBA) (*image.RGBA, error) {
-	var header BMHeader
-	if err := binary.Read(r, binary.LittleEndian, &header); err != nil {
-		return nil, fmt.Errorf("errore nella lettura dell'header BM: %w", err)
+func ParseBM(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
+	header := NewHeader()
+	if err := binary.Read(r, binary.LittleEndian, header); err != nil {
+		return nil, err
 	}
-
-	// Verifica basic signature (i file validi iniziano con 'B', 'M')
-	if header.Magic[0] != 'B' || header.Magic[1] != 'M' {
-		return nil, fmt.Errorf("firma non valida per file BM: %s", string(header.Magic[:]))
+	img, err := header.Decode(r, palette)
+	if err != nil {
+		return nil, err
 	}
-
-	width := int(header.SizeX)
-	height := int(header.SizeY)
-
-	if width <= 0 || height <= 0 {
-		return nil, fmt.Errorf("dimensioni immagine non valide: %dx%d", width, height)
-	}
-
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	// Molte texture dei livelli in Dark Forces sono RAW (0), ma alcuni sprite sono compressi.
-	// Restituiamo un errore gestito per le compressioni RLE non ancora implementate.
-	if header.Compressed != 0 {
-		return nil, fmt.Errorf("modalità di compressione BM %d non ancora supportata", header.Compressed)
-	}
-
-	// Estrazione dell'array di byte flat
-	pixelData := make([]byte, width*height)
-	n, err := io.ReadFull(r, pixelData)
-	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
-		return nil, fmt.Errorf("errore nella lettura dei pixel: %w", err)
-	}
-	if n == 0 {
-		return nil, fmt.Errorf("nessun dato pixel trovato nel file")
-	}
-
-	// Come per i segmenti di Doom, l'orientamento in RAM spesso dipende dall'asse dominante del renderer.
-	// Nel Jedi Engine, a seconda dei Flag, i pixel possono essere Row-Major o Column-Major.
-	// Assumiamo una stesura lineare Column-Major tipica delle texture dei muri per i vecchi raycaster:
-	isColumnMajor := (header.Flags & 1) != 0 // Euristica: spia i bit di flag, potresti doverla tarare
-
-	idx := 0
-	if isColumnMajor {
-		// Scansione per colonne (es. pareti verticali)
-		for x := 0; x < width; x++ {
-			for y := 0; y < height; y++ {
-				if idx >= len(pixelData) {
-					break
-				}
-				mapPixelToRGBA(img, x, y, pixelData[idx], header.Transparent, palette)
-				idx++
-			}
-		}
-	} else {
-		// Scansione per righe (es. flats, cielo, hud)
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				if idx >= len(pixelData) {
-					break
-				}
-				mapPixelToRGBA(img, x, y, pixelData[idx], header.Transparent, palette)
-				idx++
-			}
-		}
-	}
-
 	return img, nil
 }
 
+// Decode estrae uno o più frame da un file .BM, restituendo un array di image.RGBA.
+// Il numero di frame è dedotto dinamicamente dalla dimensione del payload decompresso.
+func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
+	if bm.Magic[0] != 'B' || bm.Magic[1] != 'M' {
+		return nil, fmt.Errorf("firma non valida per file BM: %s", string(bm.Magic[:]))
+	}
+	width := int(bm.SizeX)
+	height := int(bm.SizeY)
+	frameSize := width * height
+	if frameSize <= 0 {
+		return nil, fmt.Errorf("dimensioni immagine non valide: %dx%d", width, height)
+	}
+	var pixelData []byte
+
+	switch bm.Compressed {
+	case 0:
+		// Lettura RAW lineare (singolo o multi-frame)
+		data, err := io.ReadAll(r)
+		if err != nil && err != io.ErrUnexpectedEOF {
+			return nil, err
+		}
+		pixelData = data
+
+	case 1, 2:
+		// Decodifica RLE dinamica per stream continui
+		compData, err := io.ReadAll(r)
+		if err != nil && err != io.ErrUnexpectedEOF {
+			return nil, err
+		}
+		out := make([]byte, 0, frameSize)
+		for i := 0; i < len(compData); {
+			cmd := int8(compData[i])
+			i++
+			if cmd >= 0 {
+				count := int(cmd) + 1
+				if i+count > len(compData) {
+					count = len(compData) - i
+				}
+				out = append(out, compData[i:i+count]...)
+				i += count
+			} else if cmd != -128 {
+				count := int(-cmd) + 1
+				if i < len(compData) {
+					val := compData[i]
+					i++
+					for j := 0; j < count; j++ {
+						out = append(out, val)
+					}
+				}
+			}
+		}
+		// Gestione specifica RLE0 (Compressed == 2):
+		// Se il packer ha troncato lo stream omettendo l'ultimo blocco di pixel trasparenti,
+		// riempiamo il buffer fino al limite corretto del frameSize.
+		if bm.Compressed == 2 && len(out)%frameSize != 0 {
+			padding := frameSize - (len(out) % frameSize)
+			for j := 0; j < padding; j++ {
+				out = append(out, bm.Transparent)
+			}
+		}
+		pixelData = out
+	default:
+		return nil, fmt.Errorf("algoritmo di compressione %d non supportato", bm.Compressed)
+	}
+
+	numFrames := len(pixelData) / frameSize
+	if numFrames == 0 {
+		return nil, fmt.Errorf("dati insufficienti per l'estrazione di un singolo frame")
+	}
+
+	isColumnMajor := (bm.Idc & 1) != 0
+	frames := make([]*image.RGBA, numFrames)
+
+	for f := 0; f < numFrames; f++ {
+		img := image.NewRGBA(image.Rect(0, 0, width, height))
+		offset := f * frameSize
+		idx := 0
+
+		if isColumnMajor {
+			// Offset extraction per pareti / switch (Idc == 1, 3)
+			for x := 0; x < width; x++ {
+				for y := 0; y < height; y++ {
+					bm.mapPixelToRGBA(img, x, y, pixelData[offset+idx], bm.Transparent, palette)
+					idx++
+				}
+			}
+		} else {
+			// Offset extraction per UI / flats (Idc == 0, 2)
+			for y := 0; y < height; y++ {
+				for x := 0; x < width; x++ {
+					bm.mapPixelToRGBA(img, x, y, pixelData[offset+idx], bm.Transparent, palette)
+					idx++
+				}
+			}
+		}
+		frames[f] = img
+	}
+
+	return frames, nil
+}
+
 // mapPixelToRGBA traduce l'indice cromatico applicando o meno il canale alpha (A=0 per la trasparenza).
-func mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tIndex uint8, pal [256]color.RGBA) {
+func (bm *BMHeader) mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tIndex uint8, pal [256]color.RGBA) {
 	c := pal[pIndex]
 	if pIndex == tIndex {
 		c.A = 0 // Colore bucato (es: grate o staccionate)

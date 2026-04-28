@@ -69,7 +69,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	}
 
 	palette := NewPalette()
-
 	colorPal, err := palette.Parse(bytes.NewReader(palData))
 	if err != nil {
 		return nil, fmt.Errorf("errore parsing palette VGA: %w", err)
@@ -79,10 +78,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 	textures := NewTextures()
 
-	// -------------------------------------------------------------------------
-	// COSTRUZIONE TOPOLOGIA (Unità Native LucasArts)
-	// -------------------------------------------------------------------------
-
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
 	totalVertices := 0
 	for _, sec := range level.Sectors {
@@ -90,7 +85,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	}
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 
-	// 1. INGESTIONE GEOMETRICA (.LEV)
 	for _, sector := range level.Sectors {
 		if sector.Id < 0 {
 			continue
@@ -109,46 +103,62 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
 			cSector.Floor = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+		} else {
+			fmt.Println("MISSING FLOOR_TEXTURE")
 		}
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
 			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+		} else {
+			fmt.Println("MISSING CEILING_EXTURE")
 		}
 
 		wallCount := len(sector.Walls)
 		if wallCount > 0 {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
-			for i, wall := range sector.Walls {
-				v1 := sector.Vertices[wall.VertexIndex]
-				nextWall := sector.Walls[(i+1)%wallCount]
-				v2 := sector.Vertices[nextWall.VertexIndex]
+			for _, wall := range sector.Walls {
+				if wall.LeftIndex < 0 || wall.RightVertex < 0 {
+					continue
+				}
+				v1 := sector.Vertices[wall.LeftIndex]
+				v2 := sector.Vertices[wall.RightVertex]
 
 				globalVertices = append(globalVertices, v1)
+				//globalVertices = append(globalVertices, v2)
 
 				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
-
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall
 					if wall.MidTexture >= 0 {
 						texName := level.GetTexture(wall.MidTexture)
 						names := textures.AddTexture(d, bm, texName, colorPal)
 						cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+					} else {
+						fmt.Println("MISSING MID_TEXTURE")
 					}
 				} else {
-					cSeg.Kind = config.SegmentUnknown
+					//cSeg.Kind = config.SegmentUnknown
 					adjSec := level.Sectors[wall.Adjoin]
-					if sector.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
-						texName := level.GetTexture(wall.TopTexture)
-						names := textures.AddTexture(d, bm, texName, colorPal)
-						cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+					if sector.CeilingY > adjSec.CeilingY {
+						if wall.TopTexture >= 0 {
+							texName := level.GetTexture(wall.TopTexture)
+							names := textures.AddTexture(d, bm, texName, colorPal)
+							cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+						} else {
+							fmt.Println("MISSING TOP_TEXTURE")
+						}
 					}
-					if sector.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
-						texName := level.GetTexture(wall.BotTexture)
-						names := textures.AddTexture(d, bm, texName, colorPal)
-						cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+					if sector.FloorY < adjSec.FloorY {
+						if wall.BotTexture >= 0 {
+							texName := level.GetTexture(wall.BotTexture)
+							names := textures.AddTexture(d, bm, texName, colorPal)
+							cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+						} else {
+							fmt.Println("MISSING BOT_TEXTURE")
+						}
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)
@@ -191,6 +201,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
 func CreateCoords(x, y, z float64) geometry.XYZ {
+	//return geometry.XYZ{X: 16.43, Y: -441, Z: -8}
 	return geometry.XYZ{X: x, Y: -z, Z: y}
 	//return geometry.XYZ{X: x, Y: y, Z: z}
 }

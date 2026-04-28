@@ -54,11 +54,12 @@ func (e *Entities) Parse(r io.Reader) error {
 			obj := NewObject()
 			// Correzione: il ciclo parte da 0 per mappare correttamente le tuple [Chiave, Valore]
 			for i := 0; i < len(tokens); i += 2 {
-				if i+1 >= len(tokens) {
+				next := i + 1
+				if next >= len(tokens) {
 					break
 				}
 				key := CleanKey(tokens[i])
-				val := tokens[i+1]
+				val := tokens[next]
 
 				switch key {
 				case "CLASS":

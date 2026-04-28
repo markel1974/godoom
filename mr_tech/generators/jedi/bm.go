@@ -120,6 +120,7 @@ func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 	}
 
 	isColumnMajor := (bm.Idc & 1) != 0
+	//isColumnMajor := bm.Idc != 0
 	frames := make([]*image.RGBA, numFrames)
 
 	for f := 0; f < numFrames; f++ {

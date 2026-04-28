@@ -23,19 +23,24 @@ const (
 
 // Wall represents a wall in a sector, containing vertex and texture information for rendering and adjacency.
 type Wall struct {
-	VertexIndex int
+	LeftIndex   int
+	RightVertex int
 	Adjoin      int
 	MidTexture  int
 	TopTexture  int
 	BotTexture  int
+	SignTexture int
 }
 
 func NewWall() *Wall {
 	return &Wall{
-		Adjoin:     -1,
-		MidTexture: -1,
-		TopTexture: -1,
-		BotTexture: -1,
+		LeftIndex:   -1,
+		RightVertex: -1,
+		Adjoin:      -1,
+		MidTexture:  -1,
+		TopTexture:  -1,
+		BotTexture:  -1,
+		SignTexture: -1,
 	}
 }
 
@@ -156,17 +161,30 @@ func (p *Level) Parse(r io.Reader) error {
 
 		default:
 			if mode == modeTextures && len(tokens) > 1 {
-				p.Textures = append(p.Textures, tokens[1]) // Usa p.Textures
+				key := CleanKey(tokens[0])
+				if key == "TEXTURE" && len(tokens) >= 3 {
+					if id, err := strconv.Atoi(tokens[3]); err == nil {
+						for len(p.Textures) <= id {
+							p.Textures = append(p.Textures, "")
+						}
+						p.Textures[id] = tokens[1]
+					}
+				}
 			} else if sector != nil {
 				if mode == modeVertices && len(tokens) >= 2 {
 					var ptX, ptY float64
 					if strings.Contains(strings.ToUpper(line), "X:") {
 						for i := 0; i < len(tokens); i++ {
+							next := i + 1
+							if next >= len(tokens) {
+								break
+							}
 							key := CleanKey(tokens[i])
-							if key == "X" && i+1 < len(tokens) {
-								ptX, _ = strconv.ParseFloat(tokens[i+1], 64)
-							} else if key == "Z" && i+1 < len(tokens) {
-								ptY, _ = strconv.ParseFloat(tokens[i+1], 64)
+							switch key {
+							case "X":
+								ptX, _ = strconv.ParseFloat(tokens[next], 64)
+							case "Z":
+								ptY, _ = strconv.ParseFloat(tokens[next], 64)
 							}
 						}
 					} else if len(tokens) >= 3 {
@@ -197,7 +215,12 @@ func (p *Level) createWall(tokens []string) *Wall {
 		switch key {
 		case "LEFT":
 			if i+1 < len(tokens) {
-				wall.VertexIndex, _ = strconv.Atoi(tokens[i+1])
+				wall.LeftIndex, _ = strconv.Atoi(tokens[i+1])
+				i++
+			}
+		case "RIGHT":
+			if i+1 < len(tokens) {
+				wall.RightVertex, _ = strconv.Atoi(tokens[i+1])
 				i++
 			}
 		case "ADJOIN":
@@ -232,6 +255,17 @@ func (p *Level) createWall(tokens []string) *Wall {
 				}
 				i++
 			}
+		case "SIGN":
+			if i+1 < len(tokens) {
+				val := tokens[i+1]
+				if val != "-1" && val != "-" {
+					texID, _ := strconv.Atoi(val)
+					wall.SignTexture = texID
+				}
+				i++
+			}
+		default:
+			fmt.Println("Unknown wall attribute: ", key)
 		}
 	}
 

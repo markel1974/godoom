@@ -71,11 +71,11 @@ func main() {
 		cfg, err = wb.Setup(wadFile, level)
 	case 4:
 		jFile := "resources" + string(os.PathSeparator) + "jedi"
-		jf := jedi.NewJediBuilder(1)
+		jf := jedi.NewBuilder()
 		cfg, err = jf.Build(jFile, level)
 	case 5:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
-		wb := quake.NewBuilder() //wad.NewBuilderNew()
+		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(quakeFile, level)
 	default:
 		cfg, err = world.Generate()

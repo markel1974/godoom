@@ -21,9 +21,9 @@ type Builder struct {
 	scaleFactor float64
 }
 
-// NewJediBuilder creates a new Builder instance and initializes its scale factor.
-func NewJediBuilder(scale float64) *Builder {
-	return &Builder{scaleFactor: scale}
+// NewBuilder creates a new Builder instance and initializes its scale factor.
+func NewBuilder() *Builder {
+	return &Builder{scaleFactor: 0.9}
 }
 
 // Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
@@ -96,8 +96,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector.FloorY = sector.FloorY
 		cSector.CeilY = sector.CeilingY
 
-		fmt.Println("---------------------------------------")
-		fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
+		//fmt.Println("---------------------------------------")
+		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
@@ -119,6 +119,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
 			for _, wall := range sector.Walls {
 				if wall.LeftVertex < 0 || wall.RightVertex < 0 {
+					fmt.Println("INVALID VERTEX")
 					continue
 				}
 				v1 := sector.Vertices[wall.LeftVertex]
@@ -127,42 +128,34 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				globalVertices = append(globalVertices, v1)
 				//globalVertices = append(globalVertices, v2)
 
-				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
+				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v1, v2)
 				//cSeg.Id = strconv.Itoa(wall.Id)
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
-
-				fmt.Println("SEGMENT ", cSeg.Start, cSeg.End)
-
-				if wall.Adjoin == -1 {
-					cSeg.Kind = config.SegmentWall
-					if wall.MidTexture >= 0 {
-						texName := level.GetTexture(wall.MidTexture)
-						names := textures.AddTexture(d, bm, texName, colorPal)
-						cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
-					} else {
-						fmt.Println("MISSING MID_TEXTURE")
-					}
+				//fmt.Println("SEGMENT ", cSeg.Start, cSeg.End)
+				if wall.MidTexture >= 0 {
+					texName := level.GetTexture(wall.MidTexture)
+					names := textures.AddTexture(d, bm, texName, colorPal)
+					cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 				} else {
-					//cSeg.Kind = config.SegmentUnknown
-					adjSec := level.Sectors[wall.Adjoin]
-					if sector.CeilingY > adjSec.CeilingY {
-						if wall.TopTexture >= 0 {
+					fmt.Println("MISSING MID_TEXTURE")
+				}
+				if wall.Adjoin >= 0 {
+					cSeg.Kind = config.SegmentUnknown
+					if wall.Adjoin < len(level.Sectors) {
+						adjSec := level.Sectors[wall.Adjoin]
+						if sector.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
-						} else {
-							fmt.Println("MISSING TOP_TEXTURE")
 						}
-					}
-					if sector.FloorY < adjSec.FloorY {
-						if wall.BotTexture >= 0 {
+						if sector.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
-						} else {
-							fmt.Println("MISSING BOT_TEXTURE")
 						}
+					} else {
+						fmt.Println("INVALID ADJOIN")
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)
@@ -179,7 +172,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		key := CleanKey(obj.Class)
 		if key == "SPIRIT" || key == "PLAYER" {
 			if configPlayer == nil {
-				configPlayer = config.NewConfigPlayer(pos, obj.Yaw, 10, 90, 1, 8)
+				configPlayer = config.NewConfigPlayer(pos, 1, 10, 100, 1, 8)
 			}
 		} else {
 			//TODO
@@ -205,7 +198,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
 func CreateCoords(x, y, z float64) geometry.XYZ {
-	//return geometry.XYZ{X: 16.43, Y: -441, Z: -8}
 	return geometry.XYZ{X: x, Y: -z, Z: y}
 	//return geometry.XYZ{X: x, Y: y, Z: z}
 }

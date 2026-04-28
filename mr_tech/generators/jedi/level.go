@@ -106,14 +106,6 @@ func (p *Level) Parse(r io.Reader) error {
 		keyword := CleanKey(tokens[0])
 
 		switch keyword {
-
-		case "TEXTURES":
-			mode = modeTextures
-			if len(tokens) >= 2 {
-				count, _ := strconv.Atoi(tokens[1])
-				p.Textures = make([]string, 0, count) // Usa p.Textures
-			}
-
 		case "SECTOR":
 			if sector != nil {
 				p.Sectors = append(p.Sectors, sector) // Usa p.Sectors
@@ -151,34 +143,41 @@ func (p *Level) Parse(r io.Reader) error {
 					}
 				}
 			}
-
 		case "VERTICES":
 			mode = modeVertices
 			if sector != nil && len(tokens) >= 2 {
 				count, _ := strconv.Atoi(tokens[1])
 				sector.Vertices = make([]geometry.XY, 0, count)
 			}
-
 		case "WALLS":
 			mode = modeWalls
 			if sector != nil && len(tokens) >= 2 {
 				count, _ := strconv.Atoi(tokens[1])
 				sector.Walls = make([]*Wall, 0, count)
 			}
-
-		default:
-			if mode == modeTextures && len(tokens) > 1 {
-				key := CleanKey(tokens[0])
-				if key == "TEXTURE" && len(tokens) >= 3 {
-					if id, err := strconv.Atoi(tokens[3]); err == nil {
-						for len(p.Textures) <= id {
-							p.Textures = append(p.Textures, "")
-						}
-						p.Textures[id] = tokens[1]
+		case "TEXTURES":
+			mode = modeTextures
+			if len(tokens) >= 2 {
+				count, _ := strconv.Atoi(tokens[1])
+				p.Textures = make([]string, 0, count) // Usa p.Textures
+			}
+		case "WALL":
+			if sector != nil {
+				wall := p.createWall(tokens)
+				sector.Walls = append(sector.Walls, wall)
+			}
+		case "TEXTURE":
+			if len(tokens) >= 3 {
+				if id, err := strconv.Atoi(tokens[3]); err == nil {
+					for len(p.Textures) <= id {
+						p.Textures = append(p.Textures, "")
 					}
+					p.Textures[id] = tokens[1]
 				}
-			} else if sector != nil {
-				if mode == modeVertices && len(tokens) >= 2 {
+			}
+		default:
+			if mode == modeVertices {
+				if sector != nil && len(tokens) >= 2 {
 					var ptX, ptY float64
 					if strings.Contains(strings.ToUpper(line), "X:") {
 						for i := 0; i < len(tokens); i++ {
@@ -199,9 +198,6 @@ func (p *Level) Parse(r io.Reader) error {
 						ptY, _ = strconv.ParseFloat(tokens[2], 64)
 					}
 					sector.Vertices = append(sector.Vertices, geometry.XY{X: ptX, Y: ptY})
-				} else if mode == modeWalls && len(tokens) >= 2 {
-					wall := p.createWall(tokens)
-					sector.Walls = append(sector.Walls, wall)
 				}
 			}
 		}
@@ -218,73 +214,80 @@ func (p *Level) Parse(r io.Reader) error {
 func (p *Level) createWall(tokens []string) *Wall {
 	wall := NewWall()
 	for i := 0; i < len(tokens); i++ {
-		key := CleanKey(tokens[i])
+		key := tokens[i]
+		if !strings.Contains(key, ":") {
+			continue
+		}
 		switch key {
-		//case "WALL":
-		//	if i+1 < len(tokens) {
-		//		wall.Id, _ = strconv.Atoi(tokens[i+1])
-		//		i++
-		//	}
-		case "LEFT":
-			if i+1 < len(tokens) {
-				wall.LeftVertex, _ = strconv.Atoi(tokens[i+1])
-				i++
+		case "WALK:":
+			//TODO
+		case "MIRROR:":
+			//TODO
+		case "LEFT:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
+				wall.LeftVertex, _ = strconv.Atoi(val)
 			}
-		case "RIGHT":
-			if i+1 < len(tokens) {
-				wall.RightVertex, _ = strconv.Atoi(tokens[i+1])
-				i++
+		case "RIGHT:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
+				wall.RightVertex, _ = strconv.Atoi(val)
 			}
-		case "ADJOIN":
-			if i+1 < len(tokens) {
-				wall.Adjoin, _ = strconv.Atoi(tokens[i+1])
-				i++
+		case "ADJOIN:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
+				wall.Adjoin, _ = strconv.Atoi(val)
 			}
-		case "MID":
-			if i+1 < len(tokens) {
-				val := tokens[i+1]
+		case "MID:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
 				if val != "-1" && val != "-" {
 					texID, _ := strconv.Atoi(val)
 					wall.MidTexture = texID
 				}
-				i++
 			}
-		case "TOP":
-			if i+1 < len(tokens) {
-				val := tokens[i+1]
+		case "TOP:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
 				if val != "-1" && val != "-" {
 					texID, _ := strconv.Atoi(val)
 					wall.TopTexture = texID
 				}
-				i++
 			}
-		case "BOT":
-			if i+1 < len(tokens) {
-				val := tokens[i+1]
+		case "BOT:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
 				if val != "-1" && val != "-" {
 					texID, _ := strconv.Atoi(val)
 					wall.BotTexture = texID
 				}
-				i++
 			}
-		case "SIGN":
-			if i+1 < len(tokens) {
-				val := tokens[i+1]
+		case "SIGN:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
 				if val != "-1" && val != "-" {
 					texID, _ := strconv.Atoi(val)
 					wall.SignTexture = texID
 				}
-				i++
 			}
-		case "FLAGS":
-			if i+1 < len(tokens) {
-				wall.Flags, _ = strconv.Atoi(tokens[i+1])
-				i++
+		case "FLAGS:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
+				wall.Flags, _ = strconv.Atoi(val)
 			}
-		case "LIGHT":
-			if i+1 < len(tokens) {
-				wall.Light, _ = strconv.Atoi(tokens[i+1])
-				i++
+		case "LIGHT:":
+			i++
+			if i < len(tokens) {
+				val := tokens[i]
+				wall.Light, _ = strconv.Atoi(val)
 			}
 		default:
 			fmt.Println("Unknown wall attribute: ", key)

@@ -96,8 +96,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector.FloorY = sector.FloorY
 		cSector.CeilY = sector.CeilingY
 
-		//fmt.Println("---------------------------------------")
-		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
+		fmt.Println("---------------------------------------")
+		fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
@@ -118,18 +118,22 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if wallCount > 0 {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
 			for _, wall := range sector.Walls {
-				if wall.LeftIndex < 0 || wall.RightVertex < 0 {
+				if wall.LeftVertex < 0 || wall.RightVertex < 0 {
 					continue
 				}
-				v1 := sector.Vertices[wall.LeftIndex]
+				v1 := sector.Vertices[wall.LeftVertex]
 				v2 := sector.Vertices[wall.RightVertex]
 
 				globalVertices = append(globalVertices, v1)
 				//globalVertices = append(globalVertices, v2)
 
 				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
+				//cSeg.Id = strconv.Itoa(wall.Id)
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
+
+				fmt.Println("SEGMENT ", cSeg.Start, cSeg.End)
+
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall
 					if wall.MidTexture >= 0 {

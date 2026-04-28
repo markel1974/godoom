@@ -52,7 +52,6 @@ func (e *Entities) Parse(r io.Reader) error {
 			}
 		case "CLASS":
 			obj := NewObject()
-			// Correzione: il ciclo parte da 0 per mappare correttamente le tuple [Chiave, Valore]
 			for i := 0; i < len(tokens); i += 2 {
 				next := i + 1
 				if next >= len(tokens) {

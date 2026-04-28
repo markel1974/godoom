@@ -23,24 +23,30 @@ const (
 
 // Wall represents a wall in a sector, containing vertex and texture information for rendering and adjacency.
 type Wall struct {
-	LeftIndex   int
+	//Id          int
+	LeftVertex  int
 	RightVertex int
 	Adjoin      int
 	MidTexture  int
 	TopTexture  int
 	BotTexture  int
 	SignTexture int
+	Flags       int
+	Light       int
 }
 
 func NewWall() *Wall {
 	return &Wall{
-		LeftIndex:   -1,
+		//Id:          -1,
+		LeftVertex:  -1,
 		RightVertex: -1,
 		Adjoin:      -1,
 		MidTexture:  -1,
 		TopTexture:  -1,
 		BotTexture:  -1,
 		SignTexture: -1,
+		Flags:       0,
+		Light:       0,
 	}
 }
 
@@ -100,6 +106,7 @@ func (p *Level) Parse(r io.Reader) error {
 		keyword := CleanKey(tokens[0])
 
 		switch keyword {
+
 		case "TEXTURES":
 			mode = modeTextures
 			if len(tokens) >= 2 {
@@ -213,9 +220,14 @@ func (p *Level) createWall(tokens []string) *Wall {
 	for i := 0; i < len(tokens); i++ {
 		key := CleanKey(tokens[i])
 		switch key {
+		//case "WALL":
+		//	if i+1 < len(tokens) {
+		//		wall.Id, _ = strconv.Atoi(tokens[i+1])
+		//		i++
+		//	}
 		case "LEFT":
 			if i+1 < len(tokens) {
-				wall.LeftIndex, _ = strconv.Atoi(tokens[i+1])
+				wall.LeftVertex, _ = strconv.Atoi(tokens[i+1])
 				i++
 			}
 		case "RIGHT":
@@ -262,6 +274,16 @@ func (p *Level) createWall(tokens []string) *Wall {
 					texID, _ := strconv.Atoi(val)
 					wall.SignTexture = texID
 				}
+				i++
+			}
+		case "FLAGS":
+			if i+1 < len(tokens) {
+				wall.Flags, _ = strconv.Atoi(tokens[i+1])
+				i++
+			}
+		case "LIGHT":
+			if i+1 < len(tokens) {
+				wall.Light, _ = strconv.Atoi(tokens[i+1])
 				i++
 			}
 		default:

@@ -2,14 +2,14 @@ package jedi
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"io"
 )
 
-// BMHeader rappresenta la struttura dell'header di un file .BM nel Jedi Engine.
-// L'header è fisso a 32 byte.
+// BMHeader represents the header structure of a BM file format, including metadata and configuration details.
 type BMHeader struct {
 	Magic       [4]byte  // Magico, tipicamente inizia con "BM"
 	SizeX       uint16   // Larghezza dell'immagine
@@ -23,14 +23,23 @@ type BMHeader struct {
 	Padding     [12]byte // Spazio riservato/padding per allineamento a 32 byte
 }
 
-func NewHeader() *BMHeader {
+// NewBMHeader creates and initializes a new BMHeader instance with default values.
+func NewBMHeader() *BMHeader {
 	return &BMHeader{}
 }
 
-// ParseBM legge un flusso di byte in formato BM e lo converte in un'immagine RGBA,
-// mappando i valori a 8-bit sulla palette fornita in input.
-func ParseBM(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
-	header := NewHeader()
+// BM represents a type used for parsing and handling custom bitmap image formats.
+type BM struct {
+}
+
+// NewBM initializes and returns a new instance of the BM struct.
+func NewBM() *BM {
+	return &BM{}
+}
+
+// Parse reads data from the provided io.Reader, decodes it using the specified palette, and returns a slice of RGBA images.
+func (b *BM) Parse(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
+	header := NewBMHeader()
 	if err := binary.Read(r, binary.LittleEndian, header); err != nil {
 		return nil, err
 	}
@@ -41,8 +50,7 @@ func ParseBM(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
 	return img, nil
 }
 
-// Decode estrae uno o più frame da un file .BM, restituendo un array di image.RGBA.
-// Il numero di frame è dedotto dinamicamente dalla dimensione del payload decompresso.
+// Decode parses image data from the provided reader using the BMHeader properties and palette, returning decoded frames or an error.
 func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
 	if bm.Magic[0] != 'B' || bm.Magic[1] != 'M' {
 		return nil, fmt.Errorf("firma non valida per file BM: %s", string(bm.Magic[:]))
@@ -59,7 +67,7 @@ func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 	case 0:
 		// Lettura RAW lineare (singolo o multi-frame)
 		data, err := io.ReadAll(r)
-		if err != nil && err != io.ErrUnexpectedEOF {
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, err
 		}
 		pixelData = data
@@ -67,7 +75,7 @@ func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 	case 1, 2:
 		// Decodifica RLE dinamica per stream continui
 		compData, err := io.ReadAll(r)
-		if err != nil && err != io.ErrUnexpectedEOF {
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, err
 		}
 		out := make([]byte, 0, frameSize)
@@ -142,7 +150,7 @@ func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 	return frames, nil
 }
 
-// mapPixelToRGBA traduce l'indice cromatico applicando o meno il canale alpha (A=0 per la trasparenza).
+// mapPixelToRGBA maps a pixel with a palette index to its corresponding RGBA value in the image, applying transparency rules.
 func (bm *BMHeader) mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tIndex uint8, pal [256]color.RGBA) {
 	c := pal[pIndex]
 	if pIndex == tIndex {
@@ -152,12 +160,3 @@ func (bm *BMHeader) mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tInde
 	}
 	img.SetRGBA(x, y, c)
 }
-
-/*
-pal := loadJediPalette("SECBASE.PAL")
-file, _ := os.Open("OAK.BM")
-imgRGBA, _ := jedi.ParseBM(file, pal)
-
-// E l'inserimento nel tuo sistema generico del generatore
-texHandler.Add("OAK", imgRGBA)
-*/

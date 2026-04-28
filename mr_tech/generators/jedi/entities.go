@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// LevObject represents an object in a level with positional, rotational, and classification data.
-type LevObject struct {
+// Object represents a 3D object in a level, with positional and rotational data, class type, and difficulty flag.
+type Object struct {
 	Class            string
 	Data             string
 	X, Y, Z          float64
@@ -16,40 +16,44 @@ type LevObject struct {
 	Diff             int // Difficulty flag
 }
 
-// ObjAST represents a parsed structure for storing level data and associated objects in the AST (Abstract Syntax Tree).
-// LevelName specifies the name of the level associated with the objects.
-// Objects holds a list of LevObject entities, defining individual objects and their properties.
-type ObjAST struct {
+// Entities represents a collection of game level data, including the level name and associated objects.
+type Entities struct {
 	LevelName string
-	Objects   []LevObject
+	Objects   []Object
 }
 
-// ParseObjects parses object data from the provided io.Reader and returns an ObjAST structure or an error if parsing fails.
-func ParseObjects(r io.Reader) (*ObjAST, error) {
-	ast := &ObjAST{}
-	scanner := bufio.NewScanner(r)
+// NewEntities creates and returns a new instance of the Entities struct.
+func NewEntities() *Entities {
+	return &Entities{}
+}
 
+func (e *Entities) Parse(r io.Reader) error {
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-
 		tokens := strings.Fields(line)
-		switch strings.ToUpper(tokens[0]) {
+		if len(tokens) == 0 {
+			continue
+		}
+		rootKey := CleanKey(tokens[0])
+		switch rootKey {
 		case "LEVELNAME":
 			if len(tokens) > 1 {
-				ast.LevelName = tokens[1]
+				e.LevelName = tokens[1]
 			}
 		case "CLASS":
-			// Struttura fissa: CLASS [class] DATA [data] X [x] Y [y] Z [z] PITCH [p] YAW [y] ROLL [r] DIFF [d]
-			obj := LevObject{}
-			for i := 1; i < len(tokens); i += 2 {
+			obj := Object{}
+			// Correzione: il ciclo parte da 0 per mappare correttamente le tuple [Chiave, Valore]
+			for i := 0; i < len(tokens); i += 2 {
 				if i+1 >= len(tokens) {
 					break
 				}
-				key := strings.ToUpper(tokens[i])
+				key := CleanKey(tokens[i])
 				val := tokens[i+1]
+
 				switch key {
 				case "CLASS":
 					obj.Class = val
@@ -71,8 +75,8 @@ func ParseObjects(r io.Reader) (*ObjAST, error) {
 					obj.Diff, _ = strconv.Atoi(val)
 				}
 			}
-			ast.Objects = append(ast.Objects, obj)
+			e.Objects = append(e.Objects, obj)
 		}
 	}
-	return ast, scanner.Err()
+	return scanner.Err()
 }

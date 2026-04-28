@@ -54,19 +54,37 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		return nil, fmt.Errorf("errore sintattico in %s.LEV: %w", baseName, err)
 	}
 
-	// 2. Estrazione e Parsing Entità (.O)
-	var objAst *ObjAST
-	if objData, err := d.GetPayload(baseName + ".O"); err == nil {
-		objAst, err = ParseObjects(bytes.NewReader(objData))
-		if err != nil {
-			return nil, fmt.Errorf("errore sintattico in %s.O: %w", baseName, err)
-		}
-	} else {
-		fmt.Printf("Warning: file %s.O non trovato nel VFS, livello privo di entità.\n", baseName)
+	entitiesData, err := d.GetPayload(baseName + ".O")
+	if err != nil {
+		return nil, err
 	}
 
+	entities := NewEntities()
+	if err = entities.Parse(bytes.NewReader(entitiesData)); err != nil {
+		return nil, err
+	}
+
+	palData, err := d.GetPayload(entities.LevelName + ".PAL")
+	if err != nil {
+		palData, err = d.GetPayload("SECBASE.PAL")
+		if err != nil {
+			return nil, fmt.Errorf("master palette non trovata: %w", err)
+		}
+	}
+
+	palette := NewPalette()
+
+	colorPal, err := palette.Parse(bytes.NewReader(palData))
+	if err != nil {
+		return nil, fmt.Errorf("errore parsing palette VGA: %w", err)
+	}
+
+	bm := NewBM()
+
+	textures := NewTextures()
+
 	// -------------------------------------------------------------------------
-	// COSTRUZIONE TOPOLOGIA
+	// COSTRUZIONE TOPOLOGIA (Unità Native LucasArts)
 	// -------------------------------------------------------------------------
 
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
@@ -83,14 +101,20 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 		secId := strconv.Itoa(levSec.Id)
 		cSector := config.NewConfigSector(secId, levSec.LightLevel, config.LightKindAmbient, 0)
-		cSector.FloorY = levSec.FloorY / b.scaleFactor
-		cSector.CeilY = levSec.CeilingY / b.scaleFactor
 
-		if levSec.FloorTexture != "" {
-			cSector.Floor = config.NewConfigAnimation([]string{levSec.FloorTexture}, config.AnimationKindLoop, 1.0, 1.0)
+		// Quote altimetriche pure
+		cSector.FloorY = levSec.FloorY
+		cSector.CeilY = levSec.CeilingY
+
+		if levSec.FloorTexture >= 0 {
+			texName := level.GetTexture(levSec.FloorTexture)
+			names := textures.AddTexture(d, bm, texName, colorPal)
+			cSector.Floor = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 		}
-		if levSec.CeilingTexture != "" {
-			cSector.Ceil = config.NewConfigAnimation([]string{levSec.CeilingTexture}, config.AnimationKindLoop, 1.0, 1.0)
+		if levSec.CeilingTexture >= 0 {
+			texName := level.GetTexture(levSec.CeilingTexture)
+			names := textures.AddTexture(d, bm, texName, colorPal)
+			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 		}
 
 		wallCount := len(levSec.Walls)
@@ -104,25 +128,28 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				globalVertices = append(globalVertices, v1)
 
 				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
-				// Inversione asse Z (profondità planare) standardizzata per mr_tech
+				// Inversione asse Z (profondità planare) standardizzata per mr_tech, scalatura delegata al compilatore
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall
-					if wall.MidTexture != -1 {
+					if wall.MidTexture >= 0 {
 						texName := level.GetTexture(wall.MidTexture)
-						cSeg.Middle = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
+						names := textures.AddTexture(d, bm, texName, colorPal)
+						cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 					}
 				} else {
 					cSeg.Kind = config.SegmentUnknown
 					adjSec := level.Sectors[wall.Adjoin]
-					if levSec.CeilingY > adjSec.CeilingY && wall.TopTexture != -1 {
+					if levSec.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
 						texName := level.GetTexture(wall.TopTexture)
-						cSeg.Upper = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
+						names := textures.AddTexture(d, bm, texName, colorPal)
+						cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 					}
-					if levSec.FloorY < adjSec.FloorY && wall.BotTexture != -1 {
+					if levSec.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
 						texName := level.GetTexture(wall.BotTexture)
-						cSeg.Lower = config.NewConfigAnimation([]string{texName}, config.AnimationKindLoop, 1.0, 1.0)
+						names := textures.AddTexture(d, bm, texName, colorPal)
+						cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)
@@ -131,40 +158,37 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		configSectors = append(configSectors, cSector)
 	}
 
-	// 2. INGESTIONE ENTITÀ (.O)
 	var configThings []*config.Thing
 	var configPlayer *config.Player
 
-	if objAst != nil {
-		for i, obj := range objAst.Objects {
-			// Mapping coordinate: X, Z planari, Y altitudine (con ripristino della scalatura)
-			pos := geometry.XYZ{
-				X: obj.X / b.scaleFactor,
-				Y: -obj.Z / b.scaleFactor,
-				Z: obj.Y / b.scaleFactor,
+	for _, obj := range entities.Objects {
+		pos := CreateCoords(obj.X, obj.Y, obj.Z)
+		if strings.ToUpper(obj.Class) == "SPIRIT" || strings.ToUpper(obj.Class) == "PLAYER" {
+			if configPlayer == nil {
+				configPlayer = config.NewConfigPlayer(pos, obj.Yaw, 10, 90, 1, 8)
 			}
-
-			// In Dark Forces "SPIRIT" è il marker per lo start del giocatore o la telecamera
-			if strings.ToUpper(obj.Class) == "SPIRIT" || strings.ToUpper(obj.Class) == "PLAYER" {
-				// Il primo player trovato vince (supporto limitato al single-player per i .O standard)
-				if configPlayer == nil {
-					configPlayer = config.NewConfigPlayer(pos, obj.Yaw, 10, 90, 1, 8)
-				}
-			} else {
+		} else {
+			//TODO
+			/*
 				cThing := &config.Thing{
 					Id:       obj.Class + "_" + strconv.Itoa(i),
 					Position: pos,
 					Angle:    obj.Yaw,
-					//Sprite:   obj.Data,
 				}
 				configThings = append(configThings, cThing)
-			}
+
+			*/
 		}
 	}
 
-	cr := config.NewConfigRoot(nil, configSectors, configPlayer, nil, b.scaleFactor, nil)
-	cr.Things = configThings // Aggancio esplicito
+	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, b.scaleFactor, textures)
+	cr.Things = configThings
 	cr.Vertices = globalVertices
 
 	return cr, nil
+}
+
+func CreateCoords(x, y, z float64) geometry.XYZ {
+	return geometry.XYZ{X: x, Y: -z, Z: y}
 }

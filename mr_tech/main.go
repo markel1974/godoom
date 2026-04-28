@@ -70,7 +70,7 @@ func main() {
 		wb := wad.NewBuilder() //wad.NewBuilderNew()
 		cfg, err = wb.Setup(wadFile, level)
 	case 4:
-		jFile := "resources" + string(os.PathSeparator) + "jedi" + string(os.PathSeparator) + "JEDI.ZLB"
+		jFile := "resources" + string(os.PathSeparator) + "jedi"
 		jf := jedi.NewJediBuilder(1)
 		cfg, err = jf.Build(jFile, level)
 	case 5:

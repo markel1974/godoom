@@ -44,8 +44,8 @@ type Sector struct {
 	Id             int
 	FloorY         float64
 	CeilingY       float64
-	FloorTexture   string
-	CeilingTexture string
+	FloorTexture   int
+	CeilingTexture int
 	LightLevel     float64
 	Vertices       []geometry.XY
 	Walls          []*Wall
@@ -92,7 +92,7 @@ func (p *Level) Parse(r io.Reader) error {
 		}
 
 		tokens := strings.Fields(line)
-		keyword := strings.ToUpper(tokens[0])
+		keyword := CleanKey(tokens[0])
 
 		switch keyword {
 		case "TEXTURES":
@@ -122,7 +122,8 @@ func (p *Level) Parse(r io.Reader) error {
 					sector.FloorY, _ = strconv.ParseFloat(tokens[2], 64)
 				case "TEXTURE":
 					if tokens[2] != "-" {
-						sector.FloorTexture = tokens[2]
+						texId, _ := strconv.Atoi(tokens[2])
+						sector.FloorTexture = texId
 					}
 				}
 			}
@@ -133,7 +134,8 @@ func (p *Level) Parse(r io.Reader) error {
 					sector.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
 				case "TEXTURE":
 					if tokens[2] != "-" {
-						sector.CeilingTexture = tokens[2]
+						texId, _ := strconv.Atoi(tokens[2])
+						sector.CeilingTexture = texId
 					}
 				}
 			}
@@ -179,19 +181,19 @@ func (p *Level) Parse(r io.Reader) error {
 func (p *Level) createWall(tokens []string) *Wall {
 	wall := NewWall()
 	for i := 0; i < len(tokens); i++ {
-		key := strings.ToUpper(tokens[i])
+		key := CleanKey(tokens[i])
 		switch key {
-		case "LEFT:":
+		case "LEFT":
 			if i+1 < len(tokens) {
 				wall.VertexIndex, _ = strconv.Atoi(tokens[i+1])
 				i++
 			}
-		case "ADJOIN:":
+		case "ADJOIN":
 			if i+1 < len(tokens) {
 				wall.Adjoin, _ = strconv.Atoi(tokens[i+1])
 				i++
 			}
-		case "MID:":
+		case "MID":
 			if i+1 < len(tokens) {
 				val := tokens[i+1]
 				if val != "-1" && val != "-" {
@@ -200,7 +202,7 @@ func (p *Level) createWall(tokens []string) *Wall {
 				}
 				i++
 			}
-		case "TOP:":
+		case "TOP":
 			if i+1 < len(tokens) {
 				val := tokens[i+1]
 				if val != "-1" && val != "-" {
@@ -209,7 +211,7 @@ func (p *Level) createWall(tokens []string) *Wall {
 				}
 				i++
 			}
-		case "BOT:":
+		case "BOT":
 			if i+1 < len(tokens) {
 				val := tokens[i+1]
 				if val != "-1" && val != "-" {

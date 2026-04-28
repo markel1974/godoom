@@ -6,8 +6,15 @@ import (
 	"io"
 )
 
-// ParsePAL estrae la palette VGA a 6-bit e la normalizza in RGBA a 8-bit.
-func ParsePAL(r io.Reader) ([256]color.RGBA, error) {
+type Palette struct {
+}
+
+func NewPalette() *Palette {
+	return &Palette{}
+}
+
+// Parse estrae la palette VGA a 6-bit e la normalizza in RGBA a 8-bit.
+func (p *Palette) Parse(r io.Reader) ([256]color.RGBA, error) {
 	var pal [256]color.RGBA
 	raw := make([]byte, 768)
 	if _, err := io.ReadFull(r, raw); err != nil {

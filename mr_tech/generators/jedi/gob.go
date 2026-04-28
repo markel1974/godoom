@@ -120,7 +120,7 @@ func (g *GobHandler) add(filename string) error {
 func (g *GobHandler) GetPayload(name string) ([]byte, error) {
 	gob, ok := g.entries[strings.ToUpper(name)]
 	if !ok {
-		return nil, fmt.Errorf("lump %s non trovato", name)
+		return nil, fmt.Errorf("%s not found", name)
 	}
 	return gob.Read()
 }

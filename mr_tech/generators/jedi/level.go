@@ -158,10 +158,22 @@ func (p *Level) Parse(r io.Reader) error {
 			if mode == modeTextures && len(tokens) > 1 {
 				p.Textures = append(p.Textures, tokens[1]) // Usa p.Textures
 			} else if sector != nil {
-				if mode == modeVertices && len(tokens) >= 3 {
-					x, _ := strconv.ParseFloat(tokens[1], 64)
-					y, _ := strconv.ParseFloat(tokens[2], 64)
-					sector.Vertices = append(sector.Vertices, geometry.XY{X: x, Y: y})
+				if mode == modeVertices && len(tokens) >= 2 {
+					var ptX, ptY float64
+					if strings.Contains(strings.ToUpper(line), "X:") {
+						for i := 0; i < len(tokens); i++ {
+							key := CleanKey(tokens[i])
+							if key == "X" && i+1 < len(tokens) {
+								ptX, _ = strconv.ParseFloat(tokens[i+1], 64)
+							} else if key == "Z" && i+1 < len(tokens) {
+								ptY, _ = strconv.ParseFloat(tokens[i+1], 64)
+							}
+						}
+					} else if len(tokens) >= 3 {
+						ptX, _ = strconv.ParseFloat(tokens[1], 64)
+						ptY, _ = strconv.ParseFloat(tokens[2], 64)
+					}
+					sector.Vertices = append(sector.Vertices, geometry.XY{X: ptX, Y: ptY})
 				} else if mode == modeWalls && len(tokens) >= 2 {
 					wall := p.createWall(tokens)
 					sector.Walls = append(sector.Walls, wall)

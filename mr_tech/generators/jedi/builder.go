@@ -102,6 +102,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector.FloorY = sector.FloorY
 		cSector.CeilY = sector.CeilingY
 
+		fmt.Println("---------------------------------------")
+		fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
+
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
@@ -126,8 +129,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
-
-				//fmt.Println("SEGMENT", cSeg.Start, cSeg.End)
 
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall

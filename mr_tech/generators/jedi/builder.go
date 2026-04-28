@@ -4,45 +4,41 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// Builder is a type for constructing configuration objects by interpreting level ASTs with a specified scale factor.
-type Builder struct {
-	scaleFactor float64
-}
-
-// NewJediBuilder initializes a Builder with a given scale factor for processing level configurations.
-func NewJediBuilder(scale float64) *Builder {
-	return &Builder{scaleFactor: scale}
-}
-
-// Build converte l'AST del livello e l'AST degli oggetti nel config.Root universale
-// Definizione sequenziale dei livelli di Dark Forces (Index 1 = SECBASE)
-var levelNames = []string{
+// levelNames holds the list of level identifiers used as base names for accessing level-specific configurations and data.
+var __levelNames = []string{
 	"SECBASE", "TALAY", "SEWERS", "TEST", "GROMAS", "DTENTION",
 	"RAMSHEAD", "ROBOTICS", "NARSHADA", "JABBSHIP", "IMPCITY",
 	"FUELSTAT", "EXECUTOR", "ARC",
 }
 
-// Build converte l'AST del livello e l'AST degli oggetti nel config.Root universale
+// Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
+type Builder struct {
+	scaleFactor float64
+}
+
+// NewJediBuilder creates a new Builder instance and initializes its scale factor.
+func NewJediBuilder(scale float64) *Builder {
+	return &Builder{scaleFactor: scale}
+}
+
+// Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
+// It validates the level index, processes sector topology, and integrates player and object configurations.
+// Returns an error if the input directory is invalid, files are missing, or parsing fails.
 func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	d := NewGobHandler()
 	if err := d.Parse(dir); err != nil {
 		return nil, err
 	}
 	defer d.Close()
-	if levelNumber < 1 || levelNumber > len(levelNames) {
-		return nil, fmt.Errorf("indice di livello %d fuori scala (1-%d)", levelNumber, len(levelNames))
+	if levelNumber < 1 || levelNumber > len(__levelNames) {
+		return nil, fmt.Errorf("indice di livello %d fuori scala (1-%d)", levelNumber, len(__levelNames))
 	}
-	baseName := levelNames[levelNumber-1]
-
-	// -------------------------------------------------------------------------
-	// LETTURA PAYLOAD DAL VFS E PARSING DEGLI AST
-	// -------------------------------------------------------------------------
+	baseName := __levelNames[levelNumber-1]
 
 	levelData, err := d.GetPayload(baseName + ".LEV")
 	if err != nil {
@@ -95,41 +91,43 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 
 	// 1. INGESTIONE GEOMETRICA (.LEV)
-	for _, levSec := range level.Sectors {
-		if levSec.Id < 0 {
+	for _, sector := range level.Sectors {
+		if sector.Id < 0 {
 			continue
 		}
-		secId := strconv.Itoa(levSec.Id)
-		cSector := config.NewConfigSector(secId, levSec.LightLevel, config.LightKindAmbient, 0)
+		secId := strconv.Itoa(sector.Id)
+		cSector := config.NewConfigSector(secId, sector.LightLevel, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
-		cSector.FloorY = levSec.FloorY
-		cSector.CeilY = levSec.CeilingY
+		cSector.FloorY = sector.FloorY
+		cSector.CeilY = sector.CeilingY
 
-		if levSec.FloorTexture >= 0 {
-			texName := level.GetTexture(levSec.FloorTexture)
+		if sector.FloorTexture >= 0 {
+			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
 			cSector.Floor = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 		}
-		if levSec.CeilingTexture >= 0 {
-			texName := level.GetTexture(levSec.CeilingTexture)
+		if sector.CeilingTexture >= 0 {
+			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
 			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 		}
 
-		wallCount := len(levSec.Walls)
+		wallCount := len(sector.Walls)
 		if wallCount > 0 {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
-			for i, wall := range levSec.Walls {
-				v1 := levSec.Vertices[wall.VertexIndex]
-				nextWall := levSec.Walls[(i+1)%wallCount]
-				v2 := levSec.Vertices[nextWall.VertexIndex]
+			for i, wall := range sector.Walls {
+				v1 := sector.Vertices[wall.VertexIndex]
+				nextWall := sector.Walls[(i+1)%wallCount]
+				v2 := sector.Vertices[nextWall.VertexIndex]
 
 				globalVertices = append(globalVertices, v1)
 
 				cSeg := config.NewConfigSegment(secId, config.SegmentUnknown, v1, v2)
-				// Inversione asse Z (profondità planare) standardizzata per mr_tech, scalatura delegata al compilatore
+				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
+
+				//fmt.Println("SEGMENT", cSeg.Start, cSeg.End)
 
 				if wall.Adjoin == -1 {
 					cSeg.Kind = config.SegmentWall
@@ -141,12 +139,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				} else {
 					cSeg.Kind = config.SegmentUnknown
 					adjSec := level.Sectors[wall.Adjoin]
-					if levSec.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
+					if sector.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
 						texName := level.GetTexture(wall.TopTexture)
 						names := textures.AddTexture(d, bm, texName, colorPal)
 						cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
 					}
-					if levSec.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
+					if sector.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
 						texName := level.GetTexture(wall.BotTexture)
 						names := textures.AddTexture(d, bm, texName, colorPal)
 						cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
@@ -163,7 +161,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 	for _, obj := range entities.Objects {
 		pos := CreateCoords(obj.X, obj.Y, obj.Z)
-		if strings.ToUpper(obj.Class) == "SPIRIT" || strings.ToUpper(obj.Class) == "PLAYER" {
+		key := CleanKey(obj.Class)
+		if key == "SPIRIT" || key == "PLAYER" {
 			if configPlayer == nil {
 				configPlayer = config.NewConfigPlayer(pos, obj.Yaw, 10, 90, 1, 8)
 			}
@@ -189,6 +188,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	return cr, nil
 }
 
+// CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
 func CreateCoords(x, y, z float64) geometry.XYZ {
 	return geometry.XYZ{X: x, Y: -z, Z: y}
+	//return geometry.XYZ{X: x, Y: y, Z: z}
 }

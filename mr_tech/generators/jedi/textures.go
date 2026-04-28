@@ -44,7 +44,7 @@ func (t *Textures) AddTexture(d *GobHandler, bm *BM, texName string, palette [25
 	for counter, img := range images {
 		name := fmt.Sprintf("%s__FRAME__%d", texName, counter)
 		t.add(name, img)
-		out = append(out, name)
+		out[counter] = name
 	}
 	return out
 }

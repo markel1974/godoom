@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Object represents a 3D object in a level, with positional and rotational data, class type, and difficulty flag.
+// Object represents a 3D entity with positional, rotational, and class-related attributes.
 type Object struct {
 	Class            string
 	Data             string
@@ -16,17 +16,23 @@ type Object struct {
 	Diff             int // Difficulty flag
 }
 
-// Entities represents a collection of game level data, including the level name and associated objects.
-type Entities struct {
-	LevelName string
-	Objects   []Object
+// NewObject initializes and returns a pointer to a new Object instance with default values.
+func NewObject() *Object {
+	return &Object{}
 }
 
-// NewEntities creates and returns a new instance of the Entities struct.
+// Entities represents a collection of objects and a level name within a structured data model.
+type Entities struct {
+	LevelName string
+	Objects   []*Object
+}
+
+// NewEntities initializes and returns a new instance of Entities with default values.
 func NewEntities() *Entities {
 	return &Entities{}
 }
 
+// Parse reads and parses input data from the provided io.Reader to populate the Entities struct with level and object data.
 func (e *Entities) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
@@ -45,7 +51,7 @@ func (e *Entities) Parse(r io.Reader) error {
 				e.LevelName = tokens[1]
 			}
 		case "CLASS":
-			obj := Object{}
+			obj := NewObject()
 			// Correzione: il ciclo parte da 0 per mappare correttamente le tuple [Chiave, Valore]
 			for i := 0; i < len(tokens); i += 2 {
 				if i+1 >= len(tokens) {

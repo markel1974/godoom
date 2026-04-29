@@ -23,7 +23,7 @@ type Builder struct {
 
 // NewBuilder creates a new Builder instance and initializes its scale factor.
 func NewBuilder() *Builder {
-	return &Builder{scaleFactor: 0.9}
+	return &Builder{scaleFactor: 1.0}
 }
 
 // Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.

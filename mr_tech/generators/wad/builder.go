@@ -11,30 +11,31 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// WorldScaleFactor defines a constant scaling factor used to standardize and convert game world dimensions to real-world units.
+// WorldScaleFactor defines the scaling constant used for converting in-game measurements to world units.
 const WorldScaleFactor = 25.0
 
-// WallScaleW is a constant scaling factor applied to the width of wall textures in the game world rendering system.
+// WallScaleW defines the horizontal scaling factor for wall textures based on the world scaling factor.
 const WallScaleW = WorldScaleFactor * 0.16
 
-// ScaleCeilFloorLineDef is a constant used to scale ceiling and floor heights relative to WorldScaleFactor.
+// ScaleCeilFloorLineDef is a scaling factor used to normalize ceiling and floor heights in sector calculations.
 const ScaleCeilFloorLineDef = WorldScaleFactor * 0.32
 
-// ScaleWallH defines the vertical scaling factor for wall height, determined as 40% of the global WorldScaleFactor.
+// ScaleWallH defines the vertical scaling factor for wall textures based on a fraction of the WorldScaleFactor.
 const ScaleWallH = WorldScaleFactor * 0.4
 
-// ScaleWThings is a constant representing a factor for scaling the width of "thing" objects in the game world.
+// ScaleWThings represents a scaling factor for object width, calculated as WorldScaleFactor multiplied by 0.002.
 const ScaleWThings = WorldScaleFactor * 0.002
 
-// ScaleHThings defines the height scale factor for things in the game world, derived from WorldScaleFactor.
+// ScaleHThings defines the vertical scaling factor for "things" in the game, derived from WorldScaleFactor.
 const ScaleHThings = WorldScaleFactor * 0.006
 
-// SkyPicture represents the identifier for sky-related ceiling or floor textures in the game's level configuration.
+// SkyPicture represents the texture identifier used to denote sky ceilings and floors in the level configurations.
 const SkyPicture = "F_SKY1"
 
+// openAllDoors indicates whether all doors in the level should start in an open state.
 const openAllDoors = true
 
-// Edge represents a connection between two points (P1 and P2) with metadata such as Sidedef, Linedef, and associated Sectors.
+// Edge represents a line in a 2D space connecting two points, with metadata about its relationship to sectors and sidedefs.
 type Edge struct {
 	P1         geometry.XY
 	P2         geometry.XY
@@ -46,7 +47,7 @@ type Edge struct {
 	BackSector *lumps.Sector
 }
 
-// Builder is a type responsible for constructing and configuring game assets like sectors, things, and players.
+// Builder represents a utility for constructing configuration objects from level data in a WAD file.
 type Builder struct {
 }
 
@@ -55,8 +56,8 @@ func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-// Setup initializes the configuration for a specific level in the WAD file and returns a Root or an error.
-func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error) {
+// Build generates a Root configuration by loading level data from a WAD file and populating sectors, things, and player.
+func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error) {
 	wad := New()
 	if err := wad.Load(wadFile); err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 	return cr, nil
 }
 
-// buildConfigSector constructs and returns a Sector for a given level sector, including floor, ceiling, and lighting data.
+// buildSector creates and configures a Sector with specified properties such as light levels, textures, and geometry.
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures, edges []Edge) *config.Sector {
 	ceilingType := config.MaterialKindLoop
 	floorType := config.MaterialKindLoop
@@ -144,7 +145,7 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	return miSector
 }
 
-// buildSegment constructs a Segment for a given edge within a sector, including wall textures and alignment adjustments.
+// buildSegment creates and configures a new segment for a given sector and edge, applying texture and rendering adjustments.
 func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) *config.Segment {
 	seg := config.NewConfigSegment(sectorId, config.SegmentUnknown, e.P1, e.P2)
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
@@ -172,7 +173,7 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	return seg
 }
 
-// buildThings generates a list of config.Thing objects from a level's things, excluding specific types (1, 2, 3, 4, 11).
+// buildThings creates a configuration object for a game "Thing" entity with its properties and associated materials.
 func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *config.Thing {
 	tX := float64(t.X)
 	tY := float64(t.Y)
@@ -194,7 +195,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	return cfgThing
 }
 
-// buildPlayer initializes and returns a Player instance based on the first thing of type 1 found in the level.
+// buildPlayer creates and returns a Player object configured with position, angle, mass, speed, radius, and height.
 func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	pX, pY, pAngle := float64(0), float64(0), float64(0)
 	for _, t := range level.Things {
@@ -215,7 +216,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	return player
 }
 
-// calculateOpenDoorCeil calculates the ceiling height for an open door or collapsed sector based on adjacent sectors and door checks.
+// calculateOpenDoorCeil computes the ceiling height of a sector if it functions as a door, falling back to the sector's original height.
 func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, sector *lumps.Sector, edges []Edge) float64 {
 	isDoor := false
 	lowestAdjCeil := int16(math.MaxInt16)
@@ -252,7 +253,7 @@ func (bld *Builder) calculateOpenDoorCeil(level *Level, secIdx uint16, sector *l
 	return float64(sector.CeilingHeight)
 }
 
-// createSectorsEdges constructs edges for each sector in the provided level using its LineDefs and vertex data.
+// createSectorsEdges constructs a 2D slice of edges for each sector in a given level based on its LineDefs and Vertexes.
 func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) [][]Edge {
 	sectorsEdges := make([][]Edge, len(level.Sectors))
 	add := func(ld *lumps.LineDef, sdIdx int16, isLeft bool) {
@@ -303,7 +304,7 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 	return sectorsEdges
 }
 
-// Estendiamo l'euristica per restituire anche R, G, B
+// heuristicLight determines the light intensity, kind, falloff, and color values for a scene based on provided parameters.
 func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
 	intensity := float64(lightLevel) * 0.008
 	kind := config.LightKindAmbient

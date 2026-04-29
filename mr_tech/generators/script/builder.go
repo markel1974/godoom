@@ -12,24 +12,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// scaleW defines the horizontal scaling factor.
-// scaleH defines the vertical scaling factor.
+// scaleW defines the scaling factor for width calculations.
+// scaleH defines the scaling factor for height calculations.
 const (
 	scaleW = 10.0
 	scaleH = 50.0
 )
 
-// Parser is a type responsible for parsing and constructing game configuration data from text inputs.
-type Parser struct {
+// Builder is a type used to construct and configure complex objects or data structures.
+type Builder struct {
 }
 
-// NewParser creates and returns a new instance of Parser, used for parsing and managing level configuration data.
-func NewParser() *Parser {
-	return &Parser{}
+// NewBuilder initializes and returns a new instance of Builder.
+func NewBuilder() *Builder {
+	return &Builder{}
 }
 
-// Parse parses the given script data, initializing and returning the game's configuration or an error if parsing fails.
-func (p *Parser) Parse(id string) (*config.Root, error) {
+// Build processes the given data string to construct a Root configuration object, parsing vertices, sectors, and player info.
+func (p *Builder) Build(id string) (*config.Root, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, tErr := NewTextures(basePath)
 	if tErr != nil {
@@ -85,8 +85,8 @@ func (p *Parser) Parse(id string) (*config.Root, error) {
 	return cfg, nil
 }
 
-// finalize processes and finalizes the sector definitions by scanning for reversed segments and updating their properties.
-func (p *Parser) finalize(cfg *config.Root) {
+// finalize processes and updates sector segment relationships within the configuration by performing a topological rescan.
+func (p *Builder) finalize(cfg *config.Root) {
 	// 2. Fase di Sigillatura (Rescan Topologico)
 	type edgeKey struct{ p1, p2 geometry.XY }
 	lineDefsCache := make(map[edgeKey]*config.Sector)
@@ -113,8 +113,8 @@ func (p *Parser) finalize(cfg *config.Root) {
 	}
 }
 
-// parseVertex reads vertex data from the provided reader and returns a slice of geometry.XY or an error on failure.
-func (p *Parser) parseVertex(r io.Reader) ([]geometry.XY, error) {
+// parseVertex reads vertex data from an io.Reader, parsing it into a slice of geometry.XY points. Returns an error on failure.
+func (p *Builder) parseVertex(r io.Reader) ([]geometry.XY, error) {
 	var cfgVertices []geometry.XY
 	for {
 		var vertexY float64
@@ -138,9 +138,9 @@ func (p *Parser) parseVertex(r io.Reader) ([]geometry.XY, error) {
 	return cfgVertices, nil
 }
 
-// parseSector parses sector data from the provided reader, using vertices and a sector index, and constructs a Sector.
-// Returns the created Sector or an error if parsing fails.
-func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSectorIdx int) (*config.Sector, error) {
+// parseSector parses sector data from the provided io.Reader and constructs a Sector object using given vertices and index.
+// Returns the constructed Sector or an error if parsing fails.
+func (p *Builder) parseSector(r io.Reader, cfgVertices []geometry.XY, configSectorIdx int) (*config.Sector, error) {
 	if cfgVertices == nil {
 		return nil, errors.New("nil vertices")
 	}
@@ -200,8 +200,8 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 	return cs, nil
 }
 
-// parsePlayer parses player position, angle, and updates the provided Player instance from the given io.Reader input.
-func (p *Parser) parsePlayer(r io.Reader, player *config.Player) error {
+// parsePlayer reads position and angle data from the given reader and populates the specified Player structure.
+func (p *Builder) parsePlayer(r io.Reader, player *config.Player) error {
 	if _, err := fmt.Fscanf(r, "%f %f %f", &player.Position.X, &player.Position.Y, &player.Angle); err != nil {
 		return err
 	}

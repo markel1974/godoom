@@ -1,4 +1,4 @@
-package world
+package dungeon
 
 import (
 	"encoding/json"
@@ -17,6 +17,21 @@ const (
 	scaleH = 50.0
 )
 
+// availableCeil contains a list of available ceiling texture file names in PPM format.
+var _availableCeil = []string{"ceil.ppm", "ceil2.ppm", "ceil2_norm.ppm"}
+
+// availableFloor represents a list of texture filenames that can be used as floor textures in the game environment.
+var _availableFloor = []string{"floor.ppm"}
+
+// availableUpper contains a list of file names for textures used as the upper surface in sectors.
+var _availableUpper = []string{"wall2.ppm"}
+
+// availableLower stores a list of texture file names used for lower wall surfaces in the level configuration.
+var _availableLower = []string{"wall2.ppm"}
+
+// availableWall holds a list of wall texture file names available for sector configurations.
+var _availableWall = []string{"wall2.ppm"}
+
 // random generates a random integer between the specified min (inclusive) and max (inclusive) values.
 func random(min int, max int) int {
 	return rnd.Intn(max-min+1) + min
@@ -27,39 +42,32 @@ func randomF(min float64, max float64) float64 {
 	return min + rnd.Float64()*(max-min)
 }
 
-// ParseJsonData parses a JSON-encoded byte array into a Root struct and returns it or an error on failure.
-func ParseJsonData(source []byte) (*config.Root, error) {
-	cfg := &config.Root{}
-	if err := json.Unmarshal(source, cfg); err != nil {
-		return nil, err
-	}
-	return cfg, nil
+// Builder provides methods to construct and generate a configuration tree for the application.
+type Builder struct {
 }
 
-// availableCeil contains a list of available ceiling texture file names in PPM format.
-var availableCeil = []string{"ceil.ppm", "ceil2.ppm", "ceil2_norm.ppm"}
+// NewBuilder creates and returns a new instance of Builder.
+func NewBuilder() *Builder {
+	return &Builder{}
+}
 
-// availableFloor represents a list of texture filenames that can be used as floor textures in the game environment.
-var availableFloor = []string{"floor.ppm"}
-
-// availableUpper contains a list of file names for textures used as the upper surface in sectors.
-var availableUpper = []string{"wall2.ppm"}
-
-// availableLower stores a list of texture file names used for lower wall surfaces in the level configuration.
-var availableLower = []string{"wall2.ppm"}
-
-// availableWall holds a list of wall texture file names available for sector configurations.
-var availableWall = []string{"wall2.ppm"}
+// Build generates and returns the root configuration for the application or system, along with any encountered errors.
+func (b *Builder) Build(level int) (*config.Root, error) {
+	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
+	t, _ := NewTextures(basePath)
+	//return b.generateSimple(t, 16, 16)
+	return b.generateDungeon(t, 16, 16, 16.0)
+}
 
 // createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.
-func createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.Sector {
+func (b *Builder) createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.Sector {
 	const falloff = 10.0
 	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient, falloff)
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
-	floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
-	ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
+	floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
+	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
 	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 
@@ -77,9 +85,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		// Allocazione corretta tramite costruttore
 		seg := config.NewConfigSegment("", config.SegmentUnknown, start, end)
 
-		upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
-		lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
-		middleT := []string{availableWall[random(0, len(availableWall)-1)]}
+		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
+		lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
+		middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
 		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
@@ -90,24 +98,16 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 	return sector
 }
 
-func Generate() (*config.Root, error) {
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := NewTextures(basePath)
-
-	//return generateSimple(t, 16, 16)
-	return generateDungeon(t, 16, 16, 16.0)
-}
-
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
-func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
+func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
-	s1 := createCube(0, 0, 8, 0, 20)
+	s1 := b.createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)
 
-	s2 := createCube(8, 0, 8, 0, 20)
+	s2 := b.createCube(8, 0, 8, 0, 20)
 	s1.Id = "toor"
 	cfg.Sectors = append(cfg.Sectors, s2)
 
@@ -117,7 +117,7 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 			if x == 1 || y == 1 || create > 2 {
 				ceil := randomF(15, 30)
 				floor := randomF(0, 2)
-				s3 := createCube(float64(x)*8, 8*float64(y), 8, floor, ceil)
+				s3 := b.createCube(float64(x)*8, 8*float64(y), 8, floor, ceil)
 				cfg.Sectors = append(cfg.Sectors, s3)
 			}
 		}
@@ -128,7 +128,8 @@ func generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 
 	return cfg, nil
 }
-func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
+
+func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
@@ -181,8 +182,8 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 			sector.FloorY = distFromCenter * 1.5 // Altezza gradino
 			sector.CeilY = sector.FloorY + randomF(20.0, 100.0)
 
-			floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
-			ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
+			floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
+			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
 			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 
@@ -226,9 +227,9 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 				}
 
 				seg := config.NewConfigSegment("", kind, e.p1, e.p2)
-				upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
-				lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
-				middleT := []string{availableWall[random(0, len(availableWall)-1)]}
+				upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
+				lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
+				middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
 				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
@@ -242,5 +243,14 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 	cfg.Player.Position = geometry.XYZ{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2, Z: 0}
 	cfg.Player.Angle = 0.0
 
+	return cfg, nil
+}
+
+// ParseJsonData parses a JSON-encoded byte array into a Root struct and returns it or an error on failure.
+func (b *Builder) parseJsonData(source []byte) (*config.Root, error) {
+	cfg := &config.Root{}
+	if err := json.Unmarshal(source, cfg); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }

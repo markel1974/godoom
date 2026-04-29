@@ -7,12 +7,12 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
+	"github.com/markel1974/godoom/mr_tech/generators/dungeon"
 	"github.com/markel1974/godoom/mr_tech/generators/jedi"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
-	"github.com/markel1974/godoom/mr_tech/generators/world"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/software"
 	"github.com/markel1974/godoom/mr_tech/version"
@@ -59,16 +59,18 @@ func main() {
 
 	switch mode {
 	case 0:
-		p := script.NewParser()
-		cfg, err = p.Parse(script.StubOld2)
+		p := script.NewBuilder()
+		cfg, err = p.Build(script.StubOld2)
 	case 1:
-		cfg, err = world.Generate()
+		db := dungeon.NewBuilder()
+		cfg, err = db.Build(level)
 	case 2:
-		cfg, err = wolfstein.CreateLevel(level)
+		wb := wolfstein.NewBuilder()
+		cfg, err = wb.Build(level)
 	case 3:
 		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
-		wb := wad.NewBuilder() //wad.NewBuilderNew()
-		cfg, err = wb.Setup(wadFile, level)
+		wb := wad.NewBuilder()
+		cfg, err = wb.Build(wadFile, level)
 	case 4:
 		jFile := "resources" + string(os.PathSeparator) + "jedi"
 		jf := jedi.NewBuilder()
@@ -78,7 +80,8 @@ func main() {
 		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(quakeFile, level)
 	default:
-		cfg, err = world.Generate()
+		db := dungeon.NewBuilder()
+		cfg, err = db.Build(level)
 	}
 
 	if err != nil {

@@ -39,11 +39,13 @@ type Material struct {
 	gScale      float64
 	scaleW      float64
 	scaleH      float64
+	u           float64
+	v           float64
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewMaterial(frames []*Texture, kind int, gScale float64, scaleW float64, scaleH float64) *Material {
+func NewMaterial(frames []*Texture, kind int, gScale, scaleW, scaleH, u, v float64) *Material {
 	if gScale == 0 {
 		gScale = 1
 	}
@@ -61,15 +63,17 @@ func NewMaterial(frames []*Texture, kind int, gScale float64, scaleW float64, sc
 		gScale:      gScale,
 		scaleW:      scaleW,
 		scaleH:      scaleH,
+		u:           u,
+		v:           v,
 	}
-	for _, v := range frames {
-		if v == nil {
+	for _, frame := range frames {
+		if frame == nil {
 			a.totalFrames = 0
 			a.frames = nil
 			fmt.Println("nil frame")
 			break
 		}
-		v.SetScaleFactor(gScale, scaleW, scaleH)
+		frame.SetScaleFactor(gScale, scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]

@@ -11,37 +11,37 @@ import (
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	parent     *Volume
-	neighbor   *Volume
-	tag        string
-	aabb       *physics.AABB
-	tri        [3]geometry.XYZ
-	normal     geometry.XYZ
-	normalAbs  geometry.XYZ
-	animations []*textures.Material
-	material   *textures.Material
-	minZ       float64
-	maxZ       float64
-	hasFixedZ  bool
-	u          [3]float64
-	v          [3]float64
-	lockUV     bool
+	parent    *Volume
+	neighbor  *Volume
+	tag       string
+	aabb      *physics.AABB
+	tri       [3]geometry.XYZ
+	normal    geometry.XYZ
+	normalAbs geometry.XYZ
+	materials []*textures.Material
+	material  *textures.Material
+	minZ      float64
+	maxZ      float64
+	hasFixedZ bool
+	u         [3]float64
+	v         [3]float64
+	lockUV    bool
 }
 
-// NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Material) *Face {
+// NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture materials.
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, materials []*textures.Material) *Face {
 	out := &Face{
-		hasFixedZ:  true,
-		neighbor:   neighbor,
-		tag:        tag,
-		minZ:       0,
-		maxZ:       0,
-		aabb:       physics.NewAABB(),
-		animations: []*textures.Material{nil},
-		lockUV:     false,
+		hasFixedZ: true,
+		neighbor:  neighbor,
+		tag:       tag,
+		minZ:      0,
+		maxZ:      0,
+		aabb:      physics.NewAABB(),
+		materials: []*textures.Material{nil},
+		lockUV:    false,
 	}
-	if len(animations) > 0 {
-		out.animations = animations
+	if len(materials) > 0 {
+		out.materials = materials
 	}
 	out.tri[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
 	out.tri[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
@@ -155,11 +155,11 @@ func (s *Face) GetEnd() geometry.XYZ {
 	return s.tri[2]
 }
 
-// GetAnimationIndex retrieves the Material object corresponding to the given material index.
-func (s *Face) GetAnimationIndex(m int) *textures.Material {
+// GetMaterialIndex retrieves the Material object corresponding to the given material index.
+func (s *Face) GetMaterialIndex(m int) *textures.Material {
 	//0 Upper, 1 Middle, 2 Lower
-	idx := m % len(s.animations)
-	return s.animations[idx]
+	idx := m % len(s.materials)
+	return s.materials[idx]
 }
 
 // GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.

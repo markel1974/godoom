@@ -9,13 +9,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VertexMD2 represents a structure containing 3D volume data and associated sprite frame face mappings.
+// VertexMD2 represents a structure containing 3D volume data and associated material frame face mappings.
 type VertexMD2 struct {
 	volume *Volume
 	frames [][]*Face
 }
 
-// NewVertexMD2 creates a new VertexMD2 object with the given configuration, sprite, dimensions, mass, restitution, and friction.
+// NewVertexMD2 creates a new VertexMD2 object with the given configuration, material, dimensions, mass, restitution, and friction.
 func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d, mass, restitution, friction float64) *VertexMD2 {
 	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, mass, restitution, friction)
 	v := &VertexMD2{
@@ -50,7 +50,7 @@ func (v *VertexMD2) GetVolume() *Volume {
 	return v.volume
 }
 
-// GetVertices retrieves the vertices corresponding to the current sprite frame, determined by the specified tick value.
+// GetVertices retrieves the vertices corresponding to the current material frame, determined by the specified tick value.
 func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	const groupSize = 6.0
 	frameFloat := textures.TickGrouped(tick, int(groupSize))

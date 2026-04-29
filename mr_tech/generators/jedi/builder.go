@@ -115,7 +115,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			cSector.Floor = config.NewConfigMaterial(names, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE")
 		}
@@ -123,9 +123,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			animKind := config.AnimationKindLoop
+			animKind := config.MaterialKindLoop
 			if isSky {
-				animKind = config.AnimationKindSky
+				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
 			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleW, scaleH, 0, 0)
@@ -155,7 +155,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				if wall.MidTexture >= 0 {
 					texName := level.GetTexture(wall.MidTexture)
 					names := textures.AddTexture(d, bm, texName, colorPal)
-					cSeg.Middle = config.NewConfigMaterial(names, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 				} else if wall.Adjoin < 0 {
 					fmt.Println("MISSING MID_TEXTURE")
 				}
@@ -169,19 +169,19 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 						adjIsSky := adjSec.IsSky()
 
 						if isSky && adjIsSky {
-							cSeg.Upper = config.NewConfigMaterial(nil, config.AnimationKindNone, scaleW, scaleH, 0, 0)
+							cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleW, scaleH, 0, 0)
 						} else if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
 							// UPPER TEXTURE STANDARD (uno dei due settori è un interno chiuso)
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Upper = config.NewConfigMaterial(names, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 						}
 
 						// --- 2. GESTIONE LOWER WALL ---
 						if sector.FloorY > adjSec.FloorY && wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Lower = config.NewConfigMaterial(names, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 						}
 					} else {
 						fmt.Println("INVALID ADJOIN")

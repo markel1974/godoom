@@ -91,19 +91,19 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 				switch cp.Kind {
 				case model.IdWall, model.IdUpper, model.IdLower:
 					if cp.Kind == model.IdWall {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
+						w.pushWall(w.fv, w.dc, cp, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
 					} else if cp.Kind == model.IdUpper {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
+						w.pushWall(w.fv, w.dc, cp, cp.Material, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
 					} else {
-						w.pushWall(w.fv, w.dc, cp, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
+						w.pushWall(w.fv, w.dc, cp, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
 					}
 				case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 					if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.MaterialCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
 							w.cSky = sky
 						}
 					} else {
-						if sky := w.pushFlat(w.fv, w.dc, cp, cp.AnimationFloor, float32(cp.Volume.GetMinZ())); sky != nil {
+						if sky := w.pushFlat(w.fv, w.dc, cp, cp.MaterialFloor, float32(cp.Volume.GetMinZ())); sky != nil {
 							w.cSky = sky
 						}
 					}
@@ -170,7 +170,7 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 // pushFlat processes and renders a flat surface using the given polygon key, animation, and Z-coordinate.
 // It returns a texture if the animation is of type sky or a nil value in other cases.
 func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Material, zF float32) *textures.Texture {
-	if anim.Kind() == int(config.AnimationKindSky) {
+	if anim.Kind() == int(config.MaterialKindSky) {
 		return anim.CurrentFrame()
 	}
 

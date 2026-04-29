@@ -110,7 +110,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				}
 				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
 				const scaleH = 0.08
-				anim := config.NewConfigMaterial(sequence, config.AnimationKindLoop, scaleH, scaleH*2, 0, 0)
+				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, scaleH, scaleH*2, 0, 0)
 				if useEnemy {
 					thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
 					root.Things = append(root.Things, thing)
@@ -125,8 +125,8 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 			cs.FloorY = 0
 			cs.CeilY = wp.sectorHeight
 			cs.Tag = "wolf_cell"
-			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
-			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.AnimationKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
+			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.MaterialKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
+			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.MaterialKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
 			y0, y1 := float64(y)*wp.tileSize, float64(y+1)*wp.tileSize
 			pTL := geometry.XY{X: x0, Y: y0}
@@ -149,7 +149,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidT, pMidB)
-						anim := config.NewConfigMaterial([]string{"image99.png"}, config.AnimationKindLoop, 10.0, 10.0, 0, 0)
+						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 10.0, 10.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -165,7 +165,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidL, pMidR)
-						anim := config.NewConfigMaterial([]string{"image98.png"}, config.AnimationKindLoop, 10.0, 50.0, 0, 0)
+						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 10.0, 50.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -253,7 +253,7 @@ func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end ge
 		}
 	}
 	if texName != "" {
-		anim := config.NewConfigMaterial([]string{texName}, config.AnimationKindLoop, 7.0, 4.0, 0, 0)
+		anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 7.0, 4.0, 0, 0)
 		seg.Upper = anim
 		seg.Middle = anim
 		seg.Lower = anim

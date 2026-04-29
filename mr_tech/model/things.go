@@ -19,7 +19,7 @@ type Things struct {
 	full3d           bool
 	config           []*config.Thing
 	volumes          *Volumes
-	animations       *Materials
+	materials        *Materials
 	tree             *physics.AABBTree
 	pending          []IThing
 	pendingIdx       atomic.Int32
@@ -37,7 +37,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, animations *Materials) *Things {
+func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
@@ -54,7 +54,7 @@ func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.
 		hasPending:       false,
 		config:           cfg,
 		volumes:          volumes,
-		animations:       animations,
+		materials:        materials,
 		event:            NewThingEvent(solverJitter),
 	}
 	e.pendingIdx.Store(0)
@@ -126,7 +126,7 @@ func (th *Things) GetVolumes() *Volumes {
 
 // GetTextures fetches the ITextures instance from the associated Materials object.
 func (th *Things) GetTextures() textures.ITextures {
-	return th.animations.GetTextures()
+	return th.materials.GetTextures()
 }
 
 // GetActive returns the slice of active IThing objects and the current index of active things.
@@ -155,17 +155,17 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingEnemy(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	case config.ThingThrowableDef:
-		thing = NewThingThrowable(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingThrowable(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	case config.ThingItemDef:
-		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	default:
-		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
 	}
 	return thing
 }
@@ -179,7 +179,7 @@ func (th *Things) CreateThrowable(volume *Volume, pos geometry.XYZ, angle, pitch
 	}
 	c := th.config[throwableIndex]
 	id := utils.NextUUId()
-	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed, c.Animation)
+	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed, c.Material)
 	ct.Pitch = pitch
 	slot := th.pendingIdx.Add(1) - 1
 	if slot >= int32(len(th.pending)) {

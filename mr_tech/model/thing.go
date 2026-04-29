@@ -18,7 +18,7 @@ type IThing interface {
 
 	GetAABB() *physics.AABB
 
-	GetAnimation() *textures.Material
+	GetMaterial() *textures.Material
 
 	GetPosition() (float64, float64, float64)
 

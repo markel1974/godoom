@@ -81,7 +81,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 				if tex == nil {
 					continue
 				}
-				if texKind == int(config.AnimationKindSky) {
+				if texKind == int(config.MaterialKindSky) {
 					w.cSky = tex
 					continue
 				}

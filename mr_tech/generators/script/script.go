@@ -189,13 +189,13 @@ func (p *Parser) parseSector(r io.Reader, cfgVertices []geometry.XY, configSecto
 		end := cfgVertices[v2Idx.Val]
 
 		seg := config.NewConfigSegment("", neighborId.Kind, start, end)
-		seg.Middle = config.NewConfigMaterial([]string{"wall2.ppm"}, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
-		seg.Lower = config.NewConfigMaterial([]string{"wall.ppm"}, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
-		seg.Upper = config.NewConfigMaterial([]string{"wall3.ppm"}, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+		seg.Middle = config.NewConfigMaterial([]string{"wall2.ppm"}, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+		seg.Lower = config.NewConfigMaterial([]string{"wall.ppm"}, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+		seg.Upper = config.NewConfigMaterial([]string{"wall3.ppm"}, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 		cs.Segments = append(cs.Segments, seg)
 	}
-	cs.Floor = config.NewConfigMaterial([]string{"floor.ppm"}, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
-	cs.Ceil = config.NewConfigMaterial([]string{"ceil.ppm"}, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+	cs.Floor = config.NewConfigMaterial([]string{"floor.ppm"}, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+	cs.Ceil = config.NewConfigMaterial([]string{"ceil.ppm"}, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 
 	return cs, nil
 }

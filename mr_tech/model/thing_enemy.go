@@ -90,7 +90,7 @@ func (t *ThingEnemy) StageThinking(playerX float64, playerY float64, playerZ flo
 	if playerDist2d <= 0.001 {
 		return
 	}
-	// Aggiorniamo l'angolo del nemico affinché lo sprite o il modello si giri verso il bersaglio
+	// Aggiorniamo l'angolo del nemico affinché lo material o il modello si giri verso il bersaglio
 	t.SetAngle(math.Atan2(dy, dx))
 	invDist := 1.0 / playerDist2d
 	nx := dx * invDist

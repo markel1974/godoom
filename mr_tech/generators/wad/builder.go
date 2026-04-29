@@ -119,8 +119,8 @@ func (bld *Builder) Setup(wadFile string, levelNumber int) (*config.Root, error)
 
 // buildConfigSector constructs and returns a Sector for a given level sector, including floor, ceiling, and lighting data.
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures, edges []Edge) *config.Sector {
-	ceilingType := config.AnimationKindLoop
-	floorType := config.AnimationKindLoop
+	ceilingType := config.MaterialKindLoop
+	floorType := config.MaterialKindLoop
 	light, kind, falloff, r, g, b := bld.heuristicLight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
 
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
@@ -132,11 +132,11 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
 	miSector.Tag = sectorId
 	if ceilPic == SkyPicture {
-		ceilingType = config.AnimationKindSky
+		ceilingType = config.MaterialKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
 	if floorPic == SkyPicture {
-		floorType = config.AnimationKindSky
+		floorType = config.MaterialKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
 	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, WallScaleW, ScaleWallH, 0, 0)
@@ -150,18 +150,18 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
-	seg.Middle = config.NewConfigMaterial(middleT, config.AnimationKindLoop, WallScaleW, ScaleWallH, 0, 0)
-	seg.Upper = config.NewConfigMaterial(upperT, config.AnimationKindLoop, WallScaleW, ScaleWallH, 0, 0)
-	seg.Lower = config.NewConfigMaterial(lowerT, config.AnimationKindLoop, WallScaleW, ScaleWallH, 0, 0)
+	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
+	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
+	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
 	// vertical sky hack
 	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 		if e.Sector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
-			seg.Upper = config.NewConfigMaterial(nil, config.AnimationKindNone, WallScaleW, ScaleWallH, 0, 0)
+			seg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, WallScaleW, ScaleWallH, 0, 0)
 		}
 		// Extension for floors (e.g. moats that show sky at the bottom)
 		if e.Sector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
-			seg.Lower = config.NewConfigMaterial(nil, config.AnimationKindNone, WallScaleW, ScaleWallH, 0, 0)
+			seg.Lower = config.NewConfigMaterial(nil, config.MaterialKindNone, WallScaleW, ScaleWallH, 0, 0)
 		}
 	}
 	if !e.LineDef.HasFlag(2) {
@@ -189,8 +189,8 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		frames = sd.Sprites
 	}
 	tId := fmt.Sprintf("t_%d", i)
-	anim := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.AnimationKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, anim)
+	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
 	return cfgThing
 }
 

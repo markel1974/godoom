@@ -116,8 +116,8 @@ func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
 		u0 := 0.0
 		u1 := math.Hypot(wx2-wx1, wz2-wz1) * r.textureScaleRepetition
 
-		ceilT := cs.Volume.GetAnimation(1)
-		floorT := cs.Volume.GetAnimation(0)
+		ceilT := cs.Volume.GetMaterialIndex(1)
+		floorT := cs.Volume.GetMaterialIndex(0)
 		sectorCeilY := volume.GetMaxZ()
 		sectorFloorY := volume.GetMinZ()
 
@@ -127,18 +127,18 @@ func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
 			neighborFloorY := neighbor.GetMinZ()
 			// Upper Wall (dal soffitto corrente scende al soffitto del vicino)
 			if sectorCeilY > neighborCeilY {
-				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, face.GetAnimationIndex(0), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, face.GetMaterialIndex(0), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				// x1, Y_top, Y_bottom, z1, x2, Y_top, Y_bottom, z2
 				upperP.Rect(wx1, sectorCeilY, neighborCeilY, wz1, wx2, sectorCeilY, neighborCeilY, wz2)
 			}
 			// Lower Wall (dal pavimento del vicino scende al pavimento corrente)
 			if sectorFloorY < neighborFloorY {
-				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, face.GetAnimationIndex(2), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, face.GetMaterialIndex(2), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 				lowerP.Rect(wx1, neighborFloorY, sectorFloorY, wz1, wx2, neighborFloorY, sectorFloorY, wz2)
 			}
 		} else {
 			// 2. Muro Solido (Middle Wall) - connette soffitto e pavimento del settore
-			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, face.GetAnimationIndex(1), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
+			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, face.GetMaterialIndex(1), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
 		center := volume.GetCentroid2d()
@@ -331,8 +331,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			}
 		}
 
-		ceilT := cs.Volume.GetAnimation(1)
-		floorT := cs.Volume.GetAnimation(0)
+		ceilT := cs.Volume.GetMaterialIndex(1)
+		floorT := cs.Volume.GetMaterialIndex(0)
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 		ceilP.Rect(x1Max, y1Ceil, yaStart, zStart, x2Min, y2Ceil, yaStop, zStop)
@@ -347,7 +347,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			nYaStart := (x1Max-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			nYaStop := (x2Min-x1)*(ny2a-ny1a)/(x2-x1) + ny1a
 			if yaStart-yaStop != 0 || nYaStop-nYaStop != 0 {
-				upperT := face.GetAnimationIndex(0)
+				upperT := face.GetMaterialIndex(0)
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, x2Min, yaStop, nYaStop, zStop)
 			}
@@ -360,7 +360,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 			nYbStart := (x1Max-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			nYbStop := (x2Min-x1)*(ny2b-ny1b)/(x2-x1) + ny1b
 			if (ybStart-nYbStart) != 0 || (nYbStop-ybStop) != 0 {
-				lowerT := face.GetAnimationIndex(2)
+				lowerT := face.GetMaterialIndex(2)
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, x2Min, nYbStop, ybStop, zStop)
 			}
@@ -369,7 +369,7 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 
 			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {
-			middleT := face.GetAnimationIndex(1)
+			middleT := face.GetMaterialIndex(1)
 			wallP := cs.Acquire(neighbor, model.IdWall, ceilT, floorT, middleT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 			wallP.Rect(x1Max, yaStart, ybStart, zStart, x2Min, yaStop, ybStop, zStop)
 		}

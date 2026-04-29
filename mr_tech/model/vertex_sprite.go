@@ -10,7 +10,7 @@ type VertexSprite struct {
 	volume *Volume
 }
 
-// NewVertexSprite creates a new VertexSprite with the given sprite, position, dimensions, and physical properties.
+// NewVertexSprite creates a new VertexSprite with the given material, position, dimensions, and physical properties.
 func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
 	height := h
 	width := w
@@ -26,7 +26,7 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 		}
 	}
 
-	volume := NewVolumeDetails3d(0, "sprite", "thing", x, y, z, width, height, d, mass, restitution, friction)
+	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, mass, restitution, friction)
 	f := &VertexSprite{volume: volume}
 	f.volume.SetBillboard(1.0)
 
@@ -65,7 +65,7 @@ func (v *VertexSprite) GetVolume() *Volume {
 }
 
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
-// The returned faces represent the geometry of the vertex sprite at the given moment in time.
+// The returned faces represent the geometry of the vertex material at the given moment in time.
 func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0

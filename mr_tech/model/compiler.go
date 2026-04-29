@@ -41,12 +41,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	full3d := cfg.Calibration.Full3d
 
 	cfg.Scale(r.gScale)
-	animations := NewMaterials(cfg.GetTextures(), r.gScale)
+	materials := NewMaterials(cfg.GetTextures(), r.gScale)
 	r.lights = NewLights()
 	var container2d []*Volume
 
 	if len(cfg.Sectors) > 0 {
-		container2d = r.compile2d(cfg.Vertices, cfg.Sectors, animations)
+		container2d = r.compile2d(cfg.Vertices, cfg.Sectors, materials)
 		if len(container2d) == 0 {
 			return fmt.Errorf("no 2D volumes compiled")
 		}
@@ -78,7 +78,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 			allVolumes = append(allVolumes, r.upgrade3d(container2d)...)
 		}
 		if len(cfg.Volumes) > 0 {
-			allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, animations)...)
+			allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, materials)...)
 		}
 	} else {
 		allVolumes = append(allVolumes, container2d...)
@@ -88,7 +88,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	r.volumes.Setup()
 
 	r.lights.AddLights(r.compileLights(cfg.Lights))
-	r.things = NewThings(full3d, r.gScale, 10, cfg.Things, r.volumes, animations)
+	r.things = NewThings(full3d, r.gScale, 10, cfg.Things, r.volumes, materials)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")
@@ -124,7 +124,7 @@ func (r *Compiler) GetCalibration() *Calibration {
 	return r.calibration
 }
 
-// compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
+// compile2d constructs and processes game volumes based on configuration data, materials, and geometry relationships.
 func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Materials) []*Volume {
 	const epsilon = 0.01
 	modelSectorId := 0
@@ -279,18 +279,18 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 
 		ceilZ := vol2d.GetMaxZ()
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: ceilZ}, {X: p1.X, Y: p1.Y, Z: ceilZ}, {X: p2.X, Y: p2.Y, Z: ceilZ}}
-		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetAnimation(1))
+		ceilFace := NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1))
 		vol3d.AddFace(ceilFace)
 
 		floorZ := vol2d.GetMinZ()
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: floorZ}, {X: p2.X, Y: p2.Y, Z: floorZ}, {X: p1.X, Y: p1.Y, Z: floorZ}}
-		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetAnimation(0))
+		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0))
 		vol3d.AddFace(floorFace)
 
 		for _, f2d := range faces2d {
 			neighbor := f2d.GetNeighbor()
 			if neighbor == nil {
-				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetAnimationIndex(1))
+				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetMaterialIndex(1))
 				continue
 			}
 			// Adjacent sector exists: we need to calculate height differentials
@@ -298,11 +298,11 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 			nCeilZ := neighbor.GetMaxZ()
 			// 1. Lower Wall (bottom wall: neighbor's floor is higher than ours)
 			if nFloorZ > floorZ {
-				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetAnimationIndex(2))
+				buildQuad(vol3d, f2d, floorZ, nFloorZ, f2d.GetTag()+"_lower", f2d.GetMaterialIndex(2))
 			}
 			// 2. Upper Wall (top wall: neighbor's ceiling drops below ours)
 			if nCeilZ < ceilZ {
-				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetAnimationIndex(0))
+				buildQuad(vol3d, f2d, nCeilZ, ceilZ, f2d.GetTag()+"_upper", f2d.GetMaterialIndex(0))
 			}
 			// 3. Middle Portal (the opening through which the player can navigate and look)
 			//portalBottom := floorZ
@@ -315,7 +315,7 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 			//}
 			// If the opening physically exists (avoids glitches if two sectors are completely misaligned)
 			//if portalTop > portalBottom {
-			//buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetAnimationIndex(1))
+			//buildQuad(vol3d, f2d, portalBottom, portalTop, f2d.GetTag()+"_portal", f2d.GetMaterialIndex(1))
 			//}
 		}
 		vol3d.Rebuild()
@@ -335,7 +335,7 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	return volumes3d
 }
 
-// compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
+// compile3d constructs 3D volumes from configurations and materials, linking geometry and calculating adjacency portals.
 func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volume {
 	totalFaces := 0
 	var container []*Volume

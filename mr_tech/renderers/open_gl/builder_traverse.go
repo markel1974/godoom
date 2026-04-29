@@ -141,11 +141,11 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
 				} else {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Animation, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -155,12 +155,12 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 				w.processedPolygons[key] = true
 				w.visibleVolumes[cp.Volume] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
 						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.AnimationFloor, float32(cp.Volume.GetMinZ())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialFloor, float32(cp.Volume.GetMinZ())); sky != nil {
 						w.cSky = sky
 					}
 				}
@@ -225,7 +225,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
 func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyKey, anim *textures.Material, zF float32) *textures.Texture {
-	if anim.Kind() == int(config.AnimationKindSky) {
+	if anim.Kind() == int(config.MaterialKindSky) {
 		return anim.CurrentFrame()
 	}
 

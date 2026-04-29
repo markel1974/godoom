@@ -25,23 +25,23 @@ const (
 
 // CompiledPolygon represents a polygon with precompiled data for rendering or simulation purposes.
 type CompiledPolygon struct {
-	Points         []geometry.XYZ
-	Volume         *Volume
-	Neighbor       *Volume
-	Kind           int
-	id             float64
-	PLen           int
-	X1             float64
-	X2             float64
-	Tx1            float64
-	Tx2            float64
-	Tz1            float64
-	Tz2            float64
-	U0             float64
-	U1             float64
-	Animation      *textures.Material
-	AnimationCeil  *textures.Material
-	AnimationFloor *textures.Material
+	Points        []geometry.XYZ
+	Volume        *Volume
+	Neighbor      *Volume
+	Kind          int
+	id            float64
+	PLen          int
+	X1            float64
+	X2            float64
+	Tx1           float64
+	Tx2           float64
+	Tz1           float64
+	Tz2           float64
+	U0            float64
+	U1            float64
+	Material      *textures.Material
+	MaterialCeil  *textures.Material
+	MaterialFloor *textures.Material
 }
 
 // NewCompiledPolygon creates and returns a pointer to an empty CompiledPolygon with preallocated points.
@@ -153,9 +153,9 @@ func (cp *CompiledPolygons) Acquire(volume *Volume, neighbor *Volume, kind int, 
 	p.Tz2 = tz2
 	p.U0 = u0
 	p.U1 = u1
-	p.Animation = t
-	p.AnimationCeil = c
-	p.AnimationFloor = f
+	p.Material = t
+	p.MaterialCeil = c
+	p.MaterialFloor = f
 	p.Init(kind)
 
 	return p

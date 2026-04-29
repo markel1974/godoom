@@ -28,7 +28,7 @@ type ThingBase struct {
 	jumpForce     float64
 	location      *Volume
 	world         *Volumes
-	sprite        *textures.Material
+	material      *textures.Material
 	things        *Things
 	isActive      bool
 	identifier    int
@@ -43,7 +43,7 @@ type ThingBase struct {
 	done          chan struct{}
 }
 
-// NewThingBase creates a new ThingBase instance with specified configuration, sprite, sector, world, and things.
+// NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
 func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	radAngle := cfg.Angle // * (math.Pi / 180.0)
@@ -74,7 +74,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		jumpForce:     cfg.JumpForce,
 		pos:           pos,
 		location:      location,
-		sprite:        material,
+		material:      material,
 		world:         volumes,
 		things:        things,
 		maxStep:       cfg.Height * 0.5,
@@ -132,9 +132,9 @@ func (t *ThingBase) GetEntity() *physics.Entity {
 	return t.entity
 }
 
-// GetAnimation returns the sprite associated with the ThingBase instance.
-func (t *ThingBase) GetAnimation() *textures.Material {
-	return t.sprite
+// GetMaterial returns the material associated with the ThingBase instance.
+func (t *ThingBase) GetMaterial() *textures.Material {
+	return t.material
 }
 
 // GetLocation retrieves the current location associated with the ThingBase instance.

@@ -469,7 +469,7 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 	}
 	lightAmbient := vi.GetLightIntensity()
 	lightArtificial := cp.Volume.Light.GetIntensity()
-	tex := cp.Animation.CurrentFrame()
+	tex := cp.Material.CurrentFrame()
 	scaleH := tex.GetScaleFactorH()
 
 	switch cp.Kind {

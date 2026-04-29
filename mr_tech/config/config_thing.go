@@ -42,11 +42,11 @@ type Thing struct {
 	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	Md2            *MD2         `json:"md2"`
-	Animation      *Material    `json:"animation"`
+	Material       *Material    `json:"material"`
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
-func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Material) *Thing {
+func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, material *Material) *Thing {
 	return &Thing{
 		Id:             id,
 		Position:       pos,
@@ -56,7 +56,7 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Radius:         radius,
 		Height:         height,
 		Speed:          speed,
-		Animation:      anim,
+		Material:       material,
 		Restitution:    0.0,
 		WakeUpDistance: 25.0,
 		JumpForce:      200,

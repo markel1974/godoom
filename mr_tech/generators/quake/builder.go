@@ -204,9 +204,9 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			pos := p.createXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, pos)
 		}
-		animKind := config.AnimationKindLoop
+		animKind := config.MaterialKindLoop
 		if isSky {
-			animKind = config.AnimationKindSky
+			animKind = config.MaterialKindSky
 		}
 		material := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
 		triangles := p.triangulateConvex3d(points)
@@ -363,7 +363,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	var anim *config.Material
 	if len(registeredTexNames) > skinTargetIndex {
 		targetSkin := []string{registeredTexNames[skinTargetIndex]}
-		anim = config.NewConfigMaterial(targetSkin, config.AnimationKindLoop, 1.0, 1.0, 0, 0)
+		anim = config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 	}
 	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
 

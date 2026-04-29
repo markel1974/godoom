@@ -23,7 +23,7 @@ type Builder struct {
 
 // NewBuilder creates a new Builder instance and initializes its scale factor.
 func NewBuilder() *Builder {
-	return &Builder{scaleFactor: 1.0}
+	return &Builder{scaleFactor: 2.5}
 }
 
 // Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
@@ -97,11 +97,11 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			continue
 		}
 
-		const scaleW = 0.5
-		const scaleH = 0.5
+		const scaleW = 1.0
+		const scaleH = 1.5
 
 		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, sector.LightLevel*0.3, config.LightKindAmbient, 0)
+		cSector := config.NewConfigSector(secId, sector.LightLevel*0.09, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
 		cSector.FloorY = -sector.FloorY
@@ -203,6 +203,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if key == "SPIRIT" || key == "PLAYER" {
 			if configPlayer == nil {
 				configPlayer = config.NewConfigPlayer(pos, 1, 10, 100, 1, 7)
+				configPlayer.Radius = 1
 			}
 		} else {
 			//TODO

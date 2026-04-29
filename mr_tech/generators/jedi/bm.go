@@ -11,16 +11,16 @@ import (
 
 // BMHeader represents the header structure of a BM file format, including metadata and configuration details.
 type BMHeader struct {
-	Magic       [4]byte  // Magico, tipicamente inizia con "BM"
-	SizeX       uint16   // Larghezza dell'immagine
-	SizeY       uint16   // Altezza dell'immagine
-	Idc         uint16   // Identificatore/Modalità
-	Flags       uint16   // Flag (determina orientamento, es. row-major vs column-major)
-	Transparent uint8    // Indice del colore trasparente nella palette
-	LogSizeY    uint8    // Esponente di 2 per altezze di texture (utile per il wrapping)
-	Compressed  uint16   // Modalità di compressione: 0 = Raw, 1/2 = RLE (Run-Length Encoding)
-	DataSize    uint32   // Dimensione in byte della porzione dati
-	Padding     [12]byte // Spazio riservato/padding per allineamento a 32 byte
+	Magic       [4]byte  // 0x00 - Magico ("BM" + \x1E\x00)
+	SizeX       uint16   // 0x04 - Larghezza
+	SizeY       uint16   // 0x06 - Altezza
+	Idc         uint16   // 0x08 - Identificatore (0=UI/Flat, 8=Column-Major, etc.)
+	LogSizeY    uint8    // 0x0A - Esponente base 2 per tiling verticale
+	Transparent uint8    // 0x0B - 0 = Solido, > 0 = Indice 0 bucato
+	Unknown     uint16   // 0x0C - Padding/Riservato
+	Compressed  uint16   // 0x0E - Compressione (0=RAW, 1/2=RLE)
+	DataSize    uint32   // 0x10 - Dimensione del payload
+	Padding     [12]byte // 0x14 - Spazio riservato a riempimento dei 32 byte
 }
 
 // NewBMHeader creates and initializes a new BMHeader instance with default values.
@@ -155,10 +155,15 @@ func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 // mapPixelToRGBA maps a pixel with a palette index to its corresponding RGBA value in the image, applying transparency rules.
 func (bm *BMHeader) mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tIndex uint8, pal [256]color.RGBA) {
 	c := pal[pIndex]
-	if pIndex == tIndex {
-		c.A = 0 // Colore bucato (es: grate o staccionate)
+
+	// bm.Transparent è il flag nativo letto dall'header del file .BM.
+	// Se la texture è contrassegnata come trasparente E il pixel matcha l'indice chiave (solitamente 0), buca.
+	// Altrimenti, rendi il pixel solido, salvando il nero assoluto sui muri.
+	if bm.Transparent > 0 && pIndex == tIndex {
+		c.A = 0
 	} else {
 		c.A = 255
 	}
+
 	img.SetRGBA(x, y, c)
 }

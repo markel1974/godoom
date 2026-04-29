@@ -202,7 +202,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		key := CleanKey(obj.Class)
 		if key == "SPIRIT" || key == "PLAYER" {
 			if configPlayer == nil {
-				configPlayer = config.NewConfigPlayer(pos, 1, 10, 100, 1, 8)
+				configPlayer = config.NewConfigPlayer(pos, 1, 10, 100, 1, 7)
 			}
 		} else {
 			//TODO

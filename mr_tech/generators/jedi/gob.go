@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+const (
+	ExtLevel = ".LEV"
+)
+
 // GobHeader represents the header of a GOB file, containing magic bytes and master offset.
 type GobHeader struct {
 	Magic     [4]byte
@@ -51,6 +55,7 @@ func (g *Gob) Read() ([]byte, error) {
 type GobHandler struct {
 	entries map[string]*Gob
 	files   []*os.File
+	levels  []string
 }
 
 // NewGobHandler initializes and returns a new instance of GobHandler with an empty entry map.
@@ -112,19 +117,16 @@ func (g *GobHandler) add(filename string) error {
 		}
 		cleanName := strings.ToUpper(string(entry.Name[:nameLen]))
 		g.entries[cleanName] = NewGob(f, entry)
+		if pos := strings.Index(cleanName, ExtLevel); pos > 0 {
+			g.levels = append(g.levels, cleanName[:pos])
+		}
 	}
 	return nil
 }
 
-// Find searches for and returns a list of entry names that contain the specified pattern as a substring.
-func (g *GobHandler) Find(pattern string) []string {
-	var out []string
-	for k := range g.entries {
-		if strings.Contains(k, pattern) {
-			out = append(out, k)
-		}
-	}
-	return out
+// GetLevels returns a slice of strings containing the names of all level entries identified in the GOB files.
+func (g *GobHandler) GetLevels() []string {
+	return g.levels
 }
 
 // GetPayload retrieves the payload data associated with the specified name in uppercase from the GobHandler entries map.

@@ -50,22 +50,6 @@ func NewWall() *Wall {
 	}
 }
 
-// Sector represents a sector in a level, containing geometric and texture data, as well as lighting and wall information.
-type Sector struct {
-	Id             int
-	FloorY         float64
-	CeilingY       float64
-	FloorTexture   int
-	CeilingTexture int
-	LightLevel     float64
-	Vertices       []geometry.XY
-	Walls          []*Wall
-}
-
-func NewSector(id int) *Sector {
-	return &Sector{Id: id}
-}
-
 // Level represents a game level containing textures and multiple sectors for defining its structure.
 type Level struct {
 	Textures []string
@@ -174,6 +158,12 @@ func (p *Level) Parse(r io.Reader) error {
 					}
 					p.Textures[id] = tokens[1]
 				}
+			}
+		case "FLAGS":
+			if sector != nil && len(tokens) >= 4 {
+				sector.Flags[0], _ = strconv.Atoi(tokens[1])
+				sector.Flags[1], _ = strconv.Atoi(tokens[2])
+				sector.Flags[2], _ = strconv.Atoi(tokens[3])
 			}
 		default:
 			if mode == modeVertices {

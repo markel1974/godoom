@@ -3,9 +3,7 @@ package jedi
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -37,10 +35,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		return nil, err
 	}
 	defer d.Close()
-	levels := d.Find(".LEV")
-	if len(levels) == 0 {
-		return nil, fmt.Errorf("no levels found")
-	}
+	levels := d.GetLevels()
 	levelNumber -= 1
 	if levelNumber <= 0 {
 		levelNumber = 0
@@ -48,21 +43,23 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	if levelNumber > len(levels) {
 		return nil, fmt.Errorf("level %d not found (%d)", levelNumber, len(levels))
 	}
-	levelName := levels[levelNumber]
-	baseName := strings.TrimSuffix(filepath.Base(levelName), filepath.Ext(levelName))
-	levelData, err := d.GetPayload(baseName + ".LEV")
+	baseName := levels[levelNumber]
+	levelName := baseName + ExtLevel
+
+	levelData, err := d.GetPayload(levelName)
 	if err != nil {
-		return nil, fmt.Errorf("geometria %s.LEV mancante: %w", baseName, err)
+		return nil, fmt.Errorf("error reading %s: %w", levelName, err)
 	}
 
 	level := NewLevel()
 	if err = level.Parse(bytes.NewReader(levelData)); err != nil {
-		return nil, fmt.Errorf("errore sintattico in %s.LEV: %w", baseName, err)
+		return nil, fmt.Errorf("syntax error in %s: %w", levelName, err)
 	}
 
-	entitiesData, err := d.GetPayload(baseName + ".O")
+	entitiesName := baseName + ".O"
+	entitiesData, err := d.GetPayload(entitiesName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading %s: %w", entitiesName, err)
 	}
 
 	entities := NewEntities()
@@ -74,14 +71,14 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	if err != nil {
 		palData, err = d.GetPayload("SECBASE.PAL")
 		if err != nil {
-			return nil, fmt.Errorf("master palette non trovata: %w", err)
+			return nil, fmt.Errorf("master palette non found: %w", err)
 		}
 	}
 
 	palette := NewPalette()
 	colorPal, err := palette.Parse(bytes.NewReader(palData))
 	if err != nil {
-		return nil, fmt.Errorf("errore parsing palette VGA: %w", err)
+		return nil, fmt.Errorf("error parsing palette: %w", err)
 	}
 
 	bm := NewBM()
@@ -113,6 +110,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		//fmt.Println("---------------------------------------")
 		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
 
+		isSky := sector.IsSky()
+
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
@@ -120,12 +119,18 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE")
 		}
+
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
+			animKind := config.AnimationKindLoop
+			if isSky {
+				animKind = config.AnimationKindSky
+				cSector.Light.Kind = config.LightKindOpenAir
+			}
+			cSector.Ceil = config.NewConfigAnimation(names, animKind, scaleW, scaleH)
 		} else {
-			fmt.Println("MISSING CEILING_EXTURE")
+			fmt.Println("MISSING CEILING_TEXTURE")
 		}
 
 		wallCount := len(sector.Walls)
@@ -140,36 +145,39 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				v2 := sector.Vertices[wall.RightVertex]
 
 				globalVertices = append(globalVertices, v1)
-				//globalVertices = append(globalVertices, v2)
+				globalVertices = append(globalVertices, v2)
 
 				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v2, v1)
-				//cSeg.Id = strconv.Itoa(wall.Id)
 
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 
-				//fmt.Println("SEGMENT ", cSeg.Start, cSeg.End)
 				if wall.MidTexture >= 0 {
 					texName := level.GetTexture(wall.MidTexture)
 					names := textures.AddTexture(d, bm, texName, colorPal)
 					cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
-				} else {
+				} else if wall.Adjoin < 0 {
 					fmt.Println("MISSING MID_TEXTURE")
 				}
+
 				if wall.Adjoin >= 0 {
 					if wall.Adjoin < len(level.Sectors) {
+						// Corretto: per mr_tech i portali devono essere SegmentUnknown per l'attraversamento
 						cSeg.Kind = config.SegmentUnknown
 
 						adjSec := level.Sectors[wall.Adjoin]
+						adjIsSky := adjSec.IsSky()
 
-						if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
+						if isSky && adjIsSky {
+							cSeg.Upper = config.NewConfigAnimation(nil, config.AnimationKindNone, scaleW, scaleH)
+						} else if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
+							// UPPER TEXTURE STANDARD (uno dei due settori è un interno chiuso)
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 						}
 
-						// FIX MATEMATICO: Lower Texture
-						// 10 (Pavimento Profondo) > 0 (Pavimento Rialzato) -> TRUE
+						// --- 2. GESTIONE LOWER WALL ---
 						if sector.FloorY > adjSec.FloorY && wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
@@ -182,6 +190,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				cSector.Segments = append(cSector.Segments, cSeg)
 			}
 		}
+
 		configSectors = append(configSectors, cSector)
 	}
 

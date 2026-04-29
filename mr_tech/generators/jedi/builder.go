@@ -89,8 +89,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if sector.Id < 0 {
 			continue
 		}
+
+		const scaleW = 0.5
+		const scaleH = 0.5
+
 		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, sector.LightLevel, config.LightKindAmbient, 0)
+		cSector := config.NewConfigSector(secId, sector.LightLevel*0.3, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
 		cSector.FloorY = -sector.FloorY
@@ -102,14 +106,14 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			cSector.Floor = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+			cSector.Floor = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE")
 		}
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+			cSector.Ceil = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 		} else {
 			fmt.Println("MISSING CEILING_EXTURE")
 		}
@@ -138,23 +142,28 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				if wall.MidTexture >= 0 {
 					texName := level.GetTexture(wall.MidTexture)
 					names := textures.AddTexture(d, bm, texName, colorPal)
-					cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+					cSeg.Middle = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 				} else {
 					fmt.Println("MISSING MID_TEXTURE")
 				}
 				if wall.Adjoin >= 0 {
-					cSeg.Kind = config.SegmentUnknown
 					if wall.Adjoin < len(level.Sectors) {
+						cSeg.Kind = config.SegmentUnknown
+
 						adjSec := level.Sectors[wall.Adjoin]
-						if sector.CeilingY > adjSec.CeilingY && wall.TopTexture >= 0 {
+
+						if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+							cSeg.Upper = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 						}
-						if sector.FloorY < adjSec.FloorY && wall.BotTexture >= 0 {
+
+						// FIX MATEMATICO: Lower Texture
+						// 10 (Pavimento Profondo) > 0 (Pavimento Rialzato) -> TRUE
+						if sector.FloorY > adjSec.FloorY && wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, 1.0, 1.0)
+							cSeg.Lower = config.NewConfigAnimation(names, config.AnimationKindLoop, scaleW, scaleH)
 						}
 					} else {
 						fmt.Println("INVALID ADJOIN")

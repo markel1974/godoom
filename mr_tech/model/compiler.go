@@ -41,7 +41,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	full3d := cfg.Calibration.Full3d
 
 	cfg.Scale(r.gScale)
-	animations := NewAnimations(cfg.GetTextures(), r.gScale)
+	animations := NewMaterials(cfg.GetTextures(), r.gScale)
 	r.lights = NewLights()
 	var container2d []*Volume
 
@@ -125,13 +125,13 @@ func (r *Compiler) GetCalibration() *Calibration {
 }
 
 // compile2d constructs and processes game volumes based on configuration data, animations, and geometry relationships.
-func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Animations) []*Volume {
+func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Materials) []*Volume {
 	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Volume
 	var fixFaces []*Face
 	facesTree := physics.NewAABBTree(1024, epsilon)
-	emptyAnim := anim.GetAnimation(nil)
+	emptyAnim := anim.GetMaterial(nil)
 
 	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
@@ -152,7 +152,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					fmt.Println("wrong tri", tri)
 					continue
 				}
-				volumeMaterials := []*textures.Animation{anim.GetAnimation(cs.Floor), anim.GetAnimation(cs.Ceil)}
+				volumeMaterials := []*textures.Material{anim.GetMaterial(cs.Floor), anim.GetMaterial(cs.Ceil)}
 				volume := NewVolume2d(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
 				modelSectorId++
 				// Maintains consistent Winding Order for ContainsPoint
@@ -173,13 +173,13 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 						if (p1 == cn.Start && p2 == cn.End) || (p1 == cn.End && p2 == cn.Start) {
 							isWall = cn.Kind == config.SegmentWall
 							tag = cn.Tag
-							upper = anim.GetAnimation(cn.Upper)
-							middle = anim.GetAnimation(cn.Middle)
-							lower = anim.GetAnimation(cn.Lower)
+							upper = anim.GetMaterial(cn.Upper)
+							middle = anim.GetMaterial(cn.Middle)
+							lower = anim.GetMaterial(cn.Lower)
 							break
 						}
 					}
-					faceMaterials := []*textures.Animation{upper, middle, lower}
+					faceMaterials := []*textures.Material{upper, middle, lower}
 					face := NewFace2d(nil, start, end, tag, faceMaterials)
 					volume.AddFace(face)
 					volume.AddTag(tag)
@@ -248,7 +248,7 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	var volumes3d []*Volume
 	volMap := make(map[*Volume]*Volume)
 
-	buildQuad := func(vol3d *Volume, f2d *Face, zBottom, zTop float64, tag string, material *textures.Animation) {
+	buildQuad := func(vol3d *Volume, f2d *Face, zBottom, zTop float64, tag string, material *textures.Material) {
 		start := f2d.GetStart()
 		end := f2d.GetEnd()
 		v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBottom} // Bottom-Start
@@ -336,7 +336,7 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 }
 
 // compile3d constructs 3D volumes from configurations and animations, linking geometry and calculating adjacency portals.
-func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volume {
+func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volume {
 	totalFaces := 0
 	var container []*Volume
 	var fixFaces []*Face
@@ -353,7 +353,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Animations) []*Volu
 				fmt.Println("wrong points configuration", cf.Points)
 				continue
 			}
-			material := anim.GetAnimation(cf.Material)
+			material := anim.GetMaterial(cf.Material)
 			// Robust polygon decomposition (Supports concave N-Gons)
 			triangles := geometry.Triangulate3d(pts)
 			for _, t := range triangles {

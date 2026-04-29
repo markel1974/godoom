@@ -9,12 +9,12 @@ import (
 type Face struct {
 	Id       string         `json:"id"`
 	Points   []geometry.XYZ `json:"points"`
-	Material *Animation     `json:"material"`
+	Material *Material      `json:"material"`
 	Tag      string         `json:"tag"`
 }
 
 // NewConfigFace creates and returns a pointer to a Face instance with specified points, kind, neighbor, material, and tag.
-func NewConfigFace(points []geometry.XYZ, material *Animation, tag string) *Face {
+func NewConfigFace(points []geometry.XYZ, material *Material, tag string) *Face {
 	return &Face{
 		Id:       utils.NextUUId(),
 		Points:   points,

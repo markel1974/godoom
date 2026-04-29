@@ -129,7 +129,7 @@ func (w *BuilderScene) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *eng
 }
 
 // pushWall processes polygonal wall data, calculates texture mapping, and adds the wall's vertices and triangles to the scene.
-func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Material, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -169,7 +169,7 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 
 // pushFlat processes and renders a flat surface using the given polygon key, animation, and Z-coordinate.
 // It returns a texture if the animation is of type sky or a nil value in other cases.
-func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.CompiledPolygon, anim *textures.Material, zF float32) *textures.Texture {
 	if anim.Kind() == int(config.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}

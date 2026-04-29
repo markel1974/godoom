@@ -19,7 +19,7 @@ type Things struct {
 	full3d           bool
 	config           []*config.Thing
 	volumes          *Volumes
-	animations       *Animations
+	animations       *Materials
 	tree             *physics.AABBTree
 	pending          []IThing
 	pendingIdx       atomic.Int32
@@ -37,7 +37,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, animations *Animations) *Things {
+func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, animations *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
@@ -124,7 +124,7 @@ func (th *Things) GetVolumes() *Volumes {
 	return th.volumes
 }
 
-// GetTextures fetches the ITextures instance from the associated Animations object.
+// GetTextures fetches the ITextures instance from the associated Materials object.
 func (th *Things) GetTextures() textures.ITextures {
 	return th.animations.GetTextures()
 }
@@ -155,17 +155,17 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingEnemy(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	case config.ThingThrowableDef:
-		thing = NewThingThrowable(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingThrowable(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	case config.ThingItemDef:
-		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	default:
-		thing = NewThingItem(th, ct, th.animations.GetAnimation(ct.Animation), volume)
+		thing = NewThingItem(th, ct, th.animations.GetMaterial(ct.Animation), volume)
 	}
 	return thing
 }

@@ -7,8 +7,8 @@ type Sector struct {
 	Id       string     `json:"id"`
 	CeilY    float64    `json:"ceilY"`
 	FloorY   float64    `json:"floorY"`
-	Ceil     *Animation `json:"ceil"`
-	Floor    *Animation `json:"floor"`
+	Ceil     *Material  `json:"ceil"`
+	Floor    *Material  `json:"floor"`
 	Light    *Light     `json:"light"`
 	Segments []*Segment `json:"segments"`
 	Tag      string     `json:"tag"`

@@ -30,8 +30,8 @@ func TickGrouped(tick uint64, groupSize int) float64 {
 	return frameFloat
 }
 
-// Animation represents a collection of 2D texture frames used for rendering animations.
-type Animation struct {
+// Material represents a collection of 2D texture frames used for rendering animations.
+type Material struct {
 	frame       *Texture
 	frames      []*Texture
 	totalFrames uint64
@@ -41,9 +41,9 @@ type Animation struct {
 	scaleH      float64
 }
 
-// NewAnimation creates a new Animation instance from a provided slice of Texture pointers.
+// NewMaterial creates a new Material instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewAnimation(frames []*Texture, kind int, gScale float64, scaleW float64, scaleH float64) *Animation {
+func NewMaterial(frames []*Texture, kind int, gScale float64, scaleW float64, scaleH float64) *Material {
 	if gScale == 0 {
 		gScale = 1
 	}
@@ -53,7 +53,7 @@ func NewAnimation(frames []*Texture, kind int, gScale float64, scaleW float64, s
 	if scaleH == 0 {
 		scaleH = 1
 	}
-	a := &Animation{
+	a := &Material{
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
@@ -78,12 +78,12 @@ func NewAnimation(frames []*Texture, kind int, gScale float64, scaleW float64, s
 }
 
 // Kind returns the type of the animation as an integer value.
-func (a *Animation) Kind() int {
+func (a *Material) Kind() int {
 	return a.kind
 }
 
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
-func (a *Animation) CurrentFrame() *Texture {
+func (a *Material) CurrentFrame() *Texture {
 	if a.totalFrames > 1 {
 		frameIdx := (_globalTick / _tickInterval) % a.totalFrames
 		return a.frames[frameIdx]

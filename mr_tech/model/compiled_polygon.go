@@ -39,9 +39,9 @@ type CompiledPolygon struct {
 	Tz2            float64
 	U0             float64
 	U1             float64
-	Animation      *textures.Animation
-	AnimationCeil  *textures.Animation
-	AnimationFloor *textures.Animation
+	Animation      *textures.Material
+	AnimationCeil  *textures.Material
+	AnimationFloor *textures.Material
 }
 
 // NewCompiledPolygon creates and returns a pointer to an empty CompiledPolygon with preallocated points.
@@ -134,7 +134,7 @@ func (cp *CompiledPolygons) Clear() {
 }
 
 // Acquire assigns properties to a `CompiledPolygon` from the pool and returns the initialized instance.
-func (cp *CompiledPolygons) Acquire(volume *Volume, neighbor *Volume, kind int, c, f, t *textures.Animation, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
+func (cp *CompiledPolygons) Acquire(volume *Volume, neighbor *Volume, kind int, c, f, t *textures.Material, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
 	if cp.idx >= len(cp.data) {
 		cp.Grow()
 	}

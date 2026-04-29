@@ -208,7 +208,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		if isSky {
 			animKind = config.AnimationKindSky
 		}
-		material := config.NewConfigAnimation([]string{texName}, animKind, 1.0, 1.0)
+		material := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
 		triangles := p.triangulateConvex3d(points)
 		for _, tri := range triangles {
 			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
@@ -360,16 +360,16 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		kind = config.ThingItemDef
 	}
 
-	var anim *config.Animation
+	var anim *config.Material
 	if len(registeredTexNames) > skinTargetIndex {
 		targetSkin := []string{registeredTexNames[skinTargetIndex]}
-		anim = config.NewConfigAnimation(targetSkin, config.AnimationKindLoop, 1.0, 1.0)
+		anim = config.NewConfigMaterial(targetSkin, config.AnimationKindLoop, 1.0, 1.0, 0, 0)
 	}
 	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
 
-	cModel := &config.Model3d{Frames: make([]config.Frame3d, mdl.Header.NumFrames)}
+	cModel := &config.MD2{Frames: make([]config.MD2Frame, mdl.Header.NumFrames)}
 	for idx, f := range mdl.Frames {
-		cFrame := config.Frame3d{Triangles: make([][3]config.Vertex3d, mdl.Header.NumTris)}
+		cFrame := config.MD2Frame{Triangles: make([][3]config.MD2Vertex, mdl.Header.NumTris)}
 		skinW := float32(mdl.Header.SkinWidth)
 		skinH := float32(mdl.Header.SkinHeight)
 		for tIdx, tri := range mdl.Triangles {
@@ -383,7 +383,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cFrame.Triangles[tIdx][v] = config.Vertex3d{Pos: p.createXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cFrame.Triangles[tIdx][v] = config.MD2Vertex{Pos: p.createXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 		}
 		cModel.Frames[idx] = cFrame
@@ -420,9 +420,9 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 			_ = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false)
 		}
 	}
-	// 3. Traduzione Geometria in Model3d Agnostico
+	// 3. Traduzione Geometria in MD2 Agnostico
 	// Raccogliamo tutti i triangoli in questo singolo frame
-	var allTriangles [][3]config.Vertex3d
+	var allTriangles [][3]config.MD2Vertex
 	model := bspModels[0] // Il modello root dell'oggetto
 	for i := int32(0); i < model.NumFaces; i++ {
 		faceIdx := model.FirstFace + i
@@ -445,7 +445,7 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 		// Triangolazione del poligono della faccia
 		rawTriangles := p.triangulateConvex3d(points)
 		for _, rawTri := range rawTriangles {
-			tri := [3]config.Vertex3d{
+			tri := [3]config.MD2Vertex{
 				{Pos: rawTri[0], U: 0.0, V: 0.0}, // Placeholder UV, andrebbe calcolato
 				{Pos: rawTri[1], U: 1.0, V: 0.0},
 				{Pos: rawTri[2], U: 0.0, V: 1.0},
@@ -454,7 +454,7 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 		}
 	}
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
-	model3d := &config.Model3d{Frames: make([]config.Frame3d, 1)}
+	model3d := &config.MD2{Frames: make([]config.MD2Frame, 1)}
 	model3d.Frames[0].Triangles = allTriangles
 
 	// 4. Iniezione nel ConfigThing

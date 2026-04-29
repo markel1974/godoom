@@ -60,8 +60,8 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 
 	floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
 	ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
-	sector.Floor = config.NewConfigAnimation(floorT, config.AnimationKindLoop, scaleW, scaleH)
-	sector.Ceil = config.NewConfigAnimation(ceilT, config.AnimationKindLoop, scaleW, scaleH)
+	sector.Floor = config.NewConfigMaterial(floorT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+	sector.Ceil = config.NewConfigMaterial(ceilT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
 
 	pts := [4]geometry.XY{
 		{X: x, Y: y},
@@ -80,9 +80,9 @@ func createCube(x float64, y float64, max float64, floor float64, ceil float64) 
 		upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
 		lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
 		middleT := []string{availableWall[random(0, len(availableWall)-1)]}
-		seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, scaleW, scaleH)
-		seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, scaleW, scaleH)
-		seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, scaleW, scaleH)
+		seg.Upper = config.NewConfigMaterial(upperT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+		seg.Lower = config.NewConfigMaterial(lowerT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+		seg.Middle = config.NewConfigMaterial(middleT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -183,8 +183,8 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 
 			floorT := []string{availableFloor[random(0, len(availableFloor)-1)]}
 			ceilT := []string{availableCeil[random(0, len(availableCeil)-1)]}
-			sector.Floor = config.NewConfigAnimation(floorT, config.AnimationKindLoop, scaleW, scaleH)
-			sector.Ceil = config.NewConfigAnimation(ceilT, config.AnimationKindLoop, scaleW, scaleH)
+			sector.Floor = config.NewConfigMaterial(floorT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+			sector.Ceil = config.NewConfigMaterial(ceilT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
 
 			sectorGrid[x][y] = sector
 			cfg.Sectors = append(cfg.Sectors, sector)
@@ -229,9 +229,9 @@ func generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float6
 				upperT := []string{availableUpper[random(0, len(availableUpper)-1)]}
 				lowerT := []string{availableLower[random(0, len(availableLower)-1)]}
 				middleT := []string{availableWall[random(0, len(availableWall)-1)]}
-				seg.Upper = config.NewConfigAnimation(upperT, config.AnimationKindLoop, scaleW, scaleH)
-				seg.Lower = config.NewConfigAnimation(lowerT, config.AnimationKindLoop, scaleW, scaleH)
-				seg.Middle = config.NewConfigAnimation(middleT, config.AnimationKindLoop, scaleW, scaleH)
+				seg.Upper = config.NewConfigMaterial(upperT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+				seg.Lower = config.NewConfigMaterial(lowerT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
+				seg.Middle = config.NewConfigMaterial(middleT, config.AnimationKindLoop, scaleW, scaleH, 0, 0)
 
 				sector.Segments = append(sector.Segments, seg)
 			}

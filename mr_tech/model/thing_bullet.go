@@ -13,7 +13,7 @@ type ThingThrowable struct {
 }
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
-func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingThrowable {
+func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingThrowable {
 	pos := cfg.Position
 	p := &ThingThrowable{
 		ThingBase: NewThingBase(things, cfg, pos, anim, volume),

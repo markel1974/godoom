@@ -177,8 +177,8 @@ func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*text
 }
 
 /*
-// GetAnimation trasforma un nome texture in un oggetto Animation pronto per il compilatore.
-func (w *Textures) GetAnimation(name string) *configAnimation {
+// GetMaterial trasforma un nome texture in un oggetto Material pronto per il compilatore.
+func (w *Textures) GetMaterial(name string) *configAnimation {
 	tex := w.Get([]string{name})
 	if tex == nil {
 		return nil

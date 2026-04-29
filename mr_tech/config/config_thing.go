@@ -25,23 +25,6 @@ const (
 	ThingItemDef
 )
 
-// Vertex3d represents a 3D vertex with position (XYZ) and texture coordinates (U, V).
-type Vertex3d struct {
-	Pos geometry.XYZ
-	U   float32
-	V   float32
-}
-
-// Frame3d represents a 3D frame composed of a collection of triangles, where each triangle contains three Vertex3d points.
-type Frame3d struct {
-	Triangles [][3]Vertex3d
-}
-
-// Model3d represents a 3D model consisting of multiple frames, where each frame is composed of 3D triangles.
-type Model3d struct {
-	Frames []Frame3d
-}
-
 // Thing represents a physical or logical entity with position, dimensions, motion properties, and optional animations or models.
 type Thing struct {
 	Id             string       `json:"id"`
@@ -58,12 +41,12 @@ type Thing struct {
 	JumpForce      float64      `json:"jumpForce"`
 	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
-	Model3D        *Model3d     `json:"model3d"`
-	Animation      *Animation   `json:"animation"`
+	Md2            *MD2         `json:"md2"`
+	Animation      *Material    `json:"animation"`
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
-func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Animation) *Thing {
+func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, anim *Material) *Thing {
 	return &Thing{
 		Id:             id,
 		Position:       pos,
@@ -86,7 +69,7 @@ func (t *Thing) Scale(scale float64) {
 	t.Position.Scale(scale)
 }
 
-// SetModel3d assigns the provided 3D model to the Thing's Model3D field.
-func (t *Thing) SetModel3d(model *Model3d) {
-	t.Model3D = model
+// SetModel3d assigns the provided 3D model to the Thing's Md2 field.
+func (t *Thing) SetModel3d(model *MD2) {
+	t.Md2 = model
 }

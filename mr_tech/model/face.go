@@ -18,8 +18,8 @@ type Face struct {
 	tri        [3]geometry.XYZ
 	normal     geometry.XYZ
 	normalAbs  geometry.XYZ
-	animations []*textures.Animation
-	material   *textures.Animation
+	animations []*textures.Material
+	material   *textures.Material
 	minZ       float64
 	maxZ       float64
 	hasFixedZ  bool
@@ -29,7 +29,7 @@ type Face struct {
 }
 
 // NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture animations.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Animation) *Face {
+func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, animations []*textures.Material) *Face {
 	out := &Face{
 		hasFixedZ:  true,
 		neighbor:   neighbor,
@@ -37,7 +37,7 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 		minZ:       0,
 		maxZ:       0,
 		aabb:       physics.NewAABB(),
-		animations: []*textures.Animation{nil},
+		animations: []*textures.Material{nil},
 		lockUV:     false,
 	}
 	if len(animations) > 0 {
@@ -51,7 +51,7 @@ func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string,
 }
 
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Animation) *Face {
+func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Material) *Face {
 	out := &Face{
 		hasFixedZ: false,
 		neighbor:  neighbor,
@@ -155,8 +155,8 @@ func (s *Face) GetEnd() geometry.XYZ {
 	return s.tri[2]
 }
 
-// GetAnimationIndex retrieves the Animation object corresponding to the given material index.
-func (s *Face) GetAnimationIndex(m int) *textures.Animation {
+// GetAnimationIndex retrieves the Material object corresponding to the given material index.
+func (s *Face) GetAnimationIndex(m int) *textures.Material {
 	//0 Upper, 1 Middle, 2 Lower
 	idx := m % len(s.animations)
 	return s.animations[idx]

@@ -14,7 +14,7 @@ type Volume struct {
 	id         string
 	faces      []*Face
 	tag        string
-	animations []*textures.Animation
+	animations []*textures.Material
 	Light      *Light
 	entity     *physics.Entity
 	minZ       float64
@@ -28,7 +28,7 @@ const solidRestitution = 0.0
 const solidFriction = 0.2
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
-func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, animations []*textures.Animation, tag string) *Volume {
+func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, animations []*textures.Material, tag string) *Volume {
 	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction)
 	v.hasFixedZ = true
 	v.minZ = minZ
@@ -54,7 +54,7 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		minZ:       0,
 		maxZ:       0,
 		hasFixedZ:  false,
-		animations: []*textures.Animation{nil},
+		animations: []*textures.Material{nil},
 		entity:     physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction),
 		facesTree:  physics.NewAABBTree(64, 0.0),
 	}
@@ -162,8 +162,8 @@ func (v *Volume) GetMaxZ() float64 {
 	return v.entity.GetAABB().GetMaxZ()
 }
 
-// GetAnimation retrieves a material animation from the location's materials list based on the provided index modulo the list size.
-func (v *Volume) GetAnimation(m int) *textures.Animation {
+// GetAnimation retrieves a material sprite from the location's materials list based on the provided index modulo the list size.
+func (v *Volume) GetAnimation(m int) *textures.Material {
 	//floor 0, ceil 1
 	idx := m % len(v.animations)
 	return v.animations[idx]

@@ -183,7 +183,7 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 }
 
 // pushWall adds a textured wall polygon to the batch using the specified view matrix, polygon key, animation, and height range.
-func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, cp PolyKey, anim *textures.Animation, zBottom, zTop float32) {
+func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, cp PolyKey, anim *textures.Material, zBottom, zTop float32) {
 	tex := anim.CurrentFrame()
 	if tex == nil {
 		return
@@ -224,7 +224,7 @@ func (w *BuilderTraverse) pushWall(fv *FrameVertices, dc *DrawCommands, vi *mode
 }
 
 // pushFlat processes a flat surface for rendering, computes its vertices and indices, and adds draw commands.
-func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyKey, anim *textures.Animation, zF float32) *textures.Texture {
+func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyKey, anim *textures.Material, zF float32) *textures.Texture {
 	if anim.Kind() == int(config.AnimationKindSky) {
 		return anim.CurrentFrame()
 	}

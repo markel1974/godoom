@@ -19,7 +19,7 @@ type ThingEnemy struct {
 }
 
 // NewThingEnemy creates and initializes a new ThingEnemy instance.
-func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Animation, volume *Volume) *ThingEnemy {
+func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
 	if cfg.Speed <= 0 {
 		cfg.Speed = 6

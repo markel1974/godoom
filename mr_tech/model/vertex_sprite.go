@@ -10,8 +10,8 @@ type VertexSprite struct {
 	volume *Volume
 }
 
-// NewVertexSprite creates a new VertexSprite with the given animation, position, dimensions, and physical properties.
-func NewVertexSprite(anim *textures.Animation, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
+// NewVertexSprite creates a new VertexSprite with the given sprite, position, dimensions, and physical properties.
+func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
 	height := h
 	width := w
 	halfW := width / 2.0

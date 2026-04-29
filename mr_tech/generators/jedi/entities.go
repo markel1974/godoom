@@ -2,6 +2,7 @@ package jedi
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -34,55 +35,110 @@ func NewEntities() *Entities {
 
 // Parse reads and parses input data from the provided io.Reader to populate the Entities struct with level and object data.
 func (e *Entities) Parse(r io.Reader) error {
+
+	insideComment := false
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+		baseLine := scanner.Text()
+		if !insideComment {
+			if p0 := strings.Index(baseLine, "/*"); p0 >= 0 {
+				if p1 := strings.Index(baseLine, "*/"); p1 >= 0 {
+					baseLine = baseLine[:p0] + baseLine[p1+2:]
+				} else {
+					insideComment = true
+					baseLine = baseLine[:p0]
+				}
+			}
+		} else {
+			if p := strings.Index(baseLine, "*/"); p >= 0 {
+				insideComment = false
+				baseLine = baseLine[p+2:]
+			} else {
+				continue
+			}
 		}
+		line := strings.TrimSpace(baseLine)
 		tokens := strings.Fields(line)
 		if len(tokens) == 0 {
 			continue
 		}
-		rootKey := CleanKey(tokens[0])
+		rootKey := strings.TrimSpace(strings.ToUpper(tokens[0]))
+		if len(rootKey) == 0 {
+			continue
+		}
 		switch rootKey {
-		case "LEVELNAME":
+		case "FLAGS:": // TODO IMPLEMENT
+		case "D_YAW:": // IMPLEMENT
+		case "EYE:": // TODO IMPLEMENT
+		case "LOGIC:": // TODO IMPLEMENT
+		case "SEQ": // TODO IMPLEMENT
+		case "SEQEND": // TODO IMPLEMENT
+		case "PODS": // TODO IMPLEMENT
+		case "POD:": // TODO IMPLEMENT
+		case "SPR:": // TODO IMPLEMENT
+		case "FME:": // TODO IMPLEMENT
+		case "SOUND:": // TODO IMPLEMENT
+		case "TYPE:": // TODO IMPLEMENT
+		case "HEIGHT:": // TODO IMPLEMENT
+		case "RADIUS:": // TODO IMPLEMENT
+		case "DELAY:":
+		case "INTERVAL:":
+		case "MAX_ALIVE:":
+		case "MIN_DIST:":
+		case "MAX_DIST:":
+		case "NUM_TERMINATE:":
+		case "PAUSE:":
+		case "VUE:":
+		case "VUE_APPEND:":
+		case "BOSS:":
+
+		case "O": // TODO IMPLEMENT
+		case "FMES": // TODO IMPLEMENT
+		case "SPRS": // TODO IMPLEMENT
+		case "OBJECTS": // TODO IMPLEMENT
+		case "SOUNDS": // TODO IMPLEMENT
+		case "LEVELNAME": // TODO IMPLEMENT
 			if len(tokens) > 1 {
 				e.LevelName = tokens[1]
 			}
-		case "CLASS":
+		case "CLASS:":
 			obj := NewObject()
 			for i := 0; i < len(tokens); i += 2 {
 				next := i + 1
 				if next >= len(tokens) {
 					break
 				}
-				key := CleanKey(tokens[i])
+				key := strings.TrimSpace(strings.ToUpper(tokens[i]))
 				val := tokens[next]
 
 				switch key {
-				case "CLASS":
+				case "CLASS:":
 					obj.Class = val
-				case "DATA":
+				case "DATA:":
 					obj.Data = val
-				case "X":
+				case "X:":
 					obj.X, _ = strconv.ParseFloat(val, 64)
-				case "Y":
+				case "Y:":
 					obj.Y, _ = strconv.ParseFloat(val, 64)
-				case "Z":
+				case "Z:":
 					obj.Z, _ = strconv.ParseFloat(val, 64)
-				case "YAW":
+				case "YAW:":
 					obj.Yaw, _ = strconv.ParseFloat(val, 64)
-				case "PITCH":
+				case "PITCH:", "PCH:":
 					obj.Pitch, _ = strconv.ParseFloat(val, 64)
-				case "ROLL":
+				case "ROLL:", "ROL:":
 					obj.Roll, _ = strconv.ParseFloat(val, 64)
-				case "DIFF":
+				case "DIFF:":
 					obj.Diff, _ = strconv.Atoi(val)
+				default:
+					fmt.Println("Unknown CLASS object attribute: ", key)
 				}
 			}
 			e.Objects = append(e.Objects, obj)
+		default:
+			fmt.Println("Unknown LEVEL object attribute: ", rootKey)
 		}
+
 	}
 	return scanner.Err()
 }

@@ -1,7 +1,6 @@
 package jedi
 
 import (
-	"encoding/binary"
 	"image/color"
 	"io"
 )
@@ -30,19 +29,4 @@ func (p *Palette) Parse(r io.Reader) ([256]color.RGBA, error) {
 		}
 	}
 	return pal, nil
-}
-
-// ColorMap contiene i 64 livelli di shading. 0 = Full Bright, 63 = Pitch Black.
-type ColorMap struct {
-	LightMaps [64][256]byte
-}
-
-func ParseCMP(r io.Reader) (*ColorMap, error) {
-	cmp := &ColorMap{}
-	// Il file CMP standard inizia con la mappa di illuminazione principale (16384 byte)
-	if err := binary.Read(r, binary.LittleEndian, &cmp.LightMaps); err != nil {
-		return nil, err
-	}
-	// (Omette l'estrazione delle mappe di tinting per i visori/gas/danni per brevità)
-	return cmp, nil
 }

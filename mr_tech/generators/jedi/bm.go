@@ -43,7 +43,7 @@ func (b *BM) Parse(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) 
 	if err := binary.Read(r, binary.LittleEndian, header); err != nil {
 		return nil, err
 	}
-	img, err := header.Decode(r, palette)
+	img, err := header.decode(r, palette)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (b *BM) Parse(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) 
 }
 
 // Decode parses image data from the provided reader using the BMHeader properties and palette, returning decoded frames or an error.
-func (bm *BMHeader) Decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
+func (bm *BMHeader) decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA, error) {
 	if bm.Magic[0] != 'B' || bm.Magic[1] != 'M' {
 		return nil, fmt.Errorf("firma non valida per file BM: %s", string(bm.Magic[:]))
 	}

@@ -9,13 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// levelNames holds the list of level identifiers used as base names for accessing level-specific configurations and data.
-//var __levelNames = []string{
-//	"SECBASE", "TALAY", "SEWERS", "TEST", "GROMAS", "DTENTION",
-//	"RAMSHEAD", "ROBOTICS", "NARSHADA", "JABBSHIP", "IMPCITY",
-//	"FUELSTAT", "EXECUTOR", "ARC",
-//}
-
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
 	scaleFactor float64
@@ -100,7 +93,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 		const scaleW = 1.0
 		const scaleH = 1.5
-		const scaleLight = 0.3 //0.09
+		const scaleLight = 0.15 //0.09
 
 		secId := strconv.Itoa(sector.Id)
 		cSector := config.NewConfigSector(secId, sector.LightLevel*scaleLight, config.LightKindAmbient, 0)
@@ -177,15 +170,15 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 						adjIsSky := adjSec.IsSky()
 
 						if isSky && adjIsSky {
+							texName := level.GetTexture(wall.TopTexture)
+							_ = textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleW, scaleH, 0, 0)
 						} else if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
-							// UPPER TEXTURE STANDARD (uno dei due settori è un interno chiuso)
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
 						}
 
-						// --- 2. GESTIONE LOWER WALL ---
 						if sector.FloorY > adjSec.FloorY && wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)

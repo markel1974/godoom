@@ -33,7 +33,7 @@ type ThingPlayer struct {
 func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
 	volume := volumes.LocateVolume(c.Position.X, c.Position.Y, c.Position.Z)
 	if volume == nil {
-		fmt.Printf("can't find player location at %f, %f\n", c.Position.X, c.Position.Y)
+		fmt.Printf("can't find 3d player location at X: %f Y: %f Z: %f\n", c.Position.X, c.Position.Y, c.Position.Z)
 		return nil
 	}
 	c.Kind = config.ThingPlayerDef

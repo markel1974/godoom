@@ -3,18 +3,20 @@ package jedi
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // levelNames holds the list of level identifiers used as base names for accessing level-specific configurations and data.
-var __levelNames = []string{
-	"SECBASE", "TALAY", "SEWERS", "TEST", "GROMAS", "DTENTION",
-	"RAMSHEAD", "ROBOTICS", "NARSHADA", "JABBSHIP", "IMPCITY",
-	"FUELSTAT", "EXECUTOR", "ARC",
-}
+//var __levelNames = []string{
+//	"SECBASE", "TALAY", "SEWERS", "TEST", "GROMAS", "DTENTION",
+//	"RAMSHEAD", "ROBOTICS", "NARSHADA", "JABBSHIP", "IMPCITY",
+//	"FUELSTAT", "EXECUTOR", "ARC",
+//}
 
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
@@ -35,11 +37,19 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		return nil, err
 	}
 	defer d.Close()
-	if levelNumber < 1 || levelNumber > len(__levelNames) {
-		return nil, fmt.Errorf("indice di livello %d fuori scala (1-%d)", levelNumber, len(__levelNames))
+	levels := d.Find(".LEV")
+	if len(levels) == 0 {
+		return nil, fmt.Errorf("no levels found")
 	}
-	baseName := __levelNames[levelNumber-1]
-
+	levelNumber -= 1
+	if levelNumber <= 0 {
+		levelNumber = 0
+	}
+	if levelNumber > len(levels) {
+		return nil, fmt.Errorf("level %d not found (%d)", levelNumber, len(levels))
+	}
+	levelName := levels[levelNumber]
+	baseName := strings.TrimSuffix(filepath.Base(levelName), filepath.Ext(levelName))
 	levelData, err := d.GetPayload(baseName + ".LEV")
 	if err != nil {
 		return nil, fmt.Errorf("geometria %s.LEV mancante: %w", baseName, err)

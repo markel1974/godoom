@@ -116,6 +116,17 @@ func (g *GobHandler) add(filename string) error {
 	return nil
 }
 
+// Find searches for and returns a list of entry names that contain the specified pattern as a substring.
+func (g *GobHandler) Find(pattern string) []string {
+	var out []string
+	for k := range g.entries {
+		if strings.Contains(k, pattern) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 // GetPayload retrieves the payload data associated with the specified name in uppercase from the GobHandler entries map.
 func (g *GobHandler) GetPayload(name string) ([]byte, error) {
 	gob, ok := g.entries[strings.ToUpper(name)]

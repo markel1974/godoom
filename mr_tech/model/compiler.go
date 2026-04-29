@@ -55,7 +55,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		//player Z
 		pv := volumes2d.LocateVolume2d(cfg.Player.Position.X, cfg.Player.Position.Y)
 		if pv == nil {
-			return fmt.Errorf("can't find player location at %f, %f", cfg.Player.Position.X, cfg.Player.Position.Y)
+			return fmt.Errorf("can't find 2d player location at X: %f Y: %f", cfg.Player.Position.X, cfg.Player.Position.Y)
 		}
 		cfg.Player.Position.Z = pv.GetMinZ()
 		//things Z

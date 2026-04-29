@@ -40,8 +40,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	if levelNumber <= 0 {
 		levelNumber = 0
 	}
-	if levelNumber > len(levels) {
-		return nil, fmt.Errorf("level %d not found (%d)", levelNumber, len(levels))
+	if levelNumber >= len(levels) {
+		return nil, fmt.Errorf("level %d not found (total levels %d)", levelNumber, len(levels)-1)
 	}
 	baseName := levels[levelNumber]
 	levelName := baseName + ExtLevel
@@ -91,6 +91,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		totalVertices += len(sec.Walls)
 	}
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
+	var lights []*config.Light
 
 	for _, sector := range level.Sectors {
 		if sector.Id < 0 {
@@ -99,9 +100,10 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 		const scaleW = 1.0
 		const scaleH = 1.5
+		const scaleLight = 0.3 //0.09
 
 		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, sector.LightLevel*0.09, config.LightKindAmbient, 0)
+		cSector := config.NewConfigSector(secId, sector.LightLevel*scaleLight, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
 		cSector.FloorY = -sector.FloorY
@@ -147,10 +149,16 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				globalVertices = append(globalVertices, v1)
 				globalVertices = append(globalVertices, v2)
 
-				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v2, v1)
+				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v1, v2)
+
+				//if wall.Light > 0 {
+				//	pos := geometry.XYZ{X: v1.X, Y: sector.CeilingY, Z: -v1.Y}
+				//	light := config.NewConfigLight(pos, float64(wall.Light), config.LightKindSpot, 50)
+				//	lights = append(lights, light)
+				//}
 
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
-				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
+				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 
 				if wall.MidTexture >= 0 {
 					texName := level.GetTexture(wall.MidTexture)
@@ -223,12 +231,13 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, b.scaleFactor, textures)
 	cr.Things = configThings
 	cr.Vertices = globalVertices
+	cr.Lights = lights
 
 	return cr, nil
 }
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
 func CreateCoords(x, y, z float64) geometry.XYZ {
-	return geometry.XYZ{X: x, Y: -z, Z: -y}
-	//return geometry.XYZ{X: x, Y: y, Z: z}
+	//return geometry.XYZ{X: x, Y: -z, Z: -y}
+	return geometry.XYZ{X: x, Y: z, Z: -y}
 }

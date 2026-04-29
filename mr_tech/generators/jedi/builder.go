@@ -93,10 +93,15 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 		const scaleW = 1.0
 		const scaleH = 1.5
-		const scaleLight = 0.15 //0.09
+		const scaleLight = 0.09
+
+		lightLevel := sector.LightLevel * scaleLight
+		if lightLevel < 1.6 {
+			lightLevel = 1.6
+		}
 
 		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, sector.LightLevel*scaleLight, config.LightKindAmbient, 0)
+		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
 		cSector.FloorY = -sector.FloorY

@@ -93,8 +93,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector := config.NewConfigSector(secId, sector.LightLevel, config.LightKindAmbient, 0)
 
 		// Quote altimetriche pure
-		cSector.FloorY = sector.FloorY
-		cSector.CeilY = sector.CeilingY
+		cSector.FloorY = -sector.FloorY
+		cSector.CeilY = -sector.CeilingY
 
 		//fmt.Println("---------------------------------------")
 		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
@@ -128,10 +128,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				globalVertices = append(globalVertices, v1)
 				//globalVertices = append(globalVertices, v2)
 
-				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v1, v2)
+				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v2, v1)
 				//cSeg.Id = strconv.Itoa(wall.Id)
+
 				// Inversione asse Z (profondità planare) standardizzata per mr_tech
 				cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
+
 				//fmt.Println("SEGMENT ", cSeg.Start, cSeg.End)
 				if wall.MidTexture >= 0 {
 					texName := level.GetTexture(wall.MidTexture)
@@ -198,6 +200,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
 func CreateCoords(x, y, z float64) geometry.XYZ {
-	return geometry.XYZ{X: x, Y: -z, Z: y}
+	return geometry.XYZ{X: x, Y: -z, Z: -y}
 	//return geometry.XYZ{X: x, Y: y, Z: z}
 }

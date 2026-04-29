@@ -35,7 +35,6 @@ func NewEntities() *Entities {
 
 // Parse reads and parses input data from the provided io.Reader to populate the Entities struct with level and object data.
 func (e *Entities) Parse(r io.Reader) error {
-
 	insideComment := false
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
@@ -81,16 +80,16 @@ func (e *Entities) Parse(r io.Reader) error {
 		case "TYPE:": // TODO IMPLEMENT
 		case "HEIGHT:": // TODO IMPLEMENT
 		case "RADIUS:": // TODO IMPLEMENT
-		case "DELAY:":
-		case "INTERVAL:":
-		case "MAX_ALIVE:":
-		case "MIN_DIST:":
-		case "MAX_DIST:":
-		case "NUM_TERMINATE:":
-		case "PAUSE:":
-		case "VUE:":
-		case "VUE_APPEND:":
-		case "BOSS:":
+		case "DELAY:": // TODO IMPLEMENT
+		case "INTERVAL:": // TODO IMPLEMENT
+		case "MAX_ALIVE:": // TODO IMPLEMENT
+		case "MIN_DIST:": // TODO IMPLEMENT
+		case "MAX_DIST:": // TODO IMPLEMENT
+		case "NUM_TERMINATE:": // TODO IMPLEMENT
+		case "PAUSE:": // TODO IMPLEMENT
+		case "VUE:": // TODO IMPLEMENT
+		case "VUE_APPEND:": // TODO IMPLEMENT
+		case "BOSS:": // TODO IMPLEMENT
 
 		case "O": // TODO IMPLEMENT
 		case "FMES": // TODO IMPLEMENT

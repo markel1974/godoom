@@ -21,7 +21,7 @@ const scaleTextureW = 0.1
 const scaleTextureH = 0.2 * scaleSectorH //0.6
 
 const scaleLight = 0.07
-const scaleLightFalloff = 1.3
+const scaleLightFalloff = 10
 
 const playerHeight = 6.0 * scaleSectorH
 const playerRadius = 2.5
@@ -110,7 +110,10 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 
 		lightLevel := sector.LightLevel * scaleLight
-		lightFalloff := sector.LightLevel * scaleLightFalloff
+		if lightLevel < 2.5 {
+			lightLevel = 2.5
+		}
+		lightFalloff := lightLevel * scaleLightFalloff
 
 		secId := strconv.Itoa(sector.Id)
 		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, lightFalloff)

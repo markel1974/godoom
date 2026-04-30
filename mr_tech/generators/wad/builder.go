@@ -11,22 +11,41 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// WorldScaleFactor defines the scaling factor used to convert in-game world dimensions to internal engine units.
+// AspectRatio defines the fixed width-to-height ratio used for rendering or configuration purposes, set to 1.5.
+const AspectRatio = 1.5
 
-// ScaleSectorH is a scaling factor used to convert level units into corresponding in-game dimensions, based on WorldScaleFactor.
-const ScaleSectorH = 1.5 //0.32
+// ScaleLight is a constant factor used to scale light intensity values within the lighting system calculations.
+const ScaleLight = 0.015
 
-// ScaleTextureW defines the horizontal scaling factor for textures, calculated as a fraction of the WorldScaleFactor.
-const ScaleTextureW = 1.0 //WorldScaleFactor * 0.16
+// ScaleSectorH is a constant used to scale the height values of sectors in the configuration.
+const ScaleSectorH = 1.0
 
-// ScaleTextureH defines the vertical scaling factor for textures, calculated as 40% of the WorldScaleFactor.
-const ScaleTextureH = 1.0 // WorldScaleFactor * 0.4
+// ScaleTextureW represents the width scaling factor applied to textures during rendering or material configuration.
+const ScaleTextureW = 1.0
 
-// ScaleWThings defines the width scaling factor for "Thing" entities based on the world scale factor.
-const ScaleWThings = 1.6
+// ScaleTextureH represents the vertical texture scaling factor, typically used for aligning textures in rendering operations.
+const ScaleTextureH = 1.0
 
-// ScaleHThings is a constant used to scale the height of "Thing" entities in the game world by a fixed factor.
-const ScaleHThings = 1.6
+// ScaleWThings defines the horizontal scaling factor applied to the material dimensions of "Thing" entities in the game world.
+const ScaleWThings = 1.0
+
+// ScaleHThings represents the scaling factor for the height of "Thing" entities in the game configuration.
+const ScaleHThings = 1.0
+
+// GForce represents the standard gravitational force multiplier applied to game entities, with a value of 9.8 * 8.
+const GForce = 9.8 * 15
+
+// playerHeight defines the height of a player entity in game units, used for calculations related to geometry and physics.
+const playerHeight = 50.0
+
+// playerRadius defines the constant radius of the player character used for collision detection and bounding operations.
+const playerRadius = 10
+
+// playerSpeed defines the constant speed value for the player, represented in units per second.
+const playerSpeed = 1800
+
+// playerMass defines the mass of the player entity in the game, used for physics calculations and movement behavior.
+const playerMass = 50
 
 // SkyPicture represents the texture string identifier used for sky rendering in sectors and segments.
 const SkyPicture = "F_SKY1"
@@ -111,7 +130,7 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 
 	player := bld.buildPlayer(level)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	cal.AspectRatio = 1.0
+	cal.AspectRatio = AspectRatio
 	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1}
 	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)
 	cr.Vertices = vertexes
@@ -193,6 +212,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	tId := fmt.Sprintf("t_%d", i)
 	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
+	cfgThing.GForce = GForce
 	cfgThing.WakeUpDistance = 500
 	cfgThing.Speed = 300
 	cfgThing.JumpForce = 400
@@ -209,15 +229,10 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 		}
 	}
 
-	const playerHeight = 80.0
-	const playerRadius = 20
-	const playerSpeed = 900
-	const playerMass = 8
-
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
 
-	//root.Player.Speed = 1200
-	player.JumpForce = 300
+	player.GForce = GForce
+	player.JumpForce = 1000
 
 	player.Flash.ZFar = 8192
 	player.Flash.Factor = 0.02
@@ -225,9 +240,9 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 2.0
-	player.Bobbing.SwayOffsetX = 50
+	player.Bobbing.SwayOffsetX = 20
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	player.Bobbing.MaxAmplitudeX = playerHeight / 3 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
 	player.Bobbing.MaxAmplitudeY = 5.5
 	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
 	player.Bobbing.IdleAmpX = 0.9        // Respiro
@@ -334,7 +349,7 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 
 // heuristicLight determines the light intensity, kind, falloff, and color values for a scene based on provided parameters.
 func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
-	intensity := float64(lightLevel) * 0.008
+	intensity := float64(lightLevel) * ScaleLight
 	kind := config.LightKindAmbient
 	falloff := ((ceilY - floorY) * ScaleSectorH) * 2.0
 

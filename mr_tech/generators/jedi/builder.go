@@ -110,8 +110,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		//fmt.Println("---------------------------------------")
 		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
 
-		isSky := sector.IsSky()
-
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
@@ -124,7 +122,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
 			animKind := config.MaterialKindLoop
-			if isSky {
+			if sector.IsSky() {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
@@ -137,7 +135,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if wallCount > 0 {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
 			for _, wall := range sector.Walls {
-				if wall.LeftVertex < 0 || wall.RightVertex < 0 {
+				if wall.LeftVertex < 0 || wall.RightVertex < 0 || wall.LeftVertex >= len(sector.Vertices) || wall.RightVertex >= len(sector.Vertices) {
 					fmt.Println("INVALID VERTEX")
 					continue
 				}
@@ -155,42 +153,46 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				//	lights = append(lights, light)
 				//}
 
-				// Inversione asse Z (profondità planare) standardizzata per mr_tech
+				// Inversione asse Z (profondità planare)
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 
-				if wall.MidTexture >= 0 {
+				if wall.Adjoin < 0 {
+					if wall.MidTexture < 0 {
+						fmt.Println("WARNING MISSING MID_TEXTURE")
+						continue
+					}
 					texName := level.GetTexture(wall.MidTexture)
 					names := textures.AddTexture(d, bm, texName, colorPal)
 					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-				} else if wall.Adjoin < 0 {
-					fmt.Println("MISSING MID_TEXTURE")
-				}
-
-				if wall.Adjoin >= 0 {
-					if wall.Adjoin < len(level.Sectors) {
-						// Corretto: per mr_tech i portali devono essere SegmentUnknown per l'attraversamento
-						cSeg.Kind = config.SegmentUnknown
-
-						adjSec := level.Sectors[wall.Adjoin]
-						adjIsSky := adjSec.IsSky()
-
-						if isSky && adjIsSky {
-							texName := level.GetTexture(wall.TopTexture)
-							_ = textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleW, scaleH, 0, 0)
-						} else if sector.CeilingY < adjSec.CeilingY && wall.TopTexture >= 0 {
+				} else {
+					cSeg.Kind = config.SegmentUnknown
+					if wall.Adjoin >= len(level.Sectors) {
+						fmt.Println("INVALID ADJOIN")
+						continue
+					}
+					adjSec := level.Sectors[wall.Adjoin]
+					if sector.IsSky() && adjSec.IsSky() {
+						texName := level.GetTexture(wall.TopTexture)
+						_ = textures.AddTexture(d, bm, texName, colorPal)
+						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleW, scaleH, 0, 0)
+					} else if sector.CeilingY < adjSec.CeilingY {
+						if wall.TopTexture >= 0 {
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+						} else {
+							fmt.Println("MISSING TOP_TEXTURE")
 						}
+					}
 
-						if sector.FloorY > adjSec.FloorY && wall.BotTexture >= 0 {
+					if sector.FloorY > adjSec.FloorY {
+						if wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
 							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+						} else {
+							fmt.Println("MISSING BOTTOM_TEXTURE")
 						}
-					} else {
-						fmt.Println("INVALID ADJOIN")
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)

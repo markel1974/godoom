@@ -133,7 +133,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.metrics.Rebuild(w.w, w.h)
 
 		if full3d {
-			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.ScaleFactor), float32(w.cal.FovVerticalDegrees))
+			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 		} else {
 			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
 		}

@@ -11,28 +11,27 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// WorldScaleFactor defines the scaling constant used for converting in-game measurements to world units.
-const WorldScaleFactor = 25.0
+// WorldScaleFactor defines the scaling factor used to convert in-game world dimensions to internal engine units.
 
-// WallScaleW defines the horizontal scaling factor for wall textures based on the world scaling factor.
-const WallScaleW = WorldScaleFactor * 0.16
+// ScaleSectorH is a scaling factor used to convert level units into corresponding in-game dimensions, based on WorldScaleFactor.
+const ScaleSectorH = 1.5 //0.32
 
-// ScaleCeilFloorLineDef is a scaling factor used to normalize ceiling and floor heights in sector calculations.
-const ScaleCeilFloorLineDef = WorldScaleFactor * 0.32
+// ScaleTextureW defines the horizontal scaling factor for textures, calculated as a fraction of the WorldScaleFactor.
+const ScaleTextureW = 1.0 //WorldScaleFactor * 0.16
 
-// ScaleWallH defines the vertical scaling factor for wall textures based on a fraction of the WorldScaleFactor.
-const ScaleWallH = WorldScaleFactor * 0.4
+// ScaleTextureH defines the vertical scaling factor for textures, calculated as 40% of the WorldScaleFactor.
+const ScaleTextureH = 1.0 // WorldScaleFactor * 0.4
 
-// ScaleWThings represents a scaling factor for object width, calculated as WorldScaleFactor multiplied by 0.002.
-const ScaleWThings = WorldScaleFactor * 0.002
+// ScaleWThings defines the width scaling factor for "Thing" entities based on the world scale factor.
+const ScaleWThings = 1.6
 
-// ScaleHThings defines the vertical scaling factor for "things" in the game, derived from WorldScaleFactor.
-const ScaleHThings = WorldScaleFactor * 0.006
+// ScaleHThings is a constant used to scale the height of "Thing" entities in the game world by a fixed factor.
+const ScaleHThings = 1.6
 
-// SkyPicture represents the texture identifier used to denote sky ceilings and floors in the level configurations.
+// SkyPicture represents the texture string identifier used for sky rendering in sectors and segments.
 const SkyPicture = "F_SKY1"
 
-// openAllDoors indicates whether all doors in the level should start in an open state.
+// openAllDoors determines whether all doors in the level should be opened automatically during sector configuration.
 const openAllDoors = true
 
 // Edge represents a line in a 2D space connecting two points, with metadata about its relationship to sectors and sidedefs.
@@ -112,7 +111,8 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 
 	player := bld.buildPlayer(level)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	scaleFactor := geometry.XYZ{X: WorldScaleFactor, Y: WorldScaleFactor, Z: 1}
+	cal.AspectRatio = 1.0
+	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1}
 	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)
 	cr.Vertices = vertexes
 
@@ -130,8 +130,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	miSector.Light.G = g
 	miSector.Light.B = b
 
-	miSector.FloorY = floorY / ScaleCeilFloorLineDef
-	miSector.CeilY = ceilY / ScaleCeilFloorLineDef
+	miSector.FloorY = floorY * ScaleSectorH
+	miSector.CeilY = ceilY * ScaleSectorH
 	miSector.Tag = sectorId
 	if ceilPic == SkyPicture {
 		ceilingType = config.MaterialKindSky
@@ -141,8 +141,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 		floorType = config.MaterialKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, WallScaleW, ScaleWallH, 0, 0)
-	miSector.Floor = config.NewConfigMaterial(texHandler.FlatCreateAnimation(floorPic), floorType, WallScaleW, ScaleWallH, 0, 0)
+	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, ScaleTextureW, ScaleTextureH, 0, 0)
+	miSector.Floor = config.NewConfigMaterial(texHandler.FlatCreateAnimation(floorPic), floorType, ScaleTextureW, ScaleTextureH, 0, 0)
 	return miSector
 }
 
@@ -152,25 +152,25 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
-	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
-	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
-	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, WallScaleW, ScaleWallH, 0, 0)
+	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
+	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
+	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
 	// vertical sky hack
 	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 		if e.Sector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
-			seg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, WallScaleW, ScaleWallH, 0, 0)
+			seg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, ScaleTextureW, ScaleTextureH, 0, 0)
 		}
 		// Extension for floors (e.g. moats that show sky at the bottom)
 		if e.Sector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
-			seg.Lower = config.NewConfigMaterial(nil, config.MaterialKindNone, WallScaleW, ScaleWallH, 0, 0)
+			seg.Lower = config.NewConfigMaterial(nil, config.MaterialKindNone, ScaleTextureW, ScaleTextureH, 0, 0)
 		}
 	}
 	if !e.LineDef.HasFlag(2) {
 		seg.Kind = config.SegmentWall
 	}
 	// Inversione Y per l'allineamento con il motore di rendering
-	seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
+	//seg.Start.Y, seg.End.Y = -seg.Start.Y, -seg.End.Y
 	return seg
 }
 
@@ -192,7 +192,10 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	}
 	tId := fmt.Sprintf("t_%d", i)
 	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: -tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
+	cfgThing.WakeUpDistance = 500
+	cfgThing.Speed = 300
+	cfgThing.JumpForce = 400
 	return cfgThing
 }
 
@@ -206,14 +209,38 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 		}
 	}
 
-	const playerHeight = 175.0 / WorldScaleFactor
-	//const playerRadius = 2 / WorldScaleFactor
-	//const playerHeight = 25 / WorldScaleFactor
-	const playerRadius = 30 / WorldScaleFactor
-	const playerSpeed = 2000 / WorldScaleFactor
+	const playerHeight = 80.0
+	const playerRadius = 20
+	const playerSpeed = 900
 	const playerMass = 8
 
-	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: -pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
+	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
+
+	//root.Player.Speed = 1200
+	player.JumpForce = 300
+
+	player.Flash.ZFar = 8192
+	player.Flash.Factor = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+	player.Bobbing.SwayScale = 2.0
+	player.Bobbing.SwayOffsetX = 50
+	player.Bobbing.SwayOffsetY = -0.9
+	player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	player.Bobbing.MaxAmplitudeY = 5.5
+	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
+	player.Bobbing.IdleAmpX = 0.9        // Respiro
+	player.Bobbing.IdleAmpY = 0.9
+	player.Bobbing.IdleDrift = 0.01
+	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
+	player.Bobbing.AmpLerp = 0.20
+	player.Bobbing.ImpactMax = 1000.0
+	player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale
+	player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
+	player.Bobbing.SpringDamping = 0.80
+	player.Bobbing.TiltAmp = 0.05
+
 	return player
 }
 
@@ -309,7 +336,7 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
 	intensity := float64(lightLevel) * 0.008
 	kind := config.LightKindAmbient
-	falloff := (ceilY - floorY) / ScaleCeilFloorLineDef * 1.5
+	falloff := ((ceilY - floorY) * ScaleSectorH) * 2.0
 
 	// Default: Luce bianca/calda
 	r, g, b := 1.0, 0.95, 0.9

@@ -9,6 +9,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+const scaleX = 1.0
+const scaleY = 1.0
+const scaleZ = 1.0
+
+const scaleSectorH = 3.8
+
+const scaleTextureW = 0.1
+const scaleTextureH = 0.2 * scaleSectorH //0.6
+
+const scaleLight = 0.2
+
+const playerHeight = 7.0 * scaleSectorH
+const playerRadius = 1.0
+const playerSpeed = 200
+const playerMass = 8
+
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
 }
@@ -90,10 +106,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			continue
 		}
 
-		const scaleW = 1.0
-		const scaleH = 1.5
-		const scaleLight = 0.09
-
 		lightLevel := sector.LightLevel * scaleLight
 		if lightLevel < 1.6 {
 			lightLevel = 1.6
@@ -103,8 +115,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, 0)
 
 		// Quote altimetriche
-		cSector.FloorY = -sector.FloorY
-		cSector.CeilY = -sector.CeilingY
+		cSector.FloorY = -sector.FloorY * scaleSectorH
+		cSector.CeilY = -sector.CeilingY * scaleSectorH
 
 		//fmt.Println("---------------------------------------")
 		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
@@ -112,7 +124,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names := textures.AddTexture(d, bm, texName, colorPal)
-			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE")
 		}
@@ -125,7 +137,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
-			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleW, scaleH, 0, 0)
+			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
 			fmt.Println("MISSING CEILING_TEXTURE")
 		}
@@ -162,7 +174,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					}
 					texName := level.GetTexture(wall.MidTexture)
 					names := textures.AddTexture(d, bm, texName, colorPal)
-					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
 					cSeg.Kind = config.SegmentUnknown
 					if wall.Adjoin >= len(level.Sectors) {
@@ -173,12 +185,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					if sector.IsSky() && adjSec.IsSky() {
 						texName := level.GetTexture(wall.TopTexture)
 						_ = textures.AddTexture(d, bm, texName, colorPal)
-						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleW, scaleH, 0, 0)
+						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
 					} else if sector.CeilingY < adjSec.CeilingY {
 						if wall.TopTexture >= 0 {
 							texName := level.GetTexture(wall.TopTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
 							fmt.Println("MISSING TOP_TEXTURE")
 						}
@@ -188,7 +200,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 						if wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
 							names := textures.AddTexture(d, bm, texName, colorPal)
-							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
 							fmt.Println("MISSING BOTTOM_TEXTURE")
 						}
@@ -209,8 +221,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		key := CleanKey(obj.Class)
 		if key == "SPIRIT" || key == "PLAYER" {
 			if configPlayer == nil {
-				configPlayer = config.NewConfigPlayer(pos, 1, 10, 100, 1, 7)
-				configPlayer.Radius = 1
+				configPlayer = b.buildPlayer(pos)
 			}
 		} else {
 			//TODO
@@ -227,13 +238,44 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	}
 
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	scaleFactor := geometry.XYZ{X: 2.5, Y: 2.5, Z: 1}
+	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
 	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, textures)
 	cr.Things = configThings
 	cr.Vertices = globalVertices
 	cr.Lights = lights
 
 	return cr, nil
+}
+
+func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
+	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
+
+	//root.Player.Speed = 1200
+	player.JumpForce = 400
+
+	player.Flash.ZFar = 8192
+	player.Flash.Factor = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+	player.Bobbing.SwayScale = 2.0
+	player.Bobbing.SwayOffsetX = 3
+	player.Bobbing.SwayOffsetY = -0.9
+	player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	player.Bobbing.MaxAmplitudeY = 5.5
+	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
+	player.Bobbing.IdleAmpX = 0.9        // Respiro
+	player.Bobbing.IdleAmpY = 0.9
+	player.Bobbing.IdleDrift = 0.01
+	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
+	player.Bobbing.AmpLerp = 0.20
+	player.Bobbing.ImpactMax = 1000.0
+	player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale
+	player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
+	player.Bobbing.SpringDamping = 0.80
+	player.Bobbing.TiltAmp = 0.05
+
+	return player
 }
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.

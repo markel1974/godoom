@@ -14,7 +14,7 @@ type ThingDef struct {
 	Kind    config.ThingType
 }
 
-const sSpeed = 12
+const sSpeed = 800
 
 // _spriteDictionary is a map that associates integer keys with ThingDef structures, defining game objects and their properties.
 var _spriteDictionary = map[int]ThingDef{

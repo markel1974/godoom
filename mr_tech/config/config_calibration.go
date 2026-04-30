@@ -9,7 +9,7 @@ type Calibration struct {
 	LightCamY          float64 `json:"lightCamY"`
 	ZNearRoom          float64 `json:"zNearRoom"`
 	ZFarRoom           float64 `json:"zFarRoom"`
-	ScaleFactor        float64 `json:"scaleFactor"`
+	AspectRatio        float64 `json:"aspectRatio"`
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	ShininessWall      float64 `json:"shininessWall"`
 	ShininessFloor     float64 `json:"shininessFloor"`
@@ -38,7 +38,7 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 		ZFarRoom:   zFarRoom,
 		Auto:       auto,
 	}
-	c.ScaleFactor = 0.4
+	c.AspectRatio = 0.4
 	c.FovVerticalDegrees = 90
 	c.ShininessWall = 128.0
 	c.ShininessFloor = 64.0

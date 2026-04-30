@@ -36,14 +36,13 @@ func (t *Texture) SetScaleFactor(gScale geometry.XYZ, scaleW, scaleH float64) {
 	t.scaleW = scaleW
 	t.scaleH = scaleH
 	t.wScaled, t.hScaled = float64(t.w), float64(t.h)
-	scale := gScale.X
+	//scale := gScale.X
 
-	if scale != 1.0 || t.scaleW != 1.0 || t.scaleH != 1.0 {
+	if t.scaleW != 1.0 || t.scaleH != 1.0 {
 		//TODO CAPIRE PERCHE BISOGNA MOLTIPLICARE PER 5 in DOOM!!!!!
 		//t.gScale.X *= 5
-		scale *= 5
-		t.wScaled *= t.scaleW / scale
-		t.hScaled *= t.scaleH / scale
+		t.wScaled *= t.scaleW
+		t.hScaled *= t.scaleH
 	}
 }
 
@@ -103,18 +102,17 @@ func (t *Texture) GetName() string {
 
 // RGBA returns the width, height, and a pixel array representing the texture in RGBA format.
 func (t *Texture) RGBA() (int, int, []uint8) {
+	const stride = 4
 	width, height := t.Size()
-	width = width + 1
-	height = height + 1
-	pixels := make([]uint8, width*height*4)
+	pixels := make([]uint8, width*height*stride)
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			c := t.Get(x, y)
-			idx := (y*width + x) * 4
-			pixels[idx] = uint8(c >> 24)
-			pixels[idx+1] = uint8(c >> 16)
-			pixels[idx+2] = uint8(c >> 8)
-			pixels[idx+3] = uint8(c)
+			idx := (y*width + x) * stride
+			pixels[idx] = uint8(c >> 24)   // R
+			pixels[idx+1] = uint8(c >> 16) // G
+			pixels[idx+2] = uint8(c >> 8)  // B
+			pixels[idx+3] = uint8(c)       // A
 		}
 	}
 	return width, height, pixels

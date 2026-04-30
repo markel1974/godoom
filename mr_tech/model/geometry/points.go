@@ -30,8 +30,8 @@ type XY struct {
 
 // Scale adjusts the X and Y components of the XY instance by dividing them by the given scale factor.
 func (xy *XY) Scale(scale XY) {
-	xy.X /= scale.X
-	xy.Y /= scale.Y
+	xy.X *= scale.X
+	xy.Y *= scale.Y
 }
 
 // XYZ represents a point or vector in 3D space with X, Y, and Z coordinates.
@@ -43,9 +43,9 @@ type XYZ struct {
 
 // Scale divides the X, Y and Z components of the XYZ struct by the given scale factor.
 func (xyz *XYZ) Scale(scale XYZ) {
-	xyz.X /= scale.X
-	xyz.Y /= scale.Y
-	xyz.Z /= scale.Z
+	xyz.X *= scale.X
+	xyz.Y *= scale.Y
+	xyz.Z *= scale.Z
 }
 
 // BigFloat creates a new *big.Float with 256 bits of precision and sets its value to the given float64.

@@ -58,8 +58,8 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Speed:          speed,
 		Material:       material,
 		Restitution:    0.0,
-		WakeUpDistance: 25.0,
-		JumpForce:      200,
+		WakeUpDistance: 100.0,
+		JumpForce:      600,
 		Friction:       0.2,
 	}
 }

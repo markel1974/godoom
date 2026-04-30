@@ -81,7 +81,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	//cal.ZNearRoom = 0.1
 	//cal.ZFarRoom = 16000
 
-	cal.ScaleFactor = 1.0
+	cal.AspectRatio = 1.0
+
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, p.texManager)
 

@@ -103,18 +103,16 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			continue
 		}
 		tex := tn[0]
-		w, h := tex.Size()
+		w, h, pixels := tex.RGBA()
 		maxDim := w
 		if h > maxDim {
 			maxDim = h
 		}
-
 		bIdx := idxByDim(maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		origW, origH, pixels := tex.RGBA()
-		//UpscaleFixedPoint UpscaleLanczosSeparable
-		resizedPixels := UpscaleBicubic(pixels, origW, origH, size, size, stride)
+		//UpscaleFixedPoint UpscaleBicubic UpscaleLanczosSeparable
+		resizedPixels := UpscaleBicubic(pixels, w, h, size, size, stride)
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
 		blackPixels := createBlackPixels(size, size, stride)
@@ -185,12 +183,17 @@ func createTextureArray(width, height int, layers int32) uint32 {
 		gl.TexImage3D(gl.TEXTURE_2D_ARRAY, i, gl.RGBA8, w, h, layers, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 	}
 
+	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT)
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT)
 	// Anisotropic filtering
-	gl.TexParameterf(gl.TEXTURE_2D_ARRAY, 0x84FE, 8.0)
+	var maxAniso float32
+	gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
+	gl.TexParameterf(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_ANISOTROPY, maxAniso)
 
 	return tex
 }

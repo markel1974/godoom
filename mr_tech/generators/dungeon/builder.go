@@ -102,7 +102,8 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
+	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
 	s1 := b.createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)
@@ -132,7 +133,8 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	cfg := config.NewConfigRoot(cal, nil, player, nil, 0, t)
+	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
 
 	// 1. Generazione Logica (Drunkard's Walk)
 	grid := make([][]bool, gridWidth)

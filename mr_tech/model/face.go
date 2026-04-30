@@ -207,7 +207,7 @@ func (s *Face) PointInside2d(px, py float64) bool {
 }
 
 // Scale2d scales the starting and ending points of the segment by applying the given scale factor.
-func (s *Face) Scale2d(scale float64) {
+func (s *Face) Scale2d(scale geometry.XYZ) {
 	s.tri[0].Scale(scale)
 	s.tri[1].Scale(scale)
 	s.tri[2].Scale(scale)

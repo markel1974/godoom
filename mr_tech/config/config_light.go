@@ -60,6 +60,6 @@ func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff
 }
 
 // Scale adjusts the position of the light by scaling its X, Y, and Z coordinates with the provided scale factor.
-func (t *Light) Scale(scale float64) {
+func (t *Light) Scale(scale geometry.XYZ) {
 	t.Pos.Scale(scale)
 }

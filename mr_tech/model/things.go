@@ -15,7 +15,7 @@ const solverJitter = 1e-6
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	gScale           float64
+	gScale           geometry.XYZ
 	full3d           bool
 	config           []*config.Thing
 	volumes          *Volumes
@@ -37,7 +37,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(full3d bool, gScale float64, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(full3d bool, gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
@@ -115,7 +115,7 @@ func (th *Things) SetPlayer(p *ThingPlayer) {
 }
 
 // GetGlobalScale retrieves the global scaling factor applied to all objects managed by the Things instance.
-func (th *Things) GetGlobalScale() float64 {
+func (th *Things) GetGlobalScale() geometry.XYZ {
 	return th.gScale
 }
 

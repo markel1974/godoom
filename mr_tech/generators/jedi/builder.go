@@ -11,12 +11,11 @@ import (
 
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
-	scaleFactor float64
 }
 
 // NewBuilder creates a new Builder instance and initializes its scale factor.
 func NewBuilder() *Builder {
-	return &Builder{scaleFactor: 2.5}
+	return &Builder{}
 }
 
 // Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
@@ -228,7 +227,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	}
 
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, b.scaleFactor, textures)
+	scaleFactor := geometry.XYZ{X: 2.5, Y: 2.5, Z: 1}
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, textures)
 	cr.Things = configThings
 	cr.Vertices = globalVertices
 	cr.Lights = lights

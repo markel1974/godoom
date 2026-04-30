@@ -1,5 +1,7 @@
 package textures
 
+import "github.com/markel1974/godoom/mr_tech/model/geometry"
+
 // Texture represents a 2D texture with metadata and pixel data.
 // name is the identifier name of the texture.
 // id is the unique identifier for the texture.
@@ -11,7 +13,6 @@ type Texture struct {
 	w       int
 	h       int
 	data    [][]int
-	gScale  float64
 	scaleW  float64
 	scaleH  float64
 	wScaled float64
@@ -31,16 +32,18 @@ func NewTexture(name string, id uint32, w int, h int) *Texture {
 }
 
 // SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.
-func (t *Texture) SetScaleFactor(gScale, scaleW, scaleH float64) {
-	t.gScale = gScale
+func (t *Texture) SetScaleFactor(gScale geometry.XYZ, scaleW, scaleH float64) {
 	t.scaleW = scaleW
 	t.scaleH = scaleH
 	t.wScaled, t.hScaled = float64(t.w), float64(t.h)
-	if t.gScale != 1.0 || t.scaleW != 1.0 || t.scaleH != 1.0 {
+	scale := gScale.X
+
+	if scale != 1.0 || t.scaleW != 1.0 || t.scaleH != 1.0 {
 		//TODO CAPIRE PERCHE BISOGNA MOLTIPLICARE PER 5 in DOOM!!!!!
-		t.gScale *= 5
-		t.wScaled *= t.scaleW / t.gScale
-		t.hScaled *= t.scaleH / t.gScale
+		//t.gScale.X *= 5
+		scale *= 5
+		t.wScaled *= t.scaleW / scale
+		t.hScaled *= t.scaleH / scale
 	}
 }
 
@@ -50,8 +53,8 @@ func (t *Texture) GetSizeScaled() (float64, float64) {
 }
 
 // GetScaleFactor returns the global scale factor and the width and height scale values of the texture as floats.
-func (t *Texture) GetScaleFactor() (float64, float64, float64) {
-	return t.gScale, t.scaleW, t.scaleH
+func (t *Texture) GetScaleFactor() (float64, float64) {
+	return t.scaleW, t.scaleH
 }
 
 // GetScaleFactorH retrieves the height scaling factor of the Texture as a float64.

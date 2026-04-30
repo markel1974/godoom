@@ -19,7 +19,7 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 		tex := anim.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
-			_, scaleW, scaleH := tex.GetScaleFactor()
+			scaleW, scaleH := tex.GetScaleFactor()
 			width = float64(texW) * scaleW
 			height = float64(texH) * scaleH
 			halfW = width / 2.0

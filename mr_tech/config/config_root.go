@@ -13,7 +13,7 @@ type Root struct {
 	Sectors     []*Sector        `json:"sectors"`
 	Things      []*Thing         `json:"things"`
 	Player      *Player          `json:"player"`
-	ScaleFactor float64          `json:"scaleFactor"`
+	ScaleFactor geometry.XYZ     `json:"scaleFactor"`
 	Vertices    geometry.Polygon `json:"vertices"`
 	Volumes     []*Volume        `json:"volumes"`
 	Lights      []*Light         `json:"lights"`
@@ -21,7 +21,7 @@ type Root struct {
 }
 
 // NewConfigRoot creates and initializes a new Root object with the specified sectors, player, things, and configuration.
-func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, things []*Thing, scaleFactor float64, t textures.ITextures) *Root {
+func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, things []*Thing, scaleFactor geometry.XYZ, t textures.ITextures) *Root {
 	return &Root{
 		Id:          utils.NextUUId(),
 		Calibration: calibration,
@@ -39,8 +39,8 @@ func (cfg *Root) GetTextures() textures.ITextures {
 }
 
 // Scale adjusts the dimensions of all entities in the Root object by the specified scale factor. If scale is 0, defaults to 1.
-func (cfg *Root) Scale(scale float64) {
-	if scale == 0 || scale == 1 {
+func (cfg *Root) Scale(scale geometry.XYZ) {
+	if scale.X == 1 && scale.Y == 1 && scale.Z == 1 {
 		return
 	}
 	cfg.Player.Scale(scale)

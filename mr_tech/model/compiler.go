@@ -13,7 +13,7 @@ import (
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
 type Compiler struct {
-	gScale      float64
+	gScale      geometry.XYZ
 	volumes     *Volumes
 	player      *ThingPlayer
 	lights      *Lights
@@ -34,8 +34,14 @@ func NewCompiler() *Compiler {
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
 func (r *Compiler) Compile(cfg *config.Root) error {
 	r.gScale = cfg.ScaleFactor
-	if r.gScale == 0 {
-		r.gScale = 1
+	if r.gScale.X == 0 {
+		r.gScale.X = 1
+	}
+	if r.gScale.Y == 0 {
+		r.gScale.Y = 1
+	}
+	if r.gScale.Z == 0 {
+		r.gScale.Z = 1
 	}
 
 	full3d := cfg.Calibration.Full3d

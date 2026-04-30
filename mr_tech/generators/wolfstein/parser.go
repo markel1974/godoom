@@ -71,7 +71,8 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 	}
 
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	root := config.NewConfigRoot(cal, nil, nil, nil, 1.0, texProvider)
+	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texProvider)
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
 	}

@@ -25,9 +25,10 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff 
 }
 
 // Scale scales all the segments of the Sector by the given scale factor by applying it to their start and end points.
-func (s *Sector) Scale(scale float64) {
+func (s *Sector) Scale(scale geometry.XYZ) {
+	xy := geometry.XY{X: scale.X, Y: scale.Y}
 	for _, seg := range s.Segments {
-		seg.Start.Scale(scale)
-		seg.End.Scale(scale)
+		seg.Start.Scale(xy)
+		seg.End.Scale(xy)
 	}
 }

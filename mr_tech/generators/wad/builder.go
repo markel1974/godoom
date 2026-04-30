@@ -112,7 +112,8 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 
 	player := bld.buildPlayer(level)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	cr := config.NewConfigRoot(cal, sectors, player, things, WorldScaleFactor, texHandler)
+	scaleFactor := geometry.XYZ{X: WorldScaleFactor, Y: WorldScaleFactor, Z: 1}
+	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)
 	cr.Vertices = vertexes
 
 	return cr, nil

@@ -1,5 +1,7 @@
 package config
 
+import "github.com/markel1974/godoom/mr_tech/model/geometry"
+
 // Volume represents a 3D volume in a configuration, containing faces, lighting information, and a unique identifier.
 type Volume struct {
 	Id    string  `json:"id"`
@@ -22,7 +24,7 @@ func (cv *Volume) AddFace(face *Face) {
 }
 
 // Scale uniformly scales the geometry of all faces in the Volume by the given scale factor.
-func (cv *Volume) Scale(scale float64) {
+func (cv *Volume) Scale(scale geometry.XYZ) {
 	for _, face := range cv.Faces {
 		for i := range face.Points {
 			face.Points[i].Scale(scale)

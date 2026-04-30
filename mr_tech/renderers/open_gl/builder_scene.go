@@ -139,7 +139,7 @@ func (w *BuilderScene) pushWall(fv *FrameVertices, dc *DrawCommands, cp *model.C
 		return
 	}
 	texW, texH := tex.Size()
-	_, scaleW, scaleH := tex.GetScaleFactor()
+	scaleW, scaleH := tex.GetScaleFactor()
 
 	u0 := float32(cp.U0) / (float32(texW) * float32(scaleW))
 	u1 := float32(cp.U1) / (float32(texW) * float32(scaleW))

@@ -268,6 +268,7 @@ func (p *Level) doTexture(tokens []string) {
 	p.Textures[id] = val
 }
 
+// doFlags parses and assigns flag values from the given tokens to the specified sector's Flags array.
 func (p *Level) doFlags(tokens []string, sector *Sector) {
 	if sector == nil {
 		fmt.Println("doFlags: nil sector")
@@ -299,6 +300,7 @@ func (p *Level) doWall(tokens []string, sector *Sector) {
 	}
 	wall := NewWall()
 	for i := 0; i < len(tokens); i++ {
+		var err error
 		key := strings.ToUpper(strings.TrimSpace(tokens[i]))
 		if !strings.Contains(key, ":") {
 			continue
@@ -308,72 +310,60 @@ func (p *Level) doWall(tokens []string, sector *Sector) {
 		case "MIRROR:":
 		case "LEFT:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				wall.LeftVertex, _ = strconv.Atoi(val)
+			wall.LeftVertex, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				fmt.Printf("doWall: LEFT invalid token id at %d: %s\n", i, err.Error())
 			}
 		case "RIGHT:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				wall.RightVertex, _ = strconv.Atoi(val)
+			wall.RightVertex, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				fmt.Printf("doWall: RIGHT invalid token id at %d: %s\n", i, err.Error())
 			}
 		case "ADJOIN:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				wall.Adjoin, _ = strconv.Atoi(val)
+			wall.Adjoin, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				fmt.Printf("doWall: ADJOIN invalid token id at %d: %s\n", i, err.Error())
 			}
 		case "MID:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				if val != "-1" && val != "-" {
-					texID, _ := strconv.Atoi(val)
-					wall.MidTexture = texID
-				}
+			wall.MidTexture, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				wall.MidTexture = -1
 			}
 		case "TOP:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				if val != "-1" && val != "-" {
-					texID, _ := strconv.Atoi(val)
-					wall.TopTexture = texID
-				}
+			wall.TopTexture, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				wall.TopTexture = -1
 			}
 		case "BOT:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				if val != "-1" && val != "-" {
-					texID, _ := strconv.Atoi(val)
-					wall.BotTexture = texID
-				}
+			wall.BotTexture, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				wall.BotTexture = -1
 			}
 		case "SIGN:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				if val != "-1" && val != "-" {
-					texID, _ := strconv.Atoi(val)
-					wall.SignTexture = texID
-				}
+			wall.SignTexture, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				wall.SignTexture = -1
 			}
 		case "FLAGS:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				wall.Flags, _ = strconv.Atoi(val)
+			wall.Flags, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				fmt.Printf("doWall: FLAGS invalid token id at %d: %s\n", i, err.Error())
 			}
 		case "LIGHT:":
 			i++
-			if i < len(tokens) {
-				val := tokens[i]
-				wall.Light, _ = strconv.Atoi(val)
+			wall.Light, err = GetTokenIntAt(tokens, i)
+			if err != nil {
+				fmt.Printf("doWall: LIGHT invalid token id at %d: %s\n", i, err.Error())
 			}
 		default:
-			fmt.Println("Unknown wall attribute: ", key)
+			fmt.Println("doWall: Unknown wall attribute: ", key)
 		}
 	}
 	sector.Walls = append(sector.Walls, wall)

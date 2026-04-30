@@ -103,7 +103,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		secId := strconv.Itoa(sector.Id)
 		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, 0)
 
-		// Quote altimetriche pure
+		// Quote altimetriche
 		cSector.FloorY = -sector.FloorY
 		cSector.CeilY = -sector.CeilingY
 

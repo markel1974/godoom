@@ -87,7 +87,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		tx.buckets[idx].Count++
 	}
 
-	// 3. Allocazione VRAM selettiva
+	// Allocazione VRAM selettiva
 	for i := range tx.buckets {
 		if tx.buckets[i].Count > 0 {
 			tx.buckets[i].DiffuseArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
@@ -96,7 +96,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		}
 	}
 
-	// 4. Popolamento e Packing
+	// Popolamento e Packing
 	for _, id := range names {
 		tn := t.Get([]string{id})
 		if len(tn) == 0 {
@@ -244,7 +244,7 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 	size := width * height
 	luma := make([]float64, size)
 
-	// Pass 1: Pre-calcolo della mappa di luminanza (O(N) invece di O(N*9))
+	// Pre-calcolo della mappa di luminanza (O(N) invece di O(N*9))
 	for i := 0; i < size; i++ {
 		idx := i * stride
 		luma[i] = (0.299*float64(pixels[idx]) + 0.587*float64(pixels[idx+1]) + 0.114*float64(pixels[idx+2])) / 255.0
@@ -269,7 +269,7 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 	// Fattore di normalizzazione per i pesi di Scharr (3 + 10 + 3 = 16 -> span 32)
 	weightNorm := strength / 32.0
 
-	// Pass 2: Convoluzione di Scharr 3x3
+	// Convoluzione di Scharr 3x3
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			tl := getLuma(x-1, y-1)

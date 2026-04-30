@@ -1,7 +1,5 @@
 package textures
 
-import "github.com/markel1974/godoom/mr_tech/model/geometry"
-
 // Texture represents a 2D texture with metadata and pixel data.
 // name is the identifier name of the texture.
 // id is the unique identifier for the texture.
@@ -39,15 +37,11 @@ func (t *Texture) IsEmissive() bool {
 }
 
 // SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.
-func (t *Texture) SetScaleFactor(gScale geometry.XYZ, scaleW, scaleH float64) {
+func (t *Texture) SetScaleFactor(scaleW, scaleH float64) {
 	t.scaleW = scaleW
 	t.scaleH = scaleH
 	t.wScaled, t.hScaled = float64(t.w), float64(t.h)
-	//scale := gScale.X
-
 	if t.scaleW != 1.0 || t.scaleH != 1.0 {
-		//TODO CAPIRE PERCHE BISOGNA MOLTIPLICARE PER 5 in DOOM!!!!!
-		//t.gScale.X *= 5
 		t.wScaled *= t.scaleW
 		t.hScaled *= t.scaleH
 	}

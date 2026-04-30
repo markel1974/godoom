@@ -47,7 +47,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	full3d := cfg.Calibration.Full3d
 
 	cfg.Scale(r.gScale)
-	materials := NewMaterials(cfg.GetTextures(), r.gScale)
+	materials := NewMaterials(cfg.GetTextures())
 	r.lights = NewLights()
 	var container2d []*Volume
 

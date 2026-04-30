@@ -2,7 +2,6 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -10,17 +9,15 @@ import (
 type Materials struct {
 	frames map[string]*textures.Material
 	tex    textures.ITextures
-	gScale geometry.XYZ
 	empty  *textures.Material
 }
 
 // NewMaterials creates a new Materials instance with the provided textures and initializes its material map.
-func NewMaterials(tex textures.ITextures, gScale geometry.XYZ) *Materials {
+func NewMaterials(tex textures.ITextures) *Materials {
 	return &Materials{
 		tex:    tex,
-		gScale: gScale,
 		frames: make(map[string]*textures.Material),
-		empty:  textures.NewMaterial(nil, int(config.MaterialKindNone), gScale, 1, 1, 0, 0),
+		empty:  textures.NewMaterial(nil, int(config.MaterialKindNone), 1, 1, 0, 0),
 	}
 }
 
@@ -41,7 +38,7 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 		return material
 	}
 	tex := r.tex.Get(ca.Frames)
-	material = textures.NewMaterial(tex, int(ca.Kind), r.gScale, ca.ScaleW, ca.ScaleH, ca.U, ca.V)
+	material = textures.NewMaterial(tex, int(ca.Kind), ca.ScaleW, ca.ScaleH, ca.U, ca.V)
 	r.frames[key] = material
 	return material
 }

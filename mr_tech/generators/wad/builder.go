@@ -131,7 +131,7 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 	player := bld.buildPlayer(level)
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = AspectRatio
-	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1}
+	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1.0}
 	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)
 	cr.Vertices = vertexes
 
@@ -352,15 +352,12 @@ func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float
 	intensity := float64(lightLevel) * ScaleLight
 	kind := config.LightKindAmbient
 	falloff := ((ceilY - floorY) * ScaleSectorH) * 2.0
-
-	// Default: Luce bianca/calda
 	r, g, b := 1.0, 0.95, 0.9
 
 	// --- EURISTICA DEL COLORE ---
 	// 1. Acido / Radioattività (Nukage, Slime) -> Verde
 	if strings.Contains(floorPic, "NUKAGE") || strings.Contains(floorPic, "SLIME") {
 		r, g, b = 0.2, 1.0, 0.2
-		// Se c'è acido a terra, illuminiamo l'ambiente di verde!
 	}
 	// 2. Lava / Sangue -> Rosso
 	if strings.Contains(floorPic, "LAVA") || strings.Contains(floorPic, "BLOOD") || strings.Contains(ceilPic, "RED") {
@@ -403,7 +400,7 @@ func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float
 	}
 	if (isSmall && isLightTexture) || (isSmall && isBright) {
 		kind = config.LightKindSpot
-		intensity *= 2.0
+		intensity *= 3.0
 		if falloff < 10.0 {
 			falloff = 10.0
 		}

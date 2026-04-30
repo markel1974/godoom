@@ -2,8 +2,6 @@ package textures
 
 import (
 	"fmt"
-
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // _tickInterval defines the number of global ticks between frame updates in animations.
@@ -38,7 +36,6 @@ type Material struct {
 	frames      []*Texture
 	totalFrames uint64
 	kind        int
-	gScale      geometry.XYZ
 	scaleW      float64
 	scaleH      float64
 	u           float64
@@ -47,7 +44,7 @@ type Material struct {
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewMaterial(frames []*Texture, kind int, gScale geometry.XYZ, scaleW, scaleH, u, v float64) *Material {
+func NewMaterial(frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Material {
 	if scaleW == 0 {
 		scaleW = 1
 	}
@@ -59,7 +56,6 @@ func NewMaterial(frames []*Texture, kind int, gScale geometry.XYZ, scaleW, scale
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
 		kind:        kind,
-		gScale:      gScale,
 		scaleW:      scaleW,
 		scaleH:      scaleH,
 		u:           u,
@@ -72,7 +68,7 @@ func NewMaterial(frames []*Texture, kind int, gScale geometry.XYZ, scaleW, scale
 			fmt.Println("nil frame")
 			break
 		}
-		frame.SetScaleFactor(gScale, scaleW, scaleH)
+		frame.SetScaleFactor(scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]

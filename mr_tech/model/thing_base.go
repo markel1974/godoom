@@ -56,9 +56,9 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 
 	var vertices IVertices
 	if cfg.Md2 != nil {
-		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction)
+		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	} else {
-		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction)
+		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	}
 	const cageMargin = 0.001
 	volume := vertices.GetVolume()
@@ -80,7 +80,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		maxStep:       cfg.Height * 0.5,
 		isActive:      true,
 		identifier:    -1,
-		cage:          NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0),
+		cage:          NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
 		inbox:         make(chan *ThingEvent, 16),
 		done:          make(chan struct{}),
 		collisions:    make([]IThing, 128),

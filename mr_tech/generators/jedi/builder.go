@@ -9,20 +9,23 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+const aspectRatio = 1.5
+
 const scaleX = 1.0
 const scaleY = 1.0
 const scaleZ = 1.0
 
-const scaleSectorH = 3.8
+const scaleSectorH = 1.0
 
 const scaleTextureW = 0.1
 const scaleTextureH = 0.2 * scaleSectorH //0.6
 
-const scaleLight = 0.2
+const scaleLight = 0.07
+const scaleLightFalloff = 1.5
 
-const playerHeight = 7.0 * scaleSectorH
-const playerRadius = 1.0
-const playerSpeed = 200
+const playerHeight = 6.0 * scaleSectorH
+const playerRadius = 2.5
+const playerSpeed = 300
 const playerMass = 8
 
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
@@ -107,12 +110,10 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 
 		lightLevel := sector.LightLevel * scaleLight
-		if lightLevel < 1.6 {
-			lightLevel = 1.6
-		}
+		lightFalloff := sector.LightLevel * scaleLightFalloff
 
 		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, 0)
+		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, lightFalloff)
 
 		// Quote altimetriche
 		cSector.FloorY = -sector.FloorY * scaleSectorH
@@ -238,6 +239,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	}
 
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	calibration.AspectRatio = aspectRatio
 	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
 	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, textures)
 	cr.Things = configThings
@@ -249,9 +251,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
-
-	//root.Player.Speed = 1200
-	player.JumpForce = 400
+	player.GForce = 9.8 * 7
+	player.JumpForce = 1500
 
 	player.Flash.ZFar = 8192
 	player.Flash.Factor = 0.02
@@ -261,8 +262,8 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player.Bobbing.SwayScale = 2.0
 	player.Bobbing.SwayOffsetX = 3
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
-	player.Bobbing.MaxAmplitudeY = 5.5
+	player.Bobbing.MaxAmplitudeX = 2.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	player.Bobbing.MaxAmplitudeY = 2.5
 	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
 	player.Bobbing.IdleAmpX = 0.9        // Respiro
 	player.Bobbing.IdleAmpY = 0.9

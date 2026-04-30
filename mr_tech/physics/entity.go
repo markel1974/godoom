@@ -9,8 +9,6 @@ import (
 const (
 	airFriction = 0.99
 
-	gForce = 9.8
-
 	// vMin represents the minimum velocity threshold below which motion is considered negligible.
 	vMin = 0.1
 
@@ -57,7 +55,7 @@ type Entity struct {
 }
 
 // NewEntity creates and returns a pointer to a new Entity initialized with the given position, size, mass, and physical properties.
-func NewEntity(x, y, z, w, h, d, mass, restitution, friction float64) *Entity {
+func NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
 	}

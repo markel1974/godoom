@@ -219,7 +219,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		root.Volumes = append(root.Volumes, volume)
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
-	//root.Player.Speed = 1200
+	root.Player.GForce = 9.8 * 8
 	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192

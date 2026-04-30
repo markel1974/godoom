@@ -26,10 +26,11 @@ type Volume struct {
 
 const solidRestitution = 0.0
 const solidFriction = 0.2
+const solidGForce = 9.8
 
 // NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
 func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Material, tag string) *Volume {
-	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction)
+	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
 	v.hasFixedZ = true
 	v.minZ = minZ
 	v.maxZ = maxZ
@@ -41,12 +42,12 @@ func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials [
 
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
-	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction)
+	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
 	return v
 }
 
 // NewVolumeDetails3d creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
-func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction float64) *Volume {
+func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
 		modelId:   modelId,
 		id:        id,
@@ -55,7 +56,7 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		maxZ:      0,
 		hasFixedZ: false,
 		materials: []*textures.Material{nil},
-		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction),
+		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
 	}
 	return v

@@ -11,7 +11,7 @@ type VertexSprite struct {
 }
 
 // NewVertexSprite creates a new VertexSprite with the given material, position, dimensions, and physical properties.
-func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitution, friction float64) *VertexSprite {
+func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *VertexSprite {
 	height := h
 	width := w
 	halfW := width / 2.0
@@ -26,7 +26,7 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 		}
 	}
 
-	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, mass, restitution, friction)
+	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, mass, restitution, friction, gForce)
 	f := &VertexSprite{volume: volume}
 	f.volume.SetBillboard(1.0)
 

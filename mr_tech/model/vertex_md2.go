@@ -16,8 +16,8 @@ type VertexMD2 struct {
 }
 
 // NewVertexMD2 creates a new VertexMD2 object with the given configuration, material, dimensions, mass, restitution, and friction.
-func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d, mass, restitution, friction float64) *VertexMD2 {
-	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, mass, restitution, friction)
+func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *VertexMD2 {
+	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, mass, restitution, friction, gForce)
 	v := &VertexMD2{
 		volume: volume,
 		frames: make([][]*Face, len(cfg.Frames)),

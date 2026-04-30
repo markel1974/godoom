@@ -67,7 +67,11 @@ func NewTextures() (*Textures, error) {
 func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)
-	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y)
+	emissive := false
+	if len(srcId) > 0 && srcId[0] == '*' || srcId[0] == '+' {
+		emissive = true
+	}
+	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y, emissive)
 	for y := 0; y < size.Y; y++ {
 		for x := 0; x < size.X; x++ {
 			c := src.RGBAAt(x, y)

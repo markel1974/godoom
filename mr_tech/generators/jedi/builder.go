@@ -21,7 +21,7 @@ const scaleTextureW = 0.1
 const scaleTextureH = 0.2 * scaleSectorH //0.6
 
 const scaleLight = 0.07
-const scaleLightFalloff = 1.5
+const scaleLightFalloff = 1.3
 
 const playerHeight = 6.0 * scaleSectorH
 const playerRadius = 2.5

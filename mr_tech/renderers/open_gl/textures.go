@@ -103,6 +103,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			continue
 		}
 		tex := tn[0]
+
 		w, h, pixels := tex.RGBA()
 		maxDim := w
 		if h > maxDim {
@@ -115,7 +116,6 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		resizedPixels := UpscaleBicubic(pixels, w, h, size, size, stride)
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
-		blackPixels := createBlackPixels(size, size, stride)
 
 		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
@@ -124,11 +124,13 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(normalPixels))
 
 		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
-		if len(id) > 0 && (id[0] == '*' || id[0] == '+') {
+		if tex.IsEmissive() {
 			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
 		} else {
+			blackPixels := createBlackPixels(size, size, stride)
 			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
 		}
+
 		//Impacchettiamo Bucket e Layer in un solo Float
 		packedValue := float32(bIdx*1000) + float32(layer)
 		tx.textures[tex] = packedValue
@@ -184,8 +186,9 @@ func createTextureArray(width, height int, layers int32) uint32 {
 	}
 
 	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT)

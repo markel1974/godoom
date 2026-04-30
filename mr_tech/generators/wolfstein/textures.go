@@ -57,8 +57,12 @@ func (w *Textures) load(filename string, idx int32) (*textures.Texture, error) {
 	bounds := img.Bounds()
 	width := bounds.Max.X - bounds.Min.X
 	height := bounds.Max.Y - bounds.Min.Y
+	emissive := false
+	if len(filename) > 0 && filename[0] == '*' || filename[0] == '+' {
+		emissive = true
+	}
 
-	tex := textures.NewTexture(filename, uint32(idx), width, height)
+	tex := textures.NewTexture(filename, uint32(idx), width, height, emissive)
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()

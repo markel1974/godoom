@@ -60,7 +60,11 @@ func (t *Textures) AddTexture(d *GobHandler, bm *BM, texName string, palette [25
 func (t *Textures) add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)
-	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y)
+	emissive := false
+	if len(srcId) > 0 && srcId[0] == '*' || srcId[0] == '+' {
+		emissive = true
+	}
+	texture := textures.NewTexture(srcId, uint32(id), size.X, size.Y, emissive)
 	for y := 0; y < size.Y; y++ {
 		flipY := size.Y - 1 - y
 		for x := 0; x < size.X; x++ {

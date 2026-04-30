@@ -77,7 +77,11 @@ func (w *Textures) RegisterPixels(name string, width, height int, indices []byte
 }
 
 func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
-	tex := textures.NewTexture(name, uint32(idx), width, height)
+	emissive := false
+	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
+		emissive = true
+	}
+	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 	// Gestione unificata dell'Alpha (HL BSP + Override esplicito)
 	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
 	transparentColor := transIndex
@@ -111,7 +115,11 @@ func (w *Textures) loadFromPixels(name string, width, height int, indices []byte
 }
 
 func (w *Textures) loadFromPixelsOld(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte) (*textures.Texture, error) {
-	tex := textures.NewTexture(name, uint32(idx), width, height)
+	emissive := false
+	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
+		emissive = true
+	}
+	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 
 	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
 	transparentColor := transIndex
@@ -154,8 +162,12 @@ func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*text
 	bounds := img.Bounds()
 	width := bounds.Max.X - bounds.Min.X
 	height := bounds.Max.Y - bounds.Min.Y
+	emissive := false
+	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
+		emissive = true
+	}
 
-	tex := textures.NewTexture(name, uint32(idx), width, height)
+	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 	for y := 0; y < height; y++ {
 		// Calcolo della riga invertita per il memory layout di OpenGL
 		flippedY := height - 1 - y

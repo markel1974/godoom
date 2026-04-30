@@ -8,27 +8,34 @@ import "github.com/markel1974/godoom/mr_tech/model/geometry"
 // w and h define the width and height of the texture in pixels.
 // data holds the actual pixel information as a 2D array of integers.
 type Texture struct {
-	name    string
-	id      uint32
-	w       int
-	h       int
-	data    [][]int
-	scaleW  float64
-	scaleH  float64
-	wScaled float64
-	hScaled float64
+	name     string
+	id       uint32
+	w        int
+	h        int
+	data     [][]int
+	scaleW   float64
+	scaleH   float64
+	wScaled  float64
+	hScaled  float64
+	emissive bool
 }
 
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
-func NewTexture(name string, id uint32, w int, h int) *Texture {
+func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	z := &Texture{
 		name: name, id: id, w: w, h: h,
-		data: make([][]int, w),
+		data:     make([][]int, w),
+		emissive: emissive,
 	}
 	for i := range z.data {
 		z.data[i] = make([]int, h)
 	}
 	return z
+}
+
+// IsEmissive determines if the texture is marked as emissive and returns true if it is, otherwise false.
+func (t *Texture) IsEmissive() bool {
+	return t.emissive
 }
 
 // SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.

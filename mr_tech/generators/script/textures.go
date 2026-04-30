@@ -24,8 +24,13 @@ func NewTextures(basePath string) (*Textures, error) {
 	}
 
 	for idx, f := range files {
-		if !f.IsDir() {
-			tex := textures.NewTexture(f.Name(), uint32(idx), 1024, 1024)
+		name := f.Name()
+		if !f.IsDir() && len(name) > 0 {
+			emissive := false
+			if name[0] == '*' || name[0] == '+' {
+				emissive = true
+			}
+			tex := textures.NewTexture(f.Name(), uint32(idx), 1024, 1024, emissive)
 			err = t.load(tex, basePath+f.Name())
 			if err == nil || err == io.EOF {
 				t.resources[f.Name()] = tex

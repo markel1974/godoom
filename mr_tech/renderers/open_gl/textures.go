@@ -113,7 +113,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		if h < 1 {
 			h = 1
 		}
-		pixels := UpscaleBicubic(pixelsOrig, wOrig, hOrig, w, h, stride)
+		pixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, w, h, stride)
 		maxDim := w
 		if h > maxDim {
 			maxDim = h
@@ -121,9 +121,15 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		bIdx := idxByDim(maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		//UpscaleFixedPoint UpscaleBicubic UpscaleLanczosSeparable
-		resizedPixels := UpscaleBicubic(pixels, w, h, size, size, stride)
-		//resizedPixels := PadPixels(pixels, w, h, size, stride)
+		var resizedPixels []uint8
+		if w == h {
+			//UpscaleFixedPoint UpscaleBicubic UpscaleLanczosSeparable
+			resizedPixels = UpscaleLanczosSeparable(pixels, w, h, size, size, stride)
+		} else {
+			//TODO SE W e H sono differenti usare PadPixels
+			//resizedPixels = PadPixels(pixels, w, h, size, stride)
+			resizedPixels = UpscaleBicubic(pixels, w, h, size, size, stride)
+		}
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
 

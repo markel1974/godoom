@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-const aspectRatio = 1.5
+const aspectRatio = 1.6
 
 const scaleX = 10.0
 const scaleY = 10.0
@@ -20,8 +20,8 @@ const scaleSectorH = 8.0
 const scaleTextureW = 1.0 //0.1
 const scaleTextureH = 1.0 //0.2
 
-const scaleLight = 0.1
-const scaleLightFalloff = 50
+const scaleLight = 0.11
+const scaleLightFalloff = 40
 
 const playerHeight = 6.0 * scaleSectorH
 const playerRadius = 2.5

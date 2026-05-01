@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
@@ -219,6 +220,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		root.Volumes = append(root.Volumes, volume)
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
+	playerLogic := common.NewPlayer()
+	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.GForce = 9.8 * 8
 	root.Player.JumpForce = 1000
 
@@ -368,6 +371,15 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	}
 	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
 
+	if thingCfg.Kind == config.ThingEnemyDef {
+		enemyLogic := common.NewEnemy(300)
+		thingCfg.OnThinking = enemyLogic.OnThinking
+		thingCfg.OnCollision = enemyLogic.OnCollision
+	} else {
+		itemLogic := common.NewItem()
+		thingCfg.OnCollision = itemLogic.OnCollision
+	}
+
 	cModel := &config.MD2{Frames: make([]config.MD2Frame, mdl.Header.NumFrames)}
 	for idx, f := range mdl.Frames {
 		cFrame := config.MD2Frame{Triangles: make([][3]config.MD2Vertex, mdl.Header.NumTris)}
@@ -462,6 +474,15 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 	// Nota: usiamo config.ThingItemDef e un raggio/altezza fittizi per le collisioni
 	thingCfg := config.NewConfigThing(classname, pos, 0.0, config.ThingItemDef, 16.0, 16.0, 32.0, 0.0, nil)
 	thingCfg.SetModel3d(model3d)
+
+	if thingCfg.Kind == config.ThingEnemyDef {
+		enemyLogic := common.NewEnemy(100)
+		thingCfg.OnThinking = enemyLogic.OnThinking
+		thingCfg.OnCollision = enemyLogic.OnCollision
+	} else {
+		itemLogic := common.NewItem()
+		thingCfg.OnCollision = itemLogic.OnCollision
+	}
 
 	return thingCfg, nil
 }

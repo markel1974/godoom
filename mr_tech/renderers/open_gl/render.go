@@ -245,7 +245,7 @@ func (w *RenderOpenGL) doRun() {
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
 func (w *RenderOpenGL) doPlayerThrow() {
 	const throwableIndex = 2
-	w.player.Throw(throwableIndex, 200)
+	w.player.Throw(throwableIndex, 300)
 }
 
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.

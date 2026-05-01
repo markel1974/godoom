@@ -171,7 +171,7 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
-func (th *Things) CreateThrowable(throwableIndex int, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
+func (th *Things) CreateThrowable(throwableIndex int, onCollision func(self config.IThingConfig, other config.IThingConfig), volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	//TODO now is an hack
 	//const throwableIndex = 2
 	if len(th.config) <= throwableIndex {
@@ -180,6 +180,7 @@ func (th *Things) CreateThrowable(throwableIndex int, volume *Volume, pos geomet
 	c := th.config[throwableIndex]
 	id := utils.NextUUId()
 	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed, c.Material)
+	ct.OnCollision = onCollision
 	ct.Pitch = pitch
 	slot := th.pendingIdx.Add(1) - 1
 	if slot >= int32(len(th.pending)) {

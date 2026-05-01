@@ -6,23 +6,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// IThing defines an interface for a game entity with methods for retrieving identifiers, position, and physics properties.
+// IThing represents a general-purpose interface for entities with configuration, physics, and rendering properties.
 type IThing interface {
-	GetId() string
+	config.IThingConfig
 
 	SetIdentifier(identifier int)
 
 	GetIdentifier() int
 
-	GetKind() config.ThingType
-
 	GetAABB() *physics.AABB
 
 	GetMaterial() *textures.Material
-
-	GetPosition() (float64, float64, float64)
-
-	GetAngle() float64
 
 	GetVertices() ([]*Face, []*Face, float64, float64)
 

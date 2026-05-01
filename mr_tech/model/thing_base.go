@@ -40,6 +40,7 @@ type ThingBase struct {
 	collisionsIdx int
 	inbox         chan *ThingEvent
 	full3d        bool
+	onCollision   config.CollisionFunc
 	done          chan struct{}
 }
 
@@ -59,6 +60,10 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	} else {
 		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	}
+
+	if cfg.OnCollision == nil {
+		panic("onCollision is nil for thing:" + cfg.Id)
 	}
 	const cageMargin = 0.001
 	volume := vertices.GetVolume()
@@ -85,6 +90,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		done:          make(chan struct{}),
 		collisions:    make([]IThing, 128),
 		collisionsIdx: 0,
+		onCollision:   cfg.OnCollision,
 		full3d:        things.full3d,
 	}
 	t.entity.SetOnGround(false)
@@ -142,9 +148,59 @@ func (t *ThingBase) GetLocation() *Volume {
 	return t.location
 }
 
+// GetMaxStep returns the maximum step value associated with the ThingBase instance.
+func (t *ThingBase) GetMaxStep() float64 {
+	return t.maxStep
+}
+
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetRadius() float64 {
 	return t.entity.GetWidth() / 2.0
+}
+
+// GetAcceleration returns the current acceleration value of the ThingBase.
+func (t *ThingBase) GetAcceleration() float64 {
+	return t.acceleration
+}
+
+// GetDepth retrieves the depth value of the entity associated with the ThingBase instance.
+func (t *ThingBase) GetDepth() float64 {
+	return t.entity.GetDepth()
+}
+
+// GetSpeed returns the current speed of the ThingBase instance as a float64.
+func (t *ThingBase) GetSpeed() float64 {
+	return t.speed
+}
+
+// GetWidth retrieves the width of the underlying entity associated with the ThingBase.
+func (t *ThingBase) GetWidth() float64 {
+	return t.entity.GetWidth()
+}
+
+// GetMass retrieves the mass value of the underlying entity associated with the ThingBase instance.
+func (t *ThingBase) GetMass() float64 {
+	return t.entity.GetMass()
+}
+
+// GetVelocity retrieves the current velocity of the entity as a tuple of X, Y, and Z components.
+func (t *ThingBase) GetVelocity() (float64, float64, float64) {
+	return t.entity.GetVelocity()
+}
+
+// IsOnGround checks if the entity associated with ThingBase is currently on the ground and returns true if it is.
+func (t *ThingBase) IsOnGround() bool {
+	return t.entity.IsOnGround()
+}
+
+// SetOnGround sets the on-ground state of the entity to the specified boolean value.
+func (t *ThingBase) SetOnGround(g bool) {
+	t.entity.SetOnGround(g)
+}
+
+// AddForce applies a force vector (fx, fy, fz) to the entity associated with the ThingBase.
+func (t *ThingBase) AddForce(fx, fy, fz float64) {
+	t.entity.AddForce(fx, fy, fz)
 }
 
 // GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
@@ -189,6 +245,8 @@ func (t *ThingBase) OnCollide(other IThing) {
 	}
 	t.collisions[t.collisionsIdx] = other
 	t.collisionsIdx++
+
+	t.onCollision(t, other)
 	//fmt.Println("COLLISION -> ", other.GetId())
 }
 
@@ -300,8 +358,8 @@ func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
-func (t *ThingBase) LaunchObject(throwableIndex int, pos geometry.XYZ, angle, pitch, speed float64) {
-	t.things.CreateThrowable(throwableIndex, t.location, pos, angle, pitch, speed)
+func (t *ThingBase) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+	t.things.CreateThrowable(throwableIndex, onCollision, t.location, pos, angle, pitch, speed)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
@@ -351,6 +409,19 @@ func (t *ThingBase) FireHitscan(pos geometry.XYZ, dirX, dirY, dirZ float64) {
 	}
 }
 
+// spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
+// It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
+func (t *ThingBase) spawnBulletHole(x, y, z float64, target physics.IAABB) {
+	// Creiamo un'entità visiva temporanea tramite il gestore Things
+	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
+	// per evitare lo Z-fighting durante il rendering.
+
+	// Se il target è un muro, possiamo estrarre la normale per ruotare la decalcomania
+	// ma per ora posizioniamola semplicemente nel punto XYZ.
+	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
+}
+
+/*
 // IsValidZ checks if the entity's base and top Z positions are within valid bounds of the location, considering maxStep.
 func isValidZ(volume *Volume, baseZ, topZ, maxStep float64) *Volume {
 	if volume == nil {
@@ -376,15 +447,4 @@ func isValidZ(volume *Volume, baseZ, topZ, maxStep float64) *Volume {
 	}
 	return volume
 }
-
-// spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
-// It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
-func (t *ThingBase) spawnBulletHole(x, y, z float64, target physics.IAABB) {
-	// Creiamo un'entità visiva temporanea tramite il gestore Things
-	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
-	// per evitare lo Z-fighting durante il rendering.
-
-	// Se il target è un muro, possiamo estrarre la normale per ruotare la decalcomania
-	// ma per ora posizioniamola semplicemente nel punto XYZ.
-	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
-}
+*/

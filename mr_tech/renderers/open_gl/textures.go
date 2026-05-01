@@ -103,8 +103,17 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			continue
 		}
 		tex := tn[0]
-
-		w, h, pixels := tex.RGBA()
+		//w, h, pixels := tex.RGBA()
+		wOrig, hOrig, pixelsOrig := tex.RGBA()
+		wScaled, hScaled := tex.GetSizeScaled()
+		w, h := int(wScaled), int(hScaled)
+		if w < 1 {
+			w = 1
+		}
+		if h < 1 {
+			h = 1
+		}
+		pixels := UpscaleBicubic(pixelsOrig, wOrig, hOrig, w, h, stride)
 		maxDim := w
 		if h > maxDim {
 			maxDim = h
@@ -114,6 +123,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		layer := tx.buckets[bIdx].Layer
 		//UpscaleFixedPoint UpscaleBicubic UpscaleLanczosSeparable
 		resizedPixels := UpscaleBicubic(pixels, w, h, size, size, stride)
+		//resizedPixels := PadPixels(pixels, w, h, size, stride)
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
 
@@ -153,7 +163,6 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 
 // createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.
 func createTextureArray(width, height int, layers int32) uint32 {
-	// computeMipMapLevel calculates the number of mipmap levels based on the maximum dimension of a texture (width or height).
 	computeMipMapLevel := func(width, height int) int32 {
 		maxDim := float64(width)
 		if height > width {
@@ -193,6 +202,9 @@ func createTextureArray(width, height int, layers int32) uint32 {
 
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT)
 	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT)
+	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
 	// Anisotropic filtering
 	var maxAniso float32
 	gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)

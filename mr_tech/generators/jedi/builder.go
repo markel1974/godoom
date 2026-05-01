@@ -11,21 +11,21 @@ import (
 
 const aspectRatio = 1.5
 
-const scaleX = 1.0
-const scaleY = 1.0
+const scaleX = 10.0
+const scaleY = 10.0
 const scaleZ = 1.0
 
-const scaleSectorH = 1.0
+const scaleSectorH = 8.0
 
-const scaleTextureW = 0.1
-const scaleTextureH = 0.2 * scaleSectorH //0.6
+const scaleTextureW = 1.0 //0.1
+const scaleTextureH = 1.0 //0.2
 
-const scaleLight = 0.07
-const scaleLightFalloff = 10
+const scaleLight = 0.1
+const scaleLightFalloff = 50
 
 const playerHeight = 6.0 * scaleSectorH
 const playerRadius = 2.5
-const playerSpeed = 300
+const playerSpeed = 900
 const playerMass = 8
 
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
@@ -254,19 +254,19 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
-	player.GForce = 9.8 * 7
-	player.JumpForce = 1500
+	player.GForce = 9.8 * 8
+	player.JumpForce = 1000
 
 	player.Flash.ZFar = 8192
 	player.Flash.Factor = 0.02
-	player.Flash.Falloff = 2000
+	player.Flash.Falloff = 1500
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 2.0
-	player.Bobbing.SwayOffsetX = 3
+	player.Bobbing.SwayOffsetX = 50
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = 2.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
-	player.Bobbing.MaxAmplitudeY = 2.5
+	player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	player.Bobbing.MaxAmplitudeY = 5.5
 	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
 	player.Bobbing.IdleAmpX = 0.9        // Respiro
 	player.Bobbing.IdleAmpY = 0.9

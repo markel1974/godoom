@@ -28,12 +28,8 @@ func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	for i := range z.data {
 		z.data[i] = make([]int, h)
 	}
+	z.SetScaleFactor(1.0, 1.0)
 	return z
-}
-
-// IsEmissive determines if the texture is marked as emissive and returns true if it is, otherwise false.
-func (t *Texture) IsEmissive() bool {
-	return t.emissive
 }
 
 // SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.
@@ -99,6 +95,11 @@ func (t *Texture) GetId() uint32 {
 // GetName returns the name of the texture as a string.
 func (t *Texture) GetName() string {
 	return t.name
+}
+
+// IsEmissive determines if the texture is marked as emissive and returns true if it is, otherwise false.
+func (t *Texture) IsEmissive() bool {
+	return t.emissive
 }
 
 // RGBA returns the width, height, and a pixel array representing the texture in RGBA format.

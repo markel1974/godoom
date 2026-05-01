@@ -373,3 +373,18 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 	}
 	return dst
 }
+
+func PadPixels(pixels []uint8, srcW, srcH, dstSize, stride int) []uint8 {
+	if srcW == dstSize && srcH == dstSize {
+		return pixels
+	}
+	padded := make([]uint8, dstSize*dstSize*stride)
+	for y := 0; y < srcH; y++ {
+		for x := 0; x < srcW; x++ {
+			srcIdx := (y*srcW + x) * stride
+			dstIdx := (y*dstSize + x) * stride
+			copy(padded[dstIdx:dstIdx+stride], pixels[srcIdx:srcIdx+stride])
+		}
+	}
+	return padded
+}

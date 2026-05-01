@@ -14,8 +14,9 @@ type ThingItem struct {
 func NewThingItem(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingItem {
 	pos := cfg.Position
 	thing := &ThingItem{
-		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
+		ThingBase: NewThingBase2(things, cfg, pos, anim, volume),
 	}
+	thing.volume.SetThing(thing)
 	return thing
 }
 

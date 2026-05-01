@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 
@@ -30,7 +29,11 @@ func NewEnemy(wakeUpDistance float64) *Enemy {
 
 // OnCollision is triggered when the enemy collides with another object, handling interaction logic between entities.
 func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig) {
-	fmt.Println("Enemy.OnCollision:", self.GetId(), other.GetId())
+	//otherId := "UNKNOW"
+	//if other != nil {
+	//	otherId = other.GetId()
+	//}
+	//fmt.Println("Enemy.OnCollision:", self.GetId(), otherId)
 }
 
 // OnThinking handles the logic for enemy behavior, including activation, movement, aiming, and attack decision-making.

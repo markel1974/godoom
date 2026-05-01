@@ -46,7 +46,7 @@ type IThing interface {
 
 	SetActive(active bool)
 
-	OnCollide(other IThing)
+	//OnCollision(other IThing)
 
 	StartLoop()
 

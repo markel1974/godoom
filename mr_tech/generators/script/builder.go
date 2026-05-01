@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -37,6 +38,8 @@ func (p *Builder) Build(id string) (*config.Root, error) {
 	}
 
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 90, 1.0, 20)
+	playerLogic := common.NewPlayer()
+	player.OnCollision = playerLogic.OnCollision
 	player.Speed = 60
 
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)

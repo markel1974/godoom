@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
@@ -213,6 +214,14 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
 
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
+	if cfgThing.Kind == config.ThingEnemyDef {
+		enemyLogic := common.NewEnemy(100)
+		cfgThing.OnThinking = enemyLogic.OnThinking
+		cfgThing.OnCollision = enemyLogic.OnCollision
+	} else {
+		itemLogic := common.NewItem()
+		cfgThing.OnCollision = itemLogic.OnCollision
+	}
 	cfgThing.GForce = GForce
 	cfgThing.WakeUpDistance = 500
 	cfgThing.JumpForce = 400
@@ -230,7 +239,8 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	}
 
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
-
+	playerLogic := common.NewPlayer()
+	player.OnCollision = playerLogic.OnCollision
 	player.GForce = GForce
 	player.JumpForce = 1800
 

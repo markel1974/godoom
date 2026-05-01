@@ -1,8 +1,6 @@
 package common
 
 import (
-	"fmt"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
@@ -17,5 +15,9 @@ func NewItem() *Item {
 
 // OnCollision handles the collision event between the current item and another object.
 func (e *Item) OnCollision(self config.IThingConfig, other config.IThingConfig) {
-	fmt.Println("Item.OnCollision:", self.GetId(), other.GetId())
+	//otherId := "UNKNOWN"
+	//if other != nil {
+	//	otherId = other.GetId()
+	//}
+	//fmt.Println("Item.OnCollision:", self.GetId(), otherId)
 }

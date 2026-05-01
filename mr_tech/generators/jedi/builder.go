@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -254,6 +255,8 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
+	playerLogic := common.NewPlayer()
+	player.OnCollision = playerLogic.OnCollision
 	player.GForce = 9.8 * 8
 	player.JumpForce = 1000
 

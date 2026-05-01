@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -101,6 +102,8 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
+	playerLogic := common.NewPlayer()
+	player.OnCollision = playerLogic.OnCollision
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)

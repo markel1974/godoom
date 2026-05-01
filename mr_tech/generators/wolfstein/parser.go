@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -113,8 +114,16 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				const scaleH = 0.08
 				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, scaleH, scaleH*2, 0, 0)
 				if useEnemy {
-					thing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
-					root.Things = append(root.Things, thing)
+					cfgThing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6, anim)
+					if cfgThing.Kind == config.ThingEnemyDef {
+						enemyLogic := common.NewEnemy(100)
+						cfgThing.OnThinking = enemyLogic.OnThinking
+						cfgThing.OnCollision = enemyLogic.OnCollision
+					} else {
+						itemLogic := common.NewItem()
+						cfgThing.OnCollision = itemLogic.OnCollision
+					}
+					root.Things = append(root.Things, cfgThing)
 				}
 				cell = 0 // Libera la cella per il compilatore topologico
 			}
@@ -189,6 +198,8 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 		playerPos = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
 	}
 	root.Player = config.NewConfigPlayer(playerPos, 0, 20, 90, 1, 8)
+	playerLogic := common.NewPlayer()
+	root.Player.OnCollision = playerLogic.OnCollision
 	return root, nil
 }
 

@@ -15,25 +15,26 @@ type ThingThrowable struct {
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
 func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingThrowable {
 	pos := cfg.Position
-	p := &ThingThrowable{
-		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
+	thing := &ThingThrowable{
+		ThingBase: NewThingBase2(things, cfg, pos, anim, volume),
 	}
+	thing.volume.SetThing(thing)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
-	p.maxStep = 0.0
+	thing.maxStep = 0.0
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
 	// 2. Vettore Direzionale 3D normalizzato
-	dirX := math.Cos(p.angle) * math.Cos(cfg.Pitch)
-	dirY := math.Sin(p.angle) * math.Cos(cfg.Pitch)
+	dirX := math.Cos(thing.angle) * math.Cos(cfg.Pitch)
+	dirY := math.Sin(thing.angle) * math.Cos(cfg.Pitch)
 	dirZ := math.Sin(cfg.Pitch)
 	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
-	muzzleVelocity := p.speed * 5.0
-	p.entity.SetVx(dirX * muzzleVelocity)
-	p.entity.SetVy(dirY * muzzleVelocity)
-	p.entity.SetVz(dirZ * muzzleVelocity)
+	muzzleVelocity := thing.speed * 5.0
+	thing.entity.SetVx(dirX * muzzleVelocity)
+	thing.entity.SetVy(dirY * muzzleVelocity)
+	thing.entity.SetVz(dirZ * muzzleVelocity)
 
-	return p
+	return thing
 }
 
 // PostMessage sends a ThingEvent to the ThingThrowable's inbox channel for processing in the event loop.

@@ -18,34 +18,34 @@ type IVertices interface {
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	id            string
-	pos           geometry.XYZ
-	kind          config.ThingType
-	angle         float64
-	maxStep       float64
-	speed         float64
-	acceleration  float64
-	jumpForce     float64
-	location      *Volume
-	world         *Volumes
-	material      *textures.Material
-	things        *Things
-	isActive      bool
-	identifier    int
-	cage          *CollisionCage
-	volume        *Volume
-	entity        *physics.Entity
-	vertices      IVertices
-	collisions    []IThing
-	collisionsIdx int
-	inbox         chan *ThingEvent
-	full3d        bool
-	onCollision   config.CollisionFunc
-	done          chan struct{}
+	id           string
+	pos          geometry.XYZ
+	kind         config.ThingType
+	angle        float64
+	maxStep      float64
+	speed        float64
+	acceleration float64
+	jumpForce    float64
+	location     *Volume
+	world        *Volumes
+	material     *textures.Material
+	things       *Things
+	isActive     bool
+	identifier   int
+	cage         *CollisionCage
+	volume       *Volume
+	entity       *physics.Entity
+	vertices     IVertices
+	//collisions    []IThing
+	//collisionsIdx int
+	inbox       chan *ThingEvent
+	full3d      bool
+	onCollision config.CollisionFunc
+	done        chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
+func NewThingBase2(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	radAngle := cfg.Angle // * (math.Pi / 180.0)
 	entX := pos.X - cfg.Radius
@@ -67,34 +67,34 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 	}
 	const cageMargin = 0.001
 	volume := vertices.GetVolume()
+
 	t := &ThingBase{
-		vertices:      vertices,
-		volume:        volume,
-		entity:        volume.GetEntity(),
-		id:            cfg.Id,
-		angle:         radAngle,
-		kind:          cfg.Kind,
-		speed:         cfg.Speed,
-		acceleration:  cfg.Acceleration,
-		jumpForce:     cfg.JumpForce,
-		pos:           pos,
-		location:      location,
-		material:      material,
-		world:         volumes,
-		things:        things,
-		maxStep:       cfg.Height * 0.5,
-		isActive:      true,
-		identifier:    -1,
-		cage:          NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
-		inbox:         make(chan *ThingEvent, 16),
-		done:          make(chan struct{}),
-		collisions:    make([]IThing, 128),
-		collisionsIdx: 0,
-		onCollision:   cfg.OnCollision,
-		full3d:        things.full3d,
+		vertices:     vertices,
+		volume:       volume,
+		entity:       volume.GetEntity(),
+		id:           cfg.Id,
+		angle:        radAngle,
+		kind:         cfg.Kind,
+		speed:        cfg.Speed,
+		acceleration: cfg.Acceleration,
+		jumpForce:    cfg.JumpForce,
+		pos:          pos,
+		location:     location,
+		material:     material,
+		world:        volumes,
+		things:       things,
+		maxStep:      cfg.Height * 0.5,
+		isActive:     true,
+		identifier:   -1,
+		cage:         NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
+		inbox:        make(chan *ThingEvent, 16),
+		done:         make(chan struct{}),
+		//collisions:    make([]IThing, 128),
+		//collisionsIdx: 0,
+		onCollision: cfg.OnCollision,
+		full3d:      things.full3d,
 	}
 	t.entity.SetOnGround(false)
-
 	return t
 }
 
@@ -238,17 +238,17 @@ func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
 
-// OnCollide handles interactions when the current object collides with another object implementing the IThing interface.
-func (t *ThingBase) OnCollide(other IThing) {
-	if t.collisionsIdx >= len(t.collisions) {
-		return
-	}
-	t.collisions[t.collisionsIdx] = other
-	t.collisionsIdx++
+// OnCollision handles interactions when the current object collides with another object implementing the IThing interface.
+//func (t *ThingBase) OnCollision(other IThing) {
+//if t.collisionsIdx >= len(t.collisions) {
+//	return
+//}
+//t.collisions[t.collisionsIdx] = other
+//t.collisionsIdx++
 
-	t.onCollision(t, other)
-	//fmt.Println("COLLISION -> ", other.GetId())
-}
+//t.onCollision(t, other)
+//fmt.Println("COLLISION -> ", other.GetId())
+//}
 
 // IsActive checks if the ThingBase instance is currently active.
 func (t *ThingBase) IsActive() bool {
@@ -305,10 +305,17 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 			}
 
 			penetration := (rEff - distTarget) + solverJitter
-			otherParentEnt := otherFace.GetParent().GetEntity()
+			otherParent := otherFace.GetParent()
+			otherParentEnt := otherParent.GetEntity()
 
 			// Delega totale e assoluta al solutore interno di physics
 			t.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
+
+			//TODO PASSARE ITHING
+			thing := otherParent.GetThing()
+			if thing != nil {
+				t.onCollision(t, thing)
+			}
 		}
 	}
 }

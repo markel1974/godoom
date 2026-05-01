@@ -23,11 +23,12 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Material, v
 	if cfg.OnThinking == nil {
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}
-	e := &ThingEnemy{
-		ThingBase:  NewThingBase(things, cfg, pos, anim, volume),
+	thing := &ThingEnemy{
+		ThingBase:  NewThingBase2(things, cfg, pos, anim, volume),
 		onThinking: cfg.OnThinking,
 	}
-	return e
+	thing.volume.SetThing(thing)
+	return thing
 }
 
 func (t *ThingEnemy) PostMessage(ec *ThingEvent) {

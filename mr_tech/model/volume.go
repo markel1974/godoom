@@ -22,6 +22,7 @@ type Volume struct {
 	hasFixedZ bool
 	facesTree *physics.AABBTree
 	billboard float64
+	thing     IThing
 }
 
 const solidRestitution = 0.0
@@ -106,6 +107,16 @@ func (v *Volume) Rebuild() bool {
 		v.facesTree.InsertObject(face)
 	}
 	return true
+}
+
+// SetThing sets the IThing instance associated with the Volume.
+func (v *Volume) SetThing(thing IThing) {
+	v.thing = thing
+}
+
+// GetThing retrieves the IThing object associated with the Volume instance.
+func (v *Volume) GetThing() IThing {
+	return v.thing
 }
 
 // GetBillboard retrieves the billboard value associated with the Face instance.

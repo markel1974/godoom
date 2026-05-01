@@ -48,12 +48,11 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	}
 	c.Id = "PLAYER"
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
-	base := NewThingBase(things, c.Thing, c.Position, nil, volume)
-	p := &ThingPlayer{
+	thing := &ThingPlayer{
 		kind:           0,
 		pitch:          0,
 		pitchState:     0,
-		ThingBase:      base,
+		ThingBase:      NewThingBase2(things, c.Thing, c.Position, nil, volume),
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
@@ -62,9 +61,9 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	//p.id = "PLAYER"
-	p.SetAngle(c.Angle)
-	return p
+	thing.volume.SetThing(thing)
+	thing.SetAngle(c.Angle)
+	return thing
 }
 
 // IsActive determines whether the ThingPlayer instance is currently active, returning true if active, otherwise false.

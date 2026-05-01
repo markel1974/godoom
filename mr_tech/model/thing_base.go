@@ -300,8 +300,8 @@ func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
-func (t *ThingBase) LaunchObject(pos geometry.XYZ, angle, pitch float64) {
-	t.things.CreateThrowable(t.location, pos, angle, pitch, 1.0, 1.0, 10)
+func (t *ThingBase) LaunchObject(throwableIndex int, pos geometry.XYZ, angle, pitch, speed float64) {
+	t.things.CreateThrowable(throwableIndex, t.location, pos, angle, pitch, speed)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.

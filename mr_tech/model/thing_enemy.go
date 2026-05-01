@@ -106,7 +106,9 @@ func (t *ThingEnemy) StageThinking(playerX float64, playerY float64, playerZ flo
 	thingZ := t.pos.Z
 	t.MoveTowards(nx, ny, t.speed*impulse, t.acceleration)
 	t.doJump(playerZ, thingZ, playerDist2d, nx, ny)
-	t.doThrow(playerDist3d, playerDist2d, dz)
+	const throwableIndex = 2
+	const throwableSpeed = 100
+	t.doThrow(throwableIndex, throwableSpeed, playerDist3d, playerDist2d, dz)
 }
 
 // doJump applies a vertical and forward force to the entity if it is blocked or the target floor is higher than its current one.
@@ -137,7 +139,7 @@ func (t *ThingEnemy) doJump(playerZ, thingZ, playerDist2d, nx, ny float64) {
 }
 
 // doFire enables the entity to fire a projectile if within range and off cooldown, calculating its spawn position and trajectory.
-func (t *ThingEnemy) doThrow(dist3d, dist2d, dz float64) {
+func (t *ThingEnemy) doThrow(throwableIndex int, speed, dist3d, dist2d, dz float64) {
 	if t.throwCooldown <= 0 && dist3d < 20.0 {
 		weaponForward := t.entity.GetWidth()
 		spawnX := t.pos.X + (math.Cos(t.angle) * weaponForward)
@@ -145,7 +147,7 @@ func (t *ThingEnemy) doThrow(dist3d, dist2d, dz float64) {
 		spawnZ := t.pos.Z + (t.entity.GetDepth() * 0.5)
 		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 		aimPitch := math.Atan2(dz, dist2d)
-		t.LaunchObject(bulletPos, t.angle, aimPitch)
+		t.LaunchObject(throwableIndex, bulletPos, t.angle, aimPitch, speed)
 		// Resetta il timer
 		t.throwCooldown = t.throwMin
 	}

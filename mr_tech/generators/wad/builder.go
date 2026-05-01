@@ -33,7 +33,7 @@ const ScaleWThings = 1.0
 const ScaleHThings = 1.0
 
 // GForce represents the standard gravitational force multiplier applied to game entities, with a value of 9.8 * 8.
-const GForce = 9.8 * 15
+const GForce = 9.8 * 20
 
 // playerHeight defines the height of a player entity in game units, used for calculations related to geometry and physics.
 const playerHeight = 50.0
@@ -232,7 +232,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
 
 	player.GForce = GForce
-	player.JumpForce = 1000
+	player.JumpForce = 1800
 
 	player.Flash.ZFar = 8192
 	player.Flash.Factor = 0.02
@@ -242,9 +242,9 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Bobbing.SwayScale = 2.0
 	player.Bobbing.SwayOffsetX = 20
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = playerHeight / 3 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
-	player.Bobbing.MaxAmplitudeY = 5.5
-	player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
+	player.Bobbing.MaxAmplitudeX = playerHeight * 0.2
+	player.Bobbing.MaxAmplitudeY = playerHeight * 0.2
+	player.Bobbing.StrideLength = 0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
 	player.Bobbing.IdleAmpX = 0.9        // Respiro
 	player.Bobbing.IdleAmpY = 0.9
 	player.Bobbing.IdleDrift = 0.01

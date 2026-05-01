@@ -171,9 +171,9 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
-func (th *Things) CreateThrowable(volume *Volume, pos geometry.XYZ, angle, pitch, mass, radius, speed float64) {
+func (th *Things) CreateThrowable(throwableIndex int, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	//TODO now is an hack
-	const throwableIndex = 2
+	//const throwableIndex = 2
 	if len(th.config) <= throwableIndex {
 		return
 	}

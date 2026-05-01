@@ -318,14 +318,14 @@ func (p *ThingPlayer) getEyeHeight() float64 {
 }
 
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
-func (p *ThingPlayer) Throw() {
+func (p *ThingPlayer) Throw(throwableIndex int, speed float64) {
 	camX, camY, camZ := p.GetVisualPosition()
 	diameter := p.entity.GetWidth()
 	spawnX := camX + (p.angleCos * diameter)
 	spawnY := camY + (p.angleSin * diameter)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.LaunchObject(spawnPos, p.angle, -p.pitch)
+	p.LaunchObject(throwableIndex, spawnPos, p.angle, -p.pitch, speed)
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.

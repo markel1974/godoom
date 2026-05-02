@@ -25,7 +25,7 @@ func isDoor(cell uint16) bool {
 	return cell >= 100 && cell <= 109
 }
 
-func isThing2(cell uint16) bool {
+func isThing(cell uint16) bool {
 	//136 - 183 objects | 183 - 197 enemies (with animation)
 	return (cell >= 136 && cell <= 183) || isEnemy(cell)
 }
@@ -37,7 +37,7 @@ func isEnemy(cell uint16) bool {
 // isThing determines if a given cell value represents a "thing" based on predefined ranges of values.
 func isThingOrEnemy(cell uint16) bool {
 	//136 - 183 objects | 183 - 197 enemies (with animation)
-	return isThing2(cell) || isEnemy(cell)
+	return isThing(cell) || isEnemy(cell)
 }
 
 // Parser represents a structure used for parsing and managing 2D grid-based map data, including sectors and entities.

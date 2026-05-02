@@ -161,7 +161,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			continue
 
 		case len(externalBSPPath) > 0:
-			cThing, err := p.createExternalBModelThing(externalBSPPath, pos, classname, pk, palette)
+			cThing, err := p.createBSPThing(externalBSPPath, pos, classname, pk, palette)
 			if err != nil {
 				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
 				continue
@@ -352,33 +352,34 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 
 	skinTargetIndex := 0
 	kind := config.ThingEnemyDef
-
-	if strings.HasPrefix(classname, "item_") {
-		itemName := strings.TrimPrefix(classname, "item_")
-		switch itemName {
-		case "armor2":
-			skinTargetIndex = 1
-		case "armorInv":
-			skinTargetIndex = 2
-		}
+	var category string
+	var definition string
+	if c := strings.Split(classname, "_"); len(c) > 1 {
+		category = c[0]
+		definition = c[1]
+	}
+	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
+	switch category {
+	case "item":
 		kind = config.ThingItemDef
+		if skinTIndex, ok := items[definition]; ok {
+			skinTargetIndex = skinTIndex
+		}
+	case "weapon":
+		kind = config.ThingItemDef
+	case "enemy":
+		kind = config.ThingEnemyDef
+	case "monster":
+		kind = config.ThingEnemyDef
+	default:
+		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	var anim *config.Material
-	if len(registeredTexNames) > skinTargetIndex {
-		targetSkin := []string{registeredTexNames[skinTargetIndex]}
-		anim = config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	if skinTargetIndex >= len(registeredTexNames) {
+		return nil, fmt.Errorf("skin target index out of range: %d", skinTargetIndex)
 	}
-	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
-
-	if thingCfg.Kind == config.ThingEnemyDef {
-		enemyLogic := common.NewEnemy(300)
-		thingCfg.OnThinking = enemyLogic.OnThinking
-		thingCfg.OnCollision = enemyLogic.OnCollision
-	} else {
-		itemLogic := common.NewItem()
-		thingCfg.OnCollision = itemLogic.OnCollision
-	}
+	targetSkin := []string{registeredTexNames[skinTargetIndex]}
+	anim := config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
 	cModel := &config.MD2{Frames: make([]config.MD2Frame, mdl.Header.NumFrames)}
 	for idx, f := range mdl.Frames {
@@ -403,12 +404,13 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg.WakeUpDistance = 400
-	thingCfg.SetModel3d(cModel)
+	thingCfg := p.createConfigThing(classname, pos, kind, cModel, anim, 0, 16.0, 16.0, 56, 100.0)
+
 	return thingCfg, nil
 }
 
-func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
+// createExternalBModelThing constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
+func (p *Builder) createBSPThing(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
@@ -425,14 +427,18 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 	edges, _ := lumps.NewEdges(rs, infos[lumps.LumpEdges])
 	surfEdges, _ := lumps.NewSurfEdges(rs, infos[lumps.LumpSurfEdges])
 	faces, _ := lumps.NewFace(rs, infos[lumps.LumpFaces])
-	//texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfo])
 	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
 
+	var sMaterials []string
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
-			_ = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false)
+			sMaterials = append(sMaterials, mt.Name)
+			if err = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false); err != nil {
+				return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
+			}
 		}
 	}
+	materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 	// 3. Traduzione Geometria in MD2 Agnostico
 	// Raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles [][3]config.MD2Vertex
@@ -470,21 +476,25 @@ func (p *Builder) createExternalBModelThing(bspPath string, pos geometry.XYZ, cl
 	model3d := &config.MD2{Frames: make([]config.MD2Frame, 1)}
 	model3d.Frames[0].Triangles = allTriangles
 
-	// 4. Iniezione nel ConfigThing
-	// Nota: usiamo config.ThingItemDef e un raggio/altezza fittizi per le collisioni
-	thingCfg := config.NewConfigThing(classname, pos, 0.0, config.ThingItemDef, 16.0, 16.0, 32.0, 0.0, nil)
-	thingCfg.SetModel3d(model3d)
+	thingCfg := p.createConfigThing(classname, pos, config.ThingItemDef, model3d, materials, 0.0, 16.0, 16.0, 32.0, 0.0)
 
+	return thingCfg, nil
+}
+
+// createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
+func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
 	if thingCfg.Kind == config.ThingEnemyDef {
-		enemyLogic := common.NewEnemy(100)
+		enemyLogic := common.NewEnemy(300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision
+		thingCfg.WakeUpDistance = 400
 	} else {
 		itemLogic := common.NewItem()
 		thingCfg.OnCollision = itemLogic.OnCollision
 	}
-
-	return thingCfg, nil
+	thingCfg.SetModel3d(cModel)
+	return thingCfg
 }
 
 // createXYZ creates and returns a geometry.XYZ struct using the provided x, y, and z coordinates.

@@ -85,7 +85,7 @@ func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 		if cage.GetVolume() == thing.GetVolume() {
 			return false
 		}
-		targetX, targetY, targetZ := thing.GetPosition()
+		targetX, targetY, targetZ := thing.GetBottomLeft()
 		localAABB := cage.Translate(targetX, targetY, targetZ)
 		thing.GetVolume().QueryOverlaps(localAABB, func(otherEnt physics.IAABB) bool {
 			face, faceOk := otherEnt.(*Face)
@@ -285,7 +285,7 @@ func (th *Things) processCollision() {
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
 		ent := t2.GetEntity()
-		px, py, pz := t2.GetPosition()
+		px, py, pz := t2.GetBottomLeft()
 		eRadius := ent.GetWidth() / 2.0
 		ent.MoveTo(px-eRadius, py-eRadius, pz)
 		th.tree.UpdateObject(t2)

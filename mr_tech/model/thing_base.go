@@ -199,18 +199,16 @@ func (t *ThingBase) AddForce(fx, fy, fz float64) {
 	t.entity.AddForce(fx, fy, fz)
 }
 
-// GetPosition returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
-func (t *ThingBase) GetPosition() (float64, float64, float64) {
+// GetBottomLeft returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
+func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
 	return t.pos.X, t.pos.Y, t.pos.Z
 }
 
-/*
 func (t *ThingBase) GetCenter() (float64, float64, float64) {
 	x, y, z := t.pos.X, t.pos.Y, t.pos.Z
-	h := t.entity.GetDepth() * 0.5
-	return x, y, z
+	cx, cy, cz := t.entity.GetCenter()
+	return x + cx, y + cy, z + cz
 }
-*/
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
 func (t *ThingBase) GetLight() *Light {
@@ -250,7 +248,7 @@ func (t *ThingBase) StageCompute() {
 	//if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 	//	return
 	//}
-	pX, pY, pZ := t.GetPosition()
+	pX, pY, pZ := t.GetBottomLeft()
 	eRadX := t.entity.GetWidth() * 0.5
 	eRadY := t.entity.GetHeight() * 0.5
 	eRadZ := t.entity.GetDepth() * 0.5

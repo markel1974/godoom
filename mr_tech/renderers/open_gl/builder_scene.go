@@ -222,7 +222,7 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		}
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetPosition()
+		tPosX, tPosY, zBot := thing.GetBottomLeft()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		b := float32(billBoard)
 		startIndices := fv.GetIndicesLen()

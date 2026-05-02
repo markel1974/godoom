@@ -150,7 +150,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		gl.BindTexture(gl.TEXTURE_2D_ARRAY, emissive)
 	}
 
-	px, _, pz := vi.GetXYZ()
+	px, _, pz := vi.GetView()
 	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
 
 	//dirX, dirY, dirZ := vi.GetForwardVector()

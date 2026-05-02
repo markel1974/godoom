@@ -483,22 +483,22 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 		yRef := math.Abs((cp.Neighbor.GetMinZ() - cp.Volume.GetMinZ()) * scaleH)
 		dr.DrawTexture(tex, cp.X1, cp.X2, cp.Tz1, cp.Tz2, cp.U0, cp.U1, yRef, lightAmbient, lightArtificial)
 	case model.IdCeil:
-		viX, viY, viZ := vi.GetXYZ()
+		viX, viY, viZ := vi.GetView()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloor:
-		viX, viY, viZ := vi.GetXYZ()
+		viX, viY, viZ := vi.GetView()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdFloorTest:
-		viX, viY, viZ := vi.GetXYZ()
+		viX, viY, viZ := vi.GetView()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMinZ(), scaleH, lightAmbient, lightArtificial)
 	case model.IdCeilTest:
-		viX, viY, viZ := vi.GetXYZ()
+		viX, viY, viZ := vi.GetView()
 		viSin, viCos := vi.GetAngleFull()
 		viYaw := vi.GetPitch()
 		dr.DrawPerspectiveTexture(viX, viY, viZ, viYaw, viSin, viCos, tex, cp.Volume.GetMaxZ(), scaleH, lightAmbient, lightArtificial)

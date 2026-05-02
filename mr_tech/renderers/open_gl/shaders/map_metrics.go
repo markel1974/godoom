@@ -199,7 +199,7 @@ func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOff
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
-	wX, wY, wZ := vi.GetXYZ()
+	wX, wY, wZ := vi.GetView()
 	// Spatial mapping for OpenGL (X, Z, -Y)
 	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
 	mainView := [16]float32{
@@ -243,7 +243,7 @@ func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]flo
 	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
 	rX, rY, rZ := -fZ, float32(0.0), fX
 	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
-	wX, wY, wZ := vi.GetXYZ()
+	wX, wY, wZ := vi.GetView()
 	// Spatial mapping for OpenGL (X, Z, -Y)
 	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
 	mainView := [16]float32{

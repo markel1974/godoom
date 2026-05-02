@@ -18,7 +18,7 @@ const (
 
 // ViewMatrix represents a view configuration with position, orientation, zoom level, and lighting intensity for rendering.
 type ViewMatrix struct {
-	where           geometry.XYZ
+	view            geometry.XYZ
 	angleSin        float64
 	angleCos        float64
 	angle           float64
@@ -45,7 +45,7 @@ func NewViewMatrix() *ViewMatrix {
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngleFull()
 	vi.volume = player.GetLocation()
-	vi.where.X, vi.where.Y, vi.where.Z = player.GetVisualPosition()
+	vi.view.X, vi.view.Y, vi.view.Z = player.GetVisualPosition()
 	vi.pitch = player.GetPitch()
 	vi.angle = player.GetAngle()
 	vi.roll = player.GetTilt()
@@ -57,27 +57,17 @@ func (vi *ViewMatrix) Update(player *ThingPlayer) {
 // It returns the translated local coordinates (lx, ly) and the transformed coordinates (tx, tz) in the view space.
 func (vi *ViewMatrix) TranslateXY(x float64, y float64) (float64, float64, float64, float64) {
 	// 1. Translation relative to the ViewMatrix
-	lx := x - vi.where.X
-	ly := y - vi.where.Y
+	lx := x - vi.view.X
+	ly := y - vi.view.Y
 	// 2. Rotation in View Space
 	tx := (lx * vi.angleSin) - (ly * vi.angleCos)
 	tz := (lx * vi.angleCos) + (ly * vi.angleSin)
 	return lx, ly, tx, tz
 }
 
-// GetXY retrieves the X and Y coordinates from the ViewMatrix's position.
-func (vi *ViewMatrix) GetXY() (float64, float64) {
-	return vi.where.X, vi.where.Y
-}
-
-// GetXYZ retrieves the X, Y, and Z coordinates of the ViewMatrix's position as a tuple of three float64 values.
-func (vi *ViewMatrix) GetXYZ() (float64, float64, float64) {
-	return vi.where.X, vi.where.Y, vi.where.Z
-}
-
-// GetZ retrieves the Z-coordinate of the ViewMatrix's position.
-func (vi *ViewMatrix) GetZ() float64 {
-	return vi.where.Z
+// GetView retrieves the X, Y, and Z coordinates of the ViewMatrix's position as a tuple of three float64 values.
+func (vi *ViewMatrix) GetView() (float64, float64, float64) {
+	return vi.view.X, vi.view.Y, vi.view.Z
 }
 
 // GetAngleFull returns the sine and cosine of the ViewMatrix's angle as two float64 values.
@@ -112,7 +102,7 @@ func (vi *ViewMatrix) GetVolume() *Volume {
 
 // ZDistance calculates the distance between the given value and the Z-coordinate of the ViewMatrix's position.
 func (vi *ViewMatrix) ZDistance(v float64) float64 {
-	return v - vi.where.Z
+	return v - vi.view.Z
 }
 
 // GetSway returns the horizontal and vertical sway values of the ViewMatrix as two float64 values.

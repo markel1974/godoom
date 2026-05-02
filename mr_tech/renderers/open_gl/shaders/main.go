@@ -261,8 +261,7 @@ func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 
 	// Spatial Mapping and Translation
 	// Transform position from Model (Z-Up) to OpenGL space (Y-Up)
-	viX, viY := vi.GetXY()
-	viZ := vi.GetZ()
+	viX, viY, viZ := vi.GetView()
 	ex := float32(viX)
 	ey := float32(viZ)
 	ez := float32(-viY)
@@ -315,8 +314,7 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	newUy := cosR
 	newUz := -rZ * sinR
 
-	viX, viY := vi.GetXY()
-	viZ := vi.GetZ()
+	viX, viY, viZ := vi.GetView()
 	ex, ey, ez := float32(viX), float32(viZ), float32(-viY)
 	// Translation uses the new oriented vectors to shift the world
 	tx := -(newRx*ex + newRy*ey + newRz*ez)

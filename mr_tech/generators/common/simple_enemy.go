@@ -40,7 +40,7 @@ func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig)
 func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ float64) {
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := playerZ + (self.GetDepth() / 2)
-	selfX, selfY, selfZ := self.GetBottomLeft()
+	selfX, selfY, selfZ := self.GetBottomCenter()
 	dx := playerX - selfX
 	dy := playerY - selfY
 	dz := targetZ - selfZ

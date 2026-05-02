@@ -212,9 +212,13 @@ func (e *Entity) Invalidate() {
 	e.clearCollider()
 }
 
-// GetBottomLeft returns the bottom-left corner coordinates (x, y, z) of the entity's rectangular bounds.
+// GetBottomLeft returns the x, y, and z coordinates of the bottom-left corner of the entity's rectangular area.
 func (e *Entity) GetBottomLeft() (float64, float64, float64) {
 	return e.rect.GetBottomLeft()
+}
+
+func (e *Entity) GetBase() (float64, float64, float64) {
+	return e.rect.GetBottomCenter()
 }
 
 // GetSize returns the width, height, and depth of the entity as a tuple of three float64 values.
@@ -255,6 +259,11 @@ func (e *Entity) GetAABB() *AABB {
 // GetCenter returns the 3D center coordinates (x, y, z) of the Entity's bounding rectangle.
 func (e *Entity) GetCenter() (float64, float64, float64) {
 	return e.rect.GetCenter()
+}
+
+// GetBottomCenter retrieves the x, y, and z coordinates of the bottom-center point of the entity's bounding rectangle.
+func (e *Entity) GetBottomCenter() (float64, float64, float64) {
+	return e.rect.GetBottomCenter()
 }
 
 // GetDepth returns the depth of the entity's bounding rectangle.

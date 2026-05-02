@@ -12,6 +12,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+const gForce = 9.8 * 8
+
 //MODEL IMPORTAL
 //model is Z up
 //model is CCW
@@ -222,7 +224,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
-	root.Player.GForce = 9.8 * 8
+	root.Player.GForce = gForce
 	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
@@ -401,7 +403,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg := p.createConfigThing(classname, pos, kind, cModel, anim, 0, 16.0, 16.0, 56, 100.0)
+	thingCfg := p.createConfigThing(classname, pos, kind, cModel, anim, 0, 30.0, 16.0, 56, 600.0)
 
 	return thingCfg, nil
 }
@@ -479,7 +481,7 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 
 // createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
 func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, 0.0, kind, 16.0, 16.0, 56, 100.0, anim)
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed, anim)
 	if thingCfg.Kind == config.ThingEnemyDef {
 		enemyLogic := common.NewEnemy(300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
@@ -489,6 +491,7 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		itemLogic := common.NewItem()
 		thingCfg.OnCollision = itemLogic.OnCollision
 	}
+	thingCfg.GForce = gForce
 	thingCfg.SetModel3d(cModel)
 	return thingCfg
 }

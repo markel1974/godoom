@@ -17,6 +17,8 @@ type IThingConfig interface {
 
 	GetBottomLeft() (float64, float64, float64)
 
+	GetBottomCenter() (float64, float64, float64)
+
 	GetCenter() (float64, float64, float64)
 
 	GetAngle() float64

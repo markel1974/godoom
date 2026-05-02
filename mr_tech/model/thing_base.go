@@ -45,6 +45,7 @@ type ThingBase struct {
 func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	radAngle := cfg.Angle // * (math.Pi / 180.0)
+	//we need bottom left here
 	entX := pos.X - cfg.Radius
 	entY := pos.Y - cfg.Radius
 	entZ := pos.Z
@@ -197,9 +198,14 @@ func (t *ThingBase) AddForce(fx, fy, fz float64) {
 	t.entity.AddForce(fx, fy, fz)
 }
 
-// GetBottomLeft returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
+// GetBottomLeft returns the bottom-left coordinates (x, y) and an optional z-value of the entity associated with the ThingBase.
 func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
 	return t.entity.GetBottomLeft()
+}
+
+// GetBottomCenter returns the center-bottom coordinates (x, y, z) of the ThingBase entity.
+func (t *ThingBase) GetBottomCenter() (float64, float64, float64) {
+	return t.entity.GetBottomCenter()
 }
 
 // GetCenter calculates and returns the center coordinates (x, y, z) of the entity within ThingBase.
@@ -232,20 +238,21 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
-// StageCompute calculates the displacement and updates the entity's collision cage for collision detection and resolution.
 func (t *ThingBase) StageCompute() {
 	dx, dy, dz := t.entity.GetDisplacement()
+
 	// DEADZONE
 	const sleepEpsilon = 0.005
 	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 		return
 	}
+	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := t.GetBottomLeft()
+	// Calcolo Half-Extents
 	w, h, d := t.entity.GetSize()
 	eRadX, eRadY, eRadZ := w*0.5, h*0.5, d*0.5
-
-	cX, cY, cZ := pX, pY, pZ+eRadZ
-	//tX, tY, tZ := cX+dx, cY+dy, cZ+dz
+	// Calcolo del CENTRO per il Broad-Phase
+	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
 	t.world.QueryCollisionCage(t.cage, t.maxStep)
 	t.things.QueryCollisionCage(t.cage, t.maxStep)

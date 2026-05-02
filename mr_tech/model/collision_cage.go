@@ -159,6 +159,7 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	w := maxX - minX
 	h := maxY - minY
 	d := maxZ - minZ
+	//x y z == BOTTOM LEFT
 	s.ellipsoid.Rebuild(x, y, z, w, h, d)
 	// Fast reset
 	for i := 0; i < 6; i++ {

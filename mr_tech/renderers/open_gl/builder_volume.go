@@ -177,9 +177,10 @@ func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *Dra
 	}
 	lerp := float32(lp)
 	yaw := float32(thing.GetAngle())
-	tPosX, tPosY, zBot := thing.GetBottomLeft()
+	//tPosX, tPosY, zBot := thing.GetBottomLeft()
 	//TODO e' una patch bisogna creare gli oggetti dal centro
-	zBot += thing.GetAABB().GetDepth() * 0.5
+	//zBot += thing.GetAABB().GetDepth() * 0.5
+	tPosX, tPosY, zBot := thing.GetCenter()
 	oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 	b := float32(billBoard)
 	startIndices := fv.GetIndicesLen()

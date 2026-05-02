@@ -5,6 +5,7 @@ type Rect struct {
 	point  Point
 	size   Size
 	center Point
+	base   Point
 	aabb   *AABB
 }
 
@@ -17,11 +18,6 @@ func NewRect(x, y, w, h, z, d float64) Rect {
 	}
 	r.rebuild()
 	return r
-}
-
-// GetBottomLeft returns the bottom-left corner coordinates (x, y, z) of the Rect as float64 values.
-func (r *Rect) GetBottomLeft() (float64, float64, float64) {
-	return r.point.x, r.point.y, r.point.z
 }
 
 // Reset updates the position, size, and depth of the Rect to the specified values and recalculates its properties.
@@ -37,9 +33,18 @@ func (r *Rect) Reset(x, y, z, w, h, d float64) {
 
 // rebuild recalculates the rectangle's center, AABB bounds, and surface area based on its current position and size.
 func (r *Rect) rebuild() {
-	r.center.x = r.point.x + (r.size.w / 2)
-	r.center.y = r.point.y + (r.size.h / 2)
-	r.center.z = r.point.z + (r.size.d / 2)
+	cx := r.point.x + (r.size.w / 2)
+	cy := r.point.y + (r.size.h / 2)
+	cz := r.point.z + (r.size.d / 2)
+
+	r.center.x = cx
+	r.center.y = cy
+	r.center.z = cz
+
+	r.base.x = cx
+	r.base.y = cy
+	r.base.z = r.point.z
+
 	minX := r.point.x
 	maxX := r.point.x + r.size.w
 	minY := r.point.y
@@ -47,6 +52,16 @@ func (r *Rect) rebuild() {
 	minZ := r.point.z
 	maxZ := r.point.z + r.size.d
 	r.aabb.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+}
+
+// GetBottomLeft returns the x, y, and z coordinates of the bottom-left corner of the Rect as float64 values.
+func (r *Rect) GetBottomLeft() (float64, float64, float64) {
+	return r.point.x, r.point.y, r.point.z
+}
+
+// GetBottomCenter returns the x, y, and z coordinates of the Rect's base point as float64 values.
+func (r *Rect) GetBottomCenter() (float64, float64, float64) {
+	return r.base.x, r.base.y, r.base.z
 }
 
 // SetSize updates the width, height, and depth of the Rect and recalculates its properties by invoking rebuild.

@@ -48,11 +48,12 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	}
 	c.Id = "PLAYER"
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
+	base := NewThingBase(things, c.Thing, c.Position, nil, volume)
 	thing := &ThingPlayer{
 		kind:           0,
 		pitch:          0,
 		pitchState:     0,
-		ThingBase:      NewThingBase(things, c.Thing, c.Position, nil, volume),
+		ThingBase:      base,
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
@@ -235,7 +236,7 @@ func (p *ThingPlayer) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (p *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := p.GetBottomLeft() //p.pos.X, p.pos.Y, p.pos.Z
+	visualX, visualY, visualZ := p.GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := p.GetAngleFull()
 	bobX, bobY, _ := p.GetBob()
 	visualZ += p.getEyeHeight() + bobY + p.bobbing.GetJump()

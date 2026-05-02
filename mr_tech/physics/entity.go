@@ -105,6 +105,11 @@ func (e *Entity) MoveTo(x float64, y float64, z float64) {
 	e.rect.MoveTo(x, y, z)
 }
 
+// AddTo updates the position of the entity by adding the given x, y, and z offsets.
+func (e *Entity) AddTo(x float64, y float64, z float64) {
+	e.rect.AddTo(x, y, z)
+}
+
 // SetFriction sets the friction coefficient for the entity and updates its current friction value.
 func (e *Entity) SetFriction(f float64) {
 	e.frictionGround = f
@@ -207,14 +212,19 @@ func (e *Entity) Invalidate() {
 	e.clearCollider()
 }
 
-// GetWidth returns the width of the entity by querying its internal rectangular representation.
-func (e *Entity) GetWidth() float64 {
-	return e.rect.GetWidth()
+// GetBottomLeft returns the bottom-left corner coordinates (x, y, z) of the entity's rectangular bounds.
+func (e *Entity) GetBottomLeft() (float64, float64, float64) {
+	return e.rect.GetBottomLeft()
 }
 
 // GetSize returns the width, height, and depth of the entity as a tuple of three float64 values.
 func (e *Entity) GetSize() (float64, float64, float64) {
 	return e.rect.GetSize()
+}
+
+// GetWidth returns the width of the entity by querying its internal rectangular representation.
+func (e *Entity) GetWidth() float64 {
+	return e.rect.GetWidth()
 }
 
 // GetHeight returns the height of the entity by retrieving it from the associated rectangle object.

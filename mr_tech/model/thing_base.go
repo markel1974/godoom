@@ -19,7 +19,6 @@ type IVertices interface {
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id           string
-	pos          geometry.XYZ
 	kind         config.ThingType
 	angle        float64
 	maxStep      float64
@@ -76,7 +75,6 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		speed:        cfg.Speed,
 		acceleration: cfg.Acceleration,
 		jumpForce:    cfg.JumpForce,
-		pos:          pos,
 		location:     location,
 		material:     material,
 		world:        volumes,
@@ -201,18 +199,12 @@ func (t *ThingBase) AddForce(fx, fy, fz float64) {
 
 // GetBottomLeft returns the X, Y, and Z coordinates of the ThingBase instance as a tuple of three float64 values.
 func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
-	return t.pos.X, t.pos.Y, t.pos.Z
+	return t.entity.GetBottomLeft()
 }
 
+// GetCenter calculates and returns the center coordinates (x, y, z) of the entity within ThingBase.
 func (t *ThingBase) GetCenter() (float64, float64, float64) {
-	x, y, z := t.pos.X, t.pos.Y, t.pos.Z
-	w, h, d := t.entity.GetSize()
-	return x + w, y + h, z + d
-}
-
-// GetLight retrieves the Light object associated with the ThingBase's current sector.
-func (t *ThingBase) GetLight() *Light {
-	return t.location.Light
+	return t.entity.GetCenter()
 }
 
 // GetVolume retrieves the volume associated with the ThingBase instance.
@@ -327,11 +319,7 @@ func (t *ThingBase) StageApply() {
 	// APPLICAZIONE STATO
 	t.entity.SetOnGround(isGrounded)
 
-	// 4. INTEGRAZIONE POSIZIONALE PURA
-	// La posizione è il risultato diretto del displacement fisico.
-	t.pos.X += dx
-	t.pos.Y += dy
-	t.pos.Z += dz
+	t.entity.AddTo(dx, dy, dz)
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

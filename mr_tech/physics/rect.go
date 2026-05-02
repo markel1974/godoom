@@ -19,6 +19,11 @@ func NewRect(x, y, w, h, z, d float64) Rect {
 	return r
 }
 
+// GetBottomLeft returns the bottom-left corner coordinates (x, y, z) of the Rect as float64 values.
+func (r *Rect) GetBottomLeft() (float64, float64, float64) {
+	return r.point.x, r.point.y, r.point.z
+}
+
 // Reset updates the position, size, and depth of the Rect to the specified values and recalculates its properties.
 func (r *Rect) Reset(x, y, z, w, h, d float64) {
 	r.point.x = x

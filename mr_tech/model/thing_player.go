@@ -187,9 +187,9 @@ func (p *ThingPlayer) SetDucking() {
 	p.ducking = !p.ducking
 	if p.ducking {
 		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*0.5)
-		p.pos.Z -= p.entity.GetDepth() * 0.25
+		//p.pos.Z -= p.entity.GetDepth() * 0.25
 	} else {
-		p.pos.Z += p.entity.GetDepth() * 0.25
+		//p.pos.Z += p.entity.GetDepth() * 0.25
 		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*2.0)
 	}
 }
@@ -235,7 +235,7 @@ func (p *ThingPlayer) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (p *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := p.pos.X, p.pos.Y, p.pos.Z
+	visualX, visualY, visualZ := p.GetBottomLeft() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := p.GetAngleFull()
 	bobX, bobY, _ := p.GetBob()
 	visualZ += p.getEyeHeight() + bobY + p.bobbing.GetJump()

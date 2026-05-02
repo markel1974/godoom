@@ -12,7 +12,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-const gForce = 9.8 * 8
+const gForce = 9.8 * 14
 
 //MODEL IMPORTAL
 //model is Z up

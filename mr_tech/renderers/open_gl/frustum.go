@@ -16,9 +16,9 @@ func CreateFrontRearFrustum(aspect, zFarRoom, px, py, pz float32, angle, pitch, 
 
 // CreateFrustum generates a view-projection matrix for rendering a 3D frustum with specified dimensions and orientation.
 func CreateFrustum(aspect, zFarRoom, px, py, pz float32, yaw, pitch, roll float64) [16]float32 {
-	//aspect := fbw / fbh
-	scaleX := (2.0 / aspect) * float32(model.HFov)
-	scaleY := 2.0 * float32(model.VFov)
+	const kScale = float32(1.0)
+	scaleX := (kScale / aspect) * float32(model.HFov)
+	scaleY := kScale * float32(model.VFov)
 	zNear := float32(0.1)
 	zFar := zFarRoom
 	if zFar <= zNear {

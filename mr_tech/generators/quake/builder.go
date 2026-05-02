@@ -38,34 +38,32 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	if err := pk.Setup(pakPath); err != nil {
 		return nil, err
 	}
-	palReader, err := pk.Open(palPath)
-	if err != nil {
-		return nil, err
-	}
-	palette, err := lumps.NewPalette(palReader)
-	if err != nil {
-		return nil, err
-	}
 	rs, err := pk.Open(bpsPath)
 	if err != nil {
 		return nil, err
 	}
-	// Header
-	infos, err := lumps.NewLumpInfos(rs)
+	rsPal, err := pk.Open(palPath)
 	if err != nil {
 		return nil, err
 	}
-	// Geometry
-	vertexes, _ := lumps.NewVertexes(rs, infos[lumps.LumpVertexes])
-	edges, _ := lumps.NewEdges(rs, infos[lumps.LumpEdges])
-	surfEdges, _ := lumps.NewSurfEdges(rs, infos[lumps.LumpSurfEdges])
-	faces, _ := lumps.NewFace(rs, infos[lumps.LumpFaces])
-	texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfo])
-	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
-	//leaves, _ := lumps.NewLeaves(rs, infos[lumps.LumpLeaves])
-	entities, _ := lumps.NewEntities(rs, infos[lumps.LumpEntities])
-	//marks, _ := lumps.NewMarks(rs, infos[lumps.LumpMarkSurfaces])
-	bspModels, _ := lumps.NewModels(rs, infos[lumps.LumpModels])
+	reader, err := lumps.Factory(rs, rsPal)
+	if err != nil {
+		return nil, err
+	}
+	if err = reader.Setup(); err != nil {
+		return nil, err
+	}
+	vertexes, _ := reader.GetVertexes()
+	edges, _ := reader.GetEdges()
+	surfEdges, _ := reader.GetSurfEdges()
+	faces, _ := reader.GetFaces()
+	texInfos, _ := reader.GetTexInfos()
+	mipTextures, _ := reader.GetMipTextures()
+	//leaves, _ := reader.GetLeaves(rs, infos[lumps.LumpLeaves])
+	entities, _ := reader.GetEntities()
+	//marks, _ := reader.GetMarks(rs, infos[lumps.LumpMarkSurfaces])
+	bspModels, _ := reader.GetModels()
+	palette, _ := reader.GetPalette()
 
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {

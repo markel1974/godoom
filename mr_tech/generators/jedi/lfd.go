@@ -46,7 +46,7 @@ func (l *LFD) Parse(filename string) error {
 		return err
 	}
 	if string(rMapType[:]) != "RMAP" {
-		return fmt.Errorf("firma LFD non valida, atteso RMAP, trovato: %s", string(rMapType[:]))
+		return fmt.Errorf("invalid LFD signature, waiting for RMAP, found: %s", string(rMapType[:]))
 	}
 	_ = binary.Read(f, binary.LittleEndian, &rMapName)
 	_ = binary.Read(f, binary.LittleEndian, &rMapSize)
@@ -99,7 +99,7 @@ func (l *LFD) GetPayload(resType, name string) ([]byte, error) {
 	key := fmt.Sprintf("%s_%s", resType, name)
 	entry, ok := l.entries[key]
 	if !ok {
-		return nil, fmt.Errorf("risorsa %s di tipo %s non trovata", name, resType)
+		return nil, fmt.Errorf("resource type %s not found, found %s instead", name, resType)
 	}
 
 	data := make([]byte, entry.Size)

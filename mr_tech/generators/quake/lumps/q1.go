@@ -2,20 +2,26 @@
 package lumps
 
 import (
+	"fmt"
 	"io"
 )
 
 // Q1BSPReader is a reader for Quake 1 BSP files, providing access to lump data and associated metadata.
 type Q1BSPReader struct {
-	rs      io.ReadSeeker
-	rsPal   io.ReadSeeker
-	infos   []*LumpInfo
-	palette []byte
+	rs         io.ReadSeeker
+	rsPal      io.ReadSeeker
+	infos      []*LumpInfo
+	palette    []byte
+	texManager *Textures
 }
 
 // NewQ1BSPReader initializes a Q1BSPReader for reading Quake 1 BSP files and a palette from the provided io.ReadSeekers.
 func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
-	return &Q1BSPReader{rs: rs, rsPal: rsPal}
+	return &Q1BSPReader{
+		rs:         rs,
+		rsPal:      rsPal,
+		texManager: NewTextures(),
+	}
 }
 
 // Setup initializes the Q1BSPReader by processing lump information and palette data from the provided file streams.
@@ -28,6 +34,14 @@ func (q1 *Q1BSPReader) Setup() error {
 	q1.palette, err = NewPalette(q1.rsPal)
 	if err != nil {
 		return err
+	}
+	mipTextures, _ := q1.GetMipTextures()
+	for _, mt := range mipTextures {
+		if mt != nil && mt.Name != "" {
+			if err = q1.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
+				fmt.Printf("Warning: texture %s error: %s\n", mt.Name, err.Error())
+			}
+		}
 	}
 	return nil
 }
@@ -77,4 +91,14 @@ func (q1 *Q1BSPReader) GetModels() ([]*Model, error) {
 // GetPalette retrieves the palette data from the BSP file. It returns the palette as a byte slice or an error if unavailable.
 func (q1 *Q1BSPReader) GetPalette() ([]byte, error) {
 	return q1.palette, nil
+}
+
+// GetTextures returns a pointer to the Textures manager associated with the Q1BSPReader instance.
+func (q1 *Q1BSPReader) GetTextures() *Textures {
+	return q1.texManager
+}
+
+// RegisterPixels registers a texture's pixel data with the specified attributes in the Q1BSPReader's texture manager.
+func (q1 *Q1BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
+	return q1.texManager.RegisterPixels(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }

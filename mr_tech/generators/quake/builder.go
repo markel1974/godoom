@@ -20,14 +20,11 @@ const gForce = 9.8 * 14
 
 // Builder manages the construction and handling of graphical assets, leveraging a Textures manager for texture operations.
 type Builder struct {
-	texManager *Textures
 }
 
 // NewBuilder initializes and returns a pointer to a new Builder instance with a default Textures manager.
 func NewBuilder() *Builder {
-	return &Builder{
-		texManager: NewTextures(),
-	}
+	return &Builder{}
 }
 
 // Setup initializes the game environment by loading and processing BSP data, textures, entities, and lights from a .pak file.
@@ -63,15 +60,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	entities, _ := reader.GetEntities()
 	//marks, _ := reader.GetMarks(rs, infos[lumps.LumpMarkSurfaces])
 	bspModels, _ := reader.GetModels()
-	palette, _ := reader.GetPalette()
-
-	for _, mt := range mipTextures {
-		if mt != nil && mt.Name != "" {
-			if err = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false); err != nil {
-				fmt.Printf("Warning: texture %s error: %s\n", mt.Name, err.Error())
-			}
-		}
-	}
+	texManager := reader.GetTextures()
 
 	var playerAngle float64
 	var playerPos geometry.XYZ
@@ -85,7 +74,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	cal.AspectRatio = 1.0
 
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
-	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, p.texManager)
+	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texManager)
 
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
@@ -161,7 +150,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			continue
 
 		case len(externalBSPPath) > 0:
-			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, pk, palette)
+			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, pk, reader)
 			if err != nil {
 				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
 				continue
@@ -169,7 +158,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			root.Things = append(root.Things, cThing)
 
 		default:
-			cThing, err := p.createThing(pos, classname, pk, palette)
+			cThing, err := p.createThing(pos, classname, pk, reader)
 			if err != nil {
 				fmt.Printf("Warning: %s\n", err.Error())
 				continue
@@ -178,46 +167,52 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 	}
 
-	// 4. Conversione Geometria Statica: BSP Faces -> Volume
-	// Creiamo un singolo volume globale, senza duplicazioni.
-	volume := config.NewConfigVolume("quake_world", "quake_bsp")
+	//l'indice 0 contiene i gli elementi di un mondo, gli altri sono modelli esterni
+	worldCount := 1
+	for idx := 0; idx < worldCount; idx++ {
+		worldModel := bspModels[idx]
+		// 4. Conversione Geometria Statica: BSP Faces -> Volume
+		// Creiamo un singolo volume globale, senza duplicazioni.
+		vIdx := strconv.Itoa(idx)
+		volume := config.NewConfigVolume("quake_world_"+vIdx, "quake_bsp_"+vIdx)
 
-	worldModel := bspModels[0]
+		//worldModel := bspModels[0]
 
-	// Iteriamo ESCLUSIVAMENTE sulle facce che appartengono al mondo
-	for i := int32(0); i < worldModel.NumFaces; i++ {
-		faceIdx := worldModel.FirstFace + i
-		bspFace := faces[faceIdx]
-		texInfo := texInfos[bspFace.TexInfo]
-		texName := "default"
-		isSky := (texInfo.Flags & 4) != 0
-		if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
-			texName = mipTextures[texInfo.MipTex].Name
-		}
-		var points []geometry.XYZ
-		for j := uint16(0); j < bspFace.NumEdges; j++ {
-			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
-			var v *lumps.Vertex
-			if surfEdgeIdx >= 0 {
-				v = vertexes[edges[surfEdgeIdx].Vertex0]
-			} else {
-				v = vertexes[edges[-surfEdgeIdx].Vertex1]
+		// Iteriamo ESCLUSIVAMENTE sulle facce che appartengono al mondo
+		for i := int32(0); i < worldModel.NumFaces; i++ {
+			faceIdx := worldModel.FirstFace + i
+			bspFace := faces[faceIdx]
+			texInfo := texInfos[bspFace.TexInfo]
+			texName := "default"
+			isSky := (texInfo.Flags & 4) != 0
+			if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
+				texName = mipTextures[texInfo.MipTex].Name
 			}
-			pos := p.createXYZ(float64(v.X), float64(v.Y), float64(v.Z))
-			points = append(points, pos)
+			var points []geometry.XYZ
+			for j := uint16(0); j < bspFace.NumEdges; j++ {
+				surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
+				var v *lumps.Vertex
+				if surfEdgeIdx >= 0 {
+					v = vertexes[edges[surfEdgeIdx].Vertex0]
+				} else {
+					v = vertexes[edges[-surfEdgeIdx].Vertex1]
+				}
+				pos := p.createXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+				points = append(points, pos)
+			}
+			animKind := config.MaterialKindLoop
+			if isSky {
+				animKind = config.MaterialKindSky
+			}
+			material := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+			triangles := p.triangulateConvex3d(points)
+			for _, tri := range triangles {
+				volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
+			}
 		}
-		animKind := config.MaterialKindLoop
-		if isSky {
-			animKind = config.MaterialKindSky
+		if len(volume.Faces) > 0 {
+			root.Volumes = append(root.Volumes, volume)
 		}
-		material := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
-		triangles := p.triangulateConvex3d(points)
-		for _, tri := range triangles {
-			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
-		}
-	}
-	if len(volume.Faces) > 0 {
-		root.Volumes = append(root.Volumes, volume)
 	}
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
 	playerLogic := common.NewPlayer()
@@ -322,7 +317,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 }
 
 // createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
-func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
+func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
 	thingPath := GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -340,7 +335,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		texName := fmt.Sprintf("%s_skin_%d", classname, sIdx)
 		w := int(mdl.Header.SkinWidth)
 		h := int(mdl.Header.SkinHeight)
-		if err = p.texManager.RegisterPixels(texName, w, h, skin.Data, palette, false, 255, false); err != nil {
+		if err = reader.RegisterPixels(texName, w, h, skin.Data, false, 255, false); err != nil {
 			fmt.Printf("Warning: texture %s error: %s\n", texName, err.Error())
 			continue
 		}
@@ -407,7 +402,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 }
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
+func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
@@ -430,7 +425,7 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 	for _, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
 			sMaterials = append(sMaterials, mt.Name)
-			if err = p.texManager.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], palette, false, 255, false); err != nil {
+			if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
 				return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
 			}
 		}

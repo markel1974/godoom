@@ -36,7 +36,9 @@ type IBSPReader interface {
 
 	GetModels() ([]*Model, error)
 
-	GetPalette() ([]byte, error)
+	GetTextures() *Textures
+
+	RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error
 }
 
 // Factory detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.

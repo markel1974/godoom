@@ -64,15 +64,20 @@ type HeaderQ2 struct {
 
 // Q2BSPReader provides methods to read and parse Quake 2 BSP (Binary Space Partitioning) map files.
 type Q2BSPReader struct {
-	header  HeaderQ2
-	rs      io.ReadSeeker
-	rsPal   io.ReadSeeker
-	palette []byte
+	header     HeaderQ2
+	rs         io.ReadSeeker
+	rsPal      io.ReadSeeker
+	palette    []byte
+	texManager *Textures
 }
 
 // NewQ2BSPReader initializes a Q2BSPReader for reading Quake 2 BSP files and a palette from the provided io.ReadSeekers.
 func NewQ2BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
-	reader := &Q2BSPReader{rs: rs, rsPal: rsPal}
+	reader := &Q2BSPReader{
+		rs:         rs,
+		texManager: NewTextures(),
+		rsPal:      rsPal,
+	}
 	return reader
 }
 
@@ -137,7 +142,10 @@ func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
 	return nil, fmt.Errorf("implement me")
 }
 
-// GetPalette retrieves the palette data from the BSP file. It returns the palette as a byte slice or an error if unavailable.
-func (q2 *Q2BSPReader) GetPalette() ([]byte, error) {
-	return nil, fmt.Errorf("implement me")
+func (q2 *Q2BSPReader) GetTextures() *Textures {
+	return q2.texManager
+}
+
+func (q2 *Q2BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
+	return q2.texManager.RegisterPixels(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }

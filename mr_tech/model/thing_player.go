@@ -52,7 +52,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		kind:           0,
 		pitch:          0,
 		pitchState:     0,
-		ThingBase:      NewThingBase2(things, c.Thing, c.Position, nil, volume),
+		ThingBase:      NewThingBase(things, c.Thing, c.Position, nil, volume),
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,

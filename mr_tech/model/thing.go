@@ -22,9 +22,7 @@ type IThing interface {
 
 	GetLight() *Light
 
-	GetMinZ() float64
-
-	GetMaxZ() float64
+	GetLocation() *Volume
 
 	GetVolume() *Volume
 
@@ -32,7 +30,9 @@ type IThing interface {
 
 	GetEntity() *physics.Entity
 
-	GetLocation() *Volume
+	IsActive() bool
+
+	SetActive(active bool)
 
 	StageThinking(playerX float64, playerY float64, playerZ float64)
 
@@ -41,12 +41,6 @@ type IThing interface {
 	StageResolve(solverJitter float64)
 
 	StageApply()
-
-	IsActive() bool
-
-	SetActive(active bool)
-
-	//OnCollision(other IThing)
 
 	StartLoop()
 

@@ -16,7 +16,7 @@ type ThingThrowable struct {
 func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingThrowable {
 	pos := cfg.Position
 	thing := &ThingThrowable{
-		ThingBase: NewThingBase2(things, cfg, pos, anim, volume),
+		ThingBase: NewThingBase(things, cfg, pos, anim, volume),
 	}
 	thing.volume.SetThing(thing)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini

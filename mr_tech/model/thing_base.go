@@ -36,16 +36,14 @@ type ThingBase struct {
 	volume       *Volume
 	entity       *physics.Entity
 	vertices     IVertices
-	//collisions    []IThing
-	//collisionsIdx int
-	inbox       chan *ThingEvent
-	full3d      bool
-	onCollision config.CollisionFunc
-	done        chan struct{}
+	inbox        chan *ThingEvent
+	full3d       bool
+	onCollision  config.CollisionFunc
+	done         chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase2(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
+func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	radAngle := cfg.Angle // * (math.Pi / 180.0)
 	entX := pos.X - cfg.Radius
@@ -89,10 +87,8 @@ func NewThingBase2(things *Things, cfg *config.Thing, pos geometry.XYZ, material
 		cage:         NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
-		//collisions:    make([]IThing, 128),
-		//collisionsIdx: 0,
-		onCollision: cfg.OnCollision,
-		full3d:      things.full3d,
+		onCollision:  cfg.OnCollision,
+		full3d:       things.full3d,
 	}
 	t.entity.SetOnGround(false)
 	return t
@@ -208,19 +204,17 @@ func (t *ThingBase) GetPosition() (float64, float64, float64) {
 	return t.pos.X, t.pos.Y, t.pos.Z
 }
 
+/*
+func (t *ThingBase) GetCenter() (float64, float64, float64) {
+	x, y, z := t.pos.X, t.pos.Y, t.pos.Z
+	h := t.entity.GetDepth() * 0.5
+	return x, y, z
+}
+*/
+
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
 func (t *ThingBase) GetLight() *Light {
 	return t.location.Light
-}
-
-// GetMinZ retrieves the minimum Z-coordinate (floor height) of the location associated with the ThingBase instance.
-func (t *ThingBase) GetMinZ() float64 {
-	return t.location.GetMinZ()
-}
-
-// GetMaxZ retrieves the maximum Z-coordinate (height) of the location associated with the ThingBase instance.
-func (t *ThingBase) GetMaxZ() float64 {
-	return t.location.GetMaxZ()
 }
 
 // GetVolume retrieves the volume associated with the ThingBase instance.
@@ -237,18 +231,6 @@ func (t *ThingBase) SetIdentifier(identifier int) {
 func (t *ThingBase) GetIdentifier() int {
 	return t.identifier
 }
-
-// OnCollision handles interactions when the current object collides with another object implementing the IThing interface.
-//func (t *ThingBase) OnCollision(other IThing) {
-//if t.collisionsIdx >= len(t.collisions) {
-//	return
-//}
-//t.collisions[t.collisionsIdx] = other
-//t.collisionsIdx++
-
-//t.onCollision(t, other)
-//fmt.Println("COLLISION -> ", other.GetId())
-//}
 
 // IsActive checks if the ThingBase instance is currently active.
 func (t *ThingBase) IsActive() bool {
@@ -268,7 +250,7 @@ func (t *ThingBase) StageCompute() {
 	//if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 	//	return
 	//}
-	pX, pY, pZ := t.pos.X, t.pos.Y, t.pos.Z
+	pX, pY, pZ := t.GetPosition()
 	eRadX := t.entity.GetWidth() * 0.5
 	eRadY := t.entity.GetHeight() * 0.5
 	eRadZ := t.entity.GetDepth() * 0.5

@@ -7,16 +7,16 @@ import (
 )
 
 // CreateFrontRearFrustum generates view-projection matrices for front and rear frustums based on given camera parameters.
-func CreateFrontRearFrustum(fbw, fbh, zFarRoom, px, py, pz float32, angle, pitch, roll float64) ([16]float32, [16]float32) {
+func CreateFrontRearFrustum(aspect, zFarRoom, px, py, pz float32, angle, pitch, roll float64) ([16]float32, [16]float32) {
 	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
-	fm := CreateFrustum(fbw, fbh, zFarRoom, px, py, pz, angle, pitch, roll)
-	fr := CreateFrustum(fbw, fbh, zFarRoom, px, py, pz, rAngle, rPitch, rRoll)
+	fm := CreateFrustum(aspect, zFarRoom, px, py, pz, angle, pitch, roll)
+	fr := CreateFrustum(aspect, zFarRoom, px, py, pz, rAngle, rPitch, rRoll)
 	return fm, fr
 }
 
 // CreateFrustum generates a view-projection matrix for rendering a 3D frustum with specified dimensions and orientation.
-func CreateFrustum(fbw, fbh, zFarRoom, px, py, pz float32, yaw, pitch, roll float64) [16]float32 {
-	aspect := fbw / fbh
+func CreateFrustum(aspect, zFarRoom, px, py, pz float32, yaw, pitch, roll float64) [16]float32 {
+	//aspect := fbw / fbh
 	scaleX := (2.0 / aspect) * float32(model.HFov)
 	scaleY := 2.0 * float32(model.VFov)
 	zNear := float32(0.1)

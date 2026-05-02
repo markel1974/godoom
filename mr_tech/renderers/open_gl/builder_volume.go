@@ -113,7 +113,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	px, py, pz := vi.GetXYZ()
 	camX, camY, camZ := float32(px), float32(pz), float32(-py)
 	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-	fm, fr := CreateFrontRearFrustum(float32(fbw), float32(fbh), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
+	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, frustumRear)
 	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, camX, camY, camZ)

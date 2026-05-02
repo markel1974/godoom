@@ -90,7 +90,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	palette := NewPalette()
 	colorPal, err := palette.Parse(bytes.NewReader(palData))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing palette: %w", err)
+		return nil, fmt.Errorf("error while parsing palette: %w", err)
 	}
 
 	bm := NewBM()

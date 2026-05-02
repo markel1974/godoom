@@ -50,16 +50,15 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	if err = reader.Setup(); err != nil {
 		return nil, err
 	}
-	vertexes, _ := reader.GetVertexes()
-	edges, _ := reader.GetEdges()
-	surfEdges, _ := reader.GetSurfEdges()
-	faces, _ := reader.GetFaces()
-	texInfos, _ := reader.GetTexInfos()
-	mipTextures, _ := reader.GetMipTextures()
-	//leaves, _ := reader.GetLeaves(rs, infos[lumps.LumpLeaves])
-	entities, _ := reader.GetEntities()
-	//marks, _ := reader.GetMarks(rs, infos[lumps.LumpMarkSurfaces])
-	bspModels, _ := reader.GetModels()
+	mIdx := 0
+	faces, err := reader.GetRawFaces(mIdx)
+	if err != nil {
+		return nil, err
+	}
+	entities, err := reader.GetEntities()
+	if err != nil {
+		return nil, err
+	}
 	texManager := reader.GetTextures()
 
 	var playerAngle float64
@@ -78,11 +77,19 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
+		//baseClass := classname
+		//subClass := ""
+		//if z := strings.Split(classname, "_"); len(z) > 1 {
+		//	baseClass = z[0]
+		//	subClass = z[1]
+		//}
+		//fmt.Println(baseClass, subClass)
+
 		var pos geometry.XYZ
 		if origin, ok := ent.Properties["origin"]; ok {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
-			pos = p.createXYZ(x, y, z)
+			pos = lumps.CreateXYZ(x, y, z)
 		}
 		modelProp := ent.Properties["model"]
 
@@ -122,7 +129,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
 			continue
 
-		case strings.HasPrefix(classname, "light"):
+		case strings.HasPrefix(classname, "light_"):
 			style := lightStyle0
 			if sIndex, ok := ent.Properties["style"]; ok {
 				if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(lightStyles) {
@@ -137,7 +144,6 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			root.Lights = append(root.Lights, light)
 
 		case strings.HasPrefix(classname, "ambient_"):
-			// Suoni ambientali (es. ambient_drone). Nessuna mesh.
 			continue
 
 		case strings.HasPrefix(modelProp, "*"):
@@ -166,54 +172,21 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			root.Things = append(root.Things, cThing)
 		}
 	}
-
-	//l'indice 0 contiene i gli elementi di un mondo, gli altri sono modelli esterni
-	worldCount := 1
-	for idx := 0; idx < worldCount; idx++ {
-		worldModel := bspModels[idx]
-		// 4. Conversione Geometria Statica: BSP Faces -> Volume
-		// Creiamo un singolo volume globale, senza duplicazioni.
-		vIdx := strconv.Itoa(idx)
-		volume := config.NewConfigVolume("quake_world_"+vIdx, "quake_bsp_"+vIdx)
-
-		//worldModel := bspModels[0]
-
-		// Iteriamo ESCLUSIVAMENTE sulle facce che appartengono al mondo
-		for i := int32(0); i < worldModel.NumFaces; i++ {
-			faceIdx := worldModel.FirstFace + i
-			bspFace := faces[faceIdx]
-			texInfo := texInfos[bspFace.TexInfo]
-			texName := "default"
-			isSky := (texInfo.Flags & 4) != 0
-			if texInfo.MipTex < uint32(len(mipTextures)) && mipTextures[texInfo.MipTex] != nil {
-				texName = mipTextures[texInfo.MipTex].Name
-			}
-			var points []geometry.XYZ
-			for j := uint16(0); j < bspFace.NumEdges; j++ {
-				surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
-				var v *lumps.Vertex
-				if surfEdgeIdx >= 0 {
-					v = vertexes[edges[surfEdgeIdx].Vertex0]
-				} else {
-					v = vertexes[edges[-surfEdgeIdx].Vertex1]
-				}
-				pos := p.createXYZ(float64(v.X), float64(v.Y), float64(v.Z))
-				points = append(points, pos)
-			}
-			animKind := config.MaterialKindLoop
-			if isSky {
-				animKind = config.MaterialKindSky
-			}
-			material := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
-			triangles := p.triangulateConvex3d(points)
-			for _, tri := range triangles {
-				volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, texName))
-			}
+	vIdx := strconv.Itoa(mIdx)
+	volume := config.NewConfigVolume("quake_world_"+vIdx, "quake_bsp_"+vIdx)
+	for _, v := range faces {
+		animKind := config.MaterialKindLoop
+		if v.IsSky {
+			animKind = config.MaterialKindSky
 		}
-		if len(volume.Faces) > 0 {
-			root.Volumes = append(root.Volumes, volume)
+		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+		triangles := p.triangulateConvex3d(v.Points)
+		for _, tri := range triangles {
+			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, v.TexName))
 		}
 	}
+	root.Volumes = append(root.Volumes, volume)
+
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
@@ -389,7 +362,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cFrame.Triangles[tIdx][v] = config.MD2Vertex{Pos: p.createXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cFrame.Triangles[tIdx][v] = config.MD2Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 		}
 		cModel.Frames[idx] = cFrame
@@ -449,7 +422,7 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 			} else {
 				v = vertexes[edges[-surfEdgeIdx].Vertex1]
 			}
-			xyz := p.createXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+			xyz := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, xyz)
 		}
 		// Triangolazione del poligono della faccia
@@ -487,14 +460,6 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	thingCfg.GForce = gForce
 	thingCfg.SetModel3d(cModel)
 	return thingCfg
-}
-
-// createXYZ creates and returns a geometry.XYZ struct using the provided x, y, and z coordinates.
-func (p *Builder) createXYZ(x, y, z float64) geometry.XYZ {
-	// Conversione coordinate: Quake Z-up -> Engine Z-up
-	//pos := geometry.XYZ{X: x, Y: z, Z: -y}
-	pos := geometry.XYZ{X: x, Y: y, Z: z}
-	return pos
 }
 
 // triangulateConvex3d generates a triangle fan from a convex 3D polygon defined by a list of vertices.

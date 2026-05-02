@@ -1,18 +1,17 @@
 package lumps
 
-// model_agnostic.go (nel package lumps)
-
-type RawModel struct {
-	FirstFace int32
-	NumFaces  int32
-}
+import "github.com/markel1974/godoom/mr_tech/model/geometry"
 
 type RawFace struct {
-	FirstEdge int32
-	NumEdges  uint16
-	TexName   string // Semplificato: il nome esatto della texture pronto all'uso
+	Points  []geometry.XYZ
+	TexName string
+	IsSky   bool
 }
 
-type RawVertex struct {
-	X, Y, Z float32
+// CreateXYZ creates and returns a geometry.XYZ struct using the provided x, y, and z coordinates.
+func CreateXYZ(x, y, z float64) geometry.XYZ {
+	// Conversione coordinate: Quake Z-up -> Engine Z-up
+	//pos := geometry.XYZ{X: x, Y: z, Z: -y}
+	pos := geometry.XYZ{X: x, Y: y, Z: z}
+	return pos
 }

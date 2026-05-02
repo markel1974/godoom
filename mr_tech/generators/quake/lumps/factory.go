@@ -22,23 +22,13 @@ type IBSPReader interface {
 
 	GetEntities() ([]*Entity, error)
 
-	GetVertexes() ([]*Vertex, error)
-
-	GetEdges() ([]*Edge, error)
-
-	GetSurfEdges() ([]int32, error)
-
-	GetFaces() ([]*Face, error)
-
-	GetTexInfos() ([]*TexInfo, error)
-
-	GetMipTextures() ([]*MipTexture, error)
-
 	GetModels() ([]*Model, error)
 
 	GetTextures() *Textures
 
 	RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error
+
+	GetRawFaces(modelIdx int) ([]*RawFace, error)
 }
 
 // Factory detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.

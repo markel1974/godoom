@@ -106,46 +106,19 @@ func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
 	return parseEntityText(text) // Usiamo la tua funzione esistente!
 }
 
-// GetVertexes reads and returns the list of Vertex objects from the BSP file. It returns an error if reading fails.
-func (q2 *Q2BSPReader) GetVertexes() ([]*Vertex, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
-// GetEdges reads and returns all edges from the BSP file along with any error encountered during the process.
-func (q2 *Q2BSPReader) GetEdges() ([]*Edge, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
-// GetSurfEdges retrieves the list of surface edge indices from the BSP file and returns them as a slice of int32 values.
-// It returns an error if the operation fails.
-func (q2 *Q2BSPReader) GetSurfEdges() ([]int32, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
-// GetFaces retrieves all faces from the BSP file, which represent sector geometry and related properties.
-func (q2 *Q2BSPReader) GetFaces() ([]*Face, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
-// GetTexInfos retrieves texture mapping information from the BSP file, including texture vectors, indices, and flags.
-func (q2 *Q2BSPReader) GetTexInfos() ([]*TexInfo, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
-// GetMipTextures retrieves all mipmapped textures from the BSP file, returning them as a slice of MipTexture pointers.
-func (q2 *Q2BSPReader) GetMipTextures() ([]*MipTexture, error) {
-	return nil, fmt.Errorf("implement me")
-}
-
 // GetModels reads and returns a list of sub-models (BModels) from the BSP file or an error if the operation fails.
 func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
 	return nil, fmt.Errorf("implement me")
 }
 
-func (q2 *Q2BSPReader) GetTextures() *Textures {
-	return q2.texManager
-}
-
 func (q2 *Q2BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return q2.texManager.RegisterPixels(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
+}
+
+func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
+	return nil, fmt.Errorf("implement me")
+}
+
+func (q2 *Q2BSPReader) GetTextures() *Textures {
+	return q2.texManager
 }

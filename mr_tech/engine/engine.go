@@ -97,7 +97,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	vi.Update(player)
 
 	// 2. AI & External Forces: Wake up things BEFORE physics calculation
-	pX, pY, pZ := player.GetPosition()
+	pX, pY, pZ := player.GetBottomLeft()
 
 	// 3. Static ThingPlayer Motion
 	//player.Update(vi)

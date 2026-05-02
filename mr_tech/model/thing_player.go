@@ -209,11 +209,6 @@ func (p *ThingPlayer) GetSway() (float64, float64, float64) {
 	return p.bobbing.GetSway()
 }
 
-// GetPosition returns the player's current X, Y, and Z coordinates, adjusting for the eye height based on their state.
-func (p *ThingPlayer) GetPosition() (float64, float64, float64) {
-	return p.pos.X, p.pos.Y, p.pos.Z
-}
-
 func (p *ThingPlayer) GetTilt() float64 {
 	//if !p.entity.IsOnGround() {
 	//	return 0.0

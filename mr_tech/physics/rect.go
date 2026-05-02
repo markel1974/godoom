@@ -117,5 +117,7 @@ func (r *Rect) GetHeight() float64 { return r.size.h }
 // GetDepth returns the depth (d) of the Rect object as a float64 value.
 func (r *Rect) GetDepth() float64 { return r.size.d }
 
+func (r *Rect) GetSize() (float64, float64, float64) { return r.size.w, r.size.h, r.size.d }
+
 // GetAABB returns a pointer to the axis-aligned bounding box (AABB) associated with the Rect instance.
 func (r *Rect) GetAABB() *AABB { return r.aabb }

@@ -206,8 +206,8 @@ func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
 
 func (t *ThingBase) GetCenter() (float64, float64, float64) {
 	x, y, z := t.pos.X, t.pos.Y, t.pos.Z
-	cx, cy, cz := t.entity.GetCenter()
-	return x + cx, y + cy, z + cz
+	w, h, d := t.entity.GetSize()
+	return x + w, y + h, z + d
 }
 
 // GetLight retrieves the Light object associated with the ThingBase's current sector.
@@ -243,15 +243,15 @@ func (t *ThingBase) SetActive(active bool) {
 // StageCompute calculates the displacement and updates the entity's collision cage for collision detection and resolution.
 func (t *ThingBase) StageCompute() {
 	dx, dy, dz := t.entity.GetDisplacement()
-	// 1. DEADZONE
-	//const sleepEpsilon = 0.005
-	//if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-	//	return
-	//}
+	// DEADZONE
+	const sleepEpsilon = 0.005
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		return
+	}
 	pX, pY, pZ := t.GetBottomLeft()
-	eRadX := t.entity.GetWidth() * 0.5
-	eRadY := t.entity.GetHeight() * 0.5
-	eRadZ := t.entity.GetDepth() * 0.5
+	w, h, d := t.entity.GetSize()
+	eRadX, eRadY, eRadZ := w*0.5, h*0.5, d*0.5
+
 	cX, cY, cZ := pX, pY, pZ+eRadZ
 	//tX, tY, tZ := cX+dx, cY+dy, cZ+dz
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)

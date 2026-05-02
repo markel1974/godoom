@@ -212,6 +212,11 @@ func (e *Entity) GetWidth() float64 {
 	return e.rect.GetWidth()
 }
 
+// GetSize returns the width, height, and depth of the entity as a tuple of three float64 values.
+func (e *Entity) GetSize() (float64, float64, float64) {
+	return e.rect.GetSize()
+}
+
 // GetHeight returns the height of the entity by retrieving it from the associated rectangle object.
 func (e *Entity) GetHeight() float64 {
 	return e.rect.GetHeight()

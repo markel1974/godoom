@@ -209,10 +209,10 @@ func (w *RenderOpenGL) doRun() {
 
 		w.doPlayerMoves(impulse, up, down, left, right)
 
-		if w.win.JustPressed(pixels.KeyQ) {
+		if w.win.JustPressed(pixels.KeyO) {
 			w.doPlayerThrow()
 		}
-		if w.win.JustPressed(pixels.KeyW) {
+		if w.win.JustPressed(pixels.KeyP) {
 			w.doPlayerFire()
 		}
 		if w.win.JustPressed(pixels.KeyC) {

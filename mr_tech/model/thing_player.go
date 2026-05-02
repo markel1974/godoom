@@ -335,10 +335,10 @@ func (p *ThingPlayer) Fire() {
 	// 3. Punto di spawn fuori dalla hitbox del player
 	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
 	weaponForward := p.GetRadius() * 2.0
+	weaponForce := 5000.0 // TODO CONFIG
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)
-
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.FireHitscan(spawnPos, dirX, dirY, dirZ)
+	p.FireHitscan(spawnPos, weaponForce, dirX, dirY, dirZ)
 }

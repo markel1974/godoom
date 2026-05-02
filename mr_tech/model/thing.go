@@ -14,6 +14,8 @@ type IThing interface {
 
 	GetIdentifier() int
 
+	GetBase() *ThingBase
+
 	GetAABB() *physics.AABB
 
 	GetMaterial() *textures.Material

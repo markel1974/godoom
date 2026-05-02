@@ -161,7 +161,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 			continue
 
 		case len(externalBSPPath) > 0:
-			cThing, err := p.createBSPThing(externalBSPPath, pos, classname, pk, palette)
+			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, pk, palette)
 			if err != nil {
 				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
 				continue
@@ -263,7 +263,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 	falloff := 0.0
 	var kind config.LightKind
 
-	// 1. INTENSITÀ DI BASE
+	// INTENSITÀ DI BASE
 	if l, ok := entity.Properties["light"]; ok {
 		intensity, _ = strconv.ParseFloat(l, 64)
 	} else {
@@ -307,15 +307,12 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 		falloff = intensity
 	}
 
-	// 4. CREAZIONE CONFIGURAZIONE
+	// CREAZIONE CONFIGURAZIONE
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
 	cl.R = r
 	cl.G = g
 	cl.B = b
 
-	// Applica il fix al sistema di coordinate se il tuo motore trasforma Z in Y
-	// Se nel tuo builder.go trasformi le posizioni con XYZ{X: x, Y: -y, Z: 0},
-	// assicurati che anche la direzione segua la stessa swizzle logic.
 	cl.DirX = dirX
 	cl.DirY = dirY
 	cl.DirZ = dirZ
@@ -409,8 +406,8 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	return thingCfg, nil
 }
 
-// createExternalBModelThing constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createBSPThing(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
+// createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
+func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, palette []byte) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
@@ -439,8 +436,7 @@ func (p *Builder) createBSPThing(bspPath string, pos geometry.XYZ, classname str
 		}
 	}
 	materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-	// 3. Traduzione Geometria in MD2 Agnostico
-	// Raccogliamo tutti i triangoli in questo singolo frame
+	// Traduzione Geometria in MD2 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles [][3]config.MD2Vertex
 	model := bspModels[0] // Il modello root dell'oggetto
 	for i := int32(0); i < model.NumFaces; i++ {

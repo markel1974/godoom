@@ -27,6 +27,9 @@ var _dictModelFilename = map[string]string{
 	"item_artifact_invisibility":    "progs/invisibl.mdl", // Ring of Shadows
 	"item_artifact_envirosuit":      "progs/suit.mdl",     // Biosuit
 
+	// Ammo Drops (che usano .mdl invece di .bsp in certi casi o versioni)
+	"item_spikes": "progs/w_spike.mdl", // Chiodi per la Nailgun (drop dal nemico)
+
 	// Weapons
 	"weapon_shotgun":         "progs/g_shot.mdl",
 	"weapon_supershotgun":    "progs/g_shot.mdl", // Il drop usa lo stesso modello
@@ -35,15 +38,41 @@ var _dictModelFilename = map[string]string{
 	"weapon_grenadelauncher": "progs/g_rock.mdl",
 	"weapon_rocketlauncher":  "progs/g_rock2.mdl",
 	"weapon_lightning":       "progs/g_light.mdl",
+
+	"item_key1": "progs/w_s_key.mdl", // Silver Key (a volte)
+	"item_key2": "progs/w_g_key.mdl", // Gold Key (a volte)
+
+	"trap_spikeshooter": "progs/spike.mdl",   // Spara chiodi normali
+	"trap_shooter":      "progs/spike.mdl",   // Variante che spara chiodi
+	"spike":             "progs/spike.mdl",   // Il chiodo vero e proprio
+	"s_spike":           "progs/s_spike.mdl", // Super spike (usato dalla Super Nailgun)
+	"laser":             "progs/laser.mdl",   // Laser (usato dagli Enforcer)
+	"grenade":           "progs/grenade.mdl", // Granata (dal lanciagranate o dagli Ogre)
+	"rocket":            "progs/missile.mdl", // Razzo
 }
 
 var _dictBModel = map[string]string{
-	"item_health":   "maps/b_bh25.bsp",   // Medkit standard (25hp)
-	"item_spikes":   "maps/b_nail0.bsp",  // Casse di chiodi
-	"item_shells":   "maps/b_shell0.bsp", // Scatole di cartucce
-	"item_rockets":  "maps/b_rock0.bsp",  // Razzi
-	"item_cells":    "maps/b_batt0.bsp",  // Celle di energia
-	"misc_explobox": "maps/b_explob.bsp", // Cassa esplosiva
+	// Health
+	"item_health":       "maps/b_bh25.bsp",  // Medkit standard (25hp)
+	"item_health_large": "maps/b_bh100.bsp", // Megahealth (100hp) - *Potrebbe anche essere un b_bh10.bsp per il piccolo, controlla i source di Q1*
+
+	// Ammo Boxes (Queste sono geometrie BSP)
+	"item_spikes":        "maps/b_nail0.bsp",  // Casse di chiodi
+	"item_spikes_large":  "maps/b_nail1.bsp",  // Cassa grande
+	"item_shells":        "maps/b_shell0.bsp", // Scatole di cartucce
+	"item_shells_large":  "maps/b_shell1.bsp", // Cassa grande
+	"item_rockets":       "maps/b_rock0.bsp",  // Razzi
+	"item_rockets_large": "maps/b_rock1.bsp",  // Cassa grande
+	"item_cells":         "maps/b_batt0.bsp",  // Celle di energia
+	"item_cells_large":   "maps/b_batt1.bsp",  // Cassa grande
+
+	// Keys (In Quake 1 vanilla, le chiavi sono BModels)
+	"item_key1": "maps/b_silkey.bsp", // Silver Key
+	"item_key2": "maps/b_gokey.bsp",  // Gold Key
+
+	// Misc
+	"misc_explobox":  "maps/b_explob.bsp", // Cassa esplosiva
+	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande
 }
 
 func GetExternalBModelFileName(classname string) string {

@@ -77,92 +77,81 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
-		//baseClass := classname
-		//subClass := ""
-		//if z := strings.Split(classname, "_"); len(z) > 1 {
-		//	baseClass = z[0]
-		//	subClass = z[1]
-		//}
-		//fmt.Println(baseClass, subClass)
-
+		baseClass := classname
+		subClass := ""
+		if z := strings.Split(classname, "_"); len(z) > 1 {
+			baseClass = z[0]
+			subClass = z[1]
+		}
 		var pos geometry.XYZ
 		if origin, ok := ent.Properties["origin"]; ok {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
 			pos = lumps.CreateXYZ(x, y, z)
 		}
-		modelProp := ent.Properties["model"]
 
 		var angle float64
 		if a, ok := ent.Properties["angle"]; ok {
 			angle, _ = strconv.ParseFloat(a, 64)
 		}
-		mangleStr, _ := ent.Properties["mangle"]
-		colorStr, _ := ent.Properties["_color"]
 
-		externalBSPPath := GetExternalBModelFileName(classname)
-
-		switch {
-		case classname == "worldspawn":
-			// Ignoriamo: è la mappa base, la geometria è già gestita da worldModel
+		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
 			continue
-		case classname == "info_player_start":
-			playerPos, playerAngle, err = p.createPlayerProps(angle, pos)
-			if err != nil {
-				fmt.Printf("Warning: %s\n", err.Error())
-				continue
-			}
-		case classname == "light":
-			light := p.createLight(ent, angle, mangleStr, colorStr, pos, lightStyle0, false)
-			if light == nil {
-				continue
-			}
-			root.Lights = append(root.Lights, light)
+		}
 
-		case strings.HasPrefix(classname, "info_"):
-			// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
-			// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
-			continue
-
-		case strings.HasPrefix(classname, "path_"):
-			// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
-			// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
-			continue
-
-		case strings.HasPrefix(classname, "light_"):
-			style := lightStyle0
-			if sIndex, ok := ent.Properties["style"]; ok {
-				if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(lightStyles) {
-					style = lightStyles[index]
-				}
-			}
-			// Gestisce light, light_fluoro, light_fluorospark
-			light := p.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
-			if light == nil {
-				continue
-			}
-			root.Lights = append(root.Lights, light)
-
-		case strings.HasPrefix(classname, "ambient_"):
-			continue
-
-		case strings.HasPrefix(modelProp, "*"):
-			continue
-
-		case strings.HasPrefix(classname, "func_"):
-			continue
-
-		case strings.HasPrefix(classname, "trigger_"):
-			continue
-
-		case len(externalBSPPath) > 0:
+		if externalBSPPath := GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
 			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, pk, reader)
 			if err != nil {
 				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
 				continue
 			}
 			root.Things = append(root.Things, cThing)
+			continue
+		}
 
+		switch baseClass {
+		case "worldspawn":
+			// Ignoriamo: è la mappa base, la geometria è già gestita da worldModel
+		case "info":
+			if classname == "info_player_start" {
+				playerPos, playerAngle, err = p.createPlayerProps(angle, pos)
+				if err != nil {
+					fmt.Printf("Warning: %s\n", err.Error())
+				}
+			} else {
+				// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
+				// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
+			}
+		case "light":
+			mangleStr, _ := ent.Properties["mangle"]
+			colorStr, _ := ent.Properties["_color"]
+			var light *config.Light = nil
+			if len(subClass) == 0 {
+				light = p.createLight(ent, angle, mangleStr, colorStr, pos, lightStyle0, false)
+			} else {
+				style := lightStyle0
+				if sIndex, ok := ent.Properties["style"]; ok {
+					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(lightStyles) {
+						style = lightStyles[index]
+					}
+				}
+				// Gestisce light, light_fluoro, light_fluorospark
+				light = p.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
+			}
+			if light != nil {
+				root.Lights = append(root.Lights, light)
+			}
+		case "path":
+		// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
+		// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
+		case "ambient":
+			// TODO:
+		case "func":
+			// TODO:
+		case "trigger":
+		// TODO:
+		//case "trap":
+		//TODO
 		default:
 			cThing, err := p.createThing(pos, classname, pk, reader)
 			if err != nil {

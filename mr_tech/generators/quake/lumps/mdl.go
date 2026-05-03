@@ -57,12 +57,12 @@ type MDLVertex struct {
 
 // Model3DResource represents a 3D model resource containing header, skins, texture coordinates, triangles, and decompressed frames.
 type Model3DResource struct {
-	Header    *MDLHeader
-	Skins     []*MDLSkin
-	TexCoords []*MDLTexCoord
-	Triangles []*MDLTriangle
-	// I frame conterranno i vertici già decompressi e convertiti in float64
-	Frames [][][3]float64
+	Header     *MDLHeader
+	Skins      []*MDLSkin
+	TexCoords  []*MDLTexCoord
+	Triangles  []*MDLTriangle
+	Frames     [][][3]float64
+	FrameNames []string
 }
 
 // NewMDLResource reads a Quake MDL 3D model from the given io.ReadSeeker and returns a fully populated Model3DResource.
@@ -137,6 +137,7 @@ func NewMDLResource(rs io.ReadSeeker) (*Model3DResource, error) {
 			frameVerts[vIdx] = [3]float64{x, y, z}
 		}
 		resource.Frames[i] = frameVerts
+		resource.FrameNames = append(resource.FrameNames, FromNullTerminatingString(name[:]))
 	}
 
 	return resource, nil

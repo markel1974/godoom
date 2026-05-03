@@ -335,9 +335,9 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	targetSkin := []string{registeredTexNames[skinTargetIndex]}
 	anim := config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := &config.MD2{Frames: make([]config.MD2Frame, mdl.Header.NumFrames)}
+	cModel := config.NewMD2(int(mdl.Header.NumFrames), mdl.FrameNames)
 	for idx, f := range mdl.Frames {
-		cFrame := config.MD2Frame{Triangles: make([][3]config.MD2Vertex, mdl.Header.NumTris)}
+		cFrame := config.NewMD2Frame(int(mdl.Header.NumTris))
 		skinW := float32(mdl.Header.SkinWidth)
 		skinH := float32(mdl.Header.SkinHeight)
 		for tIdx, tri := range mdl.Triangles {
@@ -355,7 +355,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 			}
 		}
 		cModel.Frames[idx] = cFrame
-		cModel.Frames[idx] = cFrame
+		//cModel.Frames[idx] = cFrame
 	}
 
 	thingCfg := p.createConfigThing(classname, pos, kind, cModel, anim, 0, 30.0, 16.0, 56, 600.0)
@@ -426,7 +426,7 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 		}
 	}
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
-	model3d := &config.MD2{Frames: make([]config.MD2Frame, 1)}
+	model3d := config.NewMD2(1, []string{"default"})
 	model3d.Frames[0].Triangles = allTriangles
 
 	thingCfg := p.createConfigThing(classname, pos, config.ThingItemDef, model3d, materials, 0.0, 16.0, 16.0, 32.0, 0.0)

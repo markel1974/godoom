@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
@@ -28,6 +29,8 @@ const playerHeight = 6.0 * scaleSectorH
 const playerRadius = 2.5
 const playerSpeed = 1800
 const playerMass = 40
+
+const gForce = 9.8 * 8
 
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
@@ -223,23 +226,112 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 	for _, obj := range entities.Objects {
 		pos := CreateCoords(obj.X, obj.Y, obj.Z)
-		key := CleanKey(obj.Class)
-		if key == "SPIRIT" || key == "PLAYER" {
+		key := strings.ToUpper(strings.TrimSpace(obj.Class))
+		switch key {
+		case "SPIRIT", "PLAYER":
 			if configPlayer == nil {
 				configPlayer = b.buildPlayer(pos)
 			}
-		} else {
-			//TODO
-			/*
-				cThing := &config.Thing{
-					Id:       obj.Class + "_" + strconv.Itoa(i),
-					Position: pos,
-					Angle:    obj.Yaw,
-				}
-				configThings = append(configThings, cThing)
+		case "SPRITE":
+			dataIdx, _ := strconv.Atoi(obj.Data)
+			if dataIdx < 0 || dataIdx >= len(entities.Waxes) {
+				fmt.Printf("Warning: SPRITE index not valid: %s\n", obj.Data)
+				continue
+			}
+			fileName := entities.Waxes[dataIdx]
+			waxData, err := d.GetPayload(fileName)
+			if err != nil {
+				fmt.Printf("Warning: Could not load 3DO %s: %v\n", fileName, err)
+				continue
+			}
+			waxData, err = DecompressPayload(waxData)
+			if err != nil {
+				fmt.Printf("Warning: Could not decompress %s: %v\n", fileName, err)
+			}
+			//fmt.Printf("Decompression Success: %s\n", fileName)
+			wax := NewWax()
+			err = wax.Parse(bytes.NewReader(waxData))
+			if err != nil {
+				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
+				continue
+			}
+			var frameTextureNames []string
 
-			*/
+			// Estraiamo i frame dalla prima Action disponibile
+			// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
+			var targetAction *WaxAction
+			for _, act := range wax.Actions {
+				if act != nil {
+					targetAction = act
+					break
+				}
+			}
+
+			if targetAction != nil {
+				for _, viewOffset := range targetAction.ViewOffsets {
+					if viewOffset != 0 {
+						for _, frame := range wax.Frames {
+							if cell, ok := wax.Cells[frame.CellOffset]; ok {
+								texName := fmt.Sprintf("%s_C%d", fileName, frame.CellOffset)
+								// Aggiungiamo la texture al manager (converte 8-bit -> RGBA)
+								textures.AddRawTexture(texName, int(cell.SizeX), int(cell.SizeY), cell.Pixels, colorPal)
+								frameTextureNames = append(frameTextureNames, texName)
+							}
+							// Carichiamo solo i frame necessari per la vista frontale
+							if len(frameTextureNames) > 0 {
+								break
+							}
+						}
+					}
+				}
+			}
+			if len(frameTextureNames) == 0 {
+				fmt.Printf("Warning: Nessun frame utile in %s\n", fileName)
+				continue
+			}
+			// Creiamo il materiale animato (o statico se 1 solo frame)
+			anim := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 0, 0, 0, 0)
+			configThings = append(configThings, cThing)
+		case "FRAME":
+			//fmt.Println("---------------- FRAME ------------")
+			//fmt.Println(obj)
+		case "3D":
+			dataIdx, _ := strconv.Atoi(obj.Data)
+			if dataIdx < 0 || dataIdx >= len(entities.Threedos) {
+				fmt.Printf("Warning: 3DO/POD index not valid: %s\n", obj.Data)
+				continue
+			}
+			fileName := entities.Threedos[dataIdx]
+			threedoData, err := d.GetPayload(fileName)
+			if err != nil {
+				fmt.Printf("Warning: Could not load 3DO %s: %v\n", fileName, err)
+				continue
+			}
+			threedoObj := NewThreedo()
+			if err = threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
+				continue
+			}
+			md2Model, _ := threedoObj.ToMD2()
+			var texNames []string
+			for _, texName := range threedoObj.Textures {
+				names := textures.AddTexture(d, bm, texName, colorPal)
+				texNames = append(texNames, names...)
+			}
+			if len(texNames) == 0 {
+				texNames = []string{"default"}
+			}
+			anim := config.NewConfigMaterial(texNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			id := fmt.Sprintf("%s_%s", "3DO", fileName)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 0, 0, 0, 0)
+			cThing.SetModel3d(md2Model)
+			configThings = append(configThings, cThing)
+		case "SAFE":
+		default:
+			fmt.Println("Unsupported object class:", key)
 		}
+
 	}
 
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
@@ -258,7 +350,7 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
 	player.OnImpact = playerLogic.OnImpact
-	player.GForce = 9.8 * 8
+	player.GForce = gForce
 	player.JumpForce = 1000
 
 	player.Flash.ZFar = 8192
@@ -285,6 +377,27 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player.Bobbing.TiltAmp = 0.05
 
 	return player
+}
+
+func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed, anim)
+	thingCfg.GForce = gForce
+	if thingCfg.Kind == config.ThingEnemyDef {
+		var actions []string
+		if thingCfg.Md2 != nil {
+			actions = thingCfg.Md2.ActionDefinitions
+		}
+		enemyLogic := common.NewEnemy(actions, 300)
+		thingCfg.OnThinking = enemyLogic.OnThinking
+		thingCfg.OnCollision = enemyLogic.OnCollision
+		thingCfg.OnImpact = enemyLogic.OnImpact
+		thingCfg.WakeUpDistance = 400
+	} else {
+		itemLogic := common.NewItem()
+		thingCfg.OnCollision = itemLogic.OnCollision
+		thingCfg.OnImpact = itemLogic.OnImpact
+	}
+	return thingCfg
 }
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.

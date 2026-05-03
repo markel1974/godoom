@@ -10,18 +10,18 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// cleanId transforms the input string to uppercase and removes any leading or trailing whitespace.
+// cleanId processes the input string by trimming whitespace and converting it to uppercase.
 func cleanId(id string) string {
 	return strings.TrimSpace(strings.ToUpper(id))
 }
 
-// Textures manages a collection of Texture resources, providing functionality to add, retrieve, and query textures.
+// Textures manages a collection of 2D textures and provides caching for efficient retrieval.
 type Textures struct {
 	resources map[string]*textures.Texture
 	cache     map[string][]string
 }
 
-// NewTextures initializes and returns a new instance of the Textures struct with an empty resources map.
+// NewTextures creates and returns a new instance of the Textures struct with initialized resource and cache maps.
 func NewTextures() *Textures {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
@@ -30,7 +30,7 @@ func NewTextures() *Textures {
 	return t
 }
 
-// AddTexture parses a texture file, generates frames as RGBA images, stores them, and returns their names as a slice of strings.
+// AddTexture adds a texture by parsing bitmap data and applying a palette, caching the result for future requests.
 func (t *Textures) AddTexture(d *GobHandler, bm *BM, texName string, palette [256]color.RGBA) []string {
 	v, ok := t.cache[texName]
 	if ok {
@@ -56,7 +56,46 @@ func (t *Textures) AddTexture(d *GobHandler, bm *BM, texName string, palette [25
 	return out
 }
 
-// add creates and adds a new texture to the resources map using the provided source ID and RGBA image.
+// AddRawTexture creates a texture from raw indexed pixel data, applies a palette, and stores it in the texture manager.
+func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels []byte, palette [256]color.RGBA) string {
+	if _, exists := t.resources[name]; exists {
+		return name
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			// NOTA SULLA TOPOLOGIA: Nel parser WAX che abbiamo scritto,
+			// abbiamo salvato i dati nel buffer come Column-Major (x * height + y).
+			// Se hai deciso di cambiarlo in Row-Major, usa: pixelPos := y*width + x
+			pixelPos := x*height + y
+			// Controllo di sicurezza bounds
+			if pixelPos >= len(indexedPixels) {
+				continue
+			}
+			colorIdx := indexedPixels[pixelPos]
+			var c color.RGBA
+			if colorIdx == 0 {
+				// Nel Jedi Engine, il colore 0 è rigorosamente il color-key della trasparenza
+				c = color.RGBA{R: 0, G: 0, B: 0, A: 0}
+			} else {
+				// Recuperiamo il colore dalla palette master
+				c = palette[colorIdx]
+				// Assicuriamoci che il canale Alpha sia completamente opaco
+				c.A = 255
+			}
+			img.SetRGBA(x, y, c)
+		}
+	}
+
+	// Passiamo il risultato al tuo metodo helper che si occuperà di fare
+	// il Y-Flip e il packing a 32-bit (int(c.R)<<24...) per il tuo engine.
+	t.add(name, img)
+
+	return name
+}
+
+// add creates and adds a new texture to the resources map, initializing it with RGBA pixel data from the source image.
 func (t *Textures) add(srcId string, src *image.RGBA) *textures.Texture {
 	size := src.Bounds().Size()
 	id := len(t.resources)
@@ -77,7 +116,7 @@ func (t *Textures) add(srcId string, src *image.RGBA) *textures.Texture {
 	return texture
 }
 
-// Get retrieves textures corresponding to the provided list of IDs. Missing IDs return a nil entry in the output slice.
+// Get retrieves a list of textures corresponding to the given slice of IDs. Missing textures are replaced with nil.
 func (t *Textures) Get(ids []string) []*textures.Texture {
 	l := len(ids)
 	if l == 0 {
@@ -100,7 +139,7 @@ func (t *Textures) Get(ids []string) []*textures.Texture {
 	return out
 }
 
-// GetNames retrieves a list of all texture IDs stored in the Textures instance.
+// GetNames returns a slice of strings containing the names of all textures in the Textures instance.
 func (t *Textures) GetNames() []string {
 	var out []string
 	for id := range t.resources {

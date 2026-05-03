@@ -25,6 +25,10 @@ func NewObject() *Object {
 // Entities represents a collection of objects and a level name within a structured data model.
 type Entities struct {
 	LevelName string
+	Waxes     []string
+	Fmes      []string
+	Threedos  []string
+	Sounds    []string
 	Objects   []*Object
 }
 
@@ -66,16 +70,33 @@ func (e *Entities) Parse(r io.Reader) error {
 			continue
 		}
 		switch rootKey {
+		case "O":
+		case "PODS":
+			count, _ := GetTokenIntAt(tokens, 1)
+			e.Threedos = make([]string, 0, count)
+		case "FMES":
+			count, _ := GetTokenIntAt(tokens, 1)
+			e.Fmes = make([]string, 0, count)
+		case "SPRS":
+			count, _ := GetTokenIntAt(tokens, 1)
+			e.Waxes = make([]string, 0, count)
+		case "OBJECTS": // TODO IMPLEMENT
+		case "SOUNDS": // TODO IMPLEMENT
+		case "LEVELNAME": // TODO IMPLEMENT
+			levelName, _ := GetTokenStringAt(tokens, 1)
+			e.LevelName = levelName
 		case "FLAGS:": // TODO IMPLEMENT
 		case "D_YAW:": // IMPLEMENT
 		case "EYE:": // TODO IMPLEMENT
 		case "LOGIC:": // TODO IMPLEMENT
 		case "SEQ": // TODO IMPLEMENT
 		case "SEQEND": // TODO IMPLEMENT
-		case "PODS": // TODO IMPLEMENT
-		case "POD:": // TODO IMPLEMENT
-		case "SPR:": // TODO IMPLEMENT
+		case "POD:":
+			e.Threedos = append(e.Threedos, tokens[1])
+		case "SPR:":
+			e.Waxes = append(e.Waxes, tokens[1])
 		case "FME:": // TODO IMPLEMENT
+			e.Fmes = append(e.Fmes, tokens[1])
 		case "SOUND:": // TODO IMPLEMENT
 		case "TYPE:": // TODO IMPLEMENT
 		case "HEIGHT:": // TODO IMPLEMENT
@@ -90,16 +111,8 @@ func (e *Entities) Parse(r io.Reader) error {
 		case "VUE:": // TODO IMPLEMENT
 		case "VUE_APPEND:": // TODO IMPLEMENT
 		case "BOSS:": // TODO IMPLEMENT
+		case "MASTER:": //TODO
 
-		case "O": // TODO IMPLEMENT
-		case "FMES": // TODO IMPLEMENT
-		case "SPRS": // TODO IMPLEMENT
-		case "OBJECTS": // TODO IMPLEMENT
-		case "SOUNDS": // TODO IMPLEMENT
-		case "LEVELNAME": // TODO IMPLEMENT
-			if len(tokens) > 1 {
-				e.LevelName = tokens[1]
-			}
 		case "CLASS:":
 			obj := NewObject()
 			for i := 0; i < len(tokens); i += 2 {

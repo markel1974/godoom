@@ -70,3 +70,8 @@ func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0
 }
+
+func (v *VertexSprite) SetAction(idx int) {
+	//TODO IMPLEMENT
+	return
+}

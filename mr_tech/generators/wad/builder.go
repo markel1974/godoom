@@ -215,7 +215,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
 	if cfgThing.Kind == config.ThingEnemyDef {
-		enemyLogic := common.NewEnemy(100)
+		enemyLogic := common.NewEnemy(nil, 100)
 		cfgThing.OnThinking = enemyLogic.OnThinking
 		cfgThing.OnCollision = enemyLogic.OnCollision
 	} else {

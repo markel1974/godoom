@@ -437,8 +437,14 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 // createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
 func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed, anim)
+	thingCfg.GForce = gForce
+	thingCfg.SetModel3d(cModel)
 	if thingCfg.Kind == config.ThingEnemyDef {
-		enemyLogic := common.NewEnemy(300)
+		var actions []string
+		if thingCfg.Md2 != nil {
+			actions = thingCfg.Md2.ActionDefinitions
+		}
+		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision
 		thingCfg.WakeUpDistance = 400
@@ -446,8 +452,6 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		itemLogic := common.NewItem()
 		thingCfg.OnCollision = itemLogic.OnCollision
 	}
-	thingCfg.GForce = gForce
-	thingCfg.SetModel3d(cModel)
 	return thingCfg
 }
 

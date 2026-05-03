@@ -11,6 +11,8 @@ type IThingConfig interface {
 
 	GetKind() ThingType
 
+	SetAction(idx int)
+
 	IsOnGround() bool
 
 	SetOnGround(g bool)

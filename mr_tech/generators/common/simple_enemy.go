@@ -3,6 +3,7 @@ package common
 import (
 	"math"
 	"math/rand"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -14,17 +15,23 @@ type Enemy struct {
 	throwCooldown  float64
 	throwMin       float64
 	wakeUpDistance float64
+	actions        map[string]int
 }
 
 // NewEnemy creates and initializes a new Enemy instance with the specified wake-up distance.
-func NewEnemy(wakeUpDistance float64) *Enemy {
+func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
 	const throwMin, throwMax = 5, 10
-	return &Enemy{
+	e := &Enemy{
+		actions:        make(map[string]int),
 		active:         false,
 		throwMin:       float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		throwCooldown:  0.0,
 		wakeUpDistance: wakeUpDistance,
 	}
+	for idx, action := range actions {
+		e.actions[strings.ToLower(strings.TrimSpace(action))] = idx
+	}
+	return e
 }
 
 // OnCollision is triggered when the enemy collides with another object, handling interaction logic between entities.
@@ -50,6 +57,8 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		if playerDist3d < e.wakeUpDistance { // Raggio di risveglio
 			e.active = true
 			e.throwCooldown = e.throwMin
+			action := e.actions["run"]
+			self.SetAction(action)
 		}
 		return
 	}

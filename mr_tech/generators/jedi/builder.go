@@ -250,7 +250,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			}
 			//fmt.Printf("Decompression Success: %s\n", fileName)
 			wax := NewWax()
-			err = wax.Parse(fileName, len(waxData), bytes.NewReader(waxData))
+			err = wax.Parse(bytes.NewReader(waxData))
 			if err != nil {
 				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
 				continue

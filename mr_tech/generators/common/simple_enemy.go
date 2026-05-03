@@ -13,10 +13,13 @@ import (
 // Enemy represents an in-game enemy with activation, attack cooldown, and wake-up behavior based on distance.
 type Enemy struct {
 	active         bool
+	isDead         bool
+	health         float64 // Add health
 	throwCooldown  float64
 	throwMin       float64
 	wakeUpDistance float64
 	actions        map[string]int
+	painCooldown   float64 // Timer to prevent pain animation spam
 }
 
 // NewEnemy creates and initializes a new Enemy instance with the specified wake-up distance.
@@ -25,9 +28,12 @@ func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
 	e := &Enemy{
 		actions:        make(map[string]int),
 		active:         false,
+		isDead:         false,
+		health:         100.0, // Set default health
 		throwMin:       float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		throwCooldown:  0.0,
 		wakeUpDistance: wakeUpDistance,
+		painCooldown:   0.0,
 	}
 	for idx, action := range actions {
 		e.actions[strings.ToLower(strings.TrimSpace(action))] = idx
@@ -45,11 +51,82 @@ func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig)
 }
 
 func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
-	fmt.Println("ENEMY IMPACT!!!!")
+	if e.isDead {
+		return // Dead enemies don't react to new impacts
+	}
+
+	// 1. Calculate and apply damage
+	// Assuming 'force' correlates to damage. Adjust the multiplier as needed.
+	damage := force * 0.5
+	e.health -= damage
+
+	// 2. Apply Knockback Physics
+	// Push the enemy back along the impact direction vector
+	knockbackMultiplier := 50.0 // Adjust based on your physics scale
+	self.AddForce(dirX*force*knockbackMultiplier, dirY*force*knockbackMultiplier, dirZ*force*knockbackMultiplier)
+
+	// 3. Instant Aggro
+	if !e.active {
+		e.active = true
+		e.throwCooldown = e.throwMin
+	}
+
+	// 4. Handle Death or Pain
+	if e.health <= 0 {
+		e.handleDeath(self)
+	} else {
+		e.handlePain(self)
+	}
+}
+
+func (e *Enemy) handleDeath(self config.IThingConfig) {
+	e.isDead = true
+	fmt.Println("ENEMY DEAD!!!!")
+
+	// Set death animation
+	if actionIdx, ok := e.actions["death"]; ok {
+		self.SetAction(actionIdx)
+	} else if actionIdx, ok = e.actions["die"]; ok {
+		self.SetAction(actionIdx)
+	}
+
+	// Optional: Disable collisions or change collision group so player walks over the corpse
+	// self.SetSolid(false)
+}
+
+func (e *Enemy) handlePain(self config.IThingConfig) {
+	// Don't restart the pain animation if we are already in pain
+	if e.painCooldown > 0 {
+		return
+	}
+
+	fmt.Println("ENEMY IN PAIN!!!! Health:", e.health)
+
+	// Set pain animation
+	if actionIdx, ok := e.actions["pain"]; ok {
+		self.SetAction(actionIdx)
+		e.painCooldown = 0.5 // Lock in pain state for 0.5 seconds
+	}
 }
 
 // OnThinking handles the logic for enemy behavior, including activation, movement, aiming, and attack decision-making.
 func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ float64) {
+	if e.isDead {
+		return // Stop thinking if dead
+	}
+
+	// Process pain timer
+	if e.painCooldown > 0 {
+		e.painCooldown -= 1.0 / 60.0 // Assuming 60 ticks per second
+		if e.painCooldown <= 0 {
+			// Pain finished, return to running/chasing
+			if actionIdx, ok := e.actions["run"]; ok {
+				self.SetAction(actionIdx)
+			}
+		}
+		return
+	}
+
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
 	targetZ := playerZ + (self.GetDepth() / 2)
 	selfX, selfY, selfZ := self.GetBottomCenter()
@@ -94,7 +171,11 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	acceleration := self.GetAcceleration()
 	speed := self.GetSpeed()
 	self.MoveTowards(nx, ny, speed*impulse, acceleration)
-	e.tryJump(self, playerZ, thingZ, playerDist2d, nx, ny)
+
+	if self.IsOnGround() {
+		e.handleJump(self, playerZ, thingZ, playerDist2d, nx, ny)
+	}
+
 	const throwableIndex = 2
 	const throwableSpeed = 100
 	if e.throwCooldown <= 0 && playerDist3d < 20.0 {
@@ -111,7 +192,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 }
 
 // tryJump allows the enemy to perform a jump if blocked or the player is at a higher elevation.
-func (e *Enemy) tryJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
+func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
 	if !self.IsOnGround() {
 		return
 	}

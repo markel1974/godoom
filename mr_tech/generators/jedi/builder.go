@@ -239,18 +239,18 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 			fileName := entities.Waxes[dataIdx]
-			waxData, err := d.GetPayload(fileName)
+			waxCompressedData, err := d.GetPayload(fileName)
 			if err != nil {
 				fmt.Printf("Warning: Could not load 3DO %s: %v\n", fileName, err)
 				continue
 			}
-			waxData, err = DecompressPayload(waxData)
+			waxData, err := DecompressPayload(waxCompressedData)
 			if err != nil {
 				fmt.Printf("Warning: Could not decompress %s: %v\n", fileName, err)
 			}
 			//fmt.Printf("Decompression Success: %s\n", fileName)
 			wax := NewWax()
-			err = wax.Parse(bytes.NewReader(waxData))
+			err = wax.Parse(fileName, len(waxData), bytes.NewReader(waxData))
 			if err != nil {
 				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
 				continue

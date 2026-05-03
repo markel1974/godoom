@@ -249,6 +249,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				fmt.Printf("Warning: Could not decompress %s: %v\n", fileName, err)
 			}
 			//fmt.Printf("Decompression Success: %s\n", fileName)
+			//os.Exit(1)
 			wax := NewWax()
 			err = wax.Parse(bytes.NewReader(waxData))
 			if err != nil {
@@ -282,6 +283,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 								break
 							}
 						}
+						//if len(frameTextureNames) > 0 {
+						//	break
+						//}
 					}
 				}
 			}

@@ -68,7 +68,7 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 			// NOTA SULLA TOPOLOGIA: Nel parser WAX che abbiamo scritto,
 			// abbiamo salvato i dati nel buffer come Column-Major (x * height + y).
 			// Se hai deciso di cambiarlo in Row-Major, usa: pixelPos := y*width + x
-			pixelPos := x*height + y
+			pixelPos := y*width + x //x*height + y
 			// Controllo di sicurezza bounds
 			if pixelPos >= len(indexedPixels) {
 				continue

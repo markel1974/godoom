@@ -9,19 +9,17 @@ import (
 // MaxWaxDimension defines the maximum allowable dimension for wax-related computations or operations.
 const MaxWaxDimension = 2048
 
-// --- STRUTTURE DATI ---
-
 // WaxHeader represents the header of a Wax file, containing metadata about sequences, frames, cells, and scaling factors.
 type WaxHeader struct {
-	Version    uint32
-	NumSeqs    uint32
-	NumFrames  uint32
-	NumCells   uint32
-	ScaleX     uint32
-	ScaleY     uint32
-	ExtraLight uint32
-	Pad        uint32
-	SeqOffsets [32]uint32 // Offset alle Action
+	Version     uint32
+	NumSegments uint32
+	NumFrames   uint32
+	NumCells    uint32
+	ScaleX      uint32
+	ScaleY      uint32
+	ExtraLight  uint32
+	Pad         uint32
+	SeqOffsets  [32]uint32 // Offset alle Action
 }
 
 // WaxAction represents an action sequence in the WAX data format.
@@ -72,7 +70,7 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 		return err
 	}
 
-	// 1. Leggiamo l'header fisso di 32 byte
+	// Leggiamo l'header fisso di 32 byte
 	var raw struct {
 		SizeX, SizeY, Compressed, DataSize uint32 // 0-15
 		Reserved1, Reserved2               uint32 // 16-23
@@ -108,19 +106,6 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 		if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
 			return err
 		}
-		//rawData := make([]byte, p.SizeX*p.SizeY)
-		/*
-			n, _ := io.ReadAtLeast(r, rawData, 0)
-			for x := uint32(0); x < p.SizeX; x++ {
-				for y := uint32(0); y < p.SizeY; y++ {
-					idx := x*p.SizeY + y
-					if idx < uint32(n) {
-						p.Pixels[y*p.SizeX+x] = rawData[idx]
-					}
-				}
-			}
-
-		*/
 		rawData := make([]byte, p.SizeX*p.SizeY)
 		total := 0
 		for total < len(rawData) {
@@ -138,31 +123,49 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 				rawData[i] = 0
 			}
 		}
+		/*
+			// Popola p.Pixels in Row-Major: y*p.SizeX + x
+			for y := uint32(0); y < p.SizeY; y++ {
+				for x := uint32(0); x < p.SizeX; x++ {
+					idx := y*p.SizeX + x
+					if idx < uint32(total) {
+						p.Pixels[idx] = rawData[idx]
+					}
+					// Se total < p.SizeX*p.SizeY, il resto resta 0 (già riempito prima)
+				}
+			}
+		*/
 		return nil
 	}
 
 	// --- MODALITÀ COMPRESSA (RLE) ---
 	// Leggiamo la tabella degli offset (uno per colonna)
-	if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
+	collOffset := offset
+	if _, err := r.Seek(collOffset, io.SeekStart); err != nil {
 		return err
 	}
 	colTable := make([]uint32, p.SizeX)
 	if err := binary.Read(r, binary.LittleEndian, colTable); err != nil {
-		return fmt.Errorf("failed to read colTable at %d: %w", offset+tableStartRelative, err)
+		return fmt.Errorf("failed to read colTable at %d: %w", collOffset, err)
 	}
 
 	for x := uint32(0); x < p.SizeX; x++ {
 		if colTable[x] == 0 {
 			continue
 		}
-		if _, err := r.Seek(offset+int64(colTable[x]), io.SeekStart); err != nil {
+		seekOffset := offset + int64(colTable[x])
+		if _, err := r.Seek(seekOffset, io.SeekStart); err != nil {
 			continue
 		}
 		y := uint32(0)
 		for y < p.SizeY {
 			var cmd uint8
 			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-				break // EOF su questa colonna, passa alla prossima
+				if err == io.EOF {
+					break
+				} else {
+					return fmt.Errorf("failed to read cmd at %d: %w", offset+int64(colTable[x]), err)
+				}
 			}
 			if cmd >= 128 {
 				// Skip (Trasparenza)
@@ -172,7 +175,14 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 				count := uint32(cmd)
 				for i := uint32(0); i < count && y < p.SizeY; i++ {
 					var pix uint8
-					if binary.Read(r, binary.LittleEndian, &pix) == nil {
+					if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
+						if err == io.EOF {
+							break
+						} else {
+							return fmt.Errorf("failed to read pixel at %d: %w", offset+int64(colTable[x]), err)
+						}
+					} else {
+						//p.Pixels[y*p.SizeX+x] = pix
 						p.Pixels[y*p.SizeX+x] = pix
 					}
 					y++

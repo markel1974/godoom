@@ -292,7 +292,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			// Creiamo il materiale animato (o statico se 1 solo frame)
 			anim := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 0, 0, 0, 0)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 50, 3, 50, 400)
 			configThings = append(configThings, cThing)
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")
@@ -324,7 +324,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			}
 			anim := config.NewConfigMaterial(texNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			id := fmt.Sprintf("%s_%s", "3DO", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 0, 0, 0, 0)
+			cThing := b.createConfigThing(id, pos, config.ThingItemDef, anim, 0, 40, 10, 50, 0)
 			cThing.SetModel3d(md2Model)
 			configThings = append(configThings, cThing)
 		case "SAFE":

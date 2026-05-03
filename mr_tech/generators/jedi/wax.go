@@ -69,104 +69,94 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 		return err
 	}
 
+	// 1. Leggiamo l'header fisso di 32 byte
 	var raw struct {
-		SizeX      uint32 // 0-3
-		SizeY      uint32 // 4-7
-		Compressed uint32 // 8-11
-		DataSize   uint32 // 12-15
-		Pad1       uint32 // 16-19
-		Pad2       uint32 // 20-23
-		ColOffsets uint32 // 24-27
-		Pad3       uint32 // 28-31
+		SizeX, SizeY, Compressed, DataSize uint32 // 0-15
+		Reserved1, Reserved2               uint32 // 16-23
+		ColOffsets                         uint32 // 24-27 (Il tuo 136)
+		Reserved3                          uint32 // 28-31
 	}
-
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
 
-	p.SizeX = raw.SizeX
-	p.SizeY = raw.SizeY
+	p.SizeX, p.SizeY = raw.SizeX, raw.SizeY
 	p.Compressed = raw.Compressed
 	p.DataSize = raw.DataSize
-	p.ColOffsets = raw.ColOffsets
+
 	if p.SizeX == 0 || p.SizeY == 0 {
 		return nil
 	}
-	if p.SizeX > MaxWaxDimension || p.SizeY > MaxWaxDimension {
-		return fmt.Errorf("invalid dimensions: %dx%d", p.SizeX, p.SizeY)
+
+	// Determiniamo dove inizia effettivamente la tabella delle colonne
+	// Se ColOffsets è 0, la tabella segue l'header (byte 32)
+	tableStartRelative := int64(raw.ColOffsets)
+	if tableStartRelative == 0 {
+		tableStartRelative = 32
 	}
+
 	p.Pixels = make([]byte, p.SizeX*p.SizeY)
+
+	// --- MODALITÀ NON COMPRESSA ---
 	if p.Compressed == 0 {
-		const headerSize = 32
-		pixelStart := offset + headerSize
-		if _, err := r.Seek(pixelStart, io.SeekStart); err != nil {
+		if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
 			return err
 		}
-		expectedSize := p.SizeX * p.SizeY
-		rawData := make([]byte, expectedSize)
-		n, err := io.ReadAtLeast(r, rawData, 0)
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("errore lettura parziale raw pixels: %w", err)
-		}
-		// Trasposizione Column-Major -> Row-Major con controllo di sicurezza
+		rawData := make([]byte, p.SizeX*p.SizeY)
+		n, _ := io.ReadAtLeast(r, rawData, 0)
 		for x := uint32(0); x < p.SizeX; x++ {
 			for y := uint32(0); y < p.SizeY; y++ {
-				// Indice nel buffer raw (Column-Major)
-				rawIdx := x*p.SizeY + y
-				// Se abbiamo i dati per questo pixel, copiamoli.
-				// Se n è inferiore (EOF prematuro), il pixel in p.Pixels rimarrà 0 (trasparente).
-				if rawIdx < uint32(n) {
-					p.Pixels[y*p.SizeX+x] = rawData[rawIdx]
+				idx := x*p.SizeY + y
+				if idx < uint32(n) {
+					p.Pixels[y*p.SizeX+x] = rawData[idx]
 				}
 			}
 		}
 		return nil
 	}
 
-	// --- LOGICA RLE (Compressed == 1) ---
-	if p.ColOffsets == 0 {
-		return fmt.Errorf("cella compressa ma ColOffsets è 0 @ %d", offset)
-	}
-	// Leggiamo la tabella degli offset delle colonne
-	if _, err := r.Seek(offset+int64(p.ColOffsets), io.SeekStart); err != nil {
+	// --- MODALITÀ COMPRESSA (RLE) ---
+	// Leggiamo la tabella degli offset (uno per colonna)
+	if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
 		return err
 	}
-	// --- DECOMPRESSIONE RLE ---
 	colTable := make([]uint32, p.SizeX)
-	if _, err := r.Seek(offset+int64(p.ColOffsets), io.SeekStart); err != nil {
-		return fmt.Errorf("error seeking colTable: %w", err)
-	}
 	if err := binary.Read(r, binary.LittleEndian, colTable); err != nil {
-		return fmt.Errorf("error reading colTable: %w", err)
+		return fmt.Errorf("failed to read colTable at %d: %w", offset+tableStartRelative, err)
 	}
+
 	for x := uint32(0); x < p.SizeX; x++ {
+		// REGOLA D'ORO: colTable[x] è RELATIVO all'offset della cella
 		if colTable[x] == 0 {
 			continue
 		}
-		if _, err := r.Seek(int64(colTable[x]), io.SeekStart); err != nil {
-			return err
+
+		if _, err := r.Seek(offset+int64(colTable[x]), io.SeekStart); err != nil {
+			continue
 		}
+
 		y := uint32(0)
 		for y < p.SizeY {
 			var cmd uint8
 			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-				fmt.Printf("error reading cmd at x: %d, y: %d, sizeX: %d, sizeY: %d: %s\n", x, y, p.SizeX, p.SizeY, err.Error())
-				break
+				break // EOF su questa colonna, passa alla prossima
 			}
+
 			if cmd >= 128 {
-				// Trasparenza (Skip)
+				// Skip (Trasparenza)
 				y += uint32(cmd - 128)
-			} else {
-				// Pixel Opachi
+			} else if cmd > 0 {
+				// Pixel opachi
 				count := uint32(cmd)
 				for i := uint32(0); i < count && y < p.SizeY; i++ {
 					var pix uint8
-					if err := binary.Read(r, binary.LittleEndian, &pix); err == nil {
-						// Trasposizione Column-Major -> Row-Major
+					if binary.Read(r, binary.LittleEndian, &pix) == nil {
 						p.Pixels[y*p.SizeX+x] = pix
 					}
 					y++
 				}
+			} else {
+				break // cmd 0 = fine colonna
 			}
 		}
 	}
@@ -248,7 +238,7 @@ func (w *Wax) Parse(id string, max int, r io.ReadSeeker) error {
 					if _, exists := w.Cells[frame.CellOffset]; !exists {
 						cell := NewWaxCellHeader()
 						// Se la cella fallisce, logghiamo ma non interrompiamo il file
-						fmt.Println("Id", id, "CellOffset", frame.CellOffset, "File Size", max)
+						//fmt.Println("Id", id, "CellOffset", frame.CellOffset, "File Size", max)
 						if err := cell.Parse(r, int64(frame.CellOffset)); err != nil {
 							fmt.Printf("Skip cell @ %d: %v\n", frame.CellOffset, err)
 						} else {

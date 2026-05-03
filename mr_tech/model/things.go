@@ -284,10 +284,6 @@ func (th *Things) processCollision() {
 	// COMMIT SPAZIALE E INTEGRAZIONE
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
-		//ent := t2.GetEntity()
-		//px, py, pz := t2.GetBottomLeft()
-		//eRadius := ent.GetWidth() / 2.0
-		//ent.MoveTo(px-eRadius, py-eRadius, pz)
 		th.tree.UpdateObject(t2)
 	}
 }

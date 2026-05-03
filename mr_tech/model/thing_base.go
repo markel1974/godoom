@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -245,14 +246,13 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
+// StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
 func (t *ThingBase) StageCompute() {
 	dx, dy, dz := t.entity.GetDisplacement()
-
-	// DEADZONE
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+	if t.deadZone(dx, dy, dz) {
 		return
 	}
+
 	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := t.GetBottomLeft()
 	// Calcolo Half-Extents
@@ -297,9 +297,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 			// Delega totale e assoluta al solutore interno di physics
 			t.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
-			//TODO PASSARE ITHING
-			thing := otherParent.GetThing()
-			if thing != nil {
+			if thing := otherParent.GetThing(); thing != nil {
 				t.onCollision(t, thing)
 			}
 		}
@@ -310,14 +308,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 func (t *ThingBase) StageApply() {
 	dx, dy, dz := t.entity.GetDisplacement()
 
-	// DEADZONE
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		if t.entity.IsOnGround() {
-			t.entity.SetVz(0.0)
-		}
+	if t.deadZone(dx, dy, dz) {
 		return
 	}
 
@@ -345,6 +336,7 @@ func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 	t.entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
 }
 
+// GetBase returns the current instance of ThingBase. Useful for method chaining or accessing the base object.
 func (t *ThingBase) GetBase() *ThingBase {
 	return t
 }
@@ -385,10 +377,26 @@ func (t *ThingBase) FireHitscan(pos geometry.XYZ, force float64, dirX, dirY, dir
 		impactX := pos.X + (dirX * closestDist)
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
+
+		fmt.Println("IMPACT: ", force, closestThing.GetId(), impactX, impactY, impactZ)
 		// 3. Risoluzione dell'impatto
 		closestThing.AddForce(dirX*force, dirY*force, dirZ*force)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}
+}
+
+// deadZone checks if the provided velocity components are within a threshold, sets velocity to zero, and returns true if so.
+func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
+	const sleepEpsilon = 0.005
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		t.entity.SetVx(0.0)
+		t.entity.SetVy(0.0)
+		if t.entity.IsOnGround() {
+			t.entity.SetVz(0.0)
+		}
+		return true
+	}
+	return false
 }
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.

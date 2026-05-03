@@ -41,6 +41,7 @@ type ThingBase struct {
 	inbox        chan *ThingEvent
 	full3d       bool
 	onCollision  config.CollisionFunc
+	onImpact     config.ImpactFunc
 	done         chan struct{}
 }
 
@@ -66,6 +67,9 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
+	if cfg.OnImpact == nil {
+		panic("OnImpact is nil for thing:" + cfg.Id)
+	}
 	const cageMargin = 0.001
 	volume := vertices.GetVolume()
 
@@ -89,6 +93,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		cage:         NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
+		onImpact:     cfg.OnImpact,
 		onCollision:  cfg.OnCollision,
 		full3d:       things.full3d,
 	}
@@ -347,7 +352,7 @@ func (t *ThingBase) LaunchObject(throwableIndex int, onCollision config.Collisio
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingBase) FireHitscan(pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
 	var closestThing IThing
@@ -380,7 +385,9 @@ func (t *ThingBase) FireHitscan(pos geometry.XYZ, force float64, dirX, dirY, dir
 
 		fmt.Println("IMPACT: ", force, closestThing.GetId(), impactX, impactY, impactZ)
 		// 3. Risoluzione dell'impatto
+		force *= 100
 		closestThing.AddForce(dirX*force, dirY*force, dirZ*force)
+		closestThing.Impact(closestThing, id, force, closestDist, dirX, dirY, dirZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}
 }
@@ -397,6 +404,16 @@ func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
 		return true
 	}
 	return false
+}
+
+// Impact handles the interaction logic when this object collides with another object.
+// other refers to the configuration of the colliding object.
+// id is a unique identifier for the impact event.
+// force denotes the magnitude of the impact force.
+// closestDist represents the closest distance between the objects upon collision.
+// dirX, dirY, and dirZ specify the directional vector of the impact in 3D space.
+func (t *ThingBase) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
+	t.onImpact(t, other, id, force, closestDist, dirX, dirY, dirZ)
 }
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.

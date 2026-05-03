@@ -218,9 +218,11 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		enemyLogic := common.NewEnemy(nil, 100)
 		cfgThing.OnThinking = enemyLogic.OnThinking
 		cfgThing.OnCollision = enemyLogic.OnCollision
+		cfgThing.OnImpact = enemyLogic.OnImpact
 	} else {
 		itemLogic := common.NewItem()
 		cfgThing.OnCollision = itemLogic.OnCollision
+		cfgThing.OnImpact = itemLogic.OnImpact
 	}
 	cfgThing.GForce = GForce
 	cfgThing.WakeUpDistance = 500
@@ -241,6 +243,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
+	player.OnImpact = playerLogic.OnImpact
 	player.GForce = GForce
 	player.JumpForce = 1800
 

@@ -4,7 +4,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+type ThinkingFunc func(self IThingConfig, playerX, playerY, playerZ float64)
+
 type CollisionFunc func(self IThingConfig, other IThingConfig)
+
+type ImpactFunc func(self IThingConfig, other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)
 
 type IThingConfig interface {
 	GetId() string
@@ -48,4 +52,6 @@ type IThingConfig interface {
 	MoveTowards(dirX, dirY, targetSpeed, accelForce float64)
 
 	LaunchObject(throwableIndex int, cf CollisionFunc, pos geometry.XYZ, angle, pitch, speed float64)
+
+	Impact(other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)
 }

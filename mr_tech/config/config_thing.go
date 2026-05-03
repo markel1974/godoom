@@ -45,9 +45,11 @@ type Thing struct {
 	Md2            *MD2         `json:"md2"`
 	Material       *Material    `json:"material"`
 
-	OnThinking func(self IThingConfig, playerX, playerY, playerZ float64)
+	OnThinking ThinkingFunc
 
-	OnCollision func(self IThingConfig, other IThingConfig)
+	OnCollision CollisionFunc
+
+	OnImpact ImpactFunc
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.

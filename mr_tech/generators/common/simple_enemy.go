@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strings"
@@ -41,6 +42,10 @@ func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig)
 	//	otherId = other.GetId()
 	//}
 	//fmt.Println("Enemy.OnCollision:", self.GetId(), otherId)
+}
+
+func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
+	fmt.Println("ENEMY IMPACT!!!!")
 }
 
 // OnThinking handles the logic for enemy behavior, including activation, movement, aiming, and attack decision-making.

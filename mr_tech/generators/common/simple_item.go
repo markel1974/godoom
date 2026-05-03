@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
@@ -20,4 +22,8 @@ func (e *Item) OnCollision(self config.IThingConfig, other config.IThingConfig) 
 	//	otherId = other.GetId()
 	//}
 	//fmt.Println("Item.OnCollision:", self.GetId(), otherId)
+}
+
+func (e *Item) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
+	fmt.Println("Item IMPACT!!!!")
 }

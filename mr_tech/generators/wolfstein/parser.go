@@ -119,9 +119,11 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 						enemyLogic := common.NewEnemy(nil, 100)
 						cfgThing.OnThinking = enemyLogic.OnThinking
 						cfgThing.OnCollision = enemyLogic.OnCollision
+						cfgThing.OnImpact = enemyLogic.OnImpact
 					} else {
 						itemLogic := common.NewItem()
 						cfgThing.OnCollision = itemLogic.OnCollision
+						cfgThing.OnImpact = itemLogic.OnImpact
 					}
 					root.Things = append(root.Things, cfgThing)
 				}
@@ -200,6 +202,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 	root.Player = config.NewConfigPlayer(playerPos, 0, 20, 90, 1, 8)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
+	root.Player.OnImpact = playerLogic.OnImpact
 	return root, nil
 }
 

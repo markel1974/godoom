@@ -250,7 +250,7 @@ func (w *RenderOpenGL) doPlayerThrow() {
 
 // doPlayerFire triggers the player's fire action by retrieving position, angle, and sector, and invoking the engine's fire logic.
 func (w *RenderOpenGL) doPlayerFire() {
-	w.player.Fire()
+	w.player.Fire("gun")
 }
 
 // doPlayerDuckingToggle toggles the player's ducking state by invoking the SetDucking method on the player instance.

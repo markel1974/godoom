@@ -257,6 +257,7 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
+	player.OnImpact = playerLogic.OnImpact
 	player.GForce = 9.8 * 8
 	player.JumpForce = 1000
 

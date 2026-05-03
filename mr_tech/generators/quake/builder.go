@@ -179,6 +179,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
+	root.Player.OnImpact = playerLogic.OnImpact
 	root.Player.GForce = gForce
 	root.Player.JumpForce = 1000
 
@@ -447,10 +448,12 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision
+		thingCfg.OnImpact = enemyLogic.OnImpact
 		thingCfg.WakeUpDistance = 400
 	} else {
 		itemLogic := common.NewItem()
 		thingCfg.OnCollision = itemLogic.OnCollision
+		thingCfg.OnImpact = itemLogic.OnImpact
 	}
 	return thingCfg
 }

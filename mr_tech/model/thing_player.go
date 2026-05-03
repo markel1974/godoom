@@ -324,7 +324,7 @@ func (p *ThingPlayer) Throw(throwableIndex int, speed float64) {
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
-func (p *ThingPlayer) Fire() {
+func (p *ThingPlayer) Fire(id string) {
 	// 1. Origine della vista (include Bobbing e Crouch)
 	camX, camY, camZ := p.GetVisualPosition()
 	// 2. Calcolo del vettore direzione (Radianti)
@@ -341,5 +341,5 @@ func (p *ThingPlayer) Fire() {
 	spawnY := camY + (p.angleSin * weaponForward)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.FireHitscan(spawnPos, weaponForce, dirX, dirY, dirZ)
+	p.FireHitscan(id, spawnPos, weaponForce, dirX, dirY, dirZ)
 }

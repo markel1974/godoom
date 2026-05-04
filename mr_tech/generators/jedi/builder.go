@@ -235,18 +235,18 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		case "SPRITE":
 			dataIdx, _ := strconv.Atoi(obj.Data)
 			if dataIdx < 0 || dataIdx >= len(entities.Waxes) {
-				fmt.Printf("Warning: SPRITE index not valid: %s\n", obj.Data)
+				fmt.Printf("Warning: sprite index not valid: %s\n", obj.Data)
 				continue
 			}
 			fileName := entities.Waxes[dataIdx]
 			waxCompressedData, err := d.GetPayload(fileName)
 			if err != nil {
-				fmt.Printf("Warning: Could not load 3DO %s: %v\n", fileName, err)
+				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
 				continue
 			}
 			waxData, err := DecompressPayload(waxCompressedData)
 			if err != nil {
-				fmt.Printf("Warning: Could not decompress %s: %v\n", fileName, err)
+				fmt.Printf("Warning: could not decompress %s: %v\n", fileName, err)
 			}
 			//fmt.Printf("Decompression Success: %s\n", fileName)
 			//os.Exit(1)
@@ -281,7 +281,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				}
 			}
 			if len(frameTextureNames) == 0 {
-				fmt.Printf("Warning: Nessun frame utile in %s\n", fileName)
+				fmt.Printf("Warning: no frame found in %s\n", fileName)
 				continue
 			}
 			// Creiamo il materiale animato (o statico se 1 solo frame)
@@ -301,7 +301,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			fileName := entities.Threedos[dataIdx]
 			threedoData, err := d.GetPayload(fileName)
 			if err != nil {
-				fmt.Printf("Warning: Could not load 3DO %s: %v\n", fileName, err)
+				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
 				continue
 			}
 			threedoObj := NewThreedo()

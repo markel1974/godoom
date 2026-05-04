@@ -30,7 +30,7 @@ const (
 	LumpVertexes
 	LumpVisibility
 	LumpNodes
-	LumpTexInfo
+	LumpTexInfos
 	LumpFaces
 	LumpLighting
 	LumpClipNodes

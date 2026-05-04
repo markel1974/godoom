@@ -368,7 +368,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 }
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
+func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
@@ -386,27 +386,45 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 	surfEdges, _ := lumps.NewSurfEdges(rs, infos[lumps.LumpSurfEdges])
 	faces, _ := lumps.NewFace(rs, infos[lumps.LumpFaces])
 	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
+	texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfos])
 
-	var sMaterials []string
-	for _, mt := range mipTextures {
+	// 2. Creiamo i materiali statici singolarmente, salvandoli in una slice parallela a mipTextures
+	bspMaterials := make([]*config.Material, len(mipTextures))
+	for i, mt := range mipTextures {
 		if mt != nil && mt.Name != "" {
-			sMaterials = append(sMaterials, mt.Name)
+			bspMaterials[i] = config.NewConfigMaterial([]string{mt.Name}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
 				return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
 			}
 		}
 	}
-	materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+	/*
+		var sMaterials []string
+		for _, mt := range mipTextures {
+			if mt != nil && mt.Name != "" {
+				sMaterials = append(sMaterials, mt.Name)
+				if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
+					return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
+				}
+			}
+		}
+		materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	*/
 	// Traduzione Geometria in MD2 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles []config.MD2Triangle
 	model := bspModels[0] // Il modello root dell'oggetto
+
 	for i := int32(0); i < model.NumFaces; i++ {
 		faceIdx := model.FirstFace + i
 		bspFace := faces[faceIdx]
-		//texInfo := texInfos[bspFace.TexInfo]
+
+		// 3. RECUPERO DELLA TEXTURE SPECIFICA
+		texInfo := texInfos[bspFace.TexInfo]
+		mipTex := mipTextures[texInfo.MipTex]
+		specificMaterial := bspMaterials[texInfo.MipTex]
+
 		var points []geometry.XYZ
-		// (Per un rendering perfetto delle texture sui BSP servirebbe il calcolo vettoriale
-		// di S e T usando i vettori in TexInfo, ma per la geometria bruta ci basta la posizione)
 		for j := uint16(0); j < bspFace.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
 			var v *lumps.Vertex
@@ -418,20 +436,39 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 			xyz := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, xyz)
 		}
-		// Triangolazione del poligono della faccia
+
 		rawTriangles := p.triangulateConvex3d(points)
+
+		// 4. CALCOLO VETTORIALE DELLE UV
 		for _, rawTri := range rawTriangles {
-			tri := config.NewMD2Triangle(materials)
-			tri.Vertices[0] = config.MD2Vertex{Pos: rawTri[0], U: 0.0, V: 0.0}
-			tri.Vertices[1] = config.MD2Vertex{Pos: rawTri[1], U: 1.0, V: 0.0}
-			tri.Vertices[2] = config.MD2Vertex{Pos: rawTri[2], U: 0.0, V: 1.0}
+			tri := config.NewMD2Triangle(specificMaterial)
+
+			for k := 0; k < 3; k++ {
+				pos := rawTri[k]
+				// Prodotto scalare per l'asse orizzontale S (Vecs[0])
+				u := (pos.X * float64(texInfo.Vecs[0][0])) +
+					(pos.Y * float64(texInfo.Vecs[0][1])) +
+					(pos.Z * float64(texInfo.Vecs[0][2])) +
+					float64(texInfo.Vecs[0][3])
+				// Prodotto scalare per l'asse verticale T (Vecs[1])
+				v := (pos.X * float64(texInfo.Vecs[1][0])) +
+					(pos.Y * float64(texInfo.Vecs[1][1])) +
+					(pos.Z * float64(texInfo.Vecs[1][2])) +
+					float64(texInfo.Vecs[1][3])
+				// Normalizzazione (0.0 -> 1.0)
+				normU := u / float64(mipTex.Width)
+				normV := v / float64(mipTex.Height)
+
+				tri.Vertices[k] = config.MD2Vertex{Pos: pos, U: float32(normU), V: float32(normV)}
+			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
+
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
 	model3d := config.NewMD2(1, []string{"default"})
 	model3d.Frames[0] = config.NewMD2Frame(allTriangles)
-	thingCfg := p.createConfigThing(classname, pos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	thingCfg := p.createConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 

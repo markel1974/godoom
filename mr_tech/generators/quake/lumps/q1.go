@@ -155,7 +155,7 @@ func (q1 *Q1BSPReader) getFaces() ([]*Face, error) {
 
 // GetTexInfos retrieves texture mapping information from the loaded BSP file and returns a slice of TexInfo pointers.
 func (q1 *Q1BSPReader) getTexInfos() ([]*TexInfo, error) {
-	return NewTexInfos(q1.rs, q1.infos[LumpTexInfo])
+	return NewTexInfos(q1.rs, q1.infos[LumpTexInfos])
 }
 
 // GetMipTextures retrieves all *MipTexture objects from the TEXTURES lump in the BSP file. Returns an error on failure.

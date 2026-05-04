@@ -84,7 +84,14 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 				// Assicuriamoci che il canale Alpha sia completamente opaco
 				c.A = 255
 			}
-			img.SetRGBA(x, y, c)
+
+			offset := pixelPos * 4
+			img.Pix[offset+0] = c.R
+			img.Pix[offset+1] = c.G
+			img.Pix[offset+2] = c.B
+			img.Pix[offset+3] = c.A
+
+			//img.SetRGBA(x, y, c)
 		}
 	}
 

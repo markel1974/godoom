@@ -6,27 +6,60 @@ import (
 	"io"
 )
 
-// MaxWaxDimension defines the maximum allowable dimension (width or height) for a WAX cell in pixels.
+// MaxWaxDimension defines the maximum allowed dimension for the width or height of a WaxCell (in pixels).
 const MaxWaxDimension = 2048
 
-// WaxCell represents a 2D grid cell with dimensions and pixel data.
+// WaxCell represents a graphical cell with associated metadata, pixel data, and a reference to its parent WaxFrame.
 type WaxCell struct {
-	SizeX  int
-	SizeY  int
-	Pixels []byte
-	Frame  *WaxFrame
+	id     string
+	sizeX  int
+	sizeY  int
+	pixels []byte
+	frame  *WaxFrame
 }
 
-// NewWaxCell creates and returns a pointer to a new WaxCell instance with default values.
-func NewWaxCell(frame *WaxFrame) *WaxCell {
+// GetId returns the identifier of the WaxCell as a string.
+func (p *WaxCell) GetId() string {
+	return p.id
+}
+
+// GetSize returns the dimensions of the WaxCell as two integers: sizeX and sizeY.
+func (p *WaxCell) GetSize() (int, int) {
+	return p.sizeX, p.sizeY
+}
+
+// GetPixels returns the pixel data associated with the WaxCell as a slice of bytes.
+func (p *WaxCell) GetPixels() []byte {
+	return p.pixels
+}
+
+// GetFrame retrieves the associated WaxFrame of the current WaxCell instance.
+func (p *WaxCell) GetFrame() *WaxFrame {
+	return p.frame
+}
+
+// NewWaxCell creates a new WaxCell instance with the specified id and associated WaxFrame.
+func NewWaxCell(id string, frame *WaxFrame) *WaxCell {
 	return &WaxCell{
-		Frame: frame,
+		id:    id,
+		frame: frame,
 	}
 }
 
-// Parse reads and decodes the WaxCellHeader data from an io.ReadSeeker based on the provided WaxFrame information.
+// Clone creates a deep copy of the current WaxCell, including its properties and associated frame data.
+func (p *WaxCell) Clone() *WaxCell {
+	return &WaxCell{
+		id:     p.id,
+		sizeX:  p.sizeX,
+		sizeY:  p.sizeY,
+		pixels: p.pixels,
+		frame:  p.frame,
+	}
+}
+
+// Parse reads and processes the WAX cell data from the given io.ReadSeeker, handling both compressed and uncompressed formats.
 func (p *WaxCell) Parse(r io.ReadSeeker) error {
-	offset := int64(p.Frame.CellOffset)
+	offset := int64(p.frame.cellOffset)
 	if _, err := r.Seek(offset, io.SeekStart); err != nil {
 		return err
 	}
@@ -43,17 +76,16 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 		return err
 	}
 
-	p.SizeX, p.SizeY = int(raw.SizeX), int(raw.SizeY)
-
-	if p.SizeX == 0 || p.SizeY == 0 {
+	p.sizeX, p.sizeY = int(raw.SizeX), int(raw.SizeY)
+	if p.sizeX == 0 || p.sizeY == 0 {
 		return nil
 	}
 
-	if p.SizeX > MaxWaxDimension || p.SizeY > MaxWaxDimension {
-		return fmt.Errorf("cell dimension exceeds maximum: %dx%d", p.SizeX, p.SizeY)
+	if p.sizeX > MaxWaxDimension || p.sizeY > MaxWaxDimension {
+		return fmt.Errorf("cell dimension exceeds maximum: %dx%d", p.sizeX, p.sizeY)
 	}
 
-	p.Pixels = make([]byte, p.SizeX*p.SizeY)
+	p.pixels = make([]byte, p.sizeX*p.sizeY)
 
 	// --- MODALITÀ NON COMPRESSA (RAW) ---
 	if raw.Compressed == 0 {
@@ -62,18 +94,18 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 		if _, err := r.Seek(rawOffset, io.SeekStart); err != nil {
 			return err
 		}
-		expectedSize := p.SizeX * p.SizeY
+		expectedSize := p.sizeX * p.sizeY
 		rawData := make([]byte, expectedSize)
 		n, err := io.ReadAtLeast(r, rawData, 0)
 		if err != nil && err != io.EOF {
 			return err
 		}
 		// Column-Major -> Row-Major
-		for x := 0; x < p.SizeX; x++ {
-			for y := 0; y < p.SizeY; y++ {
-				srcIdx := x*p.SizeY + y
+		for x := 0; x < p.sizeX; x++ {
+			for y := 0; y < p.sizeY; y++ {
+				srcIdx := x*p.sizeY + y
 				if srcIdx < n {
-					p.Pixels[y*p.SizeX+x] = rawData[srcIdx]
+					p.pixels[y*p.sizeX+x] = rawData[srcIdx]
 				}
 			}
 		}
@@ -86,12 +118,12 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 		return err
 	}
 
-	colTable := make([]uint32, p.SizeX)
+	colTable := make([]uint32, p.sizeX)
 	if err := binary.Read(r, binary.LittleEndian, colTable); err != nil {
 		return fmt.Errorf("failed to read colTable at %d: %w", tableOffset, err)
 	}
 
-	for x := 0; x < p.SizeX; x++ {
+	for x := 0; x < p.sizeX; x++ {
 		if colTable[x] == 0 {
 			continue
 		}
@@ -101,7 +133,7 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 			continue
 		}
 		y := 0
-		for y < p.SizeY {
+		for y < p.sizeY {
 			var rawCmd uint8
 			if err := binary.Read(r, binary.LittleEndian, &rawCmd); err != nil {
 				break
@@ -111,10 +143,10 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 				y += cmd - 128
 			} else if cmd > 0 {
 				count := cmd
-				for i := 0; i < count && y < p.SizeY; i++ {
+				for i := 0; i < count && y < p.sizeY; i++ {
 					var pix uint8
 					if err := binary.Read(r, binary.LittleEndian, &pix); err == nil {
-						p.Pixels[y*p.SizeX+x] = pix // Row-Major nativo
+						p.pixels[y*p.sizeX+x] = pix // Row-Major nativo
 					}
 					y++
 				}
@@ -126,20 +158,27 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 	return nil
 }
 
-// WaxView represents a structure that stores fixed-size frame offsets for parsing data.
+// WaxView represents a collection of WaxCells and manages their data and lifecycle.
 type WaxView struct {
-	Cells     []*WaxCell
+	id        string
 	cellCache map[uint32]*WaxCell
+	cells     []*WaxCell
 }
 
-// NewWaxView creates and returns a new instance of WaxView with default values.
-func NewWaxView(cellCache map[uint32]*WaxCell) *WaxView {
+// NewWaxView creates a new WaxView with the specified ID and a shared cell cache map.
+func NewWaxView(id string, cellCache map[uint32]*WaxCell) *WaxView {
 	return &WaxView{
+		id:        id,
 		cellCache: cellCache,
 	}
 }
 
-// Parse reads and extracts frame offset data from the provided io.ReadSeeker and updates the WaxView structure.
+// GetCells returns a slice of pointers to WaxCell instances associated with the WaxView.
+func (vw *WaxView) GetCells() []*WaxCell {
+	return vw.cells
+}
+
+// Parse reads the WaxView data structure from the provided io.ReadSeeker, parsing frames and their corresponding wax cells.
 func (vw *WaxView) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Padding      [16]byte
@@ -156,52 +195,45 @@ func (vw *WaxView) Parse(r io.ReadSeeker) error {
 		if _, err := r.Seek(int64(frameOffset), io.SeekStart); err != nil {
 			continue
 		}
-
 		frame := NewWaxFrame()
 		if err := frame.Parse(r); err != nil {
 			return err
 		}
-
-		if frame.CellOffset == 0 {
+		if frame.cellOffset == 0 {
 			continue
 		}
-
-		// CACHE HIT: Abbiamo già decodificato questa cella?
-		if cachedCell, exists := vw.cellCache[frame.CellOffset]; exists {
-			// Usiamo la cella decodificata, ma potremmo aver bisogno di
-			// clonarla se il Frame (Flip, InsertX/Y) è diverso per questo riutilizzo.
-			// Per ora la riutilizziamo direttamente.
-			vw.Cells = append(vw.Cells, cachedCell)
+		if cachedCell, exists := vw.cellCache[frame.cellOffset]; exists {
+			cloned := cachedCell.Clone()
+			cloned.frame = frame
+			vw.cells = append(vw.cells, cloned)
 			continue
 		}
-
-		// CACHE MISS: Decodifichiamo la nuova cella
-		cell := NewWaxCell(frame)
+		cellId := fmt.Sprintf("%s_frame_%d", vw.id, frame.cellOffset)
+		cell := NewWaxCell(cellId, frame)
 		if err := cell.Parse(r); err != nil {
-			fmt.Printf("Skip cell @ %d: %v\n", frame.CellOffset, err)
+			fmt.Printf("Skip cell @ %d: %v\n", frame.cellOffset, err)
 			continue
 		}
-
-		vw.cellCache[frame.CellOffset] = cell
-		vw.Cells = append(vw.Cells, cell)
+		vw.cellCache[frame.cellOffset] = cell
+		vw.cells = append(vw.cells, cell)
 	}
 	return nil
 }
 
-// WaxFrame represents a frame in the WAX structure, containing positional data, orientation, and a cell reference.
+// WaxFrame represents frame metadata, including positional offsets, flipping state, and cell data offset in memory.
 type WaxFrame struct {
-	InsertX    int
-	InsertY    int
-	Flip       bool
-	CellOffset uint32
+	insertX    int
+	insertY    int
+	flip       bool
+	cellOffset uint32
 }
 
-// NewWaxFrame creates and returns a pointer to a new, empty WaxFrame instance.
+// NewWaxFrame creates and returns a pointer to a new, empty instance of WaxFrame.
 func NewWaxFrame() *WaxFrame {
 	return &WaxFrame{}
 }
 
-// Parse reads and initializes the WaxFrame fields from the provided io.ReadSeeker, using little-endian byte order.
+// Parse reads and populates the WaxFrame fields from the provided io.ReadSeeker in little-endian binary format.
 func (wf *WaxFrame) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		InsertX    int32  // 0x00
@@ -216,27 +248,36 @@ func (wf *WaxFrame) Parse(r io.ReadSeeker) error {
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
-	wf.CellOffset = raw.CellOffset
-	wf.InsertX = int(raw.InsertX)
-	wf.InsertY = int(raw.InsertY)
-	wf.Flip = raw.Flip != 0
+	wf.cellOffset = raw.CellOffset
+	wf.insertX = int(raw.InsertX)
+	wf.insertY = int(raw.InsertY)
+	wf.flip = raw.Flip != 0
 
 	return nil
 }
 
-// WaxAction represents an action sequence containing multiple viewing angles (Views).
-type WaxAction struct {
+// WaxActor represents an entity that manages WaxView objects and a shared cache of WaxCells.
+type WaxActor struct {
+	id        string
 	cellCache map[uint32]*WaxCell
-	Views     [32]*WaxView // Manteniamo la struttura ad albero: Action -> View -> Cell
+	views     [32]*WaxView
 }
 
-func NewWaxAction(cellCache map[uint32]*WaxCell) *WaxAction {
-	return &WaxAction{
+// NewWaxActor creates a new WaxActor instance with a unique identifier and a shared cell cache.
+func NewWaxActor(id string, cellCache map[uint32]*WaxCell) *WaxActor {
+	return &WaxActor{
+		id:        id,
 		cellCache: cellCache,
 	}
 }
 
-func (wa *WaxAction) Parse(r io.ReadSeeker) error {
+// GetViews returns an array of pointers to WaxView objects associated with the WaxActor.
+func (wa *WaxActor) GetViews() [32]*WaxView {
+	return wa.views
+}
+
+// Parse reads and processes data from the provided io.ReadSeeker to populate the WaxActor's views collection.
+func (wa *WaxActor) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Padding     [16]byte
 		ViewOffsets [32]uint32
@@ -252,26 +293,27 @@ func (wa *WaxAction) Parse(r io.ReadSeeker) error {
 		if _, err := r.Seek(int64(viewOffset), io.SeekStart); err != nil {
 			continue
 		}
-		view := NewWaxView(wa.cellCache)
+		viewId := fmt.Sprintf("%s_view_%d", wa.id, idx)
+		view := NewWaxView(viewId, wa.cellCache)
 		if err := view.Parse(r); err != nil {
 			continue
 		}
-		wa.Views[idx] = view
+		wa.views[idx] = view
 	}
 	return nil
 }
 
-// WaxHeader represents the header structure of a WAX file containing metadata and sequence offsets for actions.
+// WaxHeader represents a structure for holding sequence offset data for actions within a WAX binary.
 type WaxHeader struct {
-	SeqOffsets [32]uint32 // Offset alle Action
+	seqOffsets [32]uint32 // Offset alle Action
 }
 
-// NewWaxHeader creates and returns a new instance of WaxHeader with default values.
+// NewWaxHeader initializes and returns a pointer to a new WaxHeader instance.
 func NewWaxHeader() *WaxHeader {
 	return &WaxHeader{}
 }
 
-// Parse reads and parses the WaxHeader data from the given io.ReadSeeker and populates the WaxHeader fields.
+// Parse reads and populates the fields of the WaxHeader from the given io.ReadSeeker data source.
 func (wh *WaxHeader) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Version     uint32
@@ -282,47 +324,51 @@ func (wh *WaxHeader) Parse(r io.ReadSeeker) error {
 		ScaleY      uint32
 		ExtraLight  uint32
 		Pad         uint32
-		SeqOffsets  [32]uint32 // Offset alle Action
+		SeqOffsets  [32]uint32
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
-
-	wh.SeqOffsets = raw.SeqOffsets
-
+	wh.seqOffsets = raw.SeqOffsets
 	return nil
 }
 
-// Wax represents a collection of animations, frames, and graphical cells in a structured format for processing.
+// Wax represents a container for managing header and actors in a game asset or animation format.
 type Wax struct {
-	header  *WaxHeader
-	Actions [32]*WaxAction
+	header *WaxHeader
+	actors []*WaxActor
 }
 
-// NewWax initializes and returns a new instance of Wax with empty Frames and Cells maps.
+// NewWax creates and returns a new instance of the Wax structure.
 func NewWax() *Wax {
 	return &Wax{}
 }
 
-// Parse reads and processes the data from the provided io.ReadSeeker, populating the Wax structure with parsed header, actions, views, frames, and cells.
-func (w *Wax) Parse(r io.ReadSeeker) error {
+// Parse initializes the Wax object by reading and parsing its header and associated actors from the provided ReadSeeker.
+func (w *Wax) Parse(baseId string, r io.ReadSeeker) error {
 	w.header = NewWaxHeader()
 	if err := w.header.Parse(r); err != nil {
 		return err
 	}
 	cellCache := make(map[uint32]*WaxCell)
-	for idx, actOffset := range w.header.SeqOffsets {
+	for _, actOffset := range w.header.seqOffsets {
 		if actOffset == 0 {
 			continue
 		}
 		if _, err := r.Seek(int64(actOffset), io.SeekStart); err != nil {
 			return err
 		}
-		action := NewWaxAction(cellCache)
+		actorId := fmt.Sprintf("%s_act_%d", baseId, actOffset)
+		action := NewWaxActor(actorId, cellCache)
 		if err := action.Parse(r); err != nil {
 			return err
 		}
-		w.Actions[idx] = action
+		w.actors = append(w.actors, action)
 	}
 	return nil
+}
+
+// GetActors returns a slice of pointers to WaxActor representing the actors associated with the Wax instance.
+func (w *Wax) GetActors() []*WaxActor {
+	return w.actors
 }

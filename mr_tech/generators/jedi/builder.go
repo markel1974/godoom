@@ -251,7 +251,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			//fmt.Printf("Decompression Success: %s\n", fileName)
 			//os.Exit(1)
 			wax := NewWax()
-			err = wax.Parse(bytes.NewReader(waxData))
+			err = wax.Parse(fileName, bytes.NewReader(waxData))
 			if err != nil {
 				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
 				continue
@@ -261,9 +261,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			// Estraiamo i frame dalla prima Action disponibile
 			// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
 			var targetView *WaxView = nil
-			for _, act := range wax.Actions {
-				for _, view := range act.Views {
-					if view != nil && len(view.Cells) > 0 {
+			for _, act := range wax.GetActors() {
+				for _, view := range act.GetViews() {
+					if view != nil && len(view.GetCells()) > 0 {
 						targetView = view
 						break
 					}
@@ -274,11 +274,11 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			}
 
 			if targetView != nil {
-				for _, cell := range targetView.Cells {
-					texName := fmt.Sprintf("%s_C%d", fileName, cell.Frame.CellOffset)
-					// Aggiungiamo la texture al manager (converte 8-bit -> RGBA)
-					textures.AddRawTexture(texName, cell.SizeX, cell.SizeY, cell.Pixels, colorPal)
-					frameTextureNames = append(frameTextureNames, texName)
+				for _, cell := range targetView.GetCells() {
+					texId := cell.GetId()
+					sizeX, sizeY := cell.GetSize()
+					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+					frameTextureNames = append(frameTextureNames, texId)
 				}
 			}
 			if len(frameTextureNames) == 0 {

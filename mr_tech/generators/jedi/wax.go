@@ -305,7 +305,7 @@ func (wa *WaxActor) Parse(r io.ReadSeeker) error {
 
 // WaxHeader represents a structure for holding sequence offset data for actions within a WAX binary.
 type WaxHeader struct {
-	seqOffsets [32]uint32 // Offset alle Action
+	seqOffsets [32]uint32
 }
 
 // NewWaxHeader initializes and returns a pointer to a new WaxHeader instance.

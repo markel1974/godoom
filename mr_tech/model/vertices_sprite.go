@@ -36,7 +36,6 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Mater
 
 	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesSprite{volume: volume}
-	//f.volume.SetBillboard(1.0)
 
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
 	t0 := [3]geometry.XYZ{

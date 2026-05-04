@@ -176,6 +176,10 @@ func (v *Volume) AddFace(face *Face) {
 	v.faces = append(v.faces, face)
 }
 
+func (v *Volume) ClearFace() {
+	v.faces = nil
+}
+
 // GetFaces retrieves the list of face objects associated with the location.
 func (v *Volume) GetFaces() []*Face {
 	return v.faces

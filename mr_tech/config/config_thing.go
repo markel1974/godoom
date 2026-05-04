@@ -43,6 +43,7 @@ type Thing struct {
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	GForce         float64      `json:"gForce"`
 	MD2            *MD2         `json:"md2"`
+	WAX            *WAX         `json:"wax"`
 	Material       *Material    `json:"material"`
 
 	OnThinking ThinkingFunc

@@ -65,10 +65,12 @@ func NewWaxCellHeader() *WaxCellHeader {
 }
 
 // Parse reads and processes data from the provided io.ReadSeeker starting at the specified offset to populate the struct.
-func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
+func (p *WaxCellHeader) Parse(r io.ReadSeeker, frame *WaxFrame) error {
+	offset := int64(frame.CellOffset)
 	if _, err := r.Seek(offset, io.SeekStart); err != nil {
 		return err
 	}
+	//TODO usare frame.InsertX e frame.InsertY
 
 	// Leggiamo l'header fisso di 32 byte
 	var raw struct {
@@ -93,16 +95,16 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 		return fmt.Errorf("cell dimension exceeds maximum allowed size: %dx%d", p.SizeX, p.SizeY)
 	}
 
-	// Determiniamo dove inizia effettivamente la tabella delle colonne
-	// Se ColOffsets è 0, la tabella segue l'header (byte 32)
-	tableStartRelative := int64(raw.ColOffsets)
-	if tableStartRelative == 0 {
-		tableStartRelative = 32
-	}
-
 	p.Pixels = make([]byte, p.SizeX*p.SizeY)
 
 	if p.Compressed == 0 {
+		// Determiniamo dove inizia effettivamente la tabella delle colonne
+		// Se ColOffsets è 0, la tabella segue l'header (byte 32)
+		tableStartRelative := int64(raw.ColOffsets)
+		if tableStartRelative == 0 {
+			tableStartRelative = 32
+		}
+
 		if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
 			return err
 		}
@@ -123,18 +125,18 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 				rawData[i] = 0
 			}
 		}
-		/*
-			// Popola p.Pixels in Row-Major: y*p.SizeX + x
-			for y := uint32(0); y < p.SizeY; y++ {
-				for x := uint32(0); x < p.SizeX; x++ {
-					idx := y*p.SizeX + x
-					if idx < uint32(total) {
-						p.Pixels[idx] = rawData[idx]
-					}
-					// Se total < p.SizeX*p.SizeY, il resto resta 0 (già riempito prima)
-				}
-			}
-		*/
+
+		//	// Popola p.Pixels in Row-Major: y*p.SizeX + x
+		//	for y := uint32(0); y < p.SizeY; y++ {
+		//		for x := uint32(0); x < p.SizeX; x++ {
+		//			idx := y*p.SizeX + x
+		//			if idx < uint32(total) {
+		//				p.Pixels[idx] = rawData[idx]
+		//			}
+		//			// Se total < p.SizeX*p.SizeY, il resto resta 0 (già riempito prima)
+		//		}
+		//	}
+
 		return nil
 	}
 
@@ -164,7 +166,7 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 				if err == io.EOF {
 					break
 				} else {
-					return fmt.Errorf("failed to read cmd at %d: %w", offset+int64(colTable[x]), err)
+					return fmt.Errorf("failed to read cmd at %d: %w", seekOffset, err)
 				}
 			}
 			if cmd >= 128 {
@@ -182,8 +184,7 @@ func (p *WaxCellHeader) Parse(r io.ReadSeeker, offset int64) error {
 							return fmt.Errorf("failed to read pixel at %d: %w", offset+int64(colTable[x]), err)
 						}
 					} else {
-						//p.Pixels[y*p.SizeX+x] = pix
-						p.Pixels[y*p.SizeX+x] = pix
+						p.Pixels[y*p.SizeX+x] = pix //Row-Major
 					}
 					y++
 				}
@@ -263,7 +264,7 @@ func (w *Wax) Parse(r io.ReadSeeker) error {
 				}
 				if _, exists := w.Cells[frame.CellOffset]; !exists {
 					cell := NewWaxCellHeader()
-					if err := cell.Parse(r, int64(frame.CellOffset)); err != nil {
+					if err := cell.Parse(r, frame); err != nil {
 						fmt.Printf("Skip cell @ %d: %v\n", frame.CellOffset, err)
 					} else {
 						w.Cells[frame.CellOffset] = cell

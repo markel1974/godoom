@@ -28,7 +28,7 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 
 	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, mass, restitution, friction, gForce)
 	f := &VertexSprite{volume: volume}
-	f.volume.SetBillboard(1.0)
+	//f.volume.SetBillboard(1.0)
 
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
 	t0 := [3]geometry.XYZ{
@@ -80,4 +80,14 @@ func (v *VertexSprite) SetAction(idx int) {
 // GetPosition retrieves the bottom-left coordinates (x, y, z) of the associated Volume's entity.
 func (v *VertexSprite) GetPosition() (float64, float64, float64) {
 	return v.volume.entity.GetBottomLeft()
+}
+
+// GetBillboard retrieves the billboard value associated with the Face instance.
+func (v *VertexSprite) GetBillboard() float64 {
+	return 1.0
+}
+
+// SetThing assigns an IThing instance to the underlying Volume of the VertexSprite.
+func (v *VertexSprite) SetThing(t IThing) {
+	v.volume.SetThing(t)
 }

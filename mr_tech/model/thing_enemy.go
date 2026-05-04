@@ -24,10 +24,9 @@ func NewThingEnemy(things *Things, cfg *config.Thing, anim *textures.Material, v
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}
 	thing := &ThingEnemy{
-		ThingBase:  NewThingBase(things, cfg, pos, anim, volume),
 		onThinking: cfg.OnThinking,
 	}
-	thing.volume.SetThing(thing)
+	thing.ThingBase = NewThingBase(thing, things, cfg, pos, anim, volume)
 	return thing
 }
 

@@ -48,12 +48,10 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 	}
 	c.Id = "PLAYER"
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
-	base := NewThingBase(things, c.Thing, c.Position, nil, volume)
 	thing := &ThingPlayer{
 		kind:           0,
 		pitch:          0,
 		pitchState:     0,
-		ThingBase:      base,
 		bobbing:        NewBobbing(c.Bobbing),
 		lightIntensity: 0.0039,
 		debug:          debug,
@@ -62,7 +60,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	thing.volume.SetThing(thing)
+	thing.ThingBase = NewThingBase(thing, things, c.Thing, c.Position, nil, volume)
 	thing.SetAngle(c.Angle)
 	return thing
 }

@@ -34,7 +34,7 @@ func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d
 	if len(v.actions) > 0 {
 		v.SetAction(0)
 	}
-	v.volume.SetBillboard(2.0)
+	//v.volume.SetBillboard(2.0)
 
 	for frameIdx, cfgFrame := range cfg.Frames {
 		frameFaces := make([]*Face, len(cfgFrame.Triangles))
@@ -106,4 +106,14 @@ func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 // GetPosition returns the center position of the associated entity as a tuple of three float64 values.
 func (v *VertexMD2) GetPosition() (float64, float64, float64) {
 	return v.volume.entity.GetCenter()
+}
+
+// GetBillboard retrieves the billboard value associated with the Face instance.
+func (v *VertexMD2) GetBillboard() float64 {
+	return 2.0
+}
+
+// SetThing assigns an IThing instance to the underlying Volume of the VertexSprite.
+func (v *VertexMD2) SetThing(t IThing) {
+	v.volume.SetThing(t)
 }

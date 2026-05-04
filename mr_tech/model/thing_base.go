@@ -19,6 +19,10 @@ type IVertices interface {
 	SetAction(idx int)
 
 	GetPosition() (float64, float64, float64)
+
+	GetBillboard() float64
+
+	SetThing(t IThing)
 }
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
@@ -37,7 +41,6 @@ type ThingBase struct {
 	isActive     bool
 	identifier   int
 	cage         *CollisionCage
-	volume       *Volume
 	entity       *physics.Entity
 	vertices     IVertices
 	inbox        chan *ThingEvent
@@ -48,7 +51,7 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
+func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
 	volumes := things.GetVolumes()
 	radAngle := cfg.Angle // * (math.Pi / 180.0)
 	//we need bottom left here
@@ -66,6 +69,8 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	}
 
+	vertices.SetThing(thing)
+
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
@@ -73,12 +78,9 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		panic("OnImpact is nil for thing:" + cfg.Id)
 	}
 	const cageMargin = 0.001
-	volume := vertices.GetVolume()
-
 	t := &ThingBase{
 		vertices:     vertices,
-		volume:       volume,
-		entity:       volume.GetEntity(),
+		entity:       vertices.GetVolume().GetEntity(),
 		id:           cfg.Id,
 		angle:        radAngle,
 		kind:         cfg.Kind,
@@ -92,7 +94,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 		maxStep:      cfg.Height * 0.5,
 		isActive:     true,
 		identifier:   -1,
-		cage:         NewCollisionCage(cfg.Id, volume, cageMargin, 0, 0, 0),
+		cage:         NewCollisionCage(cfg.Id, vertices.GetVolume(), cageMargin, 0, 0, 0),
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
 		onImpact:     cfg.OnImpact,
@@ -106,7 +108,7 @@ func NewThingBase(things *Things, cfg *config.Thing, pos geometry.XYZ, material 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
 func (t *ThingBase) GetVertices() ([]*Face, []*Face, float64, float64) {
 	vCurr, vNext, lerp := t.vertices.GetVertices(textures.CurrentTick())
-	return vCurr, vNext, lerp, t.volume.GetBillboard()
+	return vCurr, vNext, lerp, t.vertices.GetBillboard()
 }
 
 // GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
@@ -235,7 +237,7 @@ func (t *ThingBase) GetCenter() (float64, float64, float64) {
 
 // GetVolume retrieves the volume associated with the ThingBase instance.
 func (t *ThingBase) GetVolume() *Volume {
-	return t.volume
+	return t.vertices.GetVolume()
 }
 
 // SetIdentifier sets the unique identifier for the ThingBase instance.

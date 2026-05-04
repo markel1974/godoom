@@ -21,7 +21,6 @@ type Volume struct {
 	maxZ      float64
 	hasFixedZ bool
 	facesTree *physics.AABBTree
-	billboard float64
 	thing     IThing
 }
 
@@ -117,16 +116,6 @@ func (v *Volume) SetThing(thing IThing) {
 // GetThing retrieves the IThing object associated with the Volume instance.
 func (v *Volume) GetThing() IThing {
 	return v.thing
-}
-
-// GetBillboard retrieves the billboard value associated with the Face instance.
-func (v *Volume) GetBillboard() float64 {
-	return v.billboard
-}
-
-// SetBillboard sets the billboard value for the Face instance.
-func (v *Volume) SetBillboard(billboard float64) {
-	v.billboard = billboard
 }
 
 func (v *Volume) GetEntity() *physics.Entity {

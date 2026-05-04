@@ -260,33 +260,25 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 			// Estraiamo i frame dalla prima Action disponibile
 			// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
-			var targetAction *WaxAction
+			var targetView *WaxView = nil
 			for _, act := range wax.Actions {
-				if act != nil {
-					targetAction = act
+				for _, view := range act.Views {
+					if view != nil && len(view.Cells) > 0 {
+						targetView = view
+						break
+					}
+				}
+				if targetView != nil {
 					break
 				}
 			}
 
-			if targetAction != nil {
-				for _, viewOffset := range targetAction.ViewOffsets {
-					if viewOffset != 0 {
-						for _, frame := range wax.Frames {
-							if cell, ok := wax.Cells[frame.CellOffset]; ok {
-								texName := fmt.Sprintf("%s_C%d", fileName, frame.CellOffset)
-								// Aggiungiamo la texture al manager (converte 8-bit -> RGBA)
-								textures.AddRawTexture(texName, int(cell.SizeX), int(cell.SizeY), cell.Pixels, colorPal)
-								frameTextureNames = append(frameTextureNames, texName)
-							}
-							// Carichiamo solo i frame necessari per la vista frontale
-							if len(frameTextureNames) > 0 {
-								break
-							}
-						}
-						//if len(frameTextureNames) > 0 {
-						//	break
-						//}
-					}
+			if targetView != nil {
+				for _, cell := range targetView.Cells {
+					texName := fmt.Sprintf("%s_C%d", fileName, cell.Frame.CellOffset)
+					// Aggiungiamo la texture al manager (converte 8-bit -> RGBA)
+					textures.AddRawTexture(texName, cell.SizeX, cell.SizeY, cell.Pixels, colorPal)
+					frameTextureNames = append(frameTextureNames, texName)
 				}
 			}
 			if len(frameTextureNames) == 0 {

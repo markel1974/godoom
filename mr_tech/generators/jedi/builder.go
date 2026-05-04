@@ -257,58 +257,59 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 
-			var frameTextureNames []string
-			for _, act := range wax.GetActions() {
-				if act == nil {
-					continue
-				}
-				for _, view := range act.GetViews() {
-					if view == nil {
-						continue
-					}
-					for _, cell := range view.GetCells() {
-						texId := cell.GetId()
-						sizeX, sizeY := cell.GetSize()
-						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-						frameTextureNames = append(frameTextureNames, texId)
-					}
-				}
-			}
-			material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-			cThing.Sprite = config.NewSprite(material)
-			configThings = append(configThings, cThing)
-
 			/*
-				multiSprite := config.NewMultiSprite()
+				var frameTextureNames []string
 				for _, act := range wax.GetActions() {
 					if act == nil {
 						continue
 					}
 					for _, view := range act.GetViews() {
-						if view == nil || len(view.GetCells()) == 0 {
+						if view == nil {
 							continue
 						}
-						var tn []string
 						for _, cell := range view.GetCells() {
 							texId := cell.GetId()
 							sizeX, sizeY := cell.GetSize()
 							textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-							tn = append(tn, texId)
+							frameTextureNames = append(frameTextureNames, texId)
 						}
-						material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-						multiSprite.Add(material)
 					}
 				}
-
-				// Creiamo il materiale animato (o statico se 1 solo frame)
 				material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-				cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, material, 0, 50, 3, 50, 400)
+				cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+				cThing.Sprite = config.NewSprite(material)
 				configThings = append(configThings, cThing)
 
 			*/
+
+			multiSprite := config.NewMultiSprite()
+			for _, act := range wax.GetActions() {
+				if act == nil {
+					continue
+				}
+				for _, view := range act.GetViews() {
+					if view == nil || len(view.GetCells()) == 0 {
+						continue
+					}
+					var tn []string
+					for _, cell := range view.GetCells() {
+						texId := cell.GetId()
+						sizeX, sizeY := cell.GetSize()
+						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+						tn = append(tn, texId)
+					}
+					material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+					multiSprite.Add(material)
+				}
+			}
+
+			// Creiamo il materiale animato (o statico se 1 solo frame)
+			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+			cThing.MultiSprite = multiSprite
+			configThings = append(configThings, cThing)
+
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")
 			//fmt.Println(obj)

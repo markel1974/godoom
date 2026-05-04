@@ -139,7 +139,16 @@ func (v *VerticesMultiSprite) compute() {
 }
 
 // createFaces generates two triangular faces based on the given width, height, and material animation.
-func (v *VerticesMultiSprite) createFaces(width float64, height float64, anim *textures.Material) (*Face, *Face) {
+func (v *VerticesMultiSprite) createFaces(width float64, height float64, material *textures.Material) (*Face, *Face) {
+	if material != nil {
+		tex := material.CurrentFrame()
+		if tex != nil {
+			texW, texH := tex.Size()
+			scaleW, scaleH := tex.GetScaleFactor()
+			width = float64(texW) * scaleW
+			height = float64(texH) * scaleH
+		}
+	}
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
 	halfW := width * 0.5
 	t0 := [3]geometry.XYZ{
@@ -147,7 +156,7 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, anim *t
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
-	f0 := NewFace(nil, t0, "", anim)
+	f0 := NewFace(nil, t0, "", material)
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
@@ -157,7 +166,7 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, anim *t
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
-	f1 := NewFace(nil, t1, "", anim)
+	f1 := NewFace(nil, t1, "", material)
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)

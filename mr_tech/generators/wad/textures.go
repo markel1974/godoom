@@ -5,7 +5,6 @@ import (
 	"image"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -92,8 +91,7 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 		}
 	}
 	t.resources[srcId] = texture
-
-	_ = common.SaveImage(srcId, src)
+	//_ = common.SaveImage(srcId, src)
 	return texture
 }
 

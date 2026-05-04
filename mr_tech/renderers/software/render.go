@@ -223,9 +223,11 @@ func (w *Render) doRender() {
 func (w *Render) RenderSector(volume *model.Volume) {
 	maxX := float64(0)
 	maxY := float64(0)
-	for _, v := range volume.GetFaces() {
-		sStart := v.GetStart()
-		sEnd := v.GetEnd()
+	faces, faceCount := volume.GetFaces()
+	for x := 0; x < faceCount; x++ {
+		f := faces[x]
+		sStart := f.GetStart()
+		sEnd := f.GetEnd()
 		x1 := math.Abs(sStart.X)
 		y1 := math.Abs(sStart.Y)
 		x2 := math.Abs(sEnd.X)
@@ -248,9 +250,11 @@ func (w *Render) RenderSector(volume *model.Volume) {
 	yFactor := (float64(w.h) / 2) / maxY
 
 	var t []geometry.XYZ
-	for _, v := range volume.GetFaces() {
-		sStart := v.GetStart()
-		sEnd := v.GetEnd()
+	faces, faceCount = volume.GetFaces()
+	for x := 0; x < faceCount; x++ {
+		f := faces[x]
+		sStart := f.GetStart()
+		sEnd := f.GetEnd()
 		x1 := sStart.X
 		if x1 == 0 {
 			x1 = 1
@@ -388,7 +392,9 @@ func (w *Render) doSerialRender(surface *pixels.PictureRGBA, vi *model.ViewMatri
 				if w.targetId != css[idx].Volume.GetId() {
 					w.targetId = css[idx].Volume.GetId()
 					var neighbors []string
-					for _, z := range css[idx].Volume.GetFaces() {
+					faces, faceCount := css[idx].Volume.GetFaces()
+					for x := 0; x < faceCount; x++ {
+						z := faces[x]
 						neighbor := z.GetNeighbor()
 						if z != nil && neighbor != nil {
 							neighbors = append(neighbors, neighbor.GetId())

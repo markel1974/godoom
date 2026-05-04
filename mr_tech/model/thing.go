@@ -17,7 +17,7 @@ type IThing interface {
 
 	GetAABB() *physics.AABB
 
-	GetVertices() ([]*Face, []*Face, float64, float64)
+	GetVertices() ([]*Face, int, []*Face, int, float64, float64)
 
 	GetLocation() *Volume
 

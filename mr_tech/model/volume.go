@@ -13,6 +13,7 @@ type Volume struct {
 	modelId   int
 	id        string
 	faces     []*Face
+	faceCount int
 	tag       string
 	materials []*textures.Material
 	Light     *Light
@@ -56,6 +57,8 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		maxZ:      0,
 		hasFixedZ: false,
 		materials: []*textures.Material{nil},
+		faces:     make([]*Face, 128),
+		faceCount: 0,
 		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
 	}
@@ -66,7 +69,8 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 func (v *Volume) Rebuild() bool {
 	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-	for _, face := range v.faces {
+	for x := 0; x < v.faceCount; x++ {
+		face := v.faces[x]
 		if v.hasFixedZ {
 			face.SetZ(v.minZ, v.maxZ)
 		}
@@ -101,7 +105,8 @@ func (v *Volume) Rebuild() bool {
 	v.entity.GetAABB().Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
 
 	v.facesTree.Clear()
-	for _, face := range v.faces {
+	for x := 0; x < v.faceCount; x++ {
+		face := v.faces[x]
 		face.Rebuild()
 		v.facesTree.InsertObject(face)
 	}
@@ -173,16 +178,23 @@ func (v *Volume) GetMaterialIndex(m int) *textures.Material {
 // AddFace adds a new face to the location and sets the location as the parent of the face.
 func (v *Volume) AddFace(face *Face) {
 	face.SetParent(v)
-	v.faces = append(v.faces, face)
+	if v.faceCount >= len(v.faces) {
+		newFaces := make([]*Face, v.faceCount*2)
+		copy(newFaces, v.faces)
+		v.faces = newFaces
+	}
+	v.faces[v.faceCount] = face
+	v.faceCount++
 }
 
+// ClearFace resets the face count of the Volume to zero, effectively removing all associated faces.
 func (v *Volume) ClearFace() {
-	v.faces = nil
+	v.faceCount = 0
 }
 
 // GetFaces retrieves the list of face objects associated with the location.
-func (v *Volume) GetFaces() []*Face {
-	return v.faces
+func (v *Volume) GetFaces() ([]*Face, int) {
+	return v.faces, v.faceCount
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.
@@ -203,7 +215,9 @@ func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
 		if v.PointInLineSide(px, py) {
 			return v
 		}
-		for _, face := range v.GetFaces() {
+		faces, faceCount := v.GetFaces()
+		for x := 0; x < faceCount; x++ {
+			face := faces[x]
 			if neighbor := face.GetNeighbor(); neighbor != nil {
 				if neighbor.PointInLineSide(px, py) {
 					return neighbor
@@ -215,7 +229,10 @@ func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
 	if v.PointInside2d(px, py, pz) {
 		return v
 	}
-	for _, face := range v.GetFaces() {
+
+	faces, faceCount := v.GetFaces()
+	for x := 0; x < faceCount; x++ {
+		face := faces[x]
 		if neighbor := face.GetNeighbor(); neighbor != nil {
 			if neighbor.PointInside2d(px, py, pz) {
 				return neighbor
@@ -239,7 +256,8 @@ func (v *Volume) PointInside2d(px, py, pz float64) bool {
 
 // PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.
 func (v *Volume) PointInLineSide(px, py float64) bool {
-	for _, face := range v.faces {
+	for x := 0; x < v.faceCount; x++ {
+		face := v.faces[x]
 		if !face.PointInLineSide(px, py) {
 			return false
 		}
@@ -250,7 +268,8 @@ func (v *Volume) PointInLineSide(px, py float64) bool {
 // GetCentroid3d calculates and returns the geometric centroid of the location based on its faces and 3D mode.
 func (v *Volume) GetCentroid3d() geometry.XYZ {
 	var cx, cy, cz, count float64
-	for _, face := range v.faces {
+	for x := 0; x < v.faceCount; x++ {
+		face := v.faces[x]
 		for _, p := range face.GetPoints() {
 			cx += p.X
 			cy += p.Y
@@ -267,9 +286,9 @@ func (v *Volume) GetCentroid3d() geometry.XYZ {
 // GetCentroid2d calculates and returns the 2D centroid of the location projected onto the XY plane.
 func (v *Volume) GetCentroid2d() geometry.XYZ {
 	var signedArea, cx, cy float64
-	for i := range v.faces {
-		start := v.faces[i].GetStart()
-		end := v.faces[i].GetEnd()
+	for x := 0; x < v.faceCount; x++ {
+		start := v.faces[x].GetStart()
+		end := v.faces[x].GetEnd()
 		x0, y0 := start.X, start.Y
 		x1, y1 := end.X, end.Y
 

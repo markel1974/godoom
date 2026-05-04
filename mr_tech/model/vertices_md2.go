@@ -11,11 +11,12 @@ import (
 
 // VerticesMD2 represents a structured collection of 3D model data, including frames, actions, and volume association.
 type VerticesMD2 struct {
-	volume     *Volume
-	frames     [][]*Face
-	actions    [][2]int
-	startFrame int
-	endFrame   int
+	volume        *Volume
+	frames        [][]*Face
+	actions       [][2]int
+	startFrame    int
+	endFrame      int
+	relativeFrame int
 }
 
 // NewVerticesMD2 creates a new VerticesMD2 instance with frames, actions, and volume based on the provided configuration.
@@ -29,11 +30,12 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	md2Cfg := cfg.MD2
 	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	v := &VerticesMD2{
-		volume:     volume,
-		frames:     make([][]*Face, len(md2Cfg.Frames)),
-		actions:    md2Cfg.ActionIntervals,
-		startFrame: 0,
-		endFrame:   len(md2Cfg.Frames) - 1,
+		volume:        volume,
+		frames:        make([][]*Face, len(md2Cfg.Frames)),
+		actions:       md2Cfg.ActionIntervals,
+		startFrame:    0,
+		endFrame:      len(md2Cfg.Frames) - 1,
+		relativeFrame: -1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -56,12 +58,7 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 		}
 		v.frames[frameIdx] = frameFaces
 	}
-	if len(v.frames[0]) > 0 {
-		for _, f := range v.frames[0] {
-			v.volume.AddFace(f)
-		}
-	}
-	v.volume.Rebuild()
+	v.compute(0)
 	return v
 }
 
@@ -80,14 +77,16 @@ func (v *VerticesMD2) SetAction(idx int) {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
+func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.frames) == 0 {
-		return nil, nil, 0.0
+		return nil, 0, nil, 0, 0.0
 	}
 	// Se c'è un solo frame nell'animazione, restituisce lo stesso frame due volte senza lerp
 	if v.startFrame == v.endFrame {
-		return v.frames[v.startFrame], v.frames[v.startFrame], 0.0
+		s := v.frames[v.startFrame]
+		sCount := len(s)
+		return s, sCount, s, sCount, 0.0
 	}
 	const groupSize = 6.0
 	frameFloat := textures.TickGrouped(tick, int(groupSize))
@@ -107,7 +106,13 @@ func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	idxB := v.startFrame + relativeFrameB
 	// Parte frazionaria per l'interpolazione fluida tra i due frame calcolati
 	lerpT := frameFloat - math.Floor(frameFloat)
-	return v.frames[idxA], v.frames[idxB], lerpT
+
+	if relativeFrameA != v.relativeFrame {
+		v.relativeFrame = relativeFrameA
+		v.compute(idxA)
+	}
+
+	return v.frames[idxA], len(v.frames[idxA]), v.frames[idxB], len(v.frames[idxB]), lerpT
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
@@ -123,4 +128,13 @@ func (v *VerticesMD2) GetBillboard() float64 {
 // SetThing sets the IThing instance associated with the VerticesMD2 volume.
 func (v *VerticesMD2) SetThing(t IThing) {
 	v.volume.SetThing(t)
+}
+
+// compute updates the volume by clearing faces, adding a new set of faces from the specified frame index, and rebuilding.
+func (v *VerticesMD2) compute(idx int) {
+	v.volume.ClearFace()
+	for _, f := range v.frames[idx] {
+		v.volume.AddFace(f)
+	}
+	v.volume.Rebuild()
 }

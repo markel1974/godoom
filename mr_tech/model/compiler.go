@@ -200,8 +200,9 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					volume.Light.Setup(nil, cs.Light, lightPos)
 				}
 				volume.Rebuild()
-				for _, face := range volume.GetFaces() {
-					facesTree.InsertObject(face)
+				faces, faceCount := volume.GetFaces()
+				for x := 0; x < faceCount; x++ {
+					facesTree.InsertObject(faces[x])
 				}
 				container = append(container, volume)
 			}
@@ -274,9 +275,9 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 		if vol2d.Light != nil {
 			vol3d.Light = vol2d.Light
 		}
-		faces2d := vol2d.GetFaces()
-		if len(faces2d) != 3 {
-			fmt.Println("wrong face count", len(faces2d))
+		faces2d, face2dCount := vol2d.GetFaces()
+		if face2dCount != 3 {
+			fmt.Println("wrong face count", face2dCount)
 			continue
 		}
 		p0 := faces2d[0].GetStart()
@@ -293,7 +294,8 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 		floorFace := NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0))
 		vol3d.AddFace(floorFace)
 
-		for _, f2d := range faces2d {
+		for x := 0; x < face2dCount; x++ {
+			f2d := faces2d[x]
 			neighbor := f2d.GetNeighbor()
 			if neighbor == nil {
 				buildQuad(vol3d, f2d, floorZ, ceilZ, f2d.GetTag(), f2d.GetMaterialIndex(1))
@@ -330,7 +332,9 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	}
 
 	for _, vol := range volumes3d {
-		for _, face := range vol.GetFaces() {
+		faces, faceCount := vol.GetFaces()
+		for x := 0; x < faceCount; x++ {
+			face := faces[x]
 			if neighbor := face.GetNeighbor(); neighbor != nil {
 				newNeighbor := volMap[neighbor]
 				face.SetNeighbor(newNeighbor)
@@ -472,8 +476,10 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 			queue = queue[1:]
 			areaSectors = append(areaSectors, curr)
 			// Check neighbors of this sector
-			for _, seg := range curr.GetFaces() {
-				if n := seg.GetNeighbor(); n != nil {
+			faces, faceCount := curr.GetFaces()
+			for x := 0; x < faceCount; x++ {
+				face := faces[x]
+				if n := face.GetNeighbor(); n != nil {
 					if !visited[n.GetId()] {
 						// "Same Area" condition: adjacent and with same heights/lights
 						if n.GetMaxZ() == curr.GetMaxZ() && n.GetMinZ() == curr.GetMinZ() && n.Light.intensity == curr.Light.intensity {
@@ -497,7 +503,9 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 				for _, s := range areaSectors {
 					// Calculate tri area (cross product)
 					area := 0.0
-					for _, face := range s.GetFaces() {
+					faces, faceCount := s.GetFaces()
+					for x := 0; x < faceCount; x++ {
+						face := faces[x]
 						start := face.GetStart()
 						end := face.GetEnd()
 						x0, y0 := start.X, start.Y

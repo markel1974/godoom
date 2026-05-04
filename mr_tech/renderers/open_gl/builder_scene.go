@@ -178,8 +178,8 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	if tex == nil {
 		return nil
 	}
-	faces := cp.Volume.GetFaces()
-	if len(faces) < 3 {
+	faces2, faceCount := cp.Volume.GetFaces()
+	if faceCount < 3 {
 		return nil
 	}
 
@@ -193,14 +193,15 @@ func (w *BuilderScene) pushFlat(fv *FrameVertices, dc *DrawCommands, cp *model.C
 	startIndices := fv.GetIndicesLen()
 
 	w.flatIndices = w.flatIndices[:0]
-	for _, seg := range faces {
+	for x := 0; x < faceCount; x++ {
+		seg := faces2[x]
 		v := seg.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		w.flatIndices = append(w.flatIndices, fv.AddVertex6(float32(v.X), zF, float32(-v.Y), u, vV, layer))
 	}
 
-	for i := 1; i < len(faces)-1; i++ {
+	for i := 1; i < faceCount-1; i++ {
 		fv.AddTriangle(w.flatIndices[0], w.flatIndices[i], w.flatIndices[i+1])
 	}
 
@@ -216,8 +217,8 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces, nextFaces, lp, billBoard := thing.GetVertices()
-		if faces == nil {
+		faces2, faceCount, nextFaces, _, lp, billBoard := thing.GetVertices()
+		if faceCount == 0 {
 			continue
 		}
 		lerp := float32(lp)
@@ -226,7 +227,8 @@ func (w *BuilderScene) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		b := float32(billBoard)
 		startIndices := fv.GetIndicesLen()
-		for fx, f := range faces {
+		for fx := 0; fx < faceCount; fx++ {
+			f := faces2[fx]
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue

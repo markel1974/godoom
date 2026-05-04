@@ -233,8 +233,8 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 	if tex == nil {
 		return nil
 	}
-	faces := cp.volume.GetFaces()
-	if len(faces) < 3 {
+	faces2, faceCount := cp.volume.GetFaces()
+	if faceCount < 3 {
 		return nil
 	}
 
@@ -247,16 +247,17 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 
 	startIndices := fv.GetIndicesLen()
 
-	indices := make([]uint32, len(faces))
-	for i, seg := range faces {
-		v := seg.GetStart()
+	indices := make([]uint32, faceCount)
+	for x := 0; x < faceCount; x++ {
+		f := faces2[x]
+		v := f.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
 		// Coordinate assolute
-		indices[i] = fv.AddVertex6(float32(v.X), zF, float32(-v.Y), u, vV, layer)
+		indices[x] = fv.AddVertex6(float32(v.X), zF, float32(-v.Y), u, vV, layer)
 	}
 
-	for i := 1; i < len(faces)-1; i++ {
+	for i := 1; i < faceCount-1; i++ {
 		fv.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
@@ -272,8 +273,8 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces, nextFaces, lp, billBoard := thing.GetVertices()
-		if faces == nil {
+		faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices()
+		if faceCount == 0 {
 			continue
 		}
 		lerp := float32(lp)
@@ -282,7 +283,8 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		b := float32(billBoard)
 		startIndices := fv.GetIndicesLen()
-		for fx, f := range faces {
+		for fx := 0; fx < faceCount; fx++ {
+			f := faces2[fx]
 			mat := f.GetMaterial()
 			if mat == nil {
 				continue
@@ -293,7 +295,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 			}
 			p := f.GetPoints()
 			u, v := f.GetUV()
-			np := nextFaces[fx].GetPoints()
+			np := nextFaces2[fx].GetPoints()
 			id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
 			id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
 			id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)

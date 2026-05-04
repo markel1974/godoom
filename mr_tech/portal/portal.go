@@ -105,7 +105,9 @@ func (r *Portal) Build() ([]*model.CompiledVolume, int) {
 
 // compile processes a given sector, generating compiled geometry for rendering, including walls, floors, and ceilings.
 func (r *Portal) compile(volume *model.Volume, cs *model.CompiledVolume) {
-	for _, face := range volume.GetFaces() {
+	faces, facesCount := volume.GetFaces()
+	for x := 0; x < facesCount; x++ {
+		face := faces[x]
 		neighbor := face.GetNeighbor()
 		sStart := face.GetStart()
 		sEnd := face.GetEnd()
@@ -206,7 +208,9 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 		return y + (z * pitch)
 	}
 
-	for _, face := range volume.GetFaces() {
+	faces, facesCount := volume.GetFaces()
+	for x := 0; x < facesCount; x++ {
+		face := faces[x]
 		neighbor := face.GetNeighbor()
 		if neighbor == volume {
 			continue
@@ -376,7 +380,9 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, volume 
 	}
 
 	if first && outIdx == 0 {
-		for _, face := range volume.GetFaces() {
+		faces, facesCount = volume.GetFaces()
+		for x := 0; x < facesCount; x++ {
+			face := faces[x]
 			neighbor := face.GetNeighbor()
 			if neighbor != nil && neighbor != volume {
 				outIdx = r.sectorQueue.UpdateItem(neighbor, outIdx, qi)

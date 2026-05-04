@@ -75,9 +75,9 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 }
 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() ([]*Face, []*Face, float64, float64) {
-	vCurr, vNext, lerp := t.vertices.GetVertices(textures.CurrentTick())
-	return vCurr, vNext, lerp, t.vertices.GetBillboard()
+func (t *ThingBase) GetVertices() ([]*Face, int, []*Face, int, float64, float64) {
+	vCurr, vCurrCount, vNext, vNextCount, lerp := t.vertices.GetVertices(textures.CurrentTick())
+	return vCurr, vCurrCount, vNext, vNextCount, lerp, t.vertices.GetBillboard()
 }
 
 // GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.

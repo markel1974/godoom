@@ -56,9 +56,9 @@ func (v *VerticesWAX) GetVolume() *Volume {
 }
 
 // GetVertices retrieves the faces and associated data for the current frame and returns them with a default displacement value.
-func (v *VerticesWAX) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
-	f := v.volume.GetFaces()
-	return f, f, 0.0
+func (v *VerticesWAX) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+	f, c := v.volume.GetFaces()
+	return f, c, f, c, 0.0
 }
 
 // SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.

@@ -76,7 +76,9 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		volumes := engine.GetVolumes()
 		for _, vol := range volumes.GetVolumes() {
 			startIdx := w.fv.GetIndicesLen()
-			for _, face := range vol.GetFaces() {
+			faces, faceCount := vol.GetFaces()
+			for x := 0; x < faceCount; x++ {
+				face := faces[x]
 				tex, texKind := face.GetMaterialDetails()
 				if tex == nil {
 					continue
@@ -172,8 +174,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront, frustumR
 
 // pushThing processes a single IThing instance, extracts its vertex and material data, and appends it to frame vertices and draw commands.
 func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *DrawCommands) {
-	faces, nextFaces, lp, billBoard := thing.GetVertices()
-	if faces == nil {
+	faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices()
+	if faceCount == 0 {
 		return
 	}
 	lerp := float32(lp)
@@ -182,7 +184,8 @@ func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *Dra
 	oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 	b := float32(billBoard)
 	startIndices := fv.GetIndicesLen()
-	for fx, f := range faces {
+	for fx := 0; fx < faceCount; fx++ {
+		f := faces2[fx]
 		mat := f.GetMaterial()
 		if mat == nil {
 			continue
@@ -193,7 +196,7 @@ func (w *BuilderVolume) pushThing(thing model.IThing, fv *FrameVertices, dc *Dra
 		}
 		p := f.GetPoints()
 		u, v := f.GetUV()
-		np := nextFaces[fx].GetPoints()
+		np := nextFaces2[fx].GetPoints()
 		id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), l, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
 		id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
 		id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)

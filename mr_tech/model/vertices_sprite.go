@@ -73,9 +73,9 @@ func (v *VerticesSprite) GetVolume() *Volume {
 
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex material at the given moment in time.
-func (v *VerticesSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
-	f := v.volume.GetFaces()
-	return f, f, 0.0
+func (v *VerticesSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+	f, c := v.volume.GetFaces()
+	return f, c, f, c, 0.0
 }
 
 // SetAction sets the action index for the VerticesSprite, modifying its behavior or state based on the specified index.

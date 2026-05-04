@@ -380,8 +380,8 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	thingCfg.GForce = gForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.Md2 != nil {
-			actions = thingCfg.Md2.ActionDefinitions
+		if thingCfg.MD2 != nil {
+			actions = thingCfg.MD2.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking

@@ -1,17 +1,25 @@
 package model
 
 import (
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VertexSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
-type VertexSprite struct {
+// VerticesSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
+type VerticesSprite struct {
 	volume *Volume
 }
 
-// NewVertexSprite creates a new VertexSprite with the given material, position, dimensions, and physical properties.
-func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *VertexSprite {
+// NewVerticesSprite creates a new VerticesSprite with the given material, position, dimensions, and physical properties.
+func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Material) *VerticesSprite {
+	x := pos.X - cfg.Radius
+	y := pos.Y - cfg.Radius
+	z := pos.Z
+	w := cfg.Radius * 2
+	h := cfg.Radius * 2
+	d := cfg.Height
+
 	height := h
 	width := w
 	halfW := width / 2.0
@@ -26,8 +34,8 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 		}
 	}
 
-	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, mass, restitution, friction, gForce)
-	f := &VertexSprite{volume: volume}
+	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	f := &VerticesSprite{volume: volume}
 	//f.volume.SetBillboard(1.0)
 
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
@@ -59,35 +67,35 @@ func NewVertexSprite(anim *textures.Material, x, y, z, w, h, d, mass, restitutio
 	return f
 }
 
-// GetVolume returns the Volume instance associated with the VertexSprite.
-func (v *VertexSprite) GetVolume() *Volume {
+// GetVolume returns the Volume instance associated with the VerticesSprite.
+func (v *VerticesSprite) GetVolume() *Volume {
 	return v.volume
 }
 
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex material at the given moment in time.
-func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
+func (v *VerticesSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0
 }
 
-// SetAction sets the action index for the VertexSprite, modifying its behavior or state based on the specified index.
-func (v *VertexSprite) SetAction(idx int) {
+// SetAction sets the action index for the VerticesSprite, modifying its behavior or state based on the specified index.
+func (v *VerticesSprite) SetAction(idx int) {
 	//TODO IMPLEMENT
 	return
 }
 
-// GetDisplacement retrieves the bottom-left coordinates of the entity associated with the VertexSprite's Volume.
-func (v *VertexSprite) GetDisplacement() (float64, float64, float64) {
+// GetDisplacement retrieves the bottom-left coordinates of the entity associated with the VerticesSprite's Volume.
+func (v *VerticesSprite) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetBottomLeft()
 }
 
 // GetBillboard retrieves the billboard value associated with the Face instance.
-func (v *VertexSprite) GetBillboard() float64 {
+func (v *VerticesSprite) GetBillboard() float64 {
 	return 1.0
 }
 
-// SetThing assigns an IThing instance to the underlying Volume of the VertexSprite.
-func (v *VertexSprite) SetThing(t IThing) {
+// SetThing assigns an IThing instance to the underlying Volume of the VerticesSprite.
+func (v *VerticesSprite) SetThing(t IThing) {
 	v.volume.SetThing(t)
 }

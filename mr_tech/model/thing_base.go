@@ -10,37 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// IVertices represents an interface for managing and retrieving geometric vertices and their associated volume data.
-type IVertices interface {
-	GetVertices(uint64) ([]*Face, []*Face, float64)
-
-	GetVolume() *Volume
-
-	SetAction(idx int)
-
-	GetDisplacement() (float64, float64, float64)
-
-	GetBillboard() float64
-
-	SetThing(t IThing)
-}
-
-func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, material *textures.Material) IVertices {
-	var vertices IVertices
-	entX := pos.X - cfg.Radius
-	entY := pos.Y - cfg.Radius
-	entZ := pos.Z
-	entW := cfg.Radius * 2
-	entH := cfg.Radius * 2
-	entD := cfg.Height
-	if cfg.Md2 != nil {
-		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	} else {
-		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	}
-	return vertices
-}
-
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	id           string

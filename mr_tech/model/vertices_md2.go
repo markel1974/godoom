@@ -9,8 +9,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VertexMD2 represents a data structure used for handling 3D vertex animations with multiple frames and actions.
-type VertexMD2 struct {
+// VerticesMD2 represents a structured collection of 3D model data, including frames, actions, and volume association.
+type VerticesMD2 struct {
 	volume     *Volume
 	frames     [][]*Face
 	actions    [][2]int
@@ -18,15 +18,22 @@ type VertexMD2 struct {
 	endFrame   int
 }
 
-// NewVertexMD2 creates a new VertexMD2 object with volume, frames, actions, and initial configurations for animation rendering.
-func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *VertexMD2 {
-	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, mass, restitution, friction, gForce)
-	v := &VertexMD2{
+// NewVerticesMD2 creates a new VerticesMD2 instance with frames, actions, and volume based on the provided configuration.
+func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, material *textures.Material) *VerticesMD2 {
+	x := pos.X - cfg.Radius
+	y := pos.Y - cfg.Radius
+	z := pos.Z
+	w := cfg.Radius * 2
+	h := cfg.Radius * 2
+	d := cfg.Height
+	md2Cfg := cfg.MD2
+	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	v := &VerticesMD2{
 		volume:     volume,
-		frames:     make([][]*Face, len(cfg.Frames)),
-		actions:    cfg.ActionIntervals,
+		frames:     make([][]*Face, len(md2Cfg.Frames)),
+		actions:    md2Cfg.ActionIntervals,
 		startFrame: 0,
-		endFrame:   len(cfg.Frames) - 1,
+		endFrame:   len(md2Cfg.Frames) - 1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -36,7 +43,7 @@ func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d
 	}
 	//v.volume.SetBillboard(2.0)
 
-	for frameIdx, cfgFrame := range cfg.Frames {
+	for frameIdx, cfgFrame := range md2Cfg.Frames {
 		frameFaces := make([]*Face, len(cfgFrame.Triangles))
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
@@ -57,13 +64,13 @@ func NewVertexMD2(cfg *config.MD2, material *textures.Material, x, y, z, w, h, d
 	return v
 }
 
-// GetVolume retrieves the associated Volume instance of the VertexMD2.
-func (v *VertexMD2) GetVolume() *Volume {
+// GetVolume retrieves the Volume instance associated with the VertexMD2.
+func (v *VerticesMD2) GetVolume() *Volume {
 	return v.volume
 }
 
-// SetAction updates the start and end frame indices based on the action at the specified index if it exists within bounds.
-func (v *VertexMD2) SetAction(idx int) {
+// SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
+func (v *VerticesMD2) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		return
 	}
@@ -71,9 +78,8 @@ func (v *VertexMD2) SetAction(idx int) {
 	v.endFrame = v.actions[idx][1]
 }
 
-// GetVertices returns two sets of interpolated faces and a lerp factor for rendering based on the provided tick value.
-// GetVertices returns two sets of interpolated faces and a lerp factor for rendering based on the provided tick value.
-func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
+// GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
+func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.frames) == 0 {
 		return nil, nil, 0.0
@@ -103,17 +109,17 @@ func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	return v.frames[idxA], v.frames[idxB], lerpT
 }
 
-// GetDisplacement calculates and returns the positional displacement as a tuple (x, y, z) of the associated entity.
-func (v *VertexMD2) GetDisplacement() (float64, float64, float64) {
+// GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
+func (v *VerticesMD2) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetCenter()
 }
 
-// GetBillboard retrieves the billboard value associated with the Face instance.
-func (v *VertexMD2) GetBillboard() float64 {
+// GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD2 instance.
+func (v *VerticesMD2) GetBillboard() float64 {
 	return 2.0
 }
 
-// SetThing assigns an IThing instance to the underlying Volume of the VertexSprite.
-func (v *VertexMD2) SetThing(t IThing) {
+// SetThing sets the IThing instance associated with the VerticesMD2 volume.
+func (v *VerticesMD2) SetThing(t IThing) {
 	v.volume.SetThing(t)
 }

@@ -42,7 +42,7 @@ type Thing struct {
 	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	GForce         float64      `json:"gForce"`
-	Md2            *MD2         `json:"md2"`
+	MD2            *MD2         `json:"md2"`
 	Material       *Material    `json:"material"`
 
 	OnThinking ThinkingFunc
@@ -77,7 +77,7 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)
 }
 
-// SetModel3d assigns the provided 3D model to the Thing's Md2 field.
+// SetModel3d assigns the provided 3D model to the Thing's MD2 field.
 func (t *Thing) SetModel3d(model *MD2) {
-	t.Md2 = model
+	t.MD2 = model
 }

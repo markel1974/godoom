@@ -209,8 +209,8 @@ func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 	return texture, ok
 }
 
-// GetTextures retrieves all textures and flats as an ITextures object with their corresponding data added.
-func (w *WAD) GetTextures() *Textures {
+// CreateTextures initializes and returns a Textures object populated with textures, flats, and sprites from the WAD.
+func (w *WAD) CreateTextures() *Textures {
 	t, _ := NewTextures()
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {

@@ -91,7 +91,8 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 	if err != nil {
 		return nil, err
 	}
-	texHandler := wad.GetTextures()
+	texHandler := wad.CreateTextures()
+
 	vertexes := make(geometry.Polygon, len(level.Vertexes))
 	for idx, l := range level.Vertexes {
 		vertexes[idx] = geometry.XY{X: float64(l.XCoord), Y: float64(l.YCoord)}
@@ -202,18 +203,15 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
 		return nil
 	}
+
 	sd, hasAnim := _spriteDictionary[int(t.Type)]
-	var frames []string
+	tId := fmt.Sprintf("t_%d", i)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
 	if !hasAnim {
 		fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
-		frames = []string{"UNKNOWN"}
 	} else {
-		frames = sd.Sprites
+		cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
 	}
-	tId := fmt.Sprintf("t_%d", i)
-	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
-	cfgThing.Sprite = config.NewSprite(mat)
 	if cfgThing.Kind == config.ThingEnemyDef {
 		enemyLogic := common.NewEnemy(nil, 100)
 		cfgThing.OnThinking = enemyLogic.OnThinking

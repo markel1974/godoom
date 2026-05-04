@@ -5,37 +5,39 @@ import (
 	"image"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+const FlatId = "__FLAT__"
+const TextureId = "__TEXTURE__"
+const SpriteId = "__SPRITE__"
+
 // TextureCreateId generates a unique texture identifier by appending a fixed prefix to a sanitized version of the input id.
 func TextureCreateId(id string) string {
-	const textureId = "__TEXTURE__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
 		return ""
 	}
-	return textureId + id
+	return TextureId + id
 }
 
 // FlatCreateId generates a flat identifier by appending a predefined prefix to a cleaned version of the given id.
 func FlatCreateId(id string) string {
-	const flatId = "__FLAT__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
 		return ""
 	}
-	return flatId + id
+	return FlatId + id
 }
 
 // SpriteCreateId generates a unique sprite identifier by appending a prefix to a cleaned version of the input string.
 func SpriteCreateId(id string) string {
-	const flatId = "__SPRITE__"
 	id = cleanId(id)
 	if len(id) == 0 || id == "-" {
 		return ""
 	}
-	return flatId + id
+	return SpriteId + id
 }
 
 // cleanId transforms the input string by trimming leading/trailing spaces and converting it to uppercase.
@@ -170,3 +172,99 @@ func (t *Textures) SpriteCreateAnimation(ids []string) []string {
 	}
 	return out
 }
+
+// BuildSprite estrae dal WAD le sequenze fornite e le compatta in un MultiSprite lineare.
+func (t *Textures) BuildSprite(prefix string) *config.MultiSprite {
+	var EnemyStateSequences = [][]byte{
+		{'A', 'B', 'C', 'D'},      // Action 0: Walk / Chase
+		{'E', 'F', 'G'},           // Action 1: Attack (Melee/Missile)
+		{'H'},                     // Action 2: Pain
+		{'I', 'J', 'K', 'L', 'M'}, // Action 3: Death
+		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Action 4: Extreme Death (Gibs)
+	}
+
+	const frames = 8
+
+	target := SpriteCreateId(prefix[:4])
+
+	type frameData [frames]string
+	slots := make(map[byte]*frameData)
+
+	for res := range t.resources {
+		if !strings.HasPrefix(res, target) {
+			continue
+		}
+		spriteName := strings.TrimPrefix(res, SpriteId)
+		if len(spriteName) <= 5 {
+			continue
+		}
+		frameChar := spriteName[4]
+		angleChar := spriteName[5]
+		if slots[frameChar] == nil {
+			slots[frameChar] = &frameData{}
+		}
+		if angleChar == '0' {
+			for i := 0; i < frames; i++ {
+				slots[frameChar][i] = spriteName
+			}
+		} else {
+			angleIdx := int(angleChar - '1')
+			if angleIdx >= 0 && angleIdx < frames {
+				slots[frameChar][angleIdx] = spriteName
+			}
+		}
+		// Gestione della specchiatura (es. A2A8)
+		if len(spriteName) == frames {
+			frameChar2 := spriteName[6]
+			angleChar2 := spriteName[7]
+			if slots[frameChar2] == nil {
+				slots[frameChar2] = &frameData{}
+			}
+			angleIdx2 := int(angleChar2 - '1')
+			if angleIdx2 >= 0 && angleIdx2 < frames {
+				slots[frameChar2][angleIdx2] = spriteName
+			}
+		}
+	}
+
+	ms := config.NewMultiSprite()
+
+	for _, sequence := range EnemyStateSequences {
+		for angle := 0; angle < frames; angle++ {
+			var temporalFrames []string
+			for _, frameLetter := range sequence {
+				anglesData := slots[frameLetter]
+				if anglesData == nil {
+					continue
+				}
+				texId := anglesData[angle]
+				if texId == "" {
+					texId = anglesData[0]
+				}
+				temporalFrames = append(temporalFrames, SpriteCreateId(texId))
+			}
+			if len(temporalFrames) == 0 {
+				ms.Add(nil)
+				continue
+			}
+			mat := config.NewConfigMaterial(temporalFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+			ms.Add(mat)
+		}
+	}
+
+	return ms
+}
+
+/*
+func (t *Textures) GetSprite(id string) []string {
+	var names []string
+	src := SpriteCreateId(id)
+	for k := range t.resources {
+		if strings.HasPrefix(k, src) {
+			names = append(names, k)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+*/

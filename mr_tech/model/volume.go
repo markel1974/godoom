@@ -187,8 +187,8 @@ func (v *Volume) AddFace(face *Face) {
 	v.faceCount++
 }
 
-// ClearFace resets the face count of the Volume to zero, effectively removing all associated faces.
-func (v *Volume) ClearFace() {
+// ClearFaces resets the face count of the Volume to zero, effectively removing all associated faces.
+func (v *Volume) ClearFaces() {
 	v.faceCount = 0
 }
 

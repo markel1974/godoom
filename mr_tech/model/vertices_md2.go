@@ -132,7 +132,7 @@ func (v *VerticesMD2) SetThing(t IThing) {
 
 // compute updates the volume by clearing faces, adding a new set of faces from the specified frame index, and rebuilding.
 func (v *VerticesMD2) compute(idx int) {
-	v.volume.ClearFace()
+	v.volume.ClearFaces()
 	for _, f := range v.frames[idx] {
 		v.volume.AddFace(f)
 	}

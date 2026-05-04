@@ -47,7 +47,6 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
-	f.volume.AddFace(f0)
 
 	// Triangolo 1: Top-Left, Bottom-Right, Top-Right
 	t1 := [3]geometry.XYZ{
@@ -59,8 +58,10 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
-	f.volume.AddFace(f1)
 
+	f.volume.ClearFaces()
+	f.volume.AddFace(f0)
+	f.volume.AddFace(f1)
 	f.volume.Rebuild()
 
 	return f

@@ -113,7 +113,7 @@ func (v *VerticesWAX) compute() {
 			return
 		}
 	}
-	v.volume.ClearFace()
+	v.volume.ClearFaces()
 	v.volume.AddFace(v.viewFaces.face0)
 	v.volume.AddFace(v.viewFaces.face1)
 	v.volume.Rebuild()

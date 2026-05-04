@@ -26,6 +26,8 @@ type IThing interface {
 
 	GetVolume() *Volume
 
+	GetDisplacement() (float64, float64, float64)
+
 	GetCage() *CollisionCage
 
 	GetEntity() *physics.Entity

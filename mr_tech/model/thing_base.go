@@ -18,11 +18,27 @@ type IVertices interface {
 
 	SetAction(idx int)
 
-	GetPosition() (float64, float64, float64)
+	GetDisplacement() (float64, float64, float64)
 
 	GetBillboard() float64
 
 	SetThing(t IThing)
+}
+
+func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, material *textures.Material) IVertices {
+	var vertices IVertices
+	entX := pos.X - cfg.Radius
+	entY := pos.Y - cfg.Radius
+	entZ := pos.Z
+	entW := cfg.Radius * 2
+	entH := cfg.Radius * 2
+	entD := cfg.Height
+	if cfg.Md2 != nil {
+		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	} else {
+		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	}
+	return vertices
 }
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
@@ -52,23 +68,7 @@ type ThingBase struct {
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
 func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.XYZ, material *textures.Material, location *Volume) *ThingBase {
-	volumes := things.GetVolumes()
-	radAngle := cfg.Angle // * (math.Pi / 180.0)
-	//we need bottom left here
-	entX := pos.X - cfg.Radius
-	entY := pos.Y - cfg.Radius
-	entZ := pos.Z
-	entW := cfg.Radius * 2
-	entH := cfg.Radius * 2
-	entD := cfg.Height
-
-	var vertices IVertices
-	if cfg.Md2 != nil {
-		vertices = NewVertexMD2(cfg.Md2, material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	} else {
-		vertices = NewVertexSprite(material, entX, entY, entZ, entW, entH, entD, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	}
-
+	vertices := VerticesFactory(cfg, pos, material)
 	vertices.SetThing(thing)
 
 	if cfg.OnCollision == nil {
@@ -82,14 +82,14 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 		vertices:     vertices,
 		entity:       vertices.GetVolume().GetEntity(),
 		id:           cfg.Id,
-		angle:        radAngle,
+		angle:        cfg.Angle, // * (math.Pi / 180.0),
 		kind:         cfg.Kind,
 		speed:        cfg.Speed,
 		acceleration: cfg.Acceleration,
 		jumpForce:    cfg.JumpForce,
 		location:     location,
 		material:     material,
-		world:        volumes,
+		world:        things.GetVolumes(),
 		things:       things,
 		maxStep:      cfg.Height * 0.5,
 		isActive:     true,
@@ -126,9 +126,9 @@ func (t *ThingBase) SetAction(idx int) {
 	t.vertices.SetAction(idx)
 }
 
-// GetPosition returns the x, y, and z coordinates of the position as three float64 values.
-func (t *ThingBase) GetPosition() (float64, float64, float64) {
-	return t.vertices.GetPosition()
+// GetDisplacement returns the x, y, and z coordinates of the position as three float64 values.
+func (t *ThingBase) GetDisplacement() (float64, float64, float64) {
+	return t.vertices.GetDisplacement()
 }
 
 // GetId returns the identifier string of the ThingBase instance.

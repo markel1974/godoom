@@ -103,8 +103,8 @@ func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	return v.frames[idxA], v.frames[idxB], lerpT
 }
 
-// GetPosition returns the center position of the associated entity as a tuple of three float64 values.
-func (v *VertexMD2) GetPosition() (float64, float64, float64) {
+// GetDisplacement calculates and returns the positional displacement as a tuple (x, y, z) of the associated entity.
+func (v *VertexMD2) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetCenter()
 }
 

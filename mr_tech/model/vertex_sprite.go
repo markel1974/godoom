@@ -77,8 +77,8 @@ func (v *VertexSprite) SetAction(idx int) {
 	return
 }
 
-// GetPosition retrieves the bottom-left coordinates (x, y, z) of the associated Volume's entity.
-func (v *VertexSprite) GetPosition() (float64, float64, float64) {
+// GetDisplacement retrieves the bottom-left coordinates of the entity associated with the VertexSprite's Volume.
+func (v *VertexSprite) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetBottomLeft()
 }
 

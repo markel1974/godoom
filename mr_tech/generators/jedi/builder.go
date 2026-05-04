@@ -265,6 +265,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				for _, view := range act.GetViews() {
 					if view != nil && len(view.GetCells()) > 0 {
 						targetView = view
+						break
 					}
 				}
 				if targetView != nil {

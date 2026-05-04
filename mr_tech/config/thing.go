@@ -27,8 +27,6 @@ type IThingConfig interface {
 
 	GetCenter() (float64, float64, float64)
 
-	GetPosition() (float64, float64, float64)
-
 	GetAngle() float64
 
 	SetAngle(angle float64)

@@ -257,34 +257,51 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 			var frameTextureNames []string
-
-			// Estraiamo i frame dalla prima Action disponibile
-			// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
-			var targetView *WaxView = nil
-			for _, act := range wax.GetActors() {
+			for _, act := range wax.GetActions() {
+				if act == nil {
+					continue
+				}
 				for _, view := range act.GetViews() {
-					if view != nil && len(view.GetCells()) > 0 {
-						targetView = view
+					if view == nil {
+						continue
+					}
+					for _, cell := range view.GetCells() {
+						texId := cell.GetId()
+						sizeX, sizeY := cell.GetSize()
+						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+						frameTextureNames = append(frameTextureNames, texId)
+					}
+				}
+			}
+			/*
+				// Estraiamo i frame dalla prima Action disponibile
+				// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
+				var targetView *WaxView = nil
+				for _, act := range wax.GetActions() {
+					for _, view := range act.GetViews() {
+						if view != nil && len(view.GetCells()) > 0 {
+							targetView = view
+							break
+						}
+					}
+					if targetView != nil {
 						break
 					}
 				}
-				if targetView != nil {
-					break
-				}
-			}
 
-			if targetView != nil {
-				for _, cell := range targetView.GetCells() {
-					texId := cell.GetId()
-					sizeX, sizeY := cell.GetSize()
-					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-					frameTextureNames = append(frameTextureNames, texId)
+				if targetView != nil {
+					for _, cell := range targetView.GetCells() {
+						texId := cell.GetId()
+						sizeX, sizeY := cell.GetSize()
+						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+						frameTextureNames = append(frameTextureNames, texId)
+					}
 				}
-			}
-			if len(frameTextureNames) == 0 {
-				fmt.Printf("Warning: no frame found in %s\n", fileName)
-				continue
-			}
+				if len(frameTextureNames) == 0 {
+					fmt.Printf("Warning: no frame found in %s\n", fileName)
+					continue
+				}
+			*/
 			// Creiamo il materiale animato (o statico se 1 solo frame)
 			material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)

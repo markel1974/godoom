@@ -264,28 +264,28 @@ func (wf *WaxFrame) Parse(r io.ReadSeeker) error {
 	return nil
 }
 
-// WaxActor represents an entity that manages WaxView objects and a shared cache of WaxCells.
-type WaxActor struct {
+// WaxActions represents an entity that manages WaxView objects and a shared cache of WaxCells.
+type WaxActions struct {
 	id        string
 	cellCache map[uint32]*WaxCell
 	views     [32]*WaxView
 }
 
-// NewWaxActor creates a new WaxActor instance with a unique identifier and a shared cell cache.
-func NewWaxActor(id string, cellCache map[uint32]*WaxCell) *WaxActor {
-	return &WaxActor{
+// NewWaxActions creates a new WaxActions instance with a unique identifier and a shared cell cache.
+func NewWaxActions(id string, cellCache map[uint32]*WaxCell) *WaxActions {
+	return &WaxActions{
 		id:        id,
 		cellCache: cellCache,
 	}
 }
 
 // GetViews returns an array of pointers to WaxView objects associated with the WaxActor.
-func (wa *WaxActor) GetViews() [32]*WaxView {
+func (wa *WaxActions) GetViews() [32]*WaxView {
 	return wa.views
 }
 
 // Parse reads and processes data from the provided io.ReadSeeker to populate the WaxActor's views collection.
-func (wa *WaxActor) Parse(r io.ReadSeeker) error {
+func (wa *WaxActions) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Padding     [16]byte
 		ViewOffsets [32]uint32
@@ -341,10 +341,10 @@ func (wh *WaxHeader) Parse(r io.ReadSeeker) error {
 	return nil
 }
 
-// Wax represents a container for managing header and actors in a game asset or animation format.
+// Wax represents a container for managing header and actions in a game asset or animation format.
 type Wax struct {
-	header *WaxHeader
-	actors []*WaxActor
+	header  *WaxHeader
+	actions []*WaxActions
 }
 
 // NewWax creates and returns a new instance of the Wax structure.
@@ -352,7 +352,7 @@ func NewWax() *Wax {
 	return &Wax{}
 }
 
-// Parse initializes the Wax object by reading and parsing its header and associated actors from the provided ReadSeeker.
+// Parse initializes the Wax object by reading and parsing its header and associated actions from the provided ReadSeeker.
 func (w *Wax) Parse(baseId string, r io.ReadSeeker) error {
 	w.header = NewWaxHeader()
 	if err := w.header.Parse(r); err != nil {
@@ -367,16 +367,16 @@ func (w *Wax) Parse(baseId string, r io.ReadSeeker) error {
 			return err
 		}
 		actorId := fmt.Sprintf("%s_act_%d", baseId, actOffset)
-		action := NewWaxActor(actorId, cellCache)
+		action := NewWaxActions(actorId, cellCache)
 		if err := action.Parse(r); err != nil {
 			return err
 		}
-		w.actors = append(w.actors, action)
+		w.actions = append(w.actions, action)
 	}
 	return nil
 }
 
-// GetActors returns a slice of pointers to WaxActor representing the actors associated with the Wax instance.
-func (w *Wax) GetActors() []*WaxActor {
-	return w.actors
+// GetActions returns the slice of WaxActor pointers representing the actions associated with the Wax object.
+func (w *Wax) GetActions() []*WaxActions {
+	return w.actions
 }

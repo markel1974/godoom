@@ -185,7 +185,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		spawnZ := selfZ + (self.GetDepth() * 0.5)
 		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 		aimPitch := math.Atan2(dz, playerDist2d)
-		self.LaunchObject(throwableIndex, e.OnCollision, bulletPos, angle, aimPitch, throwableSpeed)
+		self.LaunchObject(throwableIndex, e.OnCollision, e.OnImpact, bulletPos, angle, aimPitch, throwableSpeed)
 		// Resetta il timer
 		e.throwCooldown = e.throwMin
 	}

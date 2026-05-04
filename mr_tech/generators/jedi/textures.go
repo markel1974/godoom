@@ -5,15 +5,9 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
-
-// cleanId processes the input string by trimming whitespace and converting it to uppercase.
-func cleanId(id string) string {
-	return strings.TrimSpace(strings.ToUpper(id))
-}
 
 // Textures manages a collection of 2D textures and provides caching for efficient retrieval.
 type Textures struct {
@@ -61,15 +55,12 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 	if _, exists := t.resources[name]; exists {
 		return name
 	}
-
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
-			// NOTA SULLA TOPOLOGIA: Nel parser WAX che abbiamo scritto,
-			// abbiamo salvato i dati nel buffer come Column-Major (x * height + y).
-			// Se hai deciso di cambiarlo in Row-Major, usa: pixelPos := y*width + x
-			pixelPos := y*width + x //x*height + y
-			// Controllo di sicurezza bounds
+			// Column-Major: x * height + y
+			// Row-Major: y * width + x
+			pixelPos := y*width + x
 			if pixelPos >= len(indexedPixels) {
 				continue
 			}
@@ -79,24 +70,18 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 				// Nel Jedi Engine, il colore 0 è rigorosamente il color-key della trasparenza
 				c = color.RGBA{R: 0, G: 0, B: 0, A: 0}
 			} else {
-				// Recuperiamo il colore dalla palette master
 				c = palette[colorIdx]
-				// Assicuriamoci che il canale Alpha sia completamente opaco
 				c.A = 255
 			}
-
 			offset := pixelPos * 4
 			img.Pix[offset+0] = c.R
 			img.Pix[offset+1] = c.G
 			img.Pix[offset+2] = c.B
 			img.Pix[offset+3] = c.A
-
 			//img.SetRGBA(x, y, c)
 		}
 	}
 
-	// Passiamo il risultato al tuo metodo helper che si occuperà di fare
-	// il Y-Flip e il packing a 32-bit (int(c.R)<<24...) per il tuo engine.
 	t.add(name, img)
 
 	return name

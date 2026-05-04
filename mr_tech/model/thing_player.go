@@ -320,7 +320,7 @@ func (p *ThingPlayer) Throw(throwableIndex int, speed float64) {
 	spawnY := camY + (p.angleSin * diameter)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-	p.LaunchObject(throwableIndex, p.onCollision, spawnPos, p.angle, -p.pitch, speed)
+	p.LaunchObject(throwableIndex, p.onCollision, p.onImpact, spawnPos, p.angle, -p.pitch, speed)
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.

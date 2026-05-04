@@ -1,8 +1,6 @@
 package model
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -59,42 +57,6 @@ func (v *VerticesMultiSprite) GetVolume() *Volume {
 func (v *VerticesMultiSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
 	f, c := v.volume.GetFaces()
 	return f, c, f, c, 0.0
-}
-
-/*
-// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
-func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
-	// 1. Calcolo del vettore direzione dalla telecamera all'entità
-	dx := cameraPos.X - entityPos.X
-	dy := cameraPos.Y - entityPos.Y // Considerando Y come profondità (Z nel tuo CreateCoords)
-	// 2. Angolo assoluto tra telecamera ed entità
-	angleToCam := math.Atan2(dy, dx)
-	// 3. Delta angolare (Angolo Telecamera - Yaw Entità)
-	// Normalizziamo l'angolo per assicurarci che sia tra 0 e 2*Pi
-	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
-	sectorMax := len(v.faces)
-	sectorSize := (math.Pi * 2) / float64(sectorMax)
-	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
-	v.currentAngle = index % sectorMax
-	v.compute()
-}
-*/
-
-// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
-func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
-	dx := cameraPos.X - entityPos.X
-	dy := cameraPos.Y - entityPos.Y
-
-	angleToCam := math.Atan2(dy, dx)
-	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
-
-	sectorSize := (math.Pi * 2) / 32.0
-	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
-
-	const viewOffset = 3
-	v.currentAngle = (index + viewOffset) % 32
-
-	v.compute()
 }
 
 // SetAction updates the current action index if the provided index is within bounds and triggers a recomputation of vertices.
@@ -172,3 +134,41 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, materia
 	f1.LockUV(true)
 	return f0, f1
 }
+
+/*
+// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
+func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
+	// 1. Calcolo del vettore direzione dalla telecamera all'entità
+	dx := cameraPos.X - entityPos.X
+	dy := cameraPos.Y - entityPos.Y // Considerando Y come profondità (Z nel tuo CreateCoords)
+	// 2. Angolo assoluto tra telecamera ed entità
+	angleToCam := math.Atan2(dy, dx)
+	// 3. Delta angolare (Angolo Telecamera - Yaw Entità)
+	// Normalizziamo l'angolo per assicurarci che sia tra 0 e 2*Pi
+	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
+	sectorMax := len(v.faces)
+	sectorSize := (math.Pi * 2) / float64(sectorMax)
+	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
+	v.currentAngle = index % sectorMax
+	v.compute()
+}
+
+
+// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
+func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
+	dx := cameraPos.X - entityPos.X
+	dy := cameraPos.Y - entityPos.Y
+
+	angleToCam := math.Atan2(dy, dx)
+	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
+
+	sectorSize := (math.Pi * 2) / 32.0
+	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
+
+	const viewOffset = 3
+	v.currentAngle = (index + viewOffset) % 32
+
+	v.compute()
+}
+
+*/

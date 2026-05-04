@@ -256,6 +256,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
 				continue
 			}
+
 			var frameTextureNames []string
 			for _, act := range wax.GetActions() {
 				if act == nil {
@@ -273,40 +274,41 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					}
 				}
 			}
+			material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+			cThing.Sprite = config.NewSprite(material)
+			configThings = append(configThings, cThing)
+
 			/*
-				// Estraiamo i frame dalla prima Action disponibile
-				// In un sistema completo dovresti mappare le Action agli stati (IDLE, WALK, etc.)
-				var targetView *WaxView = nil
+				multiSprite := config.NewMultiSprite()
 				for _, act := range wax.GetActions() {
-					for _, view := range act.GetViews() {
-						if view != nil && len(view.GetCells()) > 0 {
-							targetView = view
-							break
-						}
+					if act == nil {
+						continue
 					}
-					if targetView != nil {
-						break
+					for _, view := range act.GetViews() {
+						if view == nil || len(view.GetCells()) == 0 {
+							continue
+						}
+						var tn []string
+						for _, cell := range view.GetCells() {
+							texId := cell.GetId()
+							sizeX, sizeY := cell.GetSize()
+							textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+							tn = append(tn, texId)
+						}
+						material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+						multiSprite.Add(material)
 					}
 				}
 
-				if targetView != nil {
-					for _, cell := range targetView.GetCells() {
-						texId := cell.GetId()
-						sizeX, sizeY := cell.GetSize()
-						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-						frameTextureNames = append(frameTextureNames, texId)
-					}
-				}
-				if len(frameTextureNames) == 0 {
-					fmt.Printf("Warning: no frame found in %s\n", fileName)
-					continue
-				}
+				// Creiamo il materiale animato (o statico se 1 solo frame)
+				material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+				cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, material, 0, 50, 3, 50, 400)
+				configThings = append(configThings, cThing)
+
 			*/
-			// Creiamo il materiale animato (o statico se 1 solo frame)
-			material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, material, 0, 50, 3, 50, 400)
-			configThings = append(configThings, cThing)
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")
 			//fmt.Println(obj)
@@ -326,19 +328,10 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			if err = threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
 				continue
 			}
-			md2Model, _ := threedoObj.ToMD2()
-			var texNames []string
-			for _, texName := range threedoObj.Textures {
-				names := textures.AddTexture(d, bm, texName, colorPal)
-				texNames = append(texNames, names...)
-			}
-			if len(texNames) == 0 {
-				texNames = []string{"default"}
-			}
-			anim := config.NewConfigMaterial(texNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			md2Model := threedoObj.ToMD2(textures, d, bm, colorPal)
 			id := fmt.Sprintf("%s_%s", "3DO", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingItemDef, anim, 0, 40, 10, 50, 0)
-			cThing.SetModel3d(md2Model)
+			cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
+			cThing.MD2 = md2Model
 			configThings = append(configThings, cThing)
 		case "SAFE":
 		default:
@@ -392,8 +385,8 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	return player
 }
 
-func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed, anim)
+func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, angle, mass, radius, height, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string

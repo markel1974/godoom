@@ -49,10 +49,10 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 		frameFaces := make([]*Face, len(cfgFrame.Triangles))
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
-			points := [3]geometry.XYZ{tri[0].Pos, tri[1].Pos, tri[2].Pos}
-			material := materials.GetMaterial(cfg.Material)
+			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
+			material := materials.GetMaterial(tri.Material)
 			face := NewFace(nil, points, tag, material)
-			face.SetUV(float64(tri[0].U), float64(tri[0].V), float64(tri[1].U), float64(tri[1].V), float64(tri[2].U), float64(tri[2].V))
+			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
 			frameFaces[triIdx] = face
 		}

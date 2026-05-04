@@ -43,8 +43,8 @@ type Thing struct {
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	GForce         float64      `json:"gForce"`
 	MD2            *MD2         `json:"md2"`
-	WAX            *WAX         `json:"wax"`
-	Material       *Material    `json:"material"`
+	MultiSprite    *MultiSprite `json:"multiSprite"`
+	Sprite         *Sprite      `json:"sprite"`
 
 	OnThinking ThinkingFunc
 
@@ -54,7 +54,7 @@ type Thing struct {
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
-func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64, material *Material) *Thing {
+func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64) *Thing {
 	return &Thing{
 		Id:             id,
 		Position:       pos,
@@ -64,7 +64,6 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Radius:         radius,
 		Height:         height,
 		Speed:          speed,
-		Material:       material,
 		Restitution:    0.0,
 		WakeUpDistance: 100.0,
 		JumpForce:      600,
@@ -76,9 +75,4 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 // Scale adjusts the position of the Thing by scaling its X, Y, and Z components using the specified scale factor.
 func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)
-}
-
-// SetModel3d assigns the provided 3D model to the Thing's MD2 field.
-func (t *Thing) SetModel3d(model *MD2) {
-	t.MD2 = model
 }

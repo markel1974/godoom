@@ -212,8 +212,8 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	}
 	tId := fmt.Sprintf("t_%d", i)
 	mat := config.NewConfigMaterial(texHandler.SpriteCreateAnimation(frames), config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed, mat)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
+	cfgThing.Sprite = config.NewSprite(mat)
 	if cfgThing.Kind == config.ThingEnemyDef {
 		enemyLogic := common.NewEnemy(nil, 100)
 		cfgThing.OnThinking = enemyLogic.OnThinking

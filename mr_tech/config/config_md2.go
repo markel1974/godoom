@@ -13,14 +13,28 @@ type MD2Vertex struct {
 	V   float32
 }
 
+type MD2Triangle struct {
+	Vertices [3]MD2Vertex
+	Material *Material
+}
+
+func NewMD2Triangle(material *Material) MD2Triangle {
+	tri := MD2Triangle{
+		Material: material,
+	}
+	return tri
+}
+
 // MD2Frame represents a single frame in an MD2 animation, consisting of an array of triangles made up of MD2Vertex data.
 type MD2Frame struct {
-	Triangles [][3]MD2Vertex
+	Triangles []MD2Triangle
 }
 
 // NewMD2Frame creates a new MD2Frame with the specified number of triangles, initializing the Triangles slice accordingly.
-func NewMD2Frame(numTris int) MD2Frame {
-	return MD2Frame{Triangles: make([][3]MD2Vertex, numTris)}
+func NewMD2Frame(triangles []MD2Triangle) MD2Frame {
+	return MD2Frame{
+		Triangles: triangles,
+	}
 }
 
 // MD2 represents a 3D model composed of animation frames, associated actions, and frame intervals.

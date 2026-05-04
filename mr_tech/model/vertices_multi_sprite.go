@@ -8,24 +8,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// WAXFaces represents a pair of connected Faces within a 3D volume, providing bidirectional linking between structures.
-type WAXFaces struct {
+// MSFaces represents a pair of connected Faces within a 3D volume, providing bidirectional linking between structures.
+type MSFaces struct {
 	face0 *Face
 	face1 *Face
 }
 
-// VerticesWAX represents a 3D entity composed of WAXFaces and organized within a Volume.
-type VerticesWAX struct {
+// VerticesMultiSprite represents a 3D entity composed of MSFaces and organized within a Volume.
+type VerticesMultiSprite struct {
 	volume        *Volume
 	baseTexName   string
 	currentAction int
 	currentAngle  int
-	faces         []*WAXFaces
-	viewFaces     *WAXFaces
+	faces         []*MSFaces
+	viewFaces     *MSFaces
 }
 
-// NewVerticesWAX creates a new VerticesWAX instance with geometry, physics, and animation information, based on input config.
-func NewVerticesWAX(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesWAX {
+// NewVerticesMultiSprite creates a new VerticesMultiSprite instance with geometry, physics, and animation information, based on input config.
+func NewVerticesMultiSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMultiSprite {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
 	z := pos.Z
@@ -34,35 +34,36 @@ func NewVerticesWAX(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	d := cfg.Height
 
 	volume := NewVolumeDetails3d(0, "wax", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	f := &VerticesWAX{
+	f := &VerticesMultiSprite{
 		volume: volume,
 	}
-	f.faces = make([]*WAXFaces, len(cfg.WAX.Materials))
-	for viewIdx, view := range cfg.WAX.Materials {
+	f.faces = make([]*MSFaces, len(cfg.MultiSprite.Materials))
+	for viewIdx, view := range cfg.MultiSprite.Materials {
 		if view == nil || len(view.Frames) == 0 {
 			continue
 		}
 		material := materials.GetMaterial(view)
 		f0, f1 := f.createFaces(w, h, material)
-		f.faces[viewIdx] = &WAXFaces{face0: f0, face1: f1}
+		f.faces[viewIdx] = &MSFaces{face0: f0, face1: f1}
 	}
 	f.compute()
 	return f
 }
 
-// GetVolume returns the pointer to the Volume instance associated with the VerticesWAX object.
-func (v *VerticesWAX) GetVolume() *Volume {
+// GetVolume returns the pointer to the Volume instance associated with the VerticesMultiSprite object.
+func (v *VerticesMultiSprite) GetVolume() *Volume {
 	return v.volume
 }
 
 // GetVertices retrieves the faces and associated data for the current frame and returns them with a default displacement value.
-func (v *VerticesWAX) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+func (v *VerticesMultiSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
 	f, c := v.volume.GetFaces()
 	return f, c, f, c, 0.0
 }
 
+/*
 // SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
-func (v *VerticesWAX) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
+func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
 	// 1. Calcolo del vettore direzione dalla telecamera all'entità
 	dx := cameraPos.X - entityPos.X
 	dy := cameraPos.Y - entityPos.Y // Considerando Y come profondità (Z nel tuo CreateCoords)
@@ -77,9 +78,27 @@ func (v *VerticesWAX) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw 
 	v.currentAngle = index % sectorMax
 	v.compute()
 }
+*/
+
+// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
+func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
+	dx := cameraPos.X - entityPos.X
+	dy := cameraPos.Y - entityPos.Y
+
+	angleToCam := math.Atan2(dy, dx)
+	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
+
+	sectorSize := (math.Pi * 2) / 32.0
+	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
+
+	const viewOffset = 3
+	v.currentAngle = (index + viewOffset) % 32
+
+	v.compute()
+}
 
 // SetAction updates the current action index if the provided index is within bounds and triggers a recomputation of vertices.
-func (v *VerticesWAX) SetAction(idx int) {
+func (v *VerticesMultiSprite) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.faces) {
 		return
 	}
@@ -88,22 +107,22 @@ func (v *VerticesWAX) SetAction(idx int) {
 }
 
 // GetDisplacement retrieves the displacement coordinates (X, Y, Z) of the volume's bottom-left position.
-func (v *VerticesWAX) GetDisplacement() (float64, float64, float64) {
+func (v *VerticesMultiSprite) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetBottomLeft()
 }
 
-// GetBillboard returns the billboard orientation value for the VerticesWAX instance.
-func (v *VerticesWAX) GetBillboard() float64 {
+// GetBillboard returns the billboard orientation value for the VerticesMultiSprite instance.
+func (v *VerticesMultiSprite) GetBillboard() float64 {
 	return 1.0
 }
 
-// SetThing assigns an IThing instance to the internal volume of the VerticesWAX object.
-func (v *VerticesWAX) SetThing(t IThing) {
+// SetThing assigns an IThing instance to the internal volume of the VerticesMultiSprite object.
+func (v *VerticesMultiSprite) SetThing(t IThing) {
 	v.volume.SetThing(t)
 }
 
 // compute updates the current view faces and rebuilds the volume geometry based on the active view angle.
-func (v *VerticesWAX) compute() {
+func (v *VerticesMultiSprite) compute() {
 	viewFaces := v.faces[v.currentAngle]
 	if viewFaces == v.viewFaces {
 		return
@@ -120,7 +139,7 @@ func (v *VerticesWAX) compute() {
 }
 
 // createFaces generates two triangular faces based on the given width, height, and material animation.
-func (v *VerticesWAX) createFaces(width float64, height float64, anim *textures.Material) (*Face, *Face) {
+func (v *VerticesMultiSprite) createFaces(width float64, height float64, anim *textures.Material) (*Face, *Face) {
 	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
 	halfW := width * 0.5
 	t0 := [3]geometry.XYZ{

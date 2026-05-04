@@ -179,7 +179,10 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	}
 	c := th.config[throwableIndex]
 	id := utils.NextUUId()
-	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed, c.Material)
+	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed)
+	c.Sprite = ct.Sprite
+	c.MultiSprite = ct.MultiSprite
+	c.MD2 = ct.MD2
 	ct.OnCollision = onCollision
 	ct.OnImpact = onImpact
 	ct.Pitch = pitch

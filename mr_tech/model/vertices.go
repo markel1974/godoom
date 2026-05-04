@@ -25,8 +25,8 @@ func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, materials *Materials) 
 	if cfg.MD2 != nil {
 		return NewVerticesMD2(cfg, pos, materials)
 	}
-	if cfg.WAX != nil {
-		return NewVerticesWAX(cfg, pos, materials)
+	if cfg.MultiSprite != nil {
+		return NewVerticesMultiSprite(cfg, pos, materials)
 	}
 	return NewVerticesSprite(cfg, pos, materials)
 }

@@ -338,10 +338,11 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 
 	cModel := config.NewMD2(int(mdl.Header.NumFrames), mdl.FrameNames)
 	for idx, f := range mdl.Frames {
-		cFrame := config.NewMD2Frame(int(mdl.Header.NumTris))
+		triangles := make([]config.MD2Triangle, int(mdl.Header.NumTris))
 		skinW := float32(mdl.Header.SkinWidth)
 		skinH := float32(mdl.Header.SkinHeight)
 		for tIdx, tri := range mdl.Triangles {
+			cTri := config.NewMD2Triangle(anim)
 			for v := 0; v < 3; v++ {
 				vx := tri.Vertices[v]
 				tc := mdl.TexCoords[vx]
@@ -352,14 +353,16 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cFrame.Triangles[tIdx][v] = config.MD2Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cTri.Vertices[v] = config.MD2Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
+			triangles[tIdx] = cTri
 		}
+		cFrame := config.NewMD2Frame(triangles)
 		cModel.Frames[idx] = cFrame
 		//cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg := p.createConfigThing(classname, pos, kind, cModel, anim, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := p.createConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
 
 	return thingCfg, nil
 }
@@ -395,7 +398,7 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 	}
 	materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 	// Traduzione Geometria in MD2 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
-	var allTriangles [][3]config.MD2Vertex
+	var allTriangles []config.MD2Triangle
 	model := bspModels[0] // Il modello root dell'oggetto
 	for i := int32(0); i < model.NumFaces; i++ {
 		faceIdx := model.FirstFace + i
@@ -418,28 +421,25 @@ func (p *Builder) createThingBSP(bspPath string, pos geometry.XYZ, classname str
 		// Triangolazione del poligono della faccia
 		rawTriangles := p.triangulateConvex3d(points)
 		for _, rawTri := range rawTriangles {
-			tri := [3]config.MD2Vertex{
-				{Pos: rawTri[0], U: 0.0, V: 0.0}, // Placeholder UV, andrebbe calcolato
-				{Pos: rawTri[1], U: 1.0, V: 0.0},
-				{Pos: rawTri[2], U: 0.0, V: 1.0},
-			}
+			tri := config.NewMD2Triangle(materials)
+			tri.Vertices[0] = config.MD2Vertex{Pos: rawTri[0], U: 0.0, V: 0.0}
+			tri.Vertices[1] = config.MD2Vertex{Pos: rawTri[1], U: 1.0, V: 0.0}
+			tri.Vertices[2] = config.MD2Vertex{Pos: rawTri[2], U: 0.0, V: 1.0}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
 	model3d := config.NewMD2(1, []string{"default"})
-	model3d.Frames[0].Triangles = allTriangles
-
-	thingCfg := p.createConfigThing(classname, pos, config.ThingItemDef, model3d, materials, 0.0, 16.0, 16.0, 32.0, 0.0)
-
+	model3d.Frames[0] = config.NewMD2Frame(allTriangles)
+	thingCfg := p.createConfigThing(classname, pos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 
 // createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
-func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, anim *config.Material, angle, mass, radius, height, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed, anim)
+func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, angle, mass, radius, height, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
-	thingCfg.SetModel3d(cModel)
+	thingCfg.MD2 = cModel
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
 		if thingCfg.MD2 != nil {

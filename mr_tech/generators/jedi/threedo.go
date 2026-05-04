@@ -2,6 +2,7 @@ package jedi
 
 import (
 	"bufio"
+	"image/color"
 	"io"
 	"strconv"
 	"strings"
@@ -165,21 +166,24 @@ func (t *Threedo) Parse(r io.Reader) error {
 	return scanner.Err()
 }
 
-func (t *Threedo) ToMD2() (*config.MD2, []string) {
-	var allTriangles [][3]config.MD2Vertex
-	var usedTextures []string
+func (t *Threedo) ToMD2(tex *Textures, d *GobHandler, bm *BM, colorPal [256]color.RGBA) *config.MD2 {
+	var allTriangles []config.MD2Triangle
+	//var usedTextures []string
 
 	// Create a quick lookup map to avoid duplicate texture names in our return list
-	texMap := make(map[string]bool)
+	texMap := make(map[string]*config.Material)
 
 	// Iterate over all sub-objects
 	for _, obj := range t.Objects {
+		var material *config.Material
 		// Track which textures are actually used
 		if obj.TextureIdx >= 0 && obj.TextureIdx < len(t.Textures) {
 			texName := t.Textures[obj.TextureIdx]
-			if !texMap[texName] {
-				usedTextures = append(usedTextures, texName)
-				texMap[texName] = true
+			var ok bool
+			if material, ok = texMap[texName]; !ok {
+				tNames := tex.AddTexture(d, bm, texName, colorPal)
+				anim := config.NewConfigMaterial(tNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				texMap[texName] = anim
 			}
 		}
 
@@ -189,18 +193,14 @@ func (t *Threedo) ToMD2() (*config.MD2, []string) {
 			if pLen < 3 {
 				continue
 			}
-
 			// Ensure we have matching texture coordinates if the fill type uses them
 			hasUVs := quad.Fill == "TEXTURE" && qIdx < len(obj.TexQuads) && len(obj.TexQuads[qIdx].TexVertIndices) == pLen
-
 			// Triangle Fan triangulation (anchored at vertex 0)
 			for i := 1; i < pLen-1; i++ {
-
 				// 1. Get physical positions
 				v0 := obj.Vertices[quad.VertexIndices[0]]
 				v1 := obj.Vertices[quad.VertexIndices[i]]
 				v2 := obj.Vertices[quad.VertexIndices[i+1]]
-
 				// 2. Get UV coordinates (default to 0.0 if not a textured face)
 				var uv0, uv1, uv2 [2]float64
 				if hasUVs {
@@ -208,13 +208,10 @@ func (t *Threedo) ToMD2() (*config.MD2, []string) {
 					uv1 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i]]
 					uv2 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i+1]]
 				}
-
-				// Build the triangle for your engine
-				tri := [3]config.MD2Vertex{
-					{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])},
-					{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])},
-					{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])},
-				}
+				tri := config.NewMD2Triangle(material)
+				tri.Vertices[0] = config.MD2Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
+				tri.Vertices[1] = config.MD2Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
+				tri.Vertices[2] = config.MD2Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
 				allTriangles = append(allTriangles, tri)
 			}
 		}
@@ -222,6 +219,6 @@ func (t *Threedo) ToMD2() (*config.MD2, []string) {
 
 	// Create a single-frame MD2
 	cModel := config.NewMD2(1, []string{"stand"})
-	cModel.Frames[0].Triangles = allTriangles
-	return cModel, usedTextures
+	cModel.Frames[0] = config.NewMD2Frame(allTriangles)
+	return cModel
 }

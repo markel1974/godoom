@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ThingThrowable represents a throwable object in the system, extending the base functionality of ThingBase.
@@ -13,10 +12,10 @@ type ThingThrowable struct {
 }
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
-func NewThingThrowable(things *Things, cfg *config.Thing, anim *textures.Material, volume *Volume) *ThingThrowable {
+func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *ThingThrowable {
 	pos := cfg.Position
 	thing := &ThingThrowable{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, pos, anim, volume)
+	thing.ThingBase = NewThingBase(thing, things, cfg, pos, volume)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	thing.maxStep = 0.0
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)

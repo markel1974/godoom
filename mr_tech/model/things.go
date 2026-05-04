@@ -155,17 +155,17 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	var thing IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingEnemy(th, ct, volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingItem(th, ct, volume)
 	case config.ThingThrowableDef:
-		thing = NewThingThrowable(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingItem(th, ct, volume)
 	case config.ThingItemDef:
-		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingItem(th, ct, volume)
 	default:
-		thing = NewThingItem(th, ct, th.materials.GetMaterial(ct.Material), volume)
+		thing = NewThingItem(th, ct, volume)
 	}
 	return thing
 }

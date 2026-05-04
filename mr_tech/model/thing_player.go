@@ -60,7 +60,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	thing.ThingBase = NewThingBase(thing, things, c.Thing, c.Position, nil, volume)
+	thing.ThingBase = NewThingBase(thing, things, c.Thing, c.Position, volume)
 	thing.SetAngle(c.Angle)
 	return thing
 }

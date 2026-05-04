@@ -19,7 +19,7 @@ type VerticesMD2 struct {
 }
 
 // NewVerticesMD2 creates a new VerticesMD2 instance with frames, actions, and volume based on the provided configuration.
-func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, material *textures.Material) *VerticesMD2 {
+func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMD2 {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
 	z := pos.Z
@@ -48,6 +48,7 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, material *textures.Mate
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
 			points := [3]geometry.XYZ{tri[0].Pos, tri[1].Pos, tri[2].Pos}
+			material := materials.GetMaterial(cfg.Material)
 			face := NewFace(nil, points, tag, material)
 			face.SetUV(float64(tri[0].U), float64(tri[0].V), float64(tri[1].U), float64(tri[1].V), float64(tri[2].U), float64(tri[2].V))
 			face.LockUV(true)

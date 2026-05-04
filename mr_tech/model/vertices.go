@@ -3,7 +3,6 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
@@ -22,12 +21,12 @@ type IVertices interface {
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
-func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, material *textures.Material) IVertices {
+func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, materials *Materials) IVertices {
 	if cfg.MD2 != nil {
-		return NewVerticesMD2(cfg, pos, material)
+		return NewVerticesMD2(cfg, pos, materials)
 	}
 	if cfg.WAX != nil {
-		return NewVerticesWAX(cfg, pos, material)
+		return NewVerticesWAX(cfg, pos, materials)
 	}
-	return NewVerticesSprite(cfg, pos, material)
+	return NewVerticesSprite(cfg, pos, materials)
 }

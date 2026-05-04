@@ -3,7 +3,6 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
@@ -12,7 +11,7 @@ type VerticesSprite struct {
 }
 
 // NewVerticesSprite creates a new VerticesSprite with the given material, position, dimensions, and physical properties.
-func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Material) *VerticesSprite {
+func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesSprite {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
 	z := pos.Z
@@ -23,8 +22,9 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Mater
 	height := h
 	width := w
 	halfW := width / 2.0
-	if anim != nil {
-		tex := anim.CurrentFrame()
+	material := materials.GetMaterial(cfg.Material)
+	if material != nil {
+		tex := material.CurrentFrame()
 		if tex != nil {
 			texW, texH := tex.Size()
 			scaleW, scaleH := tex.GetScaleFactor()
@@ -43,7 +43,7 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Mater
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
-	f0 := NewFace(nil, t0, "", anim)
+	f0 := NewFace(nil, t0, "", material)
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
@@ -55,7 +55,7 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, anim *textures.Mater
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
-	f1 := NewFace(nil, t1, "", anim)
+	f1 := NewFace(nil, t1, "", material)
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)

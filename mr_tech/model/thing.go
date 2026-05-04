@@ -3,7 +3,6 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/physics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // IThing represents a general-purpose interface for entities with configuration, physics, and rendering properties.
@@ -17,8 +16,6 @@ type IThing interface {
 	GetBase() *ThingBase
 
 	GetAABB() *physics.AABB
-
-	GetMaterial() *textures.Material
 
 	GetVertices() ([]*Face, []*Face, float64, float64)
 

@@ -8,71 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-/*
-	// 1. Calcolo dimensioni e offset specifici del frame
-	texW := float64(waxFrame.SizeX) // Dimensioni native del frame WAX
-	texH := float64(waxFrame.SizeY)
-
-	// Applicazione degli scale factor del motore
-	scaleW, scaleH := 1.0, 1.0 // Sostituisci con i fattori di scala globali se necessari
-	width := texW * scaleW
-	height := texH * scaleH
-	halfW := width / 2.0
-	halfH := height / 2.0
-
-	// L'insertY in Dark Forces trasla il centro del rendering
-	offY := float64(waxFrame.InsertY) * scaleH
-	offX := float64(waxFrame.InsertX) * scaleW
-
-	// 2. Costruzione dei vertici del Quad centrato (con offset)
-	// Ricorda: asse Z locale va da +halfH a -halfH
-	topZ := halfH - offY
-	botZ := -halfH - offY
-	leftX := -halfW + offX
-	rightX := halfW + offX
-
-	t0 := [3]geometry.XYZ{
-		{X: leftX, Y: 0.0, Z: topZ},  // TL
-		{X: leftX, Y: 0.0, Z: botZ},  // BL
-		{X: rightX, Y: 0.0, Z: botZ}, // BR
-	}
-	t1 := [3]geometry.XYZ{
-		{X: leftX, Y: 0.0, Z: topZ},  // TL
-		{X: rightX, Y: 0.0, Z: botZ}, // BR
-		{X: rightX, Y: 0.0, Z: topZ}, // TR
-	}
-
-	// 3. Estrazione della texture specifica per questo frame
-	// Usa il MaterialManager o un lookup per ID (es. texName generato nel Builder)
-	tag := fmt.Sprintf("%s_A%d_V%d_F%d", cfg.Id, actIdx, viewIdx, frameIdx)
-
-	// Creiamo il materiale per il singolo frame
-	// (Se hai già registrato le texture come singole nel manager)
-	//frameAnim := textures.NewMaterial([]string{waxFrame.TextureID}, textures.MaterialKindStatic, 1, 1, 0, 0)
-	//TODO
-	frameAnim := anim
-	f0 := NewFace(nil, t0, tag, frameAnim)
-	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
-	if waxFrame.Flip {
-		// Ribaltamento orizzontale nativo per specchiamento
-		f0.SetUV(1.0, 0.0, 1.0, -1.0, 0.0, -1.0)
-	}
-	f0.LockUV(true)
-
-	f1 := NewFace(nil, t1, tag, frameAnim)
-	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
-	if waxFrame.Flip {
-		f1.SetUV(1.0, 0.0, 0.0, -1.0, 0.0, 0.0)
-	}
-	f1.LockUV(true)
-
-	// Uniamo i due triangoli per formare il quad finale (opzionale se il tuo renderer gestisce slice di Facce)
-	// Nel DOM attuale di GetVertices ti aspetterai 2 face (un quad) per frame, quindi l'array finale
-	// potrebbe dover contenere i due triangoli concatenati.
-	// Per semplicità qui assumo che Face supporti i quad (o che tu concateni le slice nel GetVertices).
-
-*/
-
 // WAXFaces represents a pair of connected Faces within a 3D volume, providing bidirectional linking between structures.
 type WAXFaces struct {
 	face0 *Face
@@ -90,7 +25,7 @@ type VerticesWAX struct {
 }
 
 // NewVerticesWAX creates a new VerticesWAX instance with geometry, physics, and animation information, based on input config.
-func NewVerticesWAX(cfg *config.Thing, pos geometry.XYZ, anim *textures.Material) *VerticesWAX {
+func NewVerticesWAX(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesWAX {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
 	z := pos.Z
@@ -102,19 +37,15 @@ func NewVerticesWAX(cfg *config.Thing, pos geometry.XYZ, anim *textures.Material
 	f := &VerticesWAX{
 		volume: volume,
 	}
-	f.faces = make([]*WAXFaces, len(cfg.WAX.Views))
-	for viewIdx, view := range cfg.WAX.Views {
+	f.faces = make([]*WAXFaces, len(cfg.WAX.Materials))
+	for viewIdx, view := range cfg.WAX.Materials {
 		if view == nil || len(view.Frames) == 0 {
 			continue
 		}
-		//var animation []string
-		//for frameIdx, waxFrame := range view.Frames {
-		//	animation = append(animation, waxFrame.TextureID)
-		//}
-		f0, f1 := f.createFaces(w, h, anim)
+		material := materials.GetMaterial(view)
+		f0, f1 := f.createFaces(w, h, material)
 		f.faces[viewIdx] = &WAXFaces{face0: f0, face1: f1}
 	}
-
 	f.compute()
 	return f
 }

@@ -66,20 +66,15 @@ func (v *VerticesWAX) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw 
 	// 1. Calcolo del vettore direzione dalla telecamera all'entità
 	dx := cameraPos.X - entityPos.X
 	dy := cameraPos.Y - entityPos.Y // Considerando Y come profondità (Z nel tuo CreateCoords)
-
 	// 2. Angolo assoluto tra telecamera ed entità
 	angleToCam := math.Atan2(dy, dx)
-
 	// 3. Delta angolare (Angolo Telecamera - Yaw Entità)
 	// Normalizziamo l'angolo per assicurarci che sia tra 0 e 2*Pi
 	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
-
-	// 4. Mappatura su 32 indici (0-31)
-	// Aggiungiamo metà step (Pi / 32) per arrotondare correttamente al settore più vicino
-	sectorSize := (math.Pi * 2) / 32.0
+	sectorMax := len(v.faces)
+	sectorSize := (math.Pi * 2) / float64(sectorMax)
 	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
-
-	v.currentAngle = index % 32
+	v.currentAngle = index % sectorMax
 	v.compute()
 }
 

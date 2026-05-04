@@ -6,205 +6,256 @@ import (
 	"io"
 )
 
-// MaxWaxDimension defines the maximum allowable dimension for wax-related computations or operations.
+// MaxWaxDimension defines the maximum allowable dimension (width or height) for a WAX cell in pixels.
 const MaxWaxDimension = 2048
 
-// WaxHeader represents the header of a Wax file, containing metadata about sequences, frames, cells, and scaling factors.
+// WaxHeader represents the header structure of a WAX file containing metadata and sequence offsets for actions.
 type WaxHeader struct {
-	Version     uint32
-	NumSegments uint32
-	NumFrames   uint32
-	NumCells    uint32
-	ScaleX      uint32
-	ScaleY      uint32
-	ExtraLight  uint32
-	Pad         uint32
-	SeqOffsets  [32]uint32 // Offset alle Action
+	//Version     uint32
+	//NumSegments uint32
+	//NumFrames   uint32
+	//NumCells    uint32
+	//ScaleX      uint32
+	//ScaleY      uint32
+	//ExtraLight  uint32
+	//Pad         uint32
+	SeqOffsets [32]uint32 // Offset alle Action
 }
 
-// WaxAction represents an action sequence in the WAX data format.
-// The Padding field is reserved for future use or alignment.
-// The ViewOffsets field contains offsets to different viewing angles.
-type WaxAction struct {
-	Padding     [16]byte
-	ViewOffsets [32]uint32 // Offset alle View (Angolazioni)
+// NewWaxHeader creates and returns a new instance of WaxHeader with default values.
+func NewWaxHeader() *WaxHeader {
+	return &WaxHeader{}
 }
 
-// WaxView represents a view in a Wax file, containing padding and offsets to associated frames.
-type WaxView struct {
-	Padding      [16]byte
-	FrameOffsets [32]uint32 // Offset ai Frame reali
-}
-
-// WaxFrame represents a single frame in the wax format, containing positional, flipping, sizing, and padding metadata.
-type WaxFrame struct {
-	InsertX    int32  // 0x00
-	InsertY    int32  // 0x04
-	Flip       int32  // 0x08
-	CellOffset uint32 // 0x0C
-	UnitWidth  uint32 // 0x10
-	UnitHeight uint32 // 0x14
-	Pad1       uint32 // 0x18
-	Pad2       uint32 // 0x1C
-}
-
-// WaxCellHeader represents the header of a cell in a Wax structure, containing metadata and pixel data.
-type WaxCellHeader struct {
-	SizeX      uint32
-	SizeY      uint32
-	Compressed uint32
-	DataSize   uint32
-	ColOffsets uint32
-	Padding    [12]byte
-	Pixels     []byte
-}
-
-// NewWaxCellHeader creates and initializes a new instance of WaxCellHeader with default values.
-func NewWaxCellHeader() *WaxCellHeader {
-	return &WaxCellHeader{}
-}
-
-// Parse reads and processes data from the provided io.ReadSeeker starting at the specified offset to populate the struct.
-func (p *WaxCellHeader) Parse(r io.ReadSeeker, frame *WaxFrame) error {
-	offset := int64(frame.CellOffset)
-	if _, err := r.Seek(offset, io.SeekStart); err != nil {
-		return err
-	}
-	//TODO usare frame.InsertX e frame.InsertY
-
-	// Leggiamo l'header fisso di 32 byte
+// Parse reads and parses the WaxHeader data from the given io.ReadSeeker and populates the WaxHeader fields.
+func (wh *WaxHeader) Parse(r io.ReadSeeker) error {
 	var raw struct {
-		SizeX, SizeY, Compressed, DataSize uint32 // 0-15
-		Reserved1, Reserved2               uint32 // 16-23
-		ColOffsets                         uint32 // 24-27
-		Reserved3                          uint32 // 28-31
+		Version     uint32
+		NumSegments uint32
+		NumFrames   uint32
+		NumCells    uint32
+		ScaleX      uint32
+		ScaleY      uint32
+		ExtraLight  uint32
+		Pad         uint32
+		SeqOffsets  [32]uint32 // Offset alle Action
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
 
-	p.SizeX, p.SizeY = raw.SizeX, raw.SizeY
-	p.Compressed = raw.Compressed
-	p.DataSize = raw.DataSize
+	wh.SeqOffsets = raw.SeqOffsets
+
+	return nil
+}
+
+// WaxAction represents a structure that holds the offsets for various views (angles) in a 2D animation or rendering context.
+type WaxAction struct {
+	ViewOffsets [32]uint32 // Offset alle View (Angolazioni)
+}
+
+// NewWaxAction creates and initializes a new instance of WaxAction.
+func NewWaxAction() *WaxAction {
+	return &WaxAction{}
+}
+
+// Parse reads and populates the ViewOffsets field from the provided io.ReadSeeker. Returns an error if reading fails.
+func (va *WaxAction) Parse(r io.ReadSeeker) error {
+	var raw struct {
+		Padding     [16]byte
+		ViewOffsets [32]uint32 // Offset alle View (Angolazioni)
+	}
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return err
+	}
+	va.ViewOffsets = raw.ViewOffsets
+	return nil
+}
+
+// WaxView represents a structure that stores fixed-size frame offsets for parsing data.
+type WaxView struct {
+	FrameOffsets [32]uint32
+}
+
+// NewWaxView creates and returns a new instance of WaxView with default values.
+func NewWaxView() *WaxView {
+	return &WaxView{}
+}
+
+// Parse reads and extracts frame offset data from the provided io.ReadSeeker and updates the WaxView structure.
+func (vw *WaxView) Parse(r io.ReadSeeker) error {
+	var raw struct {
+		Padding      [16]byte
+		FrameOffsets [32]uint32
+	}
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return err
+	}
+	vw.FrameOffsets = raw.FrameOffsets
+	return nil
+}
+
+// WaxFrame represents a frame in the WAX structure, containing positional data, orientation, and a cell reference.
+type WaxFrame struct {
+	InsertX    int
+	InsertY    int
+	Flip       bool
+	CellOffset uint32
+}
+
+// NewWaxFrame creates and returns a pointer to a new, empty WaxFrame instance.
+func NewWaxFrame() *WaxFrame {
+	return &WaxFrame{}
+}
+
+// Parse reads and initializes the WaxFrame fields from the provided io.ReadSeeker, using little-endian byte order.
+func (wf *WaxFrame) Parse(r io.ReadSeeker) error {
+	var raw struct {
+		InsertX    int32  // 0x00
+		InsertY    int32  // 0x04
+		Flip       int32  // 0x08
+		CellOffset uint32 // 0x0C
+		UnitWidth  uint32 // 0x10
+		UnitHeight uint32 // 0x14
+		Pad1       uint32 // 0x18
+		Pad2       uint32 // 0x1C
+	}
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return err
+	}
+	wf.CellOffset = raw.CellOffset
+	wf.InsertX = int(raw.InsertX)
+	wf.InsertY = int(raw.InsertY)
+	wf.Flip = raw.Flip != 0
+
+	return nil
+}
+
+// WaxCellHeader holds metadata for a WAX cell, including dimensions and pixel data in a row-major format.
+type WaxCellHeader struct {
+	SizeX  int
+	SizeY  int
+	Pixels []byte
+}
+
+// NewWaxCellHeader creates a new instance of WaxCellHeader with default initialization.
+func NewWaxCellHeader() *WaxCellHeader {
+	return &WaxCellHeader{}
+}
+
+// Parse reads and decodes the WaxCellHeader data from an io.ReadSeeker based on the provided WaxFrame information.
+func (p *WaxCellHeader) Parse(r io.ReadSeeker, frame *WaxFrame) error {
+	offset := int64(frame.CellOffset)
+	if _, err := r.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	const headerWaxSize = 24
+	// L'header WAX è di soli 24 byte!
+	var raw struct {
+		SizeX      uint32 // 0-3
+		SizeY      uint32 // 4-7
+		Compressed uint32 // 8-11
+		DataSize   uint32 // 12-15
+		ColOffsets uint32 // 16-19 (Spesso 0 in DF)
+		Pad1       uint32 // 20-23
+	}
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return err
+	}
+
+	p.SizeX, p.SizeY = int(raw.SizeX), int(raw.SizeY)
 
 	if p.SizeX == 0 || p.SizeY == 0 {
 		return nil
 	}
 
 	if p.SizeX > MaxWaxDimension || p.SizeY > MaxWaxDimension {
-		return fmt.Errorf("cell dimension exceeds maximum allowed size: %dx%d", p.SizeX, p.SizeY)
+		return fmt.Errorf("cell dimension exceeds maximum: %dx%d", p.SizeX, p.SizeY)
 	}
 
 	p.Pixels = make([]byte, p.SizeX*p.SizeY)
 
-	if p.Compressed == 0 {
-		// Determiniamo dove inizia effettivamente la tabella delle colonne
-		// Se ColOffsets è 0, la tabella segue l'header (byte 32)
-		tableStartRelative := int64(raw.ColOffsets)
-		if tableStartRelative == 0 {
-			tableStartRelative = 32
-		}
-
-		if _, err := r.Seek(offset+tableStartRelative, io.SeekStart); err != nil {
+	// --- MODALITÀ NON COMPRESSA (RAW) ---
+	if raw.Compressed == 0 {
+		// Dati RAW partono tipicamente al byte 32 per compatibilità
+		rawOffset := offset + 32
+		if _, err := r.Seek(rawOffset, io.SeekStart); err != nil {
 			return err
 		}
-		rawData := make([]byte, p.SizeX*p.SizeY)
-		total := 0
-		for total < len(rawData) {
-			n, err := r.Read(rawData[total:])
-			total += n
-			if err != nil {
-				if err == io.EOF {
-					break // EOF parziale
+		expectedSize := p.SizeX * p.SizeY
+		rawData := make([]byte, expectedSize)
+		n, err := io.ReadAtLeast(r, rawData, 0)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		// Column-Major -> Row-Major
+		for x := 0; x < p.SizeX; x++ {
+			for y := 0; y < p.SizeY; y++ {
+				srcIdx := x*p.SizeY + y
+				if srcIdx < n {
+					p.Pixels[y*p.SizeX+x] = rawData[srcIdx]
 				}
-				return err
 			}
 		}
-		if total < len(rawData) {
-			for i := total; i < len(rawData); i++ {
-				rawData[i] = 0
-			}
-		}
-
-		//	// Popola p.Pixels in Row-Major: y*p.SizeX + x
-		//	for y := uint32(0); y < p.SizeY; y++ {
-		//		for x := uint32(0); x < p.SizeX; x++ {
-		//			idx := y*p.SizeX + x
-		//			if idx < uint32(total) {
-		//				p.Pixels[idx] = rawData[idx]
-		//			}
-		//			// Se total < p.SizeX*p.SizeY, il resto resta 0 (già riempito prima)
-		//		}
-		//	}
-
 		return nil
 	}
 
 	// --- MODALITÀ COMPRESSA (RLE) ---
-	// Leggiamo la tabella degli offset (uno per colonna)
-	collOffset := offset
-	if _, err := r.Seek(collOffset, io.SeekStart); err != nil {
+	tableOffset := offset + headerWaxSize
+	if _, err := r.Seek(tableOffset, io.SeekStart); err != nil {
 		return err
 	}
+
 	colTable := make([]uint32, p.SizeX)
 	if err := binary.Read(r, binary.LittleEndian, colTable); err != nil {
-		return fmt.Errorf("failed to read colTable at %d: %w", collOffset, err)
+		return fmt.Errorf("failed to read colTable at %d: %w", tableOffset, err)
 	}
 
-	for x := uint32(0); x < p.SizeX; x++ {
+	for x := 0; x < p.SizeX; x++ {
 		if colTable[x] == 0 {
 			continue
 		}
-		seekOffset := offset + int64(colTable[x])
-		if _, err := r.Seek(seekOffset, io.SeekStart); err != nil {
+		// colTable[x] è relativo all'inizio della cella (offset)
+		seekPos := offset + int64(colTable[x])
+		if _, err := r.Seek(seekPos, io.SeekStart); err != nil {
 			continue
 		}
-		y := uint32(0)
+		y := 0
 		for y < p.SizeY {
-			var cmd uint8
-			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-				if err == io.EOF {
-					break
-				} else {
-					return fmt.Errorf("failed to read cmd at %d: %w", seekOffset, err)
-				}
+			var rawCmd uint8
+			if err := binary.Read(r, binary.LittleEndian, &rawCmd); err != nil {
+				break
 			}
+			cmd := int(rawCmd)
 			if cmd >= 128 {
-				// Skip (Trasparenza)
-				y += uint32(cmd - 128)
+				y += cmd - 128
 			} else if cmd > 0 {
-				// Pixel opachi
-				count := uint32(cmd)
-				for i := uint32(0); i < count && y < p.SizeY; i++ {
+				count := cmd
+				for i := 0; i < count && y < p.SizeY; i++ {
 					var pix uint8
-					if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
-						if err == io.EOF {
-							break
-						} else {
-							return fmt.Errorf("failed to read pixel at %d: %w", offset+int64(colTable[x]), err)
-						}
-					} else {
-						p.Pixels[y*p.SizeX+x] = pix //Row-Major
+					if err := binary.Read(r, binary.LittleEndian, &pix); err == nil {
+						p.Pixels[y*p.SizeX+x] = pix // Row-Major nativo
 					}
 					y++
 				}
 			} else {
-				break // cmd 0 = fine colonna
+				break
 			}
 		}
 	}
 	return nil
 }
 
-// Wax represents a structured data container holding header information, actions, frames, and cell headers.
+// Wax represents a collection of animations, frames, and graphical cells in a structured format for processing.
 type Wax struct {
-	Header  WaxHeader
+	header  *WaxHeader
 	Actions [32]*WaxAction
 	Frames  map[uint32]*WaxFrame      // Key: frameOffset
 	Cells   map[uint32]*WaxCellHeader // Key: CellOffset
 }
 
-// NewWax creates and returns a new initialized instance of Wax with empty Frames and Cells maps.
+// NewWax initializes and returns a new instance of Wax with empty Frames and Cells maps.
 func NewWax() *Wax {
 	return &Wax{
 		Frames: make(map[uint32]*WaxFrame),
@@ -212,23 +263,21 @@ func NewWax() *Wax {
 	}
 }
 
-// Parse reads and parses the Wax file structure from the given io.ReadSeeker, populating the Wax object with its components.
-// Returns an error if the parsing operation fails at any stage.
+// Parse reads and processes the data from the provided io.ReadSeeker, populating the Wax structure with parsed header, actions, views, frames, and cells.
 func (w *Wax) Parse(r io.ReadSeeker) error {
-	if err := binary.Read(r, binary.LittleEndian, &w.Header); err != nil {
+	w.header = NewWaxHeader()
+	if err := w.header.Parse(r); err != nil {
 		return err
 	}
-	// Iteriamo sulle Action (Sequenze)
-	for idx, actOffset := range w.Header.SeqOffsets {
+	for idx, actOffset := range w.header.SeqOffsets {
 		if actOffset == 0 {
 			continue
 		}
 		if _, err := r.Seek(int64(actOffset), io.SeekStart); err != nil {
 			return err
 		}
-		action := &WaxAction{}
-		// Usiamo un controllo meno rigido sulla lettura delle tabelle
-		if err := binary.Read(r, binary.LittleEndian, action); err != nil {
+		action := NewWaxAction()
+		if err := action.Parse(r); err != nil {
 			return err
 		}
 		w.Actions[idx] = action
@@ -239,11 +288,10 @@ func (w *Wax) Parse(r io.ReadSeeker) error {
 			if _, err := r.Seek(int64(viewOffset), io.SeekStart); err != nil {
 				continue
 			}
-			view := &WaxView{}
-			if err := binary.Read(r, binary.LittleEndian, view); err != nil {
+			view := NewWaxView()
+			if err := view.Parse(r); err != nil {
 				continue
 			}
-			// Iteriamo sui Frame
 			for _, frameOffset := range view.FrameOffsets {
 				if frameOffset == 0 {
 					continue
@@ -254,9 +302,9 @@ func (w *Wax) Parse(r io.ReadSeeker) error {
 				if _, err := r.Seek(int64(frameOffset), io.SeekStart); err != nil {
 					continue
 				}
-				frame := &WaxFrame{}
-				if err := binary.Read(r, binary.LittleEndian, frame); err != nil {
-					continue
+				frame := NewWaxFrame()
+				if err := frame.Parse(r); err != nil {
+					return err
 				}
 				w.Frames[frameOffset] = frame
 				if frame.CellOffset == 0 {

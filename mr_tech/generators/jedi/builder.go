@@ -265,7 +265,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				for _, view := range act.GetViews() {
 					if view != nil && len(view.GetCells()) > 0 {
 						targetView = view
-						break
 					}
 				}
 				if targetView != nil {
@@ -286,9 +285,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 			// Creiamo il materiale animato (o statico se 1 solo frame)
-			anim := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, anim, 0, 50, 3, 50, 400)
+			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, material, 0, 50, 3, 50, 400)
 			configThings = append(configThings, cThing)
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")

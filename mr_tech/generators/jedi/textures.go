@@ -83,7 +83,7 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 	}
 
 	t.add(name, img)
-
+	//_ = SaveImage(name, img)
 	return name
 }
 

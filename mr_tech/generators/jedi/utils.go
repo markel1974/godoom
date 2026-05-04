@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image"
+	"image/png"
+	"os"
 	"strconv"
 	"unicode"
 )
@@ -187,4 +190,16 @@ func Hexdump(data []byte) {
 		}
 		fmt.Printf("|\n")
 	}
+}
+
+func SaveImage(name string, img image.Image) error {
+	out, err := os.Create(name + ".png")
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if err = png.Encode(out, img); err != nil {
+		return err
+	}
+	return nil
 }

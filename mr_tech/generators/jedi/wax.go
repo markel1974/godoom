@@ -85,20 +85,28 @@ func (p *WaxCell) Parse(r io.ReadSeeker) error {
 		return fmt.Errorf("cell dimension exceeds maximum: %dx%d", p.sizeX, p.sizeY)
 	}
 
-	p.pixels = make([]byte, p.sizeX*p.sizeY)
+	size := p.sizeX * p.sizeY
+	p.pixels = make([]byte, size)
 
-	// --- MODALITÀ NON COMPRESSA (RAW) ---
 	if raw.Compressed == 0 {
-		// Dati RAW partono tipicamente al byte 32 per compatibilità
-		rawOffset := offset + 32
-		if _, err := r.Seek(rawOffset, io.SeekStart); err != nil {
+		dataOffset := offset + headerWaxSize
+		if raw.ColOffsets != 0 {
+			dataOffset = offset + int64(raw.ColOffsets)
+		}
+		if _, err := r.Seek(dataOffset, io.SeekStart); err != nil {
 			return err
 		}
-		expectedSize := p.sizeX * p.sizeY
-		rawData := make([]byte, expectedSize)
-		n, err := io.ReadAtLeast(r, rawData, 0)
-		if err != nil && err != io.EOF {
-			return err
+		rawData := make([]byte, size)
+		n := 0
+		for n < size {
+			nn, err := r.Read(rawData[n:])
+			n += nn
+			if err != nil {
+				break
+			}
+		}
+		if n == 0 {
+			return nil
 		}
 		// Column-Major -> Row-Major
 		for x := 0; x < p.sizeX; x++ {

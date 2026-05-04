@@ -338,7 +338,6 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		default:
 			fmt.Println("Unsupported object class:", key)
 		}
-
 	}
 
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)

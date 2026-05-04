@@ -46,11 +46,9 @@ type Thing struct {
 	MultiSprite    *MultiSprite `json:"multiSprite"`
 	Sprite         *Sprite      `json:"sprite"`
 
-	OnThinking ThinkingFunc
-
+	OnThinking  ThinkingFunc
 	OnCollision CollisionFunc
-
-	OnImpact ImpactFunc
+	OnImpact    ImpactFunc
 }
 
 // NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.

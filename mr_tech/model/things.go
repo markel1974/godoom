@@ -177,21 +177,21 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	if len(th.config) <= throwableIndex {
 		return
 	}
-	c := th.config[throwableIndex]
+	src := th.config[throwableIndex]
 	id := utils.NextUUId()
-	ct := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, c.Mass, c.Radius, c.Radius, speed)
-	c.Sprite = ct.Sprite
-	c.MultiSprite = ct.MultiSprite
-	c.MD2 = ct.MD2
-	ct.OnCollision = onCollision
-	ct.OnImpact = onImpact
-	ct.Pitch = pitch
+	dst := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, src.Mass, src.Radius, src.Radius, speed)
+	dst.Sprite = src.Sprite
+	dst.MultiSprite = src.MultiSprite
+	dst.MD2 = src.MD2
+	dst.OnCollision = onCollision
+	dst.OnImpact = onImpact
+	dst.Pitch = pitch
 	slot := th.pendingIdx.Add(1) - 1
 	if slot >= int32(len(th.pending)) {
 		fmt.Println("max slot reached!")
 		return
 	}
-	th.pending[slot] = th.createThing(ct, volume)
+	th.pending[slot] = th.createThing(dst, volume)
 	th.hasPending = true
 }
 

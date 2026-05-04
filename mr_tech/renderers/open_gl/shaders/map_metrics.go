@@ -112,9 +112,9 @@ func (m *MapMetrics) GetFlashAspect() float32 {
 
 // Rebuild configures the flashlight's field of view, near and far plane distances, dimensions, and projection matrix.
 func (m *MapMetrics) Rebuild(width, height int32) {
-	m.shadowWidth = width
-	m.shadowHeight = height
-	m.shadowAspect = float32(width) / float32(height)
+	m.shadowWidth = width / 4
+	m.shadowHeight = height / 4
+	m.shadowAspect = float32(m.shadowWidth) / float32(m.shadowHeight)
 	if m.shadowAspect == 0 {
 		m.shadowAspect = 1.0
 	}

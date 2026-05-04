@@ -10,11 +10,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+const ScaleFactorH = 4.2
+
 // floorCeilScaleW defines the default scaling factor for floor and ceiling texture animations in the configuration.
-const floorCeilScaleW = 10.0
+const floorCeilScaleW = 1.0
 
 // floorCeilScaleH defines the scale factor applied to the height of floor and ceiling textures in a sector.
-const floorCeilScaleH = 10.0
+const floorCeilScaleH = 1.0
+
+// GForce represents the standard gravitational force multiplier applied to game entities, with a value of 9.8 * 8.
+const GForce = 9.8 * 20
+
+const AspectRatio = 1.0
+
+const playerHeight = 10 * ScaleFactorH
+
+const falloff = 40.0
+
+const lightIntensity = 1.5 * 4
 
 func isWall(cell uint16) bool {
 	return cell >= 1 && cell <= 99
@@ -70,9 +83,9 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 	if tErr != nil {
 		return nil, tErr
 	}
-
 	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
-	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	cal.AspectRatio = AspectRatio
+	scaleFactor := geometry.XYZ{X: 15.0, Y: 15.0, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texProvider)
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
@@ -111,8 +124,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 					sequence = []string{"image194.png", "image195.png", "image196.png", "image197.png"}
 				}
 				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
-				const scaleH = 0.08
-				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, scaleH, scaleH*2, 0, 0)
+				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				if useEnemy {
 					cfgThing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6)
 					cfgThing.Sprite = config.NewSprite(anim)
@@ -131,15 +143,13 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				cell = 0 // Libera la cella per il compilatore topologico
 			}
 
-			const falloff = 10.0
-			const lightIntensity = 1.5
 			sid := wp.sectorIds[y][x]
 			cs := config.NewConfigSector(sid, lightIntensity, config.LightKindAmbient, falloff)
 			cs.FloorY = 0
-			cs.CeilY = wp.sectorHeight
+			cs.CeilY = wp.sectorHeight * ScaleFactorH
 			cs.Tag = "wolf_cell"
-			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.MaterialKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
-			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.MaterialKindLoop, floorCeilScaleW, floorCeilScaleH, 0, 0)
+			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
 			y0, y1 := float64(y)*wp.tileSize, float64(y+1)*wp.tileSize
 			pTL := geometry.XY{X: x0, Y: y0}
@@ -162,7 +172,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidT, pMidB)
-						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 10.0, 10.0, 0, 0)
+						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -178,7 +188,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidL, pMidR)
-						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 10.0, 50.0, 0, 0)
+						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
@@ -198,10 +208,38 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 	var playerPos geometry.XYZ
 	if len(root.Sectors) > 0 && len(root.Sectors[0].Segments) > 0 {
 		pos := root.Sectors[0].Segments[0].End
-		playerPos = geometry.XYZ{X: pos.X, Y: pos.Y, Z: 0}
+		playerPos = geometry.XYZ{X: pos.X + 5, Y: pos.Y + 5, Z: 0}
 	}
-	root.Player = config.NewConfigPlayer(playerPos, 0, 20, 90, 1, 8)
+
+	player := config.NewConfigPlayer(playerPos, 0, 60, 900, 20, playerHeight)
+	root.Player = player
 	playerLogic := common.NewPlayer()
+
+	player.GForce = GForce
+	player.JumpForce = 1800
+
+	player.Flash.ZFar = 8192
+	player.Flash.Factor = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+	player.Bobbing.SwayScale = 2.0
+	player.Bobbing.SwayOffsetX = 20
+	player.Bobbing.SwayOffsetY = -0.9
+	player.Bobbing.MaxAmplitudeX = playerHeight * 0.2
+	player.Bobbing.MaxAmplitudeY = playerHeight * 0.2
+	player.Bobbing.StrideLength = 0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
+	player.Bobbing.IdleAmpX = 0.9        // Respiro
+	player.Bobbing.IdleAmpY = 0.9
+	player.Bobbing.IdleDrift = 0.01
+	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
+	player.Bobbing.AmpLerp = 0.20
+	player.Bobbing.ImpactMax = 1000.0
+	player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale
+	player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
+	player.Bobbing.SpringDamping = 0.80
+	player.Bobbing.TiltAmp = 0.05
+
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact
 	return root, nil
@@ -269,7 +307,7 @@ func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end ge
 		}
 	}
 	if texName != "" {
-		anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 7.0, 4.0, 0, 0)
+		anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 		seg.Upper = anim
 		seg.Middle = anim
 		seg.Lower = anim

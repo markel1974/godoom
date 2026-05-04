@@ -102,3 +102,8 @@ func (v *VertexMD2) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	lerpT := frameFloat - math.Floor(frameFloat)
 	return v.frames[idxA], v.frames[idxB], lerpT
 }
+
+// GetPosition returns the center position of the associated entity as a tuple of three float64 values.
+func (v *VertexMD2) GetPosition() (float64, float64, float64) {
+	return v.volume.entity.GetCenter()
+}

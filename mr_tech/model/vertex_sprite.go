@@ -71,7 +71,13 @@ func (v *VertexSprite) GetVertices(tick uint64) ([]*Face, []*Face, float64) {
 	return f, f, 0.0
 }
 
+// SetAction sets the action index for the VertexSprite, modifying its behavior or state based on the specified index.
 func (v *VertexSprite) SetAction(idx int) {
 	//TODO IMPLEMENT
 	return
+}
+
+// GetPosition retrieves the bottom-left coordinates (x, y, z) of the associated Volume's entity.
+func (v *VertexSprite) GetPosition() (float64, float64, float64) {
+	return v.volume.entity.GetBottomLeft()
 }

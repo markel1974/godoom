@@ -17,6 +17,8 @@ type IVertices interface {
 	GetVolume() *Volume
 
 	SetAction(idx int)
+
+	GetPosition() (float64, float64, float64)
 }
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
@@ -120,6 +122,11 @@ func (t *ThingBase) SetAngle(angle float64) {
 // SetAction sets the action for a vertex at the specified index in the ThingBase object.
 func (t *ThingBase) SetAction(idx int) {
 	t.vertices.SetAction(idx)
+}
+
+// GetPosition returns the x, y, and z coordinates of the position as three float64 values.
+func (t *ThingBase) GetPosition() (float64, float64, float64) {
+	return t.vertices.GetPosition()
 }
 
 // GetId returns the identifier string of the ThingBase instance.

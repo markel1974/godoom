@@ -114,10 +114,13 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 
 		lightLevel := sector.LightLevel * scaleLight
-		if lightLevel < 2.5 {
-			lightLevel = 2.5
+		if lightLevel < 4.0 {
+			lightLevel = 4.0
 		}
 		lightFalloff := lightLevel * scaleLightFalloff
+		if lightFalloff < 10 {
+			lightFalloff = 10
+		}
 
 		secId := strconv.Itoa(sector.Id)
 		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, lightFalloff)

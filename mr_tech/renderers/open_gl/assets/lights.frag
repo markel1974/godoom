@@ -164,22 +164,19 @@ void main()
     vec3 V = normalize(-ViewPos); // View Direction
 
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+    float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
+    vec3 litRoom = albedo * NdotL_room * u_ambient_light;
+    vec3 roomBeam = vec3(0.0); // Di base, nessuna nebbia volumetrica
 
-    // OMBRE STANZA
-    float shadowFactor = 1.0;
     if (u_enableShadows == 1) {
+        // OMBRE STANZA
         // Usa la normale geometrica già fusa dal TBN
         vec3 geoNormal = finalNormal;
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         float shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
-        shadowFactor = 1.0 - shadowRoom;
-    }
-    float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
-    vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
-
-    // NEBBIA VOLUMETRICA
-    vec3 roomBeam = vec3(0.0); // Di base, nessuna nebbia volumetrica
-    if (u_enableShadows == 1) {
+        float shadowFactor = 1.0 - shadowRoom;
+        litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
+        // NEBBIA VOLUMETRICA
         float volRoom = 0.0;
         vec3 rayStep = ViewPos / float(u_volumetricSteps);
         vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);

@@ -22,7 +22,7 @@ type IVertices interface {
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
 func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, materials *Materials) IVertices {
-	if cfg.MD2 != nil {
+	if cfg.MD1 != nil {
 		return NewVerticesMD2(cfg, pos, materials)
 	}
 	if cfg.MultiSprite != nil {

@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// MD2Header represents the header information of an MD2 file format used in 3D models for Quake II game engine.
+// MD2Header represents the header information of an MD1 file format used in 3D models for Quake II game engine.
 type MD2Header struct {
 	Magic        int32
 	Version      int32
@@ -26,7 +26,7 @@ type MD2Header struct {
 	OffsetEnd    int32
 }
 
-// MD2Triangle represents a triangular face in an MD2 model, storing vertex and texture coordinate indices.
+// MD2Triangle represents a triangular face in an MD1 model, storing vertex and texture coordinate indices.
 type MD2Triangle struct {
 	VertexIndices [3]uint16
 	STIndices     [3]uint16
@@ -38,7 +38,7 @@ type MD2ST struct {
 	T int16
 }
 
-// MD2Vertex represents a single vertex in the MD2 model format, including position and normal index.
+// MD2Vertex represents a single vertex in the MD1 model format, including position and normal index.
 type MD2Vertex struct {
 	V           [3]uint8
 	NormalIndex uint8

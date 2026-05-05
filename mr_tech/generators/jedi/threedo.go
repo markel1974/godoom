@@ -166,8 +166,8 @@ func (t *Threedo) Parse(r io.Reader) error {
 	return scanner.Err()
 }
 
-func (t *Threedo) ToMD2(tex *Textures, d *GobHandler, bm *BM, colorPal [256]color.RGBA) *config.MD2 {
-	var allTriangles []config.MD2Triangle
+func (t *Threedo) ToMD2(tex *Textures, d *GobHandler, bm *BM, colorPal [256]color.RGBA) *config.MD1 {
+	var allTriangles []config.MD1Triangle
 	//var usedTextures []string
 
 	// Create a quick lookup map to avoid duplicate texture names in our return list
@@ -208,17 +208,17 @@ func (t *Threedo) ToMD2(tex *Textures, d *GobHandler, bm *BM, colorPal [256]colo
 					uv1 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i]]
 					uv2 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i+1]]
 				}
-				tri := config.NewMD2Triangle(material)
-				tri.Vertices[0] = config.MD2Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
-				tri.Vertices[1] = config.MD2Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
-				tri.Vertices[2] = config.MD2Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
+				tri := config.NewMD1Triangle(material)
+				tri.Vertices[0] = config.MD1Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
+				tri.Vertices[1] = config.MD1Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
+				tri.Vertices[2] = config.MD1Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
 				allTriangles = append(allTriangles, tri)
 			}
 		}
 	}
 
-	// Create a single-frame MD2
-	cModel := config.NewMD2(1, []string{"stand"})
-	cModel.Frames[0] = config.NewMD2Frame(allTriangles)
+	// Create a single-frame MD1
+	cModel := config.NewMD1(1, []string{"stand"})
+	cModel.Frames[0] = config.NewMD1Frame(allTriangles)
 	return cModel
 }

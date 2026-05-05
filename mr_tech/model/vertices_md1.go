@@ -9,8 +9,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VerticesMD2 represents a structured collection of 3D model data, including frames, actions, and volume association.
-type VerticesMD2 struct {
+// VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
+type VerticesMD1 struct {
 	volume        *Volume
 	frames        [][]*Face
 	actions       [][2]int
@@ -19,22 +19,22 @@ type VerticesMD2 struct {
 	relativeFrame int
 }
 
-// NewVerticesMD2 creates a new VerticesMD2 instance with frames, actions, and volume based on the provided configuration.
-func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMD2 {
+// NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
+func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMD1 {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
 	z := pos.Z
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	d := cfg.Height
-	md2Cfg := cfg.MD2
+	md1Cfg := cfg.MD1
 	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	v := &VerticesMD2{
+	v := &VerticesMD1{
 		volume:        volume,
-		frames:        make([][]*Face, len(md2Cfg.Frames)),
-		actions:       md2Cfg.ActionIntervals,
+		frames:        make([][]*Face, len(md1Cfg.Frames)),
+		actions:       md1Cfg.ActionIntervals,
 		startFrame:    0,
-		endFrame:      len(md2Cfg.Frames) - 1,
+		endFrame:      len(md1Cfg.Frames) - 1,
 		relativeFrame: -1,
 	}
 	if v.endFrame < 0 {
@@ -45,7 +45,7 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	}
 	//v.volume.SetBillboard(2.0)
 
-	for frameIdx, cfgFrame := range md2Cfg.Frames {
+	for frameIdx, cfgFrame := range md1Cfg.Frames {
 		frameFaces := make([]*Face, len(cfgFrame.Triangles))
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
@@ -63,12 +63,12 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 }
 
 // GetVolume retrieves the Volume instance associated with the VertexMD2.
-func (v *VerticesMD2) GetVolume() *Volume {
+func (v *VerticesMD1) GetVolume() *Volume {
 	return v.volume
 }
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
-func (v *VerticesMD2) SetAction(idx int) {
+func (v *VerticesMD1) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		return
 	}
@@ -77,7 +77,7 @@ func (v *VerticesMD2) SetAction(idx int) {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.frames) == 0 {
 		return nil, 0, nil, 0, 0.0
@@ -116,22 +116,22 @@ func (v *VerticesMD2) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
-func (v *VerticesMD2) GetDisplacement() (float64, float64, float64) {
+func (v *VerticesMD1) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetCenter()
 }
 
-// GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD2 instance.
-func (v *VerticesMD2) GetBillboard() float64 {
+// GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD1 instance.
+func (v *VerticesMD1) GetBillboard() float64 {
 	return 2.0
 }
 
-// SetThing sets the IThing instance associated with the VerticesMD2 volume.
-func (v *VerticesMD2) SetThing(t IThing) {
+// SetThing sets the IThing instance associated with the VerticesMD1 volume.
+func (v *VerticesMD1) SetThing(t IThing) {
 	v.volume.SetThing(t)
 }
 
 // compute updates the volume by clearing faces, adding a new set of faces from the specified frame index, and rebuilding.
-func (v *VerticesMD2) compute(idx int) {
+func (v *VerticesMD1) compute(idx int) {
 	v.volume.ClearFaces()
 	for _, f := range v.frames[idx] {
 		v.volume.AddFace(f)

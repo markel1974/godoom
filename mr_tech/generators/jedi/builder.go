@@ -332,7 +332,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			md2Model := threedoObj.ToMD2(textures, d, bm, colorPal)
 			id := fmt.Sprintf("%s_%s", "3DO", fileName)
 			cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
-			cThing.MD2 = md2Model
+			cThing.MD1 = md2Model
 			configThings = append(configThings, cThing)
 		case "SAFE":
 		default:
@@ -390,8 +390,8 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	thingCfg.GForce = gForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.MD2 != nil {
-			actions = thingCfg.MD2.ActionDefinitions
+		if thingCfg.MD1 != nil {
+			actions = thingCfg.MD1.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking

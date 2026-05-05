@@ -336,13 +336,13 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	targetSkin := []string{registeredTexNames[skinTargetIndex]}
 	anim := config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := config.NewMD2(int(mdl.Header.NumFrames), mdl.FrameNames)
+	cModel := config.NewMD1(int(mdl.Header.NumFrames), mdl.FrameNames)
 	for idx, f := range mdl.Frames {
-		triangles := make([]config.MD2Triangle, int(mdl.Header.NumTris))
+		triangles := make([]config.MD1Triangle, int(mdl.Header.NumTris))
 		skinW := float32(mdl.Header.SkinWidth)
 		skinH := float32(mdl.Header.SkinHeight)
 		for tIdx, tri := range mdl.Triangles {
-			cTri := config.NewMD2Triangle(anim)
+			cTri := config.NewMD1Triangle(anim)
 			for v := 0; v < 3; v++ {
 				vx := tri.Vertices[v]
 				tc := mdl.TexCoords[vx]
@@ -353,11 +353,11 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD2Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cTri.Vertices[v] = config.MD1Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 			triangles[tIdx] = cTri
 		}
-		cFrame := config.NewMD2Frame(triangles)
+		cFrame := config.NewMD1Frame(triangles)
 		cModel.Frames[idx] = cFrame
 		//cModel.Frames[idx] = cFrame
 	}
@@ -411,8 +411,8 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 		}
 		materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 	*/
-	// Traduzione Geometria in MD2 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
-	var allTriangles []config.MD2Triangle
+	// Traduzione Geometria in MD1 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
+	var allTriangles []config.MD1Triangle
 	model := bspModels[0] // Il modello root dell'oggetto
 
 	for i := int32(0); i < model.NumFaces; i++ {
@@ -441,7 +441,7 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 
 		// 4. CALCOLO VETTORIALE DELLE UV
 		for _, rawTri := range rawTriangles {
-			tri := config.NewMD2Triangle(specificMaterial)
+			tri := config.NewMD1Triangle(specificMaterial)
 
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
@@ -459,28 +459,28 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 				normU := u / float64(mipTex.Width)
 				normV := v / float64(mipTex.Height)
 
-				tri.Vertices[k] = config.MD2Vertex{Pos: pos, U: float32(normU), V: float32(normV)}
+				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: float32(normU), V: float32(normV)}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
-	model3d := config.NewMD2(1, []string{"default"})
-	model3d.Frames[0] = config.NewMD2Frame(allTriangles)
+	model3d := config.NewMD1(1, []string{"default"})
+	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
 	thingCfg := p.createConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 
 // createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
-func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD2, angle, mass, radius, height, speed float64) *config.Thing {
+func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
-	thingCfg.MD2 = cModel
+	thingCfg.MD1 = cModel
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.MD2 != nil {
-			actions = thingCfg.MD2.ActionDefinitions
+		if thingCfg.MD1 != nil {
+			actions = thingCfg.MD1.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking

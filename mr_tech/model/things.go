@@ -182,7 +182,7 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	dst := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, src.Mass, src.Radius, src.Radius, speed)
 	dst.Sprite = src.Sprite
 	dst.MultiSprite = src.MultiSprite
-	dst.MD2 = src.MD2
+	dst.MD1 = src.MD1
 	dst.OnCollision = onCollision
 	dst.OnImpact = onImpact
 	dst.Pitch = pitch

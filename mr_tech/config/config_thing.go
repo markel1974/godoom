@@ -42,7 +42,7 @@ type Thing struct {
 	Pitch          float64      `json:"pitch"`
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	GForce         float64      `json:"gForce"`
-	MD2            *MD2         `json:"md2"`
+	MD1            *MD1         `json:"md1"`
 	MultiSprite    *MultiSprite `json:"multiSprite"`
 	Sprite         *Sprite      `json:"sprite"`
 

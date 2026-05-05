@@ -37,3 +37,5 @@ This project acts as an explicit study of graphics internals, applied mathematic
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot1.png?raw=true)
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot2.png?raw=true)
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot3.png?raw=true)
+![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot4.png?raw=true)
+![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot5.png?raw=true)

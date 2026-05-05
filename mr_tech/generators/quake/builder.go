@@ -285,20 +285,19 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-	rsMdl, err := pk.Open(thingPath)
+	rsMd1, err := pk.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	mdl, err := lumps.NewMDLResource(rsMdl)
-	if err != nil {
+	md1 := lumps.NewMD1Resource()
+
+	if err = md1.Parse(rsMd1); err != nil {
 		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
 	}
 	var registeredTexNames []string
-	for sIdx, skin := range mdl.Skins {
+	for sIdx, skin := range md1.Skins {
 		texName := fmt.Sprintf("%s_skin_%d", classname, sIdx)
-		w := int(mdl.Header.SkinWidth)
-		h := int(mdl.Header.SkinHeight)
-		if err = reader.RegisterPixels(texName, w, h, skin.Data, false, 255, false); err != nil {
+		if err = reader.RegisterPixels(texName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
 			fmt.Printf("Warning: texture %s error: %s\n", texName, err.Error())
 			continue
 		}
@@ -336,16 +335,16 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	targetSkin := []string{registeredTexNames[skinTargetIndex]}
 	anim := config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := config.NewMD1(int(mdl.Header.NumFrames), mdl.FrameNames)
-	for idx, f := range mdl.Frames {
-		triangles := make([]config.MD1Triangle, int(mdl.Header.NumTris))
-		skinW := float32(mdl.Header.SkinWidth)
-		skinH := float32(mdl.Header.SkinHeight)
-		for tIdx, tri := range mdl.Triangles {
+	cModel := config.NewMD1(int(md1.Header.NumFrames), md1.FrameNames)
+	for idx, f := range md1.Frames {
+		triangles := make([]config.MD1Triangle, int(md1.Header.NumTris))
+		skinW := float32(md1.Header.SkinWidth)
+		skinH := float32(md1.Header.SkinHeight)
+		for tIdx, tri := range md1.Triangles {
 			cTri := config.NewMD1Triangle(anim)
 			for v := 0; v < 3; v++ {
 				vx := tri.Vertices[v]
-				tc := mdl.TexCoords[vx]
+				tc := md1.TexCoords[vx]
 				s := float32(tc.S)
 				t := float32(tc.T)
 				if tri.FacesFront == 0 && tc.OnSeam != 0 {
@@ -359,7 +358,6 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		}
 		cFrame := config.NewMD1Frame(triangles)
 		cModel.Frames[idx] = cFrame
-		//cModel.Frames[idx] = cFrame
 	}
 
 	thingCfg := p.createConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
@@ -398,19 +396,6 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 			}
 		}
 	}
-
-	/*
-		var sMaterials []string
-		for _, mt := range mipTextures {
-			if mt != nil && mt.Name != "" {
-				sMaterials = append(sMaterials, mt.Name)
-				if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
-					return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
-				}
-			}
-		}
-		materials := config.NewConfigMaterial(sMaterials, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-	*/
 	// Traduzione Geometria in MD1 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles []config.MD1Triangle
 	model := bspModels[0] // Il modello root dell'oggetto

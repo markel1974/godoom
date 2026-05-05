@@ -285,24 +285,6 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-	rsMd1, err := pk.Open(thingPath)
-	if err != nil {
-		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
-	}
-	md1 := lumps.NewMD1Resource()
-
-	if err = md1.Parse(rsMd1); err != nil {
-		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
-	}
-	var registeredTexNames []string
-	for sIdx, skin := range md1.Skins {
-		texName := fmt.Sprintf("%s_skin_%d", classname, sIdx)
-		if err = reader.RegisterPixels(texName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
-			fmt.Printf("Warning: texture %s error: %s\n", texName, err.Error())
-			continue
-		}
-		registeredTexNames = append(registeredTexNames, texName)
-	}
 
 	skinTargetIndex := 0
 	kind := config.ThingEnemyDef
@@ -329,11 +311,23 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	if skinTargetIndex >= len(registeredTexNames) {
-		return nil, fmt.Errorf("skin target index out of range: %d", skinTargetIndex)
+	rsMd1, err := pk.Open(thingPath)
+	if err != nil {
+		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	targetSkin := []string{registeredTexNames[skinTargetIndex]}
-	anim := config.NewConfigMaterial(targetSkin, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	md1 := lumps.NewMD1Resource()
+	if err = md1.Parse(rsMd1); err != nil {
+		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
+	}
+	if skinTargetIndex >= len(md1.Skins) {
+		return nil, fmt.Errorf("no skin found for %s", classname)
+	}
+	skin := md1.Skins[skinTargetIndex]
+	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
+	if err = reader.RegisterPixels(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
+		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
+	}
+	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
 	cModel := config.NewMD1(int(md1.Header.NumFrames), md1.FrameNames)
 	for idx, f := range md1.Frames {
@@ -386,29 +380,31 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
 	texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfos])
 
-	// 2. Creiamo i materiali statici singolarmente, salvandoli in una slice parallela a mipTextures
-	bspMaterials := make([]*config.Material, len(mipTextures))
+	// Creiamo i materiali statici singolarmente, salvandoli in una slice parallela a mipTextures
+	materials := make([]*config.Material, len(mipTextures))
 	for i, mt := range mipTextures {
-		if mt != nil && mt.Name != "" {
-			bspMaterials[i] = config.NewConfigMaterial([]string{mt.Name}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
-				return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
-			}
+		if mt == nil {
+			continue
+		}
+		if len(mt.Name) == 0 {
+			continue
+		}
+		materials[i] = config.NewConfigMaterial([]string{mt.Name}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
+			return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
 		}
 	}
 	// Traduzione Geometria in MD1 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles []config.MD1Triangle
-	model := bspModels[0] // Il modello root dell'oggetto
+	rawModel := bspModels[0]
 
-	for i := int32(0); i < model.NumFaces; i++ {
-		faceIdx := model.FirstFace + i
+	for i := int32(0); i < rawModel.NumFaces; i++ {
+		faceIdx := rawModel.FirstFace + i
 		bspFace := faces[faceIdx]
-
-		// 3. RECUPERO DELLA TEXTURE SPECIFICA
+		//RECUPERO DELLA TEXTURE SPECIFICA
 		texInfo := texInfos[bspFace.TexInfo]
 		mipTex := mipTextures[texInfo.MipTex]
-		specificMaterial := bspMaterials[texInfo.MipTex]
-
+		specificMaterial := materials[texInfo.MipTex]
 		var points []geometry.XYZ
 		for j := uint16(0); j < bspFace.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
@@ -421,13 +417,10 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 			xyz := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, xyz)
 		}
-
 		rawTriangles := p.triangulateConvex3d(points)
-
-		// 4. CALCOLO VETTORIALE DELLE UV
+		// CALCOLO VETTORIALE DELLE UV
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)
-
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
 				// Prodotto scalare per l'asse orizzontale S (Vecs[0])
@@ -443,13 +436,11 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 				// Normalizzazione (0.0 -> 1.0)
 				normU := u / float64(mipTex.Width)
 				normV := v / float64(mipTex.Height)
-
 				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: float32(normU), V: float32(normV)}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
-
 	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
 	model3d := config.NewMD1(1, []string{"default"})
 	model3d.Frames[0] = config.NewMD1Frame(allTriangles)

@@ -40,8 +40,8 @@ func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightC
 	}
 	c.AspectRatio = 0.4
 	c.FovVerticalDegrees = 90
-	c.ShininessWall = 128.0
-	c.ShininessFloor = 64.0
+	c.ShininessWall = 20.0
+	c.ShininessFloor = 40.0
 	c.SpecBoostWall = 0.05
 	c.SpecBoostFloor = 0.1
 	c.BeamRatio = 0.05

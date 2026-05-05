@@ -155,8 +155,6 @@ void main()
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
-    float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
-
     vec3 finalNormal = calculateNormal();
 
     // VARIABILI NECESSARIE PER LO SPECULARE
@@ -178,14 +176,17 @@ void main()
         litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
         // NEBBIA VOLUMETRICA
         float volRoom = 0.0;
-        vec3 rayStep = ViewPos / float(u_volumetricSteps);
-        vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
-        for (int i = 0; i < u_volumetricSteps * 2; i++) {
-            float fogGlow = exp(-length(currentPos) * 0.005) * u_ambient_light;
-            float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
-            volRoom += fogGlow * sRoom * 0.15;
-            currentPos += rayStep;
+        if (u_volumetricSteps > 0) {
+            vec3 rayStep = ViewPos / float(u_volumetricSteps);
+            vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
+            for (int i = 0; i < u_volumetricSteps * 2; i++) {
+                float fogGlow = exp(-length(currentPos) * 0.005) * u_ambient_light;
+                float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
+                volRoom += fogGlow * sRoom * 0.15;
+                currentPos += rayStep;
+            }
         }
+        float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
         // Calcoliamo il roomBeam SOLO se abbiamo fatto il raymarching
         roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
     }

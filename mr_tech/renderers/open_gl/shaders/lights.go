@@ -180,45 +180,30 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
 func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
-	const spotIntensity = 10.0
-	const beamRatio = 0.05
+	shadows := s.shadows
+	volSteps := int32(s.cal.VolSteps)
+	//TODO disabled for performance tuning
+	shadows = 0
 
 	gl.UseProgram(s.prg)
-
 	gl.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, &proj[0])
 	gl.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
 	gl.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, &invView[0])
 	gl.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, &roomSpace[0])
-
-	// Invio del contatore luci come uniform indipendente
 	gl.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
-
 	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	shadows := s.shadows
-	volSteps := int32(s.cal.VolSteps)
-	shadows = 0
-	volSteps = 0
 	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
 	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
-	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
-
-	const shininessWall = 10.0
-	const shininessFloor = 40.0
-	const specBoostWall = 0.02
-	const specBoostFloor = 0.05
-
-	gl.Uniform1f(s.GetUniform(LightLocShininessWall), float32(shininessWall))
-	gl.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(shininessFloor))
-	gl.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(specBoostWall))
-	gl.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(specBoostFloor))
-
+	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	gl.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
+	gl.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
+	gl.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	gl.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
-
 	if s.shadows != 0 {
 		gl.ActiveTexture(gl.TEXTURE12)
 		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
 	}
-
 	renderGeometry()
 }

@@ -212,8 +212,6 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.main.Render(dc.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
-	// LIGHTS
-	w.lights.Render(dc.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 	// FLASHLIGHTS
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
@@ -237,6 +235,8 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 			factor, falloff, 0.7, 0.9, float32(fbW), float32(fbH),
 		)
 	}
+	// LIGHTS
+	w.lights.Render(dc.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()

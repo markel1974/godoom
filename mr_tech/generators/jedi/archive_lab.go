@@ -8,16 +8,17 @@ import (
 	"strings"
 )
 
-const ExtLevelLFD = ".LFD"
+// ExtLevelLVT represents the file extension for level topology files within a LAB archive.
+const ExtLevelLVT = ".LVT"
 
-// LabFile represents a section of a file with a specified offset and size for reading.
+// LabFile represents a segment of a file with a specific offset and size for thread-safe read access.
 type LabFile struct {
 	file   io.ReaderAt
 	offset int
 	size   int
 }
 
-// NewLabFile creates a new LabFile instance with the given file, offset, and size parameters.
+// NewLabFile initializes and returns a new LabFile instance with the specified file, offset, and size.
 func NewLabFile(file io.ReaderAt, offset int, size int) *LabFile {
 	return &LabFile{
 		file:   file,
@@ -26,7 +27,7 @@ func NewLabFile(file io.ReaderAt, offset int, size int) *LabFile {
 	}
 }
 
-// Read reads data from the LabFile starting at the specified offset and returns the data or an error if the operation fails.
+// Read reads the data from the file at the specified offset and returns a byte slice and an error if any occurs.
 func (g *LabFile) Read() ([]byte, error) {
 	data := make([]byte, g.size)
 	// ReadAt esegue una lettura thread-safe all'offset specificato
@@ -39,22 +40,27 @@ func (g *LabFile) Read() ([]byte, error) {
 	return data, nil
 }
 
-// ArchiveLab represents a handler for managing LAB archive files, allowing parsing, retrieving, and cleanup operations.
+// ArchiveLab represents a structure for managing LAB file archives and their extracted data.
 type ArchiveLab struct {
 	container map[string]*LabFile
 	files     []*os.File
 	levels    []string
 }
 
-// NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container.
+// NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
 func NewArchiveLab() *ArchiveLab {
 	return &ArchiveLab{
 		container: make(map[string]*LabFile),
 	}
 }
 
-// Parse reads a LAB archive from the specified file path, extracting its metadata and initializing the file container.
-func (pk *ArchiveLab) Parse(dirPath string) error {
+// GetLevels retrieves the list of level names parsed from the archive.
+func (al *ArchiveLab) GetLevels() []string {
+	return al.levels
+}
+
+// Parse scans the specified directory for `.LAB` files, processes them, and adds their data to the instance container.
+func (al *ArchiveLab) Parse(dirPath string) error {
 	entries, dErr := os.ReadDir(dirPath)
 	if dErr != nil {
 		return dErr
@@ -67,16 +73,16 @@ func (pk *ArchiveLab) Parse(dirPath string) error {
 		if !strings.HasSuffix(pName, ".LAB") {
 			continue
 		}
-
 		entryPath := dirPath + string(os.PathSeparator) + entry.Name()
-		if err := pk.add(entryPath); err != nil {
+		if err := al.add(entryPath); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (pk *ArchiveLab) add(path string) error {
+// add processes a .LAB archive file at the specified path and adds its contents to the ArchiveLab instance.
+func (al *ArchiveLab) add(path string) error {
 	type LABHeader struct {
 		Magic           [4]byte // Deve essere "LABN"
 		Version         uint32  // Solitamente 65536 (ovvero 1.0 in fixed-point 16.16)
@@ -94,7 +100,7 @@ func (pk *ArchiveLab) add(path string) error {
 		return err
 	}
 	//defer file.Close()
-	pk.files = append(pk.files, file)
+	al.files = append(al.files, file)
 	var header LABHeader
 	if err = binary.Read(file, binary.LittleEndian, &header); err != nil {
 		return err
@@ -122,48 +128,44 @@ func (pk *ArchiveLab) add(path string) error {
 			end++
 		}
 		fileName := string(stringTable[start:end])
-		cleanName := pk.cleanName(fileName)
-		pk.container[cleanName] = NewLabFile(file, int(e.DataOffset), int(e.DataSize))
+		cleanName := al.cleanName(fileName)
+		al.container[cleanName] = NewLabFile(file, int(e.DataOffset), int(e.DataSize))
 
-		fmt.Printf("Found file: %s\n", cleanName)
-		if pos := strings.Index(cleanName, ExtLevelLFD); pos > 0 {
-			pk.levels = append(pk.levels, cleanName[:pos])
+		fmt.Println("ADDING ", cleanName)
+		if pos := strings.Index(cleanName, ExtLevelLVT); pos > 0 {
+			al.levels = append(al.levels, cleanName[:pos])
 		}
 	}
+	//Found file: TOWN.LVT Level Toplogy. Contiene i vertici 2D, le altezze dei settori, le texture applicate ai muri, i piani inclinati (slopes)
+	//Found file: TOWN.OBT È la popolazione del livello. Definisce le coordinate X, Y, Z, il Pitch/Yaw/Roll e la classe di tutto ciò che è dinamico: il punto di spawn del giocatore (PLAYER), i nemici, le
+	//Found file: TOWN.INF linguaggio di scripting proprietario
+	//Found file: TOWN.ITM Definisce proprietà aggiuntive e comportamenti specifici per gli oggetti interattivi presenti nell'OBT
+	//Found file: TOWN.MSC Contiene le direttive per la colonna sonora interattiva (i file audio IMUSE)
 	return nil
 }
 
-// GetPayload retrieves the data associated with the specified name from the ArchiveLab. It returns an error if not found.
-func (pk *ArchiveLab) GetPayload(name string) ([]byte, error) {
-	gob, ok := pk.container[pk.cleanName(name)]
+// GetPayload retrieves the payload data associated with the given name from the container.
+// Returns the data as a byte slice or an error if the name is not found or the read operation fails.
+func (al *ArchiveLab) GetPayload(name string) ([]byte, error) {
+	gob, ok := al.container[al.cleanName(name)]
 	if !ok {
 		return nil, fmt.Errorf("%s not found", name)
 	}
 	return gob.Read()
 }
 
-// Close releases all open file handles and clears the file list in the ArchiveLab instance.
-func (pk *ArchiveLab) Close() error {
-	for _, f := range pk.files {
+// Close releases all open file handles associated with the ArchiveLab instance and resets its file list to nil.
+func (al *ArchiveLab) Close() error {
+	for _, f := range al.files {
 		if f != nil {
 			f.Close()
 		}
 	}
-	pk.files = nil
+	al.files = nil
 	return nil
 }
 
-// cleanName standardizes a file name by removing leading/trailing spaces and converting it to uppercase.
-func (pk *ArchiveLab) cleanName(name string) string {
+// cleanName standardizes a file name by trimming whitespace and converting it to uppercase.
+func (al *ArchiveLab) cleanName(name string) string {
 	return strings.ToUpper(strings.TrimSpace(name))
 }
-
-/*
-*.LVT e *.LVB (Level Text / Level Binary): Qui c'è la topologia pura. Vertici, settori, adjoins (portali), e texture dei muri. La versione T è puro ASCII, la B è lo stesso dato compilato per caricamenti rapidi.
-
-*.OBT e *.OBB (Object Text / Object Binary): Le entità. I player spawn, i nemici, i barili, i pickup.
-
-*.INF (Information/Scripting): Il codice logico del livello. Qui dentro ci sono le macchine a stati per porte, ascensori, chiavi e trigger. Il Jedi Engine usa un linguaggio di scripting rudimentale basato su seq (sequenze).
-
-*.ITM (Items): Definizioni specifiche per il piazzamento e il comportamento degli oggetti nel livello.
- */

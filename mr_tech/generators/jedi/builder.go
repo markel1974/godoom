@@ -45,6 +45,7 @@ func NewBuilder() *Builder {
 // It validates the level index, processes sector topology, and integrates player and object configurations.
 // Returns an error if the input directory is invalid, files are missing, or parsing fails.
 func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
+
 	/*
 		{
 			lab := NewArchiveLab()

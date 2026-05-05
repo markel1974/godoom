@@ -176,16 +176,24 @@ void main()
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     float shadowFactor = 1.0 - shadowRoom;
     vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
+
+    //float volRoom = 1.0;
+
     // NEBBIA VOLUMETRICA
     float volRoom = 0.0;
-    vec3 rayStep = ViewPos / float(u_volumetricSteps);
-    vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
-    for(int i = 0; i < u_volumetricSteps * 2; i++) {
-        float fogGlow = exp(-length(currentPos) * 0.005) * u_ambient_light;
-        float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
-        volRoom += fogGlow * sRoom * 0.15;
-        currentPos += rayStep;
+    if (u_enableShadows == 1) {
+        vec3 rayStep = ViewPos / float(u_volumetricSteps);
+        vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
+        for (int i = 0; i < u_volumetricSteps * 2; i++) {
+            float fogGlow = exp(-length(currentPos) * 0.005) * u_ambient_light;
+            float sRoom = sampleVolumetricShadow(currentPos, u_roomSpaceMatrix, u_roomShadowMap);
+            volRoom += fogGlow * sRoom * 0.15;
+            currentPos += rayStep;
+        }
+    } else {
+        volRoom = 1.0;
     }
+
     vec3 roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
 
     // LUCI DINAMICHE

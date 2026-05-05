@@ -195,8 +195,12 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 
 	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
-	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
+	shadows := s.shadows
+	volSteps := int32(s.cal.VolSteps)
+	shadows = 0
+	volSteps = 1
+	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
+	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)
 
 	const shininessWall = 10.0

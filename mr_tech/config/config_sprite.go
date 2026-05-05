@@ -5,7 +5,7 @@ type Sprite struct {
 	Material *Material
 }
 
-// NewSprite creates and returns a new Sprite instance with the specified Material.
-func NewSprite(material *Material) *Sprite {
+// NewConfigSprite creates and returns a new Sprite instance with the specified Material.
+func NewConfigSprite(material *Material) *Sprite {
 	return &Sprite{Material: material}
 }

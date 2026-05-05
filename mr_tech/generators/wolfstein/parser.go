@@ -127,7 +127,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				if useEnemy {
 					cfgThing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6)
-					cfgThing.Sprite = config.NewSprite(anim)
+					cfgThing.Sprite = config.NewConfigSprite(anim)
 					if cfgThing.Kind == config.ThingEnemyDef {
 						enemyLogic := common.NewEnemy(nil, 100)
 						cfgThing.OnThinking = enemyLogic.OnThinking

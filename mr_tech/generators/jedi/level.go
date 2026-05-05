@@ -56,6 +56,7 @@ type Level struct {
 	Palette   string
 	Textures  []string
 	Sectors   []*Sector
+	Palettes  []string
 }
 
 // NewLevel creates and initializes a new Level instance with empty textures and sectors.
@@ -92,6 +93,10 @@ func (p *Level) Parse(r io.Reader) error {
 		keyword := strings.TrimSpace(strings.ToUpper(tokens[0]))
 
 		switch keyword {
+		case "LVT":
+			if len(tokens) >= 2 {
+				p.Version = tokens[1] // "1.1"
+			}
 		case "LEV":
 			if len(tokens) >= 2 {
 				p.Version = tokens[1]
@@ -99,6 +104,11 @@ func (p *Level) Parse(r io.Reader) error {
 		case "LEVELNAME":
 			if len(tokens) >= 2 {
 				p.LevelName = tokens[1]
+			}
+		case "PALETTES":
+			if len(tokens) >= 2 {
+				count, _ := strconv.Atoi(tokens[1])
+				p.Palettes = make([]string, 0, count)
 			}
 		case "PALETTE":
 			if len(tokens) >= 2 {
@@ -121,6 +131,13 @@ func (p *Level) Parse(r io.Reader) error {
 			//TODO
 		case "PARALLAX":
 			//TODO
+		case "CMAPS":
+			// Salta o inizializza
+		case "CMAP:":
+			// Salta o salva
+		case "SHADES":
+			// Il numero di shade tables
+		case "SHADE:":
 		case "SECTOR":
 			var err error
 			sector, err = p.doSector(tokens, sector)

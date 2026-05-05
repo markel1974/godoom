@@ -25,7 +25,7 @@ func NewTextures() *Textures {
 }
 
 // AddTexture adds a texture by parsing bitmap data and applying a palette, caching the result for future requests.
-func (t *Textures) AddTexture(d *GobHandler, bm *BM, texName string, palette [256]color.RGBA) []string {
+func (t *Textures) AddTexture(d *ArchiveGob, bm *BM, texName string, palette [256]color.RGBA) []string {
 	v, ok := t.cache[texName]
 	if ok {
 		return v

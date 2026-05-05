@@ -166,7 +166,7 @@ func (t *Threedo) Parse(r io.Reader) error {
 	return scanner.Err()
 }
 
-func (t *Threedo) ToMD2(tex *Textures, d *GobHandler, bm *BM, colorPal [256]color.RGBA) *config.MD1 {
+func (t *Threedo) ToMD2(tex *Textures, d *ArchiveGob, bm *BM, colorPal [256]color.RGBA) *config.MD1 {
 	var allTriangles []config.MD1Triangle
 	//var usedTextures []string
 

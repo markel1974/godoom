@@ -45,7 +45,42 @@ func NewBuilder() *Builder {
 // It validates the level index, processes sector topology, and integrates player and object configurations.
 // Returns an error if the input directory is invalid, files are missing, or parsing fails.
 func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
-	d := NewGobHandler()
+	/*
+		{
+			lab := NewArchiveLab()
+			if err := lab.Parse("resources/outlaws"); err != nil {
+				return nil, fmt.Errorf("failed to parse OUTLAWS.LAB: %w", err)
+			}
+			// 2. Estrai l'intero file LFD del livello dritto in RAM come array di byte
+			lfdData, err := lab.GetPayload("OLTOWN.LFD")
+			if err != nil {
+				return nil, fmt.Errorf("failed to read LFD: %w", err)
+			}
+			// 3. Passi l'array di byte (wrappato come Reader) al tuo nuovo parser LFD
+			lfd := NewLFD()
+			if err = lfd.Parse(bytes.NewReader(lfdData)); err != nil {
+				return nil, fmt.Errorf("failed to parse LFD: %w", err)
+			}
+			levelData, err := lfd.GetPayload("LEV", "OLTOWN")
+			if err != nil {
+				return nil, fmt.Errorf("failed to read LEV: %w", err)
+			}
+			palData, err := lfd.GetPayload("PAL", "OLTOWN")
+			if err != nil {
+				return nil, fmt.Errorf("failed to read PAL: %w", err)
+			}
+			entitiesData, err := lfd.GetPayload("O", "OLTOWN")
+			if err != nil {
+				return nil, fmt.Errorf("failed to read O: %w", err)
+			}
+			fmt.Println("---------------------------------------")
+			fmt.Println("LEVEL DATA: ", len(levelData))
+			fmt.Println("PAL DATA: ", len(palData))
+			fmt.Println("ENTITIES DATA: ", len(entitiesData))
+		}
+	*/
+
+	d := NewArchiveGob()
 	if err := d.Parse(dir); err != nil {
 		return nil, err
 	}

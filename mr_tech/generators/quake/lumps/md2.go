@@ -63,21 +63,14 @@ func (md2 *MD2Triangles) Parse(rs io.ReadSeeker, offset int32, count int32) erro
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return err
 	}
-
-	// 1. Creiamo un flat array di struct (NON puntatori) per il binary.Read
 	triArray := make([]MD2Triangle, count)
 	if err := binary.Read(rs, binary.LittleEndian, triArray); err != nil {
 		return err
 	}
-
-	// 2. Allochiamo lo slice di puntatori finale
 	md2.Triangles = make([]*MD2Triangle, count)
-
-	// 3. Assegniamo le referenze senza copiare i dati due volte
 	for i := range triArray {
 		md2.Triangles[i] = &triArray[i]
 	}
-
 	return nil
 }
 
@@ -96,18 +89,14 @@ func (md2 *MD2STS) Parse(rs io.ReadSeeker, offset int32, count int32) error {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return err
 	}
-
-	// Stessa logica: lettura bulk su flat array per massimizzare le performance di I/O
 	stArray := make([]MD2ST, count)
 	if err := binary.Read(rs, binary.LittleEndian, stArray); err != nil {
 		return err
 	}
-
 	md2.STS = make([]*MD2ST, count)
 	for i := range stArray {
 		md2.STS[i] = &stArray[i]
 	}
-
 	return nil
 }
 
@@ -134,22 +123,18 @@ func (md2 *MD2Frames) Parse(rs io.ReadSeeker, offset int32, numFrames int32, num
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return err
 	}
-
 	md2.Frames = make([][][3]float64, numFrames)
 	md2.FrameNames = make([]string, numFrames)
-
 	// In MD2, Scale e Translate cambiano ad ogni singolo frame per massimizzare la precisione degli uint8.
 	for i := int32(0); i < numFrames; i++ {
 		var fHeader MD2FrameHeader
 		if err := binary.Read(rs, binary.LittleEndian, &fHeader); err != nil {
 			return err
 		}
-
 		pVerts := make([]MD2Vertex, numVertices)
 		if err := binary.Read(rs, binary.LittleEndian, pVerts); err != nil {
 			return err
 		}
-
 		frameVerts := make([][3]float64, numVertices)
 		for vIdx, v := range pVerts {
 			x := (float64(v.V[0]) * float64(fHeader.Scale[0])) + float64(fHeader.Translate[0])
@@ -157,11 +142,9 @@ func (md2 *MD2Frames) Parse(rs io.ReadSeeker, offset int32, numFrames int32, num
 			z := (float64(v.V[2]) * float64(fHeader.Scale[2])) + float64(fHeader.Translate[2])
 			frameVerts[vIdx] = [3]float64{x, y, z}
 		}
-
 		md2.Frames[i] = frameVerts
 		md2.FrameNames[i] = FromNullTerminatingString(fHeader.Name[:])
 	}
-
 	return nil
 }
 
@@ -180,12 +163,10 @@ func (s *MD2Skins) Parse(rs io.ReadSeeker, offset int32, numSkins int32) error {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return err
 	}
-
 	names := make([][64]byte, numSkins)
 	if err := binary.Read(rs, binary.LittleEndian, names); err != nil {
 		return err
 	}
-
 	s.Names = make([]string, numSkins)
 	for i, n := range names {
 		s.Names[i] = FromNullTerminatingString(n[:])
@@ -218,13 +199,10 @@ func (md2 *MD2Resource) Parse(rs io.ReadSeeker) error {
 	if err := binary.Read(rs, binary.LittleEndian, &header); err != nil {
 		return err
 	}
-
 	if header.Magic != MD2Magic || header.Version != MD2Version {
 		return fmt.Errorf("formato MD2 non valido: magic %d, version %d", header.Magic, header.Version)
 	}
-
 	md2.Header = &header
-
 	if err := md2.Skins.Parse(rs, header.OffsetSkins, header.NumSkins); err != nil {
 		return fmt.Errorf("failed to parse MD2 skins: %w", err)
 	}
@@ -237,6 +215,5 @@ func (md2 *MD2Resource) Parse(rs io.ReadSeeker) error {
 	if err := md2.Frames.Parse(rs, header.OffsetFrames, header.NumFrames, header.NumVertices); err != nil {
 		return fmt.Errorf("failed to parse MD2 frames: %w", err)
 	}
-
 	return nil
 }

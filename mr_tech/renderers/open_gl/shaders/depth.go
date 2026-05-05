@@ -26,6 +26,7 @@ type DepthMap struct {
 	matrix [16]float32
 }
 
+// NewDepthMap creates and returns a new instance of DepthMap with default uninitialized properties.
 func NewDepthMap() *DepthMap {
 	return &DepthMap{
 		fbo: 0,
@@ -84,7 +85,7 @@ type Depth struct {
 	sHeight          int32
 	roomMap          *DepthMap
 	flashMap         *DepthMap
-	shadowLightsMap  []*DepthMap
+	shadowLights     []*DepthMap
 	viewMatrix       [16]float32
 	shadows          bool
 	metrics          *MapMetrics
@@ -92,15 +93,15 @@ type Depth struct {
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(m *MapMetrics, shadowLightMax int) *Depth {
+func NewDepth(m *MapMetrics, shadowLights int) *Depth {
 	d := &Depth{
 		metrics:          m,
 		roomMap:          NewDepthMap(),
 		flashMap:         NewDepthMap(),
 		shadowLightCount: 0,
 	}
-	for i := 0; i < shadowLightMax; i++ {
-		d.shadowLightsMap = append(d.shadowLightsMap, NewDepthMap())
+	for i := 0; i < shadowLights; i++ {
+		d.shadowLights = append(d.shadowLights, NewDepthMap())
 	}
 	return d
 }
@@ -153,7 +154,7 @@ func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, [16]float32)
 	if idx >= s.shadowLightCount {
 		return 0, 0, [16]float32{}
 	}
-	return s.shadowLightsMap[idx].tex, s.shadowLightsMap[idx].fbo, s.shadowLightsMap[idx].matrix
+	return s.shadowLights[idx].tex, s.shadowLights[idx].fbo, s.shadowLights[idx].matrix
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
@@ -196,11 +197,11 @@ func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
 	s.shadowLightCount = uint32(len(dynaLight))
-	if s.shadowLightCount >= uint32(len(s.shadowLightsMap)) {
-		s.shadowLightCount = uint32(len(s.shadowLightsMap)) - 1
+	if s.shadowLightCount >= uint32(len(s.shadowLights)) {
+		s.shadowLightCount = uint32(len(s.shadowLights)) - 1
 	}
 	for x := uint32(0); x < s.shadowLightCount; x++ {
-		s.shadowLightsMap[x].SetMatrix(dynaLight[x])
+		s.shadowLights[x].SetMatrix(dynaLight[x])
 	}
 }
 
@@ -218,14 +219,14 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	gl.Disable(gl.CULL_FACE)
 	gl.Enable(gl.POLYGON_OFFSET_FILL)
 
-	// FIX: Attiviamo il clamp della profondità.
+	// Attiviamo il clamp della profondità.
 	// Impedisce che la geometria sparisca dalla mappa delle ombre
 	// quando la telecamera ci finisce letteralmente addosso.
 	gl.Enable(gl.DEPTH_CLAMP)
 
 	gl.Viewport(0, 0, sWidth, sHeight)
 
-	// --- 1. OMBRE STANZA (Ortografica) ---
+	// OMBRE STANZA (Ortografica)
 	gl.PolygonOffset(2.0, 4.0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomMap.fbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
@@ -233,12 +234,12 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
 
-	//ROOM
+	// ROOM
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
 	//gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
-	// --- 2. OMBRE TORCIA (Prospettica) ---
+	// OMBRE TORCIA (Prospettica)
 	gl.PolygonOffset(0.5, 1.0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashMap.fbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
@@ -247,9 +248,9 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 
 	for x := 0; x < int(s.shadowLightCount); x++ {
 		gl.PolygonOffset(0.5, 1.0)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, s.shadowLightsMap[x].fbo)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, s.shadowLights[x].fbo)
 		gl.Clear(gl.DEPTH_BUFFER_BIT)
-		gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLightsMap[x].matrix[0])
+		gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLights[x].matrix[0])
 		renderScene()
 	}
 
@@ -267,7 +268,7 @@ func (s *Depth) allocate(width, height int32) {
 	s.roomMap.Update(s.sWidth, s.sHeight)
 	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (ShadowLight).
 	s.flashMap.Update(s.sWidth, s.sHeight)
-	for _, dm := range s.shadowLightsMap {
-		dm.Update(s.sWidth, s.sHeight)
+	for _, sl := range s.shadowLights {
+		sl.Update(s.sWidth, s.sHeight)
 	}
 }

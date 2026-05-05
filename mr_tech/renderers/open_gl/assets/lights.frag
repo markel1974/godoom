@@ -166,22 +166,21 @@ void main()
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
 
     // OMBRE STANZA
-    float shadowRoom = 0.0;
+    float shadowFactor = 1.0;
     if (u_enableShadows == 1) {
         // Usa la normale geometrica già fusa dal TBN
         vec3 geoNormal = finalNormal;
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
-        shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
+        float shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
+        shadowFactor = 1.0 - shadowRoom;
     }
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
-    float shadowFactor = 1.0 - shadowRoom;
     vec3 litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
 
-    //float volRoom = 1.0;
-
     // NEBBIA VOLUMETRICA
-    float volRoom = 0.0;
+    vec3 roomBeam = vec3(0.0); // Di base, nessuna nebbia volumetrica
     if (u_enableShadows == 1) {
+        float volRoom = 0.0;
         vec3 rayStep = ViewPos / float(u_volumetricSteps);
         vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
         for (int i = 0; i < u_volumetricSteps * 2; i++) {
@@ -190,11 +189,9 @@ void main()
             volRoom += fogGlow * sRoom * 0.15;
             currentPos += rayStep;
         }
-    } else {
-        volRoom = 1.0;
+        // Calcoliamo il roomBeam SOLO se abbiamo fatto il raymarching
+        roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
     }
-
-    vec3 roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
 
     // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);

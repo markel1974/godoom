@@ -198,7 +198,7 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	shadows := s.shadows
 	volSteps := int32(s.cal.VolSteps)
 	shadows = 0
-	volSteps = 1
+	volSteps = 0
 	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
 	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
 	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), beamRatio)

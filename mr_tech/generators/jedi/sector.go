@@ -2,156 +2,11 @@ package jedi
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
-
-// Wall represents a segment of a level boundary, containing various texture, lighting, and adjacency properties.
-type Wall struct {
-	Id          string
-	LeftVertex  int
-	RightVertex int
-	Adjoin      int
-	MidTexture  int
-	TopTexture  int
-	BotTexture  int
-	SignTexture int
-	Flags       int
-	Light       int
-	V1          int
-	V2          int
-	Overlay     int
-	DAdjoin     int
-	DMirror     int
-	OffsetX     float64
-	OffsetY     float64
-}
-
-// NewWall creates and returns a pointer to a new Wall instance with default field values initialized.
-func NewWall() *Wall {
-	return &Wall{
-		LeftVertex:  -1,
-		RightVertex: -1,
-		Adjoin:      -1,
-		MidTexture:  -1,
-		TopTexture:  -1,
-		BotTexture:  -1,
-		SignTexture: -1,
-		V1:          -1,
-		V2:          -1,
-		Flags:       0,
-		Light:       0,
-		Overlay:     -1,
-		DAdjoin:     -1,
-		DMirror:     -1,
-	}
-}
-
-func (w *Wall) Parse(tokens []string) {
-	for i := 0; i < len(tokens); i++ {
-		var err error
-		key := strings.ToUpper(strings.TrimSpace(tokens[i]))
-		if !strings.Contains(key, ":") {
-			continue
-		}
-		switch key {
-		case "NAME:":
-		case "WALL:":
-			w.Id, _ = GetTokenStringAt(tokens, 1)
-		case "WALK:":
-		case "MIRROR:":
-		case "LEFT:":
-			i++
-			w.LeftVertex, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: LEFT invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "RIGHT:":
-			i++
-			w.RightVertex, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: RIGHT invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "ADJOIN:":
-			i++
-			w.Adjoin, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: ADJOIN invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "MID:":
-			i++
-			w.MidTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.MidTexture = -1
-			}
-		case "TOP:":
-			i++
-			w.TopTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.TopTexture = -1
-			}
-		case "BOT:":
-			i++
-			w.BotTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.BotTexture = -1
-			}
-		case "SIGN:":
-			i++
-			w.SignTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.SignTexture = -1
-			}
-		case "FLAGS:":
-			i++
-			w.Flags, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: FLAGS invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "LIGHT:":
-			i++
-			w.Light, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: LIGHT invalid token id at %d: %s\n", i, err.Error())
-			}
-		default:
-			fmt.Println("doWall: Unknown wall attribute: ", key)
-		case "V1:":
-			i++
-			w.V1, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: V1 invalid token at %d: %s\n", i, err.Error())
-			}
-			w.LeftVertex = w.V1
-		case "V2:":
-			i++
-			w.V2, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: V2 invalid token at %d: %s\n", i, err.Error())
-			}
-			w.RightVertex = w.V2
-		case "OVERLAY:":
-			i++
-			w.Overlay, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.Overlay = -1
-			}
-		case "DADJOIN:":
-			i++
-			w.DAdjoin, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.DAdjoin = -1
-			}
-		case "DMIRROR:":
-			i++
-			w.DMirror, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				w.DMirror = -1
-			}
-		}
-	}
-}
 
 // Sector represents a distinct area of a level, defined by its geometry, textures, light level, and properties.
 type Sector struct {
@@ -185,6 +40,86 @@ func NewSector(id string, index int) *Sector {
 		CeilingY:       -1,
 		FloorTexture:   -1,
 		CeilingTexture: -1,
+	}
+}
+
+func (s *Sector) SetCeiling(tokens []string) {
+	if len(tokens) < 3 {
+		fmt.Printf("Invalid CEILING property: '%s' in line: %v\n", tokens[1], tokens)
+	}
+	subKey := strings.ToUpper(tokens[1])
+	switch subKey {
+	case "Y":
+		// Formato compresso Outlaws: CEILING Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+		if len(tokens) >= 4 {
+			s.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
+			s.CeilingY = -s.CeilingY
+			if tokens[3] != "-" {
+				s.CeilingTexture, _ = strconv.Atoi(tokens[3])
+			}
+		}
+	case "ALTITUDE":
+		s.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
+	case "TEXTURE", "TEX", "TEXTURE:":
+		if tokens[2] != "-" {
+			s.CeilingTexture, _ = strconv.Atoi(tokens[2])
+		}
+	default:
+		fmt.Printf("Unknown CEILING sub-property: '%s' in line: %v\n", subKey, tokens)
+	}
+
+}
+
+func (s *Sector) SetFloor(tokens []string) {
+	if len(tokens) < 3 {
+		fmt.Printf("Invalid FLOOR property: '%s' in line: %v\n", tokens[1], tokens)
+		return
+	}
+	subKey := strings.ToUpper(tokens[1])
+	switch subKey {
+	case "Y":
+		// Formato compresso Outlaws: FLOOR Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+		if len(tokens) >= 4 {
+			floorY, err := GetTokenFloatAt(tokens, 2)
+			if err != nil {
+				fmt.Printf("Invalid floor Y value: '%s' in line: %v\n", tokens[2], tokens)
+				return
+			}
+			s.FloorY = -floorY
+			if tokens[3] != "-" {
+				floorTexture, err := GetTokenIntAt(tokens, 3)
+				if err != nil {
+					fmt.Printf("Invalid floor texture value: '%s' in line: %v\n", tokens[3], tokens)
+					return
+				}
+				s.FloorTexture = floorTexture
+			}
+		}
+	case "ALTITUDE":
+		floorY, err := GetTokenFloatAt(tokens, 2)
+		if err != nil {
+			fmt.Printf("Invalid floor Y value: '%s' in line: %v\n", tokens[2], tokens)
+			return
+		}
+		s.FloorY = floorY
+	case "TEXTURE", "TEX", "TEXTURE:":
+		floorTexture, err := GetTokenStringAt(tokens, 2)
+		if err != nil {
+			fmt.Printf("Invalid floor texture value: '%s' in line: %v\n", tokens[2], tokens)
+			return
+		}
+		if floorTexture != "-" {
+			floorTextureId, err := strconv.Atoi(floorTexture)
+			if err != nil {
+				fmt.Printf("Invalid floor texture value: '%s' in line: %v\n", tokens[2], tokens)
+				return
+			}
+			s.FloorTexture = floorTextureId
+		}
+	case "OFFSETS":
+	case "SOUND":
+	default:
+		fmt.Printf("Unknown FLOOR sub-property: '%s' in line: %v\n", subKey, tokens)
 	}
 }
 

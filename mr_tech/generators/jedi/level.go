@@ -129,52 +129,12 @@ func (p *Level) Parse(r io.Reader) error {
 				sector.LightLevel, _ = strconv.ParseFloat(tokens[1], 64)
 			}
 		case "FLOOR":
-			if sector != nil && len(tokens) >= 3 {
-				subKey := strings.ToUpper(tokens[1])
-				switch subKey {
-				case "Y":
-					// Formato compresso Outlaws: FLOOR Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
-					if len(tokens) >= 4 {
-						sector.FloorY, _ = strconv.ParseFloat(tokens[2], 64)
-						sector.FloorY = -sector.FloorY
-						if tokens[3] != "-" {
-							sector.FloorTexture, _ = strconv.Atoi(tokens[3])
-						}
-					}
-				case "ALTITUDE":
-					sector.FloorY, _ = strconv.ParseFloat(tokens[2], 64)
-				case "TEXTURE", "TEX", "TEXTURE:":
-					if tokens[2] != "-" {
-						sector.FloorTexture, _ = strconv.Atoi(tokens[2])
-					}
-				case "OFFSETS": //TODO
-				case "SOUND": //TODO
-				default:
-					fmt.Printf("Unknown FLOOR sub-property: '%s' in line: %v\n", subKey, tokens)
-				}
+			if sector != nil {
+				sector.SetFloor(tokens)
 			}
 		case "CEILING":
-			if sector != nil && len(tokens) >= 3 {
-				subKey := strings.ToUpper(tokens[1])
-				switch subKey {
-				case "Y":
-					// Formato compresso Outlaws: CEILING Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
-					if len(tokens) >= 4 {
-						sector.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
-						sector.CeilingY = -sector.CeilingY
-						if tokens[3] != "-" {
-							sector.CeilingTexture, _ = strconv.Atoi(tokens[3])
-						}
-					}
-				case "ALTITUDE":
-					sector.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
-				case "TEXTURE", "TEX", "TEXTURE:":
-					if tokens[2] != "-" {
-						sector.CeilingTexture, _ = strconv.Atoi(tokens[2])
-					}
-				default:
-					fmt.Printf("Unknown CEILING sub-property: '%s' in line: %v\n", subKey, tokens)
-				}
+			if sector != nil {
+				sector.SetCeiling(tokens)
 			}
 		case "VERTICES":
 			mode = modeVertices

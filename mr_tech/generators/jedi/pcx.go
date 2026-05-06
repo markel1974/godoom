@@ -82,7 +82,6 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 			imgData = append(imgData, b)
 		}
 	}
-
 	// Override della palette se il flag 0x0C è presente a -769 byte dalla fine.
 	pal := defaultPalette
 	if len(rawData)-idx >= 769 && rawData[len(rawData)-769] == 0x0C {
@@ -105,14 +104,50 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 			}
 			pIndex := imgData[dataIdx]
 			c := pal[pIndex]
-			// In Outlaws l'indice 0 è convenzionalmente la chiave cromatica (Color Key) per i decal trasparenti.
 			if pIndex == 0 {
 				c.A = 0
 			} else {
 				c.A = 255
 			}
-			img.SetRGBA(x, y, c)
+			img.SetRGBA(x, height-1-y, c)
+			//img.SetRGBA(width-1-x, height-1-y, c)
 		}
 	}
 	return img, nil
+}
+
+func (p *PCX) ParsePalette(r io.ReadSeeker) ([256]color.RGBA, error) {
+	var pal [256]color.RGBA
+
+	// Saltiamo agli ultimi 769 byte del file
+	if _, err := r.Seek(-769, io.SeekEnd); err != nil {
+		return pal, fmt.Errorf("impossibile cercare la fine del file PCX: %w", err)
+	}
+
+	// Leggiamo il byte indicatore
+	var indicator [1]byte
+	if _, err := io.ReadFull(r, indicator[:]); err != nil {
+		return pal, err
+	}
+
+	// 0x0C (12 in decimale) è il flag standard che annuncia la presenza di una palette a 256 colori
+	if indicator[0] != 0x0C {
+		return pal, fmt.Errorf("firma della palette PCX non valida, atteso 0x0C, trovato 0x%02X", indicator[0])
+	}
+
+	// Leggiamo i 768 byte di dati RGB
+	raw := make([]byte, 768)
+	if _, err := io.ReadFull(r, raw); err != nil {
+		return pal, err
+	}
+	for i := 0; i < 256; i++ {
+		pal[i] = color.RGBA{
+			R: raw[i*3],
+			G: raw[(i*3)+1],
+			B: raw[(i*3)+2],
+			A: 255, // Trasparenza solida di default
+		}
+	}
+
+	return pal, nil
 }

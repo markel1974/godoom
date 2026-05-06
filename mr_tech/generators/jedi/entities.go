@@ -11,6 +11,7 @@ import (
 // Object represents a 3D entity with positional, rotational, and class-related attributes.
 type Object struct {
 	Class            string
+	Name             string
 	Data             string
 	X, Y, Z          float64
 	Yaw, Pitch, Roll float64
@@ -23,6 +24,49 @@ type Object struct {
 // NewObject initializes and returns a pointer to a new Object instance with default values.
 func NewObject() *Object {
 	return &Object{}
+}
+
+func (obj *Object) Parse(tokens []string) {
+	for i := 0; i < len(tokens); i += 2 {
+		next := i + 1
+		if next >= len(tokens) {
+			break
+		}
+		key := strings.TrimSpace(strings.ToUpper(tokens[i]))
+		val := tokens[next]
+
+		switch key {
+		case "#":
+		case "CLASS:":
+			obj.Class = val
+		case "NAME:":
+			obj.Name = val
+		case "DATA:":
+			obj.Data = val
+		case "X:":
+			obj.X, _ = strconv.ParseFloat(val, 64)
+		case "Y:":
+			obj.Y, _ = strconv.ParseFloat(val, 64)
+		case "Z:":
+			obj.Z, _ = strconv.ParseFloat(val, 64)
+		case "YAW:":
+			obj.Yaw, _ = strconv.ParseFloat(val, 64)
+		case "PITCH:", "PCH:":
+			obj.Pitch, _ = strconv.ParseFloat(val, 64)
+		case "ROLL:", "ROL:":
+			obj.Roll, _ = strconv.ParseFloat(val, 64)
+		case "DIFF:":
+			obj.Diff, _ = strconv.Atoi(val)
+		case "SECTOR:":
+			obj.Sector = val
+		case "ID:":
+			obj.Id = val
+		case "FLAGS:":
+			obj.Flags = val
+		default:
+			fmt.Println("Unknown CLASS object attribute: ", key)
+		}
+	}
 }
 
 // Entities represents a collection of objects and a level name within a structured data model.
@@ -73,6 +117,7 @@ func (e *Entities) Parse(r io.Reader) error {
 			continue
 		}
 		switch rootKey {
+		case "#":
 		case "O":
 		case "PODS":
 			count, _ := GetTokenIntAt(tokens, 1)
@@ -83,7 +128,9 @@ func (e *Entities) Parse(r io.Reader) error {
 		case "SPRS":
 			count, _ := GetTokenIntAt(tokens, 1)
 			e.Waxes = make([]string, 0, count)
-		case "OBJECTS": // TODO IMPLEMENT
+		case "OBJECTS":
+			count, _ := GetTokenIntAt(tokens, 1)
+			e.Objects = make([]*Object, 0, count)
 		case "SOUNDS": // TODO IMPLEMENT
 		case "LEVELNAME": // TODO IMPLEMENT
 			levelName, _ := GetTokenStringAt(tokens, 1)
@@ -119,46 +166,7 @@ func (e *Entities) Parse(r io.Reader) error {
 
 		case "CLASS:", "NAME:":
 			obj := NewObject()
-			for i := 0; i < len(tokens); i += 2 {
-				next := i + 1
-				if next >= len(tokens) {
-					break
-				}
-				key := strings.TrimSpace(strings.ToUpper(tokens[i]))
-				val := tokens[next]
-
-				switch key {
-				case "#":
-				case "CLASS:":
-					obj.Class = val
-				case "NAME:":
-					obj.Class = val
-				case "DATA:":
-					obj.Data = val
-				case "X:":
-					obj.X, _ = strconv.ParseFloat(val, 64)
-				case "Y:":
-					obj.Y, _ = strconv.ParseFloat(val, 64)
-				case "Z:":
-					obj.Z, _ = strconv.ParseFloat(val, 64)
-				case "YAW:":
-					obj.Yaw, _ = strconv.ParseFloat(val, 64)
-				case "PITCH:", "PCH:":
-					obj.Pitch, _ = strconv.ParseFloat(val, 64)
-				case "ROLL:", "ROL:":
-					obj.Roll, _ = strconv.ParseFloat(val, 64)
-				case "DIFF:":
-					obj.Diff, _ = strconv.Atoi(val)
-				case "SECTOR:":
-					obj.Sector = val
-				case "ID:":
-					obj.Id = val
-				case "FLAGS:":
-					obj.Flags = val
-				default:
-					fmt.Println("Unknown CLASS object attribute: ", key)
-				}
-			}
+			obj.Parse(tokens)
 			e.Objects = append(e.Objects, obj)
 		default:
 			fmt.Println("Unknown ENTITIES object attribute:", rootKey)

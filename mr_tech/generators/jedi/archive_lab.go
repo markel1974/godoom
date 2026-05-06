@@ -139,8 +139,8 @@ func (al *ArchiveLab) add(path string) error {
 		}
 		fileName := string(stringTable[start:end])
 		cleanName := al.cleanName(fileName)
+		//fmt.Printf("Adding %s\n", cleanName)
 		al.container[cleanName] = NewLabFile(file, int(e.DataOffset), int(e.DataSize))
-
 		if pos := strings.Index(cleanName, ExtLevelLVT); pos > 0 {
 			al.levels = append(al.levels, cleanName[:pos])
 		}

@@ -345,6 +345,115 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	return volumes3d
 }
 
+/*
+// upgrade3d converte i volumi 2D in 3D applicando le pendenze (slopes) e rigenerando la topologia.
+func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
+	var volumes3d []*Volume
+	volMap := make(map[*Volume]*Volume)
+
+	// Funzione helper per calcolare la Z in un punto (x, y) dato il vettore di slope.
+	// Z = Slope.Z + (Slope.X * x) + (Slope.Y * y)
+	getZ := func(p geometry.XYZ, slope geometry.XYZ) float64 {
+		return slope.Z + (slope.X * p.X) + (slope.Y * p.Y)
+	}
+
+	// buildQuad ora accetta quote differenziate per l'inizio e la fine del segmento (trapezio).
+	buildQuad := func(vol3d *Volume, f2d *Face, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material) {
+		start := f2d.GetStart()
+		end := f2d.GetEnd()
+
+		// Costruiamo i 4 vertici del trapezio verticale nello spazio 3D
+		v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBS} // Bottom-Start
+		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBE}     // Bottom-End
+		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTE}     // Top-End
+		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTS} // Top-Start
+
+		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
+		vol3d.AddFace(faceT1)
+		vol3d.AddFace(faceT2)
+	}
+
+	for _, vol2d := range volumes2d {
+		id := fmt.Sprintf("%s_3d", vol2d.GetId())
+		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
+		if vol2d.Light != nil {
+			vol3d.Light = vol2d.Light
+		}
+
+		faces2d, face2dCount := vol2d.GetFaces()
+		if face2dCount != 3 {
+			continue // Supportiamo solo triangoli per la compilazione 2D
+		}
+
+		// Recuperiamo i vertici della mesh planare
+		p0, p1, p2 := faces2d[0].GetStart(), faces2d[1].GetStart(), faces2d[2].GetStart()
+
+		// 1. Orientamento Mesh Soffitto (Ceiling)
+		zC0 := getZ(p0, vol2d.slopedCeil)
+		zC1 := getZ(p1, vol2d.slopedCeil)
+		zC2 := getZ(p2, vol2d.slopedCeil)
+		ceilP := [3]geometry.XYZ{{p0.X, p0.Y, zC0}, {p1.X, p1.Y, zC1}, {p2.X, p2.Y, zC2}}
+		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1)))
+
+		// 2. Orientamento Mesh Pavimento (Floor)
+		zF0 := getZ(p0, vol2d.slopedFloor)
+		zF1 := getZ(p1, vol2d.slopedFloor)
+		zF2 := getZ(p2, vol2d.slopedFloor)
+		floorP := [3]geometry.XYZ{{p0.X, p0.Y, zF0}, {p2.X, p2.Y, zF2}, {p1.X, p1.Y, zF1}}
+		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0)))
+
+		// 3. Generazione Muri Perimetrali e Adiacenze
+		for x := 0; x < face2dCount; x++ {
+			f2d := faces2d[x]
+			s, e := f2d.GetStart(), f2d.GetEnd()
+
+			// Altezze locali per il settore corrente
+			curF_S, curF_E := getZ(s, vol2d.slopedFloor), getZ(e, vol2d.slopedFloor)
+			curC_S, curC_E := getZ(s, vol2d.slopedCeil), getZ(e, vol2d.slopedCeil)
+
+			neighbor := f2d.GetNeighbor()
+			if neighbor == nil {
+				// Muro solido (da pavimento a soffitto)
+				buildQuad(vol3d, f2d, curF_S, curF_E, curC_S, curC_E, f2d.GetTag(), f2d.GetMaterialIndex(1))
+				continue
+			}
+
+			// Se c'è un vicino, calcoliamo le pendenze del vicino lungo il confine
+			neiF_S, neiF_E := getZ(s, neighbor.slopedFloor), getZ(e, neighbor.slopedFloor)
+			neiC_S, neiC_E := getZ(s, neighbor.slopedCeil), getZ(e, neighbor.slopedCeil)
+
+			// Lower Wall: se il pavimento del vicino è più alto del nostro in qualsiasi punto del segmento
+			if neiF_S > curF_S || neiF_E > curF_E {
+				buildQuad(vol3d, f2d, curF_S, curF_E, neiF_S, neiF_E, f2d.GetTag()+"_lower", f2d.GetMaterialIndex(2))
+			}
+
+			// Upper Wall: se il soffitto del vicino è più basso del nostro
+			if neiC_S < curC_S || neiC_E < curC_E {
+				buildQuad(vol3d, f2d, neiC_S, neiC_E, curC_S, curC_E, f2d.GetTag()+"_upper", f2d.GetMaterialIndex(0))
+			}
+		}
+
+		vol3d.Rebuild()
+		volumes3d = append(volumes3d, vol3d)
+		volMap[vol2d] = vol3d
+	}
+
+	// Risoluzione dei link bidirezionali tra i volumi 3D
+	for _, vol := range volumes3d {
+		faces, faceCount := vol.GetFaces()
+		for x := 0; x < faceCount; x++ {
+			face := faces[x]
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				face.SetNeighbor(volMap[neighbor])
+			}
+		}
+	}
+	return volumes3d
+}
+
+*/
+
 // compile3d constructs 3D volumes from configurations and materials, linking geometry and calculating adjacency portals.
 func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volume {
 	totalFaces := 0

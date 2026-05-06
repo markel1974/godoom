@@ -105,8 +105,8 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 		}
 
 		lightLevel := sector.LightLevel * scaleLight
-		if lightLevel < 4.0 {
-			lightLevel = 4.0
+		if lightLevel < 2.2 {
+			lightLevel = 2.2
 		}
 		lightFalloff := lightLevel * scaleLightFalloff
 
@@ -181,12 +181,14 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 					adjSec := level.Sectors[wall.Adjoin]
 					cSeg.Kind = config.SegmentUnknown
 					if sector.IsSky() && adjSec.IsSky() {
-						texName := level.GetTexture(wall.TopTexture)
+						topTexture := wall.TopTexture
+						texName := level.GetTexture(topTexture)
 						_, _ = archive.AddTexture(texName)
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
 					} else if sector.CeilingY < adjSec.CeilingY {
-						if wall.TopTexture >= 0 {
-							texName := level.GetTexture(wall.TopTexture)
+						topTexture := wall.TopTexture
+						if topTexture >= 0 {
+							texName := level.GetTexture(topTexture)
 							names, _ := archive.AddTexture(texName)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
@@ -195,8 +197,9 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 					}
 
 					if sector.FloorY > adjSec.FloorY {
-						if wall.BotTexture >= 0 {
-							texName := level.GetTexture(wall.BotTexture)
+						botTexture := wall.BotTexture
+						if botTexture >= 0 {
+							texName := level.GetTexture(botTexture)
 							names, _ := archive.AddTexture(texName)
 							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
@@ -215,6 +218,61 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 	var configPlayer *config.Player
 
 	for _, obj := range entities.Objects {
+		if len(obj.Name) == 0 {
+			continue
+		}
+		pos := CreateCoords(obj.X, obj.Y, obj.Z)
+		key := strings.ToUpper(strings.TrimSpace(obj.Name))
+		switch key {
+		case "SPIRIT", "PLAYER":
+			if configPlayer == nil {
+				configPlayer = b.buildPlayer(pos)
+			}
+		case "STARTPOS": //TODO
+		case "BALLSTAR": //TODO
+		case "FLAGSTAR": //TODO
+		case "DOCSTART": //TODO
+		case "SIGNODD2": //TODO
+		case "GBPLATE": //TODO
+		default:
+			data, err := archive.GetPayload(obj.Name + ".ITM")
+			if err != nil {
+				fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, err)
+				continue
+			}
+			item := NewItem()
+			err = item.Parse(bytes.NewReader(data))
+			if err != nil {
+				fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, err)
+				continue
+			}
+			if len(item.Anim) == 0 {
+				continue
+			}
+			targetName := strings.ToUpper(item.Anim)
+			if strings.Contains(targetName, ".NWX") {
+				cThing, err := b.NWXToThing(item.Anim, archive, pos)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+					continue
+				}
+				configThings = append(configThings, cThing)
+			} else if strings.Contains(targetName, ".3DO") {
+				cThing, err := b.ThreedoToThing(targetName, pos, archive)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+					continue
+				}
+				configThings = append(configThings, cThing)
+			}
+
+		}
+	}
+
+	for _, obj := range entities.Objects {
+		if len(obj.Class) == 0 {
+			continue
+		}
 		pos := CreateCoords(obj.X, obj.Y, obj.Z)
 		key := strings.ToUpper(strings.TrimSpace(obj.Class))
 		switch key {
@@ -229,77 +287,12 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 				continue
 			}
 			fileName := entities.Waxes[dataIdx]
-			waxCompressedData, err := archive.GetPayload(fileName)
+			cThing, err := b.WAXToThing(fileName, archive, pos)
 			if err != nil {
-				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
+				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue
 			}
-			waxData, err := DecompressPayload(waxCompressedData)
-			if err != nil {
-				fmt.Printf("Warning: could not decompress %s: %v\n", fileName, err)
-			}
-			//fmt.Printf("Decompression Success: %s\n", fileName)
-			//os.Exit(1)
-			wax := NewWax()
-			err = wax.Parse(fileName, bytes.NewReader(waxData))
-			if err != nil {
-				fmt.Printf("Error parsing WAX %s: %v\n", fileName, err)
-				continue
-			}
-
-			/*
-				var frameTextureNames []string
-				for _, act := range wax.GetActions() {
-					if act == nil {
-						continue
-					}
-					for _, view := range act.GetViews() {
-						if view == nil {
-							continue
-						}
-						for _, cell := range view.GetCells() {
-							texId := cell.GetId()
-							sizeX, sizeY := cell.GetSize()
-							textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-							frameTextureNames = append(frameTextureNames, texId)
-						}
-					}
-				}
-				material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-				id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-				cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-				cThing.Sprite = config.NewSprite(material)
-				configThings = append(configThings, cThing)
-
-			*/
-
-			multiSprite := config.NewMultiSprite()
-			for _, act := range wax.GetActions() {
-				if act == nil {
-					continue
-				}
-				for _, view := range act.GetViews() {
-					if view == nil || len(view.GetCells()) == 0 {
-						continue
-					}
-					var tn []string
-					for _, cell := range view.GetCells() {
-						texId := cell.GetId()
-						sizeX, sizeY := cell.GetSize()
-						archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
-						tn = append(tn, texId)
-					}
-					material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-					multiSprite.Add(material)
-				}
-			}
-
-			// Creiamo il materiale animato (o statico se 1 solo frame)
-			id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-			cThing.MultiSprite = multiSprite
 			configThings = append(configThings, cThing)
-
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")
 			//fmt.Println(obj)
@@ -310,21 +303,15 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 				continue
 			}
 			fileName := entities.Threedos[dataIdx]
-			threedoData, err := archive.GetPayload(fileName)
+			cThing, err := b.ThreedoToThing(fileName, pos, archive)
 			if err != nil {
-				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
+				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue
 			}
-			threedoObj := NewThreedo()
-			if err = threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
-				continue
-			}
-			id := fmt.Sprintf("%s_%s", "3DO", fileName)
-			thing := b.ThreedoToThing(id, pos, threedoObj, archive)
-			configThings = append(configThings, thing)
+			configThings = append(configThings, cThing)
 		case "SAFE":
 		default:
-			fmt.Println("Unsupported object class:", key)
+			return nil, fmt.Errorf("unsupported object class: %s", key)
 		}
 	}
 
@@ -394,7 +381,17 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	return thingCfg
 }
 
-func (b *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threedo, archive IArchive) *config.Thing {
+func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArchive) (*config.Thing, error) {
+	threedoData, err := archive.GetPayload(fileName)
+	if err != nil {
+		return nil, err
+	}
+	threedoObj := NewThreedo()
+	if err := threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
+		return nil, err
+	}
+	id := fmt.Sprintf("%s_%s", "3DO", fileName)
+
 	var allTriangles []config.MD1Triangle
 
 	texMap := make(map[string]*config.Material)
@@ -446,7 +443,145 @@ func (b *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threed
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
 	cThing.MD1 = cModel
-	return cThing
+	return cThing, nil
+}
+
+func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ) (*config.Thing, error) {
+	waxData, err := archive.GetPayload(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
+	}
+	waxData, err = DecompressPayload(waxData)
+	if err != nil {
+		return nil, fmt.Errorf("could not decompress %s: %v\n", fileName, err)
+	}
+	//fmt.Printf("Decompression Success: %s\n", fileName)
+	//os.Exit(1)
+	wax := NewWAX()
+	err = wax.Parse(fileName, bytes.NewReader(waxData))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
+	}
+
+	/*
+		var frameTextureNames []string
+		for _, act := range wax.GetActions() {
+			if act == nil {
+				continue
+			}
+			for _, view := range act.GetViews() {
+				if view == nil {
+					continue
+				}
+				for _, cell := range view.GetCells() {
+					texId := cell.GetId()
+					sizeX, sizeY := cell.GetSize()
+					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+					frameTextureNames = append(frameTextureNames, texId)
+				}
+			}
+		}
+		material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+		cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+		cThing.Sprite = config.NewSprite(material)
+		configThings = append(configThings, cThing)
+
+	*/
+
+	multiSprite := config.NewMultiSprite()
+	for _, act := range wax.GetActions() {
+		if act == nil {
+			continue
+		}
+		for _, view := range act.GetViews() {
+			if view == nil || len(view.GetCells()) == 0 {
+				continue
+			}
+			var tn []string
+			for _, cell := range view.GetCells() {
+				texId := cell.GetId()
+				sizeX, sizeY := cell.GetSize()
+				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
+				tn = append(tn, texId)
+			}
+			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			multiSprite.Add(material)
+		}
+	}
+
+	// Creiamo il materiale animato (o statico se 1 solo frame)
+	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+	cThing.MultiSprite = multiSprite
+	return cThing, nil
+}
+
+func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ) (*config.Thing, error) {
+	waxData, err := archive.GetPayload(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
+	}
+	//fmt.Printf("Decompression Success: %s\n", fileName)
+	//os.Exit(1)
+	wax := NewNWX()
+	err = wax.Parse(fileName, bytes.NewReader(waxData))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
+	}
+
+	/*
+		var frameTextureNames []string
+		for _, act := range wax.GetActions() {
+			if act == nil {
+				continue
+			}
+			for _, view := range act.GetViews() {
+				if view == nil {
+					continue
+				}
+				for _, cell := range view.GetCells() {
+					texId := cell.GetId()
+					sizeX, sizeY := cell.GetSize()
+					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+					frameTextureNames = append(frameTextureNames, texId)
+				}
+			}
+		}
+		material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+		cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+		cThing.Sprite = config.NewSprite(material)
+		configThings = append(configThings, cThing)
+
+	*/
+
+	multiSprite := config.NewMultiSprite()
+	for _, act := range wax.GetActions() {
+		if act == nil {
+			continue
+		}
+		for _, view := range act.GetViews() {
+			if view == nil || len(view.GetCells()) == 0 {
+				continue
+			}
+			var tn []string
+			for _, cell := range view.GetCells() {
+				texId := cell.GetId()
+				sizeX, sizeY := cell.GetSize()
+				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
+				tn = append(tn, texId)
+			}
+			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			multiSprite.Add(material)
+		}
+	}
+
+	// Creiamo il materiale animato (o statico se 1 solo frame)
+	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
+	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+	cThing.MultiSprite = multiSprite
+	return cThing, nil
 }
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.

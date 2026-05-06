@@ -62,14 +62,14 @@ func DecompressPayload(data []byte) ([]byte, error) {
 	// 2. Controllo header ASCII (per 3DO, MSG, etc.)
 	if bytes.HasPrefix(data, []byte("FME ")) ||
 		bytes.HasPrefix(data, []byte("3DO ")) ||
-		bytes.HasPrefix(data, []byte("MSG ")) {
+		bytes.HasPrefix(data, []byte("MSG ")) ||
+		bytes.HasPrefix(data, []byte("WAXF")) {
 		return data, nil
 	}
 	// 3. Altrimenti, è uno stream LZSS (i primi 4 byte sono decompressedSize)
 	return decodeJediCompression(data)
 }
 
-// decodeJediCompression decomprime il payload usando la variante Okumura LZSS del Jedi Engine.
 // decodeJediCompression decomprime il payload usando la variante Okumura LZSS del Jedi Engine.
 func decodeJediCompression(inData []byte) ([]byte, error) {
 	if len(inData) < 4 {

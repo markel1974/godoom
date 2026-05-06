@@ -8,7 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// Sector represents a distinct area of a level, defined by its geometry, textures, light level, and properties.
+// Sector represents a spatial region with geometry, textures, physical properties, and relationships to walls and vertices.
 type Sector struct {
 	Id             string
 	Index          int
@@ -31,7 +31,7 @@ type Sector struct {
 	SlopedCeiling  [3]float64
 }
 
-// NewSector creates a new Sector instance with the provided identifier and initializes its fields to default values.
+// NewSector creates and returns a new Sector instance with the specified id and index, initializing default values.
 func NewSector(id string, index int) *Sector {
 	return &Sector{
 		Id:             id,
@@ -43,6 +43,7 @@ func NewSector(id string, index int) *Sector {
 	}
 }
 
+// SetCeiling processes and sets the ceiling properties of a sector based on the provided tokens.
 func (s *Sector) SetCeiling(tokens []string) {
 	if len(tokens) < 3 {
 		fmt.Printf("Invalid CEILING property: '%s' in line: %v\n", tokens[1], tokens)
@@ -70,6 +71,7 @@ func (s *Sector) SetCeiling(tokens []string) {
 
 }
 
+// SetFloor parses and sets the floor properties of the Sector based on the provided tokens.
 func (s *Sector) SetFloor(tokens []string) {
 	if len(tokens) < 3 {
 		fmt.Printf("Invalid FLOOR property: '%s' in line: %v\n", tokens[1], tokens)
@@ -123,7 +125,7 @@ func (s *Sector) SetFloor(tokens []string) {
 	}
 }
 
-// AddFlags processes a slice of strings, extracts integer values after the first token, and stores them in the Flags field.
+// AddFlags parses a slice of string tokens, converting them to integers and appending them to the Sector's Flags slice.
 func (s *Sector) AddFlags(tokens []string) {
 	// Alloca la slice in base al numero di parametri reali sulla riga
 	flagCount := len(tokens) - 1
@@ -138,7 +140,7 @@ func (s *Sector) AddFlags(tokens []string) {
 	}
 }
 
-// AddWall parses token strings to construct a Wall object and adds it to the sector's Walls list.
+// AddWall adds a new Wall to the Sector by parsing the provided tokens and updating the Walls slice and WallIdx counter.
 func (s *Sector) AddWall(tokens []string) {
 	if s.WallIdx >= len(s.Walls) {
 		fmt.Println("max wall reached!")
@@ -150,7 +152,7 @@ func (s *Sector) AddWall(tokens []string) {
 	s.WallIdx++
 }
 
-// AddVertices parses vertex information from tokens and appends the resulting XY coordinates to the sector's vertices.
+// AddVertices updates the Vertices slice of the Sector with coordinates parsed from the provided tokens.
 func (s *Sector) AddVertices(tokens []string) {
 	var err error
 	var ptX, ptZ float64
@@ -210,7 +212,7 @@ func (s *Sector) AddVertices(tokens []string) {
 	s.Vertices[ord] = geometry.XY{X: ptX, Y: ptZ}
 }
 
-// IsSky checks if the sector is marked as a sky by evaluating the first flag in the Flags slice. Returns true or false.
+// IsSky checks if the sector is marked as "sky" based on its flags. Returns true if the first flag bit is set, otherwise false.
 func (s *Sector) IsSky() bool {
 	if len(s.Flags) < 1 {
 		return false
@@ -218,7 +220,7 @@ func (s *Sector) IsSky() bool {
 	return (s.Flags[0] & 1) != 0
 }
 
-// IsAbyss checks if the sector has the "Abyss" flag set based on its Flags slice and returns true if it is set.
+// IsAbyss determines if the sector has the "abyss" flag set, based on its Flags property. Returns true if set, else false.
 func (s *Sector) IsAbyss() bool {
 	if len(s.Flags) < 1 {
 		return false

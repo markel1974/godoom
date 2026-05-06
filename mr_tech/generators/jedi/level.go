@@ -118,7 +118,7 @@ func (p *Level) Parse(r io.Reader) error {
 			}
 		case "SECTOR":
 			var err error
-			sector, err = p.doSector(tokens, sector)
+			sector, err = p.doCreateSector(tokens)
 			if err != nil {
 				return err
 			}
@@ -222,9 +222,9 @@ func (p *Level) Parse(r io.Reader) error {
 	return scanner.Err()
 }
 
-// doSector processes a sector definition, updating the current sector or creating a new one based on the input tokens.
+// doCreateSector processes a sector definition, updating the current sector or creating a new one based on the input tokens.
 // Returns an updated or newly created Sector instance, or an error if the input tokens are invalid.
-func (p *Level) doSector(tokens []string, currSector *Sector) (*Sector, error) {
+func (p *Level) doCreateSector(tokens []string) (*Sector, error) {
 	id, err := GetTokenStringAt(tokens, 1)
 	if err != nil {
 		return nil, err
@@ -239,7 +239,7 @@ func (p *Level) doSector(tokens []string, currSector *Sector) (*Sector, error) {
 	}
 	sector := NewSector(id, idx)
 	if sector.Index < 0 || sector.Index >= len(p.Sectors) {
-		return nil, fmt.Errorf("invalid sector id: %d", currSector.Index)
+		return nil, fmt.Errorf("invalid sector id: %d", sector.Index)
 	}
 	p.Sectors[sector.Index] = sector
 	return sector, nil

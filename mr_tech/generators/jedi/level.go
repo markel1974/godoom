@@ -101,6 +101,8 @@ func (p *Level) Parse(r io.Reader) error {
 			if len(tokens) >= 2 {
 				p.Version = tokens[1]
 			}
+		case "VERSION":
+			//TODO
 		case "LEVELNAME":
 			if len(tokens) >= 2 {
 				p.LevelName = tokens[1]
@@ -108,7 +110,7 @@ func (p *Level) Parse(r io.Reader) error {
 		case "PALETTES":
 			if len(tokens) >= 2 {
 				count, _ := strconv.Atoi(tokens[1])
-				p.Palettes = make([]string, 0, count)
+				p.Palettes = make([]string, count)
 			}
 		case "PALETTE":
 			if len(tokens) >= 2 {
@@ -138,6 +140,10 @@ func (p *Level) Parse(r io.Reader) error {
 		case "SHADES":
 			// Il numero di shade tables
 		case "SHADE:":
+		case "PALETTE:":
+			if len(tokens) >= 2 {
+				p.Palettes = append(p.Palettes, tokens[1])
+			}
 		case "SECTOR":
 			var err error
 			sector, err = p.doSector(tokens, sector)

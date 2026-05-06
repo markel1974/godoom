@@ -68,6 +68,20 @@ func NewBuilder() *Builder {
 // Returns an error if the input directory is invalid, files are missing, or parsing fails.
 func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
+	{
+		lab := NewArchiveLab()
+		if err := lab.Parse("resources/outlaws"); err != nil {
+			return nil, fmt.Errorf("failed to parse OUTLAWS.LAB: %w", err)
+		}
+		if err := lab.SetLevel(0); err != nil {
+			return nil, err
+		}
+
+		level := lab.GetLevel()
+		entities := lab.GetEntities()
+		fmt.Println(level, entities)
+	}
+
 	/*
 		{
 			lab := NewArchiveLab()

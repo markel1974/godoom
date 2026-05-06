@@ -66,63 +66,19 @@ func NewBuilder() *Builder {
 // Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
 // It validates the level index, processes sector topology, and integrates player and object configurations.
 // Returns an error if the input directory is invalid, files are missing, or parsing fails.
-func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
-
-	{
-		lab := NewArchiveLab()
-		if err := lab.Parse("resources/outlaws"); err != nil {
-			return nil, fmt.Errorf("failed to parse OUTLAWS.LAB: %w", err)
-		}
-		if err := lab.SetLevel(0); err != nil {
-			return nil, err
-		}
-
-		level := lab.GetLevel()
-		entities := lab.GetEntities()
-		fmt.Println(level, entities)
+func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, error) {
+	var archive IArchive
+	if mode >= 1 {
+		archive = NewArchiveLab()
+	} else {
+		archive = NewArchiveGob()
 	}
-
-	/*
-		{
-			lab := NewArchiveLab()
-			if err := lab.Parse("resources/outlaws"); err != nil {
-				return nil, fmt.Errorf("failed to parse OUTLAWS.LAB: %w", err)
-			}
-			// 2. Estrai l'intero file LFD del livello dritto in RAM come array di byte
-			lfdData, err := lab.GetPayload("OLTOWN.LFD")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read LFD: %w", err)
-			}
-			// 3. Passi l'array di byte (wrappato come Reader) al tuo nuovo parser LFD
-			lfd := NewLFD()
-			if err = lfd.Parse(bytes.NewReader(lfdData)); err != nil {
-				return nil, fmt.Errorf("failed to parse LFD: %w", err)
-			}
-			levelData, err := lfd.GetPayload("LEV", "OLTOWN")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read LEV: %w", err)
-			}
-			palData, err := lfd.GetPayload("PAL", "OLTOWN")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read PAL: %w", err)
-			}
-			entitiesData, err := lfd.GetPayload("O", "OLTOWN")
-			if err != nil {
-				return nil, fmt.Errorf("failed to read O: %w", err)
-			}
-			fmt.Println("---------------------------------------")
-			fmt.Println("LEVEL DATA: ", len(levelData))
-			fmt.Println("PAL DATA: ", len(palData))
-			fmt.Println("ENTITIES DATA: ", len(entitiesData))
-		}
-	*/
 
 	levelNumber -= 1
 	if levelNumber <= 0 {
 		levelNumber = 0
 	}
 
-	var archive IArchive = NewArchiveGob()
 	if err := archive.Parse(dir); err != nil {
 		return nil, err
 	}
@@ -144,7 +100,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	var lights []*config.Light
 
 	for _, sector := range level.Sectors {
-		if sector.Id < 0 {
+		if len(sector.Id) == 0 {
 			continue
 		}
 
@@ -154,8 +110,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 		lightFalloff := lightLevel * scaleLightFalloff
 
-		secId := strconv.Itoa(sector.Id)
-		cSector := config.NewConfigSector(secId, lightLevel, config.LightKindAmbient, lightFalloff)
+		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)
 
 		// Quote altimetriche
 		cSector.FloorY = -sector.FloorY * scaleSectorH
@@ -199,7 +154,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				globalVertices = append(globalVertices, v1)
 				globalVertices = append(globalVertices, v2)
 
-				cSeg := config.NewConfigSegment(secId, config.SegmentWall, v1, v2)
+				cSeg := config.NewConfigSegment(sector.Id, config.SegmentWall, v1, v2)
 
 				//if wall.Light > 0 {
 				//	pos := geometry.XYZ{X: v1.X, Y: sector.CeilingY, Z: -v1.Y}
@@ -210,7 +165,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				// Inversione asse Z (profondità planare)
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 
-				if wall.Adjoin < 0 {
+				if wall.Adjoin == -1 {
 					if wall.MidTexture < 0 {
 						fmt.Println("WARNING MISSING MID_TEXTURE")
 						continue
@@ -219,12 +174,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					names, _ := archive.AddTexture(texName)
 					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
-					cSeg.Kind = config.SegmentUnknown
 					if wall.Adjoin >= len(level.Sectors) {
 						fmt.Println("INVALID ADJOIN")
 						continue
 					}
 					adjSec := level.Sectors[wall.Adjoin]
+					cSeg.Kind = config.SegmentUnknown
 					if sector.IsSky() && adjSec.IsSky() {
 						texName := level.GetTexture(wall.TopTexture)
 						_, _ = archive.AddTexture(texName)
@@ -439,7 +394,7 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	return thingCfg
 }
 
-func (t *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threedo, archive IArchive) *config.Thing {
+func (b *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threedo, archive IArchive) *config.Thing {
 	var allTriangles []config.MD1Triangle
 
 	texMap := make(map[string]*config.Material)
@@ -489,7 +444,7 @@ func (t *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threed
 	cModel := config.NewMD1(1, []string{"stand"})
 	cModel.Frames[0] = config.NewMD1Frame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
-	cThing := t.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
+	cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
 	cThing.MD1 = cModel
 	return cThing
 }

@@ -21,34 +21,6 @@ const (
 	modeWalls
 )
 
-// Wall represents a segment of a level boundary, containing various texture, lighting, and adjacency properties.
-type Wall struct {
-	LeftVertex  int
-	RightVertex int
-	Adjoin      int
-	MidTexture  int
-	TopTexture  int
-	BotTexture  int
-	SignTexture int
-	Flags       int
-	Light       int
-}
-
-// NewWall creates and returns a pointer to a new Wall instance with default field values initialized.
-func NewWall() *Wall {
-	return &Wall{
-		LeftVertex:  -1,
-		RightVertex: -1,
-		Adjoin:      -1,
-		MidTexture:  -1,
-		TopTexture:  -1,
-		BotTexture:  -1,
-		SignTexture: -1,
-		Flags:       0,
-		Light:       0,
-	}
-}
-
 // Level represents a game level including metadata, textures, and a collection of sectors.
 type Level struct {
 	Version   string
@@ -110,7 +82,7 @@ func (p *Level) Parse(r io.Reader) error {
 		case "PALETTES":
 			if len(tokens) >= 2 {
 				count, _ := strconv.Atoi(tokens[1])
-				p.Palettes = make([]string, count)
+				p.Palettes = make([]string, 0, count)
 			}
 		case "PALETTE":
 			if len(tokens) >= 2 {
@@ -122,7 +94,7 @@ func (p *Level) Parse(r io.Reader) error {
 				fmt.Printf("doSector: invalid token id: %s\n", err.Error())
 				return err
 			}
-			p.Sectors = make([]*Sector, sCount)
+			p.Sectors = make([]*Sector, 0, sCount)
 		case "NAME":
 			//TODO IMPLEMENT
 		case "SECOND":
@@ -158,26 +130,50 @@ func (p *Level) Parse(r io.Reader) error {
 			}
 		case "FLOOR":
 			if sector != nil && len(tokens) >= 3 {
-				switch strings.ToUpper(tokens[1]) {
+				subKey := strings.ToUpper(tokens[1])
+				switch subKey {
+				case "Y":
+					// Formato compresso Outlaws: FLOOR Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+					if len(tokens) >= 4 {
+						sector.FloorY, _ = strconv.ParseFloat(tokens[2], 64)
+						sector.FloorY = -sector.FloorY
+						if tokens[3] != "-" {
+							sector.FloorTexture, _ = strconv.Atoi(tokens[3])
+						}
+					}
 				case "ALTITUDE":
 					sector.FloorY, _ = strconv.ParseFloat(tokens[2], 64)
-				case "TEXTURE":
+				case "TEXTURE", "TEX", "TEXTURE:":
 					if tokens[2] != "-" {
-						texId, _ := strconv.Atoi(tokens[2])
-						sector.FloorTexture = texId
+						sector.FloorTexture, _ = strconv.Atoi(tokens[2])
 					}
+				case "OFFSETS": //TODO
+				case "SOUND": //TODO
+				default:
+					fmt.Printf("Unknown FLOOR sub-property: '%s' in line: %v\n", subKey, tokens)
 				}
 			}
 		case "CEILING":
 			if sector != nil && len(tokens) >= 3 {
-				switch strings.ToUpper(tokens[1]) {
+				subKey := strings.ToUpper(tokens[1])
+				switch subKey {
+				case "Y":
+					// Formato compresso Outlaws: CEILING Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+					if len(tokens) >= 4 {
+						sector.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
+						sector.CeilingY = -sector.CeilingY
+						if tokens[3] != "-" {
+							sector.CeilingTexture, _ = strconv.Atoi(tokens[3])
+						}
+					}
 				case "ALTITUDE":
 					sector.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
-				case "TEXTURE":
+				case "TEXTURE", "TEX", "TEXTURE:":
 					if tokens[2] != "-" {
-						texId, _ := strconv.Atoi(tokens[2])
-						sector.CeilingTexture = texId
+						sector.CeilingTexture, _ = strconv.Atoi(tokens[2])
 					}
+				default:
+					fmt.Printf("Unknown CEILING sub-property: '%s' in line: %v\n", subKey, tokens)
 				}
 			}
 		case "VERTICES":
@@ -191,26 +187,81 @@ func (p *Level) Parse(r io.Reader) error {
 			if err := p.doTextures(tokens); err != nil {
 				return err
 			}
-		case "WALL":
-			p.doWall(tokens, sector)
+		case "WALL", "WALL:":
+			if sector != nil {
+				sector.AddWall(tokens)
+			}
 		case "TEXTURE:":
 			p.doTexture(tokens)
 		case "FLAGS":
-			p.doFlags(tokens, sector)
+			if sector != nil {
+				sector.AddFlags(tokens)
+			}
+		case "FRICTION":
+			if sector != nil && len(tokens) >= 2 {
+				sector.Friction, _ = strconv.ParseFloat(tokens[1], 64)
+			}
+		case "GRAVITY":
+			if sector != nil && len(tokens) >= 2 {
+				sector.Gravity, _ = strconv.ParseFloat(tokens[1], 64)
+			}
+		case "ELASTICITY":
+			if sector != nil && len(tokens) >= 2 {
+				sector.Elasticity, _ = strconv.ParseFloat(tokens[1], 64)
+			}
+		case "VELOCITY":
+			if sector != nil && len(tokens) >= 4 {
+				sector.Velocity[0], _ = strconv.ParseFloat(tokens[1], 64) // X
+				sector.Velocity[1], _ = strconv.ParseFloat(tokens[2], 64) // Y
+				sector.Velocity[2], _ = strconv.ParseFloat(tokens[3], 64) // Z
+			}
+		case "VADJOIN":
+			if sector != nil && len(tokens) >= 2 {
+				sector.VAdjoin, _ = strconv.Atoi(tokens[1])
+			}
+		case "CMAP":
+			if sector != nil && len(tokens) >= 2 {
+				sector.CMap, _ = strconv.Atoi(tokens[1])
+			}
+		case "F_OVERLAY", "C_OVERLAY":
+			//TODO: Implementare se decidi di supportare i decal multi-texture
+		case "LIGHT":
+			// Assorbe "LIGHT SOURCE" globale o "LIGHT" a livello di settore
+			if len(tokens) >= 2 && strings.ToUpper(tokens[1]) == "SOURCE" {
+				//TODO: Salvare le coordinate della luce globale se necessario
+			}
+		case "SLOPEDFLOOR":
+			if sector != nil && len(tokens) >= 4 {
+				sector.SlopedFloor[0], _ = strconv.ParseFloat(tokens[1], 64)
+				sector.SlopedFloor[1], _ = strconv.ParseFloat(tokens[2], 64)
+				sector.SlopedFloor[2], _ = strconv.ParseFloat(tokens[3], 64)
+			}
+		case "SLOPEDCEILING":
+			if sector != nil && len(tokens) >= 4 {
+				sector.SlopedCeiling[0], _ = strconv.ParseFloat(tokens[1], 64)
+				sector.SlopedCeiling[1], _ = strconv.ParseFloat(tokens[2], 64)
+				sector.SlopedCeiling[2], _ = strconv.ParseFloat(tokens[3], 64)
+			}
+		case "OFFSET:":
+			// Assorbe l'offset se dichiarato come parametro globale del settore (es. allineamento planare)
+			if sector != nil && len(tokens) >= 3 {
+				// Opzionale: mappare su sector.FloorOffsetX, sector.FloorOffsetY
+				_, _ = strconv.ParseFloat(tokens[1], 64)
+				_, _ = strconv.ParseFloat(tokens[2], 64)
+			}
 		default:
 			if mode == modeVertices {
-				p.doApplyVertices(tokens, sector)
+				if sector != nil {
+					sector.AddVertices(tokens)
+				}
 			} else {
-				fmt.Println("unknown keyword:", keyword)
+				fmt.Println("unknown LEVEL keyword:", keyword)
 			}
 		}
 	}
 
 	if sector != nil {
-		if sector.Id < 0 || sector.Id >= len(p.Sectors) {
-			return fmt.Errorf("invalid sector id: %d", sector.Id)
-		}
-		p.Sectors[sector.Id] = sector
+		p.Sectors = append(p.Sectors, sector)
 	}
 
 	return scanner.Err()
@@ -220,12 +271,12 @@ func (p *Level) Parse(r io.Reader) error {
 // Returns an updated or newly created Sector instance, or an error if the input tokens are invalid.
 func (p *Level) doSector(tokens []string, currSector *Sector) (*Sector, error) {
 	if currSector != nil {
-		if currSector.Id < 0 || currSector.Id >= len(p.Sectors) {
-			return nil, fmt.Errorf("invalid sector id: %d", currSector.Id)
-		}
-		p.Sectors[currSector.Id] = currSector
+		//if currSector.Id < 0 || currSector.Id >= len(p.Sectors) {
+		//	return nil, fmt.Errorf("invalid sector id: %d", currSector.Id)
+		//}
+		p.Sectors = append(p.Sectors, currSector)
 	}
-	id, err := GetTokenIntAt(tokens, 1)
+	id, err := GetTokenStringAt(tokens, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -289,152 +340,4 @@ func (p *Level) doTexture(tokens []string) {
 		fmt.Printf("doTexture: invalid texture id %d\n", id)
 	}
 	p.Textures[id] = val
-}
-
-// doFlags parses and assigns flag values from the given tokens to the specified sector's Flags array.
-func (p *Level) doFlags(tokens []string, sector *Sector) {
-	if sector == nil {
-		fmt.Println("doFlags: nil sector")
-		return
-	}
-	var err error
-	sector.Flags[0], err = GetTokenIntAt(tokens, 1)
-	if err != nil {
-		fmt.Printf("doFlags: invalid token id at 1: %s\n", err.Error())
-		return
-	}
-	sector.Flags[1], err = GetTokenIntAt(tokens, 2)
-	if err != nil {
-		fmt.Printf("doFlags: invalid token id at 2: %s\n", err.Error())
-		return
-	}
-	sector.Flags[2], err = GetTokenIntAt(tokens, 3)
-	if err != nil {
-		fmt.Printf("doFlags: invalid token id at 3: %s\n", err.Error())
-		return
-	}
-}
-
-// doWall parses wall properties from the provided tokens and adds a new wall to the specified sector.
-func (p *Level) doWall(tokens []string, sector *Sector) {
-	if sector == nil {
-		fmt.Println("doWall: nil sector")
-		return
-	}
-	wall := NewWall()
-	for i := 0; i < len(tokens); i++ {
-		var err error
-		key := strings.ToUpper(strings.TrimSpace(tokens[i]))
-		if !strings.Contains(key, ":") {
-			continue
-		}
-		switch key {
-		case "WALK:":
-		case "MIRROR:":
-		case "LEFT:":
-			i++
-			wall.LeftVertex, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: LEFT invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "RIGHT:":
-			i++
-			wall.RightVertex, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: RIGHT invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "ADJOIN:":
-			i++
-			wall.Adjoin, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: ADJOIN invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "MID:":
-			i++
-			wall.MidTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				wall.MidTexture = -1
-			}
-		case "TOP:":
-			i++
-			wall.TopTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				wall.TopTexture = -1
-			}
-		case "BOT:":
-			i++
-			wall.BotTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				wall.BotTexture = -1
-			}
-		case "SIGN:":
-			i++
-			wall.SignTexture, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				wall.SignTexture = -1
-			}
-		case "FLAGS:":
-			i++
-			wall.Flags, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: FLAGS invalid token id at %d: %s\n", i, err.Error())
-			}
-		case "LIGHT:":
-			i++
-			wall.Light, err = GetTokenIntAt(tokens, i)
-			if err != nil {
-				fmt.Printf("doWall: LIGHT invalid token id at %d: %s\n", i, err.Error())
-			}
-		default:
-			fmt.Println("doWall: Unknown wall attribute: ", key)
-		}
-	}
-	sector.Walls = append(sector.Walls, wall)
-}
-
-// doApplyVertices parses vertex information from tokens and appends the resulting XY coordinates to the sector's vertices.
-func (p *Level) doApplyVertices(tokens []string, sector *Sector) {
-	if sector == nil {
-		fmt.Println("doApplyVertices: nil sector")
-		return
-	}
-	var err error
-	var ptX, ptZ float64
-	found := false
-	for i := 0; i < len(tokens); i++ {
-		next := i + 1
-		if next >= len(tokens) {
-			break
-		}
-		key := strings.ToUpper(strings.TrimSpace(tokens[i]))
-		switch key {
-		case "X:":
-			ptX, err = GetTokenFloatAt(tokens, next)
-			if err != nil {
-				fmt.Printf("doApplyVertices: invalid token id: %s\n", err.Error())
-				return
-			}
-			found = true
-		case "Z:":
-			ptZ, err = GetTokenFloatAt(tokens, next)
-			if err != nil {
-				fmt.Printf("doApplyVertices: invalid token id: %s\n", err.Error())
-				return
-			}
-			found = true
-		}
-	}
-	if !found {
-		ptX, err = GetTokenFloatAt(tokens, 1)
-		if err != nil {
-			fmt.Printf("doApplyVertices: invalid token id: %s\n", err.Error())
-			return
-		}
-		ptZ, err = GetTokenFloatAt(tokens, 2)
-		if err != nil {
-			fmt.Printf("doVertices: invalid token id: %s\n", err.Error())
-			return
-		}
-	}
-	sector.Vertices = append(sector.Vertices, geometry.XY{X: ptX, Y: ptZ})
 }

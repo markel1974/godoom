@@ -15,6 +15,9 @@ type Object struct {
 	X, Y, Z          float64
 	Yaw, Pitch, Roll float64
 	Diff             int // Difficulty flag
+	Sector           string
+	Id               string
+	Flags            string
 }
 
 // NewObject initializes and returns a pointer to a new Object instance with default values.
@@ -95,7 +98,7 @@ func (e *Entities) Parse(r io.Reader) error {
 			e.Threedos = append(e.Threedos, tokens[1])
 		case "SPR:":
 			e.Waxes = append(e.Waxes, tokens[1])
-		case "FME:": // TODO IMPLEMENT
+		case "FME:":
 			e.Fmes = append(e.Fmes, tokens[1])
 		case "SOUND:": // TODO IMPLEMENT
 		case "TYPE:": // TODO IMPLEMENT
@@ -112,8 +115,9 @@ func (e *Entities) Parse(r io.Reader) error {
 		case "VUE_APPEND:": // TODO IMPLEMENT
 		case "BOSS:": // TODO IMPLEMENT
 		case "MASTER:": //TODO
+		case "OBT": //TODO
 
-		case "CLASS:":
+		case "CLASS:", "NAME:":
 			obj := NewObject()
 			for i := 0; i < len(tokens); i += 2 {
 				next := i + 1
@@ -124,7 +128,10 @@ func (e *Entities) Parse(r io.Reader) error {
 				val := tokens[next]
 
 				switch key {
+				case "#":
 				case "CLASS:":
+					obj.Class = val
+				case "NAME:":
 					obj.Class = val
 				case "DATA:":
 					obj.Data = val
@@ -142,13 +149,19 @@ func (e *Entities) Parse(r io.Reader) error {
 					obj.Roll, _ = strconv.ParseFloat(val, 64)
 				case "DIFF:":
 					obj.Diff, _ = strconv.Atoi(val)
+				case "SECTOR:":
+					obj.Sector = val
+				case "ID:":
+					obj.Id = val
+				case "FLAGS:":
+					obj.Flags = val
 				default:
 					fmt.Println("Unknown CLASS object attribute: ", key)
 				}
 			}
 			e.Objects = append(e.Objects, obj)
 		default:
-			fmt.Println("Unknown LEVEL object attribute: ", rootKey)
+			fmt.Println("Unknown ENTITIES object attribute:", rootKey)
 		}
 
 	}

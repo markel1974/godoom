@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image"
 	"image/color"
 	"io"
 	"os"
@@ -179,32 +180,28 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", entitiesName, err)
 	}
-
 	al.entities = NewEntities()
 	if err = al.entities.Parse(bytes.NewReader(entitiesData)); err != nil {
 		return err
 	}
-
-	palData, err := al.GetPayload(al.entities.LevelName + ".PAL")
-	if err != nil {
-		// Fallback principale per Outlaws
-		palData, err = al.GetPayload("OLPAL.PAL")
-		if err != nil {
-			// Fallback generico per compatibilità
-			palData, err = al.GetPayload("SECBASE.PAL")
-			if err != nil {
-				return fmt.Errorf("master palette not found: %w", err)
-			}
-		}
+	if len(al.level.Palettes) == 0 {
+		return fmt.Errorf("no palettes declared in LVT")
 	}
-
-	palette := NewPalette()
-	al.colorPal, err = palette.Parse(bytes.NewReader(palData))
+	// Prendiamo la prima (la master per le texture di base)
+	palName := strings.ToUpper(strings.TrimSpace(al.level.Palettes[0]))
+	if !strings.HasSuffix(palName, ".PCX") {
+		palName += ".PCX"
+	}
+	palData, err := al.GetPayload(palName)
 	if err != nil {
-		return fmt.Errorf("error while parsing palette: %w", err)
+		return fmt.Errorf("can't open palette %s: %v", palName, err)
+	}
+	palette := NewPalette()
+	al.colorPal, err = palette.ParseFromPCX(bytes.NewReader(palData))
+	if err != nil {
+		return fmt.Errorf("error while parsing palette %s: %w", palName, err)
 	}
 	al.bm = NewBM()
-
 	return nil
 }
 
@@ -223,14 +220,24 @@ func (al *ArchiveLab) GetTextures() *Textures {
 	return al.textures
 }
 
-// AddTexture dynamically loads a texture by name, decodes its payload, and caches it.
 func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
-	bmData, err := al.GetPayload(texName)
+	data, err := al.GetPayload(texName)
 	if err != nil {
-		fmt.Printf("payload %s not found: %v\n", texName, err)
 		return nil, err
 	}
-	images, err := al.bm.Parse(bytes.NewReader(bmData), al.colorPal)
+	var images []*image.RGBA
+	if strings.HasSuffix(strings.ToUpper(texName), ".PCX") {
+		parser := NewPCX()
+		img, err := parser.Parse(bytes.NewReader(data), al.colorPal)
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, img)
+	} else {
+		// Fallback sul vecchio parser BM se implementi supporto misto DF/Outlaws
+		images, err = al.bm.Parse(bytes.NewReader(data), al.colorPal)
+	}
+
 	if err != nil {
 		return nil, err
 	}

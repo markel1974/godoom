@@ -1,7 +1,6 @@
 package jedi
 
 import (
-	"bytes"
 	"fmt"
 	"image"
 	"image/color"
@@ -25,21 +24,21 @@ func NewTextures() *Textures {
 }
 
 // AddTexture adds a texture by parsing bitmap data and applying a palette, caching the result for future requests.
-func (t *Textures) AddTexture(d *ArchiveGob, bm *BM, texName string, palette [256]color.RGBA) []string {
+func (t *Textures) AddTexture(texName string, images []*image.RGBA) []string {
 	v, ok := t.cache[texName]
 	if ok {
 		return v
 	}
-	bmData, err := d.GetPayload(texName)
-	if err != nil {
-		fmt.Printf("payload %s not found: %v\n", texName, err)
-		return nil
-	}
-	images, err := bm.Parse(bytes.NewReader(bmData), palette)
-	if err != nil {
-		fmt.Printf("decode error %s: %v\n", texName, err)
-		return nil
-	}
+	//bmData, err := d.GetPayload(texName)
+	//if err != nil {
+	//	fmt.Printf("payload %s not found: %v\n", texName, err)
+	//	return nil
+	//}
+	//images, err := bm2.Parse(bytes.NewReader(bmData), palette)
+	//if err != nil {
+	//	fmt.Printf("decode error %s: %v\n", texName, err)
+	//	return nil
+	//}
 	out := make([]string, len(images))
 	for counter, img := range images {
 		name := fmt.Sprintf("%s__FRAME__%d", texName, counter)

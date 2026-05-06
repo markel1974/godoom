@@ -32,6 +32,28 @@ const playerMass = 40
 
 const gForce = 9.8 * 8
 
+type IArchive interface {
+	Parse(dir string) error
+
+	GetLevels() []string
+
+	SetLevel(levelNumber int) error
+
+	GetPayload(name string) ([]byte, error)
+
+	GetTextures() *Textures
+
+	GetLevel() *Level
+
+	GetEntities() *Entities
+
+	AddTexture(texName string) ([]string, error)
+
+	AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte)
+
+	Close() error
+}
+
 // Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
 type Builder struct {
 }
@@ -81,60 +103,23 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 		}
 	*/
 
-	d := NewArchiveGob()
-	if err := d.Parse(dir); err != nil {
-		return nil, err
-	}
-	defer d.Close()
-	levels := d.GetLevels()
 	levelNumber -= 1
 	if levelNumber <= 0 {
 		levelNumber = 0
 	}
-	if levelNumber >= len(levels) {
-		return nil, fmt.Errorf("level %d not found (total levels %d)", levelNumber, len(levels)-1)
-	}
-	baseName := levels[levelNumber]
-	levelName := baseName + ExtLevel
 
-	levelData, err := d.GetPayload(levelName)
-	if err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", levelName, err)
+	var archive IArchive = NewArchiveGob()
+	if err := archive.Parse(dir); err != nil {
+		return nil, err
 	}
+	defer archive.Close()
 
-	level := NewLevel()
-	if err = level.Parse(bytes.NewReader(levelData)); err != nil {
-		return nil, fmt.Errorf("syntax error in %s: %w", levelName, err)
-	}
-
-	entitiesName := baseName + ".O"
-	entitiesData, err := d.GetPayload(entitiesName)
-	if err != nil {
-		return nil, fmt.Errorf("error reading %s: %w", entitiesName, err)
-	}
-
-	entities := NewEntities()
-	if err = entities.Parse(bytes.NewReader(entitiesData)); err != nil {
+	if err := archive.SetLevel(levelNumber); err != nil {
 		return nil, err
 	}
 
-	palData, err := d.GetPayload(entities.LevelName + ".PAL")
-	if err != nil {
-		palData, err = d.GetPayload("SECBASE.PAL")
-		if err != nil {
-			return nil, fmt.Errorf("master palette non found: %w", err)
-		}
-	}
-
-	palette := NewPalette()
-	colorPal, err := palette.Parse(bytes.NewReader(palData))
-	if err != nil {
-		return nil, fmt.Errorf("error while parsing palette: %w", err)
-	}
-
-	bm := NewBM()
-
-	textures := NewTextures()
+	level := archive.GetLevel()
+	entities := archive.GetEntities()
 
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
 	totalVertices := 0
@@ -167,7 +152,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
-			names := textures.AddTexture(d, bm, texName, colorPal)
+			names, _ := archive.AddTexture(texName)
 			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE")
@@ -175,7 +160,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
-			names := textures.AddTexture(d, bm, texName, colorPal)
+			names, _ := archive.AddTexture(texName)
 			animKind := config.MaterialKindLoop
 			if sector.IsSky() {
 				animKind = config.MaterialKindSky
@@ -217,7 +202,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 						continue
 					}
 					texName := level.GetTexture(wall.MidTexture)
-					names := textures.AddTexture(d, bm, texName, colorPal)
+					names, _ := archive.AddTexture(texName)
 					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
 					cSeg.Kind = config.SegmentUnknown
@@ -228,12 +213,12 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					adjSec := level.Sectors[wall.Adjoin]
 					if sector.IsSky() && adjSec.IsSky() {
 						texName := level.GetTexture(wall.TopTexture)
-						_ = textures.AddTexture(d, bm, texName, colorPal)
+						_, _ = archive.AddTexture(texName)
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
 					} else if sector.CeilingY < adjSec.CeilingY {
 						if wall.TopTexture >= 0 {
 							texName := level.GetTexture(wall.TopTexture)
-							names := textures.AddTexture(d, bm, texName, colorPal)
+							names, _ := archive.AddTexture(texName)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
 							fmt.Println("MISSING TOP_TEXTURE")
@@ -243,7 +228,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					if sector.FloorY > adjSec.FloorY {
 						if wall.BotTexture >= 0 {
 							texName := level.GetTexture(wall.BotTexture)
-							names := textures.AddTexture(d, bm, texName, colorPal)
+							names, _ := archive.AddTexture(texName)
 							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						} else {
 							fmt.Println("MISSING BOTTOM_TEXTURE")
@@ -275,7 +260,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 			fileName := entities.Waxes[dataIdx]
-			waxCompressedData, err := d.GetPayload(fileName)
+			waxCompressedData, err := archive.GetPayload(fileName)
 			if err != nil {
 				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
 				continue
@@ -332,7 +317,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 					for _, cell := range view.GetCells() {
 						texId := cell.GetId()
 						sizeX, sizeY := cell.GetSize()
-						textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
+						archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
 						tn = append(tn, texId)
 					}
 					material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
@@ -356,7 +341,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 				continue
 			}
 			fileName := entities.Threedos[dataIdx]
-			threedoData, err := d.GetPayload(fileName)
+			threedoData, err := archive.GetPayload(fileName)
 			if err != nil {
 				fmt.Printf("Warning: could not load 3DO %s: %v\n", fileName, err)
 				continue
@@ -365,11 +350,9 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 			if err = threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
 				continue
 			}
-			md2Model := threedoObj.ToMD2(textures, d, bm, colorPal)
 			id := fmt.Sprintf("%s_%s", "3DO", fileName)
-			cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
-			cThing.MD1 = md2Model
-			configThings = append(configThings, cThing)
+			thing := b.ThreedoToThing(id, pos, threedoObj, archive)
+			configThings = append(configThings, thing)
 		case "SAFE":
 		default:
 			fmt.Println("Unsupported object class:", key)
@@ -379,7 +362,7 @@ func (b *Builder) Build(dir string, levelNumber int) (*config.Root, error) {
 	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
 	calibration.AspectRatio = aspectRatio
 	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
-	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, textures)
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, archive.GetTextures())
 	cr.Things = configThings
 	cr.Vertices = globalVertices
 	cr.Lights = lights
@@ -440,6 +423,61 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		thingCfg.OnImpact = itemLogic.OnImpact
 	}
 	return thingCfg
+}
+
+func (t *Builder) ThreedoToThing(id string, pos geometry.XYZ, threedoObj *Threedo, archive IArchive) *config.Thing {
+	var allTriangles []config.MD1Triangle
+
+	texMap := make(map[string]*config.Material)
+	for _, obj := range threedoObj.Objects {
+		var material *config.Material
+		if obj.TextureIdx >= 0 && obj.TextureIdx < len(threedoObj.Textures) {
+			texName := threedoObj.Textures[obj.TextureIdx]
+			var ok bool
+			if material, ok = texMap[texName]; !ok {
+				tNames, _ := archive.AddTexture(texName)
+				material = config.NewConfigMaterial(tNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				texMap[texName] = material
+			}
+		}
+
+		// Iterate over the quads (or N-gons) in this object
+		for qIdx, quad := range obj.Quads {
+			pLen := len(quad.VertexIndices)
+			if pLen < 3 {
+				continue
+			}
+			// Ensure we have matching texture coordinates if the fill type uses them
+			hasUVs := quad.Fill == "TEXTURE" && qIdx < len(obj.TexQuads) && len(obj.TexQuads[qIdx].TexVertIndices) == pLen
+			// Triangle Fan triangulation (anchored at vertex 0)
+			for i := 1; i < pLen-1; i++ {
+				// 1. Get physical positions
+				v0 := obj.Vertices[quad.VertexIndices[0]]
+				v1 := obj.Vertices[quad.VertexIndices[i]]
+				v2 := obj.Vertices[quad.VertexIndices[i+1]]
+				// 2. Get UV coordinates (default to 0.0 if not a textured face)
+				var uv0, uv1, uv2 [2]float64
+				if hasUVs {
+					uv0 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[0]]
+					uv1 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i]]
+					uv2 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i+1]]
+				}
+				tri := config.NewMD1Triangle(material)
+				tri.Vertices[0] = config.MD1Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
+				tri.Vertices[1] = config.MD1Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
+				tri.Vertices[2] = config.MD1Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
+				allTriangles = append(allTriangles, tri)
+			}
+		}
+	}
+
+	// Create a single-frame MD1
+	cModel := config.NewMD1(1, []string{"stand"})
+	cModel.Frames[0] = config.NewMD1Frame(allTriangles)
+	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
+	cThing := t.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
+	cThing.MD1 = cModel
+	return cThing
 }
 
 // CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.

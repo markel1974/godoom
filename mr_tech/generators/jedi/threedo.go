@@ -2,12 +2,10 @@ package jedi
 
 import (
 	"bufio"
-	"image/color"
 	"io"
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
@@ -164,61 +162,4 @@ func (t *Threedo) Parse(r io.Reader) error {
 		}
 	}
 	return scanner.Err()
-}
-
-func (t *Threedo) ToMD2(tex *Textures, d *ArchiveGob, bm *BM, colorPal [256]color.RGBA) *config.MD1 {
-	var allTriangles []config.MD1Triangle
-	//var usedTextures []string
-
-	// Create a quick lookup map to avoid duplicate texture names in our return list
-	texMap := make(map[string]*config.Material)
-
-	// Iterate over all sub-objects
-	for _, obj := range t.Objects {
-		var material *config.Material
-		// Track which textures are actually used
-		if obj.TextureIdx >= 0 && obj.TextureIdx < len(t.Textures) {
-			texName := t.Textures[obj.TextureIdx]
-			var ok bool
-			if material, ok = texMap[texName]; !ok {
-				tNames := tex.AddTexture(d, bm, texName, colorPal)
-				anim := config.NewConfigMaterial(tNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-				texMap[texName] = anim
-			}
-		}
-
-		// Iterate over the quads (or N-gons) in this object
-		for qIdx, quad := range obj.Quads {
-			pLen := len(quad.VertexIndices)
-			if pLen < 3 {
-				continue
-			}
-			// Ensure we have matching texture coordinates if the fill type uses them
-			hasUVs := quad.Fill == "TEXTURE" && qIdx < len(obj.TexQuads) && len(obj.TexQuads[qIdx].TexVertIndices) == pLen
-			// Triangle Fan triangulation (anchored at vertex 0)
-			for i := 1; i < pLen-1; i++ {
-				// 1. Get physical positions
-				v0 := obj.Vertices[quad.VertexIndices[0]]
-				v1 := obj.Vertices[quad.VertexIndices[i]]
-				v2 := obj.Vertices[quad.VertexIndices[i+1]]
-				// 2. Get UV coordinates (default to 0.0 if not a textured face)
-				var uv0, uv1, uv2 [2]float64
-				if hasUVs {
-					uv0 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[0]]
-					uv1 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i]]
-					uv2 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i+1]]
-				}
-				tri := config.NewMD1Triangle(material)
-				tri.Vertices[0] = config.MD1Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
-				tri.Vertices[1] = config.MD1Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
-				tri.Vertices[2] = config.MD1Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
-				allTriangles = append(allTriangles, tri)
-			}
-		}
-	}
-
-	// Create a single-frame MD1
-	cModel := config.NewMD1(1, []string{"stand"})
-	cModel.Frames[0] = config.NewMD1Frame(allTriangles)
-	return cModel
 }

@@ -19,14 +19,13 @@ type Wall struct {
 	SignTexture int
 	Flags       int
 	Light       int
-	V1          float64 // Usiamo float64 perché le coordinate UV possono avere decimali
-	V2          float64
+	V1          int
+	V2          int
 	Overlay     int
 	DAdjoin     int
 	DMirror     int
 	OffsetX     float64
 	OffsetY     float64
-	HasVertex   bool
 }
 
 // NewWall creates and returns a pointer to a new Wall instance with default field values initialized.
@@ -39,6 +38,8 @@ func NewWall() *Wall {
 		TopTexture:  -1,
 		BotTexture:  -1,
 		SignTexture: -1,
+		V1:          -1,
+		V2:          -1,
 		Flags:       0,
 		Light:       0,
 		Overlay:     -1,
@@ -66,14 +67,12 @@ func (w *Wall) Parse(tokens []string) {
 			if err != nil {
 				fmt.Printf("doWall: LEFT invalid token id at %d: %s\n", i, err.Error())
 			}
-			w.HasVertex = true
 		case "RIGHT:":
 			i++
 			w.RightVertex, err = GetTokenIntAt(tokens, i)
 			if err != nil {
 				fmt.Printf("doWall: RIGHT invalid token id at %d: %s\n", i, err.Error())
 			}
-			w.HasVertex = true
 		case "ADJOIN:":
 			i++
 			w.Adjoin, err = GetTokenIntAt(tokens, i)
@@ -120,16 +119,18 @@ func (w *Wall) Parse(tokens []string) {
 			fmt.Println("doWall: Unknown wall attribute: ", key)
 		case "V1:":
 			i++
-			w.V1, err = GetTokenFloatAt(tokens, i)
+			w.V1, err = GetTokenIntAt(tokens, i)
 			if err != nil {
 				fmt.Printf("doWall: V1 invalid token at %d: %s\n", i, err.Error())
 			}
+			w.LeftVertex = w.V1
 		case "V2:":
 			i++
-			w.V2, err = GetTokenFloatAt(tokens, i)
+			w.V2, err = GetTokenIntAt(tokens, i)
 			if err != nil {
 				fmt.Printf("doWall: V2 invalid token at %d: %s\n", i, err.Error())
 			}
+			w.RightVertex = w.V2
 		case "OVERLAY:":
 			i++
 			w.Overlay, err = GetTokenIntAt(tokens, i)
@@ -155,6 +156,7 @@ func (w *Wall) Parse(tokens []string) {
 // Sector represents a distinct area of a level, defined by its geometry, textures, light level, and properties.
 type Sector struct {
 	Id             string
+	Index          int
 	FloorY         float64
 	CeilingY       float64
 	FloorTexture   int
@@ -162,6 +164,7 @@ type Sector struct {
 	LightLevel     float64
 	Vertices       []geometry.XY
 	Walls          []*Wall
+	WallIdx        int
 	Flags          []int
 	Friction       float64
 	Gravity        float64
@@ -174,9 +177,10 @@ type Sector struct {
 }
 
 // NewSector creates a new Sector instance with the provided identifier and initializes its fields to default values.
-func NewSector(id string) *Sector {
+func NewSector(id string, index int) *Sector {
 	return &Sector{
 		Id:             id,
+		Index:          index,
 		FloorY:         -1,
 		CeilingY:       -1,
 		FloorTexture:   -1,
@@ -201,26 +205,21 @@ func (s *Sector) AddFlags(tokens []string) {
 
 // AddWall parses token strings to construct a Wall object and adds it to the sector's Walls list.
 func (s *Sector) AddWall(tokens []string) {
+	if s.WallIdx >= len(s.Walls) {
+		fmt.Println("max wall reached!")
+		return
+	}
 	wall := NewWall()
 	wall.Parse(tokens)
-
-	if !wall.HasVertex {
-		if numVertices := len(s.Vertices); numVertices > 0 {
-			leftIndex := len(s.Walls)
-			rightIndex := (leftIndex + 1) % numVertices
-			wall.LeftVertex = leftIndex
-			wall.RightVertex = rightIndex
-		} else {
-			fmt.Printf("Warning: Parsing wall ID %s without loaded vertices!\n", wall.Id)
-		}
-	}
-	s.Walls = append(s.Walls, wall)
+	s.Walls[s.WallIdx] = wall
+	s.WallIdx++
 }
 
 // AddVertices parses vertex information from tokens and appends the resulting XY coordinates to the sector's vertices.
 func (s *Sector) AddVertices(tokens []string) {
 	var err error
 	var ptX, ptZ float64
+	ord := -1
 	found := false
 	for i := 0; i < len(tokens); i++ {
 		next := i + 1
@@ -230,6 +229,12 @@ func (s *Sector) AddVertices(tokens []string) {
 		key := strings.ToUpper(strings.TrimSpace(tokens[i]))
 		switch key {
 		case "#":
+			i++
+			ord, err = GetTokenIntAt(tokens, next)
+			if err != nil {
+				fmt.Printf("doApplyVertices: invalid token id: %s\n", err.Error())
+				return
+			}
 		case "X:":
 			i++
 			ptX, err = GetTokenFloatAt(tokens, next)
@@ -262,7 +267,12 @@ func (s *Sector) AddVertices(tokens []string) {
 			return
 		}
 	}
-	s.Vertices = append(s.Vertices, geometry.XY{X: ptX, Y: ptZ})
+
+	if ord < 0 || ord > len(s.Vertices) {
+		fmt.Printf("doApplyVertices: invalid vertex id %d\n", ord)
+		return
+	}
+	s.Vertices[ord] = geometry.XY{X: ptX, Y: ptZ}
 }
 
 // IsSky checks if the sector is marked as a sky by evaluating the first flag in the Flags slice. Returns true or false.

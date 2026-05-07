@@ -120,6 +120,10 @@ func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return 0, err
 	}
+
+	//if raw.CellIndex > 1000 {
+	//	fmt.Println("HERE!!!!!")
+	//}
 	g.CellIndex = raw.CellIndex
 	g.PhysicalIndex = raw.PhysicalIndex
 	g.Width = raw.Width
@@ -230,8 +234,8 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		Pad1      uint32
 		Pad2      uint32
 		Pad3      uint32
-		Pad4      uint32
-		Pad5      uint32
+		Width     float32
+		Height    float32
 		Pad6      uint32
 		Pad7      uint32
 	}

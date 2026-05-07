@@ -164,7 +164,6 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 
 				// Inversione asse Z (profondità planare)
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
-
 				if wall.Adjoin == -1 {
 					if wall.MidTexture < 0 {
 						fmt.Println("WARNING MISSING MID_TEXTURE")
@@ -178,33 +177,37 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 						fmt.Println("INVALID ADJOIN")
 						continue
 					}
-					adjSec := level.Sectors[wall.Adjoin]
 					cSeg.Kind = config.SegmentUnknown
+					adjSec := level.Sectors[wall.Adjoin]
+
 					if sector.IsSky() && adjSec.IsSky() {
+						//f !wall.Transparent {
 						topTexture := wall.TopTexture
 						texName := level.GetTexture(topTexture)
 						_, _ = archive.AddTexture(texName)
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
+						//}
 					} else if sector.CeilingY < adjSec.CeilingY {
+						//if !wall.Transparent {
 						topTexture := wall.TopTexture
 						if topTexture >= 0 {
 							texName := level.GetTexture(topTexture)
 							names, _ := archive.AddTexture(texName)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						} else {
-							fmt.Println("MISSING TOP_TEXTURE")
 						}
+						//}
 					}
 
 					if sector.FloorY > adjSec.FloorY {
-						botTexture := wall.BotTexture
-						if botTexture >= 0 {
-							texName := level.GetTexture(botTexture)
-							names, _ := archive.AddTexture(texName)
-							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						} else {
-							fmt.Println("MISSING BOTTOM_TEXTURE")
+						var names []string
+						//if !wall.Transparent {
+						if wall.BotTexture >= 0 {
+							texName := level.GetTexture(wall.BotTexture)
+							names, _ = archive.AddTexture(texName)
 						}
+						//}
+						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						//}
 					}
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)

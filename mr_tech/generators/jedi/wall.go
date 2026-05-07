@@ -24,6 +24,7 @@ type Wall struct {
 	DMirror     int
 	OffsetX     float64
 	OffsetY     float64
+	Transparent bool
 }
 
 // NewWall initializes a new Wall instance with default values and returns a pointer to it.
@@ -90,7 +91,7 @@ func (w *Wall) Parse(tokens []string) {
 				fmt.Printf("doWall: MID invalid token id at %d: %s\n", i, err.Error())
 			} else {
 				if midTexture == 0 {
-					midTexture = -1
+					w.Transparent = true
 				}
 				w.MidTexture = midTexture
 			}
@@ -100,9 +101,9 @@ func (w *Wall) Parse(tokens []string) {
 			if err != nil {
 				fmt.Printf("doWall: TOP invalid token id at %d: %s\n", i, err.Error())
 			} else {
-				//if topTexture == 0 {
-				//	topTexture = -1
-				//}
+				if topTexture == 0 {
+					w.Transparent = true
+				}
 				w.TopTexture = topTexture
 			}
 		case "BOT:":
@@ -111,9 +112,9 @@ func (w *Wall) Parse(tokens []string) {
 			if err != nil {
 				fmt.Printf("doWall: BOT invalid token id at %d: %s\n", i, err.Error())
 			} else {
-				//if botTexture == 0 {
-				//	botTexture = -1
-				//}
+				if botTexture == 0 {
+					w.Transparent = true
+				}
 				w.BotTexture = botTexture
 			}
 		case "SIGN:":

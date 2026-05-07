@@ -6,8 +6,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // modeNone represents the default mode state.
@@ -138,10 +136,14 @@ func (p *Level) Parse(r io.Reader) error {
 			}
 		case "VERTICES":
 			mode = modeVertices
-			p.doVertices(tokens, sector)
+			if sector != nil {
+				sector.VerticesInitialize(tokens)
+			}
 		case "WALLS":
 			mode = modeWalls
-			p.doWalls(tokens, sector)
+			if sector != nil {
+				sector.WallsInitialize(tokens)
+			}
 		case "TEXTURES":
 			mode = modeTextures
 			if err := p.doTextures(tokens); err != nil {
@@ -149,13 +151,13 @@ func (p *Level) Parse(r io.Reader) error {
 			}
 		case "WALL", "WALL:":
 			if sector != nil {
-				sector.AddWall(tokens)
+				sector.WallAdd(tokens)
 			}
 		case "TEXTURE:":
 			p.doTexture(tokens)
 		case "FLAGS":
 			if sector != nil {
-				sector.AddFlags(tokens)
+				sector.FlagsAdd(tokens)
 			}
 		case "FRICTION":
 			if sector != nil && len(tokens) >= 2 {
@@ -212,7 +214,7 @@ func (p *Level) Parse(r io.Reader) error {
 		default:
 			if mode == modeVertices {
 				if sector != nil {
-					sector.AddVertices(tokens)
+					sector.VertexAdd(tokens)
 				}
 			} else {
 				fmt.Println("unknown LEVEL keyword:", keyword)
@@ -243,38 +245,6 @@ func (p *Level) doCreateSector(tokens []string) (*Sector, error) {
 	}
 	p.Sectors[sector.Index] = sector
 	return sector, nil
-}
-
-// doVertices initializes the vertices of a sector by parsing the vertex count and reallocating the vertices slice.
-func (p *Level) doVertices(tokens []string, sector *Sector) {
-	if sector == nil {
-		fmt.Println("doVertices: nil sector")
-		return
-	}
-	sector.Vertices = nil
-	vCount, err := GetTokenIntAt(tokens, 1)
-	if err != nil {
-		fmt.Printf("doVertices: invalid token at 1 err: %s\n", err.Error())
-		return
-	}
-	sector.Vertices = make([]geometry.XY, vCount)
-}
-
-// doWalls initializes the walls of a sector by parsing wall count from the given tokens and reallocating the walls slice.
-func (p *Level) doWalls(tokens []string, sector *Sector) {
-	if sector == nil {
-		fmt.Printf("doWalls: nil sector\n")
-		return
-	}
-	var err error
-	sector.Walls = nil
-	sector.WallIdx = 0
-	wCount, err := GetTokenIntAt(tokens, 1)
-	if err != nil {
-		fmt.Printf("doWalls: invalid token at 1 err: %s\n", err.Error())
-		return
-	}
-	sector.Walls = make([]*Wall, wCount)
 }
 
 // doTextures initializes the Textures slice in a Level object using the count specified in tokens. Returns an error if parsing fails.

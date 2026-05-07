@@ -89,9 +89,9 @@ func (w *Wall) Parse(tokens []string) {
 			if err != nil {
 				fmt.Printf("doWall: MID invalid token id at %d: %s\n", i, err.Error())
 			} else {
-				//if midTexture == 0 {
-				//	midTexture = -1
-				//}
+				if midTexture == 0 {
+					midTexture = -1
+				}
 				w.MidTexture = midTexture
 			}
 		case "TOP:":

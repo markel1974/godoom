@@ -125,23 +125,8 @@ func (s *Sector) SetFloor(tokens []string) {
 	}
 }
 
-// AddFlags parses a slice of string tokens, converting them to integers and appending them to the Sector's Flags slice.
-func (s *Sector) AddFlags(tokens []string) {
-	// Alloca la slice in base al numero di parametri reali sulla riga
-	flagCount := len(tokens) - 1
-	s.Flags = make([]int, 0, flagCount)
-	for i := 1; i < len(tokens); i++ {
-		val, err := GetTokenIntAt(tokens, i)
-		if err != nil {
-			fmt.Printf("doFlags: invalid token at %d: %s\n", i, err.Error())
-			continue
-		}
-		s.Flags = append(s.Flags, val)
-	}
-}
-
-// AddWall adds a new Wall to the Sector by parsing the provided tokens and updating the Walls slice and WallIdx counter.
-func (s *Sector) AddWall(tokens []string) {
+// WallAdd adds a new Wall to the Sector by parsing the provided tokens and updating the Walls slice and WallIdx counter.
+func (s *Sector) WallAdd(tokens []string) {
 	if s.WallIdx >= len(s.Walls) {
 		fmt.Println("max wall reached!")
 		return
@@ -152,8 +137,8 @@ func (s *Sector) AddWall(tokens []string) {
 	s.WallIdx++
 }
 
-// AddVertices updates the Vertices slice of the Sector with coordinates parsed from the provided tokens.
-func (s *Sector) AddVertices(tokens []string) {
+// VertexAdd updates the Vertices slice of the Sector with coordinates parsed from the provided tokens.
+func (s *Sector) VertexAdd(tokens []string) {
 	var err error
 	var ptX, ptZ float64
 	ord := -1
@@ -210,6 +195,44 @@ func (s *Sector) AddVertices(tokens []string) {
 		return
 	}
 	s.Vertices[ord] = geometry.XY{X: ptX, Y: ptZ}
+}
+
+// VerticesInitialize initializes the Vertices slice with the size specified by the second token in the input array.
+func (s *Sector) VerticesInitialize(tokens []string) {
+	s.Vertices = nil
+	vCount, err := GetTokenIntAt(tokens, 1)
+	if err != nil {
+		fmt.Printf("doVertices: invalid token at 1 err: %s\n", err.Error())
+		return
+	}
+	s.Vertices = make([]geometry.XY, vCount)
+}
+
+// WallsInitialize initializes the Walls slice of the Sector based on the count provided in the tokens and resets WallIdx.
+func (s *Sector) WallsInitialize(tokens []string) {
+	var err error
+	s.Walls = nil
+	s.WallIdx = 0
+	wCount, err := GetTokenIntAt(tokens, 1)
+	if err != nil {
+		fmt.Printf("doWalls: invalid token at 1 err: %s\n", err.Error())
+		return
+	}
+	s.Walls = make([]*Wall, wCount)
+}
+
+// FlagsAdd parses a slice of string tokens, converting them to integers and appending them to the Sector's Flags slice.
+func (s *Sector) FlagsAdd(tokens []string) {
+	flagCount := len(tokens) - 1
+	s.Flags = make([]int, 0, flagCount)
+	for i := 1; i < len(tokens); i++ {
+		val, err := GetTokenIntAt(tokens, i)
+		if err != nil {
+			fmt.Printf("doFlags: invalid token at %d: %s\n", i, err.Error())
+			continue
+		}
+		s.Flags = append(s.Flags, val)
+	}
 }
 
 // IsSky checks if the sector is marked as "sky" based on its flags. Returns true if the first flag bit is set, otherwise false.

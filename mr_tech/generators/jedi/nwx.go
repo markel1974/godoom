@@ -280,37 +280,142 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		}
 		w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
 	*/
+
+	// ==========================================
+	// 2. FRAME MAPPING (FRMT)
+	// ==========================================
+	frmtBase := int64(waxHeader.FrmtOffset) + 8
+	if _, err := r.Seek(frmtBase, io.SeekStart); err != nil {
+		return fmt.Errorf("unable to seek to FRMT: %v", err)
+	}
+
+	// FrmtHeader must be 32byte
+	var frmtHeader struct {
+		Flags     uint32
+		InsertX   uint32
+		InsertY   uint32
+		Flip      uint32
+		Width     float32
+		Height    float32
+		CellIndex uint32
+		Pad7      uint32
+	}
+	if err := binary.Read(r, binary.LittleEndian, &frmtHeader); err != nil {
+		return err
+	}
+
+	isCompressed := (frmtHeader.Flags & 0x1000) != 0
+	fmt.Println(baseId, isCompressed)
+
+	//fmt.Println(baseId, frmtHeader)
+
 	if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
 		return err
 	}
+
+	// 1. Legge l'Header Globale del blocco CELT (Solo 12 byte, una volta sola)
+	var celtMagic, numCells, chunkSize uint32
+	if err := binary.Read(r, binary.LittleEndian, &celtMagic); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &numCells); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &chunkSize); err != nil {
+		return err
+	}
+
+	// Controllo di sicurezza
+	if celtMagic != 1414284611 { // "CELT"
+		return fmt.Errorf("non è un blocco CELT valido")
+	}
+
 	cellCache := make(map[uint32]*NWXCell)
-	var vErr error
-	for {
-		idx, streamW, streamH, err := parseByMarkers(baseId, r)
-		if err != nil {
-			vErr = err
-			//return fmt.Errorf("error reading cell %d in CELT: %v", i, err)
+
+	for i := uint32(0); i < numCells; i++ {
+		// L'Header della Cella è di ESATTAMENTE 20 byte (5 uint32)
+		var physIndex, size, streamW, streamH, magic uint32
+		if err := binary.Read(r, binary.LittleEndian, &physIndex); err != nil {
 			break
 		}
+		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
+			break
+		}
+		if err := binary.Read(r, binary.LittleEndian, &streamW); err != nil {
+			break
+		}
+		if err := binary.Read(r, binary.LittleEndian, &streamH); err != nil {
+			break
+		}
+		if err := binary.Read(r, binary.LittleEndian, &magic); err != nil {
+			break
+		} // Consumiamo il Magic Number (0x006CFA5D) per completare l'header!
+
 		f := NewNWXFrame()
-		f.CellIndex = idx
-		f.PhysicalIndex = idx
+		f.CellIndex = physIndex
+		f.PhysicalIndex = physIndex
 		f.Width = float32(streamW)
 		f.Height = float32(streamH)
 		w.frames = append(w.frames, f)
-		//w.frames[idx] = f
 
-		if cached, ok := cellCache[idx]; ok {
-			f.Cell = cached
-			continue
+		// Ora siamo posizionati PERFETTAMENTE all'inizio della colTable (payload vero)
+		payloadStart, _ := r.Seek(0, io.SeekCurrent)
+
+		if cell := cellCache[physIndex]; cell != nil {
+			f.Cell = cellCache[physIndex]
+		} else {
+			f.Cell = NewNWXCell(fmt.Sprintf("phys_%d", physIndex))
+			if streamW > 0 && streamH > 0 {
+				// NOTA: isCompressed deve arrivare dal FRMT, non c'è traccia qui!
+				if err := f.Cell.Parse(r, int(streamW), int(streamH), isCompressed); err != nil {
+					return err
+				}
+				cellCache[physIndex] = f.Cell
+			}
 		}
-		cell := NewNWXCell(fmt.Sprintf("phys_%d", f.PhysicalIndex))
-		if err = cell.Parse(r, int(streamW), int(streamH), true); err != nil {
+
+		// 3. Salto Assoluto: avanziamo alla cella successiva.
+		// Partendo dal payloadStart corretto, il salto copre esattamente il blocco dati.
+		if _, err := r.Seek(payloadStart+int64(size), io.SeekStart); err != nil {
 			return err
 		}
-		cellCache[f.CellIndex] = cell
-		f.Cell = cell
 	}
+
+	/*
+
+		if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
+			return err
+		}
+		cellCache := make(map[uint32]*NWXCell)
+		var vErr error
+		for {
+			idx, streamW, streamH, err := parseByMarkers(baseId, r)
+			if err != nil {
+				vErr = err
+				//return fmt.Errorf("error reading cell %d in CELT: %v", i, err)
+				break
+			}
+			f := NewNWXFrame()
+			f.CellIndex = idx
+			f.PhysicalIndex = idx
+			f.Width = float32(streamW)
+			f.Height = float32(streamH)
+			w.frames = append(w.frames, f)
+			//w.frames[idx] = f
+
+			if cached, ok := cellCache[idx]; ok {
+				f.Cell = cached
+				continue
+			}
+			cell := NewNWXCell(fmt.Sprintf("phys_%d", f.PhysicalIndex))
+			if err = cell.Parse(r, int(streamW), int(streamH), true); err != nil {
+				return err
+			}
+			cellCache[f.CellIndex] = cell
+			f.Cell = cell
+		}
+
+	*/
 	/*
 		w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
 
@@ -371,7 +476,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 
 
 	*/
-	return vErr
+	return nil
 }
 
 var _streamCounter = uint32(0)

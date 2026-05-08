@@ -31,53 +31,82 @@ func NewNWXCell(id string) *NWXCell {
 }
 
 // Parse reads and decodes pixel data from an io.ReadSeeker into the NWXCell, given the specified stream dimensions.
-func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int) error {
+func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool) error {
 	p.sizeX, p.sizeY = streamW, streamH
 	p.pixels = make([]byte, streamW*streamH)
+
+	colTableBase, _ := r.Seek(0, io.SeekCurrent)
 
 	colTable := make([]uint32, streamW)
 	if err := binary.Read(r, binary.LittleEndian, &colTable); err != nil {
 		return err
 	}
 
-	tableStart, _ := r.Seek(0, io.SeekCurrent)
-
 	for x := 0; x < streamW; x++ {
-		target := colTable[x] & 0x00FFFFFF // Mask obbligatoria per pointer a 24-bit
+		target := colTable[x] & 0x00FFFFFF
 		if target == 0 {
 			continue
 		}
 
-		if _, err := r.Seek(tableStart+int64(target), io.SeekStart); err != nil {
+		if _, err := r.Seek(colTableBase+int64(target), io.SeekStart); err != nil {
 			return err
 		}
 
-		y := 0
-		for y < streamH {
-			var cmd uint8
-			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-				break
-			}
-
-			if cmd >= 128 {
-				y += int(cmd - 128)
-			} else if cmd > 0 {
-				count := int(cmd)
-				for i := 0; i < count && y < streamH; i++ {
-					var pix uint8
-					if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
-						return err
-					}
-
-					// STRIDE FISICO: Uso streamW per andare a capo
-					targetIdx := (y * streamW) + x
-					if targetIdx < len(p.pixels) {
-						p.pixels[targetIdx] = pix
-					}
-					y++
+		if !isCompressed {
+			// ==========================================
+			// METODOLOGIA RAW (Per il Barile)
+			// ==========================================
+			for y := 0; y < streamH; y++ {
+				var pix uint8
+				if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
+					break
 				}
-			} else {
-				break
+
+				if pix == 0 {
+					continue // Maschera di trasparenza implicita
+				}
+
+				// L'inversione Y che funzionava bene
+				drawY := (streamH - 1) - y
+				targetIdx := (drawY * streamW) + x
+				if targetIdx >= 0 && targetIdx < len(p.pixels) {
+					p.pixels[targetIdx] = pix
+				}
+			}
+		} else {
+			// ==========================================
+			// METODOLOGIA RLE (Il tuo parser originale blindato)
+			// ==========================================
+			y := 0
+			for y < streamH {
+				var cmd uint8
+				if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
+					break
+				}
+
+				// Terminatori di colonna LucasArts
+				if cmd == 0 || cmd == 128 {
+					break
+				}
+
+				if cmd > 128 {
+					y += int(cmd - 128) // Salta pixel trasparenti
+				} else {
+					count := int(cmd)
+					for i := 0; i < count && y < streamH; i++ {
+						var pix uint8
+						if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
+							break
+						}
+
+						drawY := (streamH - 1) - y
+						targetIdx := (drawY * streamW) + x
+						if targetIdx >= 0 && targetIdx < len(p.pixels) {
+							p.pixels[targetIdx] = pix
+						}
+						y++
+					}
+				}
 			}
 		}
 	}
@@ -205,106 +234,150 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return fmt.Errorf("invalid signature")
 	}
 
-	// Absolute chunk bases (skipping the 4 bytes of TAG and 4 bytes of SIZE = +8)
-	seqBase := int64(waxHeader.SeqOffset) + 8
+	/*
+		// Absolute chunk bases (skipping the 4 bytes of TAG and 4 bytes of SIZE = +8)
+		seqBase := int64(waxHeader.SeqOffset) + 8
 
-	// ==========================================
-	// 1. SEQUENCE MAPPING (SEQT)
-	// ==========================================
-	if _, err := r.Seek(seqBase, io.SeekStart); err != nil {
-		return fmt.Errorf("unable to seek to SEQT: %v", err)
-	}
-
-	seqHeader := NewNWXSequenceHeader()
-	if err := seqHeader.Parse(r); err != nil {
-		return err
-	}
-
-	// ==========================================
-	// 2. FRAME MAPPING (FRMT)
-	// ==========================================
-	frmtBase := int64(waxHeader.FrmtOffset) + 8
-	if _, err := r.Seek(frmtBase, io.SeekStart); err != nil {
-		return fmt.Errorf("unable to seek to FRMT: %v", err)
-	}
-
-	// FrmtHeader must be 32byte
-	var frmtHeader struct {
-		ChunkSize uint32
-		Pad1      uint32
-		Pad2      uint32
-		Pad3      uint32
-		Width     float32
-		Height    float32
-		Pad6      uint32
-		Pad7      uint32
-	}
-	if err := binary.Read(r, binary.LittleEndian, &frmtHeader); err != nil {
-		return err
-	}
-	if _, err := r.Seek(frmtBase+int64(unsafe.Sizeof(frmtHeader)), io.SeekStart); err != nil {
-		return err
-	}
-
-	w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
-	cellMax := uint32(0)
-	for i := uint32(0); i < frmtHeader.ChunkSize; i++ {
-		gFrame := NewNWXFrame()
-		size, err := gFrame.Parse(r)
-		if err != nil {
-			return fmt.Errorf("error reading frame %d in FRMT: %v", i, err)
+		// ==========================================
+		// 1. SEQUENCE MAPPING (SEQT)
+		// ==========================================
+		if _, err := r.Seek(seqBase, io.SeekStart); err != nil {
+			return fmt.Errorf("unable to seek to SEQT: %v", err)
 		}
-		index := gFrame.CellIndex
-		if int(index) >= len(w.frames) {
-			return fmt.Errorf("cell %d not present in FRMT", index)
-		}
-		w.frames[index] = gFrame
-		if index > cellMax {
-			cellMax = index
-		}
-		i += uint32(size)
-	}
 
-	// ==========================================
-	// 3. CELL AND PIXEL MAPPING (CELT)
-	// ==========================================
+		seqHeader := NewNWXSequenceHeader()
+		if err := seqHeader.Parse(r); err != nil {
+			return err
+		}
+
+		// ==========================================
+		// 2. FRAME MAPPING (FRMT)
+		// ==========================================
+		frmtBase := int64(waxHeader.FrmtOffset) + 8
+		if _, err := r.Seek(frmtBase, io.SeekStart); err != nil {
+			return fmt.Errorf("unable to seek to FRMT: %v", err)
+		}
+
+		// FrmtHeader must be 32byte
+		var frmtHeader struct {
+			ChunkSize uint32
+			Pad1      uint32
+			Pad2      uint32
+			Pad3      uint32
+			Width     float32
+			Height    float32
+			Pad6      uint32
+			Pad7      uint32
+		}
+		if err := binary.Read(r, binary.LittleEndian, &frmtHeader); err != nil {
+			return err
+		}
+		//if _, err := r.Seek(frmtBase+int64(unsafe.Sizeof(frmtHeader)), io.SeekStart); err != nil {
+		//	return err
+		//}
+		if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
+			return err
+		}
+		w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
+	*/
 	if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
 		return err
 	}
 	cellCache := make(map[uint32]*NWXCell)
+	var vErr error
 	for {
 		idx, streamW, streamH, err := parseByMarkers(r)
 		if err != nil {
+			vErr = err
 			//return fmt.Errorf("error reading cell %d in CELT: %v", i, err)
 			break
 		}
-		if idx > uint32(len(w.frames)) {
-			fmt.Println("CELL NOT FOUND", idx, streamW, streamH)
-			continue
-		}
-		f := w.frames[idx]
-		if f == nil {
-			fmt.Println("CELL NOT FOUND", idx, streamW, streamH)
-			continue
-		}
-		if cached, ok := cellCache[f.PhysicalIndex]; ok {
+		f := NewNWXFrame()
+		f.CellIndex = idx
+		f.PhysicalIndex = idx
+		f.Width = float32(streamW)
+		f.Height = float32(streamH)
+		w.frames = append(w.frames, f)
+		//w.frames[idx] = f
+
+		if cached, ok := cellCache[idx]; ok {
 			f.Cell = cached
 			continue
 		}
 		cell := NewNWXCell(fmt.Sprintf("phys_%d", f.PhysicalIndex))
-		if err = cell.Parse(r, int(streamW), int(streamH)); err != nil {
+		if err = cell.Parse(r, int(streamW), int(streamH), false); err != nil {
 			return err
 		}
-
-		cellCache[f.PhysicalIndex] = cell
+		cellCache[f.CellIndex] = cell
 		f.Cell = cell
 	}
+	/*
+		w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
 
-	return nil
+
+
+		cellMax := uint32(0)
+		for i := uint32(0); i < frmtHeader.ChunkSize; i++ {
+			gFrame := NewNWXFrame()
+			size, err := gFrame.Parse(r)
+			if err != nil {
+				return fmt.Errorf("error reading frame %d in FRMT: %v", i, err)
+			}
+			index := gFrame.CellIndex
+			if int(index) >= len(w.frames) {
+				return fmt.Errorf("cell %d not present in FRMT", index)
+			}
+			w.frames[index] = gFrame
+			if index > cellMax {
+				cellMax = index
+			}
+			i += uint32(size)
+		}
+
+		// ==========================================
+		// 3. CELL AND PIXEL MAPPING (CELT)
+		// ==========================================
+		if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
+			return err
+		}
+		cellCache := make(map[uint32]*NWXCell)
+		for {
+			idx, streamW, streamH, err := parseByMarkers(r)
+			if err != nil {
+				//return fmt.Errorf("error reading cell %d in CELT: %v", i, err)
+				break
+			}
+			if idx > uint32(len(w.frames)) {
+				fmt.Println("CELL NOT FOUND", idx, streamW, streamH)
+				continue
+			}
+			f := w.frames[idx]
+			if f == nil {
+				fmt.Println("CELL NOT FOUND", idx, streamW, streamH)
+				continue
+			}
+			if cached, ok := cellCache[f.PhysicalIndex]; ok {
+				f.Cell = cached
+				continue
+			}
+			cell := NewNWXCell(fmt.Sprintf("phys_%d", f.PhysicalIndex))
+			if err = cell.Parse(r, int(streamW), int(streamH)); err != nil {
+				return err
+			}
+
+			cellCache[f.PhysicalIndex] = cell
+			f.Cell = cell
+		}
+
+
+	*/
+	return vErr
 }
 
+var _streamCounter = uint32(0)
+
 // parseByMarkers parses data from the provided io.ReadSeeker, locating markers to extract physIndex, streamW, and streamH.
-func parseByMarkers(r io.ReadSeeker) (physIndex, streamW, streamH uint32, err error) {
+func parseByMarkers(r io.ReadSeeker) (uint32, uint32, uint32, error) {
 	scanForMarker := func(r io.Reader, marker []byte) error {
 		buf := make([]byte, 1)
 		matchIdx := 0
@@ -325,32 +398,35 @@ func parseByMarkers(r io.ReadSeeker) (physIndex, streamW, streamH uint32, err er
 		}
 		return nil
 	}
+	_streamCounter++
+	var streamW, streamH uint32
+	physIndex := _streamCounter
 
-	prologueMarker := []byte{0x4D, 0xFA, 0x6C, 0x00, 0xCD}
+	//prologueMarker := []byte{0x4D, 0xFA, 0x6C, 0x00, 0xCD}
 	dataMarker := []byte{0x5D, 0xFA, 0x6C, 0x00}
-	if err = scanForMarker(r, prologueMarker); err != nil {
-		return 0, 0, 0, fmt.Errorf("prologo non trovato: %w", err)
-	}
-	if err = binary.Read(r, binary.LittleEndian, &physIndex); err != nil {
-		return 0, 0, 0, fmt.Errorf("lettura physIndex fallita: %w", err)
-	}
-	if err = scanForMarker(r, dataMarker); err != nil {
+	//if err = scanForMarker(r, prologueMarker); err != nil {
+	//	return 0, 0, 0, fmt.Errorf("prologo non trovato: %w", err)
+	//}
+	//if err = binary.Read(r, binary.LittleEndian, &physIndex); err != nil {
+	//	return 0, 0, 0, fmt.Errorf("lettura physIndex fallita: %w", err)
+	//}
+	if err := scanForMarker(r, dataMarker); err != nil {
 		return 0, 0, 0, fmt.Errorf("data marker non trovato per cella %d: %w", physIndex, err)
 	}
 
 	// Torniamo indietro di 12 byte: 4 (dataMarker) + 4 (streamH) + 4 (streamW)
-	if _, err = r.Seek(-12, io.SeekCurrent); err != nil {
+	if _, err := r.Seek(-12, io.SeekCurrent); err != nil {
 		return 0, 0, 0, err
 	}
-	if err = binary.Read(r, binary.LittleEndian, &streamW); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &streamW); err != nil {
 		return 0, 0, 0, err
 	}
-	if err = binary.Read(r, binary.LittleEndian, &streamH); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &streamH); err != nil {
 		return 0, 0, 0, err
 	}
 	// 4. Ripristiniamo il cursore all'inizio della colTable
 	// (saltiamo di nuovo i 4 byte del dataMarker)
-	if _, err = r.Seek(4, io.SeekCurrent); err != nil {
+	if _, err := r.Seek(4, io.SeekCurrent); err != nil {
 		return 0, 0, 0, err
 	}
 	return physIndex, streamW, streamH, nil

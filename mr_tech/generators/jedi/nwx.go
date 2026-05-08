@@ -31,6 +31,7 @@ func NewNWXCell(id string) *NWXCell {
 }
 
 // Parse reads and decodes pixel data from an io.ReadSeeker into the NWXCell, given the specified stream dimensions.
+// Parse decodifica i dati della cella usando la metodologia passata dall'esterno (RAW o RLE).
 func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool) error {
 	p.sizeX, p.sizeY = streamW, streamH
 	p.pixels = make([]byte, streamW*streamH)
@@ -54,7 +55,7 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 
 		if !isCompressed {
 			// ==========================================
-			// METODOLOGIA RAW (Per il Barile)
+			// BRANCH RAW: Dati lineari (es. Barile)
 			// ==========================================
 			for y := 0; y < streamH; y++ {
 				var pix uint8
@@ -63,10 +64,9 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 				}
 
 				if pix == 0 {
-					continue // Maschera di trasparenza implicita
+					continue // Trasparenza implicita (indice 0)
 				}
 
-				// L'inversione Y che funzionava bene
 				drawY := (streamH - 1) - y
 				targetIdx := (drawY * streamW) + x
 				if targetIdx >= 0 && targetIdx < len(p.pixels) {
@@ -75,7 +75,7 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 			}
 		} else {
 			// ==========================================
-			// METODOLOGIA RLE (Il tuo parser originale blindato)
+			// BRANCH RLE: Dati compressi con terminatori
 			// ==========================================
 			y := 0
 			for y < streamH {
@@ -84,13 +84,13 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 					break
 				}
 
-				// Terminatori di colonna LucasArts
+				// Terminatori di colonna del motore LucasArts
 				if cmd == 0 || cmd == 128 {
 					break
 				}
 
 				if cmd > 128 {
-					y += int(cmd - 128) // Salta pixel trasparenti
+					y += int(cmd - 128) // Salto (Trasparenza)
 				} else {
 					count := int(cmd)
 					for i := 0; i < count && y < streamH; i++ {
@@ -286,7 +286,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 	cellCache := make(map[uint32]*NWXCell)
 	var vErr error
 	for {
-		idx, streamW, streamH, err := parseByMarkers(r)
+		idx, streamW, streamH, err := parseByMarkers(baseId, r)
 		if err != nil {
 			vErr = err
 			//return fmt.Errorf("error reading cell %d in CELT: %v", i, err)
@@ -305,7 +305,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 			continue
 		}
 		cell := NewNWXCell(fmt.Sprintf("phys_%d", f.PhysicalIndex))
-		if err = cell.Parse(r, int(streamW), int(streamH), false); err != nil {
+		if err = cell.Parse(r, int(streamW), int(streamH), true); err != nil {
 			return err
 		}
 		cellCache[f.CellIndex] = cell
@@ -377,7 +377,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 var _streamCounter = uint32(0)
 
 // parseByMarkers parses data from the provided io.ReadSeeker, locating markers to extract physIndex, streamW, and streamH.
-func parseByMarkers(r io.ReadSeeker) (uint32, uint32, uint32, error) {
+func parseByMarkers(name string, r io.ReadSeeker) (uint32, uint32, uint32, error) {
 	scanForMarker := func(r io.Reader, marker []byte) error {
 		buf := make([]byte, 1)
 		matchIdx := 0
@@ -399,8 +399,6 @@ func parseByMarkers(r io.ReadSeeker) (uint32, uint32, uint32, error) {
 		return nil
 	}
 	_streamCounter++
-	var streamW, streamH uint32
-	physIndex := _streamCounter
 
 	//prologueMarker := []byte{0x4D, 0xFA, 0x6C, 0x00, 0xCD}
 	dataMarker := []byte{0x5D, 0xFA, 0x6C, 0x00}
@@ -411,11 +409,36 @@ func parseByMarkers(r io.ReadSeeker) (uint32, uint32, uint32, error) {
 	//	return 0, 0, 0, fmt.Errorf("lettura physIndex fallita: %w", err)
 	//}
 	if err := scanForMarker(r, dataMarker); err != nil {
-		return 0, 0, 0, fmt.Errorf("data marker non trovato per cella %d: %w", physIndex, err)
+		return 0, 0, 0, fmt.Errorf("data marker non trovato per cella  %w", err)
 	}
 
-	// Torniamo indietro di 12 byte: 4 (dataMarker) + 4 (streamH) + 4 (streamW)
-	if _, err := r.Seek(-12, io.SeekCurrent); err != nil {
+	//r.Seek(-20, io.SeekCurrent)
+	//rav := make([]byte, 64)
+	//binary.Read(r, binary.LittleEndian, &rav)
+	//common.Hexdump(rav)
+	//os.Exit(1)
+
+	// Torniamo indietro di 12 byte: 4 (dataMarker) + 4 (streamH) + 4 (streamW) + 4 (Size) + 4 (Flags)
+	if _, err := r.Seek(-32, io.SeekCurrent); err != nil {
+		return 0, 0, 0, err
+	}
+	var streamW, streamH uint32
+	var physIndex, size uint32
+	var magic [4]byte
+	var numCells, chunkSize uint32
+	if err := binary.Read(r, binary.LittleEndian, &magic); err != nil {
+		return 0, 0, 0, err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &numCells); err != nil {
+		return 0, 0, 0, err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &chunkSize); err != nil {
+		return 0, 0, 0, err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &physIndex); err != nil {
+		return 0, 0, 0, err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
 		return 0, 0, 0, err
 	}
 	if err := binary.Read(r, binary.LittleEndian, &streamW); err != nil {
@@ -424,6 +447,8 @@ func parseByMarkers(r io.ReadSeeker) (uint32, uint32, uint32, error) {
 	if err := binary.Read(r, binary.LittleEndian, &streamH); err != nil {
 		return 0, 0, 0, err
 	}
+
+	//fmt.Printf("%s: magic %s numCells %d chunkSize %d physIndex %d size %d streamW %d streamH %d\n", name, string(magic[:]), numCells, chunkSize, physIndex, size, streamW, streamH)
 	// 4. Ripristiniamo il cursore all'inizio della colTable
 	// (saltiamo di nuovo i 4 byte del dataMarker)
 	if _, err := r.Seek(4, io.SeekCurrent); err != nil {

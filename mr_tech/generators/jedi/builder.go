@@ -534,7 +534,7 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	//defer f.Close()
 	//common.Hexdump(waxData)
 	//os.Exit(1)
-	return nil, fmt.Errorf("TODO")
+	//return nil, fmt.Errorf("TODO")
 	wax := NewNWX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
 	//if err != nil {
@@ -543,6 +543,8 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	if err != nil {
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
+	multiSprite := config.NewMultiSprite()
+	var tn []string
 	for _, f := range wax.frames {
 		if f == nil {
 			continue
@@ -552,23 +554,13 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 		}
 		cell := f.Cell
 		sizeX, sizeY := cell.GetSize()
-		dump := false
-		//targets := []string{"BOTTLE", "BARREL", "COW"}
-		var targets []string
-		if len(targets) == 0 {
-			dump = true
-		} else {
-			for _, target := range targets {
-				if strings.Contains(strings.ToUpper(fileName), strings.ToUpper(target)) {
-					dump = true
-					break
-				}
-			}
-		}
-
-		archive.AddRawTexture(fileName+"_"+strconv.Itoa(int(f.CellIndex)), sizeX, sizeY, cell.GetPixels(), dump)
+		tName := fileName + "_" + strconv.Itoa(int(f.CellIndex))
+		archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
+		tn = append(tn, tName)
+		material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		multiSprite.Add(material)
+		break
 	}
-	multiSprite := config.NewMultiSprite()
 
 	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)

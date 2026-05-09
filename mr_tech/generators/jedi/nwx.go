@@ -34,9 +34,13 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 	p.sizeX, p.sizeY = streamW, streamH
 	p.pixels = make([]byte, streamW*streamH)
 
-	colTableBase, _ := r.Seek(0, io.SeekCurrent)
-
+	// La colTable esiste SEMPRE, in entrambi i formati!
+	colTableBase, cErr := r.Seek(0, io.SeekCurrent)
+	if cErr != nil {
+		return cErr
+	}
 	colTable := make([]uint32, streamW)
+
 	if err := binary.Read(r, binary.LittleEndian, &colTable); err != nil {
 		return err
 	}
@@ -47,8 +51,8 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 			continue
 		}
 
-		// FIX 2: Calcolo della lunghezza esatta della colonna per evitare di leggere byte di padding
-		colLength := streamH // Fallback per l'ultima colonna
+		// Calcolo della lunghezza della colonna (Anti-padding per il branch RAW)
+		colLength := streamH
 		for nextX := x + 1; nextX < streamW; nextX++ {
 			nextTarget := colTable[nextX] & 0x00FFFFFF
 			if nextTarget != 0 {
@@ -62,34 +66,47 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 		}
 
 		if !isCompressed {
-			// ==========================================
-			// BRANCH RAW: Dati lineari (es. Barile)
-			// ==========================================
-
-			// Leggiamo solo i byte effettivi, ignorando eventuale padding a fine colonna
-			pixelsToRead := streamH
-			if colLength < streamH {
-				pixelsToRead = colLength
-			}
-
-			for y := 0; y < pixelsToRead; y++ {
-				var pix uint8
-				if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
-					break
+			// Leggiamo un massimo di colLength o streamH byte per evitare sporcizia
+			var latestCmd uint8
+			y := 0
+			// Usiamo colLength per non sforare la lettura fisica
+			for bytesRead := 0; bytesRead < colLength && y < streamH; {
+				var cmd uint8
+				if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
+					return err
 				}
+				bytesRead++
 
-				// FIX 1: Trasparenza implicita (0) e Chroma Key LucasArts (255 = Magenta)
-				if pix == 0 || pix == 255 {
+				if cmd == 0 {
 					continue
 				}
 
-				//fmt.Println("current pix", pix)
-
 				drawY := (streamH - 1) - y
 				targetIdx := (drawY * streamW) + x
-				if targetIdx >= 0 && targetIdx < len(p.pixels) {
-					p.pixels[targetIdx] = pix
+				if targetIdx < 0 || targetIdx >= len(p.pixels) {
+					continue
 				}
+
+				//if cmd < 16 || cmd > 128 {
+				if cmd < 16 {
+					finalPix := cmd
+					switch cmd {
+					case 1:
+						finalPix = latestCmd
+					case 2:
+						finalPix = latestCmd + 1
+					case 3:
+						finalPix = latestCmd - 1
+					default:
+						finalPix = latestCmd
+					}
+					p.pixels[targetIdx] = finalPix
+					y++
+					continue
+				}
+				p.pixels[targetIdx] = cmd
+				y++
+				latestCmd = cmd
 			}
 		} else {
 			// ==========================================
@@ -99,25 +116,24 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 			for y < streamH {
 				var cmd uint8
 				if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-					break
+					return err
 				}
 
-				// Terminatori di colonna del motore LucasArts
 				if cmd == 0 || cmd == 128 {
 					break
 				}
 
 				if cmd > 128 {
-					y += int(cmd - 128) // Salto (Trasparenza)
+					y += int(cmd - 128)
 				} else {
 					count := int(cmd)
 					for i := 0; i < count && y < streamH; i++ {
 						var pix uint8
 						if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
-							break
+							return err
 						}
 
-						// Applichiamo il color key anche all'RLE per sicurezza
+						// Filtro Chroma Key applicato anche all'RLE
 						if pix == 0 || pix == 255 {
 							y++
 							continue
@@ -329,13 +345,14 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 	}
 
 	isCompressed := (frmtHeader.Flags & 0x1000) != 0
+	isCompressed = false
 	//1. Bit 2 (0x0004): L'Interruttore Generale
 	//2. Bit 12 (0x1000): Il Flag RLE
 	//3. Bit 4 (0x0010) e Bit 5 (0x0020): Fullbright / Illuminazione
 	//4. Bit 3 (0x0008) e Bit 6 (0x0040): Translucenza / Vetro
 	//5. Bit 7, 8, 9, 10... (L'Incubo del Reverse Engineering): I Flag di FLIP X
 
-	fmt.Printf("%s: %#X %d %d\n", baseId, frmtHeader.Flags, int(frmtHeader.Width), int(frmtHeader.Height))
+	//fmt.Printf("%s: %#X %d %d\n", baseId, frmtHeader.Flags, int(frmtHeader.Width), int(frmtHeader.Height))
 
 	//fmt.Println(baseId, frmtHeader)
 

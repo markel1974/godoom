@@ -30,17 +30,11 @@ func NewNWXCell(id string) *NWXCell {
 	return &NWXCell{id: id}
 }
 
-func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool) error {
+func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, streamSize int) error {
 	p.sizeX, p.sizeY = streamW, streamH
 	p.pixels = make([]byte, streamW*streamH)
 
-	// La colTable esiste SEMPRE, in entrambi i formati!
-	colTableBase, cErr := r.Seek(0, io.SeekCurrent)
-	if cErr != nil {
-		return cErr
-	}
 	colTable := make([]uint32, streamW)
-
 	if err := binary.Read(r, binary.LittleEndian, &colTable); err != nil {
 		return err
 	}
@@ -51,103 +45,57 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH int, isCompressed bool
 			continue
 		}
 
-		// Calcolo della lunghezza della colonna (Anti-padding per il branch RAW)
-		colLength := streamH
+		// Calcoliamo dove finisce FISICAMENTE questa colonna usando streamSize
+		var nextTarget = int64(streamSize) // Default: fine dello stream
 		for nextX := x + 1; nextX < streamW; nextX++ {
-			nextTarget := colTable[nextX] & 0x00FFFFFF
-			if nextTarget != 0 {
-				colLength = int(nextTarget - target)
+			nt := colTable[nextX] & 0x00FFFFFF
+			if nt != 0 {
+				nextTarget = int64(nt)
 				break
 			}
 		}
 
-		if _, err := r.Seek(colTableBase+int64(target), io.SeekStart); err != nil {
+		currentOffset := colTableBase + int64(target)
+		maxColBytes := int(nextTarget - int64(target))
+
+		if _, err := r.Seek(currentOffset, io.SeekStart); err != nil {
 			return err
 		}
 
-		if !isCompressed {
-			// Leggiamo un massimo di colLength o streamH byte per evitare sporcizia
-			var latestCmd uint8
-			y := 0
-			// Usiamo colLength per non sforare la lettura fisica
-			for bytesRead := 0; bytesRead < colLength && y < streamH; {
-				var cmd uint8
-				if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-					return err
-				}
-				bytesRead++
+		y := 0
+		bytesRead := 0
+		//var latestCmd uint8
 
-				if cmd == 0 {
-					continue
-				}
+		// Il loop ora è protetto sia verticalmente (y) che fisicamente (maxColBytes)
+		for y < streamH && bytesRead < maxColBytes {
+			var cmd uint8
+			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
+				return err
+			}
+			bytesRead++
+			if cmd == 0 {
+				continue
+			}
 
-				drawY := (streamH - 1) - y
-				targetIdx := (drawY * streamW) + x
-				if targetIdx < 0 || targetIdx >= len(p.pixels) {
-					continue
-				}
+			drawY := (streamH - 1) - y
+			targetIdx := (drawY * streamW) + x
 
-				//if cmd < 16 || cmd > 128 {
-				if cmd < 16 {
-					finalPix := cmd
-					switch cmd {
-					case 1:
-						finalPix = latestCmd
-					case 2:
-						finalPix = latestCmd + 1
-					case 3:
-						finalPix = latestCmd - 1
-					default:
-						finalPix = latestCmd
-					}
-					p.pixels[targetIdx] = finalPix
-					y++
-					continue
+			if cmd < 16 {
+				if targetIdx >= 0 && targetIdx < len(p.pixels) {
+					// Qui applicherai la tua logica di trasformazione
+					// p.pixels[targetIdx] = applyCommand(cmd, latestCmd)
+					p.pixels[targetIdx] = 32 // Test temporaneo
 				}
-				p.pixels[targetIdx] = cmd
 				y++
-				latestCmd = cmd
+				continue
 			}
-		} else {
-			// ==========================================
-			// BRANCH RLE: Dati compressi con terminatori
-			// ==========================================
-			y := 0
-			for y < streamH {
-				var cmd uint8
-				if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
-					return err
-				}
 
-				if cmd == 0 || cmd == 128 {
-					break
-				}
-
-				if cmd > 128 {
-					y += int(cmd - 128)
-				} else {
-					count := int(cmd)
-					for i := 0; i < count && y < streamH; i++ {
-						var pix uint8
-						if err := binary.Read(r, binary.LittleEndian, &pix); err != nil {
-							return err
-						}
-
-						// Filtro Chroma Key applicato anche all'RLE
-						if pix == 0 || pix == 255 {
-							y++
-							continue
-						}
-
-						drawY := (streamH - 1) - y
-						targetIdx := (drawY * streamW) + x
-						if targetIdx >= 0 && targetIdx < len(p.pixels) {
-							p.pixels[targetIdx] = pix
-						}
-						y++
-					}
-				}
+			// Literal Pixel
+			if targetIdx >= 0 && targetIdx < len(p.pixels) {
+				p.pixels[targetIdx] = cmd
 			}
+			//latestCmd = cmd
+			y++
 		}
 	}
 	return nil
@@ -344,8 +292,8 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return err
 	}
 
-	isCompressed := (frmtHeader.Flags & 0x1000) != 0
-	isCompressed = false
+	//isCompressed := (frmtHeader.Flags & 0x1000) != 0
+	//isCompressed = false
 	//1. Bit 2 (0x0004): L'Interruttore Generale
 	//2. Bit 12 (0x1000): Il Flag RLE
 	//3. Bit 4 (0x0010) e Bit 5 (0x0020): Fullbright / Illuminazione
@@ -413,7 +361,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		} else {
 			f.Cell = NewNWXCell(fmt.Sprintf("phys_%d", physIndex))
 			if streamW > 0 && streamH > 0 {
-				if err := f.Cell.Parse(r, int(streamW), int(streamH), isCompressed); err != nil {
+				if err := f.Cell.Parse(r, payloadStart, int(streamW), int(streamH), int(size)); err != nil {
 					return err
 				}
 				cellCache[physIndex] = f.Cell

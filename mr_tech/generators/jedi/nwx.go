@@ -7,8 +7,7 @@ import (
 	"unsafe"
 )
 
-// NWXCell represents a graphical cell containing pixel data and metadata.
-// It includes the cell's ID, dimensions, pixel array, and an associated frame reference.
+// NWXCell represents a 2D grid cell with unique identifier, dimensions, and pixel data.
 type NWXCell struct {
 	id     string
 	sizeX  int
@@ -16,20 +15,21 @@ type NWXCell struct {
 	pixels []byte
 }
 
-// GetId returns the unique identifier of the NWXCell.
+// GetId returns the unique identifier of the NWXCell as a string.
 func (p *NWXCell) GetId() string { return p.id }
 
-// GetSize returns the width and height of the NWXCell in pixels.
+// GetSize returns the width and height of the NWXCell as two integers.
 func (p *NWXCell) GetSize() (int, int) { return p.sizeX, p.sizeY }
 
-// GetPixels returns the raw pixel data of the NWXCell as a byte slice.
+// GetPixels retrieves the pixel data of the NWXCell as a byte slice.
 func (p *NWXCell) GetPixels() []byte { return p.pixels }
 
-// NewNWXCell creates a new NWXCell instance with the given ID and associated NWXFrame.
+// NewNWXCell creates and initializes a new NWXCell instance with the specified identifier.
 func NewNWXCell(id string) *NWXCell {
 	return &NWXCell{id: id}
 }
 
+// Parse decodes a stream of pixel data into the NWXCell using the provided stream dimensions and color table offset.
 func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, streamSize int) error {
 	p.sizeX, p.sizeY = streamW, streamH
 	p.pixels = make([]byte, streamW*streamH)
@@ -45,8 +45,8 @@ func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, s
 			continue
 		}
 
-		// Calcoliamo dove finisce FISICAMENTE questa colonna usando streamSize
-		var nextTarget = int64(streamSize) // Default: fine dello stream
+		// CALCOLO CHUNK SIZE DELLA COLONNA (come da offset table C++)
+		var nextTarget = int64(streamSize)
 		for nextX := x + 1; nextX < streamW; nextX++ {
 			nt := colTable[nextX] & 0x00FFFFFF
 			if nt != 0 {
@@ -54,64 +54,62 @@ func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, s
 				break
 			}
 		}
-
-		currentOffset := colTableBase + int64(target)
 		maxColBytes := int(nextTarget - int64(target))
 
+		currentOffset := colTableBase + int64(target)
 		if _, err := r.Seek(currentOffset, io.SeekStart); err != nil {
 			return err
 		}
 
-		y := 0
 		bytesRead := 0
-		//var latestCmd uint8
+		y := 0
 
-		// Il loop ora è protetto sia verticalmente (y) che fisicamente (maxColBytes)
-		for y < streamH && bytesRead < maxColBytes {
-			var cmd uint8
-			if err := binary.Read(r, binary.LittleEndian, &cmd); err != nil {
+		// Il limite ora è maxColBytes, non l'intero streamSize
+		for bytesRead < maxColBytes && y < streamH {
+			var controlByte uint8
+			if err := binary.Read(r, binary.LittleEndian, &controlByte); err != nil {
 				return err
 			}
 			bytesRead++
-			if cmd == 0 {
-				continue
-			}
 
-			if cmd < 16 {
-				drawY := (streamH - 1) - y
-				targetIdx := (drawY * streamW) + x
-				if targetIdx >= 0 && targetIdx < len(p.pixels) {
-					// p.pixels[targetIdx] = applyCommand(cmd, latestCmd)
-					p.pixels[targetIdx] = 32 // Test temporaneo
+			count := int(controlByte>>1) + 1
+			isRLE := (controlByte & 1) == 1
+
+			if isRLE {
+				var color uint8
+				if err := binary.Read(r, binary.LittleEndian, &color); err != nil {
+					return err
 				}
-				y++
-				continue
-			}
-
-			// Literal Pixel
-			drawY := (streamH - 1) - y
-			targetIdx := (drawY * streamW) + x
-			if targetIdx >= 0 && targetIdx < len(p.pixels) {
-				p.pixels[targetIdx] = cmd
-			}
-			//latestCmd = cmd
-			y++
-		}
-		if bytesRead < maxColBytes {
-			if _, err := r.Seek(int64(maxColBytes-bytesRead), io.SeekCurrent); err != nil {
-				return err
+				bytesRead++
+				for i := 0; i < count && y < streamH; i++ {
+					drawY := (streamH - 1) - y
+					targetIdx := (drawY * streamW) + x
+					if targetIdx >= 0 && targetIdx < len(p.pixels) {
+						p.pixels[targetIdx] = color
+					}
+					y++
+				}
+			} else {
+				for i := 0; i < count && y < streamH; i++ {
+					var color uint8
+					if err := binary.Read(r, binary.LittleEndian, &color); err != nil {
+						return err
+					}
+					bytesRead++
+					drawY := (streamH - 1) - y
+					targetIdx := (drawY * streamW) + x
+					if targetIdx >= 0 && targetIdx < len(p.pixels) {
+						p.pixels[targetIdx] = color
+					}
+					y++
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// NWXFrame represents a graphical frame containing rendering metadata for a specific frame in the NWX format.
-// CellIndex specifies the logical index of the associated NWXCell in the CELT block.
-// PhysicalIndex indicates the physical mapping index used in the CELT block for pixel data retrieval.
-// Width defines the width dimension of the graphical frame in floating-point units.
-// Height defines the height dimension of the graphical frame in floating-point units.
-// Cell is a reference to the NWXCell containing pixel and size data for this frame.
+// NWXFrame represents a single frame entity, defining its dimensions and associated cell data in the NWX system.
 type NWXFrame struct {
 	CellIndex     uint32
 	PhysicalIndex uint32
@@ -120,12 +118,13 @@ type NWXFrame struct {
 	Cell          *NWXCell
 }
 
-// NewNWXFrame creates and returns a new instance of NWXGraphicalFrame with default values.
+// NewNWXFrame creates and returns a new instance of NWXFrame with default values.
 func NewNWXFrame() *NWXFrame {
 	return &NWXFrame{}
 }
 
-// Parse reads and extracts graphical frame data from the provided io.ReadSeeker stream. It returns the size of the parsed data and an error if any occurs.
+// Parse reads and parses binary data from the provided io.ReadSeeker and populates the NWXFrame fields with the extracted values.
+// It returns the size of the parsed data structure and an error if the read operation fails.
 func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 	var raw struct {
 		InsertX       int32  // Offset X per centrare l'immagine
@@ -155,7 +154,7 @@ func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 	return v, nil
 }
 
-// NWXSequenceHeader represents the header of a NWX sequence with metadata about frames, scale, light, and sequences.
+// NWXSequenceHeader represents the metadata for a sequence, including frame count, scale, lighting, and sequence count.
 type NWXSequenceHeader struct {
 	numFrames    uint32 // Questo ci servirà per mappare il blocco FRMT
 	scaleX       uint32
@@ -164,12 +163,12 @@ type NWXSequenceHeader struct {
 	numSequences uint32 // Es: 32 azioni
 }
 
-// NewNWXSequenceHeader creates and returns a new instance of NWXSequenceHeader.
+// NewNWXSequenceHeader initializes and returns a pointer to a new NWXSequenceHeader instance.
 func NewNWXSequenceHeader() *NWXSequenceHeader {
 	return &NWXSequenceHeader{}
 }
 
-// Parse reads and decodes sequence header data from the provided io.ReadSeeker into the NWXSequenceHeader struct.
+// Parse reads and populates the NWXSequenceHeader fields from the provided io.ReadSeeker using binary little-endian format.
 func (s *NWXSequenceHeader) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Unknown1     uint32
@@ -193,18 +192,18 @@ func (s *NWXSequenceHeader) Parse(r io.ReadSeeker) error {
 
 }
 
-// NWX represents a collection of graphical frames and sequences used in a rendering system.
+// NWX represents a structure for managing collections of NWXFrame objects.
 type NWX struct {
 	//actions []*NWXSequence
 	frames []*NWXFrame
 }
 
-// NewNWX initializes and returns a new instance of NWX.
+// NewNWX creates and returns a new instance of the NWX struct.
 func NewNWX() *NWX {
 	return &NWX{}
 }
 
-// Parse reads and processes NWX file data from the provided reader, initializing frames, sequences, and cell mappings.
+// Parse reads and parses NWX data from the given io.ReadSeeker and initializes internal structures with frame and cell data.
 func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return err

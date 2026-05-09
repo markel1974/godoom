@@ -77,12 +77,10 @@ func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, s
 				continue
 			}
 
-			drawY := (streamH - 1) - y
-			targetIdx := (drawY * streamW) + x
-
 			if cmd < 16 {
+				drawY := (streamH - 1) - y
+				targetIdx := (drawY * streamW) + x
 				if targetIdx >= 0 && targetIdx < len(p.pixels) {
-					// Qui applicherai la tua logica di trasformazione
 					// p.pixels[targetIdx] = applyCommand(cmd, latestCmd)
 					p.pixels[targetIdx] = 32 // Test temporaneo
 				}
@@ -91,11 +89,18 @@ func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, s
 			}
 
 			// Literal Pixel
+			drawY := (streamH - 1) - y
+			targetIdx := (drawY * streamW) + x
 			if targetIdx >= 0 && targetIdx < len(p.pixels) {
 				p.pixels[targetIdx] = cmd
 			}
 			//latestCmd = cmd
 			y++
+		}
+		if bytesRead < maxColBytes {
+			if _, err := r.Seek(int64(maxColBytes-bytesRead), io.SeekCurrent); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

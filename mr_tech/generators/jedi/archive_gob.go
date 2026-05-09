@@ -231,6 +231,6 @@ func (g *ArchiveGob) AddTexture(texName string) ([]string, error) {
 }
 
 // AddRawTexture adds a raw texture to the texture manager using indexed pixel data and a color palette.
-func (g *ArchiveGob) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte) {
-	g.textures.AddRawTexture(texName, sizeX, sizeY, pixels, g.colorPal)
+func (g *ArchiveGob) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte, dump bool) {
+	g.textures.AddRawTexture(texName, sizeX, sizeY, pixels, g.colorPal, dump)
 }

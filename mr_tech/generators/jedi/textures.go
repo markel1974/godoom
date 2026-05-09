@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -50,7 +51,7 @@ func (t *Textures) AddTexture(texName string, images []*image.RGBA) []string {
 }
 
 // AddRawTexture creates a texture from raw indexed pixel data, applies a palette, and stores it in the texture manager.
-func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels []byte, palette [256]color.RGBA) string {
+func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels []byte, palette [256]color.RGBA, dump bool) string {
 	if _, exists := t.resources[name]; exists {
 		return name
 	}
@@ -82,7 +83,9 @@ func (t *Textures) AddRawTexture(name string, width, height int, indexedPixels [
 	}
 
 	t.add(name, img)
-	//_ = common.SaveImage(name, img)
+	if dump {
+		_ = common.SaveImage(name, img)
+	}
 	return name
 }
 

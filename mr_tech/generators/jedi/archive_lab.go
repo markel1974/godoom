@@ -43,21 +43,23 @@ func (g *LabFile) Read() ([]byte, error) {
 
 // ArchiveLab represents a structure for managing LAB file archives and their extracted data.
 type ArchiveLab struct {
-	container map[string]*LabFile
-	files     []*os.File
-	levels    []string
-	level     *Level
-	bm        *BM
-	textures  *Textures
-	colorPal  [256]color.RGBA
-	entities  *Entities
+	container     map[string]*LabFile
+	files         []*os.File
+	levels        []string
+	level         *Level
+	bm            *BM
+	textures      *Textures
+	colorPal      [][256]color.RGBA
+	colorPalIndex int
+	entities      *Entities
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
 func NewArchiveLab() *ArchiveLab {
 	return &ArchiveLab{
-		container: make(map[string]*LabFile),
-		textures:  NewTextures(),
+		container:     make(map[string]*LabFile),
+		textures:      NewTextures(),
+		colorPalIndex: 0,
 	}
 }
 
@@ -187,19 +189,24 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 	if len(al.level.Palettes) == 0 {
 		return fmt.Errorf("no palettes declared in LVT")
 	}
-	// Prendiamo la prima (la master per le texture di base)
-	palName := strings.ToUpper(strings.TrimSpace(al.level.Palettes[0]))
-	if !strings.HasSuffix(palName, ".PCX") {
-		palName += ".PCX"
-	}
-	palData, err := al.GetPayload(palName)
-	if err != nil {
-		return fmt.Errorf("can't open palette %s: %v", palName, err)
-	}
-	palette := NewPalette()
-	al.colorPal, err = palette.ParseFromPCX(bytes.NewReader(palData))
-	if err != nil {
-		return fmt.Errorf("error while parsing palette %s: %w", palName, err)
+	al.colorPalIndex = 0
+	al.colorPal = make([][256]color.RGBA, len(al.level.Palettes))
+	for idx, pal := range al.level.Palettes {
+		// Prendiamo la prima (la master per le texture di base)
+		palName := strings.ToUpper(pal)
+		if !strings.HasSuffix(palName, ".PCX") {
+			palName += ".PCX"
+		}
+		palData, err := al.GetPayload(palName)
+		if err != nil {
+			return fmt.Errorf("can't open palette %s: %v", palName, err)
+		}
+		palette := NewPalette()
+		colorPal, err := palette.ParseFromPCX(bytes.NewReader(palData))
+		if err != nil {
+			return fmt.Errorf("error while parsing palette %s: %w", palName, err)
+		}
+		al.colorPal[idx] = colorPal
 	}
 	al.bm = NewBM()
 	return nil
@@ -226,16 +233,20 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 		return nil, err
 	}
 	var images []*image.RGBA
+	if al.colorPalIndex >= len(al.level.Palettes) {
+		return nil, fmt.Errorf("invalid palette index %d", al.colorPalIndex)
+	}
+	colorPal := al.colorPal[al.colorPalIndex]
 	if strings.HasSuffix(strings.ToUpper(texName), ".PCX") {
 		parser := NewPCX()
-		img, err := parser.Parse(bytes.NewReader(data), al.colorPal)
+		img, err := parser.Parse(bytes.NewReader(data), colorPal)
 		if err != nil {
 			return nil, err
 		}
 		images = append(images, img)
 	} else {
 		// Fallback sul vecchio parser BM se implementi supporto misto DF/Outlaws
-		images, err = al.bm.Parse(bytes.NewReader(data), al.colorPal)
+		images, err = al.bm.Parse(bytes.NewReader(data), colorPal)
 	}
 
 	if err != nil {
@@ -246,8 +257,13 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 }
 
 // AddRawTexture directly maps an indexed raw pixel array to the global texture manager using the active palette.
-func (al *ArchiveLab) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte) {
-	al.textures.AddRawTexture(texName, sizeX, sizeY, pixels, al.colorPal)
+func (al *ArchiveLab) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte, dump bool) {
+	if al.colorPalIndex >= len(al.level.Palettes) {
+		fmt.Printf("invalid palette index %d\n", al.colorPalIndex)
+		return
+	}
+	colorPal := al.colorPal[al.colorPalIndex]
+	al.textures.AddRawTexture(texName, sizeX, sizeY, pixels, colorPal, dump)
 }
 
 // Close releases all open file handles associated with the ArchiveLab instance and resets its file list to nil.

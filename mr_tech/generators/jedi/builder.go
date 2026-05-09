@@ -49,7 +49,7 @@ type IArchive interface {
 
 	AddTexture(texName string) ([]string, error)
 
-	AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte)
+	AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte, dump bool)
 
 	Close() error
 }
@@ -272,6 +272,9 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 		}
 	}
 
+	//TODO RIMUOVERE
+	//fmt.Println("EXITING FOR DEBUGGING")
+	//os.Exit(1)
 	for _, obj := range entities.Objects {
 		if len(obj.Class) == 0 {
 			continue
@@ -505,7 +508,7 @@ func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ
 			for _, cell := range view.GetCells() {
 				texId := cell.GetId()
 				sizeX, sizeY := cell.GetSize()
-				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
+				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), false)
 				tn = append(tn, texId)
 			}
 			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
@@ -527,58 +530,45 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	}
 	//fmt.Printf("Decompression Success: %s\n", fileName)
 	//os.Exit(1)
+	//f, _ := os.Create("test.WAX2")
+	//defer f.Close()
+	//common.Hexdump(waxData)
+	//os.Exit(1)
+	return nil, fmt.Errorf("TODO")
 	wax := NewNWX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
+	//if err != nil {
+	//	return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
+	//}
 	if err != nil {
-		return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
+		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
-
-	/*
-		var frameTextureNames []string
-		for _, act := range wax.GetActions() {
-			if act == nil {
-				continue
-			}
-			for _, view := range act.GetViews() {
-				if view == nil {
-					continue
-				}
-				for _, cell := range view.GetCells() {
-					texId := cell.GetId()
-					sizeX, sizeY := cell.GetSize()
-					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-					frameTextureNames = append(frameTextureNames, texId)
-				}
-			}
-		}
-		material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-		cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-		cThing.Sprite = config.NewSprite(material)
-		configThings = append(configThings, cThing)
-
-	*/
-
-	multiSprite := config.NewMultiSprite()
-	for _, act := range wax.GetActions() {
-		if act == nil {
+	for _, f := range wax.frames {
+		if f == nil {
 			continue
 		}
-		for _, view := range act.GetViews() {
-			if view == nil || len(view.GetCells()) == 0 {
-				continue
-			}
-			var tn []string
-			for _, cell := range view.GetCells() {
-				texId := cell.GetId()
-				sizeX, sizeY := cell.GetSize()
-				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels())
-				tn = append(tn, texId)
-			}
-			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			multiSprite.Add(material)
+		if f.Cell == nil {
+			continue
 		}
+		cell := f.Cell
+		sizeX, sizeY := cell.GetSize()
+		dump := false
+		//targets := []string{"BOTTLE", "BARREL", "COW"}
+		var targets []string
+		if len(targets) == 0 {
+			dump = true
+		} else {
+			for _, target := range targets {
+				if strings.Contains(strings.ToUpper(fileName), strings.ToUpper(target)) {
+					dump = true
+					break
+				}
+			}
+		}
+
+		archive.AddRawTexture(fileName+"_"+strconv.Itoa(int(f.CellIndex)), sizeX, sizeY, cell.GetPixels(), dump)
 	}
+	multiSprite := config.NewMultiSprite()
 
 	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)

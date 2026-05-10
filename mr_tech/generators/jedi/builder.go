@@ -475,11 +475,11 @@ func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ
 			if act == nil {
 				continue
 			}
-			for _, view := range act.GetViews() {
-				if view == nil {
+			for _, nodes := range act.GetViews() {
+				if nodes == nil {
 					continue
 				}
-				for _, cell := range view.GetCells() {
+				for _, cell := range nodes.GetCells() {
 					texId := cell.GetId()
 					sizeX, sizeY := cell.GetSize()
 					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
@@ -540,41 +540,74 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	if err != nil {
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
+	/*
+		multiSprite := config.NewMultiSprite()
+		counter := 0
+
+		if wax.sequencer != nil {
+			for _, action := range wax.sequencer.actions {
+				if action == nil {
+					continue
+				}
+				var tn []string
+				for _, node := range action.nodes {
+					if node == nil {
+						continue
+					}
+					if node.cell == nil {
+						continue
+					}
+					cell := node.cell
+					sizeX, sizeY := cell.GetSize()
+					pixels := cell.GetPixels()
+					if sizeX > 0 && sizeY > 0 && len(pixels) > 0 {
+						tName := node.id
+						archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
+						tn = append(tn, tName)
+						counter++
+					}
+				}
+				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				multiSprite.Add(material)
+			}
+		}
+
+	*/
 	multiSprite := config.NewMultiSprite()
 	counter := 0
-
 	if wax.sequencer != nil {
-		for _, action := range wax.sequencer.actions {
+		for _, action := range wax.GetActions() {
+			var tn []string
 			if action == nil {
 				continue
 			}
-			var tn []string
-			for _, node := range action.nodes {
+			for _, node := range action.GetNodes() {
 				if node == nil {
 					continue
 				}
-				if node.cell == nil {
+				cell := node.GetCell()
+				if cell == nil {
 					continue
 				}
-				cell := node.cell
+				texId := node.GetId()
 				sizeX, sizeY := cell.GetSize()
-				pixels := cell.GetPixels()
-				if sizeX > 0 && sizeY > 0 && len(pixels) > 0 {
-					tName := node.id
-					archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
-					tn = append(tn, tName)
-					counter++
-				}
+				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), false)
+				tn = append(tn, texId)
 			}
-			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			multiSprite.Add(material)
+
+			if len(tn) > 0 {
+				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				multiSprite.Add(material)
+				counter += len(tn)
+				break
+			}
 		}
 	}
 
 	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-	if counter != 0 {
+	if counter > 0 {
 		cThing.MultiSprite = multiSprite
 	}
 	return cThing, nil

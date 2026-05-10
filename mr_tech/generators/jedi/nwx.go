@@ -267,11 +267,26 @@ type NWXSeqNode struct {
 	cell   *NWXCell
 }
 
+// GetId returns the unique identifier of the NWXSeqNode as a string.
+func (n *NWXSeqNode) GetId() string {
+	return n.id
+}
+
+// GetCell retrieves the associated NWXCell of the NWXSeqNode, which contains graphical rendering data.
+func (n *NWXSeqNode) GetCell() *NWXCell {
+	return n.cell
+}
+
 // NWXAction represents an action containing a unique identifier, a size, and a slice of sequence node pointers.
 type NWXAction struct {
 	id    int
 	size  uint32
 	nodes []*NWXSeqNode
+}
+
+// GetNodes returns the slice of NWXSeqNode pointers associated with the NWXAction.
+func (n *NWXAction) GetNodes() []*NWXSeqNode {
+	return n.nodes
 }
 
 // NWXVerbSEQT is a structure representing a sequencer with associated actions and metadata for processing sequences.
@@ -511,4 +526,9 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		}
 	}
 	return nil
+}
+
+// GetActions returns a slice of pointers to NWXAction, representing the actions managed by the NWX sequencer.
+func (w *NWX) GetActions() []*NWXAction {
+	return w.sequencer.actions
 }

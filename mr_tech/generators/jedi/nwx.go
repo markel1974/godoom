@@ -109,6 +109,35 @@ func (p *NWXCell) Parse(r io.ReadSeeker, colTableBase int64, streamW, streamH, s
 	return nil
 }
 
+type NWXCellHeader struct {
+	physIndex uint32
+	size      uint32
+	streamW   uint32
+	streamH   uint32
+}
+
+func NewNWXCellHeader() *NWXCellHeader {
+	return &NWXCellHeader{}
+}
+
+func (h *NWXCellHeader) Parse(r io.ReadSeeker) error {
+	var raw struct {
+		PhysIndex uint32
+		Size      uint32
+		StreamW   uint32
+		StreamH   uint32
+		Magic     uint32
+	}
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return err
+	}
+	h.physIndex = raw.PhysIndex
+	h.size = raw.Size
+	h.streamW = raw.StreamW
+	h.streamH = raw.StreamH
+	return nil
+}
+
 // NWXFrame represents a single frame entity, defining its dimensions and associated cell data in the NWX system.
 type NWXFrame struct {
 	CellIndex     uint32
@@ -189,7 +218,6 @@ func (s *NWXSequenceHeader) Parse(r io.ReadSeeker) error {
 	s.extraLight = raw.ExtraLight
 	s.numSequences = raw.NumSequences
 	return nil
-
 }
 
 // NWX represents a structure for managing collections of NWXFrame objects.
@@ -205,6 +233,9 @@ func NewNWX() *NWX {
 
 // Parse reads and parses NWX data from the given io.ReadSeeker and initializes internal structures with frame and cell data.
 func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
+	// ==========================================
+	// 1. HEADER
+	// ==========================================
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -226,58 +257,24 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return fmt.Errorf("invalid signature")
 	}
 
-	/*
-		// Absolute chunk bases (skipping the 4 bytes of TAG and 4 bytes of SIZE = +8)
-		seqBase := int64(waxHeader.SeqOffset) + 8
+	// ==========================================
+	// 1. SEQUENCE MAPPING (SEQT)
+	// ==========================================
+	// Absolute chunk bases (skipping the 4 bytes of TAG and 4 bytes of SIZE = +8)
+	if _, err := r.Seek(int64(waxHeader.SeqOffset)+8, io.SeekStart); err != nil {
+		return fmt.Errorf("unable to seek to SEQT: %v", err)
+	}
+	seqHeader := NewNWXSequenceHeader()
+	if err := seqHeader.Parse(r); err != nil {
+		return err
+	}
 
-		// ==========================================
-		// 1. SEQUENCE MAPPING (SEQT)
-		// ==========================================
-		if _, err := r.Seek(seqBase, io.SeekStart); err != nil {
-			return fmt.Errorf("unable to seek to SEQT: %v", err)
-		}
-
-		seqHeader := NewNWXSequenceHeader()
-		if err := seqHeader.Parse(r); err != nil {
-			return err
-		}
-
-		// ==========================================
-		// 2. FRAME MAPPING (FRMT)
-		// ==========================================
-		frmtBase := int64(waxHeader.FrmtOffset) + 8
-		if _, err := r.Seek(frmtBase, io.SeekStart); err != nil {
-			return fmt.Errorf("unable to seek to FRMT: %v", err)
-		}
-
-		// FrmtHeader must be 32byte
-		var frmtHeader struct {
-			ChunkSize uint32
-			Pad1      uint32
-			Pad2      uint32
-			Pad3      uint32
-			Width     float32
-			Height    float32
-			Pad6      uint32
-			Pad7      uint32
-		}
-		if err := binary.Read(r, binary.LittleEndian, &frmtHeader); err != nil {
-			return err
-		}
-		//if _, err := r.Seek(frmtBase+int64(unsafe.Sizeof(frmtHeader)), io.SeekStart); err != nil {
-		//	return err
-		//}
-		if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
-			return err
-		}
-		w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
-	*/
+	//w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
 
 	// ==========================================
 	// 2. FRAME MAPPING (FRMT)
 	// ==========================================
-	frmtBase := int64(waxHeader.FrmtOffset) + 8
-	if _, err := r.Seek(frmtBase, io.SeekStart); err != nil {
+	if _, err := r.Seek(int64(waxHeader.FrmtOffset)+8, io.SeekStart); err != nil {
 		return fmt.Errorf("unable to seek to FRMT: %v", err)
 	}
 
@@ -296,82 +293,56 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return err
 	}
 
-	//isCompressed := (frmtHeader.Flags & 0x1000) != 0
-	//isCompressed = false
-	//1. Bit 2 (0x0004): L'Interruttore Generale
-	//2. Bit 12 (0x1000): Il Flag RLE
-	//3. Bit 4 (0x0010) e Bit 5 (0x0020): Fullbright / Illuminazione
-	//4. Bit 3 (0x0008) e Bit 6 (0x0040): Translucenza / Vetro
-	//5. Bit 7, 8, 9, 10... (L'Incubo del Reverse Engineering): I Flag di FLIP X
-
-	//fmt.Printf("%s: %#X %d %d\n", baseId, frmtHeader.Flags, int(frmtHeader.Width), int(frmtHeader.Height))
-
-	//fmt.Println(baseId, frmtHeader)
-
+	// ==========================================
+	// 2. CELL HANDLING (CELLT)
+	// ==========================================
 	if _, err := r.Seek(int64(waxHeader.CeltOffset), io.SeekStart); err != nil {
 		return err
 	}
-
-	// 1. Legge l'Header Globale del blocco CELT (Solo 12 byte, una volta sola)
-	var celtMagic, numCells, chunkSize uint32
-	if err := binary.Read(r, binary.LittleEndian, &celtMagic); err != nil {
-		return err
+	var celtHeader struct {
+		Magic     uint32
+		NumCells  uint32
+		ChunkSize uint32
 	}
-	if err := binary.Read(r, binary.LittleEndian, &numCells); err != nil {
-		return err
-	}
-	if err := binary.Read(r, binary.LittleEndian, &chunkSize); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &celtHeader); err != nil {
 		return err
 	}
 
 	// Controllo di sicurezza
-	if celtMagic != 1414284611 { // "CELT"
+	if celtHeader.Magic != 1414284611 { // "CELT"
 		return fmt.Errorf("non è un blocco CELT valido")
 	}
 
 	cellCache := make(map[uint32]*NWXCell)
 
-	for i := uint32(0); i < numCells; i++ {
-		// L'Header della Cella è di ESATTAMENTE 20 byte (5 uint32)
-		var physIndex, size, streamW, streamH, magic uint32
-		if err := binary.Read(r, binary.LittleEndian, &physIndex); err != nil {
-			break
+	for i := uint32(0); i < celtHeader.NumCells; i++ {
+		cellHeader := NewNWXCellHeader()
+		if err := cellHeader.Parse(r); err != nil {
+			return err
 		}
-		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
-			break
-		}
-		if err := binary.Read(r, binary.LittleEndian, &streamW); err != nil {
-			break
-		}
-		if err := binary.Read(r, binary.LittleEndian, &streamH); err != nil {
-			break
-		}
-		if err := binary.Read(r, binary.LittleEndian, &magic); err != nil {
-			break
-		} // Consumiamo il Magic Number (0x006CFA5D) per completare l'header!
-
+		//TODO REAL IMPLEMENTATION
 		f := NewNWXFrame()
-		f.CellIndex = physIndex
-		f.PhysicalIndex = physIndex
-		f.Width = float32(streamW)
-		f.Height = float32(streamH)
+		f.CellIndex = cellHeader.physIndex
+		f.PhysicalIndex = cellHeader.physIndex
+		f.Width = float32(cellHeader.streamW)
+		f.Height = float32(cellHeader.streamH)
 		w.frames = append(w.frames, f)
 
 		// Ora siamo posizionati PERFETTAMENTE all'inizio della colTable (payload vero)
 		payloadStart, _ := r.Seek(0, io.SeekCurrent)
 
-		if cell := cellCache[physIndex]; cell != nil {
-			f.Cell = cellCache[physIndex]
+		if cell := cellCache[cellHeader.physIndex]; cell != nil {
+			f.Cell = cellCache[cellHeader.physIndex]
 		} else {
-			f.Cell = NewNWXCell(fmt.Sprintf("phys_%d", physIndex))
-			if streamW > 0 && streamH > 0 {
-				if err := f.Cell.Parse(r, payloadStart, int(streamW), int(streamH), int(size)); err != nil {
+			f.Cell = NewNWXCell(fmt.Sprintf("phys_%d", cellHeader.physIndex))
+			if cellHeader.streamW > 0 && cellHeader.streamH > 0 {
+				if err := f.Cell.Parse(r, payloadStart, int(cellHeader.streamW), int(cellHeader.streamH), int(cellHeader.size)); err != nil {
 					return err
 				}
-				cellCache[physIndex] = f.Cell
+				cellCache[cellHeader.physIndex] = f.Cell
 			}
 		}
-		if _, err := r.Seek(payloadStart+int64(size), io.SeekStart); err != nil {
+		if _, err := r.Seek(payloadStart+int64(cellHeader.size), io.SeekStart); err != nil {
 			return err
 		}
 	}

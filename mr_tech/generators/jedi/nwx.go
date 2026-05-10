@@ -2,6 +2,7 @@ package jedi
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"unsafe"
@@ -265,48 +266,122 @@ func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 	return v, nil
 }
 
-// NWXSequenceHeader represents the header metadata for a sequence in an NWX file format.
-type NWXSequenceHeader struct {
-	offset       int64
-	numFrames    uint32 // Questo ci servirà per mappare il blocco FRMT
-	scaleX       uint32
-	scaleY       uint32
-	extraLight   uint32
-	numSequences uint32 // Es: 32 azioni
+type NWXSeqNode struct {
+	marker int16
+	index  int16
+	tick   uint32
+	pad    uint32
 }
 
-// NewNWXSequenceHeader creates a new NWXSequenceHeader instance with the specified offset.
-func NewNWXSequenceHeader(offset int64) *NWXSequenceHeader {
-	return &NWXSequenceHeader{
+type NWXAction struct {
+	id    int
+	size  uint32
+	nodes []*NWXSeqNode
+}
+
+// NWXSequencer represents the header metadata for a sequence in an NWX file format.
+type NWXSequencer struct {
+	offset       int64
+	chunkSize    uint32
+	numSequences uint32 // Es: 32 azioni
+	actions      []*NWXAction
+}
+
+func NewNWXSequencer(offset int64) *NWXSequencer {
+	return &NWXSequencer{
 		offset: offset,
 	}
 }
 
-// Parse reads and populates the NWXSequenceHeader fields from the provided io.ReadSeeker starting at the current offset.
-func (s *NWXSequenceHeader) Parse(r io.ReadSeeker) error {
+func (s *NWXSequencer) Parse(r io.ReadSeeker) error {
 	var raw struct {
-		Magic        uint32
-		Tag          uint32
-		Unknown1     uint32
-		Unknown2     uint32
-		NumFrames    uint32 // Questo ci servirà per mappare il blocco FRMT
-		ScaleX       uint32
-		ScaleY       uint32
-		ExtraLight   uint32
-		Pad          uint32
-		NumSequences uint32 // Es: 32 azioni
+		Magic        uint32 // "SEQT"
+		NumSequences uint32
+		ChunkSize    uint32
 	}
+
 	if _, err := r.Seek(s.offset, io.SeekStart); err != nil {
 		return err
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
-	s.numFrames = raw.NumFrames
-	s.scaleX = raw.ScaleX
-	s.scaleY = raw.ScaleY
-	s.extraLight = raw.ExtraLight
+	if raw.Magic != 1414481987 {
+		return fmt.Errorf("invalid SEQT sequencer magic")
+	}
+
 	s.numSequences = raw.NumSequences
+	s.chunkSize = raw.ChunkSize
+	s.actions = make([]*NWXAction, 0, s.numSequences)
+
+	for i := uint32(0); i < s.numSequences; i++ {
+		// 1. Leggiamo il Tag iniziale del blocco (esterno al conteggio della Size)
+		var blockTag uint32
+		if err := binary.Read(r, binary.LittleEndian, &blockTag); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				break
+			}
+			return err
+		}
+		// 2. Salviamo l'offset esatto da cui la Size inizia a contare
+		chunkStart, err := r.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return err
+		}
+
+		// 3. Leggiamo l'intero header in un colpo solo
+		var header struct {
+			Size      uint32
+			Hex1      uint32
+			Hex2      uint32
+			Int1      uint32
+			Int2      uint32
+			NodeCount uint32
+			Int4      uint32
+		}
+		if err = binary.Read(r, binary.LittleEndian, &header); err != nil {
+			return err
+		}
+
+		action := &NWXAction{
+			id:   int(i),
+			size: header.Size,
+		}
+
+		// 4. Leggiamo il payload dei nodi
+		if header.NodeCount > 0 {
+			type rawSeqNode struct {
+				Flags uint32
+				Tick  uint32
+				Pad   uint32
+			}
+			nodes := make([]rawSeqNode, header.NodeCount)
+			if err = binary.Read(r, binary.LittleEndian, nodes); err != nil {
+				if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
+					break
+				}
+				return err
+			}
+
+			action.nodes = make([]*NWXSeqNode, header.NodeCount)
+			for x := 0; x < len(nodes); x++ {
+				action.nodes[x] = &NWXSeqNode{
+					marker: int16(nodes[x].Flags >> 16),
+					index:  int16(nodes[x].Flags & 0xFFFF),
+					tick:   nodes[x].Tick,
+					pad:    nodes[x].Pad,
+				}
+			}
+		}
+		s.actions = append(s.actions, action)
+
+		// Riallineamento
+		chunkNext := chunkStart + int64(header.Size)
+		if _, err = r.Seek(chunkNext, io.SeekStart); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -370,7 +445,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return err
 	}
 
-	seqHeader := NewNWXSequenceHeader(int64(waxHeader.seqOffset))
+	seqHeader := NewNWXSequencer(int64(waxHeader.seqOffset))
 	if err := seqHeader.Parse(r); err != nil {
 		return err
 	}

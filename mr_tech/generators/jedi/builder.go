@@ -537,9 +537,6 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	//return nil, fmt.Errorf("TODO")
 	wax := NewNWX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
-	//if err != nil {
-	//	return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
-	//}
 	if err != nil {
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}

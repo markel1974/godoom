@@ -222,11 +222,10 @@ func (h *NWXVerbCELT) Parse(r io.ReadSeeker) error {
 
 // NWXFrame represents a frame in an NWX structure, associating rendering dimensions and cell metadata.
 type NWXFrame struct {
-	CellIndex     uint32
-	PhysicalIndex uint32
-	Width         float32
-	Height        float32
-	Cell          *NWXCell
+	cellIndex uint32
+	width     float32
+	height    float32
+	cell      *NWXCell
 }
 
 // NewNWXFrame creates and returns a new instance of NWXGraphicalFrame with default values.
@@ -246,16 +245,13 @@ func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 		InsertY       int32    // Byte 32-35 (Valore: -90)
 		PhysicalIndex uint32   // Byte 36-39 (Valore: 16)
 	}
-	//var raw2 [40]byte
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return 0, err
 	}
-
-	g.CellIndex = raw.CellIndex
-	g.PhysicalIndex = raw.PhysicalIndex
-	g.Width = raw.Width
-	g.Height = raw.Height
-	g.Cell = nil
+	g.cellIndex = raw.CellIndex
+	g.width = raw.Width
+	g.height = raw.Height
+	g.cell = nil
 	v := int(unsafe.Sizeof(raw))
 	return v, nil
 }
@@ -484,16 +480,32 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		}
 	}
 
+	for _, frame := range frmt.frames {
+		if cell, ok := cellCache[int16(frame.cellIndex)]; ok {
+			frame.cell = cell
+		}
+	}
+
 	for _, action := range w.sequencer.actions {
 		for _, node := range action.nodes {
-			if cell, ok := cellCache[node.index]; ok {
-				id := fmt.Sprintf("%s_%d", baseId, node.index)
-				node.cell = cell
-				node.id = id
+			var logicalFrame *NWXFrame
+			if node.index < 0 {
+				continue
+			}
+			if int(node.index) < len(frmt.frames) {
+				logicalFrame = frmt.frames[node.index]
+			} else if len(frmt.frames) > 0 {
+				cleanIdx := int(node.index) % len(frmt.frames)
+				logicalFrame = frmt.frames[cleanIdx]
+				// TODO Estrazione flag
+				//flipX := (node.index & 0x20) != 0
+				//fullBright := (node.index & 0x08) != 0
+			}
+			if logicalFrame != nil {
+				node.id = fmt.Sprintf("%s_%d", baseId, node.index)
+				node.cell = logicalFrame.cell
 			} else {
-				//if node.index >= 0 {
-				//	fmt.Println("Missing cell for index:", baseId, node.index, len(cellCache))
-				//}
+				fmt.Println("Skipping node with invalid frame index:", baseId, node.index, "max frames", len(frmt.frames))
 			}
 		}
 	}

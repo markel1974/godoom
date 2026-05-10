@@ -53,7 +53,6 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH, streamSize int) error
 			continue
 		}
 
-		// CALCOLO CHUNK SIZE DELLA COLONNA (come da offset table C++)
 		var nextTarget = int64(streamSize)
 		for nextX := x + 1; nextX < streamW; nextX++ {
 			nt := colTable[nextX] & 0x00FFFFFF
@@ -72,7 +71,6 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH, streamSize int) error
 		bytesRead := 0
 		y := 0
 
-		// Il limite ora è maxColBytes, non l'intero streamSize
 		for bytesRead < maxColBytes && y < streamH {
 			var controlByte uint8
 			if err := binary.Read(r, binary.LittleEndian, &controlByte); err != nil {
@@ -90,8 +88,7 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH, streamSize int) error
 				}
 				bytesRead++
 				for i := 0; i < count && y < streamH; i++ {
-					drawY := (streamH - 1) - y
-					targetIdx := (drawY * streamW) + x
+					targetIdx := (y * streamW) + x
 					if targetIdx >= 0 && targetIdx < len(p.pixels) {
 						p.pixels[targetIdx] = color
 					}
@@ -104,8 +101,7 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH, streamSize int) error
 						return err
 					}
 					bytesRead++
-					drawY := (streamH - 1) - y
-					targetIdx := (drawY * streamW) + x
+					targetIdx := (y * streamW) + x
 					if targetIdx >= 0 && targetIdx < len(p.pixels) {
 						p.pixels[targetIdx] = color
 					}
@@ -245,6 +241,7 @@ type NWXSeqNode struct {
 	index  int16
 	tick   uint32
 	pad    uint32
+	id     string
 	cell   *NWXCell
 }
 
@@ -455,9 +452,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		f.Height = float32(cellHeader.streamH)
 		w.frames = append(w.frames, f)
 
-		// Ora siamo posizionati PERFETTAMENTE all'inizio della colTable (payload vero)
 		payloadStart, _ := r.Seek(0, io.SeekCurrent)
-
 		if cell := cellCache[int16(cellHeader.physIndex)]; cell != nil {
 			f.Cell = cellCache[int16(cellHeader.physIndex)]
 		} else {
@@ -471,7 +466,8 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 				}
 			}
 		}
-		if _, err := r.Seek(payloadStart+int64(cellHeader.size), io.SeekStart); err != nil {
+		payloadNext := payloadStart + int64(cellHeader.size)
+		if _, err := r.Seek(payloadNext, io.SeekStart); err != nil {
 			return err
 		}
 	}
@@ -479,7 +475,9 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 	for _, action := range w.sequencer.actions {
 		for _, node := range action.nodes {
 			if cell, ok := cellCache[node.index]; ok {
+				id := fmt.Sprintf("%s_%d", baseId, node.index)
 				node.cell = cell
+				node.id = id
 			}
 		}
 	}

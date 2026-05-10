@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"unsafe"
 )
 
 // NWXCell represents a cell structure holding pixel data for graphical rendering.
@@ -145,17 +144,20 @@ func (h *NWXCellHeader) Parse(r io.ReadSeeker) error {
 	return nil
 }
 
+// NWXVerbFRMT represents a structure holding an offset and a collection of NWXFrame elements used in rendering.
 type NWXVerbFRMT struct {
 	offset int64
 	frames []*NWXFrame
 }
 
+// NewNWXVerbFRMT creates and returns a new NWXVerbFRMT instance with the specified offset for parsing FRMT sections.
 func NewNWXVerbFRMT(offset int64) *NWXVerbFRMT {
 	return &NWXVerbFRMT{
 		offset: offset,
 	}
 }
 
+// Parse reads and processes the FRMT section of an NWX file, initializing frames and verifying the format's validity.
 func (f *NWXVerbFRMT) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Magic     uint32
@@ -177,7 +179,7 @@ func (f *NWXVerbFRMT) Parse(r io.ReadSeeker) error {
 	f.frames = make([]*NWXFrame, raw.NumFrames)
 	for i := uint32(0); i < raw.NumFrames; i++ {
 		frame := NewNWXFrame()
-		if _, err := frame.Parse(r); err != nil {
+		if err := frame.Parse(r); err != nil {
 			return err
 		}
 		f.frames[i] = frame
@@ -234,7 +236,7 @@ func NewNWXFrame() *NWXFrame {
 }
 
 // Parse reads and extracts graphical frame data from the provided io.ReadSeeker stream. It returns the size of the parsed data and an error if any occurs.
-func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
+func (g *NWXFrame) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Unknown1      [12]byte // Byte 0-11 (Header/Flags vuoti)
 		Width         float32  // Byte 12-15 (Valore: 55.0)
@@ -246,14 +248,13 @@ func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
 		PhysicalIndex uint32   // Byte 36-39 (Valore: 16)
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
-		return 0, err
+		return err
 	}
 	g.cellIndex = raw.CellIndex
 	g.width = raw.Width
 	g.height = raw.Height
 	g.cell = nil
-	v := int(unsafe.Sizeof(raw))
-	return v, nil
+	return nil
 }
 
 // NWXSeqNode represents a node in a sequence, storing metadata about its state and associated cell.
@@ -273,23 +274,23 @@ type NWXAction struct {
 	nodes []*NWXSeqNode
 }
 
-// NWXSequencer is a structure representing a sequencer with associated actions and metadata for processing sequences.
-type NWXSequencer struct {
+// NWXVerbSEQT is a structure representing a sequencer with associated actions and metadata for processing sequences.
+type NWXVerbSEQT struct {
 	offset       int64
 	chunkSize    uint32
-	numSequences uint32 // Es: 32 azioni
+	numSequences uint32
 	actions      []*NWXAction
 }
 
-// NewNWXSequencer creates a new instance of NWXSequencer with the specified offset value.
-func NewNWXSequencer(offset int64) *NWXSequencer {
-	return &NWXSequencer{
+// NewNWXVerbSEQT creates a new instance of NWXVerbSEQT with the specified offset value.
+func NewNWXVerbSEQT(offset int64) *NWXVerbSEQT {
+	return &NWXVerbSEQT{
 		offset: offset,
 	}
 }
 
-// Parse reads and parses sequencer data from the given io.ReadSeeker, initializing sequences and actions for NWXSequencer.
-func (s *NWXSequencer) Parse(r io.ReadSeeker) error {
+// Parse reads and parses sequencer data from the given io.ReadSeeker, initializing sequences and actions for NWXVerbSEQT.
+func (s *NWXVerbSEQT) Parse(r io.ReadSeeker) error {
 	var raw struct {
 		Magic        uint32 // "SEQT"
 		NumSequences uint32
@@ -426,7 +427,7 @@ func (h *NWXHeader) Parse(r io.ReadSeeker) error {
 
 // NWX represents a container structure that holds frames and a sequencer for managing NWX data.
 type NWX struct {
-	sequencer *NWXSequencer
+	sequencer *NWXVerbSEQT
 }
 
 // NewNWX creates and returns a new instance of the NWX structure.
@@ -434,14 +435,14 @@ func NewNWX() *NWX {
 	return &NWX{}
 }
 
-// Parse processes the NWX file data from the provided reader and initializes NWXHeader, NWXSequencer, and related components.
+// Parse processes the NWX file data from the provided reader and initializes NWXHeader, NWXVerbSEQT, and related components.
 func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 	waxHeader := NewNWXHeader(0)
 	if err := waxHeader.Parse(r); err != nil {
 		return err
 	}
 
-	w.sequencer = NewNWXSequencer(int64(waxHeader.seqOffset))
+	w.sequencer = NewNWXVerbSEQT(int64(waxHeader.seqOffset))
 	if err := w.sequencer.Parse(r); err != nil {
 		return err
 	}

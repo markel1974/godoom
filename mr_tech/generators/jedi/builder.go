@@ -541,28 +541,42 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
 	multiSprite := config.NewMultiSprite()
-	var tn []string
-	for _, f := range wax.frames {
-		if f == nil {
-			continue
+	counter := 0
+
+	if wax.sequencer != nil {
+		for _, action := range wax.sequencer.actions {
+			if action == nil {
+				continue
+			}
+			var tn []string
+			for _, node := range action.nodes {
+				if node == nil {
+					continue
+				}
+				if node.cell == nil {
+					continue
+				}
+				cell := node.cell
+				sizeX, sizeY := cell.GetSize()
+				pixels := cell.GetPixels()
+				if sizeX > 0 && sizeY > 0 && len(pixels) > 0 {
+					tName := node.id
+					archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
+					tn = append(tn, tName)
+					counter++
+				}
+			}
+			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			multiSprite.Add(material)
 		}
-		if f.Cell == nil {
-			continue
-		}
-		cell := f.Cell
-		sizeX, sizeY := cell.GetSize()
-		tName := fileName + "_" + strconv.Itoa(int(f.CellIndex))
-		archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
-		tn = append(tn, tName)
-		material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		multiSprite.Add(material)
-		break
 	}
 
 	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-	cThing.MultiSprite = multiSprite
+	if counter != 0 {
+		cThing.MultiSprite = multiSprite
+	}
 	return cThing, nil
 }
 

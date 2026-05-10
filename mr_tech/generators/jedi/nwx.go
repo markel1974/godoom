@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"unsafe"
 )
 
 // NWXCell represents a cell structure holding pixel data for graphical rendering.
 type NWXCell struct {
-	id     string
 	offset int64
 	sizeX  int
 	sizeY  int
@@ -17,15 +17,11 @@ type NWXCell struct {
 }
 
 // NewNWXCell creates and initializes a new NWXCell instance with the provided id and offset.
-func NewNWXCell(id string, offset int64) *NWXCell {
+func NewNWXCell(offset int64) *NWXCell {
 	return &NWXCell{
-		id:     id,
 		offset: offset,
 	}
 }
-
-// GetId returns the unique identifier of the NWXCell.
-func (p *NWXCell) GetId() string { return p.id }
 
 // GetSize returns the dimensions of the NWXCell as two integers: width (sizeX) and height (sizeY).
 func (p *NWXCell) GetSize() (int, int) { return p.sizeX, p.sizeY }
@@ -114,15 +110,15 @@ func (p *NWXCell) Parse(r io.ReadSeeker, streamW, streamH, streamSize int) error
 }
 
 // NWXCellHeader represents metadata for a cell in the NWX format.
-// physIndex specifies the physical index of the cell.
+// index specifies the physical index of the cell.
 // size denotes the size of the cell in bytes.
 // streamW indicates the width of the cell stream.
 // streamH indicates the height of the cell stream.
 type NWXCellHeader struct {
-	physIndex uint32
-	size      uint32
-	streamW   uint32
-	streamH   uint32
+	index   uint32
+	size    uint32
+	streamW uint32
+	streamH uint32
 }
 
 // NewNWXCellHeader creates and initializes a new instance of NWXCellHeader with default values.
@@ -133,75 +129,78 @@ func NewNWXCellHeader() *NWXCellHeader {
 // Parse decodes NWXCellHeader data from the provided io.ReadSeeker and initializes its fields.
 func (h *NWXCellHeader) Parse(r io.ReadSeeker) error {
 	var raw struct {
-		PhysIndex uint32
-		Size      uint32
-		StreamW   uint32
-		StreamH   uint32
-		Magic     uint32
+		Index   uint32
+		Size    uint32
+		StreamW uint32
+		StreamH uint32
+		Magic   uint32
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
-	h.physIndex = raw.PhysIndex
+	h.index = raw.Index
 	h.size = raw.Size
 	h.streamW = raw.StreamW
 	h.streamH = raw.StreamH
 	return nil
 }
 
-// NWXFrameHeader represents the header structure of an NWX frame containing an offset to its data within a stream.
-type NWXFrameHeader struct {
+type NWXVerbFRMT struct {
 	offset int64
+	frames []*NWXFrame
 }
 
-// NewNWXFrameHeader creates a new NWXFrameHeader instance with the specified offset.
-func NewNWXFrameHeader(offset int64) *NWXFrameHeader {
-	return &NWXFrameHeader{
+func NewNWXVerbFRMT(offset int64) *NWXVerbFRMT {
+	return &NWXVerbFRMT{
 		offset: offset,
 	}
 }
 
-// Parse reads and populates the NWXFrameHeader data structure from the provided io.ReadSeeker starting at its offset.
-func (h *NWXFrameHeader) Parse(r io.ReadSeeker) error {
-	// FrmtHeader must be 32byte
-	var frmtHeader struct {
+func (f *NWXVerbFRMT) Parse(r io.ReadSeeker) error {
+	var raw struct {
 		Magic     uint32
-		Tag       uint32
-		Flags     uint32
-		InsertX   uint32
-		InsertY   uint32
-		Flip      uint32
-		Width     float32
-		Height    float32
-		CellIndex uint32
-		Pad7      uint32
+		NumFrames uint32
+		ChunkSize uint32
 	}
-	if _, err := r.Seek(h.offset, io.SeekStart); err != nil {
+	if _, err := r.Seek(f.offset, io.SeekStart); err != nil {
 		return err
 	}
-	if err := binary.Read(r, binary.LittleEndian, &frmtHeader); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
-
+	if raw.Magic != 1414353478 { // "FRMT"
+		return fmt.Errorf("invalid FRMT format magic")
+	}
+	if _, err := r.Seek(0, io.SeekCurrent); err != nil {
+		return err
+	}
+	f.frames = make([]*NWXFrame, raw.NumFrames)
+	for i := uint32(0); i < raw.NumFrames; i++ {
+		frame := NewNWXFrame()
+		if _, err := frame.Parse(r); err != nil {
+			return err
+		}
+		f.frames[i] = frame
+	}
 	return nil
 }
 
-// NWXCeltHeader represents metadata for CELT chunk processing, including offset, number of cells, and chunk size.
-type NWXCeltHeader struct {
+// NWXVerbCELT represents metadata for CELT chunk processing, including offset, number of cells, and chunk size.
+type NWXVerbCELT struct {
 	offset    int64
 	numCells  uint32
 	chunkSize uint32
 }
 
-// NewNWXCeltHeader creates and returns a new NWXCeltHeader with the specified offset.
-func NewNWXCeltHeader(offset int64) *NWXCeltHeader {
-	return &NWXCeltHeader{
+// NewNWXVerbCELT creates and returns a new NWXVerbCELT with the specified offset.
+func NewNWXVerbCELT(offset int64) *NWXVerbCELT {
+	return &NWXVerbCELT{
 		offset: offset,
 	}
 }
 
 // Parse reads and interprets the CELT header from the provided io.ReadSeeker and populates the NWXCeltHeader fields.
-func (h *NWXCeltHeader) Parse(r io.ReadSeeker) error {
+func (h *NWXVerbCELT) Parse(r io.ReadSeeker) error {
 	var celtHeader struct {
 		Magic     uint32
 		NumCells  uint32
@@ -230,9 +229,35 @@ type NWXFrame struct {
 	Cell          *NWXCell
 }
 
-// NewNWXFrame creates and returns a new instance of NWXFrame.
+// NewNWXFrame creates and returns a new instance of NWXGraphicalFrame with default values.
 func NewNWXFrame() *NWXFrame {
 	return &NWXFrame{}
+}
+
+// Parse reads and extracts graphical frame data from the provided io.ReadSeeker stream. It returns the size of the parsed data and an error if any occurs.
+func (g *NWXFrame) Parse(r io.ReadSeeker) (int, error) {
+	var raw struct {
+		Unknown1      [12]byte // Byte 0-11 (Header/Flags vuoti)
+		Width         float32  // Byte 12-15 (Valore: 55.0)
+		Height        float32  // Byte 16-19 (Valore: 98.0)
+		CellIndex     uint32   // Byte 20-23 (Valore: 1)
+		Pad           uint32   // Byte 24-27
+		InsertX       int32    // Byte 28-31 (Valore: -31)
+		InsertY       int32    // Byte 32-35 (Valore: -90)
+		PhysicalIndex uint32   // Byte 36-39 (Valore: 16)
+	}
+	//var raw2 [40]byte
+	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
+		return 0, err
+	}
+
+	g.CellIndex = raw.CellIndex
+	g.PhysicalIndex = raw.PhysicalIndex
+	g.Width = raw.Width
+	g.Height = raw.Height
+	g.Cell = nil
+	v := int(unsafe.Sizeof(raw))
+	return v, nil
 }
 
 // NWXSeqNode represents a node in a sequence, storing metadata about its state and associated cell.
@@ -405,7 +430,6 @@ func (h *NWXHeader) Parse(r io.ReadSeeker) error {
 
 // NWX represents a container structure that holds frames and a sequencer for managing NWX data.
 type NWX struct {
-	frames    []*NWXFrame
 	sequencer *NWXSequencer
 }
 
@@ -426,44 +450,32 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		return err
 	}
 
-	//w.frames = make([]*NWXFrame, seqHeader.numFrames+1)
-	//frmtHeader := NewNWXFrameHeader(int64(waxHeader.frmtOffset))
-	//if err := frmtHeader.Parse(r); err != nil {
-	//	return err
-	//}
+	frmt := NewNWXVerbFRMT(int64(waxHeader.frmtOffset))
+	if err := frmt.Parse(r); err != nil {
+		return err
+	}
 
-	celtHeader := NewNWXCeltHeader(int64(waxHeader.celtOffset))
-	if err := celtHeader.Parse(r); err != nil {
+	celt := NewNWXVerbCELT(int64(waxHeader.celtOffset))
+	if err := celt.Parse(r); err != nil {
 		return err
 	}
 
 	cellCache := make(map[int16]*NWXCell)
 
-	for i := uint32(0); i < celtHeader.numCells; i++ {
+	for i := uint32(0); i < celt.numCells; i++ {
 		cellHeader := NewNWXCellHeader()
 		if err := cellHeader.Parse(r); err != nil {
 			return err
 		}
-		//TODO REAL IMPLEMENTATION
-		f := NewNWXFrame()
-		f.CellIndex = cellHeader.physIndex
-		f.PhysicalIndex = cellHeader.physIndex
-		f.Width = float32(cellHeader.streamW)
-		f.Height = float32(cellHeader.streamH)
-		w.frames = append(w.frames, f)
-
 		payloadStart, _ := r.Seek(0, io.SeekCurrent)
-		if cell := cellCache[int16(cellHeader.physIndex)]; cell != nil {
-			f.Cell = cellCache[int16(cellHeader.physIndex)]
-		} else {
-			cellId := fmt.Sprintf("phys_%d", cellHeader.physIndex)
-			cell = NewNWXCell(cellId, payloadStart)
-			cellCache[int16(cellHeader.physIndex)] = cell
-			f.Cell = cell
-			if cellHeader.streamW > 0 && cellHeader.streamH > 0 {
-				if err := cell.Parse(r, int(cellHeader.streamW), int(cellHeader.streamH), int(cellHeader.size)); err != nil {
-					return err
-				}
+		if _, ok := cellCache[int16(cellHeader.index)]; ok {
+			continue
+		}
+		cell := NewNWXCell(payloadStart)
+		cellCache[int16(cellHeader.index)] = cell
+		if cellHeader.streamW > 0 && cellHeader.streamH > 0 {
+			if err := cell.Parse(r, int(cellHeader.streamW), int(cellHeader.streamH), int(cellHeader.size)); err != nil {
+				return err
 			}
 		}
 		payloadNext := payloadStart + int64(cellHeader.size)
@@ -478,6 +490,10 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 				id := fmt.Sprintf("%s_%d", baseId, node.index)
 				node.cell = cell
 				node.id = id
+			} else {
+				//if node.index >= 0 {
+				//	fmt.Println("Missing cell for index:", baseId, node.index, len(cellCache))
+				//}
 			}
 		}
 	}

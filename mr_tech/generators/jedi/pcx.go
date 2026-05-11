@@ -54,8 +54,6 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 	height := int(header.YMax - header.YMin + 1)
 	bytesPerLine := int(header.BytesPerLine)
 	expectedSize := bytesPerLine * height
-
-	// Leggiamo tutto in memoria per decompressione RLE ad alta velocità
 	rawData, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -64,7 +62,7 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 	imgData := make([]byte, 0, expectedSize)
 	idx := 0
 
-	// Decompressione RLE
+	// RLE Decompression
 	for len(imgData) < expectedSize && idx < len(rawData) {
 		b := rawData[idx]
 		idx++
@@ -82,7 +80,7 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 			imgData = append(imgData, b)
 		}
 	}
-	// Override della palette se il flag 0x0C è presente a -769 byte dalla fine.
+	// Override the palette if the 0x0C flag is present at -769 bytes from the end.
 	pal := defaultPalette
 	if len(rawData)-idx >= 769 && rawData[len(rawData)-769] == 0x0C {
 		palOffset := len(rawData) - 768
@@ -116,26 +114,27 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 	return img, nil
 }
 
+// ParsePalette reads the final 769 bytes of a PCX file to extract and return a 256-color RGBA palette. Returns an error if the signature or data format is invalid.
 func (p *PCX) ParsePalette(r io.ReadSeeker) ([256]color.RGBA, error) {
 	var pal [256]color.RGBA
 
-	// Saltiamo agli ultimi 769 byte del file
+	// Skip to the last 769 bytes of the file
 	if _, err := r.Seek(-769, io.SeekEnd); err != nil {
-		return pal, fmt.Errorf("impossibile cercare la fine del file PCX: %w", err)
+		return pal, fmt.Errorf("unable to seek to end of PCX file: %w", err)
 	}
 
-	// Leggiamo il byte indicatore
+	// Read the indicator byte
 	var indicator [1]byte
 	if _, err := io.ReadFull(r, indicator[:]); err != nil {
 		return pal, err
 	}
 
-	// 0x0C (12 in decimale) è il flag standard che annuncia la presenza di una palette a 256 colori
+	// 0x0C (12 in decimal) is the standard flag that indicates the presence of a 256-color palette
 	if indicator[0] != 0x0C {
-		return pal, fmt.Errorf("firma della palette PCX non valida, atteso 0x0C, trovato 0x%02X", indicator[0])
+		return pal, fmt.Errorf("invalid PCX palette signature, expected 0x0C, found 0x%02X", indicator[0])
 	}
 
-	// Leggiamo i 768 byte di dati RGB
+	// Read the 768 bytes of RGB data
 	raw := make([]byte, 768)
 	if _, err := io.ReadFull(r, raw); err != nil {
 		return pal, err
@@ -145,7 +144,7 @@ func (p *PCX) ParsePalette(r io.ReadSeeker) ([256]color.RGBA, error) {
 			R: raw[i*3],
 			G: raw[(i*3)+1],
 			B: raw[(i*3)+2],
-			A: 255, // Trasparenza solida di default
+			A: 255, // Solid transparency by default
 		}
 	}
 

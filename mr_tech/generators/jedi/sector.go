@@ -36,8 +36,8 @@ func NewSector(id string, index int) *Sector {
 	return &Sector{
 		Id:             id,
 		Index:          index,
-		FloorY:         -1,
-		CeilingY:       -1,
+		FloorY:         0,
+		CeilingY:       0,
 		FloorTexture:   -1,
 		CeilingTexture: -1,
 	}
@@ -45,22 +45,34 @@ func NewSector(id string, index int) *Sector {
 
 // SetCeiling processes and sets the ceiling properties of a sector based on the provided tokens.
 func (s *Sector) SetCeiling(tokens []string) {
-	if len(tokens) < 3 {
+	if len(tokens) < 1 {
 		fmt.Printf("Invalid CEILING property: '%s' in line: %v\n", tokens[1], tokens)
 	}
 	subKey := strings.ToUpper(tokens[1])
 	switch subKey {
 	case "Y":
 		// Formato compresso Outlaws: CEILING Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
-		if len(tokens) >= 4 {
-			s.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
-			s.CeilingY = -s.CeilingY
-			if tokens[3] != "-" {
-				s.CeilingTexture, _ = strconv.Atoi(tokens[3])
-			}
+		if len(tokens) < 4 {
+			fmt.Printf("Invalid CEILING Y property in line: %v\n", tokens)
+			return
 		}
+		ceilingY, err := GetTokenFloatAt(tokens, 2)
+		if err != nil {
+			fmt.Printf("Invalid ceiling Y value: '%s' in line: %v\n", tokens[2], tokens)
+			return
+		}
+		s.CeilingY = -ceilingY
+		if tokens[3] != "-" {
+			s.CeilingTexture, _ = strconv.Atoi(tokens[3])
+		}
+
 	case "ALTITUDE":
-		s.CeilingY, _ = strconv.ParseFloat(tokens[2], 64)
+		ceilingY, err := GetTokenFloatAt(tokens, 2)
+		if err != nil {
+			fmt.Printf("Invalid ALTITUDE value: '%s' in line: %v\n", tokens[2], tokens)
+			return
+		}
+		s.CeilingY = ceilingY
 	case "TEXTURE", "TEX", "TEXTURE:":
 		if tokens[2] != "-" {
 			s.CeilingTexture, _ = strconv.Atoi(tokens[2])
@@ -73,7 +85,7 @@ func (s *Sector) SetCeiling(tokens []string) {
 
 // SetFloor parses and sets the floor properties of the Sector based on the provided tokens.
 func (s *Sector) SetFloor(tokens []string) {
-	if len(tokens) < 3 {
+	if len(tokens) < 1 {
 		fmt.Printf("Invalid FLOOR property: '%s' in line: %v\n", tokens[1], tokens)
 		return
 	}
@@ -81,22 +93,25 @@ func (s *Sector) SetFloor(tokens []string) {
 	switch subKey {
 	case "Y":
 		// Formato compresso Outlaws: FLOOR Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
-		if len(tokens) >= 4 {
-			floorY, err := GetTokenFloatAt(tokens, 2)
+		if len(tokens) < 4 {
+			fmt.Printf("Invalid FLOOR Y property in line: %v\n", tokens)
+			return
+		}
+		floorY, err := GetTokenFloatAt(tokens, 2)
+		if err != nil {
+			fmt.Printf("Invalid FLOOR Y value: '%s' in line: %v\n", tokens[2], tokens)
+			return
+		}
+		s.FloorY = -floorY
+		if tokens[3] != "-" {
+			floorTexture, err := GetTokenIntAt(tokens, 3)
 			if err != nil {
-				fmt.Printf("Invalid floor Y value: '%s' in line: %v\n", tokens[2], tokens)
+				fmt.Printf("Invalid FLOOR texture value: '%s' in line: %v\n", tokens[3], tokens)
 				return
 			}
-			s.FloorY = -floorY
-			if tokens[3] != "-" {
-				floorTexture, err := GetTokenIntAt(tokens, 3)
-				if err != nil {
-					fmt.Printf("Invalid floor texture value: '%s' in line: %v\n", tokens[3], tokens)
-					return
-				}
-				s.FloorTexture = floorTexture
-			}
+			s.FloorTexture = floorTexture
 		}
+
 	case "ALTITUDE":
 		floorY, err := GetTokenFloatAt(tokens, 2)
 		if err != nil {

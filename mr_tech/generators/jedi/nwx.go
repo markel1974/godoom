@@ -10,15 +10,17 @@ import (
 // NWXCell represents a cell structure holding pixel data for graphical rendering.
 type NWXCell struct {
 	offset int64
+	index  uint32
 	sizeX  int
 	sizeY  int
 	pixels []byte
 }
 
 // NewNWXCell creates and initializes a new NWXCell instance with the provided id and offset.
-func NewNWXCell(offset int64) *NWXCell {
+func NewNWXCell(offset int64, index uint32) *NWXCell {
 	return &NWXCell{
 		offset: offset,
+		index:  index,
 	}
 }
 
@@ -171,18 +173,22 @@ func (f *NWXVerbFRMT) Parse(r io.ReadSeeker) error {
 		return err
 	}
 	if raw.Magic != 1414353478 { // "FRMT"
-		return fmt.Errorf("invalid FRMT format magic")
+		return fmt.Errorf("invalid FRMT magic")
 	}
 	if _, err := r.Seek(0, io.SeekCurrent); err != nil {
 		return err
 	}
 	f.frames = make([]*NWXFrame, raw.NumFrames)
-	for i := uint32(0); i < raw.NumFrames; i++ {
+	for idx := uint32(0); idx < raw.NumFrames; idx++ {
 		frame := NewNWXFrame()
 		if err := frame.Parse(r); err != nil {
 			return err
 		}
-		f.frames[i] = frame
+		//f.frames[idx] = frame
+		if int(frame.logicalIndex) >= len(f.frames) {
+			return fmt.Errorf("invalid frame index")
+		}
+		f.frames[frame.logicalIndex] = frame
 	}
 	return nil
 }
@@ -224,10 +230,13 @@ func (h *NWXVerbCELT) Parse(r io.ReadSeeker) error {
 
 // NWXFrame represents a frame in an NWX structure, associating rendering dimensions and cell metadata.
 type NWXFrame struct {
-	cellIndex uint32
-	width     float32
-	height    float32
-	cell      *NWXCell
+	logicalIndex uint32
+	cellIndex    uint32
+	width        float32
+	height       float32
+	enabled      bool
+	flags        uint32
+	cell         *NWXCell
 }
 
 // NewNWXFrame creates and returns a new instance of NWXGraphicalFrame with default values.
@@ -238,38 +247,44 @@ func NewNWXFrame() *NWXFrame {
 // Parse reads and extracts graphical frame data from the provided io.ReadSeeker stream. It returns the size of the parsed data and an error if any occurs.
 func (g *NWXFrame) Parse(r io.ReadSeeker) error {
 	var raw struct {
-		Unknown1      [12]byte // Byte 0-11 (Header/Flags vuoti)
-		Width         float32  // Byte 12-15 (Valore: 55.0)
-		Height        float32  // Byte 16-19 (Valore: 98.0)
-		CellIndex     uint32   // Byte 20-23 (Valore: 1)
-		Pad           uint32   // Byte 24-27
-		InsertX       int32    // Byte 28-31 (Valore: -31)
-		InsertY       int32    // Byte 32-35 (Valore: -90)
-		PhysicalIndex uint32   // Byte 36-39 (Valore: 16)
+		Data      [12]byte // Byte 0-11 (Header/Flags vuoti)
+		Width     float32  // Byte 12-15 (Valore: 55.0)
+		Height    float32  // Byte 16-19 (Valore: 98.0)
+		Enabled   uint32   // Byte 20-23 (Valore: 1)
+		CellIndex uint32   // Byte 24-27
+		InsertX   int32    // Byte 28-31 (Valore: -31)
+		InsertY   int32    // Byte 32-35 (Valore: -90)
+		Flags     uint32   // Byte 36-39 (Valore: 16)
 	}
 	if err := binary.Read(r, binary.LittleEndian, &raw); err != nil {
 		return err
 	}
+
+	fmt.Println("Parsed NWXFrame with cell index:", raw.CellIndex, raw.Data)
+	g.logicalIndex = uint32(raw.Data[0])
 	g.cellIndex = raw.CellIndex
 	g.width = raw.Width
 	g.height = raw.Height
+	g.enabled = raw.Enabled != 0
+	g.flags = raw.Flags
 	g.cell = nil
 	return nil
 }
 
 // NWXSeqNode represents a node in a sequence, storing metadata about its state and associated cell.
 type NWXSeqNode struct {
-	marker int16
-	index  int16
-	tick   uint32
-	pad    uint32
-	id     string
-	cell   *NWXCell
+	marker     int16
+	index      int16
+	tick       uint32
+	pad        uint32
+	flipX      bool
+	fullBright bool
+	cell       *NWXCell
 }
 
-// GetId returns the unique identifier of the NWXSeqNode as a string.
-func (n *NWXSeqNode) GetId() string {
-	return n.id
+// GetIndex returns the index value of the NWXSeqNode, representing its position or identifier within a sequence.
+func (n *NWXSeqNode) GetIndex() int16 {
+	return n.index
 }
 
 // GetCell retrieves the associated NWXCell of the NWXSeqNode, which contains graphical rendering data.
@@ -483,7 +498,7 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		if _, ok := cellCache[int16(cellHeader.index)]; ok {
 			continue
 		}
-		cell := NewNWXCell(payloadStart)
+		cell := NewNWXCell(payloadStart, cellHeader.index)
 		cellCache[int16(cellHeader.index)] = cell
 		if cellHeader.streamW > 0 && cellHeader.streamH > 0 {
 			if err := cell.Parse(r, int(cellHeader.streamW), int(cellHeader.streamH), int(cellHeader.size)); err != nil {
@@ -502,26 +517,31 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 		}
 	}
 
+	if len(frmt.frames) == 0 {
+		fmt.Println("Skipping node with invalid frame index:", baseId, "max frames", len(frmt.frames))
+		return nil
+	}
+
 	for _, action := range w.sequencer.actions {
 		for _, node := range action.nodes {
-			var logicalFrame *NWXFrame
 			if node.index < 0 {
+				//control node
 				continue
 			}
+
 			if int(node.index) < len(frmt.frames) {
-				logicalFrame = frmt.frames[node.index]
-			} else if len(frmt.frames) > 0 {
-				cleanIdx := int(node.index) % len(frmt.frames)
-				logicalFrame = frmt.frames[cleanIdx]
-				// TODO Estrazione flag
-				//flipX := (node.index & 0x20) != 0
-				//fullBright := (node.index & 0x08) != 0
-			}
-			if logicalFrame != nil {
-				node.id = fmt.Sprintf("%s_%d", baseId, node.index)
-				node.cell = logicalFrame.cell
+				frame := frmt.frames[node.index]
+				//frame.flags & flip
+				//if node.flipX {
+				//	//TODO
+				//}
+				node.cell = frame.cell
 			} else {
-				fmt.Println("Skipping node with invalid frame index:", baseId, node.index, "max frames", len(frmt.frames))
+				cleanIdx := int(node.index) % len(frmt.frames)
+				frame := frmt.frames[cleanIdx]
+				node.cell = frame.cell
+				node.flipX = (node.index & 0x20) != 0
+				node.fullBright = (node.index & 0x08) != 0
 			}
 		}
 	}

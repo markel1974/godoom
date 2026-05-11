@@ -577,10 +577,10 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	counter := 0
 	if wax.sequencer != nil {
 		for _, action := range wax.GetActions() {
-			var tn []string
 			if action == nil {
 				continue
 			}
+			var tn []string
 			for _, node := range action.GetNodes() {
 				if node == nil {
 					continue
@@ -589,22 +589,20 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 				if cell == nil {
 					continue
 				}
-				texId := node.GetId()
+				//texId := fmt.Sprintf("%s_%d_%d_%d", fileName, actionIdx, cell.index, node.GetIndex())
+				texId := fmt.Sprintf("%s_%d", fileName, node.GetIndex())
 				sizeX, sizeY := cell.GetSize()
 				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), false)
 				tn = append(tn, texId)
 			}
-
 			if len(tn) > 0 {
 				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				multiSprite.Add(material)
 				counter += len(tn)
-				break
 			}
 		}
 	}
 
-	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
 	if counter > 0 {

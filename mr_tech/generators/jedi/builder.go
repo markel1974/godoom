@@ -528,51 +528,11 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
 	}
-	//fmt.Printf("Decompression Success: %s\n", fileName)
-	//os.Exit(1)
-	//f, _ := os.Create("test.WAX2")
-	//defer f.Close()
-	//common.Hexdump(waxData)
-	//os.Exit(1)
-	//return nil, fmt.Errorf("TODO")
 	wax := NewNWX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
 	if err != nil {
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
-	/*
-		multiSprite := config.NewMultiSprite()
-		counter := 0
-
-		if wax.sequencer != nil {
-			for _, action := range wax.sequencer.actions {
-				if action == nil {
-					continue
-				}
-				var tn []string
-				for _, node := range action.nodes {
-					if node == nil {
-						continue
-					}
-					if node.cell == nil {
-						continue
-					}
-					cell := node.cell
-					sizeX, sizeY := cell.GetSize()
-					pixels := cell.GetPixels()
-					if sizeX > 0 && sizeY > 0 && len(pixels) > 0 {
-						tName := node.id
-						archive.AddRawTexture(tName, sizeX, sizeY, cell.GetPixels(), false)
-						tn = append(tn, tName)
-						counter++
-					}
-				}
-				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-				multiSprite.Add(material)
-			}
-		}
-
-	*/
 	multiSprite := config.NewMultiSprite()
 	counter := 0
 	if wax.sequencer != nil {
@@ -589,11 +549,19 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 				if cell == nil {
 					continue
 				}
-				//texId := fmt.Sprintf("%s_%d_%d_%d", fileName, actionIdx, cell.index, node.GetIndex())
-				texId := fmt.Sprintf("%s_%d", fileName, node.GetIndex())
+				var pixels []byte
+				args := []string{strconv.Itoa(int(node.GetIndex()))}
+				if node.flipX {
+					args = append(args, "FlipX")
+					pixels = cell.GetFlippedPixels()
+				} else {
+					pixels = cell.GetPixels()
+				}
+				texId := fmt.Sprintf("%s_%s", fileName, strings.Join(args, "_"))
 				sizeX, sizeY := cell.GetSize()
-				archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), false)
+				archive.AddRawTexture(texId, sizeX, sizeY, pixels, false)
 				tn = append(tn, texId)
+				//TargetIndex[ClosestAngleBucket][CurrentFrame]
 			}
 			if len(tn) > 0 {
 				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)

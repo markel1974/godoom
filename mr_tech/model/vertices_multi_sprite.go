@@ -136,6 +136,73 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, materia
 }
 
 /*
+func (v *VerticesMultiSprite) SetFacing(action int, cameraPos, entityPos geometry.XYZ, entityYaw float64) {
+	if v.numAngles == 0 || v.numFrames == 0 {
+		return
+	}
+	if action >= len(v.actions) {
+		return
+	}
+	v.currentAction = action
+
+	// 1. Risoluzione FRAME TEMPORALE
+	//frameIdx := currentTick % v.numFrames
+
+	// 2. Risoluzione ANGOLO SPAZIALE
+	//angleIdx := 0
+
+	// Vettore direzione (Considerando X, Y come piano terra, o X, Z a seconda del tuo sistema assi)
+	dx := cameraPos.X - entityPos.X
+	dy := cameraPos.Y - entityPos.Y
+
+	// Angolo assoluto verso la telecamera (in radianti: -Pi a +Pi)
+	angleToCam := math.Atan2(dy, dx)
+
+	// Costante 2*Pi per comodità
+	twoPi := math.Pi * 2
+
+	// Delta angolare normalizzato (0 a 2*Pi)
+	// Il doppio modulo garantisce sicurezza anche se entityYaw fa più giri negativi
+	relAngle := math.Mod(math.Mod(angleToCam-entityYaw, twoPi)+twoPi, twoPi)
+
+	// Dimensione del settore in radianti (es. 8 angoli = Pi/4)
+	sectorSize := twoPi / float64(v.numAngles)
+
+	// Offset di mezzo settore per centrare il bucket "Fronte" (Indice 0) sullo zero assoluto
+	shiftedAngle := math.Mod(relAngle+(sectorSize/2.0), twoPi)
+
+	// Quantizzazione spaziale pura
+	v.currentAngleIdx = int(math.Floor(shiftedAngle / sectorSize))
+
+	// Fallback/Wrap-around di sicurezza per non sforare l'array
+	if v.currentAngleIdx >= v.numAngles {
+		v.currentAngleIdx = 0
+	}
+
+	//return action.Frames[angleIdx][frameIdx]
+}
+
+
+// GetCurrentFrame viene chiamato dal ciclo di rendering (es. a 60 FPS)
+func (v *VerticesMultiSprite) GetCurrentFrame(currentTick int) *UniFrame {
+	if v.currentAction >= len(v.actions) {
+		return nil
+	}
+
+	action := v.actions[v.currentAction]
+	if action == nil || action.NumFrames == 0 {
+		return nil
+	}
+
+	// Risoluzione temporale al volo
+	frameIdx := currentTick % action.NumFrames
+
+	// Fetch in O(1) usando lo stato pre-calcolato da SetFacing
+	return action.Frames[v.currentAngleIdx][frameIdx]
+}
+*/
+
+/*
 // SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
 func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
 	// 1. Calcolo del vettore direzione dalla telecamera all'entità

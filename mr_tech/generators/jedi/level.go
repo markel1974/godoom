@@ -193,16 +193,12 @@ func (p *Level) Parse(r io.Reader) error {
 				//TODO: Salvare le coordinate della luce globale se necessario
 			}
 		case "SLOPEDFLOOR":
-			if sector != nil && len(tokens) >= 4 {
-				sector.SlopedFloor[0], _ = strconv.ParseFloat(tokens[1], 64)
-				sector.SlopedFloor[1], _ = strconv.ParseFloat(tokens[2], 64)
-				sector.SlopedFloor[2], _ = strconv.ParseFloat(tokens[3], 64)
+			if sector != nil {
+				sector.SetSlopedFloor(tokens)
 			}
 		case "SLOPEDCEILING":
-			if sector != nil && len(tokens) >= 4 {
-				sector.SlopedCeiling[0], _ = strconv.ParseFloat(tokens[1], 64)
-				sector.SlopedCeiling[1], _ = strconv.ParseFloat(tokens[2], 64)
-				sector.SlopedCeiling[2], _ = strconv.ParseFloat(tokens[3], 64)
+			if sector != nil {
+				sector.SetSlopedCeiling(tokens)
 			}
 		case "OFFSET:":
 			// Assorbe l'offset se dichiarato come parametro globale del settore (es. allineamento planare)

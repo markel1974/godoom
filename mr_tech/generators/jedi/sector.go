@@ -43,6 +43,28 @@ func NewSector(id string, index int) *Sector {
 	}
 }
 
+// SetSlopedFloor sets the slope parameters of the sector's floor using the provided tokenized input.
+func (s *Sector) SetSlopedFloor(tokens []string) {
+	if len(tokens) < 4 {
+		fmt.Printf("Invalid SLOPEDFLOOR property in line: %v\n", tokens)
+		return
+	}
+	s.SlopedFloor[0], _ = strconv.ParseFloat(tokens[1], 64)
+	s.SlopedFloor[1], _ = strconv.ParseFloat(tokens[2], 64)
+	s.SlopedFloor[2], _ = strconv.ParseFloat(tokens[3], 64)
+}
+
+// SetSlopedCeiling sets the slope of the ceiling using parsed float values from the provided tokens slice.
+func (s *Sector) SetSlopedCeiling(tokens []string) {
+	if len(tokens) < 4 {
+		fmt.Printf("Invalid SLOPEDCEILING property in line: %v\n", tokens)
+		return
+	}
+	s.SlopedCeiling[0], _ = strconv.ParseFloat(tokens[1], 64)
+	s.SlopedCeiling[1], _ = strconv.ParseFloat(tokens[2], 64)
+	s.SlopedCeiling[2], _ = strconv.ParseFloat(tokens[3], 64)
+}
+
 // SetCeiling processes and sets the ceiling properties of a sector based on the provided tokens.
 func (s *Sector) SetCeiling(tokens []string) {
 	if len(tokens) < 1 {
@@ -51,7 +73,7 @@ func (s *Sector) SetCeiling(tokens []string) {
 	subKey := strings.ToUpper(tokens[1])
 	switch subKey {
 	case "Y":
-		// Formato compresso Outlaws: CEILING Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+		//FLOOR Y [Quota Z] [ID Texture] [U-Offset] [V-Offset] [Angolo di Rotazione]
 		if len(tokens) < 4 {
 			fmt.Printf("Invalid CEILING Y property in line: %v\n", tokens)
 			return
@@ -62,8 +84,20 @@ func (s *Sector) SetCeiling(tokens []string) {
 			return
 		}
 		s.CeilingY = -ceilingY
-		if tokens[3] != "-" {
-			s.CeilingTexture, _ = strconv.Atoi(tokens[3])
+		ceilingData, err := GetTokenStringAt(tokens, 3)
+		if err != nil {
+			fmt.Printf("Invalid CEILING texture value: '%s' in line: %v\n", tokens[3], tokens)
+			return
+		}
+		if ceilingData == "-" {
+			s.CeilingTexture = -1
+		} else {
+			ceilingTexture, err := strconv.Atoi(ceilingData)
+			if err != nil {
+				fmt.Printf("Invalid CEILINGG texture value: '%s' in line: %v\n", tokens[3], tokens)
+				return
+			}
+			s.CeilingTexture = ceilingTexture
 		}
 
 	case "ALTITUDE":
@@ -92,7 +126,7 @@ func (s *Sector) SetFloor(tokens []string) {
 	subKey := strings.ToUpper(tokens[1])
 	switch subKey {
 	case "Y":
-		// Formato compresso Outlaws: FLOOR Y [Alt] [Tex] [ScaleX] [ScaleY] [Light]
+		//FLOOR Y [Quota Z] [ID Texture] [U-Offset] [V-Offset] [Angolo di Rotazione]
 		if len(tokens) < 4 {
 			fmt.Printf("Invalid FLOOR Y property in line: %v\n", tokens)
 			return

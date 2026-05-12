@@ -180,35 +180,57 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 					cSeg.Kind = config.SegmentUnknown
 					adjSec := level.Sectors[wall.Adjoin]
 
-					if sector.IsSky() && adjSec.IsSky() {
-						//f !wall.Transparent {
-						topTexture := wall.TopTexture
-						texName := level.GetTexture(topTexture)
-						_, _ = archive.AddTexture(texName)
-						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
-						//}
-					} else if sector.CeilingY < adjSec.CeilingY {
-						//if !wall.Transparent {
-						topTexture := wall.TopTexture
-						if topTexture >= 0 {
-							texName := level.GetTexture(topTexture)
-							names, _ := archive.AddTexture(texName)
-							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						}
-						//}
+					// Gestione Upper: Soppressione se Double-Sky
+					if wall.TopTexture >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
+						texName := level.GetTexture(wall.TopTexture)
+						names, _ := archive.AddTexture(texName)
+						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
 
-					if sector.FloorY > adjSec.FloorY {
-						var names []string
-						//if !wall.Transparent {
-						if wall.BotTexture >= 0 {
-							texName := level.GetTexture(wall.BotTexture)
-							names, _ = archive.AddTexture(texName)
-						}
-						//}
+					// Gestione Lower: Passiamo sempre il materiale, il delta calcolerà l'estrusione
+					if wall.BotTexture >= 0 {
+						texName := level.GetTexture(wall.BotTexture)
+						names, _ := archive.AddTexture(texName)
 						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						//}
 					}
+
+					// Gestione Middle (Transparent Overlay)
+					if wall.MidTexture >= 0 {
+						texName := level.GetTexture(wall.MidTexture)
+						names, _ := archive.AddTexture(texName)
+						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+					}
+					/*
+						if sector.IsSky() && adjSec.IsSky() {
+							//f !wall.Transparent {
+							topTexture := wall.TopTexture
+							texName := level.GetTexture(topTexture)
+							_, _ = archive.AddTexture(texName)
+							cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
+							//}
+						} else if sector.CeilingY < adjSec.CeilingY {
+							//if !wall.Transparent {
+							topTexture := wall.TopTexture
+							if topTexture >= 0 {
+								texName := level.GetTexture(topTexture)
+								names, _ := archive.AddTexture(texName)
+								cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+							}
+							//}
+						}
+
+						if sector.FloorY > adjSec.FloorY {
+							var names []string
+							//if !wall.Transparent {
+							if wall.BotTexture >= 0 {
+								texName := level.GetTexture(wall.BotTexture)
+								names, _ = archive.AddTexture(texName)
+							}
+							//}
+							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+							//}
+						}
+					*/
 				}
 				cSector.Segments = append(cSector.Segments, cSeg)
 			}

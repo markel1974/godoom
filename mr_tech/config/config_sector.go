@@ -4,14 +4,16 @@ import "github.com/markel1974/godoom/mr_tech/model/geometry"
 
 // Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type Sector struct {
-	Id       string     `json:"id"`
-	CeilY    float64    `json:"ceilY"`
-	FloorY   float64    `json:"floorY"`
-	Ceil     *Material  `json:"ceil"`
-	Floor    *Material  `json:"floor"`
-	Light    *Light     `json:"light"`
-	Segments []*Segment `json:"segments"`
-	Tag      string     `json:"tag"`
+	Id            string       `json:"id"`
+	CeilY         float64      `json:"ceilY"`
+	FloorY        float64      `json:"floorY"`
+	Ceil          *Material    `json:"ceil"`
+	Floor         *Material    `json:"floor"`
+	Light         *Light       `json:"light"`
+	Segments      []*Segment   `json:"segments"`
+	Tag           string       `json:"tag"`
+	SlopedCeiling geometry.XYZ `json:"slopeCeiling"`
+	SlopedFloor   geometry.XYZ `json:"slopeFloor"`
 }
 
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.

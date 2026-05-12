@@ -116,8 +116,8 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 		cSector.FloorY = -sector.FloorY * scaleSectorH
 		cSector.CeilY = -sector.CeilingY * scaleSectorH
 
-		//fmt.Println("---------------------------------------")
-		//fmt.Println("SECTOR: ", cSector.FloorY, cSector.CeilY)
+		cSector.SlopedFloor = geometry.XYZ{X: sector.SlopedFloor[0], Y: sector.SlopedFloor[1], Z: sector.SlopedFloor[2]}
+		cSector.SlopedCeiling = geometry.XYZ{X: sector.SlopedCeiling[0], Y: sector.SlopedCeiling[1], Z: sector.SlopedCeiling[2]}
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)

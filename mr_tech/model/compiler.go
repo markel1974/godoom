@@ -300,154 +300,13 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	return container
 }
 
-/*
-
-// upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
-func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
-	var volumes3d []*Volume
-	volMap := make(map[*Volume]*Volume)
-
-	resolveZ := func(volume *Volume, p geometry.XYZ, baseF, baseC float64) (float64, float64) {
-		zF := baseF
-		if slopeF, ok := _slopedFloor[volume]; ok {
-			slopeX, slopeY := slopeF.Nx*slopeF.Gradient, slopeF.Ny*slopeF.Gradient
-			slopeZ := baseF - (slopeX * slopeF.Start.X) - (slopeY * slopeF.Start.Y)
-			zF = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
-		}
-
-		zC := baseC
-		if slopeC, ok := _slopedCeiling[volume]; ok {
-			slopeX, slopeY := slopeC.Nx*slopeC.Gradient, slopeC.Ny*slopeC.Gradient
-			slopeZ := baseC - (slopeX * slopeC.Start.X) - (slopeY * slopeC.Start.Y)
-			zC = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
-		}
-		// VINCOLO: Clamping (decommentalo appena sei sicuro che i piani si generino bene)
-		// if zF > zC {
-		//    mid := (zF + zC) * 0.5
-		//    return mid, mid
-		// }
-		return zF, zC
-	}
-
-	// buildQuad accetta quote differenziate per l'inizio e la fine del segmento (trapezio), utile per pendenze incrociate.
-	buildQuad := func(vol3d *Volume, f2d *Face, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material) {
-		start := f2d.GetStart()
-		end := f2d.GetEnd()
-
-		// Costruzione dei 4 vertici del trapezio verticale
-		v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBS} // Bottom-Start
-		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBE}     // Bottom-End
-		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTE}     // Top-End
-		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTS} // Top-Start
-
-		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
-		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
-		vol3d.AddFace(faceT1)
-		vol3d.AddFace(faceT2)
-	}
-
-	for _, vol2d := range volumes2d {
-		id := fmt.Sprintf("%s_3d", vol2d.GetId())
-		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
-		if vol2d.Light != nil {
-			vol3d.Light = vol2d.Light
-		}
-
-		faces2d, face2dCount := vol2d.GetFaces()
-		if face2dCount != 3 {
-			continue // Supportiamo solo triangoli base dalla tassellazione 2D
-		}
-
-		// Quote base assolute
-		curFloorY := vol2d.GetMinZ()
-		curCeilY := vol2d.GetMaxZ()
-
-		// Recupero vertici mesh planare
-		p0, p1, p2 := faces2d[0].GetStart(), faces2d[1].GetStart(), faces2d[2].GetStart()
-
-		zF0, zC0 := resolveZ(vol2d, p0, curFloorY, curCeilY)
-		zF1, zC1 := resolveZ(vol2d, p1, curFloorY, curCeilY)
-		zF2, zC2 := resolveZ(vol2d, p2, curFloorY, curCeilY)
-
-		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
-		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1)))
-
-		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
-		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0)))
-
-		// 3. Generazione Muri ed Estrusioni
-		for x := 0; x < face2dCount; x++ {
-			f2d := faces2d[x]
-			s, e := f2d.GetStart(), f2d.GetEnd()
-
-			curFS, curCS := resolveZ(vol2d, s, curFloorY, curCeilY)
-			curFE, curCE := resolveZ(vol2d, e, curFloorY, curCeilY)
-			neighbor := f2d.GetNeighbor()
-			if neighbor == nil {
-				// Muro solido (da pavimento a soffitto)
-				buildQuad(vol3d, f2d, curFS, curFE, curCS, curCE, f2d.GetTag(), f2d.GetMaterialIndex(1))
-				continue
-			}
-
-			// Risoluzione quote del vicino (prevenendo il sentinel slope a zero)
-			neiFloorY := neighbor.GetMinZ()
-			neiCeilY := neighbor.GetMaxZ()
-
-			neiFS, neiCS := resolveZ(neighbor, s, neiFloorY, neiCeilY)
-			neiFE, neiCE := resolveZ(neighbor, e, neiFloorY, neiCeilY)
-
-			// ----------------------------------------------------
-			// Lower Wall: Clamping sul massimo per evitare culling / triangoli invertiti
-			// ----------------------------------------------------
-			zLowS := curFS
-			zHighS := math.Max(curFS, neiFS)
-			zLowE := curFE
-			zHighE := math.Max(curFE, neiFE)
-
-			// Viene estrusa la geometria se vi è una porzione di muro visibile
-			if zHighS > zLowS || zHighE > zLowE {
-				buildQuad(vol3d, f2d, zLowS, zLowE, zHighS, zHighE, f2d.GetTag()+"_lower", f2d.GetMaterialIndex(2))
-			}
-
-			// ----------------------------------------------------
-			// Upper Wall: Clamping sul minimo per il ribassamento del soffitto
-			// ----------------------------------------------------
-			zTopS := curCS
-			zBottomS := math.Min(curCS, neiCS)
-			zTopE := curCE
-			zBottomE := math.Min(curCE, neiCE)
-
-			if zBottomS < zTopS || zBottomE < zTopE {
-				buildQuad(vol3d, f2d, zBottomS, zBottomE, zTopS, zTopE, f2d.GetTag()+"_upper", f2d.GetMaterialIndex(0))
-			}
-		}
-
-		vol3d.Rebuild()
-		volumes3d = append(volumes3d, vol3d)
-		volMap[vol2d] = vol3d
-	}
-
-	// Ricucitura Topologica Spaziale post-estrusione (necessaria per il Pathfinding)
-	for _, vol := range volumes3d {
-		faces, faceCount := vol.GetFaces()
-		for x := 0; x < faceCount; x++ {
-			face := faces[x]
-			if neighbor := face.GetNeighbor(); neighbor != nil {
-				face.SetNeighbor(volMap[neighbor])
-			}
-		}
-	}
-	return volumes3d
-}
-
-*/
 // upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
 func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	var volumes3d []*Volume
 	volMap := make(map[*Volume]*Volume)
 
 	// resolveZ calcola la Z per pavimento e soffitto nel punto (X,Y)
-	resolveZ := func(p geometry.XYZ, baseF, baseC float64, volume *Volume) (float64, float64) {
+	resolveZ := func(volume *Volume, p geometry.XYZ, baseF, baseC float64, clamp bool) (float64, float64) {
 		zF := baseF
 		if slopeF, ok := _slopedFloor[volume]; ok {
 			slopeX, slopeY := slopeF.Nx*slopeF.Gradient, slopeF.Ny*slopeF.Gradient
@@ -462,11 +321,13 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 			zC = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
 		}
 
-		// VINCOLO OPZIONALE: Clamping per evitare che il pavimento superi il soffitto
-		// if zF > zC {
-		//    mid := (zF + zC) * 0.5
-		//    return mid, mid
-		// }
+		if clamp {
+			// Clamping per evitare che il pavimento superi il soffitto
+			if zF > zC {
+				mid := (zF + zC) * 0.5
+				return mid, mid
+			}
+		}
 
 		return zF, zC
 	}
@@ -493,7 +354,8 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 
 		faces2d, face2dCount := vol2d.GetFaces()
 		if face2dCount != 3 {
-			continue // Supportiamo solo triangoli base dalla tassellazione 2D
+			fmt.Println("only tringle are supported")
+			continue
 		}
 
 		curFloorY := vol2d.GetMinZ()
@@ -501,9 +363,9 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 
 		p0, p1, p2 := faces2d[0].GetStart(), faces2d[1].GetStart(), faces2d[2].GetStart()
 
-		zF0, zC0 := resolveZ(p0, curFloorY, curCeilY, vol2d)
-		zF1, zC1 := resolveZ(p1, curFloorY, curCeilY, vol2d)
-		zF2, zC2 := resolveZ(p2, curFloorY, curCeilY, vol2d)
+		zF0, zC0 := resolveZ(vol2d, p0, curFloorY, curCeilY, false)
+		zF1, zC1 := resolveZ(vol2d, p1, curFloorY, curCeilY, false)
+		zF2, zC2 := resolveZ(vol2d, p2, curFloorY, curCeilY, false)
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1)))
@@ -515,8 +377,8 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 			f2d := faces2d[x]
 			s, e := f2d.GetStart(), f2d.GetEnd()
 
-			curFS, curCS := resolveZ(s, curFloorY, curCeilY, vol2d)
-			curFE, curCE := resolveZ(e, curFloorY, curCeilY, vol2d)
+			curFS, curCS := resolveZ(vol2d, s, curFloorY, curCeilY, false)
+			curFE, curCE := resolveZ(vol2d, e, curFloorY, curCeilY, false)
 			neighbor := f2d.GetNeighbor()
 
 			if neighbor == nil {
@@ -529,8 +391,8 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 			neiFloorY := neighbor.GetMinZ()
 			neiCeilY := neighbor.GetMaxZ()
 
-			neiFS, neiCS := resolveZ(s, neiFloorY, neiCeilY, neighbor)
-			neiFE, neiCE := resolveZ(e, neiFloorY, neiCeilY, neighbor)
+			neiFS, neiCS := resolveZ(neighbor, s, neiFloorY, neiCeilY, false)
+			neiFE, neiCE := resolveZ(neighbor, e, neiFloorY, neiCeilY, false)
 
 			tagLower := f2d.GetTag() + "_lower"
 			tagUpper := f2d.GetTag() + "_upper"
@@ -711,6 +573,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volum
 			}
 		}
 	}
+
 	//fmt.Printf("Total faces: %d, not found faces: %d\n", totalFaces, totalFaces-foundFaces)
 	return container
 }
@@ -832,3 +695,145 @@ func (r *Compiler) compileLights2d(volumes2d *Volumes, computeCenter bool) []*Li
 	}
 	return out
 }
+
+/*
+
+// upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
+func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
+	var volumes3d []*Volume
+	volMap := make(map[*Volume]*Volume)
+
+	resolveZ := func(volume *Volume, p geometry.XYZ, baseF, baseC float64) (float64, float64) {
+		zF := baseF
+		if slopeF, ok := _slopedFloor[volume]; ok {
+			slopeX, slopeY := slopeF.Nx*slopeF.Gradient, slopeF.Ny*slopeF.Gradient
+			slopeZ := baseF - (slopeX * slopeF.Start.X) - (slopeY * slopeF.Start.Y)
+			zF = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
+		}
+
+		zC := baseC
+		if slopeC, ok := _slopedCeiling[volume]; ok {
+			slopeX, slopeY := slopeC.Nx*slopeC.Gradient, slopeC.Ny*slopeC.Gradient
+			slopeZ := baseC - (slopeX * slopeC.Start.X) - (slopeY * slopeC.Start.Y)
+			zC = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
+		}
+		// VINCOLO: Clamping (decommentalo appena sei sicuro che i piani si generino bene)
+		// if zF > zC {
+		//    mid := (zF + zC) * 0.5
+		//    return mid, mid
+		// }
+		return zF, zC
+	}
+
+	// buildQuad accetta quote differenziate per l'inizio e la fine del segmento (trapezio), utile per pendenze incrociate.
+	buildQuad := func(vol3d *Volume, f2d *Face, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material) {
+		start := f2d.GetStart()
+		end := f2d.GetEnd()
+
+		// Costruzione dei 4 vertici del trapezio verticale
+		v0 := geometry.XYZ{X: start.X, Y: start.Y, Z: zBS} // Bottom-Start
+		v1 := geometry.XYZ{X: end.X, Y: end.Y, Z: zBE}     // Bottom-End
+		v2 := geometry.XYZ{X: end.X, Y: end.Y, Z: zTE}     // Top-End
+		v3 := geometry.XYZ{X: start.X, Y: start.Y, Z: zTS} // Top-Start
+
+		faceT1 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(f2d.GetNeighbor(), [3]geometry.XYZ{v0, v2, v3}, tag, material)
+		vol3d.AddFace(faceT1)
+		vol3d.AddFace(faceT2)
+	}
+
+	for _, vol2d := range volumes2d {
+		id := fmt.Sprintf("%s_3d", vol2d.GetId())
+		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
+		if vol2d.Light != nil {
+			vol3d.Light = vol2d.Light
+		}
+
+		faces2d, face2dCount := vol2d.GetFaces()
+		if face2dCount != 3 {
+			continue // Supportiamo solo triangoli base dalla tassellazione 2D
+		}
+
+		// Quote base assolute
+		curFloorY := vol2d.GetMinZ()
+		curCeilY := vol2d.GetMaxZ()
+
+		// Recupero vertici mesh planare
+		p0, p1, p2 := faces2d[0].GetStart(), faces2d[1].GetStart(), faces2d[2].GetStart()
+
+		zF0, zC0 := resolveZ(vol2d, p0, curFloorY, curCeilY)
+		zF1, zC1 := resolveZ(vol2d, p1, curFloorY, curCeilY)
+		zF2, zC2 := resolveZ(vol2d, p2, curFloorY, curCeilY)
+
+		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
+		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1)))
+
+		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
+		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0)))
+
+		// 3. Generazione Muri ed Estrusioni
+		for x := 0; x < face2dCount; x++ {
+			f2d := faces2d[x]
+			s, e := f2d.GetStart(), f2d.GetEnd()
+
+			curFS, curCS := resolveZ(vol2d, s, curFloorY, curCeilY)
+			curFE, curCE := resolveZ(vol2d, e, curFloorY, curCeilY)
+			neighbor := f2d.GetNeighbor()
+			if neighbor == nil {
+				// Muro solido (da pavimento a soffitto)
+				buildQuad(vol3d, f2d, curFS, curFE, curCS, curCE, f2d.GetTag(), f2d.GetMaterialIndex(1))
+				continue
+			}
+
+			// Risoluzione quote del vicino (prevenendo il sentinel slope a zero)
+			neiFloorY := neighbor.GetMinZ()
+			neiCeilY := neighbor.GetMaxZ()
+
+			neiFS, neiCS := resolveZ(neighbor, s, neiFloorY, neiCeilY)
+			neiFE, neiCE := resolveZ(neighbor, e, neiFloorY, neiCeilY)
+
+			// ----------------------------------------------------
+			// Lower Wall: Clamping sul massimo per evitare culling / triangoli invertiti
+			// ----------------------------------------------------
+			zLowS := curFS
+			zHighS := math.Max(curFS, neiFS)
+			zLowE := curFE
+			zHighE := math.Max(curFE, neiFE)
+
+			// Viene estrusa la geometria se vi è una porzione di muro visibile
+			if zHighS > zLowS || zHighE > zLowE {
+				buildQuad(vol3d, f2d, zLowS, zLowE, zHighS, zHighE, f2d.GetTag()+"_lower", f2d.GetMaterialIndex(2))
+			}
+
+			// ----------------------------------------------------
+			// Upper Wall: Clamping sul minimo per il ribassamento del soffitto
+			// ----------------------------------------------------
+			zTopS := curCS
+			zBottomS := math.Min(curCS, neiCS)
+			zTopE := curCE
+			zBottomE := math.Min(curCE, neiCE)
+
+			if zBottomS < zTopS || zBottomE < zTopE {
+				buildQuad(vol3d, f2d, zBottomS, zBottomE, zTopS, zTopE, f2d.GetTag()+"_upper", f2d.GetMaterialIndex(0))
+			}
+		}
+
+		vol3d.Rebuild()
+		volumes3d = append(volumes3d, vol3d)
+		volMap[vol2d] = vol3d
+	}
+
+	// Ricucitura Topologica Spaziale post-estrusione (necessaria per il Pathfinding)
+	for _, vol := range volumes3d {
+		faces, faceCount := vol.GetFaces()
+		for x := 0; x < faceCount; x++ {
+			face := faces[x]
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				face.SetNeighbor(volMap[neighbor])
+			}
+		}
+	}
+	return volumes3d
+}
+
+*/

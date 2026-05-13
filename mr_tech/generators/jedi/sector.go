@@ -16,8 +16,8 @@ type Slope struct {
 	WallIndex   int
 }
 
-// GetRadiansAngle calculates and returns the angle of the slope in radians using the pitch value.
-func (s *Slope) GetRadiansAngle() float64 {
+// GetGradient calculates and returns the angle of the slope in radians using the pitch value.
+func (s *Slope) GetGradient() float64 {
 	degrees := float64(s.Pitch) / 100.0
 	return math.Tan(degrees * math.Pi / 180.0)
 }

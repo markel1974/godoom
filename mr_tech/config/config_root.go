@@ -44,6 +44,12 @@ func (cfg *Root) Scale(scale geometry.XYZ) {
 		return
 	}
 	cfg.Player.Scale(scale)
+
+	xy := geometry.XY{X: scale.X, Y: scale.Y}
+
+	for _, vertice := range cfg.Vertices {
+		vertice.Scale(xy)
+	}
 	for _, sector := range cfg.Sectors {
 		sector.Scale(scale)
 	}

@@ -159,6 +159,14 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 				//	lights = append(lights, light)
 				//}
 
+				if sector.SlopedFloor != nil {
+					cSeg.SlopedFloorRef = wallIdx == sector.SlopedFloor.WallIndex
+				}
+
+				if sector.SlopedCeiling != nil {
+					cSeg.SlopedCeilingRef = wallIdx == sector.SlopedCeiling.WallIndex
+				}
+
 				// Inversione asse Z (profondità planare)
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 				if wall.Adjoin == -1 {
@@ -199,18 +207,17 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 
 		if sector.SlopedFloor != nil {
 			//segments and walls share the same index
-			cSector.SlopeFloor = config.NewSlope(sector.SlopedFloor.WallIndex, sector.SlopedFloor.GetRadiansAngle())
+			cSector.SlopedFloorGradient = sector.SlopedFloor.GetGradient()
 
 			// TODO DA RIMUOVERE:
-			cSector.SlopedFloor, _ = level.ComputeSlopePlane(sector.SlopedFloor, sector.FloorY)
+			//cSector.SlopedFloor, _ = level.ComputeSlopePlane(sector.SlopedFloor, sector.FloorY)
 		}
 
 		if sector.SlopedCeiling != nil {
 			//segments and walls share the same index
-			cSector.SlopeCeiling = config.NewSlope(sector.SlopedCeiling.WallIndex, sector.SlopedCeiling.GetRadiansAngle())
-
+			cSector.SlopedCeilingGradient = sector.SlopedCeiling.GetGradient()
 			// TODO DA RIMUOVERE:
-			cSector.SlopedCeiling, _ = level.ComputeSlopePlane(sector.SlopedCeiling, sector.CeilingY)
+			//cSector.SlopedCeiling, _ = level.ComputeSlopePlane(sector.SlopedCeiling, sector.CeilingY)
 		}
 
 		configSectors = append(configSectors, cSector)

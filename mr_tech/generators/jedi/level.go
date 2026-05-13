@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
 // modeNone represents the default mode state.
@@ -270,4 +273,46 @@ func (p *Level) doTexture(tokens []string) {
 		fmt.Printf("doTexture: invalid texture id %d\n", id)
 	}
 	p.Textures[id] = val
+}
+
+// ComputeSlopePlane calculates the slope plane of a given wall within a sector, returning its normal as an XYZ vector.
+func (p *Level) ComputeSlopePlane(slope *Slope, baseZ float64) (geometry.XYZ, error) {
+	if slope.SectorIndex < 0 || slope.SectorIndex >= len(p.Sectors) {
+		return geometry.XYZ{X: 0, Y: 0, Z: 0}, fmt.Errorf("invalid SectorId: %d", slope.SectorIndex)
+	}
+	pivotSector := p.Sectors[slope.SectorIndex]
+
+	if slope.WallIndex < 0 || slope.WallIndex >= len(pivotSector.Walls) {
+		return geometry.XYZ{X: 0, Y: 0, Z: 0}, fmt.Errorf("invalid WallId: %d", slope.WallIndex)
+	}
+	wall := pivotSector.Walls[slope.WallIndex]
+
+	if wall.LeftVertex < 0 || wall.LeftVertex >= len(pivotSector.Vertices) {
+		return geometry.XYZ{X: 0, Y: 0, Z: 0}, fmt.Errorf("invalid LeftVertex index")
+	}
+	if wall.RightVertex < 0 || wall.RightVertex >= len(pivotSector.Vertices) {
+		return geometry.XYZ{X: 0, Y: 0, Z: 0}, fmt.Errorf("invalid RightVertex index")
+	}
+	v1 := pivotSector.Vertices[wall.LeftVertex]
+	v2 := pivotSector.Vertices[wall.RightVertex]
+
+	dx := v2.X - v1.X
+	dy := v2.Y - v1.Y
+
+	length := math.Sqrt(dx*dx + dy*dy)
+	if length == 0 {
+		return geometry.XYZ{X: 0, Y: 0, Z: 0}, fmt.Errorf("pivot wall has zero length")
+	}
+	var nX, nY float64
+	if pivotSector.IsCCW() {
+		nX, nY = -dy/length, dx/length
+	} else {
+		nX, nY = dy/length, -dx/length
+	}
+	degrees := float64(slope.Pitch) / 100.0
+	gradient := math.Tan(degrees * math.Pi / 180.0)
+	slopeX := nX * gradient
+	slopeY := nY * gradient
+	slopeZ := baseZ - (slopeX * v1.X) - (slopeY * v1.Y)
+	return geometry.XYZ{X: slopeX, Y: slopeY, Z: slopeZ}, nil
 }

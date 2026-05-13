@@ -116,9 +116,6 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 		cSector.FloorY = -sector.FloorY * scaleSectorH
 		cSector.CeilY = -sector.CeilingY * scaleSectorH
 
-		cSector.SlopedFloor = geometry.XYZ{X: sector.SlopedFloor[0], Y: sector.SlopedFloor[1], Z: sector.SlopedFloor[2]}
-		cSector.SlopedCeiling = geometry.XYZ{X: sector.SlopedCeiling[0], Y: sector.SlopedCeiling[1], Z: sector.SlopedCeiling[2]}
-
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := archive.AddTexture(texName)
@@ -142,8 +139,8 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 
 		wallCount := len(sector.Walls)
 		if wallCount > 0 {
-			cSector.Segments = make([]*config.Segment, 0, wallCount)
-			for _, wall := range sector.Walls {
+			cSector.Segments = make([]*config.Segment, wallCount)
+			for wallIdx, wall := range sector.Walls {
 				if wall.LeftVertex < 0 || wall.RightVertex < 0 || wall.LeftVertex >= len(sector.Vertices) || wall.RightVertex >= len(sector.Vertices) {
 					fmt.Println("INVALID VERTEX")
 					continue
@@ -154,7 +151,7 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 				globalVertices = append(globalVertices, v1)
 				globalVertices = append(globalVertices, v2)
 
-				cSeg := config.NewConfigSegment(sector.Id, config.SegmentWall, v1, v2)
+				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
 
 				//if wall.Light > 0 {
 				//	pos := geometry.XYZ{X: v1.X, Y: sector.CeilingY, Z: -v1.Y}
@@ -169,6 +166,7 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 						fmt.Println("WARNING MISSING MID_TEXTURE")
 						continue
 					}
+					cSeg.Kind = config.SegmentWall
 					texName := level.GetTexture(wall.MidTexture)
 					names, _ := archive.AddTexture(texName)
 					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
@@ -177,63 +175,42 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 						fmt.Println("INVALID ADJOIN")
 						continue
 					}
-					cSeg.Kind = config.SegmentUnknown
 					adjSec := level.Sectors[wall.Adjoin]
-
-					// Gestione Upper: Soppressione se Double-Sky
 					if wall.TopTexture >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
 						texName := level.GetTexture(wall.TopTexture)
 						names, _ := archive.AddTexture(texName)
 						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
-
-					// Gestione Lower: Passiamo sempre il materiale, il delta calcolerà l'estrusione
 					if wall.BotTexture >= 0 {
 						texName := level.GetTexture(wall.BotTexture)
 						names, _ := archive.AddTexture(texName)
 						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
-
-					// Gestione Middle (Transparent Overlay)
 					if wall.MidTexture >= 0 {
 						texName := level.GetTexture(wall.MidTexture)
 						names, _ := archive.AddTexture(texName)
 						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
-					/*
-						if sector.IsSky() && adjSec.IsSky() {
-							//f !wall.Transparent {
-							topTexture := wall.TopTexture
-							texName := level.GetTexture(topTexture)
-							_, _ = archive.AddTexture(texName)
-							cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, scaleTextureW, scaleTextureH, 0, 0)
-							//}
-						} else if sector.CeilingY < adjSec.CeilingY {
-							//if !wall.Transparent {
-							topTexture := wall.TopTexture
-							if topTexture >= 0 {
-								texName := level.GetTexture(topTexture)
-								names, _ := archive.AddTexture(texName)
-								cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-							}
-							//}
-						}
-
-						if sector.FloorY > adjSec.FloorY {
-							var names []string
-							//if !wall.Transparent {
-							if wall.BotTexture >= 0 {
-								texName := level.GetTexture(wall.BotTexture)
-								names, _ = archive.AddTexture(texName)
-							}
-							//}
-							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-							//}
-						}
-					*/
 				}
-				cSector.Segments = append(cSector.Segments, cSeg)
+				cSector.Segments[wallIdx] = cSeg
+
 			}
+		}
+
+		if sector.SlopedFloor != nil {
+			//segments and walls share the same index
+			cSector.SlopeFloor = config.NewSlope(sector.SlopedFloor.WallIndex, sector.SlopedFloor.GetRadiansAngle())
+
+			// TODO DA RIMUOVERE:
+			cSector.SlopedFloor, _ = level.ComputeSlopePlane(sector.SlopedFloor, sector.FloorY)
+		}
+
+		if sector.SlopedCeiling != nil {
+			//segments and walls share the same index
+			cSector.SlopeCeiling = config.NewSlope(sector.SlopedCeiling.WallIndex, sector.SlopedCeiling.GetRadiansAngle())
+
+			// TODO DA RIMUOVERE:
+			cSector.SlopedCeiling, _ = level.ComputeSlopePlane(sector.SlopedCeiling, sector.CeilingY)
 		}
 
 		configSectors = append(configSectors, cSector)

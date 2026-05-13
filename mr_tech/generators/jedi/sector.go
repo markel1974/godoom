@@ -2,11 +2,25 @@ package jedi
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
+
+// Slope represents a sloped surface defined by a sector index, pitch, and wall index.
+type Slope struct {
+	SectorIndex int
+	Pitch       int
+	WallIndex   int
+}
+
+// GetRadiansAngle calculates and returns the angle of the slope in radians using the pitch value.
+func (s *Slope) GetRadiansAngle() float64 {
+	degrees := float64(s.Pitch) / 100.0
+	return math.Tan(degrees * math.Pi / 180.0)
+}
 
 // Sector represents a spatial region with geometry, textures, physical properties, and relationships to walls and vertices.
 type Sector struct {
@@ -27,8 +41,8 @@ type Sector struct {
 	Velocity       [3]float64
 	VAdjoin        int
 	CMap           int
-	SlopedFloor    [3]float64
-	SlopedCeiling  [3]float64
+	SlopedFloor    *Slope
+	SlopedCeiling  *Slope
 }
 
 // NewSector creates and returns a new Sector instance with the specified id and index, initializing default values.
@@ -49,9 +63,10 @@ func (s *Sector) SetSlopedFloor(tokens []string) {
 		fmt.Printf("Invalid SLOPEDFLOOR property in line: %v\n", tokens)
 		return
 	}
-	s.SlopedFloor[0], _ = strconv.ParseFloat(tokens[1], 64)
-	s.SlopedFloor[1], _ = strconv.ParseFloat(tokens[2], 64)
-	s.SlopedFloor[2], _ = strconv.ParseFloat(tokens[3], 64)
+	sector, _ := strconv.Atoi(tokens[1])
+	wall, _ := strconv.Atoi(tokens[2])
+	pitch, _ := strconv.Atoi(tokens[3])
+	s.SlopedFloor = &Slope{SectorIndex: sector, Pitch: pitch, WallIndex: wall}
 }
 
 // SetSlopedCeiling sets the slope of the ceiling using parsed float values from the provided tokens slice.
@@ -60,9 +75,10 @@ func (s *Sector) SetSlopedCeiling(tokens []string) {
 		fmt.Printf("Invalid SLOPEDCEILING property in line: %v\n", tokens)
 		return
 	}
-	s.SlopedCeiling[0], _ = strconv.ParseFloat(tokens[1], 64)
-	s.SlopedCeiling[1], _ = strconv.ParseFloat(tokens[2], 64)
-	s.SlopedCeiling[2], _ = strconv.ParseFloat(tokens[3], 64)
+	sector, _ := strconv.Atoi(tokens[1])
+	wall, _ := strconv.Atoi(tokens[2])
+	pitch, _ := strconv.Atoi(tokens[3])
+	s.SlopedCeiling = &Slope{SectorIndex: sector, Pitch: pitch, WallIndex: wall}
 }
 
 // SetCeiling processes and sets the ceiling properties of a sector based on the provided tokens.
@@ -298,4 +314,24 @@ func (s *Sector) IsAbyss() bool {
 		return false
 	}
 	return (s.Flags[0] & 2) != 0
+}
+
+func (s *Sector) IsCCW() bool {
+	area := 0.0
+	for _, w := range s.Walls {
+		// Fallback di sicurezza se la mappa ha indici corrotti
+		if w.LeftVertex < 0 || w.LeftVertex >= len(s.Vertices) ||
+			w.RightVertex < 0 || w.RightVertex >= len(s.Vertices) {
+			continue
+		}
+		v1 := s.Vertices[w.LeftVertex]
+		v2 := s.Vertices[w.RightVertex]
+		// Formula di calcolo dell'area per curve chiuse: (X2 - X1) * (Y2 + Y1)
+		area += (v2.X - v1.X) * (v2.Y + v1.Y)
+	}
+	// Nello Screen-Space (Y che cresce verso il basso come in Outlaws/Doom):
+	// Area < 0 significa CCW (Antiorario)
+	// Area > 0 significa CW (Orario)
+	// se Y-up cartesiano puro, invertire operatore (> 0).*
+	return area < 0
 }

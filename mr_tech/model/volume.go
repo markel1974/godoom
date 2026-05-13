@@ -23,6 +23,9 @@ type Volume struct {
 	hasFixedZ bool
 	facesTree *physics.AABBTree
 	thing     IThing
+
+	slopedCeiling geometry.XYZ
+	slopedFloor   geometry.XYZ
 }
 
 const solidRestitution = 0.0

@@ -300,6 +300,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	return container
 }
 
+/*
+
 // upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
 func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	var volumes3d []*Volume
@@ -426,6 +428,195 @@ func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
 	}
 
 	// Ricucitura Topologica Spaziale post-estrusione (necessaria per il Pathfinding)
+	for _, vol := range volumes3d {
+		faces, faceCount := vol.GetFaces()
+		for x := 0; x < faceCount; x++ {
+			face := faces[x]
+			if neighbor := face.GetNeighbor(); neighbor != nil {
+				face.SetNeighbor(volMap[neighbor])
+			}
+		}
+	}
+	return volumes3d
+}
+
+*/
+// upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
+func (r *Compiler) upgrade3d(volumes2d []*Volume) []*Volume {
+	var volumes3d []*Volume
+	volMap := make(map[*Volume]*Volume)
+
+	// resolveZ calcola la Z per pavimento e soffitto nel punto (X,Y)
+	resolveZ := func(p geometry.XYZ, baseF, baseC float64, volume *Volume) (float64, float64) {
+		zF := baseF
+		if slopeF, ok := _slopedFloor[volume]; ok {
+			slopeX, slopeY := slopeF.Nx*slopeF.Gradient, slopeF.Ny*slopeF.Gradient
+			slopeZ := baseF - (slopeX * slopeF.Start.X) - (slopeY * slopeF.Start.Y)
+			zF = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
+		}
+
+		zC := baseC
+		if slopeC, ok := _slopedCeiling[volume]; ok {
+			slopeX, slopeY := slopeC.Nx*slopeC.Gradient, slopeC.Ny*slopeC.Gradient
+			slopeZ := baseC - (slopeX * slopeC.Start.X) - (slopeY * slopeC.Start.Y)
+			zC = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
+		}
+
+		// VINCOLO OPZIONALE: Clamping per evitare che il pavimento superi il soffitto
+		// if zF > zC {
+		//    mid := (zF + zC) * 0.5
+		//    return mid, mid
+		// }
+
+		return zF, zC
+	}
+
+	// buildQuad ora accetta s (Start) ed e (End) come XY per permettere lo split parametrico
+	buildQuad := func(vol3d *Volume, neighbor *Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material) {
+		v0 := geometry.XYZ{X: s.X, Y: s.Y, Z: zBS} // Bottom-Start
+		v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE} // Bottom-End
+		v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE} // Top-End
+		v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS} // Top-Start
+
+		faceT1 := NewFace(neighbor, [3]geometry.XYZ{v0, v1, v2}, tag, material)
+		faceT2 := NewFace(neighbor, [3]geometry.XYZ{v0, v2, v3}, tag, material)
+		vol3d.AddFace(faceT1)
+		vol3d.AddFace(faceT2)
+	}
+
+	for _, vol2d := range volumes2d {
+		id := fmt.Sprintf("%s_3d", vol2d.GetId())
+		vol3d := NewVolume3d(vol2d.GetModelId(), id, vol2d.GetTag())
+		if vol2d.Light != nil {
+			vol3d.Light = vol2d.Light
+		}
+
+		faces2d, face2dCount := vol2d.GetFaces()
+		if face2dCount != 3 {
+			continue // Supportiamo solo triangoli base dalla tassellazione 2D
+		}
+
+		curFloorY := vol2d.GetMinZ()
+		curCeilY := vol2d.GetMaxZ()
+
+		p0, p1, p2 := faces2d[0].GetStart(), faces2d[1].GetStart(), faces2d[2].GetStart()
+
+		zF0, zC0 := resolveZ(p0, curFloorY, curCeilY, vol2d)
+		zF1, zC1 := resolveZ(p1, curFloorY, curCeilY, vol2d)
+		zF2, zC2 := resolveZ(p2, curFloorY, curCeilY, vol2d)
+
+		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
+		vol3d.AddFace(NewFace(nil, ceilP, vol2d.GetTag()+"_ceil", vol2d.GetMaterialIndex(1)))
+
+		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
+		vol3d.AddFace(NewFace(nil, floorP, vol2d.GetTag()+"_floor", vol2d.GetMaterialIndex(0)))
+
+		for x := 0; x < face2dCount; x++ {
+			f2d := faces2d[x]
+			s, e := f2d.GetStart(), f2d.GetEnd()
+
+			curFS, curCS := resolveZ(s, curFloorY, curCeilY, vol2d)
+			curFE, curCE := resolveZ(e, curFloorY, curCeilY, vol2d)
+			neighbor := f2d.GetNeighbor()
+
+			if neighbor == nil {
+				s2 := geometry.XY{X: s.X, Y: s.Y}
+				e2 := geometry.XY{X: e.X, Y: e.Y}
+				buildQuad(vol3d, nil, s2, e2, curFS, curFE, curCS, curCE, f2d.GetTag(), f2d.GetMaterialIndex(1))
+				continue
+			}
+
+			neiFloorY := neighbor.GetMinZ()
+			neiCeilY := neighbor.GetMaxZ()
+
+			neiFS, neiCS := resolveZ(s, neiFloorY, neiCeilY, neighbor)
+			neiFE, neiCE := resolveZ(e, neiFloorY, neiCeilY, neighbor)
+
+			tagLower := f2d.GetTag() + "_lower"
+			tagUpper := f2d.GetTag() + "_upper"
+			matLower := f2d.GetMaterialIndex(2)
+			matUpper := f2d.GetMaterialIndex(0)
+
+			// ==========================================
+			// LOWER WALL: Scontro tra pavimenti inclinati
+			// ==========================================
+			diffFS := neiFS - curFS
+			diffFE := neiFE - curFE
+
+			// Rilevamento Crossover (i piani si incrociano lungo il segmento)
+			if (diffFS > 0 && diffFE < 0) || (diffFS < 0 && diffFE > 0) {
+				t := diffFS / (diffFS - diffFE)
+				midXY := geometry.XY{X: s.X + t*(e.X-s.X), Y: s.Y + t*(e.Y-s.Y)}
+				midZ := curFS + t*(curFE-curFS) // Al punto mid, curZ == neiZ
+
+				// Segmento 1: Da Start a Mid
+				zLowS1, zHighS1 := curFS, math.Max(curFS, neiFS)
+				zLowE1, zHighE1 := midZ, midZ
+				if zHighS1 > zLowS1 || zHighE1 > zLowE1 {
+					s2 := geometry.XY{X: s.X, Y: s.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), s2, midXY, zLowS1, zLowE1, zHighS1, zHighE1, tagLower, matLower)
+				}
+				// Segmento 2: Da Mid a End
+				zLowS2, zHighS2 := midZ, midZ
+				zLowE2, zHighE2 := curFE, math.Max(curFE, neiFE)
+				if zHighS2 > zLowS2 || zHighE2 > zLowE2 {
+					e2 := geometry.XY{X: e.X, Y: e.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), midXY, e2, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower)
+				}
+			} else {
+				// Muro lineare standard
+				zLowS, zHighS := curFS, math.Max(curFS, neiFS)
+				zLowE, zHighE := curFE, math.Max(curFE, neiFE)
+				if zHighS > zLowS || zHighE > zLowE {
+					s2 := geometry.XY{X: s.X, Y: s.Y}
+					e2 := geometry.XY{X: e.X, Y: e.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), s2, e2, zLowS, zLowE, zHighS, zHighE, tagLower, matLower)
+				}
+			}
+
+			// ==========================================
+			// UPPER WALL: Scontro tra soffitti inclinati
+			// ==========================================
+			diffCS := neiCS - curCS
+			diffCE := neiCE - curCE
+
+			// Rilevamento Crossover (i piani si incrociano lungo il segmento)
+			if (diffCS > 0 && diffCE < 0) || (diffCS < 0 && diffCE > 0) {
+				t := diffCS / (diffCS - diffCE)
+				midXY := geometry.XY{X: s.X + t*(e.X-s.X), Y: s.Y + t*(e.Y-s.Y)}
+				midZ := curCS + t*(curCE-curCS)
+
+				// Segmento 1: Da Start a Mid
+				zTopS1, zBotS1 := curCS, math.Min(curCS, neiCS)
+				zTopE1, zBotE1 := midZ, midZ
+				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
+					s2 := geometry.XY{X: s.X, Y: s.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), s2, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper)
+				}
+				// Segmento 2: Da Mid a End
+				zTopS2, zBotS2 := midZ, midZ
+				zTopE2, zBotE2 := curCE, math.Min(curCE, neiCE)
+				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
+					e2 := geometry.XY{X: e.X, Y: e.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), midXY, e2, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper)
+				}
+			} else {
+				// Muro lineare standard
+				zTopS, zBotS := curCS, math.Min(curCS, neiCS)
+				zTopE, zBotE := curCE, math.Min(curCE, neiCE)
+				if zBotS < zTopS || zBotE < zTopE {
+					s2 := geometry.XY{X: s.X, Y: s.Y}
+					e2 := geometry.XY{X: e.X, Y: e.Y}
+					buildQuad(vol3d, f2d.GetNeighbor(), s2, e2, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper)
+				}
+			}
+		}
+
+		vol3d.Rebuild()
+		volumes3d = append(volumes3d, vol3d)
+		volMap[vol2d] = vol3d
+	}
+
 	for _, vol := range volumes3d {
 		faces, faceCount := vol.GetFaces()
 		for x := 0; x < faceCount; x++ {

@@ -79,7 +79,7 @@ func main() {
 		jFile := "resources" + string(os.PathSeparator) + "outlaws"
 		jf := jedi.NewBuilder()
 		cfg, err = jf.Build(1, jFile, level)
-	case 65:
+	case 6:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(quakeFile, level)

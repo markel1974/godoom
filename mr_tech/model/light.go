@@ -13,7 +13,7 @@ const defaultFalloff = 10.0
 
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
-	volume      *Volume
+	parent      *Volume
 	intensity   float64
 	falloff     float64
 	kind        config.LightKind
@@ -33,7 +33,7 @@ type Light struct {
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
 func NewLight() *Light {
 	l := &Light{
-		volume:    nil,
+		parent:    nil,
 		intensity: 0.0,
 		falloff:   defaultFalloff,
 		kind:      config.LightKindNone,
@@ -46,8 +46,7 @@ func NewLight() *Light {
 }
 
 // Setup configures the Light object by setting its intensity, falloff, stage, and position. Normalizes intensity between 0.0 and 1.0.
-func (cl *Light) Setup(volume *Volume, c *config.Light, coords geometry.XYZ) {
-	cl.volume = volume
+func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	cl.r = c.R
 	cl.g = c.G
 	cl.b = c.B
@@ -88,6 +87,16 @@ func (cl *Light) Rebuild() {
 	cl.aabb.Rebuild(cl.pos.X-r, cl.pos.Y-r, cl.pos.Z-r, cl.pos.X+r, cl.pos.Y+r, cl.pos.Z+r)
 }
 
+// SetParent assigns a parent Volume to the Light, establishing a hierarchical relationship.
+func (cl *Light) SetParent(p *Volume) {
+	cl.parent = p
+}
+
+// GetParent retrieves the location associated with the Light instance
+func (cl *Light) GetParent() *Volume {
+	return cl.parent
+}
+
 // GetAABB retrieves the axis-aligned bounding box (AABB) associated with the Light object. Returns a pointer to AABB.
 func (cl *Light) GetAABB() *physics.AABB {
 	return cl.aabb
@@ -96,11 +105,6 @@ func (cl *Light) GetAABB() *physics.AABB {
 // GetKind retrieves the type of the light as a LightKind value.
 func (cl *Light) GetKind() config.LightKind {
 	return cl.kind
-}
-
-// GetVolume retrieves the location associated with the Light instance. Returns a pointer to a Sector object.
-func (cl *Light) GetVolume() *Volume {
-	return cl.volume
 }
 
 // GetIntensity returns the current intensity of the light as a float64 value normalized between 0.0 and 1.0.

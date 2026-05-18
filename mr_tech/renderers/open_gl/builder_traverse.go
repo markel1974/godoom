@@ -11,7 +11,7 @@ import (
 // PolyKey represents a key used for identifying and differentiating polygonal geometry in a 3D simulation space.
 // It comprises references to a sector, specific texture coordinates, and unique identifiers for polygonal boundaries.
 type PolyKey struct {
-	volume *model.Volume
+	volume *model.Sector
 	kind   int
 	tx1    float32
 	tz1    float32
@@ -24,7 +24,7 @@ type PolyKey struct {
 // CreatePolygonSegment converts a CompiledPolygon into a PolyKey for identification and processing.
 func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
-		volume: cp.Volume,
+		volume: cp.Sector,
 		kind:   cp.Kind,
 		tx1:    float32(cp.Tx1),
 		tz1:    float32(cp.Tz1),
@@ -39,7 +39,7 @@ func CreatePolygonSegment(cp *model.CompiledPolygon) PolyKey {
 // CreatePolygonSector generates a PolyKey from a given CompiledPolygon by extracting its Sector and Kind properties.
 func CreatePolygonSector(cp *model.CompiledPolygon) PolyKey {
 	key := PolyKey{
-		volume: cp.Volume,
+		volume: cp.Sector,
 		kind:   cp.Kind,
 	}
 	return key
@@ -53,7 +53,7 @@ type BuilderTraverse struct {
 	fv                *FrameVertices
 	dc                *DrawCommands
 	fl                *FrameLights
-	visibleVolumes    map[*model.Volume]bool
+	visibleVolumes    map[*model.Sector]bool
 	processedPolygons map[PolyKey]bool
 	cSky              *textures.Texture
 	cal               *model.Calibration
@@ -68,7 +68,7 @@ func NewBuilderTraverse(tex *Textures, calibration *model.Calibration) *BuilderT
 		dc:                NewDrawCommands(startFrameCommands),
 		fl:                NewFrameLights(256),
 		dcRender:          NewDrawCommandsRender(),
-		visibleVolumes:    make(map[*model.Volume]bool, 256),
+		visibleVolumes:    make(map[*model.Sector]bool, 256),
 		processedPolygons: make(map[PolyKey]bool, 2048),
 		cSky:              nil,
 	}
@@ -139,13 +139,13 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleVolumes[cp.Volume] = true
+				w.visibleVolumes[cp.Sector] = true
 				if cp.Kind == model.IdWall {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Volume.GetMaxZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Sector.GetMinZ()), float32(cp.Sector.GetMaxZ()))
 				} else if cp.Kind == model.IdUpper {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Neighbor.GetMaxZ()), float32(cp.Volume.GetMaxZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Neighbor.GetMaxZ()), float32(cp.Sector.GetMaxZ()))
 				} else {
-					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Volume.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
+					w.pushWall(w.fv, w.dc, vi, key, cp.Material, float32(cp.Sector.GetMinZ()), float32(cp.Neighbor.GetMinZ()))
 				}
 			case model.IdCeil, model.IdCeilTest, model.IdFloor, model.IdFloorTest:
 				key := CreatePolygonSector(cp)
@@ -153,14 +153,14 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 					continue
 				}
 				w.processedPolygons[key] = true
-				w.visibleVolumes[cp.Volume] = true
+				w.visibleVolumes[cp.Sector] = true
 				if cp.Kind == model.IdCeil || cp.Kind == model.IdCeilTest {
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialCeil, float32(cp.Volume.GetMaxZ())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialCeil, float32(cp.Sector.GetMaxZ())); sky != nil {
 						w.cSky = sky
 					}
 				} else {
 					// IdFloor, IdFloorTest
-					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialFloor, float32(cp.Volume.GetMinZ())); sky != nil {
+					if sky := w.pushFlat(w.fv, w.dc, key, cp.MaterialFloor, float32(cp.Sector.GetMinZ())); sky != nil {
 						w.cSky = sky
 					}
 				}
@@ -177,7 +177,7 @@ func (w *BuilderTraverse) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *
 
 	tA, tC := engine.GetThings().GetActive()
 
-	w.pushThings(w.fv, w.dc, vi, tA, tC, w.visibleVolumes)
+	w.pushThings(w.fv, w.dc, vi, tA, tC)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
@@ -233,8 +233,8 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 	if tex == nil {
 		return nil
 	}
-	faces2, faceCount := cp.volume.GetFaces()
-	if faceCount < 3 {
+	segments, segmentCount := cp.volume.GetSegments()
+	if segmentCount < 3 {
 		return nil
 	}
 
@@ -247,9 +247,9 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 
 	startIndices := fv.GetIndicesLen()
 
-	indices := make([]uint32, faceCount)
-	for x := 0; x < faceCount; x++ {
-		f := faces2[x]
+	indices := make([]uint32, segmentCount)
+	for x := 0; x < segmentCount; x++ {
+		f := segments[x]
 		v := f.GetStart()
 		u := (float32(v.X) / float32(texW)) * float32(scaleH)
 		vV := (float32(-v.Y) / float32(texH)) * float32(scaleH)
@@ -257,7 +257,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 		indices[x] = fv.AddVertex6(float32(v.X), zF, float32(-v.Y), u, vV, layer)
 	}
 
-	for i := 1; i < faceCount-1; i++ {
+	for i := 1; i < segmentCount-1; i++ {
 		fv.AddTriangle(indices[0], indices[i], indices[i+1])
 	}
 
@@ -267,7 +267,7 @@ func (w *BuilderTraverse) pushFlat(fv *FrameVertices, dc *DrawCommands, cp PolyK
 }
 
 // pushThings processes and adds things to the frame rendering pipeline based on their position, texture, and visibility.
-func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int, volumes map[*model.Volume]bool) {
+func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *model.ViewMatrix, things []model.IThing, thingsCount int) {
 	if len(things) == 0 {
 		return
 	}

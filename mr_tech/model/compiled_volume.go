@@ -4,14 +4,14 @@ import "github.com/markel1974/godoom/mr_tech/textures"
 
 // CompiledVolume represents a preprocessed rendering-ready sector containing compiled polygons and tick information.
 type CompiledVolume struct {
-	Volume           *Volume
+	Sector           *Sector
 	compiledPolygons *CompiledPolygons
 }
 
 // NewCompiledSector creates and returns a pointer to a new initialized CompiledVolume instance.
 func NewCompiledSector() *CompiledVolume {
 	return &CompiledVolume{
-		Volume:           nil,
+		Sector:           nil,
 		compiledPolygons: NewCompiledPolygons(),
 	}
 }
@@ -22,8 +22,8 @@ func (cs *CompiledVolume) Setup() {
 }
 
 // Bind associates the CompiledVolume with a given Sector and resets its compiledPolygons collection.
-func (cs *CompiledVolume) Bind(volume *Volume) {
-	cs.Volume = volume
+func (cs *CompiledVolume) Bind(sector *Sector) {
+	cs.Sector = sector
 	cs.compiledPolygons.Clear()
 }
 
@@ -33,8 +33,8 @@ func (cs *CompiledVolume) Clear() {
 }
 
 // Acquire returns a compiled polygon by reusing or creating it from the provided neighbor, textures, coordinates, and type.
-func (cs *CompiledVolume) Acquire(neighbor *Volume, kind int, c, f, t *textures.Material, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
-	return cs.compiledPolygons.Acquire(cs.Volume, neighbor, kind, c, f, t, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
+func (cs *CompiledVolume) Acquire(neighbor *Sector, kind int, c, f, t *textures.Material, x1, x2, tx1, tx2, tz1, tz2, u0, u1 float64) *CompiledPolygon {
+	return cs.compiledPolygons.Acquire(cs.Sector, neighbor, kind, c, f, t, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 }
 
 // Get retrieves the collection of currently active CompiledPolygon instances from the CompiledVolume.

@@ -55,8 +55,8 @@ func (v *VerticesMultiSprite) GetVolume() *Volume {
 
 // GetVertices retrieves the faces and associated data for the current frame and returns them with a default displacement value.
 func (v *VerticesMultiSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
-	f, c := v.volume.GetFaces()
-	return f, c, f, c, 0.0
+	f, c := v.volume.GetFaces2()
+	return f[:], c, f[:], c, 0.0
 }
 
 // SetAction updates the current action index if the provided index is within bounds and triggers a recomputation of vertices.
@@ -118,7 +118,7 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, materia
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
-	f0 := NewFace(nil, t0, "", material)
+	f0 := NewFace(t0, "", material)
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
@@ -128,7 +128,7 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, materia
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
-	f1 := NewFace(nil, t1, "", material)
+	f1 := NewFace(t1, "", material)
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)

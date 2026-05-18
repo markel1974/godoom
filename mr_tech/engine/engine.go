@@ -53,9 +53,9 @@ func (e *Engine) GetLights() *model.Lights {
 	return e.lights
 }
 
-// PortalVolumeAt returns the volume at the specified index from the portal within the engine.
-func (e *Engine) PortalVolumeAt(idx int) *model.Volume {
-	return e.portal.VolumeAt(idx)
+// PortalSectorAt returns the volume at the specified index from the portal within the engine.
+func (e *Engine) PortalSectorAt(idx int) *model.Sector {
+	return e.portal.SectorAt(idx)
 }
 
 // QueryFrustum checks which objects intersect the provided frustum and invokes the callback for each intersecting object.
@@ -85,7 +85,14 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
 	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-	if err := e.portal.Setup(e.volumes.GetVolumes()); err != nil {
+
+	var sectors []*model.Sector
+	for _, v := range e.volumes.GetVolumes() {
+		if sector := v.GetSector(); sector != nil {
+			sectors = append(sectors, sector)
+		}
+	}
+	if err := e.portal.Setup(sectors); err != nil {
 		return err
 	}
 	return nil

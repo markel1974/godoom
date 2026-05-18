@@ -48,7 +48,7 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
-	f0 := NewFace(nil, t0, "", material)
+	f0 := NewFace(t0, "", material)
 	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
@@ -59,7 +59,7 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
-	f1 := NewFace(nil, t1, "", material)
+	f1 := NewFace(t1, "", material)
 	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
@@ -80,7 +80,7 @@ func (v *VerticesSprite) GetVolume() *Volume {
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex material at the given moment in time.
 func (v *VerticesSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
-	f, c := v.volume.GetFaces()
+	f, c := v.volume.GetFaces2()
 	return f, c, f, c, 0.0
 }
 

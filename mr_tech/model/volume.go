@@ -16,30 +16,16 @@ type Volume struct {
 	faceCount int
 	tag       string
 	materials []*textures.Material
-	Light     *Light
+	light     *Light
 	entity    *physics.Entity
-	minZ      float64
-	maxZ      float64
-	hasFixedZ bool
 	facesTree *physics.AABBTree
 	thing     IThing
+	sector    *Sector
 }
 
 const solidRestitution = 0.0
 const solidFriction = 0.2
 const solidGForce = 9.8
-
-// NewVolume2d creates a new 2.5D Volume instance with the specified attributes, mimicking legacy extruded world.
-func NewVolume2d(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Material, tag string) *Volume {
-	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
-	v.hasFixedZ = true
-	v.minZ = minZ
-	v.maxZ = maxZ
-	if len(materials) > 0 {
-		v.materials = materials
-	}
-	return v
-}
 
 // NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
 func NewVolume3d(modelId int, id string, tag string) *Volume {
@@ -53,9 +39,6 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		modelId:   modelId,
 		id:        id,
 		tag:       tag,
-		minZ:      0,
-		maxZ:      0,
-		hasFixedZ: false,
 		materials: []*textures.Material{nil},
 		faces:     make([]*Face, 128),
 		faceCount: 0,
@@ -71,9 +54,6 @@ func (v *Volume) Rebuild() bool {
 	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	for x := 0; x < v.faceCount; x++ {
 		face := v.faces[x]
-		if v.hasFixedZ {
-			face.SetZ(v.minZ, v.maxZ)
-		}
 		for _, p := range face.GetPoints() {
 			if p.X < minX {
 				minX = p.X
@@ -95,13 +75,7 @@ func (v *Volume) Rebuild() bool {
 			}
 		}
 	}
-	if v.hasFixedZ {
-		calcMinZ = v.minZ
-		calcMaxZ = v.maxZ
-	} else {
-		v.minZ = calcMinZ
-		v.maxZ = calcMaxZ
-	}
+
 	v.entity.GetAABB().Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
 
 	v.facesTree.Clear()
@@ -132,22 +106,6 @@ func (v *Volume) GetAABB() *physics.AABB {
 	return v.entity.GetAABB()
 }
 
-// SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
-func (v *Volume) SetZ(minZ, maxZ float64) {
-	v.minZ = minZ
-	v.maxZ = maxZ
-	v.hasFixedZ = true
-	v.Rebuild()
-}
-
-// ClearZ resets the Z-coordinate bounds of the location, marks it as lacking custom Z bounds, and triggers a rebuild.
-func (v *Volume) ClearZ() {
-	v.minZ = 0
-	v.maxZ = 0
-	v.hasFixedZ = false
-	v.Rebuild()
-}
-
 // GetModelId retrieves the model ID associated with the Volume instance.
 func (v *Volume) GetModelId() int {
 	return v.modelId
@@ -158,14 +116,9 @@ func (v *Volume) GetId() string {
 	return v.id
 }
 
-// GetMinZ retrieves the minimum Z-coordinate of the location's axis-aligned bounding box (AABB).
-func (v *Volume) GetMinZ() float64 {
-	return v.entity.GetAABB().GetMinZ()
-}
-
-// GetMaxZ retrieves the maximum Z-coordinate of the Volume's axis-aligned bounding box (AABB).
-func (v *Volume) GetMaxZ() float64 {
-	return v.entity.GetAABB().GetMaxZ()
+// GetLight retrieves the Light object associated with the Volume, or nil if no Light is assigned.
+func (v *Volume) GetLight() *Light {
+	return v.light
 }
 
 // GetMaterialIndex retrieves a material material from the location's materials list based on the provided index modulo the list size.
@@ -193,8 +146,22 @@ func (v *Volume) ClearFaces() {
 }
 
 // GetFaces retrieves the list of face objects associated with the location.
-func (v *Volume) GetFaces() ([]*Face, int) {
-	return v.faces, v.faceCount
+func (v *Volume) GetFaces2() ([]*Face, int) {
+	return v.faces[:v.faceCount], v.faceCount
+}
+
+// SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.
+func (v *Volume) SetLight(light *Light) {
+	v.light = light
+	v.light.SetParent(v)
+}
+
+func (v *Volume) GetSector() *Sector {
+	return v.sector
+}
+
+func (v *Volume) SetSector(s *Sector) {
+	v.sector = s
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.
@@ -207,62 +174,6 @@ func (v *Volume) AddTag(tags string) {
 // GetTag retrieves the tag string associated with the Volume instance.
 func (v *Volume) GetTag() string {
 	return v.tag
-}
-
-// Neighbor2d returns the neighboring location that contains the specified point (px, py, pz), or nil if no such location exists.
-func (v *Volume) Neighbor2d(px, py, pz float64) *Volume {
-	if v.hasFixedZ {
-		if v.PointInLineSide(px, py) {
-			return v
-		}
-		faces, faceCount := v.GetFaces()
-		for x := 0; x < faceCount; x++ {
-			face := faces[x]
-			if neighbor := face.GetNeighbor(); neighbor != nil {
-				if neighbor.PointInLineSide(px, py) {
-					return neighbor
-				}
-			}
-		}
-		return nil
-	}
-	if v.PointInside2d(px, py, pz) {
-		return v
-	}
-
-	faces, faceCount := v.GetFaces()
-	for x := 0; x < faceCount; x++ {
-		face := faces[x]
-		if neighbor := face.GetNeighbor(); neighbor != nil {
-			if neighbor.PointInside2d(px, py, pz) {
-				return neighbor
-			}
-		}
-	}
-	return nil
-}
-
-// PointInside2d checks if a 3D point (px, py, pz) lies inside the 2D bounds of the Volume, accounting for fixed Z bounds.
-func (v *Volume) PointInside2d(px, py, pz float64) bool {
-	if v.hasFixedZ {
-		const epsilon = 0.01
-		if pz < (v.minZ-epsilon) || pz > (v.maxZ+epsilon) {
-			return false
-		}
-		return v.PointInLineSide(px, py)
-	}
-	return false
-}
-
-// PointInLineSide checks if the point (px, py) lies on the inner side of all faces' lines within the location.
-func (v *Volume) PointInLineSide(px, py float64) bool {
-	for x := 0; x < v.faceCount; x++ {
-		face := v.faces[x]
-		if !face.PointInLineSide(px, py) {
-			return false
-		}
-	}
-	return true
 }
 
 // GetCentroid3d calculates and returns the geometric centroid of the location based on its faces and 3D mode.
@@ -281,33 +192,6 @@ func (v *Volume) GetCentroid3d() geometry.XYZ {
 		return geometry.XYZ{X: cx / count, Y: cy / count, Z: cz / count}
 	}
 	return geometry.XYZ{}
-}
-
-// GetCentroid2d calculates and returns the 2D centroid of the location projected onto the XY plane.
-func (v *Volume) GetCentroid2d() geometry.XYZ {
-	var signedArea, cx, cy float64
-	for x := 0; x < v.faceCount; x++ {
-		start := v.faces[x].GetStart()
-		end := v.faces[x].GetEnd()
-		x0, y0 := start.X, start.Y
-		x1, y1 := end.X, end.Y
-
-		a := (x0 * y1) - (x1 * y0)
-		signedArea += a
-		cx += (x0 + x1) * a
-		cy += (y0 + y1) * a
-	}
-	floorY := v.GetMinZ()
-	signedArea *= 0.5
-	if signedArea == 0 {
-		start := v.faces[0].GetStart()
-		return geometry.XYZ{X: start.X, Y: start.Y, Z: floorY}
-	}
-	return geometry.XYZ{
-		X: cx / (6.0 * signedArea),
-		Y: cy / (6.0 * signedArea),
-		Z: floorY,
-	}
 }
 
 // QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.

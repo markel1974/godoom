@@ -1,41 +1,58 @@
 package model
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
-type Volumes struct {
-	container []*Volume
+type Sectors struct {
+	container []*Sector
 	tree      *physics.AABBTree
-	cache     map[string]*Volume
+	cache     map[string]*Sector
+	fullZ     bool
 }
 
-// NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
-func NewVolumes(container []*Volume) *Volumes {
-	cache := make(map[string]*Volume)
+func NewSectors(container []*Sector, fullZ bool) *Sectors {
+	cache := make(map[string]*Sector)
 	for _, sec := range container {
 		cache[sec.GetId()] = sec
 	}
-	vs := &Volumes{
+	vs := &Sectors{
 		container: container,
 		cache:     cache,
 		tree:      physics.NewAABBTree(uint(len(container)), 4.0),
+		fullZ:     fullZ,
 	}
 	return vs
 }
 
 // Setup constructs a new AABB tree based on the current container and populates it with rebuilt location objects.
-func (s *Volumes) Setup() {
-	for _, volume := range s.container {
-		if volume.Rebuild() {
-			s.tree.InsertObject(volume)
+func (s *Sectors) Setup() {
+	for _, sector := range s.container {
+		if sector.Rebuild() {
+			s.tree.InsertObject(sector)
 		}
 	}
 }
 
+func (s *Sectors) GetSectors() []*Sector {
+	return s.container
+}
+
+func (s *Sectors) LocateSector(px, py float64) *Sector {
+	var target *Sector = nil
+	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+		if sector, ok := object.(*Sector); ok {
+			if sector.PointInLineSide(px, py) {
+				target = sector
+				return true
+			}
+		}
+		return false
+	})
+	return target
+}
+
+/*
 // GetVolume retrieves a Volume from the cache using the provided unique identifier.
 func (s *Volumes) GetVolume(id string) *Volume {
 	return s.cache[id]
@@ -47,7 +64,7 @@ func (s *Volumes) GetVolumes() []*Volume {
 }
 
 // Len returns the number of Volume objects contained within the Volumes container.
-func (s *Volumes) Len() int {
+func (s *Sectors) Len() int {
 	return len(s.container)
 }
 
@@ -100,10 +117,43 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
+// QueryPoint2d returns the Volume containing the 2D point (px, py, pz), or nil if no such Volume exists.
+func (s *Volumes) QueryPoint2d(px, py, pz float64) *Volume {
+	var target *Volume = nil
+	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
+		if vol, ok := object.(*Volume); ok {
+			if vol.PointInside2d(px, py, pz) {
+				target = vol
+				return true
+			}
+		}
+		return false
+	})
+	return target
+}
+
 // LocateVolume finds and returns the volume containing the point (px, py, pz). It uses 3D or 2D lookup based on the fullZ flag.
 func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
-	v, _ := s.locateVolume3d(px, py, pz)
-	return v
+	if s.fullZ {
+		v, _ := s.locateVolume3d(px, py, pz)
+		return v
+	}
+	return s.LocateVolume2d(px, py)
+}
+
+// LocateVolume2d searches for a 2D point (px, py) within the managed world and returns the corresponding Volume, or nil if not found.
+func (s *Volumes) LocateVolume2d(px, py float64) *Volume {
+	var target *Volume = nil
+	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+		if volume, ok := object.(*Volume); ok {
+			if volume.PointInLineSide(px, py) {
+				target = volume
+				return true
+			}
+		}
+		return false
+	})
+	return target
 }
 
 // LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
@@ -166,6 +216,8 @@ func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
 		return false
 	})
 }
+
+*/
 
 /*
 // LocateVolume3d trova il location 3D che contiene il punto (px, py, pz) e

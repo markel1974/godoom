@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -12,7 +11,6 @@ import (
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	parent    *Volume
-	neighbor  *Volume
 	tag       string
 	aabb      *physics.AABB
 	tri       [3]geometry.XYZ
@@ -20,45 +18,18 @@ type Face struct {
 	normalAbs geometry.XYZ
 	materials []*textures.Material
 	material  *textures.Material
-	minZ      float64
-	maxZ      float64
-	hasFixedZ bool
 	u         [3]float64
 	v         [3]float64
 	lockUV    bool
 }
 
-// NewFace2d creates a new Face with specified geometry, type, associated neighbor, tag, and texture materials.
-func NewFace2d(neighbor *Volume, start geometry.XY, end geometry.XY, tag string, materials []*textures.Material) *Face {
-	out := &Face{
-		hasFixedZ: true,
-		neighbor:  neighbor,
-		tag:       tag,
-		minZ:      0,
-		maxZ:      0,
-		aabb:      physics.NewAABB(),
-		materials: []*textures.Material{nil},
-		lockUV:    false,
-	}
-	if len(materials) > 0 {
-		out.materials = materials
-	}
-	out.tri[0] = geometry.XYZ{X: start.X, Y: start.Y, Z: 0}
-	out.tri[1] = geometry.XYZ{X: (start.X + end.X) * 0.5, Y: (start.Y + end.Y) * 0.5, Z: 0}
-	out.tri[2] = geometry.XYZ{X: end.X, Y: end.Y, Z: 0}
-	out.Rebuild()
-	return out
-}
-
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its normal and AABB.
-func NewFace(neighbor *Volume, tri [3]geometry.XYZ, tag string, material *textures.Material) *Face {
+func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face {
 	out := &Face{
-		hasFixedZ: false,
-		neighbor:  neighbor,
-		tag:       tag,
-		material:  material,
-		aabb:      physics.NewAABB(),
-		tri:       tri,
+		tag:      tag,
+		material: material,
+		aabb:     physics.NewAABB(),
+		tri:      tri,
 	}
 	out.Rebuild()
 	return out
@@ -81,30 +52,6 @@ func (s *Face) GetUV() ([3]float64, [3]float64) {
 	return s.u, s.v
 }
 
-// SetZ sets the minimum and maximum Z coordinates for the location, marks it as having custom Z bounds, and rebuilds its AABB.
-func (s *Face) SetZ(minZ, maxZ float64) {
-	s.minZ = minZ
-	s.maxZ = maxZ
-	s.hasFixedZ = true
-	s.tri[0].Z = minZ
-	s.tri[1].Z = minZ
-	s.tri[2].Z = minZ
-	s.Rebuild()
-}
-
-// ClearZ resets the Z-coordinate bounds of the location, marks it as lacking custom Z bounds, and triggers a rebuild.
-func (s *Face) ClearZ() {
-	if s.hasFixedZ {
-		s.tri[0].Z = 0
-		s.tri[1].Z = 0
-		s.tri[2].Z = 0
-	}
-	s.minZ = 0
-	s.maxZ = 0
-	s.hasFixedZ = false
-	s.Rebuild()
-}
-
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
 func (s *Face) GetParent() *Volume {
 	return s.parent
@@ -113,16 +60,6 @@ func (s *Face) GetParent() *Volume {
 // SetParent assigns a parent sector to the segment.
 func (s *Face) SetParent(parent *Volume) {
 	s.parent = parent
-}
-
-// GetNeighbor returns the neighboring Sector associated with the Face.
-func (s *Face) GetNeighbor() *Volume {
-	return s.neighbor
-}
-
-// SetNeighbor sets the neighbor sector of the segment. It establishes a link to an adjacent sector.
-func (s *Face) SetNeighbor(neighbor *Volume) {
-	s.neighbor = neighbor
 }
 
 // GetTag returns the tag associated with the segment.
@@ -138,28 +75,6 @@ func (s *Face) SetTag(tag string) {
 // GetNormal returns the precomputed normal vector (geometry.XYZ) of the Face.
 func (s *Face) GetNormal() geometry.XYZ {
 	return s.normal
-}
-
-// GetStart returns the first point of the segment as a geometry.XYZ value.
-func (s *Face) GetStart() geometry.XYZ {
-	return s.tri[0]
-}
-
-// GetMiddle retrieves the middle point (geometry.XYZ) of the Face from its predefined points array.
-func (s *Face) GetMiddle() geometry.XYZ {
-	return s.tri[1]
-}
-
-// GetEnd returns the last point of the segment as a geometry.XYZ value.
-func (s *Face) GetEnd() geometry.XYZ {
-	return s.tri[2]
-}
-
-// GetMaterialIndex retrieves the Material object corresponding to the given material index.
-func (s *Face) GetMaterialIndex(m int) *textures.Material {
-	//0 Upper, 1 Middle, 2 Lower
-	idx := m % len(s.materials)
-	return s.materials[idx]
 }
 
 // GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.
@@ -183,17 +98,6 @@ func (s *Face) GetPoints() [3]geometry.XYZ {
 	return s.tri
 }
 
-// PointInLineSide determines if a 2D point (px, py) lies on or to the right of the directed line segment of the Face.
-func (s *Face) PointInLineSide(px, py float64) bool {
-	start := s.GetStart()
-	end := s.GetEnd()
-	dir := mathematic.PointInLineDirectionF(px, py, start.X, start.Y, end.X, end.Y)
-	if dir < 0 {
-		return false
-	}
-	return true
-}
-
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
 func (s *Face) PointInside2d(px, py float64) bool {
 	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
@@ -204,14 +108,6 @@ func (s *Face) PointInside2d(px, py float64) bool {
 	hasNeg := (d1 < eps) || (d2 < eps) || (d3 < eps)
 	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
 	return !(hasNeg && hasPos)
-}
-
-// Scale2d scales the starting and ending points of the segment by applying the given scale factor.
-func (s *Face) Scale2d(scale geometry.XYZ) {
-	s.tri[0].Scale(scale)
-	s.tri[1].Scale(scale)
-	s.tri[2].Scale(scale)
-	s.Rebuild()
 }
 
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
@@ -229,19 +125,6 @@ func (s *Face) GetAABB() *physics.AABB {
 // computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
 func (s *Face) computeNormal() {
 	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
-	if s.hasFixedZ {
-		p0, p1 := s.tri[0], s.tri[2]
-		dx := p1.X - p0.X
-		dy := p1.Y - p0.Y
-		lenSq := dx*dx + dy*dy
-		if lenSq > 0 {
-			invLen := 1.0 / math.Sqrt(lenSq)
-			// Proiezione del vettore normale 2D nello spazio 3D
-			s.normal = geometry.XYZ{X: -dy * invLen, Y: dx * invLen, Z: 0}
-		}
-		s.normalAbs = geometry.XYZ{X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z)}
-		return
-	}
 	// Prodotto vettoriale standard per poligoni 3D
 	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
@@ -300,15 +183,15 @@ func (s *Face) computeAABB() {
 			maxZ = p.Z
 		}
 	}
-	if s.hasFixedZ {
-		minZ = s.minZ
-		maxZ = s.maxZ
-	} else {
-		if minZ == maxZ {
-			minZ -= eps
-			maxZ += eps
-		}
+	//if s.hasFixedZ {
+	//	minZ = s.minZ
+	//	maxZ = s.maxZ
+	//} else {
+	if minZ == maxZ {
+		minZ -= eps
+		maxZ += eps
 	}
+	//}
 	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 

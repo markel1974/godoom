@@ -5,7 +5,6 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
@@ -15,7 +14,6 @@ type Volume struct {
 	faces     []*Face
 	faceCount int
 	tag       string
-	materials []*textures.Material
 	light     *Light
 	entity    *physics.Entity
 	facesTree *physics.AABBTree
@@ -39,7 +37,6 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		modelId:   modelId,
 		id:        id,
 		tag:       tag,
-		materials: []*textures.Material{nil},
 		faces:     make([]*Face, 128),
 		faceCount: 0,
 		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce),
@@ -121,13 +118,6 @@ func (v *Volume) GetLight() *Light {
 	return v.light
 }
 
-// GetMaterialIndex retrieves a material material from the location's materials list based on the provided index modulo the list size.
-func (v *Volume) GetMaterialIndex(m int) *textures.Material {
-	//floor 0, ceil 1
-	idx := m % len(v.materials)
-	return v.materials[idx]
-}
-
 // AddFace adds a new face to the location and sets the location as the parent of the face.
 func (v *Volume) AddFace(face *Face) {
 	face.SetParent(v)
@@ -145,9 +135,19 @@ func (v *Volume) ClearFaces() {
 	v.faceCount = 0
 }
 
-// GetFaces retrieves the list of face objects associated with the location.
-func (v *Volume) GetFaces2() ([]*Face, int) {
-	return v.faces[:v.faceCount], v.faceCount
+// GetFace returns the Face at the specified index within the Volume's faces array.
+func (v *Volume) GetFace(index int) *Face {
+	return v.faces[index]
+}
+
+// GetFaceCount returns the number of faces currently associated with the Volume instance.
+func (v *Volume) GetFaceCount() int {
+	return v.faceCount
+}
+
+// GetFaces returns the list of all faces and the total count of faces associated with the Volume.
+func (v *Volume) GetFaces() ([]*Face, int) {
+	return v.faces, v.faceCount
 }
 
 // SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.
@@ -156,10 +156,12 @@ func (v *Volume) SetLight(light *Light) {
 	v.light.SetParent(v)
 }
 
+// GetSector retrieves the Sector associated with the Volume instance.
 func (v *Volume) GetSector() *Sector {
 	return v.sector
 }
 
+// SetSector assigns the specified Sector to the Volume instance.
 func (v *Volume) SetSector(s *Sector) {
 	v.sector = s
 }

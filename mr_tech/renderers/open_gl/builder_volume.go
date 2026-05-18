@@ -76,7 +76,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 		volumes := engine.GetVolumes()
 		for _, vol := range volumes.GetVolumes() {
 			startIdx := w.fv.GetIndicesLen()
-			faces, faceCount := vol.GetFaces2()
+			faces, faceCount := vol.GetFaces()
 			for x := 0; x < faceCount; x++ {
 				face := faces[x]
 				tex, texKind := face.GetMaterialDetails()

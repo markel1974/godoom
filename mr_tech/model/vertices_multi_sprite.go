@@ -55,7 +55,7 @@ func (v *VerticesMultiSprite) GetVolume() *Volume {
 
 // GetVertices retrieves the faces and associated data for the current frame and returns them with a default displacement value.
 func (v *VerticesMultiSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
-	f, c := v.volume.GetFaces2()
+	f, c := v.volume.GetFaces()
 	return f[:], c, f[:], c, 0.0
 }
 

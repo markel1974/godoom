@@ -16,7 +16,6 @@ type Face struct {
 	tri       [3]geometry.XYZ
 	normal    geometry.XYZ
 	normalAbs geometry.XYZ
-	materials []*textures.Material
 	material  *textures.Material
 	u         [3]float64
 	v         [3]float64
@@ -183,15 +182,10 @@ func (s *Face) computeAABB() {
 			maxZ = p.Z
 		}
 	}
-	//if s.hasFixedZ {
-	//	minZ = s.minZ
-	//	maxZ = s.maxZ
-	//} else {
 	if minZ == maxZ {
 		minZ -= eps
 		maxZ += eps
 	}
-	//}
 	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 

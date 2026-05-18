@@ -62,18 +62,6 @@ func (t *ThingThrowable) StartLoop() {
 	}()
 }
 
-// GetMaxZ retrieves the maximum Z-coordinate of the center for the associated entity.
-func (t *ThingThrowable) GetMaxZ() float64 {
-	_, _, z := t.entity.GetCenter()
-	return z
-}
-
-// GetMinZ returns the minimum Z value of the ThingThrowable's entity center's position.
-func (t *ThingThrowable) GetMinZ() float64 {
-	_, _, z := t.entity.GetCenter()
-	return z
-}
-
 // StageThinking calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
 func (t *ThingThrowable) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui

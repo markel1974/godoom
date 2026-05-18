@@ -255,29 +255,9 @@ func (p *ThingPlayer) SetLightIntensity(lightIntensity float64) {
 	p.lightIntensity = lightIntensity
 }
 
-// GetRadius returns the radius of the ThingPlayer entity.
-func (p *ThingPlayer) GetRadius() float64 {
-	return p.entity.GetWidth() / 2
-}
-
-// GetMass returns the mass of the ThingPlayer as a float64.
-func (p *ThingPlayer) GetMass() float64 {
-	return p.entity.GetMass()
-}
-
-// GetVelocity returns the current velocity components (vx, vy, vz) of the player as float64 values.
-func (p *ThingPlayer) GetVelocity() (float64, float64, float64) {
-	return p.entity.GetVx(), p.entity.GetVy(), p.entity.GetVz()
-}
-
 // GetPitch returns the current pitch angle of the ThingPlayer as a float64 value.
 func (p *ThingPlayer) GetPitch() float64 {
 	return p.pitch
-}
-
-// IsMoving returns true if the ThingPlayer's associated entity is currently in motion, and false otherwise.
-func (p *ThingPlayer) IsMoving() bool {
-	return p.entity.IsMoving()
 }
 
 // StageThinking updates the player's internal state based on the provided x, y, and z coordinates.

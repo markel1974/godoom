@@ -133,7 +133,7 @@ func (t *ThingBase) GetMaxStep() float64 {
 
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetRadius() float64 {
-	return t.entity.GetWidth() / 2.0
+	return t.entity.GetWidth() * 0.5
 }
 
 // GetAcceleration returns the current acceleration value of the ThingBase.

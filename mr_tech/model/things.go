@@ -75,6 +75,11 @@ func NewThings(full3d bool, gScale geometry.XYZ, solverIterations int, cfg []*co
 	return e
 }
 
+// GetMaterials returns a pointer to the Materials associated with the Things instance.
+func (th *Things) GetMaterials() *Materials {
+	return th.materials
+}
+
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {

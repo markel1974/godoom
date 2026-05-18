@@ -108,7 +108,6 @@ func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p
 // CollisionCage represents a structure for handling collision constraints in a 3D space through a bucketed system.
 // It tracks faces, active constraints, and spatial properties of an ellipsoid with associated margins.
 type CollisionCage struct {
-	id                  string
 	thing               IThing
 	counts              [BucketSize]int // How many active constraints per bucket
 	faces               [BucketSize][FacesPerBucket]*CageEntry
@@ -123,9 +122,8 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
-func NewCollisionCage(id string, thing IThing, margin, restitution, friction, gForce float64) *CollisionCage {
+func NewCollisionCage(thing IThing, margin, restitution, friction, gForce float64) *CollisionCage {
 	c := &CollisionCage{
-		id:             id,
 		thing:          thing,
 		margin:         margin,
 		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),

@@ -21,12 +21,15 @@ type IVertices interface {
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
-func VerticesFactory(cfg *config.Thing, pos geometry.XYZ, materials *Materials) IVertices {
+func VerticesFactory(thing IThing, cfg *config.Thing, pos geometry.XYZ, materials *Materials) IVertices {
+	var out IVertices
 	if cfg.MD1 != nil {
-		return NewVerticesMD2(cfg, pos, materials)
+		out = NewVerticesMD2(cfg, pos, materials)
+	} else if cfg.MultiSprite != nil {
+		out = NewVerticesMultiSprite(cfg, pos, materials)
+	} else {
+		out = NewVerticesSprite(cfg, pos, materials)
 	}
-	if cfg.MultiSprite != nil {
-		return NewVerticesMultiSprite(cfg, pos, materials)
-	}
-	return NewVerticesSprite(cfg, pos, materials)
+	out.SetThing(thing)
+	return out
 }

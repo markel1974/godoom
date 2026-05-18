@@ -22,10 +22,10 @@ type ThingBase struct {
 	location     *Volume
 	world        *Volumes
 	things       *Things
+	entity       *physics.Entity
 	isActive     bool
 	identifier   int
 	cage         *CollisionCage
-	entity       *physics.Entity
 	vertices     IVertices
 	inbox        chan *ThingEvent
 	full3d       bool
@@ -36,8 +36,7 @@ type ThingBase struct {
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
 func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.XYZ, location *Volume) *ThingBase {
-	vertices := VerticesFactory(cfg, pos, things.materials)
-	vertices.SetThing(thing)
+	vertices := VerticesFactory(thing, cfg, pos, things.GetMaterials())
 
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
@@ -67,7 +66,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 		onCollision:  cfg.OnCollision,
 		full3d:       things.full3d,
 	}
-	t.cage = NewCollisionCage(t.id, thing, cageMargin, 0, 0, 0)
+	t.cage = NewCollisionCage(thing, cageMargin, 0, 0, 0)
 	t.entity.SetOnGround(false)
 	return t
 }

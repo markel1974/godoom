@@ -11,27 +11,46 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
+// aspectRatio defines the proportional relationship between width and height, commonly used in graphics and media contexts.
 const aspectRatio = 1.6
 
+// scaleX represents the scaling factor along the X-axis used for transformations or calculations in a 2D context.
 const scaleX = 10.0
+
+// scaleY defines a constant scaling factor for the Y-axis, set to a fixed value of 10.0.
 const scaleY = 10.0
+
+// scaleZ represents the scaling factor applied along the Z-axis in a 3D transformation, defaulting to no scaling.
 const scaleZ = 1.0
 
+// scaleSectorH defines the horizontal scaling factor used for dimensional calculations in sectors.
 const scaleSectorH = 8.0
 
-const scaleTextureW = 1.0 //0.1
-const scaleTextureH = 1.0 //0.2
+const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
+const scaleTextureH = 1.0 // scaleTextureH defines the horizontal scaling factor for texture rendering, set to a default value of 1.0.
 
+// scaleLight represents the scaling factor applied for light intensity adjustments in specific calculations.
 const scaleLight = 0.11
+
+// scaleLightFalloff defines the falloff factor for light scaling, influencing the attenuation of light intensity over distance.
 const scaleLightFalloff = 40
 
+// playerHeight defines the height of the player model in the game, scaled proportionally to the sector height.
 const playerHeight = 6.0 * scaleSectorH
+
+// playerRadius defines the radius of the player entity, used for collision detection and spatial calculations.
 const playerRadius = 2.5
+
+// playerSpeed defines the movement speed of the player, measured in units per second.
 const playerSpeed = 1800
+
+// playerMass defines the default mass of the player in the game, measured in consistent in-game units.
 const playerMass = 40
 
+// gForce represents the product of gravitational acceleration (9.8 m/s²) and a predefined factor (8), used in physics calculations.
 const gForce = 9.8 * 8
 
+// IArchive represents an interface for managing game archives, including parsing, level management, and resource retrieval.
 type IArchive interface {
 	Parse(dir string) error
 
@@ -54,18 +73,16 @@ type IArchive interface {
 	Close() error
 }
 
-// Builder represents an entity responsible for constructing and configuring level structures with a specified scale.
+// Builder provides a flexible mechanism for constructing complex objects step-by-step.
 type Builder struct {
 }
 
-// NewBuilder creates a new Builder instance and initializes its scale factor.
+// NewBuilder initializes and returns a pointer to a new Builder instance.
 func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-// Build constructs and returns a *config.Root object by parsing geometry, entities, and textures from a specified directory.
-// It validates the level index, processes sector topology, and integrates player and object configurations.
-// Returns an error if the input directory is invalid, files are missing, or parsing fails.
+// Build constructs a game configuration based on the provided mode, directory, and level number. Returns a config.Root or error.
 func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, error) {
 	var archive IArchive
 	if mode >= 1 {
@@ -170,14 +187,17 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 				// Inversione asse Z (profondità planare)
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 				if wall.Adjoin == -1 {
-					if wall.MidTexture < 0 {
-						fmt.Println("WARNING MISSING MID_TEXTURE")
-						continue
+					if wall.MidTexture >= 0 {
+						cSeg.Kind = config.SegmentWall
+						texName := level.GetTexture(wall.MidTexture)
+						names, _ := archive.AddTexture(texName)
+						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+					} else {
+						if wall.MidTexture < 0 {
+							fmt.Println("WARNING MISSING MID_TEXTURE")
+							continue
+						}
 					}
-					cSeg.Kind = config.SegmentWall
-					texName := level.GetTexture(wall.MidTexture)
-					names, _ := archive.AddTexture(texName)
-					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
 					if wall.Adjoin >= len(level.Sectors) {
 						fmt.Println("INVALID ADJOIN")
@@ -204,22 +224,12 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 
 			}
 		}
-
 		if sector.SlopedFloor != nil {
-			//segments and walls share the same index
 			cSector.SlopedFloorGradient = sector.SlopedFloor.GetGradient()
-
-			// TODO DA RIMUOVERE:
-			//cSector.SlopedFloor, _ = level.ComputeSlopePlane(sector.SlopedFloor, sector.FloorY)
 		}
-
 		if sector.SlopedCeiling != nil {
-			//segments and walls share the same index
 			cSector.SlopedCeilingGradient = sector.SlopedCeiling.GetGradient()
-			// TODO DA RIMUOVERE:
-			//cSector.SlopedCeiling, _ = level.ComputeSlopePlane(sector.SlopedCeiling, sector.CeilingY)
 		}
-
 		configSectors = append(configSectors, cSector)
 	}
 
@@ -338,6 +348,7 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 	return cr, nil
 }
 
+// buildPlayer initializes and returns a configured Player instance with specified position and predefined attributes.
 func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
 	playerLogic := common.NewPlayer()
@@ -372,6 +383,7 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	return player
 }
 
+// createConfigThing initializes a Thing with the specified attributes such as position, type, dimensions, and behavior logic.
 func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, angle, mass, radius, height, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
@@ -393,6 +405,7 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	return thingCfg
 }
 
+// ThreedoToThing converts a 3DO model file into a Thing object using the provided position and archive for resources.
 func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArchive) (*config.Thing, error) {
 	threedoData, err := archive.GetPayload(fileName)
 	if err != nil {
@@ -458,6 +471,7 @@ func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArc
 	return cThing, nil
 }
 
+// WAXToThing converts a WAX file into a Thing object with animations or static visuals, defined at the given position.
 func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := archive.GetPayload(fileName)
 	if err != nil {
@@ -529,6 +543,7 @@ func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	return cThing, nil
 }
 
+// NWXToThing converts NWX animation data into a config.Thing by parsing its contents and creating associated materials.
 func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := archive.GetPayload(fileName)
 	if err != nil {
@@ -585,7 +600,7 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	return cThing, nil
 }
 
-// CreateCoords creates a 3D point or vector with coordinates (x, -z, y) using the geometry.XYZ struct.
+// CreateCoords generates a geometry.XYZ object from the provided x, y, and z coordinates with modified Y and Z values.
 func CreateCoords(x, y, z float64) geometry.XYZ {
 	//return geometry.XYZ{X: x, Y: -z, Z: -y}
 	return geometry.XYZ{X: x, Y: z, Z: -y}

@@ -109,7 +109,7 @@ func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p
 // It tracks faces, active constraints, and spatial properties of an ellipsoid with associated margins.
 type CollisionCage struct {
 	id                  string
-	volume              *Volume
+	thing               IThing
 	counts              [BucketSize]int // How many active constraints per bucket
 	faces               [BucketSize][FacesPerBucket]*CageEntry
 	spare               [BucketSize][FacesPerBucket]*CageEntry
@@ -123,10 +123,10 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
-func NewCollisionCage(id string, volume *Volume, margin, restitution, friction, gForce float64) *CollisionCage {
+func NewCollisionCage(id string, thing IThing, margin, restitution, friction, gForce float64) *CollisionCage {
 	c := &CollisionCage{
 		id:             id,
-		volume:         volume,
+		thing:          thing,
 		margin:         margin,
 		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
 		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
@@ -168,9 +168,9 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	}
 }
 
-// GetVolume returns the volume associated with the CollisionCage as a pointer to a Volume object.
-func (s *CollisionCage) GetVolume() *Volume {
-	return s.volume
+// GetThing retrieves the IThing instance associated with the CollisionCage.
+func (s *CollisionCage) GetThing() IThing {
+	return s.thing
 }
 
 // GetMargin returns the margin value associated with the CollisionCage.

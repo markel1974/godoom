@@ -82,7 +82,7 @@ func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 		if !volOk {
 			return false
 		}
-		if cage.GetVolume() == thing.GetVolume() {
+		if cage.GetThing() == thing {
 			return false
 		}
 		targetX, targetY, targetZ := thing.GetBottomLeft()

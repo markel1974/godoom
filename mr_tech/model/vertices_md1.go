@@ -109,7 +109,8 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 
 	if relativeFrameA != v.relativeFrame {
 		v.relativeFrame = relativeFrameA
-		v.compute(idxA)
+		//TODO IS TOO EXPENSIVE!!!!
+		//v.compute(idxA)
 	}
 
 	return v.frames[idxA], len(v.frames[idxA]), v.frames[idxB], len(v.frames[idxB]), lerpT

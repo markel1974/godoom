@@ -21,18 +21,17 @@ type ThingBase struct {
 	jumpForce    float64
 	location     *Volume
 	world        *Volumes
-	//material     *textures.Material
-	things      *Things
-	isActive    bool
-	identifier  int
-	cage        *CollisionCage
-	entity      *physics.Entity
-	vertices    IVertices
-	inbox       chan *ThingEvent
-	full3d      bool
-	onCollision config.CollisionFunc
-	onImpact    config.ImpactFunc
-	done        chan struct{}
+	things       *Things
+	isActive     bool
+	identifier   int
+	cage         *CollisionCage
+	entity       *physics.Entity
+	vertices     IVertices
+	inbox        chan *ThingEvent
+	full3d       bool
+	onCollision  config.CollisionFunc
+	onImpact     config.ImpactFunc
+	done         chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
@@ -57,19 +56,18 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 		acceleration: cfg.Acceleration,
 		jumpForce:    cfg.JumpForce,
 		location:     location,
-		//material:     material,
-		world:       things.GetVolumes(),
-		things:      things,
-		maxStep:     cfg.Height * 0.5,
-		isActive:    true,
-		identifier:  -1,
-		cage:        NewCollisionCage(cfg.Id, vertices.GetVolume(), cageMargin, 0, 0, 0),
-		inbox:       make(chan *ThingEvent, 16),
-		done:        make(chan struct{}),
-		onImpact:    cfg.OnImpact,
-		onCollision: cfg.OnCollision,
-		full3d:      things.full3d,
+		world:        things.GetVolumes(),
+		things:       things,
+		maxStep:      cfg.Height * 0.5,
+		isActive:     true,
+		identifier:   -1,
+		inbox:        make(chan *ThingEvent, 16),
+		done:         make(chan struct{}),
+		onImpact:     cfg.OnImpact,
+		onCollision:  cfg.OnCollision,
+		full3d:       things.full3d,
 	}
+	t.cage = NewCollisionCage(t.id, thing, cageMargin, 0, 0, 0)
 	t.entity.SetOnGround(false)
 	return t
 }

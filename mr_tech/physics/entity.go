@@ -27,7 +27,7 @@ const (
 
 // Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
 type Entity struct {
-	rect              Rect
+	rect              *Rect
 	id                string
 	mass              float64
 	invMass           float64
@@ -94,12 +94,12 @@ func (e *Entity) SetSize(w, h, d float64) {
 }
 
 // SetRect sets the Rect of the entity to the provided Rect value.
-func (e *Entity) SetRect(rect Rect) {
+func (e *Entity) SetRect(rect *Rect) {
 	e.rect = rect
 }
 
 // GetRect returns the Rect instance associated with the Entity, representing its position, size, and bounding box.
-func (e *Entity) GetRect() Rect {
+func (e *Entity) GetRect() *Rect {
 	return e.rect
 }
 

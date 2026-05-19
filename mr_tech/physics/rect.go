@@ -2,19 +2,21 @@ package physics
 
 // Rect represents a 3D rectangle in space, defined by its position, size, depth, elevation, and bounding box.
 type Rect struct {
-	point  Point
-	size   Size
-	center Point
-	base   Point
+	point  *Point
+	size   *Size
+	center *Point
+	base   *Point
 	aabb   *AABB
 }
 
 // NewRect creates a new Rect instance with the specified position (x, y), size (w, h), base elevation (z), and depth (d).
-func NewRect(x, y, w, h, z, d float64) Rect {
-	r := Rect{
-		aabb:  NewAABB(),
-		point: NewPoint(x, y, z),
-		size:  NewSize(w, h, d),
+func NewRect(x, y, w, h, z, d float64) *Rect {
+	r := &Rect{
+		point:  NewPoint(x, y, z),
+		size:   NewSize(w, h, d),
+		center: NewPoint(0, 0, 0),
+		base:   NewPoint(0, 0, 0),
+		aabb:   NewAABB(),
 	}
 	r.rebuild()
 	return r
@@ -110,7 +112,7 @@ func (r *Rect) GetCenter() (float64, float64, float64) {
 }
 
 // IntersectRect checks if the current rectangle intersects with another rectangle and returns true if they overlap.
-func (r *Rect) IntersectRect(r2 Rect) bool {
+func (r *Rect) IntersectRect(r2 *Rect) bool {
 	return r.Intersect(r2.point.x, r2.point.y, r2.point.z, r2.size.w, r2.size.h, r2.size.d)
 }
 

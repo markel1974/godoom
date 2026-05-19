@@ -121,10 +121,10 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 
 	if v.idxA != idxA {
 		v.idxA = idxA
-		//TODO TERMINATE IMPLEMENTATION
-		v.rootEntity.SetSize(curr.GetEntity().GetSize())
-		curr.entity = v.rootEntity
-		v.rootVolume = curr
+		// TODO TERMINATE IMPLEMENTATION
+		//v.rootEntity.SetSize(curr.GetEntity().GetSize())
+		//curr.entity = v.rootEntity
+		//v.rootVolume = curr
 	}
 
 	facesA, faceCountA := curr.GetFaces()

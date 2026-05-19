@@ -8,8 +8,7 @@ import (
 
 // MSFaces represents a pair of connected Faces within a 3D volume, providing bidirectional linking between structures.
 type MSFaces struct {
-	face0 *Face
-	face1 *Face
+	faces []*Face
 }
 
 // VerticesMultiSprite represents a 3D entity composed of MSFaces and organized within a Volume.
@@ -31,7 +30,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, pos geometry.XYZ, materials *Mate
 	h := cfg.Radius * 2
 	d := cfg.Height
 
-	volume := NewVolumeDetails3d(0, "wax", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	volume := NewVolumeDynamic(0, "wax", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesMultiSprite{
 		volume: volume,
 	}
@@ -41,8 +40,8 @@ func NewVerticesMultiSprite(cfg *config.Thing, pos geometry.XYZ, materials *Mate
 			continue
 		}
 		material := materials.GetMaterial(view)
-		f0, f1 := f.createFaces(w, h, material)
-		f.faces[viewIdx] = &MSFaces{face0: f0, face1: f1}
+		faces := f.createFaces(w, h, material)
+		f.faces[viewIdx] = &MSFaces{faces: faces}
 	}
 	f.compute()
 	return f
@@ -95,13 +94,14 @@ func (v *VerticesMultiSprite) compute() {
 		}
 	}
 	v.volume.ClearFaces()
-	v.volume.AddFace(v.viewFaces.face0)
-	v.volume.AddFace(v.viewFaces.face1)
+	for _, f := range v.viewFaces.faces {
+		v.volume.AddFace(f)
+	}
 	v.volume.Rebuild()
 }
 
-// createFaces generates two triangular faces based on the given width, height, and material animation.
-func (v *VerticesMultiSprite) createFaces(width float64, height float64, material *textures.Material) (*Face, *Face) {
+// createFaces generates a 3D box geometry (12 triangular faces) based on the given width, height, and material animation.
+func (v *VerticesMultiSprite) createFaces(width float64, height float64, material *textures.Material) []*Face {
 	if material != nil {
 		tex := material.CurrentFrame()
 		if tex != nil {
@@ -111,131 +111,59 @@ func (v *VerticesMultiSprite) createFaces(width float64, height float64, materia
 			height = float64(texH) * scaleH
 		}
 	}
-	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
+
 	halfW := width * 0.5
+	halfY := halfW // Profondità dell'AABB fisico
+
+	// Vertici del Box 3D (Fisica)
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: 0.0}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: 0.0}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: 0.0}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: 0.0}
+
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: height}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: height}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: height}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: height}
+
+	var faces []*Face
+
+	// 1. MURI FISICI INVISIBILI (NIL MATERIAL)
+	// Queste facce servono solo al solver e all'AABB tree.
+	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ) {
+		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, "", nil) // NIL MATERIAL
+		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, "", nil) // NIL MATERIAL
+		faces = append(faces, f0, f1)
+	}
+
+	addPhysicsQuad(v001, v000, v100, v101) // Front
+	addPhysicsQuad(v111, v110, v010, v011) // Back
+	addPhysicsQuad(v011, v010, v000, v001) // Left
+	addPhysicsQuad(v101, v100, v110, v111) // Right
+	addPhysicsQuad(v011, v001, v101, v111) // Top
+	addPhysicsQuad(v000, v010, v110, v100) // Bottom
+
+	// 2. PIANO VISIVO (Render)
+	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
 	t0 := [3]geometry.XYZ{
 		{X: -halfW, Y: 0.0, Z: height}, // TL
 		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 	}
 	f0 := NewFace(t0, "", material)
-	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
-	// Triangolo 1: Top-Left, Bottom-Right, Top-Right
+
 	t1 := [3]geometry.XYZ{
 		{X: -halfW, Y: 0.0, Z: height}, // TL
 		{X: halfW, Y: 0.0, Z: 0.0},     // BR
 		{X: halfW, Y: 0.0, Z: height},  // TR
 	}
 	f1 := NewFace(t1, "", material)
-	// TL: (0,0), BR: (1,-1), TR: (1,0)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
-	return f0, f1
+
+	faces = append(faces, f0, f1)
+
+	return faces
 }
-
-/*
-func (v *VerticesMultiSprite) SetFacing(action int, cameraPos, entityPos geometry.XYZ, entityYaw float64) {
-	if v.numAngles == 0 || v.numFrames == 0 {
-		return
-	}
-	if action >= len(v.actions) {
-		return
-	}
-	v.currentAction = action
-
-	// 1. Risoluzione FRAME TEMPORALE
-	//frameIdx := currentTick % v.numFrames
-
-	// 2. Risoluzione ANGOLO SPAZIALE
-	//angleIdx := 0
-
-	// Vettore direzione (Considerando X, Y come piano terra, o X, Z a seconda del tuo sistema assi)
-	dx := cameraPos.X - entityPos.X
-	dy := cameraPos.Y - entityPos.Y
-
-	// Angolo assoluto verso la telecamera (in radianti: -Pi a +Pi)
-	angleToCam := math.Atan2(dy, dx)
-
-	// Costante 2*Pi per comodità
-	twoPi := math.Pi * 2
-
-	// Delta angolare normalizzato (0 a 2*Pi)
-	// Il doppio modulo garantisce sicurezza anche se entityYaw fa più giri negativi
-	relAngle := math.Mod(math.Mod(angleToCam-entityYaw, twoPi)+twoPi, twoPi)
-
-	// Dimensione del settore in radianti (es. 8 angoli = Pi/4)
-	sectorSize := twoPi / float64(v.numAngles)
-
-	// Offset di mezzo settore per centrare il bucket "Fronte" (Indice 0) sullo zero assoluto
-	shiftedAngle := math.Mod(relAngle+(sectorSize/2.0), twoPi)
-
-	// Quantizzazione spaziale pura
-	v.currentAngleIdx = int(math.Floor(shiftedAngle / sectorSize))
-
-	// Fallback/Wrap-around di sicurezza per non sforare l'array
-	if v.currentAngleIdx >= v.numAngles {
-		v.currentAngleIdx = 0
-	}
-
-	//return action.Frames[angleIdx][frameIdx]
-}
-
-
-// GetCurrentFrame viene chiamato dal ciclo di rendering (es. a 60 FPS)
-func (v *VerticesMultiSprite) GetCurrentFrame(currentTick int) *UniFrame {
-	if v.currentAction >= len(v.actions) {
-		return nil
-	}
-
-	action := v.actions[v.currentAction]
-	if action == nil || action.NumFrames == 0 {
-		return nil
-	}
-
-	// Risoluzione temporale al volo
-	frameIdx := currentTick % action.NumFrames
-
-	// Fetch in O(1) usando lo stato pre-calcolato da SetFacing
-	return action.Frames[v.currentAngleIdx][frameIdx]
-}
-*/
-
-/*
-// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
-func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
-	// 1. Calcolo del vettore direzione dalla telecamera all'entità
-	dx := cameraPos.X - entityPos.X
-	dy := cameraPos.Y - entityPos.Y // Considerando Y come profondità (Z nel tuo CreateCoords)
-	// 2. Angolo assoluto tra telecamera ed entità
-	angleToCam := math.Atan2(dy, dx)
-	// 3. Delta angolare (Angolo Telecamera - Yaw Entità)
-	// Normalizziamo l'angolo per assicurarci che sia tra 0 e 2*Pi
-	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
-	sectorMax := len(v.faces)
-	sectorSize := (math.Pi * 2) / float64(sectorMax)
-	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
-	v.currentAngle = index % sectorMax
-	v.compute()
-}
-
-
-// SetViewAngle calculates the relative angle between the camera and the entity and updates the current view angle index.
-func (v *VerticesMultiSprite) SetViewAngle(cameraPos, entityPos geometry.XYZ, entityYaw float64) {
-	dx := cameraPos.X - entityPos.X
-	dy := cameraPos.Y - entityPos.Y
-
-	angleToCam := math.Atan2(dy, dx)
-	relativeAngle := math.Mod(angleToCam-entityYaw+(math.Pi*2), math.Pi*2)
-
-	sectorSize := (math.Pi * 2) / 32.0
-	index := int(math.Floor((relativeAngle + (sectorSize / 2.0)) / sectorSize))
-
-	const viewOffset = 3
-	v.currentAngle = (index + viewOffset) % 32
-
-	v.compute()
-}
-
-*/

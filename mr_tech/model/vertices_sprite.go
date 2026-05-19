@@ -11,7 +11,7 @@ type VerticesSprite struct {
 	volume *Volume
 }
 
-// NewVerticesSprite creates a new VerticesSprite with the given material, position, dimensions, and physical properties.
+// NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
 func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesSprite {
 	x := pos.X - cfg.Radius
 	y := pos.Y - cfg.Radius
@@ -19,10 +19,6 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	d := cfg.Height
-
-	height := h
-	width := w
-	halfW := width / 2.0
 
 	var material *textures.Material
 	if cfg.Sprite != nil {
@@ -32,41 +28,63 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 			if tex != nil {
 				texW, texH := tex.Size()
 				scaleW, scaleH := tex.GetScaleFactor()
-				width = float64(texW) * scaleW
-				height = float64(texH) * scaleH
-				halfW = width / 2.0
+				w = float64(texW) * scaleW
+				d = float64(texH) * scaleH
 			}
 		}
 	}
 
-	volume := NewVolumeDetails3d(0, "material", "thing", x, y, z, width, height, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	halfW := w * 0.5
+	halfY := cfg.Radius // Profondità 3D dell'entità sull'asse Y
+
+	volume := NewVolumeDynamic(0, "material", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesSprite{volume: volume}
 
-	// Triangolo 0: Top-Left, Bottom-Left, Bottom-Right
-	t0 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: height}, // TL
-		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
-		{X: halfW, Y: 0.0, Z: 0.0},     // BR
-	}
-	f0 := NewFace(t0, "", material)
-	// Passiamo V=0 per il top e V=-1 per il bottom (diventerà 1 nel renderer)
-	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
-	f0.LockUV(true)
+	// Costruzione degli 8 vertici del Box (Bottom e Top)
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: 0.0}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: 0.0}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: 0.0}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: 0.0}
 
-	// Triangolo 1: Top-Left, Bottom-Right, Top-Right
-	t1 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: height}, // TL
-		{X: halfW, Y: 0.0, Z: 0.0},     // BR
-		{X: halfW, Y: 0.0, Z: height},  // TR
-	}
-	f1 := NewFace(t1, "", material)
-	// TL: (0,0), BR: (1,-1), TR: (1,0)
-	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
-	f1.LockUV(true)
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: d}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: d}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: d}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: d}
 
 	f.volume.ClearFaces()
-	f.volume.AddFace(f0)
-	f.volume.AddFace(f1)
+
+	// Helper per aggiungere una faccia (2 triangoli)
+	addQuad := func(vA, vB, vC, vD geometry.XYZ) {
+		t0 := [3]geometry.XYZ{vA, vB, vC}
+		t1 := [3]geometry.XYZ{vA, vC, vD}
+
+		f0 := NewFace(t0, "", material)
+		f1 := NewFace(t1, "", material)
+
+		f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
+		f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
+
+		f0.LockUV(true)
+		f1.LockUV(true)
+
+		f.volume.AddFace(f0)
+		f.volume.AddFace(f1)
+	}
+
+	// Front (Y = -halfY)
+	addQuad(v001, v000, v100, v101)
+	// Back (Y = halfY)
+	addQuad(v111, v110, v010, v011)
+	// Left (X = -halfW)
+	addQuad(v011, v010, v000, v001)
+	// Right (X = halfW)
+	addQuad(v101, v100, v110, v111)
+	// Top (Z = d)
+	addQuad(v011, v001, v101, v111)
+	// Bottom (Z = 0)
+	addQuad(v000, v010, v110, v100)
+
+	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
 	f.volume.Rebuild()
 
 	return f

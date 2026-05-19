@@ -19,20 +19,22 @@ type Volume struct {
 	facesTree *physics.AABBTree
 	thing     IThing
 	sector    *Sector
+
+	pos geometry.XYZ
 }
 
 const solidRestitution = 0.0
 const solidFriction = 0.2
 const solidGForce = 9.8
 
-// NewVolume3d creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
-func NewVolume3d(modelId int, id string, tag string) *Volume {
-	v := NewVolumeDetails3d(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
+// NewVolumeStatic creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
+func NewVolumeStatic(modelId int, id string, tag string) *Volume {
+	v := NewVolumeDynamic(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
 	return v
 }
 
-// NewVolumeDetails3d creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
-func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Volume {
+// NewVolumeDynamic creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
+func NewVolumeDynamic(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
 		modelId:   modelId,
 		id:        id,
@@ -41,16 +43,23 @@ func NewVolumeDetails3d(modelId int, id string, tag string, x, y, z, w, h, d, ma
 		faceCount: 0,
 		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
+		pos:       geometry.XYZ{X: x, Y: y, Z: z},
 	}
 	return v
 }
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the location based on its faces and dimensions.
 func (v *Volume) Rebuild() bool {
-	minX, minY, calcMinZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, calcMaxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+
+	v.facesTree.Clear()
+
 	for x := 0; x < v.faceCount; x++ {
 		face := v.faces[x]
+		face.Rebuild()
+		v.facesTree.InsertObject(face)
+
 		for _, p := range face.GetPoints() {
 			if p.X < minX {
 				minX = p.X
@@ -64,23 +73,21 @@ func (v *Volume) Rebuild() bool {
 			if p.Y > maxY {
 				maxY = p.Y
 			}
-			if p.Z < calcMinZ {
-				calcMinZ = p.Z
+			if p.Z < minZ {
+				minZ = p.Z
 			}
-			if p.Z > calcMaxZ {
-				calcMaxZ = p.Z
+			if p.Z > maxZ {
+				maxZ = p.Z
 			}
 		}
 	}
+	w := maxX - minX
+	h := maxY - minY
+	d := maxZ - minZ
 
-	v.entity.GetAABB().Rebuild(minX, minY, calcMinZ, maxX, maxY, calcMaxZ)
+	v.entity.Rebuild(minX, minY, minZ, w, h, d)
+	//v.entity.GetAABB().Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 
-	v.facesTree.Clear()
-	for x := 0; x < v.faceCount; x++ {
-		face := v.faces[x]
-		face.Rebuild()
-		v.facesTree.InsertObject(face)
-	}
 	return true
 }
 

@@ -6,13 +6,16 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
 type VerticesMD1 struct {
 	rootVolume *Volume
+	rootEntity *physics.Entity
 	frames     []*Volume
+	entities   []*physics.Entity
 	actions    [][2]int
 	startFrame int
 	endFrame   int
@@ -33,7 +36,8 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	}
 
 	v := &VerticesMD1{
-		frames:     make([]*Volume, len(cfg.MD1.Frames)),
+		frames: make([]*Volume, len(cfg.MD1.Frames)),
+
 		actions:    cfg.MD1.ActionIntervals,
 		startFrame: 0,
 		endFrame:   len(cfg.MD1.Frames) - 1,
@@ -45,9 +49,10 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	if len(v.actions) > 0 {
 		v.SetAction(0)
 	}
+	//entity := physics.NewEntity(x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	for frameIdx, cfgFrame := range cfg.MD1.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := NewVolumeDetails3d(frameIdx, baseId, "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		volume := NewVolumeDynamic(frameIdx, baseId, "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
@@ -61,6 +66,7 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 		v.frames[frameIdx] = volume
 	}
 	v.rootVolume = v.frames[0]
+	v.rootEntity = v.rootVolume.GetEntity()
 	return v
 }
 
@@ -115,21 +121,11 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 
 	if v.idxA != idxA {
 		v.idxA = idxA
-		//fmt.Println("CHANGING", _counter)
-		//lastEntity := v.rootVolume.GetEntity()
-		//v.rootVolume = curr
-		//v.rootVolume.entity = lastEntity
+		//TODO TERMINATE IMPLEMENTATION
+		v.rootEntity.SetSize(curr.GetEntity().GetSize())
+		curr.entity = v.rootEntity
+		v.rootVolume = curr
 	}
-
-	/*
-		if relativeFrameA != v.relativeFrame {
-			v.relativeFrame = relativeFrameA
-
-			//v.rootVolume.GetEntity().SetRect()
-			//TODO IS TOO EXPENSIVE!!!!
-			//v.compute(idxA)
-		}
-	*/
 
 	facesA, faceCountA := curr.GetFaces()
 	facesB, faceCountB := next.GetFaces()
@@ -139,7 +135,7 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
 func (v *VerticesMD1) GetDisplacement() (float64, float64, float64) {
-	return v.rootVolume.entity.GetCenter()
+	return v.rootEntity.GetCenter()
 }
 
 // GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD1 instance.

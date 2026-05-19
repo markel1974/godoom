@@ -172,6 +172,8 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	default:
 		thing = NewThingItem(th, ct, volume)
 	}
+
+	thing.GetEntity().MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
 }
 

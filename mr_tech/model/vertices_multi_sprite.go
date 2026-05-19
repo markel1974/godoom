@@ -23,14 +23,10 @@ type VerticesMultiSprite struct {
 
 // NewVerticesMultiSprite creates a new VerticesMultiSprite instance with geometry, physics, and animation information, based on input config.
 func NewVerticesMultiSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMultiSprite {
-	x := pos.X - cfg.Radius
-	y := pos.Y - cfg.Radius
-	z := pos.Z
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
-	d := cfg.Height
 
-	volume := NewVolumeDynamic(0, "wax", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	volume := NewVolume(0, "wax", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesMultiSprite{
 		volume: volume,
 	}

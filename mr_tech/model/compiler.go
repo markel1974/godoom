@@ -344,7 +344,7 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 
 	for _, sector := range sectors {
 		id := fmt.Sprintf("%s_3d", sector.GetId())
-		vol3d := NewVolumeStatic(sector.GetModelId(), id, sector.GetTag())
+		vol3d := NewVolume(sector.GetModelId(), id, sector.GetTag(), 0, solidRestitution, solidFriction, solidGForce)
 		if sector.light != nil {
 			vol3d.SetLight(sector.light)
 		}
@@ -500,7 +500,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volum
 	facesTree := physics.NewAABBTree(1024, 0.001)
 	for _, cv := range volumes {
 		// cv.Id and cv.Tag come from the BSP parser
-		volume := NewVolumeStatic(modelSectorId, cv.Id, cv.Tag)
+		volume := NewVolume(modelSectorId, cv.Id, cv.Tag, 0, solidRestitution, solidFriction, solidGForce)
 		modelSectorId++
 		for _, cf := range cv.Faces {
 			pts := cf.Points

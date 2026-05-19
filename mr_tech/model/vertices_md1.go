@@ -24,13 +24,6 @@ type VerticesMD1 struct {
 
 // NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
 func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesMD1 {
-	x := pos.X - cfg.Radius
-	y := pos.Y - cfg.Radius
-	z := pos.Z
-	w := cfg.Radius * 2
-	h := cfg.Radius * 2
-	d := cfg.Height
-
 	if len(cfg.MD1.Frames) == 0 {
 		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
 	}
@@ -52,7 +45,7 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	//entity := physics.NewEntity(x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	for frameIdx, cfgFrame := range cfg.MD1.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := NewVolumeDynamic(frameIdx, baseId, "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}

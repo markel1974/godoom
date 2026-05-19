@@ -19,31 +19,22 @@ type Volume struct {
 	facesTree *physics.AABBTree
 	thing     IThing
 	sector    *Sector
-
-	pos geometry.XYZ
 }
 
 const solidRestitution = 0.0
 const solidFriction = 0.2
 const solidGForce = 9.8
 
-// NewVolumeStatic creates and returns a new true 3D Volume instance (convex polyhedron) with the specified model ID, ID, and tag.
-func NewVolumeStatic(modelId int, id string, tag string) *Volume {
-	v := NewVolumeDynamic(modelId, id, tag, 0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce)
-	return v
-}
-
-// NewVolumeDynamic creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
-func NewVolumeDynamic(modelId int, id string, tag string, x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Volume {
+// NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
+func NewVolume(modelId int, id string, tag string, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
 		modelId:   modelId,
 		id:        id,
 		tag:       tag,
 		faces:     make([]*Face, 128),
 		faceCount: 0,
-		entity:    physics.NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce),
+		entity:    physics.NewEntity(0, 0, 0, 0, 0, 0, mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
-		pos:       geometry.XYZ{X: x, Y: y, Z: z},
 	}
 	return v
 }

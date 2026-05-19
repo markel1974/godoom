@@ -13,11 +13,7 @@ type VerticesSprite struct {
 
 // NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
 func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesSprite {
-	x := pos.X - cfg.Radius
-	y := pos.Y - cfg.Radius
-	z := pos.Z
 	w := cfg.Radius * 2
-	h := cfg.Radius * 2
 	d := cfg.Height
 
 	var material *textures.Material
@@ -37,7 +33,7 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 	halfW := w * 0.5
 	halfY := cfg.Radius // Profondità 3D dell'entità sull'asse Y
 
-	volume := NewVolumeDynamic(0, "material", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesSprite{volume: volume}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)

@@ -49,10 +49,11 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	cfg.Scale(r.gScale)
 	materials := NewMaterials(cfg.GetTextures())
 	r.lights = NewLights()
-	var sectors []*Sector
+
+	var allVolumes []*Volume
 
 	if len(cfg.Sectors) > 0 {
-		sectors = r.compile2d(cfg.Vertices, cfg.Sectors, materials)
+		sectors, slopedFloor, slopedCeiling := r.compile2d(cfg.Vertices, cfg.Sectors, materials)
 		if len(sectors) == 0 {
 			return fmt.Errorf("no 2D volumes compiled")
 		}
@@ -76,19 +77,13 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		}
 		//light 2d
 		r.lights.AddLights(r.compileLights2d(locator, true))
+
+		allVolumes = append(allVolumes, r.upgrade3d(sectors, slopedFloor, slopedCeiling)...)
 	}
 
-	var allVolumes []*Volume
-	//if cfg.Calibration.Full3d {
-	if len(sectors) > 0 {
-		allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
-	}
 	if len(cfg.Volumes) > 0 {
 		allVolumes = append(allVolumes, r.compile3d(cfg.Volumes, materials)...)
 	}
-	//} else {
-	//	allVolumes = append(allVolumes, container2d...)
-	//}
 
 	r.volumes = NewVolumes(allVolumes)
 	r.volumes.Setup()
@@ -138,14 +133,13 @@ type Slope struct {
 	End      geometry.XY
 }
 
-var _slopedCeiling = make(map[*Sector]*Slope)
-var _slopedFloor = make(map[*Sector]*Slope)
-
-func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Materials) []*Sector {
+func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Materials) ([]*Sector, map[*Sector]*Slope, map[*Sector]*Slope) {
 	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Sector
 	var fixSegments []*Segment
+	var _slopedCeiling = make(map[*Sector]*Slope)
+	var _slopedFloor = make(map[*Sector]*Slope)
 	facesTree := physics.NewAABBTree(1024, epsilon)
 	emptyAnim := anim.GetMaterial(nil)
 
@@ -297,24 +291,24 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 			segment.SetNeighbor(nil)
 		}
 	}
-	return container
+	return container, _slopedFloor, _slopedCeiling
 }
 
 // upgrade3d converts a slice of 2D volumes into 3D volumes by extruding geometry and resolving slopes and adjacency.
-func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
+func (r *Compiler) upgrade3d(sectors []*Sector, slopedFloor map[*Sector]*Slope, slopedCeiling map[*Sector]*Slope) []*Volume {
 	var volumes3d []*Volume
 	volMap := make(map[*Sector]*Volume)
 
 	// resolveZ calcola la Z per pavimento e soffitto nel punto (X,Y)
 	resolveZ := func(segment *Sector, p geometry.XYZ, baseF, baseC float64, clamp bool) (float64, float64) {
 		zF := baseF
-		if slopeF, ok := _slopedFloor[segment]; ok {
+		if slopeF, ok := slopedFloor[segment]; ok {
 			slopeX, slopeY := slopeF.Nx*slopeF.Gradient, slopeF.Ny*slopeF.Gradient
 			slopeZ := baseF - (slopeX * slopeF.Start.X) - (slopeY * slopeF.Start.Y)
 			zF = slopeZ + (slopeX * p.X) + (slopeY * p.Y)
 		}
 		zC := baseC
-		if slopeC, ok := _slopedCeiling[segment]; ok {
+		if slopeC, ok := slopedCeiling[segment]; ok {
 			slopeX, slopeY := slopeC.Nx*slopeC.Gradient, slopeC.Ny*slopeC.Gradient
 			slopeZ := baseC - (slopeX * slopeC.Start.X) - (slopeY * slopeC.Start.Y)
 			zC = slopeZ + (slopeX * p.X) + (slopeY * p.Y)

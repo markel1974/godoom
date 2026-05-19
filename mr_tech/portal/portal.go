@@ -143,7 +143,7 @@ func (r *Portal) compile(sector *model.Sector, cs *model.CompiledVolume) {
 			wallP := cs.Acquire(nil, model.IdWall, ceilT, floorT, segment.GetMaterialIndex(1), wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 			wallP.Rect(wx1, sectorCeilY, sectorFloorY, wz1, wx2, sectorCeilY, sectorFloorY, wz2)
 		}
-		center := sector.GetCentroid2d()
+		center := sector.GetCentroid()
 
 		ceilP := cs.Acquire(neighbor, model.IdCeil, ceilT, floorT, ceilT, wx1, wx2, wx1, wx2, wz1, wz2, u0, u1)
 		// Generi un triangolo orizzontale: Centro, P1, P2

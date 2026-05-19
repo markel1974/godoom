@@ -177,8 +177,8 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// GetCentroid3d calculates and returns the geometric centroid of the location based on its faces and 3D mode.
-func (v *Volume) GetCentroid3d() geometry.XYZ {
+// GetCentroid calculates and returns the geometric centroid of the location based on its faces and 3D mode.
+func (v *Volume) GetCentroid() geometry.XYZ {
 	var cx, cy, cz, count float64
 	for x := 0; x < v.faceCount; x++ {
 		face := v.faces[x]

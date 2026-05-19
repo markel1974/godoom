@@ -106,7 +106,7 @@ func (s *Sector) GetSegments() ([]*Segment, int) {
 	return s.segments, s.segmentCount
 }
 
-func (s *Sector) GetCentroid2d() geometry.XYZ {
+func (s *Sector) GetCentroid() geometry.XYZ {
 	var signedArea, cx, cy float64
 	for x := 0; x < s.segmentCount; x++ {
 		start := s.segments[x].GetStart()

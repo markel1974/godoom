@@ -239,7 +239,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				light := NewLight()
 				sector.SetLight(light)
 				if cs.Light != nil {
-					centroid := sector.GetCentroid2d()
+					centroid := sector.GetCentroid()
 					lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: cs.FloorY + cs.CeilY}
 					light.Setup(cs.Light, lightPos)
 				}
@@ -639,7 +639,7 @@ func (r *Compiler) compileLights2d(locator *Sectors, computeCenter bool) []*Ligh
 		if len(areaSectors) > 1 {
 			if !computeCenter {
 				for _, s := range areaSectors {
-					addLight(s, s.GetCentroid2d(), s.light.intensity, s.light.falloff, s.light.kind, s.light.r, s.light.g, s.light.b, s.light.style)
+					addLight(s, s.GetCentroid(), s.light.intensity, s.light.falloff, s.light.kind, s.light.r, s.light.g, s.light.b, s.light.style)
 				}
 			} else {
 				var sumX, sumY, totalArea float64
@@ -687,7 +687,7 @@ func (r *Compiler) compileLights2d(locator *Sectors, computeCenter bool) []*Ligh
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
 			light := first.light
-			addLight(first, first.GetCentroid2d(), light.intensity, light.falloff, light.kind, light.r, light.g, light.b, light.style)
+			addLight(first, first.GetCentroid(), light.intensity, light.falloff, light.kind, light.r, light.g, light.b, light.style)
 		}
 	}
 	return out

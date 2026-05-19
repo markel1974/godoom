@@ -11,12 +11,12 @@ import (
 
 // VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
 type VerticesMD1 struct {
-	volume        *Volume
-	frames        [][]*Face
-	actions       [][2]int
-	startFrame    int
-	endFrame      int
-	relativeFrame int
+	rootVolume *Volume
+	frames     []*Volume
+	actions    [][2]int
+	startFrame int
+	endFrame   int
+	idxA       int
 }
 
 // NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
@@ -27,15 +27,17 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	w := cfg.Radius * 2
 	h := cfg.Radius * 2
 	d := cfg.Height
-	md1Cfg := cfg.MD1
-	volume := NewVolumeDetails3d(0, "md2", "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+
+	if len(cfg.MD1.Frames) == 0 {
+		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
+	}
+
 	v := &VerticesMD1{
-		volume:        volume,
-		frames:        make([][]*Face, len(md1Cfg.Frames)),
-		actions:       md1Cfg.ActionIntervals,
-		startFrame:    0,
-		endFrame:      len(md1Cfg.Frames) - 1,
-		relativeFrame: -1,
+		frames:     make([]*Volume, len(cfg.MD1.Frames)),
+		actions:    cfg.MD1.ActionIntervals,
+		startFrame: 0,
+		endFrame:   len(cfg.MD1.Frames) - 1,
+		idxA:       -1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -43,28 +45,28 @@ func NewVerticesMD2(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *
 	if len(v.actions) > 0 {
 		v.SetAction(0)
 	}
-	//v.volume.SetBillboard(2.0)
-
-	for frameIdx, cfgFrame := range md1Cfg.Frames {
-		frameFaces := make([]*Face, len(cfgFrame.Triangles))
+	for frameIdx, cfgFrame := range cfg.MD1.Frames {
+		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
+		volume := NewVolumeDetails3d(frameIdx, baseId, "thing", x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
-			tag := fmt.Sprintf("%s_%d_%d", "md2", frameIdx, triIdx)
+			tag := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
 			material := materials.GetMaterial(tri.Material)
 			face := NewFace(points, tag, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
-			frameFaces[triIdx] = face
+			volume.AddFace(face)
 		}
-		v.frames[frameIdx] = frameFaces
+		volume.Rebuild()
+		v.frames[frameIdx] = volume
 	}
-	v.compute(0)
+	v.rootVolume = v.frames[0]
 	return v
 }
 
 // GetVolume retrieves the Volume instance associated with the VertexMD2.
 func (v *VerticesMD1) GetVolume() *Volume {
-	return v.volume
+	return v.rootVolume
 }
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
@@ -85,8 +87,9 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 	// Se c'è un solo frame nell'animazione, restituisce lo stesso frame due volte senza lerp
 	if v.startFrame == v.endFrame {
 		s := v.frames[v.startFrame]
-		sCount := len(s)
-		return s, sCount, s, sCount, 0.0
+		//sCount := len(s)
+		faces, faceCount := s.GetFaces()
+		return faces, faceCount, faces, faceCount, 0.0
 	}
 	const groupSize = 6.0
 	frameFloat := textures.TickGrouped(tick, int(groupSize))
@@ -107,18 +110,36 @@ func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, floa
 	// Parte frazionaria per l'interpolazione fluida tra i due frame calcolati
 	lerpT := frameFloat - math.Floor(frameFloat)
 
-	if relativeFrameA != v.relativeFrame {
-		v.relativeFrame = relativeFrameA
-		//TODO IS TOO EXPENSIVE!!!!
-		//v.compute(idxA)
+	curr := v.frames[idxA]
+	next := v.frames[idxB]
+
+	if v.idxA != idxA {
+		v.idxA = idxA
+		//fmt.Println("CHANGING", _counter)
+		//lastEntity := v.rootVolume.GetEntity()
+		//v.rootVolume = curr
+		//v.rootVolume.entity = lastEntity
 	}
 
-	return v.frames[idxA], len(v.frames[idxA]), v.frames[idxB], len(v.frames[idxB]), lerpT
+	/*
+		if relativeFrameA != v.relativeFrame {
+			v.relativeFrame = relativeFrameA
+
+			//v.rootVolume.GetEntity().SetRect()
+			//TODO IS TOO EXPENSIVE!!!!
+			//v.compute(idxA)
+		}
+	*/
+
+	facesA, faceCountA := curr.GetFaces()
+	facesB, faceCountB := next.GetFaces()
+
+	return facesA, faceCountA, facesB, faceCountB, lerpT
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
 func (v *VerticesMD1) GetDisplacement() (float64, float64, float64) {
-	return v.volume.entity.GetCenter()
+	return v.rootVolume.entity.GetCenter()
 }
 
 // GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD1 instance.
@@ -128,14 +149,7 @@ func (v *VerticesMD1) GetBillboard() float64 {
 
 // SetThing sets the IThing instance associated with the VerticesMD1 volume.
 func (v *VerticesMD1) SetThing(t IThing) {
-	v.volume.SetThing(t)
-}
-
-// compute updates the volume by clearing faces, adding a new set of faces from the specified frame index, and rebuilding.
-func (v *VerticesMD1) compute(idx int) {
-	v.volume.ClearFaces()
-	for _, f := range v.frames[idx] {
-		v.volume.AddFace(f)
+	for _, f := range v.frames {
+		f.SetThing(t)
 	}
-	v.volume.Rebuild()
 }

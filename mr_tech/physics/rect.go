@@ -35,9 +35,9 @@ func (r *Rect) Reset(x, y, z, w, h, d float64) {
 
 // rebuild recalculates the rectangle's center, AABB bounds, and surface area based on its current position and size.
 func (r *Rect) rebuild() {
-	cx := r.point.x + (r.size.w / 2)
-	cy := r.point.y + (r.size.h / 2)
-	cz := r.point.z + (r.size.d / 2)
+	cx := r.point.x + (r.size.w * 0.5)
+	cy := r.point.y + (r.size.h * 0.5)
+	cz := r.point.z + (r.size.d * 0.5)
 
 	r.center.x = cx
 	r.center.y = cy

@@ -147,7 +147,8 @@ func (v *Volume) GetFaceCount() int {
 
 // GetFaces returns the list of all faces and the total count of faces associated with the Volume.
 func (v *Volume) GetFaces() ([]*Face, int) {
-	return v.faces, v.faceCount
+	//TODO BETTER IMPLEMENTATION (USE GARBAGE)
+	return v.faces[:v.faceCount], v.faceCount
 }
 
 // SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.

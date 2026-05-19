@@ -93,6 +93,16 @@ func (e *Entity) SetSize(w, h, d float64) {
 	e.rect.SetSize(w, h, d)
 }
 
+// SetRect sets the Rect of the entity to the provided Rect value.
+func (e *Entity) SetRect(rect Rect) {
+	e.rect = rect
+}
+
+// GetRect returns the Rect instance associated with the Entity, representing its position, size, and bounding box.
+func (e *Entity) GetRect() Rect {
+	return e.rect
+}
+
 // Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.
 func (e *Entity) Stop() {
 	e.vx = 0.0

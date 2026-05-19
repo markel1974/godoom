@@ -12,7 +12,7 @@ type Rect struct {
 // NewRect creates a new Rect instance with the specified position (x, y), size (w, h), base elevation (z), and depth (d).
 func NewRect(x, y, w, h, z, d float64) Rect {
 	r := Rect{
-		aabb:  &AABB{},
+		aabb:  NewAABB(),
 		point: NewPoint(x, y, z),
 		size:  NewSize(w, h, d),
 	}

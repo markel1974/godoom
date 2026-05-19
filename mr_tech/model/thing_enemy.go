@@ -4,13 +4,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
-// ThingEnemy represents a physical or logical entity in the environment with attributes like position, mass, and associated data.
+// ThingEnemy represents an enemy entity that extends ThingBase and defines behavior through a custom thinking function.
 type ThingEnemy struct {
 	*ThingBase
 	onThinking func(self config.IThingConfig, playerX, playerY, playerZ float64)
 }
 
-// NewThingEnemy creates and initializes a new ThingEnemy instance.
+// NewThingEnemy initializes and returns a new instance of ThingEnemy with the specified configuration and parameters.
+// It ensures that default values are set for speed and acceleration if not provided.
+// The function panics if the OnThinking callback in the config is nil.
 func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnemy {
 	pos := cfg.Position
 	if cfg.Speed <= 0 {
@@ -29,10 +31,12 @@ func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnem
 	return thing
 }
 
+// PostMessage sends a ThingEvent instance to the inbox channel of ThingEnemy for processing.
 func (t *ThingEnemy) PostMessage(ec *ThingEvent) {
 	t.inbox <- ec
 }
 
+// StartLoop initializes and starts a goroutine to handle ThingEvent messages and process them based on their compute stage.
 func (t *ThingEnemy) StartLoop() {
 	go func() {
 		for {
@@ -56,7 +60,7 @@ func (t *ThingEnemy) StartLoop() {
 	}()
 }
 
-// StageThinking updates the Thing's direction, position, and attack logic based on the player's coordinates.
+// StageThinking processes the enemy's thinking phase using the player's coordinates (X, Y, Z) as input.
 func (t *ThingEnemy) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	t.onThinking(t, playerX, playerY, playerZ)
 }

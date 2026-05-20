@@ -80,7 +80,7 @@ func (v *VerticesMD1) SetAction(idx int) {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *VerticesMD1) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.volumes) == 0 {
 		return nil, 0, nil, 0, 0.0

@@ -53,9 +53,9 @@ func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
 }
 
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
-func (v *VerticesMultiSprite) GetVertices(tick uint64) ([]*Face, int, []*Face, int, float64) {
+func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64) {
 	f, c := v.viewVolume.GetFaces()
-	return f[:], c, f[:], c, 0.0
+	return f, c, f, c, 0.0
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.

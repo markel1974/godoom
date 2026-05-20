@@ -12,6 +12,7 @@ type Volume struct {
 	modelId   int
 	id        string
 	faces     []*Face
+	facesPtr  *[]*Face
 	faceCount int
 	tag       string
 	light     *Light
@@ -36,6 +37,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		entity:    physics.NewEntity(0, 0, 0, 0, 0, 0, mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
 	}
+	v.facesPtr = &v.faces
 	return v
 }
 
@@ -123,6 +125,7 @@ func (v *Volume) AddFace(face *Face) {
 		newFaces := make([]*Face, v.faceCount*2)
 		copy(newFaces, v.faces)
 		v.faces = newFaces
+		v.facesPtr = &v.faces
 	}
 	v.faces[v.faceCount] = face
 	v.faceCount++
@@ -144,9 +147,9 @@ func (v *Volume) GetFaceCount() int {
 }
 
 // GetFaces returns the list of all faces and the total count of faces associated with the Volume.
-func (v *Volume) GetFaces() ([]*Face, int) {
+func (v *Volume) GetFaces() (*[]*Face, int) {
 	//TODO BETTER IMPLEMENTATION (USE GARBAGE)
-	return v.faces[:v.faceCount], v.faceCount
+	return v.facesPtr, v.faceCount
 }
 
 // SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.

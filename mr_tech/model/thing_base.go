@@ -70,7 +70,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 }
 
 // GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() ([]*Face, int, []*Face, int, float64, float64) {
+func (t *ThingBase) GetVertices() (*[]*Face, int, *[]*Face, int, float64, float64) {
 	vCurr, vCurrCount, vNext, vNextCount, lerp := t.vertices.GetVertices(textures.CurrentTick())
 	return vCurr, vCurrCount, vNext, vNextCount, lerp, t.vertices.GetBillboard()
 }

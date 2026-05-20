@@ -29,6 +29,8 @@ func NewBuilder() *Builder {
 
 // Setup initializes the game environment by loading and processing BSP data, textures, entities, and lights from a .pak file.
 func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
+	const chunkSize = float64(1024)
+
 	bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
 	pk := lumps.NewPak()
@@ -162,7 +164,8 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 	}
 	vIdx := strconv.Itoa(mIdx)
-	volume := config.NewConfigVolume("quake_world_"+vIdx, "quake_bsp_"+vIdx)
+
+	chunks := make(map[string]*config.Volume)
 	for _, v := range faces {
 		animKind := config.MaterialKindLoop
 		if v.IsSky {
@@ -170,11 +173,29 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
 		triangles := p.triangulateConvex3d(v.Points)
+
 		for _, tri := range triangles {
+			// 2. Troviamo il centroide del triangolo
+			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
+			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
+			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
+
+			// 3. Calcoliamo la chiave di Spatial Hashing (Coordinate della griglia)
+			gridX := int(math.Floor(cx / chunkSize))
+			gridY := int(math.Floor(cy / chunkSize))
+			gridZ := int(math.Floor(cz / chunkSize))
+
+			chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
+			volume, exists := chunks[chunkKey]
+			if !exists {
+				chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
+				volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
+				chunks[chunkKey] = volume
+				root.Volumes = append(root.Volumes, volume)
+			}
 			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, v.TexName))
 		}
 	}
-	root.Volumes = append(root.Volumes, volume)
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
 	playerLogic := common.NewPlayer()

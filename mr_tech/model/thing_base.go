@@ -22,7 +22,6 @@ type ThingBase struct {
 	location     *Volume
 	world        *Volumes
 	things       *Things
-	entity       *physics.Entity
 	isActive     bool
 	identifier   int
 	cage         *CollisionCage
@@ -35,8 +34,8 @@ type ThingBase struct {
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.XYZ, location *Volume) *ThingBase {
-	vertices := VerticesFactory(thing, cfg, pos, things.GetMaterials())
+func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Volume) *ThingBase {
+	vertices := VerticesFactory(thing, cfg, things.GetMaterials())
 
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
@@ -47,7 +46,6 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 	const cageMargin = 0.001
 	t := &ThingBase{
 		vertices:     vertices,
-		entity:       vertices.GetVolume().GetEntity(),
 		id:           cfg.Id,
 		angle:        cfg.Angle, // * (math.Pi / 180.0),
 		kind:         cfg.Kind,
@@ -67,7 +65,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, pos geometry.
 		full3d:       things.full3d,
 	}
 	t.cage = NewCollisionCage(thing, cageMargin, 0, 0, 0)
-	t.entity.SetOnGround(false)
+	t.vertices.GetEntity().SetOnGround(false)
 	return t
 }
 
@@ -109,7 +107,7 @@ func (t *ThingBase) GetKind() config.ThingType {
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
 func (t *ThingBase) GetAABB() *physics.AABB {
-	return t.entity.GetAABB()
+	return t.vertices.GetEntity().GetAABB()
 }
 
 func (t *ThingBase) GetCage() *CollisionCage {
@@ -118,7 +116,7 @@ func (t *ThingBase) GetCage() *CollisionCage {
 
 // GetEntity returns the physics.Entity associated with the current ThingBase instance.
 func (t *ThingBase) GetEntity() *physics.Entity {
-	return t.entity
+	return t.vertices.GetEntity()
 }
 
 // GetLocation retrieves the current location associated with the ThingBase instance.
@@ -133,7 +131,7 @@ func (t *ThingBase) GetMaxStep() float64 {
 
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
 func (t *ThingBase) GetRadius() float64 {
-	return t.entity.GetWidth() * 0.5
+	return t.vertices.GetEntity().GetWidth() * 0.5
 }
 
 // GetAcceleration returns the current acceleration value of the ThingBase.
@@ -143,7 +141,7 @@ func (t *ThingBase) GetAcceleration() float64 {
 
 // GetDepth retrieves the depth value of the entity associated with the ThingBase instance.
 func (t *ThingBase) GetDepth() float64 {
-	return t.entity.GetDepth()
+	return t.vertices.GetEntity().GetDepth()
 }
 
 // GetSpeed returns the current speed of the ThingBase instance as a float64.
@@ -153,47 +151,47 @@ func (t *ThingBase) GetSpeed() float64 {
 
 // GetWidth retrieves the width of the underlying entity associated with the ThingBase.
 func (t *ThingBase) GetWidth() float64 {
-	return t.entity.GetWidth()
+	return t.vertices.GetEntity().GetWidth()
 }
 
 // GetMass retrieves the mass value of the underlying entity associated with the ThingBase instance.
 func (t *ThingBase) GetMass() float64 {
-	return t.entity.GetMass()
+	return t.vertices.GetEntity().GetMass()
 }
 
 // GetVelocity retrieves the current velocity of the entity as a tuple of X, Y, and Z components.
 func (t *ThingBase) GetVelocity() (float64, float64, float64) {
-	return t.entity.GetVelocity()
+	return t.vertices.GetEntity().GetVelocity()
 }
 
 // IsOnGround checks if the entity associated with ThingBase is currently on the ground and returns true if it is.
 func (t *ThingBase) IsOnGround() bool {
-	return t.entity.IsOnGround()
+	return t.vertices.GetEntity().IsOnGround()
 }
 
 // SetOnGround sets the on-ground state of the entity to the specified boolean value.
 func (t *ThingBase) SetOnGround(g bool) {
-	t.entity.SetOnGround(g)
+	t.vertices.GetEntity().SetOnGround(g)
 }
 
 // AddForce applies a force vector (fx, fy, fz) to the entity associated with the ThingBase.
 func (t *ThingBase) AddForce(fx, fy, fz float64) {
-	t.entity.AddForce(fx, fy, fz)
+	t.vertices.GetEntity().AddForce(fx, fy, fz)
 }
 
 // GetBottomLeft returns the bottom-left coordinates (x, y) and an optional z-value of the entity associated with the ThingBase.
 func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
-	return t.entity.GetBottomLeft()
+	return t.vertices.GetEntity().GetBottomLeft()
 }
 
 // GetBottomCenter returns the center-bottom coordinates (x, y, z) of the ThingBase entity.
 func (t *ThingBase) GetBottomCenter() (float64, float64, float64) {
-	return t.entity.GetBottomCenter()
+	return t.vertices.GetEntity().GetBottomCenter()
 }
 
 // GetCenter calculates and returns the center coordinates (x, y, z) of the entity within ThingBase.
 func (t *ThingBase) GetCenter() (float64, float64, float64) {
-	return t.entity.GetCenter()
+	return t.vertices.GetEntity().GetCenter()
 }
 
 // GetVolume retrieves the volume associated with the ThingBase instance.
@@ -223,7 +221,8 @@ func (t *ThingBase) SetActive(active bool) {
 
 // StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
 func (t *ThingBase) StageCompute() {
-	dx, dy, dz := t.entity.GetDisplacement()
+	entity := t.vertices.GetEntity()
+	dx, dy, dz := entity.GetDisplacement()
 	if t.deadZone(dx, dy, dz) {
 		return
 	}
@@ -231,7 +230,7 @@ func (t *ThingBase) StageCompute() {
 	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := t.GetBottomLeft()
 	// Calcolo Half-Extents
-	w, h, d := t.entity.GetSize()
+	w, h, d := entity.GetSize()
 	eRadX, eRadY, eRadZ := w*0.5, h*0.5, d*0.5
 	// Calcolo del CENTRO per il Broad-Phase
 	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
@@ -270,7 +269,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 			otherParentEnt := otherParent.GetEntity()
 
 			// Delega totale e assoluta al solutore interno di physics
-			t.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
+			t.vertices.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 			if thing := otherParent.GetThing(); thing != nil {
 				t.onCollision(t, thing)
@@ -281,7 +280,8 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 
 // StageApply updates the entity's state by processing movement, grounding, and positional integration based on displacement.
 func (t *ThingBase) StageApply() {
-	dx, dy, dz := t.entity.GetDisplacement()
+	entity := t.vertices.GetEntity()
+	dx, dy, dz := entity.GetDisplacement()
 
 	if t.deadZone(dx, dy, dz) {
 		return
@@ -296,19 +296,19 @@ func (t *ThingBase) StageApply() {
 		}
 	}
 	// APPLICAZIONE STATO
-	t.entity.SetOnGround(isGrounded)
-
-	t.entity.AddTo(dx, dy, dz)
+	entity.SetOnGround(isGrounded)
+	entity.AddTo(dx, dy, dz)
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
-	vx, vy, _ := t.entity.GetVelocity()
+	entity := t.vertices.GetEntity()
+	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * targetSpeed
 	desiredVy := dirY * targetSpeed
 	deltaVx := desiredVx - vx
 	deltaVy := desiredVy - vy
-	t.entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
+	entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
 }
 
 // GetBase returns the current instance of ThingBase. Useful for method chaining or accessing the base object.
@@ -366,10 +366,11 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
 	const sleepEpsilon = 0.005
 	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		t.entity.SetVx(0.0)
-		t.entity.SetVy(0.0)
-		if t.entity.IsOnGround() {
-			t.entity.SetVz(0.0)
+		entity := t.vertices.GetEntity()
+		entity.SetVx(0.0)
+		entity.SetVy(0.0)
+		if entity.IsOnGround() {
+			entity.SetVz(0.0)
 		}
 		return true
 	}

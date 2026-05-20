@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -12,7 +13,7 @@ type VerticesSprite struct {
 }
 
 // NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
-func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials) *VerticesSprite {
+func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite {
 	w := cfg.Radius * 2
 	d := cfg.Height
 
@@ -89,6 +90,11 @@ func NewVerticesSprite(cfg *config.Thing, pos geometry.XYZ, materials *Materials
 // GetVolume returns the Volume instance associated with the VerticesSprite.
 func (v *VerticesSprite) GetVolume() *Volume {
 	return v.volume
+}
+
+// GetEntity retrieves the physics.Entity instance associated with the underlying Volume of the VerticesSprite.
+func (v *VerticesSprite) GetEntity() *physics.Entity {
+	return v.volume.GetEntity()
 }
 
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.

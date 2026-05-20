@@ -60,9 +60,9 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	thing.ThingBase = NewThingBase(thing, things, c.Thing, c.Position, volume)
-	thing.SetAngle(c.Angle)
+	thing.ThingBase = NewThingBase(thing, things, c.Thing, volume)
 	thing.GetEntity().MoveTo(c.Position.X, c.Position.Y, c.Position.Z)
+	thing.SetAngle(c.Angle)
 	return thing
 }
 
@@ -168,29 +168,31 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 // SetJump applies an upward force to make the ThingPlayer jump.
 func (p *ThingPlayer) SetJump(multi bool) {
 	onGround := true
-	mass := p.entity.GetMass()
+	entity := p.GetEntity()
+	mass := entity.GetMass()
 	fz := mass * p.jumpForce
 	if !multi {
-		onGround = p.entity.IsOnGround()
+		onGround = entity.IsOnGround()
 	} else {
 		fz *= 0.2
 	}
 	if onGround {
-		p.entity.AddForce(0.0, 0.0, fz)
-		p.entity.SetOnGround(false)
+		entity.AddForce(0.0, 0.0, fz)
+		entity.SetOnGround(false)
 		p.bobbing.InjectVerticalImpulse(-1.5)
 	}
 }
 
 // SetDucking toggles the player's ducking state between true and false.
 func (p *ThingPlayer) SetDucking() {
+	entity := p.GetEntity()
 	p.ducking = !p.ducking
 	if p.ducking {
-		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*0.5)
+		entity.SetSize(entity.GetWidth(), entity.GetHeight(), entity.GetDepth()*0.5)
 		//p.pos.Z -= p.entity.GetDepth() * 0.25
 	} else {
 		//p.pos.Z += p.entity.GetDepth() * 0.25
-		p.entity.SetSize(p.entity.GetWidth(), p.entity.GetHeight(), p.entity.GetDepth()*2.0)
+		entity.SetSize(entity.GetWidth(), entity.GetHeight(), entity.GetDepth()*2.0)
 	}
 }
 
@@ -214,10 +216,11 @@ func (p *ThingPlayer) GetTilt() float64 {
 	//	return 0.0
 	//}
 
+	entity := p.GetEntity()
 	rawTilt := p.bobbing.GetTilt()
 	// 3. Calcoliamo la velocità reale sul piano
-	vx := p.entity.GetVx()
-	vy := p.entity.GetVy()
+	vx := entity.GetVx()
+	vy := entity.GetVy()
 	currentSpeed := math.Sqrt(vx*vx + vy*vy)
 	// 4. Creiamo la maschera (Ratio)
 	// p.speed è la tua velocità massima (es. 60.0).
@@ -268,11 +271,12 @@ func (p *ThingPlayer) StageThinking(playerX float64, playerY float64, playerZ fl
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
 func (p *ThingPlayer) StageApply() {
-	wasGrounded := p.entity.IsOnGround()
-	prevVz := p.entity.GetVz()
+	entity := p.GetEntity()
+	wasGrounded := entity.IsOnGround()
+	prevVz := entity.GetVz()
 	p.ThingBase.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
-	isGrounded := p.entity.IsOnGround()
+	isGrounded := entity.IsOnGround()
 	if !wasGrounded && isGrounded {
 		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
 		p.bobbing.InjectVerticalImpulse(prevVz)
@@ -280,21 +284,23 @@ func (p *ThingPlayer) StageApply() {
 	// Fattore di allineamento per portare il 2.9 a ~60.0 fps o 120 fps...
 	const dt = 0.016 //0.016 per 60fps
 	//fmt.Printf("Vx: %f, Vy: %f, Speed: %f\n", p.entity.GetVx(), p.entity.GetVy(), p.speed)
-	p.bobbing.Compute(dt, p.speed, p.entity.GetVx(), p.entity.GetVy())
+	p.bobbing.Compute(dt, p.speed, entity.GetVx(), entity.GetVy())
 }
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.
 func (p *ThingPlayer) getEyeHeight() float64 {
+	entity := p.GetEntity()
 	if p.ducking {
-		return p.entity.GetDepth() * 0.25
+		return entity.GetDepth() * 0.25
 	}
-	return p.entity.GetDepth() * 0.80
+	return entity.GetDepth() * 0.80
 }
 
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
 func (p *ThingPlayer) Throw(throwableIndex int, speed float64) {
 	camX, camY, camZ := p.GetVisualPosition()
-	diameter := p.entity.GetWidth()
+	entity := p.GetEntity()
+	diameter := entity.GetWidth()
 	spawnX := camX + (p.angleCos * diameter)
 	spawnY := camY + (p.angleSin * diameter)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)

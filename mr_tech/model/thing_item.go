@@ -11,9 +11,8 @@ type ThingItem struct {
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
 func NewThingItem(things *Things, cfg *config.Thing, volume *Volume) *ThingItem {
-	pos := cfg.Position
 	thing := &ThingItem{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, pos, volume)
+	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
 	return thing
 }
 

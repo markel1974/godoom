@@ -14,7 +14,6 @@ type ThingEnemy struct {
 // It ensures that default values are set for speed and acceleration if not provided.
 // The function panics if the OnThinking callback in the config is nil.
 func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnemy {
-	pos := cfg.Position
 	if cfg.Speed <= 0 {
 		cfg.Speed = 6
 	}
@@ -27,7 +26,7 @@ func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnem
 	thing := &ThingEnemy{
 		onThinking: cfg.OnThinking,
 	}
-	thing.ThingBase = NewThingBase(thing, things, cfg, pos, volume)
+	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
 	return thing
 }
 

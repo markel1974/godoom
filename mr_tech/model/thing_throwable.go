@@ -13,9 +13,8 @@ type ThingThrowable struct {
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
 func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *ThingThrowable {
-	pos := cfg.Position
 	thing := &ThingThrowable{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, pos, volume)
+	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	thing.maxStep = 0.0
 	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
@@ -27,9 +26,10 @@ func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *Thing
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
 	muzzleVelocity := thing.speed * 5.0
-	thing.entity.SetVx(dirX * muzzleVelocity)
-	thing.entity.SetVy(dirY * muzzleVelocity)
-	thing.entity.SetVz(dirZ * muzzleVelocity)
+	entity := thing.GetEntity()
+	entity.SetVx(dirX * muzzleVelocity)
+	entity.SetVy(dirY * muzzleVelocity)
+	entity.SetVz(dirZ * muzzleVelocity)
 	return thing
 }
 

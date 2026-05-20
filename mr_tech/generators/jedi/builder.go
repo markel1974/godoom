@@ -332,6 +332,8 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 			}
 			configThings = append(configThings, cThing)
 		case "SAFE":
+		case "SOUND":
+
 		default:
 			return nil, fmt.Errorf("unsupported object class: %s", key)
 		}

@@ -148,7 +148,6 @@ func (v *Volume) GetFaceCount() int {
 
 // GetFaces returns the list of all faces and the total count of faces associated with the Volume.
 func (v *Volume) GetFaces() (*[]*Face, int) {
-	//TODO BETTER IMPLEMENTATION (USE GARBAGE)
 	return v.facesPtr, v.faceCount
 }
 

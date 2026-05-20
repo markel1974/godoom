@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -175,6 +177,25 @@ func (pk *Pak) ReadDir(fullPath string) ([]string, error) {
 		return nil, fmt.Errorf("path is a file, not a directory: %s", fullPath)
 	}
 	return node.GetChildren(), nil
+}
+
+func (pk *Pak) ReadDirFilter(fullPath string, wildcard string) ([]string, error) {
+	r, err := regexp.Compile(wildcard)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := pk.ReadDir(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, entry := range entries {
+		if r.MatchString(entry) {
+			out = append(out, entry)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // Parts splits the given path string into its individual components using the NodePak's separator and returns them as a slice.

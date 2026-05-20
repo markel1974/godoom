@@ -76,6 +76,19 @@ func (w *Textures) RegisterPixels(name string, width, height int, indices []byte
 	return nil
 }
 
+func (w *Textures) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+	if _, ok := w.resources[name]; ok {
+		return nil
+	}
+	idx := int32(len(w.resources))
+	tex, err := w.loadFromPixelsRGBA(name, width, height, pixels, idx, invertY)
+	if err != nil {
+		return err
+	}
+	w.resources[name] = tex
+	return nil
+}
+
 func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
 	emissive := false
 	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
@@ -114,39 +127,38 @@ func (w *Textures) loadFromPixels(name string, width, height int, indices []byte
 	return tex, nil
 }
 
-func (w *Textures) loadFromPixelsOld(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte) (*textures.Texture, error) {
+// loadFromPixelsRGBA decodes a raw []byte slice (4 bytes per pixel) into a texture object.
+func (w *Textures) loadFromPixelsRGBA(name string, width, height int, pixels []byte, idx int32, invertY bool) (*textures.Texture, error) {
 	emissive := false
-	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
+	if len(name) > 0 && (name[0] == '*' || name[0] == '+') {
 		emissive = true
 	}
 	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 
-	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
-	transparentColor := transIndex
-
-	if len(name) > 0 && name[0] == '{' {
-		transparentColor = 255
-	}
-
 	for y := 0; y < height; y++ {
-		// Inversione asse Y per hardware grafico (Bottom-Left)
-		flippedY := height - 1 - y
+		// Gestione inversione asse Y (Top-Left to Bottom-Left per OpenGL)
+		targetY := y
+		if invertY {
+			targetY = height - 1 - y
+		}
 
 		for x := 0; x < width; x++ {
-			colorIdx := indices[y*width+x]
-			if hasAlpha && colorIdx == transparentColor {
-				// Trasparenza assoluta
-				tex.Set(x, y, 0x00000000)
-				continue
-			}
-			palOffset := int(colorIdx) * 3
-			r := int(palette[palOffset])
-			g := int(palette[palOffset+1])
-			b := int(palette[palOffset+2])
-			a := 255
-			color := (r << 24) | (g << 16) | (b << 8) | a
+			// Offset lineare con stride fisso a 4 (RGBA)
+			offset := (y*width + x) * 4
 
-			tex.Set(x, flippedY, color) // Scrive sulla riga ribaltata
+			// Sanity check per evitare panic su buffer troncati
+			if offset+3 < len(pixels) {
+				r := uint32(pixels[offset])
+				g := uint32(pixels[offset+1])
+				b := uint32(pixels[offset+2])
+				a := uint32(pixels[offset+3])
+
+				color := (r << 24) | (g << 16) | (b << 8) | a
+				tex.Set(x, targetY, int(color))
+			} else {
+				// Fallback color (magenta debugging) se mancano dati nel buffer
+				tex.Set(x, targetY, int(0xFF00FF00))
+			}
 		}
 	}
 	return tex, nil

@@ -28,15 +28,23 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the game environment by loading and processing BSP data, textures, entities, and lights from a .pak file.
-func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
+func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	const chunkSize = float64(1024)
-
-	bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
+	if lev < 1 {
+		lev = 1
+	}
+	levelIndex := lev - 1
+	//bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
 	pk := lumps.NewPak()
 	if err := pk.Setup(pakPath); err != nil {
 		return nil, err
 	}
+	maps, _ := pk.ReadDirFilter("maps", "^e.+\\.bsp")
+	if levelIndex >= len(maps) {
+		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
+	}
+	bpsPath := "maps" + lumps.PakSeparator + maps[levelIndex]
 	rs, err := pk.Open(bpsPath)
 	if err != nil {
 		return nil, err
@@ -245,8 +253,9 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 	// INTENSITÀ DI BASE
 	if l, ok := entity.Properties["light"]; ok {
 		intensity, _ = strconv.ParseFloat(l, 64)
+		//intensity *= 0.3
 	} else {
-		intensity = 300.0 // Default fallback tipico di Quake
+		intensity = 300 // Default fallback tipico di Quake
 	}
 
 	// COLORE (Standard Quake 2 / Modern Quake 1)

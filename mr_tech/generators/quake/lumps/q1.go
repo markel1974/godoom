@@ -10,6 +10,7 @@ import (
 
 // Q1BSPReader is a reader for Quake 1 BSP files, providing access to lump data and associated metadata.
 type Q1BSPReader struct {
+	reader      IReader
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	infos       []*LumpInfo
@@ -33,7 +34,8 @@ func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
 }
 
 // Setup initializes the Q1BSPReader by processing lump information and palette data from the provided file streams.
-func (q1 *Q1BSPReader) Setup() error {
+func (q1 *Q1BSPReader) Setup(reader IReader) error {
+	q1.reader = reader
 	var err error
 	if q1.infos, err = NewLumpInfos(q1.rs); err != nil {
 		return err

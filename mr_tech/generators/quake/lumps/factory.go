@@ -16,9 +16,13 @@ const (
 	BSPVersionQ2 BSPVersion = 38
 )
 
+type IReader interface {
+	Open(path string) (io.ReadSeeker, error)
+}
+
 // IBSPReader defines an interface for reading BSP files, enabling access to entities and other BSP structures.
 type IBSPReader interface {
-	Setup() error
+	Setup(r IReader) error
 
 	GetEntities() ([]*Entity, error)
 

@@ -49,7 +49,7 @@ func (p *Builder) Setup(pakPath string, level int) (*config.Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = reader.Setup(); err != nil {
+	if err = reader.Setup(pk); err != nil {
 		return nil, err
 	}
 	mIdx := 0

@@ -179,10 +179,8 @@ func (w *WAD) loadFlats() error {
 // loadSprites loads all sprite patches traversing all S_START/S_END or SS_START/SS_END blocks.
 func (w *WAD) loadSprites() error {
 	inSpriteBlock := false
-
 	for i, lumpInfo := range w.lumpInfos {
 		name := lumps.FixName(lumpInfo.Name)
-
 		// Entriamo in un blocco sprite
 		if name == "S_START" || name == "SS_START" {
 			inSpriteBlock = true
@@ -193,13 +191,11 @@ func (w *WAD) loadSprites() error {
 			inSpriteBlock = false
 			continue
 		}
-
 		// Se siamo nel blocco ed è un lump valido (non un marker vuoto)
 		if inSpriteBlock && lumpInfo.Size > 0 {
 			w.sprites[name] = i
 		}
 	}
-
 	return nil
 }
 
@@ -211,7 +207,7 @@ func (w *WAD) GetTexture(name string) (*lumps.Texture, bool) {
 
 // CreateTextures initializes and returns a Textures object populated with textures, flats, and sprites from the WAD.
 func (w *WAD) CreateTextures() *Textures {
-	t, _ := NewTextures()
+	t := NewTextures()
 	for name := range w.textures {
 		if data, err := w.GetTextureImage(name); err == nil {
 			t.Add(TextureCreateId(name), data)

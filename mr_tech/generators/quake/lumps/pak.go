@@ -179,6 +179,7 @@ func (pk *Pak) ReadDir(fullPath string) ([]string, error) {
 	return node.GetChildren(), nil
 }
 
+// ReadDirFilter filters directory entries at the specified path using a wildcard pattern and returns the matching names sorted.
 func (pk *Pak) ReadDirFilter(fullPath string, wildcard string) ([]string, error) {
 	r, err := regexp.Compile(wildcard)
 	if err != nil {

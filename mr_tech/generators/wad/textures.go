@@ -52,7 +52,7 @@ type Textures struct {
 }
 
 // NewTextures initializes and returns a new instance of Textures with preloaded animations and an empty resources map.
-func NewTextures() (*Textures, error) {
+func NewTextures() *Textures {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}
@@ -62,7 +62,7 @@ func NewTextures() (*Textures, error) {
 			t.animations[a] = v
 		}
 	}
-	return t, nil
+	return t
 }
 
 // Add adds a new texture to the Textures collection using the provided source ID and RGBA image, and returns the created Animations.
@@ -79,17 +79,6 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 			c := src.RGBAAt(x, y)
 			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
 			texture.Set(x, y, rgba)
-
-			/*
-				if c.A == 0 {
-					texture.Set(x, y, 0)
-				} else {
-					//rgb := int(c.R)*65536 + int(c.G)*256 + int(c.B)
-					rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | 0xff
-					texture.Set(x, y, rgba)
-				}
-
-			*/
 		}
 	}
 	t.resources[srcId] = texture
@@ -133,9 +122,9 @@ func (t *Textures) GetNames() []string {
 func (t *Textures) TextureCreateAnimation(id string) []string {
 	id = cleanId(id)
 	if animation, ok := t.animations[id]; ok {
-		var out []string
-		for _, i := range animation {
-			out = append(out, TextureCreateId(i))
+		out := make([]string, len(animation))
+		for idx, i := range animation {
+			out[idx] = TextureCreateId(i)
 		}
 		return out
 	}
@@ -148,11 +137,17 @@ func (t *Textures) TextureCreateAnimation(id string) []string {
 
 // FlatCreateAnimation generates a list of flattened animation IDs for a given texture ID, resolving nested animations recursively.
 func (t *Textures) FlatCreateAnimation(id string) []string {
+	//out := make([]string, len(_animationsBase[0]))
+	//for idx, i := range _animationsBase[0] {
+	//	out[idx] = FlatCreateId(i)
+	//}
+	//return out
+
 	id = cleanId(id)
 	if animation, ok := t.animations[id]; ok {
-		var out []string
-		for _, i := range animation {
-			out = append(out, FlatCreateId(i))
+		out := make([]string, len(animation))
+		for idx, i := range animation {
+			out[idx] = FlatCreateId(i)
 		}
 		return out
 	}

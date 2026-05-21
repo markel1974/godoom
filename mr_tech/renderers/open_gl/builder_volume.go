@@ -14,28 +14,24 @@ type VolumeRange struct {
 }
 
 type BuilderVolume struct {
-	tex       *Textures
-	fv        *FrameVertices
-	dc        *DrawCommands
-	fl        *FrameLights
-	dcRender  *DrawCommandsRender
-	mapBuilt  bool
-	cSky      *textures.Texture
-	volRanges map[*model.Volume]VolumeRange // CACHE DI CULLING
-	cal       *model.Calibration
+	tex      *Textures
+	fv       *FrameVertices
+	dc       *DrawCommands
+	fl       *FrameLights
+	dcRender *DrawCommandsRender
+	cSky     *textures.Texture
+	cal      *model.Calibration
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		tex:       tex,
-		dcRender:  NewDrawCommandsRender(),
-		fv:        NewFrameVertices(startBatchVertices),
-		dc:        NewDrawCommands(startFrameCommands),
-		fl:        NewFrameLights(256),
-		volRanges: make(map[*model.Volume]VolumeRange), // Inizializzazione
-		mapBuilt:  false,
-		cSky:      nil,
-		cal:       calibration,
+		tex:      tex,
+		dcRender: NewDrawCommandsRender(),
+		fv:       NewFrameVertices(startBatchVertices),
+		dc:       NewDrawCommands(startFrameCommands),
+		fl:       NewFrameLights(256),
+		cSky:     nil,
+		cal:      calibration,
 	}
 	return bv
 }
@@ -63,18 +59,31 @@ func (w *BuilderVolume) GetLights() ([]float32, int32) { return w.fl.GetLights()
 func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }
 
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
-	// Ripristina VBO e Comandi allo stato congelato
-	w.fv.Reset()
-	w.dc.Reset()
-	// Reset TOTALE del buffer luci ogni frame (le calcoliamo dinamicamente)
-	w.fl.DeepReset()
+	px, py, pz := vi.GetView()
+	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
+	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
+	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
+	camX, camY, camZ := float32(px), float32(pz), float32(-py)
 
-	if !w.mapBuilt {
-		w.fv.DeepReset()
-		w.dc.DeepReset()
-		w.cSky = nil
-		volumes := engine.GetVolumes()
-		for _, vol := range volumes.GetVolumes() {
+	w.pushQVolumes(engine.GetVolumes(), frustumFront)
+	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, camX, camY, camZ)
+	w.pushQThings(engine.GetThings(), frustumFront)
+
+	w.dcRender.Prepare(w.dc.GetDrawCommands())
+}
+
+// pushQVolumes queries geometry volumes within the specified frustums and processes them using the associated draw commands.
+func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
+	// Ripristina VBO e Comandi allo stato congelato
+	//w.fv.Reset()
+	//w.dc.Reset()
+
+	w.fv.DeepReset()
+	w.dc.DeepReset()
+	w.cSky = nil
+
+	queryGeom := func(object physics.IAABB) bool {
+		if vol, hasVol := object.(*model.Volume); hasVol {
 			startIdx := w.fv.GetIndicesLen()
 			faces, faceCount := vol.GetFaces()
 			for x := 0; x < faceCount; x++ {
@@ -87,8 +96,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 					w.cSky = tex
 					continue
 				}
-				layer, ok := w.tex.Get(tex)
-				if !ok {
+				layer, hasLayer := w.tex.Get(tex)
+				if !hasLayer {
 					continue
 				}
 				p := face.GetPoints()
@@ -99,58 +108,18 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 				w.fv.AddTriangle(id0, id1, id2)
 			}
 			endIdx := w.fv.GetIndicesLen()
-			if endIdx > startIdx {
-				w.volRanges[vol] = VolumeRange{start: startIdx, end: endIdx}
-			}
-		}
-		// Congeliamo SOLO Geometria e DrawCommands
-		w.fv.Freeze()
-		w.dc.Freeze()
-		w.mapBuilt = true
-	}
-
-	//const usFrustum = true
-
-	//if usFrustum {
-	px, py, pz := vi.GetView()
-
-	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
-	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
-	camX, camY, camZ := float32(px), float32(pz), float32(-py)
-	w.pushQVolumes(engine.GetVolumes(), frustumFront, frustumRear)
-	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, camX, camY, camZ)
-	w.pushQThings(engine.GetThings(), frustumFront, frustumRear)
-	//} else {
-	//	for _, vr := range w.volRanges {
-	//		w.dc.Compute(vr.start, vr.end)
-	//	}
-	//	for _, vl := range engine.GetLights().Get() {
-	//		w.fl.Create(vl)
-	//	}
-	//	tA, tC := engine.GetThings().GetActive()
-	//	for idx := 0; idx < tC; idx++ {
-	//		w.pushThing(tA[idx], w.fv, w.dc)
-	//	}
-	//}
-	w.dcRender.Prepare(w.dc.GetDrawCommands())
-}
-
-// pushQVolumes queries geometry volumes within the specified frustums and processes them using the associated draw commands.
-func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront, frustumRear *physics.Frustum) {
-	queryGeom := func(object physics.IAABB) bool {
-		if vol, ok := object.(*model.Volume); ok {
-			if vr, exists := w.volRanges[vol]; exists {
-				w.dc.Compute(vr.start, vr.end)
-			}
+			w.dc.Compute(startIdx, endIdx)
 		}
 		return false
 	}
 	volumes.QueryFrustum(frustumFront, queryGeom)
+
 }
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
 func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, camX, camY, camZ float32) {
+	w.fl.DeepReset()
+
 	w.fl.Prepare(camX, camY, camZ)
 	queryLights := func(object physics.IAABB) bool {
 		if l, ok := object.(*model.Light); ok {
@@ -162,7 +131,7 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 }
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront, frustumRear *physics.Frustum) {
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum) {
 	q := func(object physics.IAABB) bool {
 		if l, ok := object.(model.IThing); ok {
 			w.pushThing(l, w.fv, w.dc)

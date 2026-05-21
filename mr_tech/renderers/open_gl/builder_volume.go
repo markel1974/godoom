@@ -2,7 +2,6 @@ package open_gl
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
@@ -10,58 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
-
-type VisibleVols struct {
-	volumes          []*model.Volume
-	index            int
-	camX, camY, camZ float64
-}
-
-func NewVisibleVols(initSize int) *VisibleVols {
-	return &VisibleVols{
-		volumes: make([]*model.Volume, initSize),
-		index:   0,
-		camX:    0,
-		camY:    0,
-		camZ:    0,
-	}
-}
-
-func (vs *VisibleVols) Reset(maxLen int, camX, camY, camZ float64) {
-	vs.index = 0
-	vs.camX = camX
-	vs.camY = camY
-	vs.camZ = camZ
-	if maxLen >= len(vs.volumes) {
-		vs.volumes = make([]*model.Volume, maxLen*2)
-	}
-}
-
-func (vs *VisibleVols) At(index int) *model.Volume {
-	return vs.volumes[index]
-}
-
-func (vs *VisibleVols) Add(volume *model.Volume) {
-	vs.volumes[vs.index] = volume
-	vs.index++
-}
-
-func (vs *VisibleVols) Sort() {
-	sort.Sort(vs)
-}
-
-func (vs *VisibleVols) Len() int      { return vs.index }
-func (vs *VisibleVols) Swap(i, j int) { vs.volumes[i], vs.volumes[j] = vs.volumes[j], vs.volumes[i] }
-func (vs *VisibleVols) Less(i, j int) bool {
-	// Sorting Front-to-Back (Distanza Quadra Pura)
-	a := vs.volumes[i]
-	b := vs.volumes[j]
-	aX, aY, aZ := a.GetAABB().GetCentroid()
-	bX, bY, bZ := b.GetAABB().GetCentroid()
-	distA := (aX-vs.camX)*(aX-vs.camX) + (aY-vs.camY)*(aY-vs.camY) + (aZ-vs.camZ)*(aZ-vs.camZ)
-	distB := (bX-vs.camX)*(bX-vs.camX) + (bY-vs.camY)*(bY-vs.camY) + (bZ-vs.camZ)*(bZ-vs.camZ)
-	return distA < distB
-}
 
 type BuilderVolume struct {
 	tex        *Textures
@@ -72,7 +19,7 @@ type BuilderVolume struct {
 	cSky       *textures.Texture
 	cal        *model.Calibration
 	occBuffer  *OcclusionBuffer
-	visibleVol *VisibleVols
+	visibleVol *VisibleVolumes
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
@@ -152,7 +99,7 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 
 	counter := 0
 
-	// 3. Ingestione Hardware (Early-Z friendly)
+	// Ingestione Hardware (Early-Z friendly)
 	for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 		vol := w.visibleVol.At(vIdx)
 		startIdx := w.fv.GetIndicesLen()

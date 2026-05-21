@@ -3,128 +3,132 @@ package open_gl
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// OcclusionBuffer represents a low-resolution software rasterizer used for CPU-side early Z-culling.
-// It maps the 3D frustum into a 2D tile mask to prevent rendering geometry hidden behind front walls.
+// OcclusionBuffer represents a 2D depth buffer used for visibility testing within a 3D rendering pipeline.
 type OcclusionBuffer struct {
-	Width  int
-	Height int
-	Tiles  []bool // true means the tile is completely occluded by solid geometry
+	width  int
+	height int
+	depth  []float32 // Memorizza la distanza dalla telecamera (clipW)
 }
 
-// NewOcclusionBuffer creates an initialized buffer for CPU culling. A resolution of 256x144 or 128x72 is recommended.
+// NewOcclusionBuffer creates and returns a new OcclusionBuffer with the specified width and height, initializing its depth buffer.
 func NewOcclusionBuffer(width, height int) *OcclusionBuffer {
 	return &OcclusionBuffer{
-		Width:  width,
-		Height: height,
-		Tiles:  make([]bool, width*height),
+		width:  width,
+		height: height,
+		depth:  make([]float32, width*height),
 	}
 }
 
-// Clear resets the occlusion mask. Must be called at the beginning of each frame.
+// Clear resets all depth values in the occlusion buffer to the maximum float32 value.
 func (ob *OcclusionBuffer) Clear() {
-	for i := range ob.Tiles {
-		ob.Tiles[i] = false
+	for i := range ob.depth {
+		ob.depth[i] = math.MaxFloat32
 	}
 }
 
-// SetRect marks a 2D bounding box area as fully occluded in the buffer.
-func (ob *OcclusionBuffer) SetRect(minX, minY, maxX, maxY int) {
-	// Hardware clamping for safety against out-of-bounds array access
-	if minX < 0 {
-		minX = 0
-	}
-	if minY < 0 {
-		minY = 0
-	}
-	if maxX > ob.Width-1 {
-		maxX = ob.Width - 1
-	}
-	if maxY > ob.Height-1 {
-		maxY = ob.Height - 1
-	}
+// RasterizeTriangle rasterize a 3D triangle and updates the depth buffer for occlusion testing.
+func (ob *OcclusionBuffer) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]float32) {
+	pts := [3]geometry.XYZ{p0, p1, p2}
+	var sx, sy, sw [3]float32
 
-	for y := minY; y <= maxY; y++ {
-		rowOffset := y * ob.Width
-		for x := minX; x <= maxX; x++ {
-			ob.Tiles[rowOffset+x] = true
+	for i, pt := range pts {
+		x, y, z := float32(pt.X), float32(pt.Y), float32(pt.Z)
+		clipX := x*mvp[0] + y*mvp[4] + z*mvp[8] + mvp[12]
+		clipY := x*mvp[1] + y*mvp[5] + z*mvp[9] + mvp[13]
+		clipW := x*mvp[3] + y*mvp[7] + z*mvp[11] + mvp[15]
+
+		// Ignoriamo triangoli che attraversano la telecamera per sicurezza
+		if clipW <= 0.01 {
+			return
 		}
-	}
-}
 
-// IsOccluded checks if a 2D bounding box is completely hidden by previously rendered geometry.
-func (ob *OcclusionBuffer) IsOccluded(minX, minY, maxX, maxY int) bool {
-	if minX < 0 {
-		minX = 0
-	}
-	if minY < 0 {
-		minY = 0
-	}
-	if maxX > ob.Width-1 {
-		maxX = ob.Width - 1
-	}
-	if maxY > ob.Height-1 {
-		maxY = ob.Height - 1
+		ndcX := clipX / clipW
+		ndcY := clipY / clipW
+
+		sx[i] = (ndcX + 1.0) * 0.5 * float32(ob.width)
+		sy[i] = (-ndcY + 1.0) * 0.5 * float32(ob.height)
+		sw[i] = clipW
 	}
 
-	// If the clamped box is invalid or inverted, consider it occluded (out of screen bounds)
-	if minX > maxX || minY > maxY {
-		return true
+	minX := int(math.Max(0, math.Min(float64(sx[0]), math.Min(float64(sx[1]), float64(sx[2])))))
+	minY := int(math.Max(0, math.Min(float64(sy[0]), math.Min(float64(sy[1]), float64(sy[2])))))
+	maxX := int(math.Min(float64(ob.width-1), math.Max(float64(sx[0]), math.Max(float64(sx[1]), float64(sx[2])))))
+	maxY := int(math.Min(float64(ob.height-1), math.Max(float64(sy[0]), math.Max(float64(sy[1]), float64(sy[2])))))
+
+	// Troviamo la profondità PEGGIORATIVA (il punto più lontano del triangolo).
+	// Garantisce che l'occlusione sia conservativa (non culliamo mai per sbaglio)
+	maxW := sw[0]
+	if sw[1] > maxW {
+		maxW = sw[1]
+	}
+	if sw[2] > maxW {
+		maxW = sw[2]
 	}
 
 	for y := minY; y <= maxY; y++ {
-		rowOffset := y * ob.Width
+		fy := float32(y) + 0.5
+		rowOffset := y * ob.width
 		for x := minX; x <= maxX; x++ {
-			// If we find even one tile that is NOT occluded, the AABB is at least partially visible.
-			if !ob.Tiles[rowOffset+x] {
-				return false
+			fx := float32(x) + 0.5
+
+			// Edge-Function (Coordinate Baricentriche): verifica se il pixel 2D è DENTRO il triangolo
+			w01 := (sx[1]-sx[0])*(fy-sy[0]) - (sy[1]-sy[0])*(fx-sx[0])
+			w12 := (sx[2]-sx[1])*(fy-sy[1]) - (sy[2]-sy[1])*(fx-sx[1])
+			w20 := (sx[0]-sx[2])*(fy-sy[2]) - (sy[0]-sy[2])*(fx-sx[2])
+
+			// Supporta triangoli CW e CCW
+			isInside := (w01 >= 0 && w12 >= 0 && w20 >= 0) || (w01 <= 0 && w12 <= 0 && w20 <= 0)
+
+			// Se è dentro il triangolo, aggiorna lo Z-Buffer solo se è più vicino (o se era vuoto)
+			if isInside {
+				idx := rowOffset + x
+				if maxW < ob.depth[idx] {
+					ob.depth[idx] = maxW
+				}
 			}
 		}
 	}
-	// All tiles checked are true; the AABB is 100% occluded.
-	return true
 }
 
-// ProjectAABB transforms the 8 corners of your physics.AABB using a 4x4 MVP matrix and returns the 2D bounding box on the screen.
-func (ob *OcclusionBuffer) ProjectAABB(aabb *physics.AABB, mvp [16]float32) (minX, minY, maxX, maxY int, valid bool) {
-	// Retrieve the bounds natively from your AABB implementation
+// IsAABBOccluded determines if a given axis-aligned bounding box (AABB) is occluded based on the occlusion buffer and view matrix.
+func (ob *OcclusionBuffer) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) bool {
 	mX, mY, mZ := aabb.GetMinX(), aabb.GetMinY(), aabb.GetMinZ()
 	xX, xY, xZ := aabb.GetMaxX(), aabb.GetMaxY(), aabb.GetMaxZ()
 
-	corners := [8][3]float64{
-		{mX, mY, mZ}, {xX, mY, mZ}, {mX, xY, mZ}, {xX, xY, mZ},
-		{mX, mY, xZ}, {xX, mY, xZ}, {mX, xY, xZ}, {xX, xY, xZ},
+	corners := [8][3]float32{
+		{float32(mX), float32(mY), float32(mZ)}, {float32(xX), float32(mY), float32(mZ)}, {float32(mX), float32(xY), float32(mZ)}, {float32(xX), float32(xY), float32(mZ)},
+		{float32(mX), float32(mY), float32(xZ)}, {float32(xX), float32(mY), float32(xZ)}, {float32(mX), float32(xY), float32(xZ)}, {float32(xX), float32(xY), float32(xZ)},
 	}
 
 	minScrX, minScrY := float32(math.MaxFloat32), float32(math.MaxFloat32)
 	maxScrX, maxScrY := float32(-math.MaxFloat32), float32(-math.MaxFloat32)
-	validVertices := 0
+
+	// Troviamo la profondità MIGLIORATIVA (il punto dell'AABB più vicino al giocatore)
+	minW := float32(math.MaxFloat32)
 
 	for _, pt := range corners {
-		x := float32(pt[0])
-		y := float32(pt[1])
-		z := float32(pt[2])
-
-		// Vector Matrix Multiplication (ViewProjection)
-		clipW := x*mvp[3] + y*mvp[7] + z*mvp[11] + mvp[15]
-
-		// If w <= 0, the vertex is behind the camera (near plane clipping)
-		if clipW <= 0.001 {
-			continue
-		}
-
+		x, y, z := pt[0], pt[1], pt[2]
 		clipX := x*mvp[0] + y*mvp[4] + z*mvp[8] + mvp[12]
 		clipY := x*mvp[1] + y*mvp[5] + z*mvp[9] + mvp[13]
+		clipW := x*mvp[3] + y*mvp[7] + z*mvp[11] + mvp[15]
 
-		// Perspective Divide (Clip Space -> NDC Space: -1.0 to 1.0)
+		if clipW <= 0.01 {
+			return false // Se tocca la telecamera, ovviamente lo consideriamo visibile
+		}
+
+		if clipW < minW {
+			minW = clipW
+		}
+
 		ndcX := clipX / clipW
 		ndcY := clipY / clipW
 
-		// Map NDC to the OcclusionBuffer tile resolution
-		scrX := (ndcX + 1.0) * 0.5 * float32(ob.Width)
-		scrY := (-ndcY + 1.0) * 0.5 * float32(ob.Height) // Inverted Y for 2D screen space
+		scrX := (ndcX + 1.0) * 0.5 * float32(ob.width)
+		scrY := (-ndcY + 1.0) * 0.5 * float32(ob.height)
 
 		if scrX < minScrX {
 			minScrX = scrX
@@ -138,14 +142,30 @@ func (ob *OcclusionBuffer) ProjectAABB(aabb *physics.AABB, mvp [16]float32) (min
 		if scrY > maxScrY {
 			maxScrY = scrY
 		}
-
-		validVertices++
 	}
 
-	// If no vertices survived the w-divide (entire box is behind the player)
-	if validVertices == 0 {
-		return 0, 0, 0, 0, false
+	minX := int(math.Max(0, float64(minScrX)))
+	minY := int(math.Max(0, float64(minScrY)))
+	maxX := int(math.Min(float64(ob.width-1), float64(maxScrX)))
+	maxY := int(math.Min(float64(ob.height-1), float64(maxScrY)))
+
+	if minX > maxX || minY > maxY {
+		return true // Fuori dal frustum laterale
 	}
 
-	return int(minScrX), int(minScrY), int(maxScrX), int(maxScrY), true
+	// Testiamo la profondità contro lo Z-Buffer
+	for y := minY; y <= maxY; y++ {
+		rowOffset := y * ob.width
+		for x := minX; x <= maxX; x++ {
+			// Se il punto dell'AABB più vicino alla telecamera (minW) è MINORE della
+			// profondità del muro registrato in questo pixel, l'AABB sta DAVANTI al muro.
+			// Quindi NON è occluso.
+			if minW <= ob.depth[rowOffset+x] {
+				return false
+			}
+		}
+	}
+
+	// Se per tutti i pixel la profondità del buffer era minore di minW, l'oggetto è murato vivo!
+	return true
 }

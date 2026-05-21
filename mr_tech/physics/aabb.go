@@ -139,6 +139,14 @@ func (a *AABB) GetMaxX() float64 {
 	return a.maxX
 }
 
+// GetCentroid calculates and returns the centroid (center point) of the AABB as (x, y, z) coordinates.
+func (a *AABB) GetCentroid() (float64, float64, float64) {
+	x := (a.minX + a.maxX) * 0.5
+	y := (a.minY + a.maxY) * 0.5
+	z := (a.minZ + a.maxZ) * 0.5
+	return x, y, z
+}
+
 // GetSurfaceArea calculates and returns the total surface area of the axis-aligned bounding box (AABB).
 func (a *AABB) GetSurfaceArea() float64 {
 	w := a.maxX - a.minX

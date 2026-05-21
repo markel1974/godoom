@@ -271,7 +271,7 @@ func (s *SSAO) allocate(width, height int32) {
 	gl.GenFramebuffers(1, &s.bufferFbo)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
 
-	// Position + Depth (RGBA16F per precisione spaziale)
+	// Position + depth (RGBA16F per precisione spaziale)
 	gl.GenTextures(1, &s.positionDepth)
 	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
@@ -287,7 +287,7 @@ func (s *SSAO) allocate(width, height int32) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.normal, 0)
 
-	// Aggiungi il Depth Renderbuffer (ora salvato nella struct)
+	// Aggiungi il depth Renderbuffer (ora salvato nella struct)
 	gl.GenRenderbuffers(1, &s.rboDepth)
 	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepth)
 	gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height)

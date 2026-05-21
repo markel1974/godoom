@@ -42,7 +42,7 @@ func ParseWal(rs io.ReadSeeker) (*WalTexture, error) {
 	}
 
 	// Le texture .wal usano 1 byte per pixel (indice palette).
-	// La dimensione esatta è banalmente Width * Height
+	// La dimensione esatta è banalmente width * height
 	size := int(header.Width * header.Height)
 	pixels := make([]byte, size)
 

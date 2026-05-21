@@ -29,9 +29,9 @@ type FrameLights struct {
 	stride            int32
 	shadowLights      [ShadowLightNumber]*Light
 	shadowLightsIndex int32
-	camX              float32
-	camY              float32
-	camZ              float32
+	pX                float64
+	pY                float64
+	pZ                float64
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
@@ -83,8 +83,9 @@ func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*Light, int32) {
 }
 
 // Prepare resets the shadow lights index and updates the camera position values (camX, camY, camZ).
-func (f *FrameLights) Prepare(camX, camY, camZ float32) {
-	f.camX, f.camY, f.camZ = camX, camY, camZ
+func (f *FrameLights) Prepare(px, pY, pZ float64) {
+	//f.camX, f.camY, f.camZ = camX, camY, camZ
+	f.pX, f.pY, f.pZ = px, pY, pZ
 	f.shadowLightsIndex = 0
 }
 
@@ -97,7 +98,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	intensity := float32(light.GetIntensityStyled(textures.CurrentTick()))
 
 	falloff := float32(light.GetFalloff())
-	lightType := float32(-1)
+	lType := float32(-1)
 	posX, posY, posZ := light.GetPosXYZ()
 
 	switch light.GetKind() {
@@ -106,17 +107,21 @@ func (f *FrameLights) Create(light *model.Light) {
 		// lightType = 0
 		return
 	case config.LightKindAmbient:
-		lightType = 0
+		lType = 0
 	case config.LightKindSpot:
 		//const baseCutoff = 30.0
 		//const baseOuterCutOff = 40.0
-		lightType = 1
+		lType = 1
 		//dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
 		//cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
 		//outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
+		lPosX, lPosY, lPosZ := float32(posX), float32(posZ), float32(-posY)
+		camX, camY, camZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
 		added := f.addShadowLight(
-			float32(posX), float32(posZ), float32(-posY),
-			lightType, r, g, b, intensity,
+			lPosX, lPosY, lPosZ,
+			camX, camY, camZ,
+			lType,
+			r, g, b, intensity,
 			dirGlX, dirGlY, dirGlZ, falloff,
 			cutOff, outerCutOff,
 		)
@@ -126,11 +131,11 @@ func (f *FrameLights) Create(light *model.Light) {
 	case config.LightKindNone:
 		return
 	default:
-		lightType = 0
+		lType = 0
 	}
 
 	f.add(
-		float32(posX), float32(posZ), float32(-posY), lightType,
+		float32(posX), float32(posZ), float32(-posY), lType,
 		r, g, b, intensity,
 		dirGlX, dirGlY, dirGlZ, falloff,
 		cutOff, outerCutOff, 0.0, 0.0,
@@ -171,12 +176,14 @@ func (f *FrameLights) add(
 // addShadowLight adds a shadow-casting light to the list of frame lights based on its attributes and distance to the camera.
 // Returns true if the light was successfully added, or false if it didn't qualify or was replaced in the min-heap.
 func (f *FrameLights) addShadowLight(
-	posX, posY, posZ, lightType float32,
+	lPosX, lPosY, lPosZ float32,
+	camX, camY, camZ float32,
+	lightType float32,
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 ) bool {
-	dx, dy, dz := posX-f.camX, posY-f.camY, posZ-f.camZ
+	dx, dy, dz := lPosX-camX, lPosY-camY, lPosZ-camZ
 	distSq := dx*dx + dy*dy + dz*dz
 	if distSq > (falloff * falloff * 4.0) {
 		return false
@@ -185,7 +192,7 @@ func (f *FrameLights) addShadowLight(
 	// Fase 1: Riempimento iniziale (0-7)
 	if f.shadowLightsIndex < ShadowLightNumber {
 		light := f.shadowLights[f.shadowLightsIndex]
-		f.fillLightStruct(light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+		f.fillLightStruct(light, lPosX, lPosY, lPosZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 		f.shadowLightsIndex++
 		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
 		if f.shadowLightsIndex == ShadowLightNumber {
@@ -205,7 +212,7 @@ func (f *FrameLights) addShadowLight(
 		worst.DirX, worst.DirY, worst.DirZ, worst.Falloff,
 		worst.CutOff, worst.OuterCutOff, 0.0, 0.0,
 	)
-	f.fillLightStruct(worst, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+	f.fillLightStruct(worst, lPosX, lPosY, lPosZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 	// Ripristiniamo l'ordine dell'heap in O(log N)
 	f.minHeapFixDown(0, ShadowLightNumber)
 	return true

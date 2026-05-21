@@ -12,22 +12,28 @@ type OcclusionBuffer struct {
 	width  int
 	height int
 	depth  []float32 // Memorizza la distanza dalla telecamera (clipW)
+	void   []float32
 }
 
 // NewOcclusionBuffer creates and returns a new OcclusionBuffer with the specified width and height, initializing its depth buffer.
 func NewOcclusionBuffer(width, height int) *OcclusionBuffer {
-	return &OcclusionBuffer{
+	s := width * height
+	ob := &OcclusionBuffer{
 		width:  width,
 		height: height,
-		depth:  make([]float32, width*height),
+		depth:  make([]float32, s),
 	}
+	ob.void = make([]float32, len(ob.depth))
+	for i := range ob.void {
+		ob.void[i] = math.MaxFloat32
+	}
+	ob.Clear()
+	return ob
 }
 
 // Clear resets all depth values in the occlusion buffer to the maximum float32 value.
 func (ob *OcclusionBuffer) Clear() {
-	for i := range ob.depth {
-		ob.depth[i] = math.MaxFloat32
-	}
+	copy(ob.depth, ob.void)
 }
 
 // RasterizeTriangle rasterize a 3D triangle and updates the depth buffer for occlusion testing.

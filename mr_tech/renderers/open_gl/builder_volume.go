@@ -118,21 +118,25 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 
+	// Ripristina VBO e Comandi allo stato congelato
+	//w.fv.Reset()
+	//w.dc.Reset()
+
+	w.fv.DeepReset()
+	w.dc.DeepReset()
+	w.cSky = nil
+
 	//w.pushQVolumesOcclusion(engine.GetVolumes(), frustumFront, fm, px, py, pz)
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
 	w.pushQVolumesHardware(engine.GetVolumes(), frustumFront, px, py, pz)
-	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, px, py, pz)
-	w.pushQThings(engine.GetThings(), frustumFront)
+	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, fm, px, py, pz)
+	w.pushQThings(engine.GetThings(), frustumFront, fm)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 }
 
 // pushQVolumesHardware processes and sorts visible volumes within the frustum, preparing vertex and draw command buffers.
 func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFront *physics.Frustum, pX, pY, pZ float64) {
-	w.fv.DeepReset()
-	w.dc.DeepReset()
-	w.cSky = nil
-
 	//camX, camY, camZ := pX, pZ, -pY
 	camX, camY, camZ := pX, pY, pZ
 
@@ -187,10 +191,6 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 // pushQVolumes queries geometry volumes within the specified frustums, sorts them front-to-back,
 // and culls occluded geometry using a CPU software occlusion buffer.
 func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFront *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
-	w.fv.DeepReset()
-	w.dc.DeepReset()
-	w.cSky = nil
-
 	w.occBuffer.Clear()
 
 	//camX, camY, camZ := pX, pZ, -pY
@@ -207,7 +207,7 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 
 	counter := 0
 
-	// 4. Test di occlusione e ingestione facce
+	// Test di occlusione e ingestione facce
 	for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 		vol := w.visibleVol.At(vIdx)
 		aabb := vol.GetAABB()
@@ -255,14 +255,6 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 
 // pushQVolumes queries geometry volumes within the specified frustums and processes them using the associated draw commands.
 func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
-	// Ripristina VBO e Comandi allo stato congelato
-	//w.fv.Reset()
-	//w.dc.Reset()
-
-	w.fv.DeepReset()
-	w.dc.DeepReset()
-	w.cSky = nil
-
 	counter := 0
 
 	queryGeom := func(object physics.IAABB) bool {
@@ -302,21 +294,32 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 }
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare(pX, pY, pZ)
+	counter := 0
 	queryLights := func(object physics.IAABB) bool {
 		light := object.(*model.Light)
+		//if w.occBuffer.IsAABBOccluded(light.GetAABB(), mvp) {
+		//	return false
+		//}
 		w.fl.Create(light)
+		counter++
 		return false
 	}
 	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
+
+	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
 }
 
 // pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum) {
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
+	counter := 0
 	q := func(object physics.IAABB) bool {
 		thing := object.(model.IThing)
+		//if w.occBuffer.IsAABBOccluded(thing.GetAABB(), mvp) {
+		//	return false
+		//}
 		faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices()
 		if faceCount == 0 {
 			return false
@@ -347,10 +350,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		}
 		currentIndices := w.fv.GetIndicesLen()
 		w.dc.Compute(startIndices, currentIndices)
+		counter++
 		return false
 	}
 
 	things.QueryFrustum(frustumFront, q)
 
-	//fmt.Println("TOTAL THINGS", count)
+	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }

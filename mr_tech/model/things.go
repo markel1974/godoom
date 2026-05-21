@@ -80,6 +80,11 @@ func (th *Things) GetMaterials() *Materials {
 	return th.materials
 }
 
+// Len returns the number of elements in the container.
+func (th *Things) Len() int {
+	return len(th.container)
+}
+
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {

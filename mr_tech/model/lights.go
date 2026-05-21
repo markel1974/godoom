@@ -17,6 +17,11 @@ func NewLights() *Lights {
 	return l
 }
 
+// Len returns the number of Light objects contained in the Lights collection.
+func (l *Lights) Len() int {
+	return len(l.container)
+}
+
 // AddLights adds multiple Light objects to the Lights collection and inserts them into the spatial partitioning tree.
 func (l *Lights) AddLights(e []*Light) {
 	for _, light := range e {

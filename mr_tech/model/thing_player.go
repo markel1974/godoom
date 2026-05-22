@@ -282,10 +282,7 @@ func (p *ThingPlayer) StageApply() {
 		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
 		p.bobbing.InjectVerticalImpulse(prevVz)
 	}
-	// Fattore di allineamento per portare il 2.9 a ~60.0 fps o 120 fps...
-	const dt = 0.016 //0.016 per 60fps
-	//fmt.Printf("Vx: %f, Vy: %f, Speed: %f\n", p.entity.GetVx(), p.entity.GetVy(), p.speed)
-	p.bobbing.Compute(dt, p.speed, entity.GetVx(), entity.GetVy())
+	p.bobbing.Compute(entity.GetDt(), p.speed, entity.GetVx(), entity.GetVy())
 }
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.

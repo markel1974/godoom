@@ -120,6 +120,7 @@ type CollisionCage struct {
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64
 	eRadX, eRadY, eRadZ float64
+	volume              *Volume
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
@@ -129,6 +130,7 @@ func NewCollisionCage(thing IThing, margin, restitution, friction, gForce float6
 		margin:         margin,
 		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
 		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
+		volume:         nil,
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		for j := 0; j < FacesPerBucket; j++ {
@@ -165,6 +167,7 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 		s.counts[i] = 0
 		copy(s.faces[i][:], _emptyBucketFaces[:])
 	}
+	s.volume = nil
 }
 
 // GetThing retrieves the IThing instance associated with the CollisionCage.
@@ -175,6 +178,11 @@ func (s *CollisionCage) GetThing() IThing {
 // GetMargin returns the margin value associated with the CollisionCage.
 func (s *CollisionCage) GetMargin() float64 {
 	return s.margin
+}
+
+// GetVolume retrieves the volume associated with the CollisionCage. Returns nil if no volume is set.
+func (s *CollisionCage) GetVolume() *Volume {
+	return s.volume
 }
 
 // GetRad returns the radii of the ellipsoid in the X, Y, and Z dimensions.
@@ -322,5 +330,8 @@ func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, 
 	}
 	if dist < maxDist {
 		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
+		if volume := face.GetParent(); volume != nil {
+			s.volume = volume
+		}
 	}
 }

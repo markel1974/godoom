@@ -280,23 +280,17 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 
 // StageApply updates the entity's state by processing movement, grounding, and positional integration based on displacement.
 func (t *ThingBase) StageApply() {
+	if location := t.cage.GetVolume(); location != nil {
+		t.location = location
+	}
 	entity := t.vertices.GetEntity()
-	dx, dy, dz := entity.GetDisplacement()
+	isGrounded := t.cage.counts[BucketFloor] > 0
+	entity.SetOnGround(isGrounded)
 
+	dx, dy, dz := entity.GetDisplacement()
 	if t.deadZone(dx, dy, dz) {
 		return
 	}
-
-	// TRACKING PAVIMENTO (Grounding & Location)
-	isGrounded := false
-	if count := t.cage.counts[BucketFloor]; count > 0 {
-		isGrounded = true
-		if parent := t.cage.faces[BucketFloor][0].GetFace().GetParent(); parent != nil {
-			t.location = parent
-		}
-	}
-	// APPLICAZIONE STATO
-	entity.SetOnGround(isGrounded)
 	entity.AddTo(dx, dy, dz)
 }
 

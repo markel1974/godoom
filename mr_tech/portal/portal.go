@@ -165,7 +165,7 @@ func (r *Portal) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 	r.queue.Reset()
 
 	qHead := r.queue.GetHead()
-	qHead.Update(vi.GetVolume().GetSector(), wMin, wMax, -hMax, -hMax, hMax, hMax)
+	qHead.Update(vi.GetLocation().GetSector(), wMin, wMax, -hMax, -hMax, hMax, hMax)
 
 	var qTail *QueueItem
 

@@ -19,7 +19,7 @@ type IThing interface {
 
 	GetVertices() (*[]*Face, int, *[]*Face, int, float64, float64)
 
-	GetLocation() *Volume
+	//GetLocation() *Volume
 
 	GetVolume() *Volume
 

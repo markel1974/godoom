@@ -23,6 +23,8 @@ const (
 
 	// dt120 represents the fixed time step duration equivalent to 1/120th of a second.
 	dt120 float64 = 1.0 / 120.0
+
+	dt = dt60
 )
 
 // Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
@@ -71,7 +73,7 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce float64) *E
 		gForce:           gForce,
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,
-		dt:               dt60,
+		dt:               dt,
 		mass:             mass,
 		invMass:          invMass,
 		restitution:      restitution,
@@ -101,6 +103,11 @@ func (e *Entity) SetRect(rect *Rect) {
 // GetRect returns the Rect instance associated with the Entity, representing its position, size, and bounding box.
 func (e *Entity) GetRect() *Rect {
 	return e.rect
+}
+
+// GetDt retrieves the delta time (dt) value associated with the entity's current state.
+func (e *Entity) GetDt() float64 {
+	return e.dt
 }
 
 // Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.

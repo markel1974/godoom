@@ -25,7 +25,7 @@ type ViewMatrix struct {
 	roll            float64
 	pitch           float64
 	lightIntensity  float64
-	volume          *Volume
+	location        *Volume
 	swayX           float64
 	swayY           float64
 	swaySensitivity float64
@@ -44,7 +44,7 @@ func NewViewMatrix() *ViewMatrix {
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
 func (vi *ViewMatrix) Update(player *ThingPlayer) {
 	vi.angleSin, vi.angleCos = player.GetAngleFull()
-	vi.volume = player.GetLocation()
+	vi.location = player.GetLocation()
 	vi.view.X, vi.view.Y, vi.view.Z = player.GetVisualPosition()
 	vi.pitch = player.GetPitch()
 	vi.angle = player.GetAngle()
@@ -95,9 +95,9 @@ func (vi *ViewMatrix) GetLightIntensity() float64 {
 	return vi.lightIntensity
 }
 
-// GetVolume retrieves the Volume instance associated with the ViewMatrix.
-func (vi *ViewMatrix) GetVolume() *Volume {
-	return vi.volume
+// GetLocation retrieves the Volume instance associated with the ViewMatrix.
+func (vi *ViewMatrix) GetLocation() *Volume {
+	return vi.location
 }
 
 // ZDistance calculates the distance between the given value and the Z-coordinate of the ViewMatrix's position.

@@ -284,7 +284,7 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 		if math.Abs(nZ) > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
 		}
-		if s.cZ >= planeZ-maxCliff {
+		if s.cZ >= planeZ {
 			bucket = BucketFloor // is mathematically a Floor
 			if nZ < 0 {
 				nX, nY, nZ = -nX, -nY, -nZ

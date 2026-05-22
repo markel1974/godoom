@@ -2,7 +2,6 @@ package config
 
 // Calibration represents the configuration for map and rendering settings, including orthographic size and camera parameters.
 type Calibration struct {
-	Full3d             bool    `json:"full3d"`
 	OrthoSize          float64 `json:"orthoSize"`
 	MapCenterX         float64 `json:"mapCenterX"`
 	MapCenterZ         float64 `json:"mapCenterZ"`
@@ -27,9 +26,8 @@ type Calibration struct {
 // lightCamY specifies the Y-coordinate for the light camera.
 // zNearRoom and zFarRoom determine near and far plane distances for the room.
 // auto defines whether to enable automatic calibration.
-func NewConfigCalibration(full3d bool, orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoom, zFarRoom float64, auto bool) *Calibration {
+func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoom, zFarRoom float64, auto bool) *Calibration {
 	c := &Calibration{
-		Full3d:     full3d,
 		OrthoSize:  orthoSize,
 		MapCenterX: mapCenterX,
 		MapCenterZ: mapCenterZ,

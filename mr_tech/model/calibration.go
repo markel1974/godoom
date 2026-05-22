@@ -11,7 +11,6 @@ type Calibration struct {
 	ZNearRoom          float64
 	ZFarRoom           float64
 	Auto               bool
-	Full3d             bool
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	ShininessWall      float64
@@ -33,7 +32,6 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		ZNearRoom:          cfg.ZNearRoom,
 		ZFarRoom:           cfg.ZFarRoom,
 		Auto:               cfg.Auto,
-		Full3d:             cfg.Full3d,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		ShininessWall:      cfg.ShininessWall,

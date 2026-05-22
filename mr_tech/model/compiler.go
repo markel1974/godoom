@@ -44,8 +44,6 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		r.gScale.Z = 1
 	}
 
-	full3d := cfg.Calibration.Full3d
-
 	cfg.Scale(r.gScale)
 	materials := NewMaterials(cfg.GetTextures())
 	r.lights = NewLights()
@@ -89,7 +87,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	r.volumes.Setup()
 
 	r.lights.AddLights(r.compileLights(cfg.Lights))
-	r.things = NewThings(full3d, r.gScale, 10, cfg.Things, r.volumes, materials)
+	r.things = NewThings(r.gScale, 10, cfg.Things, r.volumes, materials)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
 		return fmt.Errorf("player not found")

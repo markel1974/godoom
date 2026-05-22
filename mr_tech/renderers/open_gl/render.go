@@ -99,14 +99,14 @@ func (w *RenderOpenGL) doInitialize() error {
 		cal := w.engine.GetCalibration()
 		w.tex = NewTextures()
 		w.buildersCounter = 0
-		if cal.Full3d {
-			w.player.SetPitchOptions(-1.5, 1.5, 0.01)
-			w.builder = NewBuilderVolume(w.tex, cal)
-			w.builders = append(w.builders, w.builder)
-		} else {
-			w.builder = NewBuilderTraverse(w.tex, cal)
-			w.builders = append(w.builders, w.builder, NewBuilderScene(w.tex))
-		}
+		//if cal.Full3d {
+		w.player.SetPitchOptions(-1.5, 1.5, 0.01)
+		w.builder = NewBuilderVolume(w.tex, cal)
+		w.builders = append(w.builders, w.builder)
+		//} else {
+		//	w.builder = NewBuilderTraverse(w.tex, cal)
+		//	w.builders = append(w.builders, w.builder, NewBuilderScene(w.tex))
+		//}
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
 		w.shaders = NewShaders()

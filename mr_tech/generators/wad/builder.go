@@ -131,7 +131,7 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 	}
 
 	player := bld.buildPlayer(level)
-	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = AspectRatio
 	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1.0}
 	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)

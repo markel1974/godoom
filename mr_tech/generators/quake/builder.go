@@ -73,7 +73,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 
 	var playerAngle float64
 	var playerPos geometry.XYZ
-	cal := config.NewConfigCalibration(true, 0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	//cal.Auto = false
 	//cal.OrthoSize = 32092
 	//cal.LightCamY = 8000

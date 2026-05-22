@@ -16,7 +16,6 @@ const solverJitter = 1e-6
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	gScale           geometry.XYZ
-	full3d           bool
 	config           []*config.Thing
 	volumes          *Volumes
 	materials        *Materials
@@ -37,12 +36,11 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(full3d bool, gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
 		solverIterations: solverIterations,
-		full3d:           full3d,
 		tree:             physics.NewAABBTree(uint(len(cfg)*2), 4.0),
 		entities:         make(map[int]IThing),
 		identifier:       0,

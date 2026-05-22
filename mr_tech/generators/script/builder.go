@@ -42,7 +42,7 @@ func (p *Builder) Build(id string) (*config.Root, error) {
 	player.OnCollision = playerLogic.OnCollision
 	player.Speed = 60
 
-	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
 

@@ -83,7 +83,7 @@ func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error
 	if tErr != nil {
 		return nil, tErr
 	}
-	cal := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = AspectRatio
 	scaleFactor := geometry.XYZ{X: 15.0, Y: 15.0, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texProvider)

@@ -339,7 +339,7 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 		}
 	}
 
-	calibration := config.NewConfigCalibration(false, 0, 0, 0, 0, 0, 0, true)
+	calibration := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	calibration.AspectRatio = aspectRatio
 	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
 	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, archive.GetTextures())

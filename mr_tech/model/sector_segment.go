@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// Segment represents a 3D segment with defined points, materials, and spatial relationships to sectors and bounding data.
 type Segment struct {
 	points    [3]geometry.XYZ
 	minZ      float64
@@ -18,6 +19,7 @@ type Segment struct {
 	aabb      *physics.AABB
 }
 
+// NewSegment creates and initializes a new Segment with the specified neighbor, start/end points, tag, and materials.
 func NewSegment(neighbor *Sector, start geometry.XY, end geometry.XY, tag string, materials []*textures.Material) *Segment {
 	out := &Segment{
 		neighbor:  neighbor,
@@ -37,45 +39,52 @@ func NewSegment(neighbor *Sector, start geometry.XY, end geometry.XY, tag string
 	return out
 }
 
+// GetTag returns the tag associated with the Segment instance.
 func (s *Segment) GetTag() string {
 	return s.tag
 }
 
+// GetParent retrieves the parent Sector instance associated with the Segment. Returns a pointer to the Sector.
 func (s *Segment) GetParent() *Sector {
 	return s.parent
 }
 
+// SetParent sets the parent Sector for the Segment instance.
 func (s *Segment) SetParent(parent *Sector) {
 	s.parent = parent
 }
 
+// GetAABB returns the axis-aligned bounding box (AABB) for the segment.
 func (s *Segment) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
+// GetNeighbor retrieves the neighboring Sector of the current Segment. Returns a pointer to the Neighbor Sector.
 func (s *Segment) GetNeighbor() *Sector {
 	return s.neighbor
 }
 
+// SetNeighbor sets the neighboring Sector instance for the Segment. This defines spatial adjacency between segments.
 func (s *Segment) SetNeighbor(neighbor *Sector) {
 	s.neighbor = neighbor
 }
 
-// GetStart returns the first point of the segment as a geometry.XYZ value.
+// GetStart returns the first point in the segment as a geometry.XYZ structure.
 func (s *Segment) GetStart() geometry.XYZ {
 	return s.points[0]
 }
 
-// GetMiddle retrieves the middle point (geometry.XYZ) of the Face from its predefined points array.
+// GetMiddle returns the middle point of the segment as a geometry.XYZ object.
 func (s *Segment) GetMiddle() geometry.XYZ {
 	return s.points[1]
 }
 
-// GetEnd returns the last point of the segment as a geometry.XYZ value.
+// GetEnd returns the endpoint of the segment as a geometry.XYZ object.
 func (s *Segment) GetEnd() geometry.XYZ {
 	return s.points[2]
 }
 
+// SetZ sets the minimum and maximum Z values for the segment and updates its points' Z values before rebuilding it.
 func (s *Segment) SetZ(minZ, maxZ float64) {
 	s.minZ = minZ
 	s.maxZ = maxZ
@@ -85,21 +94,24 @@ func (s *Segment) SetZ(minZ, maxZ float64) {
 	s.Rebuild()
 }
 
-// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
+// Rebuild recalculates and updates the segment's axis-aligned bounding box (AABB) to reflect current geometry.
 func (s *Segment) Rebuild() {
 	s.computeAABB()
 }
 
+// GetPoints returns the three points defining the segment as an array of geometry.XYZ.
 func (s *Segment) GetPoints() [3]geometry.XYZ {
 	return s.points
 }
 
+// GetMaterialIndex returns a material based on the given index m, cycling through available materials in the Segment.
 func (s *Segment) GetMaterialIndex(m int) *textures.Material {
 	//0 Upper, 1 Middle, 2 Lower
 	idx := m % len(s.materials)
 	return s.materials[idx]
 }
 
+// PointInLineSide determines if the point (px, py) is on the positive side of the line segment defined by the segment's start and end.
 func (s *Segment) PointInLineSide(px, py float64) bool {
 	start := s.GetStart()
 	end := s.GetEnd()
@@ -110,7 +122,7 @@ func (s *Segment) PointInLineSide(px, py float64) bool {
 	return true
 }
 
-// computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
+// computeAABB calculates the Axis-Aligned Bounding Box (AABB) for the segment based on its points and Z bounds.
 func (s *Segment) computeAABB() {
 	const eps = 0.001
 	minX, minY, minZ := s.points[0].X, s.points[0].Y, s.points[0].Z

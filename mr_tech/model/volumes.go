@@ -94,14 +94,8 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// LocateVolume finds and returns the volume containing the point (px, py, pz). It uses 3D or 2D lookup based on the fullZ flag.
-func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
-	v, _ := s.locateVolume(px, py, pz)
-	return v
-}
-
-// LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
-func (s *Volumes) locateVolume(px, py, pz float64) (*Volume, *Face) {
+// QueryPoint identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
+func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 	var bestVol *Volume
 	var bestFace *Face
 	var minZDist = math.MaxFloat64

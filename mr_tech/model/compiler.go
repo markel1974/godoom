@@ -58,7 +58,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		locator := NewSectors(sectors, false)
 		locator.Setup()
 		//player Z
-		pv := locator.LocateSector(cfg.Player.Position.X, cfg.Player.Position.Y)
+		pv := locator.QueryPoint(cfg.Player.Position.X, cfg.Player.Position.Y)
 		if pv == nil {
 			return fmt.Errorf("can't find 2d player location at X: %f Y: %f", cfg.Player.Position.X, cfg.Player.Position.Y)
 		}
@@ -66,7 +66,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		//things Z
 		for idx := range cfg.Things {
 			tx, ty := cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y
-			tv := locator.LocateSector(tx, ty)
+			tv := locator.QueryPoint(tx, ty)
 			if tv == nil {
 				fmt.Println("can't find thing location at", tx, ty)
 				continue
@@ -674,7 +674,7 @@ func (r *Compiler) compileLights2d(locator *Sectors, computeCenter bool) []*Ligh
 					s.light.pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := locator.LocateSector(first.light.pos.X, first.light.pos.Y)
+				cVolume := locator.QueryPoint(first.light.pos.X, first.light.pos.Y)
 				if cVolume == nil {
 					cVolume = first
 					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.light.pos.X, first.light.pos.Y, first.light.pos.Z)

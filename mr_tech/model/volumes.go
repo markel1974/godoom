@@ -96,26 +96,26 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 
 // LocateVolume finds and returns the volume containing the point (px, py, pz). It uses 3D or 2D lookup based on the fullZ flag.
 func (s *Volumes) LocateVolume(px, py, pz float64) *Volume {
-	v, _ := s.locateVolume3d(px, py, pz)
+	v, _ := s.locateVolume(px, py, pz)
 	return v
 }
 
 // LocateVolume3d identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
-func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
+func (s *Volumes) locateVolume(px, py, pz float64) (*Volume, *Face) {
 	var bestVol *Volume
 	var bestFace *Face
-	var minZDist = math.MaxFloat64 // Per trovare il pavimento più vicino sotto ai piedi
+	var minZDist = math.MaxFloat64
 	// Broad-Phase Globale: troviamo i volumi il cui AABB 3D contiene il punto
 	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
-		volume, volumeOk := object.(*Volume)
-		if !volumeOk {
-			return false
+		volume := object.(*Volume)
+		if bestVol == nil {
+			bestVol = volume
 		}
 		// Broad-Phase Locale
 		volume.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			face, faceOk := object.(*Face)
-			if !faceOk {
-				return false
+			face := object.(*Face)
+			if bestFace == nil {
+				bestFace = face
 			}
 			norm := face.GetNormal()
 			// Filtro Topologico: Selezioniamo solo i pavimenti (Normal Z negativa)
@@ -138,7 +138,6 @@ func (s *Volumes) locateVolume3d(px, py, pz float64) (*Volume, *Face) {
 					bestVol = volume
 					bestFace = face
 				}
-				// Ritorniamo false per far finire il ciclo locale e testare altri eventuali pavimenti sovrapposti
 				return false
 			}
 			return false
@@ -160,71 +159,3 @@ func (s *Volumes) QueryAABB(aabb physics.IAABB, callback func(vol *Volume)) {
 		return false
 	})
 }
-
-/*
-// LocateVolume3d trova il location 3D che contiene il punto (px, py, pz) e
-// restituisce sia il Volume che la Faccia di riferimento (es. il pavimento sotto al punto).
-func (s *Volumes) LocateVolume3d(px, py, pz float64) (*Volume, *Face) {
-	var targetVol *Volume
-	var targetFace *Face
-
-	// 1. Broad-Phase Globale: troviamo il location 3D
-	s.tree.QueryPoint3d(px, py, pz, func(object physics.IAABB) bool {
-		location, volumeOk := object.(*Volume)
-		if !volumeOk {
-			return false
-		}
-		location.facesTree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-			face, faceOk := object.(*Face)
-			if !faceOk {
-				return false
-			}
-			// Filtro Topologico: Selezioniamo solo le facce che fungono da pavimento.
-			// Nei poliedri convessi con normali rivolte verso l'esterno,
-			// il pavimento ha la normale Z rivolta verso il basso (negativa).
-			if face.GetNormal().Z >= -0.001 {
-				return false // Scarta muri (Z≈0) e soffitti (Z>0)
-			}
-			// Verifica Esatta: il punto cade verticalmente dentro questo specifico triangolo?
-			if face.PointInTriangle3d(px, py, pz) {
-				targetVol = location
-				targetFace = face
-				return true
-			}
-			return false
-		})
-		if targetFace != nil {
-			return true
-		}
-		return false
-	})
-	return targetVol, targetFace
-}
-*/
-
-/*
-// QueryClosestFace identifies the closest intersecting face during a swept volume test within the given AABB.
-// Returns the closest face, normal vector (colNx, colNy, colNz), and intersection distance (minT).
-func (s *Volumes) QueryClosestFace(z physics.IAABB, viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eRadZ float64) (*Face, float64, float64, float64, float64) {
-	var closestFace *Face = nil
-	minT := 1.0
-	var colNx, colNy, colNz float64
-	s.QueryAABB(z, func(vol *Volume) {
-		vol.facesTree.QueryOverlaps(z, func(object physics.IAABB) bool {
-			face, ok := object.(*Face)
-			if !ok {
-				return false
-			}
-			hitT, cNx, cNy, cNz, hit := face.SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eRadZ)
-			if hit && hitT <= minT {
-				minT = hitT
-				closestFace = face
-				colNx, colNy, colNz = cNx, cNy, cNz
-			}
-			return false
-		})
-	})
-	return closestFace, colNx, colNy, colNz, minT
-}
-
-*/

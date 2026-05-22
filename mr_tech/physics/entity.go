@@ -81,7 +81,7 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce float64) *E
 	a.SetFriction(friction)
 	a.SetAirFriction(airFriction)
 	a.SetMaxVelocity(minThickness, safetyMargin)
-	a.SetOnGround(true)
+	a.SetOnGround(false)
 	return a
 }
 

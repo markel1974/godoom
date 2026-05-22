@@ -63,6 +63,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		for _, ct := range cfg {
 			volume := e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
 			if volume == nil {
+				//volume = e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
 				fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
 				continue
 			}
@@ -170,7 +171,9 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 		thing = NewThingItem(th, ct, volume)
 	}
 
-	thing.GetEntity().MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+	entity := thing.GetEntity()
+	entity.SetOnGround(false)
+	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
 }
 

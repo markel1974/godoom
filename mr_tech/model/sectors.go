@@ -41,11 +41,13 @@ func (s *Sectors) GetSectors() []*Sector {
 func (s *Sectors) LocateSector(px, py float64) *Sector {
 	var target *Sector = nil
 	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
-		if sector, ok := object.(*Sector); ok {
-			if sector.PointInLineSide(px, py) {
-				target = sector
-				return true
-			}
+		sector := object.(*Sector)
+		if target == nil {
+			target = sector
+		}
+		if sector.PointInLineSide(px, py) {
+			target = sector
+			return true
 		}
 		return false
 	})

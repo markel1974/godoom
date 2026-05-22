@@ -62,7 +62,9 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchSens:      0.05,
 	}
 	thing.ThingBase = NewThingBase(thing, things, c.Thing, volume)
-	thing.GetEntity().MoveTo(c.Position.X, c.Position.Y, c.Position.Z)
+	entity := thing.GetEntity()
+	entity.SetOnGround(false)
+	entity.MoveTo(c.Position.X, c.Position.Y, c.Position.Z)
 	thing.SetAngle(c.Angle)
 	return thing
 }

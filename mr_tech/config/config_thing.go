@@ -74,3 +74,29 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)
 }
+
+func (t *Thing) Clone() *Thing {
+	return &Thing{
+		Id:             t.Id,
+		Position:       t.Position,
+		Kind:           t.Kind,
+		Angle:          t.Angle,
+		Mass:           t.Mass,
+		Restitution:    t.Restitution,
+		Friction:       t.Friction,
+		Radius:         t.Radius,
+		Height:         t.Height,
+		Speed:          t.Speed,
+		Acceleration:   t.Acceleration,
+		JumpForce:      t.JumpForce,
+		Pitch:          t.Pitch,
+		WakeUpDistance: t.WakeUpDistance,
+		GForce:         t.GForce,
+		MD1:            t.MD1,
+		MultiSprite:    t.MultiSprite,
+		Sprite:         t.Sprite,
+		OnThinking:     t.OnThinking,
+		OnCollision:    t.OnCollision,
+		OnImpact:       t.OnImpact,
+	}
+}

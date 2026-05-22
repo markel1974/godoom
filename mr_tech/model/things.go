@@ -88,20 +88,14 @@ func (th *Things) Len() int {
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
-		thing, volOk := object.(IThing)
-		if !volOk {
-			return false
-		}
+		thing := object.(IThing)
 		if cage.GetThing() == thing {
 			return false
 		}
 		targetX, targetY, targetZ := thing.GetBottomLeft()
 		localAABB := cage.Translate(targetX, targetY, targetZ)
 		thing.GetVolume().QueryOverlaps(localAABB, func(otherEnt physics.IAABB) bool {
-			face, faceOk := otherEnt.(*Face)
-			if !faceOk {
-				return false
-			}
+			face := otherEnt.(*Face)
 			cage.AddFace(face, maxCliff, targetX, targetY, targetZ)
 			return false
 		})
@@ -184,26 +178,28 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
 func (th *Things) CreateThrowable(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
-	//TODO now is an hack
-	//const throwableIndex = 2
 	if len(th.config) <= throwableIndex {
 		return
 	}
 	src := th.config[throwableIndex]
-	id := utils.NextUUId()
-	dst := config.NewConfigThing(id, pos, angle, config.ThingThrowableDef, src.Mass, src.Radius, src.Radius, speed)
-	dst.Sprite = src.Sprite
-	dst.MultiSprite = src.MultiSprite
-	dst.MD1 = src.MD1
+	dst := src.Clone()
+	dst.Id = utils.NextUUId()
+	dst.Kind = config.ThingThrowableDef
+	dst.Position = pos
+	dst.Angle = angle
+	dst.Pitch = pitch
+	dst.Speed = speed
 	dst.OnCollision = onCollision
 	dst.OnImpact = onImpact
-	dst.Pitch = pitch
 	slot := th.pendingIdx.Add(1) - 1
 	if slot >= int32(len(th.pending)) {
 		fmt.Println("max slot reached!")
 		return
 	}
-	th.pending[slot] = th.createThing(dst, volume)
+	throwable := th.createThing(dst, volume)
+	throwable.SetOnGround(false)
+
+	th.pending[slot] = throwable
 	th.hasPending = true
 }
 

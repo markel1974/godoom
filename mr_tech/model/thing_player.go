@@ -47,6 +47,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		panic("player mass must be positive")
 	}
 	c.Id = "PLAYER"
+
 	c.Position = geometry.XYZ{X: c.Position.X, Y: c.Position.Y, Z: c.Position.Z}
 	thing := &ThingPlayer{
 		kind:           0,

@@ -4,16 +4,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 )
 
-// ThingType defines an enumeration type representing different kinds of objects or entities in the system.
+// ThingType defines an enumeration for the various types of objects or entities within the system.
 type ThingType int
 
-// ThingUnknownDef represents an unknown or default type of Thing.
-// ThingPlayerDef represents a player Thing type.
-// ThingEnemyDef represents an enemy Thing type.
-// ThingWeaponDef represents a weapon Thing type.
-// ThingBulletDef represents a bullet Thing type.
-// ThingKeyDef represents a key Thing type.
-// ThingItemDef represents an item Thing type.
+// ThingUnknownDef represents the default undefined type for a thing.
+// ThingPlayerDef represents a player entity type.
+// ThingEnemyDef represents an enemy entity type.
+// ThingWeaponDef represents a weapon entity type.
+// ThingBulletDef represents a bullet entity type.
+// ThingThrowableDef represents a throwable object entity type.
+// ThingKeyDef represents a key entity type.
+// ThingItemDef represents a general item entity type.
 const (
 	ThingUnknownDef = ThingType(iota)
 	ThingPlayerDef
@@ -25,7 +26,7 @@ const (
 	ThingItemDef
 )
 
-// Thing represents a physical or logical entity with position, dimensions, motion properties, and optional animations or models.
+// Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
 	Id             string       `json:"id"`
 	Position       geometry.XYZ `json:"position"`
@@ -51,7 +52,7 @@ type Thing struct {
 	OnImpact    ImpactFunc
 }
 
-// NewConfigThing creates and returns a pointer to a new Thing instance initialized with the provided parameters.
+// NewConfigThing creates and returns a new Thing instance with the specified ID, position, angle, type, and physical attributes.
 func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64) *Thing {
 	return &Thing{
 		Id:             id,
@@ -70,11 +71,12 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 	}
 }
 
-// Scale adjusts the position of the Thing by scaling its X, Y, and Z components using the specified scale factor.
+// Scale applies the given scaling factors to the Position of the Thing by modifying its X, Y, and Z coordinates.
 func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)
 }
 
+// Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
 	return &Thing{
 		Id:             t.Id,

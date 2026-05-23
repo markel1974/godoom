@@ -242,38 +242,36 @@ func (t *ThingBase) StageCompute() {
 // StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
 // solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
 func (t *ThingBase) StageResolve(solverJitter float64) {
+	slotsLen := t.cage.GetSlotsLen()
+	if slotsLen == 0 {
+		return
+	}
 	tX, tY, tZ := t.cage.GetT()
-	for bucket := BucketType(0); bucket < BucketSize; bucket++ {
-		count := t.cage.counts[bucket]
-		if count == 0 {
+	for i := 0; i < slotsLen; i++ {
+		entry := t.cage.GetSlot(i)
+		otherFace := entry.GetFace()
+		nX, nY, nZ := entry.GetNormal()
+		rEff := entry.GetREff()
+
+		// Lettura delle coordinate in WORLD SPACE tradotte dalla Cage
+		p0X := entry.p0X
+		p0Y := entry.p0Y
+		p0Z := entry.p0Z
+
+		distTarget := (tX-p0X)*nX + (tY-p0Y)*nY + (tZ-p0Z)*nZ
+		if distTarget >= rEff {
 			continue
 		}
-		for j := 0; j < count; j++ {
-			entry := t.cage.faces[bucket][j]
-			otherFace := entry.GetFace()
-			nX, nY, nZ := entry.GetNormal()
-			rEff := entry.GetREff()
 
-			// Lettura delle coordinate in WORLD SPACE tradotte dalla Cage
-			p0X := entry.p0X
-			p0Y := entry.p0Y
-			p0Z := entry.p0Z
+		penetration := (rEff - distTarget) + solverJitter
+		otherParent := otherFace.GetParent()
+		otherParentEnt := otherParent.GetEntity()
 
-			distTarget := (tX-p0X)*nX + (tY-p0Y)*nY + (tZ-p0Z)*nZ
-			if distTarget >= rEff {
-				continue
-			}
+		// Delega totale e assoluta al solutore interno di physics
+		t.vertices.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
-			penetration := (rEff - distTarget) + solverJitter
-			otherParent := otherFace.GetParent()
-			otherParentEnt := otherParent.GetEntity()
-
-			// Delega totale e assoluta al solutore interno di physics
-			t.vertices.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
-
-			if thing := otherParent.GetThing(); thing != nil {
-				t.onCollision(t, thing)
-			}
+		if thing := otherParent.GetThing(); thing != nil {
+			t.onCollision(t, thing)
 		}
 	}
 }

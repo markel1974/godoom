@@ -7,6 +7,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+// TODO LA COLLISION CAGE NON DEVE CONTENERE MAXCLIFF, ma deve essere risolta in stage resolve
+
+// TODO TROVARE UN MODO PER EVITARE DI ITERARE SU TUTTE I BUCKET ANCHE QUELLO NON SETTATI
+
 // BucketType represents a categorization of spatial partitions such as walls, ceilings, and floors in a 3D space.
 type BucketType int
 
@@ -50,10 +54,12 @@ func (p BucketType) String() string {
 const (
 	BucketSize     = BucketFloor + 1
 	FacesPerBucket = 4
+	TotalSlots     = BucketSize * FacesPerBucket
 )
 
 // _emptyBucketFaces is a pre-defined array of nil CageEntry pointers representing an empty state for bucket initialization.
 var _emptyBucketFaces = [FacesPerBucket]*CageEntry{nil, nil, nil, nil}
+var _emptySlots = make([]*CageEntry, TotalSlots)
 
 // CageEntry represents a structure containing collision-related attributes, such as the face, distance, and effective radius.
 type CageEntry struct {
@@ -122,6 +128,9 @@ type CollisionCage struct {
 	eRadX, eRadY, eRadZ float64
 	volume              *Volume
 	minDistSurfTarget   float64
+
+	slots    []*CageEntry
+	slotsLen int
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
@@ -132,6 +141,8 @@ func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 		ellipsoid:      physics.NewEntity(0, 0, 0, 0),
 		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0),
 		volume:         nil,
+		slots:          make([]*CageEntry, TotalSlots),
+		slotsLen:       0,
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		for j := 0; j < FacesPerBucket; j++ {
@@ -168,8 +179,22 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 		s.counts[i] = 0
 		copy(s.faces[i][:], _emptyBucketFaces[:])
 	}
+
 	s.volume = nil
 	s.minDistSurfTarget = math.MaxFloat32
+
+	copy(s.slots, _emptySlots)
+	s.slotsLen = 0
+}
+
+// GetSlotsLen returns the current number of slots being utilized in the CollisionCage.
+func (s *CollisionCage) GetSlotsLen() int {
+	return s.slotsLen
+}
+
+// GetSlot retrieves the CageEntry at the specified index from the CollisionCage's slot array.
+func (s *CollisionCage) GetSlot(i int) *CageEntry {
+	return s.slots[i]
 }
 
 // GetThing retrieves the IThing instance associated with the CollisionCage.
@@ -331,6 +356,8 @@ func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, 
 		target.Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
 		s.faces[bucket][idx] = target
 		s.counts[bucket]++
+		s.slots[s.slotsLen] = target
+		s.slotsLen++
 		return
 	}
 	maxIdx := 0

@@ -36,6 +36,10 @@ type Sector struct {
 
 // NewSector creates and returns a pointer to a new Sector with specified parameters such as id, bounds, and materials.
 func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*textures.Material, tag string) *Sector {
+	const concreteMass = 0.0
+	const concreteRestitution = 0.0
+	const concreteFriction = 0.2
+	const concreteGForce = 9.8
 	s := &Sector{
 		modelId:      modelId,
 		id:           id,
@@ -46,7 +50,7 @@ func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*
 		segments:     make([]*Segment, 128),
 		segmentCount: 0,
 		light:        nil,
-		entity:       physics.NewEntity(0, 0, 0, 0, 0, 0, 0, solidRestitution, solidFriction, solidGForce),
+		entity:       physics.NewEntity(concreteMass, concreteRestitution, concreteFriction, concreteGForce),
 		segmentsTree: physics.NewAABBTree(64, 0.0),
 		slopeF:       nil,
 		slopeC:       nil,

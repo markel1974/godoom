@@ -57,7 +57,7 @@ type Entity struct {
 }
 
 // NewEntity creates and returns a pointer to a new Entity initialized with the given position, size, mass, and physical properties.
-func NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce float64) *Entity {
+func NewEntity(mass, restitution, friction, gForce float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
 	}
@@ -69,7 +69,7 @@ func NewEntity(x, y, z, w, h, d, mass, restitution, friction, gForce float64) *E
 	}
 	a := &Entity{
 		id:               utils.NextUUId(),
-		rect:             NewRect(x, y, w, h, z, d),
+		rect:             NewRect(0, 0, 0, 0, 0, 0),
 		gForce:           gForce,
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,

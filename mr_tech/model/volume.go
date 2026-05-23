@@ -22,10 +22,6 @@ type Volume struct {
 	sector    *Sector
 }
 
-const solidRestitution = 0.0
-const solidFriction = 0.2
-const solidGForce = 9.8
-
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
 func NewVolume(modelId int, id string, tag string, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
@@ -34,11 +30,19 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		tag:       tag,
 		faces:     make([]*Face, 128),
 		faceCount: 0,
-		entity:    physics.NewEntity(0, 0, 0, 0, 0, 0, mass, restitution, friction, gForce),
+		entity:    physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
 	}
 	v.facesPtr = &v.faces
 	return v
+}
+
+func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
+	const concreteMass = 0.0
+	const concreteRestitution = 0.0
+	const concreteFriction = 0.2
+	const concreteGForce = 9.8
+	return NewVolume(modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, concreteGForce)
 }
 
 // Rebuild recalculates the axis-aligned bounding box (AABB) for the location based on its faces and dimensions.

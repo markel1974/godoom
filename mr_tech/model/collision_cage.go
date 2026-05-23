@@ -125,12 +125,12 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
-func NewCollisionCage(thing IThing, margin, restitution, friction, gForce float64) *CollisionCage {
+func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 	c := &CollisionCage{
 		thing:          thing,
 		margin:         margin,
-		ellipsoid:      physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
-		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0, 0, 0, -1, restitution, friction, gForce),
+		ellipsoid:      physics.NewEntity(0, 0, 0, 0),
+		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0),
 		volume:         nil,
 	}
 	for i := BucketType(0); i < BucketSize; i++ {

@@ -43,7 +43,6 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		panic("OnImpact is nil for thing:" + cfg.Id)
 	}
 
-	maxStep := vertices.GetEntity().GetDepth() * 0.5
 	const cageMargin = 0.001
 	t := &ThingBase{
 		vertices:     vertices,
@@ -56,16 +55,19 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		location:     location,
 		world:        things.GetVolumes(),
 		things:       things,
-		maxStep:      maxStep, //cfg.Height * 0.5,
+		maxStep:      0,
 		isActive:     true,
 		identifier:   -1,
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
+		cage:         NewCollisionCage(thing, cageMargin),
 		onImpact:     cfg.OnImpact,
 		onCollision:  cfg.OnCollision,
 	}
-	t.cage = NewCollisionCage(thing, cageMargin, 0, 0, 0)
-	t.vertices.GetEntity().SetOnGround(false)
+
+	entity := t.vertices.GetEntity()
+	entity.SetOnGround(false)
+	t.maxStep = entity.GetDepth() * 0.5 //cfg.Height * 0.5,
 	return t
 }
 

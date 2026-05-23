@@ -95,7 +95,7 @@ func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 		localAABB := cage.Translate(targetX, targetY, targetZ)
 		thing.GetVolume().QueryOverlaps(localAABB, func(otherEnt physics.IAABB) bool {
 			face := otherEnt.(*Face)
-			cage.AddFace(face, maxCliff, targetX, targetY, targetZ)
+			cage.AddFace(face, maxCliff, targetX, targetY, targetZ, false)
 			return false
 		})
 		return false

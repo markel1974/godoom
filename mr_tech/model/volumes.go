@@ -71,7 +71,7 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 		vol := object.(*Volume)
 		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
 			face := otherEnt.(*Face)
-			cage.AddFace(face, maxCliff, 0.0, 0.0, 0.0)
+			cage.AddFace(face, maxCliff, 0.0, 0.0, 0.0, true)
 			return false
 		})
 		return false

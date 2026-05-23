@@ -121,6 +121,7 @@ type CollisionCage struct {
 	tX, tY, tZ          float64
 	eRadX, eRadY, eRadZ float64
 	volume              *Volume
+	minDistSurfTarget   float64
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
@@ -168,6 +169,7 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 		copy(s.faces[i][:], _emptyBucketFaces[:])
 	}
 	s.volume = nil
+	s.minDistSurfTarget = math.MaxFloat32
 }
 
 // GetThing retrieves the IThing instance associated with the CollisionCage.
@@ -234,12 +236,7 @@ func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.En
 }
 
 // AddFace adds a face to a suitable collision bucket based on constraints such as orientation, distance, and margin.
-func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) {
-	//TODO MIGLIORARE MATERIALS IN MODO DA DEFINIRE LA TRASPARENZA
-	_, texKind := face.GetMaterialDetails()
-	if texKind == int(config.MaterialKindSky) {
-		return
-	}
+func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64, isVolume bool) {
 	baseCliff := s.cZ - s.eRadZ
 	absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
 	other := face.GetAABB()
@@ -248,10 +245,6 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 	wallWE := absX > absY && absX > absZ
 	wallNS := absY > absZ
 	isWall := wallWE || wallNS
-
-	if isWall && fMaxZ <= baseCliff+maxCliff {
-		return
-	}
 
 	// Translation (from Local to World Space)
 	p0x, p0y, p0z := face.tri[0].X+offX, face.tri[0].Y+offY, face.tri[0].Z+offZ
@@ -300,16 +293,35 @@ func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) 
 		}
 	}
 
-	rEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-	distSurfTarget := distTarget - rEff
+	distSurfTarget := distTarget - rayEff
 
-	if distSurfTarget > s.margin {
-		//fmt.Println("MARGIN FILTER ACTIVE, RETURNING", distSurfTarget, margin)
+	if isVolume {
+		if distSurfTarget < s.minDistSurfTarget {
+			if volume := face.GetParent(); volume != nil {
+				s.minDistSurfTarget = distSurfTarget
+				s.volume = volume
+			}
+		}
+	}
+
+	//TODO MIGLIORARE MATERIALS IN MODO DA DEFINIRE LA TRASPARENZA
+	_, texKind := face.GetMaterialDetails()
+	if texKind == int(config.MaterialKindSky) {
 		return
 	}
 
-	s.add(bucket, face, distSurfTarget, rEff, nX, nY, nZ, p0x, p0y, p0z)
+	if isWall && fMaxZ <= baseCliff+maxCliff {
+		return
+	}
+
+	if distSurfTarget > s.margin {
+		//fmt.Println("MARGIN FILTER ACTIVE, RETURNING", distSurfTarget, s.margin)
+		return
+	}
+
+	s.add(bucket, face, distSurfTarget, rayEff, nX, nY, nZ, p0x, p0y, p0z)
 }
 
 // add inserts a face into the specified bucket or replaces the furthest face if the bucket is full and the new face is closer.
@@ -331,8 +343,5 @@ func (s *CollisionCage) add(bucket BucketType, face *Face, dist, rEff, normalX, 
 	}
 	if dist < maxDist {
 		s.faces[bucket][maxIdx].Rebuild(face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z)
-		if volume := face.GetParent(); volume != nil {
-			s.volume = volume
-		}
 	}
 }

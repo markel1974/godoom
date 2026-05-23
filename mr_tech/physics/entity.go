@@ -127,6 +127,11 @@ func (e *Entity) AddTo(x float64, y float64, z float64) {
 	e.rect.AddTo(x, y, z)
 }
 
+// MoveToZ updates the z-coordinate of the Entity's position by delegating to its internal Rect instance.
+func (e *Entity) MoveToZ(z float64) {
+	e.rect.MoveToZ(z)
+}
+
 // SetFriction sets the friction coefficient for the entity and updates its current friction value.
 func (e *Entity) SetFriction(f float64) {
 	e.frictionGround = f

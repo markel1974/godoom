@@ -98,6 +98,12 @@ func (r *Rect) MoveTo(x, y, z float64) {
 	r.rebuild()
 }
 
+// MoveToZ updates the z-coordinate of the Rect's position and recalculates its spatial properties.
+func (r *Rect) MoveToZ(z float64) {
+	r.point.z = z
+	r.rebuild()
+}
+
 // MoveTest calculates and returns the resulting coordinates after applying velocity values (vx, vy, vz) to the Rect position.
 func (r *Rect) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
 	x := r.point.x + vx

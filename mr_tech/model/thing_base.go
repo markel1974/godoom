@@ -247,12 +247,20 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 		return
 	}
 	tX, tY, tZ := t.cage.GetT()
+	entity := t.vertices.GetEntity()
+
 	for i := 0; i < slotsLen; i++ {
 		entry := t.cage.GetSlot(i)
-
-		if entry.isWall && entry.fMaxZ <= (t.cage.cZ-t.cage.eRadZ)+t.maxStep {
-			//TODO APPLICARE maxStep!!!!
-			continue
+		if entry.isWall {
+			z := t.cage.GetBaseZ() //_, _, z := entity.GetBottomLeft()
+			if entry.fMaxZ <= z {
+				continue
+			}
+			if entry.fMaxZ <= z+t.maxStep {
+				//TODO APPLICARE VX (es autojump)
+				t.vertices.GetEntity().MoveToZ(entry.fMaxZ)
+				continue
+			}
 		}
 		otherFace := entry.GetFace()
 		nX, nY, nZ := entry.GetNormal()
@@ -273,7 +281,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 		otherParentEnt := otherParent.GetEntity()
 
 		// Delega totale e assoluta al solutore interno di physics
-		t.vertices.GetEntity().ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
+		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 		if thing := otherParent.GetThing(); thing != nil {
 			t.onCollision(t, thing)

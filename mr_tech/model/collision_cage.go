@@ -132,9 +132,8 @@ type CollisionCage struct {
 	eRadX, eRadY, eRadZ float64
 	volume              *Volume
 	minDistSurfTarget   float64
-	//baseCliff           float64
-	slots    []*CageEntry
-	slotsLen int
+	slots               []*CageEntry
+	slotsLen            int
 }
 
 // NewCollisionCage creates a new CollisionCage with specified margin, restitution, and friction coefficients.
@@ -189,6 +188,11 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 
 	copy(s.slots, _emptySlots)
 	s.slotsLen = 0
+}
+
+// GetBaseZ calculates and returns the base Z-coordinate of the collision cage by subtracting its Z-radius from its center Z-coordinate.
+func (s *CollisionCage) GetBaseZ() float64 {
+	return s.cZ - s.eRadZ
 }
 
 // GetSlotsLen returns the current number of slots being utilized in the CollisionCage.

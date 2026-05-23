@@ -170,19 +170,13 @@ func (p *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 
 // SetJump applies an upward force to make the ThingPlayer jump.
 func (p *ThingPlayer) SetJump(multi bool) {
-	onGround := true
-	entity := p.GetEntity()
-	mass := entity.GetMass()
-	fz := mass * p.jumpForce
-	if !multi {
-		onGround = entity.IsOnGround()
-	} else {
-		fz *= 0.2
+	factor := 1.0
+	if multi {
+		factor = 0.2
+		p.GetEntity().SetOnGround(true)
 	}
-	if onGround {
-		entity.AddForce(0.0, 0.0, fz)
-		entity.SetOnGround(false)
-		p.bobbing.InjectVerticalImpulse(-1.5)
+	if p.Jump(0, 0, factor) {
+		p.bobbing.InjectVerticalImpulse(1.5)
 	}
 }
 

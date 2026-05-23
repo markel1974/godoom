@@ -206,14 +206,7 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 	if isBlocked || playerIsHigher {
 		//1. Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso
 		//saltino in modo coerente. Regola l'800.0 in base alla tua gravità.
-		mass := self.GetMass()
-		jumpForceZ := mass * 800.0
-		self.AddForce(0.0, 0.0, jumpForceZ)
-		// Svincolo immediato dall'attrito
-		self.SetOnGround(false)
-		//Forza di slancio orizzontale (Leap) nella direzione del vettore nx, ny
-		//Questo aiuta il demone a scavalcare l'ostacolo invece di saltare solo sul posto.
-		leapForceXY := mass * 200.0
-		self.AddForce(nx*leapForceXY, ny*leapForceXY, 0.0)
+		leapForceXY := self.GetMass() * 200.0
+		self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
 	}
 }

@@ -258,6 +258,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 			}
 			if entry.fMaxZ <= z+t.maxStep { // uphill
 				//TODO APPLICARE VX (es autojump)
+
 				t.vertices.GetEntity().MoveToZ(entry.fMaxZ)
 				continue
 			}
@@ -319,6 +320,18 @@ func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
 // GetBase returns the current instance of ThingBase. Useful for method chaining or accessing the base object.
 func (t *ThingBase) GetBase() *ThingBase {
 	return t
+}
+
+// Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
+func (t *ThingBase) Jump(leapX float64, leapY float64, zFactor float64) bool {
+	entity := t.GetEntity()
+	if !entity.IsOnGround() {
+		return false
+	}
+	fz := (entity.GetMass() * t.jumpForce) * zFactor
+	entity.AddForce(leapX, leapY, fz)
+	entity.SetOnGround(false)
+	return true
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.

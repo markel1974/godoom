@@ -51,6 +51,8 @@ type IThingConfig interface {
 
 	MoveTowards(dirX, dirY, targetSpeed, accelForce float64)
 
+	Jump(leapX, leapY, zFactor float64) bool
+
 	LaunchObject(throwableIndex int, cf CollisionFunc, mf ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64)
 
 	Impact(other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)

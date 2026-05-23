@@ -252,11 +252,11 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 	for i := 0; i < slotsLen; i++ {
 		entry := t.cage.GetSlot(i)
 		if entry.isWall {
-			z := t.cage.GetBaseZ() //_, _, z := entity.GetBottomLeft()
-			if entry.fMaxZ <= z {
+			z := t.cage.GetBaseZ()
+			if entry.fMaxZ <= z { //downhill
 				continue
 			}
-			if entry.fMaxZ <= z+t.maxStep {
+			if entry.fMaxZ <= z+t.maxStep { // uphill
 				//TODO APPLICARE VX (es autojump)
 				t.vertices.GetEntity().MoveToZ(entry.fMaxZ)
 				continue

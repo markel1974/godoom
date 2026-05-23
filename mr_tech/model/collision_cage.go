@@ -73,7 +73,7 @@ type CageEntry struct {
 	p0Y     float64
 	p0Z     float64
 	isWall  bool
-	fMaxZ   float64
+	maxZ    float64
 }
 
 // GetFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
@@ -86,9 +86,19 @@ func (s *CageEntry) GetDist() float64 {
 	return s.dist
 }
 
+// IsWall returns true if the CageEntry instance represents a wall, otherwise false.
+func (s *CageEntry) IsWall() bool {
+	return s.isWall
+}
+
 // GetREff retrieves the effective radius (rEff) of the CageEntry.
 func (s *CageEntry) GetREff() float64 {
 	return s.rEff
+}
+
+// GetMaxZ retrieves the maximum Z-coordinate value stored in the CageEntry instance.
+func (s *CageEntry) GetMaxZ() float64 {
+	return s.maxZ
 }
 
 // GetNormal returns the normal vector components (normalX, normalY, normalZ) of the CageEntry as a tuple.
@@ -102,7 +112,7 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry instance with new face and attributes: distance, effective radius, and normal vector components.
-func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, fMaxZ float64) {
+func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, maxZ float64) {
 	s.face = face
 	s.dist = dist
 	s.rEff = rEff
@@ -113,7 +123,7 @@ func (s *CageEntry) Rebuild(face *Face, dist, rEff, normalX, normalY, normalZ, p
 	s.p0Y = p0y
 	s.p0Z = p0z
 	s.isWall = isWall
-	s.fMaxZ = fMaxZ
+	s.maxZ = maxZ
 }
 
 // CollisionCage represents a structure for handling collision constraints in a 3D space through a bucketed system.

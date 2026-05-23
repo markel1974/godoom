@@ -86,6 +86,10 @@ func (th *Things) Len() int {
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
+	//world
+	th.volumes.QueryCollisionCage(cage, maxCliff)
+
+	//things
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
 		thing := object.(IThing)
 		if cage.GetThing() == thing {
@@ -120,11 +124,6 @@ func (th *Things) SetPlayer(p *ThingPlayer) {
 // GetGlobalScale retrieves the global scaling factor applied to all objects managed by the Things instance.
 func (th *Things) GetGlobalScale() geometry.XYZ {
 	return th.gScale
-}
-
-// GetVolumes returns the Volumes instance managed by the Things object.
-func (th *Things) GetVolumes() *Volumes {
-	return th.volumes
 }
 
 // GetTextures fetches the ITextures instance from the associated Materials object.

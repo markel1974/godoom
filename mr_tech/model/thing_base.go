@@ -20,7 +20,6 @@ type ThingBase struct {
 	acceleration float64
 	jumpForce    float64
 	location     *Volume
-	world        *Volumes
 	things       *Things
 	isActive     bool
 	identifier   int
@@ -53,7 +52,6 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		acceleration: cfg.Acceleration,
 		jumpForce:    cfg.JumpForce,
 		location:     location,
-		world:        things.GetVolumes(),
 		things:       things,
 		maxStep:      0,
 		isActive:     true,
@@ -237,7 +235,7 @@ func (t *ThingBase) StageCompute() {
 	// Calcolo del CENTRO per il Broad-Phase
 	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
-	t.world.QueryCollisionCage(t.cage, t.maxStep)
+
 	t.things.QueryCollisionCage(t.cage, t.maxStep)
 }
 

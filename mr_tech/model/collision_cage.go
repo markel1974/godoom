@@ -7,10 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// TODO LA COLLISION CAGE NON DEVE CONTENERE MAXCLIFF, ma deve essere risolta in stage resolve
-
-// TODO TROVARE UN MODO PER EVITARE DI ITERARE SU TUTTE I BUCKET ANCHE QUELLO NON SETTATI
-
 // BucketType represents a categorization of spatial partitions such as walls, ceilings, and floors in a 3D space.
 type BucketType int
 
@@ -280,12 +276,10 @@ func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.En
 
 // AddFace adds a face to a suitable collision bucket based on constraints such as orientation, distance, and margin.
 func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume bool) {
-	absX, absY, absZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
-	other := face.GetAABB()
-	fMaxZ := other.GetMaxZ() + offZ
+	nAbsX, nAbsY, nAbsZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
 
-	wallWE := absX > absY && absX > absZ
-	wallNS := absY > absZ
+	wallWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	wallNS := nAbsY > nAbsZ
 	isWall := wallWE || wallNS
 
 	// Translation (from Local to World Space)
@@ -296,6 +290,7 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 	var bucket BucketType
 
 	if isWall {
+		// Vertical planes
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
@@ -339,11 +334,12 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	distSurfTarget := distTarget - rayEff
 
+	//Important can't leave this method before volume computation
 	if isVolume {
 		if distSurfTarget < s.minDistSurfTarget {
 			if volume := face.GetParent(); volume != nil {
-				s.minDistSurfTarget = distSurfTarget
 				s.volume = volume
+				s.minDistSurfTarget = distSurfTarget
 			}
 		}
 	}
@@ -359,6 +355,7 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 		return
 	}
 
+	fMaxZ := face.GetAABB().GetMaxZ() + offZ
 	s.add(bucket, face, distSurfTarget, rayEff, nX, nY, nZ, p0x, p0y, p0z, isWall, fMaxZ)
 }
 

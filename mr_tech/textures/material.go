@@ -10,17 +10,24 @@ var _tickInterval = uint64(32)
 // _globalTick is a monotonically increasing counter used to track global animation or system ticks within the application.
 var _globalTick uint64
 
+var _currentTick uint64
+
 // SetTickInterval sets the tick interval duration in arbitrary units.
 func SetTickInterval(interval uint64) {
 	_tickInterval = interval
 }
 
+func TickInterval() uint64 {
+	return _tickInterval
+}
+
 // Tick increments the global tick counter used for tracking application-wide progression or state updates.
 func Tick() {
 	_globalTick++
+	_currentTick = _globalTick / _tickInterval
 }
 
-func CurrentTick() uint64 {
+func GlobalTick() uint64 {
 	return _globalTick
 }
 
@@ -84,7 +91,7 @@ func (a *Material) Kind() int {
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
 func (a *Material) CurrentFrame() *Texture {
 	if a.totalFrames > 1 {
-		frameIdx := (_globalTick / _tickInterval) % a.totalFrames
+		frameIdx := _currentTick % a.totalFrames
 		return a.frames[frameIdx]
 	}
 	return a.frame

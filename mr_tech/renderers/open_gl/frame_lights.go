@@ -95,7 +95,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
-	intensity := float32(light.GetIntensityStyled(textures.CurrentTick()))
+	intensity := float32(light.GetIntensityStyled(textures.GlobalTick()))
 
 	falloff := float32(light.GetFalloff())
 	lType := float32(-1)

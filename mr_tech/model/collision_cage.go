@@ -235,8 +235,9 @@ func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.En
 
 // AddFace adds a face to a suitable collision bucket based on constraints such as orientation, distance, and margin.
 func (s *CollisionCage) AddFace(face *Face, maxCliff, offX, offY, offZ float64) {
-	tex, texKind := face.GetMaterialDetails()
-	if tex == nil || texKind == int(config.MaterialKindSky) {
+	//TODO MIGLIORARE MATERIALS IN MODO DA DEFINIRE LA TRASPARENZA
+	_, texKind := face.GetMaterialDetails()
+	if texKind == int(config.MaterialKindSky) {
 		return
 	}
 	baseCliff := s.cZ - s.eRadZ

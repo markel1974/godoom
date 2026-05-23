@@ -85,9 +85,9 @@ func (th *Things) Len() int {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
+func (th *Things) QueryCollisionCage(cage *CollisionCage) {
 	//world
-	th.volumes.QueryCollisionCage(cage, maxCliff)
+	th.volumes.QueryCollisionCage(cage)
 
 	//things
 	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
@@ -99,7 +99,7 @@ func (th *Things) QueryCollisionCage(cage *CollisionCage, maxCliff float64) {
 		localAABB := cage.Translate(targetX, targetY, targetZ)
 		thing.GetVolume().QueryOverlaps(localAABB, func(otherEnt physics.IAABB) bool {
 			face := otherEnt.(*Face)
-			cage.AddFace(face, maxCliff, targetX, targetY, targetZ, false)
+			cage.AddFace(face, targetX, targetY, targetZ, false)
 			return false
 		})
 		return false

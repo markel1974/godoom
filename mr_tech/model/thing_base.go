@@ -236,7 +236,7 @@ func (t *ThingBase) StageCompute() {
 	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
 
-	t.things.QueryCollisionCage(t.cage, t.maxStep)
+	t.things.QueryCollisionCage(t.cage)
 }
 
 // StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
@@ -249,6 +249,11 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 	tX, tY, tZ := t.cage.GetT()
 	for i := 0; i < slotsLen; i++ {
 		entry := t.cage.GetSlot(i)
+
+		if entry.isWall && entry.fMaxZ <= (t.cage.cZ-t.cage.eRadZ)+t.maxStep {
+			//TODO APPLICARE maxStep!!!!
+			continue
+		}
 		otherFace := entry.GetFace()
 		nX, nY, nZ := entry.GetNormal()
 		rEff := entry.GetREff()

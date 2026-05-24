@@ -246,7 +246,7 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 	if slotsLen == 0 {
 		return
 	}
-	tX, tY, tZ := t.cage.GetT()
+	//tX, tY, tZ := t.cage.GetT()
 	entity := t.vertices.GetEntity()
 
 	for i := 0; i < slotsLen; i++ {
@@ -256,27 +256,16 @@ func (t *ThingBase) StageResolve(solverJitter float64) {
 			maxZ := entry.GetMaxZ()
 			if maxZ <= selfZ { //downhill
 				continue
-			} else if maxZ <= selfZ+t.maxStep { // uphill
+			}
+			if maxZ <= selfZ+t.maxStep { // uphill
 				//TODO APPLICARE VX (es autojump)
 				t.vertices.GetEntity().MoveToZ(maxZ)
 				continue
 			}
 		}
 		otherFace := entry.GetFace()
+		penetration := entry.GetPenetration() + solverJitter
 		nX, nY, nZ := entry.GetNormal()
-		rEff := entry.GetREff()
-
-		// Lettura delle coordinate in WORLD SPACE tradotte dalla Cage
-		p0X := entry.p0X
-		p0Y := entry.p0Y
-		p0Z := entry.p0Z
-
-		distTarget := (tX-p0X)*nX + (tY-p0Y)*nY + (tZ-p0Z)*nZ
-		if distTarget >= rEff {
-			continue
-		}
-
-		penetration := (rEff - distTarget) + solverJitter
 		otherParent := otherFace.GetParent()
 		otherParentEnt := otherParent.GetEntity()
 
@@ -295,7 +284,7 @@ func (t *ThingBase) StageApply() {
 		t.location = location
 	}
 	entity := t.vertices.GetEntity()
-	isGrounded := t.cage.counts[BucketFloor] > 0
+	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
 	dx, dy, dz := entity.GetDisplacement()
@@ -398,7 +387,7 @@ func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
 // other refers to the configuration of the colliding object.
 // id is a unique identifier for the impact event.
 // force denotes the magnitude of the impact force.
-// closestDist represents the closest distance between the objects upon collision.
+// closestDist represents the closest penetration between the objects upon collision.
 // dirX, dirY, and dirZ specify the directional vector of the impact in 3D space.
 func (t *ThingBase) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	t.onImpact(t, other, id, force, closestDist, dirX, dirY, dirZ)

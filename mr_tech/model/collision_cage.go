@@ -139,7 +139,21 @@ func (b *CollisionBucket) Count() int {
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
 func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, fMaxZ float64) *CageEntry {
-	// If the bucket is not full, add and expose the new pointer
+	// Topological Deduplication (Filter for coplanar faces)
+	// Prevents generating multiple constraints for adjacent triangles on the same plane
+	for i := 0; i < b.counter; i++ {
+		existing := b.container[i]
+		// If the dot product is ~1.0, the two faces form a continuous plane
+		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
+			// Update the unified constraint only if the new penetration is deeper
+			if penetration > existing.penetration {
+				existing.Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
+			}
+			return nil
+		}
+	}
+
+	// Insert a new plane into the non-full bucket
 	if b.counter < FacesPerBucket {
 		target := b.spare[b.counter]
 		target.Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
@@ -148,7 +162,7 @@ func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, n
 		return target
 	}
 
-	// Find the currently stored face with the LOWEST PENETRATION (the least priority)
+	// Replace the least relevant face
 	minIdx := 0
 	minPen := b.container[0].penetration
 	for i := 1; i < FacesPerBucket; i++ {
@@ -157,13 +171,10 @@ func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, n
 			minIdx = i
 		}
 	}
-
-	// If the new face penetrates deeper than the one with minimum penetration, overwrite it
 	if penetration > minPen {
 		b.container[minIdx].Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
 	}
 
-	// Return nil because the replaced face already has its pointer exposed in the slots array
 	return nil
 }
 
@@ -377,7 +388,6 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 
 	fMaxZ := face.GetAABB().GetMaxZ() + offZ
 	cage := s.buckets[bucket].Add(face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isWall, fMaxZ)
-
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++

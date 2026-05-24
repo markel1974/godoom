@@ -53,7 +53,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		config:           cfg,
 		volumes:          volumes,
 		materials:        materials,
-		event:            NewThingEvent(solverJitter),
+		event:            NewThingEvent(0, solverJitter),
 	}
 	e.pendingIdx.Store(0)
 
@@ -273,13 +273,14 @@ func (th *Things) processCollision() {
 	th.event.wg.Wait()
 
 	for si := 0; si < th.solverIterations; si++ {
+		//th.event.SetSolver(si, solverJitter)
 		//th.event.SetStage(StageResolve)
 		for x := 0; x < th.activeIdx; x++ {
 			t2 := th.active[x]
 			//th.event.wg.Add(1)
 			//t2.PostMessage(th.event)
 			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
-			t2.StageResolve(solverJitter)
+			t2.StageResolve(si, solverJitter)
 		}
 		//th.event.wg.Wait()
 	}

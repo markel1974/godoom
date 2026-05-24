@@ -26,6 +26,7 @@ const (
 
 // ThingEvent represents an event associated with a Thing, containing position data, a compute stage, and synchronization.
 type ThingEvent struct {
+	solverIndex  int
 	solverJitter float64
 	playerX      float64
 	playerY      float64
@@ -35,16 +36,27 @@ type ThingEvent struct {
 }
 
 // NewThingEvent initializes and returns a new instance of ThingEvent with an embedded sync.WaitGroup.
-func NewThingEvent(solverJitter float64) *ThingEvent {
+func NewThingEvent(solverIndex int, solverJitter float64) *ThingEvent {
 	return &ThingEvent{
+		solverIndex:  solverIndex,
 		solverJitter: solverJitter,
 		wg:           &sync.WaitGroup{},
 	}
 }
 
-// GetSolverJitter returns the solver jitter value associated with the ThingEvent instance.
+// GetSolverIndex returns the solver index associated with the ThingEvent.
+func (e *ThingEvent) GetSolverIndex() int {
+	return e.solverIndex
+}
+
+// GetSolverJitter retrieves the solver jitter value for the current ThingEvent.
 func (e *ThingEvent) GetSolverJitter() float64 {
 	return e.solverJitter
+}
+
+func (e *ThingEvent) SetSolver(solverIndex int, solverJitter float64) {
+	e.solverIndex = solverIndex
+	e.solverJitter = solverJitter
 }
 
 // SetStage updates the ComputeStage of the ThingEvent to the specified stage.

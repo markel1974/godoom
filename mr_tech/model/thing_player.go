@@ -91,7 +91,7 @@ func (p *ThingPlayer) StartLoop() {
 				case StageCompute:
 					p.StageCompute()
 				case StageResolve:
-					p.StageResolve(evt.GetSolverJitter())
+					p.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
 				case StageApply:
 					p.StageApply()
 				}

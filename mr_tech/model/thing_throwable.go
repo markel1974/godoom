@@ -50,7 +50,7 @@ func (t *ThingThrowable) StartLoop() {
 				case StageCompute:
 					t.StageCompute()
 				case StageResolve:
-					t.StageResolve(evt.GetSolverJitter())
+					t.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
 				case StageApply:
 					t.StageApply()
 				}

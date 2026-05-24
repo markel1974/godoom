@@ -37,7 +37,7 @@ type IThing interface {
 
 	StageCompute()
 
-	StageResolve(solverJitter float64)
+	StageResolve(solverIndex int, solverJitter float64)
 
 	StageApply()
 

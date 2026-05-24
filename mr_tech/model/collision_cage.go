@@ -7,15 +7,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// BucketType represents distinct categories for organizing collision buckets in a spatial structure.
+// BucketType represents an enumeration for categorizing different types of spatial regions in a collision detection system.
 type BucketType int
 
-// BucketWallWest represents the west wall bucket type (-X).
-// BucketWallEast represents the east wall bucket type (+X).
-// BucketWallNorth represents the north wall bucket type (-Y).
-// BucketWallSouth represents the south wall bucket type (+Y).
-// BucketCeiling represents the ceiling bucket type (-Z).
-// BucketFloor represents the floor bucket type (+Z).
+// BucketWallWest represents the bucket type for the west wall (-X).
+// BucketWallEast represents the bucket type for the east wall (+X).
+// BucketWallNorth represents the bucket type for the north wall (-Y).
+// BucketWallSouth represents the bucket type for the south wall (+Y).
+// BucketCeiling represents the bucket type for the ceiling (-Z).
+// BucketFloor represents the bucket type for the floor (+Z).
 const (
 	BucketWallWest  = BucketType(0) // -X
 	BucketWallEast  = BucketType(1) // +X
@@ -25,7 +25,7 @@ const (
 	BucketFloor     = BucketType(5) // +Z
 )
 
-// String returns the string representation of the BucketType value. Maps integer values to their respective type names.
+// String returns the string representation of a BucketType.
 func (p BucketType) String() string {
 	switch p {
 	case BucketWallWest:
@@ -45,16 +45,16 @@ func (p BucketType) String() string {
 	}
 }
 
-// BucketSize represents the total count of slots available in a single bucket, derived from BucketFloor + 1.
-// FacesPerBucket defines the fixed number of faces available in each bucket for allocation.
-// TotalSlots is the total number of slots across all faces in a bucket, computed as BucketSize * FacesPerBucket.
+// BucketSize represents the total number of slots in a single bucket, calculated as BucketFloor + 1.
+// FacesPerBucket defines the number of faces associated with each bucket.
+// TotalSlots represents the overall slots available across all buckets, calculated as BucketSize * FacesPerBucket.
 const (
 	BucketSize     = BucketFloor + 1
 	FacesPerBucket = 4
 	TotalSlots     = BucketSize * FacesPerBucket
 )
 
-// CageEntry represents a collision entry with geometric and physical properties for query results.
+// CageEntry represents a collision entry containing face geometry, distance, normal, penetration, and other flags.
 type CageEntry struct {
 	face        *Face
 	dist        float64
@@ -69,42 +69,30 @@ type CageEntry struct {
 	maxZ        float64
 }
 
-// GetFace retrieves the Face object associated with the CageEntry.
-func (s *CageEntry) GetFace() *Face {
-	return s.face
-}
+// GetFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
+func (s *CageEntry) GetFace() *Face { return s.face }
 
-// GetDistance returns the stored distance value (dist) for the CageEntry instance.
-func (s *CageEntry) GetDistance() float64 {
-	return s.dist
-}
+// GetDistance returns the distance value (`dist`) associated with the CageEntry instance.
+func (s *CageEntry) GetDistance() float64 { return s.dist }
 
-// IsWall returns true if the CageEntry represents a wall, otherwise false.
-func (s *CageEntry) IsWall() bool {
-	return s.isWall
-}
+// IsWall returns true if the CageEntry is classified as a wall, false otherwise.
+func (s *CageEntry) IsWall() bool { return s.isWall }
 
 // GetMaxZ returns the maximum Z-coordinate value associated with the CageEntry instance.
-func (s *CageEntry) GetMaxZ() float64 {
-	return s.maxZ
-}
+func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
 
-// GetNormal returns the normal vector components (nX, nY, nZ) of the CageEntry as three float64 values.
-func (s *CageEntry) GetNormal() (float64, float64, float64) {
-	return s.nX, s.nY, s.nZ
-}
+// GetNormal returns the normal vector components (nX, nY, nZ) of the `CageEntry`.
+func (s *CageEntry) GetNormal() (float64, float64, float64) { return s.nX, s.nY, s.nZ }
 
-// GetPenetration returns the penetration depth associated with the CageEntry instance.
-func (s *CageEntry) GetPenetration() float64 {
-	return s.penetration
-}
+// GetPenetration returns the penetration depth value for the current CageEntry instance.
+func (s *CageEntry) GetPenetration() float64 { return s.penetration }
 
-// NewCollisionFace creates and returns a new instance of CageEntry with default values.
+// NewCollisionFace creates and returns a new instance of CageEntry with default, uninitialized values.
 func NewCollisionFace() *CageEntry {
 	return &CageEntry{}
 }
 
-// Rebuild updates the CageEntry's properties with the provided face, distance, penetration, normals, position, and other flags.
+// Rebuild updates the CageEntry fields with the provided values for geometry, collision, and wall properties.
 func (s *CageEntry) Rebuild(face *Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isWall bool, maxZ float64) {
 	s.face = face
 	s.dist = dist
@@ -115,8 +103,7 @@ func (s *CageEntry) Rebuild(face *Face, dist, penetration, nX, nY, nZ, p0x, p0y,
 	s.maxZ = maxZ
 }
 
-// CollisionBucket is a data structure for managing collision faces within a specific bucket type.
-// It stores active collision entries, spare entries, empty entries, and a count of active entries.
+// CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.
 type CollisionBucket struct {
 	bucket    BucketType
 	container [FacesPerBucket]*CageEntry
@@ -125,37 +112,34 @@ type CollisionBucket struct {
 	counter   int
 }
 
-// NewCollisionBucket creates and initializes a new CollisionBucket for the specified BucketType.
+// NewCollisionBucket initializes a new CollisionBucket with preallocated CageEntry arrays and a specified BucketType.
 func NewCollisionBucket(bucket BucketType) *CollisionBucket {
 	b := &CollisionBucket{
 		bucket:  bucket,
 		counter: 0,
 	}
 	for i := 0; i < FacesPerBucket; i++ {
-		b.container[i] = nil
-	}
-	for i := 0; i < FacesPerBucket; i++ {
 		b.spare[i] = NewCollisionFace()
-	}
-	for i := 0; i < FacesPerBucket; i++ {
+		b.container[i] = nil
 		b.empty[i] = nil
 	}
 	return b
 }
 
-// Rebuild resets the CollisionBucket by clearing its container and resetting the counter to 0.
+// Rebuild resets the CollisionBucket's counter to zero and clears its container by copying from the empty array.
 func (b *CollisionBucket) Rebuild() {
 	b.counter = 0
 	copy(b.container[:], b.empty[:])
 }
 
-// Count returns the current number of entries in the CollisionBucket.
+// Count returns the number of entries currently stored in the CollisionBucket.
 func (b *CollisionBucket) Count() int {
 	return b.counter
 }
 
-// Add inserts a Face into the CollisionBucket and returns a CageEntry if successful; otherwise, updates existing entries.
+// Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
 func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, fMaxZ float64) *CageEntry {
+	// If the bucket is not full, add and expose the new pointer
 	if b.counter < FacesPerBucket {
 		target := b.spare[b.counter]
 		target.Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
@@ -163,21 +147,27 @@ func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, n
 		b.counter++
 		return target
 	}
-	maxIdx := 0
-	maxDist := b.container[0].dist
+
+	// Find the currently stored face with the LOWEST PENETRATION (the least priority)
+	minIdx := 0
+	minPen := b.container[0].penetration
 	for i := 1; i < FacesPerBucket; i++ {
-		if b.container[i].dist > maxDist {
-			maxDist = b.container[i].dist
-			maxIdx = i
+		if b.container[i].penetration < minPen {
+			minPen = b.container[i].penetration
+			minIdx = i
 		}
 	}
-	if dist < maxDist {
-		b.container[maxIdx].Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
+
+	// If the new face penetrates deeper than the one with minimum penetration, overwrite it
+	if penetration > minPen {
+		b.container[minIdx].Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
 	}
+
+	// Return nil because the replaced face already has its pointer exposed in the slots array
 	return nil
 }
 
-// CollisionCage represents a spatial collider for managing physical interactions and detecting collisions in 3D space.
+// CollisionCage provides a structure for managing collision detection and resolution for a 3D entity.
 type CollisionCage struct {
 	thing               IThing
 	buckets             [BucketSize]*CollisionBucket
@@ -195,8 +185,7 @@ type CollisionCage struct {
 	slotsLen            int
 }
 
-// NewCollisionCage initializes and returns a new CollisionCage with the given IThing instance and margin value.
-// It sets up all required properties, including buckets, ellipsoid entities, and slot arrays.
+// NewCollisionCage creates and initializes a new CollisionCage with the given IThing and margin values.
 func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 	c := &CollisionCage{
 		thing:          thing,
@@ -211,18 +200,16 @@ func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 	for i := BucketType(0); i < BucketSize; i++ {
 		c.buckets[i] = NewCollisionBucket(i)
 	}
-	for i := BucketType(0); i < TotalSlots; i++ {
-		c.slotsEmpty[i] = nil
-	}
 	return c
 }
 
-// Rebuild updates CollisionCage attributes, recalculates bounds and extremes, resets buckets, and clears cached values.
+// Rebuild updates the internal state of the CollisionCage, recalculating volumes, bounds, and resetting temporary data.
 func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ float64) {
 	s.cX, s.cY, s.cZ = cx, cy, cz
 	s.dX, s.dY, s.dZ = dx, dy, dz
 	s.eRadX, s.eRadY, s.eRadZ = eRadX, eRadY, eRadZ
 	s.tX, s.tY, s.tZ = cx+dx, cy+dy, cz+dz
+
 	// Calculate absolute extremes (Broad-Phase Swept Volume)
 	minX := cx - eRadX + math.Min(0, dx) - s.margin
 	maxX := cx + eRadX + math.Max(0, dx) + s.margin
@@ -230,15 +217,9 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	maxY := cy + eRadY + math.Max(0, dy) + s.margin
 	minZ := cz - eRadZ + math.Min(0, dz) - s.margin
 	maxZ := cz + eRadZ + math.Max(0, dz) + s.margin
+
 	// Canonical mapping for Rect/AABB
-	x := minX
-	y := minY
-	z := minZ
-	w := maxX - minX
-	h := maxY - minY
-	d := maxZ - minZ
-	//x y z == BOTTOM LEFT
-	s.ellipsoid.Rebuild(x, y, z, w, h, d)
+	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
 
 	for i := 0; i < len(s.buckets); i++ {
 		s.buckets[i].Rebuild()
@@ -251,72 +232,46 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 	s.slotsLen = 0
 }
 
-// GetBaseZ calculates and returns the base Z coordinate of the collision cage by subtracting the Z radius from its center Z.
-func (s *CollisionCage) GetBaseZ() float64 {
-	return s.cZ - s.eRadZ
-}
+// GetBaseZ calculates and returns the lower Z-bound of the collision cage based on its center and radius.
+func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
-// GetSlotsLen returns the current number of slots in use within the CollisionCage.
-func (s *CollisionCage) GetSlotsLen() int {
-	return s.slotsLen
-}
+// GetSlotsLen returns the number of occupied slots in the CollisionCage.
+func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
 
-// GetSlot retrieves the CageEntry at the specified index from the CollisionCage's slots array.
-func (s *CollisionCage) GetSlot(i int) *CageEntry {
-	return s.slots[i]
-}
+// GetSlot retrieves the CageEntry at the specified index from the slots list.
+func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
 
-// GetThing returns the IThing instance associated with the CollisionCage.
-func (s *CollisionCage) GetThing() IThing {
-	return s.thing
-}
+// GetThing retrieves the IThing instance associated with the CollisionCage.
+func (s *CollisionCage) GetThing() IThing { return s.thing }
 
-// GetMargin retrieves the margin value used in the CollisionCage for various calculations.
-func (s *CollisionCage) GetMargin() float64 {
-	return s.margin
-}
+// GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
+func (s *CollisionCage) GetMargin() float64 { return s.margin }
 
-// GetVolume retrieves the Volume associated with the CollisionCage instance.
-func (s *CollisionCage) GetVolume() *Volume {
-	return s.volume
-}
+// GetVolume returns the Volume instance associated with the CollisionCage, or nil if no Volume is assigned.
+func (s *CollisionCage) GetVolume() *Volume { return s.volume }
 
-// GetRad returns the radii of the collision cage along the X, Y, and Z axes.
-func (s *CollisionCage) GetRad() (float64, float64, float64) {
-	return s.eRadX, s.eRadY, s.eRadZ
-}
+// GetRad retrieves the radii of the ellipsoid along the X, Y, and Z axes as a tuple of float64 values.
+func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
 
-// GetC returns the central coordinates (cX, cY, cZ) of the CollisionCage as a tuple of three float64 values.
-func (s *CollisionCage) GetC() (float64, float64, float64) {
-	return s.cX, s.cY, s.cZ
-}
+// GetC retrieves the current center coordinates (cX, cY, cZ) of the CollisionCage.
+func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
-// GetD returns the displacement values (dX, dY, dZ) of the CollisionCage.
-func (s *CollisionCage) GetD() (float64, float64, float64) {
-	return s.dX, s.dY, s.dZ
-}
+// GetD returns the displacement vector components (dX, dY, dZ) of the CollisionCage.
+func (s *CollisionCage) GetD() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
 
-// GetT retrieves the translation components (tX, tY, tZ) of the CollisionCage.
-func (s *CollisionCage) GetT() (float64, float64, float64) {
-	return s.tX, s.tY, s.tZ
-}
+// GetT retrieves the transformed coordinates (tX, tY, tZ) of the collision cage.
+func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
 
-// BucketCount returns the number of elements in the bucket of the specified type t.
-func (s *CollisionCage) BucketCount(t BucketType) int {
-	return s.buckets[t].Count()
-}
+// BucketCount returns the number of elements currently stored in the specified bucket type.
+func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
 
-// GetAABB returns the axis-aligned bounding box (AABB) of the collision cage using its ellipsoid entity.
-func (s *CollisionCage) GetAABB() *physics.AABB {
-	return s.ellipsoid.GetAABB()
-}
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the CollisionCage's ellipsoid entity.
+func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
 
 // GetEntity returns the ellipsoid entity associated with the CollisionCage.
-func (s *CollisionCage) GetEntity() *physics.Entity {
-	return s.ellipsoid
-}
+func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
 
-// Translate adjusts the `CollisionCage`'s local transformation using the target coordinates and updates its AABB.
+// Translate updates the local ellipsoid's position relative to a target and returns the updated physics.Entity.
 func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.Entity {
 	cageAABB := s.ellipsoid.GetAABB()
 	lMinX := cageAABB.GetMinX() - targetX
@@ -329,10 +284,10 @@ func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.En
 	return s.ellipsoidLocal
 }
 
-// AddFace processes a face, calculates its distance to the collision cage, and classifies it into a bucket for collision checks.
-// face: the Face object to add.
-// offX, offY, offZ: offset values to translate the face's position.
-// isVolume: a flag indicating whether to perform volume computation.
+// AddFace processes a Face to determine its type, position, and potential collision influence within the CollisionCage.
+// face is the Face object to process.
+// offX, offY, offZ specify the offsets to transform the face into world space.
+// isVolume indicates whether the Face should be prioritized as a volumetric obstacle.
 func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume bool) {
 	nAbsX, nAbsY, nAbsZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
 
@@ -348,12 +303,12 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 	var bucket BucketType
 
 	if isWall {
-		// Vertical planes
+		// Facing Normalization: Forces the plane to oppose the player
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
-		// Bucket assignment for walls based on final normal
+		// Wall Bucket Assignment
 		if wallWE {
 			if nX < 0 {
 				bucket = BucketWallWest
@@ -368,19 +323,20 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 			}
 		}
 	} else {
-		// Horizontal Planes
+		// Exact elevation evaluation (Plane Z at Center X,Y)
 		planeZ := p0z
 		if math.Abs(nZ) > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
 		}
+
 		if s.cZ >= planeZ {
-			bucket = BucketFloor // is mathematically a Floor
+			bucket = BucketFloor
 			if nZ < 0 {
 				nX, nY, nZ = -nX, -nY, -nZ
 				distStart = -distStart
 			}
 		} else {
-			bucket = BucketCeiling // is mathematically a Ceiling
+			bucket = BucketCeiling
 			if nZ > 0 {
 				nX, nY, nZ = -nX, -nY, -nZ
 				distStart = -distStart
@@ -388,37 +344,40 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 		}
 	}
 
+	// Minkowski / Support Mapping for Ellipsoids
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-	dist := distTarget - rayEff
 
-	//Important can't leave this method before volume computation
-	if isVolume {
-		if dist < s.distance {
-			if volume := face.GetParent(); volume != nil {
-				s.volume = volume
-				s.distance = dist
-			}
+	dist := distTarget - rayEff
+	penetration := rayEff - distTarget
+
+	// Volume Priority
+	if isVolume && dist < s.distance {
+		if volume := face.GetParent(); volume != nil {
+			s.volume = volume
+			s.distance = dist
 		}
 	}
 
-	//TODO MIGLIORARE MATERIALS IN MODO DA DEFINIRE LA TRASPARENZA
+	// TODO BETTER IMPLEMENTATION!
 	_, texKind := face.GetMaterialDetails()
 	if texKind == int(config.MaterialKindSky) {
-		return //transparent
+		return // Skybox/transparent: ignore collision
 	}
 
+	// Early-Exit Filtering: The plane exceeds the configured broad-margin
 	if dist > s.margin {
-		return //outside margin
+		return
 	}
 
-	if distTarget >= rayEff {
-		return //no penetration
+	// If the face is NOT penetrated at the target (penetration <= 0), it is not needed by the Half-Space solver
+	if penetration <= 0 {
+		return
 	}
 
-	penetration := rayEff - distTarget
 	fMaxZ := face.GetAABB().GetMaxZ() + offZ
 	cage := s.buckets[bucket].Add(face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isWall, fMaxZ)
+
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++

@@ -504,12 +504,27 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 	}
 
 	// BAUMGARTE STABILIZATION ---
-	const slop = 0.05
-	const percent = 0.2
-	bias := math.Max(penetration-slop, 0.0) * percent
+	//const slop = 0.05
+	//const percent = 0.2
+	//bias := math.Max(penetration-slop, 0.0) * percent
 
+	// BAUMGARTE STABILIZATION ---
+	slop := 0.05
+	percent := 0.5
+	/// Se il piano è prevalentemente orizzontale (pavimento o soffitto)
+	// applichiamo un vincolo hard per contrastare l'integrazione della gravità.
+	if math.Abs(nz) > 0.7 {
+		slop = 0.001  // Tolleranza quasi zero
+		percent = 0.2 // Reattività quasi immediata
+	}
+	bias := (math.Max(penetration-slop, 0.0) * percent) / e.dt
+
+	//bias := (penetration * 0.5) / e.dt
+
+	//bias := 0.0
+	//bias := 0.0
 	// IMPULSO NORMALE (con bias applicato)
-	j := (-(1.0 + actualRestitution) * vRelDotN) + bias
+	j := -(1.0+actualRestitution)*vRelDotN + bias
 	j /= invMassSum
 
 	e.vx += (j * nx) * e.invMass
@@ -520,7 +535,6 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 	e2.vz -= (j * nz) * e2.invMass
 
 	// IMPULSO TANGENZIALE (ATTRITO)
-	vrx = e.vx - e2.vx
 	vrx = e.vx - e2.vx
 	vry = e.vy - e2.vy
 	vrz = e.vz - e2.vz

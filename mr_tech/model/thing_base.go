@@ -241,35 +241,49 @@ func (t *ThingBase) StageCompute() {
 
 // StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
 // solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
-func (t *ThingBase) StageResolve(solverJitter float64) {
+func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	slotsLen := t.cage.GetSlotsLen()
 	if slotsLen == 0 {
 		return
 	}
-	//tX, tY, tZ := t.cage.GetT()
+
 	entity := t.vertices.GetEntity()
 
 	for i := 0; i < slotsLen; i++ {
 		entry := t.cage.GetSlot(i)
+
 		if entry.IsWall() {
 			selfZ := t.cage.GetBaseZ()
 			maxZ := entry.GetMaxZ()
-			if maxZ <= selfZ { //downhill
+			if maxZ <= selfZ { // downhill
 				continue
 			}
 			if maxZ <= selfZ+t.maxStep { // uphill
-				//TODO APPLICARE VX (es autojump)
-				t.vertices.GetEntity().MoveToZ(maxZ)
+				entity.MoveToZ(maxZ)
 				continue
 			}
 		}
+
 		otherFace := entry.GetFace()
 		penetration := entry.GetPenetration() + solverJitter
 		nX, nY, nZ := entry.GetNormal()
+
 		otherParent := otherFace.GetParent()
 		otherParentEnt := otherParent.GetEntity()
 
-		// Delega totale e assoluta al solutore interno di physics
+		// Proiezione Posizionale Pre-Iterazione (Geometrica)
+		//if solverIndex == 0 {
+		//	invMass1 := entity.GetInvMass()
+		//	invMassSum := invMass1 + otherParentEnt.GetInvMass()
+		//	if invMass1 > 0.0 && invMassSum > 0.0 {
+		//		ratio := invMass1 / invMassSum
+		//		push := penetration * ratio
+		//		entity.AddTo(nX*push, nY*push, nZ*push)
+		//	}
+		//}
+
+		// Risoluzione Impulsi e Attrito (Cinetica)
+		// Passiamo penetration = 0.0 per inibire il Baumgarte bias interno all'Entity
 		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 		if thing := otherParent.GetThing(); thing != nil {

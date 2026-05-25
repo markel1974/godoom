@@ -336,7 +336,7 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 	} else {
 		// Exact elevation evaluation (Plane Z at Center X,Y)
 		planeZ := p0z
-		if math.Abs(nZ) > 1e-5 {
+		if nAbsZ > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
 		}
 

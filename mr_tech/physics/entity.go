@@ -2,8 +2,7 @@ package physics
 
 import (
 	"math"
-
-	"github.com/markel1974/godoom/mr_tech/utils"
+	"sync/atomic"
 )
 
 const (
@@ -27,10 +26,16 @@ const (
 	dt = dt60
 )
 
+var _globalId int64 = -1
+
+func GetGlobalId() int64 {
+	return atomic.AddInt64(&_globalId, 1)
+}
+
 // Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
 type Entity struct {
 	rect              *Rect
-	id                string
+	id                uint64
 	mass              float64
 	invMass           float64
 	vx                float64
@@ -68,7 +73,7 @@ func NewEntity(mass, restitution, friction, gForce float64) *Entity {
 		invMass = 1.0 / mass
 	}
 	a := &Entity{
-		id:               utils.NextUUId(),
+		id:               uint64(GetGlobalId()),
 		rect:             NewRect(0, 0, 0, 0, 0, 0),
 		gForce:           gForce,
 		vMin:             vMin,
@@ -225,7 +230,7 @@ func (e *Entity) SubV(vx, vy, vz float64) {
 }
 
 // GetId returns the unique identifier of the entity as a string.
-func (e *Entity) GetId() string {
+func (e *Entity) GetId() uint64 {
 	return e.id
 }
 
@@ -317,14 +322,6 @@ func (e *Entity) Distance(collider *Entity) float64 {
 	return math.Sqrt(d)
 }
 
-// DistanceSq calculates the squared distance between the center points of the current entity and another entity.
-func (e *Entity) DistanceSq(other *Entity) float64 {
-	dx := (e.rect.point.x + e.rect.size.w/2.0) - (other.rect.point.x + other.rect.size.w/2.0)
-	dy := (e.rect.point.y + e.rect.size.h/2.0) - (other.rect.point.y + other.rect.size.h/2.0)
-	dz := (e.rect.point.z + e.rect.size.d/2.0) - (other.rect.point.z + other.rect.size.d/2.0)
-	return dx*dx + dy*dy + dz*dz
-}
-
 // GetXRange returns the min and max x-coordinates of the entity's rectangular bounds.
 func (e *Entity) GetXRange() (float64, float64) {
 	return e.rect.point.x, e.rect.point.x + e.rect.size.w
@@ -410,62 +407,6 @@ func (e *Entity) Update() bool {
 	// 5. RESET ACCUMULATORE
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
 	return e.IsMoving()
-}
-
-// ComputeImpact determines the collision state and calculates the collision normal and penetration depth between two entities.
-// Returns the normal vector (normX, normY, normZ), penetration depth, and a boolean indicating whether a collision occurred.
-func (e *Entity) ComputeImpact(otherEnt *Entity) (float64, float64, float64, float64, bool) {
-	x1Min, x1Max := e.GetXRange()
-	x2Min, x2Max := otherEnt.GetXRange()
-	y1Min, y1Max := e.GetYRange()
-	y2Min, y2Max := otherEnt.GetYRange()
-	// SAT: Collisione AABB Planare Veloce
-	if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
-		z1Min, z1Max := e.GetZRange()
-		z2Min, z2Max := otherEnt.GetZRange()
-		// Supporto Swept Z per il Continuous Collision Detection verticale
-		if math.Abs(e.GetVz()) >= e.GetGForce() {
-			z1Min, z1Max = e.GetSweptZRange()
-		}
-		if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
-			z2Min, z2Max = otherEnt.GetSweptZRange()
-		}
-		if z1Max > z2Min && z1Min < z2Max {
-			pX1 := x1Max - x2Min
-			pX2 := x2Max - x1Min
-			pY1 := y1Max - y2Min
-			pY2 := y2Max - y1Min
-			pZ1 := z1Max - z2Min
-			pZ2 := z2Max - z1Min
-			minPenetration := pX1
-			var normX, normY, normZ float64 = -1, 0, 0
-			// Troviamo l'asse di minima compenetrazione
-			if pX2 < minPenetration {
-				minPenetration = pX2
-				normX, normY, normZ = 1, 0, 0
-			}
-			if pY1 < minPenetration {
-				minPenetration = pY1
-				normX, normY, normZ = 0, -1, 0
-			}
-			if pY2 < minPenetration {
-				minPenetration = pY2
-				normX, normY, normZ = 0, 1, 0
-			}
-			if pZ1 < minPenetration {
-				minPenetration = pZ1
-				normX, normY, normZ = 0, 0, -1
-			}
-			if pZ2 < minPenetration {
-				minPenetration = pZ2
-				normX, normY, normZ = 0, 0, 1
-			}
-			if minPenetration > 0.001 {
-				return normX, normY, normZ, minPenetration, true
-			}
-		}
-	}
-	return 0, 0, 0, 0, false
 }
 
 // ResolveImpact resolves the collision impact between two entities, applying forces based on restitution, friction, and penetration.
@@ -568,6 +509,66 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 	}
 }
 
+/*
+// ComputeImpact determines the collision state and calculates the collision normal and penetration depth between two entities.
+// Returns the normal vector (normX, normY, normZ), penetration depth, and a boolean indicating whether a collision occurred.
+func (e *Entity) ComputeImpact(otherEnt *Entity) (float64, float64, float64, float64, bool) {
+	x1Min, x1Max := e.GetXRange()
+	x2Min, x2Max := otherEnt.GetXRange()
+	y1Min, y1Max := e.GetYRange()
+	y2Min, y2Max := otherEnt.GetYRange()
+	// SAT: Collisione AABB Planare Veloce
+	if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
+		z1Min, z1Max := e.GetZRange()
+		z2Min, z2Max := otherEnt.GetZRange()
+		// Supporto Swept Z per il Continuous Collision Detection verticale
+		if math.Abs(e.GetVz()) >= e.GetGForce() {
+			z1Min, z1Max = e.GetSweptZRange()
+		}
+		if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
+			z2Min, z2Max = otherEnt.GetSweptZRange()
+		}
+		if z1Max > z2Min && z1Min < z2Max {
+			pX1 := x1Max - x2Min
+			pX2 := x2Max - x1Min
+			pY1 := y1Max - y2Min
+			pY2 := y2Max - y1Min
+			pZ1 := z1Max - z2Min
+			pZ2 := z2Max - z1Min
+			minPenetration := pX1
+			var normX, normY, normZ float64 = -1, 0, 0
+			// Troviamo l'asse di minima compenetrazione
+			if pX2 < minPenetration {
+				minPenetration = pX2
+				normX, normY, normZ = 1, 0, 0
+			}
+			if pY1 < minPenetration {
+				minPenetration = pY1
+				normX, normY, normZ = 0, -1, 0
+			}
+			if pY2 < minPenetration {
+				minPenetration = pY2
+				normX, normY, normZ = 0, 1, 0
+			}
+			if pZ1 < minPenetration {
+				minPenetration = pZ1
+				normX, normY, normZ = 0, 0, -1
+			}
+			if pZ2 < minPenetration {
+				minPenetration = pZ2
+				normX, normY, normZ = 0, 0, 1
+			}
+			if minPenetration > 0.001 {
+				return normX, normY, normZ, minPenetration, true
+			}
+		}
+	}
+	return 0, 0, 0, 0, false
+}
+
+*/
+
+/*
 // ClipVelocity adjusts the velocity vector to prevent movement into a surface by negating the velocity component along the normal.
 // The method applies a slight over-bounce to mitigate precision errors and ensure the entity does not get stuck on the surface.
 func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64, float64) {
@@ -583,3 +584,15 @@ func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64,
 	// V_new = V - N * (V · N)
 	return vx - (nx * backoff), vy - (ny * backoff), vz - (nz * backoff)
 }
+
+*/
+
+/*
+// DistanceSq calculates the squared distance between the center points of the current entity and another entity.
+func (e *Entity) DistanceSq(other *Entity) float64 {
+	dx := (e.rect.point.x + e.rect.size.w/2.0) - (other.rect.point.x + other.rect.size.w/2.0)
+	dy := (e.rect.point.y + e.rect.size.h/2.0) - (other.rect.point.y + other.rect.size.h/2.0)
+	dz := (e.rect.point.z + e.rect.size.d/2.0) - (other.rect.point.z + other.rect.size.d/2.0)
+	return dx*dx + dy*dy + dz*dz
+}
+*/

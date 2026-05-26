@@ -22,8 +22,7 @@ type Things struct {
 	tree             *physics.AABBTree
 	pending          []IThing
 	pendingIdx       atomic.Int32
-	entities         map[int]IThing
-	identifier       int
+	entities         map[uint64]IThing
 	active           []IThing
 	activeIdx        int
 	inactive         []IThing
@@ -42,8 +41,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		gScale:           gScale,
 		solverIterations: solverIterations,
 		tree:             physics.NewAABBTree(uint(len(cfg)*2), 4.0),
-		entities:         make(map[int]IThing),
-		identifier:       0,
+		entities:         make(map[uint64]IThing),
 		active:           make([]IThing, defaultLen),
 		container:        make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
@@ -303,9 +301,7 @@ func (th *Things) processCollision() {
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
 func (th *Things) addThing(ent IThing) {
-	th.entities[th.identifier] = ent
-	ent.SetIdentifier(th.identifier)
-	th.identifier++
+	th.entities[ent.GetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.active) {
 		th.active = make([]IThing, len(th.entities)*4)
 		th.inactive = make([]IThing, len(th.entities)*4)
@@ -322,5 +318,5 @@ func (th *Things) addThing(ent IThing) {
 // removeThing removes an IThing instance from the spatial tree and the entities map.
 func (th *Things) removeThing(ent IThing) {
 	th.tree.RemoveObject(ent)
-	delete(th.entities, ent.GetIdentifier())
+	delete(th.entities, ent.GetEntity().GetId())
 }

@@ -9,9 +9,9 @@ import (
 type IThing interface {
 	config.IThingConfig
 
-	SetIdentifier(identifier int)
+	//SetIdentifier(identifier int)
 
-	GetIdentifier() int
+	//GetIdentifier() int
 
 	GetBase() *ThingBase
 

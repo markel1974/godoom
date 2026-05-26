@@ -28,6 +28,8 @@ type ThingBase struct {
 	inbox        chan *ThingEvent
 	onCollision  config.CollisionFunc
 	onImpact     config.ImpactFunc
+	canStep      int
+	step         float64
 	done         chan struct{}
 }
 
@@ -221,6 +223,8 @@ func (t *ThingBase) SetActive(active bool) {
 
 // StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
 func (t *ThingBase) StageCompute() {
+	t.canStep = -1
+	t.step = 0.0
 	entity := t.vertices.GetEntity()
 	dx, dy, dz := entity.GetDisplacement()
 	if t.deadZone(dx, dy, dz) {
@@ -248,20 +252,24 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	}
 
 	entity := t.vertices.GetEntity()
+	baseZ := t.cage.GetBaseZ()
+	stepZ := baseZ + t.maxStep
 
 	for i := 0; i < slotsLen; i++ {
 		entry := t.cage.GetSlot(i)
-
 		if entry.IsWall() {
-			selfZ := t.cage.GetBaseZ()
 			maxZ := entry.GetMaxZ()
-			if maxZ <= selfZ { // downhill
-				continue
+			if maxZ <= baseZ {
+				continue //down-hill
 			}
-			if maxZ <= selfZ+t.maxStep { // uphill
-				entity.MoveToZ(maxZ)
-				continue
+			if maxZ <= stepZ {
+				if t.canStep != 0 {
+					t.canStep = 1
+					t.step = maxZ
+				}
+				continue //up-hill
 			}
+			t.canStep = 0
 		}
 
 		otherFace := entry.GetFace()
@@ -300,6 +308,10 @@ func (t *ThingBase) StageApply() {
 	entity := t.vertices.GetEntity()
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
+
+	if t.canStep == 1 {
+		entity.MoveToZ(t.step)
+	}
 
 	dx, dy, dz := entity.GetDisplacement()
 	if t.deadZone(dx, dy, dz) {
@@ -418,31 +430,3 @@ func (t *ThingBase) spawnBulletHole(x, y, z float64, target IThing) {
 	// ma per ora posizioniamola semplicemente nel punto XYZ.
 	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
 }
-
-/*
-// IsValidZ checks if the entity's base and top Z positions are within valid bounds of the location, considering maxStep.
-func isValidZ(volume *Volume, baseZ, topZ, maxStep float64) *Volume {
-	if volume == nil {
-		return nil
-	}
-	minZ := volume.GetMinZ()
-	maxZ := volume.GetMaxZ()
-	// 1. Gestione soffitti a cielo aperto
-	if maxZ <= minZ {
-		maxZ = math.MaxFloat64
-	}
-	// 2. Controllo Pavimento (L'entità può scavalcare questo dislivello?)
-	// Se baseZ è maggiore di floor (es. stiamo cadendo o saltando), la condizione è ampiamente soddisfatta.
-	if baseZ+maxStep < minZ {
-		return nil
-	}
-	// 3. Controllo Soffitto (C'è spazio sufficiente per l'altezza totale?)
-	// Calcoliamo la quota base attesa (il massimo tra la nostra Z e il pavimento del nuovo settore)
-	expectedBase := math.Max(baseZ, minZ)
-	entityHeight := topZ - baseZ
-	if expectedBase+entityHeight > maxZ {
-		return nil
-	}
-	return volume
-}
-*/

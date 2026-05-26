@@ -306,6 +306,7 @@ func (t *ThingBase) StageApply() {
 		t.location = location
 	}
 	entity := t.vertices.GetEntity()
+	entity.ClearForce()
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 

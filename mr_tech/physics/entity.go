@@ -377,11 +377,16 @@ func (e *Entity) GetDisplacement() (float64, float64, float64) {
 	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
 }
 
-// AddForce applies a force to the entity, altering its acceleration based on the inverse of its mass.
+// AddForce applies a force vector (fx, fy, fz) to the entity, modifying its acceleration based on its inverse mass.
 func (e *Entity) AddForce(fx, fy, fz float64) {
 	e.ax += fx * e.invMass
 	e.ay += fy * e.invMass
 	e.az += fz * e.invMass
+}
+
+// ClearForce resets the accumulated force components (ax, ay, az) of the entity to zero.
+func (e *Entity) ClearForce() {
+	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
 }
 
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
@@ -405,7 +410,7 @@ func (e *Entity) Update() bool {
 		e.vz = e.terminalZVelocity
 	}
 	// 5. RESET ACCUMULATORE
-	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
+	//e.ax, e.ay, e.az = 0.0, 0.0, 0.0
 	return e.IsMoving()
 }
 
@@ -449,23 +454,19 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 	//const percent = 0.2
 	//bias := math.Max(penetration-slop, 0.0) * percent
 
-	// BAUMGARTE STABILIZATION ---
-	slop := 0.05
-	percent := 0.5
-	/// Se il piano è prevalentemente orizzontale (pavimento o soffitto)
-	// applichiamo un vincolo hard per contrastare l'integrazione della gravità.
-	if math.Abs(nz) > 0.7 {
-		slop = 0.001  // Tolleranza quasi zero
-		percent = 0.2 // Reattività quasi immediata
-	}
-	bias := (math.Max(penetration-slop, 0.0) * percent) / e.dt
+	bias := 0.0
+	//if e.ax != 0.0 || e.ay != 0.0 || e.az != 0.0 {
+	const slop = 0.05
+	const percent = 0.5
+	bias = math.Max(penetration-slop, 0.0) * percent
 
-	//bias := (penetration * 0.5) / e.dt
-
-	//bias := 0.0
-	//bias := 0.0
 	// IMPULSO NORMALE (con bias applicato)
-	j := -(1.0+actualRestitution)*vRelDotN + bias
+	impulse := -(1.0 + actualRestitution) * vRelDotN
+	if bias > impulse {
+		bias = impulse
+	}
+	j := impulse + bias
+	//fmt.Println("Applying normal impulse with bias:", impulse, bias)
 	j /= invMassSum
 
 	e.vx += (j * nx) * e.invMass

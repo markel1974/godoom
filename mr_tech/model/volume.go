@@ -206,6 +206,10 @@ func (v *Volume) QueryOverlaps(object physics.IAABB, callback func(object physic
 	v.facesTree.QueryOverlaps(object, callback)
 }
 
+func (v *Volume) QueryPoint(px, py, pz float64, callback func(object physics.IAABB) bool) {
+	v.facesTree.QueryPoint3d(px, py, pz, callback)
+}
+
 /*
 // PointInside3d determines if the point (px, py, pz) lies inside the 3D location, considering optional fixed Z bounds.
 func (v *Volume) PointInside3d(px, py, pz float64) bool {

@@ -94,18 +94,22 @@ func (th *Things) QueryCollisionCage(cage *CollisionCage) {
 			return false
 		}
 		remoteX, remoteY, remoteZ := remoteThing.GetCenter()
-		remoteAABB := cage.TranslatePoint(remoteX, remoteY, remoteZ)
+		remoteAABB := cage.TranslatePoint(0, remoteX, remoteY, remoteZ)
 		remoteThing.GetVolume().QueryOverlaps(remoteAABB, func(otherEnt physics.IAABB) bool {
+
+			//pX, pY, pZ := cage.LocatePoint(remoteX, remoteY, remoteZ)
+			//remoteThing.GetVolume().QueryPoint(pX, pY, pZ, func(otherEnt physics.IAABB) bool {
 			remoteFace := otherEnt.(*Face)
 
 			var localFace *Face
 			if volume := cage.GetVolume(); volume != nil {
-				tAABB := cage.TranslatePoint(remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z)
+				tAABB := cage.TranslatePoint(1, remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z)
 				volume.QueryOverlaps(tAABB, func(otherEnt physics.IAABB) bool {
+					//p1X, p1Y, p1Z := cage.LocatePoint(remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z)
+					//volume.QueryPoint(p1X, p1Y, p1Z, func(otherEnt physics.IAABB) bool {
 					localFace = otherEnt.(*Face)
 					return true
 				})
-
 				//if localFace == nil {
 				//	fmt.Println("QueryCollisionCage: No local face found for remote face")
 				//}

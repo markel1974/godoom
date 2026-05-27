@@ -204,7 +204,7 @@ type CollisionCage struct {
 	thing               IThing
 	buckets             [BucketSize]*CollisionBucket
 	ellipsoid           *physics.Entity
-	ellipsoidLocal      *physics.Entity
+	ellipsoidLocal      [4]*physics.Entity
 	margin              float64
 	cX, cY, cZ          float64
 	dX, dY, dZ          float64
@@ -220,17 +220,19 @@ type CollisionCage struct {
 // NewCollisionCage creates and initializes a new CollisionCage with the given IThing and margin values.
 func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 	c := &CollisionCage{
-		thing:          thing,
-		margin:         margin,
-		ellipsoid:      physics.NewEntity(0, 0, 0, 0),
-		ellipsoidLocal: physics.NewEntity(0, 0, 0, 0),
-		volume:         nil,
-		slots:          make([]*CageEntry, TotalSlots),
-		slotsEmpty:     make([]*CageEntry, TotalSlots),
-		slotsLen:       0,
+		thing:      thing,
+		margin:     margin,
+		ellipsoid:  physics.NewEntity(0, 0, 0, 0),
+		volume:     nil,
+		slots:      make([]*CageEntry, TotalSlots),
+		slotsEmpty: make([]*CageEntry, TotalSlots),
+		slotsLen:   0,
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		c.buckets[i] = NewCollisionBucket(i)
+	}
+	for i := 0; i < len(c.ellipsoidLocal); i++ {
+		c.ellipsoidLocal[i] = physics.NewEntity(0, 0, 0, 0)
 	}
 	return c
 }
@@ -304,7 +306,7 @@ func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
 func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
 
 // TranslatePoint updates the local ellipsoid's position relative to a target and returns the updated physics.Entity.
-func (s *CollisionCage) TranslatePoint(targetX, targetY, targetZ float64) *physics.Entity {
+func (s *CollisionCage) TranslatePoint(slot int, targetX, targetY, targetZ float64) *physics.Entity {
 	cageAABB := s.ellipsoid.GetAABB()
 	lMinX := cageAABB.GetMinX() - targetX
 	lMaxX := cageAABB.GetMaxX() - targetX
@@ -312,8 +314,16 @@ func (s *CollisionCage) TranslatePoint(targetX, targetY, targetZ float64) *physi
 	lMaxY := cageAABB.GetMaxY() - targetY
 	lMinZ := cageAABB.GetMinZ() - targetZ
 	lMaxZ := cageAABB.GetMaxZ() - targetZ
-	s.ellipsoidLocal.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal
+	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return s.ellipsoidLocal[slot]
+}
+
+func (s *CollisionCage) LocatePoint(targetX, targetY, targetZ float64) (float64, float64, float64) {
+	cageAABB := s.ellipsoid.GetAABB()
+	x := cageAABB.GetMinX() - targetX
+	y := cageAABB.GetMinY() - targetY
+	z := cageAABB.GetMinZ() - targetZ
+	return x, y, z
 }
 
 // SetResolved marks a CageEntry as resolved if it matches the specified Face and eId.

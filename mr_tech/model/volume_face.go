@@ -10,6 +10,7 @@ import (
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
+	id        int
 	parent    *Volume
 	tag       string
 	aabb      *physics.AABB

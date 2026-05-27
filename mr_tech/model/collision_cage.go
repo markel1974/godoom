@@ -56,7 +56,12 @@ const (
 
 // CageEntry represents a collision entry containing face geometry, distance, normal, penetration, and other flags.
 type CageEntry struct {
-	face        *Face
+	remoteCage  *CollisionCage
+	remoteFace  *Face
+	remoteId    uint64
+	localFace   *Face
+	localId     uint64
+	resolved    bool
 	dist        float64
 	penetration float64
 	nX          float64
@@ -69,8 +74,22 @@ type CageEntry struct {
 	maxZ        float64
 }
 
-// GetFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
-func (s *CageEntry) GetFace() *Face { return s.face }
+// GetRemoteFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
+func (s *CageEntry) GetRemoteFace() *Face { return s.remoteFace }
+
+// SetResolved marks the CageEntry as resolved by setting its `resolved` field to true.
+func (s *CageEntry) SetResolved() {
+	s.resolved = true
+	if s.remoteCage == nil {
+		return
+	}
+	s.remoteCage.SetResolved(s.localFace, s.localId)
+}
+
+// IsResolved checks whether the collision entry has been marked as resolved and returns true if so, otherwise false.
+func (s *CageEntry) IsResolved() bool {
+	return s.resolved
+}
 
 // GetDistance returns the distance value (`dist`) associated with the CageEntry instance.
 func (s *CageEntry) GetDistance() float64 { return s.dist }
@@ -93,8 +112,13 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry fields with the provided values for geometry, collision, and wall properties.
-func (s *CageEntry) Rebuild(face *Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isWall bool, maxZ float64) {
-	s.face = face
+func (s *CageEntry) Rebuild(remoteCage *CollisionCage, remoteFace *Face, remoteId uint64, localFace *Face, localId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isWall bool, maxZ float64) {
+	s.resolved = false
+	s.remoteFace = remoteFace
+	s.remoteCage = remoteCage
+	s.remoteId = remoteId
+	s.localFace = localFace
+	s.localId = localId
 	s.dist = dist
 	s.penetration = penetration
 	s.nX, s.nY, s.nZ = nX, nY, nZ
@@ -105,60 +129,57 @@ func (s *CageEntry) Rebuild(face *Face, dist, penetration, nX, nY, nZ, p0x, p0y,
 
 // CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.
 type CollisionBucket struct {
-	bucket    BucketType
-	container [FacesPerBucket]*CageEntry
-	spare     [FacesPerBucket]*CageEntry
-	empty     [FacesPerBucket]*CageEntry
-	counter   int
+	bucket           BucketType
+	spare            [FacesPerBucket]*CageEntry
+	container        [FacesPerBucket]*CageEntry
+	containerCounter int
 }
 
 // NewCollisionBucket initializes a new CollisionBucket with preallocated CageEntry arrays and a specified BucketType.
 func NewCollisionBucket(bucket BucketType) *CollisionBucket {
 	b := &CollisionBucket{
-		bucket:  bucket,
-		counter: 0,
+		bucket:           bucket,
+		containerCounter: 0,
 	}
 	for i := 0; i < FacesPerBucket; i++ {
 		b.spare[i] = NewCollisionFace()
 		b.container[i] = nil
-		b.empty[i] = nil
 	}
 	return b
 }
 
 // Rebuild resets the CollisionBucket's counter to zero and clears its container by copying from the empty array.
 func (b *CollisionBucket) Rebuild() {
-	b.counter = 0
-	copy(b.container[:], b.empty[:])
+	b.containerCounter = 0
 }
 
 // Count returns the number of entries currently stored in the CollisionBucket.
 func (b *CollisionBucket) Count() int {
-	return b.counter
+	return b.containerCounter
 }
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
-func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, fMaxZ float64) *CageEntry {
+func (b *CollisionBucket) Add(remoteCage *CollisionCage, remoteFace *Face, remoteId uint64, localFace *Face, localId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isWall bool, fMaxZ float64) *CageEntry {
 	// Topological Deduplication (Filter for coplanar faces)
 	// Prevents generating multiple constraints for adjacent triangles on the same plane
-	for i := 0; i < b.counter; i++ {
+	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
 		// If the dot product is ~1.0, the two faces form a continuous plane
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
 			// Update the unified constraint only if the new penetration is deeper
 			if penetration > existing.penetration {
-				existing.Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
+				existing.Rebuild(remoteCage, remoteFace, remoteId, localFace, localId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
 			}
 			return nil
 		}
 	}
 
 	// Insert a new plane into the non-full bucket
-	if b.counter < FacesPerBucket {
-		target := b.spare[b.counter]
-		target.Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
-		b.container[b.counter] = target
-		b.counter++
+	if b.containerCounter < FacesPerBucket {
+		target := b.spare[b.containerCounter]
+		target.Rebuild(remoteCage, remoteFace, remoteId, localFace, localId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
+		b.container[b.containerCounter] = target
+		b.containerCounter++
 		return target
 	}
 
@@ -172,7 +193,7 @@ func (b *CollisionBucket) Add(face *Face, dist, penetration, normalX, normalY, n
 		}
 	}
 	if penetration > minPen {
-		b.container[minIdx].Rebuild(face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
+		b.container[minIdx].Rebuild(remoteCage, remoteFace, remoteId, localFace, localId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isWall, fMaxZ)
 	}
 
 	return nil
@@ -282,8 +303,8 @@ func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
 // GetEntity returns the ellipsoid entity associated with the CollisionCage.
 func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
 
-// Translate updates the local ellipsoid's position relative to a target and returns the updated physics.Entity.
-func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.Entity {
+// TranslatePoint updates the local ellipsoid's position relative to a target and returns the updated physics.Entity.
+func (s *CollisionCage) TranslatePoint(targetX, targetY, targetZ float64) *physics.Entity {
 	cageAABB := s.ellipsoid.GetAABB()
 	lMinX := cageAABB.GetMinX() - targetX
 	lMaxX := cageAABB.GetMaxX() - targetX
@@ -295,20 +316,35 @@ func (s *CollisionCage) Translate(targetX, targetY, targetZ float64) *physics.En
 	return s.ellipsoidLocal
 }
 
+// SetResolved marks a CageEntry as resolved if it matches the specified Face and eId.
+func (s *CollisionCage) SetResolved(otherFace *Face, otherId uint64) {
+	for i := 0; i < s.slotsLen; i++ {
+		entry := s.slots[i]
+		if entry.remoteFace == otherFace {
+			entry.resolved = true
+			return
+		}
+		//if entry.remoteId == otherId {
+		//	entry.resolved = true
+		//	return
+		//}
+	}
+}
+
 // AddFace processes a Face to determine its type, position, and potential collision influence within the CollisionCage.
 // face is the Face object to process.
 // offX, offY, offZ specify the offsets to transform the face into world space.
 // isVolume indicates whether the Face should be prioritized as a volumetric obstacle.
-func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume bool) {
-	nAbsX, nAbsY, nAbsZ := face.normalAbs.X, face.normalAbs.Y, face.normalAbs.Z
+func (s *CollisionCage) AddFace(remoteCage *CollisionCage, remoteFace *Face, remoteId uint64, localFace *Face, offX, offY, offZ float64, isVolume bool) {
+	nAbsX, nAbsY, nAbsZ := remoteFace.normalAbs.X, remoteFace.normalAbs.Y, remoteFace.normalAbs.Z
 
 	wallWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	wallNS := nAbsY > nAbsZ
 	isWall := wallWE || wallNS
 
 	// Translation (from Local to World Space)
-	p0x, p0y, p0z := face.tri[0].X+offX, face.tri[0].Y+offY, face.tri[0].Z+offZ
-	nX, nY, nZ := face.normal.X, face.normal.Y, face.normal.Z
+	p0x, p0y, p0z := remoteFace.tri[0].X+offX, remoteFace.tri[0].Y+offY, remoteFace.tri[0].Z+offZ
+	nX, nY, nZ := remoteFace.normal.X, remoteFace.normal.Y, remoteFace.normal.Z
 
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
@@ -364,14 +400,14 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 
 	// Volume Priority
 	if isVolume && dist < s.distance {
-		if volume := face.GetParent(); volume != nil {
+		if volume := remoteFace.GetParent(); volume != nil {
 			s.volume = volume
 			s.distance = dist
 		}
 	}
 
 	// TODO BETTER IMPLEMENTATION!
-	_, texKind := face.GetMaterialDetails()
+	_, texKind := remoteFace.GetMaterialDetails()
 	if texKind == int(config.MaterialKindSky) {
 		return // Skybox/transparent: ignore collision
 	}
@@ -386,8 +422,12 @@ func (s *CollisionCage) AddFace(face *Face, offX, offY, offZ float64, isVolume b
 		return
 	}
 
-	fMaxZ := face.GetAABB().GetMaxZ() + offZ
-	cage := s.buckets[bucket].Add(face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isWall, fMaxZ)
+	fMaxZ := remoteFace.GetAABB().GetMaxZ() + offZ
+	localId := s.thing.GetEntity().GetId()
+	//if s.thing.GetId() == "PLAYER" {
+	//	fmt.Println("CollisionCage.AddFace:", localId, remoteId)
+	//}
+	cage := s.buckets[bucket].Add(remoteCage, remoteFace, remoteId, localFace, localId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isWall, fMaxZ)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++

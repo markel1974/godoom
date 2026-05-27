@@ -256,9 +256,9 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	stepZ := baseZ + t.maxStep
 
 	for i := 0; i < slotsLen; i++ {
-		entry := t.cage.GetSlot(i)
-		if entry.IsWall() {
-			maxZ := entry.GetMaxZ()
+		slot := t.cage.GetSlot(i)
+		if slot.IsWall() {
+			maxZ := slot.GetMaxZ()
 			if maxZ <= baseZ {
 				continue //down-hill
 			}
@@ -272,9 +272,15 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 			t.canStep = 0
 		}
 
-		otherFace := entry.GetFace()
-		penetration := entry.GetPenetration() + solverJitter
-		nX, nY, nZ := entry.GetNormal()
+		if slot.IsResolved() {
+			continue
+		}
+
+		slot.SetResolved()
+
+		otherFace := slot.GetRemoteFace()
+		penetration := slot.GetPenetration() + solverJitter
+		nX, nY, nZ := slot.GetNormal()
 
 		otherParent := otherFace.GetParent()
 		otherParentEnt := otherParent.GetEntity()

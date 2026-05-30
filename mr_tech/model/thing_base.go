@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
@@ -221,25 +220,31 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
-// StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
-func (t *ThingBase) StageCompute() {
-	t.canStep = -1
-	t.step = 0.0
+func (t *ThingBase) StagePrepare() bool {
 	entity := t.vertices.GetEntity()
-	dx, dy, dz := entity.GetDisplacement()
-	if t.deadZone(dx, dy, dz) {
-		return
+	entity.Update()
+	if !entity.IsMoving() {
+		return false
 	}
 
+	t.canStep = -1
+	t.step = 0.0
+	dx, dy, dz := entity.GetDisplacement()
+
 	// Estrazione origine (Bottom-Left)
-	pX, pY, pZ := t.GetBottomLeft()
+	pX, pY, pZ := entity.GetBottomLeft()
 	// Calcolo Half-Extents
 	w, h, d := entity.GetSize()
 	eRadX, eRadY, eRadZ := w*0.5, h*0.5, d*0.5
 	// Calcolo del CENTRO per il Broad-Phase
 	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
+	return true
+}
 
+// StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
+func (t *ThingBase) StageCompute() {
+	//TODO QueryCollisionCage va spostato in un stage apposito
 	t.things.QueryCollisionCage(t.cage)
 }
 
@@ -257,13 +262,16 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-		if slot.IsWall() {
+		if slot.IsWall() && slot.IsBlock() {
 			maxZ := slot.GetMaxZ()
 			if maxZ <= baseZ {
 				continue //down-hill
 			}
 			if maxZ <= stepZ {
 				if t.canStep != 0 {
+					//if t.id == "PLAYER" {
+					//	fmt.Println("HERE")
+					//}
 					t.canStep = 1
 					t.step = maxZ
 				}
@@ -276,7 +284,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 			continue
 		}
 
-		slot.SetResolved()
+		slot.SetResolved(t.GetId())
 
 		otherFace := slot.GetRemoteFace()
 		penetration := slot.GetPenetration() + solverJitter
@@ -298,6 +306,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 		// Risoluzione Impulsi e Attrito (Cinetica)
 		// Passiamo penetration = 0.0 per inibire il Baumgarte bias interno all'Entity
+		//penetration = 0.0
 		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 		if thing := otherParent.GetThing(); thing != nil {
@@ -312,7 +321,7 @@ func (t *ThingBase) StageApply() {
 		t.location = location
 	}
 	entity := t.vertices.GetEntity()
-	entity.ClearForce()
+	//entity.ClearForce()
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
@@ -320,10 +329,30 @@ func (t *ThingBase) StageApply() {
 		entity.MoveToZ(t.step)
 	}
 
+	/*
+		const slop = 0.01             // Tolleranza di compenetrazione consentita prima di correggere
+		const positionalPercent = 1.0 // Relaxation factor: corregge l'80% dell'errore per frame (smorza il jitter)
+		for i := 0; i < t.cage.GetSlotsLen(); i++ {
+			slot := t.cage.GetSlot(i)
+			if !slot.IsResolved() {
+				continue
+			}
+			push := slot.GetPenetration()
+			if push <= slop {
+				continue // Ignora micro-compenetrazioni millimetriche a riposo
+			}
+			nX, nY, nZ := slot.GetNormal()
+			correction := (push - slop) * positionalPercent
+			// NOTA SULLE MASSE:
+			// Se l'oggetto remoto è dinamico (es. un'altra cassa), questa correction andrebbe moltiplicata
+			// per (myInvMass / (myInvMas s + otherInvMass)).
+			// Se diamo per scontato che i muri siano massa infinita, applichiamo il 100% a noi stessi.
+			entity.AddTo(nX*correction, nY*correction, nZ*correction)
+		}
+
+	*/
+
 	dx, dy, dz := entity.GetDisplacement()
-	if t.deadZone(dx, dy, dz) {
-		return
-	}
 	entity.AddTo(dx, dy, dz)
 }
 
@@ -401,6 +430,7 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 	}
 }
 
+/*
 // deadZone checks if the provided velocity components are within a threshold, sets velocity to zero, and returns true if so.
 func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
 	const sleepEpsilon = 0.005
@@ -415,6 +445,7 @@ func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
 	}
 	return false
 }
+*/
 
 // Impact handles the interaction logic when this object collides with another object.
 // other refers to the configuration of the colliding object.

@@ -352,11 +352,6 @@ func (e *Entity) GetSweptZRange() (float64, float64) {
 	return minZ, maxZ
 }
 
-// IsMoving checks if the entity is currently in motion based on its velocity or acceleration along any axis.
-func (e *Entity) IsMoving() bool {
-	return e.vx != 0 || e.vy != 0 || e.vz != 0 || e.ax != 0 || e.ay != 0 || e.az != 0
-}
-
 // clearCollider removes the association with the current collider, ensuring any mutual reference is also cleared.
 func (e *Entity) clearCollider() {
 	if e.collider != nil {
@@ -384,16 +379,25 @@ func (e *Entity) AddForce(fx, fy, fz float64) {
 	e.az += fz * e.invMass
 }
 
-// ClearForce resets the accumulated force components (ax, ay, az) of the entity to zero.
-func (e *Entity) ClearForce() {
-	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
-}
-
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
-func (e *Entity) Update() bool {
+func (e *Entity) Update() {
+	const sleepEpsilon = 0.005
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
 	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
+
+	// RESET ACCUMULATORE
+	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
+
+	dx, dy, dz := e.vx*e.dt, e.vy*e.dt, e.vz*e.dt
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		e.vx = 0.0
+		e.vy = 0.0
+		if e.onGround {
+			e.vz = 0.0
+		}
+		return
+	}
 
 	e.vx *= e.dampingGround //e.dampingActive
 	e.vy *= e.dampingGround //e.dampingActive
@@ -409,10 +413,16 @@ func (e *Entity) Update() bool {
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}
-	// 5. RESET ACCUMULATORE
-	//e.ax, e.ay, e.az = 0.0, 0.0, 0.0
-	return e.IsMoving()
 }
+
+func (e *Entity) IsMoving() bool {
+	return e.vx != 0 || e.vy != 0 || e.vz != 0
+}
+
+// ClearForce resets the accumulated force components (ax, ay, az) of the entity to zero.
+//func (e *Entity) ClearForce() {
+//	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
+//}
 
 // ResolveImpact resolves the collision impact between two entities, applying forces based on restitution, friction, and penetration.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
@@ -454,11 +464,11 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 	//const percent = 0.2
 	//bias := math.Max(penetration-slop, 0.0) * percent
 
-	bias := 0.0
+	//bias := 0.0
 	//if e.ax != 0.0 || e.ay != 0.0 || e.az != 0.0 {
 	const slop = 0.05
-	const percent = 0.5
-	bias = math.Max(penetration-slop, 0.0) * percent
+	const percent = 0.5 //0.2
+	bias := math.Max(penetration-slop, 0.0) * percent
 
 	// IMPULSO NORMALE (con bias applicato)
 	impulse := -(1.0 + actualRestitution) * vRelDotN

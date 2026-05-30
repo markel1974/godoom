@@ -9,17 +9,11 @@ import (
 type IThing interface {
 	config.IThingConfig
 
-	//SetIdentifier(identifier int)
-
-	//GetIdentifier() int
-
 	GetBase() *ThingBase
 
 	GetAABB() *physics.AABB
 
 	GetVertices() (*[]*Face, int, *[]*Face, int, float64, float64)
-
-	//GetLocation() *Volume
 
 	GetVolume() *Volume
 
@@ -34,6 +28,8 @@ type IThing interface {
 	SetActive(active bool)
 
 	StageThinking(playerX float64, playerY float64, playerZ float64)
+
+	StagePrepare() bool
 
 	StageCompute()
 

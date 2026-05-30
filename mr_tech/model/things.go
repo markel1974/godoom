@@ -83,44 +83,52 @@ func (th *Things) Len() int {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (th *Things) QueryCollisionCage(cage *CollisionCage) {
-	//world
-	th.volumes.QueryCollisionCage(cage)
+func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
+	// Collisioni Statiche (Mondo/Mappa)
+	th.volumes.QueryCollisionCage(lCage)
 
-	//things
-	th.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
-		remoteThing := object.(IThing)
-		if cage.GetThing() == remoteThing {
+	lThing := lCage.GetThing()
+	//TODO e' profondamente sbagliato prendere un punto qualunque!
+	//lX, lY, lZ := lThing.GetBottomLeft() //  lThing.GetCenter()
+
+	// Collisioni Dinamiche (Broad-Phase contro l'AABB Tree globale)
+	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
+		rThing := object.(IThing)
+		// Auto-culling
+		if lThing == rThing {
 			return false
 		}
-		remoteX, remoteY, remoteZ := remoteThing.GetCenter()
-		remoteAABB := cage.TranslatePoint(0, remoteX, remoteY, remoteZ)
-		remoteThing.GetVolume().QueryOverlaps(remoteAABB, func(otherEnt physics.IAABB) bool {
+		rVolume := rThing.GetVolume()
+		if rVolume == nil {
+			return false // Entità senza geometria,
+		}
+		rCage := rThing.GetCage()
+		//remoteX, remoteY, remoteZ := remoteThing.GetCenter()
+		rId := rThing.GetEntity().GetId()
+		//rAABB := rCage.TranslateWorldToLocal(0, lX, lY, lZ)
+		aabb := lCage.TranslateWorldToLocalAABB(0, rCage)
+		rVolume.QueryOverlaps(aabb, func(rEnt physics.IAABB) bool {
+			rFace := rEnt.(*Face)
+			//TODO
+			var lFace *Face
+			/*
+				if localVolume != nil {
+					rPtX, rPtY, rPtZ := remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z
+					localAABB := localCage.TranslateLocalToLocal(1, rPtX, rPtY, rPtZ)
+					//a, b, c := localAABB.GetCenter()
+					//fmt.Println("HERE", rPtX, rPtY, rPtZ, "||||", a, b, c)
+					localVolume.QueryOverlaps(localAABB, func(localEnt physics.IAABB) bool {
+						localFace = localEnt.(*Face)
+						return true // Early-exit: faccia locale trovata
+					})
+				}
+			*/
 
-			//pX, pY, pZ := cage.LocatePoint(remoteX, remoteY, remoteZ)
-			//remoteThing.GetVolume().QueryPoint(pX, pY, pZ, func(otherEnt physics.IAABB) bool {
-			remoteFace := otherEnt.(*Face)
-
-			var localFace *Face
-			if volume := cage.GetVolume(); volume != nil {
-				tAABB := cage.TranslatePoint(1, remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z)
-				volume.QueryOverlaps(tAABB, func(otherEnt physics.IAABB) bool {
-					//p1X, p1Y, p1Z := cage.LocatePoint(remoteFace.tri[0].X, remoteFace.tri[0].Y, remoteFace.tri[0].Z)
-					//volume.QueryPoint(p1X, p1Y, p1Z, func(otherEnt physics.IAABB) bool {
-					localFace = otherEnt.(*Face)
-					return true
-				})
-				//if localFace == nil {
-				//	fmt.Println("QueryCollisionCage: No local face found for remote face")
-				//}
-			}
-
-			remoteId := remoteThing.GetEntity().GetId()
-			cage.AddFace(remoteThing.GetCage(), remoteFace, remoteId, localFace, remoteX, remoteY, remoteZ, false)
-
-			return false
+			// Integrazione nel Manifold
+			lCage.AddFace(rThing, rFace, rId, lFace)
+			return false // False: continua a cercare altre facce nell'altro volume
 		})
-		return false
+		return false // False: continua a cercare altre entità nell'albero globale
 	})
 }
 
@@ -267,7 +275,7 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 
 	for x := 0; x < th.containerIdx; x++ {
 		thing := th.container[x]
-		if ent := thing.GetEntity(); !ent.Update() {
+		if !thing.StagePrepare() {
 			continue
 		}
 		th.tree.UpdateObject(thing)
@@ -282,26 +290,27 @@ func (th *Things) processCollision() {
 		return
 	}
 
-	th.event.SetStage(StageCompute)
+	//th.event.SetStage(StageCompute)
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
-		th.event.wg.Add(1)
-		t2.PostMessage(th.event)
+		t2.StageCompute()
+		//th.event.wg.Add(1)
+		//t2.PostMessage(th.event)
 	}
-	th.event.wg.Wait()
+	//th.event.wg.Wait()
 
-	for si := 0; si < th.solverIterations; si++ {
-		//th.event.SetSolver(si, solverJitter)
-		//th.event.SetStage(StageResolve)
-		for x := 0; x < th.activeIdx; x++ {
-			t2 := th.active[x]
-			//th.event.wg.Add(1)
-			//t2.PostMessage(th.event)
-			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
-			t2.StageResolve(si, solverJitter)
-		}
-		//th.event.wg.Wait()
+	//for si := 0; si < th.solverIterations; si++ {
+	//th.event.SetSolver(si, solverJitter)
+	//th.event.SetStage(StageResolve)
+	for x := 0; x < th.activeIdx; x++ {
+		t2 := th.active[x]
+		//th.event.wg.Add(1)
+		//t2.PostMessage(th.event)
+		//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
+		t2.StageResolve(0, solverJitter)
 	}
+	//th.event.wg.Wait()
+	//}
 
 	th.event.SetStage(StageApply)
 	// PHYSYCS APPLY

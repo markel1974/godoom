@@ -59,9 +59,7 @@ type CageEntry struct {
 	remoteThing IThing
 	remoteFace  *Face
 	remoteId    uint64
-	localFace   *Face
 	localId     uint64
-	resolved    bool
 	dist        float64
 	penetration float64
 	nX          float64
@@ -76,23 +74,6 @@ type CageEntry struct {
 
 // GetRemoteFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
 func (s *CageEntry) GetRemoteFace() *Face { return s.remoteFace }
-
-// SetResolved marks the CageEntry as resolved by setting its `resolved` field to true.
-func (s *CageEntry) SetResolved(id string) {
-	s.resolved = true
-	if s.remoteThing == nil {
-		return
-	}
-	//if id == "PLAYER" {
-	//	fmt.Println("TRYING TO RESOLVE")
-	//}
-	s.remoteThing.GetCage().SetResolved(s.localFace, s.localId)
-}
-
-// IsResolved checks whether the collision entry has been marked as resolved and returns true if so, otherwise false.
-func (s *CageEntry) IsResolved() bool {
-	return s.resolved
-}
 
 // GetDistance returns the distance value (`dist`) associated with the CageEntry instance.
 func (s *CageEntry) GetDistance() float64 { return s.dist }
@@ -117,10 +98,8 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry fields with the provided values for geometry, collision, and wall properties.
-func (s *CageEntry) Rebuild(lThing IThing, lFace *Face, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) {
-	s.resolved = false
+func (s *CageEntry) Rebuild(lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) {
 	s.localId = lThing.GetEntity().GetId()
-	s.localFace = lFace
 	s.remoteThing = rThing
 	s.remoteFace = rFace
 	s.remoteId = rId
@@ -164,7 +143,7 @@ func (b *CollisionBucket) Count() int {
 }
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
-func (b *CollisionBucket) Add(lThing IThing, lFace *Face, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) *CageEntry {
+func (b *CollisionBucket) Add(lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) *CageEntry {
 	// Topological Deduplication (Filter for coplanar faces)
 	// Prevents generating multiple constraints for adjacent triangles on the same plane
 	for i := 0; i < b.containerCounter; i++ {
@@ -173,7 +152,7 @@ func (b *CollisionBucket) Add(lThing IThing, lFace *Face, rThing IThing, rFace *
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
 			// Update the unified constraint only if the new penetration is deeper
 			if penetration > existing.penetration {
-				existing.Rebuild(lThing, lFace, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+				existing.Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
 			}
 			return nil
 		}
@@ -182,7 +161,7 @@ func (b *CollisionBucket) Add(lThing IThing, lFace *Face, rThing IThing, rFace *
 	// Insert a new plane into the non-full bucket
 	if b.containerCounter < FacesPerBucket {
 		target := b.spare[b.containerCounter]
-		target.Rebuild(lThing, lFace, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+		target.Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
 		b.container[b.containerCounter] = target
 		b.containerCounter++
 		return target
@@ -198,7 +177,7 @@ func (b *CollisionBucket) Add(lThing IThing, lFace *Face, rThing IThing, rFace *
 		}
 	}
 	if penetration > minPen {
-		b.container[minIdx].Rebuild(lThing, lFace, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+		b.container[minIdx].Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
 	}
 
 	return nil
@@ -206,6 +185,7 @@ func (b *CollisionBucket) Add(lThing IThing, lFace *Face, rThing IThing, rFace *
 
 // CollisionCage provides a structure for managing collision detection and resolution for a 3D entity.
 type CollisionCage struct {
+	seen                map[*CollisionCage]bool
 	thing               IThing
 	buckets             [BucketSize]*CollisionBucket
 	ellipsoid           *physics.Entity
@@ -225,6 +205,7 @@ type CollisionCage struct {
 // NewCollisionCage creates and initializes a new CollisionCage with the given IThing and margin values.
 func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 	c := &CollisionCage{
+		seen:       make(map[*CollisionCage]bool),
 		thing:      thing,
 		margin:     margin,
 		ellipsoid:  physics.NewEntity(0, 0, 0, 0),
@@ -269,6 +250,18 @@ func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ floa
 
 	copy(s.slots, s.slotsEmpty)
 	s.slotsLen = 0
+
+	for k := range s.seen {
+		delete(s.seen, k)
+	}
+}
+
+func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
+	return s.seen[rCage]
+}
+
+func (s *CollisionCage) Seen(rCage *CollisionCage) {
+	s.seen[rCage] = true
 }
 
 // GetBaseZ calculates and returns the lower Z-bound of the collision cage based on its center and radius.
@@ -330,42 +323,11 @@ func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCag
 	return s.ellipsoidLocal[slot]
 }
 
-// SetResolved marks a CageEntry as resolved if it matches the specified Face and eId.
-func (s *CollisionCage) SetResolved(otherFace *Face, otherId uint64) {
-	//TODO FACE
-	/*
-		for i := 0; i < s.slotsLen; i++ {
-			entry := s.slots[i]
-			if entry.remoteFace == otherFace {
-				entry.resolved = true
-				//fmt.Println("Resolved")
-				return
-			}
-			//if entry.remoteId == otherId {
-			//	entry.resolved = true
-			//	return
-			//}
-		}
-	*/
-
-	//TODO BETTER IMPLEMENTATION
-	for i := 0; i < s.slotsLen; i++ {
-		entry := s.slots[i]
-		if entry.localId == otherId {
-			entry.resolved = true
-		}
-	}
-
-	//if s.thing.GetId() == "PLAYER" {
-	//	fmt.Println("TRYING TO RESOLVE")
-	//}
-}
-
 // AddFace processes a Face to determine its type, position, and potential collision influence within the CollisionCage.
 // face is the Face object to process.
 // offX, offY, offZ specify the offsets to transform the face into world space.
 // isVolume indicates whether the Face should be prioritized as a volumetric obstacle.
-func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64, lFace *Face) {
+func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	var offX, offY, offZ float64
 	if rThing != nil {
 		rCage := rThing.GetCage()
@@ -457,12 +419,8 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64, lFace *F
 		return
 	}
 
-	//lId := s.thing.GetEntity().GetId()
-	//if s.thing.GetId() == "PLAYER" {
-	//	fmt.Println("CollisionCage.AddFace:", localId, remoteId)
-	//}
 	lThing := s.thing
-	cage := s.buckets[bucket].Add(lThing, lFace, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isBlock, maxZ)
+	cage := s.buckets[bucket].Add(lThing, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isBlock, maxZ)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++
@@ -508,6 +466,39 @@ func (s *CollisionCage) TranslateLocalToWorld(slot int, destX, destY, destZ floa
 	lMaxZ := cageAABB.GetMaxZ() + destZ
 	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
 	return s.ellipsoidLocal[slot]
+}
+
+*/
+
+/*
+// SetResolved marks a CageEntry as resolved if it matches the specified Face and eId.
+func (s *CollisionCage) SetResolved(otherFace *Face, otherId uint64) {
+	//TODO FACE
+
+	//	for i := 0; i < s.slotsLen; i++ {
+	//		entry := s.slots[i]
+	//		if entry.remoteFace == otherFace {
+	//			entry.resolved = true
+	//			//fmt.Println("Resolved")
+	//			return
+	//		}
+	//		//if entry.remoteId == otherId {
+	//		//	entry.resolved = true
+	//		//	return
+	//		//}
+	//	}
+
+	//TODO BETTER IMPLEMENTATION
+	for i := 0; i < s.slotsLen; i++ {
+		entry := s.slots[i]
+		if entry.localId == otherId {
+			entry.resolved = true
+		}
+	}
+
+	//if s.thing.GetId() == "PLAYER" {
+	//	fmt.Println("TRYING TO RESOLVE")
+	//}
 }
 
 */

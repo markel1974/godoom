@@ -226,11 +226,9 @@ func (t *ThingBase) StagePrepare() bool {
 	if !entity.IsMoving() {
 		return false
 	}
-
 	t.canStep = -1
 	t.step = 0.0
 	dx, dy, dz := entity.GetDisplacement()
-
 	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := entity.GetBottomLeft()
 	// Calcolo Half-Extents
@@ -243,10 +241,10 @@ func (t *ThingBase) StagePrepare() bool {
 }
 
 // StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
-func (t *ThingBase) StageCompute() {
-	//TODO QueryCollisionCage va spostato in un stage apposito
-	t.things.QueryCollisionCage(t.cage)
-}
+//func (t *ThingBase) StageCompute() {
+//	//TODO QueryCollisionCage va spostato in un stage apposito
+//	t.things.QueryCollisionCage(t.cage)
+//}
 
 // StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
 // solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
@@ -269,9 +267,6 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 			}
 			if maxZ <= stepZ {
 				if t.canStep != 0 {
-					//if t.id == "PLAYER" {
-					//	fmt.Println("HERE")
-					//}
 					t.canStep = 1
 					t.step = maxZ
 				}
@@ -279,12 +274,6 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 			}
 			t.canStep = 0
 		}
-
-		if slot.IsResolved() {
-			continue
-		}
-
-		slot.SetResolved(t.GetId())
 
 		otherFace := slot.GetRemoteFace()
 		penetration := slot.GetPenetration() + solverJitter

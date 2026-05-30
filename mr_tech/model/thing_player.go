@@ -89,7 +89,7 @@ func (p *ThingPlayer) StartLoop() {
 				case StageThinking:
 					p.StageThinking(evt.GetCoords())
 				case StageCompute:
-					p.StageCompute()
+					//p.StageCompute()
 				case StageResolve:
 					p.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
 				case StageApply:

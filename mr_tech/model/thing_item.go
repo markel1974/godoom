@@ -31,7 +31,7 @@ func (t *ThingItem) StartLoop() {
 				case StageThinking:
 					t.StageThinking(evt.GetCoords())
 				case StageCompute:
-					t.StageCompute()
+					//t.StageCompute()
 				case StageResolve:
 					t.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
 				case StageApply:

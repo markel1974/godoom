@@ -56,6 +56,7 @@ const (
 
 // CageEntry represents a collision entry containing face geometry, distance, normal, penetration, and other flags.
 type CageEntry struct {
+	bucket      BucketType
 	remoteThing IThing
 	remoteFace  *Face
 	remoteId    uint64
@@ -68,7 +69,6 @@ type CageEntry struct {
 	p0X         float64
 	p0Y         float64
 	p0Z         float64
-	isBlock     bool
 	maxZ        float64
 	sMode       int
 	sSize       float64
@@ -82,11 +82,11 @@ func (s *CageEntry) GetDistance() float64 { return s.dist }
 
 func (s *CageEntry) IsDynamic() bool { return s.remoteThing != nil }
 
-// IsBlock returns true if the CageEntry is classified as a wall, false otherwise.
-func (s *CageEntry) IsBlock() bool { return s.isBlock }
-
 // GetMaxZ returns the maximum Z value associated with the CageEntry instance.
 func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
+
+// GetBucket returns the BucketType associated with the CageEntry instance.
+func (s *CageEntry) GetBucket() BucketType { return s.bucket }
 
 func (s *CageEntry) SetStep(sMode int, sSize float64) {
 	if s.sMode != 0 {
@@ -114,7 +114,8 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry fields with the provided values for geometry, collision, and wall properties.
-func (s *CageEntry) Rebuild(lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) {
+func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64) {
+	s.bucket = bucket
 	s.localId = lThing.GetEntity().GetId()
 	s.remoteThing = rThing
 	s.remoteFace = rFace
@@ -123,7 +124,6 @@ func (s *CageEntry) Rebuild(lThing IThing, rThing IThing, rFace *Face, rId uint6
 	s.penetration = penetration
 	s.nX, s.nY, s.nZ = nX, nY, nZ
 	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
-	s.isBlock = isBlock
 	s.maxZ = maxZ
 	s.sMode = -1
 	s.sSize = 0.0
@@ -161,7 +161,7 @@ func (b *CollisionBucket) Count() int {
 }
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
-func (b *CollisionBucket) Add(lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, isBlock bool, maxZ float64) *CageEntry {
+func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64) *CageEntry {
 	// Topological Deduplication (Filter for coplanar faces)
 	// Prevents generating multiple constraints for adjacent triangles on the same plane
 	for i := 0; i < b.containerCounter; i++ {
@@ -170,7 +170,7 @@ func (b *CollisionBucket) Add(lThing IThing, rThing IThing, rFace *Face, rId uin
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
 			// Update the unified constraint only if the new penetration is deeper
 			if penetration > existing.penetration {
-				existing.Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+				existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
 			}
 			return nil
 		}
@@ -179,7 +179,7 @@ func (b *CollisionBucket) Add(lThing IThing, rThing IThing, rFace *Face, rId uin
 	// Insert a new plane into the non-full bucket
 	if b.containerCounter < FacesPerBucket {
 		target := b.spare[b.containerCounter]
-		target.Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+		target.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
 		b.container[b.containerCounter] = target
 		b.containerCounter++
 		return target
@@ -195,7 +195,7 @@ func (b *CollisionBucket) Add(lThing IThing, rThing IThing, rFace *Face, rId uin
 		}
 	}
 	if penetration > minPen {
-		b.container[minIdx].Rebuild(lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, isBlock, maxZ)
+		b.container[minIdx].Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
 	}
 
 	return nil
@@ -438,7 +438,7 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	}
 
 	lThing := s.thing
-	cage := s.buckets[bucket].Add(lThing, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, isBlock, maxZ)
+	cage := s.buckets[bucket].Add(bucket, lThing, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, maxZ)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++

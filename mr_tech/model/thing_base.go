@@ -251,20 +251,24 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-
 		// Filtro topologico per ostacoli scavalcabili (Stair-Stepping).
 		// Se l'ostacolo è statico e rientra nel maxStep, inibiamo la normale di collisione
 		// orizzontale e programmiamo lo step verticale per lo StageApply.
-		if !slot.IsDynamic() && slot.IsBlock() {
-			maxZ := slot.GetMaxZ()
-			if maxZ <= baseZ {
-				continue // down-hill (in discesa)
+		if !slot.IsDynamic() {
+			switch slot.GetBucket() {
+			case BucketWallEast, BucketWallWest, BucketWallNorth, BucketWallSouth:
+				maxZ := slot.GetMaxZ()
+				if maxZ <= baseZ {
+					continue // down-hill (in discesa)
+				}
+				if maxZ <= stepZ {
+					slot.SetStep(1, maxZ)
+					continue // up-hill (gradino superabile)
+				}
+				slot.SetStep(0, 0) // Ostacolo insuperabile (muro)
+			case BucketFloor, BucketCeiling:
+				slot.SetStep(0, 0)
 			}
-			if maxZ <= stepZ {
-				slot.SetStep(1, maxZ)
-				continue // up-hill (gradino superabile)
-			}
-			slot.SetStep(0, 0) // Ostacolo insuperabile (muro)
 		}
 
 		otherFace := slot.GetRemoteFace()
@@ -286,29 +290,35 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	}
 }
 
-// StageApply esegue la Fase Geometrica (Positional Solver) e integra lo spostamento finale.
-// Risolve le compenetrazioni statiche e dinamiche tramite proiezione posizionale (NGS)
-// e applica le correzioni di step verticale.
 func (t *ThingBase) StageApply(solverJitter float64) {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
 	entity := t.vertices.GetEntity()
 
-	// Valutazione dello stato di appoggio (Grounded) basato sui contatti del bucket inferiore
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
-	const slop = 0.01             // Tolleranza di compenetrazione (Linear Slop) per far riposare gli stack senza jitter
-	const positionalPercent = 1.0 // Error Reduction Parameter (ERP). 1.0 = correzione totale istantanea. (Ridurre a ~0.8 se si nota instabilità)
+	// 1. INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
+	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta l'AABB
+	// esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
+	dx, dy, dz := t.cage.GetD()
+	entity.AddTo(dx, dy, dz)
 
+	const slop = 0.01
+	const positionalPercent = 1.0
+
+	// 2. RISOLUZIONE GEOMETRICA (Push-out)
+	// Ora che siamo nel punto di impatto, le correzioni spingeranno
+	// l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 
 		stepMode, stepSize := slot.GetStep()
 		switch stepMode {
 		case 1:
-			// Esecuzione dello step verticale calcolato nello StageResolve
+			// Il MoveToZ sovrascrive l'oldDz calcolato prima,
+			// posizionando il player esattamente sopra il gradino
 			entity.MoveToZ(stepSize)
 			continue
 		case -1:
@@ -329,7 +339,6 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 				invMassSum := invMass1 + invMass2
 				if invMassSum > 0.0 {
 					nX, nY, nZ := slot.GetNormal()
-					// Calcolo la correzione e aggiungo il Jitter per forzare il distacco FP64
 					ratio1 := invMass1 / invMassSum
 					p1 := correction * ratio1
 					entity.AddTo(nX*p1, nY*p1, nZ*p1)
@@ -340,15 +349,15 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 				}
 			} else {
 				nX, nY, nZ := slot.GetNormal()
-				// Aggiungo il Jitter anche contro la geometria statica (Mondo)
 				entity.AddTo(nX*correction, nY*correction, nZ*correction)
 			}
 		}
 	}
 
-	// Integrazione finale del displacement accumulato nel tick corrente
-	dx, dy, dz := entity.GetDisplacement()
-	entity.AddTo(dx, dy, dz)
+	// 3. FINE DEL LOOP FISICO
+	// Nessuna chiamata a GetDisplacement() qui.
+	// Le variabili e.vx, e.vy, e.vz contengono già le nuove velocità post-urto
+	// e sposteranno l'oggetto all'inizio del prossimo ciclo (in StagePrepare).
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

@@ -419,11 +419,105 @@ func (e *Entity) IsMoving() bool {
 	return e.vx != 0 || e.vy != 0 || e.vz != 0
 }
 
+// ResolveImpact resolves the collision impact between two entities, applying forces based on restitution and friction.
+// Penetration resolution is delegated to StageApply (Split-Solver architecture).
+func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, _ float64) {
+	// NORMALIZZAZIONE SICURA (Anti-Esplosione)
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen > 0.0 {
+		nx /= nLen
+		ny /= nLen
+		nz /= nLen
+	} else {
+		return // Vettore nullo, impossibile risolvere
+	}
+
+	// VELOCITÀ RELATIVA LUNGO LA NORMALE
+	vrx := e.vx - e2.vx
+	vry := e.vy - e2.vy
+	vrz := e.vz - e2.vz
+	vRelDotN := vrx*nx + vry*ny + vrz*nz
+
+	// Se i corpi si stanno allontanando, nessuna collisione da risolvere
+	if vRelDotN > 0.0 {
+		return
+	}
+
+	invMassSum := e.invMass + e2.invMass
+	if invMassSum == 0.0 {
+		return
+	}
+
+	// RESTITUZIONE CON SOGLIA (Micro-bounce slop)
+	const restitutionSlop = 0.5
+	actualRestitution := e2.restitution
+	if math.Abs(vRelDotN) < restitutionSlop {
+		actualRestitution = 0.0
+	}
+
+	// BAUMGARTE STABILIZATION ---
+	//const slop = 0.05
+	//const percent = 0.2
+	//bias := math.Max(penetration-slop, 0.0) * percent
+
+	// IMPULSO NORMALE (Puro, senza Baumgarte bias)
+	impulse := -(1.0 + actualRestitution) * vRelDotN
+	j := impulse / invMassSum
+
+	// Applica l'impulso normale
+	e.vx += (j * nx) * e.invMass
+	e.vy += (j * ny) * e.invMass
+	e.vz += (j * nz) * e.invMass
+	e2.vx -= (j * nx) * e2.invMass
+	e2.vy -= (j * ny) * e2.invMass
+	e2.vz -= (j * nz) * e2.invMass
+
+	// IMPULSO TANGENZIALE (ATTRITO)
+	// Ricalcoliamo la velocità relativa DOPO l'impulso normale
+	vrx = e.vx - e2.vx
+	vry = e.vy - e2.vy
+	vrz = e.vz - e2.vz
+	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
+
+	// Troviamo il vettore tangente
+	tx := vrx - (vRelDotNPost * nx)
+	ty := vry - (vRelDotNPost * ny)
+	tz := vrz - (vRelDotNPost * nz)
+
+	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
+	if tLen > 1e-8 {
+		tx /= tLen
+		ty /= tLen
+		tz /= tLen
+
+		vRelDotT := vrx*tx + vry*ty + vrz*tz
+		jt := -vRelDotT / invMassSum
+
+		// Friction Mixing: Media geometrica dei due coefficienti di attrito
+		mu := math.Sqrt(e.frictionActive * e2.frictionActive)
+		maxFriction := j * mu
+
+		// Clamp dell'impulso tangenziale nel cono di Coulomb
+		if math.Abs(jt) > maxFriction {
+			jt = math.Copysign(maxFriction, jt)
+		}
+
+		// Applica l'impulso di attrito
+		e.vx += (jt * tx) * e.invMass
+		e.vy += (jt * ty) * e.invMass
+		e.vz += (jt * tz) * e.invMass
+		e2.vx -= (jt * tx) * e2.invMass
+		e2.vy -= (jt * ty) * e2.invMass
+		e2.vz -= (jt * tz) * e2.invMass
+	}
+}
+
 // ClearForce resets the accumulated force components (ax, ay, az) of the entity to zero.
 //func (e *Entity) ClearForce() {
 //	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
 //}
 
+/*
 // ResolveImpact resolves the collision impact between two entities, applying forces based on restitution, friction, and penetration.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
 	// NORMALIZZAZIONE SICURA (Anti-Esplosione)
@@ -519,6 +613,8 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 		e2.vz -= (jt * tz) * e2.invMass
 	}
 }
+
+*/
 
 /*
 // ComputeImpact determines the collision state and calculates the collision normal and penetration depth between two entities.

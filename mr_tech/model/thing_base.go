@@ -236,8 +236,9 @@ func (t *ThingBase) StagePrepare() bool {
 	return true
 }
 
-// StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
-// solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
+// StageResolve esegue la Fase Cinetica (Velocity Solver) dell'architettura split-solver.
+// Calcola gli impulsi per risolvere gli urti elastici e l'attrito, demandando la correzione
+// posizionale allo StageApply. solverJitter assorbe le fluttuazioni numeriche in virgola mobile.
 func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	slotsLen := t.cage.GetSlotsLen()
 	if slotsLen == 0 {
@@ -250,16 +251,20 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
+
+		// Filtro topologico per ostacoli scavalcabili (Stair-Stepping).
+		// Se l'ostacolo è statico e rientra nel maxStep, inibiamo la normale di collisione
+		// orizzontale e programmiamo lo step verticale per lo StageApply.
 		if !slot.IsDynamic() && slot.IsBlock() {
 			maxZ := slot.GetMaxZ()
 			if maxZ <= baseZ {
-				continue //down-hill
+				continue // down-hill (in discesa)
 			}
 			if maxZ <= stepZ {
 				slot.SetStep(1, maxZ)
-				continue //up-hill
+				continue // up-hill (gradino superabile)
 			}
-			slot.SetStep(0, 0)
+			slot.SetStep(0, 0) // Ostacolo insuperabile (muro)
 		}
 
 		otherFace := slot.GetRemoteFace()
@@ -269,20 +274,10 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		otherParent := otherFace.GetParent()
 		otherParentEnt := otherParent.GetEntity()
 
-		// Proiezione Posizionale Pre-Iterazione (Geometrica)
-		//if solverIndex == 0 {
-		//	invMass1 := entity.GetInvMass()
-		//	invMassSum := invMass1 + otherParentEnt.GetInvMass()
-		//	if invMass1 > 0.0 && invMassSum > 0.0 {
-		//		ratio := invMass1 / invMassSum
-		//		push := penetration * ratio
-		//		entity.AddTo(nX*push, nY*push, nZ*push)
-		//	}
-		//}
-
-		// Risoluzione Impulsi e Attrito (Cinetica)
-		// Passiamo penetration = 0.0 per inibire il Baumgarte bias interno all'Entity
-		//penetration = 0.0
+		// Risoluzione Impulsi e Attrito (Fase Cinetica).
+		// Forziamo penetration = 0.0 per inibire la stabilizzazione Baumgarte interna
+		// al metodo ResolveImpact, evitando di iniettare energia cinetica fittizia.
+		penetration = 0.0
 		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 		if thing := otherParent.GetThing(); thing != nil {
@@ -291,48 +286,73 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	}
 }
 
-// StageApply updates the entity's state by processing movement, grounding, and positional integration based on displacement.
+// StageApply esegue la Fase Geometrica (Positional Solver) e integra lo spostamento finale.
+// Risolve le compenetrazioni statiche e dinamiche tramite proiezione posizionale (NGS)
+// e applica le correzioni di step verticale.
 func (t *ThingBase) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
 	entity := t.vertices.GetEntity()
-	//entity.ClearForce()
+
+	// Valutazione dello stato di appoggio (Grounded) basato sui contatti del bucket inferiore
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
-	const slop = 0.01             // Tolleranza di compenetrazione consentita prima di correggere
-	const positionalPercent = 1.0 // Relaxation factor: corregge l'80% dell'errore per frame (smorza il jitter)
+	const slop = 0.01             // Tolleranza di compenetrazione (Linear Slop) per far riposare gli stack senza jitter
+	const positionalPercent = 1.0 // Error Reduction Parameter (ERP). 1.0 = correzione totale istantanea. (Ridurre a ~0.8 se si nota instabilità)
+
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 
 		stepMode, stepSize := slot.GetStep()
 		switch stepMode {
 		case 1:
+			// Esecuzione dello step verticale calcolato nello StageResolve
 			entity.MoveToZ(stepSize)
 			continue
 		case -1:
 			continue
 		case 0:
-			//if !slot.IsResolved() {
-			//	continue
-			//}
-			push := slot.GetPenetration()
-			if push <= slop {
-				continue // Ignora micro-compenetrazioni millimetriche a riposo
+			penetration := slot.GetPenetration()
+			if penetration <= slop {
+				continue // Ignora le micro-compenetrazioni millimetriche a riposo (Evita il micro-jitter)
 			}
 			nX, nY, nZ := slot.GetNormal()
-			correction := (push - slop) * positionalPercent
-			// NOTA SULLE MASSE:
-			// Se l'oggetto remoto è dinamico (es. un'altra cassa), questa correction andrebbe moltiplicata
-			// per (myInvMass / (myInvMas s + otherInvMass)).
-			// Se diamo per scontato che i muri siano massa infinita, applichiamo il 100% a noi stessi.
-			if !slot.IsDynamic() {
-				entity.AddTo(nX*correction, nY*correction, nZ*correction)
+
+			if slot.IsDynamic() {
+				// Proiezione posizionale dinamica: ripartisce la correzione in base al rapporto
+				// delle masse inverse. Un corpo con massa infinita (invMass=0) non verrà spostato.
+				otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
+				invMass1 := entity.GetInvMass()
+				invMass2 := otherEnt.GetInvMass()
+				invMassSum := invMass1 + invMass2
+
+				if invMassSum > 0.0 {
+					correction := (penetration - slop) * positionalPercent
+					if correction > 0.0 {
+						// Quota di spostamento per l'entità locale (lungo la normale)
+						ratio1 := invMass1 / invMassSum
+						p1 := correction * ratio1
+						entity.AddTo(nX*p1, nY*p1, nZ*p1)
+
+						// Quota di spostamento per l'entità remota (contro la normale)
+						ratio2 := invMass2 / invMassSum
+						p2 := correction * ratio2
+						otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+					}
+				}
+			} else {
+				// Proiezione posizionale statica: il mondo ha massa infinita, l'entità locale
+				// assorbe il 100% della correzione geometrica.
+				if c := (penetration - slop) * positionalPercent; c > 0.0 {
+					entity.AddTo(nX*c, nY*c, nZ*c)
+				}
 			}
 		}
 	}
 
+	// Integrazione finale del displacement accumulato nel tick corrente
 	dx, dy, dz := entity.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 }

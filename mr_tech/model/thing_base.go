@@ -289,7 +289,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 // StageApply esegue la Fase Geometrica (Positional Solver) e integra lo spostamento finale.
 // Risolve le compenetrazioni statiche e dinamiche tramite proiezione posizionale (NGS)
 // e applica le correzioni di step verticale.
-func (t *ThingBase) StageApply() {
+func (t *ThingBase) StageApply(solverJitter float64) {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
@@ -316,38 +316,32 @@ func (t *ThingBase) StageApply() {
 		case 0:
 			penetration := slot.GetPenetration()
 			if penetration <= slop {
-				continue // Ignora le micro-compenetrazioni millimetriche a riposo (Evita il micro-jitter)
+				continue
 			}
-			nX, nY, nZ := slot.GetNormal()
-
+			correction := ((penetration - slop) * positionalPercent) + solverJitter
+			if correction <= 0.0 {
+				continue
+			}
 			if slot.IsDynamic() {
-				// Proiezione posizionale dinamica: ripartisce la correzione in base al rapporto
-				// delle masse inverse. Un corpo con massa infinita (invMass=0) non verrà spostato.
 				otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
 				invMass1 := entity.GetInvMass()
 				invMass2 := otherEnt.GetInvMass()
 				invMassSum := invMass1 + invMass2
-
 				if invMassSum > 0.0 {
-					correction := (penetration - slop) * positionalPercent
-					if correction > 0.0 {
-						// Quota di spostamento per l'entità locale (lungo la normale)
-						ratio1 := invMass1 / invMassSum
-						p1 := correction * ratio1
-						entity.AddTo(nX*p1, nY*p1, nZ*p1)
+					nX, nY, nZ := slot.GetNormal()
+					// Calcolo la correzione e aggiungo il Jitter per forzare il distacco FP64
+					ratio1 := invMass1 / invMassSum
+					p1 := correction * ratio1
+					entity.AddTo(nX*p1, nY*p1, nZ*p1)
 
-						// Quota di spostamento per l'entità remota (contro la normale)
-						ratio2 := invMass2 / invMassSum
-						p2 := correction * ratio2
-						otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
-					}
+					ratio2 := invMass2 / invMassSum
+					p2 := correction * ratio2
+					otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
 				}
 			} else {
-				// Proiezione posizionale statica: il mondo ha massa infinita, l'entità locale
-				// assorbe il 100% della correzione geometrica.
-				if c := (penetration - slop) * positionalPercent; c > 0.0 {
-					entity.AddTo(nX*c, nY*c, nZ*c)
-				}
+				nX, nY, nZ := slot.GetNormal()
+				// Aggiungo il Jitter anche contro la geometria statica (Mondo)
+				entity.AddTo(nX*correction, nY*correction, nZ*correction)
 			}
 		}
 	}

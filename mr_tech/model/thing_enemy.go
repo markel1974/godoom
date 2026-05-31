@@ -49,7 +49,7 @@ func (t *ThingEnemy) StartLoop() {
 				case StageResolve:
 					t.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
 				case StageApply:
-					t.StageApply()
+					t.StageApply(evt.GetSolverJitter())
 				}
 				evt.Done()
 			case <-t.done:

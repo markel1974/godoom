@@ -70,6 +70,8 @@ type CageEntry struct {
 	p0Z         float64
 	isBlock     bool
 	maxZ        float64
+	sMode       int
+	sSize       float64
 }
 
 // GetRemoteFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
@@ -78,13 +80,27 @@ func (s *CageEntry) GetRemoteFace() *Face { return s.remoteFace }
 // GetDistance returns the distance value (`dist`) associated with the CageEntry instance.
 func (s *CageEntry) GetDistance() float64 { return s.dist }
 
-func (s *CageEntry) IsWall() bool { return s.remoteThing == nil }
+func (s *CageEntry) IsDynamic() bool { return s.remoteThing != nil }
 
 // IsBlock returns true if the CageEntry is classified as a wall, false otherwise.
 func (s *CageEntry) IsBlock() bool { return s.isBlock }
 
 // GetMaxZ returns the maximum Z value associated with the CageEntry instance.
 func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
+
+func (s *CageEntry) SetStep(sMode int, sSize float64) {
+	if s.sMode != 0 {
+		s.sMode = sMode
+		s.sSize = sSize
+		return
+	}
+	s.sMode = 0
+	s.sSize = 0
+}
+
+func (s *CageEntry) GetStep() (int, float64) {
+	return s.sMode, s.sSize
+}
 
 // GetNormal returns the normal vector components (nX, nY, nZ) of the `CageEntry`.
 func (s *CageEntry) GetNormal() (float64, float64, float64) { return s.nX, s.nY, s.nZ }
@@ -109,6 +125,8 @@ func (s *CageEntry) Rebuild(lThing IThing, rThing IThing, rFace *Face, rId uint6
 	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
 	s.isBlock = isBlock
 	s.maxZ = maxZ
+	s.sMode = -1
+	s.sSize = 0.0
 }
 
 // CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.

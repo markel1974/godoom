@@ -258,7 +258,7 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 		if !thing.StagePrepare() {
 			continue
 		}
-		th.tree.UpdateObject(thing)
+		//th.tree.UpdateObject(thing)
 		th.active[th.activeIdx] = thing
 		th.activeIdx++
 	}

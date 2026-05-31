@@ -27,8 +27,6 @@ type ThingBase struct {
 	inbox        chan *ThingEvent
 	onCollision  config.CollisionFunc
 	onImpact     config.ImpactFunc
-	canStep      int
-	step         float64
 	done         chan struct{}
 }
 
@@ -226,8 +224,6 @@ func (t *ThingBase) StagePrepare() bool {
 	if !entity.IsMoving() {
 		return false
 	}
-	t.canStep = -1
-	t.step = 0.0
 	dx, dy, dz := entity.GetDisplacement()
 	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := entity.GetBottomLeft()
@@ -239,12 +235,6 @@ func (t *ThingBase) StagePrepare() bool {
 	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
 	return true
 }
-
-// StageCompute updates the bounding volume for the entity, computes its displacement, and evaluates potential collisions.
-//func (t *ThingBase) StageCompute() {
-//	//TODO QueryCollisionCage va spostato in un stage apposito
-//	t.things.QueryCollisionCage(t.cage)
-//}
 
 // StageResolve processes interactions between the current object and others in proximity to resolve collisions or overlaps.
 // solverJitter adds a small adjustment to penetration calculations to account for numerical instability.
@@ -260,19 +250,16 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-		if slot.IsWall() && slot.IsBlock() {
+		if !slot.IsDynamic() && slot.IsBlock() {
 			maxZ := slot.GetMaxZ()
 			if maxZ <= baseZ {
 				continue //down-hill
 			}
 			if maxZ <= stepZ {
-				if t.canStep != 0 {
-					t.canStep = 1
-					t.step = maxZ
-				}
+				slot.SetStep(1, maxZ)
 				continue //up-hill
 			}
-			t.canStep = 0
+			slot.SetStep(0, 0)
 		}
 
 		otherFace := slot.GetRemoteFace()
@@ -314,18 +301,22 @@ func (t *ThingBase) StageApply() {
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
-	if t.canStep == 1 {
-		entity.MoveToZ(t.step)
-	}
+	const slop = 0.01             // Tolleranza di compenetrazione consentita prima di correggere
+	const positionalPercent = 1.0 // Relaxation factor: corregge l'80% dell'errore per frame (smorza il jitter)
+	for i := 0; i < t.cage.GetSlotsLen(); i++ {
+		slot := t.cage.GetSlot(i)
 
-	/*
-		const slop = 0.01             // Tolleranza di compenetrazione consentita prima di correggere
-		const positionalPercent = 1.0 // Relaxation factor: corregge l'80% dell'errore per frame (smorza il jitter)
-		for i := 0; i < t.cage.GetSlotsLen(); i++ {
-			slot := t.cage.GetSlot(i)
-			if !slot.IsResolved() {
-				continue
-			}
+		stepMode, stepSize := slot.GetStep()
+		switch stepMode {
+		case 1:
+			entity.MoveToZ(stepSize)
+			continue
+		case -1:
+			continue
+		case 0:
+			//if !slot.IsResolved() {
+			//	continue
+			//}
 			push := slot.GetPenetration()
 			if push <= slop {
 				continue // Ignora micro-compenetrazioni millimetriche a riposo
@@ -336,10 +327,11 @@ func (t *ThingBase) StageApply() {
 			// Se l'oggetto remoto è dinamico (es. un'altra cassa), questa correction andrebbe moltiplicata
 			// per (myInvMass / (myInvMas s + otherInvMass)).
 			// Se diamo per scontato che i muri siano massa infinita, applichiamo il 100% a noi stessi.
-			entity.AddTo(nX*correction, nY*correction, nZ*correction)
+			if !slot.IsDynamic() {
+				entity.AddTo(nX*correction, nY*correction, nZ*correction)
+			}
 		}
-
-	*/
+	}
 
 	dx, dy, dz := entity.GetDisplacement()
 	entity.AddTo(dx, dy, dz)

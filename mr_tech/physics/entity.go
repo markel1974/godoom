@@ -453,7 +453,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float
 		return
 	}
 
-	const restitutionSlop = 1.0
+	const restitutionSlop = 0.5
 	actualRestitution := e2.restitution
 	if math.Abs(vRelDotN) < restitutionSlop {
 		actualRestitution = 0.0

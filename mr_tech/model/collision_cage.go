@@ -306,8 +306,8 @@ func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s
 // GetC retrieves the current center coordinates (cX, cY, cZ) of the CollisionCage.
 func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
-// GetD returns the displacement vector components (dX, dY, dZ) of the CollisionCage.
-func (s *CollisionCage) GetD() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
+// GetDisplacement returns the displacement vector components (dX, dY, dZ) of the CollisionCage.
+func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
 
 // GetT retrieves the transformed coordinates (tX, tY, tZ) of the collision cage.
 func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }

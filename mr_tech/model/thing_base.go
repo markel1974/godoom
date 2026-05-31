@@ -254,7 +254,9 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		// Filtro topologico per ostacoli scavalcabili (Stair-Stepping).
 		// Se l'ostacolo è statico e rientra nel maxStep, inibiamo la normale di collisione
 		// orizzontale e programmiamo lo step verticale per lo StageApply.
+
 		if !slot.IsDynamic() {
+			//if solverIndex == 0 {
 			switch slot.GetBucket() {
 			case BucketWallEast, BucketWallWest, BucketWallNorth, BucketWallSouth:
 				maxZ := slot.GetMaxZ()
@@ -290,6 +292,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	}
 }
 
+// StageApply applies physical and geometrical adjustments to the entity based on collision resolution and position corrections.
 func (t *ThingBase) StageApply(solverJitter float64) {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
@@ -299,16 +302,16 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	isGrounded := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(isGrounded)
 
-	// 1. INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
+	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta l'AABB
 	// esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
-	dx, dy, dz := t.cage.GetD()
+	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 
 	const slop = 0.01
 	const positionalPercent = 1.0
 
-	// 2. RISOLUZIONE GEOMETRICA (Push-out)
+	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno
 	// l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
@@ -317,7 +320,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 		stepMode, stepSize := slot.GetStep()
 		switch stepMode {
 		case 1:
-			// Il MoveToZ sovrascrive l'oldDz calcolato prima,
+			// Il MoveToZ sovrascrive dz calcolato prima,
 			// posizionando il player esattamente sopra il gradino
 			entity.MoveToZ(stepSize)
 			continue
@@ -353,11 +356,6 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			}
 		}
 	}
-
-	// 3. FINE DEL LOOP FISICO
-	// Nessuna chiamata a GetDisplacement() qui.
-	// Le variabili e.vx, e.vy, e.vz contengono già le nuove velocità post-urto
-	// e sposteranno l'oggetto all'inizio del prossimo ciclo (in StagePrepare).
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

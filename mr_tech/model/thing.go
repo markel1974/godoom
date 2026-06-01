@@ -13,15 +13,15 @@ type IThing interface {
 
 	GetAABB() *physics.AABB
 
+	GetCage() *CollisionCage
+
+	GetEntity() *physics.Entity
+
 	GetVertices() (*[]*Face, int, *[]*Face, int, float64, float64)
 
 	GetVolume() *Volume
 
 	GetDisplacement() (float64, float64, float64)
-
-	GetCage() *CollisionCage
-
-	GetEntity() *physics.Entity
 
 	IsActive() bool
 

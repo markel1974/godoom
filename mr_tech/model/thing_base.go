@@ -21,7 +21,6 @@ type ThingBase struct {
 	location     *Volume
 	things       *Things
 	isActive     bool
-	identifier   int
 	cage         *CollisionCage
 	vertices     IVertices
 	inbox        chan *ThingEvent
@@ -54,7 +53,6 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		things:       things,
 		maxStep:      0,
 		isActive:     true,
-		identifier:   -1,
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
 		cage:         NewCollisionCage(thing, cageMargin),
@@ -82,16 +80,6 @@ func (t *ThingBase) GetAngle() float64 {
 // SetAngle updates the rotation angle of the ThingBase instance to the specified float64 value.
 func (t *ThingBase) SetAngle(angle float64) {
 	t.angle = angle
-}
-
-// SetAction sets the action for a vertex at the specified index in the ThingBase object.
-func (t *ThingBase) SetAction(idx int) {
-	t.vertices.SetAction(idx)
-}
-
-// GetDisplacement returns the x, y, and z coordinates of the position as three float64 values.
-func (t *ThingBase) GetDisplacement() (float64, float64, float64) {
-	return t.vertices.GetDisplacement()
 }
 
 // GetId returns the identifier string of the ThingBase instance.
@@ -128,9 +116,14 @@ func (t *ThingBase) GetAABB() *physics.AABB {
 	return t.vertices.GetEntity().GetAABB()
 }
 
-// GetRadius retrieves the radius of the ThingBase instance as a float64 value.
-func (t *ThingBase) GetRadius() float64 {
-	return t.vertices.GetEntity().GetWidth() * 0.5
+// SetAction sets the action for a vertex at the specified index in the ThingBase object.
+func (t *ThingBase) SetAction(idx int) {
+	t.vertices.SetAction(idx)
+}
+
+// GetDisplacement returns the x, y, and z coordinates of the position as three float64 values.
+func (t *ThingBase) GetDisplacement() (float64, float64, float64) {
+	return t.vertices.GetDisplacement()
 }
 
 // GetSize returns the dimensions (width, height, depth) of the entity as a tuple of float64 values.
@@ -203,16 +196,6 @@ func (t *ThingBase) GetSpeed() float64 {
 	return t.speed
 }
 
-// SetIdentifier sets the unique identifier for the ThingBase instance.
-func (t *ThingBase) SetIdentifier(identifier int) {
-	t.identifier = identifier
-}
-
-// GetIdentifier returns the unique identifier of the ThingBase instance.
-func (t *ThingBase) GetIdentifier() int {
-	return t.identifier
-}
-
 // IsActive checks if the ThingBase instance is currently active.
 func (t *ThingBase) IsActive() bool {
 	return t.isActive
@@ -223,6 +206,7 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
+// StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *ThingBase) StagePrepare() bool {
 	entity := t.vertices.GetEntity()
 	entity.Update()
@@ -296,8 +280,8 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	}
 	entity := t.vertices.GetEntity()
 
-	isGrounded := t.cage.BucketCount(BucketFloor) > 0
-	entity.SetOnGround(isGrounded)
+	onGround := t.cage.BucketCount(BucketFloor) > 0
+	entity.SetOnGround(onGround)
 
 	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta l'AABB
@@ -318,7 +302,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 		switch stepMode {
 		case 1:
 			// Il MoveToZ sovrascrive dz calcolato prima,
-			// posizionando il player esattamente sopra il gradino
+			// posizionandolo sopra il gradino
 			entity.MoveToZ(stepSize)
 			continue
 		case -1:

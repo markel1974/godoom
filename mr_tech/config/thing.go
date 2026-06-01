@@ -33,8 +33,6 @@ type IThingConfig interface {
 
 	SetAngle(angle float64)
 
-	GetRadius() float64
-
 	GetDepth() float64
 
 	GetAcceleration() float64

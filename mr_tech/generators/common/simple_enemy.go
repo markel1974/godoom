@@ -161,7 +161,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	ny := dy * invDist
 	impulse := 1.0
 	// Distanza di stop (es. somma dei raggi per non compenetrare)
-	stopDistance := self.GetRadius() + 5.0
+	stopDistance := (self.GetWidth() * 0.5) + 5.0
 	if playerDist2d < stopDistance {
 		impulse = 0.0
 	} else if playerDist3d < 20.0 && e.throwCooldown <= 0 {

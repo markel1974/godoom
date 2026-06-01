@@ -242,19 +242,26 @@ func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 }
 
 // Rebuild updates the internal state of the CollisionCage, recalculating volumes, bounds, and resetting temporary data.
-func (s *CollisionCage) Rebuild(cx, cy, cz, dx, dy, dz, eRadX, eRadY, eRadZ float64) {
-	s.cX, s.cY, s.cZ = cx, cy, cz
-	s.dX, s.dY, s.dZ = dx, dy, dz
-	s.eRadX, s.eRadY, s.eRadZ = eRadX, eRadY, eRadZ
-	s.tX, s.tY, s.tZ = cx+dx, cy+dy, cz+dz
+func (s *CollisionCage) Rebuild() {
+	entity := s.thing.GetEntity()
+	s.dX, s.dY, s.dZ = entity.GetDisplacement()
+	// Estrazione origine (Bottom-Left)
+	pX, pY, pZ := entity.GetBottomLeft()
+	// Calcolo Half-Extents
+	w, h, d := entity.GetSize()
+	s.eRadX, s.eRadY, s.eRadZ = w*0.5, h*0.5, d*0.5
+	// Calcolo del CENTRO per il Broad-Phase
+	s.cX, s.cY, s.cZ = pX+s.eRadX, pY+s.eRadY, pZ+s.eRadZ
+
+	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
 	// Calculate absolute extremes (Broad-Phase Swept Volume)
-	minX := cx - eRadX + math.Min(0, dx) - s.margin
-	maxX := cx + eRadX + math.Max(0, dx) + s.margin
-	minY := cy - eRadY + math.Min(0, dy) - s.margin
-	maxY := cy + eRadY + math.Max(0, dy) + s.margin
-	minZ := cz - eRadZ + math.Min(0, dz) - s.margin
-	maxZ := cz + eRadZ + math.Max(0, dz) + s.margin
+	minX := s.cX - s.eRadX + math.Min(0, s.dX) - s.margin
+	maxX := s.cX + s.eRadX + math.Max(0, s.dX) + s.margin
+	minY := s.cY - s.eRadY + math.Min(0, s.dY) - s.margin
+	maxY := s.cY + s.eRadY + math.Max(0, s.dY) + s.margin
+	minZ := s.cZ - s.eRadZ + math.Min(0, s.dZ) - s.margin
+	maxZ := s.cZ + s.eRadZ + math.Max(0, s.dZ) + s.margin
 
 	// Canonical mapping for Rect/AABB
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)

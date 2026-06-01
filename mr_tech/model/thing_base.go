@@ -104,9 +104,14 @@ func (t *ThingBase) GetKind() config.ThingType {
 	return t.kind
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
-func (t *ThingBase) GetAABB() *physics.AABB {
-	return t.vertices.GetEntity().GetAABB()
+// GetLocation retrieves the current location associated with the ThingBase instance.
+func (t *ThingBase) GetLocation() *Volume {
+	return t.location
+}
+
+// GetMaxStep returns the maximum step value associated with the ThingBase instance.
+func (t *ThingBase) GetMaxStep() float64 {
+	return t.maxStep
 }
 
 func (t *ThingBase) GetCage() *CollisionCage {
@@ -118,14 +123,9 @@ func (t *ThingBase) GetEntity() *physics.Entity {
 	return t.vertices.GetEntity()
 }
 
-// GetLocation retrieves the current location associated with the ThingBase instance.
-func (t *ThingBase) GetLocation() *Volume {
-	return t.location
-}
-
-// GetMaxStep returns the maximum step value associated with the ThingBase instance.
-func (t *ThingBase) GetMaxStep() float64 {
-	return t.maxStep
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
+func (t *ThingBase) GetAABB() *physics.AABB {
+	return t.vertices.GetEntity().GetAABB()
 }
 
 // GetRadius retrieves the radius of the ThingBase instance as a float64 value.
@@ -133,19 +133,14 @@ func (t *ThingBase) GetRadius() float64 {
 	return t.vertices.GetEntity().GetWidth() * 0.5
 }
 
-// GetAcceleration returns the current acceleration value of the ThingBase.
-func (t *ThingBase) GetAcceleration() float64 {
-	return t.acceleration
+// GetSize returns the dimensions (width, height, depth) of the entity as a tuple of float64 values.
+func (t *ThingBase) GetSize() (float64, float64, float64) {
+	return t.vertices.GetEntity().GetSize()
 }
 
 // GetDepth retrieves the depth value of the entity associated with the ThingBase instance.
 func (t *ThingBase) GetDepth() float64 {
 	return t.vertices.GetEntity().GetDepth()
-}
-
-// GetSpeed returns the current speed of the ThingBase instance as a float64.
-func (t *ThingBase) GetSpeed() float64 {
-	return t.speed
 }
 
 // GetWidth retrieves the width of the underlying entity associated with the ThingBase.
@@ -198,6 +193,16 @@ func (t *ThingBase) GetVolume() *Volume {
 	return t.vertices.GetVolume()
 }
 
+// GetAcceleration returns the current acceleration value of the ThingBase.
+func (t *ThingBase) GetAcceleration() float64 {
+	return t.acceleration
+}
+
+// GetSpeed returns the current speed of the ThingBase instance as a float64.
+func (t *ThingBase) GetSpeed() float64 {
+	return t.speed
+}
+
 // SetIdentifier sets the unique identifier for the ThingBase instance.
 func (t *ThingBase) SetIdentifier(identifier int) {
 	t.identifier = identifier
@@ -224,15 +229,7 @@ func (t *ThingBase) StagePrepare() bool {
 	if !entity.IsMoving() {
 		return false
 	}
-	dx, dy, dz := entity.GetDisplacement()
-	// Estrazione origine (Bottom-Left)
-	pX, pY, pZ := entity.GetBottomLeft()
-	// Calcolo Half-Extents
-	w, h, d := entity.GetSize()
-	eRadX, eRadY, eRadZ := w*0.5, h*0.5, d*0.5
-	// Calcolo del CENTRO per il Broad-Phase
-	cX, cY, cZ := pX+eRadX, pY+eRadY, pZ+eRadZ
-	t.cage.Rebuild(cX, cY, cZ, dx, dy, dz, eRadX, eRadY, eRadZ)
+	t.cage.Rebuild()
 	return true
 }
 

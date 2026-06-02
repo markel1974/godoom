@@ -267,7 +267,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		//if w.occBuffer.IsAABBOccluded(thing.GetAABB(), mvp) {
 		//	return false
 		//}
-		faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices()
+		faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices(textures.GlobalTick())
 		if faceCount == 0 {
 			return false
 		}

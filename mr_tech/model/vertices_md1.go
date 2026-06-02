@@ -66,8 +66,14 @@ func (v *VerticesMD1) GetVolume() *Volume {
 	return v.viewVolume
 }
 
+// GetEntity returns the physics.Entity instance associated with the VerticesMD1 viewVolume.
 func (v *VerticesMD1) GetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
+}
+
+// GetAABB returns the axis-aligned bounding box (AABB) of the associated entity in the view volume.
+func (v *VerticesMD1) GetAABB() *physics.AABB {
+	return v.viewVolume.GetEntity().GetAABB()
 }
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
@@ -80,16 +86,16 @@ func (v *VerticesMD1) SetAction(idx int) {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64) {
+func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.volumes) == 0 {
-		return nil, 0, nil, 0, 0.0
+		return nil, 0, nil, 0, 0.0, v.GetBillboard()
 	}
 	// Se c'è un solo frame nell'animazione, restituisce lo stesso frame due volte senza lerp
 	if v.startFrame == v.endFrame {
 		s := v.volumes[v.startFrame]
 		faces, faceCount := s.GetFaces()
-		return faces, faceCount, faces, faceCount, 0.0
+		return faces, faceCount, faces, faceCount, 0.0, v.GetBillboard()
 	}
 	const groupSize = 6.0
 	frameFloat := textures.TickGrouped(tick, int(groupSize))
@@ -124,7 +130,7 @@ func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	facesA, faceCountA := curr.GetFaces()
 	facesB, faceCountB := next.GetFaces()
 
-	return facesA, faceCountA, facesB, faceCountB, lerpT
+	return facesA, faceCountA, facesB, faceCountB, lerpT, v.GetBillboard()
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.

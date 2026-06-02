@@ -70,8 +70,7 @@ type CageEntry struct {
 	p0Y         float64
 	p0Z         float64
 	maxZ        float64
-	sMode       int
-	sSize       float64
+	iMode       int
 }
 
 // GetRemoteFace retrieves the Face instance associated with the CageEntry. Returns nil if no Face is set.
@@ -88,18 +87,16 @@ func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
 // GetBucket returns the BucketType associated with the CageEntry instance.
 func (s *CageEntry) GetBucket() BucketType { return s.bucket }
 
-func (s *CageEntry) SetStep(sMode int, sSize float64) {
-	if s.sMode != 0 {
-		s.sMode = sMode
-		s.sSize = sSize
+func (s *CageEntry) SetImpact(sMode int) {
+	if s.iMode != 0 {
+		s.iMode = sMode
 		return
 	}
-	s.sMode = 0
-	s.sSize = 0
+	s.iMode = 0
 }
 
-func (s *CageEntry) GetStep() (int, float64) {
-	return s.sMode, s.sSize
+func (s *CageEntry) GetImpact() int {
+	return s.iMode
 }
 
 // GetNormal returns the normal vector components (nX, nY, nZ) of the `CageEntry`.
@@ -125,8 +122,7 @@ func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFa
 	s.nX, s.nY, s.nZ = nX, nY, nZ
 	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
 	s.maxZ = maxZ
-	s.sMode = -1
-	s.sSize = 0.0
+	s.iMode = -1
 }
 
 // CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.

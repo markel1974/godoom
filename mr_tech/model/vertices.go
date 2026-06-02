@@ -7,9 +7,11 @@ import (
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
-	GetVertices(uint64) (*[]*Face, int, *[]*Face, int, float64)
+	GetVertices(uint64) (*[]*Face, int, *[]*Face, int, float64, float64)
 
 	GetVolume() *Volume
+
+	GetAABB() *physics.AABB
 
 	GetEntity() *physics.Entity
 

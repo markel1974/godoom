@@ -72,11 +72,16 @@ func (v *VerticesLiquid) GetVolume() *Volume { return v.volume }
 // GetEntity retrieves the physics.Entity associated with the VerticesLiquid instance.
 func (v *VerticesLiquid) GetEntity() *physics.Entity { return v.volume.GetEntity() }
 
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the entity associated with the VerticesLiquid instance.
+func (v *VerticesLiquid) GetAABB() *physics.AABB {
+	return v.volume.GetEntity().GetAABB()
+}
+
 // GetVertices retrieves vertex and face information for liquid rendering at a specific simulation tick.
 // Returns two sets of face pointers, their counts, and a float64 placeholder.
-func (v *VerticesLiquid) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64) {
+func (v *VerticesLiquid) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	f, c := v.volume.GetFaces()
-	return f, c, f, c, 0.0
+	return f, c, f, c, 0.0, v.GetBillboard()
 }
 
 // SetAction updates the state or behavior of the liquid vertices at the specified index.

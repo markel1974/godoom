@@ -6,11 +6,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+const ImpactNone = -1
+const ImpactStep = 0
+const ImpactInelastic = 1
+const ImpactElastic = 2
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
+	IVertices
 	id           string
 	kind         config.ThingType
 	angle        float64
@@ -22,27 +27,28 @@ type ThingBase struct {
 	things       *Things
 	isActive     bool
 	cage         *CollisionCage
-	vertices     IVertices
-	inbox        chan *ThingEvent
-	onCollision  config.CollisionFunc
-	onImpact     config.ImpactFunc
-	done         chan struct{}
+
+	inbox       chan *ThingEvent
+	onCollision config.CollisionFunc
+	onImpact    config.ImpactFunc
+	done        chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
 func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Volume) *ThingBase {
-	vertices := VerticesFactory(thing, cfg, things.GetMaterials())
-
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
 	if cfg.OnImpact == nil {
 		panic("OnImpact is nil for thing:" + cfg.Id)
 	}
+	if cfg.Mass == 0 {
+		panic("mass is zero for thing:" + cfg.Id)
+	}
 
 	const cageMargin = 0.001
 	t := &ThingBase{
-		vertices:     vertices,
+		IVertices:    VerticesFactory(thing, cfg, things.GetMaterials()),
 		id:           cfg.Id,
 		angle:        cfg.Angle, // * (math.Pi / 180.0),
 		kind:         cfg.Kind,
@@ -60,26 +66,11 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		onCollision:  cfg.OnCollision,
 	}
 
-	entity := t.vertices.GetEntity()
+	entity := t.GetEntity()
 	entity.SetOnGround(false)
+	//TODO FROM CONFIG
 	t.maxStep = entity.GetDepth() * 0.5 //cfg.Height * 0.5,
 	return t
-}
-
-// GetVertices retrieves the vertices of the ThingBase's associated triangular entity after updating their origin positions.
-func (t *ThingBase) GetVertices() (*[]*Face, int, *[]*Face, int, float64, float64) {
-	vCurr, vCurrCount, vNext, vNextCount, lerp := t.vertices.GetVertices(textures.GlobalTick())
-	return vCurr, vCurrCount, vNext, vNextCount, lerp, t.vertices.GetBillboard()
-}
-
-// GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
-func (t *ThingBase) GetAngle() float64 {
-	return t.angle
-}
-
-// SetAngle updates the rotation angle of the ThingBase instance to the specified float64 value.
-func (t *ThingBase) SetAngle(angle float64) {
-	t.angle = angle
 }
 
 // GetId returns the identifier string of the ThingBase instance.
@@ -97,93 +88,24 @@ func (t *ThingBase) GetLocation() *Volume {
 	return t.location
 }
 
-// GetMaxStep returns the maximum step value associated with the ThingBase instance.
-func (t *ThingBase) GetMaxStep() float64 {
-	return t.maxStep
-}
-
+// GetCage retrieves the CollisionCage instance associated with the ThingBase, which defines its physical boundaries.
 func (t *ThingBase) GetCage() *CollisionCage {
 	return t.cage
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
-func (t *ThingBase) GetAABB() *physics.AABB {
-	return t.vertices.GetEntity().GetAABB()
+// GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
+func (t *ThingBase) GetAngle() float64 {
+	return t.angle
 }
 
-// GetEntity returns the physics.Entity associated with the current ThingBase instance.
-func (t *ThingBase) GetEntity() *physics.Entity {
-	return t.vertices.GetEntity()
+// SetAngle updates the rotation angle of the ThingBase instance to the specified float64 value.
+func (t *ThingBase) SetAngle(angle float64) {
+	t.angle = angle
 }
 
-// GetDisplacement returns the x, y, and z coordinates of the position as three float64 values.
-func (t *ThingBase) GetDisplacement() (float64, float64, float64) {
-	return t.vertices.GetDisplacement()
-}
-
-// GetSize returns the dimensions (width, height, depth) of the entity as a tuple of float64 values.
-func (t *ThingBase) GetSize() (float64, float64, float64) {
-	return t.vertices.GetEntity().GetSize()
-}
-
-// GetDepth retrieves the depth value of the entity associated with the ThingBase instance.
-func (t *ThingBase) GetDepth() float64 {
-	return t.vertices.GetEntity().GetDepth()
-}
-
-// GetWidth retrieves the width of the underlying entity associated with the ThingBase.
-func (t *ThingBase) GetWidth() float64 {
-	return t.vertices.GetEntity().GetWidth()
-}
-
-// GetMass retrieves the mass value of the underlying entity associated with the ThingBase instance.
-func (t *ThingBase) GetMass() float64 {
-	return t.vertices.GetEntity().GetMass()
-}
-
-// GetVelocity retrieves the current velocity of the entity as a tuple of X, Y, and Z components.
-func (t *ThingBase) GetVelocity() (float64, float64, float64) {
-	return t.vertices.GetEntity().GetVelocity()
-}
-
-// IsOnGround checks if the entity associated with ThingBase is currently on the ground and returns true if it is.
-func (t *ThingBase) IsOnGround() bool {
-	return t.vertices.GetEntity().IsOnGround()
-}
-
-// SetOnGround sets the on-ground state of the entity to the specified boolean value.
-func (t *ThingBase) SetOnGround(g bool) {
-	t.vertices.GetEntity().SetOnGround(g)
-}
-
-// GetBottomLeft returns the bottom-left coordinates (x, y) and an optional z-value of the entity associated with the ThingBase.
-func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
-	return t.vertices.GetEntity().GetBottomLeft()
-}
-
-// GetBottomCenter returns the center-bottom coordinates (x, y, z) of the ThingBase entity.
-func (t *ThingBase) GetBottomCenter() (float64, float64, float64) {
-	return t.vertices.GetEntity().GetBottomCenter()
-}
-
-// GetCenter calculates and returns the center coordinates (x, y, z) of the entity within ThingBase.
-func (t *ThingBase) GetCenter() (float64, float64, float64) {
-	return t.vertices.GetEntity().GetCenter()
-}
-
-// GetVolume retrieves the volume associated with the ThingBase instance.
-func (t *ThingBase) GetVolume() *Volume {
-	return t.vertices.GetVolume()
-}
-
-// AddForce applies a force vector (fx, fy, fz) to the entity associated with the ThingBase.
-func (t *ThingBase) AddForce(fx, fy, fz float64) {
-	t.vertices.GetEntity().AddForce(fx, fy, fz)
-}
-
-// SetAction sets the action for a vertex at the specified index in the ThingBase object.
-func (t *ThingBase) SetAction(idx int) {
-	t.vertices.SetAction(idx)
+// GetMaxStep returns the maximum step value associated with the ThingBase instance.
+func (t *ThingBase) GetMaxStep() float64 {
+	return t.maxStep
 }
 
 // GetAcceleration returns the current acceleration value of the ThingBase.
@@ -208,7 +130,7 @@ func (t *ThingBase) SetActive(active bool) {
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *ThingBase) StagePrepare() bool {
-	entity := t.vertices.GetEntity()
+	entity := t.GetEntity()
 	entity.Update()
 	if !entity.IsMoving() {
 		return false
@@ -226,31 +148,34 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		return
 	}
 
-	entity := t.vertices.GetEntity()
-	baseZ := t.cage.GetBaseZ()
-	stepZ := baseZ + t.maxStep
+	entity := t.GetEntity()
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-		// Filtro topologico per ostacoli scavalcabili (Stair-Stepping).
-		// Se l'ostacolo è statico e rientra nel maxStep, inibiamo la normale di collisione
-		// orizzontale e programmiamo lo step verticale per lo StageApply.
 
-		if !slot.IsDynamic() {
-			//if solverIndex == 0 {
-			switch slot.GetBucket() {
+		bucket := slot.GetBucket()
+		if slot.IsDynamic() {
+			// TODO IMPLEMENT
+			//slot.SetImpact(ImpactElastic)
+			//slot.SetImpact(ImpactInelastic)
+			slot.SetImpact(ImpactNone)
+		} else {
+			baseZ := t.cage.GetBaseZ()
+			switch bucket {
 			case BucketWallEast, BucketWallWest, BucketWallNorth, BucketWallSouth:
 				maxZ := slot.GetMaxZ()
 				if maxZ <= baseZ {
+					slot.SetImpact(ImpactNone)
 					continue // down-hill (in discesa)
 				}
+				stepZ := baseZ + t.maxStep
 				if maxZ <= stepZ {
-					slot.SetStep(1, maxZ)
+					slot.SetImpact(ImpactStep)
 					continue // up-hill (gradino superabile)
 				}
-				slot.SetStep(0, 0) // Ostacolo insuperabile (muro)
-			case BucketFloor, BucketCeiling:
-				slot.SetStep(0, 0)
+				slot.SetImpact(ImpactInelastic) // Ostacolo insuperabile (muro)
+			default:
+				slot.SetImpact(ImpactInelastic)
 			}
 		}
 
@@ -264,7 +189,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
 		// Forziamo penetration = 0.0 per inibire la stabilizzazione Baumgarte interna
 		// al metodo ResolveImpact, evitando di iniettare energia cinetica fittizia.
-		penetration = 0.0
+		//penetration = 0.0
 		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
 
 		if thing := otherParent.GetThing(); thing != nil {
@@ -278,7 +203,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
-	entity := t.vertices.GetEntity()
+	entity := t.GetEntity()
 
 	onGround := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(onGround)
@@ -298,16 +223,13 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 
-		stepMode, stepSize := slot.GetStep()
-		switch stepMode {
-		case 1:
+		iMode := slot.GetImpact()
+		switch iMode {
+		case ImpactStep:
 			// Il MoveToZ sovrascrive dz calcolato prima,
 			// posizionandolo sopra il gradino
-			entity.MoveToZ(stepSize)
-			continue
-		case -1:
-			continue
-		case 0:
+			entity.MoveToZ(slot.GetMaxZ())
+		case ImpactInelastic:
 			penetration := slot.GetPenetration()
 			if penetration <= slop {
 				continue
@@ -316,32 +238,37 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			if correction <= 0.0 {
 				continue
 			}
-			if slot.IsDynamic() {
-				otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
-				invMass1 := entity.GetInvMass()
-				invMass2 := otherEnt.GetInvMass()
-				invMassSum := invMass1 + invMass2
-				if invMassSum > 0.0 {
-					nX, nY, nZ := slot.GetNormal()
-					ratio1 := invMass1 / invMassSum
-					p1 := correction * ratio1
-					entity.AddTo(nX*p1, nY*p1, nZ*p1)
-
-					ratio2 := invMass2 / invMassSum
-					p2 := correction * ratio2
-					otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
-				}
-			} else {
-				nX, nY, nZ := slot.GetNormal()
-				entity.AddTo(nX*correction, nY*correction, nZ*correction)
+			nX, nY, nZ := slot.GetNormal()
+			entity.AddTo(nX*correction, nY*correction, nZ*correction)
+		case ImpactElastic:
+			penetration := slot.GetPenetration()
+			if penetration <= slop {
+				continue
 			}
+			correction := ((penetration - slop) * positionalPercent) + solverJitter
+			if correction <= 0.0 {
+				continue
+			}
+			otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
+			invMass1 := entity.GetInvMass()
+			invMass2 := otherEnt.GetInvMass()
+			invMassSum := invMass1 + invMass2
+
+			ratio1 := invMass1 / invMassSum
+			ratio2 := invMass2 / invMassSum
+			p1 := correction * ratio1
+			p2 := correction * ratio2
+
+			nX, nY, nZ := slot.GetNormal()
+			entity.AddTo(nX*p1, nY*p1, nZ*p1)
+			otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
 		}
 	}
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
-	entity := t.vertices.GetEntity()
+	entity := t.GetEntity()
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * targetSpeed
 	desiredVy := dirY * targetSpeed
@@ -407,7 +334,8 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 		fmt.Println("IMPACT: ", force, closestThing.GetId(), impactX, impactY, impactZ)
 		// 3. Risoluzione dell'impatto
 		force *= 100
-		closestThing.AddForce(dirX*force, dirY*force, dirZ*force)
+
+		closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 		closestThing.Impact(closestThing, id, force, closestDist, dirX, dirY, dirZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}

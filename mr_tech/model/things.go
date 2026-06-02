@@ -204,7 +204,7 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 		return
 	}
 	throwable := th.createThing(dst, volume)
-	throwable.SetOnGround(false)
+	throwable.GetEntity().SetOnGround(false)
 
 	th.pending[slot] = throwable
 	th.hasPending = true

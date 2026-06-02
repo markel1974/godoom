@@ -52,10 +52,15 @@ func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
 }
 
+// GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
+func (v *VerticesMultiSprite) GetAABB() *physics.AABB {
+	return v.viewVolume.GetEntity().GetAABB()
+}
+
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
-func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64) {
+func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	f, c := v.viewVolume.GetFaces()
-	return f, c, f, c, 0.0
+	return f, c, f, c, 0.0, v.GetBillboard()
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.

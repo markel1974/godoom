@@ -173,7 +173,7 @@ func (p *ThingPlayer) SetJump(multi bool) {
 	factor := 1.0
 	if multi {
 		factor = 0.2
-		p.SetOnGround(true)
+		p.GetEntity().SetOnGround(true)
 	}
 	if p.Jump(0, 0, factor) {
 		p.bobbing.InjectVerticalImpulse(1.5)
@@ -235,7 +235,7 @@ func (p *ThingPlayer) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (p *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := p.GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
+	visualX, visualY, visualZ := p.GetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := p.GetAngleFull()
 	bobX, bobY, _ := p.GetBob()
 	visualZ += p.getEyeHeight() + bobY + p.bobbing.GetJump()
@@ -314,8 +314,8 @@ func (p *ThingPlayer) Fire(id string) {
 	dirZ := math.Sin(pitchRad)
 	// 3. Punto di spawn fuori dalla hitbox del player
 	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
-	weaponForward := p.GetWidth() //p.GetRadius() * 2.0
-	weaponForce := 5000.0         // TODO CONFIG
+	weaponForward := p.GetEntity().GetWidth() //p.GetRadius() * 2.0
+	weaponForce := 5000.0                     // TODO CONFIG
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)

@@ -101,7 +101,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 // Compute updates the game state by synchronizing the player, processing AI, applying physics, and updating the view matrix.
 func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	// AI & External Forces: Wake up things BEFORE physics calculation
-	pX, pY, pZ := player.GetCenter()
+	pX, pY, pZ := player.GetEntity().GetCenter()
 	// Dynamic Solver
 	e.things.Compute(pX, pY, pZ)
 	// Post-Sync ViewMatrix

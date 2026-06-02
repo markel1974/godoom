@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 type ThinkingFunc func(self IThingConfig, playerX, playerY, playerZ float64)
@@ -15,25 +16,27 @@ type IThingConfig interface {
 
 	GetKind() ThingType
 
+	GetEntity() *physics.Entity
+
 	SetAction(idx int)
 
-	IsOnGround() bool
+	//IsOnGround() bool
 
-	SetOnGround(g bool)
+	//SetOnGround(g bool)
 
-	GetBottomLeft() (float64, float64, float64)
+	//GetBottomLeft() (float64, float64, float64)
 
-	GetBottomCenter() (float64, float64, float64)
+	//GetBottomCenter() (float64, float64, float64)
 
-	GetCenter() (float64, float64, float64)
+	//GetCenter() (float64, float64, float64)
 
-	GetSize() (float64, float64, float64)
+	//GetSize() (float64, float64, float64)
 
 	GetAngle() float64
 
 	SetAngle(angle float64)
 
-	GetDepth() float64
+	//GetDepth() float64
 
 	GetAcceleration() float64
 
@@ -41,13 +44,13 @@ type IThingConfig interface {
 
 	GetSpeed() float64
 
-	GetWidth() float64
+	//GetWidth() float64
 
-	GetMass() float64
+	//GetMass() float64
 
-	GetVelocity() (float64, float64, float64)
+	//GetVelocity() (float64, float64, float64)
 
-	AddForce(fx, fy, fz float64)
+	//AddForce(fx, fy, fz float64)
 
 	MoveTowards(dirX, dirY, targetSpeed, accelForce float64)
 

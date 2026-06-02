@@ -63,7 +63,8 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 	// 2. Apply Knockback Physics
 	// Push the enemy back along the impact direction vector
 	knockbackMultiplier := 50.0 // Adjust based on your physics scale
-	self.AddForce(dirX*force*knockbackMultiplier, dirY*force*knockbackMultiplier, dirZ*force*knockbackMultiplier)
+	entity := self.GetEntity()
+	entity.AddForce(dirX*force*knockbackMultiplier, dirY*force*knockbackMultiplier, dirZ*force*knockbackMultiplier)
 
 	// 3. Instant Aggro
 	if !e.active {
@@ -127,9 +128,10 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		return
 	}
 
+	entity := self.GetEntity()
 	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
-	targetZ := playerZ + (self.GetDepth() / 2)
-	selfX, selfY, selfZ := self.GetBottomCenter()
+	targetZ := playerZ + (entity.GetDepth() / 2)
+	selfX, selfY, selfZ := entity.GetBottomCenter()
 	dx := playerX - selfX
 	dy := playerY - selfY
 	dz := targetZ - selfZ
@@ -161,7 +163,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	ny := dy * invDist
 	impulse := 1.0
 	// Distanza di stop (es. somma dei raggi per non compenetrare)
-	stopDistance := (self.GetWidth() * 0.5) + 5.0
+	stopDistance := (entity.GetWidth() * 0.5) + 5.0
 	if playerDist2d < stopDistance {
 		impulse = 0.0
 	} else if playerDist3d < 20.0 && e.throwCooldown <= 0 {
@@ -172,17 +174,17 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	speed := self.GetSpeed()
 	self.MoveTowards(nx, ny, speed*impulse, acceleration)
 
-	if self.IsOnGround() {
+	if entity.IsOnGround() {
 		e.handleJump(self, playerZ, thingZ, playerDist2d, nx, ny)
 	}
 
 	const throwableIndex = 2
 	const throwableSpeed = 100
 	if e.throwCooldown <= 0 && playerDist3d < 20.0 {
-		weaponForward := self.GetWidth()
+		weaponForward := entity.GetWidth()
 		spawnX := selfX + (math.Cos(angle) * weaponForward)
 		spawnY := selfY + (math.Sin(angle) * weaponForward)
-		spawnZ := selfZ + (self.GetDepth() * 0.5)
+		spawnZ := selfZ + (entity.GetDepth() * 0.5)
 		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
 		aimPitch := math.Atan2(dz, playerDist2d)
 		self.LaunchObject(throwableIndex, e.OnCollision, e.OnImpact, bulletPos, angle, aimPitch, throwableSpeed)
@@ -193,10 +195,11 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 
 // tryJump allows the enemy to perform a jump if blocked or the player is at a higher elevation.
 func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
-	if !self.IsOnGround() {
+	entity := self.GetEntity()
+	if !entity.IsOnGround() {
 		return
 	}
-	vx, vy, _ := self.GetVelocity()
+	vx, vy, _ := entity.GetVelocity()
 	speedSq := (vx * vx) + (vy * vy)
 	// Euristica A: bloccato contro un muro/ostacolo
 	isBlocked := speedSq < 0.1
@@ -206,7 +209,7 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 	if isBlocked || playerIsHigher {
 		//1. Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso
 		//saltino in modo coerente. Regola l'800.0 in base alla tua gravità.
-		leapForceXY := self.GetMass() * 200.0
+		leapForceXY := entity.GetMass() * 200.0
 		self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
 	}
 }

@@ -167,9 +167,9 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		penetration = 0.0
 		entity.ResolveImpact(rParentEnt, nX, nY, nZ, penetration)
 
-		if thing := rParent.GetThing(); thing != nil {
-			t.onCollision(t, thing)
-		}
+		//if thing := rParent.GetThing(); thing != nil {
+		//	t.onCollision(t, thing)
+		//}
 	}
 }
 
@@ -197,13 +197,13 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	// l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
-
 		iMode := slot.GetImpactMode()
 		switch iMode {
+		case ImpactNone:
+			continue
 		case ImpactStep:
-			// Il MoveToZ sovrascrive dz calcolato prima,
-			// posizionandolo sopra il gradino
 			entity.MoveToZ(slot.GetMaxZ())
+			continue
 		case ImpactInelastic:
 			penetration := slot.GetPenetration()
 			if penetration <= slop {
@@ -239,6 +239,12 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 				entity.AddTo(nX*p1, nY*p1, nZ*p1)
 				otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
 			*/
+		}
+
+		rFace := slot.GetRemoteFace()
+		rParent := rFace.GetParent()
+		if thing := rParent.GetThing(); thing != nil {
+			t.onCollision(t, thing)
 		}
 	}
 }

@@ -369,7 +369,7 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	if rThing != nil {
 		rCage := rThing.GetCage()
 		offX, offY, offZ = rCage.ellipsoid.GetCenter()
-		maxZ += offZ // CORREZIONE FIX: Operatore composto corretto
+		maxZ += offZ
 		iMode = ImpactElastic
 	} else {
 		iMode = ImpactInelastic

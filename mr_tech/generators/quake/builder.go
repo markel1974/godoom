@@ -205,7 +205,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		}
 	}
 
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 4, 40)
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 40)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact

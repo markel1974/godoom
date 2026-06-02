@@ -351,20 +351,20 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	maxZ := rFace.GetAABB().GetMaxZ()
 	nX, nY, nZ := rFace.normal.X, rFace.normal.Y, rFace.normal.Z
 	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
-	wallWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	blockNS := nAbsY > nAbsZ
-	isWall := wallWE || blockNS
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+	isSolid := solidWE || solidNS
 
 	iMode := ImpactNone
 	var offX, offY, offZ float64
 	if rThing != nil {
 		rCage := rThing.GetCage()
 		offX, offY, offZ = rCage.ellipsoid.GetCenter()
-		maxZ = +offZ
+		maxZ += offZ
 		iMode = ImpactElastic
 	} else {
 		iMode = ImpactInelastic
-		if isWall {
+		if isSolid {
 			baseZ := s.GetBaseZ()
 			if maxZ <= baseZ { // down-hill (in discesa)
 				iMode = ImpactNone
@@ -383,14 +383,14 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 
 	var bucket BucketType
 
-	if isWall {
-		// Facing Normalization: Forces the plane to oppose the player
+	if isSolid {
+		// Facing Normalization: Forces the plane to oppose the thing
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
 		// Wall Bucket Assignment
-		if wallWE {
+		if solidWE {
 			if nX < 0 {
 				bucket = BucketWallWest
 			} else {

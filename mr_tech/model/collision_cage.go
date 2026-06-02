@@ -155,13 +155,23 @@ func (b *CollisionBucket) Count() int {
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
 func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode int) *CageEntry {
-	// Topological Deduplication (Filter for coplanar faces)
-	// Prevents generating multiple constraints for adjacent triangles on the same plane
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
-		// If the dot product is ~1.0, the two faces form a continuous plane
+		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
+		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
+		if rThing != nil && existing.remoteId == rId {
+			// Teniamo la faccia con la compenetrazione MAGGIORE.
+			// Perché? Se sei entrato nel petto del mostro di 10 unità, e sfiori il suo braccio di 2 unità,
+			// il motore deve spingerti fuori di 10 per liberarti, non di 2.
+			if penetration > existing.penetration {
+				existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+			}
+			return nil // Interrompiamo: abbiamo già gestito questo oggetto in questo bucket
+		}
+		// 2. DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
+		// Se il dot product è ~1.0, i due triangoli formano un piano continuo (Triangle Soup statica)
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
-			// Update the unified constraint only if the new penetration is deeper
+			// Aggiorniamo il vincolo solo se la nuova penetrazione è più profonda
 			if penetration > existing.penetration {
 				existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 			}
@@ -190,7 +200,6 @@ func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, r
 	if penetration > minPen {
 		b.container[minIdx].Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	}
-
 	return nil
 }
 
@@ -360,7 +369,7 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	if rThing != nil {
 		rCage := rThing.GetCage()
 		offX, offY, offZ = rCage.ellipsoid.GetCenter()
-		maxZ += offZ
+		maxZ += offZ // CORREZIONE FIX: Operatore composto corretto
 		iMode = ImpactElastic
 	} else {
 		iMode = ImpactInelastic
@@ -376,13 +385,14 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 			}
 		}
 	}
+
 	// Translation (from Local to World Space)
 	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
-
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 
 	var bucket BucketType
 
+	// NORMALIZZAZIONE UNIVERSALE (Nessuna distinzione tra statico e dinamico!)
 	if isSolid {
 		// Facing Normalization: Forces the plane to oppose the thing
 		if distStart < 0 {
@@ -423,15 +433,6 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 			}
 		}
 	}
-
-	//if rFace.GetParent().GetThing() != nil {
-	//	r := rFace.GetParent().GetThing()
-	//	if s.GetThing().GetId() == "PLAYER" {
-	//		fmt.Println(counter, "LOCAL", nAbsX, nAbsY, nAbsZ, r.GetId(), bucket)
-	//	} else if r.GetId() == "PLAYER" {
-	//		fmt.Println(counter, "REMOTE", nAbsX, nAbsY, nAbsZ, s.GetThing().GetId(), bucket)
-	//	}
-	//}
 
 	// Minkowski / Support Mapping for Ellipsoids
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))

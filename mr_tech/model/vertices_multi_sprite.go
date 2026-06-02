@@ -79,7 +79,7 @@ func (v *VerticesMultiSprite) GetDisplacement() (float64, float64, float64) {
 
 // GetBillboard returns a constant value of 1.0, typically used to represent a uniform scaling factor for billboards.
 func (v *VerticesMultiSprite) GetBillboard() float64 {
-	return 1.0
+	return 1.0 //3.0 Debug
 }
 
 // SetThing assigns the specified IThing instance to all volumes in the VerticesMultiSprite object.
@@ -137,12 +137,15 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 		faces = append(faces, f0, f1)
 	}
 
-	addPhysicsQuad(v001, v000, v100, v101, nil) // Front
-	addPhysicsQuad(v111, v110, v010, v011, nil) // Back
-	addPhysicsQuad(v011, v010, v000, v001, nil) // Left
-	addPhysicsQuad(v101, v100, v110, v111, nil) // Right
-	addPhysicsQuad(v011, v001, v101, v111, nil) // Top
-	addPhysicsQuad(v000, v010, v110, v100, nil) // Bottom
+	var debug *textures.Material = nil
+	//debug = material
+
+	addPhysicsQuad(v001, v000, v100, v101, debug) // Front
+	addPhysicsQuad(v111, v110, v010, v011, debug) // Back
+	addPhysicsQuad(v011, v010, v000, v001, debug) // Left
+	addPhysicsQuad(v101, v100, v110, v111, debug) // Right
+	addPhysicsQuad(v011, v001, v101, v111, debug) // Top
+	addPhysicsQuad(v000, v010, v110, v100, debug) // Bottom
 
 	// 2. PIANO VISIVO (Render)
 	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.

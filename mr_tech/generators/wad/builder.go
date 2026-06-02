@@ -37,10 +37,10 @@ const ScaleHThings = 1.0
 const GForce = 9.8 * 20
 
 // playerHeight defines the height of a player entity in game units, used for calculations related to geometry and physics.
-const playerHeight = 50.0
+const playerHeight = 62.0
 
 // playerRadius defines the constant radius of the player character used for collision detection and bounding operations.
-const playerRadius = 10
+const playerRadius = 30
 
 // playerSpeed defines the constant speed value for the player, represented in units per second.
 const playerSpeed = 1800

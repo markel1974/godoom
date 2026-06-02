@@ -93,14 +93,21 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		if lThing == rThing {
 			return false
 		}
+
+		//if lCage.GetThing().GetId() == "PLAYER" {
+		//	fmt.Println("Collisione con PLAYER:", rThing.GetId())
+		//}
+
 		rCage := rThing.GetCage()
 		if lCage.HasSeen(rCage) {
 			return false
 		}
+
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 
 		rId := rThing.GetEntity().GetId()
+
 		rVolume := rThing.GetVolume()
 		aabb := lCage.TranslateWorldToLocalAABB(0, rCage)
 		rVolume.QueryOverlaps(aabb, func(rEnt physics.IAABB) bool {
@@ -111,6 +118,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		})
 		return false
 	})
+
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.

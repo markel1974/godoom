@@ -350,7 +350,7 @@ func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCag
 func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	maxZ := rFace.GetAABB().GetMaxZ()
 	nX, nY, nZ := rFace.normal.X, rFace.normal.Y, rFace.normal.Z
-	nAbsX, nAbsY, nAbsZ := rFace.normalAbs.X, rFace.normalAbs.Y, rFace.normalAbs.Z
+	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
 	wallWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	blockNS := nAbsY > nAbsZ
 	isWall := wallWE || blockNS
@@ -380,6 +380,7 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
 
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+
 	var bucket BucketType
 
 	if isWall {
@@ -422,6 +423,15 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 			}
 		}
 	}
+
+	//if rFace.GetParent().GetThing() != nil {
+	//	r := rFace.GetParent().GetThing()
+	//	if s.GetThing().GetId() == "PLAYER" {
+	//		fmt.Println(counter, "LOCAL", nAbsX, nAbsY, nAbsZ, r.GetId(), bucket)
+	//	} else if r.GetId() == "PLAYER" {
+	//		fmt.Println(counter, "REMOTE", nAbsX, nAbsY, nAbsZ, s.GetThing().GetId(), bucket)
+	//	}
+	//}
 
 	// Minkowski / Support Mapping for Ellipsoids
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))

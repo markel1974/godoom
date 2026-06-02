@@ -31,8 +31,8 @@ type ThingPlayer struct {
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
 func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bool) *ThingPlayer {
-	volume, _ := volumes.QueryPoint(c.Position.X, c.Position.Y, c.Position.Z)
-	if volume == nil {
+	location, _ := volumes.QueryPoint(c.Position.X, c.Position.Y, c.Position.Z)
+	if location == nil {
 		fmt.Printf("can't find 3d player location at X: %f Y: %f Z: %f\n", c.Position.X, c.Position.Y, c.Position.Z)
 		return nil
 	}
@@ -61,7 +61,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 	}
-	thing.ThingBase = NewThingBase(thing, things, c.Thing, volume)
+	thing.ThingBase = NewThingBase(thing, things, c.Thing, location)
 	entity := thing.GetEntity()
 	entity.SetOnGround(false)
 	entity.MoveTo(c.Position.X, c.Position.Y, c.Position.Z)

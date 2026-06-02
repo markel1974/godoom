@@ -31,22 +31,22 @@ func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite 
 		}
 	}
 
-	halfW := w * 0.5
-	halfY := cfg.Radius // Profondità 3D dell'entità sull'asse Y
+	halfX := w * 0.5
+	halfY := w * 0.5
 
 	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesSprite{volume: volume}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
-	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: 0.0}
-	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: 0.0}
-	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: 0.0}
-	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: 0.0}
+	v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: 0.0}
+	v100 := geometry.XYZ{X: halfX, Y: -halfY, Z: 0.0}
+	v110 := geometry.XYZ{X: halfX, Y: halfY, Z: 0.0}
+	v010 := geometry.XYZ{X: -halfX, Y: halfY, Z: 0.0}
 
-	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: d}
-	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: d}
-	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: d}
-	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: d}
+	v001 := geometry.XYZ{X: -halfX, Y: -halfY, Z: d}
+	v101 := geometry.XYZ{X: halfX, Y: -halfY, Z: d}
+	v111 := geometry.XYZ{X: halfX, Y: halfY, Z: d}
+	v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: d}
 
 	f.volume.ClearFaces()
 

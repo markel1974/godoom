@@ -198,6 +198,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		iMode := slot.GetImpactMode()
+
 		switch iMode {
 		case ImpactNone:
 			continue

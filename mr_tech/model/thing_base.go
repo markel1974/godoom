@@ -106,19 +106,14 @@ func (t *ThingBase) GetCage() *CollisionCage {
 	return t.cage
 }
 
-// GetEntity returns the physics.Entity associated with the current ThingBase instance.
-func (t *ThingBase) GetEntity() *physics.Entity {
-	return t.vertices.GetEntity()
-}
-
 // GetAABB retrieves the axis-aligned bounding box (AABB) of the associated physics entity.
 func (t *ThingBase) GetAABB() *physics.AABB {
 	return t.vertices.GetEntity().GetAABB()
 }
 
-// SetAction sets the action for a vertex at the specified index in the ThingBase object.
-func (t *ThingBase) SetAction(idx int) {
-	t.vertices.SetAction(idx)
+// GetEntity returns the physics.Entity associated with the current ThingBase instance.
+func (t *ThingBase) GetEntity() *physics.Entity {
+	return t.vertices.GetEntity()
 }
 
 // GetDisplacement returns the x, y, and z coordinates of the position as three float64 values.
@@ -161,11 +156,6 @@ func (t *ThingBase) SetOnGround(g bool) {
 	t.vertices.GetEntity().SetOnGround(g)
 }
 
-// AddForce applies a force vector (fx, fy, fz) to the entity associated with the ThingBase.
-func (t *ThingBase) AddForce(fx, fy, fz float64) {
-	t.vertices.GetEntity().AddForce(fx, fy, fz)
-}
-
 // GetBottomLeft returns the bottom-left coordinates (x, y) and an optional z-value of the entity associated with the ThingBase.
 func (t *ThingBase) GetBottomLeft() (float64, float64, float64) {
 	return t.vertices.GetEntity().GetBottomLeft()
@@ -184,6 +174,16 @@ func (t *ThingBase) GetCenter() (float64, float64, float64) {
 // GetVolume retrieves the volume associated with the ThingBase instance.
 func (t *ThingBase) GetVolume() *Volume {
 	return t.vertices.GetVolume()
+}
+
+// AddForce applies a force vector (fx, fy, fz) to the entity associated with the ThingBase.
+func (t *ThingBase) AddForce(fx, fy, fz float64) {
+	t.vertices.GetEntity().AddForce(fx, fy, fz)
+}
+
+// SetAction sets the action for a vertex at the specified index in the ThingBase object.
+func (t *ThingBase) SetAction(idx int) {
+	t.vertices.SetAction(idx)
 }
 
 // GetAcceleration returns the current acceleration value of the ThingBase.
@@ -413,23 +413,6 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 	}
 }
 
-/*
-// deadZone checks if the provided velocity components are within a threshold, sets velocity to zero, and returns true if so.
-func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		entity := t.vertices.GetEntity()
-		entity.SetVx(0.0)
-		entity.SetVy(0.0)
-		if entity.IsOnGround() {
-			entity.SetVz(0.0)
-		}
-		return true
-	}
-	return false
-}
-*/
-
 // Impact handles the interaction logic when this object collides with another object.
 // other refers to the configuration of the colliding object.
 // id is a unique identifier for the impact event.
@@ -451,3 +434,20 @@ func (t *ThingBase) spawnBulletHole(x, y, z float64, target IThing) {
 	// ma per ora posizioniamola semplicemente nel punto XYZ.
 	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
 }
+
+/*
+// deadZone checks if the provided velocity components are within a threshold, sets velocity to zero, and returns true if so.
+func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
+	const sleepEpsilon = 0.005
+	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+		entity := t.vertices.GetEntity()
+		entity.SetVx(0.0)
+		entity.SetVy(0.0)
+		if entity.IsOnGround() {
+			entity.SetVz(0.0)
+		}
+		return true
+	}
+	return false
+}
+*/

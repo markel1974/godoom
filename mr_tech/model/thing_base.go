@@ -8,11 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-const ImpactNone = -1
-const ImpactStep = 0
-const ImpactInelastic = 1
-const ImpactElastic = 2
-
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	IVertices
@@ -135,7 +130,7 @@ func (t *ThingBase) StagePrepare() bool {
 	if !entity.IsMoving() {
 		return false
 	}
-	t.cage.Rebuild()
+	t.cage.Rebuild(t.maxStep)
 	return true
 }
 
@@ -153,46 +148,26 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
 
-		bucket := slot.GetBucket()
-		if slot.IsDynamic() {
-			// TODO IMPLEMENT
-			//slot.SetImpact(ImpactElastic)
-			//slot.SetImpact(ImpactInelastic)
-			slot.SetImpact(ImpactNone)
-		} else {
-			baseZ := t.cage.GetBaseZ()
-			switch bucket {
-			case BucketWallEast, BucketWallWest, BucketWallNorth, BucketWallSouth:
-				maxZ := slot.GetMaxZ()
-				if maxZ <= baseZ {
-					slot.SetImpact(ImpactNone)
-					continue // down-hill (in discesa)
-				}
-				stepZ := baseZ + t.maxStep
-				if maxZ <= stepZ {
-					slot.SetImpact(ImpactStep)
-					continue // up-hill (gradino superabile)
-				}
-				slot.SetImpact(ImpactInelastic) // Ostacolo insuperabile (muro)
-			default:
-				slot.SetImpact(ImpactInelastic)
-			}
+		iMode := slot.GetImpactMode()
+		switch iMode {
+		case ImpactNone, ImpactStep:
+			continue
 		}
 
-		otherFace := slot.GetRemoteFace()
 		penetration := slot.GetPenetration() + solverJitter
 		nX, nY, nZ := slot.GetNormal()
 
-		otherParent := otherFace.GetParent()
-		otherParentEnt := otherParent.GetEntity()
+		rFace := slot.GetRemoteFace()
+		rParent := rFace.GetParent()
+		rParentEnt := rParent.GetEntity()
 
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
 		// Forziamo penetration = 0.0 per inibire la stabilizzazione Baumgarte interna
 		// al metodo ResolveImpact, evitando di iniettare energia cinetica fittizia.
-		//penetration = 0.0
-		entity.ResolveImpact(otherParentEnt, nX, nY, nZ, penetration)
+		penetration = 0.0
+		entity.ResolveImpact(rParentEnt, nX, nY, nZ, penetration)
 
-		if thing := otherParent.GetThing(); thing != nil {
+		if thing := rParent.GetThing(); thing != nil {
 			t.onCollision(t, thing)
 		}
 	}
@@ -223,7 +198,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 
-		iMode := slot.GetImpact()
+		iMode := slot.GetImpactMode()
 		switch iMode {
 		case ImpactStep:
 			// Il MoveToZ sovrascrive dz calcolato prima,
@@ -241,27 +216,29 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			nX, nY, nZ := slot.GetNormal()
 			entity.AddTo(nX*correction, nY*correction, nZ*correction)
 		case ImpactElastic:
-			penetration := slot.GetPenetration()
-			if penetration <= slop {
-				continue
-			}
-			correction := ((penetration - slop) * positionalPercent) + solverJitter
-			if correction <= 0.0 {
-				continue
-			}
-			otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
-			invMass1 := entity.GetInvMass()
-			invMass2 := otherEnt.GetInvMass()
-			invMassSum := invMass1 + invMass2
+			/*
+				penetration := slot.GetPenetration()
+				if penetration <= slop {
+					continue
+				}
+				correction := ((penetration - slop) * positionalPercent) + solverJitter
+				if correction <= 0.0 {
+					continue
+				}
+				otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
+				invMass1 := entity.GetInvMass()
+				invMass2 := otherEnt.GetInvMass()
+				invMassSum := invMass1 + invMass2
 
-			ratio1 := invMass1 / invMassSum
-			ratio2 := invMass2 / invMassSum
-			p1 := correction * ratio1
-			p2 := correction * ratio2
+				ratio1 := invMass1 / invMassSum
+				ratio2 := invMass2 / invMassSum
+				p1 := correction * ratio1
+				p2 := correction * ratio2
 
-			nX, nY, nZ := slot.GetNormal()
-			entity.AddTo(nX*p1, nY*p1, nZ*p1)
-			otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+				nX, nY, nZ := slot.GetNormal()
+				entity.AddTo(nX*p1, nY*p1, nZ*p1)
+				otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+			*/
 		}
 	}
 }

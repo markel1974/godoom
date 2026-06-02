@@ -7,6 +7,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+const ImpactNone = 0
+const ImpactStep = 1
+const ImpactInelastic = 2
+const ImpactElastic = 3
+
 // BucketType represents an enumeration for categorizing different types of spatial regions in a collision detection system.
 type BucketType int
 
@@ -87,15 +92,7 @@ func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
 // GetBucket returns the BucketType associated with the CageEntry instance.
 func (s *CageEntry) GetBucket() BucketType { return s.bucket }
 
-func (s *CageEntry) SetImpact(sMode int) {
-	if s.iMode != 0 {
-		s.iMode = sMode
-		return
-	}
-	s.iMode = 0
-}
-
-func (s *CageEntry) GetImpact() int {
+func (s *CageEntry) GetImpactMode() int {
 	return s.iMode
 }
 
@@ -111,7 +108,7 @@ func NewCollisionFace() *CageEntry {
 }
 
 // Rebuild updates the CageEntry fields with the provided values for geometry, collision, and wall properties.
-func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64) {
+func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
 	s.bucket = bucket
 	s.localId = lThing.GetEntity().GetId()
 	s.remoteThing = rThing
@@ -122,7 +119,7 @@ func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFa
 	s.nX, s.nY, s.nZ = nX, nY, nZ
 	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
 	s.maxZ = maxZ
-	s.iMode = -1
+	s.iMode = iMode
 }
 
 // CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.
@@ -157,7 +154,7 @@ func (b *CollisionBucket) Count() int {
 }
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.
-func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64) *CageEntry {
+func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, rFace *Face, rId uint64, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode int) *CageEntry {
 	// Topological Deduplication (Filter for coplanar faces)
 	// Prevents generating multiple constraints for adjacent triangles on the same plane
 	for i := 0; i < b.containerCounter; i++ {
@@ -166,7 +163,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, r
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
 			// Update the unified constraint only if the new penetration is deeper
 			if penetration > existing.penetration {
-				existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
+				existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 			}
 			return nil
 		}
@@ -175,7 +172,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, r
 	// Insert a new plane into the non-full bucket
 	if b.containerCounter < FacesPerBucket {
 		target := b.spare[b.containerCounter]
-		target.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
+		target.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.container[b.containerCounter] = target
 		b.containerCounter++
 		return target
@@ -191,7 +188,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lThing IThing, rThing IThing, r
 		}
 	}
 	if penetration > minPen {
-		b.container[minIdx].Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ)
+		b.container[minIdx].Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	}
 
 	return nil
@@ -214,6 +211,7 @@ type CollisionCage struct {
 	slots               []*CageEntry
 	slotsEmpty          []*CageEntry
 	slotsLen            int
+	maxStep             float64
 }
 
 // NewCollisionCage creates and initializes a new CollisionCage with the given IThing and margin values.
@@ -238,7 +236,7 @@ func NewCollisionCage(thing IThing, margin float64) *CollisionCage {
 }
 
 // Rebuild updates the internal state of the CollisionCage, recalculating volumes, bounds, and resetting temporary data.
-func (s *CollisionCage) Rebuild() {
+func (s *CollisionCage) Rebuild(maxStep float64) {
 	entity := s.thing.GetEntity()
 	s.dX, s.dY, s.dZ = entity.GetDisplacement()
 	// Estrazione origine (Bottom-Left)
@@ -275,6 +273,7 @@ func (s *CollisionCage) Rebuild() {
 	for k := range s.seen {
 		delete(s.seen, k)
 	}
+	s.maxStep = maxStep
 }
 
 func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
@@ -349,32 +348,48 @@ func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCag
 // offX, offY, offZ specify the offsets to transform the face into world space.
 // isVolume indicates whether the Face should be prioritized as a volumetric obstacle.
 func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
+	maxZ := rFace.GetAABB().GetMaxZ()
+	nX, nY, nZ := rFace.normal.X, rFace.normal.Y, rFace.normal.Z
+	nAbsX, nAbsY, nAbsZ := rFace.normalAbs.X, rFace.normalAbs.Y, rFace.normalAbs.Z
+	wallWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	blockNS := nAbsY > nAbsZ
+	isWall := wallWE || blockNS
+
+	iMode := ImpactNone
 	var offX, offY, offZ float64
 	if rThing != nil {
 		rCage := rThing.GetCage()
 		offX, offY, offZ = rCage.ellipsoid.GetCenter()
+		maxZ = +offZ
+		iMode = ImpactElastic
+	} else {
+		iMode = ImpactInelastic
+		if isWall {
+			baseZ := s.GetBaseZ()
+			if maxZ <= baseZ { // down-hill (in discesa)
+				iMode = ImpactNone
+			} else {
+				stepZ := baseZ + s.maxStep
+				if maxZ <= stepZ { // up-hill (gradino superabile)
+					iMode = ImpactStep
+				}
+			}
+		}
 	}
 	// Translation (from Local to World Space)
-	maxZ := rFace.GetAABB().GetMaxZ() + offZ
 	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
-	nX, nY, nZ := rFace.normal.X, rFace.normal.Y, rFace.normal.Z
-	nAbsX, nAbsY, nAbsZ := rFace.normalAbs.X, rFace.normalAbs.Y, rFace.normalAbs.Z
-
-	blockWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	blockNS := nAbsY > nAbsZ
-	isBlock := blockWE || blockNS
 
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
 
-	if isBlock {
+	if isWall {
 		// Facing Normalization: Forces the plane to oppose the player
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
 		// Wall Bucket Assignment
-		if blockWE {
+		if wallWE {
 			if nX < 0 {
 				bucket = BucketWallWest
 			} else {
@@ -393,7 +408,6 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 		if nAbsZ > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
 		}
-
 		if s.cZ >= planeZ {
 			bucket = BucketFloor
 			if nZ < 0 {
@@ -441,7 +455,7 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	}
 
 	lThing := s.thing
-	cage := s.buckets[bucket].Add(bucket, lThing, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, maxZ)
+	cage := s.buckets[bucket].Add(bucket, lThing, rThing, rFace, rId, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++

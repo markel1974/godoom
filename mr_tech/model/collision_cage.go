@@ -122,6 +122,23 @@ func (s *CageEntry) Rebuild(bucket BucketType, lThing IThing, rThing IThing, rFa
 	s.iMode = iMode
 }
 
+// Penetrable checks if the current CageEntry can be penetrated based on its impact mode and the state of its remote entity.
+func (s *CageEntry) Penetrable() bool {
+	if s.iMode == ImpactInelastic {
+		return false
+	}
+	remote := s.remoteThing
+	if remote == nil {
+		return true
+	}
+	// Passiamo il controllo al bucket dell'entità remota nella STESSA direzione.
+	cage := remote.GetCage()
+	v := cage.buckets[s.bucket]
+	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
+	// allora questa specifica faccia non può essere penetrata/spinta.
+	return v.Penetrable()
+}
+
 // CollisionBucket represents a data structure that manages collision entries for a specific bucket type in a defined space.
 type CollisionBucket struct {
 	bucket           BucketType
@@ -151,6 +168,26 @@ func (b *CollisionBucket) Rebuild() {
 // Count returns the number of entries currently stored in the CollisionBucket.
 func (b *CollisionBucket) Count() int {
 	return b.containerCounter
+}
+
+// Penetrable checks if the current CollisionBucket can be penetrated by verifying the penetrability of its entries.
+func (b *CollisionBucket) Penetrable() bool {
+	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
+	for i := 0; i < b.containerCounter; i++ {
+		entry := b.container[i]
+		// Se tocchiamo direttamente un muro, il bucket è bloccato
+		if entry.iMode == ImpactInelastic {
+			return false
+		}
+		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
+		// può essere spinta a sua volta (Attraversamento Ricorsivo del Grafo).
+		// Se anche UNA SOLA entità è bloccata, tutto il nostro fronte di spinta è bloccato!
+		if !entry.Penetrable() {
+			return false
+		}
+	}
+	// Se nessuna entità oppone resistenza anelastica infinita, il bucket cede.
+	return true
 }
 
 // Add inserts a face into the CollisionBucket, replacing the lowest-priority entry if the bucket is full.

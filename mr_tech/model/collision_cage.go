@@ -285,73 +285,6 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.maxStep = maxStep
 }
 
-func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
-	return s.seen[rCage]
-}
-
-func (s *CollisionCage) Seen(rCage *CollisionCage) {
-	s.seen[rCage] = true
-}
-
-// GetBaseZ calculates and returns the lower Z-bound of the collision cage based on its center and radius.
-func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
-
-// GetSlotsLen returns the number of occupied slots in the CollisionCage.
-func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
-
-// GetSlot retrieves the CageEntry at the specified index from the slots list.
-func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
-
-// GetThing retrieves the IThing instance associated with the CollisionCage.
-func (s *CollisionCage) GetThing() IThing { return s.thing }
-
-// GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
-func (s *CollisionCage) GetMargin() float64 { return s.margin }
-
-// GetVolume returns the Volume instance associated with the CollisionCage, or nil if no Volume is assigned.
-func (s *CollisionCage) GetVolume() *Volume { return s.volume }
-
-// GetRad retrieves the radii of the ellipsoid along the X, Y, and Z axes as a tuple of float64 values.
-func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
-
-// GetC retrieves the current center coordinates (cX, cY, cZ) of the CollisionCage.
-func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
-
-// GetDisplacement returns the displacement vector components (dX, dY, dZ) of the CollisionCage.
-func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
-
-// GetT retrieves the transformed coordinates (tX, tY, tZ) of the collision cage.
-func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
-
-// BucketCount returns the number of elements currently stored in the specified bucket type.
-func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
-
-// GetAABB retrieves the axis-aligned bounding box (AABB) of the CollisionCage's ellipsoid entity.
-func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
-
-// GetEntity returns the ellipsoid entity associated with the CollisionCage.
-func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
-
-// TranslateWorldToLocalAABB transforms a world-space AABB into local-space relative to the target and updates the specified slot.
-// slot specifies the slot index to store the transformed local AABB.
-// target is the CollisionCage whose AABB serves as the spatial reference for the transformation.
-// Returns the updated physics.Entity representing the local AABB.
-func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCage) *physics.Entity {
-	from := s.ellipsoid.GetAABB()
-	to := target.GetAABB() // target anchor
-	offX := to.GetMinX()
-	offY := to.GetMinY()
-	offZ := to.GetMinZ()
-	lMinX := from.GetMinX() - offX
-	lMaxX := from.GetMaxX() - offX
-	lMinY := from.GetMinY() - offY
-	lMaxY := from.GetMaxY() - offY
-	lMinZ := from.GetMinZ() - offZ
-	lMaxZ := from.GetMaxZ() - offZ
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
-}
-
 // AddFace processes a Face to determine its type, position, and potential collision influence within the CollisionCage.
 // face is the Face object to process.
 // offX, offY, offZ specify the offsets to transform the face into world space.
@@ -472,6 +405,73 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 		s.slotsLen++
 	}
 }
+
+// TranslateWorldToLocalAABB transforms a world-space AABB into local-space relative to the target and updates the specified slot.
+// slot specifies the slot index to store the transformed local AABB.
+// target is the CollisionCage whose AABB serves as the spatial reference for the transformation.
+// Returns the updated physics.Entity representing the local AABB.
+func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCage) *physics.Entity {
+	from := s.ellipsoid.GetAABB()
+	to := target.GetAABB() // target anchor
+	offX := to.GetMinX()
+	offY := to.GetMinY()
+	offZ := to.GetMinZ()
+	lMinX := from.GetMinX() - offX
+	lMaxX := from.GetMaxX() - offX
+	lMinY := from.GetMinY() - offY
+	lMaxY := from.GetMaxY() - offY
+	lMinZ := from.GetMinZ() - offZ
+	lMaxZ := from.GetMaxZ() - offZ
+	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return s.ellipsoidLocal[slot]
+}
+
+func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
+	return s.seen[rCage]
+}
+
+func (s *CollisionCage) Seen(rCage *CollisionCage) {
+	s.seen[rCage] = true
+}
+
+// GetBaseZ calculates and returns the lower Z-bound of the collision cage based on its center and radius.
+func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
+
+// GetSlotsLen returns the number of occupied slots in the CollisionCage.
+func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
+
+// GetSlot retrieves the CageEntry at the specified index from the slots list.
+func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
+
+// GetThing retrieves the IThing instance associated with the CollisionCage.
+func (s *CollisionCage) GetThing() IThing { return s.thing }
+
+// GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
+func (s *CollisionCage) GetMargin() float64 { return s.margin }
+
+// GetVolume returns the Volume instance associated with the CollisionCage, or nil if no Volume is assigned.
+func (s *CollisionCage) GetVolume() *Volume { return s.volume }
+
+// GetRad retrieves the radii of the ellipsoid along the X, Y, and Z axes as a tuple of float64 values.
+func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
+
+// GetC retrieves the current center coordinates (cX, cY, cZ) of the CollisionCage.
+func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
+
+// GetDisplacement returns the displacement vector components (dX, dY, dZ) of the CollisionCage.
+func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
+
+// GetT retrieves the transformed coordinates (tX, tY, tZ) of the collision cage.
+func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
+
+// BucketCount returns the number of elements currently stored in the specified bucket type.
+func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
+
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the CollisionCage's ellipsoid entity.
+func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
+
+// GetEntity returns the ellipsoid entity associated with the CollisionCage.
+func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
 
 /*
 

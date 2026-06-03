@@ -292,7 +292,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 	maxZ := rFace.GetAABB().GetMaxZ()
 	nX, nY, nZ := rFace.normal.X, rFace.normal.Y, rFace.normal.Z
-	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+	nAbsX, nAbsY, nAbsZ := rFace.normalAbs.X, rFace.normalAbs.Y, rFace.normalAbs.Z
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
 	isSolid := solidWE || solidNS
@@ -367,6 +367,8 @@ func (s *CollisionCage) AddFace(rThing IThing, rFace *Face, rId uint64) {
 		}
 	}
 
+	// Support Mapping for AABB (Sorgente Rettangolare Completa)
+	//rayEff := math.Abs(nX*s.eRadX) + math.Abs(nY*s.eRadY) + math.Abs(nZ*s.eRadZ)
 	// Minkowski / Support Mapping for Ellipsoids
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ

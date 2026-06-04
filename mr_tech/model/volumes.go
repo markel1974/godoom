@@ -112,19 +112,18 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 			if bestFace == nil {
 				bestFace = face
 			}
-			norm := face.GetNormal()
+			normX, normY, normZ := face.GetNormal()
 			// Filtro Topologico: Selezioniamo solo i pavimenti (Normal Z negativa)
-			if norm.Z >= -0.001 {
+			if normZ >= -0.001 {
 				return false
 			}
 			// Proiezione 2D
 			if face.PointInside2d(px, py) {
 				// CALCOLO Z ESATTO SUL TRIANGOLO (Plane Equation)
 				// Z = V.z - (Nx*(Px - V.x) + Ny*(Py - V.y)) / Nz
-				// Assumiamo che tu possa recuperare un vertice della faccia, es. face.GetVertex(0)
-				v0 := face.tri[0] // <--- Adattalo al tuo metodo reale per prendere un Vector3 del triangolo
-				floorZ := v0.Z - (norm.X*(px-v0.X)+norm.Y*(py-v0.Y))/norm.Z
-				// Distanza verticale dal player al pavimento
+				v0 := face.tri[0]
+				floorZ := v0.Z - (normX*(px-v0.X)+normY*(py-v0.Y))/normZ
+				// Distanza verticale al pavimento
 				zDist := pz - floorZ
 				// Se il pavimento è SOTTO il player (o entro un piccolo margine di compenetrazione/step)
 				// E se è il più vicino che abbiamo trovato finora
@@ -137,7 +136,6 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 			}
 			return false
 		})
-
 		// Continuiamo sempre la query globale per coprire il caso di AABB di volumi sovrapposti
 		return false
 	})

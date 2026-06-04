@@ -245,8 +245,8 @@ func (v *Volume) PointInside3d(px, py, pz float64) bool {
 
 	// 3. Risoluzione tramite Dot Product
 	// closestFace.nx, ny, nz devono essere la NORMALE USCENTE (Outward Normal) del triangolo
-	normal := closestFace.GetNormal()
-	dot := normal.X*dirX + normal.Y*dirY + normal.Z*dirZ
+	n := closestFace.GetNormal()
+	dot := n.X*dirX + n.Y*dirY + n.Z*dirZ
 
 	// Se il dot è > 0, raggio e normale vanno nella stessa direzione.
 	// Significa che stai "sfondando" la parete da dentro verso fuori.

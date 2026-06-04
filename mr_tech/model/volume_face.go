@@ -10,20 +10,20 @@ import (
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	id        int
-	parent    *Volume
-	tag       string
-	aabb      *physics.AABB
-	tri       [3]geometry.XYZ
-	normal    geometry.XYZ
-	normalAbs geometry.XYZ
-	material  *textures.Material
-	u         [3]float64
-	v         [3]float64
-	lockUV    bool
+	id       int
+	parent   *Volume
+	tag      string
+	aabb     *physics.AABB
+	tri      [3]geometry.XYZ
+	n        geometry.XYZ
+	nAbs     geometry.XYZ
+	material *textures.Material
+	u        [3]float64
+	v        [3]float64
+	lockUV   bool
 }
 
-// NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its normal and AABB.
+// NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
 func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face {
 	out := &Face{
 		tag:      tag,
@@ -72,9 +72,14 @@ func (s *Face) SetTag(tag string) {
 	s.tag = tag
 }
 
-// GetNormal returns the precomputed normal vector (geometry.XYZ) of the Face.
-func (s *Face) GetNormal() geometry.XYZ {
-	return s.normal
+// GetNormal retrieves the normalized vector components (X, Y, Z) representing the face's orientation in 3D space.
+func (s *Face) GetNormal() (float64, float64, float64) {
+	return s.n.X, s.n.Y, s.n.Z
+}
+
+// GetNormalAbs returns the absolute values of the normal vector components (X, Y, Z) for the face.
+func (s *Face) GetNormalAbs() (float64, float64, float64) {
+	return s.nAbs.X, s.nAbs.Y, s.nAbs.Z
 }
 
 // GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.
@@ -122,9 +127,12 @@ func (s *Face) GetAABB() *physics.AABB {
 	return s.aabb
 }
 
-// computeNormal calculates and assigns the normal vector (geometry.XYZ) for the Face based on its points and geometry.
+// computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.
 func (s *Face) computeNormal() {
-	s.normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
+	const snapToZero = 1e-15
+	const areaCulling = 1e-12
+
+	s.n = geometry.XYZ{X: 0, Y: 0, Z: 1}
 	// Prodotto vettoriale standard per poligoni 3D
 	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
@@ -132,8 +140,6 @@ func (s *Face) computeNormal() {
 	nx := v1y*v2z - v1z*v2y
 	ny := v1z*v2x - v1x*v2z
 	nz := v1x*v2y - v1y*v2x
-	const snapToZero = 1e-15
-	const areaCulling = 1e-12
 	// 1. SNAP TO ZERO: Puliamo il rumore di fondo prima della magnitudo
 	if math.Abs(nx) < snapToZero {
 		nx = 0
@@ -149,13 +155,13 @@ func (s *Face) computeNormal() {
 	// il triangolo è un "Sliver" degenere prodotto dal clipping.
 	if l < areaCulling {
 		// Lo marchiamo con normale nulla: la QueryCollisionCage lo scarterà
-		s.normal = geometry.XYZ{X: 0, Y: 0, Z: 0}
-		s.normalAbs = geometry.XYZ{X: 0, Y: 0, Z: 0}
+		s.n.X, s.n.Y, s.n.Z = 0, 0, 0
+		s.nAbs.X, s.nAbs.Y, s.nAbs.Z = 0, 0, 0
 		//fmt.Printf("Ignorato triangolo degenere (Sliver) %f\n", l)
 		return
 	}
-	s.normal = geometry.XYZ{X: nx / l, Y: ny / l, Z: nz / l}
-	s.normalAbs = geometry.XYZ{X: math.Abs(s.normal.X), Y: math.Abs(s.normal.Y), Z: math.Abs(s.normal.Z)}
+	s.n.X, s.n.Y, s.n.Z = nx/l, ny/l, nz/l
+	s.nAbs.X, s.nAbs.Y, s.nAbs.Z = math.Abs(s.n.X), math.Abs(s.n.Y), math.Abs(s.n.Z)
 }
 
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
@@ -190,7 +196,7 @@ func (s *Face) computeAABB() {
 	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 
-// computeUV computes the UV mapping for the current face based on its normal, material, and texture scaling factors.
+// computeUV computes the UV mapping for the current face based on its n, material, and texture scaling factors.
 func (s *Face) computeUV() {
 	if s.lockUV {
 		return
@@ -203,17 +209,15 @@ func (s *Face) computeUV() {
 		return
 	}
 	w, h := tex.GetSizeScaled()
-	absX := s.normalAbs.X
-	absY := s.normalAbs.Y
-	absZ := s.normalAbs.Z
+	nAbsX, nAbsY, nAbsZ := s.GetNormalAbs()
 	// Pure Triplanar Projection.
-	if absZ >= absX && absZ >= absY {
+	if nAbsZ >= nAbsX && nAbsZ >= nAbsY {
 		// Upper / Lower (Floors and Ceilings)
 		u0, v0 := s.tri[0].X/w, s.tri[0].Y/h
 		u1, v1 := s.tri[1].X/w, s.tri[1].Y/h
 		u2, v2 := s.tri[2].X/w, s.tri[2].Y/h
 		s.SetUV(u0, v0, u1, v1, u2, v2)
-	} else if absY >= absX && absY >= absZ {
+	} else if nAbsY >= nAbsX && nAbsY >= nAbsZ {
 		// Walls facing Y
 		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
 	} else {
@@ -236,7 +240,7 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eR
 
 	// Ricalcoliamo la normale RIGOROSAMENTE in e-space basandoci sui vertici deformati.
 	// Questo garantisce perfetta coplanarità matematica a prescindere da come
-	// il map-exporter aveva salvato s.normal.
+	// il map-exporter aveva salvato s.n.
 	e1x, e1y, e1z := p1x-p0x, p1y-p0y, p1z-p0z
 	e2x, e2y, e2z := p2x-p0x, p2y-p0y, p2z-p0z
 

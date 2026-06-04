@@ -384,7 +384,11 @@ func (e *Entity) Update() {
 	const sleepEpsilon = 0.005
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
-	e.vz += (e.az - e.gForce) * e.dt // La gravità agisce sempre e senza condizioni
+	gForce := e.gForce
+	if e.onGround {
+		gForce = 0.0
+	}
+	e.vz += (e.az - gForce) * e.dt // La gravità agisce sempre e senza condizioni
 
 	// RESET ACCUMULATORE
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0

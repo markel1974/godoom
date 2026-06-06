@@ -71,10 +71,10 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
 		vol := object.(*Volume)
 		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
 			face := otherEnt.(*Face)
-			rId := vol.GetEntity().GetId()
-			cage.AddFace(nil, face, rId)
+			cage.AddFace(face)
 			return false
 		})
+		cage.CommitStatic()
 		return false
 	})
 }

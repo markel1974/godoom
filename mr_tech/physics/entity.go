@@ -453,10 +453,12 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, _ float64) {
 	}
 
 	// RESTITUZIONE CON SOGLIA (Micro-bounce slop)
-	const restitutionSlop = 0.5
 	actualRestitution := e2.restitution
-	if math.Abs(vRelDotN) < restitutionSlop {
-		actualRestitution = 0.0
+	if actualRestitution != 0 {
+		const restitutionSlop = 0.5
+		if math.Abs(vRelDotN) < restitutionSlop {
+			actualRestitution = 0.0
+		}
 	}
 
 	// BAUMGARTE STABILIZATION ---
@@ -488,8 +490,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, _ float64) {
 	ty := vry - (vRelDotNPost * ny)
 	tz := vrz - (vRelDotNPost * nz)
 
-	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
-	if tLen > 1e-8 {
+	if tLen := math.Sqrt(tx*tx + ty*ty + tz*tz); tLen > 1e-8 {
 		tx /= tLen
 		ty /= tLen
 		tz /= tLen

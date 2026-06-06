@@ -131,21 +131,27 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 
 	var faces []*Face
 
-	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, mat *textures.Material) {
-		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, "", mat) // NIL MATERIAL
-		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, "", mat) // NIL MATERIAL
+	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
+		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
+		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
 		faces = append(faces, f0, f1)
 	}
 
 	var debug *textures.Material = nil
 	//debug = material
 
-	addPhysicsQuad(v001, v000, v100, v101, debug) // Front
-	addPhysicsQuad(v111, v110, v010, v011, debug) // Back
-	addPhysicsQuad(v011, v010, v000, v001, debug) // Left
-	addPhysicsQuad(v101, v100, v110, v111, debug) // Right
-	addPhysicsQuad(v011, v001, v101, v111, debug) // Top
-	addPhysicsQuad(v000, v010, v110, v100, debug) // Bottom
+	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
+	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back
+	addPhysicsQuad(v011, v010, v000, v001, "Left", debug)   // Left
+	addPhysicsQuad(v101, v100, v110, v111, "Right", debug)  // Right
+	addPhysicsQuad(v011, v001, v101, v111, "Top", debug)    // Top
+	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
+
+	//for _, test := range faces {
+	//	nX, nY, nZ := test.GetNormal()
+	//	fmt.Println("TAG", test.tag, nX, nY, nZ, test.tri)
+	//}
+	//os.Exit(1)
 
 	// 2. PIANO VISIVO (Render)
 	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.

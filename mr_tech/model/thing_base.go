@@ -56,7 +56,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		isActive:     true,
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
-		cage:         NewCollisionCage(thing, cageMargin),
+		cage:         NewCollisionCage(thing), //, cageMargin),
 		onImpact:     cfg.OnImpact,
 		onCollision:  cfg.OnCollision,
 	}
@@ -150,7 +150,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 
 		iMode := slot.GetImpactMode()
 		switch iMode {
-		case ImpactNone, ImpactStep:
+		case ImpactStep:
 			continue
 		}
 
@@ -180,8 +180,8 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	}
 	entity := t.GetEntity()
 
-	onGround := t.cage.BucketCount(BucketFloor) > 0
-	entity.SetOnGround(onGround)
+	//onGround := t.cage.BucketCount(BucketFloor) > 0
+	entity.SetOnGround(false)
 
 	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta l'AABB
@@ -197,50 +197,96 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	// l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
-		iMode := slot.GetImpactMode()
+		if slot.GetBucket() == BucketFloor {
+			entity.SetOnGround(true)
+		}
 
+		penetrable := true
+		iMode := slot.GetImpactMode()
 		switch iMode {
-		case ImpactNone:
-			continue
 		case ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
-		case ImpactInelastic:
-			penetration := slot.GetPenetration()
-			if penetration <= slop {
-				continue
-			}
-			correction := ((penetration - slop) * positionalPercent) + solverJitter
-			if correction <= 0.0 {
-				continue
-			}
-			nX, nY, nZ := slot.GetNormal()
-			entity.AddTo(nX*correction, nY*correction, nZ*correction)
 		case ImpactElastic:
-			/*
-				penetration := slot.GetPenetration()
-				if penetration <= slop {
-					continue
-				}
-				correction := ((penetration - slop) * positionalPercent) + solverJitter
-				if correction <= 0.0 {
-					continue
-				}
-				otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
-				invMass1 := entity.GetInvMass()
-				invMass2 := otherEnt.GetInvMass()
-				invMassSum := invMass1 + invMass2
-
-				ratio1 := invMass1 / invMassSum
-				ratio2 := invMass2 / invMassSum
-				p1 := correction * ratio1
-				p2 := correction * ratio2
-
-				nX, nY, nZ := slot.GetNormal()
-				entity.AddTo(nX*p1, nY*p1, nZ*p1)
-				otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
-			*/
+			penetrable = true
+			//penetrable = slot.Penetrable()
+		case ImpactInelastic:
+			penetrable = false
 		}
+
+		if !penetrable {
+			penetration := slot.GetPenetration()
+			depth := penetration - slop
+			// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
+			if depth > 0.0 {
+				correction := depth * positionalPercent
+				correction += solverJitter
+				nX, nY, nZ := slot.GetNormal()
+				//vrx, vry, vrz := entity.GetVelocity()
+				//vRelDotN := vrx*nX + vry*nY + vrz*nZ
+				entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
+			}
+		} else {
+			if t.GetId() == "PLAYER" {
+				//IL BUG E' LEGATO AL FATTO CHE NELLA COLLISION CAGE
+				//NON VIENE PRESA IN CONSIDERAZIONE LA NORMALE DI SPOSTAMENTO,
+				//E NON VIENE PRESA IN CONSIDERAZIONE LA FACCIA PIU PROBABILE
+				/*
+					nX, nY, nZ := slot.GetNormal()
+					vrx, vry, vrz := entity.GetVelocity()
+					vRelDotN := vrx*nX + vry*nY + vrz*nZ
+					fmt.Println("VRELDOTN: ", vRelDotN)
+					fmt.Println("VEL: ", vrx, vry, vrz)
+					fmt.Println("NORMAL: ", nX, nY, nZ)
+					fmt.Println("-------------------------")
+				*/
+			}
+		}
+
+		/*
+			switch iMode {
+			case ImpactInelastic:
+				penetration := slot.GetPenetration()
+				depth := penetration - slop
+				// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
+				if depth > 0.0 {
+					correction := depth * positionalPercent
+					correction += solverJitter
+					nX, nY, nZ := slot.GetNormal()
+					nc := nZ * correction
+					if nc > 0.0433 {
+						nc = 0.0433
+					}
+					entity.AddTo(nX*correction, nY*correction, nc) //0.0453) //nZ*correction)
+				}
+
+			case ImpactElastic:
+
+					penetration := slot.GetPenetration()
+					if penetration <= slop {
+						continue
+					}
+					correction := ((penetration - slop) * positionalPercent) + solverJitter
+					if correction <= 0.0 {
+						continue
+					}
+					otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
+					invMass1 := entity.GetInvMass()
+					invMass2 := otherEnt.GetInvMass()
+					invMassSum := invMass1 + invMass2
+
+					ratio1 := invMass1 / invMassSum
+					ratio2 := invMass2 / invMassSum
+					p1 := correction * ratio1
+					p2 := correction * ratio2
+
+					nX, nY, nZ := slot.GetNormal()
+					entity.AddTo(nX*p1, nY*p1, nZ*p1)
+					otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+
+			}
+
+		*/
 
 		rFace := slot.GetRemoteFace()
 		rParent := rFace.GetParent()

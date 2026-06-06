@@ -54,6 +54,11 @@ func (p BucketType) String() string {
 	}
 }
 
+// IsWall checks if the BucketType represents any wall (west, east, north, or south).
+func (p BucketType) IsWall() bool {
+	return p == BucketWallWest || p == BucketWallEast || p == BucketWallNorth || p == BucketWallSouth
+}
+
 // BucketSize defines the size of a bucket as one more than the BucketFloor.
 // FacesPerBucket specifies the fixed number of faces in each bucket.
 // TotalSlots calculates the total number of slots using BucketSize and FacesPerBucket.
@@ -346,26 +351,16 @@ const epsilon = 0.05
 
 // CommitStatic processes static collision detection between the entity and the environment using SAT filtering logic.
 func (s *CollisionCage) CommitStatic() {
-	lAABB := s.GetAABB()
-
+	lAABB := s.ellipsoid.GetAABB()
 	for x := 0; x < s.facesIdx; x++ {
 		face := s.faces[x]
-		iMode := ImpactInelastic
-		// --- INIZIO FILTRO SAT (Anti-Phantom Plane per Mondo Statico) ---
-		rAABB := face.GetAABB()
-		oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rAABB.GetMinX(), rAABB.GetMaxX()-lAABB.GetMinX()))
-		oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rAABB.GetMinY(), rAABB.GetMaxY()-lAABB.GetMinY()))
-		oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rAABB.GetMinZ(), rAABB.GetMaxZ()-lAABB.GetMinZ()))
-		// La reale penetrazione volumetrica massima possibile
-		minOverlap := math.Min(oX, math.Min(oY, oZ))
 		// ----------------------------------------------------------------
-		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z := s.computeFace(face, 0.0, 0.0, 0.0)
+		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
 		// Se la compenetrazione calcolata dal semispazio infinito supera il limite fisico della AABB,
 		// stiamo intersecando la proiezione di un piano ortogonale fantasma. Lo scartiamo.
 		if pen > minOverlap+epsilon {
 			continue
 		}
-
 		// Volume Priority
 		if dist < s.distance {
 			if volume := face.GetParent(); volume != nil {
@@ -377,53 +372,38 @@ func (s *CollisionCage) CommitStatic() {
 		if texKind == int(config.MaterialKindSky) {
 			continue // Skybox/transparent: ignore collision
 		}
-		maxZ := rAABB.GetMaxZ()
-		if b == BucketWallWest || b == BucketWallEast || b == BucketWallNorth || b == BucketWallSouth {
+		iMode := ImpactInelastic
+		if b.IsWall() {
 			baseZ := s.GetBaseZ()
-			if maxZ <= baseZ { // down-hill (in discesa)
+			if rMaxZ <= baseZ { // down-hill (in discesa)
 				continue
 			}
 			stepZ := baseZ + s.maxStep
-			if maxZ <= stepZ { // up-hill (gradino superabile)
+			if rMaxZ <= stepZ { // up-hill (gradino superabile)
 				iMode = ImpactStep
 			}
 		}
-		s.addToBucket(b, nil, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
+		s.addToBucket(b, nil, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
 	}
 	s.facesIdx = 0
 }
 
 // CommitDynamic processes elastic collisions between the current CollisionCage and a reference CollisionCage.
 func (s *CollisionCage) CommitDynamic(rCage *CollisionCage) {
-	lAABB := s.GetAABB()
+	lAABB := s.ellipsoid.GetAABB()
 	offX, offY, offZ := rCage.ellipsoid.GetCenter()
-
 	for x := 0; x < s.facesIdx; x++ {
 		face := s.faces[x]
 		_, texKind := face.GetMaterialDetails()
 		if texKind == int(config.MaterialKindSky) {
 			continue
 		}
-		// --- INIZIO FILTRO SAT (Anti-Phantom Plane per Mondo Dinamico) ---
-		rFaceAABB := face.GetAABB()
-		// TRASLAZIONE IN WORLD SPACE (Cruciale!)
-		rMinX := rFaceAABB.GetMinX() + offX
-		rMaxX := rFaceAABB.GetMaxX() + offX
-		rMinY := rFaceAABB.GetMinY() + offY
-		rMaxY := rFaceAABB.GetMaxY() + offY
-		rMinZ := rFaceAABB.GetMinZ() + offZ
-		rMaxZ := rFaceAABB.GetMaxZ() + offZ
-		oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-		oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
-		oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
-		// La reale penetrazione volumetrica massima possibile per questa specifica faccia
-		minOverlap := math.Min(oX, math.Min(oY, oZ))
-		// ----------------------------------------------------------------
-		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z := s.computeFace(face, offX, offY, offZ)
+		// sat filter (Anti-Phantom Plane)
+		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, offX, offY, offZ)
 		if pen > minOverlap+epsilon {
 			continue
 		}
-		if b == BucketWallWest || b == BucketWallEast || b == BucketWallNorth || b == BucketWallSouth {
+		if b.IsWall() {
 			if rMaxZ <= s.GetBaseZ() { // down-hill (in discesa)
 				continue
 			}
@@ -433,17 +413,8 @@ func (s *CollisionCage) CommitDynamic(rCage *CollisionCage) {
 	s.facesIdx = 0
 }
 
-// addToBucket adds a CollisionCage or Face into the specified bucket with given parameters to manage collision resolution.
-func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
-	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
-	if cage != nil {
-		s.slots[s.slotsLen] = cage
-		s.slotsLen++
-	}
-}
-
 // computeFace computes the collision interaction with a given face and returns bucket type, distances, penetration, normals, and vertex coordinates.
-func (s *CollisionCage) computeFace(rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
@@ -502,14 +473,38 @@ func (s *CollisionCage) computeFace(rFace *Face, offX, offY, offZ float64) (Buck
 	penetration := rayEff - distTarget
 	// Early-Exit Filtering: The plane exceeds the configured broad-margin
 	//if dist > s.margin {
-	//	fmt.Println("NIL PENETRATION!!!", penetration)
 	//	return
 	//}
 	// If the face is NOT penetrated at the target (penetration <= 0), it is not needed by the Half-Space solver
 	//if penetration <= 0 {
 	//	return
 	//}
-	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z
+
+	// sat filter (Anti-Phantom Plane)
+	rFaceAABB := rFace.GetAABB()
+	// world space translation
+	rMinX := rFaceAABB.GetMinX() + offX
+	rMaxX := rFaceAABB.GetMaxX() + offX
+	rMinY := rFaceAABB.GetMinY() + offY
+	rMaxY := rFaceAABB.GetMaxY() + offY
+	rMinZ := rFaceAABB.GetMinZ() + offZ
+	rMaxZ := rFaceAABB.GetMaxZ() + offZ
+	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
+	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
+	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
+	// La reale penetrazione volumetrica massima possibile per questa specifica faccia
+	minOverlap := math.Min(oX, math.Min(oY, oZ))
+
+	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
+}
+
+// addToBucket adds a CollisionCage or Face into the specified bucket with given parameters to manage collision resolution.
+func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
+	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
+	if cage != nil {
+		s.slots[s.slotsLen] = cage
+		s.slotsLen++
+	}
 }
 
 // TranslateWorldToLocalAABB translates the AABB of a target `CollisionCage` from world space to local space for a given slot.

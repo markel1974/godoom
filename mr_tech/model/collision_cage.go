@@ -208,15 +208,14 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		existing := b.container[i]
 		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
-		//if rThing != nil && existing.remoteId == rId {
-		// Teniamo la faccia con la compenetrazione MAGGIORE.
-		// Perché? Se sei entrato nel petto del mostro di 10 unità, e sfiori il suo braccio di 2 unità,
-		// il motore deve spingerti fuori di 10 per liberarti, non di 2.
-		//	if penetration > existing.penetration {
-		//		existing.Rebuild(bucket, lThing, rThing, rFace, rId, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
-		//	}
-		//	return nil // Interrompiamo: abbiamo già gestito questo oggetto in questo bucket
-		//}
+		if rCage != nil && existing.rCage != nil {
+			if rCage.GetEntity().GetId() == existing.rCage.GetEntity().GetId() {
+				if penetration > existing.penetration {
+					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+				}
+				return nil // Interrompiamo: abbiamo già gestito questo oggetto in questo bucket
+			}
+		}
 		// 2. DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
 		// Se il dot product è ~1.0, i due triangoli formano un piano continuo (Triangle Soup statica)
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
@@ -354,11 +353,10 @@ func (s *CollisionCage) CommitStatic() {
 	lAABB := s.ellipsoid.GetAABB()
 	for x := 0; x < s.facesIdx; x++ {
 		face := s.faces[x]
-		// ----------------------------------------------------------------
 		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
 		// Se la compenetrazione calcolata dal semispazio infinito supera il limite fisico della AABB,
 		// stiamo intersecando la proiezione di un piano ortogonale fantasma. Lo scartiamo.
-		if pen > minOverlap+epsilon {
+		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
 			continue
 		}
 		// Volume Priority
@@ -398,9 +396,8 @@ func (s *CollisionCage) CommitDynamic(rCage *CollisionCage) {
 		if texKind == int(config.MaterialKindSky) {
 			continue
 		}
-		// sat filter (Anti-Phantom Plane)
 		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, offX, offY, offZ)
-		if pen > minOverlap+epsilon {
+		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
 			continue
 		}
 		if b.IsWall() {
@@ -419,11 +416,11 @@ func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
-	// Translation (from Local to World Space)
+	// Translation (Local -> World)
 	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
-	// NORMALIZZAZIONE UNIVERSALE (Nessuna distinzione tra statico e dinamico!)
+	// Universal normalization
 	if solidWE || solidNS {
 		// Facing Normalization: Forces the plane to oppose the thing
 		if distStart < 0 {
@@ -572,79 +569,3 @@ func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
 
 // GetEntity returns the physics.Entity associated with the CollisionCage.
 func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }
-
-/*
-
-// TranslateWorldToLocal transforms the given world-space coordinates into local-space and updates the specified slot.
-func (s *CollisionCage) TranslateWorldToLocal(slot int, targetX, targetY, targetZ float64) *physics.Entity {
-	cageAABB := s.ellipsoid.GetAABB()
-	lMinX := cageAABB.GetMinX() - targetX
-	lMaxX := cageAABB.GetMaxX() - targetX
-	lMinY := cageAABB.GetMinY() - targetY
-	lMaxY := cageAABB.GetMaxY() - targetY
-	lMinZ := cageAABB.GetMinZ() - targetZ
-	lMaxZ := cageAABB.GetMaxZ() - targetZ
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
-}
-
-func (s *CollisionCage) TranslateLocalToLocal(slot int, destX, destY, destZ float64) *physics.Entity {
-	cageAABB := s.ellipsoid.GetAABB()
-	// Traslazione dello Swept Volume globale nello spazio locale della destinazione
-	lMinX := cageAABB.GetMinX() - destX
-	lMaxX := cageAABB.GetMaxX() - destX
-	lMinY := cageAABB.GetMinY() - destY
-	lMaxY := cageAABB.GetMaxY() - destY
-	lMinZ := cageAABB.GetMinZ() - destZ
-	lMaxZ := cageAABB.GetMaxZ() - destZ
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
-}
-
-// TranslateLocalToWorld transforms a local AABB to world coordinates using the specified slot and target translation values.
-func (s *CollisionCage) TranslateLocalToWorld(slot int, destX, destY, destZ float64) *physics.Entity {
-	cageAABB := s.ellipsoid.GetAABB()
-	lMinX := cageAABB.GetMinX() + destX
-	lMaxX := cageAABB.GetMaxX() + destX
-	lMinY := cageAABB.GetMinY() + destY
-	lMaxY := cageAABB.GetMaxY() + destY
-	lMinZ := cageAABB.GetMinZ() + destZ
-	lMaxZ := cageAABB.GetMaxZ() + destZ
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
-}
-
-*/
-
-/*
-// SetResolved marks a CageEntry as resolved if it matches the specified Face and eId.
-func (s *CollisionCage) SetResolved(otherFace *Face, otherId uint64) {
-	//TODO FACE
-
-	//	for i := 0; i < s.slotsLen; i++ {
-	//		entry := s.slots[i]
-	//		if entry.remoteFace == otherFace {
-	//			entry.resolved = true
-	//			//fmt.Println("Resolved")
-	//			return
-	//		}
-	//		//if entry.remoteId == otherId {
-	//		//	entry.resolved = true
-	//		//	return
-	//		//}
-	//	}
-
-	//TODO BETTER IMPLEMENTATION
-	for i := 0; i < s.slotsLen; i++ {
-		entry := s.slots[i]
-		if entry.localId == otherId {
-			entry.resolved = true
-		}
-	}
-
-	//if s.thing.GetId() == "PLAYER" {
-	//	fmt.Println("TRYING TO RESOLVE")
-	//}
-}
-
-*/

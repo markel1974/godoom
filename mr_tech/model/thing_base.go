@@ -222,8 +222,6 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 				correction := depth * positionalPercent
 				correction += solverJitter
 				nX, nY, nZ := slot.GetNormal()
-				//vrx, vry, vrz := entity.GetVelocity()
-				//vRelDotN := vrx*nX + vry*nY + vrz*nZ
 				entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
 			}
 		} else {

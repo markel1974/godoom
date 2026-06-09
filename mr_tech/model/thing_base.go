@@ -41,7 +41,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		panic("mass is zero for thing:" + cfg.Id)
 	}
 
-	const cageMargin = 0.001
+	//const cageMargin = 0.001
 	t := &ThingBase{
 		IVertices:    VerticesFactory(thing, cfg, things.GetMaterials()),
 		id:           cfg.Id,
@@ -184,13 +184,12 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	entity.SetOnGround(false)
 
 	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
-	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta l'AABB
+	// spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB
 	// esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 
-	const slop = 0.01
-	const positionalPercent = 1.0
+	//fmt.Println("-------------------")
 
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno
@@ -201,20 +200,56 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			entity.SetOnGround(true)
 		}
 
-		penetrable := true
+		rMovable := true
 		iMode := slot.GetImpactMode()
 		switch iMode {
 		case ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
 		case ImpactElastic:
-			penetrable = true
+			rMovable = true
 			//penetrable = slot.Penetrable()
 		case ImpactInelastic:
-			penetrable = false
+			rMovable = false
 		}
 
-		if !penetrable {
+		const slop = 0.01
+		const positionalPercent = 1.0
+
+		//if slot.GetBucket() == BucketCeiling {
+		//	continue
+		//}
+
+		if rMovable {
+			//if slot.GetBucket() == BucketCeiling {
+			//	continue
+			//}
+			//if t.GetId() == "PLAYER" && slot.rCage != nil {
+			//	nX, nY, nZ := slot.GetNormal()
+			//	fmt.Println("Player collision detected", nX, nY, nZ, slot.GetBucket().String())
+			//}
+			penetration := slot.GetPenetration()
+			if penetration <= slop {
+				continue
+			}
+			correction := ((penetration - slop) * positionalPercent) + solverJitter
+			if correction <= 0.0 {
+				continue
+			}
+			rEnt := slot.GetRemoteFace().GetParent().GetEntity()
+			invMass1 := entity.GetInvMass()
+			invMass2 := rEnt.GetInvMass()
+			invMassSum := invMass1 + invMass2
+
+			ratio1 := invMass1 / invMassSum
+			ratio2 := invMass2 / invMassSum
+			p1 := correction * ratio1
+			p2 := correction * ratio2
+
+			nX, nY, nZ := slot.GetNormal()
+			entity.AddTo(nX*p1, nY*p1, nZ*p1)
+			rEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+		} else {
 			penetration := slot.GetPenetration()
 			depth := penetration - slop
 			// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
@@ -224,26 +259,10 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 				nX, nY, nZ := slot.GetNormal()
 				entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
 			}
-		} else {
-			if t.GetId() == "PLAYER" {
-				//IL BUG E' LEGATO AL FATTO CHE NELLA COLLISION CAGE
-				//NON VIENE PRESA IN CONSIDERAZIONE LA NORMALE DI SPOSTAMENTO,
-				//E NON VIENE PRESA IN CONSIDERAZIONE LA FACCIA PIU PROBABILE
-				/*
-					nX, nY, nZ := slot.GetNormal()
-					vrx, vry, vrz := entity.GetVelocity()
-					vRelDotN := vrx*nX + vry*nY + vrz*nZ
-					fmt.Println("VRELDOTN: ", vRelDotN)
-					fmt.Println("VEL: ", vrx, vry, vrz)
-					fmt.Println("NORMAL: ", nX, nY, nZ)
-					fmt.Println("-------------------------")
-				*/
-			}
 		}
 
 		/*
-			switch iMode {
-			case ImpactInelastic:
+			if !penetrable {
 				penetration := slot.GetPenetration()
 				depth := penetration - slop
 				// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
@@ -251,37 +270,23 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 					correction := depth * positionalPercent
 					correction += solverJitter
 					nX, nY, nZ := slot.GetNormal()
-					nc := nZ * correction
-					if nc > 0.0433 {
-						nc = 0.0433
-					}
-					entity.AddTo(nX*correction, nY*correction, nc) //0.0453) //nZ*correction)
+					entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
 				}
+			} else {
+				//if t.GetId() == "PLAYER" {
+					//IL BUG E' LEGATO AL FATTO CHE NELLA COLLISION CAGE
+					//NON VIENE PRESA IN CONSIDERAZIONE LA NORMALE DI SPOSTAMENTO,
+					//E NON VIENE PRESA IN CONSIDERAZIONE LA FACCIA PIU PROBABILE
 
-			case ImpactElastic:
+					//	nX, nY, nZ := slot.GetNormal()
+					//	vrx, vry, vrz := entity.GetVelocity()
+					//	vRelDotN := vrx*nX + vry*nY + vrz*nZ
+					//	fmt.Println("VRELDOTN: ", vRelDotN)
+					//	fmt.Println("VEL: ", vrx, vry, vrz)
+					//	fmt.Println("NORMAL: ", nX, nY, nZ)
+					//	fmt.Println("-------------------------")
 
-					penetration := slot.GetPenetration()
-					if penetration <= slop {
-						continue
-					}
-					correction := ((penetration - slop) * positionalPercent) + solverJitter
-					if correction <= 0.0 {
-						continue
-					}
-					otherEnt := slot.GetRemoteFace().GetParent().GetEntity()
-					invMass1 := entity.GetInvMass()
-					invMass2 := otherEnt.GetInvMass()
-					invMassSum := invMass1 + invMass2
-
-					ratio1 := invMass1 / invMassSum
-					ratio2 := invMass2 / invMassSum
-					p1 := correction * ratio1
-					p2 := correction * ratio2
-
-					nX, nY, nZ := slot.GetNormal()
-					entity.AddTo(nX*p1, nY*p1, nZ*p1)
-					otherEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
-
+				//}
 			}
 
 		*/

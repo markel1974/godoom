@@ -34,7 +34,7 @@ func GetGlobalId() int64 {
 
 // Entity represents a physical object in a simulation with properties for position, velocity, acceleration, and collision.
 type Entity struct {
-	rect              *Rect
+	rect              *BoundingBox
 	id                uint64
 	mass              float64
 	invMass           float64
@@ -74,7 +74,7 @@ func NewEntity(mass, restitution, friction, gForce float64) *Entity {
 	}
 	a := &Entity{
 		id:               uint64(GetGlobalId()),
-		rect:             NewRect(0, 0, 0, 0, 0, 0),
+		rect:             NewBoundingBox(0, 0, 0, 0, 0, 0),
 		gForce:           gForce,
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,
@@ -100,13 +100,13 @@ func (e *Entity) SetSize(w, h, d float64) {
 	e.rect.SetSize(w, h, d)
 }
 
-// SetRect sets the Rect of the entity to the provided Rect value.
-func (e *Entity) SetRect(rect *Rect) {
+// SetRect sets the BoundingBox of the entity to the provided BoundingBox value.
+func (e *Entity) SetRect(rect *BoundingBox) {
 	e.rect = rect
 }
 
-// GetRect returns the Rect instance associated with the Entity, representing its position, size, and bounding box.
-func (e *Entity) GetRect() *Rect {
+// GetRect returns the BoundingBox instance associated with the Entity, representing its position, size, and bounding box.
+func (e *Entity) GetRect() *BoundingBox {
 	return e.rect
 }
 
@@ -132,7 +132,7 @@ func (e *Entity) AddTo(x float64, y float64, z float64) {
 	e.rect.AddTo(x, y, z)
 }
 
-// MoveToZ updates the z-coordinate of the Entity's position by delegating to its internal Rect instance.
+// MoveToZ updates the z-coordinate of the Entity's position by delegating to its internal BoundingBox instance.
 func (e *Entity) MoveToZ(z float64) {
 	e.rect.MoveToZ(z)
 }
@@ -244,10 +244,6 @@ func (e *Entity) GetBottomLeft() (float64, float64, float64) {
 	return e.rect.GetBottomLeft()
 }
 
-func (e *Entity) GetBase() (float64, float64, float64) {
-	return e.rect.GetBottomCenter()
-}
-
 // GetSize returns the width, height, and depth of the entity as a tuple of three float64 values.
 func (e *Entity) GetSize() (float64, float64, float64) {
 	return e.rect.GetSize()
@@ -305,7 +301,7 @@ func (e *Entity) GetGForce() float64 {
 
 // HasCollision checks if the current entity's rectangular boundaries intersect with the specified entity's boundaries.
 func (e *Entity) HasCollision(obj2 *Entity) bool {
-	return e.rect.IntersectRect(obj2.rect)
+	return e.rect.IntersectBB(obj2.rect)
 }
 
 // Distance computes the Euclidean distance between the entity and a specified collider entity.
@@ -324,17 +320,17 @@ func (e *Entity) Distance(collider *Entity) float64 {
 
 // GetXRange returns the min and max x-coordinates of the entity's rectangular bounds.
 func (e *Entity) GetXRange() (float64, float64) {
-	return e.rect.point.x, e.rect.point.x + e.rect.size.w
+	return e.rect.bottomLeft.x, e.rect.bottomLeft.x + e.rect.size.w
 }
 
 // GetYRange returns the minimum and maximum Y coordinates of the entity's bounding rectangle as a tuple.
 func (e *Entity) GetYRange() (float64, float64) {
-	return e.rect.point.y, e.rect.point.y + e.rect.size.h
+	return e.rect.bottomLeft.y, e.rect.bottomLeft.y + e.rect.size.h
 }
 
 // GetZRange returns the minimum and maximum Z-coordinates of the entity's rectangular bounding box.
 func (e *Entity) GetZRange() (float64, float64) {
-	return e.rect.point.z, e.rect.point.z + e.rect.size.d
+	return e.rect.bottomLeft.z, e.rect.bottomLeft.z + e.rect.size.d
 }
 
 // GetSweptZRange computes the range of the entity's Z-axis considering its velocity to account for potential motion effects.

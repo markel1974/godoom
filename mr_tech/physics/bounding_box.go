@@ -31,19 +31,14 @@ func (r *BoundingBox) Reset(x, y, z, w, h, d float64) {
 
 // rebuild recalculates the center, bottom-center, and AABB boundaries of the bounding box based on its current position and size.
 func (r *BoundingBox) rebuild() {
-	r.center.x = r.bottomLeft.x + (r.size.w * 0.5)
-	r.center.y = r.bottomLeft.y + (r.size.h * 0.5)
-	r.center.z = r.bottomLeft.z + (r.size.d * 0.5)
-
-	r.bottomCenter.x = r.center.x
-	r.bottomCenter.y = r.center.y
-	r.bottomCenter.z = r.bottomLeft.z
-
+	cw, ch, cd := r.size.GetCenter()
+	r.center.MoveTo(r.bottomLeft.x+cw, r.bottomLeft.y+ch, r.bottomLeft.z+cd)
+	r.bottomCenter.MoveTo(r.center.x, r.center.y, r.bottomLeft.z)
 	minX := r.bottomLeft.x
-	maxX := r.bottomLeft.x + r.size.w
 	minY := r.bottomLeft.y
-	maxY := r.bottomLeft.y + r.size.h
 	minZ := r.bottomLeft.z
+	maxX := r.bottomLeft.x + r.size.w
+	maxY := r.bottomLeft.y + r.size.h
 	maxZ := r.bottomLeft.z + r.size.d
 	r.aabb.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
@@ -129,16 +124,16 @@ func (r *BoundingBox) Intersect(x2, y2, z2, w2, h2, d2 float64) bool {
 func (r *BoundingBox) GetZ() float64 { return r.bottomLeft.z }
 
 // GetWidth returns the width of the bounding box as a float64 value.
-func (r *BoundingBox) GetWidth() float64 { return r.size.w }
+func (r *BoundingBox) GetWidth() float64 { return r.size.GetWidth() }
 
 // GetHeight returns the height of the BoundingBox.
-func (r *BoundingBox) GetHeight() float64 { return r.size.h }
+func (r *BoundingBox) GetHeight() float64 { return r.size.GetHeight() }
 
 // GetDepth returns the depth value of the bounding box.
-func (r *BoundingBox) GetDepth() float64 { return r.size.d }
+func (r *BoundingBox) GetDepth() float64 { return r.size.GetDepth() }
 
 // GetSize returns the width, height, and depth of the bounding box as a tuple of three float64 values.
-func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.w, r.size.h, r.size.d }
+func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.Get() }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the BoundingBox.
 func (r *BoundingBox) GetAABB() *AABB { return r.aabb }

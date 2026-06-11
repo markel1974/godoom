@@ -68,6 +68,10 @@ const (
 	TotalSlots     = BucketSize * FacesPerBucket
 )
 
+type ICageObject interface {
+	GetEntity() *physics.Entity
+}
+
 // CageEntry represents a single entry within a collision cage, storing data about collisions and their properties.
 type CageEntry struct {
 	bucket      BucketType
@@ -143,7 +147,7 @@ func (s *CageEntry) Penetrable() bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.GetThing().GetId())
+	return v.Penetrable(s.lCage.GetObject().GetEntity().GetId())
 }
 
 // CollisionBucket represents a storage container for collision detection entities within a specific spatial bucket.
@@ -180,7 +184,7 @@ func (b *CollisionBucket) Count() int {
 
 // Penetrable determines if the CollisionBucket can be traversed based on its contents and the provided entity ID.
 // It checks for inelastic resistance or recursively evaluates dynamic entities. Returns false if any resistance is detected.
-func (b *CollisionBucket) Penetrable(from string) bool {
+func (b *CollisionBucket) Penetrable(from uint64) bool {
 	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.container[i]
@@ -188,7 +192,7 @@ func (b *CollisionBucket) Penetrable(from string) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.GetThing().GetId() == from {
+		if entry.rCage != nil && entry.rCage.GetObject().GetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -209,7 +213,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.GetThing().GetEntity().GetId() == existing.rCage.GetThing().GetEntity().GetId() {
+			if rCage.GetObject().GetEntity().GetId() == existing.rCage.GetObject().GetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
@@ -254,7 +258,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 // CollisionCage represents a spatial structure used for managing collision detection and resolution in a 3D environment.
 type CollisionCage struct {
 	seen                map[*CollisionCage]bool
-	thing               IThing
+	object              ICageObject
 	buckets             [BucketSize]*CollisionBucket
 	ellipsoid           *physics.Entity
 	ellipsoidLocal      [4]*physics.Entity
@@ -273,10 +277,10 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage initializes and returns a pointer to a new CollisionCage instance for the provided IThing entity.
-func NewCollisionCage(thing IThing) *CollisionCage {
+func NewCollisionCage(object ICageObject) *CollisionCage {
 	c := &CollisionCage{
 		seen:       make(map[*CollisionCage]bool),
-		thing:      thing,
+		object:     object,
 		ellipsoid:  physics.NewEntity(0, 0, 0, 0),
 		volume:     nil,
 		slots:      make([]*CageEntry, TotalSlots),
@@ -296,7 +300,7 @@ func NewCollisionCage(thing IThing) *CollisionCage {
 
 // Rebuild updates the collision cage's geometry, displacement, and internal buckets based on the provided maximum step size.
 func (s *CollisionCage) Rebuild(maxStep float64) {
-	entity := s.thing.GetEntity()
+	entity := s.object.GetEntity()
 	s.dX, s.dY, s.dZ = entity.GetDisplacement()
 	// Estrazione origine (Bottom-Left)
 	pX, pY, pZ := entity.GetBottomLeft()
@@ -540,8 +544,8 @@ func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
 // GetSlot retrieves the CageEntry at the specified index from the slots array in the CollisionCage.
 func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
 
-// GetThing returns the IThing instance associated with the CollisionCage.
-func (s *CollisionCage) GetThing() IThing { return s.thing }
+// GetObject returns the ICageObject instance contained within the CollisionCage.
+func (s *CollisionCage) GetObject() ICageObject { return s.object }
 
 // GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
 //func (s *CollisionCage) GetMargin() float64 { return s.margin }

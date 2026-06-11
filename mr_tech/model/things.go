@@ -84,7 +84,7 @@ func (th *Things) Len() int {
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
-	lThing := lCage.GetThing()
+	lThing := lCage.GetObject().(IThing)
 
 	// Collisioni Dinamiche (Broad-Phase contro l'AABB Tree globale)
 	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {

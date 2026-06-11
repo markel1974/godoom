@@ -232,9 +232,9 @@ func (e *Cinematic) Update() {
 	if e.onGround {
 		gForce = 0.0
 	}
-	e.vz += (e.az - gForce) * e.dt // La gravità agisce sempre e senza condizioni
+	e.vz += (e.az - gForce) * e.dt // gravity always acts unconditionally
 
-	// RESET ACCUMULATORE
+	// reset accumulator
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
 
 	dx, dy, dz := e.vx*e.dt, e.vy*e.dt, e.vz*e.dt
@@ -250,14 +250,14 @@ func (e *Cinematic) Update() {
 	e.vx *= e.groundDamping //e.dampingActive
 	e.vy *= e.groundDamping //e.dampingActive
 	e.vz *= e.airDamping
-	// SLEEP PLANARE Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
+	// planar sleep - zero only xy to stop micro-sliding (jittering).
 	if math.Abs(e.vx) < e.vMin {
 		e.vx = 0.0
 	}
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	//CLAMPING VELOCITÀ TERMINALE
+	// terminal velocity clamping
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}
@@ -270,23 +270,23 @@ func (e *Cinematic) IsMoving() bool {
 
 // ResolveImpact resolves a collision between two Cinematic objects by applying normal and tangential impulses for both.
 func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) {
-	// NORMALIZZAZIONE SICURA (Anti-Esplosione)
+	// safe normalization (anti-explosion)
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen > 0.0 {
 		nx /= nLen
 		ny /= nLen
 		nz /= nLen
 	} else {
-		return // Vettore nullo, impossibile risolvere
+		return // null vector, cannot resolve
 	}
 
-	// VELOCITÀ RELATIVA LUNGO LA NORMALE
+	// relative velocity along the normal
 	vrx := e.vx - e2.vx
 	vry := e.vy - e2.vy
 	vrz := e.vz - e2.vz
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
 
-	// Se i corpi si stanno allontanando, nessuna collisione da risolvere
+	// if bodies are separating, no collision to resolve
 	if vRelDotN > 0.0 {
 		return
 	}
@@ -296,7 +296,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 		return
 	}
 
-	// RESTITUZIONE CON SOGLIA (Micro-bounce slop)
+	// restitution with threshold (micro-bounce slop)
 	actualRestitution := e2.restitution
 	if actualRestitution != 0 {
 		const restitutionSlop = 0.5
@@ -305,16 +305,16 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 		}
 	}
 
-	// BAUMGARTE STABILIZATION ---
+	// baumgarte stabilization ---
 	//const slop = 0.05
 	//const percent = 0.2
 	//bias := math.Max(penetration-slop, 0.0) * percent
 
-	// IMPULSO NORMALE (Puro, senza Baumgarte bias)
+	// normal impulse (pure, without baumgarte bias)
 	impulse := -(1.0 + actualRestitution) * vRelDotN
 	j := impulse / invMassSum
 
-	// Applica l'impulso normale
+	// apply normal impulse
 	e.vx += (j * nx) * e.invMass
 	e.vy += (j * ny) * e.invMass
 	e.vz += (j * nz) * e.invMass
@@ -322,14 +322,14 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 	e2.vy -= (j * ny) * e2.invMass
 	e2.vz -= (j * nz) * e2.invMass
 
-	// IMPULSO TANGENZIALE (ATTRITO)
-	// Ricalcoliamo la velocità relativa DOPO l'impulso normale
+	// tangential impulse (friction)
+	// recalculates relative velocity after normal impulse
 	vrx = e.vx - e2.vx
 	vry = e.vy - e2.vy
 	vrz = e.vz - e2.vz
 	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
 
-	// Troviamo il vettore tangente
+	// find tangent vector
 	tx := vrx - (vRelDotNPost * nx)
 	ty := vry - (vRelDotNPost * ny)
 	tz := vrz - (vRelDotNPost * nz)
@@ -342,16 +342,16 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 		vRelDotT := vrx*tx + vry*ty + vrz*tz
 		jt := -vRelDotT / invMassSum
 
-		// Friction Mixing: Media geometrica dei due coefficienti di attrito
+		// friction mixing: geometric mean of the two friction coefficients
 		mu := math.Sqrt(e.frictionActive * e2.frictionActive)
 		maxFriction := j * mu
 
-		// Clamp dell'impulso tangenziale nel cono di Coulomb
+		// clamp tangential impulse within coulomb cone
 		if math.Abs(jt) > maxFriction {
 			jt = math.Copysign(maxFriction, jt)
 		}
 
-		// Applica l'impulso di attrito
+		// apply friction impulse
 		e.vx += (jt * tx) * e.invMass
 		e.vy += (jt * ty) * e.invMass
 		e.vz += (jt * tz) * e.invMass
@@ -360,195 +360,3 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 		e2.vz -= (jt * tz) * e2.invMass
 	}
 }
-
-// ClearForce resets the accumulated force components (ax, ay, az) of the entity to zero.
-//func (e *Entity) ClearForce() {
-//	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
-//}
-
-/*
-// ResolveImpact resolves the collision impact between two entities, applying forces based on restitution, friction, and penetration.
-func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
-	// NORMALIZZAZIONE SICURA (Anti-Esplosione)
-	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
-	if nLen > 0.0 {
-		nx /= nLen
-		ny /= nLen
-		nz /= nLen
-	} else {
-		return // Vettore nullo, impossibile risolvere
-	}
-	// VELOCITÀ RELATIVA E SOGLIE
-	if e2.invMass == 0.0 {
-		e2.vx, e2.vy, e2.vz = 0.0, 0.0, 0.0
-	}
-	vrx := e.vx - e2.vx
-	vry := e.vy - e2.vy
-	vrz := e.vz - e2.vz
-	vRelDotN := vrx*nx + vry*ny + vrz*nz
-
-	// Se i corpi si stanno allontanando
-	if vRelDotN > 0.0 {
-		return
-	}
-	invMassSum := e.invMass + e2.invMass
-	if invMassSum == 0.0 {
-		return
-	}
-
-	const restitutionSlop = 0.5
-	actualRestitution := e2.restitution
-	if math.Abs(vRelDotN) < restitutionSlop {
-		actualRestitution = 0.0
-	}
-
-	// BAUMGARTE STABILIZATION ---
-	//const slop = 0.05
-	//const percent = 0.2
-	//bias := math.Max(penetration-slop, 0.0) * percent
-
-	//bias := 0.0
-	//if e.ax != 0.0 || e.ay != 0.0 || e.az != 0.0 {
-	const slop = 0.05
-	const percent = 0.5 //0.2
-	bias := math.Max(penetration-slop, 0.0) * percent
-
-	// IMPULSO NORMALE (con bias applicato)
-	impulse := -(1.0 + actualRestitution) * vRelDotN
-	if bias > impulse {
-		bias = impulse
-	}
-	j := impulse + bias
-	//fmt.Println("Applying normal impulse with bias:", impulse, bias)
-	j /= invMassSum
-
-	e.vx += (j * nx) * e.invMass
-	e.vy += (j * ny) * e.invMass
-	e.vz += (j * nz) * e.invMass
-	e2.vx -= (j * nx) * e2.invMass
-	e2.vy -= (j * ny) * e2.invMass
-	e2.vz -= (j * nz) * e2.invMass
-
-	// IMPULSO TANGENZIALE (ATTRITO)
-	vrx = e.vx - e2.vx
-	vry = e.vy - e2.vy
-	vrz = e.vz - e2.vz
-	vRelDotNPost := vrx*nx + vry*ny + vrz*nz
-
-	tx := vrx - (vRelDotNPost * nx)
-	ty := vry - (vRelDotNPost * ny)
-	tz := vrz - (vRelDotNPost * nz)
-
-	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
-	if tLen > 1e-8 {
-		tx /= tLen
-		ty /= tLen
-		tz /= tLen
-
-		vRelDotT := vrx*tx + vry*ty + vrz*tz
-		jt := -vRelDotT / invMassSum
-
-		maxFriction := j * e2.frictionActive
-		if math.Abs(jt) > maxFriction {
-			// math.Copysign copia il segno di jt su maxFriction, evitando branch
-			jt = math.Copysign(maxFriction, jt)
-		}
-
-		e.vx += (jt * tx) * e.invMass
-		e.vy += (jt * ty) * e.invMass
-		e.vz += (jt * tz) * e.invMass
-		e2.vx -= (jt * tx) * e2.invMass
-		e2.vy -= (jt * ty) * e2.invMass
-		e2.vz -= (jt * tz) * e2.invMass
-	}
-}
-
-*/
-
-/*
-// ComputeImpact determines the collision state and calculates the collision normal and penetration depth between two entities.
-// Returns the normal vector (normX, normY, normZ), penetration depth, and a boolean indicating whether a collision occurred.
-func (e *Entity) ComputeImpact(otherEnt *Entity) (float64, float64, float64, float64, bool) {
-	x1Min, x1Max := e.GetXRange()
-	x2Min, x2Max := otherEnt.GetXRange()
-	y1Min, y1Max := e.GetYRange()
-	y2Min, y2Max := otherEnt.GetYRange()
-	// SAT: Collisione AABB Planare Veloce
-	if x1Max > x2Min && x1Min < x2Max && y1Max > y2Min && y1Min < y2Max {
-		z1Min, z1Max := e.GetZRange()
-		z2Min, z2Max := otherEnt.GetZRange()
-		// Supporto Swept Z per il Continuous Collision Detection verticale
-		if math.Abs(e.GetVz()) >= e.GetGForce() {
-			z1Min, z1Max = e.GetSweptZRange()
-		}
-		if math.Abs(otherEnt.GetVz()) >= otherEnt.GetGForce() {
-			z2Min, z2Max = otherEnt.GetSweptZRange()
-		}
-		if z1Max > z2Min && z1Min < z2Max {
-			pX1 := x1Max - x2Min
-			pX2 := x2Max - x1Min
-			pY1 := y1Max - y2Min
-			pY2 := y2Max - y1Min
-			pZ1 := z1Max - z2Min
-			pZ2 := z2Max - z1Min
-			minPenetration := pX1
-			var normX, normY, normZ float64 = -1, 0, 0
-			// Troviamo l'asse di minima compenetrazione
-			if pX2 < minPenetration {
-				minPenetration = pX2
-				normX, normY, normZ = 1, 0, 0
-			}
-			if pY1 < minPenetration {
-				minPenetration = pY1
-				normX, normY, normZ = 0, -1, 0
-			}
-			if pY2 < minPenetration {
-				minPenetration = pY2
-				normX, normY, normZ = 0, 1, 0
-			}
-			if pZ1 < minPenetration {
-				minPenetration = pZ1
-				normX, normY, normZ = 0, 0, -1
-			}
-			if pZ2 < minPenetration {
-				minPenetration = pZ2
-				normX, normY, normZ = 0, 0, 1
-			}
-			if minPenetration > 0.001 {
-				return normX, normY, normZ, minPenetration, true
-			}
-		}
-	}
-	return 0, 0, 0, 0, false
-}
-
-*/
-
-/*
-// ClipVelocity adjusts the velocity vector to prevent movement into a surface by negating the velocity component along the normal.
-// The method applies a slight over-bounce to mitigate precision errors and ensure the entity does not get stuck on the surface.
-func (e *Entity) ClipVelocity(vx, vy, vz, nx, ny, nz float64) (float64, float64, float64) {
-	// V · N (How much velocity is pushing against the plane)
-	backoff := vx*nx + vy*ny + vz*nz
-	// If positive, we are already moving away from the plane, no correction needed
-	if backoff > 0.0 {
-		return vx, vy, vz
-	}
-	// Very slight over-bounce (1.001) to absorb FP64 precision error
-	// and prevent the entity from getting stuck in the plane on the next frame.
-	backoff *= 1.001
-	// V_new = V - N * (V · N)
-	return vx - (nx * backoff), vy - (ny * backoff), vz - (nz * backoff)
-}
-
-*/
-
-/*
-// DistanceSq calculates the squared distance between the center points of the current entity and another entity.
-func (e *Entity) DistanceSq(other *Entity) float64 {
-	dx := (e.rect.point.x + e.rect.size.w/2.0) - (other.rect.point.x + other.rect.size.w/2.0)
-	dy := (e.rect.point.y + e.rect.size.h/2.0) - (other.rect.point.y + other.rect.size.h/2.0)
-	dz := (e.rect.point.z + e.rect.size.d/2.0) - (other.rect.point.z + other.rect.size.d/2.0)
-	return dx*dx + dy*dy + dz*dz
-}
-*/

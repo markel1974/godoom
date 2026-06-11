@@ -38,12 +38,12 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 
 // MergeInPlace updates the current AABB to encompass the union of the specified source and other AABBs.
 func (a *AABB) MergeInPlace(src, other *AABB) {
-	minX := math.Min(src.minX, other.minX)
-	minY := math.Min(src.minY, other.minY)
-	minZ := math.Min(src.minZ, other.minZ)
-	maxX := math.Max(src.maxX, other.maxX)
-	maxY := math.Max(src.maxY, other.maxY)
-	maxZ := math.Max(src.maxZ, other.maxZ)
+	minX := min(src.minX, other.minX)
+	minY := min(src.minY, other.minY)
+	minZ := min(src.minZ, other.minZ)
+	maxX := max(src.maxX, other.maxX)
+	maxY := max(src.maxY, other.maxY)
+	maxZ := max(src.maxZ, other.maxZ)
 	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
@@ -60,12 +60,12 @@ func (a *AABB) ExpandInPlace(src *AABB, margin float64) {
 
 // IntersectInPlace updates the AABB in place to represent the intersection volume of the source and other AABB.
 func (a *AABB) IntersectInPlace(src, other *AABB) {
-	minX := math.Max(src.minX, other.minX)
-	minY := math.Max(src.minY, other.minY)
-	minZ := math.Max(src.minZ, other.minZ)
-	maxX := math.Min(src.maxX, other.maxX)
-	maxY := math.Min(src.maxY, other.maxY)
-	maxZ := math.Min(src.maxZ, other.maxZ)
+	minX := max(src.minX, other.minX)
+	minY := max(src.minY, other.minY)
+	minZ := max(src.minZ, other.minZ)
+	maxX := min(src.maxX, other.maxX)
+	maxY := min(src.maxY, other.maxY)
+	maxZ := min(src.maxZ, other.maxZ)
 	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
@@ -235,6 +235,7 @@ func (a *AABB) IntersectFrustum(f *Frustum) bool {
 	return true
 }
 
+/*
 // SweepAABB performs a Continuous Collision Detection (CCD) sweep of a moving AABB against a 3D triangle.
 // It uses the Minkowski sum approach to expand the triangle by the AABB's half-extents.
 // Returns:
@@ -330,3 +331,4 @@ func (a *AABB) SweepAABB(vx, vy, vz float64, p0, p1, p2, normal Point) (float64,
 	// return frontal hit.
 	return tHit, normal, true
 }
+*/

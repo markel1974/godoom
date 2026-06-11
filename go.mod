@@ -1,6 +1,6 @@
 module github.com/markel1974/godoom
 
-go 1.16
+go 1.21
 
 require (
 	github.com/go-gl/gl v0.0.0-20210905235341-f7a045908259

@@ -8,8 +8,8 @@ type Point struct {
 }
 
 // NewPoint creates a new Point with the specified x, y, and z coordinates as float64 values.
-func NewPoint(x float64, y float64, z float64) *Point {
-	return &Point{
+func NewPoint(x float64, y float64, z float64) Point {
+	return Point{
 		x: x,
 		y: y,
 		z: z,

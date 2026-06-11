@@ -4,10 +4,10 @@ import "math"
 
 // BoundingBox represents a 3D rectangular region defined by its position, dimensions, and axis-aligned bounding box (AABB).
 type BoundingBox struct {
-	bottomLeft   *Point
-	bottomCenter *Point
-	center       *Point
-	size         *Size
+	bottomLeft   Point
+	bottomCenter Point
+	center       Point
+	size         Size
 	aabb         *AABB
 }
 

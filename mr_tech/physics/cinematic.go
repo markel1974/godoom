@@ -1,8 +1,24 @@
 package physics
 
-import (
-	"math"
-)
+import "math"
+
+/*
+3. I Limiti Matematici dell'Implementazione Attuale
+L'architettura è robusta, ma presenta un limite matematico fondamentale
+se l'obiettivo (come avevi accennato prima) è un motore fisico puramente generico: Assenza di Dinamica Rotazionale (Torque e Inerzia)
+Il modulo Cinematic descrive il moto traslazionale di un punto materiale, non la dinamica di un corpo rigido vero e proprio.
+Manca totalmente il concetto di Momento d'Inerzia (tensore d'inerzia $I$), Velocità Angolare ($\omega$) e Momento Torcente ($\tau$).
+Attualmente, quando calcoli gli impulsi in ResolveImpact, assumi che la forza colpisca sempre esattamente il centro di massa dell'oggetto.
+In un motore fisico generico, l'impulso applicato a una distanza $\vec{r}$ dal centro di massa deve generare
+una rotazione $\Delta\omega = I^{-1} (\vec{r} \times \vec{J})$.Essendo il tuo sistema basato su AABB
+(che per definizione non possono ruotare, altrimenti diventerebbero OBB - Oriented Bounding Boxes),
+questo non è un bug, ma un vincolo intrinseco del design.Conclusione:Dal punto di vista matematico, le equazioni lineari,
+i calcoli tensoriali sui vettori normali e gli integratori esponenziali sono implementati alla perfezione.
+Architetturalmente l'ECS-lite (Cinematic + BoundingBox) ti garantisce stabilità spaziale.
+Se il motore è destinato a muovere entità orientate assialmente (come giocatori FPS, mostri, proiettili o veicoli hover),
+il core matematico è completo e corretto. Se invece in futuro vorrai simulare scatole che ruzzolano o ragdoll,
+l'architettura dovrà espandere il modulo Cinematic per includere i quaternioni e la matrice del tensore d'inerzia.
+*/
 
 const (
 	airFriction = 0.99

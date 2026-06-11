@@ -8,8 +8,8 @@ type Size struct {
 }
 
 // NewSize initializes and returns a pointer to a Size with the specified width, height, and depth.
-func NewSize(w float64, h float64, d float64) *Size {
-	return &Size{w: w, h: h, d: d}
+func NewSize(w float64, h float64, d float64) Size {
+	return Size{w: w, h: h, d: d}
 }
 
 // Get returns the width, height, and depth of the Size instance.

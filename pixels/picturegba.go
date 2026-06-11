@@ -40,8 +40,8 @@ func NewPictureRGBAFromPicture(pic IPicture) *PictureRGBA {
 		for y := math.Floor(bounds.Min.Y); y < bounds.Max.Y; y++ {
 			for x := math.Floor(bounds.Min.X); x < bounds.Max.X; x++ {
 				at := MakeVec(
-					math.Max(x, bounds.Min.X),
-					math.Max(y, bounds.Min.Y),
+					max(x, bounds.Min.X),
+					max(y, bounds.Min.Y),
 				)
 				col := pic.Color(at)
 				pd.SetRGBA(int(x), int(y), uint8(col.R*255), uint8(col.G*255), uint8(col.B*255), uint8(col.A*255))

@@ -4,9 +4,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	mathematic2 "github.com/markel1974/godoom/mr_tech/model/mathematic"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/pixels"
 )
@@ -70,15 +69,15 @@ func (dp *DrawPolygon) Setup(surface *pixels.PictureRGBA, points1 []geometry.XYZ
 			dp.bottom = int(dp.points[x].Y)
 		}
 	}
-	dp.left = mathematic2.Clamp(dp.left, 0, dp.maxW-1)
-	dp.right = mathematic2.Clamp(dp.right, 0, dp.maxW-1)
-	dp.top = mathematic2.Clamp(dp.top, 0, dp.maxH-1)
-	dp.bottom = mathematic2.Clamp(dp.bottom, 0, dp.maxH-1)
+	dp.left = geometry.Clamp(dp.left, 0, dp.maxW-1)
+	dp.right = geometry.Clamp(dp.right, 0, dp.maxW-1)
+	dp.top = geometry.Clamp(dp.top, 0, dp.maxH-1)
+	dp.bottom = geometry.Clamp(dp.bottom, 0, dp.maxH-1)
 }
 
 // Verify checks if the polygon's bounding box intersects with the drawable area and verifies minimum dimensions.
 func (dp *DrawPolygon) Verify() bool {
-	if !mathematic2.IntersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) {
+	if !geometry.IntersectBox(dp.left, dp.top, dp.right, dp.bottom, 0, 0, dp.maxW, dp.maxH) {
 		return false
 	}
 	if dp.right-dp.left < 1 {
@@ -119,7 +118,7 @@ func (dp *DrawPolygon) compileNodes(pixelX int) []int {
 	case 2:
 		nodeY = dp.nodeY[:nodes]
 		if nodeY[0] > nodeY[1] {
-			nodeY[0], nodeY[1] = mathematic2.Swap(nodeY[0], nodeY[1])
+			nodeY[0], nodeY[1] = geometry.Swap(nodeY[0], nodeY[1])
 		}
 	default:
 		nodeY = dp.nodeY[:nodes]
@@ -174,8 +173,8 @@ func (dp *DrawPolygon) DrawTexture(texture *textures.Texture, x1 float64, x2 flo
 					continue
 				}
 
-				cY1 := mathematic2.Clamp(y1, 0, dp.lastH)
-				cY2 := mathematic2.Clamp(y2, 0, dp.lastH)
+				cY1 := geometry.Clamp(y1, 0, dp.lastH)
+				cY2 := geometry.Clamp(y2, 0, dp.lastH)
 
 				// Overlap di 1 pixel per sigillare i gap sub-pixel
 				if cY2 < dp.lastH {
@@ -228,8 +227,8 @@ func (dp *DrawPolygon) DrawPerspectiveTexture(x float64, y float64, z float64, y
 				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
 					continue
 				}
-				cY1 := mathematic2.Clamp(y1, 0, dp.lastH)
-				cY2 := mathematic2.Clamp(y2, 0, dp.lastH)
+				cY1 := geometry.Clamp(y1, 0, dp.lastH)
+				cY2 := geometry.Clamp(y2, 0, dp.lastH)
 
 				// Overlap di 1 pixel per sigillare i gap sub-pixel
 				if cY2 < dp.lastH {
@@ -288,8 +287,8 @@ func (dp *DrawPolygon) DrawWireFrame(filled bool) {
 				if (y1 < 0 && y2 < 0) || (y1 >= dp.maxH && y2 >= dp.maxH) {
 					continue
 				}
-				cY1 := mathematic2.Clamp(y1, -1, dp.maxH)
-				cY2 := mathematic2.Clamp(y2, -1, dp.maxH)
+				cY1 := geometry.Clamp(y1, -1, dp.maxH)
+				cY2 := geometry.Clamp(y2, -1, dp.maxH)
 				if filled {
 					for pixelY := cY1; pixelY <= cY2; pixelY++ {
 						dp.surface.SetRGBA(pixelX, pixelY, r0, g0, b0, 255)
@@ -353,13 +352,13 @@ func (dp *DrawPolygon) drawLine(x1 float64, y1 float64, x2 float64, y2 float64) 
 	r0, g0, b0 := ToRGB(dp.Color, lightStart)
 	steep := math.Abs(y2-y1) > math.Abs(x2-x1)
 	if steep {
-		x1, y1 = mathematic2.SwapF(x1, y1)
-		x2, y2 = mathematic2.SwapF(x2, y2)
+		x1, y1 = geometry.SwapF(x1, y1)
+		x2, y2 = geometry.SwapF(x2, y2)
 	}
 
 	if x1 > x2 {
-		x1, x2 = mathematic2.SwapF(x1, x2)
-		y1, y2 = mathematic2.SwapF(y1, y2)
+		x1, x2 = geometry.SwapF(x1, x2)
+		y1, y2 = geometry.SwapF(y1, y2)
 	}
 	dx := x2 - x1
 	dy := math.Abs(y2 - y1)

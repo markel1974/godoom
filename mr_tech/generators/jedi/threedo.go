@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // ThreedoQuad represents a single face (which seems to default to Quads in this format).

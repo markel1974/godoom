@@ -419,7 +419,7 @@ func (poly Polygon) BowyerWatson() []Triangle {
 	}
 
 	dx, dy := maxX-minX, maxY-minY
-	deltaMax := math.Max(dx, dy)
+	deltaMax := max(dx, dy)
 	if deltaMax == 0 {
 		deltaMax = 1.0
 	}

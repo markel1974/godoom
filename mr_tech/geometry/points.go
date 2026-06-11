@@ -228,16 +228,16 @@ func LineIntersection(p1, q1, p2, q2 XY) (float64, float64) {
 
 // OnSegment checks if point q lies on the line segment defined by points p and r, assuming p, q, and r are collinear.
 func OnSegment(p, q, r XY) bool {
-	return q.X <= math.Max(p.X, r.X) && q.X >= math.Min(p.X, r.X) &&
-		q.Y <= math.Max(p.Y, r.Y) && q.Y >= math.Min(p.Y, r.Y)
+	return q.X <= max(p.X, r.X) && q.X >= min(p.X, r.X) &&
+		q.Y <= max(p.Y, r.Y) && q.Y >= min(p.Y, r.Y)
 }
 
 // OnSegmentStrict checks if point q lies strictly on the line segment formed by points p and r.
 // This function ensures q is collinear with p and r and lies within the bounded box formed by p and r.
 func OnSegmentStrict(p, q, r XY) bool {
 	return Orientation(p, q, r) == 0 &&
-		q.X >= math.Min(p.X, r.X) && q.X <= math.Max(p.X, r.X) &&
-		q.Y >= math.Min(p.Y, r.Y) && q.Y <= math.Max(p.Y, r.Y)
+		q.X >= min(p.X, r.X) && q.X <= max(p.X, r.X) &&
+		q.Y >= min(p.Y, r.Y) && q.Y <= max(p.Y, r.Y)
 }
 
 // SegmentsCross determines if two line segments, defined by points (p1, q1) and (p2, q2), intersect each other strictly.

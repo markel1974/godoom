@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // ThingType defines an enumeration for the various types of objects or entities within the system.

@@ -3,7 +3,7 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -304,7 +304,7 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eR
 	}
 
 	if (vDotN < 0.0 || isParallel) && t0 <= 1.0 && t1 >= 0.0 {
-		tPlane := math.Max(0.0, t0) // Micro-penetration clamp
+		tPlane := max(0.0, t0) // Micro-penetration clamp
 
 		if tPlane <= 1.0 {
 			cx := eVX + eVelX*tPlane
@@ -333,7 +333,7 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eR
 				// Tolleranza per fessure a scala sub-millimetrica
 				const baryEps = -1e-3
 				if v >= baryEps && w >= baryEps && u >= baryEps {
-					safeT := math.Max(0.0, tPlane-epsilon)
+					safeT := max(0.0, tPlane-epsilon)
 					hit = true
 					minT = safeT
 					cNx, cNy, cNz = enX, enY, enZ
@@ -434,7 +434,7 @@ func (s *Face) SweepTest(viewX, viewY, viewZ, velX, velY, velZ, eRadX, eRadY, eR
 
 RESOLVE:
 	if hit {
-		safeT := math.Max(0.0, minT-epsilon)
+		safeT := max(0.0, minT-epsilon)
 
 		// 3. RIPRISTINO SCALA EUCLIDEA
 		realNx := cNx / eRadX

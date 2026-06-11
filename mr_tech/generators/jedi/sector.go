@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Slope represents a sloped surface defined by a sector index, pitch, and wall index.

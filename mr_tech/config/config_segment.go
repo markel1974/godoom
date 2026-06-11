@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 

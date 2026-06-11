@@ -5,8 +5,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
+	geometry "github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -176,7 +175,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 
 				modelSectorId++
 				// Maintains consistent Winding Order for ContainsPoint
-				if mathematic.PointInLineDirectionF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
+				if geometry.PointInLineDirectionF(tri[2].X, tri[2].Y, tri[0].X, tri[0].Y, tri[1].X, tri[1].Y) < 0 {
 					tri[1], tri[2] = tri[2], tri[1]
 				}
 				for k := 0; k < 3; k++ {
@@ -387,7 +386,7 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 				midZ := curFS + t*(curFE-curFS) // Al punto mid, curZ == neiZ
 
 				// Segmento 1: Da Start a Mid
-				zLowS1, zHighS1 := curFS, math.Max(curFS, neiFS)
+				zLowS1, zHighS1 := curFS, max(curFS, neiFS)
 				zLowE1, zHighE1 := midZ, midZ
 				if zHighS1 > zLowS1 || zHighE1 > zLowE1 {
 					s2 := geometry.XY{X: s.X, Y: s.Y}
@@ -395,15 +394,15 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 				}
 				// Segmento 2: Da Mid a End
 				zLowS2, zHighS2 := midZ, midZ
-				zLowE2, zHighE2 := curFE, math.Max(curFE, neiFE)
+				zLowE2, zHighE2 := curFE, max(curFE, neiFE)
 				if zHighS2 > zLowS2 || zHighE2 > zLowE2 {
 					e2 := geometry.XY{X: e.X, Y: e.Y}
 					buildQuad(vol3d, seg.GetNeighbor(), midXY, e2, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower)
 				}
 			} else {
 				// Muro lineare standard
-				zLowS, zHighS := curFS, math.Max(curFS, neiFS)
-				zLowE, zHighE := curFE, math.Max(curFE, neiFE)
+				zLowS, zHighS := curFS, max(curFS, neiFS)
+				zLowE, zHighE := curFE, max(curFE, neiFE)
 				if zHighS > zLowS || zHighE > zLowE {
 					s2 := geometry.XY{X: s.X, Y: s.Y}
 					e2 := geometry.XY{X: e.X, Y: e.Y}
@@ -423,7 +422,7 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 				midXY := geometry.XY{X: s.X + t*(e.X-s.X), Y: s.Y + t*(e.Y-s.Y)}
 				midZ := curCS + t*(curCE-curCS)
 				// Segmento 1: Da Start a Mid
-				zTopS1, zBotS1 := curCS, math.Min(curCS, neiCS)
+				zTopS1, zBotS1 := curCS, min(curCS, neiCS)
 				zTopE1, zBotE1 := midZ, midZ
 				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
 					s2 := geometry.XY{X: s.X, Y: s.Y}
@@ -431,15 +430,15 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 				}
 				// Segmento 2: Da Mid a End
 				zTopS2, zBotS2 := midZ, midZ
-				zTopE2, zBotE2 := curCE, math.Min(curCE, neiCE)
+				zTopE2, zBotE2 := curCE, min(curCE, neiCE)
 				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
 					e2 := geometry.XY{X: e.X, Y: e.Y}
 					buildQuad(vol3d, seg.GetNeighbor(), midXY, e2, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper)
 				}
 			} else {
 				// Muro lineare standard
-				zTopS, zBotS := curCS, math.Min(curCS, neiCS)
-				zTopE, zBotE := curCE, math.Min(curCE, neiCE)
+				zTopS, zBotS := curCS, min(curCS, neiCS)
+				zTopE, zBotE := curCE, min(curCE, neiCE)
 				if zBotS < zTopS || zBotE < zTopE {
 					s2 := geometry.XY{X: s.X, Y: s.Y}
 					e2 := geometry.XY{X: e.X, Y: e.Y}

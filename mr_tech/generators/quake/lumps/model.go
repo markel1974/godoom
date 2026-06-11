@@ -1,6 +1,6 @@
 package lumps
 
-import "github.com/markel1974/godoom/mr_tech/model/geometry"
+import "github.com/markel1974/godoom/mr_tech/geometry"
 
 type RawFace struct {
 	Points  []geometry.XYZ

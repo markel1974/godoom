@@ -121,8 +121,8 @@ func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	if rawSpeed > frameMaxSpeed {
 		frameMaxSpeed = (frameMaxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
-	timeLerpSpeed := math.Min(p.speedLerp*dt*60.0, 1.0)
-	timeLerpAmp := math.Min(p.ampLerp*dt*60.0, 1.0)
+	timeLerpSpeed := min(p.speedLerp*dt*60.0, 1.0)
+	timeLerpAmp := min(p.ampLerp*dt*60.0, 1.0)
 	// Time-corrected lerp protetto
 	p.smoothedSpeed = p.smoothedSpeed + (rawSpeed-p.smoothedSpeed)*timeLerpSpeed
 	// La fase deve accumularsi in base al tempo, non ai frame

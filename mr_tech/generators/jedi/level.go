@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // modeNone represents the default mode state.

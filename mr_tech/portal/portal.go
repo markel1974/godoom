@@ -3,8 +3,8 @@ package portal
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
 )
 
 // defaultQueueLen defines the initial size of the queue used for processing rendering or computational tasks.
@@ -286,8 +286,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 		sectorYCeil := vi.ZDistance(sector.GetMaxZ())
 		sectorYFloor := vi.ZDistance(sector.GetMinZ())
 
-		x1Max := mathematic.MaxF(x1, qi.x1)
-		x2Min := mathematic.MinF(x2, qi.x2)
+		x1Max := max(x1, qi.x1)
+		x2Min := min(x2, qi.x2)
 
 		y1a := screenHeightHalf + (-computePitch(sectorYCeil, tz1) * yScale1)
 		y2a := screenHeightHalf + (-computePitch(sectorYCeil, tz2) * yScale2)
@@ -313,18 +313,18 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 		y1Floor := qi.y1b
 		y2Floor := qi.y2b
 		if x1Max != qi.x1 {
-			if _, i1, ok := mathematic.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok {
+			if _, i1, ok := geometry.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x1Max, ybStart, x1Max, qi.y1t); ok {
 				y1Ceil = i1
 			}
-			if _, i1, ok := mathematic.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok {
+			if _, i1, ok := geometry.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x1Max, ybStart, x1Max, qi.y1b); ok {
 				y1Floor = i1
 			}
 		}
 		if x2Min != qi.x2 {
-			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok {
+			if _, i2, ok := geometry.IntersectFn(qi.x1, qi.y1t, qi.x2, qi.y2t, x2Min, ybStop, x2Min, qi.y2t); ok {
 				y2Ceil = i2
 			}
-			if _, i2, ok := mathematic.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok {
+			if _, i2, ok := geometry.IntersectFn(qi.x1, qi.y1b, qi.x2, qi.y2b, x2Min, ybStop, x2Min, qi.y2b); ok {
 				y2Floor = i2
 			}
 		}
@@ -355,8 +355,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 				upperP := cs.Acquire(neighbor, model.IdUpper, ceilT, floorT, upperT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				upperP.Rect(x1Max, yaStart, nYaStart, zStart, x2Min, yaStop, nYaStop, zStop)
 			}
-			y1Ceil = mathematic.MaxF(yaStart, nYaStart)
-			y2Ceil = mathematic.MaxF(yaStop, nYaStop)
+			y1Ceil = max(yaStart, nYaStart)
+			y2Ceil = max(yaStop, nYaStop)
 
 			neighborYFloor := vi.ZDistance(neighbor.GetMinZ())
 			ny1b := screenHeightHalf + (-computePitch(neighborYFloor, tz1) * yScale1)
@@ -368,8 +368,8 @@ func (r *Portal) compileProjection(fbw, fbh int32, vi *model.ViewMatrix, sector 
 				lowerP := cs.Acquire(neighbor, model.IdLower, ceilT, floorT, lowerT, x1, x2, tx1, tx2, tz1, tz2, u0, u1)
 				lowerP.Rect(x1Max, nYbStart, ybStart, zStart, x2Min, nYbStop, ybStop, zStop)
 			}
-			y1Floor = mathematic.MinF(nYbStart, ybStart)
-			y2Floor = mathematic.MinF(nYbStop, ybStop)
+			y1Floor = min(nYbStart, ybStart)
+			y2Floor = min(nYbStop, ybStop)
 
 			outIdx = r.sectorQueue.Update(neighbor, outIdx, x1Max, x2Min, y1Ceil, y2Ceil, y1Floor, y2Floor)
 		} else {

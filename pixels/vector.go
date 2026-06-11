@@ -53,7 +53,7 @@ func nearlyEqual(a float64, b float64) bool {
 	absA := math.Abs(a)
 	absB := math.Abs(b)
 
-	return diff/math.Min(absA+absB, math.MaxFloat64) < epsilon
+	return diff/min(absA+absB, math.MaxFloat64) < epsilon
 }
 
 // Eq will compare two vectors and return whether they are equal accounting for rounding errors.  At worst, the result
@@ -221,8 +221,8 @@ func (l Line) Center() Vec {
 func (l Line) Closest(v Vec) Vec {
 	// between is a helper function which determines whether x is greater than min(a, b) and less than max(a, b)
 	between := func(a, b, x float64) bool {
-		min := math.Min(a, b)
-		max := math.Max(a, b)
+		min := min(a, b)
+		max := max(a, b)
 		return min < x && x < max
 	}
 

@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 const (

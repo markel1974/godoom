@@ -3,7 +3,7 @@ package open_gl
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
@@ -60,10 +60,10 @@ func (ob *OcclusionBuffer) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]fl
 		sw[i] = clipW
 	}
 
-	minX := int(math.Max(0, math.Min(float64(sx[0]), math.Min(float64(sx[1]), float64(sx[2])))))
-	minY := int(math.Max(0, math.Min(float64(sy[0]), math.Min(float64(sy[1]), float64(sy[2])))))
-	maxX := int(math.Min(float64(ob.width-1), math.Max(float64(sx[0]), math.Max(float64(sx[1]), float64(sx[2])))))
-	maxY := int(math.Min(float64(ob.height-1), math.Max(float64(sy[0]), math.Max(float64(sy[1]), float64(sy[2])))))
+	minX := int(max(0, min(float64(sx[0]), min(float64(sx[1]), float64(sx[2])))))
+	minY := int(max(0, min(float64(sy[0]), min(float64(sy[1]), float64(sy[2])))))
+	maxX := int(min(float64(ob.width-1), max(float64(sx[0]), max(float64(sx[1]), float64(sx[2])))))
+	maxY := int(min(float64(ob.height-1), max(float64(sy[0]), max(float64(sy[1]), float64(sy[2])))))
 
 	// Troviamo la profondità PEGGIORATIVA (il punto più lontano del triangolo).
 	// Garantisce che l'occlusione sia conservativa (non culliamo mai per sbaglio)
@@ -150,10 +150,10 @@ func (ob *OcclusionBuffer) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) b
 		}
 	}
 
-	minX := int(math.Max(0, float64(minScrX)))
-	minY := int(math.Max(0, float64(minScrY)))
-	maxX := int(math.Min(float64(ob.width-1), float64(maxScrX)))
-	maxY := int(math.Min(float64(ob.height-1), float64(maxScrY)))
+	minX := int(max(0, float64(minScrX)))
+	minY := int(max(0, float64(minScrY)))
+	maxX := int(min(float64(ob.width-1), float64(maxScrX)))
+	maxY := int(min(float64(ob.height-1), float64(maxScrY)))
 
 	if minX > maxX || minY > maxY {
 		return true // Fuori dal frustum laterale

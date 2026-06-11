@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Q1BSPReader is a reader for Quake 1 BSP files, providing access to lump data and associated metadata.

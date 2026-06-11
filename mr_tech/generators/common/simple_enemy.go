@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Enemy represents an in-game enemy with activation, attack cooldown, and wake-up behavior based on distance.

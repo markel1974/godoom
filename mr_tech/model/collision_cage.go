@@ -313,12 +313,12 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
 	// Calculate absolute extremes (Broad-Phase Swept Volume)
-	minX := s.cX - s.eRadX + math.Min(0, s.dX) //- s.margin
-	maxX := s.cX + s.eRadX + math.Max(0, s.dX) //+ s.margin
-	minY := s.cY - s.eRadY + math.Min(0, s.dY) //- s.margin
-	maxY := s.cY + s.eRadY + math.Max(0, s.dY) //+ s.margin
-	minZ := s.cZ - s.eRadZ + math.Min(0, s.dZ) //- s.margin
-	maxZ := s.cZ + s.eRadZ + math.Max(0, s.dZ) //+ s.margin
+	minX := s.cX - s.eRadX + min(0, s.dX) //- s.margin
+	maxX := s.cX + s.eRadX + max(0, s.dX) //+ s.margin
+	minY := s.cY - s.eRadY + min(0, s.dY) //- s.margin
+	maxY := s.cY + s.eRadY + max(0, s.dY) //+ s.margin
+	minZ := s.cZ - s.eRadZ + min(0, s.dZ) //- s.margin
+	maxZ := s.cZ + s.eRadZ + max(0, s.dZ) //+ s.margin
 
 	// Canonical mapping for Rect/AABB
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
@@ -490,11 +490,11 @@ func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY
 	rMaxY := rFaceAABB.GetMaxY() + offY
 	rMinZ := rFaceAABB.GetMinZ() + offZ
 	rMaxZ := rFaceAABB.GetMaxZ() + offZ
-	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
-	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
+	oX := max(0.0, min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
+	oY := max(0.0, min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
+	oZ := max(0.0, min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
 	// La reale penetrazione volumetrica massima possibile per questa specifica faccia
-	minOverlap := math.Min(oX, math.Min(oY, oZ))
+	minOverlap := min(oX, min(oY, oZ))
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }

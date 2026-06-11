@@ -1,9 +1,5 @@
 package physics
 
-import (
-	"math"
-)
-
 // IAABB represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
 type IAABB interface {
@@ -158,12 +154,12 @@ func (a *AABB) GetSurfaceArea() float64 {
 
 // GetSurfaceAreaMerged calculates the surface area of the bounding box formed by merging two AABBs.
 func (a *AABB) GetSurfaceAreaMerged(other *AABB) float64 {
-	minX := math.Min(a.minX, other.minX)
-	minY := math.Min(a.minY, other.minY)
-	minZ := math.Min(a.minZ, other.minZ)
-	maxX := math.Max(a.maxX, other.maxX)
-	maxY := math.Max(a.maxY, other.maxY)
-	maxZ := math.Max(a.maxZ, other.maxZ)
+	minX := min(a.minX, other.minX)
+	minY := min(a.minY, other.minY)
+	minZ := min(a.minZ, other.minZ)
+	maxX := max(a.maxX, other.maxX)
+	maxY := max(a.maxY, other.maxY)
+	maxZ := max(a.maxZ, other.maxZ)
 	w := maxX - minX
 	h := maxY - minY
 	d := maxZ - minZ
@@ -190,21 +186,21 @@ func (a *AABB) GetDepth() float64 {
 func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (float64, bool) {
 	t1 := (a.minX - oX) * invDirX
 	t2 := (a.maxX - oX) * invDirX
-	tMin := math.Min(t1, t2)
-	tMax := math.Max(t1, t2)
+	tMin := min(t1, t2)
+	tMax := max(t1, t2)
 
 	t1 = (a.minY - oY) * invDirY
 	t2 = (a.maxY - oY) * invDirY
-	tMin = math.Max(tMin, math.Min(t1, t2))
-	tMax = math.Min(tMax, math.Max(t1, t2))
+	tMin = max(tMin, min(t1, t2))
+	tMax = min(tMax, max(t1, t2))
 
 	t1 = (a.minZ - oZ) * invDirZ
 	t2 = (a.maxZ - oZ) * invDirZ
-	tMin = math.Max(tMin, math.Min(t1, t2))
-	tMax = math.Min(tMax, math.Max(t1, t2))
+	tMin = max(tMin, min(t1, t2))
+	tMax = min(tMax, max(t1, t2))
 
 	// Intersezione valida se tMax >= tMin e il volume è davanti al raggio (tMax >= 0)
-	if tMax >= math.Max(tMin, 0.0) {
+	if tMax >= max(tMin, 0.0) {
 		return tMin, true
 	}
 	return 0.0, false

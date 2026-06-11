@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 

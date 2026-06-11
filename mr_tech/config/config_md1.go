@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // MD1Vertex represents a single vertex in an MD1 3D model with position and texture coordinates.

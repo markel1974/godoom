@@ -1,6 +1,6 @@
 package config
 
-import "github.com/markel1974/godoom/mr_tech/model/geometry"
+import "github.com/markel1974/godoom/mr_tech/geometry"
 
 // Volume represents a 3D volume in a configuration, containing faces, lighting information, and a unique identifier.
 type Volume struct {

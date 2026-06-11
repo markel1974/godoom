@@ -1,24 +1,8 @@
-package mathematic
-
-// Min returns the smaller of two integer values a and b.
-func Min(a int, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// Max returns the greater of two integers, a and b.
-func Max(a int, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
+package geometry
 
 // Clamp constrains an integer value `a` to lie between `mi` and `ma`.
 func Clamp(a int, mi int, ma int) int {
-	return Min(Max(a, mi), ma)
+	return min(max(a, mi), ma)
 }
 
 // Vxs calculates the 2D cross product of vectors (x0, y0) and (x1, y1), returning the signed area of the parallelogram.
@@ -28,17 +12,17 @@ func Vxs(x0 int, y0 int, x1 int, y1 int) int {
 
 // FindMinAndMax returns the minimum and maximum values from the provided slice of integers.
 func FindMinAndMax(a []int) (int, int) {
-	min := a[0]
-	max := a[0]
+	minV := a[0]
+	maxV := a[0]
 	for _, value := range a {
-		if value < min {
-			min = value
+		if value < minV {
+			minV = value
 		}
-		if value > max {
-			max = value
+		if value > maxV {
+			maxV = value
 		}
 	}
-	return min, max
+	return minV, maxV
 }
 
 // Swap exchanges the values of two integers and returns them in reversed order.
@@ -48,7 +32,7 @@ func Swap(a int, b int) (int, int) {
 
 // Overlap checks if two ranges [a0, a1] and [b0, b1] overlap by comparing their minimum and maximum boundaries.
 func Overlap(a0 int, a1 int, b0 int, b1 int) bool {
-	return Min(a0, a1) <= Max(b0, b1) && Min(b0, b1) <= Max(a0, a1)
+	return min(a0, a1) <= max(b0, b1) && min(b0, b1) <= max(a0, a1)
 }
 
 // IntersectBox determines if two rectangular boxes overlap based on their edge coordinates. Returns true if overlapping.

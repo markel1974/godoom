@@ -2,7 +2,6 @@ package pixels
 
 import (
 	"github.com/markel1974/godoom/pixels/executor"
-	"math"
 )
 
 type GLPicture interface {
@@ -98,8 +97,8 @@ func acquirePicture(p IPicture, bx int, by int, bw int, bh int, bMinX float64, b
 		for y := 0; y < bh; y++ {
 			for x := 0; x < bw; x++ {
 				at := MakeVec(
-					math.Max(float64(bx+x), bMinX),
-					math.Max(float64(by+y), bMinY),
+					max(float64(bx+x), bMinX),
+					max(float64(by+y), bMinY),
 				)
 				color := p.Color(at)
 				off := (y*bw + x) * 4

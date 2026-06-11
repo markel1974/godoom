@@ -1,8 +1,7 @@
 package model
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -115,7 +114,7 @@ func (s *Segment) GetMaterialIndex(m int) *textures.Material {
 func (s *Segment) PointInLineSide(px, py float64) bool {
 	start := s.GetStart()
 	end := s.GetEnd()
-	dir := mathematic.PointInLineDirectionF(px, py, start.X, start.Y, end.X, end.Y)
+	dir := geometry.PointInLineDirectionF(px, py, start.X, start.Y, end.X, end.Y)
 	if dir < 0 {
 		return false
 	}

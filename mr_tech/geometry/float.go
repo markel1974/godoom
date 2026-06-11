@@ -1,28 +1,12 @@
-package mathematic
+package geometry
 
 import (
 	"math"
 )
 
-// MinF returns the smaller of two float64 values, a and b.
-func MinF(a float64, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// MaxF returns the greater of two float64 values, a and b. If a is greater than b, it returns a; otherwise, it returns b.
-func MaxF(a float64, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // ClampF restricts a float64 value to a specified range [mi, ma].
 func ClampF(a float64, mi float64, ma float64) float64 {
-	return MinF(MaxF(a, mi), ma)
+	return min(max(a, mi), ma)
 }
 
 // VxsF calculates the 2D cross product of two vectors defined by their components (x0, y0) and (x1, y1).
@@ -32,7 +16,7 @@ func VxsF(x0 float64, y0 float64, x1 float64, y1 float64) float64 {
 
 // OverlapF returns true if the intervals [a0, a1] and [b0, b1] overlap, otherwise it returns false.
 func OverlapF(a0 float64, a1 float64, b0 float64, b1 float64) bool {
-	return MinF(a0, a1) <= MaxF(b0, b1) && MinF(b0, b1) <= MaxF(a0, a1)
+	return min(a0, a1) <= max(b0, b1) && min(b0, b1) <= max(a0, a1)
 }
 
 // IntersectBoxF determines if two axis-aligned bounding boxes overlap based on their corner coordinates.

@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // CellKey represents a grid cell in a 2D spatial grid, defined by integer X and Y coordinates.
@@ -37,10 +37,10 @@ func NewSpatialGrid(sectors []*config.Sector, cellSize float64) *SpatialGrid {
 		v2 := geometry.XY{X: s.Segments[1].Start.X, Y: -s.Segments[1].Start.Y}
 		v3 := geometry.XY{X: s.Segments[2].Start.X, Y: -s.Segments[2].Start.Y}
 
-		minX := math.Min(v1.X, math.Min(v2.X, v3.X))
-		maxX := math.Max(v1.X, math.Max(v2.X, v3.X))
-		minY := math.Min(v1.Y, math.Min(v2.Y, v3.Y))
-		maxY := math.Max(v1.Y, math.Max(v2.Y, v3.Y))
+		minX := min(v1.X, min(v2.X, v3.X))
+		maxX := max(v1.X, max(v2.X, v3.X))
+		minY := min(v1.Y, min(v2.Y, v3.Y))
+		maxY := max(v1.Y, max(v2.Y, v3.Y))
 
 		startX := int(math.Floor(minX / cellSize))
 		endX := int(math.Floor(maxX / cellSize))

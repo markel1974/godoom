@@ -5,8 +5,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/mathematic"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
@@ -127,7 +126,7 @@ func (p *ThingPlayer) GetAngleFull() (float64, float64) {
 
 // SetPitch adjusts the player's pitch angle within the allowed range, affecting vertical view orientation.
 func (p *ThingPlayer) SetPitch(y float64) {
-	p.pitchState = mathematic.ClampF(p.pitchState-(y*p.pitchSens), p.pitchMin, p.pitchMax)
+	p.pitchState = geometry.ClampF(p.pitchState-(y*p.pitchSens), p.pitchMin, p.pitchMax)
 	p.pitch = p.pitchState
 }
 

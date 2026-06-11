@@ -1,6 +1,6 @@
 package config
 
-import "github.com/markel1974/godoom/mr_tech/model/geometry"
+import "github.com/markel1974/godoom/mr_tech/geometry"
 
 // Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type Sector struct {

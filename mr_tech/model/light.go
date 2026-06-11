@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/geometry"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -64,7 +64,7 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 		cl.outerCutOff = math.Cos(40 * math.Pi / 180.0)
 	}
 	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
-	cl.intensity = c.Intensity //math.Max(0.0, math.Min(1.0, intensity))
+	cl.intensity = c.Intensity //max(0.0, min(1.0, intensity))
 	cl.falloff = c.Falloff
 	if cl.falloff <= 0 {
 		cl.falloff = defaultFalloff

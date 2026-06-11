@@ -308,7 +308,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) 
 	// baumgarte stabilization ---
 	//const slop = 0.05
 	//const percent = 0.2
-	//bias := math.Max(penetration-slop, 0.0) * percent
+	//bias := max(penetration-slop, 0.0) * percent
 
 	// normal impulse (pure, without baumgarte bias)
 	impulse := -(1.0 + actualRestitution) * vRelDotN

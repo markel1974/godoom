@@ -81,7 +81,6 @@ func (a *AABBTree) InsertObject(object IAABB) {
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
 	a.insertLeaf(nodeIndex)
 	a.objectNodeIndexMap[object] = nodeIndex
-	//fmt.Println("INSERTING OBJECT", object.GetAABB().GetMinZ(), object.GetAABB().GetMaxZ())
 }
 
 // RemoveObject removes the specified object from the AABBTree if it exists.

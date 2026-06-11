@@ -45,6 +45,24 @@ func (r *BoundingBox) rebuild() {
 	r.aabb.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
+// GetAABB returns the axis-aligned bounding box (AABB) of the BoundingBox.
+func (r *BoundingBox) GetAABB() *AABB { return r.aabb }
+
+// GetWidth returns the width of the bounding box as a float64 value.
+func (r *BoundingBox) GetWidth() float64 { return r.size.GetWidth() }
+
+// GetHeight returns the height of the BoundingBox.
+func (r *BoundingBox) GetHeight() float64 { return r.size.GetHeight() }
+
+// GetDepth returns the depth value of the bounding box.
+func (r *BoundingBox) GetDepth() float64 { return r.size.GetDepth() }
+
+// GetSize returns the width, height, and depth of the bounding box as a tuple of three float64 values.
+func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.Get() }
+
+// GetZ returns the z-coordinate of the bottom-left point of the BoundingBox.
+func (r *BoundingBox) GetZ() float64 { return r.bottomLeft.z }
+
 // GetBottomLeft retrieves the x, y, and z coordinates of the bottom-left corner of the bounding box.
 func (r *BoundingBox) GetBottomLeft() (float64, float64, float64) {
 	return r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z
@@ -106,11 +124,6 @@ func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
 	return x, y, z
 }
 
-// IntersectBB checks if the current bounding box intersects with another bounding box.
-func (r *BoundingBox) IntersectBB(r2 *BoundingBox) bool {
-	return r.Intersect(r2.bottomLeft.x, r2.bottomLeft.y, r2.bottomLeft.z, r2.size.w, r2.size.h, r2.size.d)
-}
-
 // Distance computes the Euclidean distance between the entity and a specified collider entity.
 func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 	x1, y1, z1 := r.GetCenter()
@@ -136,20 +149,7 @@ func (r *BoundingBox) Intersect(x2, y2, z2, w2, h2, d2 float64) bool {
 	return true
 }
 
-// GetZ returns the z-coordinate of the bottom-left point of the BoundingBox.
-func (r *BoundingBox) GetZ() float64 { return r.bottomLeft.z }
-
-// GetWidth returns the width of the bounding box as a float64 value.
-func (r *BoundingBox) GetWidth() float64 { return r.size.GetWidth() }
-
-// GetHeight returns the height of the BoundingBox.
-func (r *BoundingBox) GetHeight() float64 { return r.size.GetHeight() }
-
-// GetDepth returns the depth value of the bounding box.
-func (r *BoundingBox) GetDepth() float64 { return r.size.GetDepth() }
-
-// GetSize returns the width, height, and depth of the bounding box as a tuple of three float64 values.
-func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.Get() }
-
-// GetAABB returns the axis-aligned bounding box (AABB) of the BoundingBox.
-func (r *BoundingBox) GetAABB() *AABB { return r.aabb }
+// IntersectBB checks if the current bounding box intersects with another bounding box.
+func (r *BoundingBox) IntersectBB(r2 *BoundingBox) bool {
+	return r.Intersect(r2.bottomLeft.x, r2.bottomLeft.y, r2.bottomLeft.z, r2.size.w, r2.size.h, r2.size.d)
+}

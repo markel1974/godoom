@@ -1,5 +1,7 @@
 package physics
 
+import "math"
+
 // BoundingBox represents a 3D rectangular region defined by its position, dimensions, and axis-aligned bounding box (AABB).
 type BoundingBox struct {
 	bottomLeft   *Point
@@ -22,8 +24,8 @@ func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 	return r
 }
 
-// Reset updates the bounding box's bottom-left position and size, and triggers a rebuild of its dependent properties.
-func (r *BoundingBox) Reset(x, y, z, w, h, d float64) {
+// Rebuild updates the bounding box's bottom-left position and size, and triggers a rebuild of its dependent properties.
+func (r *BoundingBox) Rebuild(x, y, z, w, h, d float64) {
 	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = x, y, z
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
@@ -107,6 +109,20 @@ func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
 // IntersectBB checks if the current bounding box intersects with another bounding box.
 func (r *BoundingBox) IntersectBB(r2 *BoundingBox) bool {
 	return r.Intersect(r2.bottomLeft.x, r2.bottomLeft.y, r2.bottomLeft.z, r2.size.w, r2.size.h, r2.size.d)
+}
+
+// Distance computes the Euclidean distance between the entity and a specified collider entity.
+func (r *BoundingBox) Distance(target *BoundingBox) float64 {
+	x1, y1, z1 := r.GetCenter()
+	x2, y2, z2 := target.GetCenter()
+	dx := x2 - x1
+	dy := y2 - y1
+	dz := z2 - z1
+	d := dx*dx + dy*dy + dz*dz
+	if d < 0.0001 {
+		return 0.01
+	}
+	return math.Sqrt(d)
 }
 
 // Intersect checks if the current bounding box intersects with another AABB defined by its position and dimensions.

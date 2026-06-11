@@ -74,7 +74,7 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 
 // GetDisplacement retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
 func (v *VerticesMultiSprite) GetDisplacement() (float64, float64, float64) {
-	return v.viewVolume.GetEntity().GetBottomLeft()
+	return v.viewVolume.GetEntity().GetBottomCenter()
 }
 
 // GetBillboard returns a constant value of 1.0, typically used to represent a uniform scaling factor for billboards.

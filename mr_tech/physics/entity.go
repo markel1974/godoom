@@ -22,8 +22,6 @@ const (
 
 	// dt120 represents the fixed time step duration equivalent to 1/120th of a second.
 	dt120 float64 = 1.0 / 120.0
-
-	dt = dt60
 )
 
 var _globalId int64 = -1
@@ -45,11 +43,11 @@ type Entity struct {
 	ay                float64
 	az                float64
 	vMin              float64
-	frictionGround    float64
-	frictionAir       float64
+	groundFriction    float64
+	airFriction       float64
 	frictionActive    float64
-	dampingAir        float64
-	dampingGround     float64
+	airDamping        float64
+	groundDamping     float64
 	dampingActive     float64
 	gForce            float64
 	restitution       float64
@@ -61,7 +59,7 @@ type Entity struct {
 }
 
 // NewEntity creates and returns a pointer to a new Entity initialized with the given position, size, mass, and physical properties.
-func NewEntity(mass, restitution, friction, gForce float64) *Entity {
+func NewEntity(mass, restitution, groundFriction, gForce float64) *Entity {
 	if restitution <= 0.0 {
 		restitution = 0.2
 	}
@@ -77,41 +75,33 @@ func NewEntity(mass, restitution, friction, gForce float64) *Entity {
 		gForce:           gForce,
 		vMin:             vMin,
 		sleepThresholdSq: vMin * vMin,
-		dt:               dt,
 		mass:             mass,
 		invMass:          invMass,
 		restitution:      restitution,
+		onGround:         false,
 	}
-	a.SetFriction(friction)
-	a.SetAirFriction(airFriction)
-	a.SetMaxVelocity(minThickness, safetyMargin)
+	a.SetOptions(dt60, groundFriction, airFriction)
 	a.SetOnGround(false)
 	return a
 }
 
-// Rebuild updates the entity's rectangular attributes and triggers a rebuild operation.
-func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
-	e.bb.Reset(x, y, z, w, h, d)
-}
-
-// SetSize updates the dimensions of the entity with the specified width, height, and depth.
-func (e *Entity) SetSize(w, h, d float64) {
-	e.bb.SetSize(w, h, d)
-}
-
-// SetBoundingBox sets the BoundingBox of the entity to the provided BoundingBox value.
-func (e *Entity) SetBoundingBox(bb *BoundingBox) {
-	e.bb = bb
-}
-
-// GetBoundingBox returns the BoundingBox instance associated with the Entity, representing its position, size, and bounding box.
-func (e *Entity) GetBoundingBox() *BoundingBox {
-	return e.bb
-}
-
-// GetDt retrieves the delta time (dt) value associated with the entity's current state.
-func (e *Entity) GetDt() float64 {
-	return e.dt
+// SetOptions configures ground friction, air friction, minimum thickness, and safety margin for the entity.
+func (e *Entity) SetOptions(dt, gFriction, aFriction float64) {
+	e.dt = dt
+	e.groundFriction = gFriction
+	e.groundDamping = math.Pow(e.groundFriction, e.dt)
+	e.airFriction = aFriction
+	e.airDamping = math.Pow(e.airFriction, e.dt)
+	if e.airDamping >= 1.0 {
+		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
+		e.terminalZVelocity = -math.MaxFloat64
+	} else {
+		// Calcolo dell'asintoto dell'integratore
+		e.terminalZVelocity = (-e.gForce * e.dt * e.airDamping) / (1.0 - e.airDamping)
+	}
+	maxVelocity := (minThickness * safetyMargin) / e.dt
+	e.maxVelocitySq = maxVelocity * maxVelocity
+	e.SetOnGround(e.onGround)
 }
 
 // Stop sets the entity's velocity components (vx, vy, vz) to zero, effectively halting its movement.
@@ -121,58 +111,21 @@ func (e *Entity) Stop() {
 	e.vz = 0.0
 }
 
-// MoveTo sets the entity's position to the specified x, y, and z coordinates.
-func (e *Entity) MoveTo(x float64, y float64, z float64) {
-	e.bb.MoveTo(x, y, z)
-}
-
-// AddTo updates the position of the entity by adding the given x, y, and z offsets.
-func (e *Entity) AddTo(x float64, y float64, z float64) {
-	e.bb.AddTo(x, y, z)
-}
-
-// MoveToZ updates the z-coordinate of the Entity's position by delegating to its internal BoundingBox instance.
-func (e *Entity) MoveToZ(z float64) {
-	e.bb.MoveToZ(z)
-}
-
-// SetFriction sets the friction coefficient for the entity and updates its current friction value.
-func (e *Entity) SetFriction(f float64) {
-	e.frictionGround = f
-	e.dampingGround = math.Pow(e.frictionGround, e.dt)
-	e.SetOnGround(e.onGround)
-}
-
-// SetAirFriction sets the air friction value and updates the active air friction for the entity.
-func (e *Entity) SetAirFriction(f float64) {
-	e.frictionAir = f
-	e.dampingAir = math.Pow(e.frictionAir, e.dt)
-	if e.dampingAir >= 1.0 {
-		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
-		e.terminalZVelocity = -math.MaxFloat64
-	} else {
-		// Calcolo dell'asintoto dell'integratore
-		e.terminalZVelocity = (-e.gForce * e.dt * e.dampingAir) / (1.0 - e.dampingAir)
-	}
-	e.SetOnGround(e.onGround)
-}
-
-// SetMaxVelocity calculates and sets the maximum velocity squared based on the entity's time step and given parameters.
-func (e *Entity) SetMaxVelocity(minThickness float64, safetyMargin float64) {
-	maxVelocity := (minThickness * safetyMargin) / e.dt
-	e.maxVelocitySq = maxVelocity * maxVelocity
+// SetDt updates the delta time parameter and recalculates the entity's options using ground and air friction values.
+func (e *Entity) SetDt(dt float64) {
+	e.SetOptions(dt, e.groundFriction, e.airFriction)
 }
 
 // SetOnGround sets the onGround state of the entity to the specified boolean value.
 func (e *Entity) SetOnGround(onGround bool) {
 	e.onGround = onGround
 	if e.onGround {
-		e.frictionActive = e.frictionGround
-		e.dampingActive = e.dampingGround
+		e.frictionActive = e.groundFriction
+		e.dampingActive = e.groundDamping
 		//e.vz = 0.0
 	} else {
-		e.frictionActive = e.frictionAir
-		e.dampingActive = e.dampingAir
+		e.frictionActive = e.airFriction
+		e.dampingActive = e.airDamping
 	}
 }
 
@@ -233,6 +186,73 @@ func (e *Entity) GetId() uint64 {
 	return e.id
 }
 
+// GetDt returns the value of the dt1 field as a float64.
+func (e *Entity) GetDt() float64 {
+	return e.dt
+}
+
+// GetInvMass returns the inverse mass of the entity, which is the reciprocal of its mass.
+func (e *Entity) GetInvMass() float64 {
+	return e.invMass
+}
+
+// GetMass retrieves the mass of the entity. It returns the mass as a float64 value.
+func (e *Entity) GetMass() float64 {
+	return e.mass
+}
+
+// GetRestitution returns the restitution coefficient of the entity, which determines its bounciness upon collision.
+func (e *Entity) GetRestitution() float64 {
+	return e.restitution
+}
+
+// GetGForce returns the gravitational force acting on the entity.
+func (e *Entity) GetGForce() float64 {
+	return e.gForce
+}
+
+// GetVelocity retrieves the velocity components of the entity along the x, y, and z axes.
+func (e *Entity) GetVelocity() (float64, float64, float64) {
+	return e.vx, e.vy, e.vz
+}
+
+// GetDisplacement computes the displacement of an entity based on its velocity and time step. Returns dx, dy, dz.
+func (e *Entity) GetDisplacement() (float64, float64, float64) {
+	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
+}
+
+// AddForce applies a force vector (fx, fy, fz) to the entity, modifying its acceleration based on its inverse mass.
+func (e *Entity) AddForce(fx, fy, fz float64) {
+	e.ax += fx * e.invMass
+	e.ay += fy * e.invMass
+	e.az += fz * e.invMass
+}
+
+// GetAABB returns the axis-aligned bounding box (AABB) of the entity.
+func (e *Entity) GetAABB() *AABB {
+	return e.bb.GetAABB()
+}
+
+// Rebuild updates the entity's rectangular attributes and triggers a rebuild operation.
+func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
+	e.bb.Rebuild(x, y, z, w, h, d)
+}
+
+// SetSize updates the dimensions of the entity with the specified width, height, and depth.
+func (e *Entity) SetSize(w, h, d float64) {
+	e.bb.SetSize(w, h, d)
+}
+
+// GetCenter returns the 3D center coordinates (x, y, z) of the Entity's bounding rectangle.
+func (e *Entity) GetCenter() (float64, float64, float64) {
+	return e.bb.GetCenter()
+}
+
+// GetBottomCenter retrieves the x, y, and z coordinates of the bottom-center point of the entity's bounding rectangle.
+func (e *Entity) GetBottomCenter() (float64, float64, float64) {
+	return e.bb.GetBottomCenter()
+}
+
 // GetBottomLeft returns the x, y, and z coordinates of the bottom-left corner of the entity's rectangular area.
 func (e *Entity) GetBottomLeft() (float64, float64, float64) {
 	return e.bb.GetBottomLeft()
@@ -253,44 +273,24 @@ func (e *Entity) GetHeight() float64 {
 	return e.bb.GetHeight()
 }
 
-// GetInvMass returns the inverse mass of the entity, which is the reciprocal of its mass.
-func (e *Entity) GetInvMass() float64 {
-	return e.invMass
-}
-
-// GetMass retrieves the mass of the entity. It returns the mass as a float64 value.
-func (e *Entity) GetMass() float64 {
-	return e.mass
-}
-
-// GetRestitution returns the restitution coefficient of the entity, which determines its bounciness upon collision.
-func (e *Entity) GetRestitution() float64 {
-	return e.restitution
-}
-
-// GetAABB returns the axis-aligned bounding box (AABB) of the entity.
-func (e *Entity) GetAABB() *AABB {
-	return e.bb.GetAABB()
-}
-
-// GetCenter returns the 3D center coordinates (x, y, z) of the Entity's bounding rectangle.
-func (e *Entity) GetCenter() (float64, float64, float64) {
-	return e.bb.GetCenter()
-}
-
-// GetBottomCenter retrieves the x, y, and z coordinates of the bottom-center point of the entity's bounding rectangle.
-func (e *Entity) GetBottomCenter() (float64, float64, float64) {
-	return e.bb.GetBottomCenter()
-}
-
 // GetDepth returns the depth of the entity's bounding rectangle.
 func (e *Entity) GetDepth() float64 {
 	return e.bb.GetDepth()
 }
 
-// GetGForce returns the gravitational force acting on the entity.
-func (e *Entity) GetGForce() float64 {
-	return e.gForce
+// MoveTo sets the entity's position to the specified x, y, and z coordinates.
+func (e *Entity) MoveTo(x float64, y float64, z float64) {
+	e.bb.MoveTo(x, y, z)
+}
+
+// AddTo updates the position of the entity by adding the given x, y, and z offsets.
+func (e *Entity) AddTo(x float64, y float64, z float64) {
+	e.bb.AddTo(x, y, z)
+}
+
+// MoveToZ updates the z-coordinate of the Entity's position by delegating to its internal BoundingBox instance.
+func (e *Entity) MoveToZ(z float64) {
+	e.bb.MoveToZ(z)
 }
 
 // HasCollision checks if the current entity's rectangular boundaries intersect with the specified entity's boundaries.
@@ -299,34 +299,8 @@ func (e *Entity) HasCollision(obj2 *Entity) bool {
 }
 
 // Distance computes the Euclidean distance between the entity and a specified collider entity.
-func (e *Entity) Distance(collider *Entity) float64 {
-	x1, y1, z1 := e.bb.GetCenter()
-	x2, y2, z2 := collider.bb.GetCenter()
-	dx := x2 - x1
-	dy := y2 - y1
-	dz := z2 - z1
-	d := dx*dx + dy*dy + dz*dz
-	if d < 0.0001 {
-		return 0.01
-	}
-	return math.Sqrt(d)
-}
-
-// GetVelocity retrieves the velocity components of the entity along the x, y, and z axes.
-func (e *Entity) GetVelocity() (float64, float64, float64) {
-	return e.vx, e.vy, e.vz
-}
-
-// GetDisplacement computes the displacement of an entity based on its velocity and time step. Returns dx, dy, dz.
-func (e *Entity) GetDisplacement() (float64, float64, float64) {
-	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
-}
-
-// AddForce applies a force vector (fx, fy, fz) to the entity, modifying its acceleration based on its inverse mass.
-func (e *Entity) AddForce(fx, fy, fz float64) {
-	e.ax += fx * e.invMass
-	e.ay += fy * e.invMass
-	e.az += fz * e.invMass
+func (e *Entity) Distance(target *Entity) float64 {
+	return e.bb.Distance(target.bb)
 }
 
 // Update updates the entity's velocity and position based on applied forces, damping, gravity, and constraints.
@@ -353,9 +327,9 @@ func (e *Entity) Update() {
 		return
 	}
 
-	e.vx *= e.dampingGround //e.dampingActive
-	e.vy *= e.dampingGround //e.dampingActive
-	e.vz *= e.dampingAir
+	e.vx *= e.groundDamping //e.dampingActive
+	e.vy *= e.groundDamping //e.dampingActive
+	e.vz *= e.airDamping
 	// SLEEP PLANARE Azzeriamo solo XY per fermare i micro-scivolamenti (jittering).
 	if math.Abs(e.vx) < e.vMin {
 		e.vx = 0.0

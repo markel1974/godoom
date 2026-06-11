@@ -117,7 +117,7 @@ func (v *VerticesSprite) SetAction(idx int) {
 
 // GetDisplacement retrieves the bottom-left coordinates of the entity associated with the VerticesSprite's Volume.
 func (v *VerticesSprite) GetDisplacement() (float64, float64, float64) {
-	return v.volume.entity.GetBottomLeft()
+	return v.volume.entity.GetBottomCenter()
 }
 
 // GetBillboard retrieves the billboard value associated with the Face instance.

@@ -209,7 +209,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.GetEntity().GetId() == existing.rCage.GetEntity().GetId() {
+			if rCage.GetThing().GetEntity().GetId() == existing.rCage.GetThing().GetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
@@ -566,6 +566,3 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
 func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
-
-// GetEntity returns the physics.Entity associated with the CollisionCage.
-func (s *CollisionCage) GetEntity() *physics.Entity { return s.ellipsoid }

@@ -56,7 +56,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		isActive:     true,
 		inbox:        make(chan *ThingEvent, 16),
 		done:         make(chan struct{}),
-		cage:         NewCollisionCage(thing), //, cageMargin),
+		cage:         nil,
 		onImpact:     cfg.OnImpact,
 		onCollision:  cfg.OnCollision,
 	}
@@ -65,6 +65,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 	entity.SetOnGround(false)
 	//TODO FROM CONFIG
 	t.maxStep = entity.GetDepth() * 0.5 //cfg.Height * 0.5,
+	t.cage = NewCollisionCage(thing)    //, cageMargin),
 	return t
 }
 

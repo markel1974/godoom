@@ -70,8 +70,8 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
 	s.tree.QueryOverlaps(cage, func(object physics.IAABB) bool {
 		vol := object.(*Volume)
 		vol.QueryOverlaps(cage, func(otherEnt physics.IAABB) bool {
-			face := otherEnt.(*Face)
-			cage.AddFace(face)
+			rFace := otherEnt.(*Face)
+			cage.AddFace(rFace, nil)
 			return false
 		})
 		cage.Commit(nil)

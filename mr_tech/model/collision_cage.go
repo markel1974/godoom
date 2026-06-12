@@ -336,7 +336,8 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 }
 
 // AddFace adds a face to the CollisionCage, expanding the storage if necessary to accommodate new entries.
-func (s *CollisionCage) AddFace(rFace *Face) {
+func (s *CollisionCage) AddFace(rFace *Face, lFace *Face) {
+	//TODO IMPLEMENT lFace
 	if s.facesIdx >= len(s.faces) {
 		n := make([]*Face, len(s.faces)*2)
 		copy(n, s.faces)
@@ -482,10 +483,9 @@ func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFa
 	}
 }
 
-// TranslateWorldToLocalAABB translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
-func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCage) *physics.Entity {
+// TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
+func (s *CollisionCage) TranslateWorldToLocal(slot int, to *physics.AABB) *physics.Entity {
 	from := s.ellipsoid.GetAABB()
-	to := target.GetAABB() // target anchor
 	offX := to.GetMinX()
 	offY := to.GetMinY()
 	offZ := to.GetMinZ()
@@ -495,6 +495,22 @@ func (s *CollisionCage) TranslateWorldToLocalAABB(slot int, target *CollisionCag
 	lMaxY := from.GetMaxY() - offY
 	lMinZ := from.GetMinZ() - offZ
 	lMaxZ := from.GetMaxZ() - offZ
+	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return s.ellipsoidLocal[slot]
+}
+
+// TranslateLocalToWorld translates an AABB from local space to world space for a given collision slot and updates its geometry.
+func (s *CollisionCage) TranslateLocalToWorld(slot int, to *physics.AABB) *physics.Entity {
+	from := s.ellipsoid.GetAABB()
+	offX := to.GetMinX()
+	offY := to.GetMinY()
+	offZ := to.GetMinZ()
+	lMinX := from.GetMinX() + offX
+	lMaxX := from.GetMaxX() + offX
+	lMinY := from.GetMinY() + offY
+	lMaxY := from.GetMaxY() + offY
+	lMinZ := from.GetMinZ() + offZ
+	lMaxZ := from.GetMaxZ() + offZ
 	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
 	return s.ellipsoidLocal[slot]
 }

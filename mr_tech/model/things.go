@@ -102,19 +102,28 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 
-		rVolume := rThing.GetVolume()
-		aabb := lCage.TranslateWorldToLocalAABB(0, rCage)
-		rVolume.QueryOverlaps(aabb, func(rEnt physics.IAABB) bool {
+		lEntityL := lCage.TranslateWorldToLocal(0, rCage.GetAABB())
+		//lEntityL := rCage.TranslateWorldToLocal(0, lCage.GetAABB())
+
+		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
+			rEntityW := rCage.TranslateLocalToWorld(1, rFace.GetAABB())
+			rEntityL := lCage.TranslateWorldToLocal(2, rEntityW.GetAABB())
+			lThing.GetVolume().QueryOverlaps(rEntityL, func(rEnt physics.IAABB) bool {
+				lFace := rEnt.(*Face)
+				// Integrazione nel Manifold
+				lCage.AddFace(rFace, lFace)
+				return false
+			})
+			return false
 
 			// Integrazione nel Manifold
-			lCage.AddFace(rFace)
-			return false
+			//lCage.AddFace(rFace, nil)
+			//return false
 		})
 		lCage.Commit(rCage)
 		return false
 	})
-
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.

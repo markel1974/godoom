@@ -74,7 +74,7 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
 			cage.AddFace(face)
 			return false
 		})
-		cage.CommitStatic()
+		cage.Commit(nil)
 		return false
 	})
 }

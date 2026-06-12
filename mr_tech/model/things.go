@@ -84,7 +84,7 @@ func (th *Things) Len() int {
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
-	lThing := lCage.GetObject().(IThing)
+	lThing := lCage.GetThing()
 
 	// Collisioni Dinamiche (Broad-Phase contro l'AABB Tree globale)
 	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
@@ -106,11 +106,12 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		aabb := lCage.TranslateWorldToLocalAABB(0, rCage)
 		rVolume.QueryOverlaps(aabb, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
+
 			// Integrazione nel Manifold
 			lCage.AddFace(rFace)
 			return false
 		})
-		lCage.CommitDynamic(rCage)
+		lCage.Commit(rCage)
 		return false
 	})
 

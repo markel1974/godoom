@@ -7,14 +7,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// ImpactStep is a constant representing a collision mode where the entity encounters a step or small height difference.
-const ImpactStep = 1
+const (
+	// ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
+	ImpactInelastic = 1
+	// ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
+	ImpactElastic = 2
+	// ImpactStep is a constant representing a collision mode where the entity encounters a step or small height difference.
+	ImpactStep = 3
+)
 
-// ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
-const ImpactInelastic = 2
-
-// ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
-const ImpactElastic = 3
+const satFilterEpsilon = 0.05
 
 // BucketType represents the type of bucket categorizing spatial elements such as walls, ceiling, and floor in 3D space.
 type BucketType int
@@ -67,10 +69,6 @@ const (
 	FacesPerBucket = 4
 	TotalSlots     = BucketSize * FacesPerBucket
 )
-
-type ICageObject interface {
-	GetEntity() *physics.Entity
-}
 
 // CageEntry represents a single entry within a collision cage, storing data about collisions and their properties.
 type CageEntry struct {
@@ -147,7 +145,7 @@ func (s *CageEntry) Penetrable() bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.GetObject().GetEntity().GetId())
+	return v.Penetrable(s.lCage.GetThing().GetEntity().GetId())
 }
 
 // CollisionBucket represents a storage container for collision detection entities within a specific spatial bucket.
@@ -192,7 +190,7 @@ func (b *CollisionBucket) Penetrable(from uint64) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.GetObject().GetEntity().GetId() == from {
+		if entry.rCage != nil && entry.rCage.GetThing().GetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -213,7 +211,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.GetObject().GetEntity().GetId() == existing.rCage.GetObject().GetEntity().GetId() {
+			if rCage.GetThing().GetEntity().GetId() == existing.rCage.GetThing().GetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
@@ -258,7 +256,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 // CollisionCage represents a spatial structure used for managing collision detection and resolution in a 3D environment.
 type CollisionCage struct {
 	seen                map[*CollisionCage]bool
-	object              ICageObject
+	object              IThing
 	buckets             [BucketSize]*CollisionBucket
 	ellipsoid           *physics.Entity
 	ellipsoidLocal      [4]*physics.Entity
@@ -277,7 +275,7 @@ type CollisionCage struct {
 }
 
 // NewCollisionCage initializes and returns a pointer to a new CollisionCage instance for the provided IThing entity.
-func NewCollisionCage(object ICageObject) *CollisionCage {
+func NewCollisionCage(object IThing) *CollisionCage {
 	c := &CollisionCage{
 		seen:       make(map[*CollisionCage]bool),
 		object:     object,
@@ -348,61 +346,33 @@ func (s *CollisionCage) AddFace(rFace *Face) {
 	s.facesIdx++
 }
 
-const epsilon = 0.05
-
-// CommitStatic processes static collision detection between the entity and the environment using SAT filtering logic.
-func (s *CollisionCage) CommitStatic() {
+// Commit resolves collisions between the current CollisionCage and an optional target CollisionCage.
+func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	lAABB := s.ellipsoid.GetAABB()
+
 	for x := 0; x < s.facesIdx; x++ {
 		face := s.faces[x]
-		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
-		// Volume Priority
-		if dist < s.distance {
-			if volume := face.GetParent(); volume != nil {
-				s.volume = volume
-				s.distance = dist
-			}
-		}
-		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
-		// we are intersecting the projection of a phantom orthogonal plane. Discard it.
-		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
-			continue
-		}
 		_, texKind := face.GetMaterialDetails()
 		if texKind == int(config.MaterialKindSky) {
 			continue // Skybox/transparent: ignore collision
 		}
-		iMode := ImpactInelastic
-		if b.IsWall() {
-			baseZ := s.GetBaseZ()
-			if rMaxZ <= baseZ { // down-hill (going downhill)
-				continue
-			}
-			stepZ := baseZ + s.maxStep
-			if rMaxZ <= stepZ { // up-hill (climbable step)
-				iMode = ImpactStep
-			}
-		}
-		s.addToBucket(b, nil, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
-	}
-	s.facesIdx = 0
-}
-
-// CommitDynamic processes elastic collisions between the current CollisionCage and a reference CollisionCage.
-func (s *CollisionCage) CommitDynamic(rCage *CollisionCage) {
-	lAABB := s.ellipsoid.GetAABB()
-	offX, offY, offZ := rCage.ellipsoid.GetCenter()
-	for x := 0; x < s.facesIdx; x++ {
-		face := s.faces[x]
-		_, texKind := face.GetMaterialDetails()
-		if texKind == int(config.MaterialKindSky) {
-			continue
-		}
-		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, offX, offY, offZ)
-		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
-			continue
-		}
+		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
+		// Volume Priority
 		iMode := ImpactElastic
+		if rCage == nil {
+			iMode = ImpactInelastic
+			if dist < s.distance {
+				if volume := face.GetParent(); volume != nil {
+					s.volume = volume
+					s.distance = dist
+				}
+			}
+		}
+		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
+		// we are intersecting the projection of a phantom orthogonal plane. Discard it.
+		if pen > minOverlap+satFilterEpsilon { // SAT filter (Anti-Phantom Plane)
+			continue
+		}
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
 			if rMaxZ <= baseZ { // down-hill (going downhill)
@@ -548,8 +518,8 @@ func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
 // GetSlot retrieves the CageEntry at the specified index from the slots array in the CollisionCage.
 func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
 
-// GetObject returns the ICageObject instance contained within the CollisionCage.
-func (s *CollisionCage) GetObject() ICageObject { return s.object }
+// GetThing returns the IThing object associated with the CollisionCage.
+func (s *CollisionCage) GetThing() IThing { return s.object }
 
 // GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
 //func (s *CollisionCage) GetMargin() float64 { return s.margin }

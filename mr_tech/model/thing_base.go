@@ -135,9 +135,7 @@ func (t *ThingBase) StagePrepare() bool {
 	return true
 }
 
-// StageResolve esegue la Fase Cinetica (Velocity Solver) dell'architettura split-solver.
-// Calcola gli impulsi per risolvere gli urti elastici e l'attrito, demandando la correzione
-// posizionale allo StageApply. solverJitter assorbe le fluttuazioni numeriche in virgola mobile.
+// StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
 func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 	slotsLen := t.cage.GetSlotsLen()
 	if slotsLen == 0 {
@@ -209,7 +207,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			continue
 		case ImpactElastic:
 			rMovable = true
-			//penetrable = slot.Penetrable()
+			//rMovable = slot.Penetrable()
 		case ImpactInelastic:
 			rMovable = false
 		}
@@ -262,36 +260,6 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			}
 		}
 
-		/*
-			if !penetrable {
-				penetration := slot.GetPenetration()
-				depth := penetration - slop
-				// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
-				if depth > 0.0 {
-					correction := depth * positionalPercent
-					correction += solverJitter
-					nX, nY, nZ := slot.GetNormal()
-					entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
-				}
-			} else {
-				//if t.GetId() == "PLAYER" {
-					//IL BUG E' LEGATO AL FATTO CHE NELLA COLLISION CAGE
-					//NON VIENE PRESA IN CONSIDERAZIONE LA NORMALE DI SPOSTAMENTO,
-					//E NON VIENE PRESA IN CONSIDERAZIONE LA FACCIA PIU PROBABILE
-
-					//	nX, nY, nZ := slot.GetNormal()
-					//	vrx, vry, vrz := entity.GetVelocity()
-					//	vRelDotN := vrx*nX + vry*nY + vrz*nZ
-					//	fmt.Println("VRELDOTN: ", vRelDotN)
-					//	fmt.Println("VEL: ", vrx, vry, vrz)
-					//	fmt.Println("NORMAL: ", nX, nY, nZ)
-					//	fmt.Println("-------------------------")
-
-				//}
-			}
-
-		*/
-
 		rFace := slot.GetRemoteFace()
 		rParent := rFace.GetParent()
 		if thing := rParent.GetThing(); thing != nil {
@@ -301,11 +269,11 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
-func (t *ThingBase) MoveTowards(dirX, dirY, targetSpeed, accelForce float64) {
+func (t *ThingBase) MoveTowards(dirX, dirY, speed, accelForce float64) {
 	entity := t.GetEntity()
 	vx, vy, _ := entity.GetVelocity()
-	desiredVx := dirX * targetSpeed
-	desiredVy := dirY * targetSpeed
+	desiredVx := dirX * speed
+	desiredVy := dirY * speed
 	deltaVx := desiredVx - vx
 	deltaVy := desiredVy - vy
 	entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)

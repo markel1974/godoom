@@ -32,79 +32,6 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxZ = maxZ
 }
 
-// MergeInPlace updates the current AABB to encompass the union of the specified source and other AABBs.
-func (a *AABB) MergeInPlace(src, other *AABB) {
-	minX := min(src.minX, other.minX)
-	minY := min(src.minY, other.minY)
-	minZ := min(src.minZ, other.minZ)
-	maxX := max(src.maxX, other.maxX)
-	maxY := max(src.maxY, other.maxY)
-	maxZ := max(src.maxZ, other.maxZ)
-	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-}
-
-// ExpandInPlace recalculates and updates the AABB by expanding it in all directions by the specified margin.
-func (a *AABB) ExpandInPlace(src *AABB, margin float64) {
-	minX := src.minX - margin
-	minY := src.minY - margin
-	minZ := src.minZ - margin
-	maxX := src.maxX + margin
-	maxY := src.maxY + margin
-	maxZ := src.maxZ + margin
-	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-}
-
-// IntersectInPlace updates the AABB in place to represent the intersection volume of the source and other AABB.
-func (a *AABB) IntersectInPlace(src, other *AABB) {
-	minX := max(src.minX, other.minX)
-	minY := max(src.minY, other.minY)
-	minZ := max(src.minZ, other.minZ)
-	maxX := min(src.maxX, other.maxX)
-	maxY := min(src.maxY, other.maxY)
-	maxZ := min(src.maxZ, other.maxZ)
-	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
-}
-
-// Overlaps checks if the current AABB intersects with another AABB and returns true if an overlap exists.
-func (a *AABB) Overlaps(other *AABB) bool {
-	// y is deliberately first in the list of checks below as it is seen as more likely than things
-	// collide on x,z but not on y than they do on y, thus we drop sooner on a y fail
-	return a.maxX > other.minX &&
-		a.minX < other.maxX &&
-		a.maxY > other.minY &&
-		a.minY < other.maxY &&
-		a.maxZ > other.minZ &&
-		a.minZ < other.maxZ
-}
-
-// ContainsPoint2d checks if the given 2D point (px, py) lies within the bounds of the AABB instance.
-func (a *AABB) ContainsPoint2d(px, py float64) bool {
-	return a.maxX >= px &&
-		a.minX <= px &&
-		a.maxY >= py &&
-		a.minY <= py
-}
-
-// ContainsPoint3d checks if the AABB contains the specified 3D point (px, py, pz) and returns true if it does.
-func (a *AABB) ContainsPoint3d(px, py, pz float64) bool {
-	return px >= a.minX &&
-		px <= a.maxX &&
-		py >= a.minY &&
-		py <= a.maxY &&
-		pz >= a.minZ &&
-		pz <= a.maxZ
-}
-
-// Contains checks if the given AABB is fully enclosed within the boundaries of the current AABB.
-func (a *AABB) Contains(other *AABB) bool {
-	return other.minX >= a.minX &&
-		other.maxX <= a.maxX &&
-		other.minY >= a.minY &&
-		other.maxY <= a.maxY &&
-		other.minZ >= a.minZ &&
-		other.maxZ <= a.maxZ
-}
-
 // GetWidth calculates and returns the width of the AABB by subtracting minX from maxX.
 func (a *AABB) GetWidth() float64 {
 	return a.maxX - a.minX
@@ -133,6 +60,21 @@ func (a *AABB) GetMinX() float64 {
 // GetMaxX returns the maximum x-coordinate (maxX) of the AABB.
 func (a *AABB) GetMaxX() float64 {
 	return a.maxX
+}
+
+// GetMinZ returns the minimum Z-coordinate of the AABB.
+func (a *AABB) GetMinZ() float64 {
+	return a.minZ
+}
+
+// GetMaxZ returns the maximum Z-coordinate of the axis-aligned bounding box.
+func (a *AABB) GetMaxZ() float64 {
+	return a.maxZ
+}
+
+// GetDepth calculates and returns the depth of the AABB as the difference between maxZ and minZ.
+func (a *AABB) GetDepth() float64 {
+	return a.maxZ - a.minZ
 }
 
 // GetCentroid calculates and returns the centroid (center point) of the AABB as (x, y, z) coordinates.
@@ -167,19 +109,77 @@ func (a *AABB) GetSurfaceAreaMerged(other *AABB) float64 {
 	return out
 }
 
-// GetMinZ returns the minimum Z-coordinate of the AABB.
-func (a *AABB) GetMinZ() float64 {
-	return a.minZ
+// MergeInPlace updates the current AABB to encompass the union of the specified source and other AABBs.
+func (a *AABB) MergeInPlace(src, other *AABB) {
+	minX := min(src.minX, other.minX)
+	minY := min(src.minY, other.minY)
+	minZ := min(src.minZ, other.minZ)
+	maxX := max(src.maxX, other.maxX)
+	maxY := max(src.maxY, other.maxY)
+	maxZ := max(src.maxZ, other.maxZ)
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
-// GetMaxZ returns the maximum Z-coordinate of the axis-aligned bounding box.
-func (a *AABB) GetMaxZ() float64 {
-	return a.maxZ
+// ExpandInPlace recalculates and updates the AABB by expanding it in all directions by the specified margin.
+func (a *AABB) ExpandInPlace(src *AABB, margin float64) {
+	minX := src.minX - margin
+	minY := src.minY - margin
+	minZ := src.minZ - margin
+	maxX := src.maxX + margin
+	maxY := src.maxY + margin
+	maxZ := src.maxZ + margin
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
-// GetDepth calculates and returns the depth of the AABB as the difference between maxZ and minZ.
-func (a *AABB) GetDepth() float64 {
-	return a.maxZ - a.minZ
+// Contains checks if the given AABB is fully enclosed within the boundaries of the current AABB.
+func (a *AABB) Contains(other *AABB) bool {
+	return other.minX >= a.minX &&
+		other.maxX <= a.maxX &&
+		other.minY >= a.minY &&
+		other.maxY <= a.maxY &&
+		other.minZ >= a.minZ &&
+		other.maxZ <= a.maxZ
+}
+
+// ContainsPoint2d checks if the given 2D point (px, py) lies within the bounds of the AABB instance.
+func (a *AABB) ContainsPoint2d(px, py float64) bool {
+	return a.maxX >= px &&
+		a.minX <= px &&
+		a.maxY >= py &&
+		a.minY <= py
+}
+
+// ContainsPoint3d checks if the AABB contains the specified 3D point (px, py, pz) and returns true if it does.
+func (a *AABB) ContainsPoint3d(px, py, pz float64) bool {
+	return px >= a.minX &&
+		px <= a.maxX &&
+		py >= a.minY &&
+		py <= a.maxY &&
+		pz >= a.minZ &&
+		pz <= a.maxZ
+}
+
+// Overlaps checks if the current AABB intersects with another AABB and returns true if an overlap exists.
+func (a *AABB) Overlaps(other *AABB) bool {
+	// y is deliberately first in the list of checks below as it is seen as more likely than things
+	// collide on x,z but not on y than they do on y, thus we drop sooner on a y fail
+	return a.maxX > other.minX &&
+		a.minX < other.maxX &&
+		a.maxY > other.minY &&
+		a.minY < other.maxY &&
+		a.maxZ > other.minZ &&
+		a.minZ < other.maxZ
+}
+
+// IntersectInPlace updates the AABB in place to represent the intersection volume of the source and other AABB.
+func (a *AABB) IntersectInPlace(src, other *AABB) {
+	minX := max(src.minX, other.minX)
+	minY := max(src.minY, other.minY)
+	minZ := max(src.minZ, other.minZ)
+	maxX := min(src.maxX, other.maxX)
+	maxY := min(src.maxY, other.maxY)
+	maxZ := min(src.maxZ, other.maxZ)
+	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
 // IntersectRay checks if a ray intersects the AABB and calculates the intersection distance if applicable.

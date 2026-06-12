@@ -93,10 +93,10 @@ func (e *Cinematic) SetOptions(dt, gFriction, aFriction float64) {
 	e.airFriction = aFriction
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	if e.airDamping >= 1.0 {
-		// Nessun attrito atmosferico, la velocità terminale tenderebbe a infinito
+		// No atmospheric friction, terminal velocity would tend to infinity
 		e.terminalZVelocity = -math.MaxFloat64
 	} else {
-		// Calcolo dell'asintoto dell'integratore
+		// Calculation of the integrator's asymptote
 		e.terminalZVelocity = (-e.gForce * e.dt * e.airDamping) / (1.0 - e.airDamping)
 	}
 	maxVelocity := (minThickness * safetyMargin) / e.dt
@@ -216,6 +216,11 @@ func (e *Cinematic) GetDisplacement() (float64, float64, float64) {
 	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
 }
 
+// IsMoving returns true if the object has any non-zero velocity components (vx, vy, or vz), indicating it is in motion.
+func (e *Cinematic) IsMoving() bool {
+	return e.vx != 0 || e.vy != 0 || e.vz != 0
+}
+
 // AddForce applies a force to the object by modifying its acceleration components (ax, ay, az) using the force and inverse mass.
 func (e *Cinematic) AddForce(fx, fy, fz float64) {
 	e.ax += fx * e.invMass
@@ -261,11 +266,6 @@ func (e *Cinematic) Update() {
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}
-}
-
-// IsMoving returns true if the object has any non-zero velocity components (vx, vy, or vz), indicating it is in motion.
-func (e *Cinematic) IsMoving() bool {
-	return e.vx != 0 || e.vy != 0 || e.vz != 0
 }
 
 // ResolveImpact resolves a collision between two Cinematic objects by applying normal and tangential impulses for both.

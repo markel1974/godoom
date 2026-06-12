@@ -60,6 +60,9 @@ func (r *BoundingBox) GetDepth() float64 { return r.size.GetDepth() }
 // GetSize returns the width, height, and depth of the bounding box as a tuple of three float64 values.
 func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.Get() }
 
+// GetSizeCenter returns the center coordinates (x, y, z) of the bounding box's size dimensions.
+func (r *BoundingBox) GetSizeCenter() (float64, float64, float64) { return r.size.GetCenter() }
+
 // GetZ returns the z-coordinate of the bottom-left point of the BoundingBox.
 func (r *BoundingBox) GetZ() float64 { return r.bottomLeft.z }
 

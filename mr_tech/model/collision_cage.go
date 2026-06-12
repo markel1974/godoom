@@ -301,14 +301,12 @@ func NewCollisionCage(object ICageObject) *CollisionCage {
 // Rebuild updates the collision cage's geometry, displacement, and internal buckets based on the provided maximum step size.
 func (s *CollisionCage) Rebuild(maxStep float64) {
 	entity := s.object.GetEntity()
+	// Calculate Position
 	s.dX, s.dY, s.dZ = entity.GetDisplacement()
-	// Estrazione origine (Bottom-Left)
-	pX, pY, pZ := entity.GetBottomLeft()
-	// Calcolo Half-Extents
-	w, h, d := entity.GetSize()
-	s.eRadX, s.eRadY, s.eRadZ = w*0.5, h*0.5, d*0.5
-	// Calcolo del CENTRO per il Broad-Phase
-	s.cX, s.cY, s.cZ = pX+s.eRadX, pY+s.eRadY, pZ+s.eRadZ
+	// Calculate Half-Extents
+	s.eRadX, s.eRadY, s.eRadZ = entity.GetSizeCenter()
+	// Calculate center for Broad-Phase
+	s.cX, s.cY, s.cZ = entity.GetCenter()
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
@@ -358,17 +356,17 @@ func (s *CollisionCage) CommitStatic() {
 	for x := 0; x < s.facesIdx; x++ {
 		face := s.faces[x]
 		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
-		// Se la compenetrazione calcolata dal semispazio infinito supera il limite fisico della AABB,
-		// stiamo intersecando la proiezione di un piano ortogonale fantasma. Lo scartiamo.
-		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
-			continue
-		}
 		// Volume Priority
 		if dist < s.distance {
 			if volume := face.GetParent(); volume != nil {
 				s.volume = volume
 				s.distance = dist
 			}
+		}
+		// Se la compenetrazione calcolata dal semispazio infinito supera il limite fisico della AABB,
+		// stiamo intersecando la proiezione di un piano ortogonale fantasma. Lo scartiamo.
+		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
+			continue
 		}
 		_, texKind := face.GetMaterialDetails()
 		if texKind == int(config.MaterialKindSky) {

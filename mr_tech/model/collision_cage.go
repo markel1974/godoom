@@ -363,8 +363,8 @@ func (s *CollisionCage) CommitStatic() {
 				s.distance = dist
 			}
 		}
-		// Se la compenetrazione calcolata dal semispazio infinito supera il limite fisico della AABB,
-		// stiamo intersecando la proiezione di un piano ortogonale fantasma. Lo scartiamo.
+		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
+		// we are intersecting the projection of a phantom orthogonal plane. Discard it.
 		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
 			continue
 		}
@@ -375,11 +375,11 @@ func (s *CollisionCage) CommitStatic() {
 		iMode := ImpactInelastic
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
-			if rMaxZ <= baseZ { // down-hill (in discesa)
+			if rMaxZ <= baseZ { // down-hill (going downhill)
 				continue
 			}
 			stepZ := baseZ + s.maxStep
-			if rMaxZ <= stepZ { // up-hill (gradino superabile)
+			if rMaxZ <= stepZ { // up-hill (climbable step)
 				iMode = ImpactStep
 			}
 		}
@@ -402,12 +402,18 @@ func (s *CollisionCage) CommitDynamic(rCage *CollisionCage) {
 		if pen > minOverlap+epsilon { // SAT filter (Anti-Phantom Plane)
 			continue
 		}
+		iMode := ImpactElastic
 		if b.IsWall() {
-			if rMaxZ <= s.GetBaseZ() { // down-hill (in discesa)
+			baseZ := s.GetBaseZ()
+			if rMaxZ <= baseZ { // down-hill (going downhill)
 				continue
 			}
+			stepZ := baseZ + s.maxStep
+			if rMaxZ <= stepZ { // up-hill (climbable step)
+				iMode = ImpactStep
+			}
 		}
-		s.addToBucket(b, rCage, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, ImpactElastic)
+		s.addToBucket(b, rCage, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
 	}
 	s.facesIdx = 0
 }

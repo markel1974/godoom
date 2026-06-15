@@ -626,15 +626,12 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 	return w
 }
 
-// TranslateRemote computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
-func (s *CollisionCage) TranslateRemote(slot int, rCage *CollisionCage) (physics.IAABB, float64, float64, float64) {
+// TranslateCage computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
+func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (physics.IAABB, float64, float64, float64) {
 	lCx, lCy, lCz := s.GetAABB().GetCentroid()
 	rCx, rCy, rCz := rCage.GetAABB().GetCentroid()
 	lEntityL := s.TranslateWorldToLocal(slot, rCx, rCy, rCz)
-	deltaX := rCx - lCx
-	deltaY := rCy - lCy
-	deltaZ := rCz - lCz
-	return lEntityL, deltaX, deltaY, deltaZ
+	return lEntityL, rCx - lCx, rCy - lCy, rCz - lCz
 }
 
 // Translate updates an ellipsoid slot's dimensions by applying delta values to the target AABB coordinates in world space.

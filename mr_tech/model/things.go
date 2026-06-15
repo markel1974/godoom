@@ -97,7 +97,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 
-		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateRemote(0, rCage)
+		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
 
 		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
@@ -116,54 +116,6 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		return false
 	})
 }
-
-/*
-// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (th *Things) QueryCollisionCageOLd(lCage *CollisionCage) {
-	lThing := lCage.GetThing()
-
-	// Collisioni Dinamiche (Broad-Phase contro l'AABB Tree globale)
-	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
-		rThing := object.(IThing)
-		// Auto-culling
-		if lThing == rThing {
-			return false
-		}
-
-		rCage := rThing.GetCage()
-		if lCage.HasSeen(rCage) {
-			return false
-		}
-		//if rCage.HasSeen(lCage) {
-		//	return false
-		//}
-		lCage.Seen(rCage)
-		rCage.Seen(lCage)
-
-		lEntityL := lCage.TranslateWorldToLocal(0, rCage)
-
-		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
-			rFace := rEnt.(*Face)
-
-			rEntityW := rCage.TranslateLocalToWorld(1, rThing.GetVolume(), rFace)
-			rEntityL := lCage.TranslateWorldToLocal(2, rEntityW)
-			lThing.GetVolume().QueryOverlaps(rEntityL, func(rEnt physics.IAABB) bool {
-				lFace := rEnt.(*Face)
-				// Integrazione nel Manifold
-				lCage.AddFace(rFace, lFace)
-				return false
-			})
-			return false
-
-			// Integrazione nel Manifold
-			//lCage.AddFace(rFace, nil)
-			//return false
-		})
-		lCage.Commit(rCage)
-		return false
-	})
-}
-*/
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
 func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {

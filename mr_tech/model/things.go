@@ -84,7 +84,6 @@ func (th *Things) Len() int {
 
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
-	lCx, lCy, lCz := lThing.GetEntity().GetCenter() // Centro Self (World)
 
 	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
 		rThing := object.(IThing)
@@ -97,31 +96,14 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		}
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
-		// 1. AABB del Player nello spazio Locale del Nemico (Per la prima query)
-		lEntityL := lCage.TranslateWorldToLocal(0, rCage)
-		// OTTIMIZZAZIONE 6 DOF: Calcolo del Delta Spaziale Relativo
-		// Questo vettore converte direttamente Local(Other) -> Local(Self)
-		rCx, rCy, rCz := rCage.GetThing().GetEntity().GetCenter() // Centro Other (World)
-		deltaX := rCx - lCx
-		deltaY := rCy - lCy
-		deltaZ := rCz - lCz
+
+		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateRemote(0, rCage)
 
 		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
-			rFaceAABB := rFace.GetAABB()
-			// 2. Traslazione DIRETTA da Local(Nemico) a Local(Player)
-			// Usiamo un Entity pre-allocato (slot 1) senza passare dal World Space
-			lMinX := rFaceAABB.GetMinX() + deltaX
-			lMaxX := rFaceAABB.GetMaxX() + deltaX
-			lMinY := rFaceAABB.GetMinY() + deltaY
-			lMaxY := rFaceAABB.GetMaxY() + deltaY
-			lMinZ := rFaceAABB.GetMinZ() + deltaZ
-			lMaxZ := rFaceAABB.GetMaxZ() + deltaZ
-
-			lCage.ellipsoidLocal[1].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-
-			// 3. Query sul BVH del Player
-			lThing.GetVolume().QueryOverlaps(lCage.ellipsoidLocal[1], func(lEnt physics.IAABB) bool {
+			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
+			// 3. Query sul BVH del Self
+			lThing.GetVolume().QueryOverlaps(z, func(lEnt physics.IAABB) bool {
 				lFace := lEnt.(*Face)
 				// Integrazione nel Manifold (Assicurati che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
@@ -135,6 +117,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	})
 }
 
+/*
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCageOLd(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
@@ -180,6 +163,7 @@ func (th *Things) QueryCollisionCageOLd(lCage *CollisionCage) {
 		return false
 	})
 }
+*/
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
 func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {

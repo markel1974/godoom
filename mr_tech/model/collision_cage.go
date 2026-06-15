@@ -272,11 +272,10 @@ type CollisionCage struct {
 	volume              *Volume
 	distance            float64
 	slots               []*CageEntry
-	//slotsEmpty          []*CageEntry
-	slotsLen int
-	maxStep  float64
-	faces    []*CageFaces
-	facesIdx int
+	slotsLen            int
+	maxStep             float64
+	faces               []*CageFaces
+	facesIdx            int
 }
 
 // NewCollisionCage initializes and returns a pointer to a new CollisionCage instance for the provided IThing entity.
@@ -292,7 +291,7 @@ func NewCollisionCage(object IThing) *CollisionCage {
 		facesIdx:  0,
 	}
 	for i := 0; i < len(c.faces); i++ {
-		c.faces[i] = &CageFaces{}
+		c.faces[i] = &CageFaces{} // Inizializzazione puntatori per zero-allocation
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		c.buckets[i] = NewCollisionBucket(i)
@@ -316,12 +315,12 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
 	// Calculate absolute extremes (Broad-Phase Swept Volume)
-	minX := s.cX - s.eRadX + min(0, s.dX) //- s.margin
-	maxX := s.cX + s.eRadX + max(0, s.dX) //+ s.margin
-	minY := s.cY - s.eRadY + min(0, s.dY) //- s.margin
-	maxY := s.cY + s.eRadY + max(0, s.dY) //+ s.margin
-	minZ := s.cZ - s.eRadZ + min(0, s.dZ) //- s.margin
-	maxZ := s.cZ + s.eRadZ + max(0, s.dZ) //+ s.margin
+	minX := s.cX - s.eRadX + math.Min(0, s.dX)
+	maxX := s.cX + s.eRadX + math.Max(0, s.dX)
+	minY := s.cY - s.eRadY + math.Min(0, s.dY)
+	maxY := s.cY + s.eRadY + math.Max(0, s.dY)
+	minZ := s.cZ - s.eRadZ + math.Min(0, s.dZ)
+	maxZ := s.cZ + s.eRadZ + math.Max(0, s.dZ)
 
 	// Canonical mapping for Rect/AABB
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
@@ -333,7 +332,6 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.volume = nil
 	s.distance = math.MaxFloat64
 
-	//copy(s.slots, s.slotsEmpty)
 	s.slotsLen = 0
 
 	for k := range s.seen {
@@ -363,30 +361,54 @@ func (s *CollisionCage) AddFace(rFace *Face, lFace *Face) {
 func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	lAABB := s.ellipsoid.GetAABB()
 
+	var rOffX, rOffY, rOffZ float64
+	var lOffX, lOffY, lOffZ float64
+	if rCage != nil {
+		rOffX, rOffY, rOffZ = rCage.GetThing().GetEntity().GetCenter()
+		lOffX, lOffY, lOffZ = s.GetThing().GetEntity().GetCenter()
+	}
+
 	for x := 0; x < s.facesIdx; x++ {
 		faces := s.faces[x]
-		face := faces.rFace
-		_, texKind := face.GetMaterialDetails()
+		rFace := faces.rFace
+		lFace := faces.lFace
+
+		_, texKind := rFace.GetMaterialDetails()
 		if texKind == int(config.MaterialKindSky) {
 			continue // Skybox/transparent: ignore collision
 		}
-		b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeFace(lAABB, face, 0.0, 0.0, 0.0)
-		// Volume Priority
+
+		var b BucketType
+		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
+
+		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
+		if lFace != nil && rCage != nil {
+			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
+			if pen <= 0 {
+				continue
+			}
+		} else {
+			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
+		}
+
+		// Volume Priority per le mesh statiche
 		iMode := ImpactElastic
 		if rCage == nil {
 			iMode = ImpactInelastic
 			if dist < s.distance {
-				if volume := face.GetParent(); volume != nil {
+				if volume := rFace.GetParent(); volume != nil {
 					s.volume = volume
 					s.distance = dist
 				}
 			}
 		}
+
 		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
 		// we are intersecting the projection of a phantom orthogonal plane. Discard it.
 		if pen > minOverlap+satFilterEpsilon { // SAT filter (Anti-Phantom Plane)
 			continue
 		}
+
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
 			if rMaxZ <= baseZ { // down-hill (going downhill)
@@ -397,7 +419,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 				iMode = ImpactStep
 			}
 		}
-		s.addToBucket(b, rCage, face, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+		s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
 	}
 	s.facesIdx = 0
 }
@@ -453,21 +475,11 @@ func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY
 			}
 		}
 	}
-	// Support Mapping for AABB (Sorgente Rettangolare Completa)
-	//rayEff := math.Abs(nX*s.eRadX) + math.Abs(nY*s.eRadY) + math.Abs(nZ*s.eRadZ)
 	// Minkowski / Support Mapping for Ellipsoids
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	dist := distTarget - rayEff
 	penetration := rayEff - distTarget
-	// Early-Exit Filtering: The plane exceeds the configured broad-margin
-	//if dist > s.margin {
-	//	return
-	//}
-	// If the face is NOT penetrated at the target (penetration <= 0), it is not needed by the Half-Space solver
-	//if penetration <= 0 {
-	//	return
-	//}
 
 	// sat filter (Anti-Phantom Plane)
 	rFaceAABB := rFace.GetAABB()
@@ -478,13 +490,117 @@ func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY
 	rMaxY := rFaceAABB.GetMaxY() + offY
 	rMinZ := rFaceAABB.GetMinZ() + offZ
 	rMaxZ := rFaceAABB.GetMaxZ() + offZ
-	oX := max(0.0, min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-	oY := max(0.0, min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
-	oZ := max(0.0, min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
+	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
+	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
+	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
 	// La reale penetrazione volumetrica massima possibile per questa specifica faccia
-	minOverlap := min(oX, min(oY, oZ))
+	minOverlap := math.Min(oX, math.Min(oY, oZ))
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
+}
+
+func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	// 1. Dati del piano remoto (Il Muro/Ostacolo)
+	nX, nY, nZ := rFace.GetNormal()
+
+	// Punto di ancoraggio del piano remoto in World Space
+	p0x := rFace.tri[0].X + rOffX
+	p0y := rFace.tri[0].Y + rOffY
+	p0z := rFace.tri[0].Z + rOffZ
+
+	// 2. Normalizzazione
+	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+
+	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+	var bucket BucketType
+
+	if solidWE || solidNS {
+		if distStart < 0 {
+			nX, nY, nZ = -nX, -nY, -nZ
+		}
+		if solidWE {
+			if nX < 0 {
+				bucket = BucketWallWest
+			} else {
+				bucket = BucketWallEast
+			}
+		} else {
+			if nY < 0 {
+				bucket = BucketWallNorth
+			} else {
+				bucket = BucketWallSouth
+			}
+		}
+	} else {
+		planeZ := p0z
+		if nAbsZ > 1e-5 {
+			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
+		}
+		if s.cZ >= planeZ {
+			bucket = BucketFloor
+			if nZ < 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+			}
+		} else {
+			bucket = BucketCeiling
+			if nZ > 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+			}
+		}
+	}
+
+	// 3. LA NUOVA MAGIA 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
+	maxPenetration := -math.MaxFloat64
+	var hitDist float64
+
+	for i := 0; i < 3; i++ {
+		// Trasliamo il vertice della nostra mesh in World Space
+		vx := lFace.tri[i].X + lOffX
+		vy := lFace.tri[i].Y + lOffY
+		vz := lFace.tri[i].Z + lOffZ
+
+		// Distanza ortogonale del vertice dal piano remoto
+		vDist := (vx-p0x)*nX + (vy-p0y)*nY + (vz-p0z)*nZ
+
+		// La penetrazione è negativa rispetto alla distanza
+		pen := -vDist
+		if pen > maxPenetration {
+			maxPenetration = pen
+			hitDist = vDist
+		}
+	}
+
+	// Se la compenetrazione massima è <= 0, scartiamo.
+	if maxPenetration <= 0 {
+		return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
+
+	// 4. SAT Filter basato sulle AABB locali portate in World Space
+	rFaceAABB := rFace.GetAABB()
+	rMinX := rFaceAABB.GetMinX() + rOffX
+	rMaxX := rFaceAABB.GetMaxX() + rOffX
+	rMinY := rFaceAABB.GetMinY() + rOffY
+	rMaxY := rFaceAABB.GetMaxY() + rOffY
+	rMinZ := rFaceAABB.GetMinZ() + rOffZ
+	rMaxZ := rFaceAABB.GetMaxZ() + rOffZ
+
+	lFaceAABB := lFace.GetAABB()
+	lMinX := lFaceAABB.GetMinX() + lOffX
+	lMaxX := lFaceAABB.GetMaxX() + lOffX
+	lMinY := lFaceAABB.GetMinY() + lOffY
+	lMaxY := lFaceAABB.GetMaxY() + lOffY
+	lMinZ := lFaceAABB.GetMinZ() + lOffZ
+	lMaxZ := lFaceAABB.GetMaxZ() + lOffZ
+
+	oX := math.Max(0.0, math.Min(lMaxX-rMinX, rMaxX-lMinX))
+	oY := math.Max(0.0, math.Min(lMaxY-rMinY, rMaxY-lMinY))
+	oZ := math.Max(0.0, math.Min(lMaxZ-rMinZ, rMaxZ-lMinZ))
+
+	minOverlap := math.Min(oX, math.Min(oY, oZ))
+
+	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
 // addToBucket adds a CollisionCage or Face into the specified bucket with given parameters to manage collision resolution.
@@ -497,40 +613,42 @@ func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFa
 }
 
 // TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
-// TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
-func (s *CollisionCage) TranslateWorldToLocal(slot int, target physics.IAABB) *physics.Entity {
+func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *physics.Entity {
+	w := s.ellipsoidLocal[slot]
 	from := s.ellipsoid.GetAABB()
-	to := target.GetAABB()
-	// FIX 1: Usa il Centroide per l'estrazione dello spazio locale.
-	// Questo si allinea matematicamente all'offset usato in CommitElastic e ai vertici delle facce.
-	offX, offY, offZ := to.GetCentroid()
-	lMinX := from.GetMinX() - offX
-	lMaxX := from.GetMaxX() - offX
-	lMinY := from.GetMinY() - offY
-	lMaxY := from.GetMaxY() - offY
-	lMinZ := from.GetMinZ() - offZ
-	lMaxZ := from.GetMaxZ() - offZ
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
+	lMinX := from.GetMinX() - deltaX
+	lMaxX := from.GetMaxX() - deltaX
+	lMinY := from.GetMinY() - deltaY
+	lMaxY := from.GetMaxY() - deltaY
+	lMinZ := from.GetMinZ() - deltaZ
+	lMaxZ := from.GetMaxZ() - deltaZ
+	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return w
 }
 
-// TranslateLocalToWorld translates an AABB from local space to world space for a given collision slot and updates its geometry.
-func (s *CollisionCage) TranslateLocalToWorld(slot int, localAABB physics.IAABB, target physics.IAABB) *physics.Entity {
-	from := localAABB.GetAABB()
-	to := target.GetAABB()
+// TranslateRemote computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
+func (s *CollisionCage) TranslateRemote(slot int, rCage *CollisionCage) (physics.IAABB, float64, float64, float64) {
+	lCx, lCy, lCz := s.GetAABB().GetCentroid()
+	rCx, rCy, rCz := rCage.GetAABB().GetCentroid()
+	lEntityL := s.TranslateWorldToLocal(slot, rCx, rCy, rCz)
+	deltaX := rCx - lCx
+	deltaY := rCy - lCy
+	deltaZ := rCz - lCz
+	return lEntityL, deltaX, deltaY, deltaZ
+}
 
-	// FIX 1: Usa il Centroide anche qui per la trasformazione inversa
-	offX, offY, offZ := to.GetCentroid()
-
-	lMinX := from.GetMinX() + offX
-	lMaxX := from.GetMaxX() + offX
-	lMinY := from.GetMinY() + offY
-	lMaxY := from.GetMaxY() + offY
-	lMinZ := from.GetMinZ() + offZ
-	lMaxZ := from.GetMaxZ() + offZ
-
-	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return s.ellipsoidLocal[slot]
+// Translate updates an ellipsoid slot's dimensions by applying delta values to the target AABB coordinates in world space.
+func (s *CollisionCage) Translate(slot int, src physics.IAABB, deltaX, deltaY, deltaZ float64) *physics.Entity {
+	w := s.ellipsoidLocal[slot]
+	to := src.GetAABB()
+	lMinX := to.GetMinX() + deltaX
+	lMaxX := to.GetMaxX() + deltaX
+	lMinY := to.GetMinY() + deltaY
+	lMaxY := to.GetMaxY() + deltaY
+	lMinZ := to.GetMinZ() + deltaZ
+	lMaxZ := to.GetMaxZ() + deltaZ
+	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return w
 }
 
 // HasSeen checks if the given CollisionCage has already been encountered in the current context.
@@ -555,9 +673,6 @@ func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
 // GetThing returns the IThing object associated with the CollisionCage.
 func (s *CollisionCage) GetThing() IThing { return s.object }
 
-// GetMargin retrieves the margin value used in collision calculations for the CollisionCage.
-//func (s *CollisionCage) GetMargin() float64 { return s.margin }
-
 // GetVolume retrieves the current volume associated with the collision cage. Returns nil if no volume is set.
 func (s *CollisionCage) GetVolume() *Volume { return s.volume }
 
@@ -578,71 +693,3 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
 func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
-
-/*
-func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64) {
-
-	// 1. Dati del piano remoto (Il Muro/Ostacolo)
-	nX, nY, nZ := rFace.GetNormal()
-
-	// Punto di ancoraggio del piano remoto in World Space
-	p0x := rFace.tri[0].X + rOffX
-	p0y := rFace.tri[0].Y + rOffY
-	p0z := rFace.tri[0].Z + rOffZ
-
-	// 2. Normalizzazione come prima (Facing Normalization)
-	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
-	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	solidNS := nAbsY > nAbsZ
-
-	// Calcoliamo la direzione dal centro della nostra entità al piano per orientare la normale
-	distStart := (s.cX - p0x)*nX + (s.cY - p0y)*nY + (s.cZ - p0z)*nZ
-	var bucket BucketType
-
-	if solidWE || solidNS {
-		if distStart < 0 {
-			nX, nY, nZ = -nX, -nY, -nZ
-		}
-		if solidWE {
-			if nX < 0 { bucket = BucketWallWest } else { bucket = BucketWallEast }
-		} else {
-			if nY < 0 { bucket = BucketWallNorth } else { bucket = BucketWallSouth }
-		}
-	} else {
-		// ... (stessa logica Floor/Ceiling che hai già) ...
-	}
-
-	// 3. LA NUOVA MAGIA 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
-	// Invece di rayEff, testiamo i 3 vertici del NOSTRO triangolo (lFace) contro il piano remoto.
-	maxPenetration := -math.MaxFloat64
-	var hitDist float64
-
-	for i := 0; i < 3; i++ {
-		// Trasliamo il vertice della nostra mesh in World Space
-		vx := lFace.tri[i].X + lOffX
-		vy := lFace.tri[i].Y + lOffY
-		vz := lFace.tri[i].Z + lOffZ
-
-		// Distanza ortogonale del vertice dal piano remoto
-		vDist := (vx - p0x)*nX + (vy - p0y)*nY + (vz - p0z)*nZ
-
-		// La penetrazione è negativa rispetto alla distanza
-		pen := -vDist
-		if pen > maxPenetration {
-			maxPenetration = pen
-			hitDist = vDist
-		}
-	}
-
-	// Se la compenetrazione massima è <= 0, le due facce si sfiorano nelle AABB
-	// ma sono separate geometricamente (Separating Axis Theorem implicito). Scartiamo.
-	if maxPenetration <= 0 {
-		return bucket, hitDist, 0, nX, nY, nZ, p0x, p0y, p0z // Pen 0 farà scattare il 'return' al piano di sopra
-	}
-
-	// 4. SAT Filter (Anti-Phantom Plane) come prima, ma usando le AABB locali/remote!
-	// ... (Mantieni il calcolo minOverlap usando lFace.GetAABB() e rFace.GetAABB()) ...
-
-	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z
-}
-*/

@@ -97,3 +97,59 @@ func resolve3dPoint(p2d XY, originalPts []XYZ, nx, ny, nz float64, axis int) XYZ
 		return XYZ{X: p2d.X, Y: p2d.Y, Z: z}
 	}
 }
+
+// ClosestPointSegmentSegment calculates the closest points between two 3D line segments defined by their points and directions.
+// p1 and d1 define the starting point and direction vector of the first segment, respectively.
+// p2 and d2 define the starting point and direction vector of the second segment, respectively.
+// Returns the closest points on the two segments as two geometry.XYZ instances.
+func ClosestPointSegmentSegment(p1, d1, p2, d2 XYZ) (XYZ, XYZ) {
+	r := SubXYZ(p1, p2)
+	a, e, f := DotXYZ(d1, d1), DotXYZ(d2, d2), DotXYZ(d2, r)
+	c := DotXYZ(d1, r)
+	b := DotXYZ(d1, d2)
+	denom := a*e - b*b
+	s, t := 0.0, 0.0
+	if denom != 0.0 {
+		s = max(0.0, min(1.0, (b*f-c*e)/denom))
+	}
+	t = (b*s + f) / e
+	t = max(0.0, min(1.0, t))
+	s = (b*t - c) / a
+	s = max(0.0, min(1.0, s))
+	c1 := XYZ{X: p1.X + d1.X*s, Y: p1.Y + d1.Y*s, Z: p1.Z + d1.Z*s}
+	c2 := XYZ{X: p2.X + d2.X*t, Y: p2.Y + d2.Y*t, Z: p2.Z + d2.Z*t}
+	return c1, c2
+}
+
+// TriangleProject projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
+func TriangleProject(tri [3]XYZ, axis XYZ) (float64, float64) {
+	minP := DotXYZ(axis, tri[0])
+	maxP := minP
+	for i := 1; i < 3; i++ {
+		p := DotXYZ(axis, tri[i])
+		if p < minP {
+			minP = p
+		}
+		if p > maxP {
+			maxP = p
+		}
+	}
+	return minP, maxP
+}
+
+// TriangleFindDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
+// dir is the reference direction for projection.
+// v is an array of three 3D points representing the vertices of a triangle.
+// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
+func TriangleFindDeepestPoint(tri [3]XYZ, dir XYZ) (float64, float64, float64) {
+	bestP := DotXYZ(dir, tri[0])
+	bestIdx := 0
+	for i := 1; i < 3; i++ {
+		p := DotXYZ(dir, tri[i])
+		if p < bestP {
+			bestP = p
+			bestIdx = i
+		}
+	}
+	return tri[bestIdx].X, tri[bestIdx].Y, tri[bestIdx].Z
+}

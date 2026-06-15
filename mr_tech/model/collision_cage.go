@@ -635,7 +635,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) ContactManifold {
 	cm := ContactManifold{Hit: false}
 
-	// 1. FAST-FAIL: SAT Filter AABB spostato in testa
+	// FAST-FAIL: SAT Filter AABB spostato in testa
 	rFaceAABB := rFace.GetAABB()
 	rMinX, rMaxX := rFaceAABB.GetMinX()+rOffX, rFaceAABB.GetMaxX()+rOffX
 	rMinY, rMaxY := rFaceAABB.GetMinY()+rOffY, rFaceAABB.GetMaxY()+rOffY
@@ -656,14 +656,14 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 	cm.MinOverlap = min(oX, min(oY, oZ))
 	cm.RMaxZ = rMaxZ
 
-	// 2. Setup Vertici in World Space
+	// Setup Vertici in World Space
 	var rV, lV [3]geometry.XYZ
 	for i := 0; i < 3; i++ {
 		rV[i] = geometry.XYZ{X: rFace.tri[i].X + rOffX, Y: rFace.tri[i].Y + rOffY, Z: rFace.tri[i].Z + rOffZ}
 		lV[i] = geometry.XYZ{X: lFace.tri[i].X + lOffX, Y: lFace.tri[i].Y + lOffY, Z: lFace.tri[i].Z + lOffZ}
 	}
 
-	// 3. Normali e Calcolo Legacy Bucket
+	// Normali e Calcolo Legacy Bucket
 	nX, nY, nZ := rFace.GetNormal()
 	cm.P0X, cm.P0Y, cm.P0Z = rV[0].X, rV[0].Y, rV[0].Z
 
@@ -707,8 +707,7 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 		}
 	}
 	cm.NormalX, cm.NormalY, cm.NormalZ = nX, nY, nZ
-
-	// 4. SAT FULL 11-AXIS E CALCOLO PUNTO DI CONTATTO 3D
+	// SAT FULL 11-AXIS E CALCOLO PUNTO DI CONTATTO 3D
 	lnX, lnY, lnZ := lFace.GetNormal()
 	axes := [11]geometry.XYZ{
 		{X: nX, Y: nY, Z: nZ},    // 0: Normale Remota (Faccia vs Vertice)
@@ -717,7 +716,6 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 
 	rE := [3]geometry.XYZ{geometry.SubXYZ(rV[1], rV[0]), geometry.SubXYZ(rV[2], rV[1]), geometry.SubXYZ(rV[0], rV[2])}
 	lE := [3]geometry.XYZ{geometry.SubXYZ(lV[1], lV[0]), geometry.SubXYZ(lV[2], lV[1]), geometry.SubXYZ(lV[0], lV[2])}
-
 	axisIdx := 2
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
@@ -729,23 +727,19 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 			axisIdx++
 		}
 	}
-
 	bestPenetration := math.MaxFloat64
 	bestAxisIdx := -1
-
 	// Risoluzione SAT (Proiezione di R e L su tutti gli 11 assi)
 	for i := 0; i < 11; i++ {
 		if axes[i].X == 0 && axes[i].Y == 0 && axes[i].Z == 0 {
 			continue
 		}
-		rMin, rMax := ProjectTri(axes[i], rV)
-		lMin, lMax := ProjectTri(axes[i], lV)
-
+		rMin, rMax := geometry.TriangleProject(rV, axes[i])
+		lMin, lMax := geometry.TriangleProject(lV, axes[i])
 		// Check separazione
 		if lMax < rMin || rMax < lMin {
 			return cm // Esiste un asse separatore. Hit = false.
 		}
-
 		// Calcolo compenetrazione
 		pen := math.Min(rMax-lMin, lMax-rMin)
 		if pen < bestPenetration {
@@ -757,11 +751,9 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 			}
 		}
 	}
-
-	// 5. Estrazione Feature e Punto Esatto in base all'asse vincente
+	// Estrazione Feature e Punto Esatto in base all'asse vincente
 	cm.Hit = true
 	cm.Depth = bestPenetration
-
 	// Conserviamo il calcolo legacy per hitDist per non rompere il tuo StageResolve attuale
 	for i := 0; i < 3; i++ {
 		vDist := (lV[i].X-cm.P0X)*nX + (lV[i].Y-cm.P0Y)*nY + (lV[i].Z-cm.P0Z)*nZ
@@ -769,24 +761,22 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 			cm.HitDist = vDist // Legacy hitDist maintain
 		}
 	}
-
 	if bestAxisIdx == 0 {
 		// Urto planare (Vertice Locale penetra Faccia Remota)
-		cm.PointX, cm.PointY, cm.PointZ = FindDeepestPoint(axes[0], lV)
+		cm.PointX, cm.PointY, cm.PointZ = geometry.TriangleFindDeepestPoint(lV, axes[0])
 	} else if bestAxisIdx == 1 {
 		// Urto planare inverso (Vertice Remoto penetra Faccia Locale)
-		cm.PointX, cm.PointY, cm.PointZ = FindDeepestPoint(geometry.XYZ{X: -axes[1].X, Y: -axes[1].Y, Z: -axes[1].Z}, rV)
+		cm.PointX, cm.PointY, cm.PointZ = geometry.TriangleFindDeepestPoint(rV, geometry.XYZ{X: -axes[1].X, Y: -axes[1].Y, Z: -axes[1].Z})
 	} else {
 		// Urto Edge-Edge (Segmenti Sghembi). Ricaviamo gli indici rE e lE.
 		eIdx := bestAxisIdx - 2
 		rIdx, lIdx := eIdx/3, eIdx%3
-		p1, p2 := ClosestPointSegmentSegment(rV[rIdx], rE[rIdx], lV[lIdx], lE[lIdx])
+		p1, p2 := geometry.ClosestPointSegmentSegment(rV[rIdx], rE[rIdx], lV[lIdx], lE[lIdx])
 		// Il punto di contatto è il punto medio tra i due segmenti intersecanti
 		cm.PointX = (p1.X + p2.X) * 0.5
 		cm.PointY = (p1.Y + p2.Y) * 0.5
 		cm.PointZ = (p1.Z + p2.Z) * 0.5
 	}
-
 	return cm
 }
 
@@ -879,59 +869,3 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
 func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
-
-// ProjectTri projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
-func ProjectTri(axis geometry.XYZ, v [3]geometry.XYZ) (float64, float64) {
-	minP := geometry.DotXYZ(axis, v[0])
-	maxP := minP
-	for i := 1; i < 3; i++ {
-		p := geometry.DotXYZ(axis, v[i])
-		if p < minP {
-			minP = p
-		}
-		if p > maxP {
-			maxP = p
-		}
-	}
-	return minP, maxP
-}
-
-// FindDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
-// dir is the reference direction for projection.
-// v is an array of three 3D points representing the vertices of a triangle.
-// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
-func FindDeepestPoint(dir geometry.XYZ, v [3]geometry.XYZ) (float64, float64, float64) {
-	bestP := geometry.DotXYZ(dir, v[0])
-	bestIdx := 0
-	for i := 1; i < 3; i++ {
-		p := geometry.DotXYZ(dir, v[i])
-		if p < bestP {
-			bestP = p
-			bestIdx = i
-		}
-	}
-	return v[bestIdx].X, v[bestIdx].Y, v[bestIdx].Z
-}
-
-// ClosestPointSegmentSegment calculates the closest points between two 3D line segments defined by their points and directions.
-// p1 and d1 define the starting point and direction vector of the first segment, respectively.
-// p2 and d2 define the starting point and direction vector of the second segment, respectively.
-// Returns the closest points on the two segments as two geometry.XYZ instances.
-func ClosestPointSegmentSegment(p1, d1, p2, d2 geometry.XYZ) (geometry.XYZ, geometry.XYZ) {
-	r := geometry.SubXYZ(p1, p2)
-	a, e, f := geometry.DotXYZ(d1, d1), geometry.DotXYZ(d2, d2), geometry.DotXYZ(d2, r)
-	c := geometry.DotXYZ(d1, r)
-	b := geometry.DotXYZ(d1, d2)
-	denom := a*e - b*b
-	s, t := 0.0, 0.0
-	if denom != 0.0 {
-		s = max(0.0, min(1.0, (b*f-c*e)/denom))
-	}
-	t = (b*s + f) / e
-	t = max(0.0, min(1.0, t))
-	s = (b*t - c) / a
-	s = max(0.0, min(1.0, s))
-	c1 := geometry.XYZ{X: p1.X + d1.X*s, Y: p1.Y + d1.Y*s, Z: p1.Z + d1.Z*s}
-	c2 := geometry.XYZ{X: p2.X + d2.X*t, Y: p2.Y + d2.Y*t, Z: p2.Z + d2.Z*t}
-	return c1, c2
-}

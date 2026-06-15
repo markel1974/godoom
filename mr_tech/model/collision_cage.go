@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
@@ -69,6 +70,22 @@ const (
 	FacesPerBucket = 4
 	TotalSlots     = BucketSize * FacesPerBucket
 )
+
+type ContactManifold struct {
+	Hit           bool
+	Bucket        BucketType
+	NormalX       float64
+	NormalY       float64
+	NormalZ       float64
+	PointX        float64 // Esatto punto di impatto 3D per calcolo momento torcente
+	PointY        float64
+	PointZ        float64
+	Depth         float64 // Compenetrazione matematica lungo l'asse SAT vincente
+	HitDist       float64 // Distanza originale mantenuta per compatibilità
+	P0X, P0Y, P0Z float64 // Punto di ancoraggio piano originario
+	MinOverlap    float64 // Ovelap AABB originale
+	RMaxZ         float64 // RMaxZ originale
+}
 
 type CageFaces struct {
 	lFace *Face
@@ -378,6 +395,14 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 
 		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
 		if lFace != nil && rCage != nil {
+			//manifold := s.computeManifold(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
+			//b = manifold.Bucket
+			//dist = manifold.HitDist
+			//pen = manifold.Depth
+			//nX, nY, nZ = manifold.NormalX, manifold.NormalY, manifold.NormalZ
+			//p0x, p0y, p0z = manifold.P0X, manifold.P0Y, manifold.P0Z
+			//minOverlap = manifold.MinOverlap
+			//rMaxZ = manifold.RMaxZ
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
@@ -607,6 +632,164 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
+func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) ContactManifold {
+	manifold := ContactManifold{Hit: false}
+
+	// 1. FAST-FAIL: SAT Filter AABB spostato in testa
+	rFaceAABB := rFace.GetAABB()
+	rMinX, rMaxX := rFaceAABB.GetMinX()+rOffX, rFaceAABB.GetMaxX()+rOffX
+	rMinY, rMaxY := rFaceAABB.GetMinY()+rOffY, rFaceAABB.GetMaxY()+rOffY
+	rMinZ, rMaxZ := rFaceAABB.GetMinZ()+rOffZ, rFaceAABB.GetMaxZ()+rOffZ
+
+	lFaceAABB := lFace.GetAABB()
+	lMinX, lMaxX := lFaceAABB.GetMinX()+lOffX, lFaceAABB.GetMaxX()+lOffX
+	lMinY, lMaxY := lFaceAABB.GetMinY()+lOffY, lFaceAABB.GetMaxY()+lOffY
+	lMinZ, lMaxZ := lFaceAABB.GetMinZ()+lOffZ, lFaceAABB.GetMaxZ()+lOffZ
+
+	oX := max(0.0, min(lMaxX-rMinX, rMaxX-lMinX))
+	oY := max(0.0, min(lMaxY-rMinY, rMaxY-lMinY))
+	oZ := max(0.0, min(lMaxZ-rMinZ, rMaxZ-lMinZ))
+
+	if oX <= 0 || oY <= 0 || oZ <= 0 {
+		return manifold // Nessuna intersezione spaziale, abort immediato
+	}
+	manifold.MinOverlap = min(oX, min(oY, oZ))
+	manifold.RMaxZ = rMaxZ
+
+	// 2. Setup Vertici in World Space
+	var rV, lV [3]geometry.XYZ
+	for i := 0; i < 3; i++ {
+		rV[i] = geometry.XYZ{X: rFace.tri[i].X + rOffX, Y: rFace.tri[i].Y + rOffY, Z: rFace.tri[i].Z + rOffZ}
+		lV[i] = geometry.XYZ{X: lFace.tri[i].X + lOffX, Y: lFace.tri[i].Y + lOffY, Z: lFace.tri[i].Z + lOffZ}
+	}
+
+	// 3. Normali e Calcolo Legacy Bucket
+	nX, nY, nZ := rFace.GetNormal()
+	manifold.P0X, manifold.P0Y, manifold.P0Z = rV[0].X, rV[0].Y, rV[0].Z
+
+	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+	distStart := (s.cX-manifold.P0X)*nX + (s.cY-manifold.P0Y)*nY + (s.cZ-manifold.P0Z)*nZ
+
+	if solidWE || solidNS {
+		if distStart < 0 {
+			nX, nY, nZ = -nX, -nY, -nZ
+		}
+		if solidWE {
+			if nX < 0 {
+				manifold.Bucket = BucketWallWest
+			} else {
+				manifold.Bucket = BucketWallEast
+			}
+		} else {
+			if nY < 0 {
+				manifold.Bucket = BucketWallNorth
+			} else {
+				manifold.Bucket = BucketWallSouth
+			}
+		}
+	} else {
+		planeZ := manifold.P0Z
+		if nAbsZ > 1e-5 {
+			planeZ = manifold.P0Z - (nX*(s.cX-manifold.P0X)+nY*(s.cY-manifold.P0Y))/nZ
+		}
+		if s.cZ >= planeZ {
+			manifold.Bucket = BucketFloor
+			if nZ < 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+			}
+		} else {
+			manifold.Bucket = BucketCeiling
+			if nZ > 0 {
+				nX, nY, nZ = -nX, -nY, -nZ
+			}
+		}
+	}
+	manifold.NormalX, manifold.NormalY, manifold.NormalZ = nX, nY, nZ
+
+	// 4. SAT FULL 11-AXIS E CALCOLO PUNTO DI CONTATTO 3D
+	lnX, lnY, lnZ := lFace.GetNormal()
+	axes := [11]geometry.XYZ{
+		{X: nX, Y: nY, Z: nZ},    // 0: Normale Remota (Faccia vs Vertice)
+		{X: lnX, Y: lnY, Z: lnZ}, // 1: Normale Locale (Vertice vs Faccia)
+	}
+
+	rE := [3]geometry.XYZ{subXYZ(rV[1], rV[0]), subXYZ(rV[2], rV[1]), subXYZ(rV[0], rV[2])}
+	lE := [3]geometry.XYZ{subXYZ(lV[1], lV[0]), subXYZ(lV[2], lV[1]), subXYZ(lV[0], lV[2])}
+
+	axisIdx := 2
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			crossP := crossXYZ(rE[i], lE[j])
+			// Se i due edge sono paralleli (cross quasi nullo), l'asse è degenere e viene scartato
+			if dotXYZ(crossP, crossP) > 1e-8 {
+				axes[axisIdx] = normalizeXYZ(crossP)
+			}
+			axisIdx++
+		}
+	}
+
+	bestPenetration := math.MaxFloat64
+	bestAxisIdx := -1
+
+	// Risoluzione SAT (Proiezione di R e L su tutti gli 11 assi)
+	for i := 0; i < 11; i++ {
+		if axes[i].X == 0 && axes[i].Y == 0 && axes[i].Z == 0 {
+			continue
+		}
+		rMin, rMax := projectTri(axes[i], rV)
+		lMin, lMax := projectTri(axes[i], lV)
+
+		// Check separazione
+		if lMax < rMin || rMax < lMin {
+			return manifold // Esiste un asse separatore. Hit = false.
+		}
+
+		// Calcolo compenetrazione
+		pen := math.Min(rMax-lMin, lMax-rMin)
+		if pen < bestPenetration {
+			bestPenetration = pen
+			bestAxisIdx = i
+			// Assicuriamo che la normale punti da Remote verso Local
+			if rMin < lMin {
+				axes[i] = geometry.XYZ{X: -axes[i].X, Y: -axes[i].Y, Z: -axes[i].Z}
+			}
+		}
+	}
+
+	// 5. Estrazione Feature e Punto Esatto in base all'asse vincente
+	manifold.Hit = true
+	manifold.Depth = bestPenetration
+
+	// Conserviamo il calcolo legacy per hitDist per non rompere il tuo StageResolve attuale
+	for i := 0; i < 3; i++ {
+		vDist := (lV[i].X-manifold.P0X)*nX + (lV[i].Y-manifold.P0Y)*nY + (lV[i].Z-manifold.P0Z)*nZ
+		if -vDist > manifold.HitDist {
+			manifold.HitDist = vDist // Legacy hitDist maintain
+		}
+	}
+
+	if bestAxisIdx == 0 {
+		// Urto planare (Vertice Locale penetra Faccia Remota)
+		manifold.PointX, manifold.PointY, manifold.PointZ = findDeepestPoint(axes[0], lV)
+	} else if bestAxisIdx == 1 {
+		// Urto planare inverso (Vertice Remoto penetra Faccia Locale)
+		manifold.PointX, manifold.PointY, manifold.PointZ = findDeepestPoint(geometry.XYZ{X: -axes[1].X, Y: -axes[1].Y, Z: -axes[1].Z}, rV)
+	} else {
+		// Urto Edge-Edge (Segmenti Sghembi). Ricaviamo gli indici rE e lE.
+		eIdx := bestAxisIdx - 2
+		rIdx, lIdx := eIdx/3, eIdx%3
+		p1, p2 := closestPointSegmentSegment(rV[rIdx], rE[rIdx], lV[lIdx], lE[lIdx])
+		// Il punto di contatto è il punto medio tra i due segmenti intersecanti
+		manifold.PointX = (p1.X + p2.X) * 0.5
+		manifold.PointY = (p1.Y + p2.Y) * 0.5
+		manifold.PointZ = (p1.Z + p2.Z) * 0.5
+	}
+
+	return manifold
+}
+
 // addToBucket adds a CollisionCage or Face into the specified bucket with given parameters to manage collision resolution.
 func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
@@ -696,3 +879,78 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
 func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
+
+// subXYZ subtracts two geometry.XYZ vectors component-wise and returns the resulting vector.
+func subXYZ(a, b geometry.XYZ) geometry.XYZ {
+	return geometry.XYZ{X: a.X - b.X, Y: a.Y - b.Y, Z: a.Z - b.Z}
+}
+
+// dotXYZ computes the dot product of two 3D vectors represented by geometry.XYZ structs.
+func dotXYZ(a, b geometry.XYZ) float64 { return a.X*b.X + a.Y*b.Y + a.Z*b.Z }
+
+// crossXYZ computes the cross product of two 3D vectors a and b, returning the resulting vector as geometry.XYZ.
+func crossXYZ(a, b geometry.XYZ) geometry.XYZ {
+	return geometry.XYZ{X: a.Y*b.Z - a.Z*b.Y, Y: a.Z*b.X - a.X*b.Z, Z: a.X*b.Y - a.Y*b.X}
+}
+
+// normalizeXYZ normalizes a 3D vector to unit length and returns the resulting vector.
+func normalizeXYZ(v geometry.XYZ) geometry.XYZ {
+	lenInv := 1.0 / math.Sqrt(v.X*v.X+v.Y*v.Y+v.Z*v.Z)
+	return geometry.XYZ{X: v.X * lenInv, Y: v.Y * lenInv, Z: v.Z * lenInv}
+}
+
+// projectTri projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
+func projectTri(axis geometry.XYZ, v [3]geometry.XYZ) (float64, float64) {
+	minP := dotXYZ(axis, v[0])
+	maxP := minP
+	for i := 1; i < 3; i++ {
+		p := dotXYZ(axis, v[i])
+		if p < minP {
+			minP = p
+		}
+		if p > maxP {
+			maxP = p
+		}
+	}
+	return minP, maxP
+}
+
+// findDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
+// dir is the reference direction for projection.
+// v is an array of three 3D points representing the vertices of a triangle.
+// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
+func findDeepestPoint(dir geometry.XYZ, v [3]geometry.XYZ) (float64, float64, float64) {
+	bestP := dotXYZ(dir, v[0])
+	bestIdx := 0
+	for i := 1; i < 3; i++ {
+		p := dotXYZ(dir, v[i])
+		if p < bestP {
+			bestP = p
+			bestIdx = i
+		}
+	}
+	return v[bestIdx].X, v[bestIdx].Y, v[bestIdx].Z
+}
+
+// closestPointSegmentSegment calculates the closest points between two 3D line segments defined by their points and directions.
+// p1 and d1 define the starting point and direction vector of the first segment, respectively.
+// p2 and d2 define the starting point and direction vector of the second segment, respectively.
+// Returns the closest points on the two segments as two geometry.XYZ instances.
+func closestPointSegmentSegment(p1, d1, p2, d2 geometry.XYZ) (geometry.XYZ, geometry.XYZ) {
+	r := subXYZ(p1, p2)
+	a, e, f := dotXYZ(d1, d1), dotXYZ(d2, d2), dotXYZ(d2, r)
+	c := dotXYZ(d1, r)
+	b := dotXYZ(d1, d2)
+	denom := a*e - b*b
+	s, t := 0.0, 0.0
+	if denom != 0.0 {
+		s = max(0.0, min(1.0, (b*f-c*e)/denom))
+	}
+	t = (b*s + f) / e
+	t = max(0.0, min(1.0, t))
+	s = (b*t - c) / a
+	s = max(0.0, min(1.0, s))
+	c1 := geometry.XYZ{X: p1.X + d1.X*s, Y: p1.Y + d1.Y*s, Z: p1.Z + d1.Z*s}
+	c2 := geometry.XYZ{X: p2.X + d2.X*t, Y: p2.Y + d2.Y*t, Z: p2.Z + d2.Z*t}
+	return c1, c2
+}

@@ -215,6 +215,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 		const slop = 0.01
 		const positionalPercent = 1.0
 
+		//TODO verifica il bucket ceiling non dovrebbe arrivare nei test!
 		//if slot.GetBucket() == BucketCeiling {
 		//	continue
 		//}

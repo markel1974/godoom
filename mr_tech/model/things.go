@@ -82,8 +82,61 @@ func (th *Things) Len() int {
 	return len(th.container)
 }
 
-// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
+	lThing := lCage.GetThing()
+	lCx, lCy, lCz := lThing.GetEntity().GetCenter() // Centro Self (World)
+
+	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
+		rThing := object.(IThing)
+		if lThing == rThing {
+			return false
+		}
+		rCage := rThing.GetCage()
+		if lCage.HasSeen(rCage) {
+			return false
+		}
+		lCage.Seen(rCage)
+		rCage.Seen(lCage)
+		// 1. AABB del Player nello spazio Locale del Nemico (Per la prima query)
+		lEntityL := lCage.TranslateWorldToLocal(0, rCage)
+		// OTTIMIZZAZIONE 6 DOF: Calcolo del Delta Spaziale Relativo
+		// Questo vettore converte direttamente Local(Other) -> Local(Self)
+		rCx, rCy, rCz := rCage.GetThing().GetEntity().GetCenter() // Centro Other (World)
+		deltaX := rCx - lCx
+		deltaY := rCy - lCy
+		deltaZ := rCz - lCz
+
+		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
+			rFace := rEnt.(*Face)
+			rFaceAABB := rFace.GetAABB()
+			// 2. Traslazione DIRETTA da Local(Nemico) a Local(Player)
+			// Usiamo un Entity pre-allocato (slot 1) senza passare dal World Space
+			lMinX := rFaceAABB.GetMinX() + deltaX
+			lMaxX := rFaceAABB.GetMaxX() + deltaX
+			lMinY := rFaceAABB.GetMinY() + deltaY
+			lMaxY := rFaceAABB.GetMaxY() + deltaY
+			lMinZ := rFaceAABB.GetMinZ() + deltaZ
+			lMaxZ := rFaceAABB.GetMaxZ() + deltaZ
+
+			lCage.ellipsoidLocal[1].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+
+			// 3. Query sul BVH del Player
+			lThing.GetVolume().QueryOverlaps(lCage.ellipsoidLocal[1], func(lEnt physics.IAABB) bool {
+				lFace := lEnt.(*Face)
+				// Integrazione nel Manifold (Assicurati che AddFace accetti/conosca i delta
+				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
+				lCage.AddFace(rFace, lFace)
+				return false
+			})
+			return false
+		})
+		lCage.Commit(rCage)
+		return false
+	})
+}
+
+// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
+func (th *Things) QueryCollisionCageOLd(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
 
 	// Collisioni Dinamiche (Broad-Phase contro l'AABB Tree globale)
@@ -98,17 +151,19 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		if lCage.HasSeen(rCage) {
 			return false
 		}
-
+		//if rCage.HasSeen(lCage) {
+		//	return false
+		//}
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 
-		lEntityL := lCage.TranslateWorldToLocal(0, rCage.GetAABB())
-		//lEntityL := rCage.TranslateWorldToLocal(0, lCage.GetAABB())
+		lEntityL := lCage.TranslateWorldToLocal(0, rCage)
 
 		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
-			rEntityW := rCage.TranslateLocalToWorld(1, rFace.GetAABB())
-			rEntityL := lCage.TranslateWorldToLocal(2, rEntityW.GetAABB())
+
+			rEntityW := rCage.TranslateLocalToWorld(1, rThing.GetVolume(), rFace)
+			rEntityL := lCage.TranslateWorldToLocal(2, rEntityW)
 			lThing.GetVolume().QueryOverlaps(rEntityL, func(rEnt physics.IAABB) bool {
 				lFace := rEnt.(*Face)
 				// Integrazione nel Manifold

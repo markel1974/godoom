@@ -70,6 +70,11 @@ const (
 	TotalSlots     = BucketSize * FacesPerBucket
 )
 
+type CageFaces struct {
+	lFace *Face
+	rFace *Face
+}
+
 // CageEntry represents a single entry within a collision cage, storing data about collisions and their properties.
 type CageEntry struct {
 	bucket      BucketType
@@ -267,25 +272,27 @@ type CollisionCage struct {
 	volume              *Volume
 	distance            float64
 	slots               []*CageEntry
-	slotsEmpty          []*CageEntry
-	slotsLen            int
-	maxStep             float64
-	faces               []*Face
-	facesIdx            int
+	//slotsEmpty          []*CageEntry
+	slotsLen int
+	maxStep  float64
+	faces    []*CageFaces
+	facesIdx int
 }
 
 // NewCollisionCage initializes and returns a pointer to a new CollisionCage instance for the provided IThing entity.
 func NewCollisionCage(object IThing) *CollisionCage {
 	c := &CollisionCage{
-		seen:       make(map[*CollisionCage]bool),
-		object:     object,
-		ellipsoid:  physics.NewEntity(0, 0, 0, 0),
-		volume:     nil,
-		slots:      make([]*CageEntry, TotalSlots),
-		slotsEmpty: make([]*CageEntry, TotalSlots),
-		slotsLen:   0,
-		faces:      make([]*Face, 8),
-		facesIdx:   0,
+		seen:      make(map[*CollisionCage]bool),
+		object:    object,
+		ellipsoid: physics.NewEntity(0, 0, 0, 0),
+		volume:    nil,
+		slots:     make([]*CageEntry, TotalSlots),
+		slotsLen:  0,
+		faces:     make([]*CageFaces, 8),
+		facesIdx:  0,
+	}
+	for i := 0; i < len(c.faces); i++ {
+		c.faces[i] = &CageFaces{}
 	}
 	for i := BucketType(0); i < BucketSize; i++ {
 		c.buckets[i] = NewCollisionBucket(i)
@@ -299,12 +306,12 @@ func NewCollisionCage(object IThing) *CollisionCage {
 // Rebuild updates the collision cage's geometry, displacement, and internal buckets based on the provided maximum step size.
 func (s *CollisionCage) Rebuild(maxStep float64) {
 	entity := s.object.GetEntity()
-	// Calculate Position
-	s.dX, s.dY, s.dZ = entity.GetDisplacement()
 	// Calculate Half-Extents
 	s.eRadX, s.eRadY, s.eRadZ = entity.GetSizeCenter()
 	// Calculate center for Broad-Phase
 	s.cX, s.cY, s.cZ = entity.GetCenter()
+	// Calculate Position
+	s.dX, s.dY, s.dZ = entity.GetDisplacement()
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
@@ -326,7 +333,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.volume = nil
 	s.distance = math.MaxFloat64
 
-	copy(s.slots, s.slotsEmpty)
+	//copy(s.slots, s.slotsEmpty)
 	s.slotsLen = 0
 
 	for k := range s.seen {
@@ -337,13 +344,18 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 
 // AddFace adds a face to the CollisionCage, expanding the storage if necessary to accommodate new entries.
 func (s *CollisionCage) AddFace(rFace *Face, lFace *Face) {
-	//TODO IMPLEMENT lFace
 	if s.facesIdx >= len(s.faces) {
-		n := make([]*Face, len(s.faces)*2)
+		n := make([]*CageFaces, len(s.faces)*2)
 		copy(n, s.faces)
+		// Popolamento dei nuovi puntatori dopo il resize
+		for i := len(s.faces); i < len(n); i++ {
+			n[i] = &CageFaces{}
+		}
 		s.faces = n
 	}
-	s.faces[s.facesIdx] = rFace
+	f := s.faces[s.facesIdx]
+	f.rFace = rFace
+	f.lFace = lFace
 	s.facesIdx++
 }
 
@@ -352,7 +364,8 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	lAABB := s.ellipsoid.GetAABB()
 
 	for x := 0; x < s.facesIdx; x++ {
-		face := s.faces[x]
+		faces := s.faces[x]
+		face := faces.rFace
 		_, texKind := face.GetMaterialDetails()
 		if texKind == int(config.MaterialKindSky) {
 			continue // Skybox/transparent: ignore collision
@@ -484,11 +497,13 @@ func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFa
 }
 
 // TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
-func (s *CollisionCage) TranslateWorldToLocal(slot int, to *physics.AABB) *physics.Entity {
+// TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
+func (s *CollisionCage) TranslateWorldToLocal(slot int, target physics.IAABB) *physics.Entity {
 	from := s.ellipsoid.GetAABB()
-	offX := to.GetMinX()
-	offY := to.GetMinY()
-	offZ := to.GetMinZ()
+	to := target.GetAABB()
+	// FIX 1: Usa il Centroide per l'estrazione dello spazio locale.
+	// Questo si allinea matematicamente all'offset usato in CommitElastic e ai vertici delle facce.
+	offX, offY, offZ := to.GetCentroid()
 	lMinX := from.GetMinX() - offX
 	lMaxX := from.GetMaxX() - offX
 	lMinY := from.GetMinY() - offY
@@ -500,17 +515,20 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, to *physics.AABB) *physi
 }
 
 // TranslateLocalToWorld translates an AABB from local space to world space for a given collision slot and updates its geometry.
-func (s *CollisionCage) TranslateLocalToWorld(slot int, to *physics.AABB) *physics.Entity {
-	from := s.ellipsoid.GetAABB()
-	offX := to.GetMinX()
-	offY := to.GetMinY()
-	offZ := to.GetMinZ()
+func (s *CollisionCage) TranslateLocalToWorld(slot int, localAABB physics.IAABB, target physics.IAABB) *physics.Entity {
+	from := localAABB.GetAABB()
+	to := target.GetAABB()
+
+	// FIX 1: Usa il Centroide anche qui per la trasformazione inversa
+	offX, offY, offZ := to.GetCentroid()
+
 	lMinX := from.GetMinX() + offX
 	lMaxX := from.GetMaxX() + offX
 	lMinY := from.GetMinY() + offY
 	lMaxY := from.GetMaxY() + offY
 	lMinZ := from.GetMinZ() + offZ
 	lMaxZ := from.GetMaxZ() + offZ
+
 	s.ellipsoidLocal[slot].Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
 	return s.ellipsoidLocal[slot]
 }
@@ -560,3 +578,71 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
 func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
+
+/*
+func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64) {
+
+	// 1. Dati del piano remoto (Il Muro/Ostacolo)
+	nX, nY, nZ := rFace.GetNormal()
+
+	// Punto di ancoraggio del piano remoto in World Space
+	p0x := rFace.tri[0].X + rOffX
+	p0y := rFace.tri[0].Y + rOffY
+	p0z := rFace.tri[0].Z + rOffZ
+
+	// 2. Normalizzazione come prima (Facing Normalization)
+	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+
+	// Calcoliamo la direzione dal centro della nostra entità al piano per orientare la normale
+	distStart := (s.cX - p0x)*nX + (s.cY - p0y)*nY + (s.cZ - p0z)*nZ
+	var bucket BucketType
+
+	if solidWE || solidNS {
+		if distStart < 0 {
+			nX, nY, nZ = -nX, -nY, -nZ
+		}
+		if solidWE {
+			if nX < 0 { bucket = BucketWallWest } else { bucket = BucketWallEast }
+		} else {
+			if nY < 0 { bucket = BucketWallNorth } else { bucket = BucketWallSouth }
+		}
+	} else {
+		// ... (stessa logica Floor/Ceiling che hai già) ...
+	}
+
+	// 3. LA NUOVA MAGIA 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
+	// Invece di rayEff, testiamo i 3 vertici del NOSTRO triangolo (lFace) contro il piano remoto.
+	maxPenetration := -math.MaxFloat64
+	var hitDist float64
+
+	for i := 0; i < 3; i++ {
+		// Trasliamo il vertice della nostra mesh in World Space
+		vx := lFace.tri[i].X + lOffX
+		vy := lFace.tri[i].Y + lOffY
+		vz := lFace.tri[i].Z + lOffZ
+
+		// Distanza ortogonale del vertice dal piano remoto
+		vDist := (vx - p0x)*nX + (vy - p0y)*nY + (vz - p0z)*nZ
+
+		// La penetrazione è negativa rispetto alla distanza
+		pen := -vDist
+		if pen > maxPenetration {
+			maxPenetration = pen
+			hitDist = vDist
+		}
+	}
+
+	// Se la compenetrazione massima è <= 0, le due facce si sfiorano nelle AABB
+	// ma sono separate geometricamente (Separating Axis Theorem implicito). Scartiamo.
+	if maxPenetration <= 0 {
+		return bucket, hitDist, 0, nX, nY, nZ, p0x, p0y, p0z // Pen 0 farà scattare il 'return' al piano di sopra
+	}
+
+	// 4. SAT Filter (Anti-Phantom Plane) come prima, ma usando le AABB locali/remote!
+	// ... (Mantieni il calcolo minOverlap usando lFace.GetAABB() e rFace.GetAABB()) ...
+
+	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z
+}
+*/

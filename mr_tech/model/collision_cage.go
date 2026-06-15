@@ -373,20 +373,12 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		rFace := faces.rFace
 		lFace := faces.lFace
 
-		_, texKind := rFace.GetMaterialDetails()
-		if texKind == int(config.MaterialKindSky) {
-			continue // Skybox/transparent: ignore collision
-		}
-
 		var b BucketType
 		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
 
 		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
 		if lFace != nil && rCage != nil {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
-			if pen <= 0 {
-				continue
-			}
 		} else {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
@@ -401,6 +393,15 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 					s.distance = dist
 				}
 			}
+		}
+
+		_, texKind := rFace.GetMaterialDetails()
+		if texKind == int(config.MaterialKindSky) {
+			continue // Skybox/transparent: ignore collision
+		}
+
+		if pen <= 0 {
+			continue
 		}
 
 		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
@@ -499,6 +500,11 @@ func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
+// computeFaceMeshVsMesh performs collision detection between two 3D faces, calculating penetration depth and overlap metrics.
+// rFace and lFace represent the remote and local mesh faces, respectively.
+// rOffX, rOffY, rOffZ specify the position offsets for the remote face in world space.
+// lOffX, lOffY, lOffZ specify the position offsets for the local face in world space.
+// Returns the collision bucket, hit distance, maximum penetration depth, normal vector, anchor point, and overlap metrics.
 func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	// 1. Dati del piano remoto (Il Muro/Ostacolo)
 	nX, nY, nZ := rFace.GetNormal()

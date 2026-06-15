@@ -150,7 +150,7 @@ func (s *CageEntry) Penetrable() bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.GetThing().GetEntity().GetId())
+	return v.Penetrable(s.lCage.object.GetEntity().GetId())
 }
 
 // CollisionBucket represents a storage container for collision detection entities within a specific spatial bucket.
@@ -195,7 +195,7 @@ func (b *CollisionBucket) Penetrable(from uint64) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.GetThing().GetEntity().GetId() == from {
+		if entry.rCage != nil && entry.rCage.object.GetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -216,7 +216,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.GetThing().GetEntity().GetId() == existing.rCage.GetThing().GetEntity().GetId() {
+			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
@@ -364,8 +364,8 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.GetThing().GetEntity().GetCenter()
-		lOffX, lOffY, lOffZ = s.GetThing().GetEntity().GetCenter()
+		rOffX, rOffY, rOffZ = rCage.object.GetEntity().GetCenter()
+		lOffX, lOffY, lOffZ = s.object.GetEntity().GetCenter()
 	}
 
 	for x := 0; x < s.facesIdx; x++ {
@@ -551,7 +551,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		}
 	}
 
-	// 3. LA NUOVA MAGIA 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
+	// 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
 	maxPenetration := -math.MaxFloat64
 	var hitDist float64
 
@@ -560,10 +560,8 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		vx := lFace.tri[i].X + lOffX
 		vy := lFace.tri[i].Y + lOffY
 		vz := lFace.tri[i].Z + lOffZ
-
 		// Distanza ortogonale del vertice dal piano remoto
 		vDist := (vx-p0x)*nX + (vy-p0y)*nY + (vz-p0z)*nZ
-
 		// La penetrazione è negativa rispetto alla distanza
 		pen := -vDist
 		if pen > maxPenetration {
@@ -577,7 +575,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// 4. SAT Filter basato sulle AABB locali portate in World Space
+	// SAT Filter basato sulle AABB locali portate in World Space
 	rFaceAABB := rFace.GetAABB()
 	rMinX := rFaceAABB.GetMinX() + rOffX
 	rMaxX := rFaceAABB.GetMaxX() + rOffX
@@ -628,8 +626,10 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 
 // TranslateCage computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
 func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (physics.IAABB, float64, float64, float64) {
-	lCx, lCy, lCz := s.GetAABB().GetCentroid()
-	rCx, rCy, rCz := rCage.GetAABB().GetCentroid()
+	lCx, lCy, lCz := s.object.GetEntity().GetCenter()
+	rCx, rCy, rCz := rCage.object.GetEntity().GetCenter()
+	//lCx, lCy, lCz := s.GetAABB().GetCentroid()
+	//rCx, rCy, rCz := rCage.GetAABB().GetCentroid()
 	lEntityL := s.TranslateWorldToLocal(slot, rCx, rCy, rCz)
 	return lEntityL, rCx - lCx, rCy - lCy, rCz - lCz
 }

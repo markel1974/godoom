@@ -48,6 +48,25 @@ func (xyz *XYZ) Scale(scale XYZ) {
 	xyz.Z *= scale.Z
 }
 
+// SubXYZ subtracts two geometry.XYZ vectors component-wise and returns the resulting vector.
+func SubXYZ(a, b XYZ) XYZ {
+	return XYZ{X: a.X - b.X, Y: a.Y - b.Y, Z: a.Z - b.Z}
+}
+
+// DotXYZ computes the dot product of two 3D vectors represented by geometry.XYZ structs.
+func DotXYZ(a, b XYZ) float64 { return a.X*b.X + a.Y*b.Y + a.Z*b.Z }
+
+// CrossXYZ computes the cross product of two 3D vectors a and b, returning the resulting vector as geometry.XYZ.
+func CrossXYZ(a, b XYZ) XYZ {
+	return XYZ{X: a.Y*b.Z - a.Z*b.Y, Y: a.Z*b.X - a.X*b.Z, Z: a.X*b.Y - a.Y*b.X}
+}
+
+// NormalizeXYZ normalizes a 3D vector to unit length and returns the resulting vector.
+func NormalizeXYZ(v XYZ) XYZ {
+	lenInv := 1.0 / math.Sqrt(v.X*v.X+v.Y*v.Y+v.Z*v.Z)
+	return XYZ{X: v.X * lenInv, Y: v.Y * lenInv, Z: v.Z * lenInv}
+}
+
 // BigFloat creates a new *big.Float with 256 bits of precision and sets its value to the given float64.
 func BigFloat(f float64) *big.Float {
 	return new(big.Float).SetPrec(256).SetFloat64(f)

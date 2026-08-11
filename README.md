@@ -1,8 +1,40 @@
 # mr_tech Engine
 
-Can a 3D game be reverse-engineered, without infringing copyright, and transformed into a sufficiently general intermediate representation that allows it to execute on a runtime for which it was never designed?
+> **Treat a game as source code, not as its runtime — the way a compiler treats its source files.**
 
-mr_tech is an experimental attempt to answer this question.
+Can a 3D game be reverse-engineered, without infringing copyright, understood as a source representation, and transformed into a sufficiently general Intermediate Representation (IR) that allows it to execute on a runtime for which it was never designed?
+
+**mr_tech is an experimental attempt to answer this question.**
+
+The central idea is to treat a 3D game not as a runtime to be emulated, but as a **source program to be understood, translated, and executed by a different runtime**.
+
+In this model, the original game engine is not the target execution environment. Instead, the game is processed through a compiler-like pipeline:
+
+```text
+        3D GAME
+           │
+           ▼
+   Reverse Engineering
+           │
+           ▼
+        Frontend
+           │
+           ▼
+   Semantic Understanding
+           │
+           ▼
+    Intermediate
+    Representation
+           │
+           ▼
+       mr_tech
+        Runtime
+           │
+      ┌────┴────┐
+      ▼         ▼
+   OpenGL    Software
+   Backend   Backend
+```
 
 A bare-metal, highly decoupled 3D rendering and physics engine written in Go. Designed with a strict system-level architecture, it exposes the raw mechanics of spatial partitioning, portal-based visibility, rigid-body kinematics, and hardware graphics pipelines without relying on high-level commercial abstractions.
 

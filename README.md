@@ -1,6 +1,8 @@
 # mr_tech Engine
 
-# mr_tech Engine
+Can a 3D game be reverse-engineered, without infringing copyright, and transformed into a sufficiently general intermediate representation that allows it to execute on a runtime for which it was never designed?
+
+mr_tech is an experimental attempt to answer this question.
 
 A bare-metal, highly decoupled 3D rendering and physics engine written in Go. Designed with a strict system-level architecture, it exposes the raw mechanics of spatial partitioning, portal-based visibility, rigid-body kinematics, and hardware graphics pipelines without relying on high-level commercial abstractions.
 

@@ -36,7 +36,7 @@ In this model, the original game engine is not the target execution environment.
    Backend   Backend
 ```
 
-A bare-metal, highly decoupled 3D rendering and physics engine written in Go. Designed with a strict system-level architecture, it exposes the raw mechanics of spatial partitioning, portal-based visibility, rigid-body kinematics, and hardware graphics pipelines without relying on high-level commercial abstractions.
+A bare-metal, highly decoupled 3D rendering and physics engine written in Go. Designed with a strict system-level architecture, it exposes the raw mechanics of spatial partitioning, rigid-body kinematics, and hardware graphics pipelines without relying on high-level commercial abstractions.
 
 ## Architecture
 
@@ -46,7 +46,7 @@ The engine discards static blockmaps in favor of a universal, dynamic physical w
 * **Dynamic AABB Tree:** Provides O(log n) spatial queries and collision detection. Every entity (player, NPCs, projectiles) is a first-class node within the tree.
 * **Newtonian Kinematics:** Implements real-time rigid-body dynamics featuring momentum conservation, friction, and elastic/inelastic responses.
 * **Baumgarte Stabilization:** Resolves inter-frame positional penetration (Positional Projection) ensuring jitter-free collision response.
-* **Bidirectional Sync-Back:** The physical solver and logical spatial topology are strictly synchronized. Passive physical deltas (bounces, impacts) are automatically translated back into sector transitions and portal resolution.
+* **Bidirectional Sync-Back:** The physical solver and logical spatial topology are strictly synchronized. Passive physical deltas (bounces, impacts) are automatically translated back.
 
 ### Entity System (Composition over Inheritance)
 Entities are designed using idiomatic Go composition, entirely decoupling game logic from the physics and rendering cores.
@@ -58,10 +58,9 @@ Entities are designed using idiomatic Go composition, entirely decoupling game l
 Geometry is parsed and translated into a unified planar topology (IR).
 * **WAD Parser:** Decodes classic WAD formats to extract raw geometry, completely ignoring legacy BSP trees.
 * **Custom DSL:** A text-based parser for rapid, textual planar topology prototyping.
-* **Procedural Generator:** An automated dungeon generator (Drunkard's walk) featuring dynamic portal resolution on shared grid edges and continuous elevation handling.
+* **Procedural Generator:** An automated dungeon generator (Drunkard's walk) featuring continuous elevation handling.
 
 ### Rendering Backends
-* **Portal Rendering Core:** Dynamic visibility resolution and spatial culling utilizing a custom ring queue and visibility caching.
 * **OpenGL Rasterizer:** Hardware-accelerated pipeline featuring geometry batching and custom shader implementations (including SSAO for depth enhancement on planar geometry).
 * **Software Rasterizer:** A dependency-free implementation for direct vertex buffer manipulation and raw primitive rasterization.
 

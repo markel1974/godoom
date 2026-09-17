@@ -40,6 +40,8 @@ func (p *Builder) Build(id string) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 10, 90, 1.0, 20)
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
+	player.OnImpact = playerLogic.OnImpact
+
 	player.Speed = 60
 
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)

@@ -136,6 +136,9 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 
 func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
+	playerLogic := common.NewPlayer()
+	player.OnCollision = playerLogic.OnCollision
+	player.OnImpact = playerLogic.OnImpact
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)

@@ -5,15 +5,29 @@ import "math"
 // __srgbToLin is a lookup table for converting sRGB values (0-255) to linear color space values in the range [0.0, 1.0].
 var __srgbToLin [256]float64
 
+var __linToSrgb [4096]uint8
+
 // init initializes the __srgbToLin array with sRGB to linear conversion values for the range [0, 255].
 func init() {
-	for i := 0; i < 256; i++ {
-		v := float64(i) / 255.0
+	srgbToLinLen := len(__srgbToLin)
+	for i := 0; i < srgbToLinLen; i++ {
+		v := float64(i) / float64(srgbToLinLen-1)
 		if v <= 0.04045 {
 			__srgbToLin[i] = v / 12.92
 		} else {
 			__srgbToLin[i] = math.Pow((v+0.055)/1.055, 2.4)
 		}
+	}
+	linToSrgbLen := len(__linToSrgb)
+	for i := 0; i < linToSrgbLen; i++ {
+		c := float64(i) / float64(linToSrgbLen-1)
+		var v float64
+		if c <= 0.0031308 {
+			v = c * 12.92
+		} else {
+			v = 1.055*math.Pow(c, 1/2.4) - 0.055
+		}
+		__linToSrgb[i] = uint8(math.Round(v * 255.0))
 	}
 }
 
@@ -249,14 +263,10 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 		if c >= 1.0 {
 			return 255
 		}
-		var v float64
-		if c <= 0.0031308 {
-			v = c * 12.92
-		} else {
-			v = 1.055*math.Pow(c, 1/2.4) - 0.055
-		}
-		return uint8(math.Round(v * 255.0))
+		idx := int(c * 4095.0)
+		return __linToSrgb[idx]
 	}
+
 	sinc := func(x float64) float64 {
 		if x == 0 {
 			return 1.0
@@ -278,96 +288,128 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 		return src
 	}
 
+	type tap struct {
+		offset int
+		w      float64
+	}
+
+	xRatio := float64(oldW) / float64(newW)
+	hTaps := make([][6]tap, newW)
+	for x := 0; x < newW; x++ {
+		cx := (float64(x)+0.5)*xRatio - 0.5
+		ix := int(math.Floor(cx))
+		var wSum float64
+		for j := -2; j <= 3; j++ {
+			sx := ix + j
+			if sx < 0 {
+				sx = 0
+			} else if sx >= oldW {
+				sx = oldW - 1
+			}
+			w := lanczos3(cx - float64(ix+j))
+			hTaps[x][j+2] = tap{offset: sx * stride, w: w}
+			wSum += w
+		}
+		if wSum != 0 {
+			for j := 0; j < 6; j++ {
+				hTaps[x][j].w /= wSum
+			}
+		}
+	}
+
+	yRatio := float64(oldH) / float64(newH)
+	vTaps := make([][6]tap, newH)
+	for y := 0; y < newH; y++ {
+		cy := (float64(y)+0.5)*yRatio - 0.5
+		iy := int(math.Floor(cy))
+		var wSum float64
+		for j := -2; j <= 3; j++ {
+			sy := iy + j
+			if sy < 0 {
+				sy = 0
+			} else if sy >= oldH {
+				sy = oldH - 1
+			}
+			w := lanczos3(cy - float64(iy+j))
+			vTaps[y][j+2] = tap{offset: sy * newW * stride, w: w}
+			wSum += w
+		}
+		if wSum != 0 {
+			for j := 0; j < 6; j++ {
+				vTaps[y][j].w /= wSum
+			}
+		}
+	}
+
 	// Intermediate buffer in linear space (float64 to preserve gradient precision)
 	temp := make([]float64, newW*oldH*stride)
-	xRatio := float64(oldW) / float64(newW)
 
 	// Horizontal Convolution (src -> temp)
 	for y := 0; y < oldH; y++ {
+		rowOffset := y * oldW * stride
+		tempRowOffset := y * newW * stride
 		for x := 0; x < newW; x++ {
-			cx := (float64(x)+0.5)*xRatio - 0.5
-			ix := int(math.Floor(cx))
-
+			taps := hTaps[x]
 			for c := 0; c < stride; c++ {
-				var sum, wSum float64
-				minV, maxV := 1.0, 0.0
+				val0 := __srgbToLin[src[rowOffset+taps[0].offset+c]]
+				val1 := __srgbToLin[src[rowOffset+taps[1].offset+c]]
+				val2 := __srgbToLin[src[rowOffset+taps[2].offset+c]]
+				val3 := __srgbToLin[src[rowOffset+taps[3].offset+c]]
+				val4 := __srgbToLin[src[rowOffset+taps[4].offset+c]]
+				val5 := __srgbToLin[src[rowOffset+taps[5].offset+c]]
 
-				// Radius 3 -> 6 tap (-2 to +3)
-				for j := -2; j <= 3; j++ {
-					sx := ix + j
-					if sx < 0 {
-						sx = 0
-					} else if sx >= oldW {
-						sx = oldW - 1
-					}
+				res := val0*taps[0].w + val1*taps[1].w + val2*taps[2].w + val3*taps[3].w + val4*taps[4].w + val5*taps[5].w
 
-					val := __srgbToLin[src[(y*oldW+sx)*stride+c]]
-
-					// Local Extrema Tracking (on the 2 texels adjacent to the center)
-					if j == 0 || j == 1 {
-						if val < minV {
-							minV = val
-						}
-						if val > maxV {
-							maxV = val
-						}
-					}
-
-					w := lanczos3(cx - float64(ix+j))
-					sum += val * w
-					wSum += w
+				minV := val2
+				maxV := val2
+				if val3 < minV {
+					minV = val3
+				} else if val3 > maxV {
+					maxV = val3
 				}
 
-				res := sum / wSum
 				if res < minV {
 					res = minV
 				} else if res > maxV {
 					res = maxV
 				}
-				temp[(y*newW+x)*stride+c] = res
+				temp[tempRowOffset+x*stride+c] = res
 			}
 		}
 	}
 
 	dst := make([]uint8, newW*newH*stride)
-	yRatio := float64(oldH) / float64(newH)
 
 	// Vertical Convolution (temp -> dst)
-	for x := 0; x < newW; x++ {
-		for y := 0; y < newH; y++ {
-			cy := (float64(y)+0.5)*yRatio - 0.5
-			iy := int(math.Floor(cy))
+	for y := 0; y < newH; y++ {
+		dstRowOffset := y * newW * stride
+		taps := vTaps[y]
+		for x := 0; x < newW; x++ {
+			colOffset := x * stride
 			for c := 0; c < stride; c++ {
-				var sum, wSum float64
-				minV, maxV := 1.0, 0.0
-				for j := -2; j <= 3; j++ {
-					sy := iy + j
-					if sy < 0 {
-						sy = 0
-					} else if sy >= oldH {
-						sy = oldH - 1
-					}
-					val := temp[(sy*newW+x)*stride+c]
-					if j == 0 || j == 1 {
-						if val < minV {
-							minV = val
-						}
-						if val > maxV {
-							maxV = val
-						}
-					}
-					w := lanczos3(cy - float64(iy+j))
-					sum += val * w
-					wSum += w
+				val0 := temp[taps[0].offset+colOffset+c]
+				val1 := temp[taps[1].offset+colOffset+c]
+				val2 := temp[taps[2].offset+colOffset+c]
+				val3 := temp[taps[3].offset+colOffset+c]
+				val4 := temp[taps[4].offset+colOffset+c]
+				val5 := temp[taps[5].offset+colOffset+c]
+
+				res := val0*taps[0].w + val1*taps[1].w + val2*taps[2].w + val3*taps[3].w + val4*taps[4].w + val5*taps[5].w
+
+				minV := val2
+				maxV := val2
+				if val3 < minV {
+					minV = val3
+				} else if val3 > maxV {
+					maxV = val3
 				}
-				res := sum / wSum
+
 				if res < minV {
 					res = minV
 				} else if res > maxV {
 					res = maxV
 				}
-				// Return to gamma-compressed sRGB space
-				dst[(y*newW+x)*stride+c] = linToSRGB(res)
+				dst[dstRowOffset+colOffset+c] = linToSRGB(res)
 			}
 		}
 	}

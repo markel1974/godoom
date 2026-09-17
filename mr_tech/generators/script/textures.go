@@ -1,10 +1,10 @@
 package script
 
 import (
-	"bufio"
 	"io"
 	"os"
 
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -30,8 +30,7 @@ func NewTextures(basePath string) (*Textures, error) {
 			if name[0] == '*' || name[0] == '+' {
 				emissive = true
 			}
-			tex := textures.NewTexture(f.Name(), uint32(idx), 1024, 1024, emissive)
-			err = t.load(tex, basePath+f.Name())
+			tex, err := common.PPMToTexture(basePath+f.Name(), f.Name(), uint32(idx), emissive)
 			if err == nil || err == io.EOF {
 				t.resources[f.Name()] = tex
 			} else {
@@ -40,39 +39,6 @@ func NewTextures(basePath string) (*Textures, error) {
 		}
 	}
 	return t, nil
-}
-
-// load reads texture data from the specified file and populates the given Animations instance with pixel values.
-func (t *Textures) load(tex *textures.Texture, filename string) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if _, err := file.Seek(0x11, io.SeekStart); err != nil {
-		return err
-	}
-	br := bufio.NewReader(file)
-	var r byte
-	var g byte
-	var b byte
-	for {
-		for y := 0; y < 1024; y++ {
-			for x := 0; x < 1024; x++ {
-				if r, err = br.ReadByte(); err != nil {
-					return err
-				}
-				if g, err = br.ReadByte(); err != nil {
-					return err
-				}
-				if b, err = br.ReadByte(); err != nil {
-					return err
-				}
-				rgba := int(r)<<24 | int(g)<<16 | int(b)<<8 | 255
-				tex.Set(x, y, rgba)
-			}
-		}
-	}
 }
 
 // Get retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.

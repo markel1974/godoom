@@ -27,13 +27,11 @@ func IntersectBoxF(x0 float64, y0 float64, x1 float64, y1 float64, x2 float64, y
 // PointInLineDirectionF determines the relative position of point (px, py) to a directed line segment (x0, y0) -> (x1, y1).
 // Returns 0 if the point lies on the line, -1 if it's to the left, and 1 if it's to the right.
 func PointInLineDirectionF(px, py, x0, y0, x1, y1 float64) float64 {
-	const epsilon = 1e-5 // 0.00001
-	v := VxsF(x1-x0, y1-y0, px-x0, py-y0)
-	// Difesa contro l'imprecisione del floating point
-	if math.Abs(v) <= epsilon {
+	o := Orient2D(XY{X: x0, Y: y0}, XY{X: x1, Y: y1}, XY{X: px, Y: py})
+	if o == 0 {
 		return 0
 	}
-	if v < 0 {
+	if o < 0 {
 		return -1
 	}
 	return 1
@@ -53,13 +51,19 @@ func IntersectFn(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 
 	if d == 0 {
 		return 0, 0, false
 	}
-	pre := (x1 * y2) - (y1 * x2)
-	post := (x3 * y4) - (y3 * x4)
-	x := (pre*(x3-x4) - (x1-x2)*post) / d
-	y := (pre*(y3-y4) - (y1-y2)*post) / d
-	//if x < minF(x1, x2) || x > maxF(x1, x2) || x < minF(x3, x4) || x > maxF(x3, x4) { return 0, 0, false }
-	//if y < minF(y1, y2) || y > maxF(y1, y2) || y < minF(y3, y4) || y > maxF(y3, y4) { return 0, 0, false }
-	return x, y, true
+
+	// Use parametric equations to find intersection points
+	t := ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / d
+	u := ((x1-x3)*(y1-y2) - (y1-y3)*(x1-x2)) / d
+
+	// Check if the intersection lies within both line segments (t and u must be between 0 and 1)
+	if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
+		x := x1 + t*(x2-x1)
+		y := y1 + t*(y2-y1)
+		return x, y, true
+	}
+
+	return 0, 0, false
 }
 
 // IntersectLineSegmentsF determines if two 2D line segments intersect using their endpoint coordinates.

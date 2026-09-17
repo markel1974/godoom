@@ -1,7 +1,5 @@
 package geometry
 
-import "math"
-
 const segmentsTolerance = 1e-6 // segmentsTolerance defines the precision threshold for geometric calculations, such as collinearity and point-segment checks.
 
 // IsSegmentSubset determines if the segment defined by points a1 and a2 is a subset of the segment defined by points b1 and b2.
@@ -19,8 +17,18 @@ func IsSegmentSubset(a1, a2, b1, b2 XY) bool {
 
 // isCollinear determines if a point p is collinear with a line segment defined by points s1 and s2, using a tolerance.
 func isCollinear(s1, s2, p XY) bool {
-	crossProduct := (s2.X-s1.X)*(p.Y-s1.Y) - (s2.Y-s1.Y)*(p.X-s1.X)
-	return math.Abs(crossProduct) < segmentsTolerance
+	dx := s2.X - s1.X
+	dy := s2.Y - s1.Y
+	lengthSq := dx*dx + dy*dy
+
+	if lengthSq == 0 {
+		return DistanceSq(s1, p) < segmentsTolerance*segmentsTolerance
+	}
+
+	crossProduct := dx*(p.Y-s1.Y) - dy*(p.X-s1.X)
+	// crossProduct represents the scaled perpendicular distance.
+	// We normalize it by the segment length squared to check the actual distance.
+	return (crossProduct*crossProduct)/lengthSq < segmentsTolerance*segmentsTolerance
 }
 
 // isPointOnSegment determines if a point p lies on the line segment defined by endpoints s1 and s2 within a tolerance.

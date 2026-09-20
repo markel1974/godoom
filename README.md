@@ -67,7 +67,7 @@ Geometry is parsed and translated into a unified planar topology (IR).
 ## Design Philosophy
 
 This project acts as an explicit study of graphics internals, applied mathematics, and system programming. It avoids the "black-box" nature of modern 3D frameworks, offering granular, driver-level control over memory, spatial structures, and the rendering pipeline.
-
+[![mr_tech — 3D games as source code](https://img.youtube.com/vi/t4Mag_FCjLc/maxresdefault.jpg)](https://www.youtube.com/watch?v=t4Mag_FCjLc)
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot1.png?raw=true)
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot2.png?raw=true)
 ![alt text](https://github.com/markel1974/godoom/blob/main/bloob/screenshot3.png?raw=true)

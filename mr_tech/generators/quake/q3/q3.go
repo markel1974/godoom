@@ -732,21 +732,14 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	skinTargetIndex := 0
 	kind := config.ThingEnemyDef
 	var category string
-	var definition string
 	if c := strings.Split(classname, "_"); len(c) > 1 {
 		category = c[0]
-		definition = c[1]
 	}
-	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
 	switch category {
 	case "item":
 		kind = config.ThingItemDef
-		if skinTIndex, ok := items[definition]; ok {
-			skinTargetIndex = skinTIndex
-		}
 	case "weapon":
 		kind = config.ThingItemDef
 	case "enemy":
@@ -757,47 +750,20 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 	arc := q3.GetArchive()
-	rsMd1, err := arc.Open(thingPath)
+	rsMd3, err := arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	md1 := lumps.NewMD1Resource()
-	if err = md1.Parse(rsMd1); err != nil {
-		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
-	}
-	if skinTargetIndex >= len(md1.Skins) {
-		return nil, fmt.Errorf("no skin found for %s", classname)
-	}
-	skin := md1.Skins[skinTargetIndex]
-	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
-	if err = q3.RegisterPixels(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
-		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
-	}
-	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := config.NewMD1(int(md1.Header.NumFrames), md1.FrameNames)
-	for idx, f := range md1.Frames {
-		triangles := make([]config.MD1Triangle, int(md1.Header.NumTris))
-		skinW := float32(md1.Header.SkinWidth)
-		skinH := float32(md1.Header.SkinHeight)
-		for tIdx, tri := range md1.Triangles {
-			cTri := config.NewMD1Triangle(anim)
-			for v := 0; v < 3; v++ {
-				vx := tri.Vertices[v]
-				tc := md1.TexCoords[vx]
-				s := float32(tc.S)
-				t := float32(tc.T)
-				if tri.FacesFront == 0 && tc.OnSeam != 0 {
-					s += skinW / 2.0
-				}
-				nU := s / skinW
-				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD1Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
-			}
-			triangles[tIdx] = cTri
-		}
-		cFrame := config.NewMD1Frame(triangles)
-		cModel.Frames[idx] = cFrame
+	md3 := lumps.NewMD3Resource()
+	basePath := thingPath
+	if lastSlash := strings.LastIndex(thingPath, "/"); lastSlash != -1 {
+		basePath = thingPath[:lastSlash+1]
+	}
+
+	cModel, err := md3.Parse(rsMd3, q3.texManager, basePath)
+	if err != nil {
+		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
 
 	thingCfg := q3.createConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)

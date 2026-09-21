@@ -16,10 +16,10 @@ var _q3DictModelFilename = map[string]string{
 	"item_armor_combat": "models/powerups/armor/armor_yel.md3", // Yellow Armor
 	"item_armor_body":   "models/powerups/armor/armor_red.md3", // Red Armor
 
-	"item_health_small": "models/powerups/health/health_s.md3",
-	"item_health":       "models/powerups/health/health.md3",
-	"item_health_large": "models/powerups/health/health_large.md3",
-	"item_health_mega":  "models/powerups/health/mega_h.md3",
+	"item_health_small": "models/powerups/health/small_cross.md3",
+	"item_health":       "models/powerups/health/medium_cross.md3",
+	"item_health_large": "models/powerups/health/large_cross.md3",
+	"item_health_mega":  "models/powerups/health/mega_cross.md3",
 
 	// Powerups
 	"item_quad":   "models/powerups/instant/quad.md3",

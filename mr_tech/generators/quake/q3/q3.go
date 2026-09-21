@@ -381,8 +381,25 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 			if errTga == nil {
 				img, err = common.DecodeTGA(fileTga)
 			} else {
-				fmt.Printf("Warning: asset mancante %s (.jpg/.tga)\n", texName)
-				continue
+				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
+				if fallbackName, ok := _q3ShaderFallback[texName]; ok {
+					// Riprova con il fallback
+					fbJpg := fallbackName + ".jpg"
+					if fJpg, e := q3.arc.Open(fbJpg); e == nil {
+						img, _, err = image.Decode(fJpg)
+					} else {
+						fbTga := fallbackName + ".tga"
+						if fTga, e := q3.arc.Open(fbTga); e == nil {
+							img, err = common.DecodeTGA(fTga)
+						} else {
+							fmt.Printf("Warning: asset mancante %s (.jpg/.tga) (fallito anche il fallback)\n", texName)
+							continue
+						}
+					}
+				} else {
+					fmt.Printf("Warning: asset mancante %s (.jpg/.tga)\n", texName)
+					continue
+				}
 			}
 		}
 
@@ -536,7 +553,7 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		case "worldspawn":
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
-			if classname == "info_player_start" {
+			if classname == "info_player_start" || classname == "info_player_deathmatch" {
 				var err error
 				q3.playerPos, q3.playerAngle, err = q3.createPlayerProps(angle, pos)
 				if err != nil {

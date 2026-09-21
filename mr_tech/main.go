@@ -83,6 +83,10 @@ func main() {
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(quakeFile, level)
+	case 8:
+		quakeFile := "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
+		wb := quake.NewBuilder()
+		cfg, err = wb.Setup(quakeFile, level)
 	default:
 		db := dungeon.NewBuilder()
 		cfg, err = db.Build(level)

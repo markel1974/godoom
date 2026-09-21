@@ -466,7 +466,7 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 		case "worldspawn":
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
-			if classname == "info_player_start" {
+			if classname == "info_player_start" || classname == "info_player_deathmatch" {
 				var err error
 				q2.playerPos, q2.playerAngle, err = q2.createPlayerProps(angle, pos)
 				if err != nil {

@@ -43,3 +43,16 @@ var _q3DictModelFilename = map[string]string{
 var _q3DictBModel = map[string]string{
 	// Q3 usa bmodels interni per l'architettura mobile (*1, *2) ma non modelli BSP esterni precompilati per le armi.
 }
+
+var _q3ShaderFallback = map[string]string{
+	"textures/sfx/flame1side":                   "textures/sfx/flame1",
+	"textures/sfx/flame1_hell":                  "textures/sfx/flame1",
+	"textures/gothic_trim/pitted_rust2_trans":   "textures/gothic_trim/pitted_rust2",
+	"textures/skin/surface8_trans":              "textures/skin/surface8",
+	"textures/gothic_light/pentagram_light1_1k": "textures/gothic_light/pentagram_light1",
+	"textures/liquids/lavahell_750":             "textures/liquids/lavahell",
+	"textures/liquids/lavahellflat_400":         "textures/liquids/lavahell",
+	"textures/skin/tongue_trans":                "textures/skin/tongue",
+	"textures/gothic_door/km_arena1columna2r":   "textures/gothic_door/km_arena1columna2",
+	"textures/skies/tim_hell":                   "env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
+}

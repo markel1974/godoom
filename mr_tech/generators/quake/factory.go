@@ -13,18 +13,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/q3"
 )
 
-// BSPVersion represents the version of a BSP (Binary Space Partitioning) file used in different game engines.
-type BSPVersion int
-
-// BSPVersionQ1 represents the BSP version for Quake 1 files.
-// BSPVersionQ2 represents the BSP version for Quake 2 files.
-// BSPVersionQ3 represents the BSP version for Quake 3 files.
-const (
-// BSPVersionQ1 BSPVersion = 29
-// BSPVersionQ2 BSPVersion = 38
-// BSPVersionQ3 BSPVersion = 46
-)
-
 // NewBSPReader creates and initializes an IBSPReader for the specified BSP file using the provided IArchive instance.
 func NewBSPReader(arc interfaces.IArchive, bspPath string) (interfaces.IBSPReader, error) {
 	rs, rErr := arc.Open(bspPath)

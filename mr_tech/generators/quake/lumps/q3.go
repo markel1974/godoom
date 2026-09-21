@@ -411,3 +411,13 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XY
 	}
 	return points, uvs
 }
+
+// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+func (q3 *Q3BSPReader) GetExternalBModelFileName(classname string) string {
+	return _q3DictBModel[classname]
+}
+
+// GetModelFileName returns the file name of the model associated with the specified classname.
+func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
+	return _q3DictModelFilename[classname]
+}

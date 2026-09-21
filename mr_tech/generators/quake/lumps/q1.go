@@ -167,6 +167,16 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	return rawFaces, nil
 }
 
+// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+func (q1 *Q1BSPReader) GetExternalBModelFileName(classname string) string {
+	return _q1DictBModel[classname]
+}
+
+// GetModelFileName returns the file name of the model associated with the specified classname.
+func (q1 *Q1BSPReader) GetModelFileName(classname string) string {
+	return _q1DictModelFilename[classname]
+}
+
 // GetVertexes retrieves a slice of Vertex pointers from the BSP file and returns an error if the operation fails.
 func (q1 *Q1BSPReader) getVertexes() ([]*Vertex, error) {
 	return NewVertexes(q1.rs, q1.infos[LumpVertexes])

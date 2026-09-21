@@ -371,3 +371,13 @@ func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
 		}
 	}
 }
+
+// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+func (q2 *Q2BSPReader) GetExternalBModelFileName(classname string) string {
+	return _q2DictBModel[classname]
+}
+
+// GetModelFileName returns the file name of the model associated with the specified classname.
+func (q2 *Q2BSPReader) GetModelFileName(classname string) string {
+	return _q2DictModelFilename[classname]
+}

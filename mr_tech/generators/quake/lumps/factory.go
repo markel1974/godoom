@@ -47,6 +47,10 @@ type IBSPReader interface {
 	RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error
 
 	GetRawFaces(modelIdx int) ([]*RawFace, error)
+
+	GetExternalBModelFileName(classname string) string
+
+	GetModelFileName(classname string) string
 }
 
 // NewBSPReader detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.

@@ -118,10 +118,10 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			continue
 		}
 
-		if externalBSPPath := GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
+		if externalBSPPath := reader.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
 			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, arc, reader)
 			if err != nil {
-				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
+				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
 				continue
 			}
 			root.Things = append(root.Things, cThing)
@@ -193,15 +193,18 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		triangles := p.triangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
-			triUvs := make([][2]float64, 3)
-			for k := 0; k < 3; k++ {
-				pos := tri[k]
-				for idx, pt := range v.Points {
-					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
-						if len(v.UVs) > idx {
-							triUvs[k] = v.UVs[idx]
+			var triUvs [][2]float64
+			if len(v.UVs) > 0 {
+				triUvs = make([][2]float64, 3)
+				for k := 0; k < 3; k++ {
+					pos := tri[k]
+					for idx, pt := range v.Points {
+						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+							if len(v.UVs) > idx {
+								triUvs[k] = v.UVs[idx]
+							}
+							break
 						}
-						break
 					}
 				}
 			}
@@ -334,7 +337,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 
 // createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
 func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArchive, reader lumps.IBSPReader) (*config.Thing, error) {
-	thingPath := GetModelFileName(classname)
+	thingPath := reader.GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}

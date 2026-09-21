@@ -1,6 +1,6 @@
-package quake
+package lumps
 
-var _dictModelFilename = map[string]string{
+var _q1DictModelFilename = map[string]string{
 	// Monsters
 	"monster_army":        "progs/soldier.mdl", // Grunt
 	"monster_enforcer":    "progs/enforcer.mdl",
@@ -51,7 +51,7 @@ var _dictModelFilename = map[string]string{
 	"rocket":            "progs/missile.mdl", // Razzo
 }
 
-var _dictBModel = map[string]string{
+var _q1DictBModel = map[string]string{
 	// Health
 	"item_health":       "maps/b_bh25.bsp",  // Medkit standard (25hp)
 	"item_health_large": "maps/b_bh100.bsp", // Megahealth (100hp) - *Potrebbe anche essere un b_bh10.bsp per il piccolo, controlla i source di Q1*
@@ -75,6 +75,7 @@ var _dictBModel = map[string]string{
 	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande
 }
 
+/*
 func GetExternalBModelFileName(classname string) string {
 	return _dictBModel[classname]
 }
@@ -84,3 +85,4 @@ func GetExternalBModelFileName(classname string) string {
 func GetModelFileName(classname string) string {
 	return _dictModelFilename[classname]
 }
+*/

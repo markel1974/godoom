@@ -85,21 +85,21 @@ type q3Vertex struct {
 
 // Q3BSPReader analizza le mappe in formato idTech 3 (Quake 3 / Return to Castle Wolfenstein)
 type Q3BSPReader struct {
-	fs         IReader
+	arc        IArchive
 	header     HeaderQ3
 	rs         io.ReadSeeker
 	texManager *Textures
 }
 
-func NewQ3BSPReader(rs io.ReadSeeker) *Q3BSPReader {
+func NewQ3BSPReader(arc IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	return &Q3BSPReader{
+		arc:        arc,
 		rs:         rs,
 		texManager: NewTextures(),
 	}
 }
 
-func (q3 *Q3BSPReader) Setup(r IReader) error {
-	q3.fs = r
+func (q3 *Q3BSPReader) Setup() error {
 	if _, err := q3.rs.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -110,6 +110,11 @@ func (q3 *Q3BSPReader) Setup(r IReader) error {
 		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.header.Magic[:]), q3.header.Version)
 	}
 	return nil
+}
+
+// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
+func (q3 *Q3BSPReader) GetArchive() IArchive {
+	return q3.arc
 }
 
 func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
@@ -312,13 +317,13 @@ func (q3 *Q3BSPReader) compileTextures(faces []*RawFace) {
 
 		// Prova prima con JPEG
 		jpgPath := texName + ".jpg"
-		file, errJpg := q3.fs.Open(jpgPath)
+		file, errJpg := q3.arc.Open(jpgPath)
 		if errJpg == nil {
 			img, _, err = image.Decode(file)
 		} else {
 			// Fallback su TGA
 			tgaPath := texName + ".tga"
-			fileTga, errTga := q3.fs.Open(tgaPath)
+			fileTga, errTga := q3.arc.Open(tgaPath)
 			if errTga == nil {
 				img, err = common.DecodeTGA(fileTga)
 			} else {

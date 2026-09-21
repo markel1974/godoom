@@ -1,4 +1,3 @@
-// lumps_q1_wrapper.go
 package lumps
 
 import (
@@ -10,7 +9,7 @@ import (
 
 // Q1BSPReader reads and processes Quake 1 BSP files by managing lumps, textures, and geometry data.
 type Q1BSPReader struct {
-	reader      IReader
+	arc         IArchive
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	infos       []*LumpInfo
@@ -25,8 +24,9 @@ type Q1BSPReader struct {
 }
 
 // NewQ1BSPReader initializes and returns a pointer to a new Q1BSPReader instance using the provided io.ReadSeeker streams.
-func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
+func NewQ1BSPReader(arc IArchive, rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
 	return &Q1BSPReader{
+		arc:        arc,
 		rs:         rs,
 		rsPal:      rsPal,
 		texManager: NewTextures(),
@@ -34,8 +34,7 @@ func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
 }
 
 // Setup initializes the Q1BSPReader by loading BSP data, textures, palettes, and related metadata from the provided reader.
-func (q1 *Q1BSPReader) Setup(reader IReader) error {
-	q1.reader = reader
+func (q1 *Q1BSPReader) Setup() error {
 	var err error
 	if q1.infos, err = NewLumpInfos(q1.rs); err != nil {
 		return err
@@ -69,6 +68,11 @@ func (q1 *Q1BSPReader) Setup(reader IReader) error {
 		}
 	}
 	return nil
+}
+
+// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
+func (q1 *Q1BSPReader) GetArchive() IArchive {
+	return q1.arc
 }
 
 // GetEntities retrieves all entities from the BSP file and returns them as a slice of Entity pointers or an error.

@@ -105,7 +105,7 @@ type q2Vertex struct {
 
 // Q2BSPReader reads and processes Quake 2 BSP files, handling headers, entities, models, and textures.
 type Q2BSPReader struct {
-	reader     IReader
+	arc        IArchive
 	header     HeaderQ2
 	rs         io.ReadSeeker
 	rsPal      io.ReadSeeker
@@ -114,8 +114,9 @@ type Q2BSPReader struct {
 }
 
 // NewQ2BSPReader creates and returns a new Q2BSPReader to handle Quake 2 BSP files with optional palette support.
-func NewQ2BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
+func NewQ2BSPReader(arc IArchive, rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
 	return &Q2BSPReader{
+		arc:        arc,
 		rs:         rs,
 		texManager: NewTextures(),
 		rsPal:      rsPal,
@@ -123,8 +124,7 @@ func NewQ2BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
 }
 
 // Setup initializes the Q2BSPReader, reading the header and optionally loading the palette if available.
-func (q2 *Q2BSPReader) Setup(r IReader) error {
-	q2.reader = r
+func (q2 *Q2BSPReader) Setup() error {
 	var err error
 	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
 		return err
@@ -146,6 +146,11 @@ func (q2 *Q2BSPReader) Setup(r IReader) error {
 		}
 	}
 	return nil
+}
+
+// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
+func (q2 *Q2BSPReader) GetArchive() IArchive {
+	return q2.arc
 }
 
 // GetEntities reads and parses the entities lump from the BSP file, returning a slice of Entity pointers or an error.
@@ -352,7 +357,7 @@ func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
 			continue
 		}
 		walPath := "textures" + PakSeparator + texName + ".wal"
-		walFile, walErr := q2.reader.Open(walPath)
+		walFile, walErr := q2.arc.Open(walPath)
 		if walErr != nil {
 			fmt.Printf("Warning: missing asset %s: %s\n \n", walPath, walErr.Error())
 			continue

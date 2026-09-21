@@ -20,6 +20,8 @@ const gForce = 9.8 * 14
 
 // Builder manages the construction and handling of graphical assets, leveraging a Textures manager for texture operations.
 type Builder struct {
+	playerAngle float64
+	playerPos   geometry.XYZ
 }
 
 // NewBuilder initializes and returns a pointer to a new Builder instance with a default Textures manager.
@@ -29,7 +31,6 @@ func NewBuilder() *Builder {
 
 // Setup initializes the game environment by loading and processing BSP data, textures, entities, and lights from a .pak file.
 func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
-	const chunkSize = float64(1024)
 	if lev < 1 {
 		lev = 1
 	}
@@ -57,22 +58,12 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	if bErr != nil {
 		return nil, bErr
 	}
-	if err := reader.Setup(arc); err != nil {
+	if err := reader.Setup(); err != nil {
 		return nil, err
 	}
-	mIdx := 0
-	faces, rfErr := reader.GetRawFaces(mIdx)
-	if rfErr != nil {
-		return nil, rfErr
-	}
-	entities, eErr := reader.GetEntities()
-	if eErr != nil {
-		return nil, eErr
-	}
+
 	texManager := reader.GetTextures()
 
-	var playerAngle float64
-	var playerPos geometry.XYZ
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	//cal.Auto = false
 	//cal.OrthoSize = 32092
@@ -85,6 +76,56 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texManager)
 
+	if err := p.Build(root, reader); err != nil {
+		return nil, err
+	}
+
+	root.Player = config.NewConfigPlayer(p.playerPos, p.playerAngle, 100, 1200, 15, 40)
+	playerLogic := common.NewPlayer()
+	root.Player.OnCollision = playerLogic.OnCollision
+	root.Player.OnImpact = playerLogic.OnImpact
+	root.Player.GForce = gForce
+	root.Player.JumpForce = 1000
+
+	root.Player.Flash.ZFar = 8192
+	root.Player.Flash.Factor = 0.02
+	root.Player.Flash.Falloff = 2000
+	root.Player.Flash.OffsetX = 0.2
+	root.Player.Flash.OffsetY = 0.1
+	root.Player.Bobbing.SwayScale = 2.0
+	root.Player.Bobbing.SwayOffsetX = 50
+	root.Player.Bobbing.SwayOffsetY = -0.9
+	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
+	root.Player.Bobbing.MaxAmplitudeY = 5.5
+	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	root.Player.Bobbing.IdleAmpX = 0.9        // Breathing
+	root.Player.Bobbing.IdleAmpY = 0.9
+	root.Player.Bobbing.IdleDrift = 0.01
+	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
+	root.Player.Bobbing.AmpLerp = 0.20
+	root.Player.Bobbing.ImpactMax = 1000.0
+	root.Player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
+	root.Player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
+	root.Player.Bobbing.SpringDamping = 0.80
+	root.Player.Bobbing.TiltAmp = 0.05
+
+	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
+	//root.Things = nil
+
+	return root, nil
+}
+
+func (p *Builder) Build(root *config.Root, reader lumps.IBSPReader) error {
+	const chunkSize = float64(1024)
+	mIdx := 0
+	faces, rfErr := reader.GetRawFaces(mIdx)
+	if rfErr != nil {
+		return rfErr
+	}
+	entities, eErr := reader.GetEntities()
+	if eErr != nil {
+		return eErr
+	}
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
@@ -114,7 +155,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		}
 
 		if externalBSPPath := reader.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
-			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, arc, reader)
+			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, reader)
 			if err != nil {
 				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
 				continue
@@ -129,7 +170,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		case "info":
 			if classname == "info_player_start" {
 				var err error
-				playerPos, playerAngle, err = p.createPlayerProps(angle, pos)
+				p.playerPos, p.playerAngle, err = p.createPlayerProps(angle, pos)
 				if err != nil {
 					fmt.Printf("Warning: %s\n", err.Error())
 				}
@@ -168,7 +209,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		//case "trap":
 		//TODO
 		default:
-			cThing, err := p.createThing(pos, classname, arc, reader)
+			cThing, err := p.createThing(pos, classname, reader)
 			if err != nil {
 				fmt.Printf("Warning: %s\n", err.Error())
 				continue
@@ -185,7 +226,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			animKind = config.MaterialKindSky
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
-		triangles := p.triangulateConvex3d(v.Points)
+		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
 			var triUvs [][2]float64
@@ -225,38 +266,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
 		}
 	}
-
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 40)
-	playerLogic := common.NewPlayer()
-	root.Player.OnCollision = playerLogic.OnCollision
-	root.Player.OnImpact = playerLogic.OnImpact
-	root.Player.GForce = gForce
-	root.Player.JumpForce = 1000
-
-	root.Player.Flash.ZFar = 8192
-	root.Player.Flash.Factor = 0.02
-	root.Player.Flash.Falloff = 2000
-	root.Player.Flash.OffsetX = 0.2
-	root.Player.Flash.OffsetY = 0.1
-	root.Player.Bobbing.SwayScale = 2.0
-	root.Player.Bobbing.SwayOffsetX = 50
-	root.Player.Bobbing.SwayOffsetY = -0.9
-	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
-	root.Player.Bobbing.MaxAmplitudeY = 5.5
-	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
-	root.Player.Bobbing.IdleAmpX = 0.9        // Breathing
-	root.Player.Bobbing.IdleAmpY = 0.9
-	root.Player.Bobbing.IdleDrift = 0.01
-	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
-	root.Player.Bobbing.AmpLerp = 0.20
-	root.Player.Bobbing.ImpactMax = 1000.0
-	root.Player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
-	root.Player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
-	root.Player.Bobbing.SpringDamping = 0.80
-	root.Player.Bobbing.TiltAmp = 0.05
-	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
-	//root.Things = nil
-	return root, nil
+	return nil
 }
 
 // createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
@@ -282,7 +292,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 	// COLOR (Standard Quake 2 / Modern Quake 1)
 	r, g, b := 1.0, 1.0, 1.0 // Default White
 	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := p.parseVector(colorStr); valid {
+		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
 				r, g, b = cr/255.0, cg/255.0, cb/255.0
 			} else {
@@ -298,8 +308,8 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 		intensity = intensity * 0.9
 		falloff = intensity * 10
 		if len(mangleStr) > 0 {
-			if yaw, pitch, _, valid := p.parseVector(mangleStr); valid {
-				dirX, dirY, dirZ = p.calcDirection(yaw, pitch)
+			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
+				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
 			}
 		} else {
 			if angle == -1 {
@@ -307,7 +317,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 			} else if angle == -2 {
 				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
 			} else {
-				dirX, dirY, dirZ = p.calcDirection(angle, 0)
+				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
 			}
 		}
 	} else {
@@ -331,7 +341,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 }
 
 // createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
-func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArchive, reader lumps.IBSPReader) (*config.Thing, error) {
+func (p *Builder) createThing(pos geometry.XYZ, classname string, reader lumps.IBSPReader) (*config.Thing, error) {
 	thingPath := reader.GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -361,7 +371,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArc
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-
+	arc := reader.GetArchive()
 	rsMd1, err := arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
@@ -411,12 +421,12 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArc
 }
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, arc lumps.IArchive, parentReader lumps.IBSPReader) (*config.Thing, error) {
-	reader, err := lumps.NewBSPReader(arc, bspPath)
+func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, parentReader lumps.IBSPReader) (*config.Thing, error) {
+	reader, err := lumps.NewBSPReader(parentReader.GetArchive(), bspPath)
 	if err != nil {
 		return nil, err
 	}
-	if err = reader.Setup(arc); err != nil {
+	if err = reader.Setup(); err != nil {
 		return nil, err
 	}
 	bspModels, err := reader.GetModels()
@@ -446,7 +456,7 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 			tw, th, pixels := texes[0].RGBA()
 			_ = parentReader.RegisterPixelsRGBA(texName, tw, th, pixels, false)
 		}
-		rawTriangles := p.triangulateConvex3d(bspFace.Points)
+		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)
@@ -496,63 +506,4 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		thingCfg.OnImpact = itemLogic.OnImpact
 	}
 	return thingCfg
-}
-
-// triangulateConvex3d generates a triangle fan from a convex 3D polygon defined by a list of vertices.
-// It returns a slice of slices, each containing exactly three vertices representing a single triangle.
-func (p *Builder) triangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
-	pLen := len(pts)
-	if pLen < 3 {
-		return nil // Degenerate polygon
-	}
-	if pLen == 3 {
-		return [][]geometry.XYZ{{pts[0], pts[1], pts[2]}}
-	}
-	output := make([][]geometry.XYZ, 0, pLen-2)
-	// Triangle Fan anchored to pts[0]
-	for i := 1; i < pLen-1; i++ {
-		output = append(output, []geometry.XYZ{pts[0], pts[i], pts[i+1]})
-	}
-	return output
-}
-
-// triangulateConvex3dInverted triangulates a convex 3D polygon into triangles in inverted winding order.
-func (p *Builder) triangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.XYZ {
-	pLen := len(pts)
-	if pLen < 3 {
-		return nil
-	}
-	if pLen == 3 {
-		// INVERTED: from (0, 1, 2) to (0, 2, 1)
-		return [][]geometry.XYZ{{pts[0], pts[2], pts[1]}}
-	}
-
-	output := make([][]geometry.XYZ, 0, pLen-2)
-	for i := 1; i < pLen-1; i++ {
-		// INVERTED: pts[i+1] comes BEFORE pts[i]
-		output = append(output, []geometry.XYZ{pts[0], pts[i+1], pts[i]})
-	}
-	return output
-}
-
-// parseVector extracts 3 floats from a Quake-style string (e.g. "1.0 0.5 0.0").
-func (p *Builder) parseVector(s string) (float64, float64, float64, bool) {
-	parts := strings.Fields(s)
-	if len(parts) >= 3 {
-		v1, _ := strconv.ParseFloat(parts[0], 64)
-		v2, _ := strconv.ParseFloat(parts[1], 64)
-		v3, _ := strconv.ParseFloat(parts[2], 64)
-		return v1, v2, v3, true
-	}
-	return 0, 0, 0, false
-}
-
-// calcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
-func (p *Builder) calcDirection(yaw, pitch float64) (float64, float64, float64) {
-	yawRad := yaw * math.Pi / 180.0
-	pitchRad := pitch * math.Pi / 180.0
-	dirX := math.Cos(pitchRad) * math.Cos(yawRad)
-	dirY := math.Sin(pitchRad)
-	dirZ := math.Cos(pitchRad) * math.Sin(yawRad)
-	return dirX, dirY, dirZ
 }

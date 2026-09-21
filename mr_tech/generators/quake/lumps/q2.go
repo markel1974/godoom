@@ -56,8 +56,8 @@ const (
 	NumQ2Lumps        = 19
 )
 
-// HeaderQ2 represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
-type HeaderQ2 struct {
+// Q2Header represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
+type Q2Header struct {
 	Magic   [4]byte
 	Version int32
 	Lumps   [NumQ2Lumps]struct {
@@ -121,7 +121,7 @@ type q2Vertex struct {
 // Q2BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type Q2BSPReader struct {
 	arc         IArchive
-	header      HeaderQ2
+	header      Q2Header
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	palette     []byte

@@ -18,6 +18,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// LumpQ3Entities represents the lump index for storing entity data in a Quake 3 map.
+// LumpQ3Textures represents the lump index for storing texture data in a Quake 3 map.
+// LumpQ3Planes represents the lump index for storing plane data in a Quake 3 map.
+// LumpQ3Nodes represents the lump index for storing node data in a Quake 3 map.
+// LumpQ3Leafs represents the lump index for storing leaf data in a Quake 3 map.
+// LumpQ3LeafFaces represents the lump index for storing leaf face data in a Quake 3 map.
+// LumpQ3LeafBrushes represents the lump index for storing leaf brush data in a Quake 3 map.
+// LumpQ3Models represents the lump index for storing model data in a Quake 3 map.
+// LumpQ3Brushes represents the lump index for storing brush data in a Quake 3 map.
+// LumpQ3BrushSides represents the lump index for storing brush side data in a Quake 3 map.
+// LumpQ3Vertexes represents the lump index for storing vertex data in a Quake 3 map.
+// LumpQ3MeshVerts represents the lump index for storing mesh vertex data in a Quake 3 map.
+// LumpQ3Effects represents the lump index for storing special effect data in a Quake 3 map.
+// LumpQ3Faces represents the lump index for storing face data in a Quake 3 map.
+// LumpQ3Lightmaps represents the lump index for storing lightmap data in a Quake 3 map.
+// LumpQ3LightVols represents the lump index for storing light volume data in a Quake 3 map.
+// LumpQ3VisData represents the lump index for storing visibility data in a Quake 3 map.
+// NumQ3Lumps represents the total number of lumps in a Quake 3 map.
 const (
 	LumpQ3Entities    = 0
 	LumpQ3Textures    = 1
@@ -39,8 +57,10 @@ const (
 	NumQ3Lumps        = 17
 )
 
+// BSPVersionQ3 represents the BSP version number used for Quake 3 map files.
 const BSPVersionQ3 int = 46
 
+// HeaderQ3 represents the header structure of a Quake 3 BSP file, containing metadata and lump information.
 type HeaderQ3 struct {
 	Magic   [4]byte
 	Version int32
@@ -50,12 +70,15 @@ type HeaderQ3 struct {
 	}
 }
 
+// q3Texture represents a texture used in a Quake III BSP file.
+// It includes the texture name, rendering flags, and content flags.
 type q3Texture struct {
 	Name     [64]byte
 	Flags    uint32
 	Contents uint32
 }
 
+// q3Model represents a 3D model in a Quake 3 BSP file, including bounds and references to associated geometry data.
 type q3Model struct {
 	Mins       [3]float32
 	Maxs       [3]float32
@@ -65,6 +88,7 @@ type q3Model struct {
 	NumBrushes int32
 }
 
+// q3Face represents a face in a Quake 3 BSP map, including its geometry, texture, and lightmap information.
 type q3Face struct {
 	TextureID   int32
 	Effect      int32
@@ -82,6 +106,12 @@ type q3Face struct {
 	PatchSize   [2]int32
 }
 
+// q3Vertex represents a single vertex in a Quake 3 BSP model structure.
+// Position defines the 3D coordinates of the vertex in space.
+// TexCoord specifies the 2D texture mapping coordinates.
+// LMapCoord provides the lightmap texture coordinates.
+// Normal defines the surface normal vector at the vertex.
+// Color stores the RGBA color values of the vertex.
 type q3Vertex struct {
 	Position  [3]float32
 	TexCoord  [2]float32
@@ -90,7 +120,7 @@ type q3Vertex struct {
 	Color     [4]uint8
 }
 
-// Q3BSPReader analizza le mappe in formato idTech 3 (Quake 3 / Return to Castle Wolfenstein)
+// Q3BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
 type Q3BSPReader struct {
 	arc         interfaces.IArchive
 	header      HeaderQ3
@@ -100,6 +130,7 @@ type Q3BSPReader struct {
 	playerPos   geometry.XYZ
 }
 
+// NewQ3BSPReader creates a new instance of Q3BSPReader with the provided archive and ReadSeeker.
 func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	return &Q3BSPReader{
 		arc:        arc,
@@ -108,6 +139,7 @@ func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	}
 }
 
+// Setup initializes the Q3BSPReader instance by validating the magic number and version of the Quake 3 BSP file.
 func (q3 *Q3BSPReader) Setup() error {
 	if _, err := q3.rs.Seek(0, io.SeekStart); err != nil {
 		return err
@@ -121,16 +153,17 @@ func (q3 *Q3BSPReader) Setup() error {
 	return nil
 }
 
-// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
+// GetArchive returns the IArchive instance associated with the Q3BSPReader.
 func (q3 *Q3BSPReader) GetArchive() interfaces.IArchive {
 	return q3.arc
 }
 
-// GetPlayerInfo retrieves the player's viewing angle in radians and position in 3D space as a geometry.XYZ struct.
+// GetPlayerInfo retrieves the player's view angle (in radians) and position in 3D space.
 func (q3 *Q3BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q3.playerAngle, q3.playerPos
 }
 
+// GetEntities retrieves all entities from the BSP file by parsing the entities lump and returns them as a slice.
 func (q3 *Q3BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	lump := q3.header.Lumps[LumpQ3Entities]
 	if _, err := q3.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
@@ -143,6 +176,7 @@ func (q3 *Q3BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	return lumps.NewEntitiesFromText(lumps.FromNullTerminatingString(data))
 }
 
+// GetModels extracts and returns all BSP sub-models from the lump data, including static and moving brush models.
 func (q3 *Q3BSPReader) GetModels() ([]*lumps.Model, error) {
 	lModels := q3.header.Lumps[LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
@@ -169,19 +203,25 @@ func (q3 *Q3BSPReader) GetModels() ([]*lumps.Model, error) {
 	return out, nil
 }
 
+// RegisterPixels registers a texture by name with specified dimensions and pixel indices data, supporting transparency and Y-inversion.
 func (q3 *Q3BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return nil // In Q3 le texture sono solitamente .tga o .jpg lette dal VFS nativamente come RGBA, il manager andrà adattato
 }
 
+// RegisterPixelsRGBA registers an RGBA texture in the texture manager with the given name, dimensions, and pixel data.
+// Pixels should be provided as a byte slice in RGBA format, and setting invertY to true flips the texture vertically.
+// Returns an error if the registration fails.
 func (q3 *Q3BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return q3.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
+// GetTextures retrieves the texture manager containing the loaded textures for the current Q3 BSP file.
 func (q3 *Q3BSPReader) GetTextures() *lumps.Textures {
 	return q3.texManager
 }
 
-// GetRawFaces risolve nativamente Index Buffer (MeshVerts) e Patch di Bezier
+// GetRawFaces retrieves all raw face data for a specific model index from the BSP file, including geometry and texture info.
+// Returns a slice of RawFace objects or an error if the operation fails.
 func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	lModels := q3.header.Lumps[LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
@@ -314,7 +354,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	return rawFaces, nil
 }
 
-// compileTextures cerca e decodifica i file JPEG associati alle facce estratte
+// compileTextures loads and registers unique textures from a list of faces, supporting JPEG and TGA formats.
 func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
@@ -367,13 +407,14 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	}
 }
 
-// evalBezier calcola la coordinata lungo la curva di grado 2 per il fattore t [0.0 - 1.0]
+// evalBezier computes the value of a quadratic Bézier curve given control points p0, p1, p2 and a parameter t [0,1].
 func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
 	u := 1.0 - t
 	return (u * u * p0) + (2.0 * u * t * p1) + (t * t * p2)
 }
 
-// tessellatePatch espande i 9 punti di controllo in un array flat di triangoli
+// tessellatePatch calculates a triangle mesh from a 3x3 patch of control points, using a specified tessellation level.
+// The method returns a list of 3D vertices and corresponding UV texture coordinates for the generated mesh.
 func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XYZ, [][2]float64) {
 	var points []geometry.XYZ
 	var uvs [][2]float64
@@ -431,16 +472,17 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XY
 	return points, uvs
 }
 
-// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+// GetExternalBModelFileName retrieves the external BSP model filename associated with the given classname.
 func (q3 *Q3BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q3DictBModel[classname]
 }
 
-// GetModelFileName returns the file name of the model associated with the specified classname.
+// GetModelFileName retrieves the file path of the model associated with the given classname from the model filename map.
 func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
 	return _q3DictModelFilename[classname]
 }
 
+// Build processes entities and geometry from a Q3BSPReader, organizing them into the root config structure.
 func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
@@ -509,12 +551,12 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			colorStr, _ := ent.Properties["_color"]
 			var light *config.Light = nil
 			if len(subClass) == 0 {
-				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, _q1LightStyle0, false)
+				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, _q3LightStyle0, false)
 			} else {
-				style := _q1LightStyle0
+				style := _q3LightStyle0
 				if sIndex, ok := ent.Properties["style"]; ok {
-					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q1LightStyles) {
-						style = _q1LightStyles[index]
+					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q3LightStyles) {
+						style = _q3LightStyles[index]
 					}
 				}
 				// Handles light, light_fluoro, light_fluorospark
@@ -595,13 +637,13 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	return nil
 }
 
-// createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
+// createPlayerProps calculates the player's angle in radians and returns updated position, angle, and error if any.
 func (q3 *Q3BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
 	playerAngle := angle * (math.Pi / 180.0)
 	return pos, playerAngle, nil
 }
 
-// createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
+// createLight creates a light configuration based on entity properties, position, type, intensity, and direction.
 func (q3 *Q3BSPReader) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
@@ -666,7 +708,7 @@ func (q3 *Q3BSPReader) createLight(entity *lumps.Entity, angle float64, mangleSt
 	return cl
 }
 
-// createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
+// createThing creates a new Thing entity based on its position and classname, returning the configured Thing or an error.
 func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.Thing, error) {
 	thingPath := q3.GetModelFileName(classname)
 	if len(thingPath) == 0 {
@@ -746,7 +788,7 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 	return thingCfg, nil
 }
 
-// createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
+// createThingBSP reads a BSP file, extracts its models, and generates a Thing configuration from the extracted data.
 func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
 	arc := q3.GetArchive()
 	rs, err := arc.Open(bspPath)
@@ -813,7 +855,7 @@ func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 	return thingCfg, nil
 }
 
-// createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
+// createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
 func (q3 *Q3BSPReader) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)

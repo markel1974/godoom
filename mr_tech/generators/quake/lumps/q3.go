@@ -437,8 +437,6 @@ func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
 	return _q3DictModelFilename[classname]
 }
 
-//------------------------
-
 func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
@@ -832,5 +830,3 @@ func (q3 *Q3BSPReader) createConfigThing(classname string, pos geometry.XYZ, kin
 	}
 	return thingCfg
 }
-
-// --------------

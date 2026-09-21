@@ -194,8 +194,6 @@ func (q1 *Q1BSPReader) GetModelFileName(classname string) string {
 	return _q1DictModelFilename[classname]
 }
 
-//------------------------
-
 func (q1 *Q1BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
@@ -589,8 +587,6 @@ func (q1 *Q1BSPReader) createConfigThing(classname string, pos geometry.XYZ, kin
 	}
 	return thingCfg
 }
-
-// --------------
 
 // getVertexes retrieves the vertex data from the BSP file using the lump information and returns a slice of vertex pointers.
 func (q1 *Q1BSPReader) getVertexes() ([]*Vertex, error) {

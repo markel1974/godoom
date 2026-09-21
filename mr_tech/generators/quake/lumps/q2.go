@@ -13,26 +13,26 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// LumpQ2Entities represents the lump index for Quake 2 entity data.
-// LumpQ2Planes represents the lump index for Quake 2 plane data.
-// LumpQ2Vertexes represents the lump index for Quake 2 vertex data.
-// LumpQ2Visibility represents the lump index for Quake 2 visibility data.
-// LumpQ2Nodes represents the lump index for Quake 2 node data.
-// LumpQ2TexInfo represents the lump index for Quake 2 texture information.
-// LumpQ2Faces represents the lump index for Quake 2 face data.
-// LumpQ2Lighting represents the lump index for Quake 2 lightmaps data.
-// LumpQ2Leaves represents the lump index for Quake 2 leaf data.
-// LumpQ2LeafFaces represents the lump index for Quake 2 leaf faces data.
-// LumpQ2LeafBrushes represents the lump index for Quake 2 leaf brushes data.
-// LumpQ2Edges represents the lump index for Quake 2 edge data.
-// LumpQ2SurfEdges represents the lump index for Quake 2 surface edges data.
-// LumpQ2Models represents the lump index for Quake 2 model data.
-// LumpQ2Brushes represents the lump index for Quake 2 brush data.
-// LumpQ2BrushSides represents the lump index for Quake 2 brush sides data.
-// LumpQ2Pop represents the lump index for Quake 2 population visibility data.
-// LumpQ2Areas represents the lump index for Quake 2 area definitions.
-// LumpQ2AreaPortals represents the lump index for Quake 2 area portal data.
-// NumQ2Lumps defines the total number of lump types available in Quake 2.
+// LumpQ2Entities represents the lump index for entities in Quake 2 BSP files.
+// LumpQ2Planes represents the lump index for planes in Quake 2 BSP files.
+// LumpQ2Vertexes represents the lump index for vertices in Quake 2 BSP files.
+// LumpQ2Visibility represents the lump index for visibility in Quake 2 BSP files.
+// LumpQ2Nodes represents the lump index for nodes in Quake 2 BSP files.
+// LumpQ2TexInfo represents the lump index for texture information in Quake 2 BSP files.
+// LumpQ2Faces represents the lump index for faces in Quake 2 BSP files.
+// LumpQ2Lighting represents the lump index for lighting in Quake 2 BSP files.
+// LumpQ2Leaves represents the lump index for leaves in Quake 2 BSP files.
+// LumpQ2LeafFaces represents the lump index for leaf faces in Quake 2 BSP files.
+// LumpQ2LeafBrushes represents the lump index for leaf brushes in Quake 2 BSP files.
+// LumpQ2Edges represents the lump index for edges in Quake 2 BSP files.
+// LumpQ2SurfEdges represents the lump index for surface edges in Quake 2 BSP files.
+// LumpQ2Models represents the lump index for models in Quake 2 BSP files.
+// LumpQ2Brushes represents the lump index for brushes in Quake 2 BSP files.
+// LumpQ2BrushSides represents the lump index for brush sides in Quake 2 BSP files.
+// LumpQ2Pop represents the lump index for pop in Quake 2 BSP files (unused or specific purpose).
+// LumpQ2Areas represents the lump index for areas in Quake 2 BSP files.
+// LumpQ2AreaPortals represents the lump index for area portals in Quake 2 BSP files.
+// NumQ2Lumps represents the total number of lumps in Quake 2 BSP files.
 const (
 	LumpQ2Entities    = 0
 	LumpQ2Planes      = 1
@@ -56,7 +56,7 @@ const (
 	NumQ2Lumps        = 19
 )
 
-// HeaderQ2 represents the header structure of a Quake II BSP file, containing metadata and lump directory information.
+// HeaderQ2 represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
 type HeaderQ2 struct {
 	Magic   [4]byte
 	Version int32
@@ -66,7 +66,7 @@ type HeaderQ2 struct {
 	}
 }
 
-// q2Model represents a Quake 2 model with spatial and structural data stored in BSP format.
+// q2Model represents a Quake 2 model with bounds, origin, BSP tree head, and face-related indices.
 type q2Model struct {
 	Mins      [3]float32
 	Maxs      [3]float32
@@ -76,8 +76,14 @@ type q2Model struct {
 	NumFaces  int32
 }
 
-// q2Face defines the structure of a face in a Quake 2 BSP file.
-// It includes information about the plane, edges, texture, lighting, and lightmap.
+// q2Face represents a face in the Quake 2 BSP map format.
+// PlaneID is the plane index in the BSP plane array associated with this face.
+// Side specifies whether the face is oriented in the same or opposite direction to the plane.
+// FirstEdge is the starting index in the surface edge array for this face's edges.
+// NumEdges indicates the total number of edges defining this face.
+// TexInfo is the index into the texture information array for texture details of the face.
+// LightTypes contains light style indices for the face's dynamic lighting data.
+// Lightmap is the offset in the lightmap data where this face's lightmap starts.
 type q2Face struct {
 	PlaneID    uint16
 	Side       uint16
@@ -88,7 +94,12 @@ type q2Face struct {
 	Lightmap   int32
 }
 
-// q2TexInfo represents texture information in a Quake 2 BSP file, including transformation vectors, flags, and texture name.
+// q2TexInfo represents texture mapping information for Quake 2 BSP files.
+// Vecs defines two texture vectors used for UV mapping calculations.
+// Flags holds attributes for the surface such as visibility or rendering properties.
+// Value specifies additional data for the texture, often used for switches or animations.
+// TextureName is the name of the texture, stored as a null-terminated string.
+// NextTexInfo holds the index of the next texture in the chain, or -1 if none.
 type q2TexInfo struct {
 	Vecs        [2][4]float32
 	Flags       uint32
@@ -102,12 +113,12 @@ type q2Edge struct {
 	V1, V2 uint16
 }
 
-// q2Vertex represents a vertex in 3D space with X, Y, and Z coordinates stored as 32-bit floating-point values.
+// q2Vertex represents a 3D point in space with X, Y, and Z coordinates as float32 values.
 type q2Vertex struct {
 	X, Y, Z float32
 }
 
-// Q2BSPReader reads and processes Quake 2 BSP files, handling headers, entities, models, and textures.
+// Q2BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type Q2BSPReader struct {
 	arc         IArchive
 	header      HeaderQ2
@@ -119,7 +130,7 @@ type Q2BSPReader struct {
 	playerPos   geometry.XYZ
 }
 
-// NewQ2BSPReader creates and returns a new Q2BSPReader to handle Quake 2 BSP files with optional palette support.
+// NewQ2BSPReader creates a new Q2BSPReader instance with the provided archive, BSP file reader, and optional palette reader.
 func NewQ2BSPReader(arc IArchive, rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
 	return &Q2BSPReader{
 		arc:        arc,
@@ -129,7 +140,7 @@ func NewQ2BSPReader(arc IArchive, rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPR
 	}
 }
 
-// Setup initializes the Q2BSPReader, reading the header and optionally loading the palette if available.
+// Setup initializes the Q2BSPReader by reading the header and optionally loading the palette for WAL textures.
 func (q2 *Q2BSPReader) Setup() error {
 	var err error
 	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
@@ -154,17 +165,17 @@ func (q2 *Q2BSPReader) Setup() error {
 	return nil
 }
 
-// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
+// GetArchive retrieves the IArchive instance associated with the Q2BSPReader.
 func (q2 *Q2BSPReader) GetArchive() IArchive {
 	return q2.arc
 }
 
-// GetPlayerInfo retrieves the player's angle in radians and position in 3D space as geometry.XYZ coordinates.
+// GetPlayerInfo returns the player's current angle (in radians) and position as an XYZ coordinate structure.
 func (q2 *Q2BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q2.playerAngle, q2.playerPos
 }
 
-// GetEntities reads and parses the entities lump from the BSP file, returning a slice of Entity pointers or an error.
+// GetEntities extracts and parses entities from the BSP file by reading the entities lump and converting it to structured data.
 func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
 	lump := q2.header.Lumps[LumpQ2Entities]
 	if _, err := q2.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
@@ -178,7 +189,7 @@ func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
 	return NewEntitiesFromText(text)
 }
 
-// GetModels retrieves all BSP sub-models (bmodels) from the Quake 2 BSP file or returns an error if not implemented.
+// GetModels reads and parses the model lump to retrieve an array of BSP sub-models from the map file.
 func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
@@ -204,16 +215,18 @@ func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
 	return out, nil
 }
 
-// RegisterPixels registers texture pixel data with the texture manager, applying palette and optional transformations.
+// RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
 func (q2 *Q2BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return q2.texManager.RegisterPixels(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }
 
+// RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.
+// Returns an error if the registration process fails.
 func (q2 *Q2BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return q2.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
-// GetRawFaces extracts raw face data for a specific model index from the Quake 2 BSP file and returns the corresponding faces.
+// GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
 func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	// Read models to find face offsets
 	lumpModels := q2.header.Lumps[LumpQ2Models]
@@ -352,12 +365,12 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	return rawFaces, nil
 }
 
-// GetTextures retrieves the texture manager associated with the Q2BSPReader.
+// GetTextures returns a reference to the Textures manager associated with the Q2BSPReader.
 func (q2 *Q2BSPReader) GetTextures() *Textures {
 	return q2.texManager
 }
 
-// PrepareTexture loads and registers unique textures from a PAK file based on the provided faces, excluding sky textures.
+// compileTextures processes and registers unique textures extracted from the given raw faces, excluding "sky" textures.
 func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
@@ -388,18 +401,17 @@ func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
 	}
 }
 
-// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+// GetExternalBModelFileName returns the external BModel file name associated with the given classname.
 func (q2 *Q2BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q2DictBModel[classname]
 }
 
-// GetModelFileName returns the file name of the model associated with the specified classname.
+// GetModelFileName retrieves the file name of the model associated with the given classname from the predefined dictionary.
 func (q2 *Q2BSPReader) GetModelFileName(classname string) string {
 	return _q2DictModelFilename[classname]
 }
 
-//------------------------
-
+// Build processes the Quake 2 BSP data and constructs the corresponding game world structure in the provided root configuration.
 func (q2 *Q2BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
@@ -554,13 +566,13 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 	return nil
 }
 
-// createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
+// createPlayerProps calculates the player's position and orientation in radians based on the provided angle and position.
 func (q2 *Q2BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
 	playerAngle := angle * (math.Pi / 180.0)
 	return pos, playerAngle, nil
 }
 
-// createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
+// createLight initializes a Light object based on entity properties, position, style, color, and light type (spot or ambient).
 func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
@@ -625,7 +637,7 @@ func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 	return cl
 }
 
-// createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
+// createThing creates a new game entity (Thing) based on its position and classname, returning the entity or an error.
 func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.Thing, error) {
 	thingPath := q2.GetModelFileName(classname)
 	if len(thingPath) == 0 {
@@ -705,7 +717,8 @@ func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 	return thingCfg, nil
 }
 
-// createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
+// createThingBSP creates a Thing entity from a BSP file at the specified position and with the given classname.
+// It extracts and converts BSP models, textures, and faces, constructing a Thing with appropriate geometry data.
 func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
 	reader, err := NewBSPReader(q2.GetArchive(), bspPath)
 	if err != nil {
@@ -770,7 +783,7 @@ func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 	return thingCfg, nil
 }
 
-// createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
+// createConfigThing initializes and returns a Thing configuration object with provided properties and logic handlers.
 func (q2 *Q2BSPReader) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
@@ -793,5 +806,3 @@ func (q2 *Q2BSPReader) createConfigThing(classname string, pos geometry.XYZ, kin
 	}
 	return thingCfg
 }
-
-// --------------

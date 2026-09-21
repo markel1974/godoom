@@ -7,8 +7,11 @@ import (
 	"image/draw"
 	_ "image/jpeg"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -85,10 +88,12 @@ type q3Vertex struct {
 
 // Q3BSPReader analizza le mappe in formato idTech 3 (Quake 3 / Return to Castle Wolfenstein)
 type Q3BSPReader struct {
-	arc        IArchive
-	header     HeaderQ3
-	rs         io.ReadSeeker
-	texManager *Textures
+	arc         IArchive
+	header      HeaderQ3
+	rs          io.ReadSeeker
+	texManager  *Textures
+	playerAngle float64
+	playerPos   geometry.XYZ
 }
 
 func NewQ3BSPReader(arc IArchive, rs io.ReadSeeker) *Q3BSPReader {
@@ -115,6 +120,11 @@ func (q3 *Q3BSPReader) Setup() error {
 // GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
 func (q3 *Q3BSPReader) GetArchive() IArchive {
 	return q3.arc
+}
+
+// GetPlayerInfo retrieves the player's viewing angle in radians and position in 3D space as a geometry.XYZ struct.
+func (q3 *Q3BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
+	return q3.playerAngle, q3.playerPos
 }
 
 func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
@@ -426,3 +436,401 @@ func (q3 *Q3BSPReader) GetExternalBModelFileName(classname string) string {
 func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
 	return _q3DictModelFilename[classname]
 }
+
+//------------------------
+
+func (q3 *Q3BSPReader) Build(root *config.Root) error {
+	const chunkSize = float64(1024)
+	mIdx := 0
+	faces, rfErr := q3.GetRawFaces(mIdx)
+	if rfErr != nil {
+		return rfErr
+	}
+	entities, eErr := q3.GetEntities()
+	if eErr != nil {
+		return eErr
+	}
+	for _, ent := range entities {
+		classname := ent.Properties["classname"]
+		baseClass := classname
+		subClass := ""
+		if z := strings.Split(classname, "_"); len(z) > 1 {
+			baseClass = z[0]
+			subClass = z[1]
+		}
+		var pos geometry.XYZ
+		if origin, ok := ent.Properties["origin"]; ok {
+			var x, y, z float64
+			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
+			pos = CreateXYZ(x, y, z)
+		}
+
+		var angle float64
+		if a, ok := ent.Properties["angle"]; ok {
+			angle, _ = strconv.ParseFloat(a, 64)
+		}
+
+		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
+		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
+		// is rendered correctly. When ready, we will remove this continue
+		// and instantiate bmodels using GetModels() from IBSPReader.
+		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
+			continue
+		}
+
+		if externalBSPPath := q3.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
+			cThing, err := q3.createThingBSP(externalBSPPath, pos, classname)
+			if err != nil {
+				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
+				continue
+			}
+			root.Things = append(root.Things, cThing)
+			continue
+		}
+
+		switch baseClass {
+		case "worldspawn":
+			// Ignored: it is the base map, geometry is already handled by worldModel
+		case "info":
+			if classname == "info_player_start" {
+				var err error
+				q3.playerPos, q3.playerAngle, err = q3.createPlayerProps(angle, pos)
+				if err != nil {
+					fmt.Printf("Warning: %s\n", err.Error())
+				}
+			} else {
+				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+				// TODO: Save them in a gameplay waypoint/spawnpoint list.
+			}
+		case "light":
+			mangleStr, _ := ent.Properties["mangle"]
+			colorStr, _ := ent.Properties["_color"]
+			var light *config.Light = nil
+			if len(subClass) == 0 {
+				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, _q1LightStyle0, false)
+			} else {
+				style := _q1LightStyle0
+				if sIndex, ok := ent.Properties["style"]; ok {
+					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q1LightStyles) {
+						style = _q1LightStyles[index]
+					}
+				}
+				// Handles light, light_fluoro, light_fluorospark
+				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
+			}
+			if light != nil {
+				root.Lights = append(root.Lights, light)
+			}
+		case "path":
+			// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+			// TODO: Save them in a gameplay waypoint/spawnpoint list.
+		case "ambient":
+			// TODO:
+		case "func":
+			// TODO:
+		case "trigger":
+		// TODO:
+		//case "trap":
+		//TODO
+		default:
+			cThing, err := q3.createThing(pos, classname)
+			if err != nil {
+				fmt.Printf("Warning: %s\n", err.Error())
+				continue
+			}
+			root.Things = append(root.Things, cThing)
+		}
+	}
+	vIdx := strconv.Itoa(mIdx)
+
+	chunks := make(map[string]*config.Volume)
+	for _, v := range faces {
+		animKind := config.MaterialKindLoop
+		if v.IsSky {
+			animKind = config.MaterialKindSky
+		}
+		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+		triangles := TriangulateConvex3d(v.Points)
+
+		for _, tri := range triangles {
+			var triUvs [][2]float64
+			if len(v.UVs) > 0 {
+				triUvs = make([][2]float64, 3)
+				for k := 0; k < 3; k++ {
+					pos := tri[k]
+					for idx, pt := range v.Points {
+						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+							if len(v.UVs) > idx {
+								triUvs[k] = v.UVs[idx]
+							}
+							break
+						}
+					}
+				}
+			}
+
+			// 2. Find the triangle centroid
+			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
+			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
+			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
+
+			// 3. Calculate the spatial hashing key (grid coordinates)
+			gridX := int(math.Floor(cx / chunkSize))
+			gridY := int(math.Floor(cy / chunkSize))
+			gridZ := int(math.Floor(cz / chunkSize))
+
+			chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
+			volume, exists := chunks[chunkKey]
+			if !exists {
+				chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
+				volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
+				chunks[chunkKey] = volume
+				root.Volumes = append(root.Volumes, volume)
+			}
+			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
+		}
+	}
+	return nil
+}
+
+// createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
+func (q3 *Q3BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
+	playerAngle := angle * (math.Pi / 180.0)
+	return pos, playerAngle, nil
+}
+
+// createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
+func (q3 *Q3BSPReader) createLight(entity *Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+	intensity := 0.0
+	falloff := 0.0
+	var kind config.LightKind
+
+	// BASE INTENSITY
+	if l, ok := entity.Properties["light"]; ok {
+		intensity, _ = strconv.ParseFloat(l, 64)
+		//intensity *= 0.3
+	} else {
+		intensity = 300 // Typical Quake default fallback
+	}
+
+	// COLOR (Standard Quake 2 / Modern Quake 1)
+	r, g, b := 1.0, 1.0, 1.0 // Default White
+	if len(colorStr) > 0 {
+		if cr, cg, cb, valid := ParseVector(colorStr); valid {
+			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
+				r, g, b = cr/255.0, cg/255.0, cb/255.0
+			} else {
+				r, g, b = cr, cg, cb
+			}
+		}
+	}
+
+	// SPOTLIGHT DIRECTION
+	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
+	if isSpot {
+		kind = config.LightKindSpot
+		intensity = intensity * 0.9
+		falloff = intensity * 10
+		if len(mangleStr) > 0 {
+			if yaw, pitch, _, valid := ParseVector(mangleStr); valid {
+				dirX, dirY, dirZ = CalcDirection(yaw, pitch)
+			}
+		} else {
+			if angle == -1 {
+				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
+			} else if angle == -2 {
+				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
+			} else {
+				dirX, dirY, dirZ = CalcDirection(angle, 0)
+			}
+		}
+	} else {
+		kind = config.LightKindAmbient
+		intensity = intensity * 0.05
+		falloff = intensity
+	}
+
+	// CONFIGURATION CREATION
+	cl := config.NewConfigLight(pos, intensity, kind, falloff)
+	cl.R = r
+	cl.G = g
+	cl.B = b
+
+	cl.DirX = dirX
+	cl.DirY = dirY
+	cl.DirZ = dirZ
+	cl.Style = style
+
+	return cl
+}
+
+// createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
+func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.Thing, error) {
+	thingPath := q3.GetModelFileName(classname)
+	if len(thingPath) == 0 {
+		return nil, fmt.Errorf("unknown thing %s", classname)
+	}
+
+	skinTargetIndex := 0
+	kind := config.ThingEnemyDef
+	var category string
+	var definition string
+	if c := strings.Split(classname, "_"); len(c) > 1 {
+		category = c[0]
+		definition = c[1]
+	}
+	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
+	switch category {
+	case "item":
+		kind = config.ThingItemDef
+		if skinTIndex, ok := items[definition]; ok {
+			skinTargetIndex = skinTIndex
+		}
+	case "weapon":
+		kind = config.ThingItemDef
+	case "enemy":
+		kind = config.ThingEnemyDef
+	case "monster":
+		kind = config.ThingEnemyDef
+	default:
+		return nil, fmt.Errorf("unknown thing %s", classname)
+	}
+	arc := q3.GetArchive()
+	rsMd1, err := arc.Open(thingPath)
+	if err != nil {
+		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
+	}
+	md1 := NewMD1Resource()
+	if err = md1.Parse(rsMd1); err != nil {
+		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
+	}
+	if skinTargetIndex >= len(md1.Skins) {
+		return nil, fmt.Errorf("no skin found for %s", classname)
+	}
+	skin := md1.Skins[skinTargetIndex]
+	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
+	if err = q3.RegisterPixels(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
+		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
+	}
+	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+	cModel := config.NewMD1(int(md1.Header.NumFrames), md1.FrameNames)
+	for idx, f := range md1.Frames {
+		triangles := make([]config.MD1Triangle, int(md1.Header.NumTris))
+		skinW := float32(md1.Header.SkinWidth)
+		skinH := float32(md1.Header.SkinHeight)
+		for tIdx, tri := range md1.Triangles {
+			cTri := config.NewMD1Triangle(anim)
+			for v := 0; v < 3; v++ {
+				vx := tri.Vertices[v]
+				tc := md1.TexCoords[vx]
+				s := float32(tc.S)
+				t := float32(tc.T)
+				if tri.FacesFront == 0 && tc.OnSeam != 0 {
+					s += skinW / 2.0
+				}
+				nU := s / skinW
+				nV := 1.0 - (t / skinH)
+				cTri.Vertices[v] = config.MD1Vertex{Pos: CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+			}
+			triangles[tIdx] = cTri
+		}
+		cFrame := config.NewMD1Frame(triangles)
+		cModel.Frames[idx] = cFrame
+	}
+
+	thingCfg := q3.createConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+
+	return thingCfg, nil
+}
+
+// createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
+func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
+	reader, err := NewBSPReader(q3.GetArchive(), bspPath)
+	if err != nil {
+		return nil, err
+	}
+	if err = reader.Setup(); err != nil {
+		return nil, err
+	}
+	bspModels, err := reader.GetModels()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get models from %s: %v", bspPath, err)
+	}
+	if len(bspModels) == 0 {
+		return nil, fmt.Errorf("no model found in %s", bspPath)
+	}
+	rawFaces, err := reader.GetRawFaces(0)
+	if err != nil {
+		return nil, err
+	}
+	texManager := reader.GetTextures()
+	// Geometry translation into agnostic MD1, collect all triangles in this single frame
+	var allTriangles []config.MD1Triangle
+	for _, bspFace := range rawFaces {
+		// RETRIEVAL OF SPECIFIC TEXTURE
+		texName := bspFace.TexName
+		animKind := config.MaterialKindLoop
+		if bspFace.IsSky {
+			animKind = config.MaterialKindSky
+		}
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
+		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+			tw, th, pixels := texes[0].RGBA()
+			_ = q3.RegisterPixelsRGBA(texName, tw, th, pixels, false)
+		}
+		rawTriangles := TriangulateConvex3d(bspFace.Points)
+		// Assignment of pre-calculated UVs from IBSPReader
+		for _, rawTri := range rawTriangles {
+			tri := config.NewMD1Triangle(specificMaterial)
+			for k := 0; k < 3; k++ {
+				pos := rawTri[k]
+				u, v := float32(0.0), float32(0.0)
+				// Find corresponding UV index for vertex
+				for idx, pt := range bspFace.Points {
+					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+						if len(bspFace.UVs) > idx {
+							u = float32(bspFace.UVs[idx][0])
+							v = float32(bspFace.UVs[idx][1])
+						}
+						break
+					}
+				}
+				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: u, V: v}
+			}
+			allTriangles = append(allTriangles, tri)
+		}
+	}
+	// BSPs do not have vertex-morphing animations, 1 single frame
+	model3d := config.NewMD1(1, []string{"default"})
+	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
+	thingCfg := q3.createConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	return thingCfg, nil
+}
+
+// createConfigThing creates a Thing configuration object with properties like position, model, animation, and physics.
+func (q3 *Q3BSPReader) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
+	const gForce = 9.8 * 14
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
+	thingCfg.GForce = gForce
+	thingCfg.MD1 = cModel
+	if thingCfg.Kind == config.ThingEnemyDef {
+		var actions []string
+		if thingCfg.MD1 != nil {
+			actions = thingCfg.MD1.ActionDefinitions
+		}
+		enemyLogic := common.NewEnemy(actions, 300)
+		thingCfg.OnThinking = enemyLogic.OnThinking
+		thingCfg.OnCollision = enemyLogic.OnCollision
+		thingCfg.OnImpact = enemyLogic.OnImpact
+		thingCfg.WakeUpDistance = 400
+	} else {
+		itemLogic := common.NewItem()
+		thingCfg.OnCollision = itemLogic.OnCollision
+		thingCfg.OnImpact = itemLogic.OnImpact
+	}
+	return thingCfg
+}
+
+// --------------

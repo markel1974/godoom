@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // BSPVersion represents the versioning enumeration for BSP (Binary Space Partitioning) structures in a system.
@@ -37,6 +40,10 @@ type IBSPReader interface {
 	Setup() error
 
 	GetArchive() IArchive
+
+	Build(root *config.Root) error
+
+	GetPlayerInfo() (float64, geometry.XYZ)
 
 	GetEntities() ([]*Entity, error)
 

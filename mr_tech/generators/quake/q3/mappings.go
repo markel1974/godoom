@@ -22,12 +22,14 @@ var _q3DictModelFilename = map[string]string{
 	"item_health_mega":  "models/powerups/health/mega_cross.md3",
 
 	// Powerups
-	"item_quad":   "models/powerups/instant/quad.md3",
-	"item_enviro": "models/powerups/instant/enviro.md3",
-	"item_haste":  "models/powerups/instant/haste.md3",
-	"item_invis":  "models/powerups/instant/invis.md3",
-	"item_regen":  "models/powerups/instant/regen.md3",
-	"item_flight": "models/powerups/instant/flight.md3",
+	"holdable_teleporter": "models/powerups/holdable/teleporter.md3",
+	"holdable_medkit":     "models/powerups/holdable/medkit.md3",
+	"item_quad":           "models/powerups/instant/quad.md3",
+	"item_enviro":         "models/powerups/instant/enviro.md3",
+	"item_haste":          "models/powerups/instant/haste.md3",
+	"item_invis":          "models/powerups/instant/invis.md3",
+	"item_regen":          "models/powerups/instant/regen.md3",
+	"item_flight":         "models/powerups/instant/flight.md3",
 
 	// Ammo
 	"ammo_shells":    "models/powerups/ammo/shotgunam.md3",
@@ -55,4 +57,18 @@ var _q3ShaderFallback = map[string]string{
 	"textures/skin/tongue_trans":                "textures/skin/tongue",
 	"textures/gothic_door/km_arena1columna2r":   "textures/gothic_door/km_arena1columna2",
 	"textures/skies/tim_hell":                   "env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
+	"textures/sfx/hellfogdense":                 "",                         // La nebbia non ha texture diffusa
+	"textures/liquids/lavahelldark":             "textures/liquids/lavahell",
+	"textures/gothic_trim/column2c_trans":       "textures/gothic_trim/column2c",
+	"textures/skin/skin6_trans":                 "textures/skin/skin6",
+	"textures/gothic_light/ironcrosslt2_2000":   "textures/gothic_light/ironcrosslt2",
+	"textures/base_light/light1_1500":           "textures/base_light/light1",
+	"textures/organics/dirt_trans":              "textures/organics/dirt",
+	"textures/skies/toxicskytim_dm8":            "env/tim_hell/tim_hell_up",
+	"textures/gothic_light/ironcrosslt2_10000":  "textures/gothic_light/ironcrosslt2",
+	"textures/gothic_light/pentagram_light1_5k": "textures/gothic_light/pentagram_light1",
+	"textures/sfx/fog_intel":                    "",
+	"textures/gothic_light/pentagram_light1_2k": "textures/gothic_light/pentagram_light1",
+	"textures/sfx/flame1dark":                   "textures/sfx/flame1",
+	"textures/liquids/lavahell_1000":            "textures/liquids/lavahell",
 }

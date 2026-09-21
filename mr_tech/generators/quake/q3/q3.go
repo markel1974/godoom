@@ -383,6 +383,9 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 			} else {
 				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
 				if fallbackName, ok := _q3ShaderFallback[texName]; ok {
+					if fallbackName == "" {
+						continue // Skips textures explicitly mapped to empty string (e.g. fog)
+					}
 					// Riprova con il fallback
 					fbJpg := fallbackName + ".jpg"
 					if fJpg, e := q3.arc.Open(fbJpg); e == nil {
@@ -591,8 +594,8 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			// TODO:
 		case "trigger":
 		// TODO:
-		//case "trap":
-		//TODO
+		case "target", "misc", "shooter":
+		// TODO: ignore invisible targets and misc models for now
 		default:
 			cThing, err := q3.createThing(pos, classname)
 			if err != nil {
@@ -738,7 +741,7 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 		category = c[0]
 	}
 	switch category {
-	case "item":
+	case "item", "ammo", "holdable":
 		kind = config.ThingItemDef
 	case "weapon":
 		kind = config.ThingItemDef

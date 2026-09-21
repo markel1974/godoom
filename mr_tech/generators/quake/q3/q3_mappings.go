@@ -1,4 +1,4 @@
-package lumps
+package q3
 
 var _q3DictModelFilename = map[string]string{
 	// Weapons (Q3 usa .md3)

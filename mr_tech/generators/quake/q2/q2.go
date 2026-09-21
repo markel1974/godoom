@@ -1,4 +1,4 @@
-package lumps
+package q2
 
 import (
 	"encoding/binary"
@@ -10,8 +10,12 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
+
+const BSPVersionQ2 int = 38
 
 // LumpQ2Entities represents the lump index for entities in Quake 2 BSP files.
 // LumpQ2Planes represents the lump index for planes in Quake 2 BSP files.
@@ -120,28 +124,30 @@ type q2Vertex struct {
 
 // Q2BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type Q2BSPReader struct {
-	arc         IArchive
+	arc         interfaces.IArchive
 	header      Q2Header
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	palette     []byte
-	texManager  *Textures
+	texManager  *lumps.Textures
 	playerAngle float64
 	playerPos   geometry.XYZ
 }
 
-// NewQ2BSPReader creates a new Q2BSPReader instance with the provided archive, BSP file reader, and optional palette reader.
-func NewQ2BSPReader(arc IArchive, rs io.ReadSeeker, rsPal io.ReadSeeker) *Q2BSPReader {
+// NewQ2BSPReader creates a new Q2BSPReader instance with the provided reader.go, BSP file reader, and optional palette reader.
+func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q2BSPReader {
 	return &Q2BSPReader{
 		arc:        arc,
 		rs:         rs,
-		texManager: NewTextures(),
-		rsPal:      rsPal,
+		texManager: lumps.NewTextures(),
+		rsPal:      nil,
 	}
 }
 
 // Setup initializes the Q2BSPReader by reading the header and optionally loading the palette for WAL textures.
 func (q2 *Q2BSPReader) Setup() error {
+	q2.rsPal, _ = q2.arc.Open("gfx" + lumps.PakSeparator + "palette.lmp")
+
 	var err error
 	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
 		return err
@@ -157,7 +163,7 @@ func (q2 *Q2BSPReader) Setup() error {
 	// In Quake 2, WAL textures often use dedicated palettes or true-color,
 	// but we still load the palette if provided by the builder.
 	if q2.rsPal != nil {
-		q2.palette, err = NewPalette(q2.rsPal)
+		q2.palette, err = lumps.NewPalette(q2.rsPal)
 		if err != nil {
 			fmt.Printf("Warning: palette.lmp not loaded in Q2 (WAL textures include it): %v\n", err)
 		}
@@ -166,7 +172,7 @@ func (q2 *Q2BSPReader) Setup() error {
 }
 
 // GetArchive retrieves the IArchive instance associated with the Q2BSPReader.
-func (q2 *Q2BSPReader) GetArchive() IArchive {
+func (q2 *Q2BSPReader) GetArchive() interfaces.IArchive {
 	return q2.arc
 }
 
@@ -176,7 +182,7 @@ func (q2 *Q2BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 }
 
 // GetEntities extracts and parses entities from the BSP file by reading the entities lump and converting it to structured data.
-func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
+func (q2 *Q2BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	lump := q2.header.Lumps[LumpQ2Entities]
 	if _, err := q2.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -185,12 +191,12 @@ func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
 	if _, err := q2.rs.Read(data); err != nil {
 		return nil, err
 	}
-	text := FromNullTerminatingString(data)
-	return NewEntitiesFromText(text)
+	text := lumps.FromNullTerminatingString(data)
+	return lumps.NewEntitiesFromText(text)
 }
 
 // GetModels reads and parses the model lump to retrieve an array of BSP sub-models from the map file.
-func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
+func (q2 *Q2BSPReader) GetModels() ([]*lumps.Model, error) {
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -201,9 +207,9 @@ func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
 		return nil, err
 	}
 
-	out := make([]*Model, numModels)
+	out := make([]*lumps.Model, numModels)
 	for i, m := range models {
-		out[i] = &Model{
+		out[i] = &lumps.Model{
 			Mins:      m.Mins,
 			Maxs:      m.Maxs,
 			Origin:    m.Origin,
@@ -227,7 +233,7 @@ func (q2 *Q2BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels
 }
 
 // GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
-func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
+func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	// Read models to find face offsets
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
@@ -291,7 +297,7 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	}
 
 	// Resolve indirection and generate RawFaces
-	var rawFaces []*RawFace
+	var rawFaces []*lumps.RawFace
 	for i := int32(0); i < targetModel.NumFaces; i++ {
 		faceIdx := targetModel.FirstFace + i
 		face := faces[faceIdx]
@@ -340,7 +346,7 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 			}
 
 			// Apply standard z-up axis transformation using CreateXYZ
-			points = append(points, CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z)))
+			points = append(points, lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z)))
 
 			u := (float64(v.X) * float64(texInfo.Vecs[0][0])) +
 				(float64(v.Y) * float64(texInfo.Vecs[0][1])) +
@@ -352,7 +358,7 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 				float64(texInfo.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
-		rf := NewRawFace(points, uvs, texName, isSky)
+		rf := lumps.NewRawFace(points, uvs, texName, isSky)
 		rawFaces = append(rawFaces, rf)
 	}
 
@@ -361,12 +367,12 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 }
 
 // GetTextures returns a reference to the Textures manager associated with the Q2BSPReader.
-func (q2 *Q2BSPReader) GetTextures() *Textures {
+func (q2 *Q2BSPReader) GetTextures() *lumps.Textures {
 	return q2.texManager
 }
 
 // compileTextures processes and registers unique textures extracted from the given raw faces, excluding "sky" textures.
-func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
+func (q2 *Q2BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
 		uniqueTextures[f.TexName] = true
@@ -375,14 +381,14 @@ func (q2 *Q2BSPReader) compileTextures(faces []*RawFace) {
 		if texName == "sky" || len(texName) == 0 {
 			continue
 		}
-		walPath := "textures" + PakSeparator + texName + ".wal"
+		walPath := "textures" + lumps.PakSeparator + texName + ".wal"
 		walFile, walErr := q2.arc.Open(walPath)
 		if walErr != nil {
 			fmt.Printf("Warning: missing asset %s: %s\n \n", walPath, walErr.Error())
 			continue
 		}
 
-		walTex, walErr := ParseWal(walFile)
+		walTex, walErr := lumps.ParseWal(walFile)
 		if walErr != nil {
 			fmt.Printf("Warning: can't open asset %s: %s\n", walPath, walErr.Error())
 			continue
@@ -430,7 +436,7 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 		if origin, ok := ent.Properties["origin"]; ok {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
-			pos = CreateXYZ(x, y, z)
+			pos = lumps.CreateXYZ(x, y, z)
 		}
 
 		var angle float64
@@ -518,7 +524,7 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 			animKind = config.MaterialKindSky
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
-		triangles := TriangulateConvex3d(v.Points)
+		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
 			var triUvs [][2]float64
@@ -568,7 +574,7 @@ func (q2 *Q2BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geome
 }
 
 // createLight initializes a Light object based on entity properties, position, style, color, and light type (spot or ambient).
-func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+func (q2 *Q2BSPReader) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
 	var kind config.LightKind
@@ -584,7 +590,7 @@ func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 	// COLOR (Standard Quake 2 / Modern Quake 1)
 	r, g, b := 1.0, 1.0, 1.0 // Default White
 	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := ParseVector(colorStr); valid {
+		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
 				r, g, b = cr/255.0, cg/255.0, cb/255.0
 			} else {
@@ -600,8 +606,8 @@ func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 		intensity = intensity * 0.9
 		falloff = intensity * 10
 		if len(mangleStr) > 0 {
-			if yaw, pitch, _, valid := ParseVector(mangleStr); valid {
-				dirX, dirY, dirZ = CalcDirection(yaw, pitch)
+			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
+				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
 			}
 		} else {
 			if angle == -1 {
@@ -609,7 +615,7 @@ func (q2 *Q2BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 			} else if angle == -2 {
 				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
 			} else {
-				dirX, dirY, dirZ = CalcDirection(angle, 0)
+				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
 			}
 		}
 	} else {
@@ -668,7 +674,7 @@ func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	md1 := NewMD1Resource()
+	md1 := lumps.NewMD1Resource()
 	if err = md1.Parse(rsMd1); err != nil {
 		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
 	}
@@ -699,7 +705,7 @@ func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD1Vertex{Pos: CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cTri.Vertices[v] = config.MD1Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 			triangles[tIdx] = cTri
 		}
@@ -715,10 +721,12 @@ func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 // createThingBSP creates a Thing entity from a BSP file at the specified position and with the given classname.
 // It extracts and converts BSP models, textures, and faces, constructing a Thing with appropriate geometry data.
 func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
-	reader, err := NewBSPReader(q2.GetArchive(), bspPath)
+	arc := q2.GetArchive()
+	rs, err := arc.Open(bspPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())
 	}
+	reader := NewQ2BSPReader(arc, rs)
 	if err = reader.Setup(); err != nil {
 		return nil, err
 	}
@@ -749,7 +757,7 @@ func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 			tw, th, pixels := texes[0].RGBA()
 			_ = q2.RegisterPixelsRGBA(texName, tw, th, pixels, false)
 		}
-		rawTriangles := TriangulateConvex3d(bspFace.Points)
+		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)

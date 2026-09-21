@@ -32,7 +32,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	levelIndex := lev - 1
 	//bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 
-	arc, aErr := lumps.NewArchive(pakPath)
+	arc, aErr := NewArchive(pakPath)
 	if aErr != nil {
 		return nil, aErr
 	}
@@ -49,7 +49,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	}
 	bpsPath := "maps" + lumps.PakSeparator + maps[levelIndex]
 
-	reader, bErr := lumps.NewBSPReader(arc, bpsPath)
+	reader, bErr := NewBSPReader(arc, bpsPath)
 	if bErr != nil {
 		return nil, bErr
 	}

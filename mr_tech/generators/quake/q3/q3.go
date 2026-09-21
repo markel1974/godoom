@@ -1,4 +1,4 @@
-package lumps
+package q3
 
 import (
 	"encoding/binary"
@@ -13,6 +13,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -36,6 +38,8 @@ const (
 	LumpQ3VisData     = 16
 	NumQ3Lumps        = 17
 )
+
+const BSPVersionQ3 int = 46
 
 type HeaderQ3 struct {
 	Magic   [4]byte
@@ -88,19 +92,19 @@ type q3Vertex struct {
 
 // Q3BSPReader analizza le mappe in formato idTech 3 (Quake 3 / Return to Castle Wolfenstein)
 type Q3BSPReader struct {
-	arc         IArchive
+	arc         interfaces.IArchive
 	header      HeaderQ3
 	rs          io.ReadSeeker
-	texManager  *Textures
+	texManager  *lumps.Textures
 	playerAngle float64
 	playerPos   geometry.XYZ
 }
 
-func NewQ3BSPReader(arc IArchive, rs io.ReadSeeker) *Q3BSPReader {
+func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	return &Q3BSPReader{
 		arc:        arc,
 		rs:         rs,
-		texManager: NewTextures(),
+		texManager: lumps.NewTextures(),
 	}
 }
 
@@ -118,7 +122,7 @@ func (q3 *Q3BSPReader) Setup() error {
 }
 
 // GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
-func (q3 *Q3BSPReader) GetArchive() IArchive {
+func (q3 *Q3BSPReader) GetArchive() interfaces.IArchive {
 	return q3.arc
 }
 
@@ -127,7 +131,7 @@ func (q3 *Q3BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q3.playerAngle, q3.playerPos
 }
 
-func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
+func (q3 *Q3BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	lump := q3.header.Lumps[LumpQ3Entities]
 	if _, err := q3.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -136,10 +140,10 @@ func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
 	if _, err := q3.rs.Read(data); err != nil {
 		return nil, err
 	}
-	return NewEntitiesFromText(FromNullTerminatingString(data))
+	return lumps.NewEntitiesFromText(lumps.FromNullTerminatingString(data))
 }
 
-func (q3 *Q3BSPReader) GetModels() ([]*Model, error) {
+func (q3 *Q3BSPReader) GetModels() ([]*lumps.Model, error) {
 	lModels := q3.header.Lumps[LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -151,9 +155,9 @@ func (q3 *Q3BSPReader) GetModels() ([]*Model, error) {
 		return nil, err
 	}
 
-	out := make([]*Model, numModels)
+	out := make([]*lumps.Model, numModels)
 	for i, m := range models {
-		out[i] = &Model{
+		out[i] = &lumps.Model{
 			Mins:      m.Mins,
 			Maxs:      m.Maxs,
 			FirstFace: m.FirstFace,
@@ -173,12 +177,12 @@ func (q3 *Q3BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels
 	return q3.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
-func (q3 *Q3BSPReader) GetTextures() *Textures {
+func (q3 *Q3BSPReader) GetTextures() *lumps.Textures {
 	return q3.texManager
 }
 
 // GetRawFaces risolve nativamente Index Buffer (MeshVerts) e Patch di Bezier
-func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
+func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	lModels := q3.header.Lumps[LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
@@ -230,7 +234,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 		return nil, fmt.Errorf("failed to read textures lump: %w", err)
 	}
 
-	var rawFaces []*RawFace
+	var rawFaces []*lumps.RawFace
 
 	// 3. Risoluzione Topologica
 	for i := int32(0); i < targetModel.NumFaces; i++ {
@@ -260,10 +264,10 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 				for k := int32(0); k < 3; k++ {
 					vIdx := face.VertexStart + meshVerts[face.MeshStart+j+k]
 					v := vertexes[vIdx]
-					tri = append(tri, CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
+					tri = append(tri, lumps.CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
 					uvs = append(uvs, [2]float64{float64(v.TexCoord[0]), float64(v.TexCoord[1])})
 				}
-				rawFaces = append(rawFaces, &RawFace{
+				rawFaces = append(rawFaces, &lumps.RawFace{
 					Points:  tri, // Il Builder non dovrà fare il Fan se riceve già 3 punti
 					UVs:     uvs,
 					TexName: texName,
@@ -293,7 +297,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 					triangles, uvs := q3.tessellatePatch(cp, 5)
 
 					for t := 0; t < len(triangles); t += 3 {
-						rawFaces = append(rawFaces, &RawFace{
+						rawFaces = append(rawFaces, &lumps.RawFace{
 							Points:  []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]},
 							UVs:     [][2]float64{uvs[t], uvs[t+1], uvs[t+2]},
 							TexName: texName,
@@ -311,7 +315,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 }
 
 // compileTextures cerca e decodifica i file JPEG associati alle facce estratte
-func (q3 *Q3BSPReader) compileTextures(faces []*RawFace) {
+func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
 		uniqueTextures[f.TexName] = true
@@ -387,7 +391,7 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XY
 			var puv [3][2]float32
 			for row := 0; row < 3; row++ {
 				idx := row * 3
-				p[row] = CreateXYZ(
+				p[row] = lumps.CreateXYZ(
 					float64(q3.evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
 					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
 					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
@@ -397,7 +401,7 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XY
 					q3.evalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
 				}
 			}
-			grid[i*L+j] = CreateXYZ(
+			grid[i*L+j] = lumps.CreateXYZ(
 				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
 				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
 				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
@@ -460,7 +464,7 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		if origin, ok := ent.Properties["origin"]; ok {
 			var x, y, z float64
 			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
-			pos = CreateXYZ(x, y, z)
+			pos = lumps.CreateXYZ(x, y, z)
 		}
 
 		var angle float64
@@ -548,7 +552,7 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			animKind = config.MaterialKindSky
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
-		triangles := TriangulateConvex3d(v.Points)
+		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
 			var triUvs [][2]float64
@@ -598,7 +602,7 @@ func (q3 *Q3BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geome
 }
 
 // createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
-func (q3 *Q3BSPReader) createLight(entity *Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+func (q3 *Q3BSPReader) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0
 	var kind config.LightKind
@@ -614,7 +618,7 @@ func (q3 *Q3BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 	// COLOR (Standard Quake 2 / Modern Quake 1)
 	r, g, b := 1.0, 1.0, 1.0 // Default White
 	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := ParseVector(colorStr); valid {
+		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
 				r, g, b = cr/255.0, cg/255.0, cb/255.0
 			} else {
@@ -630,8 +634,8 @@ func (q3 *Q3BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 		intensity = intensity * 0.9
 		falloff = intensity * 10
 		if len(mangleStr) > 0 {
-			if yaw, pitch, _, valid := ParseVector(mangleStr); valid {
-				dirX, dirY, dirZ = CalcDirection(yaw, pitch)
+			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
+				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
 			}
 		} else {
 			if angle == -1 {
@@ -639,7 +643,7 @@ func (q3 *Q3BSPReader) createLight(entity *Entity, angle float64, mangleStr, col
 			} else if angle == -2 {
 				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
 			} else {
-				dirX, dirY, dirZ = CalcDirection(angle, 0)
+				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
 			}
 		}
 	} else {
@@ -698,7 +702,7 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	md1 := NewMD1Resource()
+	md1 := lumps.NewMD1Resource()
 	if err = md1.Parse(rsMd1); err != nil {
 		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
 	}
@@ -729,7 +733,7 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD1Vertex{Pos: CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cTri.Vertices[v] = config.MD1Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
 			}
 			triangles[tIdx] = cTri
 		}
@@ -744,10 +748,12 @@ func (q3 *Q3BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
 func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
-	reader, err := NewBSPReader(q3.GetArchive(), bspPath)
+	arc := q3.GetArchive()
+	rs, err := arc.Open(bspPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())
 	}
+	reader := NewQ3BSPReader(arc, rs)
 	if err = reader.Setup(); err != nil {
 		return nil, err
 	}
@@ -778,7 +784,7 @@ func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 			tw, th, pixels := texes[0].RGBA()
 			_ = q3.RegisterPixelsRGBA(texName, tw, th, pixels, false)
 		}
-		rawTriangles := TriangulateConvex3d(bspFace.Points)
+		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)

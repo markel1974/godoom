@@ -1,4 +1,4 @@
-package lumps
+package q2
 
 var _q2DictModelFilename = map[string]string{
 	// Monsters (Quake 2 usa tris.md2 in sottocartelle)

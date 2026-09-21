@@ -1,4 +1,4 @@
-package lumps
+package q2
 
 // lightStyle0 is a slice of float64 values representing the default style or configuration for a light source.
 var _q1LightStyle0 = []float64{1.0}

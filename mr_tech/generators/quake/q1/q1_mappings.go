@@ -1,4 +1,4 @@
-package lumps
+package q1
 
 var _q1DictModelFilename = map[string]string{
 	// Monsters
@@ -74,15 +74,3 @@ var _q1DictBModel = map[string]string{
 	"misc_explobox":  "maps/b_explob.bsp", // Cassa esplosiva
 	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande
 }
-
-/*
-func GetExternalBModelFileName(classname string) string {
-	return _dictBModel[classname]
-}
-
-// GetModelFileName restituisce il percorso virtuale del file .mdl all'interno del file PAK
-// basandosi sulla classname dell'entità letta dal BSP.
-func GetModelFileName(classname string) string {
-	return _dictModelFilename[classname]
-}
-*/

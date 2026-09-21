@@ -35,46 +35,44 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	}
 	levelIndex := lev - 1
 	//bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
-	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
 
-	var pk lumps.IArchive
-	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
-		pk = lumps.NewPk3()
-	} else {
-		pk = lumps.NewPak()
+	arc, aErr := lumps.NewArchive(pakPath)
+	if aErr != nil {
+		return nil, aErr
 	}
 
-	if err := pk.Setup(pakPath); err != nil {
+	if err := arc.Setup(pakPath); err != nil {
 		return nil, err
 	}
-	maps, _ := pk.ReadDirFilter("maps", "^e.+\\.bsp")
+	maps, _ := arc.ReadDirFilter("maps", "^e.+\\.bsp")
 	if len(maps) == 0 {
-		maps, _ = pk.ReadDirFilter("maps", "\\.bsp$") // Fallback per Q2/Q3
+		maps, _ = arc.ReadDirFilter("maps", "\\.bsp$") // Fallback per Q2/Q3
 	}
 	if levelIndex >= len(maps) {
 		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
 	}
 	bpsPath := "maps" + lumps.PakSeparator + maps[levelIndex]
-	rs, err := pk.Open(bpsPath)
-	if err != nil {
-		return nil, err
+	rs, aErr := arc.Open(bpsPath)
+	if aErr != nil {
+		return nil, aErr
 	}
-	rsPal, _ := pk.Open(palPath) // Ignore palette error for Q3
-	reader, err := lumps.Factory(rs, rsPal)
-	if err != nil {
-		return nil, err
+	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
+	rsPal, _ := arc.Open(palPath) // Ignore palette error for Q3
+	reader, bErr := lumps.NewBSPReader(rs, rsPal)
+	if bErr != nil {
+		return nil, bErr
 	}
-	if err = reader.Setup(pk); err != nil {
+	if err := reader.Setup(arc); err != nil {
 		return nil, err
 	}
 	mIdx := 0
-	faces, err := reader.GetRawFaces(mIdx)
-	if err != nil {
-		return nil, err
+	faces, rfErr := reader.GetRawFaces(mIdx)
+	if rfErr != nil {
+		return nil, rfErr
 	}
-	entities, err := reader.GetEntities()
-	if err != nil {
-		return nil, err
+	entities, eErr := reader.GetEntities()
+	if eErr != nil {
+		return nil, eErr
 	}
 	texManager := reader.GetTextures()
 
@@ -121,7 +119,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		}
 
 		if externalBSPPath := GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
-			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, pk, reader)
+			cThing, err := p.createThingBSP(externalBSPPath, pos, classname, arc, reader)
 			if err != nil {
 				fmt.Printf("Warning External BModel: %s (Errore: %v)\n", classname, err)
 				continue
@@ -135,6 +133,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			// Ignoriamo: è la mappa base, la geometria è già gestita da worldModel
 		case "info":
 			if classname == "info_player_start" {
+				var err error
 				playerPos, playerAngle, err = p.createPlayerProps(angle, pos)
 				if err != nil {
 					fmt.Printf("Warning: %s\n", err.Error())
@@ -174,7 +173,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		//case "trap":
 		//TODO
 		default:
-			cThing, err := p.createThing(pos, classname, pk, reader)
+			cThing, err := p.createThing(pos, classname, arc, reader)
 			if err != nil {
 				fmt.Printf("Warning: %s\n", err.Error())
 				continue
@@ -334,7 +333,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 }
 
 // createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
-func (p *Builder) createThing(pos geometry.XYZ, classname string, pk lumps.IArchive, reader lumps.IBSPReader) (*config.Thing, error) {
+func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArchive, reader lumps.IBSPReader) (*config.Thing, error) {
 	thingPath := GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -365,7 +364,7 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk lumps.IArch
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	rsMd1, err := pk.Open(thingPath)
+	rsMd1, err := arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
@@ -417,10 +416,10 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk lumps.IArch
 func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, pk lumps.IArchive, parentReader lumps.IBSPReader) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
-		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
+		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())
 	}
 	rsPal, _ := pk.Open("gfx/palette.lmp") // Ignore error for Q3
-	reader, err := lumps.Factory(rs, rsPal)
+	reader, err := lumps.NewBSPReader(rs, rsPal)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +454,7 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 		// Gestione Texture Manager per le BModel esterne (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()
-			parentReader.RegisterPixelsRGBA(texName, tw, th, pixels, false)
+			_ = parentReader.RegisterPixelsRGBA(texName, tw, th, pixels, false)
 		}
 
 		rawTriangles := p.triangulateConvex3d(bspFace.Points)

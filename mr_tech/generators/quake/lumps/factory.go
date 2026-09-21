@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // BSPVersion represents the versioning enumeration for BSP (Binary Space Partitioning) structures in a system.
@@ -48,8 +49,8 @@ type IBSPReader interface {
 	GetRawFaces(modelIdx int) ([]*RawFace, error)
 }
 
-// Factory detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.
-func Factory(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
+// NewBSPReader detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.
+func NewBSPReader(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
 	var magic [4]byte
 	if err := binary.Read(rs, binary.LittleEndian, &magic); err != nil {
 		return nil, fmt.Errorf("failed to read magic bytes: %w", err)
@@ -89,4 +90,11 @@ func Factory(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
 		return nil, fmt.Errorf("failed to rewind stream: %w", err)
 	}
 	return NewQ1BSPReader(rs, palette), nil
+}
+
+func NewArchive(pakPath string) (IArchive, error) {
+	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
+		return NewPk3(), nil
+	}
+	return NewPak(), nil
 }

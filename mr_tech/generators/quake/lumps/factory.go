@@ -14,7 +14,18 @@ type BSPVersion int
 const (
 	BSPVersionQ1 BSPVersion = 29
 	BSPVersionQ2 BSPVersion = 38
+	BSPVersionQ3 BSPVersion = 46
 )
+
+type IArchive interface {
+	Setup(path string) error
+
+	Open(fullPath string) (io.ReadSeeker, error)
+
+	ReadDir(fullPath string) ([]string, error)
+
+	ReadDirFilter(fullPath string, wildcard string) ([]string, error)
+}
 
 type IReader interface {
 	Open(path string) (io.ReadSeeker, error)
@@ -42,23 +53,26 @@ func Factory(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
 		return nil, fmt.Errorf("failed to read magic bytes: %w", err)
 	}
 
-	// Quake 2 (IBSP)
+	// Quake 2 & 3 (IBSP)
 	if string(magic[:]) == "IBSP" {
 		var version int32
 		if err := binary.Read(rs, binary.LittleEndian, &version); err != nil {
 			return nil, err
 		}
-		if version != int32(BSPVersionQ2) {
-			return nil, fmt.Errorf("unsupported IBSP version: %d", version)
-		}
-		// Riavvolgiamo lo stream all'inizio prima di passare al parser specifico
 		if _, err := rs.Seek(0, io.SeekStart); err != nil {
 			return nil, fmt.Errorf("failed to rewind stream: %w", err)
 		}
-		return NewQ2BSPReader(rs, palette), nil
+		switch BSPVersion(version) {
+		case BSPVersionQ3:
+			return NewQ3BSPReader(rs), nil
+		case BSPVersionQ2:
+			return NewQ2BSPReader(rs, palette), nil
+		default:
+			return nil, fmt.Errorf("unsupported IBSP version: %d", version)
+		}
 	}
 
-	// Quake 1 (Nessun magic "IBSP", inizia direttamente con la versione 29)
+	// Quake 1 (version 29)
 	if _, err := rs.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to rewind stream: %w", err)
 	}

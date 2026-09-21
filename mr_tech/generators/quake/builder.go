@@ -36,11 +36,18 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	levelIndex := lev - 1
 	//bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
-	pk := lumps.NewPak()
+
+	var pk lumps.IArchive
+	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
+		pk = lumps.NewPk3()
+	} else {
+		pk = lumps.NewPak()
+	}
+
 	if err := pk.Setup(pakPath); err != nil {
 		return nil, err
 	}
-	maps, _ := pk.ReadDirFilter("maps", "^e.+\\.bsp")
+	maps, _ := pk.ReadDirFilter("maps", "\\.bsp$")
 	if levelIndex >= len(maps) {
 		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
 	}
@@ -49,10 +56,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	rsPal, err := pk.Open(palPath)
-	if err != nil {
-		return nil, err
-	}
+	rsPal, _ := pk.Open(palPath) // Ignore palette error for Q3
 	reader, err := lumps.Factory(rs, rsPal)
 	if err != nil {
 		return nil, err
@@ -105,6 +109,10 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			angle, _ = strconv.ParseFloat(a, 64)
 		}
 
+		// TODO: Attualmente stiamo ignorando i sub-models (*1, *2, ecc.) come func_door o func_plat.
+		// Prima di concentrarci sugli "accessori", assicuriamoci che il worldspawn (la mappa base)
+		// venga renderizzato correttamente. Quando saremo pronti, toglieremo questo continue
+		// e instanzieremo i bmodel utilizzando GetModels() del IBSPReader.
 		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
 			continue
 		}

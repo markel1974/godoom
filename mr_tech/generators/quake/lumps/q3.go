@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -124,7 +125,29 @@ func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
 }
 
 func (q3 *Q3BSPReader) GetModels() ([]*Model, error) {
-	return nil, fmt.Errorf("implement me per i sub-models di Q3")
+	lModels := q3.header.Lumps[LumpQ3Models]
+	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
+
+	numModels := int(lModels.Length) / 40
+	models := make([]q3Model, numModels)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
+		return nil, err
+	}
+
+	out := make([]*Model, numModels)
+	for i, m := range models {
+		out[i] = &Model{
+			Mins:      m.Mins,
+			Maxs:      m.Maxs,
+			FirstFace: m.FirstFace,
+			NumFaces:  m.NumFaces,
+			// Q3 non usa Origin/HeadNode/VisLeafs nel lump Models, le collisioni
+			// sono basate sui Brush associati (FirstBrush, NumBrushes).
+		}
+	}
+	return out, nil
 }
 
 func (q3 *Q3BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
@@ -137,37 +160,56 @@ func (q3 *Q3BSPReader) GetTextures() *Textures {
 
 // GetRawFaces risolve nativamente Index Buffer (MeshVerts) e Patch di Bezier
 func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
-	// 1. Lettura dei Modelli
 	lModels := q3.header.Lumps[LumpQ3Models]
-	q3.rs.Seek(int64(lModels.Offset), io.SeekStart)
+	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
+	}
 	models := make([]q3Model, int(lModels.Length)/40)
-	binary.Read(q3.rs, binary.LittleEndian, &models)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
+		return nil, fmt.Errorf("failed to read models lump: %w", err)
+	}
 
 	if modelIdx < 0 || modelIdx >= len(models) {
-		return nil, fmt.Errorf("modelIdx fuori range")
+		return nil, fmt.Errorf("modelIdx out of range")
 	}
 	targetModel := models[modelIdx]
 
-	// 2. Lettura massiva in RAM dei lump geometrici
+	//Geometrical lumps
 	lFaces := q3.header.Lumps[LumpQ3Faces]
-	q3.rs.Seek(int64(lFaces.Offset), io.SeekStart)
+	if _, err := q3.rs.Seek(int64(lFaces.Offset), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to faces lump: %w", err)
+	}
 	faces := make([]q3Face, int(lFaces.Length)/104)
-	binary.Read(q3.rs, binary.LittleEndian, &faces)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &faces); err != nil {
+		return nil, fmt.Errorf("failed to read faces lump: %w", err)
+	}
 
 	lVerts := q3.header.Lumps[LumpQ3Vertexes]
-	q3.rs.Seek(int64(lVerts.Offset), io.SeekStart)
+	if _, err := q3.rs.Seek(int64(lVerts.Offset), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to vertexes lump: %w", err)
+	}
 	vertexes := make([]q3Vertex, int(lVerts.Length)/44)
-	binary.Read(q3.rs, binary.LittleEndian, &vertexes)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &vertexes); err != nil {
+		return nil, fmt.Errorf("failed to read vertexes lump: %w", err)
+	}
 
 	lMeshVerts := q3.header.Lumps[LumpQ3MeshVerts]
-	q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart)
+	if _, err := q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to mesh verts lump: %w", err)
+	}
 	meshVerts := make([]int32, int(lMeshVerts.Length)/4)
-	binary.Read(q3.rs, binary.LittleEndian, &meshVerts)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &meshVerts); err != nil {
+		return nil, fmt.Errorf("failed to read mesh verts lump: %w", err)
+	}
 
 	lTextures := q3.header.Lumps[LumpQ3Textures]
-	q3.rs.Seek(int64(lTextures.Offset), io.SeekStart)
+	if _, err := q3.rs.Seek(int64(lTextures.Offset), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek to textures lump: %w", err)
+	}
 	textures := make([]q3Texture, int(lTextures.Length)/72)
-	binary.Read(q3.rs, binary.LittleEndian, &textures)
+	if err := binary.Read(q3.rs, binary.LittleEndian, &textures); err != nil {
+		return nil, fmt.Errorf("failed to read textures lump: %w", err)
+	}
 
 	var rawFaces []*RawFace
 
@@ -222,7 +264,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 					}
 
 					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
-					triangles := tessellatePatch(cp, 5)
+					triangles := q3.tessellatePatch(cp, 5)
 
 					// Raggruppiamo i punti a gruppi di 3 per formare i RawFace
 					for t := 0; t < len(triangles); t += 3 {
@@ -254,21 +296,28 @@ func (q3 *Q3BSPReader) compileTextures(faces []*RawFace) {
 			continue
 		}
 
-		// idTech 3 non specifica l'estensione nel BSP. Tentiamo il JPEG.
-		jpgPath := texName + ".jpg"
+		var img image.Image
+		var err error
 
-		// fs è l'IReader (es. Pk3Reader) iniettato tramite Setup()
-		file, err := q3.fs.Open(jpgPath)
-		if err != nil {
-			// Opzionale: implementare qui il fallback per la ricerca di ".tga"
-			fmt.Printf("Warning: asset mancante %s\n", jpgPath)
-			continue
+		// Prova prima con JPEG
+		jpgPath := texName + ".jpg"
+		file, errJpg := q3.fs.Open(jpgPath)
+		if errJpg == nil {
+			img, _, err = image.Decode(file)
+		} else {
+			// Fallback su TGA
+			tgaPath := texName + ".tga"
+			fileTga, errTga := q3.fs.Open(tgaPath)
+			if errTga == nil {
+				img, err = common.DecodeTGA(fileTga)
+			} else {
+				fmt.Printf("Warning: asset mancante %s (.jpg/.tga)\n", texName)
+				continue
+			}
 		}
 
-		// Decodifica lo stream JPEG
-		img, _, err := image.Decode(file)
 		if err != nil {
-			fmt.Printf("Warning: decodifica fallita per %s: %v\n", jpgPath, err)
+			fmt.Printf("Warning: decodifica fallita per %s: %v\n", texName, err)
 			continue
 		}
 
@@ -289,13 +338,13 @@ func (q3 *Q3BSPReader) compileTextures(faces []*RawFace) {
 }
 
 // evalBezier calcola la coordinata lungo la curva di grado 2 per il fattore t [0.0 - 1.0]
-func evalBezier(p0, p1, p2 float32, t float32) float32 {
+func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
 	u := 1.0 - t
 	return (u * u * p0) + (2.0 * u * t * p1) + (t * t * p2)
 }
 
 // tessellatePatch espande i 9 punti di controllo in un array flat di triangoli
-func tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ {
+func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ {
 	var points []geometry.XYZ
 	step := 1.0 / float32(level)
 	L := level + 1
@@ -310,15 +359,15 @@ func tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ {
 			for row := 0; row < 3; row++ {
 				idx := row * 3
 				p[row] = CreateXYZ(
-					float64(evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
-					float64(evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
-					float64(evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
+					float64(q3.evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
+					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
+					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
 				)
 			}
 			grid[i*L+j] = CreateXYZ(
-				float64(evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
-				float64(evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
-				float64(evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
+				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
+				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
+				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
 			)
 		}
 	}

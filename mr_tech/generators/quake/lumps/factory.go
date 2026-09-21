@@ -43,6 +43,8 @@ type IBSPReader interface {
 
 	RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error
 
+	RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error
+
 	GetRawFaces(modelIdx int) ([]*RawFace, error)
 }
 

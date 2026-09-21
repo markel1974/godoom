@@ -4,6 +4,7 @@ import "github.com/markel1974/godoom/mr_tech/geometry"
 
 type RawFace struct {
 	Points  []geometry.XYZ
+	UVs     [][2]float64
 	TexName string
 	IsSky   bool
 }

@@ -47,7 +47,10 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	if err := pk.Setup(pakPath); err != nil {
 		return nil, err
 	}
-	maps, _ := pk.ReadDirFilter("maps", "\\.bsp$")
+	maps, _ := pk.ReadDirFilter("maps", "^e.+\\.bsp")
+	if len(maps) == 0 {
+		maps, _ = pk.ReadDirFilter("maps", "\\.bsp$") // Fallback per Q2/Q3
+	}
 	if levelIndex >= len(maps) {
 		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
 	}
@@ -191,6 +194,19 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		triangles := p.triangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
+			triUvs := make([][2]float64, 3)
+			for k := 0; k < 3; k++ {
+				pos := tri[k]
+				for idx, pt := range v.Points {
+					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+						if len(v.UVs) > idx {
+							triUvs[k] = v.UVs[idx]
+						}
+						break
+					}
+				}
+			}
+
 			// 2. Troviamo il centroide del triangolo
 			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
@@ -209,7 +225,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 				chunks[chunkKey] = volume
 				root.Volumes = append(root.Volumes, volume)
 			}
-			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, material, v.TexName))
+			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
 		}
 	}
 
@@ -318,7 +334,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 }
 
 // createThing creates a new Thing object based on the specified position, classname, Pak file, and color palette.
-func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
+func (p *Builder) createThing(pos geometry.XYZ, classname string, pk lumps.IArchive, reader lumps.IBSPReader) (*config.Thing, error) {
 	thingPath := GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -398,83 +414,69 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, pk *lumps.Pak,
 }
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, pk *lumps.Pak, reader lumps.IBSPReader) (*config.Thing, error) {
+func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, pk lumps.IArchive, parentReader lumps.IBSPReader) (*config.Thing, error) {
 	rs, err := pk.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("impossibile aprire %s: %s", bspPath, err.Error())
 	}
-	infos, err := lumps.NewLumpInfos(rs)
+	rsPal, _ := pk.Open("gfx/palette.lmp") // Ignore error for Q3
+	reader, err := lumps.Factory(rs, rsPal)
 	if err != nil {
 		return nil, err
 	}
-	bspModels, _ := lumps.NewModels(rs, infos[lumps.LumpModels])
-	if len(bspModels) == 0 {
+	if err = reader.Setup(pk); err != nil {
+		return nil, err
+	}
+
+	bspModels, err := reader.GetModels()
+	if err != nil || len(bspModels) == 0 {
 		return nil, fmt.Errorf("nessun modello trovato in %s", bspPath)
 	}
-	vertexes, _ := lumps.NewVertexes(rs, infos[lumps.LumpVertexes])
-	edges, _ := lumps.NewEdges(rs, infos[lumps.LumpEdges])
-	surfEdges, _ := lumps.NewSurfEdges(rs, infos[lumps.LumpSurfEdges])
-	faces, _ := lumps.NewFace(rs, infos[lumps.LumpFaces])
-	mipTextures, _ := lumps.NewMipTextures(rs, infos[lumps.LumpTextures])
-	texInfos, _ := lumps.NewTexInfos(rs, infos[lumps.LumpTexInfos])
 
-	// Creiamo i materiali statici singolarmente, salvandoli in una slice parallela a mipTextures
-	materials := make([]*config.Material, len(mipTextures))
-	for i, mt := range mipTextures {
-		if mt == nil {
-			continue
-		}
-		if len(mt.Name) == 0 {
-			continue
-		}
-		materials[i] = config.NewConfigMaterial([]string{mt.Name}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		if err = reader.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
-			return nil, fmt.Errorf("failed to register texture %s: %v", mt.Name, err)
-		}
+	rawFaces, err := reader.GetRawFaces(0)
+	if err != nil {
+		return nil, err
 	}
+
+	texManager := reader.GetTextures()
+
 	// Traduzione Geometria in MD1 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
 	var allTriangles []config.MD1Triangle
-	rawModel := bspModels[0]
 
-	for i := int32(0); i < rawModel.NumFaces; i++ {
-		faceIdx := rawModel.FirstFace + i
-		bspFace := faces[faceIdx]
-		//RECUPERO DELLA TEXTURE SPECIFICA
-		texInfo := texInfos[bspFace.TexInfo]
-		mipTex := mipTextures[texInfo.MipTex]
-		specificMaterial := materials[texInfo.MipTex]
-		var points []geometry.XYZ
-		for j := uint16(0); j < bspFace.NumEdges; j++ {
-			surfEdgeIdx := surfEdges[bspFace.FirstEdge+int32(j)]
-			var v *lumps.Vertex
-			if surfEdgeIdx >= 0 {
-				v = vertexes[edges[surfEdgeIdx].Vertex0]
-			} else {
-				v = vertexes[edges[-surfEdgeIdx].Vertex1]
-			}
-			xyz := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
-			points = append(points, xyz)
+	for _, bspFace := range rawFaces {
+		// RECUPERO DELLA TEXTURE SPECIFICA
+		texName := bspFace.TexName
+		animKind := config.MaterialKindLoop
+		if bspFace.IsSky {
+			animKind = config.MaterialKindSky
 		}
-		rawTriangles := p.triangulateConvex3d(points)
-		// CALCOLO VETTORIALE DELLE UV
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+
+		// Gestione Texture Manager per le BModel esterne (Q3 vs Q1/Q2)
+		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+			tw, th, pixels := texes[0].RGBA()
+			parentReader.RegisterPixelsRGBA(texName, tw, th, pixels, false)
+		}
+
+		rawTriangles := p.triangulateConvex3d(bspFace.Points)
+
+		// Assegnazione UVs pre-calcolate da IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
-				// Prodotto scalare per l'asse orizzontale S (Vecs[0])
-				u := (pos.X * float64(texInfo.Vecs[0][0])) +
-					(pos.Y * float64(texInfo.Vecs[0][1])) +
-					(pos.Z * float64(texInfo.Vecs[0][2])) +
-					float64(texInfo.Vecs[0][3])
-				// Prodotto scalare per l'asse verticale T (Vecs[1])
-				v := (pos.X * float64(texInfo.Vecs[1][0])) +
-					(pos.Y * float64(texInfo.Vecs[1][1])) +
-					(pos.Z * float64(texInfo.Vecs[1][2])) +
-					float64(texInfo.Vecs[1][3])
-				// Normalizzazione (0.0 -> 1.0)
-				normU := u / float64(mipTex.Width)
-				normV := v / float64(mipTex.Height)
-				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: float32(normU), V: float32(normV)}
+				u, v := float32(0.0), float32(0.0)
+				// Troviamo l'indice UV corrispondente al vertice
+				for idx, pt := range bspFace.Points {
+					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+						if len(bspFace.UVs) > idx {
+							u = float32(bspFace.UVs[idx][0])
+							v = float32(bspFace.UVs[idx][1])
+						}
+						break
+					}
+				}
+				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: u, V: v}
 			}
 			allTriangles = append(allTriangles, tri)
 		}

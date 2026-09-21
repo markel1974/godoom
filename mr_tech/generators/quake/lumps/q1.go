@@ -91,6 +91,10 @@ func (q1 *Q1BSPReader) RegisterPixels(name string, width, height int, indices []
 	return q1.texManager.RegisterPixels(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }
 
+func (q1 *Q1BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+	return q1.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
+}
+
 func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	// 1. Carica i dati base
 	models, _ := q1.GetModels()
@@ -112,6 +116,21 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 			texName = q1.mipTextures[texInfo.MipTex].Name
 		}
 		var points []geometry.XYZ
+		var uvs [][2]float64
+
+		// Prepare texture width/height for normalization
+		texW, texH := float64(256), float64(256)
+		if texInfo.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[texInfo.MipTex] != nil {
+			texW = float64(q1.mipTextures[texInfo.MipTex].Width)
+			texH = float64(q1.mipTextures[texInfo.MipTex].Height)
+			if texW == 0 {
+				texW = 256
+			}
+			if texH == 0 {
+				texH = 256
+			}
+		}
+
 		for j := uint16(0); j < bspFace.NumEdges; j++ {
 			surfEdgeIdx := q1.surfEdges[bspFace.FirstEdge+int32(j)]
 			var v *Vertex
@@ -120,11 +139,26 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 			} else {
 				v = q1.vertexes[q1.edges[-surfEdgeIdx].Vertex1]
 			}
-			points = append(points, CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z)))
+			pos := CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+			points = append(points, pos)
+
+			// Compute UVs using Quake 1 vector projection
+			// Note: Q1 raw vertex coords are used for projection
+			u := (float64(v.X) * float64(texInfo.Vecs[0][0])) +
+				(float64(v.Y) * float64(texInfo.Vecs[0][1])) +
+				(float64(v.Z) * float64(texInfo.Vecs[0][2])) +
+				float64(texInfo.Vecs[0][3])
+			vt := (float64(v.X) * float64(texInfo.Vecs[1][0])) +
+				(float64(v.Y) * float64(texInfo.Vecs[1][1])) +
+				(float64(v.Z) * float64(texInfo.Vecs[1][2])) +
+				float64(texInfo.Vecs[1][3])
+
+			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
 
 		rawFaces = append(rawFaces, &RawFace{
 			Points:  points,
+			UVs:     uvs,
 			TexName: texName,
 			IsSky:   isSky,
 		})

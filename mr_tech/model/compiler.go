@@ -496,6 +496,24 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volum
 				}
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
 				face := NewFace(tri, cf.Tag, material)
+
+				// Map UVs if provided by the config face
+				if len(cf.UVs) > 0 {
+					var triUvs [3][2]float64
+					for k := 0; k < 3; k++ {
+						for idx, pt := range cf.Points {
+							if pt.X == t[k].X && pt.Y == t[k].Y && pt.Z == t[k].Z {
+								if len(cf.UVs) > idx {
+									triUvs[k] = cf.UVs[idx]
+								}
+								break
+							}
+						}
+					}
+					face.SetUV(triUvs[0][0], triUvs[0][1], triUvs[1][0], triUvs[1][1], triUvs[2][0], triUvs[2][1])
+					face.LockUV(true)
+				}
+
 				volume.AddFace(face)
 				fixFaces = append(fixFaces, face)
 				facesTree.InsertObject(face)

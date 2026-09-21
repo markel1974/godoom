@@ -132,17 +132,17 @@ func (q2 *Q2BSPReader) Setup(r IReader) error {
 	if err = binary.Read(q2.rs, binary.LittleEndian, &q2.header); err != nil {
 		return err
 	}
-
-	if string(q2.header.Magic[:]) != "IBSP" {
-		return fmt.Errorf("magic number non valido per Quake 2: %s", string(q2.header.Magic[:]))
+	ibsp := string(q2.header.Magic[:])
+	if ibsp != "IBSP" {
+		return fmt.Errorf("invalid ibsp: %s", ibsp)
 	}
 
-	// In Quake 2 le texture WAL usano spesso palette dedicate o truecolor,
-	// ma carichiamo comunque la palette se fornita dal builder.
+	// In Quake 2, WAL textures often use dedicated palettes or true-color,
+	// but we still load the palette if provided by the builder.
 	if q2.rsPal != nil {
 		q2.palette, err = NewPalette(q2.rsPal)
 		if err != nil {
-			fmt.Printf("Warning: palette.lmp non caricata in Q2 (le texture WAL la includono): %v\n", err)
+			fmt.Printf("Warning: palette.lmp not loaded in Q2 (WAL textures include it): %v\n", err)
 		}
 	}
 	return nil
@@ -159,13 +159,33 @@ func (q2 *Q2BSPReader) GetEntities() ([]*Entity, error) {
 		return nil, err
 	}
 	text := FromNullTerminatingString(data)
-	return parseEntityText(text)
+	return NewEntitiesFromText(text)
 }
 
 // GetModels retrieves all BSP sub-models (bmodels) from the Quake 2 BSP file or returns an error if not implemented.
 func (q2 *Q2BSPReader) GetModels() ([]*Model, error) {
-	// Q2 bmodels sono strutturati diversamente, il builder.go li legge internamente per ora.
-	return nil, fmt.Errorf("implement me per i sub-models")
+	lumpModels := q2.header.Lumps[LumpQ2Models]
+	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
+	numModels := int(lumpModels.Length) / 48
+	models := make([]q2Model, numModels)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &models); err != nil {
+		return nil, err
+	}
+
+	out := make([]*Model, numModels)
+	for i, m := range models {
+		out[i] = &Model{
+			Mins:      m.Mins,
+			Maxs:      m.Maxs,
+			Origin:    m.Origin,
+			HeadNode:  [4]int32{m.HeadNode, -1, -1, -1}, // Q2 has a single tree, not 4 hulls like Q1
+			FirstFace: m.FirstFace,
+			NumFaces:  m.NumFaces,
+		}
+	}
+	return out, nil
 }
 
 // RegisterPixels registers texture pixel data with the texture manager, applying palette and optional transformations.
@@ -173,9 +193,13 @@ func (q2 *Q2BSPReader) RegisterPixels(name string, width, height int, indices []
 	return q2.texManager.RegisterPixels(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }
 
+func (q2 *Q2BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+	return q2.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
+}
+
 // GetRawFaces extracts raw face data for a specific model index from the Quake 2 BSP file and returns the corresponding faces.
 func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
-	// 1. Lettura dei Modelli per trovare l'offset delle facce
+	// Read models to find face offsets
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -191,40 +215,60 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	}
 	targetModel := models[modelIdx]
 
-	// 2. Lettura massiva dei lumps topologici
+	// 2. Bulk read topological lumps
 	lumpFaces := q2.header.Lumps[LumpQ2Faces]
-	q2.rs.Seek(int64(lumpFaces.Offset), io.SeekStart)
+	if _, err := q2.rs.Seek(int64(lumpFaces.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
 	faces := make([]q2Face, int(lumpFaces.Length)/20)
-	binary.Read(q2.rs, binary.LittleEndian, &faces)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &faces); err != nil {
+		return nil, err
+	}
 
 	lumpTexInfos := q2.header.Lumps[LumpQ2TexInfo]
-	q2.rs.Seek(int64(lumpTexInfos.Offset), io.SeekStart)
+	if _, err := q2.rs.Seek(int64(lumpTexInfos.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
 	texInfos := make([]q2TexInfo, int(lumpTexInfos.Length)/76)
-	binary.Read(q2.rs, binary.LittleEndian, &texInfos)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &texInfos); err != nil {
+		return nil, err
+	}
 
 	lumpSurfEdges := q2.header.Lumps[LumpQ2SurfEdges]
-	q2.rs.Seek(int64(lumpSurfEdges.Offset), io.SeekStart)
+	if _, err := q2.rs.Seek(int64(lumpSurfEdges.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
 	surfEdges := make([]int32, int(lumpSurfEdges.Length)/4)
-	binary.Read(q2.rs, binary.LittleEndian, &surfEdges)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &surfEdges); err != nil {
+		return nil, err
+	}
 
 	lumpEdges := q2.header.Lumps[LumpQ2Edges]
-	q2.rs.Seek(int64(lumpEdges.Offset), io.SeekStart)
+	if _, err := q2.rs.Seek(int64(lumpEdges.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
 	edges := make([]q2Edge, int(lumpEdges.Length)/4)
-	binary.Read(q2.rs, binary.LittleEndian, &edges)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &edges); err != nil {
+		return nil, err
+	}
 
 	lumpVerts := q2.header.Lumps[LumpQ2Vertexes]
-	q2.rs.Seek(int64(lumpVerts.Offset), io.SeekStart)
+	if _, err := q2.rs.Seek(int64(lumpVerts.Offset), io.SeekStart); err != nil {
+		return nil, err
+	}
 	vertexes := make([]q2Vertex, int(lumpVerts.Length)/12)
-	binary.Read(q2.rs, binary.LittleEndian, &vertexes)
+	if err := binary.Read(q2.rs, binary.LittleEndian, &vertexes); err != nil {
+		return nil, err
+	}
 
-	// 3. Risoluzione dell'indirezione e generazione dei RawFace
+	// Resolve indirection and generate RawFaces
 	var rawFaces []*RawFace
 	for i := int32(0); i < targetModel.NumFaces; i++ {
 		faceIdx := targetModel.FirstFace + i
 		face := faces[faceIdx]
 		texInfo := texInfos[face.TexInfo]
 
-		// Decodifica il nome della texture (array fisso di 32 byte null-terminated in C)
+		// Decode texture name (fixed 32-byte null-terminated C string)
 		texNameBytes := make([]byte, 0, 32)
 		for _, b := range texInfo.TextureName {
 			if b == 0 {
@@ -234,27 +278,55 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 		}
 		texName := strings.ToLower(string(texNameBytes))
 
-		// In Quake 2 i flag sono inclusi nel TexInfo. SURF_SKY è il bitmask 0x4
+		// In Quake 2 flags are included in TexInfo. SURF_SKY is bitmask 0x4
+		if (texInfo.Flags & 0x80) != 0 {
+			continue // SURF_NODRAW
+		}
 		isSky := (texInfo.Flags & 0x4) != 0
 
-		// Risoluzione SurfEdge -> Edge -> Vertex
+		// Resolve SurfEdge -> Edge -> Vertex
 		var points []geometry.XYZ
+		var uvs [][2]float64
+		texW, texH := float64(256), float64(256)
+		if texes := q2.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+			tw, th := texes[0].Size()
+			texW = float64(tw)
+			texH = float64(th)
+			if texW == 0 {
+				texW = 256
+			}
+			if texH == 0 {
+				texH = 256
+			}
+		}
+
 		for j := uint16(0); j < face.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[face.FirstEdge+int32(j)]
 
 			var v q2Vertex
 			if surfEdgeIdx >= 0 {
-				v = vertexes[edges[surfEdgeIdx].V1] // Direzione positiva (Senso antiorario)
+				v = vertexes[edges[surfEdgeIdx].V1] // Positive direction (counter-clockwise)
 			} else {
-				v = vertexes[edges[-surfEdgeIdx].V2] // Direzione invertita (Senso orario)
+				v = vertexes[edges[-surfEdgeIdx].V2] // Reversed direction (clockwise)
 			}
 
-			// Applichiamo la trasformazione degli assi standard z-up usando CreateXYZ
+			// Apply standard z-up axis transformation using CreateXYZ
 			points = append(points, CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z)))
+
+			u := (float64(v.X) * float64(texInfo.Vecs[0][0])) +
+				(float64(v.Y) * float64(texInfo.Vecs[0][1])) +
+				(float64(v.Z) * float64(texInfo.Vecs[0][2])) +
+				float64(texInfo.Vecs[0][3])
+			vt := (float64(v.X) * float64(texInfo.Vecs[1][0])) +
+				(float64(v.Y) * float64(texInfo.Vecs[1][1])) +
+				(float64(v.Z) * float64(texInfo.Vecs[1][2])) +
+				float64(texInfo.Vecs[1][3])
+			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
 
 		rawFaces = append(rawFaces, &RawFace{
 			Points:  points,
+			UVs:     uvs,
 			TexName: texName,
 			IsSky:   isSky,
 		})

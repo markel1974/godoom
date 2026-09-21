@@ -121,7 +121,7 @@ func (q3 *Q3BSPReader) GetEntities() ([]*Entity, error) {
 	if _, err := q3.rs.Read(data); err != nil {
 		return nil, err
 	}
-	return parseEntityText(FromNullTerminatingString(data))
+	return NewEntitiesFromText(FromNullTerminatingString(data))
 }
 
 func (q3 *Q3BSPReader) GetModels() ([]*Model, error) {
@@ -152,6 +152,10 @@ func (q3 *Q3BSPReader) GetModels() ([]*Model, error) {
 
 func (q3 *Q3BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return nil // In Q3 le texture sono solitamente .tga o .jpg lette dal VFS nativamente come RGBA, il manager andrà adattato
+}
+
+func (q3 *Q3BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+	return q3.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
 func (q3 *Q3BSPReader) GetTextures() *Textures {
@@ -228,18 +232,25 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 		texName := strings.ToLower(string(texNameBytes))
 		isSky := (tex.Flags & 0x4) != 0 // SURF_SKY
 
+		if (tex.Flags & 0x80) != 0 {
+			continue // SURF_NODRAW
+		}
+
 		switch face.Type {
 		case 1, 3: // Poligono Convesso (1) o Mesh Complessa (3)
 			// Q3 usa l'indicizzazione per formare direttamente triangoli
 			for j := int32(0); j < face.NumMesh; j += 3 {
 				var tri []geometry.XYZ
+				var uvs [][2]float64
 				for k := int32(0); k < 3; k++ {
 					vIdx := face.VertexStart + meshVerts[face.MeshStart+j+k]
 					v := vertexes[vIdx]
 					tri = append(tri, CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
+					uvs = append(uvs, [2]float64{float64(v.TexCoord[0]), float64(v.TexCoord[1])})
 				}
 				rawFaces = append(rawFaces, &RawFace{
 					Points:  tri, // Il Builder non dovrà fare il Fan se riceve già 3 punti
+					UVs:     uvs,
 					TexName: texName,
 					IsSky:   isSky,
 				})
@@ -264,12 +275,12 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 					}
 
 					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
-					triangles := q3.tessellatePatch(cp, 5)
+					triangles, uvs := q3.tessellatePatch(cp, 5)
 
-					// Raggruppiamo i punti a gruppi di 3 per formare i RawFace
 					for t := 0; t < len(triangles); t += 3 {
 						rawFaces = append(rawFaces, &RawFace{
 							Points:  []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]},
+							UVs:     [][2]float64{uvs[t], uvs[t+1], uvs[t+2]},
 							TexName: texName,
 							IsSky:   isSky,
 						})
@@ -344,11 +355,13 @@ func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
 }
 
 // tessellatePatch espande i 9 punti di controllo in un array flat di triangoli
-func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ {
+func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XYZ, [][2]float64) {
 	var points []geometry.XYZ
+	var uvs [][2]float64
 	step := 1.0 / float32(level)
 	L := level + 1
 	grid := make([]geometry.XYZ, L*L)
+	gridUV := make([][2]float64, L*L)
 
 	// Calcolo interpolazione griglia
 	for i := 0; i <= level; i++ {
@@ -356,6 +369,7 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ
 		for j := 0; j <= level; j++ {
 			tU := float32(j) * step
 			var p [3]geometry.XYZ
+			var puv [3][2]float32
 			for row := 0; row < 3; row++ {
 				idx := row * 3
 				p[row] = CreateXYZ(
@@ -363,26 +377,37 @@ func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) []geometry.XYZ
 					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
 					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
 				)
+				puv[row] = [2]float32{
+					q3.evalBezier(cp[idx].TexCoord[0], cp[idx+1].TexCoord[0], cp[idx+2].TexCoord[0], tU),
+					q3.evalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
+				}
 			}
 			grid[i*L+j] = CreateXYZ(
 				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
 				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
 				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
 			)
+			gridUV[i*L+j] = [2]float64{
+				float64(q3.evalBezier(puv[0][0], puv[1][0], puv[2][0], tV)),
+				float64(q3.evalBezier(puv[0][1], puv[1][1], puv[2][1], tV)),
+			}
 		}
 	}
 
 	// Chiusura dei quadrati in triangoli (Winding Order CCW)
 	for i := 0; i < level; i++ {
 		for j := 0; j < level; j++ {
-			v0 := grid[(i*L)+j]
-			v1 := grid[(i*L)+j+1]
-			v2 := grid[((i+1)*L)+j]
-			v3 := grid[((i+1)*L)+j+1]
+			idx0 := (i * L) + j
+			idx1 := (i * L) + j + 1
+			idx2 := ((i + 1) * L) + j
+			idx3 := ((i + 1) * L) + j + 1
 
-			points = append(points, v0, v2, v1)
-			points = append(points, v1, v2, v3)
+			points = append(points, grid[idx0], grid[idx2], grid[idx1])
+			uvs = append(uvs, gridUV[idx0], gridUV[idx2], gridUV[idx1])
+
+			points = append(points, grid[idx1], grid[idx2], grid[idx3])
+			uvs = append(uvs, gridUV[idx1], gridUV[idx2], gridUV[idx3])
 		}
 	}
-	return points
+	return points, uvs
 }

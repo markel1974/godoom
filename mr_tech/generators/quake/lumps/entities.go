@@ -22,12 +22,12 @@ func NewEntities(rs io.ReadSeeker, lumpInfo *LumpInfo) ([]*Entity, error) {
 	}
 	// Quake text lumps sono spesso null-terminated o con garbage alla fine
 	text := FromNullTerminatingString(data)
-	return parseEntityText(text)
+	return NewEntitiesFromText(text)
 }
 
-// parseEntityText parses a structured text input to extract entities with key-value properties organized in brackets.
+// NewEntitiesFromText parses a structured text input to extract entities with key-value properties organized in brackets.
 // Returns a slice of Entity pointers or an error if parsing fails.
-func parseEntityText(text string) ([]*Entity, error) {
+func NewEntitiesFromText(text string) ([]*Entity, error) {
 	var entities []*Entity
 	var currentEntity *Entity
 
@@ -35,7 +35,7 @@ func parseEntityText(text string) ([]*Entity, error) {
 	var currentToken bytes.Buffer
 	var tokens []string
 
-	// 1. Tokenizzazione di base: estrae { } e le stringhe tra virgolette
+	// Tokenizzazione di base: estrae { } e le stringhe tra virgolette
 	for i := 0; i < len(text); i++ {
 		c := text[i]
 		if c == '"' {

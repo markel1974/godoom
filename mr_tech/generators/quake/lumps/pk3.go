@@ -80,7 +80,8 @@ func (np *NodePk3) GetNode(parts []string) *NodePk3 {
 }
 
 type Pk3 struct {
-	root *NodePk3
+	root   *NodePk3
+	reader *zip.ReadCloser
 }
 
 func NewPk3() *Pk3 {
@@ -92,7 +93,7 @@ func (pk *Pk3) Setup(path string) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	pk.reader = r
 
 	pk.root = NewPk3Node(nil)
 	for _, f := range r.File {

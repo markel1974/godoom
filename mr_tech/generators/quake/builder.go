@@ -46,19 +46,14 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	}
 	maps, _ := arc.ReadDirFilter("maps", "^e.+\\.bsp")
 	if len(maps) == 0 {
-		maps, _ = arc.ReadDirFilter("maps", "\\.bsp$") // Fallback per Q2/Q3
+		maps, _ = arc.ReadDirFilter("maps", "\\.bsp$") // Fallback for Q2/Q3
 	}
 	if levelIndex >= len(maps) {
 		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
 	}
 	bpsPath := "maps" + lumps.PakSeparator + maps[levelIndex]
-	rs, aErr := arc.Open(bpsPath)
-	if aErr != nil {
-		return nil, aErr
-	}
-	palPath := "gfx" + lumps.PakSeparator + "palette.lmp"
-	rsPal, _ := arc.Open(palPath) // Ignore palette error for Q3
-	reader, bErr := lumps.NewBSPReader(rs, rsPal)
+
+	reader, bErr := lumps.NewBSPReader(arc, bpsPath)
 	if bErr != nil {
 		return nil, bErr
 	}
@@ -110,10 +105,10 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 			angle, _ = strconv.ParseFloat(a, 64)
 		}
 
-		// TODO: Attualmente stiamo ignorando i sub-models (*1, *2, ecc.) come func_door o func_plat.
-		// Prima di concentrarci sugli "accessori", assicuriamoci che il worldspawn (la mappa base)
-		// venga renderizzato correttamente. Quando saremo pronti, toglieremo questo continue
-		// e instanzieremo i bmodel utilizzando GetModels() del IBSPReader.
+		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
+		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
+		// is rendered correctly. When ready, we will remove this continue
+		// and instantiate bmodels using GetModels() from IBSPReader.
 		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
 			continue
 		}
@@ -130,7 +125,7 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 
 		switch baseClass {
 		case "worldspawn":
-			// Ignoriamo: è la mappa base, la geometria è già gestita da worldModel
+			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
 			if classname == "info_player_start" {
 				var err error
@@ -139,8 +134,8 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 					fmt.Printf("Warning: %s\n", err.Error())
 				}
 			} else {
-				// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
-				// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
+				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
 			mangleStr, _ := ent.Properties["mangle"]
@@ -155,15 +150,15 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 						style = lightStyles[index]
 					}
 				}
-				// Gestisce light, light_fluoro, light_fluorospark
+				// Handles light, light_fluoro, light_fluorospark
 				light = p.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
 			}
 			if light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":
-		// Marker invisibili: teletrasporti, spawn point deathmatch, nodi di pattuglia.
-		// TODO: Salvarli in una lista di waypoint/spawnpoint gameplay.
+			// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+			// TODO: Save them in a gameplay waypoint/spawnpoint list.
 		case "ambient":
 			// TODO:
 		case "func":
@@ -209,12 +204,12 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 				}
 			}
 
-			// 2. Troviamo il centroide del triangolo
+			// 2. Find the triangle centroid
 			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
 
-			// 3. Calcoliamo la chiave di Spatial Hashing (Coordinate della griglia)
+			// 3. Calculate the spatial hashing key (grid coordinates)
 			gridX := int(math.Floor(cx / chunkSize))
 			gridY := int(math.Floor(cy / chunkSize))
 			gridZ := int(math.Floor(cz / chunkSize))
@@ -246,17 +241,17 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 	root.Player.Bobbing.SwayScale = 2.0
 	root.Player.Bobbing.SwayOffsetX = 50
 	root.Player.Bobbing.SwayOffsetY = -0.9
-	root.Player.Bobbing.MaxAmplitudeX = 5.0 // ESCURSIONE MASSIMA: 12 unità (circa il 20% dell'altezza player)
+	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
-	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
-	root.Player.Bobbing.IdleAmpX = 0.9        // Respiro
+	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	root.Player.Bobbing.IdleAmpX = 0.9        // Breathing
 	root.Player.Bobbing.IdleAmpY = 0.9
 	root.Player.Bobbing.IdleDrift = 0.01
-	root.Player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
+	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
 	root.Player.Bobbing.AmpLerp = 0.20
 	root.Player.Bobbing.ImpactMax = 1000.0
-	root.Player.Bobbing.ImpactScale = 0.02   // ATTERRAGGIO: 1000 * 0.02 = 20 unità di scuotimento verticale
-	root.Player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
+	root.Player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
+	root.Player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
 	root.Player.Bobbing.SpringDamping = 0.80
 	root.Player.Bobbing.TiltAmp = 0.05
 	//fmt.Println("TODO REACTIVATE ROOT THINGS!")
@@ -276,16 +271,16 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 	falloff := 0.0
 	var kind config.LightKind
 
-	// INTENSITÀ DI BASE
+	// BASE INTENSITY
 	if l, ok := entity.Properties["light"]; ok {
 		intensity, _ = strconv.ParseFloat(l, 64)
 		//intensity *= 0.3
 	} else {
-		intensity = 300 // Default fallback tipico di Quake
+		intensity = 300 // Typical Quake default fallback
 	}
 
-	// COLORE (Standard Quake 2 / Modern Quake 1)
-	r, g, b := 1.0, 1.0, 1.0 // Default Bianco
+	// COLOR (Standard Quake 2 / Modern Quake 1)
+	r, g, b := 1.0, 1.0, 1.0 // Default White
 	if len(colorStr) > 0 {
 		if cr, cg, cb, valid := p.parseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
@@ -296,8 +291,8 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 		}
 	}
 
-	// DIREZIONE DELLO SPOTLIGHT
-	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: guarda in basso
+	// SPOTLIGHT DIRECTION
+	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
 	if isSpot {
 		kind = config.LightKindSpot
 		intensity = intensity * 0.9
@@ -308,9 +303,9 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 			}
 		} else {
 			if angle == -1 {
-				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Guarda in alto
+				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
 			} else if angle == -2 {
-				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Guarda in basso
+				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
 			} else {
 				dirX, dirY, dirZ = p.calcDirection(angle, 0)
 			}
@@ -321,7 +316,7 @@ func (p *Builder) createLight(entity *lumps.Entity, angle float64, mangleStr, co
 		falloff = intensity
 	}
 
-	// CREAZIONE CONFIGURAZIONE
+	// CONFIGURATION CREATION
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
 	cl.R = r
 	cl.G = g
@@ -416,59 +411,49 @@ func (p *Builder) createThing(pos geometry.XYZ, classname string, arc lumps.IArc
 }
 
 // createThingBSP constructs a Thing instance using external BSP model data, applying positions, textures, and materials.
-func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, pk lumps.IArchive, parentReader lumps.IBSPReader) (*config.Thing, error) {
-	rs, err := pk.Open(bspPath)
-	if err != nil {
-		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())
-	}
-	rsPal, _ := pk.Open("gfx/palette.lmp") // Ignore error for Q3
-	reader, err := lumps.NewBSPReader(rs, rsPal)
+func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classname string, arc lumps.IArchive, parentReader lumps.IBSPReader) (*config.Thing, error) {
+	reader, err := lumps.NewBSPReader(arc, bspPath)
 	if err != nil {
 		return nil, err
 	}
-	if err = reader.Setup(pk); err != nil {
+	if err = reader.Setup(arc); err != nil {
 		return nil, err
 	}
-
 	bspModels, err := reader.GetModels()
-	if err != nil || len(bspModels) == 0 {
-		return nil, fmt.Errorf("nessun modello trovato in %s", bspPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get models from %s: %v", bspPath, err)
 	}
-
+	if len(bspModels) == 0 {
+		return nil, fmt.Errorf("no model found in %s", bspPath)
+	}
 	rawFaces, err := reader.GetRawFaces(0)
 	if err != nil {
 		return nil, err
 	}
-
 	texManager := reader.GetTextures()
-
-	// Traduzione Geometria in MD1 Agnostico, raccogliamo tutti i triangoli in questo singolo frame
+	// Geometry translation into agnostic MD1, collect all triangles in this single frame
 	var allTriangles []config.MD1Triangle
-
 	for _, bspFace := range rawFaces {
-		// RECUPERO DELLA TEXTURE SPECIFICA
+		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := config.MaterialKindLoop
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
-
-		// Gestione Texture Manager per le BModel esterne (Q3 vs Q1/Q2)
+		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()
 			_ = parentReader.RegisterPixelsRGBA(texName, tw, th, pixels, false)
 		}
-
 		rawTriangles := p.triangulateConvex3d(bspFace.Points)
-
-		// Assegnazione UVs pre-calcolate da IBSPReader
+		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewMD1Triangle(specificMaterial)
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
-				// Troviamo l'indice UV corrispondente al vertice
+				// Find corresponding UV index for vertex
 				for idx, pt := range bspFace.Points {
 					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
 						if len(bspFace.UVs) > idx {
@@ -483,7 +468,7 @@ func (p *Builder) createThingBSP(bspPath string, position geometry.XYZ, classnam
 			allTriangles = append(allTriangles, tri)
 		}
 	}
-	// I BSP non hanno animazioni vertex-morphing, 1 solo frame
+	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewMD1(1, []string{"default"})
 	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
 	thingCfg := p.createConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
@@ -518,13 +503,13 @@ func (p *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 func (p *Builder) triangulateConvex3d(pts []geometry.XYZ) [][]geometry.XYZ {
 	pLen := len(pts)
 	if pLen < 3 {
-		return nil // Poligono degenere
+		return nil // Degenerate polygon
 	}
 	if pLen == 3 {
 		return [][]geometry.XYZ{{pts[0], pts[1], pts[2]}}
 	}
 	output := make([][]geometry.XYZ, 0, pLen-2)
-	// Triangle Fan ancorato a pts[0]
+	// Triangle Fan anchored to pts[0]
 	for i := 1; i < pLen-1; i++ {
 		output = append(output, []geometry.XYZ{pts[0], pts[i], pts[i+1]})
 	}
@@ -538,19 +523,19 @@ func (p *Builder) triangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.X
 		return nil
 	}
 	if pLen == 3 {
-		// INVERTITO: da (0, 1, 2) a (0, 2, 1)
+		// INVERTED: from (0, 1, 2) to (0, 2, 1)
 		return [][]geometry.XYZ{{pts[0], pts[2], pts[1]}}
 	}
 
 	output := make([][]geometry.XYZ, 0, pLen-2)
 	for i := 1; i < pLen-1; i++ {
-		// INVERTITO: pts[i+1] viene PRIMA di pts[i]
+		// INVERTED: pts[i+1] comes BEFORE pts[i]
 		output = append(output, []geometry.XYZ{pts[0], pts[i+1], pts[i]})
 	}
 	return output
 }
 
-// parseVector estrae 3 float da una stringa stile Quake (es. "1.0 0.5 0.0")
+// parseVector extracts 3 floats from a Quake-style string (e.g. "1.0 0.5 0.0").
 func (p *Builder) parseVector(s string) (float64, float64, float64, bool) {
 	parts := strings.Fields(s)
 	if len(parts) >= 3 {
@@ -562,7 +547,7 @@ func (p *Builder) parseVector(s string) (float64, float64, float64, bool) {
 	return 0, 0, 0, false
 }
 
-// calcDirection converte gli angoli Quake (yaw, pitch) in un vettore direzionale normalizzato
+// calcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
 func (p *Builder) calcDirection(yaw, pitch float64) (float64, float64, float64) {
 	yawRad := yaw * math.Pi / 180.0
 	pitchRad := pitch * math.Pi / 180.0

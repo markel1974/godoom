@@ -54,7 +54,11 @@ type IBSPReader interface {
 }
 
 // NewBSPReader detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.
-func NewBSPReader(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
+func NewBSPReader(arc IArchive, bspPath string) (IBSPReader, error) {
+	rs, err := arc.Open(bspPath)
+	if err != nil {
+		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())
+	}
 	var magic [4]byte
 	if err := binary.Read(rs, binary.LittleEndian, &magic); err != nil {
 		return nil, fmt.Errorf("failed to read magic bytes: %w", err)
@@ -73,6 +77,7 @@ func NewBSPReader(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
 		case BSPVersionQ3:
 			return NewQ3BSPReader(rs), nil
 		case BSPVersionQ2:
+			palette, _ := arc.Open("gfx" + PakSeparator + "palette.lmp")
 			return NewQ2BSPReader(rs, palette), nil
 		default:
 			return nil, fmt.Errorf("unsupported IBSP version: %d", version)
@@ -93,6 +98,7 @@ func NewBSPReader(rs io.ReadSeeker, palette io.ReadSeeker) (IBSPReader, error) {
 	if _, err := rs.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to rewind stream: %w", err)
 	}
+	palette, _ := arc.Open("gfx" + PakSeparator + "palette.lmp")
 	return NewQ1BSPReader(rs, palette), nil
 }
 

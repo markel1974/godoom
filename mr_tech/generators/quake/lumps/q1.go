@@ -8,7 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// Q1BSPReader is a reader for Quake 1 BSP files, providing access to lump data and associated metadata.
+// Q1BSPReader reads and processes Quake 1 BSP files by managing lumps, textures, and geometry data.
 type Q1BSPReader struct {
 	reader      IReader
 	rs          io.ReadSeeker
@@ -24,7 +24,7 @@ type Q1BSPReader struct {
 	texManager  *Textures
 }
 
-// NewQ1BSPReader initializes a Q1BSPReader for reading Quake 1 BSP files and a palette from the provided io.ReadSeekers.
+// NewQ1BSPReader initializes and returns a pointer to a new Q1BSPReader instance using the provided io.ReadSeeker streams.
 func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
 	return &Q1BSPReader{
 		rs:         rs,
@@ -33,7 +33,7 @@ func NewQ1BSPReader(rs io.ReadSeeker, rsPal io.ReadSeeker) *Q1BSPReader {
 	}
 }
 
-// Setup initializes the Q1BSPReader by processing lump information and palette data from the provided file streams.
+// Setup initializes the Q1BSPReader by loading BSP data, textures, palettes, and related metadata from the provided reader.
 func (q1 *Q1BSPReader) Setup(reader IReader) error {
 	q1.reader = reader
 	var err error
@@ -71,32 +71,33 @@ func (q1 *Q1BSPReader) Setup(reader IReader) error {
 	return nil
 }
 
-// GetEntities retrieves a list of entities by parsing the lump data for entities in the BSP file. Returns entities or an error.
+// GetEntities retrieves all entities from the BSP file and returns them as a slice of Entity pointers or an error.
 func (q1 *Q1BSPReader) GetEntities() ([]*Entity, error) {
 	return NewEntities(q1.rs, q1.infos[LumpEntities])
 }
 
-// GetModels reads and returns all BSP sub-models as a slice of Model structs or an error if loading fails.
+// GetModels retrieves the BSP models from the lump data and returns a slice of models or an error if reading fails.
 func (q1 *Q1BSPReader) GetModels() ([]*Model, error) {
 	return NewModels(q1.rs, q1.infos[LumpModels])
 }
 
-// GetTextures returns a pointer to the Textures manager associated with the Q1BSPReader instance.
+// GetTextures returns the texture manager instance containing textures defined in the BSP file.
 func (q1 *Q1BSPReader) GetTextures() *Textures {
 	return q1.texManager
 }
 
-// RegisterPixels registers a texture's pixel data with the specified attributes in the Q1BSPReader's texture manager.
+// RegisterPixels registers a texture by name with specified dimensions, pixel data, palette, transparency, and alignment.
 func (q1 *Q1BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return q1.texManager.RegisterPixels(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }
 
+// RegisterPixelsRGBA registers a texture using raw RGBA pixel data with optional Y-axis inversion.
 func (q1 *Q1BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return q1.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
+// GetRawFaces extracts raw face data for a specified model index, including geometry, texture names, and UV coordinates.
 func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
-	// 1. Carica i dati base
 	models, _ := q1.GetModels()
 	if modelIdx < 0 || modelIdx >= len(models) {
 		return nil, fmt.Errorf("invalid model index")
@@ -105,7 +106,7 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 
 	var rawFaces []*RawFace
 
-	// 2. Itera solo sulle facce di questo modello (0 = World, 1+ = BModels)
+	// Itera solo sulle facce di questo modello (0 = World, 1+ = BModels)
 	for i := int32(0); i < model.NumFaces; i++ {
 		faceIdx := model.FirstFace + i
 		bspFace := q1.faces[faceIdx]
@@ -167,44 +168,43 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 	return rawFaces, nil
 }
 
-// GetExternalBModelFileName retrieves the file name of an external BModel based on the provided classname.
+// GetExternalBModelFileName returns the file name of the external BSP model associated with the given classname.
 func (q1 *Q1BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q1DictBModel[classname]
 }
 
-// GetModelFileName returns the file name of the model associated with the specified classname.
+// GetModelFileName returns the file name of a model corresponding to the given classname from the predefined model dictionary.
 func (q1 *Q1BSPReader) GetModelFileName(classname string) string {
 	return _q1DictModelFilename[classname]
 }
 
-// GetVertexes retrieves a slice of Vertex pointers from the BSP file and returns an error if the operation fails.
+// getVertexes retrieves the vertex data from the BSP file using the lump information and returns a slice of vertex pointers.
 func (q1 *Q1BSPReader) getVertexes() ([]*Vertex, error) {
 	return NewVertexes(q1.rs, q1.infos[LumpVertexes])
 }
 
-// GetEdges reads and returns the list of edges from the BSP file, represented as directed line segments.
+// getEdges loads and returns the list of edges from the edges lump data or an error if the operation fails.
 func (q1 *Q1BSPReader) getEdges() ([]*Edge, error) {
 	return NewEdges(q1.rs, q1.infos[LumpEdges])
 }
 
-// GetSurfEdges retrieves an array of int32 representing surface edge indices from the BSP file.
-// A negative index indicates reversed edge vertex order. Returns an error if reading fails.
+// getSurfEdges retrieves an array of surface edges, representing directed edge indices used for face definitions.
+// Returns a slice of int32 values and an error if reading fails.
 func (q1 *Q1BSPReader) getSurfEdges() ([]int32, error) {
 	return NewSurfEdges(q1.rs, q1.infos[LumpSurfEdges])
 }
 
-// GetFaces retrieves all face structures from the BSP file using metadata from the LumpFaces lump.
-// Returns a slice of Face pointers or an error if the operation fails.
+// getFaces retrieves all Face structures from the BSP file using lump metadata and returns them or an error if encountered.
 func (q1 *Q1BSPReader) getFaces() ([]*Face, error) {
 	return NewFace(q1.rs, q1.infos[LumpFaces])
 }
 
-// GetTexInfos retrieves texture mapping information from the loaded BSP file and returns a slice of TexInfo pointers.
+// getTexInfos retrieves texture mapping information from the level data and returns a slice of TexInfo and an error.
 func (q1 *Q1BSPReader) getTexInfos() ([]*TexInfo, error) {
 	return NewTexInfos(q1.rs, q1.infos[LumpTexInfos])
 }
 
-// GetMipTextures retrieves all *MipTexture objects from the TEXTURES lump in the BSP file. Returns an error on failure.
+// getMipTextures reads and decodes all mipmap textures from the lump data in the BSP file. Returns an error on failure.
 func (q1 *Q1BSPReader) getMipTextures() ([]*MipTexture, error) {
 	return NewMipTextures(q1.rs, q1.infos[LumpTextures])
 }

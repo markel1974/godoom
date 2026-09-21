@@ -5,11 +5,16 @@ import (
 	"io"
 )
 
+// Marks encapsulates information about the count of surfaces and their indices in a level's data.
+// Count specifies the number of surfaces.
+// Surfaces holds the indices of surfaces as a slice of uint16.
 type Marks struct {
 	Count    int
 	Surfaces []uint16
 }
 
+// NewMarks initializes and returns a Marks object by reading data from the provided ReadSeeker and LumpInfo metadata.
+// Returns an error if seeking or data reading fails.
 func NewMarks(rs io.ReadSeeker, lumpInfo *LumpInfo) (*Marks, error) {
 	if err := Seek(rs, lumpInfo.Filepos); err != nil {
 		return nil, err

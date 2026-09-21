@@ -10,17 +10,23 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// BSPVersion represents the versioning enumeration for BSP (Binary Space Partitioning) structures in a system.
+// BSPVersion represents the version of a BSP (Binary Space Partitioning) file used in different game engines.
 type BSPVersion int
 
-// BSPVersionQ1 represents the BSP version used in Quake 1.
-// BSPVersionQ2 represents the BSP version used in Quake 2.
+// BSPVersionQ1 represents the BSP version for Quake 1 files.
+// BSPVersionQ2 represents the BSP version for Quake 2 files.
+// BSPVersionQ3 represents the BSP version for Quake 3 files.
 const (
 	BSPVersionQ1 BSPVersion = 29
 	BSPVersionQ2 BSPVersion = 38
 	BSPVersionQ3 BSPVersion = 46
 )
 
+// IArchive defines an interface for managing archive files, supporting file access and directory operations.
+// Setup initializes the archive with the specified path.
+// Open retrieves a file as a readable and seekable stream from the archive based on its full path.
+// ReadDir returns a slice of file names present in the specified directory path within the archive.
+// ReadDirFilter returns file names matching a wildcard pattern in the specified directory path within the archive.
 type IArchive interface {
 	Setup(path string) error
 
@@ -31,11 +37,12 @@ type IArchive interface {
 	ReadDirFilter(fullPath string, wildcard string) ([]string, error)
 }
 
+// IReader represents an interface for reading and seeking through a resource identified by a file path.
 type IReader interface {
 	Open(path string) (io.ReadSeeker, error)
 }
 
-// IBSPReader defines an interface for reading BSP files, enabling access to entities and other BSP structures.
+// IBSPReader defines an interface for reading and processing BSP (Binary Space Partitioning) structure data.
 type IBSPReader interface {
 	Setup() error
 
@@ -62,7 +69,7 @@ type IBSPReader interface {
 	GetModelFileName(classname string) string
 }
 
-// NewBSPReader detects the BSP file version from the provided io.ReadSeeker and returns an appropriate IBSPReader implementation.
+// NewBSPReader creates and initializes an IBSPReader for the specified BSP file using the provided IArchive instance.
 func NewBSPReader(arc IArchive, bspPath string) (IBSPReader, error) {
 	rs, rErr := arc.Open(bspPath)
 	if rErr != nil {
@@ -111,6 +118,7 @@ func NewBSPReader(arc IArchive, bspPath string) (IBSPReader, error) {
 	return NewQ1BSPReader(arc, rs, palette), nil
 }
 
+// NewArchive creates a new archive instance based on the file extension, supporting ".pk3" and other formats.
 func NewArchive(pakPath string) (IArchive, error) {
 	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
 		return NewPk3(), nil

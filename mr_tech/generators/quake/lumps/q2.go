@@ -352,13 +352,8 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 				float64(texInfo.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
-
-		rawFaces = append(rawFaces, &RawFace{
-			Points:  points,
-			UVs:     uvs,
-			TexName: texName,
-			IsSky:   isSky,
-		})
+		rf := NewRawFace(points, uvs, texName, isSky)
+		rawFaces = append(rawFaces, rf)
 	}
 
 	q2.compileTextures(rawFaces)

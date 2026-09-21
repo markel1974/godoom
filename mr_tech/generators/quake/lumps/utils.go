@@ -109,3 +109,11 @@ func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
 	dirZ := math.Cos(pitchRad) * math.Sin(yawRad)
 	return dirX, dirY, dirZ
 }
+
+// CreateXYZ creates an XYZ struct with specified X, Y, and Z coordinates.
+func CreateXYZ(x, y, z float64) geometry.XYZ {
+	// Conversione coordinate: Quake Z-up -> Engine Z-up
+	//pos := geometry.XYZ{X: x, Y: z, Z: -y}
+	pos := geometry.XYZ{X: x, Y: y, Z: z}
+	return pos
+}

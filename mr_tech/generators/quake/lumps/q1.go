@@ -172,13 +172,8 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*RawFace, error) {
 
 			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
-
-		rawFaces = append(rawFaces, &RawFace{
-			Points:  points,
-			UVs:     uvs,
-			TexName: texName,
-			IsSky:   isSky,
-		})
+		rf := NewRawFace(points, uvs, texName, isSky)
+		rawFaces = append(rawFaces, rf)
 	}
 
 	return rawFaces, nil

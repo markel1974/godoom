@@ -481,12 +481,12 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 			colorStr, _ := ent.Properties["_color"]
 			var light *config.Light = nil
 			if len(subClass) == 0 {
-				light = q2.createLight(ent, angle, mangleStr, colorStr, pos, _q1LightStyle0, false)
+				light = q2.createLight(ent, angle, mangleStr, colorStr, pos, _q2LightStyle0, false)
 			} else {
-				style := _q1LightStyle0
+				style := _q2LightStyle0
 				if sIndex, ok := ent.Properties["style"]; ok {
-					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q1LightStyles) {
-						style = _q1LightStyles[index]
+					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q2LightStyles) {
+						style = _q2LightStyles[index]
 					}
 				}
 				// Handles light, light_fluoro, light_fluorospark

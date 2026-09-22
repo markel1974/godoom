@@ -143,6 +143,7 @@ func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	return q3
 }
 
+// Setup initializes the Q3BSPReader by parsing the header, validating file format, and loading shaders for additive materials.
 func (q3 *Q3BSPReader) Setup() error {
 	if _, err := q3.rs.Seek(0, io.SeekStart); err != nil {
 		return err

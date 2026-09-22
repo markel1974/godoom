@@ -31,6 +31,7 @@ type Shader struct {
 	stages       []*ShaderStage
 }
 
+// NewShader creates and returns a new Shader instance with the provided name and cull mode.
 func NewShader(name string, cull string) *Shader {
 	return &Shader{
 		name:         name,
@@ -155,11 +156,7 @@ func (s *Shaders) parseShaderFile(data string) {
 
 			if depth == 0 {
 				// Shader name
-				currentShader = &Shader{
-					name:         tl,
-					surfaceParms: make(map[string]bool),
-					cull:         "front",
-				}
+				currentShader = NewShader(tl, "front")
 				i++
 			} else if depth == 1 && currentShader != nil {
 				// Global directive

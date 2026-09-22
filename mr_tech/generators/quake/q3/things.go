@@ -75,7 +75,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadMissingTexture(texName)
+				t.loadTexture(texName)
 			}
 		}
 	}
@@ -181,8 +181,8 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 	return thingCfg
 }
 
-// loadMissingTexture attempts to load and register a texture for an MD3 model from the archive.
-func (t *Things) loadMissingTexture(texName string) {
+// loadTexture attempts to load and register a texture for an MD3 model from the archive.
+func (t *Things) loadTexture(texName string) {
 	if texName == "noshader" || len(texName) == 0 {
 		return
 	}
@@ -191,7 +191,7 @@ func (t *Things) loadMissingTexture(texName string) {
 	}
 	img, err := LoadImage(texName, t.arc)
 	if err != nil {
-		fmt.Printf("warning: md3 %s\n", err.Error())
+		fmt.Printf("warning: %s\n", err.Error())
 		return
 	}
 	bounds := img.Bounds()

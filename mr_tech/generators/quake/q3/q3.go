@@ -518,7 +518,7 @@ func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
 func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
-	faces, rfErr := q3.GetRawFaces(mIdx)
+	rawFaces, rfErr := q3.GetRawFaces(mIdx)
 	if rfErr != nil {
 		return rfErr
 	}
@@ -528,6 +528,8 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	}
 	things := NewThings(q3.arc, q3.shaders, q3.texManager)
 	lights := NewLights(entities)
+	faces := NewFaces(q3.shaders)
+
 	playerSpawned := false
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
@@ -556,12 +558,11 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		}
 
 		if externalBSPPath := q3.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
-			cThing, err := things.CreateBSP(externalBSPPath, pos, classname)
-			if err != nil {
+			if cThing, err := things.CreateBSP(externalBSPPath, pos, classname); err != nil {
 				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
-				continue
+			} else {
+				root.Things = append(root.Things, cThing)
 			}
-			root.Things = append(root.Things, cThing)
 			continue
 		}
 
@@ -618,60 +619,10 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			}
 		}
 	}
-	vIdx := strconv.Itoa(mIdx)
-
-	chunks := make(map[string]*config.Volume)
-	for _, v := range faces {
-		animKind := config.MaterialKindLoop
-		if v.IsSky {
-			animKind = config.MaterialKindSky
-		}
-		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
-		material.Shader = v.TexName
-
-		texNameLC := strings.ToLower(v.TexName)
-		if q3.shaders.IsAdditive(texNameLC) {
-			material.BlendMode = config.BlendModeAdditive
-		}
-		triangles := lumps.TriangulateConvex3d(v.Points)
-
-		for _, tri := range triangles {
-			var triUvs [][2]float64
-			if len(v.UVs) > 0 {
-				triUvs = make([][2]float64, 3)
-				for k := 0; k < 3; k++ {
-					pos := tri[k]
-					for idx, pt := range v.Points {
-						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
-							if len(v.UVs) > idx {
-								triUvs[k] = v.UVs[idx]
-							}
-							break
-						}
-					}
-				}
-			}
-
-			// 2. Find the triangle centroid
-			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
-			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
-			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
-
-			// 3. Calculate the spatial hashing key (grid coordinates)
-			gridX := int(math.Floor(cx / chunkSize))
-			gridY := int(math.Floor(cy / chunkSize))
-			gridZ := int(math.Floor(cz / chunkSize))
-
-			chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
-			volume, exists := chunks[chunkKey]
-			if !exists {
-				chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
-				volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
-				chunks[chunkKey] = volume
-				root.Volumes = append(root.Volumes, volume)
-			}
-			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
-		}
+	if cVolumes, err := faces.CreateFaces(mIdx, rawFaces); err != nil {
+		fmt.Printf("Warning can't create faces: %s\n", err.Error())
+	} else {
+		root.Volumes = cVolumes
 	}
 	return nil
 }

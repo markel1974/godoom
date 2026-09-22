@@ -382,26 +382,26 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 				img, err = common.DecodeTGA(fileTga)
 			} else {
 				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
-				if fallbackName, ok := _q3ShaderFallback[texName]; ok {
-					if fallbackName == "" {
-						continue // Skips textures explicitly mapped to empty string (e.g. fog)
-					}
-					// Riprova con il fallback
-					fbJpg := fallbackName + ".jpg"
-					if fJpg, e := q3.arc.Open(fbJpg); e == nil {
-						img, _, err = image.Decode(fJpg)
-					} else {
-						fbTga := fallbackName + ".tga"
-						if fTga, e := q3.arc.Open(fbTga); e == nil {
-							img, err = common.DecodeTGA(fTga)
-						} else {
-							fmt.Printf("Warning: asset mancante %s (.jpg/.tga) (fallito anche il fallback)\n", texName)
-							continue
-						}
-					}
-				} else {
-					fmt.Printf("Warning: asset mancante %s (.jpg/.tga)\n", texName)
+				fallbackName, ok := _q3ShaderFallback[texName]
+				if !ok {
+					fmt.Printf("Warning: missing asset %s (.jpg/.tga)\n", texName)
 					continue
+				}
+				if fallbackName == "" {
+					continue // Skips textures explicitly mapped to empty string (e.g. fog)
+				}
+				// Riprova con il fallback
+				fbJpg := fallbackName + ".jpg"
+				if fJpg, e := q3.arc.Open(fbJpg); e == nil {
+					img, _, err = image.Decode(fJpg)
+				} else {
+					fbTga := fallbackName + ".tga"
+					if fTga, e := q3.arc.Open(fbTga); e == nil {
+						img, err = common.DecodeTGA(fTga)
+					} else {
+						fmt.Printf("warning: missing asset %s (.jpg/.tga) (fallito anche il fallback)\n", texName)
+						continue
+					}
 				}
 			}
 		}

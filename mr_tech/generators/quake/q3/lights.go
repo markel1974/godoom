@@ -133,7 +133,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 }
 
 // Create initializes and returns a Light object based on the provided entity, angle, position, and properties.
-func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) *config.Light {
+func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) (*config.Light, error) {
 	mangleStr, _ := ent.Properties["mangle"]
 	colorStr, _ := ent.Properties["_color"]
 	targetStr, hasTarget := ent.Properties["target"]
@@ -166,7 +166,7 @@ func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) *con
 		}
 	}
 	light := l.doCreate(ent, angle, mangleStr, colorStr, pos, style, isSpot)
-	return light
+	return light, nil
 }
 
 // doCreate constructs and returns a Light object with the specified properties like position, intensity, and light type.

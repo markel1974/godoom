@@ -593,8 +593,11 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			light := lights.Create(ent, angle, pos)
-			root.Lights = append(root.Lights, light)
+			if cLight, err := lights.Create(ent, angle, pos); err != nil {
+				fmt.Printf("Warning can't create light: %s\n", err.Error())
+			} else {
+				root.Lights = append(root.Lights, cLight)
+			}
 		case "path":
 			// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
 			// TODO: Save them in a gameplay waypoint/spawnpoint list.
@@ -608,12 +611,11 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		// TODO: ignore invisible targets and misc models for now
 		default:
 			thingPath := q3.GetModelFileName(classname)
-			cThing, err := things.Create(thingPath, pos, classname)
-			if err != nil {
-				fmt.Printf("Warning: %s\n", err.Error())
-				continue
+			if cThing, err := things.Create(thingPath, pos, classname); err != nil {
+				fmt.Printf("Warning can't create thing: %s\n", err.Error())
+			} else {
+				root.Things = append(root.Things, cThing)
 			}
-			root.Things = append(root.Things, cThing)
 		}
 	}
 	vIdx := strconv.Itoa(mIdx)

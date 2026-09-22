@@ -11,12 +11,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// Things represents a structure that manages archives, shaders, and texture managers for a graphical context.
 type Things struct {
 	arc        interfaces.IArchive
 	shaders    *Shaders
 	texManager *lumps.Textures
 }
 
+// NewThings initializes and returns a new Things instance with the provided archive, shaders, and texture manager.
 func NewThings(arc interfaces.IArchive, shaders *Shaders, texManager *lumps.Textures) *Things {
 	return &Things{
 		arc:        arc,
@@ -25,7 +27,7 @@ func NewThings(arc interfaces.IArchive, shaders *Shaders, texManager *lumps.Text
 	}
 }
 
-// CreateThing creates a new Thing entity based on its position and classname, returning the configured Thing or an error.
+// Create creates a new Thing entity based on its position and classname, returning the configured Thing or an error.
 func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -72,7 +74,6 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 
 // CreateBSP reads a BSP file, extracts its models, and generates a Thing configuration from the extracted data.
 func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
-	//arc := q3.GetArchive()
 	rs, err := t.arc.Open(bspPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", bspPath, err.Error())

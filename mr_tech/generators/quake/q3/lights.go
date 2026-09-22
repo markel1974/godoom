@@ -1,5 +1,15 @@
 package q3
 
+import (
+	"fmt"
+	"math"
+	"strconv"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
+
 // _q3LightStyle0 defines a default constant light style with uniform intensity throughout.
 var _q3LightStyle0 = []float64{1.0}
 
@@ -96,4 +106,125 @@ var _q3LightStyles = [][]float64{
 	_q3LightStyle9,
 	_q3LightStyle10,
 	_q3LightStyle11,
+}
+
+const lightTargetName = "targetname"
+
+type Lights struct {
+	entities []*lumps.Entity
+	targets  map[string]*lumps.Entity
+}
+
+func NewLights(entities []*lumps.Entity) *Lights {
+	l := &Lights{
+		entities: entities,
+		targets:  make(map[string]*lumps.Entity),
+	}
+	for _, ent := range entities {
+		if targetName, ok := ent.Properties[lightTargetName]; ok {
+			l.targets[targetName] = ent
+		}
+	}
+	return l
+}
+
+func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) *config.Light {
+	mangleStr, _ := ent.Properties["mangle"]
+	colorStr, _ := ent.Properties["_color"]
+	targetStr, hasTarget := ent.Properties["target"]
+
+	// Detect spotlight
+	isSpot := false
+	if hasTarget && len(targetStr) > 0 {
+		isSpot = true
+		if otherEnt, ok := l.targets[targetStr]; ok {
+			if otherEnt.Properties[lightTargetName] == targetStr {
+				if originStr, ok := otherEnt.Properties["origin"]; ok {
+					if tx, ty, tz, valid := lumps.ParseVector(originStr); valid {
+						dx := tx - pos.X
+						dy := ty - pos.Y
+						dz := tz - pos.Z
+						yaw := math.Atan2(dy, dx) * 180 / math.Pi
+						pitch := math.Atan2(dz, math.Sqrt(dx*dx+dy*dy)) * 180 / math.Pi
+						mangleStr = fmt.Sprintf("%f %f 0", yaw, pitch)
+					}
+				}
+			}
+		}
+	} else if len(mangleStr) > 0 {
+		isSpot = true
+	}
+	style := _q3LightStyle0
+	if sIndex, ok := ent.Properties["style"]; ok {
+		if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q3LightStyles) {
+			style = _q3LightStyles[index]
+		}
+	}
+	light := l.doCreate(ent, angle, mangleStr, colorStr, pos, style, isSpot)
+	return light
+}
+
+// createLight creates a light configuration based on entity properties, position, type, intensity, and direction.
+func (l *Lights) doCreate(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+	intensity := 0.0
+	falloff := 0.0
+	var kind config.LightKind
+
+	// BASE INTENSITY
+	if l, ok := entity.Properties["light"]; ok {
+		intensity, _ = strconv.ParseFloat(l, 64)
+		//intensity *= 0.3
+	} else {
+		intensity = 300 // Typical Quake default fallback
+	}
+
+	// COLOR (Standard Quake 2 / Modern Quake 1)
+	r, g, b := 1.0, 1.0, 1.0 // Default White
+	if len(colorStr) > 0 {
+		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
+			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
+				r, g, b = cr/255.0, cg/255.0, cb/255.0
+			} else {
+				r, g, b = cr, cg, cb
+			}
+		}
+	}
+
+	// SPOTLIGHT DIRECTION
+	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
+	if isSpot {
+		kind = config.LightKindSpot
+		intensity = intensity * 0.9
+		falloff = intensity * 10
+		if len(mangleStr) > 0 {
+			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
+				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
+			}
+		} else {
+			if angle == -1 {
+				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
+			} else if angle == -2 {
+				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
+			} else {
+				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
+			}
+		}
+	} else {
+		kind = config.LightKindAmbient
+		intensity = intensity * 0.02
+		falloff = intensity
+	}
+
+	// CONFIGURATION CREATION
+	cl := config.NewConfigLight(pos, intensity, kind, falloff)
+	cl.R = r
+	cl.G = g
+	cl.B = b
+
+	cl.DirX = dirX
+	cl.DirY = dirY
+	cl.DirZ = dirZ
+	cl.Style = style
+
+	return cl
 }

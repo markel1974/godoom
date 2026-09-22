@@ -61,7 +61,9 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		if pv == nil {
 			return fmt.Errorf("can't find 2d player location at X: %f Y: %f", cfg.Player.Position.X, cfg.Player.Position.Y)
 		}
-		cfg.Player.Position.Z = pv.GetMinZ()
+		if cfg.Player.Position.Z == 0 {
+			cfg.Player.Position.Z = pv.GetMinZ()
+		}
 		//things Z
 		for idx := range cfg.Things {
 			tx, ty := cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y
@@ -70,7 +72,9 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 				fmt.Println("can't find thing location at", tx, ty)
 				continue
 			}
-			cfg.Things[idx].Position.Z = tv.GetMinZ()
+			if cfg.Things[idx].Position.Z == 0 {
+				cfg.Things[idx].Position.Z = tv.GetMinZ()
+			}
 		}
 		//light 2d
 		r.lights.AddLights(r.compileLights2d(locator, true))

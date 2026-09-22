@@ -74,18 +74,18 @@ func NewShaders() *Shaders {
 	}
 }
 
-// Retrieve returns a map indicating shaders with at least one additive stage, keyed by shader name.
-func (s *Shaders) Retrieve() map[string]bool {
-	additive := make(map[string]bool)
-	for name, sh := range s.container {
-		for _, st := range sh.stages {
-			if st.IsAdditive() {
-				additive[name] = true
-				break
-			}
+// IsAdditive checks if the shader associated with the given target name contains any stages that use additive blending.
+func (s *Shaders) IsAdditive(target string) bool {
+	k, ok := s.container[target]
+	if !ok {
+		return false
+	}
+	for _, st := range k.stages {
+		if st.IsAdditive() {
+			return true
 		}
 	}
-	return additive
+	return false
 }
 
 // Reset clears the container map, effectively removing all stored Shader objects.

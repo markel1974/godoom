@@ -10,17 +10,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// _q3LightStyle0 defines a default constant light style with uniform intensity throughout.
+// _q3LightStyle0 is the default light style array with a constant intensity value of 1.0.
 var _q3LightStyle0 = []float64{1.0}
 
-// _q3LightStyle1 represents a predefined light intensity pattern for rendering light styles.
+// _q3LightStyle1 defines a sequence of brightness levels for a specific light style pattern.
 var _q3LightStyle1 = []float64{
 	1.0, 1.0, 1.08, 1.0, 1.0, 1.17, 1.0, 1.0, 1.17, 1.0,
 	1.0, 1.08, 1.17, 1.08, 1.0, 1.0, 1.17, 1.08, 1.33, 1.08,
 	1.0, 1.0, 1.17,
 }
 
-// _q3LightStyle2 represents a dynamic light style pattern using a sinusoidal-like modulation of intensity levels.
+// _q3LightStyle2 represents a predefined light intensity pattern with values oscillating between 0.0 and 2.08 in a sine-like manner.
 var _q3LightStyle2 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50, 1.58,
@@ -30,7 +30,7 @@ var _q3LightStyle2 = []float64{
 	0.0,
 }
 
-// _q3LightStyle3 defines a light style with oscillating brightness patterns using a mix of steady and gradual transitions.
+// _q3LightStyle3 defines a sequence of light intensity values representing a predefined light flicker style pattern.
 var _q3LightStyle3 = []float64{
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -38,12 +38,12 @@ var _q3LightStyle3 = []float64{
 	0.25, 0.33, 0.42, 0.50,
 }
 
-// _q3LightStyle4 represents a light style pattern alternating between full intensity (1.0) and zero intensity (0.0).
+// _q3LightStyle4 represents an alternating pattern of high (1.0) and low (0.0) light intensity values.
 var _q3LightStyle4 = []float64{
 	1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0,
 }
 
-// _q3LightStyle5 represents a sinusoidal-like sequence of brightness values primarily used for dynamic light simulation.
+// _q3LightStyle5 defines a sequence of floating-point values representing light intensity variations in a wave-like pattern.
 var _q3LightStyle5 = []float64{
 	0.75, 0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50,
 	1.58, 1.67, 1.75, 1.83, 1.92, 2.0, 2.08, 2.0, 1.92, 1.83,
@@ -51,40 +51,40 @@ var _q3LightStyle5 = []float64{
 	0.92, 0.83, 0.75,
 }
 
-// _q3LightStyle6 represents a light style pattern with varying intensity values for illumination effects.
+// _q3LightStyle6 defines a light intensity pattern with varying brightness values over a sequence of 17 floats.
 var _q3LightStyle6 = []float64{
 	1.08, 1.0, 1.17, 1.08, 1.33, 1.08, 1.0, 1.17, 1.0, 1.08,
 	1.0, 1.17, 1.0, 1.17, 1.0, 1.08, 1.17,
 }
 
-// _q3LightStyle7 represents a light style pattern defined by a sequence of float64 intensity values.
+// _q3LightStyle7 defines a sequence of light intensity values used to represent a specific light flicker pattern.
 var _q3LightStyle7 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.08, 0.17, 0.25,
 	0.33, 0.42, 0.50, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0,
 	0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
 }
 
-// _q3LightStyle8 defines a specific light intensity pattern as a sequence of normalized float values.
+// _q3LightStyle8 defines a light flicker pattern with alternating intensity changes, including sustained and gradual fades.
 var _q3LightStyle8 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0,
 	0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.08, 0.17, 0.25, 0.33,
 	0.42, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
 }
 
-// _q3LightStyle9 defines a light style pattern with an initial sequence of zeros followed by constant intensity values.
+// _q3LightStyle9 defines a light pattern with initial zero intensity and a steady increase to a uniform intensity of 2.08.
 var _q3LightStyle9 = []float64{
 	0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08,
 }
 
-// _q3LightStyle10 defines a light intensity pattern as a sequence of floating-point values for visual effects.
+// _q3LightStyle10 represents a light style with specific intensity changes over time for rendering effects.
 var _q3LightStyle10 = []float64{
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0,
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
 	0.0, 1.0, 1.0, 1.0, 0.0,
 }
 
-// _q3LightStyle11 defines a light intensity pattern with a wave-like progression, starting and ending at zero intensity.
+// _q3LightStyle11 represents a sine wave light pattern with values gradually increasing and then decreasing.
 var _q3LightStyle11 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.42, 1.33,
@@ -92,7 +92,7 @@ var _q3LightStyle11 = []float64{
 	0.42, 0.33, 0.25, 0.17, 0.08, 0.0,
 }
 
-// _q3LightStyles holds predefined light animation styles used to simulate various light effects in the game.
+// _q3LightStyles defines a collection of light intensity patterns used to vary lighting styles in the system.
 var _q3LightStyles = [][]float64{
 	_q3LightStyle0,
 	_q3LightStyle1,
@@ -108,13 +108,17 @@ var _q3LightStyles = [][]float64{
 	_q3LightStyle11,
 }
 
+// lightTargetName defines the property key for identifying an entity's target in a mapping or lighting context.
 const lightTargetName = "targetname"
 
+// Lights is a type that manages a collection of entities and their relationships to produce light configurations.
+// It maps target names to entities and provides methods for creating and configuring light objects.
 type Lights struct {
 	entities []*lumps.Entity
 	targets  map[string]*lumps.Entity
 }
 
+// NewLights initializes a Lights instance by mapping entities to their target names, if present.
 func NewLights(entities []*lumps.Entity) *Lights {
 	l := &Lights{
 		entities: entities,
@@ -128,6 +132,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	return l
 }
 
+// Create initializes and returns a Light object based on the provided entity, angle, position, and properties.
 func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) *config.Light {
 	mangleStr, _ := ent.Properties["mangle"]
 	colorStr, _ := ent.Properties["_color"]
@@ -164,7 +169,7 @@ func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) *con
 	return light
 }
 
-// createLight creates a light configuration based on entity properties, position, type, intensity, and direction.
+// doCreate constructs and returns a Light object with the specified properties like position, intensity, and light type.
 func (l *Lights) doCreate(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
 	intensity := 0.0
 	falloff := 0.0

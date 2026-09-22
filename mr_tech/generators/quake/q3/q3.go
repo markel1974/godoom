@@ -369,17 +369,17 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		var img image.Image
 		var err error
 
-		// Prova prima con JPEG
-		jpgPath := texName + ".jpg"
-		file, errJpg := q3.arc.Open(jpgPath)
-		if errJpg == nil {
-			img, _, err = image.Decode(file)
+		// Prova prima con TGA (perché supporta l'alpha channel natively)
+		tgaPath := texName + ".tga"
+		fileTga, errTga := q3.arc.Open(tgaPath)
+		if errTga == nil {
+			img, err = common.DecodeTGA(fileTga)
 		} else {
-			// Fallback su TGA
-			tgaPath := texName + ".tga"
-			fileTga, errTga := q3.arc.Open(tgaPath)
-			if errTga == nil {
-				img, err = common.DecodeTGA(fileTga)
+			// Fallback su JPEG
+			jpgPath := texName + ".jpg"
+			fileJpg, errJpg := q3.arc.Open(jpgPath)
+			if errJpg == nil {
+				img, _, err = image.Decode(fileJpg)
 			} else {
 				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
 				fallbackName, ok := _q3ShaderFallback[texName]
@@ -390,14 +390,14 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 				if fallbackName == "" {
 					continue // Skips textures explicitly mapped to empty string (e.g. fog)
 				}
-				// Riprova con il fallback
-				fbJpg := fallbackName + ".jpg"
-				if fJpg, e := q3.arc.Open(fbJpg); e == nil {
-					img, _, err = image.Decode(fJpg)
+				// Riprova con il fallback (sempre prima TGA poi JPG)
+				fbTga := fallbackName + ".tga"
+				if fTga, e := q3.arc.Open(fbTga); e == nil {
+					img, err = common.DecodeTGA(fTga)
 				} else {
-					fbTga := fallbackName + ".tga"
-					if fTga, e := q3.arc.Open(fbTga); e == nil {
-						img, err = common.DecodeTGA(fTga)
+					fbJpg := fallbackName + ".jpg"
+					if fJpg, e := q3.arc.Open(fbJpg); e == nil {
+						img, _, err = image.Decode(fJpg)
 					} else {
 						fmt.Printf("warning: missing asset %s (.jpg/.tga) (fallito anche il fallback)\n", texName)
 						continue
@@ -416,6 +416,24 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		rgba := image.NewRGBA(bounds)
 		draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
+		// Fix per fiamme e materiali additivi (Quake 3 usa blendFunc GL_ONE GL_ONE,
+		// ma noi al momento usiamo l'Alpha Test nel main.frag).
+		// Generiamo un canale alpha finto basato sulla luminosità.
+		if strings.Contains(texName, "flame") || strings.Contains(texName, "flare") {
+			for i := 0; i < len(rgba.Pix); i += 4 {
+				r := rgba.Pix[i]
+				g := rgba.Pix[i+1]
+				b := rgba.Pix[i+2]
+				max := r
+				if g > max {
+					max = g
+				}
+				if b > max {
+					max = b
+				}
+				rgba.Pix[i+3] = max
+			}
+		}
 		// Invio del buffer [R,G,B,A, R,G,B,A...] al manager.
 		// NOTA: Usa un metodo specifico per i 32-bit (es. RegisterPixelsRGBA)
 		// bypassando la logica della palette a 8-bit usata in Q1/Q2.

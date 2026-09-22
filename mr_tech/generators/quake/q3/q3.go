@@ -524,13 +524,12 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	if eErr != nil {
 		return eErr
 	}
+	playerSpawned := false
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
-		subClass := ""
 		if z := strings.Split(classname, "_"); len(z) > 1 {
 			baseClass = z[0]
-			subClass = z[1]
 		}
 		var pos geometry.XYZ
 		if origin, ok := ent.Properties["origin"]; ok {
@@ -567,10 +566,21 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
 			if classname == "info_player_start" || classname == "info_player_deathmatch" {
-				var err error
-				q3.playerPos, q3.playerAngle, err = q3.createPlayerProps(angle, pos)
-				if err != nil {
-					fmt.Printf("Warning: %s\n", err.Error())
+				if !playerSpawned {
+					var err error
+					q3.playerPos, q3.playerAngle, err = q3.createPlayerProps(angle, pos)
+					if err != nil {
+						fmt.Printf("Warning: %s\n", err.Error())
+					}
+					playerSpawned = true
+				} else {
+					// We use remaining spawn points as Bot spawners
+					cThing, err := q3.createThing(pos, "enemy_bot")
+					if err == nil {
+						root.Things = append(root.Things, cThing)
+					} else {
+						fmt.Printf("Warning BotSpawner: %s\n", err.Error())
+					}
 				}
 			} else {
 				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
@@ -579,19 +589,40 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		case "light":
 			mangleStr, _ := ent.Properties["mangle"]
 			colorStr, _ := ent.Properties["_color"]
-			var light *config.Light = nil
-			if len(subClass) == 0 {
-				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, _q3LightStyle0, false)
-			} else {
-				style := _q3LightStyle0
-				if sIndex, ok := ent.Properties["style"]; ok {
-					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q3LightStyles) {
-						style = _q3LightStyles[index]
+			targetStr, hasTarget := ent.Properties["target"]
+
+			// Detect spotlight
+			isSpot := false
+			if hasTarget && len(targetStr) > 0 {
+				isSpot = true
+				for _, otherEnt := range entities {
+					if otherEnt.Properties["targetname"] == targetStr {
+						if originStr, ok := otherEnt.Properties["origin"]; ok {
+							if tx, ty, tz, valid := lumps.ParseVector(originStr); valid {
+								dx := tx - pos.X
+								dy := ty - pos.Y
+								dz := tz - pos.Z
+								yaw := math.Atan2(dy, dx) * 180 / math.Pi
+								pitch := math.Atan2(dz, math.Sqrt(dx*dx+dy*dy)) * 180 / math.Pi
+								mangleStr = fmt.Sprintf("%f %f 0", yaw, pitch)
+							}
+						}
+						break
 					}
 				}
-				// Handles light, light_fluoro, light_fluorospark
-				light = q3.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
+			} else if len(mangleStr) > 0 {
+				isSpot = true
 			}
+
+			var light *config.Light = nil
+			style := _q3LightStyle0
+			if sIndex, ok := ent.Properties["style"]; ok {
+				if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q3LightStyles) {
+					style = _q3LightStyles[index]
+				}
+			}
+			light = q3.createLight(ent, angle, mangleStr, colorStr, pos, style, isSpot)
+
 			if light != nil {
 				root.Lights = append(root.Lights, light)
 			}

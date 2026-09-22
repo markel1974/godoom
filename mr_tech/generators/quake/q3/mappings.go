@@ -40,6 +40,7 @@ var _q3DictModelFilename = map[string]string{
 	"ammo_slugs":     "models/powerups/ammo/railgunam.md3",
 	"ammo_cells":     "models/powerups/ammo/plasmaam.md3",
 	"ammo_bfg":       "models/powerups/ammo/bfgam.md3",
+	"enemy_bot":      "models/players/sarge/lower.md3",
 }
 
 var _q3DictBModel = map[string]string{

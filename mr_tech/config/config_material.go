@@ -24,6 +24,13 @@ const (
 )
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.
+const (
+	CullFront = iota
+	CullNone
+	CullBack
+)
+
+// Material represents animation properties including a sequence of frames, the type of animation, and the shader.
 type Material struct {
 	Id        string       `json:"id"`
 	BlendMode int          `json:"blendMode"`
@@ -34,18 +41,38 @@ type Material struct {
 	ScaleH    float64      `json:"scaleH"`
 	U         float64      `json:"u"`
 	V         float64      `json:"v"`
+
+	// Universal Modern Rendering Properties
+	CullMode   int     `json:"cullMode"`
+	DepthWrite bool    `json:"depthWrite"`
+	AlphaTest  float32 `json:"alphaTest"`
+
+	// Texture Slots
+	DiffuseMap  string `json:"diffuseMap"`
+	NormalMap   string `json:"normalMap"`
+	SpecularMap string `json:"specularMap"`
+	EmissionMap string `json:"emissionMap"`
+	DetailMap   string `json:"detailMap"`
+	BlendMap    string `json:"blendMap"`
+
+	// UV Animations
+	ScrollU float32 `json:"scrollU"`
+	ScrollV float32 `json:"scrollV"`
+	Rotate  float32 `json:"rotate"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
 func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v float64) *Material {
 	return &Material{
-		Id:     utils.NextUUId(),
-		Frames: frames,
-		Kind:   kind,
-		ScaleW: scaleW,
-		ScaleH: scaleH,
-		U:      u,
-		V:      v,
+		Id:         utils.NextUUId(),
+		Frames:     frames,
+		Kind:       kind,
+		ScaleW:     scaleW,
+		ScaleH:     scaleH,
+		U:          u,
+		V:          v,
+		DepthWrite: true, // Default to true for opaque materials
+		CullMode:   CullFront,
 	}
 }
 
@@ -55,6 +82,18 @@ func (m *Material) HashKey() string {
 	h.Write([]byte(m.Shader))
 	h.Write([]byte{0})
 	h.Write([]byte{byte(m.BlendMode)})
+	h.Write([]byte{byte(m.CullMode)})
+	if m.DepthWrite {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
+	h.Write([]byte(m.DiffuseMap))
+	h.Write([]byte(m.NormalMap))
+	h.Write([]byte(m.SpecularMap))
+	h.Write([]byte(m.EmissionMap))
+	h.Write([]byte(m.DetailMap))
+	h.Write([]byte(m.BlendMap))
 	h.Write([]byte{0})
 	for _, f := range m.Frames {
 		h.Write([]byte(f))

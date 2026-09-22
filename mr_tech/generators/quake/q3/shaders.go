@@ -33,22 +33,22 @@ func (st *ShaderStage) IsAdditive() bool {
 
 // Shader represents a graphics shader with specific properties, shader stages, and parameters for rendering operations.
 type Shader struct {
-	name           string
-	surfaceParms   map[string]bool
-	cull           string
-	skyParms       []string
-	fogParms       []string
-	sort           string
-	nopicmip       bool
-	nomipmaps      bool
-	polygonOffset  bool
-	portal         bool
-	entityMergable bool
-	tessSize       string
-	deformVertexes [][]string
-	qerParms       map[string][]string
-	q3mapParms     map[string][]string
-	stages         []*ShaderStage
+	name            string
+	surfaceParms    map[string]bool
+	cull            string
+	skyParms        []string
+	fogParms        []string
+	sort            string
+	noPicMip        bool
+	noMipmaps       bool
+	polygonOffset   bool
+	portal          bool
+	entityMergeable bool
+	tessSize        string
+	deformVertexes  [][]string
+	qerParms        map[string][]string
+	q3mapParms      map[string][]string
+	stages          []*ShaderStage
 }
 
 // NewShader creates a new Shader instance with the specified name and culling behavior.
@@ -398,15 +398,15 @@ func (s *Shaders) parseData(data string) {
 				} else if cmd == "sort" && len(args) > 0 {
 					shader.sort = args[0]
 				} else if cmd == "nopicmip" {
-					shader.nopicmip = true
+					shader.noPicMip = true
 				} else if cmd == "nomipmaps" {
-					shader.nomipmaps = true
+					shader.noMipmaps = true
 				} else if cmd == "polygonoffset" {
 					shader.polygonOffset = true
 				} else if cmd == "portal" {
 					shader.portal = true
 				} else if cmd == "entitymergable" {
-					shader.entityMergable = true
+					shader.entityMergeable = true
 				} else if cmd == "tesssize" && len(args) > 0 {
 					shader.tessSize = args[0]
 				} else if cmd == "deformvertexes" {

@@ -416,9 +416,13 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		rgba := image.NewRGBA(bounds)
 		draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
-		// Fix per fiamme e materiali additivi (Quake 3 usa blendFunc GL_ONE GL_ONE,
-		// ma noi al momento usiamo l'Alpha Test nel main.frag).
-		// Generiamo un canale alpha finto basato sulla luminosità.
+		// =================================================================================================
+		// TODO (PATCH): Hack temporaneo per supportare la trasparenza delle fiamme e materiali additivi.
+		// Quake 3 utilizza normalmente script .shader con "blendFunc GL_ONE GL_ONE" (blending additivo)
+		// e le texture originali (es. flame1.jpg) NON hanno alcun canale alpha.
+		// Visto che attualmente non parsiamo i file .shader e usiamo un semplice alpha test nel main.frag,
+		// generiamo al volo un canale alpha finto basato sulla luminosità del pixel (max(R,G,B)).
+		// =================================================================================================
 		if strings.Contains(texName, "flame") || strings.Contains(texName, "flare") {
 			for i := 0; i < len(rgba.Pix); i += 4 {
 				r := rgba.Pix[i]
@@ -434,6 +438,7 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 				rgba.Pix[i+3] = max
 			}
 		}
+		// =================================================================================================
 		// Invio del buffer [R,G,B,A, R,G,B,A...] al manager.
 		// NOTA: Usa un metodo specifico per i 32-bit (es. RegisterPixelsRGBA)
 		// bypassando la logica della palette a 8-bit usata in Q1/Q2.

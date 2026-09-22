@@ -516,7 +516,6 @@ func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
 
 // Build processes entities and geometry from a Q3BSPReader, organizing them into the root config structure.
 func (q3 *Q3BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(1024)
 	mIdx := 0
 	rawFaces, rfErr := q3.GetRawFaces(mIdx)
 	if rfErr != nil {

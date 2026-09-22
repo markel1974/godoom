@@ -153,11 +153,12 @@ func (q3 *Q3BSPReader) Setup() error {
 	if string(q3.header.Magic[:]) != "IBSP" || q3.header.Version != 46 {
 		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.header.Magic[:]), q3.header.Version)
 	}
-	var err error
-	q3.additiveMats, err = ParseShaders(q3.arc)
-	if err != nil {
+	shaders := NewShader()
+	if err := shaders.Parse(q3.arc); err != nil {
 		return err
 	}
+	q3.additiveMats = shaders.Retrieve()
+
 	return nil
 }
 

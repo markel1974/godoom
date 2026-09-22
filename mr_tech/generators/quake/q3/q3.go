@@ -726,7 +726,7 @@ func (q3 *Q3BSPReader) createLight(entity *lumps.Entity, angle float64, mangleSt
 		}
 	} else {
 		kind = config.LightKindAmbient
-		intensity = intensity * 0.05
+		intensity = intensity * 0.14
 		falloff = intensity
 	}
 

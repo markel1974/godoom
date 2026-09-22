@@ -122,24 +122,27 @@ type q3Vertex struct {
 
 // Q3BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
 type Q3BSPReader struct {
-	arc         interfaces.IArchive
-	header      HeaderQ3
-	rs          io.ReadSeeker
-	texManager  *lumps.Textures
-	playerAngle float64
-	playerPos   geometry.XYZ
+	arc          interfaces.IArchive
+	header       HeaderQ3
+	rs           io.ReadSeeker
+	texManager   *lumps.Textures
+	playerAngle  float64
+	playerPos    geometry.XYZ
+	additiveMats map[string]bool
 }
 
 // NewQ3BSPReader creates a new instance of Q3BSPReader with the provided archive and ReadSeeker.
 func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
-	return &Q3BSPReader{
-		arc:        arc,
-		rs:         rs,
-		texManager: lumps.NewTextures(),
+	q3 := &Q3BSPReader{
+		arc:          arc,
+		rs:           rs,
+		texManager:   lumps.NewTextures(),
+		additiveMats: nil,
 	}
+
+	return q3
 }
 
-// Setup initializes the Q3BSPReader instance by validating the magic number and version of the Quake 3 BSP file.
 func (q3 *Q3BSPReader) Setup() error {
 	if _, err := q3.rs.Seek(0, io.SeekStart); err != nil {
 		return err
@@ -149,6 +152,11 @@ func (q3 *Q3BSPReader) Setup() error {
 	}
 	if string(q3.header.Magic[:]) != "IBSP" || q3.header.Version != 46 {
 		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.header.Magic[:]), q3.header.Version)
+	}
+	var err error
+	q3.additiveMats, err = ParseShaders(q3.arc)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -384,7 +392,7 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
 				fallbackName, ok := _q3ShaderFallback[texName]
 				if !ok {
-					fmt.Printf("Warning: missing asset %s (.jpg/.tga)\n", texName)
+					fmt.Printf("warning: missing asset %s (.jpg/.tga)\n", texName)
 					continue
 				}
 				if fallbackName == "" {
@@ -415,34 +423,11 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		bounds := img.Bounds()
 		rgba := image.NewRGBA(bounds)
 		draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
-
-		// =================================================================================================
-		// TODO (PATCH): Hack temporaneo per supportare la trasparenza delle fiamme e materiali additivi.
-		// Quake 3 utilizza normalmente script .shader con "blendFunc GL_ONE GL_ONE" (blending additivo)
-		// e le texture originali (es. flame1.jpg) NON hanno alcun canale alpha.
-		// Visto che attualmente non parsiamo i file .shader e usiamo un semplice alpha test nel main.frag,
-		// generiamo al volo un canale alpha finto basato sulla luminosità del pixel (max(R,G,B)).
-		// =================================================================================================
-		if strings.Contains(texName, "flame") || strings.Contains(texName, "flare") {
-			for i := 0; i < len(rgba.Pix); i += 4 {
-				r := rgba.Pix[i]
-				g := rgba.Pix[i+1]
-				b := rgba.Pix[i+2]
-				max := r
-				if g > max {
-					max = g
-				}
-				if b > max {
-					max = b
-				}
-				rgba.Pix[i+3] = max
-			}
-		}
 		// =================================================================================================
 		// Invio del buffer [R,G,B,A, R,G,B,A...] al manager.
 		// NOTA: Usa un metodo specifico per i 32-bit (es. RegisterPixelsRGBA)
 		// bypassando la logica della palette a 8-bit usata in Q1/Q2.
-		err = q3.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, false)
+		err = q3.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true)
 
 		if err != nil {
 			fmt.Printf("Warning: registrazione texture fallita %s: %v\n", texName, err)
@@ -638,6 +623,11 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
 		material.Shader = v.TexName
+
+		texNameLC := strings.ToLower(v.TexName)
+		if q3.additiveMats[texNameLC] {
+			material.BlendMode = config.BlendModeAdditive
+		}
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
@@ -832,10 +822,15 @@ func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
 		specificMaterial.Shader = texName
+
+		texNameLC := strings.ToLower(texName)
+		if q3.additiveMats[texNameLC] {
+			specificMaterial.BlendMode = config.BlendModeAdditive
+		}
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()
-			_ = q3.RegisterPixelsRGBA(texName, tw, th, pixels, false)
+			_ = q3.RegisterPixelsRGBA(texName, tw, th, pixels, true)
 		}
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader

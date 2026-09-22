@@ -544,3 +544,10 @@ func (s *Face) RayIntersectDist(px, py, pz, dx, dy, dz float64) (bool, float64) 
 	return false, 0.0
 }
 */
+
+func (f *Face) GetMaterialObj() *textures.Material {
+	if f.material == nil {
+		return nil
+	}
+	return f.material
+}

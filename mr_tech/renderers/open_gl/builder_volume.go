@@ -11,28 +11,32 @@ import (
 )
 
 type BuilderVolume struct {
-	tex        *Textures
-	fv         *FrameVertices
-	dc         *DrawCommands
-	fl         *FrameLights
-	dcRender   *DrawCommandsRender
-	cSky       *textures.Texture
-	cal        *model.Calibration
-	occBuffer  *OcclusionBuffer
-	visibleVol *VisibleVolumes
+	tex              *Textures
+	fv               *FrameVertices
+	dc               *DrawCommands
+	dcAdditive       *DrawCommands
+	fl               *FrameLights
+	dcRender         *DrawCommandsRender
+	dcRenderAdditive *DrawCommandsRender
+	cSky             *textures.Texture
+	cal              *model.Calibration
+	occBuffer        *OcclusionBuffer
+	visibleVol       *VisibleVolumes
 }
 
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		tex:        tex,
-		dcRender:   NewDrawCommandsRender(),
-		fv:         NewFrameVertices(startBatchVertices),
-		dc:         NewDrawCommands(startFrameCommands),
-		fl:         NewFrameLights(256),
-		occBuffer:  NewOcclusionBuffer(256, 144),
-		cSky:       nil,
-		cal:        calibration,
-		visibleVol: NewVisibleVols(256),
+		tex:              tex,
+		fv:               NewFrameVertices(1048576),
+		dc:               NewDrawCommands(32768),
+		dcAdditive:       NewDrawCommands(4096),
+		fl:               NewFrameLights(1024),
+		dcRender:         NewDrawCommandsRender(),
+		dcRenderAdditive: NewDrawCommandsRender(),
+		cSky:             nil,
+		cal:              calibration,
+		occBuffer:        NewOcclusionBuffer(640, 480),
+		visibleVol:       NewVisibleVols(8192),
 	}
 	return bv
 }
@@ -80,6 +84,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.pushQThings(engine.GetThings(), frustumFront, fm)
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
+	w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
 }
 
 // pushQVolumesHardware processes and sorts visible volumes within the frustum, preparing vertex and draw command buffers.
@@ -99,40 +104,52 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 
 	counter := 0
 
-	// Ingestione Hardware (Early-Z friendly)
-	for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
-		vol := w.visibleVol.At(vIdx)
-		startIdx := w.fv.GetIndicesLen()
-		faces, faceCount := vol.GetFaces()
+	pushPass := func(targetBlendMode int, targetDc *DrawCommands) {
+		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
+			vol := w.visibleVol.At(vIdx)
+			startIdx := w.fv.GetIndicesLen()
+			faces, faceCount := vol.GetFaces()
 
-		for x := 0; x < faceCount; x++ {
-			face := (*faces)[x]
-			tex, texKind := face.GetMaterialDetails()
-			if tex == nil {
-				continue
-			}
-			if texKind == int(config.MaterialKindSky) {
-				w.cSky = tex
-				continue
-			}
-			layer, hasLayer := w.tex.Get(tex)
-			if !hasLayer {
-				continue
-			}
-			p := face.GetPoints()
-			u, v := face.GetUV()
-			id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
-			id1 := w.fv.AddVertex6(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer)
-			id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
-			w.fv.AddTriangle(id0, id1, id2)
-		}
+			var added int
+			for x := 0; x < faceCount; x++ {
+				face := (*faces)[x]
 
-		endIdx := w.fv.GetIndicesLen()
-		if startIdx != endIdx {
-			w.dc.Compute(startIdx, endIdx)
-			counter++
+				matObj := face.GetMaterialObj()
+				if matObj != nil && matObj.BlendMode() != targetBlendMode {
+					continue
+				}
+
+				tex, texKind := face.GetMaterialDetails()
+				if tex == nil {
+					continue
+				}
+				if texKind == int(config.MaterialKindSky) {
+					w.cSky = tex
+					continue
+				}
+				layer, hasLayer := w.tex.Get(tex)
+				if !hasLayer {
+					continue
+				}
+				p := face.GetPoints()
+				u, v := face.GetUV()
+				id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
+				id1 := w.fv.AddVertex6(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer)
+				id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
+				w.fv.AddTriangle(id0, id1, id2)
+				added++
+			}
+
+			endIdx := w.fv.GetIndicesLen()
+			if added > 0 && startIdx != endIdx {
+				targetDc.Compute(startIdx, endIdx)
+				counter++
+			}
 		}
 	}
+
+	pushPass(int(config.BlendModeOpaque), w.dc)
+	pushPass(int(config.BlendModeAdditive), w.dcAdditive)
 }
 
 // pushQVolumes queries geometry volumes within the specified frustums, sorts them front-to-back,
@@ -304,4 +321,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 	things.QueryFrustum(frustumFront, q)
 
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
+}
+
+func (w *BuilderVolume) GetDrawCommandsAdditive() *DrawCommandsRender {
+	return w.dcRenderAdditive
 }

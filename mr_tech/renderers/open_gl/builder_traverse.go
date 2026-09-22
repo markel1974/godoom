@@ -1,5 +1,7 @@
 package open_gl
 
+//UNUSED
+/*
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
@@ -318,3 +320,8 @@ func (w *BuilderTraverse) pushLights(fl *FrameLights, lights *model.Lights, frus
 	}
 	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
 }
+
+func (w *BuilderTraverse) GetDrawCommandsAdditive() *DrawCommandsRender {
+	return nil
+}
+*/

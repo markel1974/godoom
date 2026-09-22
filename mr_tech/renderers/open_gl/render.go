@@ -27,6 +27,8 @@ type IBuilder interface {
 
 	GetDrawCommands() *DrawCommandsRender
 
+	GetDrawCommandsAdditive() *DrawCommandsRender
+
 	GetVertices() ([]float32, int32, []uint32, int32)
 
 	GetLights() ([]float32, int32)
@@ -139,6 +141,7 @@ func (w *RenderOpenGL) doRender() {
 		w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 		cSky := w.builder.GetSkyTexture()
 		commands := w.builder.GetDrawCommands()
+		commandsAdditive := w.builder.GetDrawCommandsAdditive()
 		vert, vertLen, indices, indicesLen := w.builder.GetVertices()
 		light, lightsCount := w.builder.GetLights()
 
@@ -148,7 +151,7 @@ func (w *RenderOpenGL) doRender() {
 		if cSky != nil {
 			skyLayer, skyEnabled = w.tex.Get(cSky)
 		}
-		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, skyEnabled, skyLayer, light, lightsCount, shadowLights, shadowLightsCount)
+		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, commandsAdditive, skyEnabled, skyLayer, light, lightsCount, shadowLights, shadowLightsCount)
 	})
 }
 

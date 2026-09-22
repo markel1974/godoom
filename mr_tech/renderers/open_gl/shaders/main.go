@@ -1,7 +1,6 @@
 package shaders
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
@@ -39,8 +38,10 @@ const (
 
 // Main represents the primary rendering configuration and state for a graphics pipeline.
 type Main struct {
-	prg               uint32
-	table             [MainLocLast]int32
+	prgOpaque         uint32
+	prgAdditive       uint32
+	tableOpaque       [MainLocLast]int32
+	tableAdditive     [MainLocLast]int32
 	mainVAO           [mainDoubleBuffer]uint32
 	mainVBO           [mainDoubleBuffer]uint32
 	mainEBO           [mainDoubleBuffer]uint32
@@ -60,7 +61,8 @@ type Main struct {
 // NewMain creates and initializes a new instance of Main with the provided vertex stride value.
 func NewMain(stride int32, metrics *MapMetrics) *Main {
 	return &Main{
-		prg:               0,
+		prgOpaque:         0,
+		prgAdditive:       0,
 		emissiveIntensity: 4.0,
 		aoFactor:          0.8,
 		stride:            stride,
@@ -128,25 +130,40 @@ func (s *Main) Init() error {
 
 // SetupSamplers initializes and binds sampler uniforms for texture, SSAO, and emissive maps to the shader program.
 func (s *Main) SetupSamplers() error {
-	gl.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
 	emissiveUnits := []int32{8, 9, 10, 11}
 
-	gl.Uniform1iv(s.GetUniform(MainLocTexture), 4, &diffuseUnits[0])
-	gl.Uniform1iv(s.GetUniform(MainLocEmissiveMap), 4, &emissiveUnits[0])
+	// Setup Opaque Samplers
+	gl.UseProgram(s.prgOpaque)
+	gl.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
+	gl.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
+	gl.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
 
-	gl.Uniform1i(s.GetUniform(MainLocSSAO), 14) // Spostato su unit 14
+	// Setup Additive Samplers
+	gl.UseProgram(s.prgAdditive)
+	gl.Uniform1iv(s.GetUniformAdditive(MainLocTexture), 4, &diffuseUnits[0])
+
 	return nil
 }
 
 // GetProgram returns the program ID associated with the Main instance.
-func (s *Main) GetProgram() uint32 {
-	return s.prg
+func (s *Main) GetProgramOpaque() uint32 {
+	return s.prgOpaque
 }
 
-// GetUniform returns the location of the specified uniform variable from the internal table.
-func (s *Main) GetUniform(id MainLoc) int32 {
-	return s.table[id]
+// GetProgramAdditive returns the additive program identifier.
+func (s *Main) GetProgramAdditive() uint32 {
+	return s.prgAdditive
+}
+
+// GetUniformOpaque returns the uniform location for opaque shader.
+func (s *Main) GetUniformOpaque(id MainLoc) int32 {
+	return s.tableOpaque[id]
+}
+
+// GetUniformAdditive returns the uniform location for additive shader.
+func (s *Main) GetUniformAdditive(id MainLoc) int32 {
+	return s.tableAdditive[id]
 }
 
 // GetVAO returns the vertex array object identifier for the current frame buffer.
@@ -157,39 +174,59 @@ func (s *Main) GetVAO() uint32 {
 // Compile loads, compiles, and links the vertex and fragment shaders into a program, and sets up uniform locations.
 func (s *Main) Compile(a IAssets) error {
 	const vertId = "main.vert"
-	const fragId = "main.frag"
+	const fragOpaqueId = "main_opaque.frag"
+	const fragAdditiveId = "main_additive.frag"
 
-	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
+	vertexSrc, fragmentOpaqueSrc, err := a.ReadMulti(vertId, fragOpaqueId)
 	if err != nil {
 		return err
 	}
+	fragmentAdditiveSrc, err := a.Read(fragAdditiveId)
+	if err != nil {
+		return err
+	}
+
 	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+
+	// Compile Opaque Program
+	fragOpaqueShader, err := ShaderCompile(fragOpaqueId, string(fragmentOpaqueSrc), gl.FRAGMENT_SHADER)
 	if err != nil {
 		gl.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("main", vertexShader, fragmentShader)
+	s.prgOpaque, err = ShaderCreateProgram("main_opaque", vertexShader, fragOpaqueShader)
 	if err != nil {
 		return err
 	}
-	s.table[MainLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[MainLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	s.table[MainLocScreenResolution] = gl.GetUniformLocation(s.prg, gl.Str("u_screenResolution\x00"))
-	s.table[MainLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[MainLocSSAO] = gl.GetUniformLocation(s.prg, gl.Str("u_ssao\x00"))
-	s.table[MainLocEmissiveMap] = gl.GetUniformLocation(s.prg, gl.Str("u_emissiveMap\x00"))
-	s.table[MainLocEmissiveIntensity] = gl.GetUniformLocation(s.prg, gl.Str("u_emissiveIntensity\x00"))
-	s.table[MainLocAoFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_aoFactor\x00"))
 
-	for idx, v := range s.table {
-		if v < 0 {
-			return fmt.Errorf("invalid uniform location in main: %d", idx)
-		}
+	// Compile Additive Program
+	fragAdditiveShader, err := ShaderCompile(fragAdditiveId, string(fragmentAdditiveSrc), gl.FRAGMENT_SHADER)
+	if err != nil {
+		return err
 	}
+	s.prgAdditive, err = ShaderCreateProgram("main_additive", vertexShader, fragAdditiveShader)
+	if err != nil {
+		return err
+	}
+
+	// Setup Uniforms Opaque
+	s.tableOpaque[MainLocView] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_view\x00"))
+	s.tableOpaque[MainLocProjection] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_projection\x00"))
+	s.tableOpaque[MainLocScreenResolution] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_screenResolution\x00"))
+	s.tableOpaque[MainLocTexture] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_texture\x00"))
+	s.tableOpaque[MainLocSSAO] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_ssao\x00"))
+	s.tableOpaque[MainLocEmissiveMap] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveMap\x00"))
+	s.tableOpaque[MainLocEmissiveIntensity] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveIntensity\x00"))
+	s.tableOpaque[MainLocAoFactor] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_aoFactor\x00"))
+
+	// Setup Uniforms Additive
+	s.tableAdditive[MainLocView] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_view\x00"))
+	s.tableAdditive[MainLocProjection] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_projection\x00"))
+	s.tableAdditive[MainLocTexture] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_texture\x00"))
+
 	return nil
 }
 
@@ -351,13 +388,13 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint3
 	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	gl.UseProgram(s.GetProgram())
+	gl.UseProgram(s.GetProgramOpaque())
 
-	gl.UniformMatrix4fv(s.GetUniform(MainLocView), 1, false, &s.view[0])
-	gl.UniformMatrix4fv(s.GetUniform(MainLocProjection), 1, false, &s.proj[0])
-	gl.Uniform2f(s.GetUniform(MainLocScreenResolution), float32(fbW), float32(fbH))
-	gl.Uniform1f(s.GetUniform(MainLocEmissiveIntensity), s.emissiveIntensity)
-	gl.Uniform1f(s.GetUniform(MainLocAoFactor), s.aoFactor)
+	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
+	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
+	gl.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
+	gl.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
+	gl.Uniform1f(s.GetUniformOpaque(MainLocAoFactor), s.aoFactor)
 
 	gl.DepthMask(true)
 	gl.DepthFunc(gl.LESS)
@@ -372,4 +409,27 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint3
 	renderGeometry()
 	// disable it immediately to not destroy light passes
 	gl.Disable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+}
+
+// RenderAdditive executes the rendering commands for additive geometry (e.g. flames, flares) using a specialized shader.
+func (s *Main) RenderAdditive(renderGeometry func()) {
+	gl.UseProgram(s.GetProgramAdditive())
+
+	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
+	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
+
+	gl.DepthMask(false)
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.ONE, gl.ONE)
+
+	gl.BindVertexArray(s.mainVAO[s.frameIdx])
+
+	renderGeometry()
+
+	gl.Disable(gl.BLEND)
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LESS)
+	gl.DepthMask(true)
 }

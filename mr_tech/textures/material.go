@@ -39,6 +39,7 @@ func TickGrouped(tick uint64, groupSize int) float64 {
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
 type Material struct {
+	blendMode   int
 	shader      string
 	frame       *Texture
 	frames      []*Texture
@@ -102,4 +103,12 @@ func (a *Material) CurrentFrame() *Texture {
 		return a.frames[frameIdx]
 	}
 	return a.frame
+}
+
+func (m *Material) BlendMode() int {
+	return m.blendMode
+}
+
+func (m *Material) SetBlendMode(b int) {
+	m.blendMode = b
 }

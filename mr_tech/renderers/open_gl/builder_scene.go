@@ -1,5 +1,7 @@
 package open_gl
 
+// UNUSED
+/*
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
@@ -259,3 +261,8 @@ func (w *BuilderScene) pushLights(fl *FrameLights, lights []*model.Light) {
 		fl.Create(l)
 	}
 }
+
+func (w *BuilderScene) GetDrawCommandsAdditive() *DrawCommandsRender {
+	return nil
+}
+*/

@@ -126,7 +126,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dc *DrawCommandsRender, skyEnabled bool, skyLayer float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, skyEnabled bool, skyLayer float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
@@ -201,22 +201,26 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.bindTextureBuckets()
 
 	// OMBRE
-	w.depth.Render(dc.Render, w.main.GetVAO(), fbW, fbH)
+	w.depth.Render(dcOpaque.Render, w.main.GetVAO(), fbW, fbH)
 	// SSAO PREPARE
 	w.ssao.Prepare(fbW, fbH)
 	// GEOMETRY
-	w.geometry.Render(dc.Render)
+	w.geometry.Render(dcOpaque.Render)
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
-	// MAIN
-	w.main.Render(dc.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
+	// MAIN OPAQUE
+	w.main.Render(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
+	// MAIN ADDITIVE
+	if dcAdditive != nil {
+		w.main.RenderAdditive(dcAdditive.Render)
+	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
 	// FLASHLIGHTS
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dc.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
+		dcOpaque.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetFactor()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
@@ -229,14 +233,14 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		w.shadowLight.Render(
-			dc.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
+			dcOpaque.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
 			factor, falloff, 0.7, 0.9, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS
-	w.lights.Render(dc.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dcOpaque.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights()

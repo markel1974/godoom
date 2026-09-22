@@ -12,6 +12,12 @@ import (
 type MaterialKind int
 
 const (
+	BlendModeOpaque = iota
+	BlendModeAdditive
+	BlendModeAlpha
+)
+
+const (
 	MaterialKindNone MaterialKind = iota
 	MaterialKindLoop
 	MaterialKindSky
@@ -19,14 +25,15 @@ const (
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.
 type Material struct {
-	Id     string       `json:"id"`
-	Shader string       `json:"shader"`
-	Frames []string     `json:"frames"`
-	Kind   MaterialKind `json:"kind"`
-	ScaleW float64      `json:"scaleW"`
-	ScaleH float64      `json:"scaleH"`
-	U      float64      `json:"u"`
-	V      float64      `json:"v"`
+	Id        string       `json:"id"`
+	BlendMode int          `json:"blendMode"`
+	Shader    string       `json:"shader"`
+	Frames    []string     `json:"frames"`
+	Kind      MaterialKind `json:"kind"`
+	ScaleW    float64      `json:"scaleW"`
+	ScaleH    float64      `json:"scaleH"`
+	U         float64      `json:"u"`
+	V         float64      `json:"v"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
@@ -46,6 +53,8 @@ func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v 
 func (m *Material) HashKey() string {
 	h := sha256.New()
 	h.Write([]byte(m.Shader))
+	h.Write([]byte{0})
+	h.Write([]byte{byte(m.BlendMode)})
 	h.Write([]byte{0})
 	for _, f := range m.Frames {
 		h.Write([]byte(f))

@@ -8,52 +8,73 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 )
 
-// ShaderStage represents a single rendering stage (a block within a shader).
+// ShaderStage represents a stage within a shader, defining various rendering and texturing properties.
 type ShaderStage struct {
 	mapData    string
+	clampMap   string
+	animMap    []string
+	videoMap   string
 	blendSrc   string
 	blendDst   string
 	depthWrite bool
+	depthFunc  string
 	alphaFunc  string
+	detail     bool
+	tcGen      []string
+	rgbGen     []string
+	alphaGen   []string
 	tcMods     [][]string
 }
 
-// IsAdditive returns true if this stage is configured for additive blending.
+// IsAdditive determines if the shader stage uses additive blending by checking the blend source and destination factors.
 func (st *ShaderStage) IsAdditive() bool {
 	return st.blendSrc == "gl_one" && st.blendDst == "gl_one"
 }
 
-// Shader represents a fully parsed Quake 3 shader with global properties and stages.
+// Shader represents a graphics shader with specific properties, shader stages, and parameters for rendering operations.
 type Shader struct {
-	name         string
-	surfaceParms map[string]bool
-	cull         string
-	stages       []*ShaderStage
+	name           string
+	surfaceParms   map[string]bool
+	cull           string
+	skyParms       []string
+	fogParms       []string
+	sort           string
+	nopicmip       bool
+	nomipmaps      bool
+	polygonOffset  bool
+	portal         bool
+	entityMergable bool
+	tessSize       string
+	deformVertexes [][]string
+	qerParms       map[string][]string
+	q3mapParms     map[string][]string
+	stages         []*ShaderStage
 }
 
-// NewShader creates and returns a new Shader instance with the provided name and cull mode.
+// NewShader creates a new Shader instance with the specified name and culling behavior.
 func NewShader(name string, cull string) *Shader {
 	return &Shader{
 		name:         name,
 		cull:         cull,
 		surfaceParms: make(map[string]bool),
+		qerParms:     make(map[string][]string),
+		q3mapParms:   make(map[string][]string),
 	}
 }
 
-// Shaders manages all parsed shaders from the Quake 3 archive.
+// Shaders represents a collection of Shader objects organized in a map with shader names as keys.
 type Shaders struct {
 	container map[string]*Shader
 }
 
-// NewShaders creates and returns a new instance of Shader.
+// NewShaders initializes a new instance of the Shaders struct with an empty container map and returns its pointer.
 func NewShaders() *Shaders {
 	return &Shaders{
 		container: make(map[string]*Shader),
 	}
 }
 
-// Retrieve returns the map of shaders with their associated additive blending flags.
-// This is kept for backward compatibility with q3.go logic.
+// Retrieve returns a map indicating shaders with at least one additive stage, keyed by shader name.
 func (s *Shaders) Retrieve() map[string]bool {
 	additive := make(map[string]bool)
 	for name, sh := range s.container {
@@ -67,12 +88,12 @@ func (s *Shaders) Retrieve() map[string]bool {
 	return additive
 }
 
-// Reset clears the current state of the Shader by reinitializing the map.
+// Reset clears the container map, effectively removing all stored Shader objects.
 func (s *Shaders) Reset() {
 	s.container = make(map[string]*Shader)
 }
 
-// Parse processes shader files in the archive and builds a structured AST of Q3Shader objects.
+// Parse processes and loads shader files from the archive, filtering files by the "*.shader" pattern in the "scripts" folder.
 func (s *Shaders) Parse(arc interfaces.IArchive) error {
 	files, fErr := arc.ReadDirFilter("scripts", ".*\\.shader$")
 	if fErr != nil {
@@ -88,131 +109,316 @@ func (s *Shaders) Parse(arc interfaces.IArchive) error {
 		if err != nil {
 			continue
 		}
-		s.parseShaderFile(string(data))
+		s.parseData(string(data))
 	}
 	return nil
 }
 
-// parseShaderFile processes the text of a single .shader file line by line.
-func (s *Shaders) parseShaderFile(data string) {
-	lines := strings.Split(data, "\n")
-	var currentShader *Shader
-	var currentStage *ShaderStage
+// shadersTokenType represents the type of tokens used in the shader parsing process.
+type shadersTokenType int
 
-	depth := 0
+// tokEOF represents the end-of-file token type.
+// tokString represents a string token type.
+// tokLBrace represents a left brace '{' token type.
+// tokRBrace represents a right brace '}' token type.
+// tokNewline represents a newline token type.
+const (
+	tokEOF shadersTokenType = iota
+	tokString
+	tokLBrace
+	tokRBrace
+	tokNewline
+)
 
-	for _, rawLine := range lines {
-		// Strip comments
-		idx := strings.Index(rawLine, "//")
-		if idx != -1 {
-			rawLine = rawLine[:idx]
+// ShadersToken represents a single lexical token in a shader source file.
+// It contains the token's type and its associated text value.
+type ShadersToken struct {
+	kind shadersTokenType
+	val  string
+}
+
+// ShadersScanner is a lexer for parsing shader definitions, processing characters into meaningful tokens.
+type ShadersScanner struct {
+	data []rune
+	pos  int
+}
+
+// skipWhitespaceAndComments advances the scanner's position, skipping over whitespace and single-line or multi-line comments.
+func (sc *ShadersScanner) skipWhitespaceAndComments() {
+	for sc.pos < len(sc.data) {
+		c := sc.data[sc.pos]
+		if c == ' ' || c == '\t' || c == '\r' {
+			sc.pos++
+			continue
 		}
-		line := strings.TrimSpace(rawLine)
-		if line == "" {
+		if c == '/' && sc.pos+1 < len(sc.data) && sc.data[sc.pos+1] == '/' {
+			sc.pos += 2
+			for sc.pos < len(sc.data) && sc.data[sc.pos] != '\n' {
+				sc.pos++
+			}
+			continue
+		}
+		if c == '/' && sc.pos+1 < len(sc.data) && sc.data[sc.pos+1] == '*' {
+			sc.pos += 2
+			for sc.pos+1 < len(sc.data) {
+				if sc.data[sc.pos] == '*' && sc.data[sc.pos+1] == '/' {
+					sc.pos += 2
+					break
+				}
+				sc.pos++
+			}
+			continue
+		}
+		break
+	}
+}
+
+// nextToken scans the input data and returns the next ShadersToken detected at the current position.
+func (sc *ShadersScanner) nextToken() ShadersToken {
+	sc.skipWhitespaceAndComments()
+	if sc.pos >= len(sc.data) {
+		return ShadersToken{kind: tokEOF}
+	}
+
+	ct := sc.data[sc.pos]
+	if ct == '\n' {
+		sc.pos++
+		return ShadersToken{kind: tokNewline, val: "\n"}
+	}
+	if ct == '{' {
+		sc.pos++
+		return ShadersToken{kind: tokLBrace, val: "{"}
+	}
+	if ct == '}' {
+		sc.pos++
+		return ShadersToken{kind: tokRBrace, val: "}"}
+	}
+
+	var sb strings.Builder
+	if ct == '"' {
+		sc.pos++
+		for sc.pos < len(sc.data) && sc.data[sc.pos] != '"' {
+			sb.WriteRune(sc.data[sc.pos])
+			sc.pos++
+		}
+		if sc.pos < len(sc.data) {
+			sc.pos++
+		}
+		return ShadersToken{kind: tokString, val: sb.String()}
+	}
+
+	for sc.pos < len(sc.data) {
+		c := sc.data[sc.pos]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '{' || c == '}' || c == '"' {
+			break
+		}
+		if c == '/' && sc.pos+1 < len(sc.data) && (sc.data[sc.pos+1] == '/' || sc.data[sc.pos+1] == '*') {
+			break
+		}
+		sb.WriteRune(c)
+		sc.pos++
+	}
+	return ShadersToken{kind: tokString, val: sb.String()}
+}
+
+// ShadersParser is a parser that processes shader file tokens using a ShadersScanner and maintains a lookahead token.
+type ShadersParser struct {
+	sc   *ShadersScanner
+	peek *ShadersToken
+}
+
+// next retrieves the next token from the scanner or returns the peeked token if it exists, clearing the peek buffer.
+func (p *ShadersParser) next() ShadersToken {
+	if p.peek != nil {
+		tok := *p.peek
+		p.peek = nil
+		return tok
+	}
+	return p.sc.nextToken()
+}
+
+// peekToken retrieves the next token without consuming it. If the token cache is empty, it fetches the next token.
+func (p *ShadersParser) peekToken() ShadersToken {
+	if p.peek == nil {
+		tok := p.sc.nextToken()
+		p.peek = &tok
+	}
+	return *p.peek
+}
+
+// skipUntil advances the parser until a token of the specified type or EOF is encountered.
+func (p *ShadersParser) skipUntil(typ shadersTokenType) {
+	for {
+		tok := p.next()
+		if tok.kind == typ || tok.kind == tokEOF {
+			break
+		}
+	}
+}
+
+// consumeLineArgs collects and returns all arguments from the current line until a newline, brace, or EOF is encountered.
+func (p *ShadersParser) consumeLineArgs() []string {
+	var args []string
+	for {
+		t := p.peekToken()
+		if t.kind == tokNewline || t.kind == tokEOF || t.kind == tokLBrace || t.kind == tokRBrace {
+			if t.kind == tokNewline {
+				p.next()
+			}
+			break
+		}
+		tok := p.next()
+		args = append(args, tok.val)
+	}
+	return args
+}
+
+// parseData parses shader definitions from the provided data string and adds them to the Shaders container.
+func (s *Shaders) parseData(data string) {
+	p := &ShadersParser{sc: &ShadersScanner{data: []rune(data)}}
+
+	for {
+		// 1. Skip newlines at root level
+		tok := p.next()
+		for tok.kind == tokNewline {
+			tok = p.next()
+		}
+
+		if tok.kind == tokEOF {
+			break
+		}
+
+		if tok.kind != tokString {
+			continue // Unmatched braces at root level, skip
+		}
+
+		shaderName := strings.ToLower(tok.val)
+
+		// Expect LBrace (skipping newlines)
+		brTok := p.next()
+		for brTok.kind == tokNewline {
+			brTok = p.next()
+		}
+
+		if brTok.kind != tokLBrace {
+			if brTok.kind == tokString {
+				p.peek = &brTok
+			}
 			continue
 		}
 
-		// Ensure braces are separated from other tokens
-		line = strings.ReplaceAll(line, "{", " { ")
-		line = strings.ReplaceAll(line, "}", " } ")
-		line = strings.ReplaceAll(line, "\"", "")
+		shader := NewShader(shaderName, "front")
 
-		tokens := strings.Fields(line)
-		if len(tokens) == 0 {
-			continue
-		}
+		// Parse shader body
+		for {
+			t := p.next()
+			for t.kind == tokNewline {
+				t = p.next()
+			}
 
-		for i := 0; i < len(tokens); {
-			t := tokens[i]
-			tl := strings.ToLower(t)
+			if t.kind == tokEOF || t.kind == tokRBrace {
+				break
+			}
 
-			if t == "{" {
-				depth++
-				if depth == 2 && currentShader != nil {
-					currentStage = &ShaderStage{depthWrite: true}
-					currentShader.stages = append(currentShader.stages, currentStage)
+			if t.kind == tokLBrace {
+				// Parse stage block
+				stage := &ShaderStage{depthWrite: true}
+				for {
+					st := p.next()
+					for st.kind == tokNewline {
+						st = p.next()
+					}
+
+					if st.kind == tokEOF || st.kind == tokRBrace {
+						break
+					}
+					if st.kind == tokLBrace {
+						p.skipUntil(tokRBrace)
+						continue
+					}
+
+					if st.kind == tokString {
+						cmd := strings.ToLower(st.val)
+						args := p.consumeLineArgs()
+
+						if cmd == "map" && len(args) > 0 {
+							stage.mapData = args[0]
+						} else if cmd == "clampmap" && len(args) > 0 {
+							stage.clampMap = args[0]
+						} else if cmd == "animmap" && len(args) > 0 {
+							stage.animMap = args
+						} else if cmd == "videomap" && len(args) > 0 {
+							stage.videoMap = args[0]
+						} else if cmd == "blendfunc" && len(args) > 0 {
+							arg1 := strings.ToLower(args[0])
+							if arg1 == "add" {
+								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_one", "gl_one", false
+							} else if arg1 == "filter" {
+								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_dst_color", "gl_zero", false
+							} else if arg1 == "blend" {
+								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_src_alpha", "gl_one_minus_src_alpha", false
+							} else if len(args) > 1 {
+								stage.blendSrc, stage.blendDst, stage.depthWrite = arg1, strings.ToLower(args[1]), false
+							}
+						} else if cmd == "alphafunc" && len(args) > 0 {
+							stage.alphaFunc = strings.ToLower(args[0])
+						} else if cmd == "depthfunc" && len(args) > 0 {
+							stage.depthFunc = strings.ToLower(args[0])
+						} else if cmd == "depthwrite" {
+							stage.depthWrite = true
+						} else if cmd == "detail" {
+							stage.detail = true
+						} else if cmd == "tcmod" {
+							stage.tcMods = append(stage.tcMods, args)
+						} else if cmd == "tcgen" {
+							stage.tcGen = args
+						} else if cmd == "rgbgen" {
+							stage.rgbGen = args
+						} else if cmd == "alphagen" {
+							stage.alphaGen = args
+						}
+					}
 				}
-				i++
+				shader.stages = append(shader.stages, stage)
 				continue
 			}
 
-			if t == "}" {
-				depth--
-				if depth < 0 {
-					depth = 0
-				}
-				if depth == 0 {
-					if currentShader != nil {
-						s.container[currentShader.name] = currentShader
-					}
-					currentShader = nil
-				}
-				if depth == 1 {
-					currentStage = nil
-				}
-				i++
-				continue
-			}
+			if t.kind == tokString {
+				cmd := strings.ToLower(t.val)
+				args := p.consumeLineArgs()
 
-			if depth == 0 {
-				// Shader name
-				currentShader = NewShader(tl, "front")
-				i++
-			} else if depth == 1 && currentShader != nil {
-				// Global directive
-				if tl == "surfaceparm" && i+1 < len(tokens) {
-					currentShader.surfaceParms[strings.ToLower(tokens[i+1])] = true
-					break
-				} else if tl == "cull" && i+1 < len(tokens) {
-					currentShader.cull = strings.ToLower(tokens[i+1])
-					break
-				} else {
-					break // ignore unknown global directive
+				if cmd == "surfaceparm" && len(args) > 0 {
+					shader.surfaceParms[strings.ToLower(args[0])] = true
+				} else if cmd == "cull" && len(args) > 0 {
+					shader.cull = strings.ToLower(args[0])
+				} else if cmd == "skyparms" {
+					shader.skyParms = args
+				} else if cmd == "fogparms" {
+					shader.fogParms = args
+				} else if cmd == "sort" && len(args) > 0 {
+					shader.sort = args[0]
+				} else if cmd == "nopicmip" {
+					shader.nopicmip = true
+				} else if cmd == "nomipmaps" {
+					shader.nomipmaps = true
+				} else if cmd == "polygonoffset" {
+					shader.polygonOffset = true
+				} else if cmd == "portal" {
+					shader.portal = true
+				} else if cmd == "entitymergable" {
+					shader.entityMergable = true
+				} else if cmd == "tesssize" && len(args) > 0 {
+					shader.tessSize = args[0]
+				} else if cmd == "deformvertexes" {
+					shader.deformVertexes = append(shader.deformVertexes, args)
+				} else if strings.HasPrefix(cmd, "qer_") {
+					shader.qerParms[cmd] = args
+				} else if strings.HasPrefix(cmd, "q3map_") {
+					shader.q3mapParms[cmd] = args
 				}
-			} else if depth == 2 && currentStage != nil {
-				// Stage directive
-				if tl == "map" && i+1 < len(tokens) {
-					currentStage.mapData = tokens[i+1]
-					break
-				} else if tl == "blendfunc" && i+1 < len(tokens) {
-					arg1 := strings.ToLower(tokens[i+1])
-					if arg1 == "add" {
-						currentStage.blendSrc = "gl_one"
-						currentStage.blendDst = "gl_one"
-						currentStage.depthWrite = false
-					} else if arg1 == "filter" {
-						currentStage.blendSrc = "gl_dst_color"
-						currentStage.blendDst = "gl_zero"
-						currentStage.depthWrite = false
-					} else if arg1 == "blend" {
-						currentStage.blendSrc = "gl_src_alpha"
-						currentStage.blendDst = "gl_one_minus_src_alpha"
-						currentStage.depthWrite = false
-					} else if i+2 < len(tokens) {
-						currentStage.blendSrc = arg1
-						currentStage.blendDst = strings.ToLower(tokens[i+2])
-						currentStage.depthWrite = false
-					}
-					break
-				} else if tl == "alphafunc" && i+1 < len(tokens) {
-					currentStage.alphaFunc = strings.ToLower(tokens[i+1])
-					break
-				} else if tl == "depthwrite" {
-					currentStage.depthWrite = true
-					break
-				} else if tl == "tcmod" {
-					var tcMod []string
-					for j := i + 1; j < len(tokens); j++ {
-						tcMod = append(tcMod, strings.ToLower(tokens[j]))
-					}
-					currentStage.tcMods = append(currentStage.tcMods, tcMod)
-					break
-				} else {
-					break // ignore unknown stage directive
-				}
-			} else {
-				break // fallback
 			}
 		}
+
+		s.container[shader.name] = shader
 	}
 }

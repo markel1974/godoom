@@ -37,8 +37,9 @@ func TickGrouped(tick uint64, groupSize int) float64 {
 	return frameFloat
 }
 
-// Material represents a collection of 2D texture frames used for rendering animations.
+// Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
 type Material struct {
+	shader      string
 	frame       *Texture
 	frames      []*Texture
 	totalFrames uint64
@@ -51,7 +52,7 @@ type Material struct {
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewMaterial(frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Material {
+func NewMaterial(shader string, frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Material {
 	if scaleW == 0 {
 		scaleW = 1
 	}
@@ -59,6 +60,7 @@ func NewMaterial(frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Mat
 		scaleH = 1
 	}
 	a := &Material{
+		shader:      shader,
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
@@ -86,6 +88,11 @@ func NewMaterial(frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Mat
 // Kind returns the type of the animation as an integer value.
 func (a *Material) Kind() int {
 	return a.kind
+}
+
+// Shader returns the name of the shader associated with this material.
+func (a *Material) Shader() string {
+	return a.shader
 }
 
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.

@@ -17,9 +17,10 @@ const (
 	MaterialKindSky
 )
 
-// Material represents animation properties including a sequence of frames and the type of animation.
+// Material represents animation properties including a sequence of frames, the type of animation, and the shader.
 type Material struct {
 	Id     string       `json:"id"`
+	Shader string       `json:"shader"`
 	Frames []string     `json:"frames"`
 	Kind   MaterialKind `json:"kind"`
 	ScaleW float64      `json:"scaleW"`
@@ -44,6 +45,8 @@ func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v 
 // HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.
 func (m *Material) HashKey() string {
 	h := sha256.New()
+	h.Write([]byte(m.Shader))
+	h.Write([]byte{0})
 	for _, f := range m.Frames {
 		h.Write([]byte(f))
 		h.Write([]byte{0})

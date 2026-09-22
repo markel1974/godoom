@@ -637,6 +637,7 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 			animKind = config.MaterialKindSky
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+		material.Shader = v.TexName
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {
@@ -830,6 +831,7 @@ func (q3 *Q3BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 			animKind = config.MaterialKindSky
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+		specificMaterial.Shader = texName
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()

@@ -17,7 +17,7 @@ func NewMaterials(tex textures.ITextures) *Materials {
 	return &Materials{
 		tex:    tex,
 		frames: make(map[string]*textures.Material),
-		empty:  textures.NewMaterial(nil, int(config.MaterialKindNone), 1, 1, 0, 0),
+		empty:  textures.NewMaterial("", nil, int(config.MaterialKindNone), 1, 1, 0, 0),
 	}
 }
 
@@ -38,7 +38,7 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 		return material
 	}
 	tex := r.tex.Get(ca.Frames)
-	material = textures.NewMaterial(tex, int(ca.Kind), ca.ScaleW, ca.ScaleH, ca.U, ca.V)
+	material = textures.NewMaterial(ca.Shader, tex, int(ca.Kind), ca.ScaleW, ca.ScaleH, ca.U, ca.V)
 	r.frames[key] = material
 	return material
 }

@@ -1,7 +1,12 @@
 package q3
 
 import (
+	"fmt"
+	"image"
 	"path/filepath"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 )
 
 func BaseName(in string) string {
@@ -10,4 +15,36 @@ func BaseName(in string) string {
 		return in
 	}
 	return in[:len(in)-len(p)]
+}
+
+func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
+	baseName := BaseName(texName)
+	tgaPath := baseName + ".tga"
+	fileTga, errTga := arc.Open(tgaPath)
+	if errTga == nil {
+		return common.DecodeTGA(fileTga)
+	}
+	jpgPath := baseName + ".jpg"
+	fileJpg, errJpg := arc.Open(jpgPath)
+	if errJpg == nil {
+		img, _, err := image.Decode(fileJpg)
+		return img, err
+	}
+	fallbackName, ok := _q3ShaderFallback[baseName]
+	if !ok {
+		fallbackName, ok = _q3ShaderFallback[texName]
+	}
+	if ok && len(fallbackName) > 0 {
+		if fTga, e := arc.Open(fallbackName + ".tga"); e == nil {
+			return common.DecodeTGA(fTga)
+		}
+		if fJpg, e := arc.Open(fallbackName + ".jpg"); e == nil {
+			img, _, err := image.Decode(fJpg)
+			return img, err
+		}
+		var im image.Image
+		return im, fmt.Errorf("missing asset %s (.jpg/.tga) (fallback failed)", texName)
+	}
+	var img image.Image
+	return img, fmt.Errorf("missing asset %s (.jpg/.tga)", texName)
 }

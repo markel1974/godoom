@@ -19,7 +19,7 @@ var _q3DictModelFilename = map[string]string{
 	"item_health_small": "models/powerups/health/small_cross.md3",
 	"item_health":       "models/powerups/health/medium_cross.md3",
 	"item_health_large": "models/powerups/health/large_cross.md3",
-	"item_health_mega":  "models/powerups/health/mega_cross.md3",
+	"item_health_mega":  "models/powerups/health/large_cross.md3",
 
 	// Powerups
 	"holdable_teleporter": "models/powerups/holdable/teleporter.md3",
@@ -40,7 +40,7 @@ var _q3DictModelFilename = map[string]string{
 	"ammo_slugs":     "models/powerups/ammo/railgunam.md3",
 	"ammo_cells":     "models/powerups/ammo/plasmaam.md3",
 	"ammo_bfg":       "models/powerups/ammo/bfgam.md3",
-	"enemy_bot":      "models/powerups/health/mega_cross.md3",
+	"enemy_bot":      "models/powerups/ammo/machinegunam.md3",
 }
 
 var _q3DictBModel = map[string]string{
@@ -72,4 +72,5 @@ var _q3ShaderFallback = map[string]string{
 	"textures/gothic_light/pentagram_light1_2k": "textures/gothic_light/pentagram_light1",
 	"textures/sfx/flame1dark":                   "textures/sfx/flame1",
 	"textures/liquids/lavahell_1000":            "textures/liquids/lavahell",
+	"models/powerups/health/mega2":              "models/powerups/health/mega",
 }

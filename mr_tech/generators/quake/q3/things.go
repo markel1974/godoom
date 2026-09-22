@@ -189,31 +189,15 @@ func (t *Things) loadMissingTexture(texName string) {
 	if texes := t.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 		return // Already loaded
 	}
-	var img image.Image
-	var err error
-
-	baseName := BaseName(texName)
-	tgaPath := baseName + ".tga"
-	fileTga, errTga := t.arc.Open(tgaPath)
-	if errTga == nil {
-		img, err = common.DecodeTGA(fileTga)
-	} else {
-		jpgPath := baseName + ".jpg"
-		fileJpg, errJpg := t.arc.Open(jpgPath)
-		if errJpg == nil {
-			img, _, err = image.Decode(fileJpg)
-		} else {
-			// fallback without path?
-			fmt.Printf("warning: missing md3 asset %s (%s | %s)\n", texName, tgaPath, jpgPath)
-			return
-		}
-	}
+	img, err := LoadImage(texName, t.arc)
 	if err != nil {
-		fmt.Printf("Warning: decodifica fallita per %s: %v\n", texName, err)
+		fmt.Printf("warning: md3 %s\n", err.Error())
 		return
 	}
 	bounds := img.Bounds()
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
-	t.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true)
+	if err = t.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
+		fmt.Printf("warning: md3 %s\n", err.Error())
+	}
 }

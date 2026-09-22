@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -378,53 +377,9 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 			continue
 		}
 
-		baseName := BaseName(texName)
-		var img image.Image
-		var err error
-
-		// Prova prima con TGA (perché supporta l'alpha channel natively)
-		tgaPath := baseName + ".tga"
-		fileTga, errTga := q3.arc.Open(tgaPath)
-		if errTga == nil {
-			img, err = common.DecodeTGA(fileTga)
-		} else {
-			// Fallback su JPEG
-			jpgPath := baseName + ".jpg"
-			fileJpg, errJpg := q3.arc.Open(jpgPath)
-			if errJpg == nil {
-				img, _, err = image.Decode(fileJpg)
-			} else {
-				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
-				fallbackName, ok := _q3ShaderFallback[baseName]
-				if !ok {
-					// Also try original texName just in case
-					fallbackName, ok = _q3ShaderFallback[texName]
-					if !ok {
-						fmt.Printf("warning: missing asset %s (%s | %s)\n", texName, tgaPath, jpgPath)
-						continue
-					}
-				}
-				if fallbackName == "" {
-					continue // Skips textures explicitly mapped to empty string (e.g. fog)
-				}
-				// Riprova con il fallback (sempre prima TGA poi JPG)
-				fbTga := fallbackName + ".tga"
-				if fTga, e := q3.arc.Open(fbTga); e == nil {
-					img, err = common.DecodeTGA(fTga)
-				} else {
-					fbJpg := fallbackName + ".jpg"
-					if fJpg, e := q3.arc.Open(fbJpg); e == nil {
-						img, _, err = image.Decode(fJpg)
-					} else {
-						fmt.Printf("warning: missing asset %s (.jpg/.tga) (fallito anche il fallback)\n", texName)
-						continue
-					}
-				}
-			}
-		}
-
+		img, err := LoadImage(texName, q3.arc)
 		if err != nil {
-			fmt.Printf("Warning: decodifica fallita per %s: %v\n", texName, err)
+			fmt.Printf("Warning: %s\n", err.Error())
 			continue
 		}
 

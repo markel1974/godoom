@@ -378,26 +378,31 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 			continue
 		}
 
+		baseName := BaseName(texName)
 		var img image.Image
 		var err error
 
 		// Prova prima con TGA (perché supporta l'alpha channel natively)
-		tgaPath := texName + ".tga"
+		tgaPath := baseName + ".tga"
 		fileTga, errTga := q3.arc.Open(tgaPath)
 		if errTga == nil {
 			img, err = common.DecodeTGA(fileTga)
 		} else {
 			// Fallback su JPEG
-			jpgPath := texName + ".jpg"
+			jpgPath := baseName + ".jpg"
 			fileJpg, errJpg := q3.arc.Open(jpgPath)
 			if errJpg == nil {
 				img, _, err = image.Decode(fileJpg)
 			} else {
 				// Shader Fallback (se il nome è uno shader noto, puntiamo alla texture base)
-				fallbackName, ok := _q3ShaderFallback[texName]
+				fallbackName, ok := _q3ShaderFallback[baseName]
 				if !ok {
-					fmt.Printf("warning: missing asset %s (.jpg/.tga)\n", texName)
-					continue
+					// Also try original texName just in case
+					fallbackName, ok = _q3ShaderFallback[texName]
+					if !ok {
+						fmt.Printf("warning: missing asset %s (%s | %s)\n", texName, tgaPath, jpgPath)
+						continue
+					}
 				}
 				if fallbackName == "" {
 					continue // Skips textures explicitly mapped to empty string (e.g. fog)

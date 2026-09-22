@@ -2,6 +2,9 @@ package q3
 
 import (
 	"fmt"
+	"image"
+	"image/draw"
+	_ "image/jpeg"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -65,6 +68,16 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 	cModel, err := md3.Parse(rsMd3, t.texManager, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
+	}
+
+	// Load materials for the MD3 model
+	for _, frame := range cModel.Frames {
+		for _, tri := range frame.Triangles {
+			if tri.Material != nil && len(tri.Material.Frames) > 0 {
+				texName := tri.Material.Frames[0]
+				t.loadMissingTexture(texName)
+			}
+		}
 	}
 
 	thingCfg := doCreate(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
@@ -166,4 +179,41 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 		thingCfg.OnImpact = itemLogic.OnImpact
 	}
 	return thingCfg
+}
+
+// loadMissingTexture attempts to load and register a texture for an MD3 model from the archive.
+func (t *Things) loadMissingTexture(texName string) {
+	if texName == "noshader" || len(texName) == 0 {
+		return
+	}
+	if texes := t.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+		return // Already loaded
+	}
+	var img image.Image
+	var err error
+
+	baseName := BaseName(texName)
+	tgaPath := baseName + ".tga"
+	fileTga, errTga := t.arc.Open(tgaPath)
+	if errTga == nil {
+		img, err = common.DecodeTGA(fileTga)
+	} else {
+		jpgPath := baseName + ".jpg"
+		fileJpg, errJpg := t.arc.Open(jpgPath)
+		if errJpg == nil {
+			img, _, err = image.Decode(fileJpg)
+		} else {
+			// fallback without path?
+			fmt.Printf("warning: missing md3 asset %s (%s | %s)\n", texName, tgaPath, jpgPath)
+			return
+		}
+	}
+	if err != nil {
+		fmt.Printf("Warning: decodifica fallita per %s: %v\n", texName, err)
+		return
+	}
+	bounds := img.Bounds()
+	rgba := image.NewRGBA(bounds)
+	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
+	t.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true)
 }

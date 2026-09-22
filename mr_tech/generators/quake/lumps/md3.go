@@ -136,6 +136,10 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath str
 		var material *config.Material
 		if len(shaders) > 0 {
 			shaderName := strings.TrimRight(string(shaders[0].Name[:]), "\x00")
+			shaderName = strings.ReplaceAll(shaderName, "\\", "/")
+			if len(shaderName) > 0 && !strings.Contains(shaderName, "/") {
+				shaderName = basePath + shaderName
+			}
 			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 		}
 

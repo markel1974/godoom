@@ -145,28 +145,27 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath str
 		if _, err := rs.Seek(offsetSurf, io.SeekStart); err != nil {
 			return nil, err
 		}
-
 		var surfHeader MD3SurfaceHeader
 		if err := binary.Read(rs, binary.LittleEndian, &surfHeader); err != nil {
 			return nil, err
 		}
-
 		// Shaders (Materiali)
-		rs.Seek(offsetSurf+int64(surfHeader.OfsShaders), io.SeekStart)
+		if _, err := rs.Seek(offsetSurf+int64(surfHeader.OfsShaders), io.SeekStart); err != nil {
+			return nil, err
+		}
 		shaders := make([]MD3Shader, surfHeader.NumShaders)
-		binary.Read(rs, binary.LittleEndian, &shaders)
-
+		if err := binary.Read(rs, binary.LittleEndian, &shaders); err != nil {
+			return nil, err
+		}
 		// Trova il materiale (usiamo il primo shader come materiale base)
 		var material *config.Material
 		surfName := strings.TrimRight(string(surfHeader.Name[:]), "\x00")
 		var shaderName string
-
 		if skinMap != nil {
 			if texPath, ok := skinMap[surfName]; ok {
 				shaderName = texPath
 			}
 		}
-
 		if len(shaderName) == 0 && len(shaders) > 0 {
 			shaderName = strings.TrimRight(string(shaders[0].Name[:]), "\x00")
 			shaderName = strings.ReplaceAll(shaderName, "\\", "/")
@@ -174,26 +173,36 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath str
 				shaderName = basePath + shaderName
 			}
 		}
-
 		if len(shaderName) > 0 {
 			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 		}
-
 		// Triangoli
-		rs.Seek(offsetSurf+int64(surfHeader.OfsTriangles), io.SeekStart)
+		if _, err := rs.Seek(offsetSurf+int64(surfHeader.OfsTriangles), io.SeekStart); err != nil {
+			return nil, err
+		}
 		triangles := make([]MD3Triangle, surfHeader.NumTriangles)
-		binary.Read(rs, binary.LittleEndian, &triangles)
+		if err := binary.Read(rs, binary.LittleEndian, &triangles); err != nil {
+			return nil, err
+		}
 
 		// TexCoords
-		rs.Seek(offsetSurf+int64(surfHeader.OfsSt), io.SeekStart)
+		if _, err := rs.Seek(offsetSurf+int64(surfHeader.OfsSt), io.SeekStart); err != nil {
+			return nil, err
+		}
 		texCoords := make([]MD3TexCoord, surfHeader.NumVerts)
-		binary.Read(rs, binary.LittleEndian, &texCoords)
+		if err := binary.Read(rs, binary.LittleEndian, &texCoords); err != nil {
+			return nil, err
+		}
 
 		// Vertici XYZ
-		rs.Seek(offsetSurf+int64(surfHeader.OfsXYZNormal), io.SeekStart)
+		if _, err := rs.Seek(offsetSurf+int64(surfHeader.OfsXYZNormal), io.SeekStart); err != nil {
+			return nil, err
+		}
 		numTotalVerts := int(surfHeader.NumFrames * surfHeader.NumVerts)
 		vertices := make([]MD3Vertex, numTotalVerts)
-		binary.Read(rs, binary.LittleEndian, &vertices)
+		if err := binary.Read(rs, binary.LittleEndian, &vertices); err != nil {
+			return nil, err
+		}
 
 		// Assembla i triangoli per ogni frame
 		for i := 0; i < int(surfHeader.NumFrames); i++ {

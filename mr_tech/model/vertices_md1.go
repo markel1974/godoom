@@ -53,6 +53,10 @@ func NewVerticesMD2(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 			face.LockUV(true)
 			volume.AddFace(face)
 		}
+		// Copy tags to volume
+		for tagName, tagVec := range cfgFrame.Tags {
+			volume.Tags[tagName] = tagVec
+		}
 		volume.Rebuild()
 		v.volumes[frameIdx] = volume
 	}

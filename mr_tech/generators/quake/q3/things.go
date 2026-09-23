@@ -239,54 +239,42 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		return nil, err
 	}
 
-	// For now, we bake frame 0 of all parts into a single combined frame.
-	baseFrame := lower.Frames[0]
-	tagTorso, hasTorso := baseFrame.Tags["tag_torso"]
-	if !hasTorso {
-		return nil, fmt.Errorf("missing tag_torso in lower.md3")
-	}
-	upperFrame := upper.Frames[0]
-	for i := range upperFrame.Triangles {
-		for j := range upperFrame.Triangles[i].Vertices {
-			upperFrame.Triangles[i].Vertices[j].Pos.X += tagTorso.X
-			upperFrame.Triangles[i].Vertices[j].Pos.Y += tagTorso.Y
-			upperFrame.Triangles[i].Vertices[j].Pos.Z += tagTorso.Z
-		}
-	}
-	baseFrame.Triangles = append(baseFrame.Triangles, upperFrame.Triangles...)
-
-	tagHead, hasHead := upperFrame.Tags["tag_head"]
-	if hasHead {
-		headOrigin := geometry.XYZ{
-			X: tagTorso.X + tagHead.X,
-			Y: tagTorso.Y + tagHead.Y,
-			Z: tagTorso.Z + tagHead.Z,
-		}
-		headFrame := head.Frames[0]
-		for i := range headFrame.Triangles {
-			for j := range headFrame.Triangles[i].Vertices {
-				headFrame.Triangles[i].Vertices[j].Pos.X += headOrigin.X
-				headFrame.Triangles[i].Vertices[j].Pos.Y += headOrigin.Y
-				headFrame.Triangles[i].Vertices[j].Pos.Z += headOrigin.Z
+	for _, frame := range lower.Frames {
+		for _, tri := range frame.Triangles {
+			if tri.Material != nil && len(tri.Material.Frames) > 0 {
+				texName := tri.Material.Frames[0]
+				t.loadTexture(texName)
 			}
 		}
-		baseFrame.Triangles = append(baseFrame.Triangles, headFrame.Triangles...)
 	}
-
-	lower.Frames = []config.MD1Frame{baseFrame}
-
-	// ActionIntervals and Definitions should also be cleared to prevent out of bounds
-	lower.ActionDefinitions = []string{"idle"}
-	lower.ActionIntervals = [][2]int{{0, 0}}
-
-	// Load materials for the combined model
-	for _, tri := range baseFrame.Triangles {
-		if tri.Material != nil && len(tri.Material.Frames) > 0 {
-			texName := tri.Material.Frames[0]
-			t.loadTexture(texName)
+	for _, frame := range upper.Frames {
+		for _, tri := range frame.Triangles {
+			if tri.Material != nil && len(tri.Material.Frames) > 0 {
+				texName := tri.Material.Frames[0]
+				t.loadTexture(texName)
+			}
+		}
+	}
+	for _, frame := range head.Frames {
+		for _, tri := range frame.Triangles {
+			if tri.Material != nil && len(tri.Material.Frames) > 0 {
+				texName := tri.Material.Frames[0]
+				t.loadTexture(texName)
+			}
 		}
 	}
 
-	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, lower, 0, 30.0, 16.0, 56, 600.0)
+	md3 := config.NewMD3(lower, upper, head)
+	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, nil, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg.MD3 = md3
+
+	// We'll set the action definitions manually for now to avoid panic when setAction is called.
+	thingCfg.MD3.Lower.ActionDefinitions = []string{"idle"}
+	thingCfg.MD3.Lower.ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
+	thingCfg.MD3.Upper.ActionDefinitions = []string{"idle"}
+	thingCfg.MD3.Upper.ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
+	thingCfg.MD3.Head.ActionDefinitions = []string{"idle"}
+	thingCfg.MD3.Head.ActionIntervals = [][2]int{{0, len(head.Frames) - 1}}
+
 	return thingCfg, nil
 }

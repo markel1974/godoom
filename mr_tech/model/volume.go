@@ -20,6 +20,7 @@ type Volume struct {
 	facesTree *physics.AABBTree
 	thing     IThing
 	sector    *Sector
+	Tags      map[string]geometry.XYZ
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
@@ -32,6 +33,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faceCount: 0,
 		entity:    physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree: physics.NewAABBTree(64, 0.0),
+		Tags:      make(map[string]geometry.XYZ),
 	}
 	v.facesPtr = &v.faces
 	return v

@@ -44,6 +44,7 @@ type Thing struct {
 	WakeUpDistance float64      `json:"wakeUpDistance"`
 	GForce         float64      `json:"gForce"`
 	MD1            *MD1         `json:"md1"`
+	MD3            *MD3         `json:"md3"`
 	MultiSprite    *MultiSprite `json:"multiSprite"`
 	Sprite         *Sprite      `json:"sprite"`
 
@@ -95,6 +96,7 @@ func (t *Thing) Clone() *Thing {
 		WakeUpDistance: t.WakeUpDistance,
 		GForce:         t.GForce,
 		MD1:            t.MD1,
+		MD3:            t.MD3,
 		MultiSprite:    t.MultiSprite,
 		Sprite:         t.Sprite,
 		OnThinking:     t.OnThinking,

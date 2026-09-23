@@ -10,20 +10,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 )
 
-// Faces represents a structure that works with Shaders to facilitate geometry processing and face generation.
-type Faces struct {
+// Volumes represents a structure that works with Shaders to facilitate geometry processing and face generation.
+type Volumes struct {
 	shaders *Shaders
 }
 
-// NewFaces initializes and returns a new Faces instance with the provided Shaders dependency.
-func NewFaces(shaders *Shaders) *Faces {
-	return &Faces{
+// NewVolumes initializes and returns a new Faces instance with the provided Shaders dependency.
+func NewVolumes(shaders *Shaders) *Volumes {
+	return &Volumes{
 		shaders: shaders,
 	}
 }
 
-// CreateFaces generates and groups faces into 3D volumes based on spatial hashing, material properties, and shader configurations.
-func (f *Faces) CreateFaces(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, error) {
+// Create generates and groups faces into 3D volumes based on spatial hashing, material properties, and shader configurations.
+func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, error) {
 	const chunkSize = float64(1024)
 
 	var volumes []*config.Volume

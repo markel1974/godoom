@@ -53,7 +53,6 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-	//arc := q3.GetArchive()
 	rsMd3, err := t.arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
@@ -65,7 +64,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		basePath = thingPath[:lastSlash+1]
 	}
 
-	cModel, err := md3.Parse(rsMd3, t.texManager, basePath)
+	cModel, err := md3.Parse(rsMd3, t.texManager, basePath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
@@ -200,4 +199,94 @@ func (t *Things) loadTexture(texName string) {
 	if err = t.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
 		fmt.Printf("warning: md3 %s\n", err.Error())
 	}
+}
+
+// loadMD3Part loads a single MD3 part (lower, upper, or head) and its corresponding skin file.
+func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
+	md3Path := basePath + partName + ".md3"
+	skinPath := basePath + partName + "_default.skin"
+
+	var skinMap map[string]string
+	if rsSkin, err := t.arc.Open(skinPath); err == nil {
+		skin := lumps.NewSkin(rsSkin)
+		skinMap, err = skin.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("can't parse skin %s: %s", skinPath, err.Error())
+		}
+	}
+
+	rsMd3, err := t.arc.Open(md3Path)
+	if err != nil {
+		return nil, fmt.Errorf("can't open %s: %s", md3Path, err.Error())
+	}
+
+	md3 := lumps.NewMD3Resource()
+	return md3.Parse(rsMd3, t.texManager, basePath, skinMap)
+}
+
+// CreatePlayer loads and assembles a multi-part Quake 3 player model.
+func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
+	lower, err := t.loadMD3Part(basePath, "lower")
+	if err != nil {
+		return nil, err
+	}
+	upper, err := t.loadMD3Part(basePath, "upper")
+	if err != nil {
+		return nil, err
+	}
+	head, err := t.loadMD3Part(basePath, "head")
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, we bake frame 0 of all parts into a single combined frame.
+	baseFrame := lower.Frames[0]
+	tagTorso, hasTorso := baseFrame.Tags["tag_torso"]
+	if !hasTorso {
+		return nil, fmt.Errorf("missing tag_torso in lower.md3")
+	}
+	upperFrame := upper.Frames[0]
+	for i := range upperFrame.Triangles {
+		for j := range upperFrame.Triangles[i].Vertices {
+			upperFrame.Triangles[i].Vertices[j].Pos.X += tagTorso.X
+			upperFrame.Triangles[i].Vertices[j].Pos.Y += tagTorso.Y
+			upperFrame.Triangles[i].Vertices[j].Pos.Z += tagTorso.Z
+		}
+	}
+	baseFrame.Triangles = append(baseFrame.Triangles, upperFrame.Triangles...)
+
+	tagHead, hasHead := upperFrame.Tags["tag_head"]
+	if hasHead {
+		headOrigin := geometry.XYZ{
+			X: tagTorso.X + tagHead.X,
+			Y: tagTorso.Y + tagHead.Y,
+			Z: tagTorso.Z + tagHead.Z,
+		}
+		headFrame := head.Frames[0]
+		for i := range headFrame.Triangles {
+			for j := range headFrame.Triangles[i].Vertices {
+				headFrame.Triangles[i].Vertices[j].Pos.X += headOrigin.X
+				headFrame.Triangles[i].Vertices[j].Pos.Y += headOrigin.Y
+				headFrame.Triangles[i].Vertices[j].Pos.Z += headOrigin.Z
+			}
+		}
+		baseFrame.Triangles = append(baseFrame.Triangles, headFrame.Triangles...)
+	}
+
+	lower.Frames = []config.MD1Frame{baseFrame}
+
+	// ActionIntervals and Definitions should also be cleared to prevent out of bounds
+	lower.ActionDefinitions = []string{"idle"}
+	lower.ActionIntervals = [][2]int{{0, 0}}
+
+	// Load materials for the combined model
+	for _, tri := range baseFrame.Triangles {
+		if tri.Material != nil && len(tri.Material.Frames) > 0 {
+			texName := tri.Material.Frames[0]
+			t.loadTexture(texName)
+		}
+	}
+
+	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, lower, 0, 30.0, 16.0, 56, 600.0)
+	return thingCfg, nil
 }

@@ -30,12 +30,14 @@ func NewMD1Triangle(material *Material) MD1Triangle {
 // MD1Frame represents a collection of triangles that define a single frame in an MD1 animation sequence.
 type MD1Frame struct {
 	Triangles []MD1Triangle
+	Tags      map[string]geometry.XYZ
 }
 
 // NewMD1Frame creates a new MD1Frame with the specified list of MD1Triangle structures.
 func NewMD1Frame(triangles []MD1Triangle) MD1Frame {
 	return MD1Frame{
 		Triangles: triangles,
+		Tags:      make(map[string]geometry.XYZ),
 	}
 }
 
@@ -50,6 +52,9 @@ type MD1 struct {
 func NewMD1(numFrames int, frameNames []string) *MD1 {
 	m := &MD1{
 		Frames: make([]MD1Frame, numFrames),
+	}
+	for i := 0; i < numFrames; i++ {
+		m.Frames[i].Tags = make(map[string]geometry.XYZ)
 	}
 	m.compute(frameNames)
 	return m

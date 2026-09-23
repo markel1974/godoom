@@ -487,7 +487,7 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	}
 	things := NewThings(q3.arc, q3.shaders, q3.texManager)
 	lights := NewLights(entities)
-	faces := NewFaces(q3.shaders)
+	volumes := NewVolumes(q3.shaders)
 
 	playerSpawned := false
 	for _, ent := range entities {
@@ -541,7 +541,15 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 					// We use remaining spawn points as Bot spawners
 					enemyClass := "enemy_bot"
 					thingPath := q3.GetModelFileName(enemyClass)
-					cThing, err := things.Create(thingPath, pos, enemyClass)
+
+					var cThing *config.Thing
+					var err error
+					if strings.HasSuffix(thingPath, "/") {
+						cThing, err = things.CreatePlayer(thingPath, pos, enemyClass)
+					} else {
+						cThing, err = things.Create(thingPath, pos, enemyClass)
+					}
+
 					if err == nil {
 						root.Things = append(root.Things, cThing)
 					} else {
@@ -571,14 +579,22 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		// TODO: ignore invisible targets and misc models for now
 		default:
 			thingPath := q3.GetModelFileName(classname)
-			if cThing, err := things.Create(thingPath, pos, classname); err != nil {
+			var cThing *config.Thing
+			var err error
+			if strings.HasSuffix(thingPath, "/") {
+				cThing, err = things.CreatePlayer(thingPath, pos, classname)
+			} else {
+				cThing, err = things.Create(thingPath, pos, classname)
+			}
+
+			if err != nil {
 				fmt.Printf("Warning can't create thing: %s\n", err.Error())
 			} else {
 				root.Things = append(root.Things, cThing)
 			}
 		}
 	}
-	if cVolumes, err := faces.CreateFaces(mIdx, rawFaces); err != nil {
+	if cVolumes, err := volumes.Create(mIdx, rawFaces); err != nil {
 		fmt.Printf("Warning can't create faces: %s\n", err.Error())
 	} else {
 		root.Volumes = cVolumes

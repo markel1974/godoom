@@ -80,7 +80,7 @@ func NewMD3Resource() *MD3Resource {
 	return &MD3Resource{}
 }
 
-func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath string) (*config.MD1, error) {
+func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath string, skinMap map[string]string) (*config.MD1, error) {
 	if _, err := rs.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -111,6 +111,30 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath str
 	// Inizializza il contenitore generico config.MD1 (usato dall'engine come frame array)
 	cfg := config.NewMD1(int(header.NumFrames), frameNames)
 
+	// Leggi i tags
+	if header.NumTags > 0 && header.OfsTags > 0 {
+		if _, err := rs.Seek(int64(header.OfsTags), io.SeekStart); err != nil {
+			return nil, err
+		}
+		numTotalTags := int(header.NumFrames * header.NumTags)
+		tags := make([]MD3Tag, numTotalTags)
+		if err := binary.Read(rs, binary.LittleEndian, &tags); err != nil {
+			return nil, err
+		}
+		for i := 0; i < int(header.NumFrames); i++ {
+			for j := 0; j < int(header.NumTags); j++ {
+				tag := tags[i*int(header.NumTags)+j]
+				tagName := strings.TrimRight(string(tag.Name[:]), "\x00")
+				// MD3 tags don't seem to be scaled by 1/64, but let's check later, wait, MD3 tags coordinates are float32, so no md3Scale needed!
+				cfg.Frames[i].Tags[tagName] = geometry.XYZ{
+					X: float64(tag.Origin[0]),
+					Y: float64(tag.Origin[1]),
+					Z: float64(tag.Origin[2]),
+				}
+			}
+		}
+	}
+
 	// Per scalare i vertici MD3 (che sono short int) a float
 	const md3Scale = 1.0 / 64.0
 
@@ -134,12 +158,24 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker, texManager *Textures, basePath str
 
 		// Trova il materiale (usiamo il primo shader come materiale base)
 		var material *config.Material
-		if len(shaders) > 0 {
-			shaderName := strings.TrimRight(string(shaders[0].Name[:]), "\x00")
+		surfName := strings.TrimRight(string(surfHeader.Name[:]), "\x00")
+		var shaderName string
+
+		if skinMap != nil {
+			if texPath, ok := skinMap[surfName]; ok {
+				shaderName = texPath
+			}
+		}
+
+		if len(shaderName) == 0 && len(shaders) > 0 {
+			shaderName = strings.TrimRight(string(shaders[0].Name[:]), "\x00")
 			shaderName = strings.ReplaceAll(shaderName, "\\", "/")
 			if len(shaderName) > 0 && !strings.Contains(shaderName, "/") {
 				shaderName = basePath + shaderName
 			}
+		}
+
+		if len(shaderName) > 0 {
 			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 		}
 

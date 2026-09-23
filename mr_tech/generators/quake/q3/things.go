@@ -239,6 +239,9 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		return nil, err
 	}
 
+	// Load machinegun as the default weapon
+	weapon, _ := t.loadMD3Part("models/weapons2/machinegun/", "machinegun")
+
 	for _, frame := range lower.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
@@ -264,7 +267,18 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		}
 	}
 
-	md3 := config.NewMD3(lower, upper, head)
+	if weapon != nil {
+		for _, frame := range weapon.Frames {
+			for _, tri := range frame.Triangles {
+				if tri.Material != nil && len(tri.Material.Frames) > 0 {
+					texName := tri.Material.Frames[0]
+					t.loadTexture(texName)
+				}
+			}
+		}
+	}
+
+	md3 := config.NewMD3(lower, upper, head, weapon)
 
 	if rsAnim, err := t.arc.Open(basePath + "animation.cfg"); err == nil {
 		if animCfg, err := lumps.ParseAnimCfg(rsAnim); err == nil {
@@ -299,6 +313,11 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	// Head has no specific animations in Q3, just loop frame 0
 	md3.Head.ActionDefinitions = []string{"idle"}
 	md3.Head.ActionIntervals = [][2]int{{0, 0}}
+
+	if weapon != nil {
+		md3.Weapon.ActionDefinitions = []string{"idle"}
+		md3.Weapon.ActionIntervals = [][2]int{{0, 0}}
+	}
 
 	// We pass md3.Lower to doCreate so that it can extract the ActionDefinitions for the enemy logic.
 	// We'll set MD1 to nil afterwards since this is an MD3 model.

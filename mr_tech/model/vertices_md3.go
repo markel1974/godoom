@@ -11,9 +11,10 @@ import (
 )
 
 type VerticesMD3 struct {
-	lower *VerticesMD1
-	upper *VerticesMD1
-	head  *VerticesMD1
+	lower  *VerticesMD1
+	upper  *VerticesMD1
+	head   *VerticesMD1
+	weapon *VerticesMD1
 
 	facesA    []*Face
 	facesB    []*Face
@@ -44,15 +45,27 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	cfgHead.MD3 = nil
 	head := NewVerticesMD2(cfgHead, materials)
 
+	var weapon *VerticesMD1
+	var countW int
+	var weaponFaces *[]*Face
+	if cfg.MD3.Weapon != nil {
+		cfgWeapon := cfg.Clone()
+		cfgWeapon.MD1 = cfg.MD3.Weapon
+		cfgWeapon.MD3 = nil
+		weapon = NewVerticesMD2(cfgWeapon, materials)
+		weaponFaces, countW = weapon.volumes[0].GetFaces()
+	}
+
 	lowerFaces, countL := lower.volumes[0].GetFaces()
 	upperFaces, countU := upper.volumes[0].GetFaces()
 	headFaces, countH := head.volumes[0].GetFaces()
-	totalFaces := countL + countU + countH
+	totalFaces := countL + countU + countH + countW
 
 	v := &VerticesMD3{
 		lower:      lower,
 		upper:      upper,
 		head:       head,
+		weapon:     weapon,
 		totalFaces: totalFaces,
 		facesA:     make([]*Face, totalFaces),
 		facesB:     make([]*Face, totalFaces),
@@ -69,8 +82,10 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 			src = (*lowerFaces)[i]
 		} else if i < countL+countU {
 			src = (*upperFaces)[i-countL]
-		} else {
+		} else if i < countL+countU+countH {
 			src = (*headFaces)[i-countL-countU]
+		} else {
+			src = (*weaponFaces)[i-countL-countU-countH]
 		}
 
 		v.facesA[i].material = src.material
@@ -126,6 +141,9 @@ func (v *VerticesMD3) SetAction(idx int) {
 	}
 
 	v.head.SetAction(0)
+	if v.weapon != nil {
+		v.weapon.SetAction(0)
+	}
 }
 
 func (v *VerticesMD3) GetDisplacement() (float64, float64, float64) {
@@ -140,6 +158,9 @@ func (v *VerticesMD3) SetThing(t IThing) {
 	v.lower.SetThing(t)
 	v.upper.SetThing(t)
 	v.head.SetThing(t)
+	if v.weapon != nil {
+		v.weapon.SetThing(t)
+	}
 }
 
 func transformPoints(dst *Face, src *Face, origin geometry.XYZ) {
@@ -206,6 +227,22 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	for i := 0; i < countH; i++ {
 		transformPoints(v.facesA[countL+countU+i], (*facesH_A)[i], combinedHeadA)
 		transformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
+	}
+
+	if v.weapon != nil {
+		facesW_A, countW, facesW_B, _, _, _ := v.weapon.GetVertices(tick)
+		_, _ = getVol(v.weapon, tick)
+
+		tagWeaponA := volU_A.Tags["tag_weapon"]
+		tagWeaponB := volU_B.Tags["tag_weapon"]
+
+		combinedWeaponA := geometry.XYZ{X: tagTorsoA.X + tagWeaponA.X, Y: tagTorsoA.Y + tagWeaponA.Y, Z: tagTorsoA.Z + tagWeaponA.Z}
+		combinedWeaponB := geometry.XYZ{X: tagTorsoB.X + tagWeaponB.X, Y: tagTorsoB.Y + tagWeaponB.Y, Z: tagTorsoB.Z + tagWeaponB.Z}
+
+		for i := 0; i < countW; i++ {
+			transformPoints(v.facesA[countL+countU+countH+i], (*facesW_A)[i], combinedWeaponA)
+			transformPoints(v.facesB[countL+countU+countH+i], (*facesW_B)[i], combinedWeaponB)
+		}
 	}
 
 	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpT, billboard

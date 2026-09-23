@@ -377,6 +377,10 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 			for _, frameTex := range animMap {
 				uniqueTextures[strings.ToLower(frameTex)] = true
 			}
+		} else if f.IsSky {
+			if editorImg := q3.shaders.GetEditorImage(texNameLC); editorImg != "" {
+				uniqueTextures[strings.ToLower(editorImg)] = true
+			}
 		}
 	}
 

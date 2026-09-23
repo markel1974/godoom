@@ -103,6 +103,24 @@ func (s *Shaders) GetAnimMap(target string) []string {
 	return nil
 }
 
+// GetEditorImage retrieves the qer_editorimage texture path if defined for the shader, which serves as a great 2D fallback.
+func (s *Shaders) GetEditorImage(target string) string {
+	k, ok := s.container[target]
+	if !ok {
+		return ""
+	}
+	if args, has := k.qerParms["qer_editorimage"]; has && len(args) > 0 {
+		return args[0]
+	}
+	if len(k.skyParms) > 0 {
+		env := k.skyParms[0]
+		if env != "-" && env != "" {
+			return env + "_ft" // Return the front texture of the skybox
+		}
+	}
+	return ""
+}
+
 // Reset clears the container map, effectively removing all stored Shader objects.
 func (s *Shaders) Reset() {
 	s.container = make(map[string]*Shader)

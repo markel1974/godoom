@@ -34,10 +34,16 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 		if v.IsSky {
 			animKind = config.MaterialKindSky
 		}
-		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+		texNameLC := strings.ToLower(v.TexName)
+
+		var material *config.Material
+		if animMap := f.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
+			material = config.NewConfigMaterial(animMap, animKind, 1.0, 1.0, 0, 0)
+		} else {
+			material = config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+		}
 		material.Shader = v.TexName
 
-		texNameLC := strings.ToLower(v.TexName)
 		if f.shaders.IsAdditive(texNameLC) {
 			material.BlendMode = config.BlendModeAdditive
 		}

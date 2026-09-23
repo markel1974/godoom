@@ -104,9 +104,11 @@ func (e *Enemy) handleDeath(self config.IThingConfig) {
 	fmt.Println("ENEMY DEAD!!!!")
 
 	// Set death animation
-	if actionIdx, ok := e.actions["death"]; ok {
+	if actionIdx, ok := e.findAction("death1"); ok {
 		self.SetAction(actionIdx)
-	} else if actionIdx, ok = e.actions["die"]; ok {
+	} else if actionIdx, ok = e.findAction("death"); ok {
+		self.SetAction(actionIdx)
+	} else if actionIdx, ok = e.findAction("die"); ok {
 		self.SetAction(actionIdx)
 	}
 
@@ -123,10 +125,27 @@ func (e *Enemy) handlePain(self config.IThingConfig) {
 	fmt.Println("ENEMY IN PAIN!!!! Health:", e.health)
 
 	// Set pain animation
-	if actionIdx, ok := e.actions["pain"]; ok {
+	if actionIdx, ok := e.findAction("pain1"); ok {
 		self.SetAction(actionIdx)
 		e.painCooldown = 0.5 // Lock in pain state for 0.5 seconds
+	} else if actionIdx, ok = e.findAction("pain"); ok {
+		self.SetAction(actionIdx)
+		e.painCooldown = 0.5
 	}
+}
+
+// findAction is a helper to find action by prefix or exact match
+func (e *Enemy) findAction(name string) (int, bool) {
+	if idx, ok := e.actions[name]; ok {
+		return idx, true
+	}
+	if idx, ok := e.actions["legs_"+name]; ok {
+		return idx, true
+	}
+	if idx, ok := e.actions["both_"+name]; ok {
+		return idx, true
+	}
+	return 0, false
 }
 
 // OnThinking handles the logic for enemy behavior, including activation, movement, aiming, and attack decision-making.
@@ -140,7 +159,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		e.painCooldown -= 1.0 / 60.0 // Assuming 60 ticks per second
 		if e.painCooldown <= 0 {
 			// Pain finished, return to running/chasing
-			if actionIdx, ok := e.actions["run"]; ok {
+			if actionIdx, ok := e.findAction("run"); ok {
 				self.SetAction(actionIdx)
 			}
 		}
@@ -160,8 +179,9 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		if playerDist3d < e.wakeUpDistance { // Raggio di risveglio
 			e.active = true
 			e.throwCooldown = e.throwMin
-			action := e.actions["run"]
-			self.SetAction(action)
+			if action, ok := e.findAction("run"); ok {
+				self.SetAction(action)
+			}
 		}
 		return
 	}

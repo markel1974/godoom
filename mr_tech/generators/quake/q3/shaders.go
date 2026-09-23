@@ -88,6 +88,21 @@ func (s *Shaders) IsAdditive(target string) bool {
 	return false
 }
 
+// GetAnimMap retrieves the animation map frames (excluding frequency) for the first stage that has an animMap.
+func (s *Shaders) GetAnimMap(target string) []string {
+	k, ok := s.container[target]
+	if !ok {
+		return nil
+	}
+	for _, st := range k.stages {
+		if len(st.animMap) > 1 {
+			// args[0] is frequency, args[1:] are the frame textures
+			return st.animMap[1:]
+		}
+	}
+	return nil
+}
+
 // Reset clears the container map, effectively removing all stored Shader objects.
 func (s *Shaders) Reset() {
 	s.container = make(map[string]*Shader)

@@ -369,7 +369,15 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
-		uniqueTextures[f.TexName] = true
+		texNameLC := strings.ToLower(f.TexName)
+		uniqueTextures[texNameLC] = true
+
+		// If the texture is a shader with an animMap, add its frames to be compiled too.
+		if animMap := q3.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
+			for _, frameTex := range animMap {
+				uniqueTextures[strings.ToLower(frameTex)] = true
+			}
+		}
 	}
 
 	for texName := range uniqueTextures {

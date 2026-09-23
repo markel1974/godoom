@@ -76,6 +76,7 @@ func NewShaders() *Shaders {
 
 // IsAdditive checks if the shader associated with the given target name contains any stages that use additive blending.
 func (s *Shaders) IsAdditive(target string) bool {
+	//return false
 	k, ok := s.container[target]
 	if !ok {
 		return false

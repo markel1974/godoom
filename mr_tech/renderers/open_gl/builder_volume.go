@@ -75,6 +75,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 	w.fv.DeepReset()
 	w.dc.DeepReset()
+	w.dcAdditive.DeepReset()
 	w.cSky = nil
 
 	//w.pushQVolumesOcclusion(engine.GetVolumes(), frustumFront, fm, px, py, pz)
@@ -210,6 +211,7 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 		endIdx := w.fv.GetIndicesLen()
 		if startIdx != endIdx {
 			w.dc.Compute(startIdx, endIdx)
+			w.dcAdditive.Compute(startIdx, endIdx)
 			counter++
 		}
 	}
@@ -248,6 +250,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 		}
 		endIdx := w.fv.GetIndicesLen()
 		w.dc.Compute(startIdx, endIdx)
+		w.dcAdditive.Compute(startIdx, endIdx)
 		counter++
 		return false
 	}
@@ -314,6 +317,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		}
 		currentIndices := w.fv.GetIndicesLen()
 		w.dc.Compute(startIndices, currentIndices)
+		w.dcAdditive.Compute(startIndices, currentIndices)
 		counter++
 		return false
 	}

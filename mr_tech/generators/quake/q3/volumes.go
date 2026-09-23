@@ -38,15 +38,19 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 
 		var material *config.Material
 		if animMap := f.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
-			material = config.NewConfigMaterial(animMap, animKind, 1.0, 1.0, 0, 0)
+			animMapLC := make([]string, len(animMap))
+			for i, frame := range animMap {
+				animMapLC[i] = strings.ToLower(frame)
+			}
+			material = config.NewConfigMaterial(animMapLC, animKind, 1.0, 1.0, 0, 0)
 		} else if v.IsSky {
 			if editorImg := f.shaders.GetEditorImage(texNameLC); editorImg != "" {
-				material = config.NewConfigMaterial([]string{editorImg}, animKind, 1.0, 1.0, 0, 0)
+				material = config.NewConfigMaterial([]string{strings.ToLower(editorImg)}, animKind, 1.0, 1.0, 0, 0)
 			} else {
-				material = config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+				material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, 0, 0)
 			}
 		} else {
-			material = config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
+			material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, 0, 0)
 		}
 		material.Shader = v.TexName
 

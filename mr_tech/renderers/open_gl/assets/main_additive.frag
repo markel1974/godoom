@@ -22,7 +22,7 @@ vec4 getDiffuse(vec3 tc) {
 void main()
 {
     vec4 texColor = getDiffuse(TexCoords);
-    
+
     // Fill-rate optimization: discard completely black/transparent pixels
     if (texColor.a < 0.05 && (texColor.r + texColor.g + texColor.b < 0.05)) {
         discard;
@@ -32,11 +32,12 @@ void main()
         discard;
     }
 
-    vec3 albedo = pow(texColor.rgb, vec3(2.2));
+    //vec3 albedo = pow(texColor.rgb, vec3(2.2)); TEST PASSIAMO a 0.1 per renderlo visibile
+    vec3 albedo = pow(texColor.rgb, vec3(0.1));
 
     // Additive materials do not evaluate lights or SSAO
     FragColor = vec4(albedo, texColor.a);
-    
+
     // Ensure flames bloom slightly to look glowing
     BrightColor = vec4(albedo * 1.5, 1.0);
 }

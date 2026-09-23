@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// VerticesMD3 represents a higher-level structure containing multiple VerticesMD1 instances and related face data.
 type VerticesMD3 struct {
 	lower  *VerticesMD1
 	upper  *VerticesMD1
@@ -25,6 +26,8 @@ type VerticesMD3 struct {
 	entity     *physics.Entity
 }
 
+// NewVerticesMD3 initializes and returns a new instance of VerticesMD3 based on the given configuration and materials.
+// It creates vertices for the lower, upper, head, and optionally a weapon, combining their faces into a unified structure.
 func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	if cfg.MD3 == nil {
 		panic(fmt.Sprintf("no MD3 for thing %s", cfg.Id))
@@ -102,18 +105,22 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	return v
 }
 
+// GetVolume retrieves the Volume instance associated with the lower VerticesMD1 of the VerticesMD3.
 func (v *VerticesMD3) GetVolume() *Volume {
 	return v.lower.viewVolume
 }
 
+// GetEntity retrieves the physics.Entity instance associated with the VerticesMD3 object.
 func (v *VerticesMD3) GetEntity() *physics.Entity {
 	return v.entity
 }
 
+// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity of the VerticesMD3 instance.
 func (v *VerticesMD3) GetAABB() *physics.AABB {
 	return v.entity.GetAABB()
 }
 
+// SetAction updates the actions for the lower, upper, head, and weapon vertices based on the provided index.
 func (v *VerticesMD3) SetAction(idx int) {
 	// idx is the index from lower's actions (since we passed lower's ActionDefinitions to doCreate)
 	v.lower.SetAction(idx)
@@ -146,14 +153,17 @@ func (v *VerticesMD3) SetAction(idx int) {
 	}
 }
 
+// GetDisplacement returns the displacement vector (dx, dy, dz) from the lower part of the model in the 3D space.
 func (v *VerticesMD3) GetDisplacement() (float64, float64, float64) {
 	return v.lower.GetDisplacement()
 }
 
+// GetBillboard retrieves the billboard distance value from the underlying lower VerticesMD1 instance.
 func (v *VerticesMD3) GetBillboard() float64 {
 	return v.lower.GetBillboard()
 }
 
+// SetThing assigns the specified IThing instance to all components of VerticesMD3, including lower, upper, head, and weapon.
 func (v *VerticesMD3) SetThing(t IThing) {
 	v.lower.SetThing(t)
 	v.upper.SetThing(t)
@@ -163,6 +173,7 @@ func (v *VerticesMD3) SetThing(t IThing) {
 	}
 }
 
+// transformPoints updates the destination face points by translating source face points by the given origin offset.
 func transformPoints(dst *Face, src *Face, origin geometry.XYZ) {
 	pts := src.GetPoints()
 	dst.tri[0] = geometry.XYZ{X: pts[0].X + origin.X, Y: pts[0].Y + origin.Y, Z: pts[0].Z + origin.Z}
@@ -170,6 +181,7 @@ func transformPoints(dst *Face, src *Face, origin geometry.XYZ) {
 	dst.tri[2] = geometry.XYZ{X: pts[2].X + origin.X, Y: pts[2].Y + origin.Y, Z: pts[2].Z + origin.Z}
 }
 
+// copyFacePoints copies the vertex points from the source Face to the destination Face.
 func copyFacePoints(dst *Face, src *Face) {
 	pts := src.GetPoints()
 	dst.tri[0] = pts[0]
@@ -177,6 +189,7 @@ func copyFacePoints(dst *Face, src *Face) {
 	dst.tri[2] = pts[2]
 }
 
+// GetVertices retrieves and transforms the vertex data for the current tick, including interpolation and hierarchical adjustments.
 func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	facesL_A, countL, facesL_B, _, lerpT, billboard := v.lower.GetVertices(tick)
 	facesU_A, countU, facesU_B, _, _, _ := v.upper.GetVertices(tick)

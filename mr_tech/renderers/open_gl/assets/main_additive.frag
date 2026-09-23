@@ -32,8 +32,12 @@ void main()
         discard;
     }
 
-    //vec3 albedo = pow(texColor.rgb, vec3(2.2)); TEST PASSIAMO a 0.1 per renderlo visibile
-    vec3 albedo = pow(texColor.rgb, vec3(0.1));
+    // In a linear HDR pipeline, converting sRGB to linear via pow(2.2) heavily crushes midtones.
+    // In classic Quake 3 (sRGB framebuffer), 0.5 + 0.5 = 1.0 (pure white).
+    // In our linear pipeline, pow(0.5, 2.2) = 0.217. 0.217 + 0.217 = 0.434 -> sRGB 0.68 (faint gray).
+    // To restore the glowing look without washing out colors (which pow(0.1) does),
+    // we keep the 2.2 curve to preserve contrast, but multiply the output by a large emission factor (e.g., 4.0).
+    vec3 albedo = pow(texColor.rgb, vec3(2.2)) * 64.0;
 
     // Additive materials do not evaluate lights or SSAO
     FragColor = vec4(albedo, texColor.a);

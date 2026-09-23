@@ -30,7 +30,8 @@ func NewPk3Node(path []string) *NodePk3 {
 func (np *NodePk3) GetChildren() []string {
 	var entries []string
 	for name := range np.children {
-		entries = append(entries, name)
+		part := name
+		entries = append(entries, part)
 	}
 	return entries
 }
@@ -54,7 +55,10 @@ func (np *NodePk3) GetReader() (io.ReadSeeker, error) {
 }
 
 // AddNode inserts a file or directory path into the node tree, creating intermediate nodes if necessary.
-func (np *NodePk3) AddNode(parts []string, entry *zip.File) {
+func (np *NodePk3) AddNode(name string, entry *zip.File) {
+	fullPath := np.pathCleaner(name)
+	parts := strings.Split(fullPath, PakSeparator)
+
 	curr := np
 	for i, part := range parts {
 		if _, ok := curr.children[part]; !ok {
@@ -68,7 +72,9 @@ func (np *NodePk3) AddNode(parts []string, entry *zip.File) {
 }
 
 // GetNode navigates to a specific node in the tree based on the given path segments and returns it, or nil if not found.
-func (np *NodePk3) GetNode(parts []string) *NodePk3 {
+func (np *NodePk3) GetNode(p string) *NodePk3 {
+	fullPath := np.pathCleaner(p)
+	parts := strings.Split(fullPath, PakSeparator)
 	curr := np
 	if len(parts) == 0 {
 		return curr
@@ -84,6 +90,12 @@ func (np *NodePk3) GetNode(parts []string) *NodePk3 {
 		curr = child
 	}
 	return curr
+}
+
+// pathCleaner normalizes a given file or directory path by trimming whitespace and converting it to lowercase.
+func (np *NodePk3) pathCleaner(in string) string {
+	p := strings.ReplaceAll(in, "\\", PakSeparator)
+	return strings.TrimSpace(strings.ToLower(p))
 }
 
 // Pk3 represents a structure for handling and navigating through PK3 archive files.
@@ -110,17 +122,14 @@ func (pk *Pk3) Setup(path string) error {
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		fullPath := strings.ReplaceAll(f.Name, "\\", PakSeparator)
-		parts := strings.Split(fullPath, PakSeparator)
-		pk.root.AddNode(parts, f)
+		pk.root.AddNode(f.Name, f)
 	}
 	return nil
 }
 
 // Open retrieves a file by its full path within the PK3 archive and returns an io.ReadSeeker for reading its content.
 func (pk *Pk3) Open(fullPath string) (io.ReadSeeker, error) {
-	parts := strings.Split(fullPath, PakSeparator)
-	node := pk.root.GetNode(parts)
+	node := pk.root.GetNode(fullPath)
 	if node == nil {
 		return nil, fmt.Errorf("file %s not found in PK3", fullPath)
 	}
@@ -130,8 +139,7 @@ func (pk *Pk3) Open(fullPath string) (io.ReadSeeker, error) {
 // ReadDir retrieves the list of child nodes (files/directories) at the specified directory path within the PK3 file.
 // If the path does not exist or is a file, an error is returned.
 func (pk *Pk3) ReadDir(fullPath string) ([]string, error) {
-	parts := strings.Split(fullPath, PakSeparator)
-	node := pk.root.GetNode(parts)
+	node := pk.root.GetNode(fullPath)
 	if node == nil {
 		return nil, fmt.Errorf("directory not found: %s", fullPath)
 	}

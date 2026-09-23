@@ -57,8 +57,8 @@ var _q3ShaderFallback = map[string]string{
 	"textures/liquids/lavahellflat_400":         "textures/liquids/lavahell",
 	"textures/skin/tongue_trans":                "textures/skin/tongue",
 	"textures/gothic_door/km_arena1columna2r":   "textures/gothic_door/km_arena1columna2",
-	"textures/skies/tim_hell":                   "env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
-	"textures/sfx/hellfogdense":                 "",                         // La nebbia non ha texture diffusa
+	//"textures/skies/tim_hell":                   "env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
+	"textures/sfx/hellfogdense":                 "", // La nebbia non ha texture diffusa
 	"textures/liquids/lavahelldark":             "textures/liquids/lavahell",
 	"textures/gothic_trim/column2c_trans":       "textures/gothic_trim/column2c",
 	"textures/skin/skin6_trans":                 "textures/skin/skin6",
@@ -73,4 +73,8 @@ var _q3ShaderFallback = map[string]string{
 	"textures/sfx/flame1dark":                   "textures/sfx/flame1",
 	"textures/liquids/lavahell_1000":            "textures/liquids/lavahell",
 	"models/powerups/health/mega2":              "models/powerups/health/mega",
+
+	"textures/skies/stars_red": "textures/skies/killsky_1",
+	"textures/skies/tim_hell":  "textures/skies/killsky_2",
+	"textures/skies/blacksky":  "textures/skies/killsky_1",
 }

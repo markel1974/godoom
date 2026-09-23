@@ -265,16 +265,46 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 
 	md3 := config.NewMD3(lower, upper, head)
-	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, nil, 0, 30.0, 16.0, 56, 600.0)
-	thingCfg.MD3 = md3
 
-	// We'll set the action definitions manually for now to avoid panic when setAction is called.
-	thingCfg.MD3.Lower.ActionDefinitions = []string{"idle"}
-	thingCfg.MD3.Lower.ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
-	thingCfg.MD3.Upper.ActionDefinitions = []string{"idle"}
-	thingCfg.MD3.Upper.ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
-	thingCfg.MD3.Head.ActionDefinitions = []string{"idle"}
-	thingCfg.MD3.Head.ActionIntervals = [][2]int{{0, len(head.Frames) - 1}}
+	if rsAnim, err := t.arc.Open(basePath + "animation.cfg"); err == nil {
+		if animCfg, err := lumps.ParseAnimCfg(rsAnim); err == nil {
+			// Map animations to intervals based on the parsed file
+			for _, anim := range animCfg.Animations {
+				if strings.HasPrefix(anim.Name, "BOTH_") {
+					md3.Lower.ActionDefinitions = append(md3.Lower.ActionDefinitions, anim.Name)
+					md3.Lower.ActionIntervals = append(md3.Lower.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+					md3.Upper.ActionDefinitions = append(md3.Upper.ActionDefinitions, anim.Name)
+					md3.Upper.ActionIntervals = append(md3.Upper.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+				} else if strings.HasPrefix(anim.Name, "TORSO_") {
+					md3.Upper.ActionDefinitions = append(md3.Upper.ActionDefinitions, anim.Name)
+					md3.Upper.ActionIntervals = append(md3.Upper.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+				} else if strings.HasPrefix(anim.Name, "LEGS_") {
+					// Apply LegsOffset to correct the frame index for lower.md3
+					adjustedFirst := anim.FirstFrame - animCfg.LegsOffset
+					md3.Lower.ActionDefinitions = append(md3.Lower.ActionDefinitions, anim.Name)
+					md3.Lower.ActionIntervals = append(md3.Lower.ActionIntervals, [2]int{adjustedFirst, adjustedFirst + anim.NumFrames - 1})
+				}
+			}
+		}
+	}
+
+	// Fallback if animation.cfg is missing or empty
+	if len(md3.Lower.ActionDefinitions) == 0 {
+		md3.Lower.ActionDefinitions = []string{"idle"}
+		md3.Lower.ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
+		md3.Upper.ActionDefinitions = []string{"idle"}
+		md3.Upper.ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
+	}
+
+	// Head has no specific animations in Q3, just loop frame 0
+	md3.Head.ActionDefinitions = []string{"idle"}
+	md3.Head.ActionIntervals = [][2]int{{0, 0}}
+
+	// We pass md3.Lower to doCreate so that it can extract the ActionDefinitions for the enemy logic.
+	// We'll set MD1 to nil afterwards since this is an MD3 model.
+	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, md3.Lower, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg.MD1 = nil
+	thingCfg.MD3 = md3
 
 	return thingCfg, nil
 }

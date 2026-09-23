@@ -14,11 +14,12 @@ import (
 type VerticesMD1 struct {
 	viewVolume *Volume
 	//rootEntity *physics.Entity
-	volumes    []*Volume
-	actions    [][2]int
-	startFrame int
-	endFrame   int
-	idxA       int
+	volumes     []*Volume
+	actions     [][2]int
+	startFrame  int
+	endFrame    int
+	idxA        int
+	actionNames []string
 }
 
 // NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
@@ -28,11 +29,12 @@ func NewVerticesMD2(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 	}
 
 	v := &VerticesMD1{
-		volumes:    make([]*Volume, len(cfg.MD1.Frames)),
-		actions:    cfg.MD1.ActionIntervals,
-		startFrame: 0,
-		endFrame:   len(cfg.MD1.Frames) - 1,
-		idxA:       -1,
+		volumes:     make([]*Volume, len(cfg.MD1.Frames)),
+		actions:     cfg.MD1.ActionIntervals,
+		actionNames: cfg.MD1.ActionDefinitions,
+		startFrame:  0,
+		endFrame:    len(cfg.MD1.Frames) - 1,
+		idxA:        -1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -87,6 +89,22 @@ func (v *VerticesMD1) SetAction(idx int) {
 	}
 	v.startFrame = v.actions[idx][0]
 	v.endFrame = v.actions[idx][1]
+}
+
+func (v *VerticesMD1) GetActionName(idx int) string {
+	if idx < 0 || idx >= len(v.actionNames) {
+		return ""
+	}
+	return v.actionNames[idx]
+}
+
+func (v *VerticesMD1) SetActionByName(name string) {
+	for i, n := range v.actionNames {
+		if n == name {
+			v.SetAction(i)
+			return
+		}
+	}
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -99,9 +100,32 @@ func (v *VerticesMD3) GetAABB() *physics.AABB {
 }
 
 func (v *VerticesMD3) SetAction(idx int) {
+	// idx is the index from lower's actions (since we passed lower's ActionDefinitions to doCreate)
 	v.lower.SetAction(idx)
-	v.upper.SetAction(idx)
-	v.head.SetAction(idx)
+
+	actionName := v.lower.GetActionName(idx)
+	if actionName == "" {
+		return
+	}
+
+	// Map LEGS_ or BOTH_ actions to TORSO_ actions
+	// If it's BOTH_, both lower and upper should have it.
+	// If it's LEGS_RUN, we want TORSO_STAND or similar.
+	// We can use a simple mapping here:
+	if strings.HasPrefix(actionName, "BOTH_") {
+		v.upper.SetActionByName(actionName)
+	} else if strings.HasPrefix(actionName, "LEGS_") {
+		// Just a default fallback: while legs are moving, torso stands.
+		// If the enemy shoots, Enemy logic would need a way to set torso action independently.
+		// For now, we enforce a default torso state so it doesn't stay stuck in BOTH_DEATH1.
+		if strings.Contains(actionName, "IDLE") || strings.Contains(actionName, "STAND") {
+			v.upper.SetActionByName("TORSO_STAND")
+		} else {
+			v.upper.SetActionByName("TORSO_STAND") // Could be TORSO_STAND2, etc.
+		}
+	}
+
+	v.head.SetAction(0)
 }
 
 func (v *VerticesMD3) GetDisplacement() (float64, float64, float64) {

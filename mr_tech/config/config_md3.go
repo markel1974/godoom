@@ -7,23 +7,17 @@ type MD3 struct {
 	Head  *MD1
 	// Weapon *MD1 // Optional, not implemented yet
 
-	// Animation config
-	LegsStartFrame int
-	LegsNumFrames  int
-	LegsLoopFrames int
-	LegsFPS        int
-
-	TorsoStartFrame int
-	TorsoNumFrames  int
-	TorsoLoopFrames int
-	TorsoFPS        int
+	LegsActions  map[string][2]int
+	TorsoActions map[string][2]int
 }
 
 // NewMD3 creates a new MD3 structure holding multiple parts.
 func NewMD3(lower, upper, head *MD1) *MD3 {
 	return &MD3{
-		Lower: lower,
-		Upper: upper,
-		Head:  head,
+		Lower:        lower,
+		Upper:        upper,
+		Head:         head,
+		LegsActions:  make(map[string][2]int),
+		TorsoActions: make(map[string][2]int),
 	}
 }

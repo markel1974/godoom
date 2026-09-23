@@ -36,7 +36,26 @@ func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
 		painCooldown:   0.0,
 	}
 	for idx, action := range actions {
-		e.actions[strings.ToLower(strings.TrimSpace(action))] = idx
+		lowerAction := strings.ToLower(strings.TrimSpace(action))
+		e.actions[lowerAction] = idx
+		// Map common Quake 3 suffixes to standard action names
+		if strings.Contains(lowerAction, "run") {
+			e.actions["run"] = idx
+		}
+		if strings.Contains(lowerAction, "walk") {
+			e.actions["walk"] = idx
+		}
+		if strings.Contains(lowerAction, "death") || strings.Contains(lowerAction, "die") || strings.Contains(lowerAction, "dead") {
+			if _, exists := e.actions["death"]; !exists {
+				e.actions["death"] = idx
+			}
+		}
+		if strings.Contains(lowerAction, "pain") {
+			e.actions["pain"] = idx
+		}
+		if strings.Contains(lowerAction, "idle") || strings.Contains(lowerAction, "stand") {
+			e.actions["idle"] = idx
+		}
 	}
 	return e
 }

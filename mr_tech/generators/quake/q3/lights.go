@@ -165,23 +165,27 @@ func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) (*co
 			style = _q3LightStyles[index]
 		}
 	}
-	light := l.doCreate(ent, angle, mangleStr, colorStr, pos, style, isSpot)
+	// BASE INTENSITY
+	intensity := 0.0
+	if lt, ok := ent.Properties["light"]; ok {
+		intensity, _ = strconv.ParseFloat(lt, 64)
+		if isSpot {
+			intensity *= 0.07
+		} else {
+			intensity *= 10.0
+		}
+	} else {
+		intensity = 300 // Typical Quake default fallback
+	}
+	light := l.doCreate(intensity, angle, mangleStr, colorStr, pos, style, isSpot)
 	return light, nil
 }
 
 // doCreate constructs and returns a Light object with the specified properties like position, intensity, and light type.
-func (l *Lights) doCreate(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
-	intensity := 0.0
+func (l *Lights) doCreate(intensity float64, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+
 	falloff := 0.0
 	var kind config.LightKind
-
-	// BASE INTENSITY
-	if l, ok := entity.Properties["light"]; ok {
-		intensity, _ = strconv.ParseFloat(l, 64)
-		//intensity *= 0.3
-	} else {
-		intensity = 300 // Typical Quake default fallback
-	}
 
 	// COLOR (Standard Quake 2 / Modern Quake 1)
 	r, g, b := 1.0, 1.0, 1.0 // Default White

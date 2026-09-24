@@ -384,12 +384,13 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		}
 	}
 
+	il := NewImageLoader(q3.arc)
 	for texName := range uniqueTextures {
 		if texName == "noshader" || len(texName) == 0 {
 			continue
 		}
 
-		img, err := LoadImage(texName, q3.arc)
+		img, err := il.Load(texName)
 		if err != nil {
 			fmt.Printf("Warning: %s\n", err.Error())
 			//img = FallbackImage()

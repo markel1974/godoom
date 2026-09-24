@@ -12,6 +12,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 )
 
+// BaseName removes the file extension from the given string and returns the base name of the file.
 func BaseName(in string) string {
 	p := filepath.Ext(in)
 	if len(p) == 0 {
@@ -20,7 +21,18 @@ func BaseName(in string) string {
 	return in[:len(in)-len(p)]
 }
 
-func FallbackImage() image.Image {
+// ImageLoader is a utility for loading image assets from an archive implementing the IArchive interface.
+type ImageLoader struct {
+	arc interfaces.IArchive
+}
+
+// NewImageLoader creates a new ImageLoader instance using the provided IArchive for file access and directory operations.
+func NewImageLoader(arc interfaces.IArchive) *ImageLoader {
+	return &ImageLoader{arc: arc}
+}
+
+// FallbackImage generates and returns a 2x2 fallback image with a pink and black checkerboard pattern.
+func (il *ImageLoader) FallbackImage() image.Image {
 	fallbackImg := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	pink := color.RGBA{R: 255, B: 255, A: 255}
 	black := color.RGBA{A: 255}
@@ -31,8 +43,9 @@ func FallbackImage() image.Image {
 	return fallbackImg
 }
 
-func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
-	img, err := imageLoader(texName, arc)
+// Load attempts to load an image by its name and returns it; falls back to a default image on failure.
+func (il *ImageLoader) Load(texName string) (image.Image, error) {
+	img, err := il.retrieve(texName)
 	if err != nil {
 		fmt.Printf("[warning] using fallback for %s: %s\n", texName, err)
 
@@ -55,17 +68,18 @@ func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
 			}
 		*/
 
-		return FallbackImage(), nil
+		return il.FallbackImage(), nil
 	}
 	return img, nil
 }
 
-func imageLoader(texName string, arc interfaces.IArchive) (image.Image, error) {
-	if img, err := doImageLoad(texName, arc); err == nil {
+// retrieve attempts to load an image by its name, with fallback mechanisms if the primary load fails.
+func (il *ImageLoader) retrieve(texName string) (image.Image, error) {
+	if img, err := il.doLoad(texName, il.arc); err == nil {
 		return img, nil
 	}
 	baseName := BaseName(texName)
-	if img, err := doBaseImageLoad(baseName, arc); err == nil {
+	if img, err := il.doBaseLoad(baseName, il.arc); err == nil {
 		return img, err
 	}
 
@@ -74,7 +88,7 @@ func imageLoader(texName string, arc interfaces.IArchive) (image.Image, error) {
 		fallbackName, ok = _q3ShaderFallback[texName]
 	}
 	if ok && len(fallbackName) > 0 {
-		img, err := doBaseImageLoad(fallbackName, arc)
+		img, err := il.doBaseLoad(fallbackName, il.arc)
 		if err == nil {
 			return img, err
 		}
@@ -83,7 +97,9 @@ func imageLoader(texName string, arc interfaces.IArchive) (image.Image, error) {
 	return nil, fmt.Errorf("missing asset %s (.jpg/.tga)", texName)
 }
 
-func doBaseImageLoad(baseName string, arc interfaces.IArchive) (image.Image, error) {
+// doBaseLoad attempts to load an image by trying .jpg, .tga, and .png file extensions in the given archive.
+// Returns the loaded image or an error if no matching file is found.
+func (il *ImageLoader) doBaseLoad(baseName string, arc interfaces.IArchive) (image.Image, error) {
 	if fileJpg, errJpg := arc.Open(baseName + ".jpg"); errJpg == nil {
 		img, _, err := image.Decode(fileJpg)
 		return img, err
@@ -98,7 +114,8 @@ func doBaseImageLoad(baseName string, arc interfaces.IArchive) (image.Image, err
 	return nil, errors.New("no image found")
 }
 
-func doImageLoad(texName string, arc interfaces.IArchive) (image.Image, error) {
+// doLoad attempts to load an image from the archive using its file name and format, returning the decoded image or an error.
+func (il *ImageLoader) doLoad(texName string, arc interfaces.IArchive) (image.Image, error) {
 	if f, err := arc.Open(texName); err == nil {
 		if strings.HasSuffix(strings.ToLower(texName), ".tga") {
 			return common.DecodeTGA(f)

@@ -69,12 +69,13 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
 
+	il := NewImageLoader(t.arc)
 	// Load materials for the MD3 model
 	for _, frame := range cModel.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(texName)
+				t.loadTexture(il, texName)
 			}
 		}
 	}
@@ -181,14 +182,14 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 }
 
 // loadTexture attempts to load and register a texture for an MD3 model from the archive.
-func (t *Things) loadTexture(texName string) {
+func (t *Things) loadTexture(il *ImageLoader, texName string) {
 	if texName == "noshader" || len(texName) == 0 {
 		return
 	}
 	if texes := t.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 		return // Already loaded
 	}
-	img, err := LoadImage(texName, t.arc)
+	img, err := il.Load(texName)
 	if err != nil {
 		fmt.Printf("warning: %s\n", err.Error())
 		return
@@ -239,14 +240,14 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		return nil, err
 	}
 
+	il := NewImageLoader(t.arc)
 	// Load machinegun as the default weapon
 	weapon, _ := t.loadMD3Part("models/weapons2/machinegun/", "machinegun")
-
 	for _, frame := range lower.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(texName)
+				t.loadTexture(il, texName)
 			}
 		}
 	}
@@ -254,7 +255,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(texName)
+				t.loadTexture(il, texName)
 			}
 		}
 	}
@@ -262,7 +263,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(texName)
+				t.loadTexture(il, texName)
 			}
 		}
 	}
@@ -272,7 +273,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 			for _, tri := range frame.Triangles {
 				if tri.Material != nil && len(tri.Material.Frames) > 0 {
 					texName := tri.Material.Frames[0]
-					t.loadTexture(texName)
+					t.loadTexture(il, texName)
 				}
 			}
 		}

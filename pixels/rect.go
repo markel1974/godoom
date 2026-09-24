@@ -6,8 +6,8 @@ import (
 
 // Rect represents a 2D rectangular area defined by two vectors: Min (bottom-left) and Max (top-right).
 type Rect struct {
-	Min Vec
-	Max Vec
+	Min XY
+	Max XY
 }
 
 // ZR is the zero rectangle, defined as a rectangle with both Min and Max set to ZV.
@@ -16,8 +16,8 @@ var ZR = Rect{Min: ZV, Max: ZV}
 // R creates a Rect with specified minimum and maximum X and Y coordinates.
 func R(minX, minY, maxX, maxY float64) Rect {
 	return Rect{
-		Min: Vec{minX, minY},
-		Max: Vec{maxX, maxY},
+		Min: XY{minX, minY},
+		Max: XY{maxX, maxY},
 	}
 }
 
@@ -29,11 +29,11 @@ func (r Rect) String() string {
 // Norm returns a normalized rectangle with Min and Max values adjusted to ensure that Min <= Max on both axes.
 func (r Rect) Norm() Rect {
 	return Rect{
-		Min: Vec{
+		Min: XY{
 			min(r.Min.X, r.Max.X),
 			min(r.Min.Y, r.Max.Y),
 		},
-		Max: Vec{
+		Max: XY{
 			max(r.Min.X, r.Max.X),
 			max(r.Min.Y, r.Max.Y),
 		},
@@ -51,7 +51,7 @@ func (r Rect) H() float64 {
 }
 
 // Size returns a vector representing the width and height of the rectangle.
-func (r Rect) Size() Vec {
+func (r Rect) Size() XY {
 	return MakeVec(r.W(), r.H())
 }
 
@@ -73,8 +73,8 @@ func (r Rect) Edges() [4]Line {
 }
 
 // Vertices returns the four corner points of the rectangle in clockwise order, starting from the bottom-left corner.
-func (r Rect) Vertices() [4]Vec {
-	return [4]Vec{
+func (r Rect) Vertices() [4]XY {
+	return [4]XY{
 		r.Min,
 		MakeVec(r.Min.X, r.Max.Y),
 		r.Max,
@@ -83,7 +83,7 @@ func (r Rect) Vertices() [4]Vec {
 }
 
 // Contains checks whether the vector u lies within or on the boundaries of the rectangle r.
-func (r Rect) Contains(u Vec) bool {
+func (r Rect) Contains(u XY) bool {
 	return r.Min.X <= u.X && u.X <= r.Max.X && r.Min.Y <= u.Y && u.Y <= r.Max.Y
 }
 
@@ -120,11 +120,11 @@ func (r Rect) Intersects(s Rect) bool {
 }
 
 // Resized adjusts the size of the rectangle relative to a given anchor and new size without altering its proportions.
-func (r Rect) Resized(anchor, size Vec) Rect {
+func (r Rect) Resized(anchor, size XY) Rect {
 	if r.W()*r.H() == 0 {
 		panic(fmt.Errorf("(%T).Resize: zero area", r))
 	}
-	fraction := Vec{size.X / r.W(), size.Y / r.H()}
+	fraction := XY{size.X / r.W(), size.Y / r.H()}
 	return Rect{
 		Min: anchor.Add(r.Min.Sub(anchor).ScaledXY(fraction)),
 		Max: anchor.Add(r.Max.Sub(anchor).ScaledXY(fraction)),
@@ -132,7 +132,7 @@ func (r Rect) Resized(anchor, size Vec) Rect {
 }
 
 // ResizedMin returns a new Rect with the same minimum corner as the original and a maximum corner shifted by size.
-func (r Rect) ResizedMin(size Vec) Rect {
+func (r Rect) ResizedMin(size XY) Rect {
 	return Rect{
 		Min: r.Min,
 		Max: r.Min.Add(size),
@@ -141,30 +141,30 @@ func (r Rect) ResizedMin(size Vec) Rect {
 
 // Center returns the position of the center of the Rect.
 // `rect.Center()` is equivalent to `rect.Anchor(pixel.Anchor.Center)`
-func (r Rect) Center() Vec {
+func (r Rect) Center() XY {
 	return Lerp(r.Min, r.Max, 0.5)
 }
 
 // Moved returns the Rect moved (both Min and Max) by the given vector delta.
-func (r Rect) Moved(delta Vec) Rect {
+func (r Rect) Moved(delta XY) Rect {
 	return Rect{
 		Min: r.Min.Add(delta),
 		Max: r.Max.Add(delta),
 	}
 }
 
-// IntersectLine will return the shortest Vec such that if the Rect is moved by the Vec returned, the Line and Rect no
+// IntersectLine will return the shortest XY such that if the Rect is moved by the XY returned, the Line and Rect no
 // longer intersect.
-func (r Rect) IntersectLine(l Line) Vec {
+func (r Rect) IntersectLine(l Line) XY {
 	return l.IntersectRect(r).Scaled(-1)
 }
 
 // IntersectionPoints returns all the points where the Rect intersects with the line provided.  This can be zero, one or
 // two points, depending on the location of the shapes.  The points of intersection will be returned in order of
 // closest-to-l.A to closest-to-l.B.
-func (r Rect) IntersectionPoints(l Line) []Vec {
+func (r Rect) IntersectionPoints(l Line) []XY {
 	// Use map keys to ensure unique points
-	pointMap := make(map[Vec]struct{})
+	pointMap := make(map[XY]struct{})
 
 	for _, edge := range r.Edges() {
 		if intersect, ok := l.Intersect(edge); ok {
@@ -172,7 +172,7 @@ func (r Rect) IntersectionPoints(l Line) []Vec {
 		}
 	}
 
-	points := make([]Vec, 0, len(pointMap))
+	points := make([]XY, 0, len(pointMap))
 	for point := range pointMap {
 		points = append(points, point)
 	}
@@ -180,7 +180,7 @@ func (r Rect) IntersectionPoints(l Line) []Vec {
 	// Order the points
 	if len(points) == 2 {
 		if points[1].To(l.A).Len() < points[0].To(l.A).Len() {
-			return []Vec{points[1], points[0]}
+			return []XY{points[1], points[0]}
 		}
 	}
 

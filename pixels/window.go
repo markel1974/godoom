@@ -14,13 +14,13 @@ import (
 )
 
 type WindowInput struct {
-	mouse Vec
+	mouse XY
 
 	buttons [KeyLast + 1]bool
 
 	repeat [KeyLast + 1]bool
 
-	scroll Vec
+	scroll XY
 
 	typed string
 }
@@ -65,12 +65,10 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 
 	err := executor.Thread.CallErr(func() error {
 		var err error
-
 		glfw.WindowHint(glfw.ContextVersionMajor, 3)
 		glfw.WindowHint(glfw.ContextVersionMinor, 3)
 		glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 		glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-
 		glfw.WindowHint(glfw.Resizable, bool2int[cfg.Resizable])
 		glfw.WindowHint(glfw.Decorated, bool2int[!cfg.Undecorated])
 		glfw.WindowHint(glfw.Floating, bool2int[cfg.AlwaysOnTop])
@@ -79,11 +77,9 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		glfw.WindowHint(glfw.Maximized, bool2int[cfg.Maximized])
 		glfw.WindowHint(glfw.Visible, bool2int[!cfg.Invisible])
 		glfw.WindowHint(glfw.Samples, cfg.SamplesMSAA)
-
 		if cfg.Position.X != 0 || cfg.Position.Y != 0 {
 			glfw.WindowHint(glfw.Visible, glfw.False)
 		}
-
 		var share *glfw.Window
 		if currWin != nil {
 			share = currWin.window
@@ -93,12 +89,10 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		if err != nil {
 			return err
 		}
-
 		if cfg.Position.X != 0 || cfg.Position.Y != 0 {
 			w.window.SetPos(int(cfg.Position.X), int(cfg.Position.Y))
 			w.window.Show()
 		}
-
 		// enter the OpenGL context
 		w.begin()
 		executor.Thread.Init(cfg.DisableScissorTest)
@@ -111,21 +105,17 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		return nil, errors.New("creating window failed")
 	}
 
-	/*
-		if len(cfg.Icon) > 0 {
-			imgs := make([]image.Image, len(cfg.Icon))
-			for i, icon := range cfg.Icon {
-				pic := NewPictureRGBAFromPicture(icon)
-
-				fmt.Println(pic, i)
-				imgs[i] = pic.Image()
-			}
-			executor.Thread.Call(func() {
-				w.window.SetIcon(imgs)
-			})
-		}
-
-	*/
+	//if len(cfg.Icon) > 0 {
+	//	images := make([]image.Image, len(cfg.Icon))
+	//	for i, icon := range cfg.Icon {
+	//		pic := NewPictureRGBAFromPicture(icon)
+	//		fmt.Println(pic, i)
+	//		images[i] = pic.Image()
+	//	}
+	//	executor.Thread.Call(func() {
+	//		w.window.SetIcon(images)
+	//	})
+	//}
 
 	w.SetVSync(cfg.VSync)
 
@@ -186,17 +176,17 @@ func (w *Window) SetBounds(bounds Rect) {
 	})
 }
 
-// SetPos sets the position of the window to the specified coordinates defined by the Vec parameter.
-func (w *Window) SetPos(pos Vec) {
+// SetPos sets the position of the window to the specified coordinates defined by the XY parameter.
+func (w *Window) SetPos(pos XY) {
 	executor.Thread.Call(func() {
 		left, top := int(pos.X), int(pos.Y)
 		w.window.SetPos(left, top)
 	})
 }
 
-// GetPos retrieves the current position of the Window and returns it as a Vec containing the x and y coordinates.
-func (w *Window) GetPos() Vec {
-	var v Vec
+// GetPos retrieves the current position of the Window and returns it as a XY containing the x and y coordinates.
+func (w *Window) GetPos() XY {
+	var v XY
 	executor.Thread.Call(func() {
 		x, y := w.window.GetPos()
 		v = MakeVec(float64(x), float64(y))
@@ -214,9 +204,7 @@ func (w *Window) setFullscreen(monitor *GLMonitor) {
 	executor.Thread.Call(func() {
 		w.restore.xPos, w.restore.yPos = w.window.GetPos()
 		w.restore.width, w.restore.height = w.window.GetSize()
-
 		mode := monitor.monitor.GetVideoMode()
-
 		w.window.SetMonitor(
 			monitor.monitor,
 			0,
@@ -383,18 +371,18 @@ func (w *Window) Repeated(button Button) bool {
 	return w.currInp.repeat[button]
 }
 
-// MousePosition returns the current position of the mouse cursor as a Vec relative to the Window.
-func (w *Window) MousePosition() Vec {
+// MousePosition returns the current position of the mouse cursor as a XY relative to the Window.
+func (w *Window) MousePosition() XY {
 	return w.currInp.mouse
 }
 
-// MousePreviousPosition retrieves the previous mouse position as a Vec relative to the Window instance.
-func (w *Window) MousePreviousPosition() Vec {
+// MousePreviousPosition retrieves the previous mouse position as a XY relative to the Window instance.
+func (w *Window) MousePreviousPosition() XY {
 	return w.prevInp.mouse
 }
 
 // SetMousePosition updates the mouse cursor's position within the window bounds and synchronizes the internal state.
-func (w *Window) SetMousePosition(v Vec) {
+func (w *Window) SetMousePosition(v XY) {
 	executor.Thread.Call(func() {
 		if (v.X >= 0 && v.X <= w.bounds.W()) &&
 			(v.Y >= 0 && v.Y <= w.bounds.H()) {
@@ -414,8 +402,8 @@ func (w *Window) MouseInsideWindow() bool {
 	return w.cursorInsideWindow
 }
 
-// MouseScroll retrieves the current scroll offset as a Vec. It reflects the accumulated mouse scroll input.
-func (w *Window) MouseScroll() Vec {
+// MouseScroll retrieves the current scroll offset as a XY. It reflects the accumulated mouse scroll input.
+func (w *Window) MouseScroll() XY {
 	return w.currInp.scroll
 }
 
@@ -430,11 +418,11 @@ func (w *Window) initInput() {
 		w.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 			switch action {
 			case glfw.Press:
-				w.tempPressEvents[Button(button)] = true
-				w.tempInp.buttons[Button(button)] = true
+				w.tempPressEvents[button] = true
+				w.tempInp.buttons[button] = true
 			case glfw.Release:
-				w.tempReleaseEvents[Button(button)] = true
-				w.tempInp.buttons[Button(button)] = false
+				w.tempReleaseEvents[button] = true
+				w.tempInp.buttons[button] = false
 			}
 		})
 
@@ -445,15 +433,15 @@ func (w *Window) initInput() {
 			switch action {
 			case glfw.Press:
 				w.keysPressed[Button(key)] = true
-				w.tempPressEvents[Button(key)] = true
-				w.tempInp.buttons[Button(key)] = true
+				w.tempPressEvents[key] = true
+				w.tempInp.buttons[key] = true
 			case glfw.Release:
 				delete(w.keysPressed, Button(key))
-				w.tempReleaseEvents[Button(key)] = true
-				w.tempInp.buttons[Button(key)] = false
+				w.tempReleaseEvents[key] = true
+				w.tempInp.buttons[key] = false
 			case glfw.Repeat:
 				w.keysPressed[Button(key)] = true
-				w.tempInp.repeat[Button(key)] = true
+				w.tempInp.repeat[key] = true
 			}
 		})
 
@@ -474,9 +462,9 @@ func (w *Window) initInput() {
 			)
 		})
 
-		w.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-			w.tempInp.scroll.X += xoff
-			w.tempInp.scroll.Y += yoff
+		w.window.SetScrollCallback(func(_ *glfw.Window, xOff, yOff float64) {
+			w.tempInp.scroll.X += xOff
+			w.tempInp.scroll.Y += yOff
 		})
 
 		w.window.SetCharCallback(func(_ *glfw.Window, r rune) {

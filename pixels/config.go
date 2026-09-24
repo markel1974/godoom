@@ -8,7 +8,7 @@ type WindowConfig struct {
 
 	Bounds Rect
 
-	Position Vec
+	Position XY
 
 	Monitor *GLMonitor
 

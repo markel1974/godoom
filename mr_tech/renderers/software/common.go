@@ -1,5 +1,6 @@
 package software
 
+/*
 func ToRGB(rgb int, light float64) (r uint8, g uint8, b uint8) {
 	fr := float64(uint8((rgb>>16)&255)) * light
 	fg := float64(uint8((rgb>>8)&255)) * light
@@ -7,7 +8,6 @@ func ToRGB(rgb int, light float64) (r uint8, g uint8, b uint8) {
 	return uint8(fr), uint8(fg), uint8(fb)
 }
 
-/*
 func ScreenCoordsToMapCoords(mapY float64, screenX float64, screenY float64, yaw float64, angleSin float64, angleCos float64, whereX float64, whereY float64, screenW float64, screenH float64) (float64, float64) {
 	pVFov := vFov
 	//TODO TEST

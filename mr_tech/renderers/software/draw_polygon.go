@@ -1,5 +1,6 @@
 package software
 
+/*
 import (
 	"math"
 	"sort"
@@ -421,3 +422,6 @@ func (dp *DrawPolygon) computeLight(z float64, lightAmbient float64, lightArtifi
 	}
 	return light
 }
+
+
+*/

@@ -1,5 +1,6 @@
 package software
 
+/*
 import (
 	"fmt"
 	"image/color"
@@ -338,14 +339,14 @@ func (w *Render) doDebug(next int) {
 	sector := w.engine.PortalSectorAt(idx)
 	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", sector.GetId())
 
-	/*
-		sStart := sector.Faces[0].GetStart()
-		x := sStart.X + offset
-		y := sStart.Y + offset
-		fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.GetId()))
-		w.player.SetSector(sector)
-		w.player.SetXY(x, y)
-	*/
+
+	//	sStart := sector.Faces[0].GetStart()
+	//	x := sStart.X + offset
+	//	y := sStart.Y + offset
+	//	fmt.Println("CURRENT DEBUG IDX:", w.debugIdx, "total segments:", len(sector.GetId()))
+	//	w.player.SetSector(sector)
+	//	w.player.SetXY(x, y)
+
 }
 
 // doDebugMoveSectorToggle toggles the `targetEnabled` property, enabling or disabling sector targeting in debug mode.
@@ -512,3 +513,6 @@ func (w *Render) doRenderPolygon(vi *model.ViewMatrix, cp *model.CompiledPolygon
 		dr.DrawWireFrame(true)
 	}
 }
+
+
+*/

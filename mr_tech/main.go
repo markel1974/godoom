@@ -14,7 +14,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
-	"github.com/markel1974/godoom/mr_tech/renderers/software"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
@@ -106,11 +105,11 @@ func main() {
 	}
 
 	var render IRender
-	if softwareRender {
-		render = software.NewRender(int32(width), int32(height))
-	} else {
-		render = open_gl.NewRender(int32(width), int32(height))
-	}
+	//if softwareRender {
+	//	render = software.NewRender(int32(width), int32(height))
+	//} else {
+	render = open_gl.NewRender(int32(width), int32(height))
+	//}
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return

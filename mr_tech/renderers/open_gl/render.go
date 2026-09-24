@@ -129,7 +129,7 @@ func (w *RenderOpenGL) doInitialize() error {
 
 // Start initializes and starts the OpenGL rendering loop by invoking the provided rendering function.
 func (w *RenderOpenGL) Start() {
-	pixels.GLRun(w.doRun)
+	executor.Thread.Run(w.doRun)
 }
 
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.

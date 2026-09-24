@@ -198,7 +198,7 @@ func (w *Window) Bounds() Rect {
 }
 
 // setFullscreen sets the window to fullscreen mode on the specified monitor.
-func (w *Window) setFullscreen(monitor *GLMonitor) {
+func (w *Window) setFullscreen(monitor *Monitor) {
 	executor.Thread.Call(func() {
 		w.restore.xPos, w.restore.yPos = w.window.GetPos()
 		w.restore.width, w.restore.height = w.window.GetSize()
@@ -229,7 +229,7 @@ func (w *Window) setWindowed() {
 }
 
 // SetMonitor sets the monitor for the window, switching between fullscreen and windowed mode as necessary.
-func (w *Window) SetMonitor(monitor *GLMonitor) {
+func (w *Window) SetMonitor(monitor *Monitor) {
 	if w.Monitor() != monitor {
 		if monitor != nil {
 			w.setFullscreen(monitor)
@@ -239,8 +239,8 @@ func (w *Window) SetMonitor(monitor *GLMonitor) {
 	}
 }
 
-// Monitor returns the GLMonitor currently associated with the Window or nil if no monitor is connected.
-func (w *Window) Monitor() *GLMonitor {
+// Monitor returns the Monitor currently associated with the Window or nil if no monitor is connected.
+func (w *Window) Monitor() *Monitor {
 	var monitor *glfw.Monitor
 	executor.Thread.Call(func() {
 		monitor = w.window.GetMonitor()
@@ -248,7 +248,7 @@ func (w *Window) Monitor() *GLMonitor {
 	if monitor == nil {
 		return nil
 	}
-	return &GLMonitor{
+	return &Monitor{
 		monitor: monitor,
 	}
 }
@@ -582,7 +582,7 @@ func (w *Window) JoystickAxis(js Joystick, axis GamepadAxis) float64 {
 }
 
 // intBounds computes the integer bounds of a rectangle by flooring and ceiling its min and max values respectively.
-func intBounds(bounds Rect) (x, y, w, h int) {
+func intBounds(bounds Rect) (int, int, int, int) {
 	x0 := int(math.Floor(bounds.Min.X))
 	y0 := int(math.Floor(bounds.Min.Y))
 	x1 := int(math.Ceil(bounds.Max.X))

@@ -122,7 +122,8 @@ func (r Rect) Intersects(s Rect) bool {
 // Resized adjusts the size of the rectangle relative to a given anchor and new size without altering its proportions.
 func (r Rect) Resized(anchor, size XY) Rect {
 	if r.W()*r.H() == 0 {
-		panic(fmt.Errorf("(%T).Resize: zero area", r))
+		fmt.Println(fmt.Errorf("(%T).Resize: zero area", r))
+		return ZR
 	}
 	fraction := XY{size.X / r.W(), size.Y / r.H()}
 	return Rect{
@@ -163,26 +164,20 @@ func (r Rect) IntersectLine(l Line) XY {
 // two points, depending on the location of the shapes.  The points of intersection will be returned in order of
 // closest-to-l.A to closest-to-l.B.
 func (r Rect) IntersectionPoints(l Line) []XY {
-	// Use map keys to ensure unique points
 	pointMap := make(map[XY]struct{})
-
 	for _, edge := range r.Edges() {
 		if intersect, ok := l.Intersect(edge); ok {
 			pointMap[intersect] = struct{}{}
 		}
 	}
-
 	points := make([]XY, 0, len(pointMap))
 	for point := range pointMap {
 		points = append(points, point)
 	}
-
-	// Order the points
 	if len(points) == 2 {
 		if points[1].To(l.A).Len() < points[0].To(l.A).Len() {
 			return []XY{points[1], points[0]}
 		}
 	}
-
 	return points
 }

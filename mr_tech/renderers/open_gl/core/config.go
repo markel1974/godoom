@@ -10,7 +10,7 @@ type WindowConfig struct {
 
 	Position XY
 
-	Monitor *GLMonitor
+	Monitor *Monitor
 
 	Smooth bool
 

@@ -91,6 +91,16 @@ func (a *Material) Kind() int {
 	return a.kind
 }
 
+// U returns the horizontal scroll offset of the material.
+func (a *Material) U() float64 {
+	return a.u
+}
+
+// V returns the vertical scroll offset of the material.
+func (a *Material) V() float64 {
+	return a.v
+}
+
 // Shader returns the name of the shader associated with this material.
 func (a *Material) Shader() string {
 	return a.shader

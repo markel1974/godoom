@@ -20,6 +20,7 @@ type BuilderVolume struct {
 	dcRender         *DrawCommandsRender
 	dcRenderAdditive *DrawCommandsRender
 	cSky             *textures.Texture
+	cSkyU, cSkyV     float64
 	cal              *model.Calibration
 	occBuffer        *OcclusionBuffer
 	visibleVol       *VisibleVolumes
@@ -36,6 +37,8 @@ func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVol
 		dcRender:         NewDrawCommandsRender(),
 		dcRenderAdditive: NewDrawCommandsRender(),
 		cSky:             nil,
+		cSkyU:            0.0,
+		cSkyV:            0.0,
 		cal:              calibration,
 		occBuffer:        NewOcclusionBuffer(640, 480),
 		visibleVol:       NewVisibleVols(8192),
@@ -63,8 +66,11 @@ func (w *BuilderVolume) GetVertices() ([]float32, int32, []uint32, int32) { retu
 // GetLights retrieves the light data and their count from the frame lights. It returns a slice of float32 and an int32 count.
 func (w *BuilderVolume) GetLights() ([]float32, int32) { return w.fl.GetLights() }
 
-// GetSkyTexture retrieves the sky texture currently associated with the BuilderVolume. Returns nil if no texture is set.
+// GetSkyTexture retrieves the current sky texture associated with the BuilderVolume. Returns nil if no texture is set.
 func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }
+
+// GetSkyUV retrieves the horizontal and vertical scroll offsets for the sky texture.
+func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV }
 
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
@@ -131,6 +137,9 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 				}
 				if texKind == int(config.MaterialKindSky) {
 					w.cSky = tex
+					w.cSkyU = matObj.U()
+					w.cSkyV = matObj.V()
+					//fmt.Println("sky ", w.cSkyU, w.cSkyV)
 					continue
 				}
 				layer, hasLayer := w.tex.Get(tex)
@@ -197,6 +206,10 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 			}
 			if texKind == int(config.MaterialKindSky) {
 				w.cSky = tex
+				if matObj := face.GetMaterialObj(); matObj != nil {
+					w.cSkyU = matObj.U()
+					w.cSkyV = matObj.V()
+				}
 				continue
 			}
 			layer, hasLayer := w.tex.Get(tex)
@@ -239,6 +252,10 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 			}
 			if texKind == int(config.MaterialKindSky) {
 				w.cSky = tex
+				if matObj := face.GetMaterialObj(); matObj != nil {
+					w.cSkyU = matObj.U()
+					w.cSkyV = matObj.V()
+				}
 				continue
 			}
 			layer, hasLayer := w.tex.Get(tex)

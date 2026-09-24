@@ -58,6 +58,7 @@ type BuilderTraverse struct {
 	visibleVolumes    map[*model.Sector]bool
 	processedPolygons map[PolyKey]bool
 	cSky              *textures.Texture
+	cSkyU, cSkyV float64
 	cal               *model.Calibration
 }
 
@@ -94,6 +95,10 @@ func (w *BuilderTraverse) GetLightsStride() int32 {
 // GetSkyTexture retrieves the current sky texture used in the rendering pipeline.
 func (w *BuilderTraverse) GetSkyTexture() *textures.Texture {
 	return w.cSky
+}
+
+func (w *BuilderTraverse) GetSkyUV() (float64, float64) {
+	return 0, 0
 }
 
 // GetDrawCommands returns a slice of active draw commands for rendering the current frame.

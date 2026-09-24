@@ -183,11 +183,25 @@ func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) (*co
 
 // doCreate constructs and returns a Light object with the specified properties like position, intensity, and light type.
 func (l *Lights) doCreate(intensity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
-	kind := config.LightKindAmbient
-	targetFalloff := 15.0
-	targetIntensity := intensity * 0.02
-	r, g, b := 1.0, 1.0, 1.0 //white
+	// In Q3, l'intensity in ingresso per ambient è già stata moltiplicata per 10.0, per gli spot per 0.07.
+	// Recuperiamo il valore originale indicato nel BSP dal level designer:
+	q3LightValue := intensity * 5 /// 10.0
+	if isSpot {
+		q3LightValue = intensity / 0.07
+	}
 
+	kind := config.LightKindAmbient
+
+	// Fissiamo una luminosità centrale piacevole per l'HDR (Overbright classico di Q3)
+	const q3Overbright = 2.0
+	targetIntensity := q3Overbright
+
+	// Vogliamo che effectiveRadius = q3LightValue.
+	// Poiché effectiveRadius = 4.605 * targetFalloff * targetIntensity
+	// Risolviamo per targetFalloff:
+	targetFalloff := q3LightValue / (4.605 * targetIntensity)
+
+	r, g, b := 1.0, 1.0, 1.0 // white
 	if len(colorStr) > 0 {
 		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
@@ -202,8 +216,9 @@ func (l *Lights) doCreate(intensity, angle float64, mangleStr, colorStr string, 
 	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
 	if isSpot {
 		kind = config.LightKindSpot
-		targetFalloff = intensity * 4
-		targetIntensity = intensity * 0.9
+		targetIntensity = q3Overbright * 3.0 // Gli spot in Q3 sono tipicamente più concentrati
+		targetFalloff = q3LightValue / (4.605 * targetIntensity)
+
 		if len(mangleStr) > 0 {
 			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
 				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)

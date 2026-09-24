@@ -18,6 +18,7 @@ type BuilderScene struct {
 	dcRender    *DrawCommandsRender
 	mapBuilt    bool
 	cSky        *textures.Texture
+	cSkyU, cSkyV float64
 	flatIndices []uint32
 }
 
@@ -68,6 +69,10 @@ func (w *BuilderScene) GetLights() ([]float32, int32) {
 // GetSkyTexture returns the cached sky texture associated with the BuilderScene.
 func (w *BuilderScene) GetSkyTexture() *textures.Texture {
 	return w.cSky
+}
+
+func (w *BuilderScene) GetSkyUV() (float64, float64) {
+	return 0, 0
 }
 
 // Compute generates the final rendered texture for the current scene based on the provided view matrix and engine state.

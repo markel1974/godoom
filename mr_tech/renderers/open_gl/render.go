@@ -21,6 +21,8 @@ type IBuilder interface {
 
 	GetSkyTexture() *textures.Texture
 
+	GetSkyUV() (float64, float64)
+
 	GetVerticesStride() int32
 
 	GetLightsStride() int32
@@ -148,10 +150,19 @@ func (w *RenderOpenGL) doRender() {
 		shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 		skyLayer := float32(-1.0)
 		skyEnabled := false
+		skyU, skyV := float32(0), float32(0)
 		if cSky != nil {
 			skyLayer, skyEnabled = w.tex.Get(cSky)
+			u, v := w.builder.GetSkyUV()
+			tick := float32(textures.GlobalTick()) / 60.0
+			skyU = float32(u) * tick
+			skyV = float32(v) * tick
+			// DEBUG
+			//if textures.GlobalTick()%60 == 0 {
+			//	fmt.Println("SKY DEBUG: Name=", cSky.GetName(), " Layer=", skyLayer, " Enabled=", skyEnabled, " U=", skyU, " V=", skyV)
+			//}
 		}
-		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, commandsAdditive, skyEnabled, skyLayer, light, lightsCount, shadowLights, shadowLightsCount)
+		w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, commandsAdditive, skyEnabled, skyLayer, skyU, skyV, light, lightsCount, shadowLights, shadowLightsCount)
 	})
 }
 

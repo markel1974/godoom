@@ -3,6 +3,7 @@ package q3
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
@@ -102,6 +103,24 @@ func (s *Shaders) GetAnimMap(target string) []string {
 		}
 	}
 	return nil
+}
+
+// GetScroll retrieves the tcMod scroll speeds (U and V) for the shader.
+func (s *Shaders) GetScroll(target string) (float64, float64) {
+	k, ok := s.container[target]
+	if !ok {
+		return 0, 0
+	}
+	for _, st := range k.stages {
+		for _, tcMod := range st.tcMods {
+			if len(tcMod) >= 3 && strings.ToLower(tcMod[0]) == "scroll" {
+				scrollU, _ := strconv.ParseFloat(tcMod[1], 64)
+				scrollV, _ := strconv.ParseFloat(tcMod[2], 64)
+				return scrollU, scrollV
+			}
+		}
+	}
+	return 0, 0
 }
 
 // GetEditorImage retrieves the qer_editorimage texture path if defined for the shader, which serves as a great 2D fallback.

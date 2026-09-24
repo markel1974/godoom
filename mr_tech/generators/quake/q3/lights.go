@@ -182,13 +182,12 @@ func (l *Lights) Create(ent *lumps.Entity, angle float64, pos geometry.XYZ) (*co
 }
 
 // doCreate constructs and returns a Light object with the specified properties like position, intensity, and light type.
-func (l *Lights) doCreate(intensity float64, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+func (l *Lights) doCreate(intensity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
+	kind := config.LightKindAmbient
+	targetFalloff := 15.0
+	targetIntensity := intensity * 0.02
+	r, g, b := 1.0, 1.0, 1.0 //white
 
-	falloff := 0.0
-	var kind config.LightKind
-
-	// COLOR (Standard Quake 2 / Modern Quake 1)
-	r, g, b := 1.0, 1.0, 1.0 // Default White
 	if len(colorStr) > 0 {
 		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
@@ -203,8 +202,8 @@ func (l *Lights) doCreate(intensity float64, angle float64, mangleStr, colorStr 
 	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
 	if isSpot {
 		kind = config.LightKindSpot
-		intensity = intensity * 0.9
-		falloff = intensity * 10
+		targetFalloff = intensity * 4
+		targetIntensity = intensity * 0.9
 		if len(mangleStr) > 0 {
 			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
 				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
@@ -218,14 +217,10 @@ func (l *Lights) doCreate(intensity float64, angle float64, mangleStr, colorStr 
 				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
 			}
 		}
-	} else {
-		kind = config.LightKindAmbient
-		intensity = intensity * 0.02
-		falloff = intensity
 	}
 
 	// CONFIGURATION CREATION
-	cl := config.NewConfigLight(pos, intensity, kind, falloff)
+	cl := config.NewConfigLight(pos, targetIntensity, kind, targetFalloff)
 	cl.R = r
 	cl.G = g
 	cl.B = b

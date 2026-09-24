@@ -1,4 +1,4 @@
-package pixels
+package core
 
 // WindowConfig defines the configuration for a window, including appearance, behavior, and rendering properties.
 type WindowConfig struct {

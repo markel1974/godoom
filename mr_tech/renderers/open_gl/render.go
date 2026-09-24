@@ -3,9 +3,9 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	core2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
 	"github.com/markel1974/godoom/mr_tech/textures"
-	"github.com/markel1974/godoom/pixels"
-	"github.com/markel1974/godoom/pixels/executor"
 )
 
 // scaleFactor defines a constant value for scaling factors used in the application.
@@ -47,7 +47,7 @@ type RenderOpenGL struct {
 	engine          *engine.Engine
 	vi              *model.ViewMatrix
 	player          *model.ThingPlayer
-	win             *pixels.Window
+	win             *core2.Window
 	shaders         *Shaders
 	tex             *Textures
 	builder         IBuilder
@@ -82,8 +82,8 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 
 // doInitialize initializes the OpenGL rendering environment and compiles shaders and textures for the renderer.
 func (w *RenderOpenGL) doInitialize() error {
-	bounds := pixels.R(0, 0, float64(w.startWidth), float64(w.startHeight))
-	cfg := pixels.WindowConfig{
+	bounds := core2.R(0, 0, float64(w.startWidth), float64(w.startHeight))
+	cfg := core2.WindowConfig{
 		Bounds:             bounds,
 		VSync:              true,
 		Undecorated:        false,
@@ -92,7 +92,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		DisableScissorTest: true,
 	}
 	var winErr error
-	w.win, winErr = pixels.NewGLWindow(cfg)
+	w.win, winErr = core2.NewGLWindow(cfg)
 	if winErr != nil {
 		return winErr
 	}
@@ -187,56 +187,56 @@ func (w *RenderOpenGL) doRun() {
 		var impulse = 0.06
 		for v := range w.win.KeysPressed() {
 			switch v {
-			case pixels.KeyEscape:
+			case core2.KeyEscape:
 				return
-			case pixels.KeyW:
+			case core2.KeyW:
 				up = true
 				impulse = 0.01
-			case pixels.KeyUp:
+			case core2.KeyUp:
 				up = true
-			case pixels.KeyS:
+			case core2.KeyS:
 				down = true
 				impulse = 0.01
-			case pixels.KeyDown:
+			case core2.KeyDown:
 				down = true
-			case pixels.KeyLeft:
+			case core2.KeyLeft:
 				left = true
-			case pixels.KeyRight:
+			case core2.KeyRight:
 				right = true
-			case pixels.KeyL:
+			case core2.KeyL:
 				w.player.GetFlash().IncreaseFlashFactor()
-			case pixels.KeyH:
+			case core2.KeyH:
 				w.player.GetFlash().DecreaseFlashFactor()
 			}
 		}
 
 		w.doPlayerMoves(impulse, up, down, left, right)
 
-		if w.win.JustPressed(pixels.KeyO) {
+		if w.win.JustPressed(core2.KeyO) {
 			w.doPlayerThrow()
 		}
-		if w.win.JustPressed(pixels.KeyP) {
+		if w.win.JustPressed(core2.KeyP) {
 			w.doPlayerFire()
 		}
-		if w.win.JustPressed(pixels.KeyC) {
+		if w.win.JustPressed(core2.KeyC) {
 			w.enableClear = true
 		}
-		if w.win.JustPressed(pixels.KeyTab) || w.win.Pressed(pixels.MouseButton2) {
+		if w.win.JustPressed(core2.KeyTab) || w.win.Pressed(core2.MouseButton2) {
 			w.doPlayerDuckingToggle()
 		}
-		if w.win.JustPressed(pixels.KeySpace) {
+		if w.win.JustPressed(core2.KeySpace) {
 			w.doPlayerJump(false)
 		}
-		if w.win.Pressed(pixels.MouseButton1) {
+		if w.win.Pressed(core2.MouseButton1) {
 			w.doPlayerJump(true)
 		}
-		if w.win.JustPressed(pixels.KeyM) {
+		if w.win.JustPressed(core2.KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		if w.win.JustPressed(pixels.KeyN) {
+		if w.win.JustPressed(core2.KeyN) {
 			w.shaders.ToggleShadows()
 		}
-		if w.win.JustPressed(pixels.KeyT) {
+		if w.win.JustPressed(core2.KeyT) {
 			w.buildersCounter++
 			index := w.buildersCounter % (len(w.builders))
 			w.builder = w.builders[index]

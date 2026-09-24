@@ -1,4 +1,4 @@
-package pixels
+package core
 
 import (
 	"fmt"

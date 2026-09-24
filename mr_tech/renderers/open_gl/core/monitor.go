@@ -1,8 +1,8 @@
-package pixels
+package core
 
 import (
 	"github.com/go-gl/glfw/v3.3/glfw"
-	"github.com/markel1974/godoom/pixels/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
 )
 
 // VideoMode represents a video mode with specific resolution and refresh rate.

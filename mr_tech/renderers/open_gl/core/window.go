@@ -1,4 +1,4 @@
-package pixels
+package core
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/markel1974/godoom/pixels/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )

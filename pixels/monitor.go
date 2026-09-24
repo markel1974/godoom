@@ -5,8 +5,7 @@ import (
 	"github.com/markel1974/godoom/pixels/executor"
 )
 
-// VideoMode represents all properties of a video mode and is
-// associated with a monitor if it is used in fullscreen mode.
+// VideoMode represents a video mode with specific resolution and refresh rate.
 type VideoMode struct {
 	// Width is the width of the vide mode in pixels.
 	Width int
@@ -16,12 +15,12 @@ type VideoMode struct {
 	RefreshRate int
 }
 
-// GLMonitor represents a physical display attached to your computer.
+// GLMonitor represents a wrapper around a GLFW monitor providing additional utility methods for monitor information.
 type GLMonitor struct {
 	monitor *glfw.Monitor
 }
 
-// PrimaryMonitor returns the main monitor (usually the one with the taskbar and stuff).
+// PrimaryMonitor retrieves the primary monitor and wraps it into a GLMonitor structure for further usage.
 func PrimaryMonitor() *GLMonitor {
 	var monitor *glfw.Monitor
 	executor.Thread.Call(func() {
@@ -32,7 +31,7 @@ func PrimaryMonitor() *GLMonitor {
 	}
 }
 
-// Monitors returns a slice of all currently available monitors.
+// Monitors retrieves a list of all connected monitors and returns them as []*GLMonitor.
 func Monitors() []*GLMonitor {
 	var monitors []*GLMonitor
 	executor.Thread.Call(func() {
@@ -43,14 +42,14 @@ func Monitors() []*GLMonitor {
 	return monitors
 }
 
-// Name returns a human-readable name of the GLMonitor.
+// Name retrieves the name of the monitor associated with the GLMonitor instance. Uses thread-safe execution.
 func (m *GLMonitor) Name() string {
 	var name string
 	executor.Thread.Call(func() { name = m.monitor.GetName() })
 	return name
 }
 
-// PhysicalSize returns the size of the display area of the GLMonitor in millimeters.
+// PhysicalSize retrieves the physical dimensions of the monitor in millimeters as width and height.
 func (m *GLMonitor) PhysicalSize() (width, height float64) {
 	var wi, hi int
 	executor.Thread.Call(func() {
@@ -61,7 +60,7 @@ func (m *GLMonitor) PhysicalSize() (width, height float64) {
 	return
 }
 
-// Position returns the position of the upper-left corner of the GLMonitor in screen coordinates.
+// Position retrieves the current x and y position of the monitor in screen coordinates as float64 values.
 func (m *GLMonitor) Position() (x, y float64) {
 	var xi, yi int
 	executor.Thread.Call(func() {
@@ -72,7 +71,7 @@ func (m *GLMonitor) Position() (x, y float64) {
 	return
 }
 
-// Size returns the resolution of the GLMonitor in pixels.
+// Size retrieves the current width and height of the monitor in pixels as reported by its video mode.
 func (m *GLMonitor) Size() (width, height float64) {
 	var mode *glfw.VidMode
 	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
@@ -81,7 +80,7 @@ func (m *GLMonitor) Size() (width, height float64) {
 	return
 }
 
-// BitDepth returns the number of bits per color of the GLMonitor.
+// BitDepth retrieves the bit depth of the red, green, and blue color channels for the current video mode.
 func (m *GLMonitor) BitDepth() (red, green, blue int) {
 	var mode *glfw.VidMode
 	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
@@ -91,7 +90,7 @@ func (m *GLMonitor) BitDepth() (red, green, blue int) {
 	return
 }
 
-// RefreshRate returns the refresh frequency of the GLMonitor in Hz (refreshes/second).
+// RefreshRate retrieves the monitor's current refresh rate in Hertz as a floating-point value.
 func (m *GLMonitor) RefreshRate() (rate float64) {
 	var mode *glfw.VidMode
 	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
@@ -99,7 +98,7 @@ func (m *GLMonitor) RefreshRate() (rate float64) {
 	return
 }
 
-// VideoModes returns all available video modes for the monitor.
+// VideoModes retrieves all available video modes for the monitor, including their dimensions and refresh rates.
 func (m *GLMonitor) VideoModes() (vmodes []VideoMode) {
 	var modes []*glfw.VidMode
 	executor.Thread.Call(func() {

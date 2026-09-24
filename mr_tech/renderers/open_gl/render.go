@@ -47,7 +47,7 @@ type RenderOpenGL struct {
 	engine          *engine.Engine
 	vi              *model.ViewMatrix
 	player          *model.ThingPlayer
-	win             *pixels.GLWindow
+	win             *pixels.Window
 	shaders         *Shaders
 	tex             *Textures
 	builder         IBuilder

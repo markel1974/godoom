@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
 	tex              *Textures
 	fv               *FrameVertices
@@ -24,6 +25,7 @@ type BuilderVolume struct {
 	visibleVol       *VisibleVolumes
 }
 
+// NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
 func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
 		tex:              tex,
@@ -41,28 +43,30 @@ func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVol
 	return bv
 }
 
+// GetShadowLights retrieves up to 8 shadow-casting lights and their count from the current frame lighting data.
 func (w *BuilderVolume) GetShadowLights() ([8]*Light, int32) {
 	return w.fl.GetShadowLights()
 }
 
-// GetVerticesStride returns the byte stride of the vertex data as an int32 by delegating to the underlying FrameVertices.
+// GetVerticesStride returns the byte stride of the vertex data by delegating the computation to the underlying FrameVertices object.
 func (w *BuilderVolume) GetVerticesStride() int32 { return w.fv.VerticesStride() }
 
-// GetLightsStride returns the stride value for light data, representing the size in bytes of a single light entry.
+// GetLightsStride returns the stride size of the lights buffer in bytes.
 func (w *BuilderVolume) GetLightsStride() int32 { return w.fl.LightsStride() }
 
-// GetDrawCommands returns the prepared draw commands for rendering stored in the DrawCommandsRender instance.
+// GetDrawCommands returns the prepared DrawCommandsRender object containing batched GPU drawing commands for rendering.
 func (w *BuilderVolume) GetDrawCommands() *DrawCommandsRender { return w.dcRender }
 
-// GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the BuilderVolume instance.
+// GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the builder volume.
 func (w *BuilderVolume) GetVertices() ([]float32, int32, []uint32, int32) { return w.fv.GetVertices() }
 
-// GetLights retrieves the current set of light data and the number of lights in the frame as a slice and an integer.
+// GetLights retrieves the light data and their count from the frame lights. It returns a slice of float32 and an int32 count.
 func (w *BuilderVolume) GetLights() ([]float32, int32) { return w.fl.GetLights() }
 
-// GetSkyTexture retrieves the current sky texture associated with the BuilderVolume. Returns nil if no texture is set.
+// GetSkyTexture retrieves the sky texture currently associated with the BuilderVolume. Returns nil if no texture is set.
 func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }
 
+// Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
@@ -88,7 +92,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
 }
 
-// pushQVolumesHardware processes and sorts visible volumes within the frustum, preparing vertex and draw command buffers.
+// pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
+// It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
 func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFront *physics.Frustum, pX, pY, pZ float64) {
 	//camX, camY, camZ := pX, pZ, -pY
 	camX, camY, camZ := pX, pY, pZ
@@ -153,8 +158,7 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 	pushPass(int(config.BlendModeAdditive), w.dcAdditive)
 }
 
-// pushQVolumes queries geometry volumes within the specified frustums, sorts them front-to-back,
-// and culls occluded geometry using a CPU software occlusion buffer.
+// pushQVolumesOcclusion applies frustum culling and occlusion testing on volumes and populates draw buffers with visible geometry.
 func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFront *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
 	w.occBuffer.Clear()
 
@@ -219,7 +223,7 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 	//fmt.Printf("FRUSTUM VOLUMES: %d, CULLED: %d, DRAW: %d\n", w.visibleVolsIndex, w.visibleVolsIndex-counter, counter)
 }
 
-// pushQVolumes queries geometry volumes within the specified frustums and processes them using the associated draw commands.
+// pushQVolumes processes and renders visible volumes intersecting the given frustum, applying material and texture filtering.
 func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
 	counter := 0
 
@@ -260,7 +264,8 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 	fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
 }
 
-// pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
+// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
 func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare(pX, pY, pZ)
@@ -279,7 +284,7 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
 }
 
-// pushQLights processes lights within the provided frustum, filtering them and adding valid lights to the FrameLights instance.
+// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
 	counter := 0
 	q := func(object physics.IAABB) bool {
@@ -342,6 +347,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 
+// GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.
 func (w *BuilderVolume) GetDrawCommandsAdditive() *DrawCommandsRender {
 	return w.dcRenderAdditive
 }

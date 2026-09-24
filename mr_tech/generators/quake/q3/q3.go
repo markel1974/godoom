@@ -422,71 +422,6 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	}
 }
 
-// evalBezier computes the value of a quadratic Bézier curve given control points p0, p1, p2 and a parameter t [0,1].
-func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
-	u := 1.0 - t
-	return (u * u * p0) + (2.0 * u * t * p1) + (t * t * p2)
-}
-
-// tessellatePatch calculates a triangle mesh from a 3x3 patch of control points, using a specified tessellation level.
-// The method returns a list of 3D vertices and corresponding UV texture coordinates for the generated mesh.
-func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XYZ, [][2]float64) {
-	var points []geometry.XYZ
-	var uvs [][2]float64
-	step := 1.0 / float32(level)
-	L := level + 1
-	grid := make([]geometry.XYZ, L*L)
-	gridUV := make([][2]float64, L*L)
-
-	// Calcolo interpolazione griglia
-	for i := 0; i <= level; i++ {
-		tV := float32(i) * step
-		for j := 0; j <= level; j++ {
-			tU := float32(j) * step
-			var p [3]geometry.XYZ
-			var puv [3][2]float32
-			for row := 0; row < 3; row++ {
-				idx := row * 3
-				p[row] = lumps.CreateXYZ(
-					float64(q3.evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
-					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
-					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
-				)
-				puv[row] = [2]float32{
-					q3.evalBezier(cp[idx].TexCoord[0], cp[idx+1].TexCoord[0], cp[idx+2].TexCoord[0], tU),
-					q3.evalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
-				}
-			}
-			grid[i*L+j] = lumps.CreateXYZ(
-				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
-				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
-				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
-			)
-			gridUV[i*L+j] = [2]float64{
-				float64(q3.evalBezier(puv[0][0], puv[1][0], puv[2][0], tV)),
-				float64(q3.evalBezier(puv[0][1], puv[1][1], puv[2][1], tV)),
-			}
-		}
-	}
-
-	// Chiusura dei quadrati in triangoli (Winding Order CCW)
-	for i := 0; i < level; i++ {
-		for j := 0; j < level; j++ {
-			idx0 := (i * L) + j
-			idx1 := (i * L) + j + 1
-			idx2 := ((i + 1) * L) + j
-			idx3 := ((i + 1) * L) + j + 1
-
-			points = append(points, grid[idx0], grid[idx2], grid[idx1])
-			uvs = append(uvs, gridUV[idx0], gridUV[idx2], gridUV[idx1])
-
-			points = append(points, grid[idx1], grid[idx2], grid[idx3])
-			uvs = append(uvs, gridUV[idx1], gridUV[idx2], gridUV[idx3])
-		}
-	}
-	return points, uvs
-}
-
 // GetExternalBModelFileName retrieves the external BSP model filename associated with the given classname.
 func (q3 *Q3BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q3DictBModel[classname]
@@ -554,11 +489,8 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		case "info":
 			if classname == "info_player_start" || classname == "info_player_deathmatch" {
 				if !playerSpawned {
-					var err error
-					q3.playerPos, q3.playerAngle, err = q3.createPlayerProps(angle, pos)
-					if err != nil {
-						fmt.Printf("Warning: %s\n", err.Error())
-					}
+					q3.playerPos = pos
+					q3.playerAngle = angle * (math.Pi / 180.0)
 					playerSpawned = true
 				} else {
 					// We use remaining spawn points as Bot spawners
@@ -625,8 +557,67 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 	return nil
 }
 
-// createPlayerProps calculates the player's angle in radians and returns updated position, angle, and error if any.
-func (q3 *Q3BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
-	playerAngle := angle * (math.Pi / 180.0)
-	return pos, playerAngle, nil
+// evalBezier computes the value of a quadratic Bézier curve given control points p0, p1, p2 and a parameter t [0,1].
+func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
+	u := 1.0 - t
+	return (u * u * p0) + (2.0 * u * t * p1) + (t * t * p2)
+}
+
+// tessellatePatch calculates a triangle mesh from a 3x3 patch of control points, using a specified tessellation level.
+// The method returns a list of 3D vertices and corresponding UV texture coordinates for the generated mesh.
+func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XYZ, [][2]float64) {
+	var points []geometry.XYZ
+	var uvs [][2]float64
+	step := 1.0 / float32(level)
+	L := level + 1
+	grid := make([]geometry.XYZ, L*L)
+	gridUV := make([][2]float64, L*L)
+
+	// Calcolo interpolazione griglia
+	for i := 0; i <= level; i++ {
+		tV := float32(i) * step
+		for j := 0; j <= level; j++ {
+			tU := float32(j) * step
+			var p [3]geometry.XYZ
+			var puv [3][2]float32
+			for row := 0; row < 3; row++ {
+				idx := row * 3
+				p[row] = lumps.CreateXYZ(
+					float64(q3.evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
+					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
+					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
+				)
+				puv[row] = [2]float32{
+					q3.evalBezier(cp[idx].TexCoord[0], cp[idx+1].TexCoord[0], cp[idx+2].TexCoord[0], tU),
+					q3.evalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
+				}
+			}
+			grid[i*L+j] = lumps.CreateXYZ(
+				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
+				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
+				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
+			)
+			gridUV[i*L+j] = [2]float64{
+				float64(q3.evalBezier(puv[0][0], puv[1][0], puv[2][0], tV)),
+				float64(q3.evalBezier(puv[0][1], puv[1][1], puv[2][1], tV)),
+			}
+		}
+	}
+
+	// Chiusura dei quadrati in triangoli (Winding Order CCW)
+	for i := 0; i < level; i++ {
+		for j := 0; j < level; j++ {
+			idx0 := (i * L) + j
+			idx1 := (i * L) + j + 1
+			idx2 := ((i + 1) * L) + j
+			idx3 := ((i + 1) * L) + j + 1
+
+			points = append(points, grid[idx0], grid[idx2], grid[idx1])
+			uvs = append(uvs, gridUV[idx0], gridUV[idx2], gridUV[idx1])
+
+			points = append(points, grid[idx1], grid[idx2], grid[idx3])
+			uvs = append(uvs, gridUV[idx1], gridUV[idx2], gridUV[idx3])
+		}
+	}
+	return points, uvs
 }

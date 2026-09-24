@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"path/filepath"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
@@ -21,25 +22,40 @@ func BaseName(in string) string {
 func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
 	img, err := doLoadImage(texName, arc)
 	if err != nil {
-		fmt.Printf("[warning] using fallback for %s: %s", texName, err)
+		fmt.Printf("[warning] using fallback for %s: %s\n", texName, err)
 		return FallbackImage(), nil
 	}
 	return img, nil
 }
 
 func doLoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
-	baseName := BaseName(texName)
-	tgaPath := baseName + ".tga"
-	fileTga, errTga := arc.Open(tgaPath)
-	if errTga == nil {
-		return common.DecodeTGA(fileTga)
+	// 1. Prova PRIMA esattamente il nome fornito (utile se ha già l'estensione corretta)
+	if f, err := arc.Open(texName); err == nil {
+		if strings.HasSuffix(strings.ToLower(texName), ".tga") {
+			return common.DecodeTGA(f)
+		}
+		img, _, errDec := image.Decode(f)
+		return img, errDec
 	}
-	jpgPath := baseName + ".jpg"
-	fileJpg, errJpg := arc.Open(jpgPath)
-	if errJpg == nil {
+
+	// 2. Se fallisce, prova con le estensioni standard (.tga, .jpg, .png)
+	baseName := BaseName(texName)
+
+	if fileJpg, errJpg := arc.Open(baseName + ".jpg"); errJpg == nil {
 		img, _, err := image.Decode(fileJpg)
 		return img, err
 	}
+
+	if fileTga, errTga := arc.Open(baseName + ".tga"); errTga == nil {
+		return common.DecodeTGA(fileTga)
+	}
+
+	if filePng, errPng := arc.Open(baseName + ".png"); errPng == nil {
+		img, _, err := image.Decode(filePng)
+		return img, err
+	}
+
+	// 3. Fallbacks
 	fallbackName, ok := _q3ShaderFallback[baseName]
 	if !ok {
 		fallbackName, ok = _q3ShaderFallback[texName]
@@ -55,6 +71,7 @@ func doLoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
 		var im image.Image
 		return im, fmt.Errorf("missing asset %s (.jpg/.tga) (fallback failed)", texName)
 	}
+
 	var img image.Image
 	return img, fmt.Errorf("missing asset %s (.jpg/.tga)", texName)
 }

@@ -74,7 +74,16 @@ var _q3ShaderFallback = map[string]string{
 	"textures/liquids/lavahell_1000":            "textures/liquids/lavahell",
 	"models/powerups/health/mega2":              "models/powerups/health/mega",
 
+	"textures/skies/tim_hell":  "textures/skies/inteldimclouds",
+	"textures/skies/stars_red": "textures/skies/intelredclouds",
 	//"textures/skies/stars_red": "textures/skies/killsky_1",
 	//"textures/skies/tim_hell":  "textures/skies/killsky_2",
 	//"textures/skies/blacksky":  "textures/skies/killsky_1",
 }
+
+/*
+0 = inteldimclouds.jpg ->
+1 = intelredclouds.jpg ->
+2 = killsky_1.jpg ->
+3 = killsky_2.jpg ->
+*/

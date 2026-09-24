@@ -9,7 +9,6 @@ import (
 
 	"github.com/markel1974/godoom/pixels/executor"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -96,7 +95,6 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		// enter the OpenGL context
 		w.begin()
 		executor.Thread.Init(cfg.DisableScissorTest)
-		gl.Enable(gl.MULTISAMPLE)
 		w.end()
 
 		return nil
@@ -473,12 +471,6 @@ func (w *Window) initInput() {
 	})
 }
 
-// UpdateInput processes input events for the window by polling and executing the necessary update logic.
-func (w *Window) UpdateInput() {
-	executor.Thread.Call(func() { glfw.PollEvents() })
-	w.doUpdateInput()
-}
-
 // UpdateInputAndSwap updates the input state, swaps the buffers, and polls for window events in the current thread context.
 func (w *Window) UpdateInputAndSwap() {
 	executor.Thread.Call(func() {
@@ -508,13 +500,12 @@ func (w *Window) UpdateInputWait(timeout time.Duration) {
 
 // doUpdateInput synchronizes the current and previous input states, processes input events, and clears temporary input data.
 func (w *Window) doUpdateInput() {
+	//keyboard
 	w.prevInp = w.currInp
 	w.currInp = w.tempInp
-
 	//w.keysPressed = w.tempKeysPressed
 	w.pressEvents = w.tempPressEvents
 	w.releaseEvents = w.tempReleaseEvents
-
 	// Clear last frame's temporary status
 	//w.tempKeysPressed = []Button{}
 	w.tempPressEvents = [KeyLast + 1]bool{}
@@ -522,8 +513,32 @@ func (w *Window) doUpdateInput() {
 	w.tempInp.repeat = [KeyLast + 1]bool{}
 	w.tempInp.scroll = ZV
 	w.tempInp.typed = ""
-
-	w.updateJoystickInput()
+	//joysticks
+	for js := Joystick1; js <= JoystickLast; js++ {
+		joystickPresent := glfw.Joystick(js).Present()
+		w.tempJoy.connected[js] = joystickPresent
+		if joystickPresent {
+			if glfw.Joystick(js).IsGamepad() {
+				gamepadInputs := glfw.Joystick(js).GetGamepadState()
+				w.tempJoy.buttons[js] = gamepadInputs.Buttons[:]
+				w.tempJoy.axis[js] = gamepadInputs.Axes[:]
+			} else {
+				w.tempJoy.buttons[js] = glfw.Joystick(js).GetButtons()
+				w.tempJoy.axis[js] = glfw.Joystick(js).GetAxes()
+			}
+			if !w.currJoy.connected[js] {
+				w.tempJoy.name[js] = glfw.Joystick(js).GetName()
+			} else {
+				w.tempJoy.name[js] = w.currJoy.name[js]
+			}
+		} else {
+			w.tempJoy.buttons[js] = []glfw.Action{}
+			w.tempJoy.axis[js] = []float32{}
+			w.tempJoy.name[js] = ""
+		}
+	}
+	w.prevJoy = w.currJoy
+	w.currJoy = w.tempJoy
 }
 
 // JoystickPresent checks if the specified joystick is currently connected to the system.
@@ -564,39 +579,6 @@ func (w *Window) JoystickJustReleased(js Joystick, button GamepadButton) bool {
 // JoystickAxis retrieves the current value of the specified axis on the given joystick.
 func (w *Window) JoystickAxis(js Joystick, axis GamepadAxis) float64 {
 	return w.currJoy.getAxis(js, int(axis))
-}
-
-// updateJoystickInput updates the state of all connected joysticks and gamepads, including buttons, axes, and connection status.
-func (w *Window) updateJoystickInput() {
-	for js := Joystick1; js <= JoystickLast; js++ {
-		joystickPresent := glfw.Joystick(js).Present()
-		w.tempJoy.connected[js] = joystickPresent
-
-		if joystickPresent {
-			if glfw.Joystick(js).IsGamepad() {
-				gamepadInputs := glfw.Joystick(js).GetGamepadState()
-
-				w.tempJoy.buttons[js] = gamepadInputs.Buttons[:]
-				w.tempJoy.axis[js] = gamepadInputs.Axes[:]
-			} else {
-				w.tempJoy.buttons[js] = glfw.Joystick(js).GetButtons()
-				w.tempJoy.axis[js] = glfw.Joystick(js).GetAxes()
-			}
-
-			if !w.currJoy.connected[js] {
-				w.tempJoy.name[js] = glfw.Joystick(js).GetName()
-			} else {
-				w.tempJoy.name[js] = w.currJoy.name[js]
-			}
-		} else {
-			w.tempJoy.buttons[js] = []glfw.Action{}
-			w.tempJoy.axis[js] = []float32{}
-			w.tempJoy.name[js] = ""
-		}
-	}
-
-	w.prevJoy = w.currJoy
-	w.currJoy = w.tempJoy
 }
 
 // intBounds computes the integer bounds of a rectangle by flooring and ceiling its min and max values respectively.

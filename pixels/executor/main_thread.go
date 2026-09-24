@@ -47,6 +47,7 @@ func (m *MainThread) Init(disableScissorTest bool) {
 		gl.Enable(gl.SCISSOR_TEST)
 	}
 	gl.BlendEquation(gl.FUNC_ADD)
+	gl.Enable(gl.MULTISAMPLE)
 }
 
 func (m *MainThread) Run(run func()) {
@@ -54,8 +55,8 @@ func (m *MainThread) Run(run func()) {
 	if err != nil {
 		panic(errors.New("failed to initialize glfw"))
 	}
-	defer glfw.Terminate()
 	m.doRun(run)
+	glfw.Terminate()
 }
 
 // Post schedules the provided function to be executed on the main thread by adding it to the call queue.

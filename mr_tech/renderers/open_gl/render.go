@@ -11,10 +11,10 @@ import (
 // scaleFactor defines a constant value for scaling factors used in the application.
 // maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
 // maxFrameCommands sets the limit on the number of commands that can be issued per frame.
-const (
-	startBatchVertices = 16384
-	startFrameCommands = 1024
-)
+//const (
+//	startBatchVertices = 16384
+//	startFrameCommands = 1024
+//)
 
 type IBuilder interface {
 	Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine)

@@ -57,15 +57,15 @@ var _q3ShaderFallback = map[string]string{
 	"textures/liquids/lavahellflat_400":         "textures/liquids/lavahell",
 	"textures/skin/tongue_trans":                "textures/skin/tongue",
 	"textures/gothic_door/km_arena1columna2r":   "textures/gothic_door/km_arena1columna2",
-	//"textures/skies/tim_hell":                   "env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
-	"textures/sfx/hellfogdense":                 "", // La nebbia non ha texture diffusa
-	"textures/liquids/lavahelldark":             "textures/liquids/lavahell",
-	"textures/gothic_trim/column2c_trans":       "textures/gothic_trim/column2c",
-	"textures/skin/skin6_trans":                 "textures/skin/skin6",
-	"textures/gothic_light/ironcrosslt2_2000":   "textures/gothic_light/ironcrosslt2",
-	"textures/base_light/light1_1500":           "textures/base_light/light1",
-	"textures/organics/dirt_trans":              "textures/organics/dirt",
-	"textures/skies/toxicskytim_dm8":            "env/tim_hell/tim_hell_up",
+	//"textures/skies/tim_hell":				"env/tim_hell/tim_hell_up", // Uso provvisorio di un lato della skybox
+	"textures/sfx/hellfogdense":               "", // La nebbia non ha texture diffusa
+	"textures/liquids/lavahelldark":           "textures/liquids/lavahell",
+	"textures/gothic_trim/column2c_trans":     "textures/gothic_trim/column2c",
+	"textures/skin/skin6_trans":               "textures/skin/skin6",
+	"textures/gothic_light/ironcrosslt2_2000": "textures/gothic_light/ironcrosslt2",
+	"textures/base_light/light1_1500":         "textures/base_light/light1",
+	"textures/organics/dirt_trans":            "textures/organics/dirt",
+	//"textures/skies/toxicskytim_dm8":            "env/tim_hell/tim_hell_up",
 	"textures/gothic_light/ironcrosslt2_10000":  "textures/gothic_light/ironcrosslt2",
 	"textures/gothic_light/pentagram_light1_5k": "textures/gothic_light/pentagram_light1",
 	"textures/sfx/fog_intel":                    "",
@@ -74,7 +74,7 @@ var _q3ShaderFallback = map[string]string{
 	"textures/liquids/lavahell_1000":            "textures/liquids/lavahell",
 	"models/powerups/health/mega2":              "models/powerups/health/mega",
 
-	"textures/skies/stars_red": "textures/skies/killsky_1",
-	"textures/skies/tim_hell":  "textures/skies/killsky_2",
-	"textures/skies/blacksky":  "textures/skies/killsky_1",
+	//"textures/skies/stars_red": "textures/skies/killsky_1",
+	//"textures/skies/tim_hell":  "textures/skies/killsky_2",
+	//"textures/skies/blacksky":  "textures/skies/killsky_1",
 }

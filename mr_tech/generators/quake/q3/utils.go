@@ -3,6 +3,7 @@ package q3
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"path/filepath"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
@@ -18,6 +19,15 @@ func BaseName(in string) string {
 }
 
 func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
+	img, err := doLoadImage(texName, arc)
+	if err != nil {
+		fmt.Printf("[warning] using fallback for %s: %s", texName, err)
+		return FallbackImage(), nil
+	}
+	return img, nil
+}
+
+func doLoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
 	baseName := BaseName(texName)
 	tgaPath := baseName + ".tga"
 	fileTga, errTga := arc.Open(tgaPath)
@@ -47,4 +57,15 @@ func LoadImage(texName string, arc interfaces.IArchive) (image.Image, error) {
 	}
 	var img image.Image
 	return img, fmt.Errorf("missing asset %s (.jpg/.tga)", texName)
+}
+
+func FallbackImage() image.Image {
+	fallbackImg := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	pink := color.RGBA{R: 255, B: 255, A: 255}
+	black := color.RGBA{A: 255}
+	fallbackImg.Set(0, 0, pink)
+	fallbackImg.Set(1, 1, pink)
+	fallbackImg.Set(1, 0, black)
+	fallbackImg.Set(0, 1, black)
+	return fallbackImg
 }

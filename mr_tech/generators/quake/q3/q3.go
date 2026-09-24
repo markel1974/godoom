@@ -392,17 +392,7 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		img, err := LoadImage(texName, q3.arc)
 		if err != nil {
 			fmt.Printf("Warning: %s\n", err.Error())
-			/*
-				// Create a 2x2 pink/black checkerboard fallback texture
-				fallbackImg := image.NewRGBA(image.Rect(0, 0, 2, 2))
-				pink := color.RGBA{255, 0, 255, 255}
-				black := color.RGBA{0, 0, 0, 255}
-				fallbackImg.Set(0, 0, pink)
-				fallbackImg.Set(1, 1, pink)
-				fallbackImg.Set(1, 0, black)
-				fallbackImg.Set(0, 1, black)
-				img = fallbackImg
-			*/
+			//img = FallbackImage()
 			continue
 		}
 

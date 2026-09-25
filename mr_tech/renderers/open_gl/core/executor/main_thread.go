@@ -9,26 +9,28 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
-// CallQueueCap defines the capacity of the channel used for managing function calls in a MainThread instance.
+// CallQueueCap defines the capacity of the queue used to store function calls in the main thread's call queue.
 const CallQueueCap = 16
 
-// Thread is a pointer to the main thread's execution context, facilitating thread-safe operations using a queue-based model.
+// Thread is a global pointer to the main thread, used for executing thread-safe OpenGL and GLFW operations.
 var Thread *MainThread
 
-// init initializes the main thread by locking the OS thread and creating a new instance of MainThread.
+// init initializes the main thread and locks the current OS thread for proper thread management.
 func init() {
 	runtime.LockOSThread()
 	Thread = NewMainThread()
 }
 
-// MainThread is a type that manages function calls serialized onto a single thread, typically for thread-safe operations.
+// MainThread provides a mechanism for serializing function execution on a single thread.
+// It ensures thread-safe operations using a call queue and synchronization primitives.
+// Functions can be posted or called with optional return values or errors.
 type MainThread struct {
 	callQueue chan func()
 	respMutex sync.Mutex
 	respChan  chan interface{}
 }
 
-// NewMainThread creates and returns a new instance of MainThread with initialized call queue and response channel.
+// NewMainThread creates and returns a new instance of MainThread with initialized callQueue and respChan channels.
 func NewMainThread() *MainThread {
 	return &MainThread{
 		callQueue: make(chan func(), CallQueueCap),
@@ -36,7 +38,7 @@ func NewMainThread() *MainThread {
 	}
 }
 
-// Init initializes the OpenGL context and sets up blending modes and scissor test based on the provided configuration.
+// Init initializes the essential OpenGL state, enabling blending, multisampling, and optionally scissor testing.
 func (m *MainThread) Init(disableScissorTest bool) {
 	err := gl.Init()
 	if err != nil {
@@ -50,6 +52,7 @@ func (m *MainThread) Init(disableScissorTest bool) {
 	gl.Enable(gl.MULTISAMPLE)
 }
 
+// Run initializes the GLFW library, executes the provided function within the main thread, and terminates the GLFW context.
 func (m *MainThread) Run(run func()) {
 	err := glfw.Init()
 	if err != nil {
@@ -59,12 +62,12 @@ func (m *MainThread) Run(run func()) {
 	glfw.Terminate()
 }
 
-// Post schedules the provided function to be executed on the main thread by adding it to the call queue.
+// Post queues the provided function to be executed on the main thread.
 func (m *MainThread) Post(f func()) {
 	m.callQueue <- f
 }
 
-// Call schedules a function to run on the main thread and waits for its execution to complete.
+// Call executes the provided function on the main thread and blocks until the function completes.
 func (m *MainThread) Call(f func()) {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
@@ -75,7 +78,7 @@ func (m *MainThread) Call(f func()) {
 	m.respMutex.Unlock()
 }
 
-// CallErr schedules a function that returns an error for execution on the main thread and returns the resulting error.
+// CallErr executes the provided function on the main thread and returns any error it produces.
 func (m *MainThread) CallErr(f func() error) error {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
@@ -92,7 +95,7 @@ func (m *MainThread) CallErr(f func() error) error {
 	return errors.New("invalid response")
 }
 
-// CallVal schedules a function to be executed on the main thread and returns its result.
+// CallVal executes the provided function on the main thread and returns its result through a synchronized call.
 func (m *MainThread) CallVal(f func() interface{}) interface{} {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
@@ -103,7 +106,8 @@ func (m *MainThread) CallVal(f func() interface{}) interface{} {
 	return val
 }
 
-// Run executes the provided function in a separate goroutine while managing a call queue for synchronized execution.
+// doRun executes the provided function on a separate goroutine and processes queued functions on the main thread.
+// It blocks until the provided function completes execution and cleans up resources before returning.
 func (m *MainThread) doRun(run func()) {
 	done := make(chan bool)
 	go func() {

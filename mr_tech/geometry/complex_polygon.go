@@ -18,7 +18,7 @@ func (cp *ComplexPolygon) BridgeHoles() Polygon {
 		return cp.Outer
 	}
 
-	// Optimization 1: Exact calculation of final capacity to eliminate dynamic reallocations
+	// Optimization 1) Exact calculation of final capacity to eliminate dynamic reallocations
 	totalLen := len(cp.Outer)
 	for _, h := range cp.Holes {
 		totalLen += len(h) + 2 // +2 for bridge vertices (forward and return)
@@ -50,7 +50,7 @@ func (cp *ComplexPolygon) BridgeHoles() Polygon {
 				continue
 			}
 
-			// Optimization 2: Fast rejection. Calculate distance in O(1) before
+			// Optimization 2) Fast rejection. Calculate distance in O(1) before
 			// launching isVisible (which is O(N) for each segment).
 			if dist := DistanceSq(holePoint, op); dist < minDist {
 				if HasLineOfSight(holePoint, op, hole, outer) {
@@ -71,7 +71,7 @@ func (cp *ComplexPolygon) BridgeHoles() Polygon {
 			}
 		}
 
-		// Optimization 3: In-place memory shifting leveraging pre-allocated capacity.
+		// Optimization 3) In-place memory shifting leveraging pre-allocated capacity.
 		// No additional heap allocation for new bridges.
 		oldLen := len(outer)
 		spliceLen := len(hole) + 2

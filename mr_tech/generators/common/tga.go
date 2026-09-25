@@ -215,14 +215,35 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 			}
 		}
 	}
-	// --- Post-processing Alpha Channel Fix (TEST MODE) ---
-	// Forcing alpha to 255 for ALL 32-bit images to test if missing textures appear
+	// --- Asset Sanitization: Alpha Channel Fix ---
+	// In Quake 3, artists often saved 24-bit opaque textures as 32-bit TGAs by mistake,
+	// leaving the alpha channel entirely black (0). Since modern batched renderers
+	// often use a universal alpha test (discard) in the megashader, these opaque walls
+	// would disappear. We sanitize the asset by checking if the alpha channel is 100% 0,
+	// and if so, we force it to 255 (opaque). Grates and fences (which have mixed alpha)
+	// will safely bypass this fix and remain transparent.
 	//if bytesPerPixel == 4 {
+	allZeroAlpha := true
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			c := img.RGBAAt(x, y)
-			c.A = 255
-			img.SetRGBA(x, y, c)
+			_, _, _, a := img.At(x, y).RGBA()
+			if a > 0 {
+				allZeroAlpha = false
+				break
+			}
+		}
+		if !allZeroAlpha {
+			break
+		}
+	}
+
+	if allZeroAlpha {
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				c := img.RGBAAt(x, y)
+				c.A = 255
+				img.SetRGBA(x, y, c)
+			}
 		}
 	}
 	//}

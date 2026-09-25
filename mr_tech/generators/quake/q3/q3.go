@@ -361,27 +361,36 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 // compileTextures loads and registers unique textures from a list of faces, supporting JPEG and TGA formats.
 func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
-	uniqueTextures := make(map[string]bool)
+	// Map to track if a physical texture NEEDS alpha test.
+	// If it doesn't need alpha test, we can force it to be opaque.
+	needsAlphaTest := make(map[string]bool)
+
 	for _, f := range faces {
 		texNameLC := strings.ToLower(f.TexName)
+		hasAlpha := q3.shaders.HasAlphaTest(texNameLC)
 
 		if animMap := q3.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
 			for _, frameTex := range animMap {
-				uniqueTextures[strings.ToLower(frameTex)] = true
+				frameLC := strings.ToLower(frameTex)
+				if existing, ok := needsAlphaTest[frameLC]; !ok || (!existing && hasAlpha) {
+					needsAlphaTest[frameLC] = hasAlpha
+				}
 			}
 		} else {
+			targetTex := texNameLC
 			if diffMap := q3.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
-				uniqueTextures[strings.ToLower(diffMap)] = true
-			} else {
-				uniqueTextures[texNameLC] = true
+				targetTex = strings.ToLower(diffMap)
+			}
+			if existing, ok := needsAlphaTest[targetTex]; !ok || (!existing && hasAlpha) {
+				needsAlphaTest[targetTex] = hasAlpha
 			}
 		}
 	}
 
 	il := NewImageLoader(q3.arc, q3.texManager)
-	for texName := range uniqueTextures {
-
-		if err := il.Load(texName); err != nil {
+	for texName, requiresAlpha := range needsAlphaTest {
+		forceOpaque := !requiresAlpha
+		if err := il.Load(texName, forceOpaque); err != nil {
 			fmt.Printf("Warning: %s\n", err.Error())
 			continue
 		}

@@ -73,7 +73,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName); lErr != nil {
+				if lErr := il.Load(texName, false); lErr != nil {
 					fmt.Printf("warning: %s\n", lErr.Error())
 				}
 			}
@@ -226,7 +226,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName); lErr != nil {
+				if lErr := il.Load(texName, false); lErr != nil {
 					fmt.Printf("warning: %s\n", lErr.Error())
 				}
 			}
@@ -236,7 +236,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName); lErr != nil {
+				if lErr := il.Load(texName, false); lErr != nil {
 					fmt.Printf("warning: %s\n", lErr.Error())
 				}
 			}
@@ -246,7 +246,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName); lErr != nil {
+				if lErr := il.Load(texName, false); lErr != nil {
 					fmt.Printf("warning: %s\n", lErr.Error())
 				}
 			}
@@ -258,7 +258,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 			for _, tri := range frame.Triangles {
 				if tri.Material != nil && len(tri.Material.Frames) > 0 {
 					texName := tri.Material.Frames[0]
-					if lErr := il.Load(texName); lErr != nil {
+					if lErr := il.Load(texName, false); lErr != nil {
 						fmt.Printf("warning: %s\n", lErr.Error())
 					}
 				}

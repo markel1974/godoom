@@ -47,7 +47,7 @@ func (il *ImageLoader) FallbackImage() image.Image {
 }
 
 // Load attempts to load an image by its name and returns it; falls back to a default image on failure.
-func (il *ImageLoader) Load(texName string) error {
+func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
 	if texName == "noshader" || len(texName) == 0 {
 		return nil
 	}
@@ -83,6 +83,17 @@ func (il *ImageLoader) Load(texName string) error {
 	bounds := img.Bounds()
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
+
+	// If the texture is not expected to have transparency based on its shader,
+	// forcefully sanitize the alpha channel to 255. This prevents the OpenGL
+	// fragment shader from discarding valid pixels due to garbage alpha data
+	// left by artists in 32-bit TGA files.
+	if forceOpaque {
+		for i := 3; i < len(rgba.Pix); i += 4 {
+			rgba.Pix[i] = 255
+		}
+	}
+
 	if err = il.textures.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
 		fmt.Printf("warning: registering picture %s: %s\n", texName, err.Error())
 	}

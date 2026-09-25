@@ -25,6 +25,7 @@ type ShaderStage struct {
 	rgbGen     []string
 	alphaGen   []string
 	tcMods     [][]string
+	alphaMap   bool
 }
 
 // IsAdditive determines if the shader stage uses additive blending by checking the blend source and destination factors.
@@ -50,6 +51,15 @@ type Shader struct {
 	qerParms        map[string][]string
 	q3mapParms      map[string][]string
 	stages          []*ShaderStage
+
+	// Legacy / compiler specific properties
+	light      string
+	cloudParms []string
+	lightning  bool
+	fogGen     []string
+	fogOnly    bool
+	sky        bool
+	backsided  bool
 }
 
 // NewShader creates a new Shader instance with the specified name and culling behavior.
@@ -403,7 +413,7 @@ func (s *Shaders) parseData(data string) {
 	p := &ShadersParser{sc: &ShadersScanner{data: []rune(data)}}
 
 	for {
-		// 1. Skip newlines at root level
+		// Skip newlines at root level
 		tok := p.next()
 		for tok.kind == tokNewline {
 			tok = p.next()
@@ -412,28 +422,22 @@ func (s *Shaders) parseData(data string) {
 		if tok.kind == tokEOF {
 			break
 		}
-
 		if tok.kind != tokString {
 			continue // Unmatched braces at root level, skip
 		}
-
 		shaderName := strings.ToLower(tok.val)
-
 		// Expect LBrace (skipping newlines)
 		brTok := p.next()
 		for brTok.kind == tokNewline {
 			brTok = p.next()
 		}
-
 		if brTok.kind != tokLBrace {
 			if brTok.kind == tokString {
 				p.peek = &brTok
 			}
 			continue
 		}
-
 		shader := NewShader(shaderName, "front")
-
 		// Parse shader body
 		for {
 			t := p.next()
@@ -463,44 +467,66 @@ func (s *Shaders) parseData(data string) {
 					}
 
 					if st.kind == tokString {
-						cmd := strings.ToLower(st.val)
+						cmd := strings.TrimSpace(strings.ToLower(st.val))
 						args := p.consumeLineArgs()
 
-						if cmd == "map" && len(args) > 0 {
-							stage.mapData = args[0]
-						} else if cmd == "clampmap" && len(args) > 0 {
-							stage.clampMap = args[0]
-						} else if cmd == "animmap" && len(args) > 0 {
-							stage.animMap = args
-						} else if cmd == "videomap" && len(args) > 0 {
-							stage.videoMap = args[0]
-						} else if cmd == "blendfunc" && len(args) > 0 {
-							arg1 := strings.ToLower(args[0])
-							if arg1 == "add" {
-								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_one", "gl_one", false
-							} else if arg1 == "filter" {
-								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_dst_color", "gl_zero", false
-							} else if arg1 == "blend" {
-								stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_src_alpha", "gl_one_minus_src_alpha", false
-							} else if len(args) > 1 {
-								stage.blendSrc, stage.blendDst, stage.depthWrite = arg1, strings.ToLower(args[1]), false
+						switch cmd {
+						case "map":
+							if len(args) > 0 {
+								stage.mapData = args[0]
 							}
-						} else if cmd == "alphafunc" && len(args) > 0 {
-							stage.alphaFunc = strings.ToLower(args[0])
-						} else if cmd == "depthfunc" && len(args) > 0 {
-							stage.depthFunc = strings.ToLower(args[0])
-						} else if cmd == "depthwrite" {
+						case "clampmap":
+							if len(args) > 0 {
+								stage.clampMap = args[0]
+							}
+						case "animmap":
+							if len(args) > 0 {
+								stage.animMap = args
+							}
+						case "videomap":
+							if len(args) > 0 {
+								stage.videoMap = args[0]
+							}
+						case "blendfunc":
+							if len(args) == 1 {
+								arg0 := strings.TrimSpace(strings.ToLower(args[0]))
+								switch arg0 {
+								case "add":
+									stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_one", "gl_one", false
+								case "filter":
+									stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_dst_color", "gl_zero", false
+								case "blend":
+									stage.blendSrc, stage.blendDst, stage.depthWrite = "gl_src_alpha", "gl_one_minus_src_alpha", false
+								}
+							} else if len(args) > 1 {
+								arg0 := strings.TrimSpace(strings.ToLower(args[0]))
+								arg1 := strings.TrimSpace(strings.ToLower(args[1]))
+								stage.blendSrc, stage.blendDst, stage.depthWrite = arg0, arg1, false
+							}
+						case "alphafunc":
+							if len(args) > 0 {
+								stage.alphaFunc = strings.ToLower(args[0])
+							}
+						case "depthfunc":
+							if len(args) > 0 {
+								stage.depthFunc = strings.ToLower(args[0])
+							}
+						case "depthwrite":
 							stage.depthWrite = true
-						} else if cmd == "detail" {
+						case "detail":
 							stage.detail = true
-						} else if cmd == "tcmod" {
+						case "tcmod":
 							stage.tcMods = append(stage.tcMods, args)
-						} else if cmd == "tcgen" {
+						case "tcgen":
 							stage.tcGen = args
-						} else if cmd == "rgbgen" {
+						case "rgbgen":
 							stage.rgbGen = args
-						} else if cmd == "alphagen" {
+						case "alphagen":
 							stage.alphaGen = args
+						case "alphamap":
+							stage.alphaMap = true
+						default:
+							fmt.Println("Unknown string parameter [0]:", cmd)
 						}
 					}
 				}
@@ -512,34 +538,65 @@ func (s *Shaders) parseData(data string) {
 				cmd := strings.ToLower(t.val)
 				args := p.consumeLineArgs()
 
-				if cmd == "surfaceparm" && len(args) > 0 {
-					shader.surfaceParms[strings.ToLower(args[0])] = true
-				} else if cmd == "cull" && len(args) > 0 {
-					shader.cull = strings.ToLower(args[0])
-				} else if cmd == "skyparms" {
-					shader.skyParms = args
-				} else if cmd == "fogparms" {
-					shader.fogParms = args
-				} else if cmd == "sort" && len(args) > 0 {
-					shader.sort = args[0]
-				} else if cmd == "nopicmip" {
-					shader.noPicMip = true
-				} else if cmd == "nomipmaps" {
-					shader.noMipmaps = true
-				} else if cmd == "polygonoffset" {
-					shader.polygonOffset = true
-				} else if cmd == "portal" {
-					shader.portal = true
-				} else if cmd == "entitymergable" {
-					shader.entityMergeable = true
-				} else if cmd == "tesssize" && len(args) > 0 {
-					shader.tessSize = args[0]
-				} else if cmd == "deformvertexes" {
-					shader.deformVertexes = append(shader.deformVertexes, args)
-				} else if strings.HasPrefix(cmd, "qer_") {
+				if strings.HasPrefix(cmd, "qer_") {
 					shader.qerParms[cmd] = args
 				} else if strings.HasPrefix(cmd, "q3map_") {
 					shader.q3mapParms[cmd] = args
+				} else {
+					switch cmd {
+					case "surfaceparm":
+						if len(args) > 0 {
+							shader.surfaceParms[strings.ToLower(args[0])] = true
+						}
+					case "cull":
+						if len(args) > 0 {
+							shader.cull = strings.ToLower(args[0])
+						}
+					case "skyparms":
+						shader.skyParms = args
+					case "fogparms":
+						shader.fogParms = args
+					case "sort":
+						if len(args) > 0 {
+							shader.sort = args[0]
+						}
+					case "nopicmip":
+						shader.noPicMip = true
+					case "nomipmaps":
+						shader.noMipmaps = true
+					case "polygonoffset":
+						shader.polygonOffset = true
+					case "portal":
+						shader.portal = true
+					case "entitymergable":
+						shader.entityMergeable = true
+					case "tesssize":
+						if len(args) > 0 {
+							shader.tessSize = args[0]
+						}
+					case "deformvertexes":
+						shader.deformVertexes = append(shader.deformVertexes, args)
+					case "light", "light1":
+						if len(args) > 0 {
+							shader.light = args[0]
+						} else {
+							shader.light = "1"
+						}
+					case "cloudparms":
+						shader.cloudParms = args
+					case "lightning":
+						shader.lightning = true
+					case "foggen":
+						shader.fogGen = args
+					case "fogonly":
+						shader.fogOnly = true
+					case "sky":
+						shader.sky = true
+					case "backsided":
+						shader.backsided = true
+					default:
+						fmt.Println("Unknown shader string parameter [1]:", cmd)
+					}
 				}
 			}
 		}

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 )
 
 // Rect represents a 2D rectangular area defined by two vectors: Min (bottom-left) and Max (top-right).
@@ -180,4 +181,13 @@ func (r Rect) IntersectionPoints(l Line) []XY {
 		}
 	}
 	return points
+}
+
+// Bounds returns the floor of Min.X and Min.Y, the ceiling of Max.X and Max.Y, and calculates the width and height.
+func (r Rect) Bounds() (float64, float64, float64, float64) {
+	x0 := math.Floor(r.Min.X)
+	y0 := math.Floor(r.Min.Y)
+	x1 := math.Ceil(r.Max.X)
+	y1 := math.Ceil(r.Max.Y)
+	return x0, y0, x1 - x0, y1 - y0
 }

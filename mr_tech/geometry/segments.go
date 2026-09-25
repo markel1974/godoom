@@ -4,14 +4,11 @@ const segmentsTolerance = 1e-6 // segmentsTolerance defines the precision thresh
 
 // IsSegmentSubset determines if the segment defined by points a1 and a2 is a subset of the segment defined by points b1 and b2.
 func IsSegmentSubset(a1, a2, b1, b2 XY) bool {
-	// 1. Collinearity Condition:
-	// A1 and A2 must lie on the infinite line passing through B1 and B2.
+	// Collinearity Condition: A1 and A2 must lie on the infinite line passing through B1 and B2.
 	if !isCollinear(b1, b2, a1) || !isCollinear(b1, b2, a2) {
 		return false
 	}
-
-	// 2. Inclusion Condition:
-	// Both points A1 and A2 must be located "between" B1 and B2.
+	// Inclusion Condition: Both points A1 and A2 must be located "between" B1 and B2.
 	return isPointOnSegment(b1, b2, a1) && isPointOnSegment(b1, b2, a2)
 }
 
@@ -49,6 +46,6 @@ func isPointOnSegment(s1, s2, p XY) bool {
 	t := ((p.X-s1.X)*dx + (p.Y-s1.Y)*dy) / squaredLength
 
 	// If T is between 0 and 1, the point is within the segment boundaries.
-	// We use tolerance to forgive slight imprecisions at the extreme vertices.
+	// We use tolerance to forgive slight imprecision at the extreme vertices.
 	return t >= -segmentsTolerance && t <= 1.0+segmentsTolerance
 }

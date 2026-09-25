@@ -285,25 +285,21 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	for i := int32(0); i < targetModel.NumFaces; i++ {
 		face := faces[targetModel.FirstFace+i]
 		tex := textures[face.TextureID]
-
-		texNameBytes := make([]byte, 0, 64)
+		if (tex.Flags & 0x80) != 0 {
+			continue // SURF_NODRAW
+		}
+		texNameBytes := make([]byte, 0, len(tex.Name))
 		for _, b := range tex.Name {
-			if b == 0 {
+			if b == 0 || len(texNameBytes) >= len(tex.Name)-1 {
 				break
 			}
 			texNameBytes = append(texNameBytes, b)
 		}
-		texName := strings.ToLower(string(texNameBytes))
-		isSky := (tex.Flags & 0x4) != 0 // SURF_SKY
-
-		if (tex.Flags & 0x80) != 0 {
-			continue // SURF_NODRAW
-		}
-
+		texName := strings.TrimSpace(strings.ToLower(string(texNameBytes)))
 		if q3.shaders.IsNodraw(texName) {
 			continue // shader has surfaceparm nodraw
 		}
-
+		isSky := (tex.Flags & 0x4) != 0 // SURF_SKY
 		switch face.Type {
 		case 1, 3: // Poligono Convesso (1) o Mesh Complessa (3)
 			// Q3 usa l'indicizzazione per formare direttamente triangoli
@@ -370,7 +366,7 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	needsAlphaTest := make(map[string]bool)
 
 	for _, f := range faces {
-		texNameLC := strings.ToLower(f.TexName)
+		texNameLC := f.TexName
 		hasAlpha := q3.shaders.HasAlphaTest(texNameLC)
 
 		if animMap := q3.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
@@ -391,7 +387,7 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 		}
 	}
 
-	il := NewImageLoader(q3.arc, q3.texManager)
+	il := NewImageLoader(q3.arc, q3.texManager, q3.shaders)
 	for texName, requiresAlpha := range needsAlphaTest {
 		forceOpaque := !requiresAlpha
 		if err := il.Load(texName, forceOpaque); err != nil {

@@ -67,12 +67,12 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
 
-	il := NewImageLoader(t.arc, t.texManager)
+	il := NewImageLoader(t.arc, t.texManager, t.shaders)
 	// Load materials for the MD3 model
 	for _, frame := range cModel.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
-				texName := tri.Material.Frames[0]
+				texName := strings.TrimSpace(strings.ToLower(tri.Material.Frames[0]))
 				if lErr := il.Load(texName, false); lErr != nil {
 					fmt.Printf("warning: %s\n", lErr.Error())
 				}
@@ -218,7 +218,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		return nil, err
 	}
 
-	il := NewImageLoader(t.arc, t.texManager)
+	il := NewImageLoader(t.arc, t.texManager, t.shaders)
 	// Load machinegun as the default weapon
 	weapon, _ := t.loadMD3Part("models/weapons2/machinegun/", "machinegun")
 	for _, frame := range lower.Frames {

@@ -85,6 +85,7 @@ func NewShaders() *Shaders {
 	}
 }
 
+// MaterialBind configures the properties of the given material based on the specified texture name and shader settings.
 func (s *Shaders) MaterialBind(texName string, material *config.Material) {
 	texNameLC := strings.TrimSpace(strings.ToLower(texName))
 	if s.HasAlphaTest(texNameLC) {
@@ -110,6 +111,14 @@ func (s *Shaders) MaterialBind(texName string, material *config.Material) {
 	material.IsLightning = s.IsLightning(texNameLC)
 	material.IsSky = s.IsSky(texNameLC)
 	material.IsBacksided = s.IsBacksided(texNameLC)
+}
+
+// Get retrieves a Shader from the container by the specified target. Returns nil if the target is not found.
+func (s *Shaders) Get(target string) *Shader {
+	if k, ok := s.container[target]; ok {
+		return k
+	}
+	return nil
 }
 
 // IsAdditive checks if the shader associated with the given target name contains any stages that use additive blending.
@@ -804,7 +813,7 @@ func (s *Shaders) parseData(data string) {
 				}
 			}
 		}
-
-		s.container[shader.name] = shader
+		shaderId := strings.TrimSpace(strings.ToLower(shader.name))
+		s.container[shaderId] = shader
 	}
 }

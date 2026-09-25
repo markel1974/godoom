@@ -27,15 +27,16 @@ func BaseName(in string) string {
 type ImageLoader struct {
 	arc      interfaces.IArchive
 	textures *lumps.Textures
+	shaders  *Shaders
 }
 
 // NewImageLoader creates a new ImageLoader instance using the provided IArchive for file access and directory operations.
-func NewImageLoader(arc interfaces.IArchive, textures *lumps.Textures) *ImageLoader {
-	return &ImageLoader{arc: arc, textures: textures}
+func NewImageLoader(arc interfaces.IArchive, textures *lumps.Textures, shaders *Shaders) *ImageLoader {
+	return &ImageLoader{arc: arc, textures: textures, shaders: shaders}
 }
 
 // FallbackImage generates and returns a 2x2 fallback image with a pink and black checkerboard pattern.
-func (il *ImageLoader) FallbackImage() image.Image {
+func (il *ImageLoader) fallbackImage() image.Image {
 	fallbackImg := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	pink := color.RGBA{R: 255, B: 255, A: 255}
 	black := color.RGBA{A: 255}
@@ -48,36 +49,25 @@ func (il *ImageLoader) FallbackImage() image.Image {
 
 // Load attempts to load an image by its name and returns it; falls back to a default image on failure.
 func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
+	if strings.Contains(texName, ".TGA") {
+		fmt.Println("HERE")
+	}
+
 	if texName == "noshader" || len(texName) == 0 {
 		return nil
 	}
 	if texes := il.textures.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 		return nil // Already loaded
 	}
+
+	//s := il.shaders.Get(texName)
+	//if s != nil {
+	//	fmt.Printf("[debug] shader for %s: %s\n", texName, s)
+	//}
 	img, err := il.retrieve(texName)
 	if err != nil {
 		fmt.Printf("[warning] using fallback for %s: %s\n", texName, err)
-
-		/*
-			dir := path.Dir(texName)
-			if dir != "." && dir != "" {
-				files, errDir := arc.ReadDir(dir)
-				if errDir == nil {
-					for _, f := range files {
-						ext := strings.ToLower(path.Ext(f))
-						if ext == ".jpg" || ext == ".tga" || ext == ".png" {
-							smartPath := path.Join(dir, f)
-							if smartImg, errSmart := doLoadImage(smartPath, arc); errSmart == nil {
-								fmt.Printf("[info] smart fallback found: %s\n", smartPath)
-								return smartImg, nil
-							}
-						}
-					}
-				}
-			}
-		*/
-
-		img = il.FallbackImage()
+		img = il.fallbackImage()
 	}
 
 	bounds := img.Bounds()

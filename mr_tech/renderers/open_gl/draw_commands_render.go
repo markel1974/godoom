@@ -35,7 +35,6 @@ func (w *DrawCommandsRender) renderInternal(isAdditive bool) {
 	}
 
 	// Default state variables to avoid redundant calls
-	//currentCullMode := -1
 	currentDepthWrite := -1 // -1 means unknown
 
 	for _, cmd := range w.commands {
@@ -44,26 +43,6 @@ func (w *DrawCommandsRender) renderInternal(isAdditive bool) {
 		}
 
 		if cmd.material != nil {
-			// Cull Mode (0=CullFront, 1=CullNone, 2=CullBack)
-			// Note: Q3's "cull front" default actually corresponds to culling the BACK faces in our OpenGL coordinate space.
-			// TEMPORARILY DISABLED: The engine's BSP/Face winding order appears to be mixed,
-			// causing random valid walls to be culled regardless of CullFront/CullBack.
-			/*
-				cullMode := cmd.material.GetCullMode()
-				if cullMode != currentCullMode {
-					if cullMode == 1 { // CullNone
-						gl.Disable(gl.CULL_FACE)
-					} else if cullMode == 0 { // CullFront (Q3 default) -> cull BACK
-						gl.Enable(gl.CULL_FACE)
-						gl.CullFace(gl.BACK)
-					} else if cullMode == 2 { // CullBack -> cull FRONT
-						gl.Enable(gl.CULL_FACE)
-						gl.CullFace(gl.FRONT)
-					}
-					currentCullMode = cullMode
-				}
-			*/
-
 			// Depth Write
 			var depthWrite int
 			if isAdditive {
@@ -96,13 +75,6 @@ func (w *DrawCommandsRender) renderInternal(isAdditive bool) {
 		gl.DrawElements(gl.TRIANGLES, cmd.indexCount, gl.UNSIGNED_INT, offset)
 	}
 
-	// Restore default state
-	/*
-		if currentCullMode != 0 {
-			gl.Enable(gl.CULL_FACE)
-			gl.CullFace(gl.BACK)
-		}
-	*/
 	if currentDepthWrite != 1 && !isAdditive {
 		gl.DepthMask(true) // Restore depth mask if we changed it, unless we're in additive pass (where it stays false)
 	}

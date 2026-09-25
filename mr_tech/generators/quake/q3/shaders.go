@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 )
 
@@ -82,6 +83,33 @@ func NewShaders() *Shaders {
 	return &Shaders{
 		container: make(map[string]*Shader),
 	}
+}
+
+func (s *Shaders) MaterialBind(texName string, material *config.Material) {
+	texNameLC := strings.TrimSpace(strings.ToLower(texName))
+	if s.HasAlphaTest(texNameLC) {
+		material.AlphaTest = 0.5
+	}
+	if s.IsAdditive(texNameLC) {
+		material.BlendMode = config.BlendModeAdditive
+	}
+	material.CullMode = s.GetCullMode(texNameLC)
+	material.DepthWrite = s.GetDepthWrite(texNameLC)
+	material.IsFog = s.IsFog(texNameLC)
+	material.FogColor = s.GetFogColor(texNameLC)
+	material.PolygonOffset = s.GetPolygonOffset(texNameLC)
+	material.Sort = s.GetSort(texNameLC)
+	material.NoMipmaps = s.GetNoMipmaps(texNameLC)
+	material.NoPicMip = s.GetNoPicMip(texNameLC)
+	material.EntityMergeable = s.GetEntityMergeable(texNameLC)
+	material.DeformVertexes = s.GetDeformVertexes(texNameLC)
+	material.SurfaceParms = s.GetSurfaceParms(texNameLC)
+	material.SkyParms = s.GetSkyParms(texNameLC)
+	material.CloudParms = s.GetCloudParms(texNameLC)
+	material.FogGen = s.GetFogGen(texNameLC)
+	material.IsLightning = s.IsLightning(texNameLC)
+	material.IsSky = s.IsSky(texNameLC)
+	material.IsBacksided = s.IsBacksided(texNameLC)
 }
 
 // IsAdditive checks if the shader associated with the given target name contains any stages that use additive blending.
@@ -171,6 +199,174 @@ func (s *Shaders) IsNodraw(target string) bool {
 		return false
 	}
 	return k.surfaceParms["nodraw"]
+}
+
+// GetCullMode retrieves the culling mode defined by the shader.
+func (s *Shaders) GetCullMode(target string) int {
+	k, ok := s.container[target]
+	if !ok {
+		return 0 // config.CullFront
+	}
+	switch k.cull {
+	case "none", "disable", "twosided":
+		return 1 // config.CullNone
+	case "back":
+		return 2 // config.CullBack
+	case "front":
+		return 0 // config.CullFront
+	default:
+		return 0 // config.CullFront
+	}
+}
+
+// GetDepthWrite determines if the shader should write to the depth buffer.
+func (s *Shaders) GetDepthWrite(target string) bool {
+	k, ok := s.container[target]
+	if !ok {
+		// By default, opaque surfaces write depth
+		return true
+	}
+
+	// If the shader is globally additive/transparent, we default to false
+	// unless a stage explicitly enables depthWrite
+	isTransparent := s.IsAdditive(target)
+	if !isTransparent {
+		return true
+	}
+
+	for _, st := range k.stages {
+		if st.depthWrite {
+			return true
+		}
+	}
+	return false
+}
+
+// GetPolygonOffset checks if the shader requires a polygon offset to prevent z-fighting (e.g. decals).
+func (s *Shaders) GetPolygonOffset(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.polygonOffset
+	}
+	return false
+}
+
+// GetSort retrieves the sort order of the shader, defaulting to 0.
+func (s *Shaders) GetSort(target string) int {
+	if k, ok := s.container[target]; ok {
+		if sortVal, err := strconv.Atoi(k.sort); err == nil {
+			return sortVal
+		}
+	}
+	return 0
+}
+
+// GetNoMipmaps checks if mipmapping is disabled for this shader.
+func (s *Shaders) GetNoMipmaps(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.noMipmaps
+	}
+	return false
+}
+
+// GetNoPicMip checks if the shader ignores picmip downscaling settings.
+func (s *Shaders) GetNoPicMip(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.noPicMip
+	}
+	return false
+}
+
+// GetEntityMergeable checks if the shader is marked as entityMergable.
+func (s *Shaders) GetEntityMergeable(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.entityMergeable
+	}
+	return false
+}
+
+// IsFog checks if the shader is a volumetric fog shader.
+func (s *Shaders) IsFog(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.surfaceParms["fog"] || len(k.fogParms) > 0 || len(k.fogGen) > 0 || k.fogOnly
+	}
+	return false
+}
+
+// GetFogColor retrieves the RGB color array of the fog.
+func (s *Shaders) GetFogColor(target string) []float32 {
+	if k, ok := s.container[target]; ok {
+		if len(k.fogParms) >= 3 {
+			r, _ := strconv.ParseFloat(k.fogParms[0], 32)
+			g, _ := strconv.ParseFloat(k.fogParms[1], 32)
+			b, _ := strconv.ParseFloat(k.fogParms[2], 32)
+			return []float32{float32(r), float32(g), float32(b)}
+		}
+	}
+	return []float32{0, 0, 0}
+}
+
+// GetDeformVertexes returns the list of vertex deformation commands.
+func (s *Shaders) GetDeformVertexes(target string) [][]string {
+	if k, ok := s.container[target]; ok {
+		return k.deformVertexes
+	}
+	return nil
+}
+
+// GetSurfaceParms returns all the surface properties.
+func (s *Shaders) GetSurfaceParms(target string) map[string]bool {
+	if k, ok := s.container[target]; ok {
+		return k.surfaceParms
+	}
+	return nil
+}
+
+// GetSkyParms returns the sky parameters.
+func (s *Shaders) GetSkyParms(target string) []string {
+	if k, ok := s.container[target]; ok {
+		return k.skyParms
+	}
+	return nil
+}
+
+// GetCloudParms returns the cloud parameters.
+func (s *Shaders) GetCloudParms(target string) []string {
+	if k, ok := s.container[target]; ok {
+		return k.cloudParms
+	}
+	return nil
+}
+
+// GetFogGen returns the fog generation parameters.
+func (s *Shaders) GetFogGen(target string) []string {
+	if k, ok := s.container[target]; ok {
+		return k.fogGen
+	}
+	return nil
+}
+
+// IsLightning checks if this is a lightning shader.
+func (s *Shaders) IsLightning(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.lightning
+	}
+	return false
+}
+
+// IsSky checks if this is marked as a sky shader.
+func (s *Shaders) IsSky(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.sky
+	}
+	return false
+}
+
+// IsBacksided checks if the shader is backsided.
+func (s *Shaders) IsBacksided(target string) bool {
+	if k, ok := s.container[target]; ok {
+		return k.backsided
+	}
+	return false
 }
 
 // GetDiffuseMap returns the texture path defined in the best 'map' directive of the shader's stages.

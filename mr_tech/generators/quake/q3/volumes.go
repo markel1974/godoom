@@ -61,13 +61,9 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 			}
 		}
 		material.Shader = v.TexName
-		if f.shaders.HasAlphaTest(texNameLC) {
-			material.AlphaTest = 0.5
-		}
 
-		if f.shaders.IsAdditive(texNameLC) {
-			material.BlendMode = config.BlendModeAdditive
-		}
+		f.shaders.MaterialBind(texNameLC, material)
+
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {

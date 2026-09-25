@@ -59,6 +59,25 @@ type Material struct {
 	ScrollU float32 `json:"scrollU"`
 	ScrollV float32 `json:"scrollV"`
 	Rotate  float32 `json:"rotate"`
+
+	// Legacy Engine Properties
+	IsFog           bool      `json:"isFog"`
+	FogColor        []float32 `json:"fogColor"`
+	PolygonOffset   bool      `json:"polygonOffset"`
+	Sort            int       `json:"sort"`
+	NoMipmaps       bool      `json:"noMipmaps"`
+	NoPicMip        bool      `json:"noPicMip"`
+	EntityMergeable bool      `json:"entityMergeable"`
+
+	// Complex/Additional
+	DeformVertexes [][]string      `json:"deformVertexes"`
+	SurfaceParms   map[string]bool `json:"surfaceParms"`
+	SkyParms       []string        `json:"skyParms"`
+	CloudParms     []string        `json:"cloudParms"`
+	FogGen         []string        `json:"fogGen"`
+	IsLightning    bool            `json:"isLightning"`
+	IsSky          bool            `json:"isSky"`
+	IsBacksided    bool            `json:"isBacksided"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.

@@ -118,11 +118,10 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
 		specificMaterial.Shader = texName
-
 		texNameLC := strings.ToLower(texName)
-		if t.shaders.IsAdditive(texNameLC) {
-			specificMaterial.BlendMode = config.BlendModeAdditive
-		}
+
+		t.shaders.MaterialBind(texNameLC, specificMaterial)
+
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()

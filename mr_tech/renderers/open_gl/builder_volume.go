@@ -119,7 +119,6 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 	pushPass := func(targetBlendMode int, targetDc *DrawCommands) {
 		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 			vol := w.visibleVol.At(vIdx)
-			startIdx := w.fv.GetIndicesLen()
 			faces, faceCount := vol.GetFaces()
 
 			var added int
@@ -146,6 +145,9 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 				if !hasLayer {
 					continue
 				}
+
+				startIdx := w.fv.GetIndicesLen()
+
 				p := face.GetPoints()
 				u, v := face.GetUV()
 				id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
@@ -153,11 +155,14 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 				id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
 				w.fv.AddTriangle(id0, id1, id2)
 				added++
+
+				endIdx := w.fv.GetIndicesLen()
+				if startIdx != endIdx {
+					targetDc.Compute(startIdx, endIdx, matObj)
+				}
 			}
 
-			endIdx := w.fv.GetIndicesLen()
-			if added > 0 && startIdx != endIdx {
-				targetDc.Compute(startIdx, endIdx)
+			if added > 0 {
 				counter++
 			}
 		}
@@ -195,27 +200,28 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 			continue
 		}
 
-		startIdx := w.fv.GetIndicesLen()
 		faces, faceCount := vol.GetFaces()
 
 		for fIdx := 0; fIdx < faceCount; fIdx++ {
 			face := (*faces)[fIdx]
 			tex, texKind := face.GetMaterialDetails()
-			if tex == nil {
+			matObj := face.GetMaterialObj()
+			if tex == nil || matObj == nil {
 				continue
 			}
 			if texKind == int(config.MaterialKindSky) {
 				w.cSky = tex
-				if matObj := face.GetMaterialObj(); matObj != nil {
-					w.cSkyU = matObj.U()
-					w.cSkyV = matObj.V()
-				}
+				w.cSkyU = matObj.U()
+				w.cSkyV = matObj.V()
 				continue
 			}
 			layer, hasLayer := w.tex.Get(tex)
 			if !hasLayer {
 				continue
 			}
+
+			startIdx := w.fv.GetIndicesLen()
+
 			p := face.GetPoints()
 			u, v := face.GetUV()
 			id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
@@ -223,14 +229,17 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 			id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
 			w.fv.AddTriangle(id0, id1, id2)
 			w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-		}
 
-		endIdx := w.fv.GetIndicesLen()
-		if startIdx != endIdx {
-			w.dc.Compute(startIdx, endIdx)
-			w.dcAdditive.Compute(startIdx, endIdx)
-			counter++
+			endIdx := w.fv.GetIndicesLen()
+			if startIdx != endIdx {
+				if matObj.BlendMode() == int(config.BlendModeAdditive) {
+					w.dcAdditive.Compute(startIdx, endIdx, matObj)
+				} else {
+					w.dc.Compute(startIdx, endIdx, matObj)
+				}
+			}
 		}
+		counter++
 	}
 
 	//fmt.Printf("FRUSTUM VOLUMES: %d, CULLED: %d, DRAW: %d\n", w.visibleVolsIndex, w.visibleVolsIndex-counter, counter)
@@ -242,36 +251,43 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 
 	queryGeom := func(object physics.IAABB) bool {
 		vol := object.(*model.Volume)
-		startIdx := w.fv.GetIndicesLen()
 		faces, faceCount := vol.GetFaces()
 		for x := 0; x < faceCount; x++ {
 			face := (*faces)[x]
 			tex, texKind := face.GetMaterialDetails()
-			if tex == nil {
+			matObj := face.GetMaterialObj()
+			if tex == nil || matObj == nil {
 				continue
 			}
 			if texKind == int(config.MaterialKindSky) {
 				w.cSky = tex
-				if matObj := face.GetMaterialObj(); matObj != nil {
-					w.cSkyU = matObj.U()
-					w.cSkyV = matObj.V()
-				}
+				w.cSkyU = matObj.U()
+				w.cSkyV = matObj.V()
 				continue
 			}
 			layer, hasLayer := w.tex.Get(tex)
 			if !hasLayer {
 				continue
 			}
+
+			startIdx := w.fv.GetIndicesLen()
+
 			p := face.GetPoints()
 			u, v := face.GetUV()
 			id0 := w.fv.AddVertex6(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), layer)
 			id1 := w.fv.AddVertex6(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), layer)
 			id2 := w.fv.AddVertex6(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), layer)
 			w.fv.AddTriangle(id0, id1, id2)
+
+			endIdx := w.fv.GetIndicesLen()
+			if startIdx != endIdx {
+				if matObj.BlendMode() == int(config.BlendModeAdditive) {
+					w.dcAdditive.Compute(startIdx, endIdx, matObj)
+				} else {
+					w.dc.Compute(startIdx, endIdx, matObj)
+				}
+			}
 		}
-		endIdx := w.fv.GetIndicesLen()
-		w.dc.Compute(startIdx, endIdx)
-		w.dcAdditive.Compute(startIdx, endIdx)
 		counter++
 		return false
 	}
@@ -319,12 +335,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		b := float32(billBoard)
 		pushPassThing := func(targetBlendMode int, targetDc *DrawCommands) {
-			startIndices := w.fv.GetIndicesLen()
-			var added int
 			for fx := 0; fx < faceCount; fx++ {
 				f := (*faces2)[fx]
 				mat := f.GetMaterial()
-				if mat == nil {
+				matObj := f.GetMaterialObj()
+				if mat == nil || matObj == nil {
 					continue
 				}
 				blendMode := config.BlendModeOpaque
@@ -338,6 +353,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 				if !ok {
 					continue
 				}
+
+				startIndices := w.fv.GetIndicesLen()
+
 				p := f.GetPoints()
 				u, v := f.GetUV()
 				np := (*nextFaces2)[fx].GetPoints()
@@ -345,11 +363,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), l, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
 				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), l, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
 				w.fv.AddTriangle(id0, id1, id2)
-				added++
-			}
-			currentIndices := w.fv.GetIndicesLen()
-			if added > 0 && startIndices != currentIndices {
-				targetDc.Compute(startIndices, currentIndices)
+
+				currentIndices := w.fv.GetIndicesLen()
+				if startIndices != currentIndices {
+					targetDc.Compute(startIndices, currentIndices, matObj)
+				}
 			}
 		}
 

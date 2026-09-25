@@ -1,9 +1,12 @@
 package open_gl
 
+import "github.com/markel1974/godoom/mr_tech/textures"
+
 // DrawCommand represents a rendering command with a starting index and the number of indices to be drawn.
 type DrawCommand struct {
 	firstIndex int32
 	indexCount int32
+	material   *textures.Material
 }
 
 // DrawCommands manages a collection of draw command objects used to define rendering batches in a graphics pipeline.
@@ -25,22 +28,24 @@ func NewDrawCommands(s int) *DrawCommands {
 	return dc
 }
 
-// Compute updates or creates a draw command using the provided start and current index values.
-func (w *DrawCommands) Compute(startIndices, currentIndices int32) {
+// Compute updates or creates a draw command using the provided start and current index values and material.
+func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *textures.Material) {
 	var cmd *DrawCommand
 
 	// Se abbiamo già un comando e la nuova geometria inizia esattamente
 	// dove finisce la precedente, fondiamo tutto in un singolo batch gigante!
-	if w.len > 0 && (w.commands[w.len-1].firstIndex+w.commands[w.len-1].indexCount) == startIndices {
+	// MA SOLO se il materiale (ovvero lo stato OpenGL) è lo stesso.
+	if w.len > 0 && (w.commands[w.len-1].firstIndex+w.commands[w.len-1].indexCount) == startIndices && w.commands[w.len-1].material == material {
 		cmd = w.commands[w.len-1]
 	} else {
-		// Crea un nuovo comando solo in caso di discontinuità di memoria
+		// Crea un nuovo comando solo in caso di discontinuità di memoria o cambio di materiale
 		if w.len >= len(w.commands) {
 			w.Grow()
 		}
 		cmd = w.commands[w.len]
 		cmd.firstIndex = startIndices
 		cmd.indexCount = 0
+		cmd.material = material
 		w.len++
 	}
 

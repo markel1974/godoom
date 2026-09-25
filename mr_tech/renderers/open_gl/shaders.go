@@ -212,7 +212,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.main.Render(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 	// MAIN ADDITIVE
 	if dcAdditive != nil {
-		w.main.RenderAdditive(dcAdditive.Render)
+		w.main.RenderAdditive(dcAdditive.RenderAdditive)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()

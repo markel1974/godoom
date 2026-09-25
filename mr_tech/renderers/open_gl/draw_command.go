@@ -34,11 +34,25 @@ func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *tex
 
 	// Se abbiamo già un comando e la nuova geometria inizia esattamente
 	// dove finisce la precedente, fondiamo tutto in un singolo batch gigante!
-	// MA SOLO se il materiale (ovvero lo stato OpenGL) è lo stesso.
-	if w.len > 0 && (w.commands[w.len-1].firstIndex+w.commands[w.len-1].indexCount) == startIndices && w.commands[w.len-1].material == material {
+	// MA SOLO se lo stato OpenGL (DepthWrite, PolygonOffset) è identico!
+	canMerge := false
+	if w.len > 0 && (w.commands[w.len-1].firstIndex+w.commands[w.len-1].indexCount) == startIndices {
+		prevMat := w.commands[w.len-1].material
+		if prevMat == material {
+			canMerge = true
+		} else if prevMat != nil && material != nil {
+			if prevMat.GetDepthWrite() == material.GetDepthWrite() && prevMat.GetPolygonOffset() == material.GetPolygonOffset() {
+				canMerge = true
+			}
+		} else if prevMat == nil && material == nil {
+			canMerge = true
+		}
+	}
+
+	if canMerge {
 		cmd = w.commands[w.len-1]
 	} else {
-		// Crea un nuovo comando solo in caso di discontinuità di memoria o cambio di materiale
+		// Crea un nuovo comando solo in caso di discontinuità di memoria o cambio di stato
 		if w.len >= len(w.commands) {
 			w.Grow()
 		}

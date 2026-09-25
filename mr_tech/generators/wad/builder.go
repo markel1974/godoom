@@ -213,7 +213,8 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
 	}
 	if cfgThing.Kind == config.ThingEnemyDef {
-		enemyLogic := common.NewEnemy(nil, 100)
+		actions := []string{"run", "attack", "pain", "death", "xdeath"}
+		enemyLogic := common.NewEnemy(actions, 100)
 		cfgThing.OnThinking = enemyLogic.OnThinking
 		cfgThing.OnCollision = enemyLogic.OnCollision
 		cfgThing.OnImpact = enemyLogic.OnImpact

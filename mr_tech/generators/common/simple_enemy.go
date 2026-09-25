@@ -14,6 +14,7 @@ import (
 type Enemy struct {
 	active         bool
 	isDead         bool
+	firstTick      bool
 	health         float64 // Add health
 	throwCooldown  float64
 	throwMin       float64
@@ -57,6 +58,7 @@ func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
 			e.actions["idle"] = idx
 		}
 	}
+	e.firstTick = true
 	return e
 }
 
@@ -152,6 +154,19 @@ func (e *Enemy) findAction(name string) (int, bool) {
 func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ float64) {
 	if e.isDead {
 		return // Stop thinking if dead
+	}
+
+	if e.firstTick {
+		e.firstTick = false
+		if actionIdx, ok := e.findAction("idle"); ok {
+			self.SetAction(actionIdx)
+		} else if actionIdx, ok := e.findAction("stand"); ok {
+			self.SetAction(actionIdx)
+		} else if actionIdx, ok := e.findAction("run"); ok {
+			self.SetAction(actionIdx)
+		} else if actionIdx, ok := e.findAction("walk"); ok {
+			self.SetAction(actionIdx)
+		}
 	}
 
 	// Process pain timer

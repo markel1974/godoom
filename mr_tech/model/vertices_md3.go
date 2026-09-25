@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesMD3 represents a higher-level structure containing multiple VerticesMD1 instances and related face data.
@@ -22,8 +21,9 @@ type VerticesMD3 struct {
 	facesAPtr *[]*Face
 	facesBPtr *[]*Face
 
-	totalFaces int
-	entity     *physics.Entity
+	totalFaces    int
+	entity        *physics.Entity
+	currentAction int
 }
 
 // NewVerticesMD3 initializes and returns a new instance of VerticesMD3 based on the given configuration and materials.
@@ -65,13 +65,14 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	totalFaces := countL + countU + countH + countW
 
 	v := &VerticesMD3{
-		lower:      lower,
-		upper:      upper,
-		head:       head,
-		weapon:     weapon,
-		totalFaces: totalFaces,
-		facesA:     make([]*Face, totalFaces),
-		facesB:     make([]*Face, totalFaces),
+		lower:         lower,
+		upper:         upper,
+		head:          head,
+		weapon:        weapon,
+		totalFaces:    totalFaces,
+		currentAction: -1,
+		facesA:        make([]*Face, totalFaces),
+		facesB:        make([]*Face, totalFaces),
 	}
 	v.facesAPtr = &v.facesA
 	v.facesBPtr = &v.facesB
@@ -122,6 +123,10 @@ func (v *VerticesMD3) GetAABB() *physics.AABB {
 
 // SetAction updates the actions for the lower, upper, head, and weapon vertices based on the provided index.
 func (v *VerticesMD3) SetAction(idx int) {
+	if v.currentAction == idx {
+		return
+	}
+	v.currentAction = idx
 	// idx is the index from lower's actions (since we passed lower's ActionDefinitions to doCreate)
 	v.lower.SetAction(idx)
 
@@ -195,28 +200,11 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	facesU_A, countU, facesU_B, _, _, _ := v.upper.GetVertices(tick)
 	facesH_A, countH, facesH_B, _, _, _ := v.head.GetVertices(tick)
 
-	// In the real implementation, we would extract the exact tag corresponding to the frame.
-	// But GetVertices returns faces, not the Volume itself, so we can't get Tags directly
-	// unless we find the Volume.
-	// Since we know the frames from GetVertices logic:
-	var getVol = func(md1 *VerticesMD1, t uint64) (*Volume, *Volume) {
-		if md1.startFrame == md1.endFrame {
-			return md1.volumes[md1.startFrame], md1.volumes[md1.startFrame]
-		}
-		const groupSize = 6.0
-		frameFloat := textures.TickGrouped(t, int(groupSize))
-		animLength := md1.endFrame - md1.startFrame + 1
-		if animLength <= 0 {
-			animLength = 1
-		}
-		relativeFrameA := int(frameFloat) % animLength
-		relativeFrameB := (relativeFrameA + 1) % animLength
-		return md1.volumes[md1.startFrame+relativeFrameA], md1.volumes[md1.startFrame+relativeFrameB]
-	}
-
-	volL_A, volL_B := getVol(v.lower, tick)
-	volU_A, volU_B := getVol(v.upper, tick)
-	_, _ = getVol(v.head, tick) // Execute to keep state synced but discard volumes
+	// The actual frames were just calculated inside lower.GetVertices, upper.GetVertices, etc.
+	// We can retrieve them directly:
+	volL_A, volL_B := v.lower.GetVolumesAt(tick)
+	volU_A, volU_B := v.upper.GetVolumesAt(tick)
+	_, _ = v.head.GetVolumesAt(tick) // Execute to keep state synced but discard volumes
 
 	tagTorsoA := volL_A.Tags["tag_torso"]
 	tagTorsoB := volL_B.Tags["tag_torso"]
@@ -244,7 +232,7 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 
 	if v.weapon != nil {
 		facesW_A, countW, facesW_B, _, _, _ := v.weapon.GetVertices(tick)
-		_, _ = getVol(v.weapon, tick)
+		_, _ = v.weapon.GetVolumesAt(tick)
 
 		tagWeaponA := volU_A.Tags["tag_weapon"]
 		tagWeaponB := volU_B.Tags["tag_weapon"]

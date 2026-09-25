@@ -70,6 +70,21 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 	v.currentAction = idx
 	v.compute()
+
+	// Restart animation for all faces in the new action volume
+	if faces, _ := v.volumes[idx].GetFaces(); faces != nil {
+		for _, f := range *faces {
+			if mat := f.GetMaterialObj(); mat != nil {
+				mat.RestartAnim()
+				// In Doom, action 3 is death and 4 is extreme death
+				if idx == 3 || idx == 4 {
+					mat.SetClampAnim(true)
+				} else {
+					mat.SetClampAnim(false)
+				}
+			}
+		}
+	}
 }
 
 // GetDisplacement retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.

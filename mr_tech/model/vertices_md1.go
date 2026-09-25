@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -14,12 +15,14 @@ import (
 type VerticesMD1 struct {
 	viewVolume *Volume
 	//rootEntity *physics.Entity
-	volumes     []*Volume
-	actions     [][2]int
-	startFrame  int
-	endFrame    int
-	idxA        int
-	actionNames []string
+	volumes       []*Volume
+	actions       [][2]int
+	startFrame    int
+	endFrame      int
+	clampAnim     bool
+	startTick     uint64
+	currentAction int
+	actionNames   []string
 }
 
 // NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
@@ -29,12 +32,12 @@ func NewVerticesMD2(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 	}
 
 	v := &VerticesMD1{
-		volumes:     make([]*Volume, len(cfg.MD1.Frames)),
-		actions:     cfg.MD1.ActionIntervals,
-		actionNames: cfg.MD1.ActionDefinitions,
-		startFrame:  0,
-		endFrame:    len(cfg.MD1.Frames) - 1,
-		idxA:        -1,
+		volumes:       make([]*Volume, len(cfg.MD1.Frames)),
+		actions:       cfg.MD1.ActionIntervals,
+		actionNames:   cfg.MD1.ActionDefinitions,
+		startFrame:    0,
+		endFrame:      len(cfg.MD1.Frames) - 1,
+		currentAction: -1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -87,8 +90,20 @@ func (v *VerticesMD1) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		return
 	}
+	if v.currentAction == idx {
+		return
+	}
+	v.currentAction = idx
 	v.startFrame = v.actions[idx][0]
 	v.endFrame = v.actions[idx][1]
+	v.startTick = textures.GlobalTick()
+	v.clampAnim = false
+	if idx < len(v.actionNames) {
+		name := strings.ToLower(v.actionNames[idx])
+		if strings.Contains(name, "death") || strings.Contains(name, "die") || strings.Contains(name, "dead") {
+			v.clampAnim = true
+		}
+	}
 }
 
 func (v *VerticesMD1) GetActionName(idx int) string {
@@ -99,10 +114,21 @@ func (v *VerticesMD1) GetActionName(idx int) string {
 }
 
 func (v *VerticesMD1) SetActionByName(name string) {
+	nameLower := strings.ToLower(name)
 	for i, n := range v.actionNames {
-		if n == name {
+		if strings.ToLower(n) == nameLower {
 			v.SetAction(i)
 			return
+		}
+	}
+	// Fallback se fallisce (es. se BOTH_DEATH1 manca e c'è TORSO_DEATH1)
+	if strings.HasPrefix(nameLower, "both_") {
+		torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
+		for i, n := range v.actionNames {
+			if strings.ToLower(n) == torsoName {
+				v.SetAction(i)
+				return
+			}
 		}
 	}
 }
@@ -120,39 +146,95 @@ func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 		return faces, faceCount, faces, faceCount, 0.0, v.GetBillboard()
 	}
 	const groupSize = 6.0
-	frameFloat := textures.TickGrouped(tick, int(groupSize))
+	var frameFloat float64
+	if v.clampAnim {
+		elapsed := uint64(0)
+		if tick > v.startTick {
+			elapsed = tick - v.startTick
+		}
+		frameFloat = float64(elapsed) / groupSize
+	} else {
+		frameFloat = textures.TickGrouped(tick, int(groupSize))
+	}
+
 	// Calcoliamo la durata dell'animazione corrente in termini di numero di frame
-	// Aggiungiamo 1 perché l'intervallo è inclusivo (es. frame 0-5 sono 6 frame)
 	animLength := v.endFrame - v.startFrame + 1
-	// Assicuriamoci che animLength sia valido (prevenzione crash in caso di configurazione errata)
 	if animLength <= 0 {
 		animLength = 1
 	}
+
 	// Troviamo l'indice relativo all'interno dell'animazione corrente
-	relativeFrameA := int(frameFloat) % animLength
-	// L'indice B è il frame successivo relativo, e se supera la lunghezza dell'animazione, torna a 0
-	relativeFrameB := (relativeFrameA + 1) % animLength
-	// Mappiamo l'indice relativo sull'indice assoluto dell'array v.frames
+	relativeFrameA := int(frameFloat)
+	relativeFrameB := relativeFrameA + 1
+	lerpT := frameFloat - math.Floor(frameFloat)
+
+	if v.clampAnim {
+		if relativeFrameA >= animLength-1 {
+			relativeFrameA = animLength - 1
+			relativeFrameB = animLength - 1
+			lerpT = 0.0 // Fermo sull'ultimo frame
+		} else if relativeFrameB >= animLength-1 {
+			relativeFrameB = animLength - 1
+		}
+	} else {
+		// Looping animation
+		relativeFrameA = relativeFrameA % animLength
+		relativeFrameB = relativeFrameB % animLength
+	}
+
 	idxA := v.startFrame + relativeFrameA
 	idxB := v.startFrame + relativeFrameB
-	// Parte frazionaria per l'interpolazione fluida tra i due frame calcolati
-	lerpT := frameFloat - math.Floor(frameFloat)
 
 	curr := v.volumes[idxA]
 	next := v.volumes[idxB]
-
-	if v.idxA != idxA {
-		v.idxA = idxA
-		// TODO TERMINATE IMPLEMENTATION
-		//v.rootEntity.SetSize(curr.GetEntity().GetSize())
-		//curr.entity = v.rootEntity
-		//v.rootVolume = curr
-	}
 
 	facesA, faceCountA := curr.GetFaces()
 	facesB, faceCountB := next.GetFaces()
 
 	return facesA, faceCountA, facesB, faceCountB, lerpT, v.GetBillboard()
+}
+
+// GetVolumesAt calculates and returns the volumes for a specific tick, without mutating state.
+func (v *VerticesMD1) GetVolumesAt(tick uint64) (*Volume, *Volume) {
+	if len(v.volumes) == 0 {
+		return nil, nil
+	}
+	if v.startFrame == v.endFrame {
+		return v.volumes[v.startFrame], v.volumes[v.startFrame]
+	}
+	const groupSize = 6.0
+	var frameFloat float64
+	if v.clampAnim {
+		elapsed := uint64(0)
+		if tick > v.startTick {
+			elapsed = tick - v.startTick
+		}
+		frameFloat = float64(elapsed) / groupSize
+	} else {
+		frameFloat = textures.TickGrouped(tick, int(groupSize))
+	}
+
+	animLength := v.endFrame - v.startFrame + 1
+	if animLength <= 0 {
+		animLength = 1
+	}
+
+	relativeFrameA := int(frameFloat)
+	relativeFrameB := relativeFrameA + 1
+
+	if v.clampAnim {
+		if relativeFrameA >= animLength-1 {
+			relativeFrameA = animLength - 1
+			relativeFrameB = animLength - 1
+		} else if relativeFrameB >= animLength-1 {
+			relativeFrameB = animLength - 1
+		}
+	} else {
+		relativeFrameA = relativeFrameA % animLength
+		relativeFrameB = relativeFrameB % animLength
+	}
+
+	return v.volumes[v.startFrame+relativeFrameA], v.volumes[v.startFrame+relativeFrameB]
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.

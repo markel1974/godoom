@@ -50,6 +50,9 @@ type Material struct {
 	u           float64
 	v           float64
 
+	clampAnim bool
+	startTick uint64
+
 	cullMode        int
 	depthWrite      bool
 	alphaTest       float32
@@ -125,13 +128,35 @@ func (m *Material) Shader() string {
 	return m.shader
 }
 
+func (m *Material) SetClampAnim(clamp bool) {
+	m.clampAnim = clamp
+}
+
+func (m *Material) RestartAnim() {
+	m.startTick = GlobalTick()
+}
+
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
 func (m *Material) CurrentFrame() *Texture {
 	if m.totalFrames > 1 {
-		frameIdx := _currentTick % m.totalFrames
-		return m.frames[frameIdx]
+		if m.clampAnim {
+			return m.clampedFrame()
+		}
+		return m.frames[_currentTick%m.totalFrames]
 	}
 	return m.frame
+}
+
+func (m *Material) clampedFrame() *Texture {
+	elapsed := uint64(0)
+	if _globalTick > m.startTick {
+		elapsed = _globalTick - m.startTick
+	}
+	elapsedTick := elapsed / _tickInterval
+	if elapsedTick >= m.totalFrames-1 {
+		elapsedTick = m.totalFrames - 1
+	}
+	return m.frames[elapsedTick]
 }
 
 func (m *Material) BlendMode() int {

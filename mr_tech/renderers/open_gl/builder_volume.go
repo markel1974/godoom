@@ -159,6 +159,7 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 				endIdx := w.fv.GetIndicesLen()
 				if startIdx != endIdx {
 					targetDc.Compute(startIdx, endIdx, matObj)
+					startIdx = endIdx
 				}
 			}
 
@@ -237,6 +238,7 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 				} else {
 					w.dc.Compute(startIdx, endIdx, matObj)
 				}
+				startIdx = endIdx
 			}
 		}
 		counter++
@@ -286,6 +288,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 				} else {
 					w.dc.Compute(startIdx, endIdx, matObj)
 				}
+				startIdx = endIdx
 			}
 		}
 		counter++
@@ -367,6 +370,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 				currentIndices := w.fv.GetIndicesLen()
 				if startIndices != currentIndices {
 					targetDc.Compute(startIndices, currentIndices, matObj)
+					startIndices = currentIndices
 				}
 			}
 		}

@@ -300,6 +300,10 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 			continue // SURF_NODRAW
 		}
 
+		if q3.shaders.IsNodraw(texName) {
+			continue // shader has surfaceparm nodraw
+		}
+
 		switch face.Type {
 		case 1, 3: // Poligono Convesso (1) o Mesh Complessa (3)
 			// Q3 usa l'indicizzazione per formare direttamente triangoli

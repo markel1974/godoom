@@ -30,7 +30,8 @@ type ShaderStage struct {
 
 // IsAdditive determines if the shader stage uses additive blending by checking the blend source and destination factors.
 func (st *ShaderStage) IsAdditive() bool {
-	return st.blendSrc == "gl_one" && st.blendDst == "gl_one"
+	return (st.blendSrc == "gl_one" && st.blendDst == "gl_one") ||
+		(st.blendSrc == "gl_src_alpha" && st.blendDst == "gl_one")
 }
 
 // Shader represents a graphics shader with specific properties, shader stages, and parameters for rendering operations.
@@ -163,6 +164,15 @@ func (s *Shaders) HasAlphaTest(target string) bool {
 		}
 	}
 	return false
+}
+
+// IsNodraw checks if the shader has surfaceparm nodraw.
+func (s *Shaders) IsNodraw(target string) bool {
+	k, ok := s.container[target]
+	if !ok {
+		return false
+	}
+	return k.surfaceParms["nodraw"]
 }
 
 // GetDiffuseMap returns the texture path defined in the best 'map' directive of the shader's stages.
@@ -526,7 +536,7 @@ func (s *Shaders) parseData(data string) {
 						case "alphamap":
 							stage.alphaMap = true
 						default:
-							fmt.Println("Unknown string parameter [0]:", cmd)
+							fmt.Println("Unknown shader string parameter [0]:", cmd)
 						}
 					}
 				}

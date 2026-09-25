@@ -40,6 +40,16 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	tex := r.tex.Get(ca.Frames)
 	material = textures.NewMaterial(ca.Shader, tex, int(ca.Kind), ca.ScaleW, ca.ScaleH, ca.U, ca.V)
 	material.SetBlendMode(ca.BlendMode)
+
+	material.SetProperties(
+		ca.CullMode, ca.DepthWrite, ca.AlphaTest,
+		ca.IsFog, ca.FogColor, ca.PolygonOffset,
+		ca.Sort, ca.NoMipmaps, ca.NoPicMip,
+		ca.EntityMergeable, ca.DeformVertexes,
+		ca.SurfaceParms, ca.SkyParms, ca.CloudParms,
+		ca.FogGen, ca.IsLightning, ca.IsSky, ca.IsBacksided,
+	)
+
 	r.frames[key] = material
 	return material
 }

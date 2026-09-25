@@ -49,6 +49,25 @@ type Material struct {
 	scaleH      float64
 	u           float64
 	v           float64
+
+	cullMode        int
+	depthWrite      bool
+	alphaTest       float32
+	isFog           bool
+	fogColor        []float32
+	polygonOffset   bool
+	sort            int
+	noMipmaps       bool
+	noPicMip        bool
+	entityMergeable bool
+	deformVertexes  [][]string
+	surfaceParms    map[string]bool
+	skyParms        []string
+	cloudParms      []string
+	fogGen          []string
+	isLightning     bool
+	isSky           bool
+	isBacksided     bool
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
@@ -122,3 +141,73 @@ func (m *Material) BlendMode() int {
 func (m *Material) SetBlendMode(b int) {
 	m.blendMode = b
 }
+
+// SetProperties assigns all the advanced rendering properties extracted from the shader configuration.
+func (m *Material) SetProperties(cullMode int, depthWrite bool, alphaTest float32, isFog bool, fogColor []float32, polygonOffset bool, sort int, noMipmaps bool, noPicMip bool, entityMergeable bool, deformVertexes [][]string, surfaceParms map[string]bool, skyParms []string, cloudParms []string, fogGen []string, isLightning bool, isSky bool, isBacksided bool) {
+	m.cullMode = cullMode
+	m.depthWrite = depthWrite
+	m.alphaTest = alphaTest
+	m.isFog = isFog
+	m.fogColor = fogColor
+	m.polygonOffset = polygonOffset
+	m.sort = sort
+	m.noMipmaps = noMipmaps
+	m.noPicMip = noPicMip
+	m.entityMergeable = entityMergeable
+	m.deformVertexes = deformVertexes
+	m.surfaceParms = surfaceParms
+	m.skyParms = skyParms
+	m.cloudParms = cloudParms
+	m.fogGen = fogGen
+	m.isLightning = isLightning
+	m.isSky = isSky
+	m.isBacksided = isBacksided
+}
+
+// GetCullMode returns the culling mode (e.g. front, back, none).
+func (m *Material) GetCullMode() int { return m.cullMode }
+
+// GetDepthWrite returns whether the material writes to the depth buffer.
+func (m *Material) GetDepthWrite() bool { return m.depthWrite }
+
+// GetAlphaTest returns the alpha threshold for discarding pixels.
+func (m *Material) GetAlphaTest() float32 { return m.alphaTest }
+
+// IsFog returns whether this is a fog material.
+func (m *Material) IsFog() bool { return m.isFog }
+
+// GetFogColor returns the RGB components of the fog color.
+func (m *Material) GetFogColor() []float32 { return m.fogColor }
+
+// GetPolygonOffset returns whether this material needs depth offset (e.g. decals).
+func (m *Material) GetPolygonOffset() bool { return m.polygonOffset }
+
+// GetSort returns the sorting order of the material.
+func (m *Material) GetSort() int { return m.sort }
+
+// IsEntityMergeable returns whether this material's entity can be merged.
+func (m *Material) IsEntityMergeable() bool { return m.entityMergeable }
+
+// GetDeformVertexes returns the vertex deformation stages.
+func (m *Material) GetDeformVertexes() [][]string { return m.deformVertexes }
+
+// GetSurfaceParms returns the surface parameters dictionary.
+func (m *Material) GetSurfaceParms() map[string]bool { return m.surfaceParms }
+
+// GetSkyParms returns the sky parameters array.
+func (m *Material) GetSkyParms() []string { return m.skyParms }
+
+// GetCloudParms returns the cloud parameters array.
+func (m *Material) GetCloudParms() []string { return m.cloudParms }
+
+// GetFogGen returns the fog generation parameters array.
+func (m *Material) GetFogGen() []string { return m.fogGen }
+
+// IsLightning returns whether this is a lightning material.
+func (m *Material) IsLightning() bool { return m.isLightning }
+
+// IsSky returns whether this material represents the sky.
+func (m *Material) IsSky() bool { return m.isSky }
+
+// IsBacksided returns whether this material is backsided.
+func (m *Material) IsBacksided() bool { return m.isBacksided }

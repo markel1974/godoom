@@ -2,8 +2,6 @@ package q3
 
 import (
 	"fmt"
-	"image"
-	"image/draw"
 	_ "image/jpeg"
 	"strings"
 
@@ -69,13 +67,15 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
 
-	il := NewImageLoader(t.arc)
+	il := NewImageLoader(t.arc, t.texManager)
 	// Load materials for the MD3 model
 	for _, frame := range cModel.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(il, texName)
+				if lErr := il.Load(texName); lErr != nil {
+					fmt.Printf("warning: %s\n", lErr.Error())
+				}
 			}
 		}
 	}
@@ -181,27 +181,6 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 	return thingCfg
 }
 
-// loadTexture attempts to load and register a texture for an MD3 model from the archive.
-func (t *Things) loadTexture(il *ImageLoader, texName string) {
-	if texName == "noshader" || len(texName) == 0 {
-		return
-	}
-	if texes := t.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
-		return // Already loaded
-	}
-	img, err := il.Load(texName)
-	if err != nil {
-		fmt.Printf("warning: %s\n", err.Error())
-		return
-	}
-	bounds := img.Bounds()
-	rgba := image.NewRGBA(bounds)
-	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
-	if err = t.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
-		fmt.Printf("warning: md3 %s\n", err.Error())
-	}
-}
-
 // loadMD3Part loads a single MD3 part (lower, upper, or head) and its corresponding skin file.
 func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
 	md3Path := basePath + partName + ".md3"
@@ -240,14 +219,16 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		return nil, err
 	}
 
-	il := NewImageLoader(t.arc)
+	il := NewImageLoader(t.arc, t.texManager)
 	// Load machinegun as the default weapon
 	weapon, _ := t.loadMD3Part("models/weapons2/machinegun/", "machinegun")
 	for _, frame := range lower.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(il, texName)
+				if lErr := il.Load(texName); lErr != nil {
+					fmt.Printf("warning: %s\n", lErr.Error())
+				}
 			}
 		}
 	}
@@ -255,7 +236,9 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(il, texName)
+				if lErr := il.Load(texName); lErr != nil {
+					fmt.Printf("warning: %s\n", lErr.Error())
+				}
 			}
 		}
 	}
@@ -263,7 +246,9 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
 				texName := tri.Material.Frames[0]
-				t.loadTexture(il, texName)
+				if lErr := il.Load(texName); lErr != nil {
+					fmt.Printf("warning: %s\n", lErr.Error())
+				}
 			}
 		}
 	}
@@ -273,7 +258,9 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 			for _, tri := range frame.Triangles {
 				if tri.Material != nil && len(tri.Material.Frames) > 0 {
 					texName := tri.Material.Frames[0]
-					t.loadTexture(il, texName)
+					if lErr := il.Load(texName); lErr != nil {
+						fmt.Printf("warning: %s\n", lErr.Error())
+					}
 				}
 			}
 		}

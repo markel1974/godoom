@@ -3,8 +3,6 @@ package q3
 import (
 	"encoding/binary"
 	"fmt"
-	"image"
-	"image/draw"
 	_ "image/jpeg"
 	"io"
 	"math"
@@ -128,7 +126,6 @@ type Q3BSPReader struct {
 	playerAngle float64
 	playerPos   geometry.XYZ
 	shaders     *Shaders
-	//additiveMats map[string]bool
 }
 
 // NewQ3BSPReader creates a new instance of Q3BSPReader with the provided archive and ReadSeeker.
@@ -138,7 +135,6 @@ func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 		rs:         rs,
 		texManager: lumps.NewTextures(),
 		shaders:    NewShaders(),
-		//additiveMats: nil,
 	}
 
 	return q3
@@ -159,8 +155,6 @@ func (q3 *Q3BSPReader) Setup() error {
 	if err := q3.shaders.Parse(q3.arc); err != nil {
 		return err
 	}
-	//q3.additiveMats = shaders.Retrieve()
-
 	return nil
 }
 
@@ -269,11 +263,11 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 	lMeshVerts := q3.header.Lumps[LumpQ3MeshVerts]
 	if _, err := q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to mesh verts lump: %w", err)
+		return nil, fmt.Errorf("failed to seek to mesh vertices lump: %w", err)
 	}
 	meshVerts := make([]int32, int(lMeshVerts.Length)/4)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &meshVerts); err != nil {
-		return nil, fmt.Errorf("failed to read mesh verts lump: %w", err)
+		return nil, fmt.Errorf("failed to read mesh vertices lump: %w", err)
 	}
 
 	lTextures := q3.header.Lumps[LumpQ3Textures]
@@ -370,45 +364,26 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
 		texNameLC := strings.ToLower(f.TexName)
-		uniqueTextures[texNameLC] = true
 
-		// If the texture is a shader with an animMap, add its frames to be compiled too.
 		if animMap := q3.shaders.GetAnimMap(texNameLC); len(animMap) > 0 {
 			for _, frameTex := range animMap {
 				uniqueTextures[strings.ToLower(frameTex)] = true
 			}
-		} else if f.IsSky {
-			if editorImg := q3.shaders.GetEditorImage(texNameLC); editorImg != "" {
-				uniqueTextures[strings.ToLower(editorImg)] = true
+		} else {
+			if diffMap := q3.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
+				uniqueTextures[strings.ToLower(diffMap)] = true
+			} else {
+				uniqueTextures[texNameLC] = true
 			}
 		}
 	}
 
-	il := NewImageLoader(q3.arc)
+	il := NewImageLoader(q3.arc, q3.texManager)
 	for texName := range uniqueTextures {
-		if texName == "noshader" || len(texName) == 0 {
-			continue
-		}
 
-		img, err := il.Load(texName)
-		if err != nil {
+		if err := il.Load(texName); err != nil {
 			fmt.Printf("Warning: %s\n", err.Error())
-			//img = FallbackImage()
 			continue
-		}
-
-		// Normalizzazione in memoria spaziale lineare a 32-bit (RGBA)
-		bounds := img.Bounds()
-		rgba := image.NewRGBA(bounds)
-		draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
-		// =================================================================================================
-		// Invio del buffer [R,G,B,A, R,G,B,A...] al manager.
-		// NOTA: Usa un metodo specifico per i 32-bit (es. RegisterPixelsRGBA)
-		// bypassando la logica della palette a 8-bit usata in Q1/Q2.
-		err = q3.texManager.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true)
-
-		if err != nil {
-			fmt.Printf("Warning: registrazione texture fallita %s: %v\n", texName, err)
 		}
 	}
 }

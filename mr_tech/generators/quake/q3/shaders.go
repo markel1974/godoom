@@ -141,6 +141,78 @@ func (s *Shaders) GetEditorImage(target string) string {
 	return ""
 }
 
+// HasAlphaTest checks if the shader contains any stage with an alphaFunc directive (like GE128 or GT0).
+func (s *Shaders) HasAlphaTest(target string) bool {
+	k, ok := s.container[target]
+	if !ok {
+		return false
+	}
+	for _, st := range k.stages {
+		if st.alphaFunc != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDiffuseMap returns the texture path defined in the best 'map' directive of the shader's stages.
+func (s *Shaders) GetDiffuseMap(target string) string {
+	k, ok := s.container[target]
+	if !ok {
+		return ""
+	}
+
+	var bestMap string
+	var bestScore int = -1
+
+	for _, st := range k.stages {
+		mapStr := st.mapData
+		if mapStr == "" {
+			mapStr = st.clampMap
+		}
+
+		if mapStr != "" {
+			mapLC := strings.ToLower(mapStr)
+			// Ignore special shader variables like $lightmap, $whiteimage, *lightmap
+			if !strings.HasPrefix(mapLC, "$") && !strings.HasPrefix(mapLC, "*") {
+				candidate := strings.ReplaceAll(mapStr, "\\", "/")
+				score := 0
+
+				// Penalize environment maps (they are usually reflections, not base diffuse)
+				isEnv := false
+				if len(st.tcGen) > 0 && strings.ToLower(st.tcGen[0]) == "environment" {
+					isEnv = true
+				}
+
+				if !isEnv {
+					score += 10
+				}
+
+				// Prefer opaque stages over blended stages
+				if st.blendSrc == "" && st.blendDst == "" {
+					score += 5
+				}
+
+				if score > bestScore {
+					bestScore = score
+					bestMap = candidate
+				}
+			}
+		}
+	}
+
+	if bestMap != "" {
+		return bestMap
+	}
+
+	// Fallback to editor image if no valid map is found
+	editorImg := s.GetEditorImage(target)
+	if editorImg != "" {
+		return strings.ReplaceAll(editorImg, "\\", "/")
+	}
+	return ""
+}
+
 // Reset clears the container map, effectively removing all stored Shader objects.
 func (s *Shaders) Reset() {
 	s.container = make(map[string]*Shader)

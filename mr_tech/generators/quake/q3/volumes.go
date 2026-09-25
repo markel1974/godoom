@@ -46,15 +46,24 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 			}
 			material = config.NewConfigMaterial(animMapLC, animKind, 1.0, 1.0, scrollU, scrollV)
 		} else if v.IsSky {
-			if editorImg := f.shaders.GetEditorImage(texNameLC); editorImg != "" {
-				material = config.NewConfigMaterial([]string{strings.ToLower(editorImg)}, animKind, 1.0, 1.0, scrollU, scrollV)
+			// Sky textures might have a specific editor image, or we try to extract the map
+			if diffMap := f.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
+				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, 1.0, 1.0, scrollU, scrollV)
 			} else {
 				material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, scrollU, scrollV)
 			}
 		} else {
-			material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, scrollU, scrollV)
+			// For all other surfaces, extract the real texture map from the shader stages
+			if diffMap := f.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
+				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, 1.0, 1.0, scrollU, scrollV)
+			} else {
+				material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, scrollU, scrollV)
+			}
 		}
 		material.Shader = v.TexName
+		if f.shaders.HasAlphaTest(texNameLC) {
+			material.AlphaTest = 0.5
+		}
 
 		if f.shaders.IsAdditive(texNameLC) {
 			material.BlendMode = config.BlendModeAdditive

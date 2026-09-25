@@ -159,7 +159,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 				img.SetRGBA(destX, destY, c)
 			}
 		}
-		return img, nil
+
 	case 9, 10, 11:
 		x, y := 0, 0
 		var rleHeader [1]byte
@@ -214,10 +214,20 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 				}
 			}
 		}
-		return img, nil
-	default:
-		return img, nil
 	}
+	// --- Post-processing Alpha Channel Fix (TEST MODE) ---
+	// Forcing alpha to 255 for ALL 32-bit images to test if missing textures appear
+	//if bytesPerPixel == 4 {
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			c := img.RGBAAt(x, y)
+			c.A = 255
+			img.SetRGBA(x, y, c)
+		}
+	}
+	//}
+
+	return img, nil
 }
 
 // EncodeTGA encodes an image in TGA format and writes it to the provided io.Writer.

@@ -176,7 +176,7 @@ func (poly Polygon) Triangulate() []Polygon {
 		return nil
 	}
 
-	// 1. Deserialization: extract Outer and Holes from a flat-array separated by NaN
+	// step 1) Deserialization: extract Outer and Holes from a flat-array separated by NaN
 	var outer Polygon
 	var holes []Polygon
 	var current Polygon
@@ -199,7 +199,7 @@ func (poly Polygon) Triangulate() []Polygon {
 		holes = append(holes, current)
 	}
 
-	// 2. Collect all valid vertices
+	// step 2) Collect all valid vertices
 	var points Polygon
 	points = append(points, outer...)
 	for _, h := range holes {
@@ -219,15 +219,15 @@ func (poly Polygon) Triangulate() []Polygon {
 		return nil
 	}
 
-	// 3. Unconstrained Delaunay Triangulation (Bowyer-Watson)
+	// step 3) Unconstrained Delaunay Triangulation (Bowyer-Watson)
 	// We pass the superset of vertices which now includes the injected nodes
 	mesh := sanitizedPoints.BowyerWatson()
 
-	// 4. Constraint Recovery (deterministic FIFO Lawson)
+	// step 4) Constraint Recovery (deterministic FIFO Lawson)
 	// We use the fragmented constraint set to guarantee exact adjacencies
 	mesh = RecoverConstraints(sanitizedConstraints, mesh)
 
-	// 5. Domain Culling tramite incentro per la massima stabilità topologica
+	// step 5) Domain Culling tramite incentro per la massima stabilità topologica
 	var finalTriangles []Polygon
 	for _, t := range mesh {
 		a := math.Sqrt(DistanceSq(t.B, t.C))
@@ -242,7 +242,7 @@ func (poly Polygon) Triangulate() []Polygon {
 				Y: (a*t.A.Y + b*t.B.Y + c*t.C.Y) / perimeter,
 			}
 		} else {
-			testPoint = t.A // Fallback di sicurezza per triangoli a perimetro nullo
+			testPoint = t.A // security Fallback (null perimeter)
 		}
 
 		// The triangle is valid if it's inside the perimeter and outside all holes
@@ -255,7 +255,7 @@ func (poly Polygon) Triangulate() []Polygon {
 				}
 			}
 			if !inHole {
-				// Ensure counterclockwise (CCW) winding required by renderer
+				// Ensure CCW winding required by renderer
 				if Orientation(t.A, t.B, t.C) == 2 {
 					finalTriangles = append(finalTriangles, Polygon{t.A, t.C, t.B})
 				} else {
@@ -289,7 +289,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]XY) (Polygon, [][2]XY) {
 		for i, c1 := range constraints {
 			wasSplit := false
 
-			// 1. T-Junction Resolution: deterministic iteration over the slice
+			// T-Junction Resolution: deterministic iteration over the slice
 			for _, p := range orderedPoints {
 				if p != c1[0] && p != c1[1] && OnSegmentStrict(c1[0], p, c1[1]) {
 					nextConstraints = append(nextConstraints, [2]XY{c1[0], p}, [2]XY{p, c1[1]})
@@ -302,7 +302,7 @@ func (poly Polygon) SanitizePSLG(constraints [][2]XY) (Polygon, [][2]XY) {
 				continue
 			}
 
-			// 2. Edge-to-Edge Intersection Resolution
+			// Edge-to-Edge Intersection Resolution
 			for j := i + 1; j < len(constraints); j++ {
 				c2 := constraints[j]
 				if c1[0] == c2[0] || c1[0] == c2[1] || c1[1] == c2[0] || c1[1] == c2[1] {
@@ -327,9 +327,9 @@ func (poly Polygon) SanitizePSLG(constraints [][2]XY) (Polygon, [][2]XY) {
 					nextConstraints = append(nextConstraints, [2]XY{c1[0], ip}, [2]XY{ip, c1[1]})
 
 					// Simultaneous split of c2.
-					// We mutate in-place the first half so that subsequent checks in the 'j' loop respect it.
+					// mutate in-place the first half so that subsequent checks in the 'j' loop respect it.
 					constraints[j] = [2]XY{c2[0], ip}
-					// We dynamically append the second half to the current slice to evaluate it in this same pass.
+					// dynamically append the second half to the current slice to evaluate it in this same pass.
 					constraints = append(constraints, [2]XY{ip, c2[1]})
 
 					wasSplit = true
@@ -505,14 +505,14 @@ func (poly Polygon) PointInPolygon(p XY) bool {
 	inside := false
 	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
 		vi, vj := poly[i], poly[j]
-		// 1. Exact collinearity check for edges and vertices
+		// step 1) Exact collinearity check for edges and vertices
 		if Orientation(vi, p, vj) == 0 && OnSegment(vi, p, vj) {
 			return true
 		}
-		// 2. Half-open intervals for the Y-axis to avoid double counting on shared vertices
+		// step 2) Half-open intervals for the Y-axis to avoid double counting on shared vertices
 		if (vi.Y <= p.Y && p.Y < vj.Y) || (vj.Y <= p.Y && p.Y < vi.Y) {
 			o := Orientation(vi, vj, p)
-			// 3. Side check with respect to the direction of the segment
+			// step 3) Side check with respect to the direction of the segment
 			if vi.Y < vj.Y {
 				// Ascending segment: intersection occurs if 'p' is to the left (CCW)
 				if o == 2 {

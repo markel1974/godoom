@@ -34,6 +34,11 @@ func (st *ShaderStage) IsAdditive() bool {
 		(st.blendSrc == "gl_src_alpha" && st.blendDst == "gl_one")
 }
 
+// Shaders represents a collection of Shader objects organized in a map with shader names as keys.
+type Shaders struct {
+	container map[string]*Shader
+}
+
 // Shader represents a graphics shader with specific properties, shader stages, and parameters for rendering operations.
 type Shader struct {
 	name            string
@@ -52,15 +57,13 @@ type Shader struct {
 	qerParms        map[string][]string
 	q3mapParms      map[string][]string
 	stages          []*ShaderStage
-
-	// Legacy / compiler specific properties
-	light      string
-	cloudParms []string
-	lightning  bool
-	fogGen     []string
-	fogOnly    bool
-	sky        bool
-	backsided  bool
+	light           string
+	cloudParms      []string
+	lightning       bool
+	fogGen          []string
+	fogOnly         bool
+	sky             bool
+	backsided       bool
 }
 
 // NewShader creates a new Shader instance with the specified name and culling behavior.
@@ -72,11 +75,6 @@ func NewShader(name string, cull string) *Shader {
 		qerParms:     make(map[string][]string),
 		q3mapParms:   make(map[string][]string),
 	}
-}
-
-// Shaders represents a collection of Shader objects organized in a map with shader names as keys.
-type Shaders struct {
-	container map[string]*Shader
 }
 
 // NewShaders initializes a new instance of the Shaders struct with an empty container map and returns its pointer.
@@ -183,7 +181,7 @@ func (s *Shaders) GetDiffuseMap(target string) string {
 	}
 
 	var bestMap string
-	var bestScore int = -1
+	var bestScore = -1
 
 	for _, st := range k.stages {
 		mapStr := st.mapData

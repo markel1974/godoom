@@ -72,8 +72,12 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	v.compute()
 
 	// Restart animation for all faces in the new action volume
-	if faces, _ := v.volumes[idx].GetFaces(); faces != nil {
-		for _, f := range *faces {
+	if faces, count := v.volumes[idx].GetFaces(); faces != nil {
+		for i := 0; i < count; i++ {
+			f := (*faces)[i]
+			if f == nil {
+				continue
+			}
 			if mat := f.GetMaterialObj(); mat != nil {
 				mat.RestartAnim()
 				// In Doom, action 3 is death and 4 is extreme death

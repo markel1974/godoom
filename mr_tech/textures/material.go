@@ -87,32 +87,32 @@ func NewMaterial(shader string, frames []*Texture, kind int, scaleW, scaleH, u, 
 }
 
 // Kind returns the type of the animation as an integer value.
-func (a *Material) Kind() int {
-	return a.kind
+func (m *Material) Kind() int {
+	return m.kind
 }
 
 // U returns the horizontal scroll offset of the material.
-func (a *Material) U() float64 {
-	return a.u
+func (m *Material) U() float64 {
+	return m.u
 }
 
 // V returns the vertical scroll offset of the material.
-func (a *Material) V() float64 {
-	return a.v
+func (m *Material) V() float64 {
+	return m.v
 }
 
 // Shader returns the name of the shader associated with this material.
-func (a *Material) Shader() string {
-	return a.shader
+func (m *Material) Shader() string {
+	return m.shader
 }
 
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
-func (a *Material) CurrentFrame() *Texture {
-	if a.totalFrames > 1 {
-		frameIdx := _currentTick % a.totalFrames
-		return a.frames[frameIdx]
+func (m *Material) CurrentFrame() *Texture {
+	if m.totalFrames > 1 {
+		frameIdx := _currentTick % m.totalFrames
+		return m.frames[frameIdx]
 	}
-	return a.frame
+	return m.frame
 }
 
 func (m *Material) BlendMode() int {

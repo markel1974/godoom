@@ -21,6 +21,15 @@ type Enemy struct {
 	wakeUpDistance float64
 	actions        map[string]int
 	painCooldown   float64 // Timer to prevent pain animation spam
+
+	// Cached actions for zero allocations during run loop
+	actionRun    int
+	actionWalk   int
+	actionIdle   int
+	actionStand  int
+	actionPain   int
+	actionDeath  int
+	actionAttack int
 }
 
 // NewEnemy creates and initializes a new Enemy instance with the specified wake-up distance.
@@ -58,6 +67,21 @@ func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
 			e.actions["idle"] = idx
 		}
 	}
+
+	e.actionRun, _ = e.findAction("run")
+	e.actionWalk, _ = e.findAction("walk")
+	e.actionIdle, _ = e.findAction("idle")
+	e.actionStand, _ = e.findAction("stand")
+	e.actionPain, _ = e.findAction("pain")
+	if e.actionPain == 0 {
+		e.actionPain, _ = e.findAction("pain1")
+	}
+	e.actionDeath, _ = e.findAction("death")
+	e.actionAttack, _ = e.findAction("attack")
+	if e.actionDeath == 0 {
+		e.actionDeath, _ = e.findAction("die")
+	}
+
 	e.firstTick = true
 	return e
 }
@@ -106,12 +130,8 @@ func (e *Enemy) handleDeath(self config.IThingConfig) {
 	fmt.Println("ENEMY DEAD!!!!")
 
 	// Set death animation
-	if actionIdx, ok := e.findAction("death1"); ok {
-		self.SetAction(actionIdx)
-	} else if actionIdx, ok = e.findAction("death"); ok {
-		self.SetAction(actionIdx)
-	} else if actionIdx, ok = e.findAction("die"); ok {
-		self.SetAction(actionIdx)
+	if e.actionDeath != 0 {
+		self.SetAction(e.actionDeath)
 	}
 
 	// Optional: Disable collisions or change collision group so player walks over the corpse
@@ -127,12 +147,9 @@ func (e *Enemy) handlePain(self config.IThingConfig) {
 	fmt.Println("ENEMY IN PAIN!!!! Health:", e.health)
 
 	// Set pain animation
-	if actionIdx, ok := e.findAction("pain1"); ok {
-		self.SetAction(actionIdx)
+	if e.actionPain != 0 {
+		self.SetAction(e.actionPain)
 		e.painCooldown = 0.5 // Lock in pain state for 0.5 seconds
-	} else if actionIdx, ok = e.findAction("pain"); ok {
-		self.SetAction(actionIdx)
-		e.painCooldown = 0.5
 	}
 }
 
@@ -158,14 +175,14 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 
 	if e.firstTick {
 		e.firstTick = false
-		if actionIdx, ok := e.findAction("idle"); ok {
-			self.SetAction(actionIdx)
-		} else if actionIdx, ok := e.findAction("stand"); ok {
-			self.SetAction(actionIdx)
-		} else if actionIdx, ok := e.findAction("run"); ok {
-			self.SetAction(actionIdx)
-		} else if actionIdx, ok := e.findAction("walk"); ok {
-			self.SetAction(actionIdx)
+		if e.actionIdle != 0 {
+			self.SetAction(e.actionIdle)
+		} else if e.actionStand != 0 {
+			self.SetAction(e.actionStand)
+		} else if e.actionRun != 0 {
+			self.SetAction(e.actionRun)
+		} else if e.actionWalk != 0 {
+			self.SetAction(e.actionWalk)
 		}
 	}
 
@@ -174,8 +191,8 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		e.painCooldown -= 1.0 / 60.0 // Assuming 60 ticks per second
 		if e.painCooldown <= 0 {
 			// Pain finished, return to running/chasing
-			if actionIdx, ok := e.findAction("run"); ok {
-				self.SetAction(actionIdx)
+			if e.actionRun != 0 {
+				self.SetAction(e.actionRun)
 			}
 		}
 		return
@@ -194,8 +211,8 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		if playerDist3d < e.wakeUpDistance { // Raggio di risveglio
 			e.active = true
 			e.throwCooldown = e.throwMin
-			if action, ok := e.findAction("run"); ok {
-				self.SetAction(action)
+			if e.actionRun != 0 {
+				self.SetAction(e.actionRun)
 			}
 		}
 		return

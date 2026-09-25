@@ -21,9 +21,10 @@ type VerticesMD3 struct {
 	facesAPtr *[]*Face
 	facesBPtr *[]*Face
 
-	totalFaces    int
-	entity        *physics.Entity
-	currentAction int
+	totalFaces     int
+	entity         *physics.Entity
+	currentAction  int
+	upperActionMap []int
 }
 
 // NewVerticesMD3 initializes and returns a new instance of VerticesMD3 based on the given configuration and materials.
@@ -64,15 +65,31 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	headFaces, countH := head.volumes[0].GetFaces()
 	totalFaces := countL + countU + countH + countW
 
+	upperActionMap := make([]int, len(lower.actionNames))
+	for i, lowerName := range lower.actionNames {
+		upperIdx := 0 // default
+		if strings.HasPrefix(lowerName, "BOTH_") {
+			upperIdx = upper.FindActionIndex(lowerName)
+		} else if strings.HasPrefix(lowerName, "LEGS_") {
+			if strings.Contains(lowerName, "IDLE") || strings.Contains(lowerName, "STAND") {
+				upperIdx = upper.FindActionIndex("TORSO_STAND")
+			} else {
+				upperIdx = upper.FindActionIndex("TORSO_STAND")
+			}
+		}
+		upperActionMap[i] = upperIdx
+	}
+
 	v := &VerticesMD3{
-		lower:         lower,
-		upper:         upper,
-		head:          head,
-		weapon:        weapon,
-		totalFaces:    totalFaces,
-		currentAction: -1,
-		facesA:        make([]*Face, totalFaces),
-		facesB:        make([]*Face, totalFaces),
+		lower:          lower,
+		upper:          upper,
+		head:           head,
+		weapon:         weapon,
+		totalFaces:     totalFaces,
+		currentAction:  -1,
+		upperActionMap: upperActionMap,
+		facesA:         make([]*Face, totalFaces),
+		facesB:         make([]*Face, totalFaces),
 	}
 	v.facesAPtr = &v.facesA
 	v.facesBPtr = &v.facesB
@@ -130,26 +147,10 @@ func (v *VerticesMD3) SetAction(idx int) {
 	// idx is the index from lower's actions (since we passed lower's ActionDefinitions to doCreate)
 	v.lower.SetAction(idx)
 
-	actionName := v.lower.GetActionName(idx)
-	if actionName == "" {
-		return
-	}
-
-	// Map LEGS_ or BOTH_ actions to TORSO_ actions
-	// If it's BOTH_, both lower and upper should have it.
-	// If it's LEGS_RUN, we want TORSO_STAND or similar.
-	// We can use a simple mapping here:
-	if strings.HasPrefix(actionName, "BOTH_") {
-		v.upper.SetActionByName(actionName)
-	} else if strings.HasPrefix(actionName, "LEGS_") {
-		// Just a default fallback: while legs are moving, torso stands.
-		// If the enemy shoots, Enemy logic would need a way to set torso action independently.
-		// For now, we enforce a default torso state so it doesn't stay stuck in BOTH_DEATH1.
-		if strings.Contains(actionName, "IDLE") || strings.Contains(actionName, "STAND") {
-			v.upper.SetActionByName("TORSO_STAND")
-		} else {
-			v.upper.SetActionByName("TORSO_STAND") // Could be TORSO_STAND2, etc.
-		}
+	if idx >= 0 && idx < len(v.upperActionMap) {
+		v.upper.SetAction(v.upperActionMap[idx])
+	} else {
+		v.upper.SetAction(0)
 	}
 
 	v.head.SetAction(0)

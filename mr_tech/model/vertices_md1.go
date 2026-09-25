@@ -23,6 +23,7 @@ type VerticesMD1 struct {
 	startTick     uint64
 	currentAction int
 	actionNames   []string
+	clampAnimMap  []bool
 }
 
 // NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
@@ -31,10 +32,19 @@ func NewVerticesMD2(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
 	}
 
+	clampAnimMap := make([]bool, len(cfg.MD1.ActionDefinitions))
+	for i, name := range cfg.MD1.ActionDefinitions {
+		lowerName := strings.ToLower(name)
+		if strings.Contains(lowerName, "death") || strings.Contains(lowerName, "die") || strings.Contains(lowerName, "dead") {
+			clampAnimMap[i] = true
+		}
+	}
+
 	v := &VerticesMD1{
 		volumes:       make([]*Volume, len(cfg.MD1.Frames)),
 		actions:       cfg.MD1.ActionIntervals,
 		actionNames:   cfg.MD1.ActionDefinitions,
+		clampAnimMap:  clampAnimMap,
 		startFrame:    0,
 		endFrame:      len(cfg.MD1.Frames) - 1,
 		currentAction: -1,
@@ -98,11 +108,8 @@ func (v *VerticesMD1) SetAction(idx int) {
 	v.endFrame = v.actions[idx][1]
 	v.startTick = textures.GlobalTick()
 	v.clampAnim = false
-	if idx < len(v.actionNames) {
-		name := strings.ToLower(v.actionNames[idx])
-		if strings.Contains(name, "death") || strings.Contains(name, "die") || strings.Contains(name, "dead") {
-			v.clampAnim = true
-		}
+	if idx < len(v.clampAnimMap) {
+		v.clampAnim = v.clampAnimMap[idx]
 	}
 }
 
@@ -113,12 +120,11 @@ func (v *VerticesMD1) GetActionName(idx int) string {
 	return v.actionNames[idx]
 }
 
-func (v *VerticesMD1) SetActionByName(name string) {
+func (v *VerticesMD1) FindActionIndex(name string) int {
 	nameLower := strings.ToLower(name)
 	for i, n := range v.actionNames {
 		if strings.ToLower(n) == nameLower {
-			v.SetAction(i)
-			return
+			return i
 		}
 	}
 	// Fallback se fallisce (es. se BOTH_DEATH1 manca e c'è TORSO_DEATH1)
@@ -126,11 +132,15 @@ func (v *VerticesMD1) SetActionByName(name string) {
 		torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
 		for i, n := range v.actionNames {
 			if strings.ToLower(n) == torsoName {
-				v.SetAction(i)
-				return
+				return i
 			}
 		}
 	}
+	return 0
+}
+
+func (v *VerticesMD1) SetActionByName(name string) {
+	v.SetAction(v.FindActionIndex(name))
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.

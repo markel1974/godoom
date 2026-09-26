@@ -177,7 +177,6 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
 	md3Path := basePath + partName + ".md3"
 	skinPath := basePath + partName + "_default.skin"
-
 	var skinMap map[string]string
 	if rsSkin, err := t.arc.Open(skinPath); err == nil {
 		skin := lumps.NewSkin(rsSkin)
@@ -186,15 +185,7 @@ func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
 			return nil, fmt.Errorf("can't parse skin %s: %s", skinPath, err.Error())
 		}
 	}
-
 	return t.MD3ToConfig(md3Path, basePath, skinMap)
-	//rsMd3, err := t.arc.Open(md3Path)
-	//if err != nil {
-	//	return nil, fmt.Errorf("can't open %s: %s", md3Path, err.Error())
-	//}
-
-	//md3 := lumps.NewMD3Resource()
-	//return md3.Parse(rsMd3, t.texManager, basePath, skinMap)
 }
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
@@ -311,7 +302,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 
 // MD3ToConfig converts an MD3 model into an MD1 configuration, applying scaling and texture mapping if provided.
 func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]string) (*config.MD1, error) {
-	// Per scalare i vertici MD3 (che sono short int) a float
+	// Scale MD3 vertices (which are short ints) to float
 	const md3Scale = 1.0 / 64.0
 	rsMd3, err := t.arc.Open(thingPath)
 	if err != nil {
@@ -340,7 +331,7 @@ func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]stri
 	for s := 0; s < int(res.Header.NumSurfaces); s++ {
 		surf := res.Surfaces[s]
 
-		// Trova il materiale (usiamo il primo shader come materiale base)
+		// Find the material (use the first shader as base material)
 		var material *config.Material
 		surfName := strings.TrimRight(string(surf.Header.Name[:]), "\x00")
 		var shaderName string
@@ -361,7 +352,7 @@ func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]stri
 			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 		}
 
-		// Assembla i triangoli per ogni frame
+		// Assemble triangles for each frame
 		for i := 0; i < int(surf.Header.NumFrames); i++ {
 			for t := 0; t < int(surf.Header.NumTriangles); t++ {
 				var configTri config.MD1Triangle
@@ -370,7 +361,7 @@ func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]stri
 				for k := 0; k < 3; k++ {
 					vIndex := surf.Triangles[t].Indexes[k]
 
-					// L'array 'vertices' contiene i vertici di tutti i frame concatenati
+					// The 'vertices' array contains vertices of all frames concatenated
 					globVIndex := (i * int(surf.Header.NumVerts)) + int(vIndex)
 					v := surf.Vertices[globVIndex]
 					uv := surf.TexCoords[vIndex]

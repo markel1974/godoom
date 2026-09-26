@@ -51,18 +51,11 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-	rsMd3, err := t.arc.Open(thingPath)
-	if err != nil {
-		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
-	}
-
-	md3 := lumps.NewMD3Resource()
 	basePath := thingPath
 	if lastSlash := strings.LastIndex(thingPath, "/"); lastSlash != -1 {
 		basePath = thingPath[:lastSlash+1]
 	}
-
-	cModel, err := md3.Parse(rsMd3, t.texManager, basePath, nil)
+	cModel, err := t.MD3ToConfig(thingPath, basePath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
@@ -194,13 +187,14 @@ func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
 		}
 	}
 
-	rsMd3, err := t.arc.Open(md3Path)
-	if err != nil {
-		return nil, fmt.Errorf("can't open %s: %s", md3Path, err.Error())
-	}
+	return t.MD3ToConfig(md3Path, basePath, skinMap)
+	//rsMd3, err := t.arc.Open(md3Path)
+	//if err != nil {
+	//	return nil, fmt.Errorf("can't open %s: %s", md3Path, err.Error())
+	//}
 
-	md3 := lumps.NewMD3Resource()
-	return md3.Parse(rsMd3, t.texManager, basePath, skinMap)
+	//md3 := lumps.NewMD3Resource()
+	//return md3.Parse(rsMd3, t.texManager, basePath, skinMap)
 }
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
@@ -313,4 +307,87 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	thingCfg.MD3 = md3
 
 	return thingCfg, nil
+}
+
+// MD3ToConfig converts an MD3 model into an MD1 configuration, applying scaling and texture mapping if provided.
+func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]string) (*config.MD1, error) {
+	// Per scalare i vertici MD3 (che sono short int) a float
+	const md3Scale = 1.0 / 64.0
+	rsMd3, err := t.arc.Open(thingPath)
+	if err != nil {
+	}
+	md3 := lumps.NewMD3Resource()
+	res, err := md3.Parse(rsMd3)
+	if err != nil {
+		return nil, err
+	}
+	cfg := config.NewMD1(int(res.Header.NumFrames), res.FrameNames)
+	if res.Header.NumTags > 0 && res.Header.OfsTags > 0 {
+		for i := 0; i < int(res.Header.NumFrames); i++ {
+			for j := 0; j < int(res.Header.NumTags); j++ {
+				tag := res.Tags[i*int(res.Header.NumTags)+j]
+				tagName := strings.TrimRight(string(tag.Name[:]), "\x00")
+				// MD3 tags don't seem to be scaled by 1/64, but let's check later, wait, MD3 tags coordinates are float32, so no md3Scale needed!
+				cfg.Frames[i].Tags[tagName] = geometry.XYZ{
+					X: float64(tag.Origin[0]),
+					Y: float64(tag.Origin[1]),
+					Z: float64(tag.Origin[2]),
+				}
+			}
+		}
+	}
+
+	for s := 0; s < int(res.Header.NumSurfaces); s++ {
+		surf := res.Surfaces[s]
+
+		// Trova il materiale (usiamo il primo shader come materiale base)
+		var material *config.Material
+		surfName := strings.TrimRight(string(surf.Header.Name[:]), "\x00")
+		var shaderName string
+		if skinMap != nil {
+			if texPath, ok := skinMap[surfName]; ok {
+				shaderName = texPath
+			}
+		}
+
+		if len(shaderName) == 0 && len(surf.Shaders) > 0 {
+			shaderName = strings.TrimRight(string(surf.Shaders[0].Name[:]), "\x00")
+			shaderName = strings.ReplaceAll(shaderName, "\\", "/")
+			if len(shaderName) > 0 && !strings.Contains(shaderName, "/") {
+				shaderName = basePath + shaderName
+			}
+		}
+		if len(shaderName) > 0 {
+			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		}
+
+		// Assembla i triangoli per ogni frame
+		for i := 0; i < int(surf.Header.NumFrames); i++ {
+			for t := 0; t < int(surf.Header.NumTriangles); t++ {
+				var configTri config.MD1Triangle
+				configTri.Material = material
+
+				for k := 0; k < 3; k++ {
+					vIndex := surf.Triangles[t].Indexes[k]
+
+					// L'array 'vertices' contiene i vertici di tutti i frame concatenati
+					globVIndex := (i * int(surf.Header.NumVerts)) + int(vIndex)
+					v := surf.Vertices[globVIndex]
+					uv := surf.TexCoords[vIndex]
+
+					configTri.Vertices[k] = config.MD1Vertex{
+						Pos: geometry.XYZ{
+							X: float64(v.Coord[0]) * md3Scale,
+							Y: float64(v.Coord[1]) * md3Scale,
+							Z: float64(v.Coord[2]) * md3Scale,
+						},
+						U: uv.St[0],
+						V: uv.St[1],
+					}
+				}
+				cfg.Frames[i].Triangles = append(cfg.Frames[i].Triangles, configTri)
+			}
+		}
+	}
+	return cfg, nil
 }

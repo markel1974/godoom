@@ -69,7 +69,7 @@ func NewMD1Resource() *MD1Resource {
 	return &MD1Resource{}
 }
 
-// Parse parse a Quake MD1 3D model from the given io.ReadSeeker and returns a fully populated MD1Resource.
+// Parse a Quake MD1 3D model from the given io.ReadSeeker and returns a fully populated MD1Resource.
 func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	var header MD1Header
 	if err := binary.Read(rs, binary.LittleEndian, &header); err != nil {

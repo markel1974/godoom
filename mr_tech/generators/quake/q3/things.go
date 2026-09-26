@@ -52,10 +52,13 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 	basePath := thingPath
+	partName := thingPath
 	if lastSlash := strings.LastIndex(thingPath, "/"); lastSlash != -1 {
 		basePath = thingPath[:lastSlash+1]
+		partName = thingPath[lastSlash+1:]
 	}
-	cModel, err := t.MD3ToConfig(thingPath, basePath, nil)
+	partName = strings.Replace(partName, ".md3", "", 1)
+	cModel, err := t.loadMD3Part(partName, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
 	}
@@ -173,39 +176,24 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 	return thingCfg
 }
 
-// loadMD3Part loads a single MD3 part (lower, upper, or head) and its corresponding skin file.
-func (t *Things) loadMD3Part(basePath, partName string) (*config.MD1, error) {
-	md3Path := basePath + partName + ".md3"
-	skinPath := basePath + partName + "_default.skin"
-	var skinMap map[string]string
-	if rsSkin, err := t.arc.Open(skinPath); err == nil {
-		skin := lumps.NewSkin(rsSkin)
-		skinMap, err = skin.Parse()
-		if err != nil {
-			return nil, fmt.Errorf("can't parse skin %s: %s", skinPath, err.Error())
-		}
-	}
-	return t.MD3ToConfig(md3Path, basePath, skinMap)
-}
-
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
 func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
-	lower, err := t.loadMD3Part(basePath, "lower")
+	lower, err := t.loadMD3Part("lower", basePath)
 	if err != nil {
 		return nil, err
 	}
-	upper, err := t.loadMD3Part(basePath, "upper")
+	upper, err := t.loadMD3Part("upper", basePath)
 	if err != nil {
 		return nil, err
 	}
-	head, err := t.loadMD3Part(basePath, "head")
+	head, err := t.loadMD3Part("head", basePath)
 	if err != nil {
 		return nil, err
 	}
 
 	il := NewImageLoader(t.arc, t.texManager, t.shaders)
 	// Load machinegun as the default weapon
-	weapon, _ := t.loadMD3Part("models/weapons2/machinegun/", "machinegun")
+	weapon, _ := t.loadMD3Part("machinegun", "models/weapons2/machinegun/")
 	for _, frame := range lower.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
@@ -301,11 +289,24 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 }
 
 // MD3ToConfig converts an MD3 model into an MD1 configuration, applying scaling and texture mapping if provided.
-func (t *Things) MD3ToConfig(thingPath, basePath string, skinMap map[string]string) (*config.MD1, error) {
+func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 	// Scale MD3 vertices (which are short ints) to float
 	const md3Scale = 1.0 / 64.0
-	rsMd3, err := t.arc.Open(thingPath)
+
+	md3Path := basePath + partName + ".md3"
+	skinPath := basePath + partName + "_default.skin"
+	var skinMap map[string]string
+	if rsSkin, err := t.arc.Open(skinPath); err == nil {
+		skin := lumps.NewSkin(rsSkin)
+		skinMap, err = skin.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("can't parse skin %s: %s", skinPath, err.Error())
+		}
+	}
+
+	rsMd3, err := t.arc.Open(md3Path)
 	if err != nil {
+		return nil, fmt.Errorf("can't open MD3 %s: %s", md3Path, err.Error())
 	}
 	md3 := lumps.NewMD3Resource()
 	res, err := md3.Parse(rsMd3)

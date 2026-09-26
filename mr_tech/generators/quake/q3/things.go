@@ -178,6 +178,19 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
 func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
+	loadMaterial := func(il *ImageLoader, part *config.MD1) {
+		for _, frame := range part.Frames {
+			for _, tri := range frame.Triangles {
+				if tri.Material != nil && len(tri.Material.Frames) > 0 {
+					texName := tri.Material.Frames[0]
+					if lErr := il.Load(texName, false); lErr != nil {
+						fmt.Printf("warning: %s\n", lErr.Error())
+					}
+				}
+			}
+		}
+	}
+
 	lower, err := t.loadMD3Part("lower", basePath)
 	if err != nil {
 		return nil, err
@@ -192,50 +205,17 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 
 	il := NewImageLoader(t.arc, t.texManager, t.shaders)
-	// Load machinegun as the default weapon
-	weapon, _ := t.loadMD3Part("machinegun", "models/weapons2/machinegun/")
-	for _, frame := range lower.Frames {
-		for _, tri := range frame.Triangles {
-			if tri.Material != nil && len(tri.Material.Frames) > 0 {
-				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName, false); lErr != nil {
-					fmt.Printf("warning: %s\n", lErr.Error())
-				}
-			}
-		}
-	}
-	for _, frame := range upper.Frames {
-		for _, tri := range frame.Triangles {
-			if tri.Material != nil && len(tri.Material.Frames) > 0 {
-				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName, false); lErr != nil {
-					fmt.Printf("warning: %s\n", lErr.Error())
-				}
-			}
-		}
-	}
-	for _, frame := range head.Frames {
-		for _, tri := range frame.Triangles {
-			if tri.Material != nil && len(tri.Material.Frames) > 0 {
-				texName := tri.Material.Frames[0]
-				if lErr := il.Load(texName, false); lErr != nil {
-					fmt.Printf("warning: %s\n", lErr.Error())
-				}
-			}
-		}
-	}
 
+	loadMaterial(il, lower)
+	loadMaterial(il, upper)
+	loadMaterial(il, head)
+
+	const defaultWeapon = "machinegun"
+	const defaultWeaponPath = "models/weapons2/machinegun/"
+
+	weapon, _ := t.loadMD3Part(defaultWeapon, defaultWeaponPath)
 	if weapon != nil {
-		for _, frame := range weapon.Frames {
-			for _, tri := range frame.Triangles {
-				if tri.Material != nil && len(tri.Material.Frames) > 0 {
-					texName := tri.Material.Frames[0]
-					if lErr := il.Load(texName, false); lErr != nil {
-						fmt.Printf("warning: %s\n", lErr.Error())
-					}
-				}
-			}
-		}
+		loadMaterial(il, weapon)
 	}
 
 	md3 := config.NewMD3(lower, upper, head, weapon)
@@ -318,7 +298,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 		for i := 0; i < int(res.Header.NumFrames); i++ {
 			for j := 0; j < int(res.Header.NumTags); j++ {
 				tag := res.Tags[i*int(res.Header.NumTags)+j]
-				tagName := strings.TrimRight(string(tag.Name[:]), "\x00")
+				tagName := lumps.FromNullTerminatingString(tag.Name[:])
 				// MD3 tags don't seem to be scaled by 1/64, but let's check later, wait, MD3 tags coordinates are float32, so no md3Scale needed!
 				cfg.Frames[i].Tags[tagName] = geometry.XYZ{
 					X: float64(tag.Origin[0]),

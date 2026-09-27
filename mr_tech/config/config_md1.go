@@ -44,6 +44,7 @@ func NewMD1Frame(triangles []MD1Triangle) MD1Frame {
 // MD1 represents a structure holding animation frames, action definitions, and corresponding action intervals.
 type MD1 struct {
 	Frames            []MD1Frame
+	ActionClamp       []string
 	ActionDefinitions []string
 	ActionIntervals   [][2]int
 }
@@ -56,6 +57,7 @@ func NewMD1(numFrames int, frameNames []string) *MD1 {
 	for i := 0; i < numFrames; i++ {
 		m.Frames[i].Tags = make(map[string]geometry.XYZ)
 	}
+	m.ActionClamp = []string{"death", "die"}
 	m.compute(frameNames)
 	return m
 }

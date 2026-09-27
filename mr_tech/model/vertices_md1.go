@@ -13,16 +13,17 @@ import (
 
 // VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
 type VerticesMD1 struct {
-	viewVolume    *Volume
-	volumes       []*Volume
-	actions       [][2]int
-	startFrame    int
-	endFrame      int
-	clampAnim     bool
-	startTick     uint64
-	currentAction int
-	actionNames   []string
-	clampAnimMap  []bool
+	viewVolume      *Volume
+	volumes         []*Volume
+	startFrame      int
+	endFrame        int
+	startTick       uint64
+	currentAction   int
+	actionIntervals [][2]int
+	actionNames     []string
+	actionNamesC    map[string]int
+	actionClamps    []bool
+	clampAnim       bool
 }
 
 // NewVerticesMD1 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
@@ -31,27 +32,36 @@ func NewVerticesMD1(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
 	}
 
-	clampAnimMap := make([]bool, len(cfg.MD1.ActionDefinitions))
-	for i, name := range cfg.MD1.ActionDefinitions {
-		lowerName := strings.ToLower(name)
-		if strings.Contains(lowerName, "death") || strings.Contains(lowerName, "die") || strings.Contains(lowerName, "dead") {
-			clampAnimMap[i] = true
+	actionClamps := make([]bool, len(cfg.MD1.ActionDefinitions))
+	actionNames := make([]string, len(cfg.MD1.ActionDefinitions))
+	actionNamesC := make(map[string]int)
+
+	for idx, name := range cfg.MD1.ActionDefinitions {
+		nameC := md1CleanString(name)
+		actionNames[idx] = nameC
+		actionNamesC[nameC] = idx
+		for _, z := range cfg.MD1.ActionClamp {
+			if strings.Contains(nameC, md1CleanString(z)) {
+				actionClamps[idx] = true
+				break
+			}
 		}
 	}
 
 	v := &VerticesMD1{
-		volumes:       make([]*Volume, len(cfg.MD1.Frames)),
-		actions:       cfg.MD1.ActionIntervals,
-		actionNames:   cfg.MD1.ActionDefinitions,
-		clampAnimMap:  clampAnimMap,
-		startFrame:    0,
-		endFrame:      len(cfg.MD1.Frames) - 1,
-		currentAction: -1,
+		volumes:         make([]*Volume, len(cfg.MD1.Frames)),
+		actionIntervals: cfg.MD1.ActionIntervals,
+		actionNames:     actionNames,
+		actionNamesC:    actionNamesC,
+		actionClamps:    actionClamps,
+		startFrame:      0,
+		endFrame:        len(cfg.MD1.Frames) - 1,
+		currentAction:   -1,
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
 	}
-	if len(v.actions) > 0 {
+	if len(v.actionIntervals) > 0 {
 		v.SetAction(0)
 	}
 	//entity := physics.NewEntity(x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
@@ -84,6 +94,11 @@ func (v *VerticesMD1) GetVolume() *Volume {
 	return v.viewVolume
 }
 
+// GetActions returns the list of action names associated with the VerticesMD1 instance.
+func (v *VerticesMD1) GetActions() []string {
+	return v.actionNames
+}
+
 // GetEntity returns the physics.Entity instance associated with the VerticesMD1 viewVolume.
 func (v *VerticesMD1) GetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
@@ -96,39 +111,27 @@ func (v *VerticesMD1) GetAABB() *physics.AABB {
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
 func (v *VerticesMD1) SetAction(idx int) {
-	if idx < 0 || idx >= len(v.actions) {
+	if idx < 0 || idx >= len(v.actionIntervals) {
 		return
 	}
 	if v.currentAction == idx {
 		return
 	}
 	v.currentAction = idx
-	v.startFrame = v.actions[idx][0]
-	v.endFrame = v.actions[idx][1]
+	v.startFrame = v.actionIntervals[idx][0]
+	v.endFrame = v.actionIntervals[idx][1]
 	v.startTick = textures.GlobalTick()
 	v.clampAnim = false
-	if idx < len(v.clampAnimMap) {
-		v.clampAnim = v.clampAnimMap[idx]
+	if idx < len(v.actionClamps) {
+		v.clampAnim = v.actionClamps[idx]
 	}
-}
-
-// GetActionName retrieves the name of the action at the specified index. Returns an empty string if the index is out of bounds.
-func (v *VerticesMD1) GetActionName(idx int) string {
-	if idx < 0 || idx >= len(v.actionNames) {
-		return ""
-	}
-	return v.actionNames[idx]
 }
 
 // FindActionIndex searches for the index of the given action name in the actionNames list, ignoring case and returning success status.
 func (v *VerticesMD1) FindActionIndex(name string) (int, bool) {
-	nameLower := strings.ToLower(name)
-	for i, n := range v.actionNames {
-		if strings.ToLower(n) == nameLower {
-			return i, true
-		}
-	}
-	return 0, false
+	nameLower := md1CleanString(name)
+	n, k := v.actionNamesC[nameLower]
+	return n, k
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
@@ -250,4 +253,9 @@ func (v *VerticesMD1) SetThing(t IThing) {
 	for _, f := range v.volumes {
 		f.SetThing(t)
 	}
+}
+
+// md1CleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
+func md1CleanString(s string) string {
+	return strings.TrimSpace(strings.ToLower(s))
 }

@@ -66,18 +66,18 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	totalFaces := countL + countU + countH + countW
 
 	upperActionMap := make([]int, len(lower.actionNames))
-	for i, lowerName := range lower.actionNames {
+	for idx, name := range lower.GetActions() {
 		upperIdx := 0 // default
-		if strings.HasPrefix(lowerName, "BOTH_") {
-			upperIdx = md3FindActionIndex(upper, lowerName)
-		} else if strings.HasPrefix(lowerName, "LEGS_") {
-			if strings.Contains(lowerName, "IDLE") || strings.Contains(lowerName, "STAND") {
-				upperIdx = md3FindActionIndex(upper, "TORSO_STAND")
+		if strings.HasPrefix(name, "both_") {
+			upperIdx = md3FindActionIndex(upper, name)
+		} else if strings.HasPrefix(name, "legs_") {
+			if strings.Contains(name, "idle") || strings.Contains(name, "stand") {
+				upperIdx = md3FindActionIndex(upper, "torso_stand")
 			} else {
-				upperIdx = md3FindActionIndex(upper, "TORSO_STAND")
+				upperIdx = md3FindActionIndex(upper, "torso_stand")
 			}
 		}
-		upperActionMap[i] = upperIdx
+		upperActionMap[idx] = upperIdx
 	}
 
 	v := &VerticesMD3{

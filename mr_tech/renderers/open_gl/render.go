@@ -214,7 +214,7 @@ func (w *RenderOpenGL) doRun() {
 				left = true
 			case core2.KeyRight:
 				right = true
-			case core2.KeyL:
+			case core2.KeyK:
 				w.player.GetFlash().IncreaseFlashFactor()
 			case core2.KeyH:
 				w.player.GetFlash().DecreaseFlashFactor()

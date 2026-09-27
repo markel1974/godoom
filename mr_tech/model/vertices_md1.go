@@ -26,8 +26,8 @@ type VerticesMD1 struct {
 	clampAnimMap  []bool
 }
 
-// NewVerticesMD2 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
-func NewVerticesMD2(cfg *config.Thing, materials *Materials) *VerticesMD1 {
+// NewVerticesMD1 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
+func NewVerticesMD1(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 	if len(cfg.MD1.Frames) == 0 {
 		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
 	}

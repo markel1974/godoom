@@ -30,7 +30,7 @@ func VerticesFactory(thing IThing, cfg *config.Thing, materials *Materials) IVer
 	if cfg.MD3 != nil {
 		out = NewVerticesMD3(cfg, materials)
 	} else if cfg.MD1 != nil {
-		out = NewVerticesMD2(cfg, materials)
+		out = NewVerticesMD1(cfg, materials)
 	} else if cfg.MultiSprite != nil {
 		out = NewVerticesMultiSprite(cfg, materials)
 	} else {

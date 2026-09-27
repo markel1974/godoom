@@ -37,17 +37,17 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	cfgLower := cfg.Clone()
 	cfgLower.MD1 = cfg.MD3.Lower
 	cfgLower.MD3 = nil
-	lower := NewVerticesMD2(cfgLower, materials)
+	lower := NewVerticesMD1(cfgLower, materials)
 
 	cfgUpper := cfg.Clone()
 	cfgUpper.MD1 = cfg.MD3.Upper
 	cfgUpper.MD3 = nil
-	upper := NewVerticesMD2(cfgUpper, materials)
+	upper := NewVerticesMD1(cfgUpper, materials)
 
 	cfgHead := cfg.Clone()
 	cfgHead.MD1 = cfg.MD3.Head
 	cfgHead.MD3 = nil
-	head := NewVerticesMD2(cfgHead, materials)
+	head := NewVerticesMD1(cfgHead, materials)
 
 	var weapon *VerticesMD1
 	var countW int
@@ -56,7 +56,7 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 		cfgWeapon := cfg.Clone()
 		cfgWeapon.MD1 = cfg.MD3.Weapon
 		cfgWeapon.MD3 = nil
-		weapon = NewVerticesMD2(cfgWeapon, materials)
+		weapon = NewVerticesMD1(cfgWeapon, materials)
 		weaponFaces, countW = weapon.volumes[0].GetFaces()
 	}
 

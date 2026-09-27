@@ -259,7 +259,7 @@ void main()
                 if (d < virtualRadius) {
                     int lType = int(u_lights[i].pos_type.w);
                     if (lType == 1) {
-                        dynamicLights = vec3(1.0, 0.0, 0.0); // Red for Spotlight
+                        dynamicLights = vec3(0.0, 1.0, 0.0); // Green for Spotlight
                     } else if (lType == 3 || lType == 0) {
                         dynamicLights = vec3(0.0, 0.0, 1.0); // Blue for Ambient/Point
                     }

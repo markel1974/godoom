@@ -13,8 +13,7 @@ import (
 
 // VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
 type VerticesMD1 struct {
-	viewVolume *Volume
-	//rootEntity *physics.Entity
+	viewVolume    *Volume
 	volumes       []*Volume
 	actions       [][2]int
 	startFrame    int
@@ -113,6 +112,7 @@ func (v *VerticesMD1) SetAction(idx int) {
 	}
 }
 
+// GetActionName retrieves the name of the action at the specified index. Returns an empty string if the index is out of bounds.
 func (v *VerticesMD1) GetActionName(idx int) string {
 	if idx < 0 || idx >= len(v.actionNames) {
 		return ""
@@ -120,27 +120,15 @@ func (v *VerticesMD1) GetActionName(idx int) string {
 	return v.actionNames[idx]
 }
 
-func (v *VerticesMD1) FindActionIndex(name string) int {
+// FindActionIndex searches for the index of the given action name in the actionNames list, ignoring case and returning success status.
+func (v *VerticesMD1) FindActionIndex(name string) (int, bool) {
 	nameLower := strings.ToLower(name)
 	for i, n := range v.actionNames {
 		if strings.ToLower(n) == nameLower {
-			return i
+			return i, true
 		}
 	}
-	// Fallback se fallisce (es. se BOTH_DEATH1 manca e c'è TORSO_DEATH1)
-	if strings.HasPrefix(nameLower, "both_") {
-		torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
-		for i, n := range v.actionNames {
-			if strings.ToLower(n) == torsoName {
-				return i
-			}
-		}
-	}
-	return 0
-}
-
-func (v *VerticesMD1) SetActionByName(name string) {
-	v.SetAction(v.FindActionIndex(name))
+	return 0, false
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.

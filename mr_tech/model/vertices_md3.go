@@ -69,12 +69,12 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	for i, lowerName := range lower.actionNames {
 		upperIdx := 0 // default
 		if strings.HasPrefix(lowerName, "BOTH_") {
-			upperIdx = upper.FindActionIndex(lowerName)
+			upperIdx = md3FindActionIndex(upper, lowerName)
 		} else if strings.HasPrefix(lowerName, "LEGS_") {
 			if strings.Contains(lowerName, "IDLE") || strings.Contains(lowerName, "STAND") {
-				upperIdx = upper.FindActionIndex("TORSO_STAND")
+				upperIdx = md3FindActionIndex(upper, "TORSO_STAND")
 			} else {
-				upperIdx = upper.FindActionIndex("TORSO_STAND")
+				upperIdx = md3FindActionIndex(upper, "TORSO_STAND")
 			}
 		}
 		upperActionMap[i] = upperIdx
@@ -232,6 +232,24 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	}
 
 	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpT, billboard
+}
+
+// md3FindActionIndex returns the index of an action in the provided VerticesMD1 instance by matching the action name, ignoring case.
+// If no exact match is found for a "BOTH_" prefixed name, it attempts to find a "TORSO_" prefixed fallback.
+// Returns 0 if no matching index is found.
+func md3FindActionIndex(md1 *VerticesMD1, name1 string) int {
+	nameLower := strings.ToLower(name1)
+	if n, ok := md1.FindActionIndex(nameLower); ok {
+		return n
+	}
+	// Fallback se fallisce (es. se BOTH_DEATH1 manca e c'è TORSO_DEATH1)
+	if strings.HasPrefix(nameLower, "both_") {
+		torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
+		if n, ok := md1.FindActionIndex(torsoName); ok {
+			return n
+		}
+	}
+	return 0
 }
 
 // transformPoints updates the destination face points by translating source face points by the given origin offset.

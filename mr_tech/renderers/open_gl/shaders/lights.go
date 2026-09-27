@@ -46,6 +46,7 @@ const (
 	LightLocShininessFloor
 	LightLocSpecBoostWall
 	LightLocSpecBoostFloor
+	LightLocDebugLights
 	LightLocLast
 )
 
@@ -59,14 +60,16 @@ type Lights struct {
 	shadows      int32
 	stride       int32
 	cal          *model.Calibration
+	debugLights  int
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
 func NewLights(stride int32, cal *model.Calibration) *Lights {
 	return &Lights{
-		cal:      cal,
-		stride:   stride,
-		frameIdx: 0,
+		cal:         cal,
+		stride:      stride,
+		frameIdx:    0,
+		debugLights: 1,
 	}
 }
 
@@ -151,6 +154,7 @@ func (s *Lights) Compile(a IAssets) error {
 	s.table[LightLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
 	s.table[LightLocSpecBoostWall] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostWall\x00"))
 	s.table[LightLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
+	s.table[LightLocDebugLights] = gl.GetUniformLocation(s.prg, gl.Str("u_debugLights\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -200,6 +204,7 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	gl.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
 	gl.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
 	gl.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
+	gl.Uniform1i(s.GetUniform(LightLocDebugLights), int32(s.debugLights))
 	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 	if s.shadows != 0 {
 		gl.ActiveTexture(gl.TEXTURE12)

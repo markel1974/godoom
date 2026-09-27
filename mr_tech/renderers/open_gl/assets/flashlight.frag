@@ -32,6 +32,7 @@ uniform float u_specBoostFloor;
 uniform float u_beamRatioFactor;
 uniform int u_volumetricSteps;
 uniform int u_isAbsolute;
+uniform int u_debugLights;
 
 const float PI = 3.14159265359;
 
@@ -237,6 +238,20 @@ void main()
 
     float flashLightOcclusion = (1.0 - shadowFlash);
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * 2.5) * flashLightOcclusion * vec3(1.0, 0.98, 0.9);
+
+    if (u_debugLights == 1) {
+        vec3 rayDir = normalize(ViewPos);
+        float t = dot(flashPosView, rayDir);
+        if (t > 0.0 && t < length(ViewPos)) {
+            vec3 closestPoint = t * rayDir;
+            float d = length(flashPosView - closestPoint);
+            float virtualRadius = 2.0;
+            if (d < virtualRadius) {
+                litFlash = vec3(1.0, 0.0, 0.0);
+                flashBeam = vec3(0.0);
+            }
+        }
+    }
 
     FragColor = vec4(litFlash + flashBeam, 0.0);
     BrightColor = vec4(dot(litFlash + flashBeam, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? (litFlash + flashBeam) : vec3(0.0), 1.0);

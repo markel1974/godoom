@@ -23,6 +23,7 @@ type Light struct {
 
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
+	Debug             bool
 	data              []float32
 	index             int
 	freezeIndex       int
@@ -107,7 +108,9 @@ func (f *FrameLights) Create(light *model.Light) {
 		// lightType = 0
 		return
 	case config.LightKindAmbient:
-		lType = 0
+		lType = 3
+	case config.LightKindDirectional:
+		lType = 2
 	case config.LightKindSpot:
 		//const baseCutoff = 30.0
 		//const baseOuterCutOff = 40.0

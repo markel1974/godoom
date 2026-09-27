@@ -55,24 +55,27 @@ const (
 	FlashLocBeamRatioFactor
 	FlashLocVolumetricSteps
 	FlashLocIsAbsolute
+	FlashLocDebugLights
 	FlashLocLast
 )
 
 // ShadowLight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
 type ShadowLight struct {
-	prg        uint32
-	table      [FlashLocLast]int32
-	shadows    bool
-	shadowsInt int32
-	cal        *model.Calibration
+	prg         uint32
+	table       [FlashLocLast]int32
+	shadows     bool
+	shadowsInt  int32
+	cal         *model.Calibration
+	debugLights int
 }
 
 // NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
 func NewShaderShadowLight(cal *model.Calibration) *ShadowLight {
 	f := &ShadowLight{
-		cal:        cal,
-		shadows:    false,
-		shadowsInt: 0,
+		cal:         cal,
+		shadows:     false,
+		shadowsInt:  0,
+		debugLights: 1,
 	}
 	f.EnableShadows(false)
 	return f
@@ -161,6 +164,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 	s.table[FlashLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
 	s.table[FlashLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
 	s.table[FlashLocIsAbsolute] = gl.GetUniformLocation(s.prg, gl.Str("u_isAbsolute\x00"))
+	s.table[FlashLocDebugLights] = gl.GetUniformLocation(s.prg, gl.Str("u_debugLights\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("unused uniform location in flashlight: %d\n", idx)
@@ -202,6 +206,7 @@ func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj
 	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
 	gl.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
+	gl.Uniform1i(s.GetUniform(FlashLocDebugLights), int32(s.debugLights))
 	if s.shadows {
 		gl.ActiveTexture(gl.TEXTURE13)
 		gl.BindTexture(gl.TEXTURE_2D, shadowTex)

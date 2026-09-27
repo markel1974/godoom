@@ -28,6 +28,7 @@ uniform float u_shininessWall;
 uniform float u_shininessFloor;
 uniform float u_specBoostWall;
 uniform float u_specBoostFloor;
+uniform int u_debugLights;
 
 const float PI = 3.14159265359;
 
@@ -237,13 +238,34 @@ void main()
         }
 
         // CALCOLO DIFFUSIONE E SPECULARE
-        float NdotL = max(dot(finalNormal, L), 0.0);
-        float specularPower = calculateSpecular(finalNormal, L, V, isHorizontal);
+        float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
+        float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V, isHorizontal);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
 
         // ACCUMULO FINALE
         dynamicLights += (diffuse + specular) * intensity * falloff * spotEffect;
+    }
+
+    if (u_debugLights == 1) {
+        vec3 rayDir = normalize(ViewPos);
+        for (int i = 0; i < u_numLights; ++i) {
+            vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
+            float t = dot(lightPosView, rayDir);
+            if (t > 0.0 && t < length(ViewPos)) {
+                vec3 closestPoint = t * rayDir;
+                float d = length(lightPosView - closestPoint);
+                float virtualRadius = 2.0;
+                if (d < virtualRadius) {
+                    int lType = int(u_lights[i].pos_type.w);
+                    if (lType == 1) {
+                        dynamicLights = vec3(1.0, 0.0, 0.0); // Red for Spotlight
+                    } else if (lType == 3 || lType == 0) {
+                        dynamicLights = vec3(0.0, 0.0, 1.0); // Blue for Ambient/Point
+                    }
+                }
+            }
+        }
     }
 
     vec3 finalLight = litRoom + roomBeam + dynamicLights;

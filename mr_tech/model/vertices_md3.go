@@ -179,22 +179,6 @@ func (v *VerticesMD3) SetThing(t IThing) {
 	}
 }
 
-// transformPoints updates the destination face points by translating source face points by the given origin offset.
-func transformPoints(dst *Face, src *Face, origin geometry.XYZ) {
-	pts := src.GetPoints()
-	dst.tri[0] = geometry.XYZ{X: pts[0].X + origin.X, Y: pts[0].Y + origin.Y, Z: pts[0].Z + origin.Z}
-	dst.tri[1] = geometry.XYZ{X: pts[1].X + origin.X, Y: pts[1].Y + origin.Y, Z: pts[1].Z + origin.Z}
-	dst.tri[2] = geometry.XYZ{X: pts[2].X + origin.X, Y: pts[2].Y + origin.Y, Z: pts[2].Z + origin.Z}
-}
-
-// copyFacePoints copies the vertex points from the source Face to the destination Face.
-func copyFacePoints(dst *Face, src *Face) {
-	pts := src.GetPoints()
-	dst.tri[0] = pts[0]
-	dst.tri[1] = pts[1]
-	dst.tri[2] = pts[2]
-}
-
 // GetVertices retrieves and transforms the vertex data for the current tick, including interpolation and hierarchical adjustments.
 func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	facesL_A, countL, facesL_B, _, lerpT, billboard := v.lower.GetVertices(tick)
@@ -207,45 +191,61 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	volU_A, volU_B := v.upper.GetVolumesAt(tick)
 	_, _ = v.head.GetVolumesAt(tick) // Execute to keep state synced but discard volumes
 
-	tagTorsoA := volL_A.Tags["tag_torso"]
-	tagTorsoB := volL_B.Tags["tag_torso"]
+	tagTorsoA, _ := volL_A.GetVertexTag("tag_torso")
+	tagTorsoB, _ := volL_B.GetVertexTag("tag_torso")
 
-	tagHeadA := volU_A.Tags["tag_head"]
-	tagHeadB := volU_B.Tags["tag_head"]
+	tagHeadA, _ := volU_A.GetVertexTag("tag_head")
+	tagHeadB, _ := volU_B.GetVertexTag("tag_head")
 
 	combinedHeadA := geometry.XYZ{X: tagTorsoA.X + tagHeadA.X, Y: tagTorsoA.Y + tagHeadA.Y, Z: tagTorsoA.Z + tagHeadA.Z}
 	combinedHeadB := geometry.XYZ{X: tagTorsoB.X + tagHeadB.X, Y: tagTorsoB.Y + tagHeadB.Y, Z: tagTorsoB.Z + tagHeadB.Z}
 
 	for i := 0; i < countL; i++ {
-		copyFacePoints(v.facesA[i], (*facesL_A)[i])
-		copyFacePoints(v.facesB[i], (*facesL_B)[i])
+		md3CopyFacePoints(v.facesA[i], (*facesL_A)[i])
+		md3CopyFacePoints(v.facesB[i], (*facesL_B)[i])
 	}
 
 	for i := 0; i < countU; i++ {
-		transformPoints(v.facesA[countL+i], (*facesU_A)[i], tagTorsoA)
-		transformPoints(v.facesB[countL+i], (*facesU_B)[i], tagTorsoB)
+		md3TransformPoints(v.facesA[countL+i], (*facesU_A)[i], tagTorsoA)
+		md3TransformPoints(v.facesB[countL+i], (*facesU_B)[i], tagTorsoB)
 	}
 
 	for i := 0; i < countH; i++ {
-		transformPoints(v.facesA[countL+countU+i], (*facesH_A)[i], combinedHeadA)
-		transformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
+		md3TransformPoints(v.facesA[countL+countU+i], (*facesH_A)[i], combinedHeadA)
+		md3TransformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
 	}
 
 	if v.weapon != nil {
 		facesW_A, countW, facesW_B, _, _, _ := v.weapon.GetVertices(tick)
 		_, _ = v.weapon.GetVolumesAt(tick)
 
-		tagWeaponA := volU_A.Tags["tag_weapon"]
-		tagWeaponB := volU_B.Tags["tag_weapon"]
+		tagWeaponA, _ := volU_A.GetVertexTag("tag_weapon")
+		tagWeaponB, _ := volU_B.GetVertexTag("tag_weapon")
 
 		combinedWeaponA := geometry.XYZ{X: tagTorsoA.X + tagWeaponA.X, Y: tagTorsoA.Y + tagWeaponA.Y, Z: tagTorsoA.Z + tagWeaponA.Z}
 		combinedWeaponB := geometry.XYZ{X: tagTorsoB.X + tagWeaponB.X, Y: tagTorsoB.Y + tagWeaponB.Y, Z: tagTorsoB.Z + tagWeaponB.Z}
 
 		for i := 0; i < countW; i++ {
-			transformPoints(v.facesA[countL+countU+countH+i], (*facesW_A)[i], combinedWeaponA)
-			transformPoints(v.facesB[countL+countU+countH+i], (*facesW_B)[i], combinedWeaponB)
+			md3TransformPoints(v.facesA[countL+countU+countH+i], (*facesW_A)[i], combinedWeaponA)
+			md3TransformPoints(v.facesB[countL+countU+countH+i], (*facesW_B)[i], combinedWeaponB)
 		}
 	}
 
 	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpT, billboard
+}
+
+// transformPoints updates the destination face points by translating source face points by the given origin offset.
+func md3TransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
+	pts := src.GetPoints()
+	dst.tri[0] = geometry.XYZ{X: pts[0].X + origin.X, Y: pts[0].Y + origin.Y, Z: pts[0].Z + origin.Z}
+	dst.tri[1] = geometry.XYZ{X: pts[1].X + origin.X, Y: pts[1].Y + origin.Y, Z: pts[1].Z + origin.Z}
+	dst.tri[2] = geometry.XYZ{X: pts[2].X + origin.X, Y: pts[2].Y + origin.Y, Z: pts[2].Z + origin.Z}
+}
+
+// copyFacePoints copies the vertex points from the source Face to the destination Face.
+func md3CopyFacePoints(dst *Face, src *Face) {
+	pts := src.GetPoints()
+	dst.tri[0] = pts[0]
+	dst.tri[1] = pts[1]
+	dst.tri[2] = pts[2]
 }

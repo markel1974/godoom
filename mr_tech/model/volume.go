@@ -9,31 +9,31 @@ import (
 
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
 type Volume struct {
-	modelId   int
-	id        string
-	faces     []*Face
-	facesPtr  *[]*Face
-	faceCount int
-	tag       string
-	light     *Light
-	entity    *physics.Entity
-	facesTree *physics.AABBTree
-	thing     IThing
-	sector    *Sector
-	Tags      map[string]geometry.XYZ
+	modelId    int
+	id         string
+	faces      []*Face
+	facesPtr   *[]*Face
+	faceCount  int
+	tag        string
+	light      *Light
+	entity     *physics.Entity
+	facesTree  *physics.AABBTree
+	thing      IThing
+	sector     *Sector
+	vertexTags map[string]geometry.XYZ
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
 func NewVolume(modelId int, id string, tag string, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
-		modelId:   modelId,
-		id:        id,
-		tag:       tag,
-		faces:     make([]*Face, 128),
-		faceCount: 0,
-		entity:    physics.NewEntity(mass, restitution, friction, gForce),
-		facesTree: physics.NewAABBTree(64, 0.0),
-		Tags:      make(map[string]geometry.XYZ),
+		modelId:    modelId,
+		id:         id,
+		tag:        tag,
+		faces:      make([]*Face, 128),
+		faceCount:  0,
+		entity:     physics.NewEntity(mass, restitution, friction, gForce),
+		facesTree:  physics.NewAABBTree(64, 0.0),
+		vertexTags: make(map[string]geometry.XYZ),
 	}
 	v.facesPtr = &v.faces
 	return v
@@ -171,6 +171,17 @@ func (v *Volume) GetSector() *Sector {
 // SetSector assigns the specified Sector to the Volume instance.
 func (v *Volume) SetSector(s *Sector) {
 	v.sector = s
+}
+
+// SetVertexTag associates the given tag with the specified vertex in the Volume's vertexTags map.
+func (v *Volume) SetVertexTag(vertex geometry.XYZ, tag string) {
+	v.vertexTags[tag] = vertex
+}
+
+// GetVertexTag retrieves the vertex associated with a given tag from the Volume's vertexTags map. Returns the vertex and a bool indicating success.
+func (v *Volume) GetVertexTag(tag string) (geometry.XYZ, bool) {
+	vertex, ok := v.vertexTags[tag]
+	return vertex, ok
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.

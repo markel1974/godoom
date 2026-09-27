@@ -76,7 +76,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		}
 	}
 
-	thingCfg := doCreate(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := t.doCreate(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
 
 	return thingCfg, nil
 }
@@ -148,12 +148,12 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewMD1(1, []string{"default"})
 	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
-	thingCfg := doCreate(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	thingCfg := t.doCreate(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
-func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
+func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
@@ -178,6 +178,8 @@ func doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel 
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
 func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
+	const idleDef = "idle"
+
 	loadMaterial := func(il *ImageLoader, part *config.MD1) {
 		for _, frame := range part.Frames {
 			for _, tri := range frame.Triangles {
@@ -244,24 +246,24 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 
 	// Fallback if animation.cfg is missing or empty
 	if len(md3.Lower.ActionDefinitions) == 0 {
-		md3.Lower.ActionDefinitions = []string{"idle"}
+		md3.Lower.ActionDefinitions = []string{idleDef}
 		md3.Lower.ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
-		md3.Upper.ActionDefinitions = []string{"idle"}
+		md3.Upper.ActionDefinitions = []string{idleDef}
 		md3.Upper.ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
 	}
 
 	// Head has no specific animations in Q3, just loop frame 0
-	md3.Head.ActionDefinitions = []string{"idle"}
+	md3.Head.ActionDefinitions = []string{idleDef}
 	md3.Head.ActionIntervals = [][2]int{{0, 0}}
 
 	if weapon != nil {
-		md3.Weapon.ActionDefinitions = []string{"idle"}
+		md3.Weapon.ActionDefinitions = []string{idleDef}
 		md3.Weapon.ActionIntervals = [][2]int{{0, 0}}
 	}
 
 	// We pass md3.Lower to doCreate so that it can extract the ActionDefinitions for the enemy logic.
 	// We'll set MD1 to nil afterwards since this is an MD3 model.
-	thingCfg := doCreate(classname, pos, config.ThingEnemyDef, md3.Lower, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := t.doCreate(classname, pos, config.ThingEnemyDef, md3.Lower, 0, 30.0, 16.0, 56, 600.0)
 	thingCfg.MD1 = nil
 	thingCfg.MD3 = md3
 

@@ -6,6 +6,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
+const flashFactorIncrement = 0.001
+
 // Flash represents a lighting system with configurable parameters including field of view, range, intensity, and offsets.
 type Flash struct {
 	fovDeg    float64
@@ -102,12 +104,12 @@ func (p *Flash) GetOffsetY() float64 {
 
 // IncreaseFlashFactor increments the flashlight's intensity factor by increasing the `factor` field by 1.
 func (p *Flash) IncreaseFlashFactor() {
-	p.factor++
+	p.factor += flashFactorIncrement
 }
 
 // DecreaseFlashFactor reduces the flashlight's intensity factor by 1, ensuring it does not drop below 0.
 func (p *Flash) DecreaseFlashFactor() {
 	if p.factor > 0 {
-		p.factor--
+		p.factor -= flashFactorIncrement
 	}
 }

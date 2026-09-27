@@ -17,6 +17,7 @@ type Compiler struct {
 	player      *ThingPlayer
 	lights      *Lights
 	things      *Things
+	crosshair   IThing
 	calibration *Calibration
 }
 
@@ -96,6 +97,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return fmt.Errorf("player not found")
 	}
 	r.things.SetPlayer(r.player)
+
+	if cfg.Crosshair != nil {
+		vol, _ := r.volumes.QueryPoint(cfg.Crosshair.Position.X, cfg.Crosshair.Position.Y, cfg.Crosshair.Position.Z)
+		r.crosshair = r.things.createThing(cfg.Crosshair, vol)
+		r.things.AddStaticThing(r.crosshair)
+	}
 	r.calibration = NewCalibration(cfg.Calibration, r.volumes)
 	fmt.Printf("Scan complete world: %d\n", r.volumes.Len())
 	return nil
@@ -107,6 +114,11 @@ func (r *Compiler) GetThings() *Things {
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.
+// GetCrosshair returns the compiled crosshair thing.
+func (r *Compiler) GetCrosshair() IThing {
+	return r.crosshair
+}
+
 func (r *Compiler) GetVolumes() *Volumes {
 	return r.volumes
 }

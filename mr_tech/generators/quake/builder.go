@@ -75,6 +75,10 @@ func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
 		return nil, err
 	}
 
+	crosshair := common.NewSimpleCrosshair()
+	texManager.AddDirect(crosshair.GetTexture())
+	root.Crosshair = crosshair.Create()
+
 	playerAngle, playerPos := reader.GetPlayerInfo()
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 40)

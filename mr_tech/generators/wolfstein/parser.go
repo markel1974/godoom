@@ -74,15 +74,12 @@ func NewParser(tileSize float64, sectorHeight float64, openDoors bool) *Parser {
 }
 
 // Parse constructs a Root by processing a map grid of given dimensions and metadata, generating sectors and objects.
-func (wp *Parser) Parse(width int, height int, md []uint16) (*config.Root, error) {
+func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint16) (*config.Root, error) {
 	const useEnemy = true
 	if len(md) != width*height {
 		return nil, fmt.Errorf("mapData size does not match width * height")
 	}
-	texProvider, tErr := NewTextures()
-	if tErr != nil {
-		return nil, tErr
-	}
+
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = AspectRatio
 	scaleFactor := geometry.XYZ{X: 15.0, Y: 15.0, Z: 1}

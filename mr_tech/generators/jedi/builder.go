@@ -342,10 +342,15 @@ func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, er
 	calibration := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	calibration.AspectRatio = aspectRatio
 	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
-	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, archive.GetTextures())
+	tex := archive.GetTextures()
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, tex)
 	cr.Things = configThings
 	cr.Vertices = globalVertices
 	cr.Lights = lights
+
+	crosshair := common.NewSimpleCrosshair()
+	tex.AddDirect(crosshair.GetTexture())
+	cr.Crosshair = crosshair.Create()
 
 	return cr, nil
 }

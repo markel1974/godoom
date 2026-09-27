@@ -15,6 +15,7 @@ type ThingType int
 // ThingThrowableDef represents a throwable object entity type.
 // ThingKeyDef represents a key entity type.
 // ThingItemDef represents a general item entity type.
+// ThingHudDef represents a hud entity type.
 const (
 	ThingUnknownDef = ThingType(iota)
 	ThingPlayerDef
@@ -24,6 +25,7 @@ const (
 	ThingThrowableDef
 	ThingKeyDef
 	ThingItemDef
+	ThingHudDef
 )
 
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.

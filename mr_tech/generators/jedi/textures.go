@@ -141,3 +141,8 @@ func (t *Textures) GetNames() []string {
 	}
 	return out
 }
+
+// AddDirect adds a preconstructed texture to the resources map with the specified name as the key.
+func (t *Textures) AddDirect(name string, tex *textures.Texture) {
+	t.resources[name] = tex
+}

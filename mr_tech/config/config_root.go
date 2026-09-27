@@ -17,6 +17,7 @@ type Root struct {
 	Vertices    geometry.Polygon `json:"vertices"`
 	Volumes     []*Volume        `json:"volumes"`
 	Lights      []*Light         `json:"lights"`
+	Crosshair   *Thing           `json:"crosshair"`
 	textures    textures.ITextures
 }
 

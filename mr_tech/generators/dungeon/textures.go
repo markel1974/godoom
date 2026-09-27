@@ -62,3 +62,7 @@ func (t *Textures) GetNames() []string {
 	}
 	return out
 }
+
+func (t *Textures) AddTexture(name string, tex *textures.Texture) {
+	t.resources[name] = tex
+}

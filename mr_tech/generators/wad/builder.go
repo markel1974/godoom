@@ -137,6 +137,10 @@ func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error)
 	cr := config.NewConfigRoot(cal, sectors, player, things, scaleFactor, texHandler)
 	cr.Vertices = vertexes
 
+	crosshair := common.NewSimpleCrosshair()
+	texHandler.AddDirect(crosshair.GetTexture())
+	cr.Crosshair = crosshair.Create()
+
 	return cr, nil
 }
 

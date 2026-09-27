@@ -15,6 +15,7 @@ type Engine struct {
 	viewFactor  float64
 	things      *model.Things
 	player      *model.ThingPlayer
+	crosshair   model.IThing
 	volumes     *model.Volumes
 	lights      *model.Lights
 	calibration *model.Calibration
@@ -46,6 +47,11 @@ func (e *Engine) GetTextures() textures.ITextures {
 // GetThings returns the Things instance managed by the Engine.
 func (e *Engine) GetThings() *model.Things {
 	return e.things
+}
+
+// GetCrosshair returns the crosshair thing.
+func (e *Engine) GetCrosshair() model.IThing {
+	return e.crosshair
 }
 
 // GetLights retrieves the list of light sources currently managed by the engine.
@@ -80,6 +86,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 		return err
 	}
 	e.player = compiler.GetPlayer()
+	e.crosshair = compiler.GetCrosshair()
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()

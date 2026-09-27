@@ -200,14 +200,7 @@ func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*text
 	return tex, nil
 }
 
-/*
-// GetMaterial trasforma un nome texture in un oggetto Material pronto per il compilatore.
-func (w *Textures) GetMaterial(name string) *configAnimation {
-	tex := w.Get([]string{name})
-	if tex == nil {
-		return nil
-	}
-	// Ritorna un'animazione a singolo frame (loop di 1)
-	return config.NewConfigAnimation([]string{name}, config.AnimationKindLoop, 1.0, 1.0)
+// AddDirect directly adds a texture to the collection using the provided name without additional processing or checks.
+func (w *Textures) AddDirect(name string, tex *textures.Texture) {
+	w.Add(name, tex)
 }
-*/

@@ -250,6 +250,11 @@ func (t *Textures) BuildSprite(prefix string) *config.MultiSprite {
 	return ms
 }
 
+// AddDirect directly adds a texture to the Textures collection with the specified name and texture object.
+func (t *Textures) AddDirect(name string, tex *textures.Texture) {
+	t.resources[name] = tex
+}
+
 /*
 func (t *Textures) GetSprite(id string) []string {
 	var names []string

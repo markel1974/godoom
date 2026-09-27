@@ -24,7 +24,9 @@ type Things struct {
 	pendingIdx       atomic.Int32
 	entities         map[uint64]IThing
 	active           []IThing
+	static           []IThing
 	activeIdx        int
+	player           *ThingPlayer
 	inactive         []IThing
 	inactiveIdx      int
 	containerIdx     int
@@ -52,11 +54,10 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		volumes:          volumes,
 		materials:        materials,
 		event:            NewThingEvent(0, solverJitter),
+		static:           make([]IThing, 0, 16),
 	}
 	e.pendingIdx.Store(0)
-
 	const enableThingsCreation = true
-
 	if enableThingsCreation {
 		for _, ct := range cfg {
 			volume, _ := e.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
@@ -81,10 +82,8 @@ func (th *Things) GetMaterials() *Materials {
 func (th *Things) Len() int {
 	return len(th.container)
 }
-
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
-
 	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
 		rThing := object.(IThing)
 		if lThing == rThing {
@@ -96,9 +95,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		}
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
-
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
-
 		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
 			rFace := rEnt.(*Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
@@ -124,11 +121,19 @@ func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustu
 
 // QueryFrustum performs a spatial query within the specified frustum, invoking the callback for each intersected object.
 func (th *Things) QueryFrustum(front *physics.Frustum, callback func(object physics.IAABB) bool) {
+	for _, st := range th.static {
+		callback(st)
+	}
 	th.tree.QueryFrustum(front, callback)
 }
 
 // SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
+// GetPlayer returns the current player instance.
+func (th *Things) GetPlayer() *ThingPlayer {
+	return th.player
+}
 func (th *Things) SetPlayer(p *ThingPlayer) {
+	th.player = p
 	th.addThing(p)
 }
 
@@ -175,12 +180,13 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 		thing = NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
 		thing = NewThingItem(th, ct, volume)
+	case config.ThingHudDef:
+		thing = NewThingHud(th, ct, volume)
 	case config.ThingItemDef:
 		thing = NewThingItem(th, ct, volume)
 	default:
 		thing = NewThingItem(th, ct, volume)
 	}
-
 	entity := thing.GetEntity()
 	entity.SetOnGround(false)
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
@@ -209,7 +215,6 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	}
 	throwable := th.createThing(dst, volume)
 	throwable.GetEntity().SetOnGround(false)
-
 	th.pending[slot] = throwable
 	th.hasPending = true
 }
@@ -225,7 +230,6 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	th.containerIdx = 0
 	th.activeIdx = 0
 	th.inactiveIdx = 0
-
 	th.event.SetStage(StageThinking)
 	th.event.SetCoords(pX, pY, pZ)
 	for _, t2 := range th.entities {
@@ -240,14 +244,12 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 		t2.PostMessage(th.event)
 	}
 	th.event.wg.Wait()
-
 	if th.inactiveIdx > 0 {
 		for x := 0; x < th.inactiveIdx; x++ {
 			th.removeThing(th.inactive[x])
 		}
 		th.inactiveIdx = 0
 	}
-
 	if th.hasPending {
 		pendingIdx := int(th.pendingIdx.Load())
 		for x := 0; x < pendingIdx; x++ {
@@ -256,7 +258,6 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 		th.pendingIdx.Store(0)
 		th.hasPending = false
 	}
-
 	for x := 0; x < th.containerIdx; x++ {
 		thing := th.container[x]
 		if !thing.StagePrepare() {
@@ -273,7 +274,6 @@ func (th *Things) processCollision() {
 	if th.activeIdx == 0 {
 		return
 	}
-
 	//th.event.SetStage(StageCompute)
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
@@ -286,7 +286,6 @@ func (th *Things) processCollision() {
 		//t2.PostMessage(th.event)
 	}
 	//th.event.wg.Wait()
-
 	for si := 0; si < th.solverIterations; si++ {
 		//th.event.SetSolver(si, solverJitter)
 		//th.event.SetStage(StageResolve)
@@ -299,7 +298,6 @@ func (th *Things) processCollision() {
 		}
 		//th.event.wg.Wait()
 	}
-
 	th.event.SetStage(StageApply)
 	// PHYSYCS APPLY
 	for x := 0; x < th.activeIdx; x++ {
@@ -308,12 +306,16 @@ func (th *Things) processCollision() {
 		t2.PostMessage(th.event)
 	}
 	th.event.wg.Wait()
-
 	// COMMIT SPAZIALE E INTEGRAZIONE
 	for x := 0; x < th.activeIdx; x++ {
 		t2 := th.active[x]
 		th.tree.UpdateObject(t2)
 	}
+}
+
+// AddStaticThing adds a static object to the scene without physics or spatial partitioning.
+func (th *Things) AddStaticThing(ent IThing) {
+	th.static = append(th.static, ent)
 }
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.

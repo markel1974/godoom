@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"strings"
 )
 
 const MD3Magic = 860898377 // "IDP3"
@@ -118,7 +117,7 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker) (*MD3Resource, error) {
 	}
 	res.FrameNames = make([]string, header3.NumFrames)
 	for i, f := range res.Frames {
-		res.FrameNames[i] = strings.TrimRight(string(f.Name[:]), "\x00")
+		res.FrameNames[i] = FromNullTerminatingString(f.Name[:])
 	}
 
 	if res.Header.NumTags > 0 && res.Header.OfsTags > 0 {

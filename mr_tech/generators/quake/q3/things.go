@@ -314,7 +314,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 
 		// Find the material (use the first shader as base material)
 		var material *config.Material
-		surfName := strings.TrimRight(string(surf.Header.Name[:]), "\x00")
+		surfName := lumps.FromNullTerminatingString(surf.Header.Name[:])
 		var shaderName string
 		if skinMap != nil {
 			if texPath, ok := skinMap[surfName]; ok {
@@ -323,7 +323,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 		}
 
 		if len(shaderName) == 0 && len(surf.Shaders) > 0 {
-			shaderName = strings.TrimRight(string(surf.Shaders[0].Name[:]), "\x00")
+			shaderName = lumps.FromNullTerminatingString(surf.Shaders[0].Name[:])
 			shaderName = strings.ReplaceAll(shaderName, "\\", "/")
 			if len(shaderName) > 0 && !strings.Contains(shaderName, "/") {
 				shaderName = basePath + shaderName

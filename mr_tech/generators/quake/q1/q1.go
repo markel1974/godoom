@@ -315,46 +315,50 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 		if v.IsSky {
 			animKind = config.MaterialKindSky
 			velX, velY = 0.05, 0.05
+		} else if len(v.TexName) > 0 && v.TexName[0] == '*' {
+			animKind = config.MaterialKindLiquid
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, velX, velY)
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
-		for _, tri := range triangles {
-			var triUvs [][2]float64
+		//isLiquid := len(v.TexName) > 0 && v.TexName[0] == '*'
+		for _, rawTri := range triangles {
+			var rawTriUvs [][2]float64
 			if len(v.UVs) > 0 {
-				triUvs = make([][2]float64, 3)
+				rawTriUvs = make([][2]float64, 3)
 				for k := 0; k < 3; k++ {
-					pos := tri[k]
+					pos := rawTri[k]
 					for idx, pt := range v.Points {
 						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
 							if len(v.UVs) > idx {
-								triUvs[k] = v.UVs[idx]
+								rawTriUvs[k] = v.UVs[idx]
 							}
 							break
 						}
 					}
 				}
+
+				// Find the triangle centroid
+				cx := (rawTri[0].X + rawTri[1].X + rawTri[2].X) / 3.0
+				cy := (rawTri[0].Y + rawTri[1].Y + rawTri[2].Y) / 3.0
+				cz := (rawTri[0].Z + rawTri[1].Z + rawTri[2].Z) / 3.0
+
+				// Calculate the spatial hashing key (grid coordinates)
+				gridX := int(math.Floor(cx / chunkSize))
+				gridY := int(math.Floor(cy / chunkSize))
+				gridZ := int(math.Floor(cz / chunkSize))
+
+				chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
+				volume, exists := chunks[chunkKey]
+				if !exists {
+					chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
+					volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
+					chunks[chunkKey] = volume
+					root.Volumes = append(root.Volumes, volume)
+				}
+
+				volume.Faces = append(volume.Faces, config.NewConfigFace([]geometry.XYZ{rawTri[0], rawTri[1], rawTri[2]}, rawTriUvs, material, v.TexName))
 			}
-
-			// 2. Find the triangle centroid
-			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
-			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
-			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
-
-			// 3. Calculate the spatial hashing key (grid coordinates)
-			gridX := int(math.Floor(cx / chunkSize))
-			gridY := int(math.Floor(cy / chunkSize))
-			gridZ := int(math.Floor(cz / chunkSize))
-
-			chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
-			volume, exists := chunks[chunkKey]
-			if !exists {
-				chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
-				volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
-				chunks[chunkKey] = volume
-				root.Volumes = append(root.Volumes, volume)
-			}
-			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
 		}
 	}
 	return nil
@@ -479,6 +483,8 @@ func (q1 *Q1BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
 			velX, velY = 0.05, 0.05
+		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
+			animKind = config.MaterialKindLiquid
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)

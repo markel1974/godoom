@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // MainLoc represents an enumerated type for identifying shader uniform locations.
@@ -33,6 +34,7 @@ const (
 	MainLocEmissiveMap
 	MainLocEmissiveIntensity
 	MainLocAoFactor
+	MainLocTime
 	MainLocLast
 )
 
@@ -221,11 +223,13 @@ func (s *Main) Compile(a IAssets) error {
 	s.tableOpaque[MainLocEmissiveMap] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveMap\x00"))
 	s.tableOpaque[MainLocEmissiveIntensity] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveIntensity\x00"))
 	s.tableOpaque[MainLocAoFactor] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_aoFactor\x00"))
+	s.tableOpaque[MainLocTime] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_time\x00"))
 
 	// Setup Uniforms Additive
 	s.tableAdditive[MainLocView] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_view\x00"))
 	s.tableAdditive[MainLocProjection] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_projection\x00"))
 	s.tableAdditive[MainLocTexture] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_texture\x00"))
+	s.tableAdditive[MainLocTime] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_time\x00"))
 
 	return nil
 }
@@ -392,6 +396,8 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint3
 
 	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
 	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
+	gl.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*0.05)
+
 	gl.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
 	gl.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
 	gl.Uniform1f(s.GetUniformOpaque(MainLocAoFactor), s.aoFactor)
@@ -417,6 +423,7 @@ func (s *Main) RenderAdditive(renderGeometry func()) {
 
 	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
 	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
+	gl.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*0.05)
 
 	gl.DepthMask(false)
 	gl.Enable(gl.DEPTH_TEST)

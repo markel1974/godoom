@@ -13,18 +13,19 @@ type VerticesLiquid struct {
 }
 
 // NewVerticesLiquid initializes a liquid surface with a grid-based structure and associated physical volume.
+// NewVerticesLiquid initializes a liquid surface with a grid-based structure and associated physical volume.
 func NewVerticesLiquid(cfg *config.Thing, materials *Materials) *VerticesLiquid {
 	const res = 32
-
 	v := &VerticesLiquid{
 		volume: NewVolume(0, "liquid_surface", "liquid", cfg.Mass, 0.0, 0.0, 0.0),
 		width:  res,
 		depth:  res,
 	}
-
 	v.buildGrid(cfg.Radius)
-
 	return v
+}
+
+func (v *VerticesLiquid) SetThing(t IThing) {
 }
 
 // buildGrid constructs a grid of vertices and triangular faces within the specified radius for a liquid simulation.

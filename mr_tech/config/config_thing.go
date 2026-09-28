@@ -47,6 +47,7 @@ type Thing struct {
 	GForce         float64      `json:"gForce"`
 	MD1            *MD1         `json:"md1"`
 	MD3            *MD3         `json:"md3"`
+	Liquid         *Liquid      `json:"liquid"`
 	MultiSprite    *MultiSprite `json:"multiSprite"`
 	Sprite         *Sprite      `json:"sprite"`
 

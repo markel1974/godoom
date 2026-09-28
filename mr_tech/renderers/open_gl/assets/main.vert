@@ -18,6 +18,7 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform mat4 u_roomSpaceMatrix;
 uniform mat4 u_flashSpaceMatrix;
+uniform float u_time;
 
 void main()
 {
@@ -81,6 +82,15 @@ void main()
         // Mappatura OpenGL
         vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
+    } else if (aIsBillboard > 0.4 && aIsBillboard < 0.6) {
+        // --- LIQUIDI (LAVA / ACQUA) ---
+        worldPos = vec4(aPos, 1.0);
+        // Generazione del moto ondoso fisico sui vertici
+        worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
+        worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
+        // Scroll delle coordinate UV per simulare la corrente
+        TexCoords.x += u_time * 0.1;
+        TexCoords.y += u_time * 0.05;
     } else {
         // --- GEOMETRIA BSP ---
         worldPos = vec4(aPos, 1.0);

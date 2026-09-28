@@ -21,6 +21,7 @@ const (
 	MaterialKindNone MaterialKind = iota
 	MaterialKindLoop
 	MaterialKindSky
+	MaterialKindLiquid
 )
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.

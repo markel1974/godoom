@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -13,6 +14,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 )
+
+type imageDriver struct {
+	n  string
+	fn func(io.Reader) (image.Image, string, error)
+}
+
+var _imageDrivers = []imageDriver{
+	{n: ".jpg", fn: image.Decode},
+	{n: ".tga", fn: common.DecodeTGA},
+	{n: ".png", fn: image.Decode},
+}
 
 // BaseName removes the file extension from the given string and returns the base name of the file.
 func BaseName(in string) string {
@@ -117,28 +129,25 @@ func (il *ImageLoader) retrieve(texName string) (image.Image, error) {
 // doBaseLoad attempts to load an image by trying .jpg, .tga, and .png file extensions in the given archive.
 // Returns the loaded image or an error if no matching file is found.
 func (il *ImageLoader) doBaseLoad(baseName string, arc interfaces.IArchive) (image.Image, error) {
-	if fileJpg, errJpg := arc.Open(baseName + ".jpg"); errJpg == nil {
-		img, _, err := image.Decode(fileJpg)
-		return img, err
-	}
-	if fileTga, errTga := arc.Open(baseName + ".tga"); errTga == nil {
-		return common.DecodeTGA(fileTga)
-	}
-	if filePng, errPng := arc.Open(baseName + ".png"); errPng == nil {
-		img, _, err := image.Decode(filePng)
-		return img, err
+	for _, id := range _imageDrivers {
+		if reader, rErr := arc.Open(baseName + id.n); rErr == nil {
+			if img, _, err := id.fn(reader); err == nil {
+				return img, nil
+			}
+		}
 	}
 	return nil, errors.New("no image found")
 }
 
 // doLoad attempts to load an image from the archive using its file name and format, returning the decoded image or an error.
 func (il *ImageLoader) doLoad(texName string, arc interfaces.IArchive) (image.Image, error) {
-	if f, err := arc.Open(texName); err == nil {
+	if f, rErr := arc.Open(texName); rErr == nil {
 		if strings.HasSuffix(strings.ToLower(texName), ".tga") {
-			return common.DecodeTGA(f)
+			img, _, err := common.DecodeTGA(f)
+			return img, err
 		}
-		img, _, errDec := image.Decode(f)
-		return img, errDec
+		img, _, err := image.Decode(f)
+		return img, err
 	}
 	return nil, errors.New("no image found")
 }

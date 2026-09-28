@@ -73,26 +73,26 @@ func tgaReadPixel(r io.Reader, bytesPerPixel int, pixelBuf []byte, colorMap []co
 }
 
 // DecodeTGA decodes a TGA image from the provided io.Reader and returns it as an image.Image object or an error.
-func DecodeTGA(r io.Reader) (image.Image, error) {
+func DecodeTGA(r io.Reader) (image.Image, string, error) {
 	var header TGAHeader
 
 	if err := binary.Read(r, binary.LittleEndian, &header); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if header.IDLength > 0 {
 		if _, err := io.CopyN(io.Discard, r, int64(header.IDLength)); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
 	supportedTypes := map[uint8]bool{1: true, 2: true, 3: true, 9: true, 10: true, 11: true}
 	if !supportedTypes[header.ImageType] {
-		return nil, fmt.Errorf("unsupported TGA image type: %d", header.ImageType)
+		return nil, "", fmt.Errorf("unsupported TGA image type: %d", header.ImageType)
 	}
 
 	if header.PixelDepth != 8 && header.PixelDepth != 16 && header.PixelDepth != 24 && header.PixelDepth != 32 {
-		return nil, fmt.Errorf("unsupported TGA pixel depth: %d", header.PixelDepth)
+		return nil, "", fmt.Errorf("unsupported TGA pixel depth: %d", header.PixelDepth)
 	}
 
 	var colorMap []color.RGBA
@@ -100,7 +100,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 	case 0: //nothing to do
 	case 1:
 		if header.ColorMapDepth != 15 && header.ColorMapDepth != 16 && header.ColorMapDepth != 24 && header.ColorMapDepth != 32 {
-			return nil, fmt.Errorf("unsupported TGA colormap depth: %d", header.ColorMapDepth)
+			return nil, "", fmt.Errorf("unsupported TGA colormap depth: %d", header.ColorMapDepth)
 		}
 		cMapBpp := int(header.ColorMapDepth) / 8
 		if header.ColorMapDepth == 15 {
@@ -109,7 +109,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 		colorMapBytes := int(header.ColorMapLength) * cMapBpp
 		cMapData := make([]byte, colorMapBytes)
 		if _, err := io.ReadFull(r, cMapData); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		colorMap = make([]color.RGBA, header.ColorMapLength)
@@ -117,13 +117,13 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 			colorMap[i] = tgaParseColor(cMapBpp, cMapData[i*cMapBpp:(i+1)*cMapBpp])
 		}
 	default:
-		return nil, fmt.Errorf("unsupported ColorMapType: %d", header.ColorMapType)
+		return nil, "", fmt.Errorf("unsupported ColorMapType: %d", header.ColorMapType)
 	}
 
 	width := int(header.Width)
 	height := int(header.Height)
 	if width <= 0 || height <= 0 {
-		return nil, fmt.Errorf("invalid TGA dimensions: %dx%d", width, height)
+		return nil, "", fmt.Errorf("invalid TGA dimensions: %dx%d", width, height)
 	}
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -150,7 +150,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 			for x := 0; x < width; x++ {
 				c, err := tgaReadPixel(r, bytesPerPixel, pixelBuf, colorMap, cMapOrigin)
 				if err != nil {
-					return nil, err
+					return nil, "", err
 				}
 				destX := x
 				if flipX {
@@ -173,7 +173,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 			if packetHeader&0x80 != 0 { // Run-length packet
 				c, err := tgaReadPixel(r, bytesPerPixel, pixelBuf, colorMap, cMapOrigin)
 				if err != nil {
-					return nil, err
+					return nil, "", err
 				}
 				for i := 0; i < count; i++ {
 					destY := y
@@ -195,7 +195,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 				for i := 0; i < count; i++ {
 					c, err := tgaReadPixel(r, bytesPerPixel, pixelBuf, colorMap, cMapOrigin)
 					if err != nil {
-						return nil, err
+						return nil, "", err
 					}
 					destY := y
 					if flipY {
@@ -248,7 +248,7 @@ func DecodeTGA(r io.Reader) (image.Image, error) {
 	}
 	//}
 
-	return img, nil
+	return img, "", nil
 }
 
 // EncodeTGA encodes an image in TGA format and writes it to the provided io.Writer.

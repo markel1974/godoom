@@ -222,6 +222,12 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 	if eErr != nil {
 		return eErr
 	}
+	targetEntities := make(map[string]*lumps.Entity)
+	for _, ent := range entities {
+		if targetStr, _ := ent.GetProperty("targetname"); len(targetStr) > 0 {
+			targetEntities[targetStr] = ent
+		}
+	}
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
@@ -275,7 +281,7 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			if light := q1.createLight(ent, pos, subClass, entities); light != nil {
+			if light := q1.createLight(ent, pos, subClass, targetEntities); light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":
@@ -503,76 +509,69 @@ func (q1 *Q1BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 	return thingCfg, nil
 }
 
-func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass string, allEntities []*lumps.Entity) *config.Light {
+func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass string, targetEntities map[string]*lumps.Entity) *config.Light {
 	kind := config.LightKindAmbient
-	intensity := 300.0
+	q1Intensity := 300.0
 	// Default direction: down.
 	dirX, dirY, dirZ := 0.0, -1.0, 0.0
 	// Runtime color, normalized to [0, 1].
 	r, g, b := 1.0, 1.0, 1.0
 	coneAngle := 40.0 // Quake default
-	lightStr, _ := ent.Properties["light"]
-	targetStr, _ := ent.Properties["target"]
-	mangleStr, _ := ent.Properties["mangle"]
-	angleStr, _ := ent.Properties["angle"]
-	colorStr, _ := ent.Properties["_color"]
-	styleStr, _ := ent.Properties["style"]
-
-	fmt.Printf(
-		"LIGHT classname=%s origin=%s target=%s mangle=%s angle=%s\n",
-		ent.Properties["classname"],
-		ent.Properties["origin"],
-		targetStr,
-		mangleStr,
-		angleStr,
-	)
+	lightStr, _ := ent.GetProperty("light")
+	targetStr, _ := ent.GetProperty("target")
+	mangleStr, _ := ent.GetProperty("mangle")
+	angleStr, _ := ent.GetProperty("angle")
+	colorStr, _ := ent.GetProperty("_color")
+	styleStr, _ := ent.GetProperty("style")
 
 	if lightStr != "" {
 		if value, err := strconv.ParseFloat(lightStr, 64); err == nil {
-			intensity = value
+			q1Intensity = value
 		}
 	}
 
-	//target  → trasforma la light in spotlight + determina direzione
-	//mangle  → trasforma la light in spotlight + determina direzione
-	if targetStr != "" {
+	//target: trasforma la light in spotlight + determina direzione
+	//mangle: trasforma la light in spotlight + determina direzione
+	if len(targetStr) > 0 {
 		kind = config.LightKindSpot
-		for _, targetEnt := range allEntities {
-			if targetEnt.Properties["targetname"] != targetStr {
-				continue
-			}
-			originStr, ok := targetEnt.Properties["origin"]
-			if !ok {
-				break
-			}
-			var tx, ty, tz float64
-			if _, err := fmt.Sscanf(originStr, "%f %f %f", &tx, &ty, &tz); err != nil {
-				break
-			}
-			dx := tx - pos.X
-			dy := ty - pos.Y
-			dz := tz - pos.Z
-			if length := math.Sqrt(dx*dx + dy*dy + dz*dz); length > 0 {
-				dirX = dx / length
-				dirY = dy / length
-				dirZ = dz / length
-			}
-			fmt.Printf(
-				"LIGHT=(%.1f %.1f %.1f) TARGET=(%.1f %.1f %.1f) DIR=(%.4f %.4f %.4f)\n",
-				pos.X, pos.Y, pos.Z,
-				tx, ty, tz,
-				dirX, dirY, dirZ,
-			)
-			break
+		targetEnt := targetEntities[targetStr]
+		if targetEnt == nil {
+			fmt.Println("target entity not found")
+			return nil
 		}
+		originStr, _ := targetEnt.GetProperty("origin")
+		if len(originStr) == 0 {
+			fmt.Println("origin vector not found")
+			return nil
+		}
+		var tx, ty, tz float64
+		if _, err := fmt.Sscanf(originStr, "%f %f %f", &tx, &ty, &tz); err != nil {
+			fmt.Println("invalid origin vector")
+			return nil
+		}
+		dx := tx - pos.X
+		dy := ty - pos.Y
+		dz := tz - pos.Z
+		if length := math.Sqrt(dx*dx + dy*dy + dz*dz); length > 0 {
+			dirX = dx / length
+			dirY = dy / length
+			dirZ = dz / length
+		}
+		//dirZ = 0
 	} else if mangleStr != "" {
 		//TODO DISABLED FOR THE MOMENT
 		return nil
 		kind = config.LightKindSpot
-		if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
-			dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
-			//fmt.Printf("mangle=%s directions(%.3f %.3f %.3f)\n", mangleStr, dirX, dirY, dirZ)
+		yaw, pitch, _, valid := lumps.ParseVector(mangleStr)
+		if !valid {
+			fmt.Printf("Invalid mangle vector: %s\n", mangleStr)
+			return nil
 		}
+		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
+
+		dirZ = dirZ
+		dirY = dirY
+		dirX = dirX
 	}
 
 	if colorStr != "" {
@@ -605,13 +604,12 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 
 	// Runtime normalization
 	var falloff float64
+	var intensity float64
 	if kind == config.LightKindSpot {
-		falloff = intensity * 0.01
-		intensity *= 1
-		//intensity *= 0.1
+		falloff = q1Intensity * 0.07
+		intensity = q1Intensity * 1
+		//intensity *= 0.05
 		//falloff = intensity * 1.0
-		//falloff = intensity * 0.01
-		//intensity *= 1
 		if len(angleStr) > 0 {
 			if angleStr != "" {
 				if value, err := strconv.ParseFloat(angleStr, 64); err == nil {
@@ -620,8 +618,8 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 			}
 		}
 	} else {
-		falloff = intensity * 0.03
-		intensity *= 0.05
+		falloff = q1Intensity * 0.03
+		intensity *= q1Intensity * 0.05
 	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)

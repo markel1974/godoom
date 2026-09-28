@@ -78,3 +78,9 @@ func NewEntitiesFromText(text string) ([]*Entity, error) {
 
 	return entities, nil
 }
+
+// GetProperty retrieves the value associated with the given key from the entity's properties and returns a boolean indicating success.
+func (p *Entity) GetProperty(text string) (string, bool) {
+	v, ok := p.Properties[text]
+	return v, ok
+}

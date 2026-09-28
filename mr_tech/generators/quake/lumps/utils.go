@@ -111,7 +111,7 @@ func CalcDirectionOld(yaw, pitch float64) (float64, float64, float64) {
 	return dirX, dirY, dirZ
 }
 
-func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
+func CalcDirectionTEST(yaw, pitch float64) (float64, float64, float64) {
 	yawRad := yaw * math.Pi / 180.0
 	pitchRad := pitch * math.Pi / 180.0
 
@@ -131,8 +131,24 @@ func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
 	dirZ := cp * sy
 
 	dirY = -dirY
-	dirX = dirX
-	dirZ = dirZ
+	//dirX = dirX
+	//dirZ = dirZ
+
+	return dirX, dirY, dirZ
+}
+
+func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
+	yawRad := yaw * math.Pi / 180.0
+	pitchRad := pitch * math.Pi / 180.0
+
+	cp := math.Cos(pitchRad)
+	sp := math.Sin(pitchRad)
+	cy := math.Cos(yawRad)
+	sy := math.Sin(yawRad)
+
+	dirX := cp * cy
+	dirY := sp
+	dirZ := cp * sy
 
 	return dirX, dirY, dirZ
 }

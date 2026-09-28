@@ -519,8 +519,7 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 	kind := config.LightKindAmbient
 	q1Intensity := 300.0
 	// Default direction: down.
-	dirX, dirY, dirZ := 0.0, -1.0, 0.0
-	// Runtime color, normalized to [0, 1].
+	dirX, dirY, dirZ := 0.0, 0.0, -1.0
 	r, g, b := 1.0, 1.0, 1.0
 	coneAngle := 40.0 // Quake default
 	lightStr, _ := ent.GetProperty("light")

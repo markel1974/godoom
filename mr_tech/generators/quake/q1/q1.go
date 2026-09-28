@@ -376,6 +376,7 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, angle float64, pos geometr
 			fmt.Println("invalid light style index:", sIndex)
 		}
 	}
+
 	mangleStr, _ := ent.Properties["mangle"]
 	colorStr, _ := ent.Properties["_color"]
 	if l, ok := ent.Properties["light"]; ok {

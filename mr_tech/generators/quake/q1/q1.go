@@ -361,9 +361,10 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, angle float64, pos geometr
 	var kind config.LightKind
 	intensity := 300.0 // Typical Quake default fallback
 	falloff := 0.0
-	isSpot := true
-	if len(subClass) == 0 {
-		isSpot = false
+	isSpot := false
+
+	if len(subClass) > 0 {
+		isSpot = true
 	}
 
 	style := _q1LightStyle0

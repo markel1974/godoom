@@ -620,8 +620,8 @@ func (q2 *Q2BSPReader) createLight(entity *lumps.Entity, angle float64, mangleSt
 		}
 	} else {
 		kind = config.LightKindAmbient
-		intensity = intensity * 0.05
-		falloff = intensity
+		falloff = intensity * 0.03
+		intensity = intensity * 0.025
 	}
 
 	// CONFIGURATION CREATION

@@ -275,22 +275,7 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			mangleStr, _ := ent.Properties["mangle"]
-			colorStr, _ := ent.Properties["_color"]
-			var light *config.Light = nil
-			if len(subClass) == 0 {
-				light = q1.createLight(ent, angle, mangleStr, colorStr, pos, _q1LightStyle0, false)
-			} else {
-				style := _q1LightStyle0
-				if sIndex, ok := ent.Properties["style"]; ok {
-					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q1LightStyles) {
-						style = _q1LightStyles[index]
-					}
-				}
-				// Handles light, light_fluoro, light_fluorospark
-				light = q1.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
-			}
-			if light != nil {
+			if light := q1.createLight(ent, angle, pos, subClass); light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":
@@ -372,17 +357,30 @@ func (q1 *Q1BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geome
 }
 
 // createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
-func (q1 *Q1BSPReader) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
-	intensity := 0.0
-	falloff := 0.0
+func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, angle float64, pos geometry.XYZ, subClass string) *config.Light {
 	var kind config.LightKind
+	intensity := 300.0 // Typical Quake default fallback
+	falloff := 0.0
+	isSpot := true
+	if len(subClass) == 0 {
+		isSpot = false
+	}
 
-	// BASE INTENSITY
-	if l, ok := entity.Properties["light"]; ok {
+	style := _q1LightStyle0
+	if sIndex, ok := ent.Properties["style"]; ok {
+		// handles light, light_fluoro, light_fluorospark
+		if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q1LightStyles) {
+			isSpot = false
+			style = _q1LightStyles[index]
+		} else {
+			fmt.Println("invalid light style index:", sIndex)
+		}
+	}
+	mangleStr, _ := ent.Properties["mangle"]
+	colorStr, _ := ent.Properties["_color"]
+	if l, ok := ent.Properties["light"]; ok {
 		intensity, _ = strconv.ParseFloat(l, 64)
 		//intensity *= 0.3
-	} else {
-		intensity = 300 // Typical Quake default fallback
 	}
 
 	// COLOR (Standard Quake 2 / Modern Quake 1)
@@ -409,6 +407,7 @@ func (q1 *Q1BSPReader) createLight(entity *lumps.Entity, angle float64, mangleSt
 			}
 		} else {
 			if angle == -1 {
+
 				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
 			} else if angle == -2 {
 				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down

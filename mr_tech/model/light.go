@@ -13,34 +13,36 @@ const defaultFalloff = 10.0
 
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
-	parent      *Volume
-	intensity   float64
-	falloff     float64
-	kind        config.LightKind
-	pos         geometry.XYZ
-	aabb        *physics.AABB
-	r           float64
-	g           float64
-	b           float64
-	dirX        float64
-	dirY        float64
-	dirZ        float64
-	cutOff      float64
-	outerCutOff float64
-	style       []float64
+	parent           *Volume
+	intensity        float64
+	intensityDefault float64
+	falloff          float64
+	kind             config.LightKind
+	pos              geometry.XYZ
+	aabb             *physics.AABB
+	r                float64
+	g                float64
+	b                float64
+	dirX             float64
+	dirY             float64
+	dirZ             float64
+	cutOff           float64
+	outerCutOff      float64
+	style            []float64
 }
 
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
 func NewLight() *Light {
 	l := &Light{
-		parent:    nil,
-		intensity: 0.0,
-		falloff:   defaultFalloff,
-		kind:      config.LightKindNone,
-		aabb:      physics.NewAABB(),
-		r:         1.0,
-		g:         1.0,
-		b:         1.0,
+		parent:           nil,
+		intensity:        0.0,
+		intensityDefault: 0.0,
+		falloff:          defaultFalloff,
+		kind:             config.LightKindNone,
+		aabb:             physics.NewAABB(),
+		r:                1.0,
+		g:                1.0,
+		b:                1.0,
 	}
 	return l
 }
@@ -64,13 +66,17 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	if len(cl.style) == 0 {
 		cl.style = []float64{1.0}
 	}
+	if len(cl.style) == 1 {
+		cl.intensityDefault = cl.GetFrame(0)
+	}
 
 	switch cl.kind {
+	case config.LightKindAmbient:
+		//nothing to do
 	case config.LightKindOpenAir:
 		cl.pos.Z = math.Abs(cl.pos.Z) * 1000
 	case config.LightKindSpot:
-		//TODO REMOVE THIS LINE!!!!
-		//cl.dirX, cl.dirY, cl.dirZ = 0.0, -1.0, 0.0
+		//nothing to do
 	default:
 		//TODO Complete with all kinds of light
 	}
@@ -115,9 +121,11 @@ func (cl *Light) GetIntensity() float64 {
 // GetIntensityStyled calculates the styled intensity of the light at
 func (cl *Light) GetIntensityStyled(tick uint64) float64 {
 	const groupSize = 6.0
+	if cl.intensityDefault > 0 {
+		return cl.intensityDefault
+	}
 	frameFloat := textures.TickGrouped(tick, int(groupSize))
-	idx := int(frameFloat) % len(cl.style)
-	return cl.intensity * cl.style[idx]
+	return cl.GetFrame(frameFloat)
 }
 
 // GetFalloff returns the attenuation distance (radius of influence) of the light.
@@ -173,4 +181,10 @@ func (cl *Light) GetCutOff() float64 {
 // GetOuterCutOff returns the outer cutoff angle (in cosine) for spotlight calculations.
 func (cl *Light) GetOuterCutOff() float64 {
 	return cl.outerCutOff
+}
+
+// GetFrame calculates the intensity of the light at a given frame index based on its style and current intensity.
+func (cl *Light) GetFrame(frameFloat float64) float64 {
+	idx := int(frameFloat) % len(cl.style)
+	return cl.intensity * cl.style[idx]
 }

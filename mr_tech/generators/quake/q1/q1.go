@@ -619,7 +619,7 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 		}
 	} else {
 		falloff = q1Intensity * 0.03
-		intensity *= q1Intensity * 0.05
+		intensity = q1Intensity * 0.05
 	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
@@ -632,6 +632,9 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 	light.Style = style
 	light.CutOff = coneAngle
 	light.OuterCutOff = coneAngle + 5.0
+	if light.Intensity <= 0 {
+		fmt.Println("warning light intensity is zero")
+	}
 	return light
 }
 

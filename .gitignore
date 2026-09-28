@@ -10,3 +10,5 @@ build/godoom*
 build/resources/wad/
 game/
 /build/polygons.zip
+/build/resources/quake/
+/build/resources/quake3arena/

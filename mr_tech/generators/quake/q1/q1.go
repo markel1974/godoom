@@ -150,16 +150,18 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		bspFace := q1.faces[faceIdx]
 		texInfo := q1.texInfos[bspFace.TexInfo]
 		texName := "default"
-		isSky := (texInfo.Flags & 4) != 0
 		if texInfo.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[texInfo.MipTex] != nil {
 			texName = q1.mipTextures[texInfo.MipTex].Name
 		}
+		isSky := strings.HasPrefix(strings.ToLower(texName), "sky")
 		var points []geometry.XYZ
 		var uvs [][2]float64
 
 		// Prepare texture width/height for normalization
 		texW, texH := float64(256), float64(256)
 		if texInfo.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[texInfo.MipTex] != nil {
+			texName = q1.mipTextures[texInfo.MipTex].Name
+
 			texW = float64(q1.mipTextures[texInfo.MipTex].Width)
 			texH = float64(q1.mipTextures[texInfo.MipTex].Height)
 			if texW == 0 {

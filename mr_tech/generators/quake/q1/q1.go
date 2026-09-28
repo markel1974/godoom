@@ -570,8 +570,8 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
 
 		dirZ = dirZ
-		dirY = dirY
-		dirX = dirX
+		dirY = -dirY
+		dirX = -dirX
 	}
 
 	if colorStr != "" {
@@ -606,8 +606,8 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 	var falloff float64
 	var intensity float64
 	if kind == config.LightKindSpot {
-		falloff = q1Intensity * 0.07
-		intensity = q1Intensity * 1
+		falloff = q1Intensity * 0.1
+		intensity = q1Intensity * 0.1
 		//intensity *= 0.05
 		//falloff = intensity * 1.0
 		if len(angleStr) > 0 {
@@ -618,8 +618,10 @@ func (q1 *Q1BSPReader) createLight(ent *lumps.Entity, pos geometry.XYZ, subClass
 			}
 		}
 	} else {
-		falloff = q1Intensity * 0.03
-		intensity = q1Intensity * 0.05
+		//falloff = q1Intensity * 0.03
+		//intensity = q1Intensity * 0.05
+		falloff = q1Intensity * 0.01
+		intensity = q1Intensity * 0.1
 	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)

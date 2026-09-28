@@ -53,28 +53,28 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	cl.dirX = c.DirX
 	cl.dirY = c.DirY
 	cl.dirZ = c.DirZ
-	lightZ := coords.Z * 1.0
-	//TODO TERMINARE CON TUTTI I TIPI DI LUCE
-	if c.Kind == config.LightKindOpenAir {
-		lightZ = math.Abs(lightZ) * 1000 //50
-	} else if c.Kind == config.LightKindSpot {
+	cl.intensity = c.Intensity
+	cl.falloff = c.Falloff
+	cl.style = c.Style
+	cl.pos = geometry.XYZ{X: coords.X, Y: coords.Y, Z: coords.Z}
+	cl.kind = c.Kind
+
+	if len(cl.style) == 0 {
+		cl.style = []float64{1.0}
+	}
+
+	switch cl.kind {
+	case config.LightKindOpenAir:
+		cl.pos.Z = math.Abs(cl.pos.Z) * 1000
+	case config.LightKindSpot:
 		//TODO REMOVE THIS LINE!!!!
 		//cl.dirX, cl.dirY, cl.dirZ = 0.0, -1.0, 0.0
 		cl.cutOff = math.Cos(c.CutOff * math.Pi / 180.0)
 		cl.outerCutOff = math.Cos(c.OuterCutOff * math.Pi / 180.0)
+	default:
+		//TODO Complete with all kinds of light
 	}
-	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
-	cl.intensity = c.Intensity //max(0.0, min(1.0, intensity))
-	cl.falloff = c.Falloff
-	if cl.falloff <= 0 {
-		cl.falloff = defaultFalloff
-	}
-	cl.kind = c.Kind
-	cl.style = c.Style
-	if len(cl.style) == 0 {
-		cl.style = []float64{1.0}
-	}
-	cl.pos = pos
+
 	cl.Rebuild()
 }
 

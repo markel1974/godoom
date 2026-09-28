@@ -101,12 +101,39 @@ func ParseVector(s string) (float64, float64, float64, bool) {
 }
 
 // CalcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
-func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
+
+func CalcDirectionOld(yaw, pitch float64) (float64, float64, float64) {
 	yawRad := yaw * math.Pi / 180.0
 	pitchRad := pitch * math.Pi / 180.0
 	dirX := math.Cos(pitchRad) * math.Cos(yawRad)
 	dirY := math.Sin(pitchRad)
 	dirZ := math.Cos(pitchRad) * math.Sin(yawRad)
+	return dirX, dirY, dirZ
+}
+
+func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
+	yawRad := yaw * math.Pi / 180.0
+	pitchRad := pitch * math.Pi / 180.0
+
+	cp := math.Cos(pitchRad)
+	sp := math.Sin(pitchRad)
+	cy := math.Cos(yawRad)
+	sy := math.Sin(yawRad)
+
+	// Quake mangle:
+	//   yaw   = angle around Z
+	//   pitch = +90 up, -90 down
+	//   roll  = ignored
+	//
+	// Runtime: Y-up.
+	dirX := cp * cy
+	dirY := sp
+	dirZ := cp * sy
+
+	dirY = -dirY
+	dirX = dirX
+	dirZ = dirZ
+
 	return dirX, dirY, dirZ
 }
 

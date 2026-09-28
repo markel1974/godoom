@@ -216,6 +216,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights()
+
 	// FLASHLIGHTS
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
@@ -225,6 +226,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetFactor()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
 
+	// DYNAMIC LIGHTS
 	for lx := int32(0); lx < shadowLightsNum; lx++ {
 		light := shadowLights[lx]
 		lTex, _, lMatrix := w.depth.GetShadowLightTextures(uint32(lx))
@@ -232,11 +234,12 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		falloff := light.Falloff
 		wPosX, wPosY, wPosZ := light.X, light.Y, light.Z
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
+		//CutOff 0.7, OuterCutOff 0.9
 		w.shadowLight.Render(
 			dcOpaque.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
-			factor, falloff, 0.7, 0.9, float32(fbW), float32(fbH),
+			factor, falloff, light.CutOff, light.OuterCutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS

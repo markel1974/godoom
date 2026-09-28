@@ -93,7 +93,12 @@ func (f *FrameLights) Prepare(px, pY, pZ float64) {
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
 func (f *FrameLights) Create(light *model.Light) {
 	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
-	dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
+
+	//dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
+	dirGlX := float32(light.GetDirX())
+	dirGlY := float32(light.GetDirZ())
+	dirGlZ := float32(-light.GetDirY())
+
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
 	intensity := float32(light.GetIntensityStyled(textures.GlobalTick()))

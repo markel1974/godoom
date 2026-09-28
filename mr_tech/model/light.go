@@ -58,10 +58,10 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	if c.Kind == config.LightKindOpenAir {
 		lightZ = math.Abs(lightZ) * 1000 //50
 	} else if c.Kind == config.LightKindSpot {
-		//TODO DINAMIC
-		cl.dirX, cl.dirY, cl.dirZ = 0.0, -1.0, 0.0
-		cl.cutOff = math.Cos(35.0 * math.Pi / 180.0)
-		cl.outerCutOff = math.Cos(40 * math.Pi / 180.0)
+		//TODO REMOVE THIS LINE!!!!
+		//cl.dirX, cl.dirY, cl.dirZ = 0.0, -1.0, 0.0
+		cl.cutOff = math.Cos(c.CutOff * math.Pi / 180.0)
+		cl.outerCutOff = math.Cos(c.OuterCutOff * math.Pi / 180.0)
 	}
 	pos := geometry.XYZ{X: coords.X, Y: coords.Y, Z: lightZ}
 	cl.intensity = c.Intensity //max(0.0, min(1.0, intensity))

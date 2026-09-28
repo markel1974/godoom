@@ -314,7 +314,7 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 		velX, velY := 0.0, 0.0
 		if v.IsSky {
 			animKind = config.MaterialKindSky
-			velX, velY = 0.5, 0.5
+			velX, velY = 0.05, 0.05
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, velX, velY)
 		triangles := lumps.TriangulateConvex3d(v.Points)
@@ -478,7 +478,7 @@ func (q1 *Q1BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 		velX, velY := 0.0, 0.0
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
-			velX, velY = 0.5, 0.5
+			velX, velY = 0.05, 0.05
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)

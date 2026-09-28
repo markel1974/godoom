@@ -332,7 +332,13 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 			}
 		}
 		if len(shaderName) > 0 {
-			material = config.NewConfigMaterial([]string{shaderName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			animKind := config.MaterialKindLoop
+			texNameLC := strings.ToLower(shaderName)
+			parms := t.shaders.GetSurfaceParms(texNameLC)
+			if parms["water"] || parms["lava"] || parms["slime"] {
+				animKind = config.MaterialKindLiquid
+			}
+			material = config.NewConfigMaterial([]string{shaderName}, animKind, 1.0, 1.0, 0, 0)
 		}
 
 		// Assemble triangles for each frame

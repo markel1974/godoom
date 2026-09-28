@@ -31,10 +31,15 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 	vIdx := strconv.Itoa(mIdx)
 	for _, v := range faces {
 		animKind := config.MaterialKindLoop
+		texNameLC := strings.ToLower(v.TexName)
 		if v.IsSky {
 			animKind = config.MaterialKindSky
+		} else {
+			parms := f.shaders.GetSurfaceParms(texNameLC)
+			if parms["water"] || parms["lava"] || parms["slime"] {
+				animKind = config.MaterialKindLiquid
+			}
 		}
-		texNameLC := strings.ToLower(v.TexName)
 
 		var material *config.Material
 		scrollU, scrollV := f.shaders.GetScroll(texNameLC)

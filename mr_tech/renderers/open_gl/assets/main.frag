@@ -7,6 +7,7 @@ in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
 in vec3 NormalView;
+in float IsLiquid;
 
 uniform sampler2D u_ssao;
 uniform vec2 u_screenResolution;
@@ -47,11 +48,12 @@ void main()
     // CAMPIONAMENTO SSAO
     float ao = texture(u_ssao, screenUV).r;
 
-    // FIX: Ammorbidiamo l'occlusione ambientale ed evitiamo che oscuri interi poligoni.
-    // L'SSAO ora modula dolcemente la luminosità, senza farla mai scendere a livelli di nero netto (es. bloccato al 60%).
-    //float ambientOcclusion = mix(1.0, ao, u_aoFactor);
-    //float linearAmbient = max(ambientOcclusion, 0.6);
+    // Se è un liquido, disabilitiamo le ombre (SSAO) impostando l'ambient al massimo, 
+    // come se fosse fullbright/emissivo naturale (tipico di Quake per lava/slime).
     float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.05);
+    if (IsLiquid > 0.5) {
+        linearAmbient = 1.0;
+    }
 
     vec3 emissive = getEmissive(TexCoords) * u_emissiveIntensity * edgeFade;
     // Colore base pulito senza poligoni anneriti

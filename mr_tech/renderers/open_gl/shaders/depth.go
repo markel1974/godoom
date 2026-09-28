@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // DepthLoc represents the location identifiers for shader uniform variables used in depth shaders.
@@ -16,6 +17,7 @@ const (
 	DepthLocLightSpaceMatrix = DepthLoc(iota)
 	DepthLocTexture
 	DepthLocView
+	DepthLocTime
 	DepthLocLast
 )
 
@@ -180,6 +182,7 @@ func (s *Depth) Compile(assets IAssets) error {
 		return err
 	}
 	s.table[DepthLocLightSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_lightSpaceMatrix\x00"))
+	s.table[DepthLocTime] = gl.GetUniformLocation(s.prg, gl.Str("u_time\x00"))
 	s.table[DepthLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
 	s.table[DepthLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
 
@@ -231,6 +234,7 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomMap.fbo)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	gl.UseProgram(s.GetProgram())
+	gl.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
 	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
 	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
 

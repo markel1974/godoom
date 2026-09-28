@@ -250,11 +250,29 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 			angle, _ = strconv.ParseFloat(a, 64)
 		}
 
-		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
-		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
-		// is rendered correctly. When ready, we will remove this continue
-		// and instantiate bmodels using GetModels() from IBSPReader.
 		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
+			modelIdx, _ := strconv.Atoi(modelProp[1:])
+			//TODO IMPLEMENT
+			_, err := q1.createInternalBModel(modelIdx, pos, classname)
+			if err != nil {
+				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+				continue
+			}
+
+			/*
+				// Setup standard interactions based on classname
+				if strings.HasPrefix(classname, "func_door") {
+					cThing.Kind = config.ThingDoorDef
+					cThing.Mass = 1000.0 // Heavy
+				} else if strings.HasPrefix(classname, "func_plat") || strings.HasPrefix(classname, "func_train") {
+					cThing.Kind = config.ThingPlatformDef
+					cThing.Mass = 1000.0 // Heavy
+				} else if strings.HasPrefix(classname, "func_button") {
+					cThing.Kind = config.ThingButtonDef
+				}
+
+				root.Things = append(root.Things, cThing)
+			*/
 			continue
 		}
 
@@ -446,6 +464,57 @@ func (q1 *Q1BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 	}
 
 	thingCfg := q1.createConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+
+	return thingCfg, nil
+}
+
+func (q1 *Q1BSPReader) createInternalBModel(modelIdx int, position geometry.XYZ, classname string) (*config.Thing, error) {
+	rawFaces, err := q1.GetRawFaces(modelIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Geometry translation into agnostic MD1, collect all triangles in this single frame
+	var allTriangles []config.MD1Triangle
+	for _, bspFace := range rawFaces {
+		// RETRIEVAL OF SPECIFIC TEXTURE
+		texName := bspFace.TexName
+		animKind := config.MaterialKindLoop
+		velX, velY := 0.0, 0.0
+		if bspFace.IsSky {
+			animKind = config.MaterialKindSky
+			velX, velY = 0.05, 0.05
+		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
+			animKind = config.MaterialKindLiquid
+		}
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
+
+		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
+		// Assignment of pre-calculated UVs from IBSPReader
+		for _, rawTri := range rawTriangles {
+			tri := config.NewMD1Triangle(specificMaterial)
+			for k := 0; k < 3; k++ {
+				pos := rawTri[k]
+				u, v := float32(0.0), float32(0.0)
+				// Find corresponding UV index for vertex
+				for idx, pt := range bspFace.Points {
+					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+						if len(bspFace.UVs) > idx {
+							u = float32(bspFace.UVs[idx][0])
+							v = float32(bspFace.UVs[idx][1])
+						}
+						break
+					}
+				}
+				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: u, V: v}
+			}
+			allTriangles = append(allTriangles, tri)
+		}
+	}
+	// BSPs do not have vertex-morphing animations, 1 single frame
+	model3d := config.NewMD1(1, []string{"default"})
+	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
+	thingCfg := q1.createConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
 	return thingCfg, nil
 }

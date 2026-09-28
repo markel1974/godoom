@@ -13,6 +13,7 @@ out float FragDepth;
 out vec3 ViewPos;
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
+out float IsLiquid;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
@@ -103,6 +104,7 @@ void main()
 
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
+	IsLiquid = (aIsBillboard > 0.4 && aIsBillboard < 0.6) ? 1.0 : 0.0;
 
     gl_Position = u_projection * viewPos;
 }

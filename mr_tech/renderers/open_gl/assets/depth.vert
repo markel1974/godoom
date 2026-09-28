@@ -12,6 +12,7 @@ out vec3 TexCoords;
 
 uniform mat4 u_lightSpaceMatrix;
 uniform mat4 u_view; // Necessario per far orientare l'ombra in base a dove guarda il player
+uniform float u_time;
 
 void main()
 {
@@ -59,6 +60,12 @@ void main()
         float rotY = (origX * sinY) + (origY * cosY);
         vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
+    } else if (aIsBillboard > 0.4 && aIsBillboard < 0.6) {
+        // --- LIQUIDI ---
+        worldPos = vec4(aPos, 1.0);
+        worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
+        worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
+        // Scroll UV non necessario per la depth
     } else {
         // --- GEOMETRIA BSP ---
         worldPos = vec4(aPos, 1.0);

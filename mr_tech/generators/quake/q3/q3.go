@@ -15,112 +15,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// LumpQ3Entities represents the lump index for storing entity data in a Quake 3 map.
-// LumpQ3Textures represents the lump index for storing texture data in a Quake 3 map.
-// LumpQ3Planes represents the lump index for storing plane data in a Quake 3 map.
-// LumpQ3Nodes represents the lump index for storing node data in a Quake 3 map.
-// LumpQ3Leafs represents the lump index for storing leaf data in a Quake 3 map.
-// LumpQ3LeafFaces represents the lump index for storing leaf face data in a Quake 3 map.
-// LumpQ3LeafBrushes represents the lump index for storing leaf brush data in a Quake 3 map.
-// LumpQ3Models represents the lump index for storing model data in a Quake 3 map.
-// LumpQ3Brushes represents the lump index for storing brush data in a Quake 3 map.
-// LumpQ3BrushSides represents the lump index for storing brush side data in a Quake 3 map.
-// LumpQ3Vertexes represents the lump index for storing vertex data in a Quake 3 map.
-// LumpQ3MeshVerts represents the lump index for storing mesh vertex data in a Quake 3 map.
-// LumpQ3Effects represents the lump index for storing special effect data in a Quake 3 map.
-// LumpQ3Faces represents the lump index for storing face data in a Quake 3 map.
-// LumpQ3Lightmaps represents the lump index for storing lightmap data in a Quake 3 map.
-// LumpQ3LightVols represents the lump index for storing light volume data in a Quake 3 map.
-// LumpQ3VisData represents the lump index for storing visibility data in a Quake 3 map.
-// NumQ3Lumps represents the total number of lumps in a Quake 3 map.
-const (
-	LumpQ3Entities    = 0
-	LumpQ3Textures    = 1
-	LumpQ3Planes      = 2
-	LumpQ3Nodes       = 3
-	LumpQ3Leafs       = 4
-	LumpQ3LeafFaces   = 5
-	LumpQ3LeafBrushes = 6
-	LumpQ3Models      = 7
-	LumpQ3Brushes     = 8
-	LumpQ3BrushSides  = 9
-	LumpQ3Vertexes    = 10
-	LumpQ3MeshVerts   = 11
-	LumpQ3Effects     = 12
-	LumpQ3Faces       = 13
-	LumpQ3Lightmaps   = 14
-	LumpQ3LightVols   = 15
-	LumpQ3VisData     = 16
-	NumQ3Lumps        = 17
-)
-
 // BSPVersionQ3 represents the BSP version number used for Quake 3 map files.
 const BSPVersionQ3 int = 46
 
-// HeaderQ3 represents the header structure of a Quake 3 BSP file, containing metadata and lump information.
-type HeaderQ3 struct {
-	Magic   [4]byte
-	Version int32
-	Lumps   [NumQ3Lumps]struct {
-		Offset int32
-		Length int32
-	}
-}
-
-// q3Texture represents a texture used in a Quake III BSP file.
-// It includes the texture name, rendering flags, and content flags.
-type q3Texture struct {
-	Name     [64]byte
-	Flags    uint32
-	Contents uint32
-}
-
-// q3Model represents a 3D model in a Quake 3 BSP file, including bounds and references to associated geometry data.
-type q3Model struct {
-	Mins       [3]float32
-	Maxs       [3]float32
-	FirstFace  int32
-	NumFaces   int32
-	FirstBrush int32
-	NumBrushes int32
-}
-
-// q3Face represents a face in a Quake 3 BSP map, including its geometry, texture, and lightmap information.
-type q3Face struct {
-	TextureID   int32
-	Effect      int32
-	Type        int32 // 1=Polygon, 2=Patch, 3=Mesh, 4=Billboard
-	VertexStart int32
-	NumVertexes int32
-	MeshStart   int32
-	NumMesh     int32
-	LightmapID  int32
-	LMapCorner  [2]int32
-	LMapSize    [2]int32
-	LMapOrigin  [3]float32
-	LMapVecs    [2][3]float32
-	Normal      [3]float32
-	PatchSize   [2]int32
-}
-
-// q3Vertex represents a single vertex in a Quake 3 BSP model structure.
-// Position defines the 3D coordinates of the vertex in space.
-// TexCoord specifies the 2D texture mapping coordinates.
-// LMapCoord provides the lightmap texture coordinates.
-// Normal defines the surface normal vector at the vertex.
-// Color stores the RGBA color values of the vertex.
-type q3Vertex struct {
-	Position  [3]float32
-	TexCoord  [2]float32
-	LMapCoord [2]float32
-	Normal    [3]float32
-	Color     [4]uint8
-}
-
-// Q3BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
-type Q3BSPReader struct {
+// BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
+type BSPReader struct {
 	arc         interfaces.IArchive
-	header      HeaderQ3
+	header      lumps.Header3
 	rs          io.ReadSeeker
 	texManager  *lumps.Textures
 	playerAngle float64
@@ -128,9 +29,9 @@ type Q3BSPReader struct {
 	shaders     *Shaders
 }
 
-// NewQ3BSPReader creates a new instance of Q3BSPReader with the provided archive and ReadSeeker.
-func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
-	q3 := &Q3BSPReader{
+// NewQ3BSPReader creates a new instance of BSPReader with the provided archive and ReadSeeker.
+func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
+	q3 := &BSPReader{
 		arc:        arc,
 		rs:         rs,
 		texManager: lumps.NewTextures(),
@@ -140,37 +41,36 @@ func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q3BSPReader {
 	return q3
 }
 
-// Setup initializes the Q3BSPReader by parsing the header, validating file format, and loading shaders for additive materials.
-func (q3 *Q3BSPReader) Setup() error {
-	if _, err := q3.rs.Seek(0, io.SeekStart); err != nil {
+// Setup initializes the BSPReader by parsing the header, validating file format, and loading shaders for additive materials.
+func (q3 *BSPReader) Setup() error {
+	_, err := q3.rs.Seek(0, io.SeekStart)
+	if err != nil {
 		return err
 	}
-	if err := binary.Read(q3.rs, binary.LittleEndian, &q3.header); err != nil {
-		return err
-	}
+	q3.header, err = lumps.NewHeader3(q3.rs)
 	if string(q3.header.Magic[:]) != "IBSP" || q3.header.Version != 46 {
 		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.header.Magic[:]), q3.header.Version)
 	}
 	q3.shaders = NewShaders()
-	if err := q3.shaders.Parse(q3.arc); err != nil {
+	if err = q3.shaders.Parse(q3.arc); err != nil {
 		return err
 	}
 	return nil
 }
 
-// GetArchive returns the IArchive instance associated with the Q3BSPReader.
-func (q3 *Q3BSPReader) GetArchive() interfaces.IArchive {
+// GetArchive returns the IArchive instance associated with the BSPReader.
+func (q3 *BSPReader) GetArchive() interfaces.IArchive {
 	return q3.arc
 }
 
 // GetPlayerInfo retrieves the player's view angle (in radians) and position in 3D space.
-func (q3 *Q3BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
+func (q3 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q3.playerAngle, q3.playerPos
 }
 
 // GetEntities retrieves all entities from the BSP file by parsing the entities lump and returns them as a slice.
-func (q3 *Q3BSPReader) GetEntities() ([]*lumps.Entity, error) {
-	lump := q3.header.Lumps[LumpQ3Entities]
+func (q3 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
+	lump := q3.header.Lumps[lumps.LumpQ3Entities]
 	if _, err := q3.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -182,14 +82,14 @@ func (q3 *Q3BSPReader) GetEntities() ([]*lumps.Entity, error) {
 }
 
 // GetModels extracts and returns all BSP sub-models from the lump data, including static and moving brush models.
-func (q3 *Q3BSPReader) GetModels() ([]*lumps.Model, error) {
-	lModels := q3.header.Lumps[LumpQ3Models]
+func (q3 *BSPReader) GetModels() ([]*lumps.Model, error) {
+	lModels := q3.header.Lumps[lumps.LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
 
 	numModels := int(lModels.Length) / 40
-	models := make([]q3Model, numModels)
+	models := make([]lumps.Model3, numModels)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
 		return nil, err
 	}
@@ -208,31 +108,19 @@ func (q3 *Q3BSPReader) GetModels() ([]*lumps.Model, error) {
 	return out, nil
 }
 
-// RegisterPixels registers a texture by name with specified dimensions and pixel indices data, supporting transparency and Y-inversion.
-func (q3 *Q3BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	return nil // In Q3 le texture sono solitamente .tga o .jpg lette dal VFS nativamente come RGBA, il manager andrà adattato
-}
-
-// RegisterPixelsRGBA registers an RGBA texture in the texture manager with the given name, dimensions, and pixel data.
-// Pixels should be provided as a byte slice in RGBA format, and setting invertY to true flips the texture vertically.
-// Returns an error if the registration fails.
-func (q3 *Q3BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
-	return q3.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
-}
-
 // GetTextures retrieves the texture manager containing the loaded textures for the current Q3 BSP file.
-func (q3 *Q3BSPReader) GetTextures() *lumps.Textures {
+func (q3 *BSPReader) GetTextures() *lumps.Textures {
 	return q3.texManager
 }
 
 // GetRawFaces retrieves all raw face data for a specific model index from the BSP file, including geometry and texture info.
 // Returns a slice of RawFace objects or an error if the operation fails.
-func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
-	lModels := q3.header.Lumps[LumpQ3Models]
+func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+	lModels := q3.header.Lumps[lumps.LumpQ3Models]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
 	}
-	models := make([]q3Model, int(lModels.Length)/40)
+	models := make([]lumps.Model3, int(lModels.Length)/40)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
 		return nil, fmt.Errorf("failed to read models lump: %w", err)
 	}
@@ -243,25 +131,25 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	targetModel := models[modelIdx]
 
 	//Geometrical lumps
-	lFaces := q3.header.Lumps[LumpQ3Faces]
+	lFaces := q3.header.Lumps[lumps.LumpQ3Faces]
 	if _, err := q3.rs.Seek(int64(lFaces.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to faces lump: %w", err)
 	}
-	faces := make([]q3Face, int(lFaces.Length)/104)
+	faces := make([]lumps.Face3, int(lFaces.Length)/104)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &faces); err != nil {
 		return nil, fmt.Errorf("failed to read faces lump: %w", err)
 	}
 
-	lVerts := q3.header.Lumps[LumpQ3Vertexes]
+	lVerts := q3.header.Lumps[lumps.LumpQ3Vertexes]
 	if _, err := q3.rs.Seek(int64(lVerts.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to vertexes lump: %w", err)
 	}
-	vertexes := make([]q3Vertex, int(lVerts.Length)/44)
+	vertexes := make([]lumps.Vertex3, int(lVerts.Length)/44)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &vertexes); err != nil {
 		return nil, fmt.Errorf("failed to read vertexes lump: %w", err)
 	}
 
-	lMeshVerts := q3.header.Lumps[LumpQ3MeshVerts]
+	lMeshVerts := q3.header.Lumps[lumps.LumpQ3MeshVerts]
 	if _, err := q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to mesh vertices lump: %w", err)
 	}
@@ -270,11 +158,11 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		return nil, fmt.Errorf("failed to read mesh vertices lump: %w", err)
 	}
 
-	lTextures := q3.header.Lumps[LumpQ3Textures]
+	lTextures := q3.header.Lumps[lumps.LumpQ3Textures]
 	if _, err := q3.rs.Seek(int64(lTextures.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to textures lump: %w", err)
 	}
-	textures := make([]q3Texture, int(lTextures.Length)/72)
+	textures := make([]lumps.Texture3, int(lTextures.Length)/72)
 	if err := binary.Read(q3.rs, binary.LittleEndian, &textures); err != nil {
 		return nil, fmt.Errorf("failed to read textures lump: %w", err)
 	}
@@ -330,7 +218,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 			for y := 0; y < numPatchesY; y++ {
 				for x := 0; x < numPatchesX; x++ {
-					var cp [9]q3Vertex
+					var cp [9]lumps.Vertex3
 					for row := 0; row < 3; row++ {
 						for col := 0; col < 3; col++ {
 							cpIdx := face.VertexStart + int32((y*2+row)*w+(x*2+col))
@@ -339,7 +227,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 					}
 
 					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
-					triangles, uvs := q3.tessellatePatch(cp, 5)
+					triangles, uvs := lumps.Tessellate(cp, 5)
 
 					for t := 0; t < len(triangles); t += 3 {
 						rawFaces = append(rawFaces, &lumps.RawFace{
@@ -360,7 +248,7 @@ func (q3 *Q3BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 }
 
 // compileTextures loads and registers unique textures from a list of faces, supporting JPEG and TGA formats.
-func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
+func (q3 *BSPReader) compileTextures(faces []*lumps.RawFace) {
 	// Map to track if a physical texture NEEDS alpha test.
 	// If it doesn't need alpha test, we can force it to be opaque.
 	needsAlphaTest := make(map[string]bool)
@@ -398,17 +286,17 @@ func (q3 *Q3BSPReader) compileTextures(faces []*lumps.RawFace) {
 }
 
 // GetExternalBModelFileName retrieves the external BSP model filename associated with the given classname.
-func (q3 *Q3BSPReader) GetExternalBModelFileName(classname string) string {
+func (q3 *BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q3DictBModel[classname]
 }
 
 // GetModelFileName retrieves the file path of the model associated with the given classname from the model filename map.
-func (q3 *Q3BSPReader) GetModelFileName(classname string) string {
+func (q3 *BSPReader) GetModelFileName(classname string) string {
 	return _q3DictModelFilename[classname]
 }
 
-// Build processes entities and geometry from a Q3BSPReader, organizing them into the root config structure.
-func (q3 *Q3BSPReader) Build(root *config.Root) error {
+// Build processes entities and geometry from a BSPReader, organizing them into the root config structure.
+func (q3 *BSPReader) Build(root *config.Root) error {
 	mIdx := 0
 	rawFaces, rfErr := q3.GetRawFaces(mIdx)
 	if rfErr != nil {
@@ -530,69 +418,4 @@ func (q3 *Q3BSPReader) Build(root *config.Root) error {
 		root.Volumes = cVolumes
 	}
 	return nil
-}
-
-// evalBezier computes the value of a quadratic Bézier curve given control points p0, p1, p2 and a parameter t [0,1].
-func (q3 *Q3BSPReader) evalBezier(p0, p1, p2 float32, t float32) float32 {
-	u := 1.0 - t
-	return (u * u * p0) + (2.0 * u * t * p1) + (t * t * p2)
-}
-
-// tessellatePatch calculates a triangle mesh from a 3x3 patch of control points, using a specified tessellation level.
-// The method returns a list of 3D vertices and corresponding UV texture coordinates for the generated mesh.
-func (q3 *Q3BSPReader) tessellatePatch(cp [9]q3Vertex, level int) ([]geometry.XYZ, [][2]float64) {
-	var points []geometry.XYZ
-	var uvs [][2]float64
-	step := 1.0 / float32(level)
-	L := level + 1
-	grid := make([]geometry.XYZ, L*L)
-	gridUV := make([][2]float64, L*L)
-
-	// Calcolo interpolazione griglia
-	for i := 0; i <= level; i++ {
-		tV := float32(i) * step
-		for j := 0; j <= level; j++ {
-			tU := float32(j) * step
-			var p [3]geometry.XYZ
-			var puv [3][2]float32
-			for row := 0; row < 3; row++ {
-				idx := row * 3
-				p[row] = lumps.CreateXYZ(
-					float64(q3.evalBezier(cp[idx].Position[0], cp[idx+1].Position[0], cp[idx+2].Position[0], tU)),
-					float64(q3.evalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
-					float64(q3.evalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
-				)
-				puv[row] = [2]float32{
-					q3.evalBezier(cp[idx].TexCoord[0], cp[idx+1].TexCoord[0], cp[idx+2].TexCoord[0], tU),
-					q3.evalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
-				}
-			}
-			grid[i*L+j] = lumps.CreateXYZ(
-				float64(q3.evalBezier(float32(p[0].X), float32(p[1].X), float32(p[2].X), tV)),
-				float64(q3.evalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
-				float64(q3.evalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
-			)
-			gridUV[i*L+j] = [2]float64{
-				float64(q3.evalBezier(puv[0][0], puv[1][0], puv[2][0], tV)),
-				float64(q3.evalBezier(puv[0][1], puv[1][1], puv[2][1], tV)),
-			}
-		}
-	}
-
-	// Chiusura dei quadrati in triangoli (Winding Order CCW)
-	for i := 0; i < level; i++ {
-		for j := 0; j < level; j++ {
-			idx0 := (i * L) + j
-			idx1 := (i * L) + j + 1
-			idx2 := ((i + 1) * L) + j
-			idx3 := ((i + 1) * L) + j + 1
-
-			points = append(points, grid[idx0], grid[idx2], grid[idx1])
-			uvs = append(uvs, gridUV[idx0], gridUV[idx2], gridUV[idx1])
-
-			points = append(points, grid[idx1], grid[idx2], grid[idx3])
-			uvs = append(uvs, gridUV[idx1], gridUV[idx2], gridUV[idx3])
-		}
-	}
-	return points, uvs
 }

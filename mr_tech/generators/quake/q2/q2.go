@@ -127,7 +127,6 @@ type BSPReader struct {
 	arc         interfaces.IArchive
 	header      q2Header
 	rs          io.ReadSeeker
-	rsPal       io.ReadSeeker
 	palette     [256]color.RGBA
 	texManager  *lumps.Textures
 	playerAngle float64
@@ -140,39 +139,31 @@ func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
 		arc:        arc,
 		rs:         rs,
 		texManager: lumps.NewTextures(),
-		rsPal:      nil,
 	}
 }
 
 // Setup initializes the BSPReader by reading the header and optionally loading the palette for WAL textures.
 func (q2 *BSPReader) Setup() error {
-	var err error
-	palettePath := "pics" + lumps.PakSeparator + "colormap.pcx"
-	q2.rsPal, err = q2.arc.Open(palettePath)
-	if err != nil {
+	if _, err := q2.rs.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	if err = binary.Read(q2.rs, binary.LittleEndian, &q2.header); err != nil {
+	if err := binary.Read(q2.rs, binary.LittleEndian, &q2.header); err != nil {
 		return err
 	}
 	ibsp := string(q2.header.Magic[:])
 	if ibsp != "IBSP" {
 		return fmt.Errorf("invalid ibsp: %s", ibsp)
 	}
-
-	// In Quake 2, WAL textures often use dedicated palettes or true-color,
-	// but we still load the palette if provided by the builder.
-
+	const palettePath = "pics" + lumps.PakSeparator + "colormap.pcx"
+	rsPal, err := q2.arc.Open(palettePath)
+	if err != nil {
+		return err
+	}
 	palette := lumps.NewPalette(0.8)
-	//q2.palette, err = palette.Parse(q2.rsPal)
-	q2.palette, err = palette.ParseFromPCX(q2.rsPal)
+	q2.palette, err = palette.ParseFromPCX(rsPal)
 	if err != nil {
 		fmt.Printf("Warning: %s not loaded: %v\n", palettePath, err)
 	}
-
 	return nil
 }
 
@@ -425,21 +416,21 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		}
 		isSky := (texInfo.Flags & 0x4) != 0
 
+		texW, texH, err := q2.registerTexture(texName)
+		if err != nil {
+			fmt.Printf("Warning: can't register asset %s: %s\n", texName, err.Error())
+			continue
+		}
+		if texW == 0 {
+			texW = 256
+		}
+		if texH == 0 {
+			texH = 256
+		}
+
 		// Resolve SurfEdge -> Edge -> Vertex
 		var points []geometry.XYZ
 		var uvs [][2]float64
-		texW, texH := float64(256), float64(256)
-		if texes := q2.texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
-			tw, th := texes[0].Size()
-			texW = float64(tw)
-			texH = float64(th)
-			if texW == 0 {
-				texW = 256
-			}
-			if texH == 0 {
-				texH = 256
-			}
-		}
 
 		for j := uint16(0); j < face.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[face.FirstEdge+int32(j)]
@@ -462,47 +453,30 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 				(float64(v.Y) * float64(texInfo.Vecs[1][1])) +
 				(float64(v.Z) * float64(texInfo.Vecs[1][2])) +
 				float64(texInfo.Vecs[1][3])
-			uvs = append(uvs, [2]float64{u / texW, vt / texH})
+			uvs = append(uvs, [2]float64{u / float64(texW), vt / float64(texH)})
 		}
 		rf := lumps.NewRawFace(points, uvs, texName, isSky)
 		rawFaces = append(rawFaces, rf)
 	}
 
-	if err := q2.compileTextures2(rawFaces); err != nil {
-		return nil, err
-	}
-
 	return rawFaces, nil
 }
 
-// compileTextures processes and registers unique textures extracted from the given raw faces, excluding "sky" textures.
-func (q2 *BSPReader) compileTextures2(faces []*lumps.RawFace) error {
-	uniqueTextures := make(map[string]bool)
-	for _, f := range faces {
-		uniqueTextures[f.TexName] = true
+// registerTexture loads a .wal texture, parses its data, and registers it with the texture manager using a palette.
+// Returns the width, height, and potential error of the operation.
+func (q2 *BSPReader) registerTexture(texName string) (int, int, error) {
+	walPath := "textures" + lumps.PakSeparator + texName + ".wal"
+	walFile, err := q2.arc.Open(walPath)
+	if err != nil {
+		return 0, 0, err
 	}
-	for texName := range uniqueTextures {
-		if texName == "sky" || len(texName) == 0 {
-			continue
-		}
-		walPath := "textures" + lumps.PakSeparator + texName + ".wal"
-		walFile, walErr := q2.arc.Open(walPath)
-		if walErr != nil {
-			fmt.Printf("Warning: missing asset %s: %s\n \n", walPath, walErr.Error())
-			continue
-		}
-
-		walTex, walErr := lumps.ParseWal(walFile)
-		if walErr != nil {
-			fmt.Printf("Warning: can't open asset %s: %s\n", walPath, walErr.Error())
-			continue
-		}
-
-		err := q2.texManager.RegisterPixelsPalette(texName, int(walTex.Header.Width), int(walTex.Header.Height), walTex.Pixels, q2.palette, false, 255, false)
-		if err != nil {
-			fmt.Printf("Warning: can't register asset %s: %s\n", walPath, err.Error())
-			continue
-		}
+	walTex, err := lumps.ParseWal(walFile)
+	if err != nil {
+		return 0, 0, err
 	}
-	return nil
+	err = q2.texManager.RegisterPixelsPalette(texName, int(walTex.Header.Width), int(walTex.Header.Height), walTex.Pixels, q2.palette, false, 255, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	return int(walTex.Header.Width), int(walTex.Header.Height), nil
 }

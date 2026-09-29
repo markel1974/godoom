@@ -18,8 +18,8 @@ const (
 	BSPVersionQ1 int = 29
 )
 
-// Q1BSPReader reads and processes Quake 1 BSP files by managing lumps, textures, and geometry data.
-type Q1BSPReader struct {
+// BSPReader reads and processes Quake 1 BSP files by managing lumps, textures, and geometry data.
+type BSPReader struct {
 	arc         interfaces.IArchive
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
@@ -36,9 +36,9 @@ type Q1BSPReader struct {
 	playerPos   geometry.XYZ
 }
 
-// NewQ1BSPReader initializes and returns a pointer to a new Q1BSPReader instance using the provided io.ReadSeeker streams.
-func NewQ1BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q1BSPReader {
-	return &Q1BSPReader{
+// NewQ1BSPReader initializes and returns a pointer to a new BSPReader instance using the provided io.ReadSeeker streams.
+func NewQ1BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
+	return &BSPReader{
 		arc:        arc,
 		rs:         rs,
 		rsPal:      nil,
@@ -46,8 +46,8 @@ func NewQ1BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q1BSPReader {
 	}
 }
 
-// Setup initializes the Q1BSPReader by loading BSP data, textures, palettes, and related metadata from the provided reader.
-func (q1 *Q1BSPReader) Setup() error {
+// Setup initializes the BSPReader by loading BSP data, textures, palettes, and related metadata from the provided reader.
+func (q1 *BSPReader) Setup() error {
 	q1.rsPal, _ = q1.arc.Open("gfx" + lumps.PakSeparator + "palette.lmp")
 
 	if _, err := q1.rs.Seek(0, io.SeekStart); err != nil {
@@ -98,76 +98,73 @@ func (q1 *Q1BSPReader) Setup() error {
 	return nil
 }
 
-// GetArchive returns the IArchive instance associated with the Q1BSPReader, used for file access and data retrieval.
-func (q1 *Q1BSPReader) GetArchive() interfaces.IArchive {
+// GetArchive returns the IArchive instance associated with the BSPReader, used for file access and data retrieval.
+func (q1 *BSPReader) GetArchive() interfaces.IArchive {
 	return q1.arc
 }
 
 // GetPlayerInfo retrieves the player's angle in radians and position in 3D space as geometry.XYZ coordinates.
-func (q1 *Q1BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
+func (q1 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q1.playerAngle, q1.playerPos
 }
 
 // GetEntities retrieves all entities from the BSP file and returns them as a slice of Entity pointers or an error.
-func (q1 *Q1BSPReader) GetEntities() ([]*lumps.Entity, error) {
+func (q1 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	return lumps.NewEntities(q1.rs, q1.infos[lumps.LumpEntities])
 }
 
 // GetModels retrieves the BSP models from the lump data and returns a slice of models or an error if reading fails.
-func (q1 *Q1BSPReader) GetModels() ([]*lumps.Model, error) {
+func (q1 *BSPReader) GetModels() ([]*lumps.Model, error) {
 	return lumps.NewModels(q1.rs, q1.infos[lumps.LumpModels])
 }
 
 // GetModelFileName retrieves the file name of a BSP model corresponding to the given classname.
-func (q1 *Q1BSPReader) GetModelFileName(classname string) string {
+func (q1 *BSPReader) GetModelFileName(classname string) string {
 	return GetModelFileName(classname)
 }
 
 // GetTextures returns the texture manager instance containing textures defined in the BSP file.
-func (q1 *Q1BSPReader) GetTextures() *lumps.Textures {
+func (q1 *BSPReader) GetTextures() *lumps.Textures {
 	return q1.texManager
 }
 
 // RegisterPixels registers a texture by name with specified dimensions, pixel data, palette, transparency, and alignment.
-func (q1 *Q1BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
+func (q1 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return q1.texManager.RegisterPixels(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers a texture using raw RGBA pixel data with optional Y-axis inversion.
-func (q1 *Q1BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+func (q1 *BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return q1.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
 // GetRawFaces extracts raw face data for a specified model index, including geometry, texture names, and UV coordinates.
-func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	models, _ := q1.GetModels()
 	if modelIdx < 0 || modelIdx >= len(models) {
 		return nil, fmt.Errorf("invalid model index")
 	}
 	model := models[modelIdx]
-
 	var rawFaces []*lumps.RawFace
 
 	// Itera solo sulle facce di questo modello (0 = World, 1+ = BModels)
 	for i := int32(0); i < model.NumFaces; i++ {
 		faceIdx := model.FirstFace + i
 		bspFace := q1.faces[faceIdx]
-		texInfo := q1.texInfos[bspFace.TexInfo]
+		info := q1.texInfos[bspFace.TexInfo]
 		texName := "default"
-		if texInfo.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[texInfo.MipTex] != nil {
-			texName = q1.mipTextures[texInfo.MipTex].Name
+		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
+			texName = q1.mipTextures[info.MipTex].Name
 		}
 		isSky := strings.HasPrefix(strings.ToLower(texName), "sky")
 		var points []geometry.XYZ
 		var uvs [][2]float64
-
 		// Prepare texture width/height for normalization
 		texW, texH := float64(256), float64(256)
-		if texInfo.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[texInfo.MipTex] != nil {
-			texName = q1.mipTextures[texInfo.MipTex].Name
-
-			texW = float64(q1.mipTextures[texInfo.MipTex].Width)
-			texH = float64(q1.mipTextures[texInfo.MipTex].Height)
+		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
+			texName = q1.mipTextures[info.MipTex].Name
+			texW = float64(q1.mipTextures[info.MipTex].Width)
+			texH = float64(q1.mipTextures[info.MipTex].Height)
 			if texW == 0 {
 				texW = 256
 			}
@@ -186,18 +183,10 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 			}
 			pos := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
 			points = append(points, pos)
-
 			// Compute UVs using Quake 1 vector projection
 			// Note: Q1 raw vertex coords are used for projection
-			u := (float64(v.X) * float64(texInfo.Vecs[0][0])) +
-				(float64(v.Y) * float64(texInfo.Vecs[0][1])) +
-				(float64(v.Z) * float64(texInfo.Vecs[0][2])) +
-				float64(texInfo.Vecs[0][3])
-			vt := (float64(v.X) * float64(texInfo.Vecs[1][0])) +
-				(float64(v.Y) * float64(texInfo.Vecs[1][1])) +
-				(float64(v.Z) * float64(texInfo.Vecs[1][2])) +
-				float64(texInfo.Vecs[1][3])
-
+			u := (float64(v.X) * float64(info.Vecs[0][0])) + (float64(v.Y) * float64(info.Vecs[0][1])) + (float64(v.Z) * float64(info.Vecs[0][2])) + float64(info.Vecs[0][3])
+			vt := (float64(v.X) * float64(info.Vecs[1][0])) + (float64(v.Y) * float64(info.Vecs[1][1])) + (float64(v.Z) * float64(info.Vecs[1][2])) + float64(info.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
 		rf := lumps.NewRawFace(points, uvs, texName, isSky)
@@ -208,11 +197,12 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 }
 
 // GetExternalBModelFileName returns the file name of the external BSP model associated with the given classname.
-func (q1 *Q1BSPReader) GetExternalBModelFileName(classname string) string {
+func (q1 *BSPReader) GetExternalBModelFileName(classname string) string {
 	return GetExternalBModelFileName(classname)
 }
 
-func (q1 *Q1BSPReader) Build(root *config.Root) error {
+// Build processes the BSP file's data, including faces, entities, lights, and models, and populates the provided Root structure.
+func (q1 *BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
 	faces, rfErr := q1.GetRawFaces(mIdx)
@@ -322,38 +312,38 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 }
 
 // createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
-func (q1 *Q1BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
+func (q1 *BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
 	playerAngle := angle * (math.Pi / 180.0)
 	return pos, playerAngle, nil
 }
 
 // getVertexes retrieves the vertex data from the BSP file using the lump information and returns a slice of vertex pointers.
-func (q1 *Q1BSPReader) getVertexes() ([]*lumps.Vertex, error) {
+func (q1 *BSPReader) getVertexes() ([]*lumps.Vertex, error) {
 	return lumps.NewVertexes(q1.rs, q1.infos[lumps.LumpVertexes])
 }
 
 // getEdges loads and returns the list of edges from the edges lump data or an error if the operation fails.
-func (q1 *Q1BSPReader) getEdges() ([]*lumps.Edge, error) {
+func (q1 *BSPReader) getEdges() ([]*lumps.Edge, error) {
 	return lumps.NewEdges(q1.rs, q1.infos[lumps.LumpEdges])
 }
 
 // getSurfEdges retrieves an array of surface edges, representing directed edge indices used for face definitions.
 // Returns a slice of int32 values and an error if reading fails.
-func (q1 *Q1BSPReader) getSurfEdges() ([]int32, error) {
+func (q1 *BSPReader) getSurfEdges() ([]int32, error) {
 	return lumps.NewSurfEdges(q1.rs, q1.infos[lumps.LumpSurfEdges])
 }
 
 // getFaces retrieves all Face structures from the BSP file using lump metadata and returns them or an error if encountered.
-func (q1 *Q1BSPReader) getFaces() ([]*lumps.Face, error) {
+func (q1 *BSPReader) getFaces() ([]*lumps.Face, error) {
 	return lumps.NewFace(q1.rs, q1.infos[lumps.LumpFaces])
 }
 
 // getTexInfos retrieves texture mapping information from the level data and returns a slice of TexInfo and an error.
-func (q1 *Q1BSPReader) getTexInfos() ([]*lumps.TexInfo, error) {
+func (q1 *BSPReader) getTexInfos() ([]*lumps.TexInfo, error) {
 	return lumps.NewTexInfos(q1.rs, q1.infos[lumps.LumpTexInfos])
 }
 
 // getMipTextures reads and decodes all mipmap textures from the lump data in the BSP file. Returns an error on failure.
-func (q1 *Q1BSPReader) getMipTextures() ([]*lumps.MipTexture, error) {
+func (q1 *BSPReader) getMipTextures() ([]*lumps.MipTexture, error) {
 	return lumps.NewMipTextures(q1.rs, q1.infos[lumps.LumpTextures])
 }

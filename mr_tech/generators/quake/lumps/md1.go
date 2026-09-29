@@ -75,11 +75,12 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	if err := binary.Read(rs, binary.LittleEndian, &header); err != nil {
 		return fmt.Errorf("failed to read header: %w", err)
 	}
-
-	if header.Magic != MD1Magic || header.Version != MD1Version {
-		return fmt.Errorf("formato MDL non valido: magic %d, version %d", header.Magic, header.Version)
+	if header.Magic != MD1Magic {
+		return fmt.Errorf("invalid MDL format: magic %d", header.Magic)
 	}
-
+	if header.Version != MD1Version {
+		return fmt.Errorf("invalid MDL format: version %d", header.Version)
+	}
 	md1.Header = &header
 	md1.Skins = make([]*MD1Skin, header.NumSkins)
 	md1.TexCoords = make([]*MD1TexCoord, header.NumVerts)

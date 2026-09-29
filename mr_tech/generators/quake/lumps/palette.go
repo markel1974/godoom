@@ -2,16 +2,26 @@ package lumps
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"math"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // PaletteSize defines the fixed size of the color palette in bytes, commonly used for handling 256-color palettes.
 const PaletteSize = 768
 
-// NewPalette reads a palette of size PaletteSize from the provided reader and applies Gamma correction to its values.
+type Palette struct {
+}
+
+func NewPalette() *Palette {
+	return &Palette{}
+}
+
+// Parse reads a palette of size PaletteSize from the provided reader and applies Gamma correction to its values.
 // Returns the corrected palette as a byte slice or an error if the read fails or the size is incorrect.
-func NewPalette(r io.Reader) ([]byte, error) {
+func (p *Palette) Parse(r io.ReadSeeker) ([]byte, error) {
 	palette := make([]byte, PaletteSize)
 	n, err := io.ReadFull(r, palette)
 	if err != nil {
@@ -32,4 +42,11 @@ func NewPalette(r io.Reader) ([]byte, error) {
 		palette[i] = byte(val)
 	}
 	return palette, nil
+}
+
+// ParseFromPCX reads a PCX file from the provided io.ReadSeeker and extracts a 256-color RGBA palette.
+func (p *Palette) ParseFromPCX(r io.ReadSeeker) ([256]color.RGBA, error) {
+	pcx := common.NewPCX()
+	img, err := pcx.ParsePalette(r)
+	return img, err
 }

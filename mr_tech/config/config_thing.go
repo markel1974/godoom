@@ -26,6 +26,9 @@ const (
 	ThingKeyDef
 	ThingItemDef
 	ThingHudDef
+	ThingDoorDef
+	ThingPlatformDef
+	ThingButtonDef
 )
 
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.

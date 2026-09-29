@@ -239,21 +239,18 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 		}
 
 		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
-			//TODO IMPLEMENT
-			/*
-				modelIdx, _ := strconv.Atoi(modelProp[1:])
-				rawFaces, err := q1.GetRawFaces(modelIdx)
-				if err != nil {
-					fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
-					continue
-				}
-				cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
-				if err != nil {
-					fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
-					continue
-				}
-				root.Things = append(root.Things, cThing)
-			*/
+			modelIdx, _ := strconv.Atoi(modelProp[1:])
+			rawFaces, err := q1.GetRawFaces(modelIdx)
+			if err != nil {
+				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+				continue
+			}
+			cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
+			if err != nil {
+				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+				continue
+			}
+			root.Things = append(root.Things, cThing)
 			continue
 		}
 

@@ -124,7 +124,6 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 			animKind = config.MaterialKindLiquid
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
-
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
@@ -152,19 +151,19 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
-	/*
-		//TODO IMPLEMENT
-		// Setup standard interactions based on classname
-		if strings.HasPrefix(classname, "func_door") {
-			cThing.Kind = config.ThingDoorDef
-			cThing.Mass = 1000.0 // Heavy
-		} else if strings.HasPrefix(classname, "func_plat") || strings.HasPrefix(classname, "func_train") {
-			cThing.Kind = config.ThingPlatformDef
-			cThing.Mass = 1000.0 // Heavy
-		} else if strings.HasPrefix(classname, "func_button") {
-			cThing.Kind = config.ThingButtonDef
-		}
-	*/
+	// Setup standard interactions based on classname
+	if strings.HasPrefix(classname, "func_door") {
+		thingCfg.Kind = config.ThingDoorDef
+		thingCfg.Mass = 100.0 // Heavy
+	} else if strings.HasPrefix(classname, "func_plat") {
+		thingCfg.Kind = config.ThingPlatformDef
+		thingCfg.Mass = 100.0 // Heavy
+	} else if strings.HasPrefix(classname, "func_train") {
+		thingCfg.Kind = config.ThingPlatformDef
+		thingCfg.Mass = 100.0 // Heavy
+	} else if strings.HasPrefix(classname, "func_button") {
+		thingCfg.Kind = config.ThingButtonDef
+	}
 
 	return thingCfg, nil
 }

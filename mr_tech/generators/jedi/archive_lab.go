@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // ExtLevelLVT represents the file extension for level topology files within a LAB archive.
@@ -238,7 +240,7 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 	}
 	colorPal := al.colorPal[al.colorPalIndex]
 	if strings.HasSuffix(strings.ToUpper(texName), ".PCX") {
-		parser := NewPCX()
+		parser := common.NewPCX()
 		img, err := parser.Parse(bytes.NewReader(data), colorPal)
 		if err != nil {
 			return nil, err

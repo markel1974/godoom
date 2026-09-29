@@ -1,4 +1,4 @@
-package jedi
+package common
 
 import (
 	"encoding/binary"

@@ -3,6 +3,8 @@ package jedi
 import (
 	"image/color"
 	"io"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 type Palette struct {
@@ -33,7 +35,7 @@ func (p *Palette) Parse(r io.Reader) ([256]color.RGBA, error) {
 
 // ParseFromPCX reads a PCX file from the provided io.ReadSeeker and extracts a 256-color RGBA palette.
 func (p *Palette) ParseFromPCX(r io.ReadSeeker) ([256]color.RGBA, error) {
-	pcx := NewPCX()
+	pcx := common.NewPCX()
 	img, err := pcx.ParsePalette(r)
 	return img, err
 }

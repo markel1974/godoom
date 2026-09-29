@@ -16,6 +16,7 @@ type Things struct {
 	arc        interfaces.IArchive
 	texManager *lumps.Textures
 	palette    [256]color.RGBA
+	il         *ImageLoader
 }
 
 func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256]color.RGBA) *Things {
@@ -23,10 +24,10 @@ func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256
 		arc:        arc,
 		texManager: texManager,
 		palette:    palette,
+		il:         NewImageLoader(arc, texManager, palette),
 	}
 }
 
-// CreateThing creates a new game entity (Thing) based on its position and classname, returning the entity or an error.
 func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -40,6 +41,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		definition = c[1]
 	}
 	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
+
 	switch category {
 	case "item":
 		kind = config.ThingItemDef
@@ -55,51 +57,69 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
-	rsMd1, err := th.arc.Open(thingPath)
+
+	rsMD2, err := th.arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
 	}
-	md1 := lumps.NewMD1Resource()
-	if err = md1.Parse(rsMd1); err != nil {
-		return nil, fmt.Errorf("can't load MDL %s: %s\n", classname, err.Error())
+
+	md2 := lumps.NewMD2Resource()
+	if err = md2.Parse(rsMD2); err != nil {
+		return nil, fmt.Errorf("can't load MD2 %s: %s", classname, err.Error())
 	}
-	if skinTargetIndex >= len(md1.Skins) {
+	if skinTargetIndex >= len(md2.Skins.Names) {
 		return nil, fmt.Errorf("no skin found for %s", classname)
 	}
-	skin := md1.Skins[skinTargetIndex]
-	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
-	if err = th.registerPixels(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, false, 255, false); err != nil {
-		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
+	skinName := md2.Skins.Names[skinTargetIndex]
+	if len(skinName) == 0 {
+		return nil, fmt.Errorf("empty skin name for %s", classname)
 	}
-	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := config.NewMD1(int(md1.Header.NumFrames), md1.FrameNames)
-	for idx, f := range md1.Frames {
-		triangles := make([]config.MD1Triangle, int(md1.Header.NumTris))
-		skinW := float32(md1.Header.SkinWidth)
-		skinH := float32(md1.Header.SkinHeight)
-		for tIdx, tri := range md1.Triangles {
+	for _, n := range md2.Skins.Names {
+		if err = th.il.Load(n); err != nil {
+			return nil, fmt.Errorf("failed to load skin %s: %s", n, err.Error())
+		}
+	}
+
+	//materialName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
+	materialName := skinName
+
+	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+	cModel := config.NewMD1(int(md2.Header.NumFrames), md2.Frames.FrameNames)
+	skinW := float32(md2.Header.SkinWidth)
+	skinH := float32(md2.Header.SkinHeight)
+
+	for idx, f := range md2.Frames.Frames {
+		triangles := make([]config.MD1Triangle, int(md2.Header.NumTris))
+		for tIdx, tri := range md2.Triangles.Triangles {
 			cTri := config.NewMD1Triangle(anim)
 			for v := 0; v < 3; v++ {
-				vx := tri.Vertices[v]
-				tc := md1.TexCoords[vx]
+				vx := tri.VertexIndices[v]
+				if int(vx) >= len(f) {
+					return nil, fmt.Errorf("invalid MD2 vertex index %d in triangle %d", vx, tIdx)
+				}
+				tcIndex := tri.STIndices[v]
+				if int(tcIndex) >= len(md2.TexCoords.STS) {
+					return nil, fmt.Errorf("invalid MD2 texture coordinate index %d in triangle %d", tcIndex, tIdx)
+				}
+				tc := md2.TexCoords.STS[tcIndex]
 				s := float32(tc.S)
 				t := float32(tc.T)
-				if tri.FacesFront == 0 && tc.OnSeam != 0 {
-					s += skinW / 2.0
-				}
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD1Vertex{Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]), U: nU, V: nV}
+				cTri.Vertices[v] = config.MD1Vertex{
+					Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]),
+					U:   nU,
+					V:   nV,
+				}
 			}
 			triangles[tIdx] = cTri
 		}
 		cFrame := config.NewMD1Frame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
-
 	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
-
 	return thingCfg, nil
 }
 

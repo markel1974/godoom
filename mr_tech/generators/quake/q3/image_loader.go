@@ -61,10 +61,6 @@ func (il *ImageLoader) fallbackImage() image.Image {
 
 // Load attempts to load an image by its name and returns it; falls back to a default image on failure.
 func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
-	if strings.Contains(texName, ".TGA") {
-		fmt.Println("HERE")
-	}
-
 	if texName == "noshader" || len(texName) == 0 {
 		return nil
 	}
@@ -72,10 +68,6 @@ func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
 		return nil // Already loaded
 	}
 
-	//s := il.shaders.Get(texName)
-	//if s != nil {
-	//	fmt.Printf("[debug] shader for %s: %s\n", texName, s)
-	//}
 	img, err := il.retrieve(texName)
 	if err != nil {
 		fmt.Printf("[warning] using fallback for %s: %s\n", texName, err)

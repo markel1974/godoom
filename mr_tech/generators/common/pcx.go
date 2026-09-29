@@ -108,7 +108,6 @@ func (p *PCX) Parse(r io.Reader, defaultPalette [256]color.RGBA) (*image.RGBA, e
 				c.A = 255
 			}
 			img.SetRGBA(x, height-1-y, c)
-			//img.SetRGBA(width-1-x, height-1-y, c)
 		}
 	}
 	return img, nil

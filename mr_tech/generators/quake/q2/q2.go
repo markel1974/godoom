@@ -6,7 +6,6 @@ import (
 	"image/color"
 	"io"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -77,44 +76,9 @@ func (q2 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q2.playerAngle, q2.playerPos
 }
 
-// GetEntities extracts and parses entities from the BSP file by reading the entities lump and converting it to structured data.
-func (q2 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
-	lump := q2.header.Lumps[lumps.LumpEntities2]
-	if _, err := q2.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
-		return nil, err
-	}
-	data := make([]byte, lump.Length)
-	if _, err := q2.rs.Read(data); err != nil {
-		return nil, err
-	}
-	text := lumps.FromNullTerminatingString(data)
-	return lumps.NewEntitiesFromText(text)
-}
-
-// GetModels reads and parses the model lump to retrieve an array of BSP sub-models from the map file.
-func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
-	lumpModels := q2.header.Lumps[lumps.LumpModels2]
-	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
-		return nil, err
-	}
-	numModels := int(lumpModels.Length) / 48
-	models := make([]lumps.Model2, numModels)
-	if err := binary.Read(q2.rs, binary.LittleEndian, &models); err != nil {
-		return nil, err
-	}
-
-	out := make([]*lumps.Model, numModels)
-	for i, m := range models {
-		out[i] = &lumps.Model{
-			Mins:      m.Mins,
-			Maxs:      m.Maxs,
-			Origin:    m.Origin,
-			HeadNode:  [4]int32{m.HeadNode, -1, -1, -1}, // Q2 has a single tree, not 4 hulls like Q1
-			FirstFace: m.FirstFace,
-			NumFaces:  m.NumFaces,
-		}
-	}
-	return out, nil
+// GetHeaders retrieves the BSP file headers, including magic identifier, version, and lump metadata.
+func (q2 *BSPReader) GetHeaders() lumps.Headers2 {
+	return q2.header
 }
 
 // GetExternalBModelFileName returns the external BModel file name associated with the given classname.
@@ -136,7 +100,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 		return rfErr
 	}
 
-	entities, eErr := q2.GetEntities()
+	entities, eErr := lumps.NewEntities2(q2.rs, q2.header)
 	if eErr != nil {
 		return eErr
 	}
@@ -146,37 +110,29 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 	things := NewThings(q2.arc, q2.texManager, q2.palette)
 
 	for _, ent := range entities {
-		classname := ent.Properties["classname"]
-		baseClass := classname
-		subClass := ""
+		classname, _ := ent.GetProperty("classname")
+		baseClass, subClass := classname, ""
 		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass = z[0]
-			subClass = z[1]
+			baseClass, subClass = z[0], z[1]
 		}
 		var pos geometry.XYZ
-		if origin, ok := ent.Properties["origin"]; ok {
-			var x, y, z float64
-			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
+		if origin, ok := ent.GetProperty("origin"); ok {
+			x, y, z, _ := lumps.ParseVector(origin)
 			pos = lumps.CreateXYZ(x, y, z)
-		}
-
-		var angle float64
-		if a, ok := ent.Properties["angle"]; ok {
-			angle, _ = strconv.ParseFloat(a, 64)
 		}
 
 		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
 		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
 		// is rendered correctly. When ready, we will remove this continue
 		// and instantiate bmodels using GetModels() from IBSPReader.
-		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
+		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
 			continue
 		}
 
 		if externalBSPPath := q2.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
 			cThing, err := things.CreateThingBSP(externalBSPPath, pos, classname)
 			if err != nil {
-				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
+				fmt.Printf("warning on external bmodel %s: %v\n", classname, err)
 				continue
 			}
 			root.Things = append(root.Things, cThing)
@@ -189,7 +145,11 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 		case "info":
 			if classname == "info_player_start" || classname == "info_player_deathmatch" {
 				q2.playerPos = pos
-				q2.playerAngle = angle * (math.Pi / 180.0)
+				q2.playerAngle = 0.0
+				if a, ok := ent.GetProperty("angle"); ok {
+					angle, _ := lumps.ParseFloat(a)
+					q2.playerAngle = angle * (math.Pi / 180.0)
+				}
 			} else {
 				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
@@ -294,23 +254,10 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		faceIdx := targetModel.FirstFace + i
 		face := faces[faceIdx]
 		texInfo := texInfos[face.TexInfo]
-
-		// Decode texture name (fixed 32-byte null-terminated C string)
-		texNameBytes := make([]byte, 0, 32)
-		for _, b := range texInfo.TextureName {
-			if b == 0 {
-				break
-			}
-			texNameBytes = append(texNameBytes, b)
+		texName := strings.ToLower(lumps.FromNullTerminatingString(texInfo.TextureName[:]))
+		if texInfo.NoDraw() {
+			continue
 		}
-		texName := strings.ToLower(string(texNameBytes))
-
-		// In Quake 2 flags are included in TexInfo. SURF_SKY is bitmask 0x4
-		if (texInfo.Flags & 0x80) != 0 {
-			continue // SURF_NODRAW
-		}
-		isSky := (texInfo.Flags & 0x4) != 0
-
 		texW, texH, err := q2.registerTexture(texName)
 		if err != nil {
 			fmt.Printf("Warning: can't register asset %s: %s\n", texName, err.Error())
@@ -347,7 +294,7 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 				float64(texInfo.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / float64(texW), vt / float64(texH)})
 		}
-		rf := lumps.NewRawFace(points, uvs, texName, isSky)
+		rf := lumps.NewRawFace(points, uvs, texName, texInfo.IsSky())
 		rawFaces = append(rawFaces, rf)
 	}
 

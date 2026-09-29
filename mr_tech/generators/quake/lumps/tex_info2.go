@@ -1,5 +1,10 @@
 package lumps
 
+const (
+	surfSky2    = 0x4
+	surfNoDraw2 = 0x80
+)
+
 // TexInfo2 represents texture mapping information for Quake 2 BSP files.
 // Vecs defines two texture vectors used for UV mapping calculations.
 // Flags holds attributes for the surface such as visibility or rendering properties.
@@ -12,4 +17,14 @@ type TexInfo2 struct {
 	Value       uint32
 	TextureName [32]byte
 	NextTexInfo int32
+}
+
+// NoDraw checks if the texture is marked with the SurfNoDraw2 flag, indicating it should not be rendered.
+func (t TexInfo2) NoDraw() bool {
+	return (t.Flags & surfNoDraw2) != 0
+}
+
+// IsSky determines whether the texture has the SurfSky2 flag set, indicating it represents a sky surface.
+func (t TexInfo2) IsSky() bool {
+	return (t.Flags & surfSky2) != 0
 }

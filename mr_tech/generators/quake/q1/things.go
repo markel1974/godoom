@@ -74,7 +74,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	skin := md1.Skins[skinTargetIndex]
 	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
 
-	if err = th.texManager.RegisterPixelsColors(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
+	if err = th.texManager.RegisterPixelsPalette(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
 		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
 	}
 	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)

@@ -197,7 +197,7 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 // RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
 func (th *Things) registerPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	//TODO WRONG
-	return th.texManager.RegisterPixelsColors(name, width, height, indices, th.palette, isTransparent, transIndex, invertY)
+	return th.texManager.RegisterPixelsPalette(name, width, height, indices, th.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.

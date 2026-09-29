@@ -229,7 +229,7 @@ func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
 // RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
 func (q2 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	//TODO WRONG
-	return q2.texManager.RegisterPixelsColors(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
+	return q2.texManager.RegisterPixelsPalette(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.

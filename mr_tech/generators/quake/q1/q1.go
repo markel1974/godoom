@@ -209,13 +209,8 @@ func (q1 *Q1BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 // GetExternalBModelFileName returns the file name of the external BSP model associated with the given classname.
 func (q1 *Q1BSPReader) GetExternalBModelFileName(classname string) string {
-	return _q1DictBModel[classname]
+	return GetExternalBModelFileName(classname)
 }
-
-// GetModelFileName returns the file name of a model corresponding to the given classname from the predefined model dictionary.
-//func (q1 *Q1BSPReader) GetModelFileName(classname string) string {
-//	return _q1DictModelFilename[classname]
-//}
 
 func (q1 *Q1BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
@@ -231,6 +226,7 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 
 	things := NewThings(q1.arc, q1.texManager, q1.palette)
 	lights := NewLights(entities)
+	volumes := NewVolumes(mIdx, chunkSize)
 
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
@@ -254,23 +250,24 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 
 		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
 			//TODO IMPLEMENT
-			continue
-			modelIdx, _ := strconv.Atoi(modelProp[1:])
-			rawFaces, err := q1.GetRawFaces(modelIdx)
-			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
-				continue
-			}
-			cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
-			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
-				continue
-			}
-			root.Things = append(root.Things, cThing)
+			/*
+				modelIdx, _ := strconv.Atoi(modelProp[1:])
+				rawFaces, err := q1.GetRawFaces(modelIdx)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+					continue
+				}
+				cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+					continue
+				}
+				root.Things = append(root.Things, cThing)
+			*/
 			continue
 		}
 
-		if externalBSPPath := q1.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
+		if externalBSPPath := GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
 			cThing, err := things.CreateThingBSP(externalBSPPath, pos, classname)
 			if err != nil {
 				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
@@ -318,61 +315,9 @@ func (q1 *Q1BSPReader) Build(root *config.Root) error {
 			root.Things = append(root.Things, cThing)
 		}
 	}
-	vIdx := strconv.Itoa(mIdx)
 
-	chunks := make(map[string]*config.Volume)
-	for _, v := range faces {
-		animKind := config.MaterialKindLoop
-		velX, velY := 0.0, 0.0
-		if v.IsSky {
-			animKind = config.MaterialKindSky
-			velX, velY = 0.05, 0.05
-		} else if len(v.TexName) > 0 && v.TexName[0] == '*' {
-			animKind = config.MaterialKindLiquid
-		}
-		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, velX, velY)
-		triangles := lumps.TriangulateConvex3d(v.Points)
+	root.Volumes = volumes.Generate(faces)
 
-		//isLiquid := len(v.TexName) > 0 && v.TexName[0] == '*'
-		for _, rawTri := range triangles {
-			var rawTriUvs [][2]float64
-			if len(v.UVs) > 0 {
-				rawTriUvs = make([][2]float64, 3)
-				for k := 0; k < 3; k++ {
-					pos := rawTri[k]
-					for idx, pt := range v.Points {
-						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
-							if len(v.UVs) > idx {
-								rawTriUvs[k] = v.UVs[idx]
-							}
-							break
-						}
-					}
-				}
-
-				// Find the triangle centroid
-				cx := (rawTri[0].X + rawTri[1].X + rawTri[2].X) / 3.0
-				cy := (rawTri[0].Y + rawTri[1].Y + rawTri[2].Y) / 3.0
-				cz := (rawTri[0].Z + rawTri[1].Z + rawTri[2].Z) / 3.0
-
-				// Calculate the spatial hashing key (grid coordinates)
-				gridX := int(math.Floor(cx / chunkSize))
-				gridY := int(math.Floor(cy / chunkSize))
-				gridZ := int(math.Floor(cz / chunkSize))
-
-				chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
-				volume, exists := chunks[chunkKey]
-				if !exists {
-					chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
-					volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
-					chunks[chunkKey] = volume
-					root.Volumes = append(root.Volumes, volume)
-				}
-
-				volume.Faces = append(volume.Faces, config.NewConfigFace([]geometry.XYZ{rawTri[0], rawTri[1], rawTri[2]}, rawTriUvs, material, v.TexName))
-			}
-		}
-	}
 	return nil
 }
 

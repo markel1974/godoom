@@ -10,17 +10,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// _q1LightStyle0 defines a constant light animation pattern with uniform intensity throughout.
+// _q1LightStyle0 defines a lighting style with constant intensity of 1.0.
 var _q1LightStyle0 = []float64{1.0}
 
-// _q1LightStyle1 defines a lighting style represented as a sequence of float64 intensity values.
+// _q1LightStyle1 defines a sequence of float64 values representing one of the predefined light intensity patterns.
 var _q1LightStyle1 = []float64{
 	1.0, 1.0, 1.08, 1.0, 1.0, 1.17, 1.0, 1.0, 1.17, 1.0,
 	1.0, 1.08, 1.17, 1.08, 1.0, 1.0, 1.17, 1.08, 1.33, 1.08,
 	1.0, 1.0, 1.17,
 }
 
-// _q1LightStyle2 defines a waveform pattern with a gradual increase and decrease in intensity values in a symmetrical manner.
+// _q1LightStyle2 defines a light intensity pattern with a smooth increase and decrease sequence in a loop-like structure.
 var _q1LightStyle2 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50, 1.58,
@@ -30,7 +30,7 @@ var _q1LightStyle2 = []float64{
 	0.0,
 }
 
-// _q1LightStyle3 defines a series of float64 values representing a specific lighting style configuration pattern.
+// _q1LightStyle3 defines a sequence of float64 values representing a specific light intensity pattern.
 var _q1LightStyle3 = []float64{
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -38,12 +38,12 @@ var _q1LightStyle3 = []float64{
 	0.25, 0.33, 0.42, 0.50,
 }
 
-// _q1LightStyle4 represents a repeating pattern of alternating high (1.0) and low (0.0) light intensity values.
+// _q1LightStyle4 represents a light style pattern alternating between 1.0 and 0.0 at equal intervals.
 var _q1LightStyle4 = []float64{
 	1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0,
 }
 
-// _q1LightStyle5 defines a sequence of light intensity values forming a sinusoidal-like pattern with peaks and troughs.
+// _q1LightStyle5 defines a sequence of light intensity values, creating a smooth fluctuating brightness pattern.
 var _q1LightStyle5 = []float64{
 	0.75, 0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50,
 	1.58, 1.67, 1.75, 1.83, 1.92, 2.0, 2.08, 2.0, 1.92, 1.83,
@@ -51,40 +51,40 @@ var _q1LightStyle5 = []float64{
 	0.92, 0.83, 0.75,
 }
 
-// _q1LightStyle6 represents a sequence of light intensity values oscillating around a normalized brightness level of 1.0.
+// _q1LightStyle6 defines a sequence of float values representing a light style pattern in a specific configuration.
 var _q1LightStyle6 = []float64{
 	1.08, 1.0, 1.17, 1.08, 1.33, 1.08, 1.0, 1.17, 1.0, 1.08,
 	1.0, 1.17, 1.0, 1.17, 1.0, 1.08, 1.17,
 }
 
-// _q1LightStyle7 represents a predefined light animation pattern using a sequence of float64 values.
+// _q1LightStyle7 defines a sequence of light intensity values representing a distinct light style pattern.
 var _q1LightStyle7 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.08, 0.17, 0.25,
 	0.33, 0.42, 0.50, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0,
 	0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
 }
 
-// _q1LightStyle8 defines a sequence of floating-point values representing a custom lighting pattern or animation style.
+// _q1LightStyle8 represents an array of float values defining a specific light style pattern for rendering effects.
 var _q1LightStyle8 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0,
 	0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.08, 0.17, 0.25, 0.33,
 	0.42, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
 }
 
-// _q1LightStyle9 represents a light style pattern consisting of an initial series of zeroes followed by repeated 2.08 values.
+// _q1LightStyle9 represents a sequence of float64 values for a specific light style pattern with two distinct intensity levels.
 var _q1LightStyle9 = []float64{
 	0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08,
 }
 
-// _q1LightStyle10 defines a sequence of light intensity variations represented as a slice of float64 values.
+// _q1LightStyle10 represents a predefined sequence of light intensity values, alternating between high and low states.
 var _q1LightStyle10 = []float64{
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0,
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
 	0.0, 1.0, 1.0, 1.0, 0.0,
 }
 
-// _q1LightStyle11 defines a sinusoidal light intensity pattern that peaks near the center and tapers symmetrically.
+// _q1LightStyle11 defines a sequence of float64 values representing a light intensity pattern with a symmetric rise and fall.
 var _q1LightStyle11 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.42, 1.33,
@@ -92,7 +92,7 @@ var _q1LightStyle11 = []float64{
 	0.42, 0.33, 0.25, 0.17, 0.08, 0.0,
 }
 
-// _q1LightStyles contains predefined light style sequences represented as a 2D slice of float64 values.
+// _q1LightStyles defines a collection of predefined light intensity patterns to simulate various lighting effects.
 var _q1LightStyles = [][]float64{
 	_q1LightStyle0,
 	_q1LightStyle1,
@@ -108,10 +108,13 @@ var _q1LightStyles = [][]float64{
 	_q1LightStyle11,
 }
 
+// Lights manages a map of target entities, enabling the creation and manipulation of light configurations in the system.
 type Lights struct {
 	targetEntities map[string]*lumps.Entity
 }
 
+// NewLights initializes and returns a Lights instance using the provided slice of Entity objects.
+// It maps entities with a "targetname" property to facilitate light creation.
 func NewLights(entities []*lumps.Entity) *Lights {
 	targetEntities := make(map[string]*lumps.Entity)
 	for _, ent := range entities {
@@ -124,6 +127,18 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	}
 }
 
+func (l *Lights) computeIntensity(lightStr string) (float64, bool) {
+	if len(lightStr) == 0 {
+		return 0, false
+	}
+	value, err := strconv.ParseFloat(lightStr, 64)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
+}
+
+// CreateLight generates a new light source based on the given entity, position, and subclass parameters.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
 	kind := config.LightKindAmbient
 	q1Intensity := 300.0
@@ -138,10 +153,8 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")
 
-	if lightStr != "" {
-		if value, err := strconv.ParseFloat(lightStr, 64); err == nil {
-			q1Intensity = value
-		}
+	if v, ok := l.computeIntensity(lightStr); ok {
+		q1Intensity = v
 	}
 
 	//target: trasforma la light in spotlight + determina direzione
@@ -172,7 +185,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			dirZ = dz / length
 		}
 		//dirZ = 0
-	} else if mangleStr != "" {
+	} else if len(mangleStr) > 0 {
 		//TODO DISABLED FOR THE MOMENT
 		return nil
 		kind = config.LightKindSpot
@@ -188,7 +201,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		dirX = -dirX
 	}
 
-	if colorStr != "" {
+	if len(colorStr) > 0 {
 		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
 			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
 				r = cr / 255.0

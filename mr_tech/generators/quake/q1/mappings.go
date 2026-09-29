@@ -75,6 +75,12 @@ var _q1DictBModel = map[string]string{
 	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande
 }
 
+// GetModelFileName returns the file name of a model associated with the given classname from the predefined mapping.
 func GetModelFileName(classname string) string {
 	return _q1DictModelFilename[classname]
+}
+
+// GetExternalBModelFileName retrieves the file name of the external BSP model corresponding to the provided classname.
+func GetExternalBModelFileName(classname string) string {
+	return _q1DictBModel[classname]
 }

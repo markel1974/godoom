@@ -91,7 +91,7 @@ func (q1 *BSPReader) Setup() error {
 		return err
 	}
 	for _, mt := range q1.mipTextures {
-		if mt != nil && mt.Name != "" {
+		if mt != nil && len(mt.Name) > 0 {
 			if err = q1.texManager.RegisterPixelsPalette(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], q1.palette, false, 255, false); err != nil {
 				fmt.Printf("Warning: texture %s error: %s\n", mt.Name, err.Error())
 			}

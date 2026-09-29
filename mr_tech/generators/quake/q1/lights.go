@@ -228,20 +228,15 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		r, g, b = 1.0, 1.0, 1.0
 	}
 
-	// Runtime normalization
 	var falloff float64
 	var intensity float64
 	if kind == config.LightKindSpot {
 		falloff = q1Intensity * 0.1
 		intensity = q1Intensity * 0.1
-		//intensity *= 0.05
-		//falloff = intensity * 1.0
-		if c, ok := lumps.ParseFloat(angleStr); ok {
+		if c, valid := lumps.ParseFloat(angleStr); valid {
 			coneAngle = c
 		}
 	} else {
-		//falloff = q1Intensity * 0.03
-		//intensity = q1Intensity * 0.05
 		falloff = q1Intensity * 0.01
 		intensity = q1Intensity * 0.1
 	}

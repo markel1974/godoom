@@ -108,6 +108,25 @@ var _q1LightStyles = [][]float64{
 	_q1LightStyle11,
 }
 
+// LightStyle parses a style string and returns a corresponding array of light intensity values from predefined styles.
+func LightStyle(styleStr string) []float64 {
+	defaultStyle := []float64{1.0}
+	if len(styleStr) == 0 {
+		return defaultStyle
+	}
+	index, err := strconv.Atoi(styleStr)
+	if err != nil {
+		return defaultStyle
+	}
+	if index >= 0 && index < len(_q1LightStyles) {
+		return _q1LightStyles[index]
+	}
+	// Switchable Quake light styles.
+	// The runtime currently has no separate representation
+	// for the trigger/switch state, so default to steady ON.
+	return defaultStyle
+}
+
 // Lights manages a map of target entities, enabling the creation and manipulation of light configurations in the system.
 type Lights struct {
 	targetEntities map[string]*lumps.Entity
@@ -127,25 +146,33 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	}
 }
 
-func (l *Lights) computeIntensity(lightStr string) (float64, bool) {
-	if len(lightStr) == 0 {
-		return 0, false
+func (l *Lights) computeColor(colorStr string) (float64, float64, float64, bool) {
+	if len(colorStr) == 0 {
+		return 0, 0, 0, false
 	}
-	value, err := strconv.ParseFloat(lightStr, 64)
-	if err != nil {
-		return 0, false
+	cr, cg, cb, valid := lumps.ParseVector(colorStr)
+	if !valid {
+		return 0, 0, 0, false
 	}
-	return value, true
+	var r, g, b float64
+	if cr > 1.0 || cg > 1.0 || cb > 1.0 {
+		r = cr / 255.0
+		g = cg / 255.0
+		b = cb / 255.0
+	} else {
+		r = cr
+		g = cg
+		b = cb
+	}
+	return r, g, b, true
 }
 
 // CreateLight generates a new light source based on the given entity, position, and subclass parameters.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
 	kind := config.LightKindAmbient
 	q1Intensity := 300.0
-	// Default direction: down.
-	dirX, dirY, dirZ := 0.0, 0.0, -1.0
-	r, g, b := 1.0, 1.0, 1.0
-	coneAngle := 40.0 // Quake default
+	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
+	coneAngle := 40.0                  // Quake default
 	lightStr, _ := ent.GetProperty("light")
 	targetStr, _ := ent.GetProperty("target")
 	mangleStr, _ := ent.GetProperty("mangle")
@@ -153,7 +180,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")
 
-	if v, ok := l.computeIntensity(lightStr); ok {
+	if v, ok := lumps.ParseFloat(lightStr); ok {
 		q1Intensity = v
 	}
 
@@ -167,12 +194,8 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			return nil
 		}
 		originStr, _ := targetEnt.GetProperty("origin")
-		if len(originStr) == 0 {
-			fmt.Println("origin vector not found")
-			return nil
-		}
-		var tx, ty, tz float64
-		if _, err := fmt.Sscanf(originStr, "%f %f %f", &tx, &ty, &tz); err != nil {
+		tx, ty, tz, ok := lumps.ParseVector(originStr)
+		if !ok {
 			fmt.Println("invalid origin vector")
 			return nil
 		}
@@ -184,7 +207,6 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			dirY = dy / length
 			dirZ = dz / length
 		}
-		//dirZ = 0
 	} else if len(mangleStr) > 0 {
 		//TODO DISABLED FOR THE MOMENT
 		return nil
@@ -201,32 +223,9 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		dirX = -dirX
 	}
 
-	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
-			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
-				r = cr / 255.0
-				g = cg / 255.0
-				b = cb / 255.0
-			} else {
-				r = cr
-				g = cg
-				b = cb
-			}
-		}
-	}
-
-	style := []float64{1.0}
-	if styleStr != "" {
-		if index, err := strconv.Atoi(styleStr); err == nil {
-			if index >= 0 && index < len(_q1LightStyles) {
-				style = _q1LightStyles[index]
-			} else if index >= 32 {
-				// Switchable Quake light styles.
-				// The runtime currently has no separate representation
-				// for the trigger/switch state, so default to steady ON.
-				style = []float64{1.0}
-			}
-		}
+	r, g, b, ok := l.computeColor(colorStr)
+	if !ok {
+		r, g, b = 1.0, 1.0, 1.0
 	}
 
 	// Runtime normalization
@@ -237,12 +236,8 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		intensity = q1Intensity * 0.1
 		//intensity *= 0.05
 		//falloff = intensity * 1.0
-		if len(angleStr) > 0 {
-			if angleStr != "" {
-				if value, err := strconv.ParseFloat(angleStr, 64); err == nil {
-					coneAngle = value
-				}
-			}
+		if c, ok := lumps.ParseFloat(angleStr); ok {
+			coneAngle = c
 		}
 	} else {
 		//falloff = q1Intensity * 0.03
@@ -258,7 +253,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	light.DirX = dirX
 	light.DirY = dirY
 	light.DirZ = dirZ
-	light.Style = style
+	light.Style = LightStyle(styleStr)
 	light.CutOff = coneAngle
 	light.OuterCutOff = coneAngle + 5.0
 	if light.Intensity <= 0 {

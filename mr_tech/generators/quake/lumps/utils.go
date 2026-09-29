@@ -90,6 +90,9 @@ func TriangulateConvex3dInverted(pts []geometry.XYZ) [][]geometry.XYZ {
 
 // ParseVector extracts 3 floats from a Quake-style string (e.g. "1.0 0.5 0.0").
 func ParseVector(s string) (float64, float64, float64, bool) {
+	if len(s) == 0 {
+		return 0, 0, 0, false
+	}
 	parts := strings.Fields(s)
 	if len(parts) >= 3 {
 		v1, _ := strconv.ParseFloat(parts[0], 64)
@@ -98,6 +101,18 @@ func ParseVector(s string) (float64, float64, float64, bool) {
 		return v1, v2, v3, true
 	}
 	return 0, 0, 0, false
+}
+
+// ParseFloat converts a string to a float64 and returns whether the conversion was successful.
+func ParseFloat(s string) (float64, bool) {
+	if len(s) == 0 {
+		return 0, false
+	}
+	value, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
 }
 
 // CalcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.

@@ -128,54 +128,65 @@ func LightStyle(styleStr string) []float64 {
 	return defaultStyle
 }
 
-// Lights represents a collection of entities mapped by their target names, used for managing and creating light sources.
+// Lights manages Quake 2 light entities and their target relationships.
 type Lights struct {
 	targetEntities map[string]*lumps.Entity
 }
 
-// NewLights initializes a Lights structure by mapping entity targetnames to their corresponding entities.
+// NewLights initializes a Lights structure by mapping entity targetnames
+// to their corresponding entities.
 func NewLights(entities []*lumps.Entity) *Lights {
 	targetEntities := make(map[string]*lumps.Entity)
+
 	for _, ent := range entities {
 		if targetStr, _ := ent.GetProperty("targetname"); len(targetStr) > 0 {
 			targetEntities[targetStr] = ent
 		}
 	}
+
 	return &Lights{
 		targetEntities: targetEntities,
 	}
 }
 
-// CreateLight generates a light source based on an entity's properties, position, and subclass, returning the configured light.
+// CreateLight generates a light source based on a Quake 2 entity's
+// properties, position, and subclass.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
 	kind := config.LightKindAmbient
-	q1Intensity := 300.0
+	intensity := 300.0
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
-	coneAngle := 40.0                  // Quake default
+	coneAngle := 10.0                  // Quake 2 spotlight default.
 	lightStr, _ := ent.GetProperty("light")
+	lightAltStr, _ := ent.GetProperty("_light")
 	targetStr, _ := ent.GetProperty("target")
-	mangleStr, _ := ent.GetProperty("mangle")
 	angleStr, _ := ent.GetProperty("angle")
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")
+	styleAltStr, _ := ent.GetProperty("_style")
+	coneStr, _ := ent.GetProperty("_cone")
 
 	if v, ok := lumps.ParseFloat(lightStr); ok {
-		q1Intensity = v
+		intensity = v
+	} else if v, ok = lumps.ParseFloat(lightAltStr); ok {
+		intensity = v
 	}
+	//fmt.Printf("light: %f %s %s\n", intensity, targetStr, subClass)
+	//fmt.Println(ent)
 
-	//target: trasforma la light in spotlight + determina direzione
-	//mangle: trasforma la light in spotlight + determina direzione
+	// Spotlight
+	//   target     -> spotlight directed toward target entity
+	//   light_spot -> spotlight directed by "angle"
 	if len(targetStr) > 0 {
 		kind = config.LightKindSpot
 		targetEnt := l.targetEntities[targetStr]
 		if targetEnt == nil {
-			fmt.Println("target entity not found")
+			fmt.Printf("warning: target entity %q not found\n", targetStr)
 			return nil
 		}
 		originStr, _ := targetEnt.GetProperty("origin")
 		tx, ty, tz, ok := lumps.ParseVector(originStr)
 		if !ok {
-			fmt.Println("invalid origin vector")
+			fmt.Printf("warning: invalid origin for target %q: %q\n", targetStr, originStr)
 			return nil
 		}
 		dx := tx - pos.X
@@ -186,38 +197,58 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			dirY = dy / length
 			dirZ = dz / length
 		}
-	} else if len(mangleStr) > 0 {
-		//TODO DISABLED FOR THE MOMENT
-		return nil
+	} else if subClass == "light_spot" {
 		kind = config.LightKindSpot
-		yaw, pitch, _, valid := lumps.ParseVector(mangleStr)
-		if !valid {
-			fmt.Printf("Invalid mangle vector: %s\n", mangleStr)
-			return nil
+		angle := 0.0
+		if v, ok := lumps.ParseFloat(angleStr); ok {
+			angle = v
 		}
-		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
 
-		dirZ = dirZ
-		dirY = -dirY
-		dirX = -dirX
+		//   -1 = straight up
+		//   -2 = straight down
+		// Otherwise angle is the horizontal yaw.
+		switch angle {
+		case -1:
+			dirX = 0.0
+			dirY = 0.0
+			dirZ = 1.0
+		case -2:
+			dirX = 0.0
+			dirY = 0.0
+			dirZ = -1.0
+		default:
+			angleRad := angle * math.Pi / 180.0
+			dirX = math.Cos(angleRad)
+			dirY = math.Sin(angleRad)
+			dirZ = 0.0
+		}
 	}
 
 	r, g, b, ok := lumps.ParseColorVector(colorStr)
 	if !ok {
 		r, g, b = 1.0, 1.0, 1.0
 	}
-
-	var falloff float64
-	var intensity float64
+	// -----------------------------------------------------------------
+	// Cone
+	// -----------------------------------------------------------------
 	if kind == config.LightKindSpot {
-		falloff = q1Intensity * 0.1
-		intensity = q1Intensity * 0.1
-		if c, valid := lumps.ParseFloat(angleStr); valid {
+		if c, valid := lumps.ParseFloat(coneStr); valid {
 			coneAngle = c
 		}
+	}
+
+	// -----------------------------------------------------------------
+	// Falloff / intensity
+	// -----------------------------------------------------------------
+
+	var falloff float64
+
+	if kind == config.LightKindSpot {
+		falloff = intensity * 0.1
+		intensity = intensity * 0.1
 	} else {
-		falloff = q1Intensity * 0.01
-		intensity = q1Intensity * 0.3
+		falloff = intensity * 0.01
+		intensity = intensity * 0.3
 	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
@@ -227,11 +258,20 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	light.DirX = dirX
 	light.DirY = dirY
 	light.DirZ = dirZ
-	light.Style = LightStyle(styleStr)
+
+	// Q2 supports both style and _style.
+	if len(styleStr) > 0 {
+		light.Style = LightStyle(styleStr)
+	} else {
+		light.Style = LightStyle(styleAltStr)
+	}
+
 	light.CutOff = coneAngle
 	light.OuterCutOff = coneAngle + 5.0
+
 	if light.Intensity <= 0 {
-		fmt.Println("warning light intensity is zero")
+		fmt.Println("warning: light intensity is zero")
 	}
+
 	return light
 }

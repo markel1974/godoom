@@ -110,6 +110,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 
 // CreateInternalBModel generates a Thing with a 3D model from BSP face data, position, and classname configuration.
 func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geometry.XYZ, classname string) (*config.Thing, error) {
+	return nil, fmt.Errorf("warning disabled for now")
 	// Geometry translation into agnostic MD1, collect all triangles in this single frame
 	var allTriangles []config.MD1Triangle
 	for _, bspFace := range rawFaces {
@@ -151,16 +152,17 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
+	const heavyMass = 1000.0
 	// Setup standard interactions based on classname
 	if strings.HasPrefix(classname, "func_door") {
 		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = 100.0 // Heavy
+		thingCfg.Mass = heavyMass
 	} else if strings.HasPrefix(classname, "func_plat") {
 		thingCfg.Kind = config.ThingPlatformDef
-		thingCfg.Mass = 100.0 // Heavy
+		thingCfg.Mass = heavyMass
 	} else if strings.HasPrefix(classname, "func_train") {
 		thingCfg.Kind = config.ThingPlatformDef
-		thingCfg.Mass = 100.0 // Heavy
+		thingCfg.Mass = heavyMass
 	} else if strings.HasPrefix(classname, "func_button") {
 		thingCfg.Kind = config.ThingButtonDef
 	}

@@ -257,7 +257,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 		if externalBSPPath := GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
 			cThing, err := things.CreateThingBSP(externalBSPPath, pos, classname)
 			if err != nil {
-				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
+				fmt.Printf("warning on external bmodel %s: %v\n", classname, err)
 				continue
 			}
 			root.Things = append(root.Things, cThing)

@@ -68,7 +68,7 @@ func (q1 *BSPReader) Setup() error {
 	if q1.infos, err = lumps.NewLumpInfos(q1.rs); err != nil {
 		return err
 	}
-	palette := lumps.NewPalette()
+	palette := lumps.NewPalette(0.8)
 	if q1.palette, err = palette.Parse(q1.rsPal); err != nil {
 		return err
 	}

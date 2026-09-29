@@ -166,7 +166,7 @@ func (q2 *BSPReader) Setup() error {
 	// In Quake 2, WAL textures often use dedicated palettes or true-color,
 	// but we still load the palette if provided by the builder.
 
-	palette := lumps.NewPalette()
+	palette := lumps.NewPalette(0.8)
 	//q2.palette, err = palette.Parse(q2.rsPal)
 	q2.palette, err = palette.ParseFromPCX(q2.rsPal)
 	if err != nil {

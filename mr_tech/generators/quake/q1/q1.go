@@ -92,7 +92,7 @@ func (q1 *BSPReader) Setup() error {
 	}
 	for _, mt := range q1.mipTextures {
 		if mt != nil && mt.Name != "" {
-			if err = q1.RegisterPixels(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], false, 255, false); err != nil {
+			if err = q1.texManager.RegisterPixelsPalette(mt.Name, int(mt.Width), int(mt.Height), mt.Pixels[0], q1.palette, false, 255, false); err != nil {
 				fmt.Printf("Warning: texture %s error: %s\n", mt.Name, err.Error())
 			}
 		}
@@ -128,74 +128,6 @@ func (q1 *BSPReader) GetModelFileName(classname string) string {
 // GetTextures returns the texture manager instance containing textures defined in the BSP file.
 func (q1 *BSPReader) GetTextures() *lumps.Textures {
 	return q1.texManager
-}
-
-// RegisterPixels registers a texture by name with specified dimensions, pixel data, palette, transparency, and alignment.
-func (q1 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	return q1.texManager.RegisterPixelsPalette(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
-}
-
-// RegisterPixelsRGBA registers a texture using raw RGBA pixel data with optional Y-axis inversion.
-func (q1 *BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
-	return q1.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
-}
-
-// GetRawFaces extracts raw face data for a specified model index, including geometry, texture names, and UV coordinates.
-func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
-	models, _ := q1.GetModels()
-	if modelIdx < 0 || modelIdx >= len(models) {
-		return nil, fmt.Errorf("invalid model index")
-	}
-	model := models[modelIdx]
-	var rawFaces []*lumps.RawFace
-
-	// Itera solo sulle facce di questo modello (0 = World, 1+ = BModels)
-	for i := int32(0); i < model.NumFaces; i++ {
-		faceIdx := model.FirstFace + i
-		bspFace := q1.faces[faceIdx]
-		info := q1.texInfos[bspFace.TexInfo]
-		texName := "default"
-		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
-			texName = q1.mipTextures[info.MipTex].Name
-		}
-		isSky := strings.HasPrefix(strings.ToLower(texName), "sky")
-		var points []geometry.XYZ
-		var uvs [][2]float64
-		// Prepare texture width/height for normalization
-		texW, texH := float64(256), float64(256)
-		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
-			texName = q1.mipTextures[info.MipTex].Name
-			texW = float64(q1.mipTextures[info.MipTex].Width)
-			texH = float64(q1.mipTextures[info.MipTex].Height)
-			if texW == 0 {
-				texW = 256
-			}
-			if texH == 0 {
-				texH = 256
-			}
-		}
-
-		for j := uint16(0); j < bspFace.NumEdges; j++ {
-			surfEdgeIdx := q1.surfEdges[bspFace.FirstEdge+int32(j)]
-			var v *lumps.Vertex
-			if surfEdgeIdx >= 0 {
-				v = q1.vertexes[q1.edges[surfEdgeIdx].Vertex0]
-			} else {
-				v = q1.vertexes[q1.edges[-surfEdgeIdx].Vertex1]
-			}
-			pos := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
-			points = append(points, pos)
-			// Compute UVs using Quake 1 vector projection
-			// Note: Q1 raw vertex coords are used for projection
-			u := (float64(v.X) * float64(info.Vecs[0][0])) + (float64(v.Y) * float64(info.Vecs[0][1])) + (float64(v.Z) * float64(info.Vecs[0][2])) + float64(info.Vecs[0][3])
-			vt := (float64(v.X) * float64(info.Vecs[1][0])) + (float64(v.Y) * float64(info.Vecs[1][1])) + (float64(v.Z) * float64(info.Vecs[1][2])) + float64(info.Vecs[1][3])
-			uvs = append(uvs, [2]float64{u / texW, vt / texH})
-		}
-		rf := lumps.NewRawFace(points, uvs, texName, isSky)
-		rawFaces = append(rawFaces, rf)
-	}
-
-	return rawFaces, nil
 }
 
 // GetExternalBModelFileName returns the file name of the external BSP model associated with the given classname.
@@ -345,4 +277,62 @@ func (q1 *BSPReader) getTexInfos() ([]*lumps.TexInfo, error) {
 // getMipTextures reads and decodes all mipmap textures from the lump data in the BSP file. Returns an error on failure.
 func (q1 *BSPReader) getMipTextures() ([]*lumps.MipTexture, error) {
 	return lumps.NewMipTextures(q1.rs, q1.infos[lumps.LumpTextures])
+}
+
+// GetRawFaces extracts raw face data for a specified model index, including geometry, texture names, and UV coordinates.
+func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+	models, _ := q1.GetModels()
+	if modelIdx < 0 || modelIdx >= len(models) {
+		return nil, fmt.Errorf("invalid model index")
+	}
+	model := models[modelIdx]
+	var rawFaces []*lumps.RawFace
+
+	// Itera solo sulle facce di questo modello (0 = World, 1+ = BModels)
+	for i := int32(0); i < model.NumFaces; i++ {
+		faceIdx := model.FirstFace + i
+		bspFace := q1.faces[faceIdx]
+		info := q1.texInfos[bspFace.TexInfo]
+		texName := "default"
+		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
+			texName = q1.mipTextures[info.MipTex].Name
+		}
+		isSky := strings.HasPrefix(strings.ToLower(texName), "sky")
+		var points []geometry.XYZ
+		var uvs [][2]float64
+		// Prepare texture width/height for normalization
+		texW, texH := float64(256), float64(256)
+		if info.MipTex < uint32(len(q1.mipTextures)) && q1.mipTextures[info.MipTex] != nil {
+			texName = q1.mipTextures[info.MipTex].Name
+			texW = float64(q1.mipTextures[info.MipTex].Width)
+			texH = float64(q1.mipTextures[info.MipTex].Height)
+			if texW == 0 {
+				texW = 256
+			}
+			if texH == 0 {
+				texH = 256
+			}
+		}
+
+		for j := uint16(0); j < bspFace.NumEdges; j++ {
+			surfEdgeIdx := q1.surfEdges[bspFace.FirstEdge+int32(j)]
+			var v *lumps.Vertex
+			if surfEdgeIdx >= 0 {
+				v = q1.vertexes[q1.edges[surfEdgeIdx].Vertex0]
+			} else {
+				v = q1.vertexes[q1.edges[-surfEdgeIdx].Vertex1]
+			}
+			pos := lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z))
+			points = append(points, pos)
+			// Compute UVs using Quake 1 vector projection
+			// Note: Q1 raw vertex coords are used for projection
+			u := (float64(v.X) * float64(info.Vecs[0][0])) + (float64(v.Y) * float64(info.Vecs[0][1])) + (float64(v.Z) * float64(info.Vecs[0][2])) + float64(info.Vecs[0][3])
+			vt := (float64(v.X) * float64(info.Vecs[1][0])) + (float64(v.Y) * float64(info.Vecs[1][1])) + (float64(v.Z) * float64(info.Vecs[1][2])) + float64(info.Vecs[1][3])
+			uvs = append(uvs, [2]float64{u / texW, vt / texH})
+		}
+		rf := lumps.NewRawFace(points, uvs, texName, isSky)
+		rawFaces = append(rawFaces, rf)
+	}
+
+	return rawFaces, nil
 }

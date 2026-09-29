@@ -12,6 +12,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// Things represents a collection of resources and utilities for managing textures and images within an archive.
 type Things struct {
 	arc        interfaces.IArchive
 	texManager *lumps.Textures
@@ -19,6 +20,7 @@ type Things struct {
 	il         *ImageLoader
 }
 
+// NewThings creates and initializes a new Things instance with the provided archive, texture manager, and color palette.
 func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256]color.RGBA) *Things {
 	return &Things{
 		arc:        arc,
@@ -28,9 +30,10 @@ func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256
 	}
 }
 
+// CreateThing initializes and configures a Thing entity based on its class, 3D position, and file path, returning it or an error.
 func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
 	if len(thingPath) == 0 {
-		return nil, fmt.Errorf("unknown thing %s", classname)
+		return nil, fmt.Errorf("empty path for thing class %s", classname)
 	}
 	skinTargetIndex := 0
 	kind := config.ThingEnemyDef
@@ -40,16 +43,24 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		category = c[0]
 		definition = c[1]
 	}
-	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
+	//items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
 
 	switch category {
 	case "item":
 		kind = config.ThingItemDef
-		if skinTIndex, ok := items[definition]; ok {
-			skinTargetIndex = skinTIndex
+		if strings.HasSuffix(definition, "1") {
+			skinTargetIndex = 0
+		} else if strings.HasSuffix(definition, "2") {
+			skinTargetIndex = 1
+		} else if strings.HasSuffix(definition, "Inv") {
+			skinTargetIndex = 2
 		}
 	case "weapon":
 		kind = config.ThingItemDef
+	case "ammo":
+		kind = config.ThingItemDef
+	//case "misc":
+	//	kind = config.ThingItemDef
 	case "enemy":
 		kind = config.ThingEnemyDef
 	case "monster":
@@ -68,21 +79,16 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		return nil, fmt.Errorf("can't load MD2 %s: %s", classname, err.Error())
 	}
 	if skinTargetIndex >= len(md2.Skins.Names) {
-		return nil, fmt.Errorf("no skin found for %s", classname)
+		return nil, fmt.Errorf("skin index %d out of range for %s", skinTargetIndex, classname)
 	}
-	skinName := md2.Skins.Names[skinTargetIndex]
-	if len(skinName) == 0 {
+	fileName := md2.Skins.Names[skinTargetIndex]
+	if len(fileName) == 0 {
 		return nil, fmt.Errorf("empty skin name for %s", classname)
 	}
-
-	for _, n := range md2.Skins.Names {
-		if err = th.il.Load(n); err != nil {
-			return nil, fmt.Errorf("failed to load skin %s: %s", n, err.Error())
-		}
+	materialName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
+	if err = th.il.Load(materialName, fileName); err != nil {
+		return nil, fmt.Errorf("failed to load skin %s: %s", fileName, err.Error())
 	}
-
-	//materialName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
-	materialName := skinName
 
 	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
@@ -123,8 +129,13 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 	return thingCfg, nil
 }
 
-// CreateThingBSP creates a Thing entity from a BSP file at the specified position and with the given classname.
-// It extracts and converts BSP models, textures, and faces, constructing a Thing with appropriate geometry data.
+// CreateThingBSP creates a new Thing instance from a BSP file, defining its geometry, materials, and position in the game world.
+// It loads BSP models, textures, and raw faces, translating geometry into MD1 format without animations.
+// Parameters:
+// bspPath - Path to the BSP file.
+// position - The XYZ coordinates where the Thing will be placed.
+// classname - The classification name for the entity.
+// Returns: A pointer to the created Thing or an error if processing the BSP file fails.
 func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
 	rs, err := th.arc.Open(bspPath)
 	if err != nil {
@@ -145,6 +156,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	if err != nil {
 		return nil, err
 	}
+
 	texManager := reader.GetTextures()
 	// Geometry translation into agnostic MD1, collect all triangles in this single frame
 	var allTriangles []config.MD1Triangle
@@ -190,7 +202,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	return thingCfg, nil
 }
 
-// createConfigThing initializes and returns a Thing configuration object with provided properties and logic handlers.
+// doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
 func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
@@ -214,13 +226,12 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 	return thingCfg
 }
 
-// RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
+// registerPixels registers a texture using palette-based pixel data with optional transparency and vertical inversion.
 func (th *Things) registerPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	return th.texManager.RegisterPixelsPalette(name, width, height, indices, th.palette, isTransparent, transIndex, invertY)
 }
 
-// RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.
-// Returns an error if the registration process fails.
+// registerPixelsRGBA registers an RGBA texture by providing its name, dimensions, pixel data, and an option to invert Y-axis.
 func (th *Things) registerPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return th.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }

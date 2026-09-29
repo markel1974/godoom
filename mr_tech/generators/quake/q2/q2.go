@@ -60,8 +60,8 @@ const (
 	NumQ2Lumps        = 19
 )
 
-// Q2Header represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
-type Q2Header struct {
+// q2Header represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
+type q2Header struct {
 	Magic   [4]byte
 	Version int32
 	Lumps   [NumQ2Lumps]struct {
@@ -125,7 +125,7 @@ type q2Vertex struct {
 // BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type BSPReader struct {
 	arc         interfaces.IArchive
-	header      Q2Header
+	header      q2Header
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	palette     [256]color.RGBA
@@ -181,6 +181,11 @@ func (q2 *BSPReader) GetArchive() interfaces.IArchive {
 	return q2.arc
 }
 
+// GetTextures returns a reference to the Textures manager associated with the BSPReader.
+func (q2 *BSPReader) GetTextures() *lumps.Textures {
+	return q2.texManager
+}
+
 // GetPlayerInfo returns the player's current angle (in radians) and position as an XYZ coordinate structure.
 func (q2 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q2.playerAngle, q2.playerPos
@@ -226,16 +231,111 @@ func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
 	return out, nil
 }
 
-// RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
-func (q2 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	//TODO WRONG
-	return q2.texManager.RegisterPixelsPalette(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
+// GetExternalBModelFileName returns the external BModel file name associated with the given classname.
+func (q2 *BSPReader) GetExternalBModelFileName(classname string) string {
+	return _q2DictBModel[classname]
 }
 
-// RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.
-// Returns an error if the registration process fails.
-func (q2 *BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
-	return q2.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
+// GetModelFileName retrieves the file name of the model associated with the given classname from the predefined dictionary.
+func (q2 *BSPReader) GetModelFileName(classname string) string {
+	return _q2DictModelFilename[classname]
+}
+
+// Build processes the Quake 2 BSP data and constructs the corresponding game world structure in the provided root configuration.
+func (q2 *BSPReader) Build(root *config.Root) error {
+	const chunkSize = float64(1024)
+	mIdx := 0
+	faces, rfErr := q2.GetRawFaces(mIdx)
+	if rfErr != nil {
+		return rfErr
+	}
+
+	entities, eErr := q2.GetEntities()
+	if eErr != nil {
+		return eErr
+	}
+
+	lights := NewLights(entities)
+	volumes := NewVolumes(mIdx, chunkSize)
+	things := NewThings(q2.arc, q2.texManager, q2.palette)
+
+	for _, ent := range entities {
+		classname := ent.Properties["classname"]
+		baseClass := classname
+		subClass := ""
+		if z := strings.Split(classname, "_"); len(z) > 1 {
+			baseClass = z[0]
+			subClass = z[1]
+		}
+		var pos geometry.XYZ
+		if origin, ok := ent.Properties["origin"]; ok {
+			var x, y, z float64
+			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
+			pos = lumps.CreateXYZ(x, y, z)
+		}
+
+		var angle float64
+		if a, ok := ent.Properties["angle"]; ok {
+			angle, _ = strconv.ParseFloat(a, 64)
+		}
+
+		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
+		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
+		// is rendered correctly. When ready, we will remove this continue
+		// and instantiate bmodels using GetModels() from IBSPReader.
+		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
+			continue
+		}
+
+		if externalBSPPath := q2.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
+			cThing, err := things.CreateThingBSP(externalBSPPath, pos, classname)
+			if err != nil {
+				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
+				continue
+			}
+			root.Things = append(root.Things, cThing)
+			continue
+		}
+
+		switch baseClass {
+		case "worldspawn":
+			// Ignored: it is the base map, geometry is already handled by worldModel
+		case "info":
+			if classname == "info_player_start" || classname == "info_player_deathmatch" {
+				q2.playerPos = pos
+				q2.playerAngle = angle * (math.Pi / 180.0)
+			} else {
+				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+				// TODO: Save them in a gameplay waypoint/spawnpoint list.
+			}
+		case "light":
+			if light := lights.CreateLight(ent, pos, subClass); light != nil {
+				root.Lights = append(root.Lights, light)
+			}
+		case "path":
+			// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
+			// TODO: Save them in a gameplay waypoint/spawnpoint list.
+		case "ambient":
+			// TODO:
+		case "func":
+			// TODO:
+		case "trigger":
+		// TODO:
+		//case "trap":
+		//TODO
+		default:
+			thingPath := q2.GetModelFileName(classname)
+			cThing, err := things.CreateThing(thingPath, pos, classname)
+			if err != nil {
+				fmt.Printf("Warning: %s\n", err.Error())
+				continue
+			}
+			root.Things = append(root.Things, cThing)
+		}
+	}
+	root.Volumes = volumes.Create(faces)
+
+	return nil
 }
 
 // GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
@@ -368,17 +468,15 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		rawFaces = append(rawFaces, rf)
 	}
 
-	q2.compileTextures(rawFaces)
+	if err := q2.compileTextures2(rawFaces); err != nil {
+		return nil, err
+	}
+
 	return rawFaces, nil
 }
 
-// GetTextures returns a reference to the Textures manager associated with the BSPReader.
-func (q2 *BSPReader) GetTextures() *lumps.Textures {
-	return q2.texManager
-}
-
 // compileTextures processes and registers unique textures extracted from the given raw faces, excluding "sky" textures.
-func (q2 *BSPReader) compileTextures(faces []*lumps.RawFace) {
+func (q2 *BSPReader) compileTextures2(faces []*lumps.RawFace) error {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
 		uniqueTextures[f.TexName] = true
@@ -400,116 +498,11 @@ func (q2 *BSPReader) compileTextures(faces []*lumps.RawFace) {
 			continue
 		}
 
-		err := q2.RegisterPixels(texName, int(walTex.Header.Width), int(walTex.Header.Height), walTex.Pixels, false, 255, false)
+		err := q2.texManager.RegisterPixelsPalette(texName, int(walTex.Header.Width), int(walTex.Header.Height), walTex.Pixels, q2.palette, false, 255, false)
 		if err != nil {
 			fmt.Printf("Warning: can't register asset %s: %s\n", walPath, err.Error())
 			continue
 		}
 	}
-}
-
-// GetExternalBModelFileName returns the external BModel file name associated with the given classname.
-func (q2 *BSPReader) GetExternalBModelFileName(classname string) string {
-	return _q2DictBModel[classname]
-}
-
-// GetModelFileName retrieves the file name of the model associated with the given classname from the predefined dictionary.
-func (q2 *BSPReader) GetModelFileName(classname string) string {
-	return _q2DictModelFilename[classname]
-}
-
-// Build processes the Quake 2 BSP data and constructs the corresponding game world structure in the provided root configuration.
-func (q2 *BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(1024)
-	mIdx := 0
-	faces, rfErr := q2.GetRawFaces(mIdx)
-	if rfErr != nil {
-		return rfErr
-	}
-	entities, eErr := q2.GetEntities()
-	if eErr != nil {
-		return eErr
-	}
-
-	lights := NewLights(entities)
-	volumes := NewVolumes(mIdx, chunkSize)
-	things := NewThings(q2.arc, q2.texManager, q2.palette)
-
-	for _, ent := range entities {
-		classname := ent.Properties["classname"]
-		baseClass := classname
-		subClass := ""
-		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass = z[0]
-			subClass = z[1]
-		}
-		var pos geometry.XYZ
-		if origin, ok := ent.Properties["origin"]; ok {
-			var x, y, z float64
-			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
-			pos = lumps.CreateXYZ(x, y, z)
-		}
-
-		var angle float64
-		if a, ok := ent.Properties["angle"]; ok {
-			angle, _ = strconv.ParseFloat(a, 64)
-		}
-
-		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
-		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
-		// is rendered correctly. When ready, we will remove this continue
-		// and instantiate bmodels using GetModels() from IBSPReader.
-		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
-			continue
-		}
-
-		if externalBSPPath := q2.GetExternalBModelFileName(classname); len(externalBSPPath) > 0 {
-			cThing, err := things.CreateThingBSP(externalBSPPath, pos, classname)
-			if err != nil {
-				fmt.Printf("warning on external bmodel %s: %v)\n", classname, err)
-				continue
-			}
-			root.Things = append(root.Things, cThing)
-			continue
-		}
-
-		switch baseClass {
-		case "worldspawn":
-			// Ignored: it is the base map, geometry is already handled by worldModel
-		case "info":
-			if classname == "info_player_start" || classname == "info_player_deathmatch" {
-				q2.playerPos = pos
-				q2.playerAngle = angle * (math.Pi / 180.0)
-			} else {
-				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
-				// TODO: Save them in a gameplay waypoint/spawnpoint list.
-			}
-		case "light":
-			if light := lights.CreateLight(ent, pos, subClass); light != nil {
-				root.Lights = append(root.Lights, light)
-			}
-		case "path":
-			// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
-			// TODO: Save them in a gameplay waypoint/spawnpoint list.
-		case "ambient":
-			// TODO:
-		case "func":
-			// TODO:
-		case "trigger":
-		// TODO:
-		//case "trap":
-		//TODO
-		default:
-			thingPath := q2.GetModelFileName(classname)
-			cThing, err := things.CreateThing(thingPath, pos, classname)
-			if err != nil {
-				fmt.Printf("Warning: %s\n", err.Error())
-				continue
-			}
-			root.Things = append(root.Things, cThing)
-		}
-	}
-	root.Volumes = volumes.Create(faces)
-
 	return nil
 }

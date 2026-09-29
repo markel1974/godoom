@@ -38,14 +38,14 @@ func (il *ImageLoader) fallbackImage() image.Image {
 }
 
 // Load attempts to load a texture by its name, registers it if successful, and uses a fallback image if loading fails.
-func (il *ImageLoader) Load(texName string) error {
-	if texes := il.textures.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+func (il *ImageLoader) Load(id string, fileName string) error {
+	if texes := il.textures.Get([]string{id}); len(texes) > 0 && texes[0] != nil {
 		return nil // Already loaded
 	}
 
-	img, err := il.doLoad(texName)
+	img, err := il.doLoad(fileName)
 	if err != nil {
-		fmt.Printf("[warning] using fallback for %s: %s\n", texName, err)
+		fmt.Printf("[warning] using fallback for %s [%s]: %s\n", id, fileName, err)
 		img = il.fallbackImage()
 	}
 
@@ -53,8 +53,8 @@ func (il *ImageLoader) Load(texName string) error {
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
-	if err = il.textures.RegisterPixelsRGBA(texName, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
-		fmt.Printf("warning: registering picture %s: %s\n", texName, err.Error())
+	if err = il.textures.RegisterPixelsRGBA(id, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
+		fmt.Printf("warning: registering picture %s [%s]: %s\n", id, fileName, err.Error())
 	}
 	return nil
 }

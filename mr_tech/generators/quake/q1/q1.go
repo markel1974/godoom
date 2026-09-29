@@ -130,7 +130,7 @@ func (q1 *BSPReader) GetTextures() *lumps.Textures {
 
 // RegisterPixels registers a texture by name with specified dimensions, pixel data, palette, transparency, and alignment.
 func (q1 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	return q1.texManager.RegisterPixels(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
+	return q1.texManager.RegisterPixelsPalette(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers a texture using raw RGBA pixel data with optional Y-axis inversion.

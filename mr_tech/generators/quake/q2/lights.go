@@ -1,5 +1,15 @@
 package q2
 
+import (
+	"fmt"
+	"math"
+	"strconv"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
+
 // _q2LightStyle0 defines a static light style with a constant intensity of 1.0.
 var _q2LightStyle0 = []float64{1.0}
 
@@ -96,4 +106,132 @@ var _q2LightStyles = [][]float64{
 	_q2LightStyle9,
 	_q2LightStyle10,
 	_q2LightStyle11,
+}
+
+// LightStyle returns a light style pattern as a slice of float64 values based on the input string identifier.
+// If the input is empty or invalid, it returns a default light style with a steady intensity of 1.0.
+func LightStyle(styleStr string) []float64 {
+	defaultStyle := []float64{1.0}
+	if len(styleStr) == 0 {
+		return defaultStyle
+	}
+	index, err := strconv.Atoi(styleStr)
+	if err != nil {
+		return defaultStyle
+	}
+	if index >= 0 && index < len(_q2LightStyles) {
+		return _q2LightStyles[index]
+	}
+	// Switchable Quake light styles.
+	// The runtime currently has no separate representation
+	// for the trigger/switch state, so default to steady ON.
+	return defaultStyle
+}
+
+// Lights represents a collection of entities mapped by their target names, used for managing and creating light sources.
+type Lights struct {
+	targetEntities map[string]*lumps.Entity
+}
+
+// NewLights initializes a Lights structure by mapping entity targetnames to their corresponding entities.
+func NewLights(entities []*lumps.Entity) *Lights {
+	targetEntities := make(map[string]*lumps.Entity)
+	for _, ent := range entities {
+		if targetStr, _ := ent.GetProperty("targetname"); len(targetStr) > 0 {
+			targetEntities[targetStr] = ent
+		}
+	}
+	return &Lights{
+		targetEntities: targetEntities,
+	}
+}
+
+// CreateLight generates a light source based on an entity's properties, position, and subclass, returning the configured light.
+func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
+	kind := config.LightKindAmbient
+	q1Intensity := 300.0
+	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
+	coneAngle := 40.0                  // Quake default
+	lightStr, _ := ent.GetProperty("light")
+	targetStr, _ := ent.GetProperty("target")
+	mangleStr, _ := ent.GetProperty("mangle")
+	angleStr, _ := ent.GetProperty("angle")
+	colorStr, _ := ent.GetProperty("_color")
+	styleStr, _ := ent.GetProperty("style")
+
+	if v, ok := lumps.ParseFloat(lightStr); ok {
+		q1Intensity = v
+	}
+
+	//target: trasforma la light in spotlight + determina direzione
+	//mangle: trasforma la light in spotlight + determina direzione
+	if len(targetStr) > 0 {
+		kind = config.LightKindSpot
+		targetEnt := l.targetEntities[targetStr]
+		if targetEnt == nil {
+			fmt.Println("target entity not found")
+			return nil
+		}
+		originStr, _ := targetEnt.GetProperty("origin")
+		tx, ty, tz, ok := lumps.ParseVector(originStr)
+		if !ok {
+			fmt.Println("invalid origin vector")
+			return nil
+		}
+		dx := tx - pos.X
+		dy := ty - pos.Y
+		dz := tz - pos.Z
+		if length := math.Sqrt(dx*dx + dy*dy + dz*dz); length > 0 {
+			dirX = dx / length
+			dirY = dy / length
+			dirZ = dz / length
+		}
+	} else if len(mangleStr) > 0 {
+		//TODO DISABLED FOR THE MOMENT
+		return nil
+		kind = config.LightKindSpot
+		yaw, pitch, _, valid := lumps.ParseVector(mangleStr)
+		if !valid {
+			fmt.Printf("Invalid mangle vector: %s\n", mangleStr)
+			return nil
+		}
+		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
+
+		dirZ = dirZ
+		dirY = -dirY
+		dirX = -dirX
+	}
+
+	r, g, b, ok := lumps.ParseColorVector(colorStr)
+	if !ok {
+		r, g, b = 1.0, 1.0, 1.0
+	}
+
+	var falloff float64
+	var intensity float64
+	if kind == config.LightKindSpot {
+		falloff = q1Intensity * 0.1
+		intensity = q1Intensity * 0.1
+		if c, valid := lumps.ParseFloat(angleStr); valid {
+			coneAngle = c
+		}
+	} else {
+		falloff = q1Intensity * 0.01
+		intensity = q1Intensity * 0.1
+	}
+
+	light := config.NewConfigLight(pos, intensity, kind, falloff)
+	light.R = r
+	light.G = g
+	light.B = b
+	light.DirX = dirX
+	light.DirY = dirY
+	light.DirZ = dirZ
+	light.Style = LightStyle(styleStr)
+	light.CutOff = coneAngle
+	light.OuterCutOff = coneAngle + 5.0
+	if light.Intensity <= 0 {
+		fmt.Println("warning light intensity is zero")
+	}
+	return light
 }

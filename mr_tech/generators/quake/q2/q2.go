@@ -122,8 +122,8 @@ type q2Vertex struct {
 	X, Y, Z float32
 }
 
-// Q2BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
-type Q2BSPReader struct {
+// BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
+type BSPReader struct {
 	arc         interfaces.IArchive
 	header      Q2Header
 	rs          io.ReadSeeker
@@ -134,9 +134,9 @@ type Q2BSPReader struct {
 	playerPos   geometry.XYZ
 }
 
-// NewQ2BSPReader creates a new Q2BSPReader instance with the provided reader.go, BSP file reader, and optional palette reader.
-func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q2BSPReader {
-	return &Q2BSPReader{
+// NewQ2BSPReader creates a new BSPReader instance with the provided reader.go, BSP file reader, and optional palette reader.
+func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
+	return &BSPReader{
 		arc:        arc,
 		rs:         rs,
 		texManager: lumps.NewTextures(),
@@ -144,9 +144,9 @@ func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *Q2BSPReader {
 	}
 }
 
-// Setup initializes the Q2BSPReader by reading the header and optionally loading the palette for WAL textures.
-func (q2 *Q2BSPReader) Setup() error {
-	q2.rsPal, _ = q2.arc.Open("gfx" + lumps.PakSeparator + "palette.lmp")
+// Setup initializes the BSPReader by reading the header and optionally loading the palette for WAL textures.
+func (q2 *BSPReader) Setup() error {
+	q2.rsPal, _ = q2.arc.Open("pics" + lumps.PakSeparator + "colormap.pcx")
 
 	var err error
 	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
@@ -171,18 +171,18 @@ func (q2 *Q2BSPReader) Setup() error {
 	return nil
 }
 
-// GetArchive retrieves the IArchive instance associated with the Q2BSPReader.
-func (q2 *Q2BSPReader) GetArchive() interfaces.IArchive {
+// GetArchive retrieves the IArchive instance associated with the BSPReader.
+func (q2 *BSPReader) GetArchive() interfaces.IArchive {
 	return q2.arc
 }
 
 // GetPlayerInfo returns the player's current angle (in radians) and position as an XYZ coordinate structure.
-func (q2 *Q2BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
+func (q2 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q2.playerAngle, q2.playerPos
 }
 
 // GetEntities extracts and parses entities from the BSP file by reading the entities lump and converting it to structured data.
-func (q2 *Q2BSPReader) GetEntities() ([]*lumps.Entity, error) {
+func (q2 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
 	lump := q2.header.Lumps[LumpQ2Entities]
 	if _, err := q2.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (q2 *Q2BSPReader) GetEntities() ([]*lumps.Entity, error) {
 }
 
 // GetModels reads and parses the model lump to retrieve an array of BSP sub-models from the map file.
-func (q2 *Q2BSPReader) GetModels() ([]*lumps.Model, error) {
+func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
 		return nil, err
@@ -222,18 +222,19 @@ func (q2 *Q2BSPReader) GetModels() ([]*lumps.Model, error) {
 }
 
 // RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
-func (q2 *Q2BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	return q2.texManager.RegisterPixels(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
+func (q2 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
+	//TODO WRONG
+	return q2.texManager.RegisterPixelsPalette(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.
 // Returns an error if the registration process fails.
-func (q2 *Q2BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+func (q2 *BSPReader) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
 	return q2.texManager.RegisterPixelsRGBA(name, width, height, pixels, invertY)
 }
 
 // GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
-func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	// Read models to find face offsets
 	lumpModels := q2.header.Lumps[LumpQ2Models]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
@@ -366,13 +367,13 @@ func (q2 *Q2BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	return rawFaces, nil
 }
 
-// GetTextures returns a reference to the Textures manager associated with the Q2BSPReader.
-func (q2 *Q2BSPReader) GetTextures() *lumps.Textures {
+// GetTextures returns a reference to the Textures manager associated with the BSPReader.
+func (q2 *BSPReader) GetTextures() *lumps.Textures {
 	return q2.texManager
 }
 
 // compileTextures processes and registers unique textures extracted from the given raw faces, excluding "sky" textures.
-func (q2 *Q2BSPReader) compileTextures(faces []*lumps.RawFace) {
+func (q2 *BSPReader) compileTextures(faces []*lumps.RawFace) {
 	uniqueTextures := make(map[string]bool)
 	for _, f := range faces {
 		uniqueTextures[f.TexName] = true
@@ -403,17 +404,17 @@ func (q2 *Q2BSPReader) compileTextures(faces []*lumps.RawFace) {
 }
 
 // GetExternalBModelFileName returns the external BModel file name associated with the given classname.
-func (q2 *Q2BSPReader) GetExternalBModelFileName(classname string) string {
+func (q2 *BSPReader) GetExternalBModelFileName(classname string) string {
 	return _q2DictBModel[classname]
 }
 
 // GetModelFileName retrieves the file name of the model associated with the given classname from the predefined dictionary.
-func (q2 *Q2BSPReader) GetModelFileName(classname string) string {
+func (q2 *BSPReader) GetModelFileName(classname string) string {
 	return _q2DictModelFilename[classname]
 }
 
 // Build processes the Quake 2 BSP data and constructs the corresponding game world structure in the provided root configuration.
-func (q2 *Q2BSPReader) Build(root *config.Root) error {
+func (q2 *BSPReader) Build(root *config.Root) error {
 	const chunkSize = float64(1024)
 	mIdx := 0
 	faces, rfErr := q2.GetRawFaces(mIdx)
@@ -424,6 +425,10 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 	if eErr != nil {
 		return eErr
 	}
+
+	lights := NewLights(entities)
+	volumes := NewVolumes(mIdx, chunkSize)
+
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
@@ -467,32 +472,14 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
 			if classname == "info_player_start" || classname == "info_player_deathmatch" {
-				var err error
-				q2.playerPos, q2.playerAngle, err = q2.createPlayerProps(angle, pos)
-				if err != nil {
-					fmt.Printf("Warning: %s\n", err.Error())
-				}
+				q2.playerPos = pos
+				q2.playerAngle = angle * (math.Pi / 180.0)
 			} else {
 				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			mangleStr, _ := ent.Properties["mangle"]
-			colorStr, _ := ent.Properties["_color"]
-			var light *config.Light = nil
-			if len(subClass) == 0 {
-				light = q2.createLight(ent, angle, mangleStr, colorStr, pos, _q2LightStyle0, false)
-			} else {
-				style := _q2LightStyle0
-				if sIndex, ok := ent.Properties["style"]; ok {
-					if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 && index < len(_q2LightStyles) {
-						style = _q2LightStyles[index]
-					}
-				}
-				// Handles light, light_fluoro, light_fluorospark
-				light = q2.createLight(ent, angle, mangleStr, colorStr, pos, style, true)
-			}
-			if light != nil {
+			if light := lights.CreateLight(ent, pos, subClass); light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":
@@ -515,131 +502,13 @@ func (q2 *Q2BSPReader) Build(root *config.Root) error {
 			root.Things = append(root.Things, cThing)
 		}
 	}
-	vIdx := strconv.Itoa(mIdx)
+	root.Volumes = volumes.Create(faces)
 
-	chunks := make(map[string]*config.Volume)
-	for _, v := range faces {
-		animKind := config.MaterialKindLoop
-		if v.IsSky {
-			animKind = config.MaterialKindSky
-		}
-		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
-		triangles := lumps.TriangulateConvex3d(v.Points)
-
-		for _, tri := range triangles {
-			var triUvs [][2]float64
-			if len(v.UVs) > 0 {
-				triUvs = make([][2]float64, 3)
-				for k := 0; k < 3; k++ {
-					pos := tri[k]
-					for idx, pt := range v.Points {
-						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
-							if len(v.UVs) > idx {
-								triUvs[k] = v.UVs[idx]
-							}
-							break
-						}
-					}
-				}
-			}
-
-			// 2. Find the triangle centroid
-			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
-			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
-			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
-
-			// 3. Calculate the spatial hashing key (grid coordinates)
-			gridX := int(math.Floor(cx / chunkSize))
-			gridY := int(math.Floor(cy / chunkSize))
-			gridZ := int(math.Floor(cz / chunkSize))
-
-			chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
-			volume, exists := chunks[chunkKey]
-			if !exists {
-				chunkId := fmt.Sprintf("quake_world_%s_chunk_%s", vIdx, chunkKey)
-				volume = config.NewConfigVolume(chunkId, "quake_bsp_chunk")
-				chunks[chunkKey] = volume
-				root.Volumes = append(root.Volumes, volume)
-			}
-			volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, v.TexName))
-		}
-	}
 	return nil
 }
 
-// createPlayerProps calculates the player's position and orientation in radians based on the provided angle and position.
-func (q2 *Q2BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
-	playerAngle := angle * (math.Pi / 180.0)
-	return pos, playerAngle, nil
-}
-
-// createLight initializes a Light object based on entity properties, position, style, color, and light type (spot or ambient).
-func (q2 *Q2BSPReader) createLight(entity *lumps.Entity, angle float64, mangleStr, colorStr string, pos geometry.XYZ, style []float64, isSpot bool) *config.Light {
-	intensity := 0.0
-	falloff := 0.0
-	var kind config.LightKind
-
-	// BASE INTENSITY
-	if l, ok := entity.Properties["light"]; ok {
-		intensity, _ = strconv.ParseFloat(l, 64)
-		//intensity *= 0.3
-	} else {
-		intensity = 300 // Typical Quake default fallback
-	}
-
-	// COLOR (Standard Quake 2 / Modern Quake 1)
-	r, g, b := 1.0, 1.0, 1.0 // Default White
-	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
-			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
-				r, g, b = cr/255.0, cg/255.0, cb/255.0
-			} else {
-				r, g, b = cr, cg, cb
-			}
-		}
-	}
-
-	// SPOTLIGHT DIRECTION
-	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
-	if isSpot {
-		kind = config.LightKindSpot
-		intensity = intensity * 0.9
-		falloff = intensity * 10
-		if len(mangleStr) > 0 {
-			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
-				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
-			}
-		} else {
-			if angle == -1 {
-				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
-			} else if angle == -2 {
-				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
-			} else {
-				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
-			}
-		}
-	} else {
-		kind = config.LightKindAmbient
-		falloff = intensity * 0.03
-		intensity = intensity * 0.025
-	}
-
-	// CONFIGURATION CREATION
-	cl := config.NewConfigLight(pos, intensity, kind, falloff)
-	cl.R = r
-	cl.G = g
-	cl.B = b
-
-	cl.DirX = dirX
-	cl.DirY = dirY
-	cl.DirZ = dirZ
-	cl.Style = style
-
-	return cl
-}
-
 // createThing creates a new game entity (Thing) based on its position and classname, returning the entity or an error.
-func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.Thing, error) {
+func (q2 *BSPReader) createThing(pos geometry.XYZ, classname string) (*config.Thing, error) {
 	thingPath := q2.GetModelFileName(classname)
 	if len(thingPath) == 0 {
 		return nil, fmt.Errorf("unknown thing %s", classname)
@@ -720,7 +589,7 @@ func (q2 *Q2BSPReader) createThing(pos geometry.XYZ, classname string) (*config.
 
 // createThingBSP creates a Thing entity from a BSP file at the specified position and with the given classname.
 // It extracts and converts BSP models, textures, and faces, constructing a Thing with appropriate geometry data.
-func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
+func (q2 *BSPReader) createThingBSP(bspPath string, position geometry.XYZ, classname string) (*config.Thing, error) {
 	arc := q2.GetArchive()
 	rs, err := arc.Open(bspPath)
 	if err != nil {
@@ -787,7 +656,7 @@ func (q2 *Q2BSPReader) createThingBSP(bspPath string, position geometry.XYZ, cla
 }
 
 // createConfigThing initializes and returns a Thing configuration object with provided properties and logic handlers.
-func (q2 *Q2BSPReader) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
+func (q2 *BSPReader) createConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce

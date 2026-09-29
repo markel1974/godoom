@@ -115,8 +115,29 @@ func ParseFloat(s string) (float64, bool) {
 	return value, true
 }
 
-// CalcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
+// ParseColorVector parses a color string, normalizes its components, and returns them along with a validity flag.
+func ParseColorVector(colorStr string) (float64, float64, float64, bool) {
+	if len(colorStr) == 0 {
+		return 0, 0, 0, false
+	}
+	cr, cg, cb, valid := ParseVector(colorStr)
+	if !valid {
+		return 0, 0, 0, false
+	}
+	var r, g, b float64
+	if cr > 1.0 || cg > 1.0 || cb > 1.0 {
+		r = cr / 255.0
+		g = cg / 255.0
+		b = cb / 255.0
+	} else {
+		r = cr
+		g = cg
+		b = cb
+	}
+	return r, g, b, true
+}
 
+// CalcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
 func CalcDirectionOld(yaw, pitch float64) (float64, float64, float64) {
 	yawRad := yaw * math.Pi / 180.0
 	pitchRad := pitch * math.Pi / 180.0

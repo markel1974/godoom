@@ -62,13 +62,13 @@ func (w *Textures) RegisterFile(name string, rs io.Reader) error {
 	return nil
 }
 
-// RegisterPixels registers a texture using raw pixel data, a palette, dimensions, and a unique name. If the name already exists, it skips registration. Returns an error if the data cannot be processed.
-func (w *Textures) RegisterPixels(name string, width, height int, indices []byte, palette []byte, isTransparent bool, transIndex byte, invertY bool) error {
+// RegisterPixelsPalette registers a texture using raw pixel data, a palette, dimensions, and a unique name. If the name already exists, it skips registration. Returns an error if the data cannot be processed.
+func (w *Textures) RegisterPixelsPalette(name string, width, height int, indices []byte, palette []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	if _, ok := w.resources[name]; ok {
 		return nil
 	}
 	idx := int32(len(w.resources))
-	tex, err := w.loadFromPixels(name, width, height, indices, palette, idx, isTransparent, transIndex, invertY)
+	tex, err := w.loadFromPixelsPalette(name, width, height, indices, palette, idx, isTransparent, transIndex, invertY)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (w *Textures) RegisterPixelsRGBA(name string, width, height int, pixels []b
 	return nil
 }
 
-func (w *Textures) loadFromPixels(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
+func (w *Textures) loadFromPixelsPalette(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
 	emissive := false
 	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
 		emissive = true

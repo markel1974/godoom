@@ -82,6 +82,10 @@ func main() {
 		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(quakeFile, level)
+	case 7:
+		quakeFile := "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak"
+		wb := quake.NewBuilder()
+		cfg, err = wb.Setup(quakeFile, level)
 	case 8:
 		quakeFile := "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
 		wb := quake.NewBuilder()

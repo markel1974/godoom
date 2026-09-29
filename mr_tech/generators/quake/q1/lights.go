@@ -10,17 +10,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// _q1LightStyle0 defines a lighting style with constant intensity of 1.0.
+// _q1LightStyle0 represents a light style with a constant intensity value of 1.0 throughout.
 var _q1LightStyle0 = []float64{1.0}
 
-// _q1LightStyle1 defines a sequence of float64 values representing one of the predefined light intensity patterns.
+// _q1LightStyle1 defines a sequence of brightness levels for a light style animation pattern in a floating-point array.
 var _q1LightStyle1 = []float64{
 	1.0, 1.0, 1.08, 1.0, 1.0, 1.17, 1.0, 1.0, 1.17, 1.0,
 	1.0, 1.08, 1.17, 1.08, 1.0, 1.0, 1.17, 1.08, 1.33, 1.08,
 	1.0, 1.0, 1.17,
 }
 
-// _q1LightStyle2 defines a light intensity pattern with a smooth increase and decrease sequence in a loop-like structure.
+// _q1LightStyle2 represents a smooth wave-like pattern of light intensity values, cycling back to its starting point.
 var _q1LightStyle2 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50, 1.58,
@@ -30,7 +30,7 @@ var _q1LightStyle2 = []float64{
 	0.0,
 }
 
-// _q1LightStyle3 defines a sequence of float64 values representing a specific light intensity pattern.
+// _q1LightStyle3 defines a sequence of float64 values representing a specific lighting intensity pattern or style.
 var _q1LightStyle3 = []float64{
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -38,12 +38,12 @@ var _q1LightStyle3 = []float64{
 	0.25, 0.33, 0.42, 0.50,
 }
 
-// _q1LightStyle4 represents a light style pattern alternating between 1.0 and 0.0 at equal intervals.
+// _q1LightStyle4 represents a light style sequence with alternating values of 1.0 and 0.0 in a repeated pattern.
 var _q1LightStyle4 = []float64{
 	1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0,
 }
 
-// _q1LightStyle5 defines a sequence of light intensity values, creating a smooth fluctuating brightness pattern.
+// _q1LightStyle5 represents a light style sequence with symmetric intensity transitions from low to high and back to low.
 var _q1LightStyle5 = []float64{
 	0.75, 0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.50,
 	1.58, 1.67, 1.75, 1.83, 1.92, 2.0, 2.08, 2.0, 1.92, 1.83,
@@ -51,40 +51,40 @@ var _q1LightStyle5 = []float64{
 	0.92, 0.83, 0.75,
 }
 
-// _q1LightStyle6 defines a sequence of float values representing a light style pattern in a specific configuration.
+// _q1LightStyle6 defines a pattern of light intensity values used in dynamic lighting calculations.
 var _q1LightStyle6 = []float64{
 	1.08, 1.0, 1.17, 1.08, 1.33, 1.08, 1.0, 1.17, 1.0, 1.08,
 	1.0, 1.17, 1.0, 1.17, 1.0, 1.08, 1.17,
 }
 
-// _q1LightStyle7 defines a sequence of light intensity values representing a distinct light style pattern.
+// _q1LightStyle7 defines a sequence of float64 values representing a lighting pattern with periodic changes in intensity.
 var _q1LightStyle7 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.08, 0.17, 0.25,
 	0.33, 0.42, 0.50, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0,
 	0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
 }
 
-// _q1LightStyle8 represents an array of float values defining a specific light style pattern for rendering effects.
+// _q1LightStyle8 represents a specific light style pattern defined as a sequence of float64 values.
 var _q1LightStyle8 = []float64{
 	1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0,
 	0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.08, 0.17, 0.25, 0.33,
 	0.42, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
 }
 
-// _q1LightStyle9 represents a sequence of float64 values for a specific light style pattern with two distinct intensity levels.
+// _q1LightStyle9 defines a light style pattern with an initial sequence of zeros followed by repeated 2.08 values.
 var _q1LightStyle9 = []float64{
 	0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 	2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08,
 }
 
-// _q1LightStyle10 represents a predefined sequence of light intensity values, alternating between high and low states.
+// _q1LightStyle10 represents a specific light intensity pattern, defined as a sequence of float64 values.
 var _q1LightStyle10 = []float64{
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0,
 	1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
 	0.0, 1.0, 1.0, 1.0, 0.0,
 }
 
-// _q1LightStyle11 defines a sequence of float64 values representing a light intensity pattern with a symmetric rise and fall.
+// _q1LightStyle11 defines a light style pattern with gradual intensity fluctuation and symmetry around a peak value.
 var _q1LightStyle11 = []float64{
 	0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.50, 0.58, 0.67, 0.75,
 	0.83, 0.92, 1.0, 1.08, 1.17, 1.25, 1.33, 1.42, 1.42, 1.33,
@@ -92,7 +92,7 @@ var _q1LightStyle11 = []float64{
 	0.42, 0.33, 0.25, 0.17, 0.08, 0.0,
 }
 
-// _q1LightStyles defines a collection of predefined light intensity patterns to simulate various lighting effects.
+// _q1LightStyles contains predefined sequences of light intensity levels represented as nested slices of float64 values.
 var _q1LightStyles = [][]float64{
 	_q1LightStyle0,
 	_q1LightStyle1,
@@ -108,7 +108,8 @@ var _q1LightStyles = [][]float64{
 	_q1LightStyle11,
 }
 
-// LightStyle parses a style string and returns a corresponding array of light intensity values from predefined styles.
+// LightStyle returns a light style pattern as a slice of float64 values based on the input string identifier.
+// If the input is empty or invalid, it returns a default light style with a steady intensity of 1.0.
 func LightStyle(styleStr string) []float64 {
 	defaultStyle := []float64{1.0}
 	if len(styleStr) == 0 {
@@ -127,13 +128,12 @@ func LightStyle(styleStr string) []float64 {
 	return defaultStyle
 }
 
-// Lights manages a map of target entities, enabling the creation and manipulation of light configurations in the system.
+// Lights represents a collection of entities mapped by their target names, used for managing and creating light sources.
 type Lights struct {
 	targetEntities map[string]*lumps.Entity
 }
 
-// NewLights initializes and returns a Lights instance using the provided slice of Entity objects.
-// It maps entities with a "targetname" property to facilitate light creation.
+// NewLights initializes a Lights structure by mapping entity targetnames to their corresponding entities.
 func NewLights(entities []*lumps.Entity) *Lights {
 	targetEntities := make(map[string]*lumps.Entity)
 	for _, ent := range entities {
@@ -146,28 +146,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	}
 }
 
-func (l *Lights) computeColor(colorStr string) (float64, float64, float64, bool) {
-	if len(colorStr) == 0 {
-		return 0, 0, 0, false
-	}
-	cr, cg, cb, valid := lumps.ParseVector(colorStr)
-	if !valid {
-		return 0, 0, 0, false
-	}
-	var r, g, b float64
-	if cr > 1.0 || cg > 1.0 || cb > 1.0 {
-		r = cr / 255.0
-		g = cg / 255.0
-		b = cb / 255.0
-	} else {
-		r = cr
-		g = cg
-		b = cb
-	}
-	return r, g, b, true
-}
-
-// CreateLight generates a new light source based on the given entity, position, and subclass parameters.
+// CreateLight generates a light source based on an entity's properties, position, and subclass, returning the configured light.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
 	kind := config.LightKindAmbient
 	q1Intensity := 300.0
@@ -223,7 +202,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		dirX = -dirX
 	}
 
-	r, g, b, ok := l.computeColor(colorStr)
+	r, g, b, ok := lumps.ParseColorVector(colorStr)
 	if !ok {
 		r, g, b = 1.0, 1.0, 1.0
 	}
@@ -256,113 +235,3 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	}
 	return light
 }
-
-/*
-
-// createLight creates a new Light instance based on entity properties and position, returning an error if invalid or missing data.
-func (l *Lights) createLightOLD(ent *lumps.Entity, pos geometry.XYZ, subClass string, allEntities []*lumps.Entity) *config.Light {
-	kind := config.LightKindAmbient
-	intensity := 300.0 // Typical Quake default fallback
-	falloff := 0.0
-	dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Default: look down
-	r, g, b := 1.0, 1.0, 1.0           // Default White
-	mangleStr, _ := ent.Properties["mangle"]
-	colorStr, _ := ent.Properties["_color"]
-	targetStr, _ := ent.Properties["target"]
-	lightStr, _ := ent.Properties["light"]
-	angleStr, _ := ent.Properties["angle"]
-	var angle float64
-
-	if len(lightStr) > 0 {
-		intensity, _ = strconv.ParseFloat(lightStr, 64)
-	}
-
-	if len(targetStr) > 0 {
-		kind = config.LightKindSpot
-		for _, targetEnt := range allEntities {
-			if targetEnt.Properties["targetname"] == targetStr {
-				if tOrigin, ok := targetEnt.Properties["origin"]; ok {
-					var tx, ty, tz float64
-					_, _ = fmt.Sscanf(tOrigin, "%f %f %f", &tx, &ty, &tz)
-					targetPos := lumps.CreateXYZ(tx, ty, tz)
-					// Compute directional vector
-					dx := targetPos.X - pos.X
-					dy := targetPos.Y - pos.Y
-					dz := targetPos.Z - pos.Z
-					// Normalize vector
-					if length := math.Sqrt(dx*dx + dy*dy + dz*dz); length > 0 {
-						dirX, dirY, dirZ = dx/length, dy/length, dz/length
-					}
-					break
-				}
-			}
-		}
-	} else if len(angleStr) > 0 {
-		kind = config.LightKindSpot
-		if len(mangleStr) > 0 {
-			if yaw, pitch, _, valid := lumps.ParseVector(mangleStr); valid {
-				dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
-			}
-		} else {
-			angle, _ = strconv.ParseFloat(angleStr, 64)
-			if angle == -1 {
-				dirX, dirY, dirZ = 0.0, 1.0, 0.0 // Look up
-			} else if angle == -2 {
-				dirX, dirY, dirZ = 0.0, -1.0, 0.0 // Look down
-			} else {
-				dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
-			}
-		}
-	}
-
-	style := _q1LightStyle0
-	if sIndex, ok := ent.Properties["style"]; ok {
-		// handles light, light_fluoro, light_fluorospark
-		if index, err := strconv.Atoi(sIndex); err == nil && index >= 0 {
-			if index < len(_q1LightStyles) {
-				style = _q1LightStyles[index]
-			} else if index >= 32 {
-				// Quake 1 uses styles 32-63 for switchable (trigger) lights. Default to steady ON.
-				style = _q1LightStyle0
-			} else {
-				fmt.Println("invalid light style index:", sIndex)
-			}
-		} else {
-			fmt.Println("invalid light style index:", sIndex)
-		}
-	}
-
-	// COLOR (Standard Quake 2 / Modern Quake 1)
-	if len(colorStr) > 0 {
-		if cr, cg, cb, valid := lumps.ParseVector(colorStr); valid {
-			if cr > 1.0 || cg > 1.0 || cb > 1.0 {
-				r, g, b = cr/255.0, cg/255.0, cb/255.0
-			} else {
-				r, g, b = cr, cg, cb
-			}
-		}
-	}
-
-	if kind == config.LightKindSpot {
-		intensity = intensity * 0.9
-		falloff = intensity * 10
-	} else {
-		falloff = intensity * 0.03
-		intensity = intensity * 0.003
-	}
-
-	// CONFIGURATION CREATION
-	cl := config.NewConfigLight(pos, intensity, kind, falloff)
-	cl.R = r
-	cl.G = g
-	cl.B = b
-
-	cl.DirX = dirX
-	cl.DirY = dirY
-	cl.DirZ = dirZ
-	cl.Style = style
-
-	return cl
-}
-
-*/

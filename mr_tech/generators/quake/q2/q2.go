@@ -3,6 +3,7 @@ package q2
 import (
 	"encoding/binary"
 	"fmt"
+	"image/color"
 	"io"
 	"math"
 	"strconv"
@@ -127,7 +128,7 @@ type BSPReader struct {
 	header      Q2Header
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
-	palette     []byte
+	palette     [256]color.RGBA
 	texManager  *lumps.Textures
 	playerAngle float64
 	playerPos   geometry.XYZ
@@ -145,9 +146,12 @@ func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
 
 // Setup initializes the BSPReader by reading the header and optionally loading the palette for WAL textures.
 func (q2 *BSPReader) Setup() error {
-	q2.rsPal, _ = q2.arc.Open("pics" + lumps.PakSeparator + "colormap.pcx")
-
 	var err error
+	palettePath := "pics" + lumps.PakSeparator + "colormap.pcx"
+	q2.rsPal, err = q2.arc.Open(palettePath)
+	if err != nil {
+		return err
+	}
 	if _, err = q2.rs.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -161,14 +165,14 @@ func (q2 *BSPReader) Setup() error {
 
 	// In Quake 2, WAL textures often use dedicated palettes or true-color,
 	// but we still load the palette if provided by the builder.
-	if q2.rsPal != nil {
-		palette := lumps.NewPalette()
-		q2.palette, err = palette.Parse(q2.rsPal)
-		//q2.palette, err = palette.ParseFromPCX(q2.rsPal)
-		if err != nil {
-			fmt.Printf("Warning: palette.lmp not loaded in Q2 (WAL textures include it): %v\n", err)
-		}
+
+	palette := lumps.NewPalette()
+	//q2.palette, err = palette.Parse(q2.rsPal)
+	q2.palette, err = palette.ParseFromPCX(q2.rsPal)
+	if err != nil {
+		fmt.Printf("Warning: %s not loaded: %v\n", palettePath, err)
 	}
+
 	return nil
 }
 
@@ -225,7 +229,7 @@ func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
 // RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
 func (q2 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	//TODO WRONG
-	return q2.texManager.RegisterPixelsPalette(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
+	return q2.texManager.RegisterPixelsColors(name, width, height, indices, q2.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.

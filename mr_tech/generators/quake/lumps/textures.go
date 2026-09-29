@@ -2,6 +2,7 @@ package lumps
 
 import (
 	"image"
+	"image/color"
 	_ "image/png"
 	"io"
 
@@ -62,6 +63,20 @@ func (w *Textures) RegisterFile(name string, rs io.Reader) error {
 	return nil
 }
 
+// RegisterPixelsColors registers a new texture using pixel data, a color palette, and additional properties such as transparency.
+func (w *Textures) RegisterPixelsColors(name string, width, height int, indices []byte, palette [256]color.RGBA, isTransparent bool, transIndex byte, invertY bool) error {
+	if _, ok := w.resources[name]; ok {
+		return nil
+	}
+	idx := int32(len(w.resources))
+	tex, err := w.loadFromPixelsColors(name, width, height, indices, palette, idx, isTransparent, transIndex, invertY)
+	if err != nil {
+		return err
+	}
+	w.resources[name] = tex
+	return nil
+}
+
 // RegisterPixelsPalette registers a texture using raw pixel data, a palette, dimensions, and a unique name. If the name already exists, it skips registration. Returns an error if the data cannot be processed.
 func (w *Textures) RegisterPixelsPalette(name string, width, height int, indices []byte, palette []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	if _, ok := w.resources[name]; ok {
@@ -87,6 +102,43 @@ func (w *Textures) RegisterPixelsRGBA(name string, width, height int, pixels []b
 	}
 	w.resources[name] = tex
 	return nil
+}
+
+func (w *Textures) loadFromPixelsColors(name string, width, height int, indices []byte, palette [256]color.RGBA, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
+	emissive := false
+	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
+		emissive = true
+	}
+	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
+	// Gestione unificata dell'Alpha (HL BSP + Override esplicito)
+	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
+	transparentColor := transIndex
+
+	if len(name) > 0 && name[0] == '{' {
+		transparentColor = 255
+	}
+
+	for y := 0; y < height; y++ {
+		// L'inversione Y avviene solo se il formato lo richiede esplicitamente
+		targetY := y
+		if invertY {
+			targetY = height - 1 - y
+		}
+		for x := 0; x < width; x++ {
+			colorIdx := indices[y*width+x]
+			if hasAlpha && colorIdx == transparentColor {
+				tex.Set(x, targetY, 0x00000000)
+				continue
+			}
+			r := uint32(palette[colorIdx].R)
+			g := uint32(palette[colorIdx].G)
+			b := uint32(palette[colorIdx].B)
+			a := uint32(255)
+			cl := (r << 24) | (g << 16) | (b << 8) | a
+			tex.Set(x, targetY, int(cl))
+		}
+	}
+	return tex, nil
 }
 
 func (w *Textures) loadFromPixelsPalette(name string, width, height int, indices []byte, palette []byte, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
@@ -120,8 +172,8 @@ func (w *Textures) loadFromPixelsPalette(name string, width, height int, indices
 			g := uint32(palette[palOffset+1])
 			b := uint32(palette[palOffset+2])
 			a := uint32(255)
-			color := (r << 24) | (g << 16) | (b << 8) | a
-			tex.Set(x, targetY, int(color))
+			cl := (r << 24) | (g << 16) | (b << 8) | a
+			tex.Set(x, targetY, int(cl))
 		}
 	}
 	return tex, nil

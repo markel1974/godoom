@@ -2,6 +2,7 @@ package q2
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -14,10 +15,10 @@ import (
 type Things struct {
 	arc        interfaces.IArchive
 	texManager *lumps.Textures
-	palette    []byte
+	palette    [256]color.RGBA
 }
 
-func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette []byte) *Things {
+func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256]color.RGBA) *Things {
 	return &Things{
 		arc:        arc,
 		texManager: texManager,
@@ -196,7 +197,7 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 // RegisterPixels registers pixel-based texture data for a given texture name with specified dimensions and options.
 func (th *Things) registerPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
 	//TODO WRONG
-	return th.texManager.RegisterPixelsPalette(name, width, height, indices, th.palette, isTransparent, transIndex, invertY)
+	return th.texManager.RegisterPixelsColors(name, width, height, indices, th.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers an RGBA texture with the given name, dimensions, pixel data, and optional Y-axis inversion.

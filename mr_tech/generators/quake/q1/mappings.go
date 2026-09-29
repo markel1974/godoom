@@ -74,3 +74,7 @@ var _q1DictBModel = map[string]string{
 	"misc_explobox":  "maps/b_explob.bsp", // Cassa esplosiva
 	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande
 }
+
+func GetModelFileName(classname string) string {
+	return _q1DictModelFilename[classname]
+}

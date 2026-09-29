@@ -17,115 +17,10 @@ import (
 
 const BSPVersionQ2 int = 38
 
-// LumpQ2Entities represents the lump index for entities in Quake 2 BSP files.
-// LumpQ2Planes represents the lump index for planes in Quake 2 BSP files.
-// LumpQ2Vertexes represents the lump index for vertices in Quake 2 BSP files.
-// LumpQ2Visibility represents the lump index for visibility in Quake 2 BSP files.
-// LumpQ2Nodes represents the lump index for nodes in Quake 2 BSP files.
-// LumpQ2TexInfo represents the lump index for texture information in Quake 2 BSP files.
-// LumpQ2Faces represents the lump index for faces in Quake 2 BSP files.
-// LumpQ2Lighting represents the lump index for lighting in Quake 2 BSP files.
-// LumpQ2Leaves represents the lump index for leaves in Quake 2 BSP files.
-// LumpQ2LeafFaces represents the lump index for leaf faces in Quake 2 BSP files.
-// LumpQ2LeafBrushes represents the lump index for leaf brushes in Quake 2 BSP files.
-// LumpQ2Edges represents the lump index for edges in Quake 2 BSP files.
-// LumpQ2SurfEdges represents the lump index for surface edges in Quake 2 BSP files.
-// LumpQ2Models represents the lump index for models in Quake 2 BSP files.
-// LumpQ2Brushes represents the lump index for brushes in Quake 2 BSP files.
-// LumpQ2BrushSides represents the lump index for brush sides in Quake 2 BSP files.
-// LumpQ2Pop represents the lump index for pop in Quake 2 BSP files (unused or specific purpose).
-// LumpQ2Areas represents the lump index for areas in Quake 2 BSP files.
-// LumpQ2AreaPortals represents the lump index for area portals in Quake 2 BSP files.
-// NumQ2Lumps represents the total number of lumps in Quake 2 BSP files.
-const (
-	LumpQ2Entities    = 0
-	LumpQ2Planes      = 1
-	LumpQ2Vertexes    = 2
-	LumpQ2Visibility  = 3
-	LumpQ2Nodes       = 4
-	LumpQ2TexInfo     = 5
-	LumpQ2Faces       = 6
-	LumpQ2Lighting    = 7
-	LumpQ2Leaves      = 8
-	LumpQ2LeafFaces   = 9
-	LumpQ2LeafBrushes = 10
-	LumpQ2Edges       = 11
-	LumpQ2SurfEdges   = 12
-	LumpQ2Models      = 13
-	LumpQ2Brushes     = 14
-	LumpQ2BrushSides  = 15
-	LumpQ2Pop         = 16
-	LumpQ2Areas       = 17
-	LumpQ2AreaPortals = 18
-	NumQ2Lumps        = 19
-)
-
-// q2Header represents the header structure of a Quake 2 BSP file containing magic, version, and lump information.
-type q2Header struct {
-	Magic   [4]byte
-	Version int32
-	Lumps   [NumQ2Lumps]struct {
-		Offset int32
-		Length int32
-	}
-}
-
-// q2Model represents a Quake 2 model with bounds, origin, BSP tree head, and face-related indices.
-type q2Model struct {
-	Mins      [3]float32
-	Maxs      [3]float32
-	Origin    [3]float32
-	HeadNode  int32
-	FirstFace int32
-	NumFaces  int32
-}
-
-// q2Face represents a face in the Quake 2 BSP map format.
-// PlaneID is the plane index in the BSP plane array associated with this face.
-// Side specifies whether the face is oriented in the same or opposite direction to the plane.
-// FirstEdge is the starting index in the surface edge array for this face's edges.
-// NumEdges indicates the total number of edges defining this face.
-// TexInfo is the index into the texture information array for texture details of the face.
-// LightTypes contains light style indices for the face's dynamic lighting data.
-// Lightmap is the offset in the lightmap data where this face's lightmap starts.
-type q2Face struct {
-	PlaneID    uint16
-	Side       uint16
-	FirstEdge  int32
-	NumEdges   uint16
-	TexInfo    uint16
-	LightTypes [4]uint8
-	Lightmap   int32
-}
-
-// q2TexInfo represents texture mapping information for Quake 2 BSP files.
-// Vecs defines two texture vectors used for UV mapping calculations.
-// Flags holds attributes for the surface such as visibility or rendering properties.
-// Value specifies additional data for the texture, often used for switches or animations.
-// TextureName is the name of the texture, stored as a null-terminated string.
-// NextTexInfo holds the index of the next texture in the chain, or -1 if none.
-type q2TexInfo struct {
-	Vecs        [2][4]float32
-	Flags       uint32
-	Value       uint32
-	TextureName [32]byte
-	NextTexInfo int32
-}
-
-// q2Edge represents an edge in a Quake 2 BSP file, defined by two vertex indices V1 and V2.
-type q2Edge struct {
-	V1, V2 uint16
-}
-
-// q2Vertex represents a 3D point in space with X, Y, and Z coordinates as float32 values.
-type q2Vertex struct {
-	X, Y, Z float32
-}
-
 // BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type BSPReader struct {
 	arc         interfaces.IArchive
-	header      q2Header
+	header      lumps.Headers2
 	rs          io.ReadSeeker
 	palette     [256]color.RGBA
 	texManager  *lumps.Textures
@@ -184,7 +79,7 @@ func (q2 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 
 // GetEntities extracts and parses entities from the BSP file by reading the entities lump and converting it to structured data.
 func (q2 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
-	lump := q2.header.Lumps[LumpQ2Entities]
+	lump := q2.header.Lumps[lumps.LumpEntities2]
 	if _, err := q2.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -198,12 +93,12 @@ func (q2 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
 
 // GetModels reads and parses the model lump to retrieve an array of BSP sub-models from the map file.
 func (q2 *BSPReader) GetModels() ([]*lumps.Model, error) {
-	lumpModels := q2.header.Lumps[LumpQ2Models]
+	lumpModels := q2.header.Lumps[lumps.LumpModels2]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
 	numModels := int(lumpModels.Length) / 48
-	models := make([]q2Model, numModels)
+	models := make([]lumps.Model2, numModels)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &models); err != nil {
 		return nil, err
 	}
@@ -332,12 +227,12 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 // GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
 func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	// Read models to find face offsets
-	lumpModels := q2.header.Lumps[LumpQ2Models]
+	lumpModels := q2.header.Lumps[lumps.LumpModels2]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
 	numModels := int(lumpModels.Length) / 48
-	models := make([]q2Model, numModels)
+	models := make([]lumps.Model2, numModels)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &models); err != nil {
 		return nil, err
 	}
@@ -348,25 +243,25 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	targetModel := models[modelIdx]
 
 	// 2. Bulk read topological lumps
-	lumpFaces := q2.header.Lumps[LumpQ2Faces]
+	lumpFaces := q2.header.Lumps[lumps.LumpFaces2]
 	if _, err := q2.rs.Seek(int64(lumpFaces.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
-	faces := make([]q2Face, int(lumpFaces.Length)/20)
+	faces := make([]lumps.Face2, int(lumpFaces.Length)/20)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &faces); err != nil {
 		return nil, err
 	}
 
-	lumpTexInfos := q2.header.Lumps[LumpQ2TexInfo]
+	lumpTexInfos := q2.header.Lumps[lumps.LumpTexInfo2]
 	if _, err := q2.rs.Seek(int64(lumpTexInfos.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
-	texInfos := make([]q2TexInfo, int(lumpTexInfos.Length)/76)
+	texInfos := make([]lumps.TexInfo2, int(lumpTexInfos.Length)/76)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &texInfos); err != nil {
 		return nil, err
 	}
 
-	lumpSurfEdges := q2.header.Lumps[LumpQ2SurfEdges]
+	lumpSurfEdges := q2.header.Lumps[lumps.LumpSurfEdges2]
 	if _, err := q2.rs.Seek(int64(lumpSurfEdges.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -375,20 +270,20 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		return nil, err
 	}
 
-	lumpEdges := q2.header.Lumps[LumpQ2Edges]
+	lumpEdges := q2.header.Lumps[lumps.LumpEdges2]
 	if _, err := q2.rs.Seek(int64(lumpEdges.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
-	edges := make([]q2Edge, int(lumpEdges.Length)/4)
+	edges := make([]lumps.Edge2, int(lumpEdges.Length)/4)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &edges); err != nil {
 		return nil, err
 	}
 
-	lumpVerts := q2.header.Lumps[LumpQ2Vertexes]
+	lumpVerts := q2.header.Lumps[lumps.LumpVertexes2]
 	if _, err := q2.rs.Seek(int64(lumpVerts.Offset), io.SeekStart); err != nil {
 		return nil, err
 	}
-	vertexes := make([]q2Vertex, int(lumpVerts.Length)/12)
+	vertexes := make([]lumps.Vertex2, int(lumpVerts.Length)/12)
 	if err := binary.Read(q2.rs, binary.LittleEndian, &vertexes); err != nil {
 		return nil, err
 	}
@@ -434,17 +329,14 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 		for j := uint16(0); j < face.NumEdges; j++ {
 			surfEdgeIdx := surfEdges[face.FirstEdge+int32(j)]
-
-			var v q2Vertex
+			var v lumps.Vertex2
 			if surfEdgeIdx >= 0 {
 				v = vertexes[edges[surfEdgeIdx].V1] // Positive direction (counter-clockwise)
 			} else {
 				v = vertexes[edges[-surfEdgeIdx].V2] // Reversed direction (clockwise)
 			}
-
 			// Apply standard z-up axis transformation using CreateXYZ
 			points = append(points, lumps.CreateXYZ(float64(v.X), float64(v.Y), float64(v.Z)))
-
 			u := (float64(v.X) * float64(texInfo.Vecs[0][0])) +
 				(float64(v.Y) * float64(texInfo.Vecs[0][1])) +
 				(float64(v.Z) * float64(texInfo.Vecs[0][2])) +

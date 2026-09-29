@@ -140,30 +140,26 @@ func (w *Textures) loadFromPixelsRGBA(name string, width, height int, pixels []b
 		emissive = true
 	}
 	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
-
 	for y := 0; y < height; y++ {
 		// Gestione inversione asse Y (Top-Left to Bottom-Left per OpenGL)
 		targetY := y
 		if invertY {
 			targetY = height - 1 - y
 		}
-
 		for x := 0; x < width; x++ {
 			// Offset lineare con stride fisso a 4 (RGBA)
 			offset := (y*width + x) * 4
-
 			// Sanity check per evitare panic su buffer troncati
 			if offset+3 < len(pixels) {
 				r := uint32(pixels[offset])
 				g := uint32(pixels[offset+1])
 				b := uint32(pixels[offset+2])
 				a := uint32(pixels[offset+3])
-
-				color := (r << 24) | (g << 16) | (b << 8) | a
-				tex.Set(x, targetY, int(color))
+				cl := (r << 24) | (g << 16) | (b << 8) | a
+				tex.Set(x, targetY, int(cl))
 			} else {
 				// Fallback color (magenta debugging) se mancano dati nel buffer
-				tex.Set(x, targetY, int(0xFF00FF00))
+				tex.Set(x, targetY, 0xFF00FF00)
 			}
 		}
 	}
@@ -183,23 +179,17 @@ func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*text
 	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
 		emissive = true
 	}
-
 	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 	for y := 0; y < height; y++ {
-		// Calcolo della riga invertita per il memory layout di OpenGL
 		flippedY := height - 1 - y
-
 		for x := 0; x < width; x++ {
-			// Leggiamo dall'immagine sorgente usando la 'y' normale (Top-Left)
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			r8 := int(r >> 8)
 			g8 := int(g >> 8)
 			b8 := int(b >> 8)
 			a8 := int(a >> 8)
-			color := (r8 << 24) | (g8 << 16) | (b8 << 8) | a8
-
-			// Scriviamo nel nostro buffer usando la 'flippedY' (Bottom-Left)
-			tex.Set(x, flippedY, color)
+			cl := (r8 << 24) | (g8 << 16) | (b8 << 8) | a8
+			tex.Set(x, flippedY, cl)
 		}
 	}
 	return tex, nil

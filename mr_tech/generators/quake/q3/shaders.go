@@ -210,6 +210,17 @@ func (s *Shaders) IsNodraw(target string) bool {
 	return k.surfaceParms["nodraw"]
 }
 
+// NoDraws returns a map of targets with a boolean value indicating if the "nodraw" surface parameter is set to true.
+func (s *Shaders) NoDraws() map[string]bool {
+	noDraws := make(map[string]bool)
+	for target, shader := range s.container {
+		if shader.surfaceParms["nodraw"] {
+			noDraws[target] = true
+		}
+	}
+	return noDraws
+}
+
 // GetCullMode retrieves the culling mode defined by the shader.
 func (s *Shaders) GetCullMode(target string) int {
 	k, ok := s.container[target]

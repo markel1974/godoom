@@ -1,7 +1,6 @@
 package q3
 
 import (
-	"encoding/binary"
 	"fmt"
 	_ "image/jpeg"
 	"io"
@@ -77,138 +76,13 @@ func (q3 *BSPReader) GetTextures() *lumps.Textures {
 func (q3 *BSPReader) GetHeaders() lumps.Headers3 {
 	return q3.headers
 }
-
-// GetRawFaces retrieves all raw face data for a specific model index from the BSP file, including geometry and texture info.
-// Returns a slice of RawFace objects or an error if the operation fails.
 func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
-	lModels := q3.headers.Lumps[lumps.LumpModels3]
-	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
+	noDraws := q3.shaders.NoDraws()
+	rawFaces, err := lumps.NewRawFaces3(q3.rs, q3.headers, modelIdx, noDraws)
+	if err != nil {
+		return nil, err
 	}
-	models := make([]lumps.Model3, int(lModels.Length)/40)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
-		return nil, fmt.Errorf("failed to read models lump: %w", err)
-	}
-
-	if modelIdx < 0 || modelIdx >= len(models) {
-		return nil, fmt.Errorf("modelIdx out of range")
-	}
-	targetModel := models[modelIdx]
-
-	//Geometrical lumps
-	lFaces := q3.headers.Lumps[lumps.LumpFaces3]
-	if _, err := q3.rs.Seek(int64(lFaces.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to faces lump: %w", err)
-	}
-	faces := make([]lumps.Face3, int(lFaces.Length)/104)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &faces); err != nil {
-		return nil, fmt.Errorf("failed to read faces lump: %w", err)
-	}
-
-	lVerts := q3.headers.Lumps[lumps.LumpVertexes3]
-	if _, err := q3.rs.Seek(int64(lVerts.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to vertexes lump: %w", err)
-	}
-	vertexes := make([]lumps.Vertex3, int(lVerts.Length)/44)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &vertexes); err != nil {
-		return nil, fmt.Errorf("failed to read vertexes lump: %w", err)
-	}
-
-	lMeshVerts := q3.headers.Lumps[lumps.LumpMeshVerts3]
-	if _, err := q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to mesh vertices lump: %w", err)
-	}
-	meshVerts := make([]int32, int(lMeshVerts.Length)/4)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &meshVerts); err != nil {
-		return nil, fmt.Errorf("failed to read mesh vertices lump: %w", err)
-	}
-
-	lTextures := q3.headers.Lumps[lumps.LumpTextures3]
-	if _, err := q3.rs.Seek(int64(lTextures.Offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek to textures lump: %w", err)
-	}
-	textures := make([]lumps.Texture3, int(lTextures.Length)/72)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &textures); err != nil {
-		return nil, fmt.Errorf("failed to read textures lump: %w", err)
-	}
-
-	var rawFaces []*lumps.RawFace
-
-	// 3. Risoluzione Topologica
-	for i := int32(0); i < targetModel.NumFaces; i++ {
-		face := faces[targetModel.FirstFace+i]
-		tex := textures[face.TextureID]
-		if (tex.Flags & 0x80) != 0 {
-			continue // SURF_NODRAW
-		}
-		texNameBytes := make([]byte, 0, len(tex.Name))
-		for _, b := range tex.Name {
-			if b == 0 || len(texNameBytes) >= len(tex.Name)-1 {
-				break
-			}
-			texNameBytes = append(texNameBytes, b)
-		}
-		texName := strings.TrimSpace(strings.ToLower(string(texNameBytes)))
-		if q3.shaders.IsNodraw(texName) {
-			continue // shader has surfaceparm nodraw
-		}
-		isSky := (tex.Flags & 0x4) != 0 // SURF_SKY
-		switch face.Type {
-		case 1, 3: // Poligono Convesso (1) o Mesh Complessa (3)
-			// Q3 usa l'indicizzazione per formare direttamente triangoli
-			for j := int32(0); j < face.NumMesh; j += 3 {
-				var tri []geometry.XYZ
-				var uvs [][2]float64
-				for k := int32(0); k < 3; k++ {
-					vIdx := face.VertexStart + meshVerts[face.MeshStart+j+k]
-					v := vertexes[vIdx]
-					tri = append(tri, lumps.CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
-					uvs = append(uvs, [2]float64{float64(v.TexCoord[0]), float64(v.TexCoord[1])})
-				}
-				rawFaces = append(rawFaces, &lumps.RawFace{
-					Points:  tri, // Il Builder non dovrà fare il Fan se riceve già 3 punti
-					UVs:     uvs,
-					TexName: texName,
-					IsSky:   isSky,
-				})
-			}
-
-		case 2: // PATCH DI BEZIER (Biquadratica)
-			w := int(face.PatchSize[0])
-			h := int(face.PatchSize[1])
-
-			// Le patch in Q3 sono griglie 3x3 unite. Troviamo quante sub-patch ci sono.
-			numPatchesX := (w - 1) / 2
-			numPatchesY := (h - 1) / 2
-
-			for y := 0; y < numPatchesY; y++ {
-				for x := 0; x < numPatchesX; x++ {
-					var cp [9]lumps.Vertex3
-					for row := 0; row < 3; row++ {
-						for col := 0; col < 3; col++ {
-							cpIdx := face.VertexStart + int32((y*2+row)*w+(x*2+col))
-							cp[row*3+col] = vertexes[cpIdx]
-						}
-					}
-
-					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
-					triangles, uvs := lumps.Tessellate(cp, 5)
-
-					for t := 0; t < len(triangles); t += 3 {
-						rawFaces = append(rawFaces, &lumps.RawFace{
-							Points:  []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]},
-							UVs:     [][2]float64{uvs[t], uvs[t+1], uvs[t+2]},
-							TexName: texName,
-							IsSky:   isSky,
-						})
-					}
-				}
-			}
-		}
-	}
-
 	q3.compileTextures(rawFaces)
-
 	return rawFaces, nil
 }
 

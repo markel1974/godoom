@@ -217,7 +217,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		}
 	} else {
 		falloff = q1Intensity * 0.01
-		intensity = q1Intensity * 0.1
+		intensity = q1Intensity * 0.3
 	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)

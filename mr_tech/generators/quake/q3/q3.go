@@ -21,7 +21,7 @@ const BSPVersionQ3 int = 46
 // BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
 type BSPReader struct {
 	arc         interfaces.IArchive
-	header      lumps.Header3
+	headers     lumps.Headers3
 	rs          io.ReadSeeker
 	texManager  *lumps.Textures
 	playerAngle float64
@@ -47,9 +47,9 @@ func (q3 *BSPReader) Setup() error {
 	if err != nil {
 		return err
 	}
-	q3.header, err = lumps.NewHeader3(q3.rs)
-	if string(q3.header.Magic[:]) != "IBSP" || q3.header.Version != 46 {
-		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.header.Magic[:]), q3.header.Version)
+	q3.headers, err = lumps.NewHeader3(q3.rs)
+	if string(q3.headers.Magic[:]) != "IBSP" || q3.headers.Version != 46 {
+		return fmt.Errorf("formato Quake 3 non valido (Magic: %s, Versione: %d)", string(q3.headers.Magic[:]), q3.headers.Version)
 	}
 	q3.shaders = NewShaders()
 	if err = q3.shaders.Parse(q3.arc); err != nil {
@@ -68,55 +68,20 @@ func (q3 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 	return q3.playerAngle, q3.playerPos
 }
 
-// GetEntities retrieves all entities from the BSP file by parsing the entities lump and returns them as a slice.
-func (q3 *BSPReader) GetEntities() ([]*lumps.Entity, error) {
-	lump := q3.header.Lumps[lumps.LumpQ3Entities]
-	if _, err := q3.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
-		return nil, err
-	}
-	data := make([]byte, lump.Length)
-	if _, err := q3.rs.Read(data); err != nil {
-		return nil, err
-	}
-	return lumps.NewEntitiesFromText(lumps.FromNullTerminatingString(data))
-}
-
-// GetModels extracts and returns all BSP sub-models from the lump data, including static and moving brush models.
-func (q3 *BSPReader) GetModels() ([]*lumps.Model, error) {
-	lModels := q3.header.Lumps[lumps.LumpQ3Models]
-	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
-		return nil, err
-	}
-
-	numModels := int(lModels.Length) / 40
-	models := make([]lumps.Model3, numModels)
-	if err := binary.Read(q3.rs, binary.LittleEndian, &models); err != nil {
-		return nil, err
-	}
-
-	out := make([]*lumps.Model, numModels)
-	for i, m := range models {
-		out[i] = &lumps.Model{
-			Mins:      m.Mins,
-			Maxs:      m.Maxs,
-			FirstFace: m.FirstFace,
-			NumFaces:  m.NumFaces,
-			// Q3 non usa Origin/HeadNode/VisLeafs nel lump Models, le collisioni
-			// sono basate sui Brush associati (FirstBrush, NumBrushes).
-		}
-	}
-	return out, nil
-}
-
 // GetTextures retrieves the texture manager containing the loaded textures for the current Q3 BSP file.
 func (q3 *BSPReader) GetTextures() *lumps.Textures {
 	return q3.texManager
 }
 
+// GetHeaders retrieves the header structure (lumps.Headers3) of the Quake 3 BSP file contained in the BSPReader.
+func (q3 *BSPReader) GetHeaders() lumps.Headers3 {
+	return q3.headers
+}
+
 // GetRawFaces retrieves all raw face data for a specific model index from the BSP file, including geometry and texture info.
 // Returns a slice of RawFace objects or an error if the operation fails.
 func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
-	lModels := q3.header.Lumps[lumps.LumpQ3Models]
+	lModels := q3.headers.Lumps[lumps.LumpModels3]
 	if _, err := q3.rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
 	}
@@ -131,7 +96,7 @@ func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	targetModel := models[modelIdx]
 
 	//Geometrical lumps
-	lFaces := q3.header.Lumps[lumps.LumpQ3Faces]
+	lFaces := q3.headers.Lumps[lumps.LumpFaces3]
 	if _, err := q3.rs.Seek(int64(lFaces.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to faces lump: %w", err)
 	}
@@ -140,7 +105,7 @@ func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		return nil, fmt.Errorf("failed to read faces lump: %w", err)
 	}
 
-	lVerts := q3.header.Lumps[lumps.LumpQ3Vertexes]
+	lVerts := q3.headers.Lumps[lumps.LumpVertexes3]
 	if _, err := q3.rs.Seek(int64(lVerts.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to vertexes lump: %w", err)
 	}
@@ -149,7 +114,7 @@ func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		return nil, fmt.Errorf("failed to read vertexes lump: %w", err)
 	}
 
-	lMeshVerts := q3.header.Lumps[lumps.LumpQ3MeshVerts]
+	lMeshVerts := q3.headers.Lumps[lumps.LumpMeshVerts3]
 	if _, err := q3.rs.Seek(int64(lMeshVerts.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to mesh vertices lump: %w", err)
 	}
@@ -158,7 +123,7 @@ func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 		return nil, fmt.Errorf("failed to read mesh vertices lump: %w", err)
 	}
 
-	lTextures := q3.header.Lumps[lumps.LumpQ3Textures]
+	lTextures := q3.headers.Lumps[lumps.LumpTextures3]
 	if _, err := q3.rs.Seek(int64(lTextures.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to textures lump: %w", err)
 	}
@@ -266,7 +231,7 @@ func (q3 *BSPReader) compileTextures(faces []*lumps.RawFace) {
 			}
 		} else {
 			targetTex := texNameLC
-			if diffMap := q3.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
+			if diffMap := q3.shaders.GetDiffuseMap(texNameLC); len(diffMap) > 0 {
 				targetTex = strings.ToLower(diffMap)
 			}
 			if existing, ok := needsAlphaTest[targetTex]; !ok || (!existing && hasAlpha) {
@@ -302,7 +267,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	if rfErr != nil {
 		return rfErr
 	}
-	entities, eErr := q3.GetEntities()
+	entities, eErr := lumps.NewEntities3(q3.rs, q3.headers)
 	if eErr != nil {
 		return eErr
 	}

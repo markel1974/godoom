@@ -23,9 +23,5 @@ type IBSPReader interface {
 
 	GetPlayerInfo() (float64, geometry.XYZ)
 
-	GetEntities() ([]*lumps.Entity, error)
-
-	GetModels() ([]*lumps.Model, error)
-
 	GetTextures() *lumps.Textures
 }

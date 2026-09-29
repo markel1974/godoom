@@ -91,7 +91,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	if err = reader.Setup(); err != nil {
 		return nil, err
 	}
-	bspModels, err := reader.GetModels()
+	bspModels, err := lumps.NewModels3(rs, reader.GetHeaders())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models from %s: %v", bspPath, err)
 	}

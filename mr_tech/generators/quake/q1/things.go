@@ -2,6 +2,7 @@ package q1
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -15,11 +16,11 @@ import (
 type Things struct {
 	arc        interfaces.IArchive
 	texManager *lumps.Textures
-	palette    []byte
+	palette    [256]color.RGBA
 }
 
 // NewThings creates and initializes a new Things object using the provided archive, texture manager, and palette data.
-func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette []byte) *Things {
+func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256]color.RGBA) *Things {
 	return &Things{
 		arc:        arc,
 		texManager: texManager,
@@ -73,7 +74,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	skin := md1.Skins[skinTargetIndex]
 	skinName := fmt.Sprintf("%s_skin_%d", classname, skinTargetIndex)
 
-	if err = th.texManager.RegisterPixelsPalette(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
+	if err = th.texManager.RegisterPixelsColors(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
 		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
 	}
 	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)

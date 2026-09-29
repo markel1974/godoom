@@ -3,6 +3,7 @@ package q1
 import (
 	"encoding/binary"
 	"fmt"
+	"image/color"
 	"io"
 	"math"
 	"strconv"
@@ -24,7 +25,7 @@ type BSPReader struct {
 	rs          io.ReadSeeker
 	rsPal       io.ReadSeeker
 	infos       []*lumps.LumpInfo
-	palette     []byte
+	palette     [256]color.RGBA
 	mipTextures []*lumps.MipTexture
 	faces       []*lumps.Face
 	surfEdges   []int32
@@ -131,7 +132,7 @@ func (q1 *BSPReader) GetTextures() *lumps.Textures {
 
 // RegisterPixels registers a texture by name with specified dimensions, pixel data, palette, transparency, and alignment.
 func (q1 *BSPReader) RegisterPixels(name string, width, height int, indices []byte, isTransparent bool, transIndex byte, invertY bool) error {
-	return q1.texManager.RegisterPixelsPalette(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
+	return q1.texManager.RegisterPixelsColors(name, width, height, indices, q1.palette, isTransparent, transIndex, invertY)
 }
 
 // RegisterPixelsRGBA registers a texture using raw RGBA pixel data with optional Y-axis inversion.
@@ -243,12 +244,12 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 			modelIdx, _ := strconv.Atoi(modelProp[1:])
 			rawFaces, err := q1.GetRawFaces(modelIdx)
 			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+				fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
 				continue
 			}
 			cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
 			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v", classname, modelIdx, err)
+				fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
 				continue
 			}
 			root.Things = append(root.Things, cThing)

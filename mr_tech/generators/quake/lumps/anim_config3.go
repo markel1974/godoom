@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// Q3Anim represents a single animation parsed from animation.cfg.
-type Q3Anim struct {
+// Anim3 defines an animation with properties for frames, looping, playback speed, and an optional descriptive name.
+type Anim3 struct {
 	FirstFrame int
 	NumFrames  int
 	LoopFrames int
@@ -16,16 +16,16 @@ type Q3Anim struct {
 	Name       string
 }
 
-// Q3AnimConfig holds all animations for a Quake 3 player model.
-type Q3AnimConfig struct {
-	Animations []Q3Anim
+// AnimConfig3 represents the configuration for managing a set of animations and their associated leg offsets.
+type AnimConfig3 struct {
+	Animations []Anim3
 	LegsOffset int
 }
 
-// ParseAnimCfg reads a Quake 3 animation.cfg file and returns the configuration.
-func ParseAnimCfg(rs io.Reader) (*Q3AnimConfig, error) {
-	config := &Q3AnimConfig{
-		Animations: make([]Q3Anim, 0, 25),
+// NewAnimConfig3 reads animation configuration data from an io.Reader and returns an AnimConfig3 structure or an error.
+func NewAnimConfig3(rs io.Reader) (*AnimConfig3, error) {
+	config := &AnimConfig3{
+		Animations: make([]Anim3, 0, 25),
 	}
 
 	scanner := bufio.NewScanner(rs)
@@ -60,7 +60,7 @@ func ParseAnimCfg(rs io.Reader) (*Q3AnimConfig, error) {
 				name = "anim_" + strconv.Itoa(len(config.Animations))
 			}
 
-			config.Animations = append(config.Animations, Q3Anim{
+			config.Animations = append(config.Animations, Anim3{
 				FirstFrame: first,
 				NumFrames:  num,
 				LoopFrames: loop,

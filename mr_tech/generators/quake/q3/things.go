@@ -223,7 +223,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	md3 := config.NewMD3(lower, upper, head, weapon)
 
 	if rsAnim, err := t.arc.Open(basePath + "animation.cfg"); err == nil {
-		if animCfg, err := lumps.ParseAnimCfg(rsAnim); err == nil {
+		if animCfg, err := lumps.NewAnimConfig3(rsAnim); err == nil {
 			// Map animations to intervals based on the parsed file
 			for _, anim := range animCfg.Animations {
 				if strings.HasPrefix(anim.Name, "BOTH_") {

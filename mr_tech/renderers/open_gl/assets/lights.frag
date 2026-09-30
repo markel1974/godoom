@@ -168,6 +168,7 @@ void main()
     vec3 roomBeam = vec3(0.0); // Di base, nessuna nebbia volumetrica
 
     if (u_enableShadows == 1) {
+
         // OMBRE STANZA
         // Usa la normale geometrica già fusa dal TBN
         vec3 geoNormal = finalNormal;
@@ -189,8 +190,12 @@ void main()
         }
         float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
         // Calcoliamo il roomBeam SOLO se abbiamo fatto il raymarching
+
         roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
+
+        //roomBeam = vec3(0.0);
     }
+
 
     // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);

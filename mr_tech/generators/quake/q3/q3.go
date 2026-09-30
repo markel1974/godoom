@@ -5,7 +5,6 @@ import (
 	_ "image/jpeg"
 	"io"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -154,18 +153,12 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 		classname := ent.Properties["classname"]
 		baseClass := classname
 		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass = z[0]
+			baseClass, _ = z[0], z[1]
 		}
 		var pos geometry.XYZ
-		if origin, ok := ent.Properties["origin"]; ok {
-			var x, y, z float64
-			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
+		if origin, ok := ent.GetProperty("origin"); ok {
+			x, y, z, _ := lumps.ParseVector(origin)
 			pos = lumps.CreateXYZ(x, y, z)
-		}
-
-		var angle float64
-		if a, ok := ent.Properties["angle"]; ok {
-			angle, _ = strconv.ParseFloat(a, 64)
 		}
 
 		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
@@ -191,8 +184,11 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 		case "info":
 			if classname == "info_player_start" || classname == "info_player_deathmatch" {
 				if !playerSpawned {
-					q3.playerPos = pos
-					q3.playerAngle = angle * (math.Pi / 180.0)
+					q3.playerPos, q3.playerAngle = pos, 0.0
+					if a, ok := ent.GetProperty("angle"); ok {
+						angle, _ := lumps.ParseFloat(a)
+						q3.playerAngle = angle * (math.Pi / 180.0)
+					}
 					playerSpawned = true
 				} else {
 					// We use remaining spawn points as Bot spawners
@@ -218,7 +214,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			if cLight, err := lights.Create(ent, angle, pos); err != nil {
+			if cLight, err := lights.Create(ent, pos); err != nil {
 				fmt.Printf("Warning can't create light: %s\n", err.Error())
 			} else {
 				root.Lights = append(root.Lights, cLight)

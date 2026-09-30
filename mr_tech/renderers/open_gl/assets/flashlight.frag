@@ -142,16 +142,16 @@ void main()
     vec3 flashSpotDir;
 
     if (u_isAbsolute == 1) {
-        // 1. Posizione in View Space (GIUSTA)
+        // Posizione in View Space
         flashPosView = (u_view * vec4(u_flashOffset, 1.0)).xyz;
-        // 2. Crea un bersaglio nel mondo reale (1 metro più in là)
+        // Crea un bersaglio nel mondo reale (1 metro più in là)
         vec3 worldTarget = u_flashOffset + normalize(u_flashDir);
-        // 3. Trasforma il bersaglio
+        // Trasforma il bersaglio
         vec3 targetView = (u_view * vec4(worldTarget, 1.0)).xyz;
-        // 4. Calcola la differenza (Direzione pura e a prova di bomba)
+        // Calcola la differenza (Direzione pura)
         flashSpotDir = normalize(targetView - flashPosView);
     } else {
-        // --- TORCIA PLAYER (Input in VIEW SPACE) ---
+        // TORCIA PLAYER (Input in VIEW SPACE)
         // La torcia è già calcolata dalla telecamera in Go (Sway)
         flashPosView = u_flashOffset;
         // Crea il bersaglio fittizio distante 512 per il puntamento
@@ -194,9 +194,7 @@ void main()
         // Ripristiniamo il fattore energetico u_flashFalloff se necessario alla calibrazione
         flashIntensity = flashCone * u_flashIntensityFactor * distanceFade;
     } else {
-        float test = u_flashIntensityFactor;
-        //test = 0.1;
-        flashIntensity = flashCone * (u_flashFalloff * test) * distanceFade;
+        flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
     }
 
     // --- SETUP VOLUMETRICO ---

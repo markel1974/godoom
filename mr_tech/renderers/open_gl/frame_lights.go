@@ -23,7 +23,7 @@ type Light struct {
 
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
-	Debug             bool
+	debug             bool
 	data              []float32
 	index             int
 	freezeIndex       int
@@ -93,19 +93,14 @@ func (f *FrameLights) Prepare(px, pY, pZ float64) {
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
 func (f *FrameLights) Create(light *model.Light) {
 	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
-
-	//dirGlX, dirGlY, dirGlZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
-	dirGlX := float32(light.GetDirX())
-	dirGlY := float32(light.GetDirZ())
-	dirGlZ := float32(-light.GetDirY())
-
+	posX, posY, posZ := light.GetPosXYZ()
+	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)
+	glDirX, glDirY, glDirZ := float32(light.GetDirX()), float32(light.GetDirZ()), float32(-light.GetDirY())
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
 	intensity := float32(light.GetIntensityStyled(textures.GlobalTick()))
-
 	falloff := float32(light.GetFalloff())
 	lType := float32(-1)
-	posX, posY, posZ := light.GetPosXYZ()
 
 	switch light.GetKind() {
 	case config.LightKindOpenAir:
@@ -117,20 +112,15 @@ func (f *FrameLights) Create(light *model.Light) {
 	case config.LightKindDirectional:
 		lType = 2
 	case config.LightKindSpot:
-		//const baseCutoff = 30.0
-		//const baseOuterCutOff = 40.0
 		lType = 1
-		//dirGlX, dirGlY, dirGlZ = float32(0.0), float32(-1.0), float32(0.0)
-		//cutOff = float32(math.Cos(35.0 * math.Pi / 180.0))
-		//outerCutOff = float32(math.Cos(40 * math.Pi / 180.0))
-		lPosX, lPosY, lPosZ := float32(posX), float32(posZ), float32(-posY)
-		camX, camY, camZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
+		glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
+		//glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pY), float32(f.pZ)
 		added := f.addShadowLight(
-			lPosX, lPosY, lPosZ,
-			camX, camY, camZ,
+			glPosX, glPosY, glPosZ,
+			glCamX, glCamY, glCamZ,
 			lType,
 			r, g, b, intensity,
-			dirGlX, dirGlY, dirGlZ, falloff,
+			glDirX, glDirY, glDirZ, falloff,
 			cutOff, outerCutOff,
 		)
 		if added {
@@ -143,9 +133,9 @@ func (f *FrameLights) Create(light *model.Light) {
 	}
 
 	f.add(
-		float32(posX), float32(posZ), float32(-posY), lType,
+		glPosX, glPosY, glPosZ, lType,
 		r, g, b, intensity,
-		dirGlX, dirGlY, dirGlZ, falloff,
+		glDirX, glDirY, glDirZ, falloff,
 		cutOff, outerCutOff, 0.0, 0.0,
 	)
 }
@@ -184,14 +174,14 @@ func (f *FrameLights) add(
 // addShadowLight adds a shadow-casting light to the list of frame lights based on its attributes and distance to the camera.
 // Returns true if the light was successfully added, or false if it didn't qualify or was replaced in the min-heap.
 func (f *FrameLights) addShadowLight(
-	lPosX, lPosY, lPosZ float32,
+	posX, posY, posZ float32,
 	camX, camY, camZ float32,
 	lightType float32,
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 ) bool {
-	dx, dy, dz := lPosX-camX, lPosY-camY, lPosZ-camZ
+	dx, dy, dz := posX-camX, posY-camY, posZ-camZ
 	distSq := dx*dx + dy*dy + dz*dz
 	if distSq > (falloff * falloff * 4.0) {
 		return false
@@ -200,7 +190,7 @@ func (f *FrameLights) addShadowLight(
 	// Fase 1: Riempimento iniziale (0-7)
 	if f.shadowLightsIndex < ShadowLightNumber {
 		light := f.shadowLights[f.shadowLightsIndex]
-		f.fillLightStruct(light, lPosX, lPosY, lPosZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+		f.fillLightStruct(light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 		f.shadowLightsIndex++
 		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
 		if f.shadowLightsIndex == ShadowLightNumber {
@@ -220,7 +210,7 @@ func (f *FrameLights) addShadowLight(
 		worst.DirX, worst.DirY, worst.DirZ, worst.Falloff,
 		worst.CutOff, worst.OuterCutOff, 0.0, 0.0,
 	)
-	f.fillLightStruct(worst, lPosX, lPosY, lPosZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+	f.fillLightStruct(worst, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 	// Ripristiniamo l'ordine dell'heap in O(log N)
 	f.minHeapFixDown(0, ShadowLightNumber)
 	return true

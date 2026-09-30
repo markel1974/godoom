@@ -209,18 +209,11 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		// Otherwise angle is the horizontal yaw.
 		switch angle {
 		case -1:
-			dirX = 0.0
-			dirY = 0.0
-			dirZ = 1.0
+			dirX, dirY, dirZ = 0.0, 0.0, 1.0
 		case -2:
-			dirX = 0.0
-			dirY = 0.0
-			dirZ = -1.0
+			dirX, dirY, dirZ = 0.0, 0.0, -1.0
 		default:
-			angleRad := angle * math.Pi / 180.0
-			dirX = math.Cos(angleRad)
-			dirY = math.Sin(angleRad)
-			dirZ = 0.0
+			dirX, dirY, dirZ = lumps.CalcAngleDirection(angle)
 		}
 	}
 

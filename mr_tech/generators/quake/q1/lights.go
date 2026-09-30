@@ -188,7 +188,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 		}
 	} else if len(mangleStr) > 0 {
 		//TODO DISABLED FOR THE MOMENT
-		return nil
+		//return nil
 		kind = config.LightKindSpot
 		yaw, pitch, _, valid := lumps.ParseVector(mangleStr)
 		if !valid {
@@ -196,10 +196,9 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			return nil
 		}
 		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
-
-		dirZ = dirZ
-		dirY = -dirY
-		dirX = -dirX
+		//dirZ = dirZ
+		//dirY = -dirY
+		//dirX = -dirX
 	}
 
 	r, g, b, ok := lumps.ParseColorVector(colorStr)
@@ -210,8 +209,8 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	var falloff float64
 	var intensity float64
 	if kind == config.LightKindSpot {
-		falloff = q1Intensity * 0.1
-		intensity = q1Intensity * 0.1
+		falloff = q1Intensity * 0.05
+		intensity = q1Intensity * 0.01
 		if c, valid := lumps.ParseFloat(angleStr); valid {
 			coneAngle = c
 		}

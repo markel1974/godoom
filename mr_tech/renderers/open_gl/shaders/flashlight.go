@@ -75,7 +75,7 @@ func NewShaderShadowLight(cal *model.Calibration) *ShadowLight {
 		cal:         cal,
 		shadows:     false,
 		shadowsInt:  0,
-		debugLights: 1,
+		debugLights: 0,
 	}
 	f.EnableShadows(false)
 	return f

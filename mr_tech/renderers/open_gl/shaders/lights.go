@@ -69,7 +69,7 @@ func NewLights(stride int32, cal *model.Calibration) *Lights {
 		cal:         cal,
 		stride:      stride,
 		frameIdx:    0,
-		debugLights: 1,
+		debugLights: 0,
 	}
 }
 

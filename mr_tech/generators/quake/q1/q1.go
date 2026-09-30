@@ -153,26 +153,17 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 	volumes := NewVolumes(mIdx, chunkSize)
 
 	for _, ent := range entities {
-		classname := ent.Properties["classname"]
-		baseClass := classname
-		subClass := ""
+		classname, _ := ent.GetProperty("classname")
+		baseClass, subClass := classname, ""
 		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass = z[0]
-			subClass = z[1]
+			baseClass, subClass = z[0], z[1]
 		}
 		var pos geometry.XYZ
-		if origin, ok := ent.Properties["origin"]; ok {
-			var x, y, z float64
-			_, _ = fmt.Sscanf(origin, "%f %f %f", &x, &y, &z)
+		if origin, ok := ent.GetProperty("origin"); ok {
+			x, y, z, _ := lumps.ParseVector(origin)
 			pos = lumps.CreateXYZ(x, y, z)
 		}
-
-		var angle float64
-		if a, ok := ent.Properties["angle"]; ok {
-			angle, _ = strconv.ParseFloat(a, 64)
-		}
-
-		if modelProp := ent.Properties["model"]; strings.HasPrefix(modelProp, "*") {
+		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
 			modelIdx, _ := strconv.Atoi(modelProp[1:])
 			rawFaces, err := q1.GetRawFaces(modelIdx)
 			if err != nil {
@@ -203,10 +194,10 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
 			if classname == "info_player_start" {
-				var err error
-				q1.playerPos, q1.playerAngle, err = q1.createPlayerProps(angle, pos)
-				if err != nil {
-					fmt.Printf("Warning: %s\n", err.Error())
+				q1.playerPos, q1.playerAngle = pos, 0.0
+				if a, ok := ent.GetProperty("angle"); ok {
+					angle, _ := lumps.ParseFloat(a)
+					q1.playerAngle = angle * (math.Pi / 180.0)
 				}
 			} else {
 				// Invisible markers: teleports, deathmatch spawn points, patrol nodes.
@@ -240,12 +231,6 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 	root.Volumes = volumes.Generate(faces)
 
 	return nil
-}
-
-// createPlayerProps extracts player position and angle from an entity and computes the angle in radians.
-func (q1 *BSPReader) createPlayerProps(angle float64, pos geometry.XYZ) (geometry.XYZ, float64, error) {
-	playerAngle := angle * (math.Pi / 180.0)
-	return pos, playerAngle, nil
 }
 
 // getVertexes retrieves the vertex data from the BSP file using the lump information and returns a slice of vertex pointers.

@@ -137,17 +137,8 @@ func ParseColorVector(colorStr string) (float64, float64, float64, bool) {
 	return r, g, b, true
 }
 
-// CalcDirection converts Quake angles (yaw, pitch) into a normalized direction vector.
-func CalcDirectionOld(yaw, pitch float64) (float64, float64, float64) {
-	yawRad := yaw * math.Pi / 180.0
-	pitchRad := pitch * math.Pi / 180.0
-	dirX := math.Cos(pitchRad) * math.Cos(yawRad)
-	dirY := math.Sin(pitchRad)
-	dirZ := math.Cos(pitchRad) * math.Sin(yawRad)
-	return dirX, dirY, dirZ
-}
-
-func CalcDirectionTEST(yaw, pitch float64) (float64, float64, float64) {
+// CalcDirectionYUP calculates a 3D directional vector (X, Y, Z) in a Y-up coordinate system based on yaw and pitch angles.
+func CalcDirectionYUP(yaw, pitch float64) (float64, float64, float64) {
 	yawRad := yaw * math.Pi / 180.0
 	pitchRad := pitch * math.Pi / 180.0
 
@@ -156,36 +147,48 @@ func CalcDirectionTEST(yaw, pitch float64) (float64, float64, float64) {
 	cy := math.Cos(yawRad)
 	sy := math.Sin(yawRad)
 
-	// Quake mangle:
-	//   yaw   = angle around Z
-	//   pitch = +90 up, -90 down
-	//   roll  = ignored
-	//
-	// Runtime: Y-up.
 	dirX := cp * cy
 	dirY := sp
 	dirZ := cp * sy
-
-	dirY = -dirY
-	//dirX = dirX
-	//dirZ = dirZ
-
 	return dirX, dirY, dirZ
 }
 
+// CalcDirectionZUP calculates a directional vector in a Z-up coordinate system given yaw and pitch angles in degrees.
+// Returns the X, Y, and Z components of the vector as float64 values.
+func CalcDirectionZUP(yaw, pitch float64) (float64, float64, float64) {
+	yawRad := yaw * math.Pi / 180.0
+	pitchRad := pitch * math.Pi / 180.0
+	cp := math.Cos(pitchRad)
+	sp := math.Sin(pitchRad)
+	cy := math.Cos(yawRad)
+	sy := math.Sin(yawRad)
+	dirX := sp * cy
+	dirY := sp * sy
+	dirZ := -cp
+	return dirX, dirY, dirZ
+}
+
+// CalcDirection calculates the X, Y, and Z components of a direction vector based on yaw and pitch angles in degrees.
 func CalcDirection(yaw, pitch float64) (float64, float64, float64) {
-	yawRad := yaw * math.Pi / 180.0
-	pitchRad := pitch * math.Pi / 180.0
+	dirX, dirY, dirZ := CalcDirectionZUP(yaw, pitch)
+	return dirX, dirY, dirZ
+}
 
-	cp := math.Cos(pitchRad)
-	sp := math.Sin(pitchRad)
-	cy := math.Cos(yawRad)
-	sy := math.Sin(yawRad)
+// CalcAngleDirectionZUP calculates the direction in the XY-plane for a given angle assuming Z-axis is up (Z-UP).
+// The angle is provided in degrees and the function returns the X, Y, and Z components of the direction vector.
+func CalcAngleDirectionZUP(angle float64) (float64, float64, float64) {
+	angleRad := angle * math.Pi / 180.0
 
-	dirX := cp * cy
-	dirY := sp
-	dirZ := cp * sy
+	dirX := math.Cos(angleRad)
+	dirY := math.Sin(angleRad)
+	dirZ := 0.0
 
+	return dirX, dirY, dirZ
+}
+
+// CalcAngleDirection computes the direction components (X, Y, Z) for a given angle in degrees.
+func CalcAngleDirection(angle float64) (float64, float64, float64) {
+	dirX, dirY, dirZ := CalcAngleDirectionZUP(angle)
 	return dirX, dirY, dirZ
 }
 

@@ -29,6 +29,7 @@ type Light struct {
 	cutOff           float64
 	outerCutOff      float64
 	style            []float64
+	radius           float64
 }
 
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
@@ -43,6 +44,7 @@ func NewLight() *Light {
 		r:                1.0,
 		g:                1.0,
 		b:                1.0,
+		radius:           0.0,
 	}
 	return l
 }
@@ -62,6 +64,10 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	cl.kind = c.Kind
 	cl.cutOff = math.Cos(c.CutOff * math.Pi / 180.0)
 	cl.outerCutOff = math.Cos(c.OuterCutOff * math.Pi / 180.0)
+	const influence = 10
+	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
+	// esattamente il raggio di influenza massimo della luce nel mondo.
+	cl.radius = c.Falloff * influence
 
 	if len(cl.style) == 0 {
 		cl.style = []float64{1.0}
@@ -86,10 +92,7 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 
 // Rebuild recalculates the AABB of the light based on its position and real falloff radius.
 func (cl *Light) Rebuild() {
-	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
-	// esattamente il raggio di influenza massimo della luce nel mondo.
-	const influence = 10
-	r := cl.falloff * influence
+	r := cl.radius
 	cl.aabb.Rebuild(cl.pos.X-r, cl.pos.Y-r, cl.pos.Z-r, cl.pos.X+r, cl.pos.Y+r, cl.pos.Z+r)
 }
 
@@ -187,4 +190,9 @@ func (cl *Light) GetOuterCutOff() float64 {
 func (cl *Light) GetFrame(frameFloat float64) float64 {
 	idx := int(frameFloat) % len(cl.style)
 	return cl.intensity * cl.style[idx]
+}
+
+// GetRadius retrieves the effective radius of influence for the light, determined by its falloff and configuration.
+func (cl *Light) GetRadius() float64 {
+	return cl.radius
 }

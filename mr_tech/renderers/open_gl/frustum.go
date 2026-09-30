@@ -2,23 +2,21 @@ package open_gl
 
 import (
 	"math"
-
-	"github.com/markel1974/godoom/mr_tech/model"
 )
 
 // CreateFrontRearFrustum generates view-projection matrices for front and rear frustums based on given camera parameters.
-func CreateFrontRearFrustum(aspect, zFarRoom, px, py, pz float32, angle, pitch, roll float64) ([16]float32, [16]float32) {
+func CreateFrontRearFrustum(aspect, zFarRoom, px, py, pz float32, angle, pitch, roll float64, prjScaleX, prjScaleY float64) ([16]float32, [16]float32) {
 	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
-	fm := CreateFrustum(aspect, zFarRoom, px, py, pz, angle, pitch, roll)
-	fr := CreateFrustum(aspect, zFarRoom, px, py, pz, rAngle, rPitch, rRoll)
+	fm := CreateFrustum(aspect, zFarRoom, px, py, pz, angle, pitch, roll, prjScaleX, prjScaleY)
+	fr := CreateFrustum(aspect, zFarRoom, px, py, pz, rAngle, rPitch, rRoll, prjScaleX, prjScaleY)
 	return fm, fr
 }
 
 // CreateFrustum generates a view-projection matrix for rendering a 3D frustum with specified dimensions and orientation.
-func CreateFrustum(aspect, zFarRoom, px, py, pz float32, yaw, pitch, roll float64) [16]float32 {
+func CreateFrustum(aspect, zFarRoom, px, py, pz float32, yaw, pitch, roll float64, prjScaleX, prjScaleY float64) [16]float32 {
 	const kScale = float32(1.0)
-	scaleX := (kScale / aspect) * float32(model.HFov)
-	scaleY := kScale * float32(model.VFov)
+	scaleX := (kScale / aspect) * float32(prjScaleX)
+	scaleY := kScale * float32(prjScaleY)
 	zNear := float32(0.1)
 	zFar := zFarRoom
 	if zFar <= zNear {

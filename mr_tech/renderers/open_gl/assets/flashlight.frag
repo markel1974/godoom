@@ -144,7 +144,7 @@ void main()
     if (u_isAbsolute == 1) {
         // Posizione in View Space
         flashPosView = (u_view * vec4(u_flashOffset, 1.0)).xyz;
-        // Crea un bersaglio nel mondo reale (1 metro più in là)
+        // Crea un bersaglio nel mondo reale
         vec3 worldTarget = u_flashOffset + normalize(u_flashDir);
         // Trasforma il bersaglio
         vec3 targetView = (u_view * vec4(worldTarget, 1.0)).xyz;
@@ -192,7 +192,7 @@ void main()
     float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
     if (u_isAbsolute == 1) {
         // Ripristiniamo il fattore energetico u_flashFalloff se necessario alla calibrazione
-        flashIntensity = flashCone * u_flashIntensityFactor * distanceFade;
+        flashIntensity = u_flashIntensityFactor;//flashCone * u_flashIntensityFactor * distanceFade;
     } else {
         flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
     }

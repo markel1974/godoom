@@ -76,7 +76,9 @@ func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV 
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll)
+	prjScale := 0.001
+
+	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll, prjScale, prjScale)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 
 	// Ripristina VBO e Comandi allo stato congelato

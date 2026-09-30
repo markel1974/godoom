@@ -1,6 +1,8 @@
 package open_gl
 
 import (
+	"fmt"
+
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -19,6 +21,18 @@ type Light struct {
 	DirX, DirY, DirZ, Falloff float32
 	CutOff, OuterCutOff       float32
 	Score                     float32
+}
+
+// Assign sets the properties of a Light instance, including position, color, intensity, direction, falloff, and cutoff values.
+func (l *Light) Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score float32) {
+	l.X, l.Y, l.Z = posX, posY, posZ
+	l.Kind = lightType
+	l.R, l.G, l.B = colR, colG, colB
+	l.Intensity = intensity
+	l.DirX, l.DirY, l.DirZ = dirX, dirY, dirZ
+	l.Falloff = falloff
+	l.CutOff, l.OuterCutOff = cutOff, outerCutOff
+	l.Score = score
 }
 
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
@@ -114,7 +128,6 @@ func (f *FrameLights) Create(light *model.Light) {
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-
 		added := f.addShadowLight(
 			glPosX, glPosY, glPosZ,
 			f.glCamX, f.glCamY, f.glCamZ,
@@ -122,6 +135,7 @@ func (f *FrameLights) Create(light *model.Light) {
 			r, g, b, intensity,
 			glDirX, glDirY, glDirZ, falloff,
 			cutOff, outerCutOff,
+			float32(light.GetRadius()),
 		)
 		if added {
 			return
@@ -180,17 +194,26 @@ func (f *FrameLights) addShadowLight(
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
+	radius float32,
 ) bool {
+	//TODO VERIFICA LE ombre generati non sono coerenti
+	return false
 	dx, dy, dz := posX-camX, posY-camY, posZ-camZ
 	distSq := dx*dx + dy*dy + dz*dz
-	if distSq > (falloff * falloff * 4.0) {
+
+	target := radius * radius * 4
+	//if distSq > (falloff * falloff * 4.0) {
+	if distSq > target {
 		return false
 	}
+
 	score := intensity / (distSq + 1.0)
+
 	// Fase 1: Riempimento iniziale (0-7)
 	if f.shadowLightsIndex < ShadowLightNumber {
 		light := f.shadowLights[f.shadowLightsIndex]
-		f.fillLightStruct(light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+		fmt.Println("VERIFY HOTSPOT", distSq, target)
+		light.Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 		f.shadowLightsIndex++
 		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
 		if f.shadowLightsIndex == ShadowLightNumber {
@@ -202,30 +225,21 @@ func (f *FrameLights) addShadowLight(
 	if score <= f.shadowLights[0].Score {
 		return false
 	}
+
+	// TODO RIMUOVERE!
 	// Sostituzione: declassiamo la radice (la peggiore) e inseriamo la nuova
 	worst := f.shadowLights[0]
+
 	f.add(
 		worst.X, worst.Y, worst.Z, worst.Kind,
 		worst.R, worst.G, worst.B, worst.Intensity,
 		worst.DirX, worst.DirY, worst.DirZ, worst.Falloff,
 		worst.CutOff, worst.OuterCutOff, 0.0, 0.0,
 	)
-	f.fillLightStruct(worst, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
+	worst.Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 	// Ripristiniamo l'ordine dell'heap in O(log N)
 	f.minHeapFixDown(0, ShadowLightNumber)
 	return true
-}
-
-// fillLightStruct populates the given Light struct with the provided positional, directional, and light-related properties.
-func (f *FrameLights) fillLightStruct(l *Light, posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score float32) {
-	l.X, l.Y, l.Z = posX, posY, posZ
-	l.Kind = lightType
-	l.R, l.G, l.B = colR, colG, colB
-	l.Intensity = intensity
-	l.DirX, l.DirY, l.DirZ = dirX, dirY, dirZ
-	l.Falloff = falloff
-	l.CutOff, l.OuterCutOff = cutOff, outerCutOff
-	l.Score = score
 }
 
 // grow dynamically expands the size of the underlying data slice when more capacity is needed.

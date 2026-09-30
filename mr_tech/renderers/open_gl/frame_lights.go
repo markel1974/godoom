@@ -113,8 +113,8 @@ func (f *FrameLights) Create(light *model.Light) {
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-		glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
-		//glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pY), float32(f.pZ)
+		//glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
+		glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pY), float32(f.pZ)
 		added := f.addShadowLight(
 			glPosX, glPosY, glPosZ,
 			glCamX, glCamY, glCamZ,

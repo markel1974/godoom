@@ -30,9 +30,9 @@ type FrameLights struct {
 	stride            int32
 	shadowLights      [ShadowLightNumber]*Light
 	shadowLightsIndex int32
-	pX                float64
-	pY                float64
-	pZ                float64
+	glCamX            float32
+	glCamY            float32
+	glCamZ            float32
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
@@ -83,10 +83,11 @@ func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*Light, int32) {
 	return f.shadowLights, f.shadowLightsIndex
 }
 
-// Prepare resets the shadow lights index and updates the camera position values (camX, camY, camZ).
-func (f *FrameLights) Prepare(px, pY, pZ float64) {
-	//f.camX, f.camY, f.camZ = camX, camY, camZ
-	f.pX, f.pY, f.pZ = px, pY, pZ
+// Prepare initializes camera position for lighting calculations and resets the shadow lights index to zero.
+func (f *FrameLights) Prepare(pX, pY, pZ float64) {
+	//TODO VERIFICA
+	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
+	f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
 	f.shadowLightsIndex = 0
 }
 
@@ -113,11 +114,10 @@ func (f *FrameLights) Create(light *model.Light) {
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-		//glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pZ), float32(-f.pY)
-		glCamX, glCamY, glCamZ := float32(f.pX), float32(f.pY), float32(f.pZ)
+
 		added := f.addShadowLight(
 			glPosX, glPosY, glPosZ,
-			glCamX, glCamY, glCamZ,
+			f.glCamX, f.glCamY, f.glCamZ,
 			lType,
 			r, g, b, intensity,
 			glDirX, glDirY, glDirZ, falloff,

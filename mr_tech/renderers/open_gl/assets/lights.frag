@@ -32,11 +32,11 @@ uniform int u_debugLights;
 
 const float PI = 3.14159265359;
 
-// --- NUOVO UBO PER LUCI MULTIPLE (Allineamento std140 rigoroso a 16 byte) ---
+// UBO for multiple lights (Strict 16-byte std140 alignment)
 struct Light {
-    vec4 pos_type;       // xyz: Posizione World, w: Tipo (0.0=Point, 1.0=Spot, 2.0=Directional)
-    vec4 color_intensity;// xyz: Colore RGB,      w: Intensità
-    vec4 dir_falloff;    // xyz: Direzione World, w: Falloff Factor
+    vec4 pos_type;       // xyz: World position,  w: Type (0.0=Point, 1.0=Spot, 2.0=Directional)
+    vec4 color_intensity;// xyz: RGB color,       w: Intensity
+    vec4 dir_falloff;    // xyz: World direction, w: Falloff Factor
     vec4 spot_params;    // x: inner cutoff (cos), y: outer cutoff (cos), z,w: padding
 };
 
@@ -44,22 +44,33 @@ layout(std140) uniform LightsBlock {
     Light u_lights[256];
 };
 
-
 vec4 getDiffuse(vec3 tc) {
     int b = int(tc.z) / 1000;
     float l = mod(tc.z, 1000.0);
-    if (b == 0) return texture(u_texture[0], vec3(tc.xy, l));
-    if (b == 1) return texture(u_texture[1], vec3(tc.xy, l));
-    if (b == 2) return texture(u_texture[2], vec3(tc.xy, l));
+    if (b == 0) {
+        return texture(u_texture[0], vec3(tc.xy, l));
+    }
+    if (b == 1) {
+        return texture(u_texture[1], vec3(tc.xy, l));
+    }
+    if (b == 2) {
+        return texture(u_texture[2], vec3(tc.xy, l));
+    }
     return texture(u_texture[3], vec3(tc.xy, l));
 }
 
 vec3 getNormal(vec3 tc) {
     int b = int(tc.z) / 1000;
     float l = mod(tc.z, 1000.0);
-    if (b == 0) return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
-    if (b == 1) return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
-    if (b == 2) return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
+    if (b == 0) {
+        return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
+    }
+    if (b == 1) {
+        return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
+    }
+    if (b == 2) {
+        return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
+    }
     return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
 }
 
@@ -72,7 +83,9 @@ float sampleVolumetricShadow(vec3 posView, mat4 lightSpaceMatrix, sampler2DShado
     vec4 shadowPos = lightSpaceMatrix * worldPos;
     vec3 proj = shadowPos.xyz / shadowPos.w;
     proj = proj * 0.5 + 0.5;
-    if(proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) return 1.0;
+    if(proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+        return 1.0;
+    }
     return texture(shadowMap, vec3(proj.xy, proj.z - 0.005));
 }
 
@@ -80,7 +93,9 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     if (fragPosLightSpace.w <= 0.0) return 0.0;
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
-    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
+    }
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
@@ -103,20 +118,19 @@ vec3 calculateNormal() {
     vec3 dp1 = dFdx(ViewPos);
     vec3 dp2 = dFdy(ViewPos);
     vec3 geoNormal = normalize(cross(dp1, dp2));
-
-    // Sicurezza Anti-Backface antisfarfallio
+    // Anti-backface flicker safety
     if (geoNormal.z < 0.0) {
         geoNormal = -geoNormal;
     }
-
-    // Sicurezza Anti-Backface: forza la normale a guardare la camera
+    // Anti-backface safety: force normal to face the camera
     if (dot(geoNormal, ViewPos) > 0.0) {
         geoNormal = -geoNormal;
     }
 
     vec3 mapColor = getNormal(TexCoords);
-    if (length(mapColor) < 0.1) return geoNormal;
-
+    if (length(mapColor) < 0.1) {
+        return geoNormal;
+    }
     vec3 unpacked = (mapColor * 2.0) - 1.0;
     vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
@@ -143,40 +157,41 @@ float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizon
     float shininess = mix(u_shininessWall, u_shininessFloor, float(isHorizontal));
     float specBoost = mix(u_specBoostWall, u_specBoostFloor, float(isHorizontal));
 
-    if (shininess <= 0.01) return 0.0;
+    if (shininess <= 0.01) {
+        return 0.0;
+    }
 
     float energyConservation = (shininess + 2.0) / (8.0 * PI);
     return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
 }
 
-void main()
-{
+void main() {
     vec4 texColor = getDiffuse(TexCoords);
-    if(texColor.a < 0.5) discard;
-
+    if(texColor.a < 0.5) {
+        discard;
+    }
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
     vec3 finalNormal = calculateNormal();
 
-    // VARIABILI NECESSARIE PER LO SPECULARE
+    // Specular variables
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos); // View Direction
 
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     vec3 litRoom = albedo * NdotL_room * u_ambient_light;
-    vec3 roomBeam = vec3(0.0); // Di base, nessuna nebbia volumetrica
+    vec3 roomBeam = vec3(0.0); // By default, no volumetric fog
 
     if (u_enableShadows == 1) {
-
-        // OMBRE STANZA
-        // Usa la normale geometrica già fusa dal TBN
+        // Rom shadows
+        // Use the geometric normal already blended by TBN
         vec3 geoNormal = finalNormal;
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         float shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         float shadowFactor = 1.0 - shadowRoom;
         litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
-        // NEBBIA VOLUMETRICA
+        // Volumetric fog
         float volRoom = 0.0;
         if (u_volumetricSteps > 0) {
             vec3 rayStep = ViewPos / float(u_volumetricSteps);
@@ -189,29 +204,23 @@ void main()
             }
         }
         float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
-        // Calcoliamo il roomBeam SOLO se abbiamo fatto il raymarching
-
+        // Calculate roomBeam ONLY if raymarching was performed
         roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
-
-        //roomBeam = vec3(0.0);
     }
 
-
-    // LUCI DINAMICHE
     vec3 dynamicLights = vec3(0.0);
 
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
         float intensity = max(u_lights[i].color_intensity.w, 0.0);
-
-        // Se la luce è spenta, salta
-        if (intensity <= 0.001) continue;
-
+        // Skip if light is disabled
+        if (intensity <= 0.001) {
+            continue;
+        }
         vec3 lightColor = u_lights[i].color_intensity.xyz;
         vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
         vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
-
-        // Trattiamo falloffFactor come il raggio d'azione massimo della luce
+        // Treat falloff-Factor as the maximum light radius
         float falloffFactor = max(u_lights[i].dir_falloff.w, 1.0);
 
         vec3 L;
@@ -220,21 +229,22 @@ void main()
         float spotEffect = 1.0;
 
         if (lightType == 2) {
-            // --- LUCE DIREZIONALE ---
+            // Direction light
             L = -spotDirView;
         } else {
-            // --- POINT & SPOT ---
+            // Point & Spot
             vec3 diff = lightPosView - ViewPos;
             dist = length(diff);
-
             float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
-            // EARLY-OUT: Ora scartiamo i pixel solo se sono VERAMENTE fuori portata
-            if (dist > effectiveRadius) continue;
+            // Discard pixels only if truly out of range
+            if (dist > effectiveRadius) {
+                continue;
+            }
             L = diff / dist;
-            // Il tuo decadimento esponenziale HDR originale
+            // HDR exponential decay
             falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
             if (lightType == 1) {
-                // --- LIMITATORE CONO SPOT ---
+                // Spot cone limiter
                 float theta = dot(-L, spotDirView);
                 float cutOff = u_lights[i].spot_params.x;
                 float outerCutOff = u_lights[i].spot_params.y;
@@ -242,13 +252,12 @@ void main()
             }
         }
 
-        // CALCOLO DIFFUSIONE E SPECULARE
+        // Diffuse adn specular calculation
         float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
         float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V, isHorizontal);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
-
-        // ACCUMULO FINALE
+        // Finakl accumulation
         dynamicLights += (diffuse + specular) * intensity * falloff * spotEffect;
     }
 
@@ -274,6 +283,6 @@ void main()
     }
 
     vec3 finalLight = litRoom + roomBeam + dynamicLights;
-    FragColor = vec4(finalLight, 1.0); // Forzato a 1.0 per sicurezza sul frame buffer
+    FragColor = vec4(finalLight, 1.0); // Forced to 1.0 for framebuffer safety
     BrightColor = vec4(dot(finalLight, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? finalLight : vec3(0.0), 1.0);
 }

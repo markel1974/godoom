@@ -21,6 +21,7 @@ type Vertices3D struct {
 	elements       []*Vertices3DEntry
 	links          []config.Model3DLink
 	linkTagIndices []int
+	executionOrder []int
 	volsA          []*Volume
 	volsB          []*Volume
 	originsA       []geometry.XYZ
@@ -60,6 +61,33 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		}
 	}
 
+	// Build topological execution order based on Links using a Depth-First Search (DFS).
+	// This ensures that parents are always processed before their children,
+	// allowing us to calculate global origins in a single flat loop regardless
+	// of the order in which the parts were defined in the configuration.
+	executionOrder := make([]int, 0, len(elements))
+	visited := make([]bool, len(elements))
+	var visit func(int)
+	visit = func(node int) {
+		if node < 0 || node >= len(elements) || visited[node] {
+			return
+		}
+		// Visit the parent first (DFS traversal)
+		pIdx := links[node].Parent
+		if pIdx >= 0 && pIdx < len(elements) {
+			visit(pIdx)
+		}
+		visited[node] = true
+		executionOrder = append(executionOrder, node)
+	}
+
+	// Ensure all nodes are visited (including disconnected sub-trees)
+	for i := range elements {
+		if !visited[i] {
+			visit(i)
+		}
+	}
+
 	v := &Vertices3D{
 		elements:       elements,
 		totalFaces:     totalFaces,
@@ -69,6 +97,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		facesB:         make([]*Face, totalFaces),
 		links:          links,
 		linkTagIndices: linkTagIndices,
+		executionOrder: executionOrder,
 	}
 	v.facesAPtr = &v.facesA
 	v.facesBPtr = &v.facesB
@@ -127,7 +156,8 @@ func (v *Vertices3D) SetAction(idx int) {
 		return
 	}
 	v.currentAction = idx
-	for i, el := range v.elements {
+	for _, i := range v.executionOrder {
+		el := v.elements[i]
 		if el != nil {
 			if i < len(v.actionMaps) && idx >= 0 && idx < len(v.actionMaps[i]) {
 				el.SetAction(v.actionMaps[i][idx])
@@ -162,7 +192,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 	var lerpTRet float64
 	offset := 0
 
-	for i, el := range v.elements {
+	for _, i := range v.executionOrder {
+		el := v.elements[i]
 		if el == nil {
 			v.volsA[i] = nil
 			v.volsB[i] = nil
@@ -179,7 +210,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		v.volsA[i] = volA
 		v.volsB[i] = volB
 
-		if i == 0 {
+		if i == v.executionOrder[0] {
 			lerpTRet = lerpT
 		}
 

@@ -183,7 +183,7 @@ func (v *Volume) SetVertexTag(idx int, vertex geometry.XYZ) {
 	v.vertexTags[idx] = vertex
 }
 
-// GetVertexTag retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
+// GetTagVertex retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
 func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, bool) {
 	if idx >= 0 && idx < len(v.vertexTags) {
 		return v.vertexTags[idx], true

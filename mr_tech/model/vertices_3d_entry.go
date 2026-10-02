@@ -148,15 +148,22 @@ func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
 func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	// Se non ci sono frame, restituisce vuoto
-	if len(v.volumes) == 0 {
+	volA, volB, lerpT := v.GetVolumesAt(tick)
+	if volA == nil || volB == nil {
 		return nil, 0, nil, 0, 0.0, v.GetRenderMode()
 	}
-	// Se c'è un solo frame nell'animazione, restituisce lo stesso frame due volte senza lerp
+	facesA, count := volA.GetFaces()
+	facesB, _ := volB.GetFaces()
+	return facesA, count, facesB, count, lerpT, v.GetRenderMode()
+}
+
+// GetVolumesAt retrieves the precise start and end frames for interpolation at the given tick.
+func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) {
+	if len(v.volumes) == 0 {
+		return nil, nil, 0.0
+	}
 	if v.startFrame == v.endFrame {
-		s := v.volumes[v.startFrame]
-		faces, faceCount := s.GetFaces()
-		return faces, faceCount, faces, faceCount, 0.0, v.GetRenderMode()
+		return v.volumes[v.startFrame], v.volumes[v.startFrame], 0.0
 	}
 	const groupSize = 6.0
 	var frameFloat float64
@@ -170,13 +177,11 @@ func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int
 		frameFloat = textures.TickGrouped(tick, int(groupSize))
 	}
 
-	// Calcoliamo la durata dell'animazione corrente in termini di numero di frame
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
 		animLength = 1
 	}
 
-	// Troviamo l'indice relativo all'interno dell'animazione corrente
 	relativeFrameA := int(frameFloat)
 	relativeFrameB := relativeFrameA + 1
 	lerpT := frameFloat - math.Floor(frameFloat)
@@ -195,59 +200,10 @@ func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int
 		relativeFrameB = relativeFrameB % animLength
 	}
 
-	idxA := v.startFrame + relativeFrameA
-	idxB := v.startFrame + relativeFrameB
+	frameA := v.startFrame + relativeFrameA
+	frameB := v.startFrame + relativeFrameB
 
-	curr := v.volumes[idxA]
-	next := v.volumes[idxB]
-
-	facesA, faceCountA := curr.GetFaces()
-	facesB, faceCountB := next.GetFaces()
-
-	return facesA, faceCountA, facesB, faceCountB, lerpT, v.GetRenderMode()
-}
-
-// GetVolumesAt calculates and returns the volumes for a specific tick, without mutating state.
-func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume) {
-	if len(v.volumes) == 0 {
-		return nil, nil
-	}
-	if v.startFrame == v.endFrame {
-		return v.volumes[v.startFrame], v.volumes[v.startFrame]
-	}
-	const groupSize = 6.0
-	var frameFloat float64
-	if v.clampAnim {
-		elapsed := uint64(0)
-		if tick > v.startTick {
-			elapsed = tick - v.startTick
-		}
-		frameFloat = float64(elapsed) / groupSize
-	} else {
-		frameFloat = textures.TickGrouped(tick, int(groupSize))
-	}
-
-	animLength := v.endFrame - v.startFrame + 1
-	if animLength <= 0 {
-		animLength = 1
-	}
-
-	relativeFrameA := int(frameFloat)
-	relativeFrameB := relativeFrameA + 1
-
-	if v.clampAnim {
-		if relativeFrameA >= animLength-1 {
-			relativeFrameA = animLength - 1
-			relativeFrameB = animLength - 1
-		} else if relativeFrameB >= animLength-1 {
-			relativeFrameB = animLength - 1
-		}
-	} else {
-		relativeFrameA = relativeFrameA % animLength
-		relativeFrameB = relativeFrameB % animLength
-	}
-
-	return v.volumes[v.startFrame+relativeFrameA], v.volumes[v.startFrame+relativeFrameB]
+	return v.volumes[frameA], v.volumes[frameB], lerpT
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
@@ -267,15 +223,15 @@ func (v *Vertices3DEntry) SetThing(t IThing) {
 	}
 }
 
-// v3dCleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
-func v3dCleanString(s string) string {
-	return strings.TrimSpace(strings.ToLower(s))
-}
-
 // GetTagIndex returns the internal index of a tag by its name, or -1 if not found.
 func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	if idx, ok := v.tagMap[name]; ok {
 		return idx
 	}
 	return -1
+}
+
+// v3dCleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
+func v3dCleanString(s string) string {
+	return strings.TrimSpace(strings.ToLower(s))
 }

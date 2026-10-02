@@ -159,15 +159,30 @@ func (v *Vertices3D) SetThing(t IThing) {
 
 // GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
 func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	for i, el := range v.elements {
-		if el != nil {
-			v.volsA[i], v.volsB[i] = el.GetVolumesAt(tick)
-		} else {
-			v.volsA[i], v.volsB[i] = nil, nil
-		}
-	}
+	var lerpTRet float64
+	offset := 0
 
-	for i := 0; i < len(v.elements); i++ {
+	for i, el := range v.elements {
+		if el == nil {
+			v.volsA[i] = nil
+			v.volsB[i] = nil
+			v.originsA[i].X = 0
+			v.originsA[i].Y = 0
+			v.originsA[i].Z = 0
+			v.originsB[i].X = 0
+			v.originsB[i].Y = 0
+			v.originsB[i].Z = 0
+			continue
+		}
+
+		volA, volB, lerpT := el.GetVolumesAt(tick)
+		v.volsA[i] = volA
+		v.volsB[i] = volB
+
+		if i == 0 {
+			lerpTRet = lerpT
+		}
+
 		pIdx := v.links[i].Parent
 		if pIdx >= 0 && pIdx < len(v.elements) && v.volsA[pIdx] != nil && v.volsB[pIdx] != nil {
 			tagIdx := v.linkTagIndices[i]
@@ -185,24 +200,14 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			v.originsA[i].X = 0
 			v.originsA[i].Y = 0
 			v.originsA[i].Z = 0
-
 			v.originsB[i].X = 0
 			v.originsB[i].Y = 0
 			v.originsB[i].Z = 0
 		}
-	}
 
-	var lerpTRet float64
-	offset := 0
+		facesA, count := volA.GetFaces()
+		facesB, _ := volB.GetFaces()
 
-	for i, el := range v.elements {
-		if el == nil {
-			continue
-		}
-		facesA, count, facesB, _, lerpT, _ := el.GetVertices(tick)
-		if i == 0 {
-			lerpTRet = lerpT
-		}
 		if v.originsA[i].X == 0 && v.originsA[i].Y == 0 && v.originsA[i].Z == 0 && v.originsB[i].X == 0 && v.originsB[i].Y == 0 && v.originsB[i].Z == 0 {
 			for j := 0; j < count; j++ {
 				v3dCopyFacePoints(v.facesA[offset+j], (*facesA)[j])

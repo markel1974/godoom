@@ -203,11 +203,13 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		if i == 0 {
 			lerpTRet = lerpT
 		}
-		for j := 0; j < count; j++ {
-			if v.originsA[i].X == 0 && v.originsA[i].Y == 0 && v.originsA[i].Z == 0 && v.originsB[i].X == 0 && v.originsB[i].Y == 0 && v.originsB[i].Z == 0 {
+		if v.originsA[i].X == 0 && v.originsA[i].Y == 0 && v.originsA[i].Z == 0 && v.originsB[i].X == 0 && v.originsB[i].Y == 0 && v.originsB[i].Z == 0 {
+			for j := 0; j < count; j++ {
 				v3dCopyFacePoints(v.facesA[offset+j], (*facesA)[j])
 				v3dCopyFacePoints(v.facesB[offset+j], (*facesB)[j])
-			} else {
+			}
+		} else {
+			for j := 0; j < count; j++ {
 				v3dTransformPoints(v.facesA[offset+j], (*facesA)[j], v.originsA[i])
 				v3dTransformPoints(v.facesB[offset+j], (*facesB)[j], v.originsB[i])
 			}
@@ -220,16 +222,15 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 
 // v3dTransformPoints transforms the points of `src` Face to a new position relative to `origin`, storing them in `dst`.
 func v3dTransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
-	pts := src.GetPoints()
-	dst.tri[0].X = pts[0].X + origin.X
-	dst.tri[0].Y = pts[0].Y + origin.Y
-	dst.tri[0].Z = pts[0].Z + origin.Z
-	dst.tri[1].X = pts[1].X + origin.X
-	dst.tri[1].Y = pts[1].Y + origin.Y
-	dst.tri[1].Z = pts[1].Z + origin.Z
-	dst.tri[2].X = pts[2].X + origin.X
-	dst.tri[2].Y = pts[2].Y + origin.Y
-	dst.tri[2].Z = pts[2].Z + origin.Z
+	dst.tri[0].X = src.tri[0].X + origin.X
+	dst.tri[0].Y = src.tri[0].Y + origin.Y
+	dst.tri[0].Z = src.tri[0].Z + origin.Z
+	dst.tri[1].X = src.tri[1].X + origin.X
+	dst.tri[1].Y = src.tri[1].Y + origin.Y
+	dst.tri[1].Z = src.tri[1].Z + origin.Z
+	dst.tri[2].X = src.tri[2].X + origin.X
+	dst.tri[2].Y = src.tri[2].Y + origin.Y
+	dst.tri[2].Z = src.tri[2].Z + origin.Z
 }
 
 // v3dCopyFacePoints copies the vertex coordinates from the source Face to the destination Face.

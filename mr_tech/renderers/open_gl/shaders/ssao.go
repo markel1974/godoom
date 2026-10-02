@@ -5,7 +5,7 @@ import (
 	"math"
 	rnd "math/rand"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // SSAOLoc represents an identifier for accessing SSAO shader uniform locations.
@@ -31,6 +31,7 @@ const (
 
 // SSAO represents a shader implementation for Screen Space Ambient Occlusion (SSAO).
 type SSAO struct {
+	ctx              api.IContext
 	prg              uint32
 	table            [SSAOLocLast]int32
 	noiseTex         uint32    // Texture di rumore 4x4
@@ -53,8 +54,9 @@ type SSAO struct {
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.
-func NewSSAO() *SSAO {
+func NewSSAO(ctx api.IContext) *SSAO {
 	return &SSAO{
+		ctx:              ctx,
 		prg:              0,
 		kernelSize:       64,
 		noiseTextureSize: 4 * 4,
@@ -66,14 +68,14 @@ func NewSSAO() *SSAO {
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
 func (s *SSAO) SetupSamplers() error {
-	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
-	gl.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
-	gl.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
-	gl.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, &s.kernel[0])
-	gl.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
-	gl.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
-	gl.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
+	s.ctx.UseProgram(s.prg)
+	s.ctx.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
+	s.ctx.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
+	s.ctx.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
+	s.ctx.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, &s.kernel[0])
+	s.ctx.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
+	s.ctx.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
+	s.ctx.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
 	return nil
 }
 
@@ -116,27 +118,27 @@ func (s *SSAO) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("ssao", vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram(s.ctx, "ssao", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
-	s.table[SSAOLocPosition] = gl.GetUniformLocation(s.prg, gl.Str("u_position\x00"))
-	s.table[SSAOLocNormal] = gl.GetUniformLocation(s.prg, gl.Str("u_normal\x00"))
-	s.table[SSAOLocTexNoise] = gl.GetUniformLocation(s.prg, gl.Str("u_texNoise\x00"))
-	s.table[SSAOLocSamples] = gl.GetUniformLocation(s.prg, gl.Str("u_samples\x00"))
-	s.table[SSAOLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	s.table[SSAOLocKernelSize] = gl.GetUniformLocation(s.prg, gl.Str("u_kernelSize\x00"))
-	s.table[SSAOLocRadius] = gl.GetUniformLocation(s.prg, gl.Str("u_radius\x00"))
-	s.table[SSAOLocBias] = gl.GetUniformLocation(s.prg, gl.Str("u_bias\x00"))
+	s.table[SSAOLocPosition] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_position\x00"))
+	s.table[SSAOLocNormal] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normal\x00"))
+	s.table[SSAOLocTexNoise] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texNoise\x00"))
+	s.table[SSAOLocSamples] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_samples\x00"))
+	s.table[SSAOLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[SSAOLocKernelSize] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_kernelSize\x00"))
+	s.table[SSAOLocRadius] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_radius\x00"))
+	s.table[SSAOLocBias] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_bias\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -176,13 +178,13 @@ func (s *SSAO) createKernel() error {
 		noiseData[i*3+2] = 0.0
 	}
 
-	gl.GenTextures(1, &s.noiseTex)
-	gl.BindTexture(gl.TEXTURE_2D, s.noiseTex)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB32F, 4, 4, 0, gl.RGB, gl.FLOAT, gl.Ptr(noiseData))
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+	s.ctx.GenTextures(1, &s.noiseTex)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGB32F, 4, 4, 0, api.RGB, api.FLOAT, s.ctx.Ptr(noiseData))
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.REPEAT)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.REPEAT)
 
 	return nil
 }
@@ -192,11 +194,11 @@ func (s *SSAO) Prepare(fbw, fbh int32) {
 	if fbw != s.w || fbh != s.h {
 		s.allocate(fbw, fbh)
 	}
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
-	gl.ClearColor(0.0, 0.0, -100000.0, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	gl.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
+	s.ctx.ClearColor(0.0, 0.0, -100000.0, 1.0)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
+	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
 }
 
 // UpdateUniforms updates the shader's projection matrix uniform with the provided projection matrix.
@@ -206,46 +208,46 @@ func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
 func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool) {
-	gl.BindVertexArray(mainVAO)
+	s.ctx.BindVertexArray(mainVAO)
 
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT)
 
-	gl.UseProgram(s.GetProgram())
+	s.ctx.UseProgram(s.GetProgram())
 
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
-	gl.ActiveTexture(gl.TEXTURE1)
-	gl.BindTexture(gl.TEXTURE_2D, s.normal)
-	gl.ActiveTexture(gl.TEXTURE2)
-	gl.BindTexture(gl.TEXTURE_2D, s.noiseTex)
+	s.ctx.ActiveTexture(api.TEXTURE0)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.positionDepth)
+	s.ctx.ActiveTexture(api.TEXTURE1)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.normal)
+	s.ctx.ActiveTexture(api.TEXTURE2)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
 
 	if skyEnabled {
-		gl.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
-		gl.BindVertexArray(skyVAO)
-		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
+		s.ctx.BindVertexArray(skyVAO)
+		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}
 
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT)
 
 	if skyEnabled {
-		gl.UseProgram(blurPgr)
-		gl.ActiveTexture(gl.TEXTURE0)
-		gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
-		gl.BindVertexArray(skyVAO)
-		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+		s.ctx.UseProgram(blurPgr)
+		s.ctx.ActiveTexture(api.TEXTURE0)
+		s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
+		s.ctx.BindVertexArray(skyVAO)
+		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}
 
 	// 3. FORWARD MULTI-PASS
-	gl.BindFramebuffer(gl.FRAMEBUFFER, postFBO)
-	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	gl.BindVertexArray(mainVAO)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, postFBO)
+	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
+	s.ctx.BindVertexArray(mainVAO)
 
 	// PASS A: BASE
-	gl.DepthFunc(gl.LEQUAL)
-	gl.DepthMask(true)
+	s.ctx.DepthFunc(api.LEQUAL)
+	s.ctx.DepthMask(true)
 }
 
 // allocate initializes or reinitializes framebuffers, textures, and renderbuffers for the given width and height.
@@ -255,62 +257,62 @@ func (s *SSAO) allocate(width, height int32) {
 
 	// Prevenzione memory leak: distruzione esplicita dei buffer precedenti
 	if s.bufferFbo != 0 {
-		gl.DeleteFramebuffers(1, &s.bufferFbo)
-		gl.DeleteTextures(1, &s.positionDepth)
-		gl.DeleteTextures(1, &s.normal)
-		gl.DeleteRenderbuffers(1, &s.rboDepth)
+		s.ctx.DeleteFramebuffers(1, &s.bufferFbo)
+		s.ctx.DeleteTextures(1, &s.positionDepth)
+		s.ctx.DeleteTextures(1, &s.normal)
+		s.ctx.DeleteRenderbuffers(1, &s.rboDepth)
 
-		gl.DeleteFramebuffers(1, &s.fbo)
-		gl.DeleteTextures(1, &s.colorBuffer)
+		s.ctx.DeleteFramebuffers(1, &s.fbo)
+		s.ctx.DeleteTextures(1, &s.colorBuffer)
 
-		gl.DeleteFramebuffers(1, &s.blurFbo)
-		gl.DeleteTextures(1, &s.blurTexture)
+		s.ctx.DeleteFramebuffers(1, &s.blurFbo)
+		s.ctx.DeleteTextures(1, &s.blurTexture)
 	}
 
 	// 1. G-Buffer
-	gl.GenFramebuffers(1, &s.bufferFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.bufferFbo)
+	s.ctx.GenFramebuffers(1, &s.bufferFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
 
 	// Position + depth (RGBA16F per precisione spaziale)
-	gl.GenTextures(1, &s.positionDepth)
-	gl.BindTexture(gl.TEXTURE_2D, s.positionDepth)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.positionDepth, 0)
+	s.ctx.GenTextures(1, &s.positionDepth)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.positionDepth)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.positionDepth, 0)
 
 	// Normals
-	gl.GenTextures(1, &s.normal)
-	gl.BindTexture(gl.TEXTURE_2D, s.normal)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, s.normal, 0)
+	s.ctx.GenTextures(1, &s.normal)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.normal)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D, s.normal, 0)
 
 	// Aggiungi il depth Renderbuffer (ora salvato nella struct)
-	gl.GenRenderbuffers(1, &s.rboDepth)
-	gl.BindRenderbuffer(gl.RENDERBUFFER, s.rboDepth)
-	gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height)
-	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, s.rboDepth)
+	s.ctx.GenRenderbuffers(1, &s.rboDepth)
+	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepth)
+	s.ctx.RenderbufferStorage(api.RENDERBUFFER, api.DEPTH_COMPONENT24, width, height)
+	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepth)
 
-	attachments := []uint32{gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1}
-	gl.DrawBuffers(2, &attachments[0])
+	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
+	s.ctx.DrawBuffers(2, &attachments[0])
 
 	// 2. SSAO FBO
-	gl.GenFramebuffers(1, &s.fbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.fbo)
-	gl.GenTextures(1, &s.colorBuffer)
-	gl.BindTexture(gl.TEXTURE_2D, s.colorBuffer)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.colorBuffer, 0)
+	s.ctx.GenFramebuffers(1, &s.fbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
+	s.ctx.GenTextures(1, &s.colorBuffer)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RED, width, height, 0, api.RED, api.FLOAT, nil)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.colorBuffer, 0)
 
 	// 3. SSAO Blur FBO
-	gl.GenFramebuffers(1, &s.blurFbo)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.blurFbo)
-	gl.GenTextures(1, &s.blurTexture)
-	gl.BindTexture(gl.TEXTURE_2D, s.blurTexture)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RED, width, height, 0, gl.RED, gl.FLOAT, nil)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.blurTexture, 0)
+	s.ctx.GenFramebuffers(1, &s.blurFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
+	s.ctx.GenTextures(1, &s.blurTexture)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.blurTexture)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RED, width, height, 0, api.RED, api.FLOAT, nil)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.blurTexture, 0)
 
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 }

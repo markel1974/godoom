@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // ShaderSkyLoc represents the location index of shader uniforms specific to the Sky renderer.
@@ -25,6 +25,7 @@ const (
 
 // Sky is a type that manages the state and rendering of the sky shader in a graphics application.
 type Sky struct {
+	ctx    api.IContext
 	prg    uint32
 	table  [ShaderSkyLocLast]int32
 	skyVAO uint32
@@ -34,30 +35,31 @@ type Sky struct {
 }
 
 // NewSky creates and returns a new instance of Sky with default uninitialized properties.
-func NewSky() *Sky {
+func NewSky(ctx api.IContext) *Sky {
 	return &Sky{
+		ctx: ctx,
 		prg: 0,
 	}
 }
 
 // SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
 func (s *Sky) SetupSamplers() error {
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 
 	skyUnits := []int32{0, 1, 2, 3}
-	gl.Uniform1iv(s.GetUniform(ShaderSkyLocSky), 4, &skyUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(ShaderSkyLocSky), 4, &skyUnits[0])
 
-	gl.GenVertexArrays(1, &s.skyVAO)
-	gl.BindVertexArray(s.skyVAO)
-	gl.GenBuffers(1, &s.skyVBO)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.skyVBO)
+	s.ctx.GenVertexArrays(1, &s.skyVAO)
+	s.ctx.BindVertexArray(s.skyVAO)
+	s.ctx.GenBuffers(1, &s.skyVBO)
+	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.skyVBO)
 	skyQuadVertices := []float32{-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0}
-	gl.BufferData(gl.ARRAY_BUFFER, len(skyQuadVertices)*4, gl.Ptr(skyQuadVertices), gl.STATIC_DRAW)
-	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 2*4, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
+	s.ctx.BufferData(api.ARRAY_BUFFER, len(skyQuadVertices)*4, s.ctx.Ptr(skyQuadVertices), api.STATIC_DRAW)
+	s.ctx.VertexAttribPointer(0, 2, api.FLOAT, false, 2*4, s.ctx.PtrOffset(0))
+	s.ctx.EnableVertexAttribArray(0)
 	// Restore default state
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LEQUAL)
 	return nil
 }
 
@@ -96,25 +98,25 @@ func (s *Sky) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("sky", vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram(s.ctx, "sky", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
-	s.table[ShaderSkyLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	s.table[ShaderSkyLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[ShaderSkyLocSky] = gl.GetUniformLocation(s.prg, gl.Str("u_sky\x00"))
-	s.table[ShaderSkyLocSkyLayer] = gl.GetUniformLocation(s.prg, gl.Str("u_skyLayer\x00"))
-	s.table[ShaderSkyLocScrollU] = gl.GetUniformLocation(s.prg, gl.Str("u_scrollU\x00"))
-	s.table[ShaderSkyLocScrollV] = gl.GetUniformLocation(s.prg, gl.Str("u_scrollV\x00"))
+	s.table[ShaderSkyLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[ShaderSkyLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[ShaderSkyLocSky] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sky\x00"))
+	s.table[ShaderSkyLocSkyLayer] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_skyLayer\x00"))
+	s.table[ShaderSkyLocScrollU] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_scrollU\x00"))
+	s.table[ShaderSkyLocScrollV] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_scrollV\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location in sky: %d", idx)
@@ -128,22 +130,22 @@ func (s *Sky) Render(skyLayer float32, skyEnabled bool, u, v float32) {
 	if !skyEnabled {
 		return
 	}
-	gl.UseProgram(s.GetProgram())
+	s.ctx.UseProgram(s.GetProgram())
 
-	gl.DepthFunc(gl.LEQUAL)
-	gl.DepthMask(false)
+	s.ctx.DepthFunc(api.LEQUAL)
+	s.ctx.DepthMask(false)
 
-	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, &s.proj[0])
-	gl.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, &s.proj[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, &s.view[0])
 
-	gl.BindVertexArray(s.skyVAO)
+	s.ctx.BindVertexArray(s.skyVAO)
 
-	gl.Uniform1f(s.GetUniform(ShaderSkyLocSkyLayer), skyLayer)
-	gl.Uniform1f(s.GetUniform(ShaderSkyLocScrollU), u)
-	gl.Uniform1f(s.GetUniform(ShaderSkyLocScrollV), v)
+	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocSkyLayer), skyLayer)
+	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocScrollU), u)
+	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocScrollV), v)
 
-	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 
-	gl.DepthMask(true)
-	gl.DepthFunc(gl.LESS)
+	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 }

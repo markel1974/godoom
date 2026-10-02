@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	core2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -46,6 +47,8 @@ type SpriteNode struct {
 
 // RenderOpenGL is responsible for managing and executing OpenGL rendering operations for the game environment.
 type RenderOpenGL struct {
+	th              *executor.MainThread
+	ctx             api.IContext
 	engine          *engine.Engine
 	vi              *model.ViewMatrix
 	player          *model.ThingPlayer
@@ -61,8 +64,10 @@ type RenderOpenGL struct {
 }
 
 // NewRender initializes and returns a new instance of RenderOpenGL with default settings and prepared resources.
-func NewRender(w, h int32) *RenderOpenGL {
+func NewRender(ctx api.IContext, th *executor.MainThread, w, h int32) *RenderOpenGL {
 	r := &RenderOpenGL{
+		ctx:         ctx,
+		th:          th,
 		engine:      nil,
 		vi:          model.NewViewMatrix(),
 		player:      nil,
@@ -94,18 +99,18 @@ func (w *RenderOpenGL) doInitialize() error {
 		DisableScissorTest: true,
 	}
 	var winErr error
-	w.win, winErr = core2.NewGLWindow(cfg)
+	w.win, winErr = core2.NewGLWindow(w.th, cfg)
 	if winErr != nil {
 		return winErr
 	}
-	thErr := executor.Thread.CallErr(func() error {
+	thErr := w.th.CallErr(func() error {
 		w.win.Begin()
 		cal := w.engine.GetCalibration()
-		w.tex = NewTextures()
+		w.tex = NewTextures(w.ctx)
 		w.buildersCounter = 0
 		//if cal.Full3d {
 		w.player.SetPitchOptions(-1.5, 1.5, 0.01)
-		w.builder = NewBuilderVolume(w.tex, cal)
+		w.builder = NewBuilderVolume(w.ctx, w.tex, cal)
 		w.builders = append(w.builders, w.builder)
 		//} else {
 		//	w.builder = NewBuilderTraverse(w.tex, cal)
@@ -113,7 +118,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		//}
 		vStride := w.builder.GetVerticesStride()
 		lStride := w.builder.GetLightsStride()
-		w.shaders = NewShaders()
+		w.shaders = NewShaders(w.ctx)
 		if err := w.shaders.Setup(vStride, lStride, w.player, cal, w.tex); err != nil {
 			return err
 		}
@@ -131,12 +136,12 @@ func (w *RenderOpenGL) doInitialize() error {
 
 // Start initializes and starts the OpenGL rendering loop by invoking the provided rendering function.
 func (w *RenderOpenGL) Start() {
-	executor.Thread.Run(w.doRun)
+	w.th.Run(w.doRun)
 }
 
 // doRender performs the rendering process by computing the scene, creating rendering batches, and issuing draw commands.
 func (w *RenderOpenGL) doRender() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.win.Begin()
 		fbW, fbH := w.win.GetFramebufferSize()
 		w.engine.Compute(w.player, w.vi)

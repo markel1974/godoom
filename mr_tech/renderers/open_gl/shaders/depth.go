@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -23,14 +23,16 @@ const (
 
 // DepthMap represents a structure for managing depth framebuffers and textures for shadow mapping and depth rendering.
 type DepthMap struct {
+	ctx    api.IContext
 	fbo    uint32
 	tex    uint32
 	matrix [16]float32
 }
 
 // NewDepthMap creates and returns a new instance of DepthMap with default uninitialized properties.
-func NewDepthMap() *DepthMap {
+func NewDepthMap(ctx api.IContext) *DepthMap {
 	return &DepthMap{
+		ctx: ctx,
 		fbo: 0,
 		tex: 0,
 	}
@@ -41,24 +43,24 @@ func (d *DepthMap) Update(width, height int32) {
 	d.Shutdown()
 	var fbo, tex uint32
 	borderColor := []float32{1.0, 1.0, 1.0, 1.0}
-	gl.GenFramebuffers(1, &fbo)
-	gl.GenTextures(1, &tex)
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, width, height, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
+	d.ctx.GenFramebuffers(1, &fbo)
+	d.ctx.GenTextures(1, &tex)
+	d.ctx.BindTexture(api.TEXTURE_2D, tex)
+	d.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT32F, width, height, 0, api.DEPTH_COMPONENT, api.FLOAT, nil)
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_MODE, api.COMPARE_REF_TO_TEXTURE)
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_FUNC, api.LEQUAL)
 
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
-	gl.TexParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, &borderColor[0])
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_BORDER)
+	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_BORDER)
+	d.ctx.TexParameterfv(api.TEXTURE_2D, api.TEXTURE_BORDER_COLOR, &borderColor[0])
 
-	gl.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0)
-	gl.DrawBuffer(gl.NONE)
-	gl.ReadBuffer(gl.NONE)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	d.ctx.BindFramebuffer(api.FRAMEBUFFER, fbo)
+	d.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, tex, 0)
+	d.ctx.DrawBuffer(api.NONE)
+	d.ctx.ReadBuffer(api.NONE)
+	d.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	d.fbo = fbo
 	d.tex = tex
 }
@@ -71,16 +73,17 @@ func (d *DepthMap) SetMatrix(matrix [16]float32) {
 // Shutdown releases OpenGL resources associated with the framebuffer and texture of the DepthMap.
 func (d *DepthMap) Shutdown() {
 	if d.fbo != 0 {
-		gl.DeleteFramebuffers(1, &d.fbo)
+		d.ctx.DeleteFramebuffers(1, &d.fbo)
 		return
 	}
 	if d.tex != 0 {
-		gl.DeleteTextures(1, &d.tex)
+		d.ctx.DeleteTextures(1, &d.tex)
 	}
 }
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
+	ctx              api.IContext
 	prg              uint32
 	table            [DepthLocLast]int32
 	sWidth           int32
@@ -95,24 +98,25 @@ type Depth struct {
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(m *MapMetrics, shadowLights int) *Depth {
+func NewDepth(ctx api.IContext, m *MapMetrics, shadowLights int) *Depth {
 	d := &Depth{
+		ctx:              ctx,
 		metrics:          m,
-		roomMap:          NewDepthMap(),
-		flashMap:         NewDepthMap(),
+		roomMap:          NewDepthMap(ctx),
+		flashMap:         NewDepthMap(ctx),
 		shadowLightCount: 0,
 	}
 	for i := 0; i < shadowLights; i++ {
-		d.shadowLights = append(d.shadowLights, NewDepthMap())
+		d.shadowLights = append(d.shadowLights, NewDepthMap(ctx))
 	}
 	return d
 }
 
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
 func (s *Depth) SetupSamplers() error {
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
-	gl.Uniform1iv(s.GetUniform(DepthLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(DepthLocTexture), 4, &diffuseUnits[0])
 	return nil
 }
 
@@ -168,23 +172,23 @@ func (s *Depth) Compile(assets IAssets) error {
 	//s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 	//s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
 
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("depth", vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram(s.ctx, "depth", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
-	s.table[DepthLocLightSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_lightSpaceMatrix\x00"))
-	s.table[DepthLocTime] = gl.GetUniformLocation(s.prg, gl.Str("u_time\x00"))
-	s.table[DepthLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[DepthLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
+	s.table[DepthLocLightSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightSpaceMatrix\x00"))
+	s.table[DepthLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
+	s.table[DepthLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[DepthLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -217,51 +221,51 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	if sWidth != s.sWidth || sHeight != s.sHeight {
 		s.allocate(sWidth, sHeight)
 	}
-	gl.BindVertexArray(mainVao)
+	s.ctx.BindVertexArray(mainVao)
 
-	gl.Disable(gl.CULL_FACE)
-	gl.Enable(gl.POLYGON_OFFSET_FILL)
+	s.ctx.Disable(api.CULL_FACE)
+	s.ctx.Enable(api.POLYGON_OFFSET_FILL)
 
 	// Attiviamo il clamp della profondità.
 	// Impedisce che la geometria sparisca dalla mappa delle ombre
 	// quando la telecamera ci finisce letteralmente addosso.
-	gl.Enable(gl.DEPTH_CLAMP)
+	s.ctx.Enable(api.DEPTH_CLAMP)
 
-	gl.Viewport(0, 0, sWidth, sHeight)
+	s.ctx.Viewport(0, 0, sWidth, sHeight)
 
 	// OMBRE STANZA (Ortografica)
-	gl.PolygonOffset(2.0, 4.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.roomMap.fbo)
-	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UseProgram(s.GetProgram())
-	gl.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
+	s.ctx.PolygonOffset(2.0, 4.0)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.roomMap.fbo)
+	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
+	s.ctx.UseProgram(s.GetProgram())
+	s.ctx.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
 	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
 
 	// ROOM
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
-	//gl.Uniform1i(s.GetUniform(DepthLocTexture), 0)
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
+	//s.ctx.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
 	// OMBRE TORCIA (Prospettica)
-	gl.PolygonOffset(0.5, 1.0)
-	gl.BindFramebuffer(gl.FRAMEBUFFER, s.flashMap.fbo)
-	gl.Clear(gl.DEPTH_BUFFER_BIT)
-	gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMap.matrix[0])
+	s.ctx.PolygonOffset(0.5, 1.0)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.flashMap.fbo)
+	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMap.matrix[0])
 	renderScene()
 
 	for x := 0; x < int(s.shadowLightCount); x++ {
-		gl.PolygonOffset(0.5, 1.0)
-		gl.BindFramebuffer(gl.FRAMEBUFFER, s.shadowLights[x].fbo)
-		gl.Clear(gl.DEPTH_BUFFER_BIT)
-		gl.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLights[x].matrix[0])
+		s.ctx.PolygonOffset(0.5, 1.0)
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowLights[x].fbo)
+		s.ctx.Clear(api.DEPTH_BUFFER_BIT)
+		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLights[x].matrix[0])
 		renderScene()
 	}
 
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
-	gl.Disable(gl.DEPTH_CLAMP)
-	gl.Disable(gl.POLYGON_OFFSET_FILL)
-	gl.Viewport(0, 0, fbw, fbh)
+	s.ctx.Disable(api.DEPTH_CLAMP)
+	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	s.ctx.Viewport(0, 0, fbw, fbh)
 }
 
 // allocate configures the internal shadow map dimensions and updates the associated depth maps for rendering.

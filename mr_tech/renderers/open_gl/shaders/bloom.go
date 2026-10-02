@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // BloomLoc represents a type used to define specific locations in a Bloom filter system.
@@ -21,6 +21,7 @@ const (
 
 // Bloom is a struct that encapsulates data and methods for managing bloom post-processing effects in a graphics engine.
 type Bloom struct {
+	ctx              api.IContext
 	prg              uint32
 	table            [BloomLocLast]int32
 	pingPongFbo      [2]uint32
@@ -34,8 +35,9 @@ type Bloom struct {
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
-func NewBloom() *Bloom {
+func NewBloom(ctx api.IContext) *Bloom {
 	return &Bloom{
+		ctx:              ctx,
 		hvPassages:       5, //passaggi orizzontali e verticali
 		internalPassages: 3,
 	}
@@ -52,14 +54,14 @@ func (s *Bloom) Init() error {
 
 // SetupSamplers initializes the VAO and VBO for rendering a full-screen quad and configures vertex attribute pointers.
 func (s *Bloom) SetupSamplers() error {
-	gl.GenVertexArrays(1, &s.vao)
-	gl.BindVertexArray(s.vao)
-	gl.GenBuffers(1, &s.vbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.vbo)
+	s.ctx.GenVertexArrays(1, &s.vao)
+	s.ctx.BindVertexArray(s.vao)
+	s.ctx.GenBuffers(1, &s.vbo)
+	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.vbo)
 	quad := []float32{-1, -1, 1, -1, -1, 1, 1, 1}
-	gl.BufferData(gl.ARRAY_BUFFER, len(quad)*4, gl.Ptr(quad), gl.STATIC_DRAW)
-	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
-	gl.EnableVertexAttribArray(0)
+	s.ctx.BufferData(api.ARRAY_BUFFER, len(quad)*4, s.ctx.Ptr(quad), api.STATIC_DRAW)
+	s.ctx.VertexAttribPointer(0, 2, api.FLOAT, false, 0, nil)
+	s.ctx.EnableVertexAttribArray(0)
 	return nil
 }
 
@@ -72,24 +74,24 @@ func (s *Bloom) Compile(a IAssets) error {
 		return err
 	}
 
-	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(s.ctx, vertId, string(vSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(s.ctx, fragId, string(fSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vSh)
-		return err
-	}
-
-	s.prg, err = ShaderCreateProgram("bloom", vSh, fSh)
-	if err != nil {
+		s.ctx.DeleteShader(vSh)
 		return err
 	}
 
-	s.table[BloomLocImage] = gl.GetUniformLocation(s.prg, gl.Str("image\x00"))
-	s.table[BloomLocHorizontal] = gl.GetUniformLocation(s.prg, gl.Str("horizontal\x00"))
-	s.table[BloomLocPassage] = gl.GetUniformLocation(s.prg, gl.Str("u_passages\x00"))
+	s.prg, err = ShaderCreateProgram(s.ctx, "bloom", vSh, fSh)
+	if err != nil {
+		return err
+	}
+
+	s.table[BloomLocImage] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("image\x00"))
+	s.table[BloomLocHorizontal] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("horizontal\x00"))
+	s.table[BloomLocPassage] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_passages\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location in bloom: %d", idx)
@@ -104,11 +106,11 @@ func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
 		s.allocate(fbw, fbh)
 	}
 
-	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.table[BloomLocImage], 0)
-	gl.BindVertexArray(s.vao)
-	gl.Disable(gl.DEPTH_TEST)
-	gl.Viewport(0, 0, fbw/2, fbh/2)
+	s.ctx.UseProgram(s.prg)
+	s.ctx.Uniform1i(s.table[BloomLocImage], 0)
+	s.ctx.BindVertexArray(s.vao)
+	s.ctx.Disable(api.DEPTH_TEST)
+	s.ctx.Viewport(0, 0, fbw/2, fbh/2)
 
 	horizontal := true
 	firstIteration := true
@@ -118,33 +120,33 @@ func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
 		if !horizontal {
 			idx = 1
 		}
-		gl.BindFramebuffer(gl.FRAMEBUFFER, s.pingPongFbo[idx])
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.pingPongFbo[idx])
 
 		val := int32(0)
 		if horizontal {
 			val = 1
 		}
-		gl.Uniform1i(s.table[BloomLocHorizontal], val)
-		gl.Uniform1i(s.table[BloomLocPassage], s.internalPassages)
+		s.ctx.Uniform1i(s.table[BloomLocHorizontal], val)
+		s.ctx.Uniform1i(s.table[BloomLocPassage], s.internalPassages)
 
-		gl.ActiveTexture(gl.TEXTURE0)
+		s.ctx.ActiveTexture(api.TEXTURE0)
 		if firstIteration {
-			gl.BindTexture(gl.TEXTURE_2D, brightTex)
+			s.ctx.BindTexture(api.TEXTURE_2D, brightTex)
 			firstIteration = false
 		} else {
 			prevIdx := 1
 			if !horizontal {
 				prevIdx = 0
 			}
-			gl.BindTexture(gl.TEXTURE_2D, s.pingPongTex[prevIdx])
+			s.ctx.BindTexture(api.TEXTURE_2D, s.pingPongTex[prevIdx])
 		}
 
-		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 		horizontal = !horizontal
 	}
 
-	gl.Viewport(0, 0, fbw, fbh)
-	gl.Enable(gl.DEPTH_TEST)
+	s.ctx.Viewport(0, 0, fbw, fbh)
+	s.ctx.Enable(api.DEPTH_TEST)
 }
 
 // allocate resizes the bloom effect textures and framebuffers to match the specified width and height values.
@@ -154,26 +156,26 @@ func (s *Bloom) allocate(width, height int32) {
 
 	// Prevenzione memory leak al ridimensionamento
 	if s.pingPongFbo[0] != 0 {
-		gl.DeleteFramebuffers(2, &s.pingPongFbo[0])
-		gl.DeleteTextures(2, &s.pingPongTex[0])
+		s.ctx.DeleteFramebuffers(2, &s.pingPongFbo[0])
+		s.ctx.DeleteTextures(2, &s.pingPongTex[0])
 	}
 
-	gl.GenFramebuffers(2, &s.pingPongFbo[0])
-	gl.GenTextures(2, &s.pingPongTex[0])
+	s.ctx.GenFramebuffers(2, &s.pingPongFbo[0])
+	s.ctx.GenTextures(2, &s.pingPongTex[0])
 
 	mipW := s.w / 2
 	mipH := s.h / 2
 
 	for i := 0; i < 2; i++ {
-		gl.BindFramebuffer(gl.FRAMEBUFFER, s.pingPongFbo[i])
-		gl.BindTexture(gl.TEXTURE_2D, s.pingPongTex[i])
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.pingPongFbo[i])
+		s.ctx.BindTexture(api.TEXTURE_2D, s.pingPongTex[i])
 
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, mipW, mipH, 0, gl.RGBA, gl.FLOAT, nil)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s.pingPongTex[i], 0)
+		s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, mipW, mipH, 0, api.RGBA, api.FLOAT, nil)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+		s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.pingPongTex[i], 0)
 	}
-	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 }

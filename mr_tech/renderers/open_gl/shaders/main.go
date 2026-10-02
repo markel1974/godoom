@@ -3,8 +3,8 @@ package shaders
 import (
 	"math"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -40,6 +40,7 @@ const (
 
 // Main represents the primary rendering configuration and state for a graphics pipeline.
 type Main struct {
+	ctx               api.IContext
 	prgOpaque         uint32
 	prgAdditive       uint32
 	tableOpaque       [MainLocLast]int32
@@ -61,8 +62,9 @@ type Main struct {
 }
 
 // NewMain creates and initializes a new instance of Main with the provided vertex stride value.
-func NewMain(stride int32, metrics *MapMetrics) *Main {
+func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
 	return &Main{
+		ctx:               ctx,
 		prgOpaque:         0,
 		prgAdditive:       0,
 		emissiveIntensity: 4.0,
@@ -77,56 +79,56 @@ func (s *Main) Init() error {
 	vboBytesSize := 131072 * int(s.stride)
 	eboBytesSize := 262144 * 4
 
-	gl.GenVertexArrays(mainDoubleBuffer, &s.mainVAO[0])
-	gl.GenBuffers(mainDoubleBuffer, &s.mainVBO[0])
-	gl.GenBuffers(mainDoubleBuffer, &s.mainEBO[0])
+	s.ctx.GenVertexArrays(mainDoubleBuffer, &s.mainVAO[0])
+	s.ctx.GenBuffers(mainDoubleBuffer, &s.mainVBO[0])
+	s.ctx.GenBuffers(mainDoubleBuffer, &s.mainEBO[0])
 
 	for i := 0; i < mainDoubleBuffer; i++ {
 		s.vboBytesCap[i] = vboBytesSize
 		s.eboBytesCap[i] = eboBytesSize
 
-		gl.BindVertexArray(s.mainVAO[i])
+		s.ctx.BindVertexArray(s.mainVAO[i])
 
-		gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[i])
-		gl.BufferData(gl.ARRAY_BUFFER, vboBytesSize, nil, gl.DYNAMIC_DRAW)
+		s.ctx.BindBuffer(api.ARRAY_BUFFER, s.mainVBO[i])
+		s.ctx.BufferData(api.ARRAY_BUFFER, vboBytesSize, nil, api.DYNAMIC_DRAW)
 
-		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
-		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, gl.DYNAMIC_DRAW)
+		s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
+		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, api.DYNAMIC_DRAW)
 
 		// Il valore s.stride ora deve essere 40 (10 float * 4 byte)
 		strideBytes := s.stride
 
 		//  aPos (x, y, z) - 3 float
-		gl.VertexAttribPointer(0, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(0))
-		gl.EnableVertexAttribArray(0)
+		s.ctx.VertexAttribPointer(0, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(0))
+		s.ctx.EnableVertexAttribArray(0)
 
 		//  aTexCoords (u, v, layer) - 3 float
-		gl.VertexAttribPointer(1, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(3*4))
-		gl.EnableVertexAttribArray(1)
+		s.ctx.VertexAttribPointer(1, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(3*4))
+		s.ctx.EnableVertexAttribArray(1)
 
 		// Location 2: aOrigin (worldX, worldY, worldZ) - 3 float
-		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(6*4))
-		gl.EnableVertexAttribArray(2)
+		s.ctx.VertexAttribPointer(2, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(6*4))
+		s.ctx.EnableVertexAttribArray(2)
 
 		// Location 3: aRenderMode (flag) - 1 float
-		gl.VertexAttribPointer(3, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(9*4))
-		gl.EnableVertexAttribArray(3)
+		s.ctx.VertexAttribPointer(3, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(9*4))
+		s.ctx.EnableVertexAttribArray(3)
 
 		// Location 4: nextPos (x, y, z) - 3 float
-		gl.VertexAttribPointer(4, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(10*4))
-		gl.EnableVertexAttribArray(4)
+		s.ctx.VertexAttribPointer(4, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(10*4))
+		s.ctx.EnableVertexAttribArray(4)
 
 		//  Location 5: aLerp (t) - 1 float
-		gl.VertexAttribPointer(5, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(13*4))
-		gl.EnableVertexAttribArray(5)
+		s.ctx.VertexAttribPointer(5, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(13*4))
+		s.ctx.EnableVertexAttribArray(5)
 
 		// NUOVO - Location 6: aYaw (angolo) - 1 float
-		gl.VertexAttribPointer(6, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(14*4))
-		gl.EnableVertexAttribArray(6)
+		s.ctx.VertexAttribPointer(6, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(14*4))
+		s.ctx.EnableVertexAttribArray(6)
 	}
 
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LEQUAL)
 	return nil
 }
 
@@ -136,14 +138,14 @@ func (s *Main) SetupSamplers() error {
 	emissiveUnits := []int32{8, 9, 10, 11}
 
 	// Setup Opaque Samplers
-	gl.UseProgram(s.prgOpaque)
-	gl.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
-	gl.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
-	gl.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
+	s.ctx.UseProgram(s.prgOpaque)
+	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
+	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
 
 	// Setup Additive Samplers
-	gl.UseProgram(s.prgAdditive)
-	gl.Uniform1iv(s.GetUniformAdditive(MainLocTexture), 4, &diffuseUnits[0])
+	s.ctx.UseProgram(s.prgAdditive)
+	s.ctx.Uniform1iv(s.GetUniformAdditive(MainLocTexture), 4, &diffuseUnits[0])
 
 	return nil
 }
@@ -188,48 +190,48 @@ func (s *Main) Compile(a IAssets) error {
 		return err
 	}
 
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
 
 	// Compile Opaque Program
-	fragOpaqueShader, err := ShaderCompile(fragOpaqueId, string(fragmentOpaqueSrc), gl.FRAGMENT_SHADER)
+	fragOpaqueShader, err := ShaderCompile(s.ctx, fragOpaqueId, string(fragmentOpaqueSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prgOpaque, err = ShaderCreateProgram("main_opaque", vertexShader, fragOpaqueShader)
+	s.prgOpaque, err = ShaderCreateProgram(s.ctx, "main_opaque", vertexShader, fragOpaqueShader)
 	if err != nil {
 		return err
 	}
 
 	// Compile Additive Program
-	fragAdditiveShader, err := ShaderCompile(fragAdditiveId, string(fragmentAdditiveSrc), gl.FRAGMENT_SHADER)
+	fragAdditiveShader, err := ShaderCompile(s.ctx, fragAdditiveId, string(fragmentAdditiveSrc), api.FRAGMENT_SHADER)
 	if err != nil {
 		return err
 	}
-	s.prgAdditive, err = ShaderCreateProgram("main_additive", vertexShader, fragAdditiveShader)
+	s.prgAdditive, err = ShaderCreateProgram(s.ctx, "main_additive", vertexShader, fragAdditiveShader)
 	if err != nil {
 		return err
 	}
 
 	// Setup Uniforms Opaque
-	s.tableOpaque[MainLocView] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_view\x00"))
-	s.tableOpaque[MainLocProjection] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_projection\x00"))
-	s.tableOpaque[MainLocScreenResolution] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_screenResolution\x00"))
-	s.tableOpaque[MainLocTexture] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_texture\x00"))
-	s.tableOpaque[MainLocSSAO] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_ssao\x00"))
-	s.tableOpaque[MainLocEmissiveMap] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveMap\x00"))
-	s.tableOpaque[MainLocEmissiveIntensity] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_emissiveIntensity\x00"))
-	s.tableOpaque[MainLocAoFactor] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_aoFactor\x00"))
-	s.tableOpaque[MainLocTime] = gl.GetUniformLocation(s.prgOpaque, gl.Str("u_time\x00"))
+	s.tableOpaque[MainLocView] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_view\x00"))
+	s.tableOpaque[MainLocProjection] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_projection\x00"))
+	s.tableOpaque[MainLocScreenResolution] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_screenResolution\x00"))
+	s.tableOpaque[MainLocTexture] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_texture\x00"))
+	s.tableOpaque[MainLocSSAO] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_ssao\x00"))
+	s.tableOpaque[MainLocEmissiveMap] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveMap\x00"))
+	s.tableOpaque[MainLocEmissiveIntensity] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveIntensity\x00"))
+	s.tableOpaque[MainLocAoFactor] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_aoFactor\x00"))
+	s.tableOpaque[MainLocTime] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_time\x00"))
 
 	// Setup Uniforms Additive
-	s.tableAdditive[MainLocView] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_view\x00"))
-	s.tableAdditive[MainLocProjection] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_projection\x00"))
-	s.tableAdditive[MainLocTexture] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_texture\x00"))
-	s.tableAdditive[MainLocTime] = gl.GetUniformLocation(s.prgAdditive, gl.Str("u_time\x00"))
+	s.tableAdditive[MainLocView] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_view\x00"))
+	s.tableAdditive[MainLocProjection] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_projection\x00"))
+	s.tableAdditive[MainLocTexture] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_texture\x00"))
+	s.tableAdditive[MainLocTime] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_time\x00"))
 
 	return nil
 }
@@ -242,30 +244,30 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 	//	s.scaleX, s.scaleY = s.metrics.GetScale(fbW, fbH)
 	//}
 
-	gl.Viewport(0, 0, fbW, fbH)
-	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	s.ctx.Viewport(0, 0, fbW, fbH)
+	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
 
 	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
 
 	vTotal := int(verticesLen) * 4
 	iTotal := int(indicesLen) * 4
 
-	gl.BindBuffer(gl.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
+	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
 	if vTotal > s.vboBytesCap[s.frameIdx] {
 		newCap := vTotal * 2
-		gl.BufferData(gl.ARRAY_BUFFER, newCap, nil, gl.DYNAMIC_DRAW)
+		s.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.vboBytesCap[s.frameIdx] = newCap
 	}
-	gl.BufferSubData(gl.ARRAY_BUFFER, 0, vTotal, gl.Ptr(vertices))
+	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vTotal, s.ctx.Ptr(vertices))
 
-	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
+	s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
 	if iTotal > s.eboBytesCap[s.frameIdx] {
 		newCap := iTotal * 2
-		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, newCap, nil, gl.DYNAMIC_DRAW)
+		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.eboBytesCap[s.frameIdx] = newCap
 	}
-	gl.BufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, iTotal, gl.Ptr(indices))
+	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, s.ctx.Ptr(indices))
 }
 
 // UpdateUniforms3d calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
@@ -387,56 +389,56 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 // Render prepares and executes the rendering pipeline using the provided geometry and SSAO texture.
 func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
 	// target FBO preparation
-	gl.BindFramebuffer(gl.FRAMEBUFFER, targetFbo)
-	gl.Viewport(0, 0, fbW, fbH)
-	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
+	s.ctx.Viewport(0, 0, fbW, fbH)
+	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
+	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
 
-	gl.UseProgram(s.GetProgramOpaque())
+	s.ctx.UseProgram(s.GetProgramOpaque())
 
-	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
-	gl.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
-	gl.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*0.05)
+	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
+	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*0.05)
 
-	gl.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
-	gl.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
-	gl.Uniform1f(s.GetUniformOpaque(MainLocAoFactor), s.aoFactor)
+	s.ctx.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
+	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
+	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocAoFactor), s.aoFactor)
 
-	gl.DepthMask(true)
-	gl.DepthFunc(gl.LESS)
+	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 
-	gl.BindVertexArray(s.mainVAO[s.frameIdx])
+	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
 
-	gl.ActiveTexture(gl.TEXTURE14)
-	gl.BindTexture(gl.TEXTURE_2D, ssaoBlurTex)
+	s.ctx.ActiveTexture(api.TEXTURE14)
+	s.ctx.BindTexture(api.TEXTURE_2D, ssaoBlurTex)
 
 	// enable Alpha To Coverage only for the main geometry
-	gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+	s.ctx.Enable(api.SAMPLE_ALPHA_TO_COVERAGE)
 	renderGeometry()
 	// disable it immediately to not destroy light passes
-	gl.Disable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
 }
 
 // RenderAdditive executes the rendering commands for additive geometry (e.g. flames, flares) using a specialized shader.
 func (s *Main) RenderAdditive(renderGeometry func()) {
-	gl.UseProgram(s.GetProgramAdditive())
+	s.ctx.UseProgram(s.GetProgramAdditive())
 
-	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
-	gl.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
-	gl.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*0.05)
+	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
+	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*0.05)
 
-	gl.DepthMask(false)
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.ONE, gl.ONE)
+	s.ctx.DepthMask(false)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LEQUAL)
+	s.ctx.Enable(api.BLEND)
+	s.ctx.BlendFunc(api.ONE, api.ONE)
 
-	gl.BindVertexArray(s.mainVAO[s.frameIdx])
+	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
 
 	renderGeometry()
 
-	gl.Disable(gl.BLEND)
-	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LESS)
-	gl.DepthMask(true)
+	s.ctx.Disable(api.BLEND)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LESS)
+	s.ctx.DepthMask(true)
 }

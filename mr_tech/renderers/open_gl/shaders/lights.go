@@ -3,8 +3,8 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 const (
@@ -52,6 +52,7 @@ const (
 
 // Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
+	ctx          api.IContext
 	prg          uint32
 	table        [LightLocLast]int32
 	uboLights    [lightsDoubleBuffer]uint32
@@ -64,8 +65,9 @@ type Lights struct {
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
-func NewLights(stride int32, cal *model.Calibration) *Lights {
+func NewLights(ctx api.IContext, stride int32, cal *model.Calibration) *Lights {
 	return &Lights{
+		ctx:         ctx,
 		cal:         cal,
 		stride:      stride,
 		frameIdx:    0,
@@ -86,25 +88,25 @@ func (s *Lights) EnableShadows(e bool) {
 func (s *Lights) Init() error {
 	size := 1024 * int(s.stride)
 
-	gl.GenBuffers(lightsDoubleBuffer, &s.uboLights[0])
+	s.ctx.GenBuffers(lightsDoubleBuffer, &s.uboLights[0])
 
 	for i := 0; i < lightsDoubleBuffer; i++ {
-		gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights[i])
-		gl.BufferData(gl.UNIFORM_BUFFER, size, gl.Ptr(nil), gl.DYNAMIC_DRAW)
+		s.ctx.BindBuffer(api.UNIFORM_BUFFER, s.uboLights[i])
+		s.ctx.BufferData(api.UNIFORM_BUFFER, size, s.ctx.Ptr(nil), api.DYNAMIC_DRAW)
 	}
 
-	gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
+	s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
 	return nil
 }
 
 // SetupSamplers configures shader samplers for texture, normal map, and room shadow map locations.
 func (s *Lights) SetupSamplers() error {
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
 	normalUnits := []int32{4, 5, 6, 7}
-	gl.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in flashlight.go
-	gl.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
-	gl.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl.TEXTURE12 per Room, gl.TEXTURE13 per Flash
+	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in flashlight.go
+	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
+	s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
 
 	return nil
 }
@@ -123,38 +125,38 @@ func (s *Lights) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(s.ctx, vertId, string(vSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(s.ctx, fragId, string(fSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vSh)
+		s.ctx.DeleteShader(vSh)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("lights", vSh, fSh)
+	s.prg, err = ShaderCreateProgram(s.ctx, "lights", vSh, fSh)
 	if err != nil {
 		return err
 	}
 
-	s.table[LightLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	s.table[LightLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[LightLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00"))
-	s.table[LightLocRoomSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_roomSpaceMatrix\x00"))
-	s.table[LightLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[LightLocNormalMap] = gl.GetUniformLocation(s.prg, gl.Str("u_normalMap\x00"))
-	s.table[LightLocRoomShadowMap] = gl.GetUniformLocation(s.prg, gl.Str("u_roomShadowMap\x00"))
-	s.table[LightLocScreenResolution] = gl.GetUniformLocation(s.prg, gl.Str("u_screenResolution\x00"))
-	s.table[LightLocAmbientLight] = gl.GetUniformLocation(s.prg, gl.Str("u_ambient_light\x00"))
-	s.table[LightLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
-	s.table[LightLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
-	s.table[LightLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
-	s.table[LightLocNumLights] = gl.GetUniformLocation(s.prg, gl.Str("u_numLights\x00"))
-	s.table[LightLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
-	s.table[LightLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
-	s.table[LightLocSpecBoostWall] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostWall\x00"))
-	s.table[LightLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
-	s.table[LightLocDebugLights] = gl.GetUniformLocation(s.prg, gl.Str("u_debugLights\x00"))
+	s.table[LightLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[LightLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[LightLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
+	s.table[LightLocRoomSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomSpaceMatrix\x00"))
+	s.table[LightLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[LightLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
+	s.table[LightLocRoomShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomShadowMap\x00"))
+	s.table[LightLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
+	s.table[LightLocAmbientLight] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_ambient_light\x00"))
+	s.table[LightLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
+	s.table[LightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
+	s.table[LightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
+	s.table[LightLocNumLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_numLights\x00"))
+	s.table[LightLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
+	s.table[LightLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
+	s.table[LightLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
+	s.table[LightLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
+	s.table[LightLocDebugLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debugLights\x00"))
 
 	for idx, v := range s.table {
 		if v < 0 {
@@ -162,9 +164,9 @@ func (s *Lights) Compile(a IAssets) error {
 		}
 	}
 
-	blockIndex := gl.GetUniformBlockIndex(s.prg, gl.Str("LightsBlock\x00"))
-	if blockIndex != gl.INVALID_INDEX {
-		gl.UniformBlockBinding(s.prg, blockIndex, 0)
+	blockIndex := s.ctx.GetUniformBlockIndex(s.prg, s.ctx.Str("LightsBlock\x00"))
+	if blockIndex != api.INVALID_INDEX {
+		s.ctx.UniformBlockBinding(s.prg, blockIndex, 0)
 	}
 
 	return nil
@@ -175,10 +177,10 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 	s.activeLights = numLights
 	s.frameIdx = (s.frameIdx + 1) % lightsDoubleBuffer
 	if numLights > 0 {
-		gl.BindBuffer(gl.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
+		s.ctx.BindBuffer(api.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
 		// Scrittura asincrona garantita sull'UBO inattivo
-		gl.BufferSubData(gl.UNIFORM_BUFFER, 0, len(frameLights)*4, gl.Ptr(frameLights))
-		gl.BindBuffer(gl.UNIFORM_BUFFER, 0)
+		s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, len(frameLights)*4, s.ctx.Ptr(frameLights))
+		s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
 	}
 }
 
@@ -189,26 +191,26 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	//TODO disabled for performance tuning
 	shadows = 0
 
-	gl.UseProgram(s.prg)
-	gl.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, &proj[0])
-	gl.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
-	gl.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, &invView[0])
-	gl.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, &roomSpace[0])
-	gl.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
-	gl.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
-	gl.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	gl.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
-	gl.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
-	gl.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
-	gl.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
-	gl.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
-	gl.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	gl.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
-	gl.Uniform1i(s.GetUniform(LightLocDebugLights), int32(s.debugLights))
-	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
+	s.ctx.UseProgram(s.prg)
+	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, &proj[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, &invView[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, &roomSpace[0])
+	s.ctx.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
+	s.ctx.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
+	s.ctx.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
+	s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
+	s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
+	s.ctx.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	s.ctx.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
+	s.ctx.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
+	s.ctx.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	s.ctx.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
+	s.ctx.Uniform1i(s.GetUniform(LightLocDebugLights), int32(s.debugLights))
+	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 	if s.shadows != 0 {
-		gl.ActiveTexture(gl.TEXTURE12)
-		gl.BindTexture(gl.TEXTURE_2D, roomShadowTex)
+		s.ctx.ActiveTexture(api.TEXTURE12)
+		s.ctx.BindTexture(api.TEXTURE_2D, roomShadowTex)
 	}
 	renderGeometry()
 }

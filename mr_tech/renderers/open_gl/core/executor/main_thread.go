@@ -3,53 +3,63 @@ package executor
 import (
 	"errors"
 	"runtime"
+
+	//"runtime"
 	"sync"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	//"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // CallQueueCap defines the capacity of the queue used to store function calls in the main thread's call queue.
 const CallQueueCap = 16
 
 // Thread is a global pointer to the main thread, used for executing thread-safe OpenGL and GLFW operations.
-var Thread *MainThread
+//var Thread *MainThread
+
+//var Ctx *core.DesktopContext
 
 // init initializes the main thread and locks the current OS thread for proper thread management.
-func init() {
-	runtime.LockOSThread()
-	Thread = NewMainThread()
-}
+//func init() {
+//Ctx = core.NewDesktopContext()
+//runtime.LockOSThread()
+//Thread = NewMainThread(Ctx)
+//}
 
 // MainThread provides a mechanism for serializing function execution on a single thread.
 // It ensures thread-safe operations using a call queue and synchronization primitives.
 // Functions can be posted or called with optional return values or errors.
 type MainThread struct {
+	ctx       api.IContext
 	callQueue chan func()
 	respMutex sync.Mutex
 	respChan  chan interface{}
 }
 
 // NewMainThread creates and returns a new instance of MainThread with initialized callQueue and respChan channels.
-func NewMainThread() *MainThread {
-	return &MainThread{
+func NewMainThread(ctx api.IContext) *MainThread {
+	runtime.LockOSThread()
+	th := &MainThread{
+		ctx:       ctx,
 		callQueue: make(chan func(), CallQueueCap),
 		respChan:  make(chan interface{}),
 	}
+	return th
 }
 
 // Init initializes the essential OpenGL state, enabling blending, multisampling, and optionally scissor testing.
 func (m *MainThread) Init(disableScissorTest bool) {
-	err := gl.Init()
+	err := m.ctx.Init()
 	if err != nil {
 		panic(err)
 	}
-	gl.Enable(gl.BLEND)
+	m.ctx.Enable(api.BLEND)
 	if !disableScissorTest {
-		gl.Enable(gl.SCISSOR_TEST)
+		m.ctx.Enable(api.SCISSOR_TEST)
 	}
-	gl.BlendEquation(gl.FUNC_ADD)
-	gl.Enable(gl.MULTISAMPLE)
+	m.ctx.BlendEquation(api.FUNC_ADD)
+	m.ctx.Enable(api.MULTISAMPLE)
 }
 
 // Run initializes the GLFW library, executes the provided function within the main thread, and terminates the GLFW context.

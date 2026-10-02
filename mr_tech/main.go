@@ -14,12 +14,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
 type IRender interface {
 	Setup(engine *engine.Engine) error
 	Start()
+}
+
+var _ctx *core.Context
+var _thread *executor.MainThread
+
+func init() {
+	_ctx = core.NewContext()
+	_thread = executor.NewMainThread(_ctx)
 }
 
 func main() {
@@ -108,12 +118,7 @@ func main() {
 		return
 	}
 
-	var render IRender
-	//if softwareRender {
-	//	render = software.NewRender(int32(width), int32(height))
-	//} else {
-	render = open_gl.NewRender(int32(width), int32(height))
-	//}
+	render := open_gl.NewRender(_ctx, _thread, int32(width), int32(height))
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return

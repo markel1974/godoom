@@ -37,6 +37,7 @@ type WindowPos struct {
 
 // Window represents a graphical window with properties for input handling, display settings, and viewport bounds.
 type Window struct {
+	th                               *executor.MainThread
 	window                           *glfw.Window
 	bounds                           Rect
 	vsync                            bool
@@ -54,7 +55,7 @@ type Window struct {
 var currWin *Window
 
 // NewGLWindow creates and initializes a new OpenGL-based window with the specified configuration, returning a Window instance.
-func NewGLWindow(cfg WindowConfig) (*Window, error) {
+func NewGLWindow(th *executor.MainThread, cfg WindowConfig) (*Window, error) {
 	bool2int := map[bool]int{
 		true:  glfw.True,
 		false: glfw.False,
@@ -64,9 +65,14 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		return nil, fmt.Errorf("invalid value '%v' for SamplesMSAA", cfg.SamplesMSAA)
 	}
 
-	w := &Window{bounds: cfg.Bounds, cursorVisible: true, keysPressed: make(map[Button]bool)}
+	w := &Window{
+		th:            th,
+		bounds:        cfg.Bounds,
+		cursorVisible: true,
+		keysPressed:   make(map[Button]bool),
+	}
 
-	err := executor.Thread.CallErr(func() error {
+	err := th.CallErr(func() error {
 		var err error
 		glfw.WindowHint(glfw.ContextVersionMajor, 3)
 		glfw.WindowHint(glfw.ContextVersionMinor, 3)
@@ -98,7 +104,7 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 		}
 		// enter the OpenGL context
 		w.begin()
-		executor.Thread.Init(cfg.DisableScissorTest)
+		th.Init(cfg.DisableScissorTest)
 		w.end()
 
 		return nil
@@ -114,7 +120,7 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 	//		fmt.Println(pic, i)
 	//		images[i] = pic.Image()
 	//	}
-	//	executor.Thread.Call(func() {
+	//	w.th.Call(func() {
 	//		w.window.SetIcon(images)
 	//	})
 	//}
@@ -132,7 +138,7 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 
 // Destroy releases the resources associated with the window and cleans up its context.
 func (w *Window) Destroy() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.Destroy()
 	})
 }
@@ -149,7 +155,7 @@ func (w *Window) SetClipboardText(text string) {
 
 // SetClosed sets the closed state of the window, indicating whether it should be closed.
 func (w *Window) SetClosed(closed bool) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetShouldClose(closed)
 	})
 }
@@ -157,7 +163,7 @@ func (w *Window) SetClosed(closed bool) {
 // Closed checks if the window has been flagged for closure and returns true if it is.
 func (w *Window) Closed() bool {
 	var closed bool
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		closed = w.window.ShouldClose()
 	})
 	return closed
@@ -165,7 +171,7 @@ func (w *Window) Closed() bool {
 
 // SetTitle updates the title of the window with the specified string.
 func (w *Window) SetTitle(title string) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetTitle(title)
 	})
 }
@@ -173,7 +179,7 @@ func (w *Window) SetTitle(title string) {
 // SetBounds updates the Window's bounds and resizes the GLFW window to match the specified dimensions.
 func (w *Window) SetBounds(bounds Rect) {
 	w.bounds = bounds
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		_, _, width, height := bounds.Bounds()
 		w.window.SetSize(int(width), int(height))
 	})
@@ -181,7 +187,7 @@ func (w *Window) SetBounds(bounds Rect) {
 
 // SetPos sets the position of the window on the screen using the specified XY coordinates.
 func (w *Window) SetPos(pos XY) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		left, top := int(pos.X), int(pos.Y)
 		w.window.SetPos(left, top)
 	})
@@ -190,7 +196,7 @@ func (w *Window) SetPos(pos XY) {
 // GetPos retrieves the current position of the window as an XY struct.
 func (w *Window) GetPos() XY {
 	var v XY
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		x, y := w.window.GetPos()
 		v = MakeVec(float64(x), float64(y))
 	})
@@ -204,7 +210,7 @@ func (w *Window) Bounds() Rect {
 
 // setFullscreen sets the window to fullscreen mode using the provided monitor. Saves the current window state for restoration.
 func (w *Window) setFullscreen(monitor *Monitor) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.restore.xPos, w.restore.yPos = w.window.GetPos()
 		w.restore.width, w.restore.height = w.window.GetSize()
 		mode := monitor.monitor.GetVideoMode()
@@ -221,7 +227,7 @@ func (w *Window) setFullscreen(monitor *Monitor) {
 
 // setWindowed changes the window to windowed mode using its previously stored position and size.
 func (w *Window) setWindowed() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetMonitor(
 			nil,
 			w.restore.xPos,
@@ -247,7 +253,7 @@ func (w *Window) SetMonitor(monitor *Monitor) {
 // Monitor retrieves the monitor associated with the window, or nil if the window is not in fullscreen mode.
 func (w *Window) Monitor() *Monitor {
 	var monitor *glfw.Monitor
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		monitor = w.window.GetMonitor()
 	})
 	if monitor == nil {
@@ -261,7 +267,7 @@ func (w *Window) Monitor() *Monitor {
 // Focused checks if the window is currently focused and returns true if it is.
 func (w *Window) Focused() bool {
 	var focused bool
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		focused = w.window.GetAttrib(glfw.Focused) == glfw.True
 	})
 	return focused
@@ -280,7 +286,7 @@ func (w *Window) VSync() bool {
 // SetCursorVisible sets the visibility of the cursor in the window based on the provided boolean value.
 func (w *Window) SetCursorVisible(visible bool) {
 	w.cursorVisible = visible
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		if visible {
 			w.window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 		} else {
@@ -292,7 +298,7 @@ func (w *Window) SetCursorVisible(visible bool) {
 // SetCursorDisabled disables the cursor and locks it to the center of the window, making it invisible to the user.
 func (w *Window) SetCursorDisabled() {
 	w.cursorVisible = false
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 	})
 }
@@ -328,7 +334,7 @@ func (w *Window) end() {
 
 // Show makes the window visible if it is currently hidden or not already displayed.
 func (w *Window) Show() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.Show()
 	})
 }
@@ -336,7 +342,7 @@ func (w *Window) Show() {
 // Clipboard retrieves the current string content from the system clipboard associated with the window.
 func (w *Window) Clipboard() string {
 	var clipboard string
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		clipboard = w.window.GetClipboardString()
 	})
 	return clipboard
@@ -344,7 +350,7 @@ func (w *Window) Clipboard() string {
 
 // SetClipboard sets the current clipboard content to the specified string.
 func (w *Window) SetClipboard(str string) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetClipboardString(str)
 	})
 }
@@ -386,7 +392,7 @@ func (w *Window) MousePreviousPosition() XY {
 
 // SetMousePosition updates the mouse cursor position within the window bounds and adjusts internal mouse position states.
 func (w *Window) SetMousePosition(v XY) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		if (v.X >= 0 && v.X <= w.bounds.W()) &&
 			(v.Y >= 0 && v.Y <= w.bounds.H()) {
 			w.window.SetCursorPos(
@@ -417,7 +423,7 @@ func (w *Window) Typed() string {
 
 // initInput initializes input handling for the window, setting up callbacks for mouse, keyboard, cursor, and scroll events.
 func (w *Window) initInput() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 			switch action {
 			case glfw.Press:
@@ -478,7 +484,7 @@ func (w *Window) initInput() {
 
 // UpdateInputAndSwap updates input states, manages VSync, swaps buffers, polls events, and prepares for the next frame.
 func (w *Window) UpdateInputAndSwap() {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		w.begin()
 		if w.vsync {
 			glfw.SwapInterval(1)
@@ -493,7 +499,7 @@ func (w *Window) UpdateInputAndSwap() {
 
 // UpdateInputWait processes input events and updates internal state, with an optional timeout for waiting on new events.
 func (w *Window) UpdateInputWait(timeout time.Duration) {
-	executor.Thread.Call(func() {
+	w.th.Call(func() {
 		if timeout <= 0 {
 			glfw.WaitEvents()
 		} else {

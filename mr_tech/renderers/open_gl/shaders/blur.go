@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // BlurLoc is an enumerated type representing uniform locations for the Blur GLSL program.
@@ -18,13 +18,15 @@ const (
 
 // Blur represents a shader program specifically designed for performing blur effects in the rendering pipeline.
 type Blur struct {
+	ctx   api.IContext
 	prg   uint32
 	table [BlurLocLast]int32
 }
 
 // NewBlur initializes and returns a new instance of Blur with default uninitialized properties.
-func NewBlur() *Blur {
+func NewBlur(ctx api.IContext) *Blur {
 	return &Blur{
+		ctx: ctx,
 		prg: 0,
 	}
 }
@@ -46,8 +48,8 @@ func (s *Blur) GetUniform(id BlurLoc) int32 {
 
 // SetupSamplers binds the blur shader program and sets up the sampler for the SSAO input texture.
 func (s *Blur) SetupSamplers() error {
-	gl.UseProgram(s.prg)
-	gl.Uniform1i(s.GetUniform(BlurLocSSAOInput), 0)
+	s.ctx.UseProgram(s.prg)
+	s.ctx.Uniform1i(s.GetUniform(BlurLocSSAOInput), 0)
 	return nil
 }
 
@@ -59,20 +61,20 @@ func (s *Blur) Compile(assets IAssets) error {
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("blur", vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram(s.ctx, "blur", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
-	s.table[BlurLocSSAOInput] = gl.GetUniformLocation(s.prg, gl.Str("ssaoInput\x00"))
+	s.table[BlurLocSSAOInput] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("ssaoInput\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location in blur: %d", idx)

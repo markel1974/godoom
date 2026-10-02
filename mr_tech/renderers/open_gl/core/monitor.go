@@ -17,35 +17,45 @@ type VideoMode struct {
 
 // Monitor represents a wrapper around a GLFW monitor providing additional utility methods for monitor information.
 type Monitor struct {
+	th      *executor.MainThread
 	monitor *glfw.Monitor
 }
 
-// PrimaryMonitor retrieves the primary monitor and wraps it into a Monitor structure for further usage.
-func PrimaryMonitor() *Monitor {
+// NewPrimaryMonitor retrieves the primary monitor and wraps it into a Monitor structure for further usage.
+func NewPrimaryMonitor(th *executor.MainThread) *Monitor {
 	var monitor *glfw.Monitor
-	executor.Thread.Call(func() {
+	th.Call(func() {
 		monitor = glfw.GetPrimaryMonitor()
 	})
 	return &Monitor{
+		th:      th,
 		monitor: monitor,
 	}
 }
 
-// Monitors retrieves a list of all connected monitors and returns them as []*Monitor.
-func Monitors() []*Monitor {
+// NewMonitors retrieves a list of all connected monitors and returns them as []*Monitor.
+func NewMonitors(th *executor.MainThread) []*Monitor {
 	var monitors []*Monitor
-	executor.Thread.Call(func() {
+	th.Call(func() {
 		for _, monitor := range glfw.GetMonitors() {
-			monitors = append(monitors, &Monitor{monitor: monitor})
+			monitors = append(monitors, NewyMonitor(th, monitor))
 		}
 	})
 	return monitors
 }
 
+// NewyMonitor creates and returns a new Monitor instance, associating it with the provided MainThread and GLFW Monitor.
+func NewyMonitor(th *executor.MainThread, monitor *glfw.Monitor) *Monitor {
+	return &Monitor{
+		th:      th,
+		monitor: monitor,
+	}
+}
+
 // Name retrieves the name of the monitor associated with the Monitor instance. Uses thread-safe execution.
 func (m *Monitor) Name() string {
 	var name string
-	executor.Thread.Call(func() { name = m.monitor.GetName() })
+	m.th.Call(func() { name = m.monitor.GetName() })
 	return name
 }
 
@@ -53,7 +63,7 @@ func (m *Monitor) Name() string {
 func (m *Monitor) PhysicalSize() (float64, float64) {
 	var width, height float64
 	var wi, hi int
-	executor.Thread.Call(func() {
+	m.th.Call(func() {
 		wi, hi = m.monitor.GetPhysicalSize()
 	})
 	width = float64(wi)
@@ -65,7 +75,7 @@ func (m *Monitor) PhysicalSize() (float64, float64) {
 func (m *Monitor) Position() (float64, float64) {
 	var x, y float64
 	var xi, yi int
-	executor.Thread.Call(func() {
+	m.th.Call(func() {
 		xi, yi = m.monitor.GetPos()
 	})
 	x = float64(xi)
@@ -77,7 +87,7 @@ func (m *Monitor) Position() (float64, float64) {
 func (m *Monitor) Size() (float64, float64) {
 	var width, height float64
 	var mode *glfw.VidMode
-	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
+	m.th.Call(func() { mode = m.monitor.GetVideoMode() })
 	width = float64(mode.Width)
 	height = float64(mode.Height)
 	return width, height
@@ -87,7 +97,7 @@ func (m *Monitor) Size() (float64, float64) {
 func (m *Monitor) BitDepth() (int, int, int) {
 	var red, green, blue int
 	var mode *glfw.VidMode
-	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
+	m.th.Call(func() { mode = m.monitor.GetVideoMode() })
 	red = mode.RedBits
 	green = mode.GreenBits
 	blue = mode.BlueBits
@@ -98,7 +108,7 @@ func (m *Monitor) BitDepth() (int, int, int) {
 func (m *Monitor) RefreshRate() float64 {
 	var rate float64
 	var mode *glfw.VidMode
-	executor.Thread.Call(func() { mode = m.monitor.GetVideoMode() })
+	m.th.Call(func() { mode = m.monitor.GetVideoMode() })
 	rate = float64(mode.RefreshRate)
 	return rate
 }
@@ -107,7 +117,7 @@ func (m *Monitor) RefreshRate() float64 {
 func (m *Monitor) VideoModes() []VideoMode {
 	var vModes []VideoMode
 	var modes []*glfw.VidMode
-	executor.Thread.Call(func() {
+	m.th.Call(func() {
 		modes = m.monitor.GetVideoModes()
 	})
 	for _, mode := range modes {

@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // GeometryLoc represents a location identifier for shader geometry uniforms.
@@ -23,6 +23,7 @@ const (
 // Geometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
 type Geometry struct {
+	ctx   api.IContext
 	prg   uint32
 	table [GeometryLocLast]int32
 	view  [16]float32
@@ -30,17 +31,18 @@ type Geometry struct {
 }
 
 // NewGeometry initializes and returns a new Geometry instance with default properties.
-func NewGeometry() *Geometry {
+func NewGeometry(ctx api.IContext) *Geometry {
 	return &Geometry{
+		ctx: ctx,
 		prg: 0,
 	}
 }
 
 // SetupSamplers initializes and configures texture samplers for the Geometry instance.
 func (s *Geometry) SetupSamplers() error {
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
-	gl.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
 	return nil
 }
 
@@ -68,22 +70,22 @@ func (s *Geometry) Compile(assets IAssets) error {
 	if err != nil {
 		return err
 	}
-	vertexShader, err := ShaderCompile(vertId, string(vertexSrc), gl.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fragmentShader, err := ShaderCompile(fragId, string(fragmentSrc), gl.FRAGMENT_SHADER)
+	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vertexShader)
+		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prg, err = ShaderCreateProgram("geometry", vertexShader, fragmentShader)
+	s.prg, err = ShaderCreateProgram(s.ctx, "geometry", vertexShader, fragmentShader)
 	if err != nil {
 		return err
 	}
-	s.table[GeometryLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[GeometryLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[GeometryLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
+	s.table[GeometryLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[GeometryLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[GeometryLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("invalid uniform location in geometry: %d", idx)
@@ -100,9 +102,9 @@ func (s *Geometry) UpdateUniforms(view, proj [16]float32) {
 
 // Render applies shader program, updates uniform values, and executes the provided rendering function.
 func (s *Geometry) Render(renderScene func()) {
-	gl.UseProgram(s.GetProgram())
-	// RIMOSSO: gl.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
-	gl.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])
-	gl.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, &s.proj[0])
+	s.ctx.UseProgram(s.GetProgram())
+	// RIMOSSO: s.ctx.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, &s.proj[0])
 	renderScene()
 }

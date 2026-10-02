@@ -3,7 +3,7 @@ package open_gl
 import (
 	"unsafe"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 type RenderBatch struct {
@@ -15,13 +15,15 @@ type RenderBatch struct {
 
 // DrawCommandsRender manages batched GPU drawing commands, storing index counts and memory offsets for rendering.
 type DrawCommandsRender struct {
+	ctx             api.IContext
 	batches         []RenderBatch
 	batchesAdditive []RenderBatch
 }
 
 // NewDrawCommandsRender initializes and returns a new instance of DrawCommandsRender with preallocated internal arrays.
-func NewDrawCommandsRender() *DrawCommandsRender {
+func NewDrawCommandsRender(ctx api.IContext) *DrawCommandsRender {
 	return &DrawCommandsRender{
+		ctx:             ctx,
 		batches:         make([]RenderBatch, 0, 16),
 		batchesAdditive: make([]RenderBatch, 0, 16),
 	}
@@ -82,7 +84,7 @@ func (w *DrawCommandsRender) buildBatches(dc []*DrawCommand, isAdditive bool) []
 		}
 
 		currentBatch.mc = append(currentBatch.mc, cmd.indexCount)
-		currentBatch.mi = append(currentBatch.mi, gl.PtrOffset(int(cmd.firstIndex*4)))
+		currentBatch.mi = append(currentBatch.mi, w.ctx.PtrOffset(int(cmd.firstIndex*4)))
 	}
 	return batches
 }
@@ -121,30 +123,30 @@ func (w *DrawCommandsRender) renderInternal(isAdditive bool) {
 
 		if b.depthWrite != currentDepthWrite {
 			if b.depthWrite == 1 {
-				gl.DepthMask(true)
+				w.ctx.DepthMask(true)
 			} else {
-				gl.DepthMask(false)
+				w.ctx.DepthMask(false)
 			}
 			currentDepthWrite = b.depthWrite
 		}
 
 		if b.polygonOffset != currentPolygonOffset {
 			if b.polygonOffset == 1 {
-				gl.Enable(gl.POLYGON_OFFSET_FILL)
-				gl.PolygonOffset(-1.0, -1.0)
+				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
+				w.ctx.PolygonOffset(-1.0, -1.0)
 			} else {
-				gl.Disable(gl.POLYGON_OFFSET_FILL)
+				w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 			}
 			currentPolygonOffset = b.polygonOffset
 		}
 
-		gl.MultiDrawElements(gl.TRIANGLES, &b.mc[0], gl.UNSIGNED_INT, &b.mi[0], int32(len(b.mc)))
+		w.ctx.MultiDrawElements(api.TRIANGLES, &b.mc[0], api.UNSIGNED_INT, &b.mi[0], int32(len(b.mc)))
 	}
 
 	if currentDepthWrite != 1 && !isAdditive {
-		gl.DepthMask(true)
+		w.ctx.DepthMask(true)
 	}
 	if currentPolygonOffset == 1 {
-		gl.Disable(gl.POLYGON_OFFSET_FILL)
+		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	}
 }

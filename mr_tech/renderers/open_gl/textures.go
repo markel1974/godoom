@@ -3,7 +3,7 @@ package open_gl
 import (
 	"math"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -19,13 +19,15 @@ type Bucket struct {
 
 // Textures manages a collection of 2D textures and their associated VRAM buckets for efficient rendering and sampling.
 type Textures struct {
+	ctx      api.IContext
 	textures map[*textures.Texture]float32
 	buckets  []Bucket
 }
 
 // NewTextures creates and returns a new instance of Textures with an initialized map to store texture references.
-func NewTextures() *Textures {
+func NewTextures(ctx api.IContext) *Textures {
 	return &Textures{
+		ctx:      ctx,
 		textures: make(map[*textures.Texture]float32),
 	}
 }
@@ -90,9 +92,9 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	// Allocazione VRAM selettiva
 	for i := range tx.buckets {
 		if tx.buckets[i].Count > 0 {
-			tx.buckets[i].DiffuseArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
-			tx.buckets[i].NormalArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
-			tx.buckets[i].EmissiveArray = createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].DiffuseArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].NormalArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].EmissiveArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
 		}
 	}
 
@@ -133,18 +135,18 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
 
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
-		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
 
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
-		gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(normalPixels))
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(normalPixels))
 
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
 		if tex.IsEmissive() {
-			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(resizedPixels))
+			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
 		} else {
 			blackPixels := createBlackPixels(size, size, stride)
-			gl.TexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(blackPixels))
+			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(blackPixels))
 		}
 
 		//Impacchettiamo Bucket e Layer in un solo Float
@@ -156,19 +158,19 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	// 5. Generazione MipMaps globali (aggiunto l'emissivo!)
 	for i, l := range tx.buckets {
 		if l.Layer > 0 {
-			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].DiffuseArray)
-			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
-			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].NormalArray)
-			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
-			gl.BindTexture(gl.TEXTURE_2D_ARRAY, tx.buckets[i].EmissiveArray)
-			gl.GenerateMipmap(gl.TEXTURE_2D_ARRAY)
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].DiffuseArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].NormalArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].EmissiveArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
 		}
 	}
 	return nil
 }
 
 // createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.
-func createTextureArray(width, height int, layers int32) uint32 {
+func createTextureArray(ctx api.IContext, width, height int, layers int32) uint32 {
 	computeMipMapLevel := func(width, height int) int32 {
 		maxDim := float64(width)
 		if height > width {
@@ -178,14 +180,14 @@ func createTextureArray(width, height int, layers int32) uint32 {
 		return mipCount
 	}
 	var tex uint32
-	gl.GenTextures(1, &tex)
-	gl.BindTexture(gl.TEXTURE_2D_ARRAY, tex)
+	ctx.GenTextures(1, &tex)
+	ctx.BindTexture(api.TEXTURE_2D_ARRAY, tex)
 
 	mipCount := computeMipMapLevel(width, height)
 
 	// Set MipMap limits BEFORE allocation
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_BASE_LEVEL, 0)
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, mipCount-1)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_BASE_LEVEL, 0)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_LEVEL, mipCount-1)
 
 	// Explicit "Immutable-Style" allocation
 	for i := int32(0); i < mipCount; i++ {
@@ -197,24 +199,24 @@ func createTextureArray(width, height int, layers int32) uint32 {
 		if h < 1 {
 			h = 1
 		}
-		gl.TexImage3D(gl.TEXTURE_2D_ARRAY, i, gl.RGBA8, w, h, layers, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
+		ctx.TexImage3D(api.TEXTURE_2D_ARRAY, i, api.RGBA8, w, h, layers, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
 	}
 
-	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST)
-	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_MIN_FILTER, gl_api.NEAREST_MIPMAP_NEAREST)
+	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_MAG_FILTER, gl_api.NEAREST)
 
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MIN_FILTER, api.LINEAR_MIPMAP_LINEAR)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAG_FILTER, api.LINEAR)
 
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT)
-	gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT)
-	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	//gl.TexParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_S, api.REPEAT)
+	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_T, api.REPEAT)
+	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_S, gl_api.CLAMP_TO_EDGE)
+	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_T, gl_api.CLAMP_TO_EDGE)
 
 	// Anisotropic filtering
 	var maxAniso float32
-	gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
-	gl.TexParameterf(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_ANISOTROPY, maxAniso)
+	ctx.GetFloatv(api.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
+	ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
 
 	return tex
 }

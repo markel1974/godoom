@@ -1,26 +1,26 @@
 package open_gl
 
 import (
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
 const full3d = true
 
 // enableAdditiveLights configures OpenGL to use additive blending for rendering by adjusting depth and blend settings.
-func enableAdditiveLights() {
-	gl.DepthMask(false)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.ONE, gl.ONE)
-	gl.DepthFunc(gl.LEQUAL)
+func enableAdditiveLights(ctx api.IContext) {
+	ctx.DepthMask(false)
+	ctx.Enable(api.BLEND)
+	ctx.BlendFunc(api.ONE, api.ONE)
+	ctx.DepthFunc(api.LEQUAL)
 }
 
 // disableAdditiveLights disables blend-based additive light rendering and reconfigures the depth test to default behavior.
-func disableAdditiveLights() {
-	gl.Disable(gl.BLEND)
-	gl.DepthMask(true)
-	gl.DepthFunc(gl.LESS)
+func disableAdditiveLights(ctx api.IContext) {
+	ctx.Disable(api.BLEND)
+	ctx.DepthMask(true)
+	ctx.DepthFunc(api.LESS)
 }
 
 // IShader defines an interface for shader operations, including setup, sampler configuration, and compilation logic.
@@ -32,6 +32,7 @@ type IShader interface {
 
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
+	ctx           api.IContext
 	tex           *Textures
 	flash         *model.Flash
 	main          *shaders.Main
@@ -55,8 +56,9 @@ type Shaders struct {
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
-func NewShaders() *Shaders {
+func NewShaders(ctx api.IContext) *Shaders {
 	c := &Shaders{
+		ctx:           ctx,
 		tex:           nil,
 		main:          nil,
 		sky:           nil,
@@ -75,8 +77,8 @@ func NewShaders() *Shaders {
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
 func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model.Calibration, tex *Textures) error {
-	gl.Enable(gl.MULTISAMPLE)
-	//gl.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+	w.ctx.Enable(api.MULTISAMPLE)
+	//w.ctx.Enable(gl_api.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
 	w.flash = p.GetFlash()
 	w.tex = tex
@@ -85,16 +87,16 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.metrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
 	w.metrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
 
-	w.main = shaders.NewMain(vStride, w.metrics)
-	w.sky = shaders.NewSky()
-	w.geometry = shaders.NewGeometry()
-	w.ssao = shaders.NewSSAO()
-	w.blur = shaders.NewBlur()
-	w.depth = shaders.NewDepth(w.metrics, 8)
-	w.lights = shaders.NewLights(lStride, w.cal)
-	w.shadowLight = shaders.NewShaderShadowLight(w.cal)
-	w.post = shaders.NewPost()
-	w.bloom = shaders.NewBloom()
+	w.main = shaders.NewMain(w.ctx, vStride, w.metrics)
+	w.sky = shaders.NewSky(w.ctx)
+	w.geometry = shaders.NewGeometry(w.ctx)
+	w.ssao = shaders.NewSSAO(w.ctx)
+	w.blur = shaders.NewBlur(w.ctx)
+	w.depth = shaders.NewDepth(w.ctx, w.metrics, 8)
+	w.lights = shaders.NewLights(w.ctx, lStride, w.cal)
+	w.shadowLight = shaders.NewShaderShadowLight(w.ctx, w.cal)
+	w.post = shaders.NewPost(w.ctx)
+	w.bloom = shaders.NewBloom(w.ctx)
 	w.enableShadows = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom)
 	w.SetShadowEnabled(true)
@@ -142,12 +144,12 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
 	for i := 0; i < w.tex.GetBucketsLen(); i++ {
 		diffuse, normal, emissive := w.tex.GetBucket(i)
-		gl.ActiveTexture(gl.TEXTURE0 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, diffuse)
-		gl.ActiveTexture(gl.TEXTURE4 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, normal)
-		gl.ActiveTexture(gl.TEXTURE8 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, emissive)
+		w.ctx.ActiveTexture(api.TEXTURE0 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
+		w.ctx.ActiveTexture(api.TEXTURE4 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
+		w.ctx.ActiveTexture(api.TEXTURE8 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
 	}
 
 	px, _, pz := vi.GetView()
@@ -221,7 +223,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.main.RenderAdditive(dcAdditive.RenderAdditive)
 	}
 	// ENABLE ADDITIVE LIGHTS
-	enableAdditiveLights()
+	enableAdditiveLights(w.ctx)
 
 	// FLASHLIGHTS
 	fConeStart := float32(w.flash.GetConeStart())
@@ -252,7 +254,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	w.lights.Render(dcOpaque.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
-	disableAdditiveLights()
+	disableAdditiveLights(w.ctx)
 
 	w.bindTextureBuckets() // Restore texture arrays!
 
@@ -274,13 +276,13 @@ func (w *Shaders) bindTextureBuckets() {
 	for i := 0; i < w.tex.GetBucketsLen(); i++ {
 		diffuse, normal, emissive := w.tex.GetBucket(i)
 
-		gl.ActiveTexture(gl.TEXTURE0 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, diffuse)
+		w.ctx.ActiveTexture(api.TEXTURE0 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
 
-		gl.ActiveTexture(gl.TEXTURE4 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, normal)
+		w.ctx.ActiveTexture(api.TEXTURE4 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
 
-		gl.ActiveTexture(gl.TEXTURE8 + uint32(i))
-		gl.BindTexture(gl.TEXTURE_2D_ARRAY, emissive)
+		w.ctx.ActiveTexture(api.TEXTURE8 + uint32(i))
+		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
 	}
 }

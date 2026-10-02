@@ -7,11 +7,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
+	ctx              api.IContext
 	tex              *Textures
 	fv               *FrameVertices
 	dc               *DrawCommands
@@ -27,15 +29,16 @@ type BuilderVolume struct {
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
-func NewBuilderVolume(tex *Textures, calibration *model.Calibration) *BuilderVolume {
+func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
+		ctx:              ctx,
 		tex:              tex,
 		fv:               NewFrameVertices(1048576),
 		dc:               NewDrawCommands(32768),
 		dcAdditive:       NewDrawCommands(4096),
 		fl:               NewFrameLights(1024),
-		dcRender:         NewDrawCommandsRender(),
-		dcRenderAdditive: NewDrawCommandsRender(),
+		dcRender:         NewDrawCommandsRender(ctx),
+		dcRenderAdditive: NewDrawCommandsRender(ctx),
 		cSky:             nil,
 		cSkyU:            0.0,
 		cSkyV:            0.0,

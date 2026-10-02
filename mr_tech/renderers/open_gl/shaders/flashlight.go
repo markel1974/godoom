@@ -3,8 +3,8 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // FlashlightLoc represents a uniform location identifier used in the ShadowLight's shader program.
@@ -61,6 +61,7 @@ const (
 
 // ShadowLight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
 type ShadowLight struct {
+	ctx         api.IContext
 	prg         uint32
 	table       [FlashLocLast]int32
 	shadows     bool
@@ -70,8 +71,9 @@ type ShadowLight struct {
 }
 
 // NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
-func NewShaderShadowLight(cal *model.Calibration) *ShadowLight {
+func NewShaderShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
 	f := &ShadowLight{
+		ctx:         ctx,
 		cal:         cal,
 		shadows:     false,
 		shadowsInt:  0,
@@ -98,12 +100,12 @@ func (s *ShadowLight) HasShadow() bool {
 
 // SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
 func (s *ShadowLight) SetupSamplers() error {
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
 	normalUnits := []int32{4, 5, 6, 7}
-	gl.Uniform1iv(s.GetUniform(FlashLocTexture), 4, &diffuseUnits[0])
-	gl.Uniform1iv(s.GetUniform(FlashLocNormalMap), 4, &normalUnits[0])
-	gl.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 13)
+	s.ctx.Uniform1iv(s.GetUniform(FlashLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(FlashLocNormalMap), 4, &normalUnits[0])
+	s.ctx.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 13)
 	return nil
 }
 
@@ -127,44 +129,44 @@ func (s *ShadowLight) Compile(a IAssets) error {
 		return err
 	}
 
-	vSh, err := ShaderCompile(vertId, string(vSrc), gl.VERTEX_SHADER)
+	vSh, err := ShaderCompile(s.ctx, vertId, string(vSrc), api.VERTEX_SHADER)
 	if err != nil {
 		return err
 	}
-	fSh, err := ShaderCompile(fragId, string(fSrc), gl.FRAGMENT_SHADER)
+	fSh, err := ShaderCompile(s.ctx, fragId, string(fSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		gl.DeleteShader(vSh)
-		return err
-	}
-
-	s.prg, err = ShaderCreateProgram("flashLight", vSh, fSh)
-	if err != nil {
+		s.ctx.DeleteShader(vSh)
 		return err
 	}
 
-	s.table[FlashLocProjection] = gl.GetUniformLocation(s.prg, gl.Str("u_projection\x00"))
-	s.table[FlashLocView] = gl.GetUniformLocation(s.prg, gl.Str("u_view\x00"))
-	s.table[FlashLocInvView] = gl.GetUniformLocation(s.prg, gl.Str("u_invView\x00"))
-	s.table[FlashLocFlashSpaceMatrix] = gl.GetUniformLocation(s.prg, gl.Str("u_flashSpaceMatrix\x00"))
-	s.table[FlashLocTexture] = gl.GetUniformLocation(s.prg, gl.Str("u_texture\x00"))
-	s.table[FlashLocNormalMap] = gl.GetUniformLocation(s.prg, gl.Str("u_normalMap\x00"))
-	s.table[FlashLocFlashShadowMap] = gl.GetUniformLocation(s.prg, gl.Str("u_flashShadowMap\x00"))
-	s.table[FlashLocScreenResolution] = gl.GetUniformLocation(s.prg, gl.Str("u_screenResolution\x00"))
-	s.table[FlashLocFlashDir] = gl.GetUniformLocation(s.prg, gl.Str("u_flashDir\x00"))
-	s.table[FlashLocFlashIntensityFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_flashIntensityFactor\x00"))
-	s.table[FlashLocFlashOffset] = gl.GetUniformLocation(s.prg, gl.Str("u_flashOffset\x00"))
-	s.table[FlashLocFlashConeStart] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeStart\x00"))
-	s.table[FlashLocFlashConeEnd] = gl.GetUniformLocation(s.prg, gl.Str("u_flashConeEnd\x00"))
-	s.table[FlashLocFalloff] = gl.GetUniformLocation(s.prg, gl.Str("u_flashFalloff\x00"))
-	s.table[FlashLocEnableShadows] = gl.GetUniformLocation(s.prg, gl.Str("u_enableShadows\x00"))
-	s.table[FlashLocShininessWall] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessWall\x00"))
-	s.table[FlashLocShininessFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_shininessFloor\x00"))
-	s.table[FlashLocSpecBoostWall] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostWall\x00"))
-	s.table[FlashLocSpecBoostFloor] = gl.GetUniformLocation(s.prg, gl.Str("u_specBoostFloor\x00"))
-	s.table[FlashLocBeamRatioFactor] = gl.GetUniformLocation(s.prg, gl.Str("u_beamRatioFactor\x00"))
-	s.table[FlashLocVolumetricSteps] = gl.GetUniformLocation(s.prg, gl.Str("u_volumetricSteps\x00"))
-	s.table[FlashLocIsAbsolute] = gl.GetUniformLocation(s.prg, gl.Str("u_isAbsolute\x00"))
-	s.table[FlashLocDebugLights] = gl.GetUniformLocation(s.prg, gl.Str("u_debugLights\x00"))
+	s.prg, err = ShaderCreateProgram(s.ctx, "flashLight", vSh, fSh)
+	if err != nil {
+		return err
+	}
+
+	s.table[FlashLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[FlashLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[FlashLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
+	s.table[FlashLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashSpaceMatrix\x00"))
+	s.table[FlashLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[FlashLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
+	s.table[FlashLocFlashShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashShadowMap\x00"))
+	s.table[FlashLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
+	s.table[FlashLocFlashDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashDir\x00"))
+	s.table[FlashLocFlashIntensityFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashIntensityFactor\x00"))
+	s.table[FlashLocFlashOffset] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashOffset\x00"))
+	s.table[FlashLocFlashConeStart] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeStart\x00"))
+	s.table[FlashLocFlashConeEnd] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeEnd\x00"))
+	s.table[FlashLocFalloff] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashFalloff\x00"))
+	s.table[FlashLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
+	s.table[FlashLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
+	s.table[FlashLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
+	s.table[FlashLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
+	s.table[FlashLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
+	s.table[FlashLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
+	s.table[FlashLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
+	s.table[FlashLocIsAbsolute] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_isAbsolute\x00"))
+	s.table[FlashLocDebugLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debugLights\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("unused uniform location in flashlight: %d\n", idx)
@@ -179,37 +181,37 @@ func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj
 		return
 	}
 
-	gl.UseProgram(s.prg)
+	s.ctx.UseProgram(s.prg)
 
-	gl.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])
-	gl.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, &view[0])
-	gl.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, &invView[0])
-	gl.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &lightSpace[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, &view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, &invView[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &lightSpace[0])
 
-	gl.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
+	s.ctx.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
 
 	// Passaggio diretto dei vettori in View-Space
-	gl.Uniform3f(s.GetUniform(FlashLocFlashDir), dirViewX, dirViewY, dirViewZ)
-	gl.Uniform3f(s.GetUniform(FlashLocFlashOffset), posViewX, posViewY, posViewZ)
+	s.ctx.Uniform3f(s.GetUniform(FlashLocFlashDir), dirViewX, dirViewY, dirViewZ)
+	s.ctx.Uniform3f(s.GetUniform(FlashLocFlashOffset), posViewX, posViewY, posViewZ)
 
-	gl.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), intensity)
-	gl.Uniform1f(s.GetUniform(FlashLocFalloff), falloff)
+	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), intensity)
+	s.ctx.Uniform1f(s.GetUniform(FlashLocFalloff), falloff)
 
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeStart), coneStart)
-	gl.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), coneEnd)
-	gl.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
+	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashConeStart), coneStart)
+	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), coneEnd)
+	s.ctx.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
 
-	gl.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))
-	gl.Uniform1f(s.GetUniform(FlashLocShininessFloor), float32(s.cal.ShininessFloor))
-	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	gl.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
-	gl.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
-	gl.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
-	gl.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
-	gl.Uniform1i(s.GetUniform(FlashLocDebugLights), int32(s.debugLights))
+	s.ctx.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))
+	s.ctx.Uniform1f(s.GetUniform(FlashLocShininessFloor), float32(s.cal.ShininessFloor))
+	s.ctx.Uniform1f(s.GetUniform(FlashLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	s.ctx.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
+	s.ctx.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	s.ctx.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
+	s.ctx.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
+	s.ctx.Uniform1i(s.GetUniform(FlashLocDebugLights), int32(s.debugLights))
 	if s.shadows {
-		gl.ActiveTexture(gl.TEXTURE13)
-		gl.BindTexture(gl.TEXTURE_2D, shadowTex)
+		s.ctx.ActiveTexture(api.TEXTURE13)
+		s.ctx.BindTexture(api.TEXTURE_2D, shadowTex)
 	}
 
 	renderGeometry()

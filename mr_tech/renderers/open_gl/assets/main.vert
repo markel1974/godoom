@@ -13,7 +13,7 @@ out float FragDepth;
 out vec3 ViewPos;
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
-out float IsLiquid;
+out float IsFullbright;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
@@ -30,15 +30,15 @@ void main()
     if (aIsBillboard >= 1.0 && aIsBillboard < 1.5) {
         // --- VIEWPOINT BILLBOARDING (Allineamento al Player) ---
 
-        // 1. Estrazione matematica della Posizione della Camera in World Space
+        // Estrazione matematica della Posizione della Camera in World Space
         // Sfruttiamo la matrice inversa della rotazione per trovare le coordinate esatte del giocatore
         vec3 camPos = -transpose(mat3(u_view)) * u_view[3].xyz;
 
-        // 2. Calcoliamo il vettore che "guarda" verso la telecamera
+        // Calcoliamo il vettore che "guarda" verso la telecamera
         vec3 toCamera = camPos - aOrigin;
         vec3 right, up;
         if (aIsBillboard > 1.05) {
-            // --- BILLBOARD SFERICO (Fumo, Proiettili, Plasma) ---
+            // BILLBOARD SFERICO (Fumo, Proiettili, Plasma)
             // Lo sprite ti guarda dritto negli occhi, da qualsiasi altezza
             if (length(toCamera) < 0.001) {
                 toCamera = vec3(0.0, 0.0, 1.0);
@@ -54,7 +54,7 @@ void main()
             }
             up = cross(forward, right);
         } else {
-            // --- BILLBOARD CILINDRICO (Nemici, Barili, Alberi) ---
+            // BILLBOARD CILINDRICO (Nemici, Barili, Alberi)
             // Annulliamo l'asse Y: lo sprite ruota solo orizzontalmente e resta piantato a terra
             toCamera.y = 0.0;
             if (length(toCamera) < 0.001) {
@@ -68,10 +68,10 @@ void main()
         // 3. Assembliamo i vertici ignorando aYaw (gli sprite devono solo guardare la camera)
         worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
     } else if (aIsBillboard > 1.5) {
-        // --- MODELLI 3D (MD2 / MDL) ---
-        // 1. Interpolazione Hardware (Costo zero sulla GPU)
+        // MODELLI 3D
+        // Interpolazione Hardware (Costo zero sulla GPU)
         vec3 lPos = mix(aPos, aPosNext, aLerp);
-        // 2. Rotazione Yaw (Orizzontale per l'entità nel mondo)
+        // Rotazione Yaw (Orizzontale per l'entità nel mondo)
         float cosY = cos(aYaw);
         float sinY = sin(aYaw);
         // Ripristiniamo gli assi originali del MD2
@@ -84,7 +84,7 @@ void main()
         vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
     } else if (aIsBillboard > 0.4 && aIsBillboard < 0.6) {
-        // --- LIQUIDI (LAVA / ACQUA) ---
+        // MATERIALI ANIMATI (Es. Acqua, Lava, o Nastri Trasportatori)
         worldPos = vec4(aPos, 1.0);
         // Generazione del moto ondoso fisico sui vertici
         worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
@@ -93,7 +93,6 @@ void main()
         TexCoords.x += u_time * 0.1;
         TexCoords.y += u_time * 0.05;
     } else {
-        // --- GEOMETRIA BSP ---
         worldPos = vec4(aPos, 1.0);
     }
 
@@ -104,7 +103,7 @@ void main()
 
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
-	IsLiquid = (aIsBillboard > 0.4 && aIsBillboard < 0.6) ? 1.0 : 0.0;
+	IsFullbright = (aIsBillboard > 0.4 && aIsBillboard < 0.6) ? 1.0 : 0.0;
 
     gl_Position = u_projection * viewPos;
 }

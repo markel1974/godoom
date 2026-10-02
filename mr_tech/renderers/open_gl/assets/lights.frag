@@ -8,7 +8,7 @@ in float FragDepth;
 in vec3 ViewPos;
 in vec4 FragPosLightRoom;
 in vec4 FragPosLightFlash;
-in float IsLiquid;
+in float IsFullbright;
 
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
@@ -191,7 +191,7 @@ void main() {
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         float shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         float shadowFactor = 1.0 - shadowRoom;
-        if (IsLiquid > 0.5) {
+        if (IsFullbright > 0.5) {
             shadowFactor = 1.0;
             litRoom = albedo * u_ambient_light;
         } else {

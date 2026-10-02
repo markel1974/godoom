@@ -6,7 +6,7 @@ layout (location = 1) out vec4 BrightColor;
 in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
-in float IsLiquid;
+in float IsFullbright;
 
 uniform sampler2D u_ssao;
 uniform vec2 u_screenResolution;
@@ -47,10 +47,10 @@ void main()
     // CAMPIONAMENTO SSAO
     float ao = texture(u_ssao, screenUV).r;
 
-    // Se è un liquido, disabilitiamo le ombre (SSAO) impostando l'ambient al massimo, 
-    // come se fosse fullbright/emissivo naturale (tipico di Quake per lava/slime).
+    // Se è un materiale fullbright, disabilitiamo le ombre (SSAO) impostando l'ambient al massimo, 
+    // come se fosse fullbright/emissivo naturale (tipico per materiali luminosi o fluidi emissivi).
     float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.05);
-    if (IsLiquid > 0.5) {
+    if (IsFullbright > 0.5) {
         linearAmbient = 1.0;
     }
 

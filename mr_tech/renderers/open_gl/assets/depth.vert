@@ -61,7 +61,7 @@ void main()
         vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
     } else if (aIsBillboard > 0.4 && aIsBillboard < 0.6) {
-        // --- LIQUIDI ---
+        // --- MATERIALI ANIMATI O TRASPARENTI ---
         worldPos = vec4(aPos, 1.0);
         worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
         worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;

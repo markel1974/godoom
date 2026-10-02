@@ -176,8 +176,14 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
 		// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
 		fovDeg := float32(90.0)
-		near := float32(1.0)
-		lightMatrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, light.Falloff)
+		near := float32(0.1)
+		factor := light.Intensity
+		falloff := light.Falloff
+		effectiveRadius := float32(4.605) * falloff * factor
+		if effectiveRadius < 256.0 {
+			effectiveRadius = 256.0
+		}
+		lightMatrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
 		dynaLightMatrices = append(dynaLightMatrices, lightMatrix)
 	}
 
@@ -239,7 +245,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 			dcOpaque.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
-			factor, falloff, light.CutOff, light.OuterCutOff, float32(fbW), float32(fbH),
+			factor, falloff, light.OuterCutOff, light.CutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS

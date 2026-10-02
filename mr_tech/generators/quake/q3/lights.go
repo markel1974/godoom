@@ -231,11 +231,11 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 		}
 	}
 	if kind == config.LightKindSpot {
+		intensity = baseIntensity * 0.01
 		falloff = baseIntensity * 0.04
-		intensity = baseIntensity * 0.03
 	} else {
-		falloff = baseIntensity * 0.04
-		intensity = baseIntensity * 0.3
+		intensity = baseIntensity * 0.04
+		falloff = intensity * 0.6
 	}
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
 	cl.R = r

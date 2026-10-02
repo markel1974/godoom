@@ -59,18 +59,26 @@ float randomNoise(vec2 co) {
 }
 
 float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
-    if (fragPosLightSpace.w <= 0.0) return 0.0;
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
-    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+
+    if (fragPosLightSpace.w <= 0.0) {
+        return 0.0;
+    }
+    if(projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) {
+        return 0.0;
+    }
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
-    //const int SAMPLES = u_volumetricSteps;
+
+    // Golden angle in radians
     const float GOLDEN_ANGLE = 2.39996323;
-    float noise = randomNoise(gl_FragCoord.xy) * 6.2831853;
-    float spread = 2.0;
+    float spread = (u_isAbsolute == 1) ? 2.0 : 5.0; // Piu spread per luci grandi
+
+    // Usa le coordinate del frammento per creare una variante spaziale "stabile"
+    float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
 
     for(int i = 0; i < u_volumetricSteps; ++i) {
         float r = sqrt(float(i) + 0.5) / sqrt(float(u_volumetricSteps));
@@ -85,13 +93,16 @@ vec3 calculateNormal() {
     vec3 dp1 = dFdx(ViewPos);
     vec3 dp2 = dFdy(ViewPos);
     vec3 geoNormal = normalize(cross(dp1, dp2));
-
-    if (geoNormal.z < 0.0) geoNormal = -geoNormal;
-    if (dot(geoNormal, ViewPos) > 0.0) geoNormal = -geoNormal;
-
+    if (geoNormal.z < 0.0) {
+        geoNormal = -geoNormal;
+    }
+    if (dot(geoNormal, ViewPos) > 0.0) {
+        geoNormal = -geoNormal;
+    }
     vec3 mapColor = getNormal(TexCoords);
-    if (length(mapColor) < 0.1) return geoNormal;
-
+    if (length(mapColor) < 0.1) {
+        return geoNormal;
+    }
     vec3 unpacked = (mapColor * 2.0) - 1.0;
     vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
 
@@ -120,12 +131,15 @@ float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizon
     return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
 }
 
-void main()
-{
-    if (u_flashIntensityFactor <= 0.01) discard;
+void main() {
+    if (u_flashIntensityFactor <= 0.01) {
+        discard;
+    }
 
     vec4 texColor = getDiffuse(TexCoords);
-    if(texColor.a < 0.5) discard;
+    if(texColor.a < 0.5) {
+        discard;
+    }
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
@@ -135,31 +149,25 @@ void main()
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos);
 
-    // =======================================================
-    // IL CUORE DEL SISTEMA: ROUTER DEGLI SPAZI (WORLD vs VIEW)
-    // =======================================================
+    // Space Router (World vs View)
     vec3 flashPosView;
     vec3 flashSpotDir;
 
     if (u_isAbsolute == 1) {
-        // Posizione in View Space
+        // Light Hotspot (Position in View Space)
         flashPosView = (u_view * vec4(u_flashOffset, 1.0)).xyz;
-        // Crea un bersaglio nel mondo reale
-        vec3 worldTarget = u_flashOffset + normalize(u_flashDir);
-        // Trasforma il bersaglio
-        vec3 targetView = (u_view * vec4(worldTarget, 1.0)).xyz;
-        // Calcola la differenza (Direzione pura)
-        flashSpotDir = normalize(targetView - flashPosView);
+        // Create a target in world space
+        // Exact same calculation as lights.frag:
+        flashSpotDir = normalize(mat3(u_view) * u_flashDir);
     } else {
-        // TORCIA PLAYER (Input in VIEW SPACE)
-        // La torcia è già calcolata dalla telecamera in Go (Sway)
+        // Player Flashlight (input in view space)
+        // The flashlight is already calculated from the camera in Go (Sway)
         flashPosView = u_flashOffset;
-        // Crea il bersaglio fittizio distante 512 per il puntamento
+        // Create dummy target at distance 512 for aiming
         flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
     }
-    // =======================================================
 
-    // Ora L_flash e flashCone usano una matematica unificata e coerente
+    // Now L_flash and flashCone use unified and consistent math
     vec3 L_flash = normalize(flashPosView - ViewPos);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
@@ -169,9 +177,10 @@ void main()
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {
         vec3 geoNormal = normalize(cross(dFdx(ViewPos), dFdy(ViewPos)));
-        if (geoNormal.z < 0.0) geoNormal = -geoNormal;
-
-        // BIAS corretto per sconfiggere l'auto-ombreggiatura sul pavimento
+        if (geoNormal.z < 0.0) {
+            geoNormal = -geoNormal;
+        }
+        // Proper bias to eliminate floor self-shadowing
         float cosTheta = clamp(dot(geoNormal, L_flash), 0.0, 1.0);
         float bias = max(0.0005 * (1.0 - cosTheta), 0.00005);
 
@@ -191,13 +200,18 @@ void main()
     float distToLight = length(flashPosView - ViewPos);
     float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
     if (u_isAbsolute == 1) {
-        // Ripristiniamo il fattore energetico u_flashFalloff se necessario alla calibrazione
-        flashIntensity = u_flashIntensityFactor;//flashCone * u_flashIntensityFactor * distanceFade;
+        // Match the HDR exponential decay and cone logic from lights.frag!
+        float effectiveRadius = 4.605 * u_flashFalloff * max(u_flashIntensityFactor, 0.1);
+        if (distToLight > effectiveRadius) {
+            discard; // Or just let it fade to 0
+        }
+        float expFalloff = exp(-distToLight / (u_flashFalloff * max(u_flashIntensityFactor, 0.1)));
+        flashIntensity = flashCone * expFalloff * u_flashIntensityFactor;
     } else {
         flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
     }
 
-    // --- SETUP VOLUMETRICO ---
+    // Volumetric setup
     float volFlash = 0.0;
     vec3 rayStep = ViewPos / float(u_volumetricSteps);
     vec3 currentPos = rayStep * randomNoise(gl_FragCoord.xy);
@@ -217,7 +231,7 @@ void main()
 
             float sFlash = 1.0;
             if(proj.z <= 1.0 && proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0) {
-                // Bias ridotto per allinearsi a quello di superficie
+                // Reduced bias to match surface bias
                 sFlash = texture(u_flashShadowMap, vec3(proj.xy, proj.z - 0.0001));
             }
 
@@ -235,9 +249,13 @@ void main()
     vec3 flashBeam = vec3(0.9, 0.95, 1.0) * volFlash * u_flashIntensityFactor * beamRatio * edgeFade;
 
     float flashLightOcclusion = (1.0 - shadowFlash);
-    vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * 2.5) * flashLightOcclusion * vec3(1.0, 0.98, 0.9);
+    float intensityMultiplier = (u_isAbsolute == 1) ? 1.0 : 2.5;
+    vec3 lightTint = (u_isAbsolute == 1) ? vec3(1.0) : vec3(1.0, 0.98, 0.9);
+    vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * intensityMultiplier) * flashLightOcclusion * lightTint;
 
-    if (u_debugLights == 1) {
+    int dLight = u_debugLights;
+    dLight = 1;
+    if (dLight == 1) {
         vec3 rayDir = normalize(ViewPos);
         float t = dot(flashPosView, rayDir);
         if (t > 0.0 && t < length(ViewPos)) {

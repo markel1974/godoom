@@ -210,7 +210,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	var intensity float64
 	if kind == config.LightKindSpot {
 		falloff = q1Intensity * 0.05
-		intensity = q1Intensity * 0.01
+		intensity = q1Intensity * 0.1
 		if c, valid := lumps.ParseFloat(angleStr); valid {
 			coneAngle = c
 		}

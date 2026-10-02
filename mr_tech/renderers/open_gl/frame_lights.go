@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -100,8 +98,8 @@ func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*Light, int32) {
 // Prepare initializes camera position for lighting calculations and resets the shadow lights index to zero.
 func (f *FrameLights) Prepare(pX, pY, pZ float64) {
 	//TODO VERIFICA
-	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
-	f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
+	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
+	f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
 	f.shadowLightsIndex = 0
 }
 
@@ -111,6 +109,7 @@ func (f *FrameLights) Create(light *model.Light) {
 	posX, posY, posZ := light.GetPosXYZ()
 	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)
 	glDirX, glDirY, glDirZ := float32(light.GetDirX()), float32(light.GetDirZ()), float32(-light.GetDirY())
+	//glDirX, glDirY, glDirZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
 	intensity := float32(light.GetIntensityStyled(textures.GlobalTick()))
@@ -197,12 +196,13 @@ func (f *FrameLights) addShadowLight(
 	radius float32,
 ) bool {
 	//TODO VERIFICA LE ombre generati non sono coerenti
-	return false
+	//return false
+
 	dx, dy, dz := posX-camX, posY-camY, posZ-camZ
 	distSq := dx*dx + dy*dy + dz*dz
 
+	//target := radius
 	target := radius * radius * 4
-	//if distSq > (falloff * falloff * 4.0) {
 	if distSq > target {
 		return false
 	}
@@ -212,7 +212,7 @@ func (f *FrameLights) addShadowLight(
 	// Fase 1: Riempimento iniziale (0-7)
 	if f.shadowLightsIndex < ShadowLightNumber {
 		light := f.shadowLights[f.shadowLightsIndex]
-		fmt.Println("VERIFY HOTSPOT", distSq, target)
+		//fmt.Println("VERIFY HOTSPOT", distSq, target)
 		light.Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
 		f.shadowLightsIndex++
 		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
@@ -221,6 +221,8 @@ func (f *FrameLights) addShadowLight(
 		}
 		return true
 	}
+
+	//return true
 	// La luce peggiore è SEMPRE all'indice 0. Ricerca O(1).
 	if score <= f.shadowLights[0].Score {
 		return false

@@ -6,8 +6,9 @@ layout (location = 1) out vec4 BrightColor;
 in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
-in vec3 NormalView;
 in vec4 FragPosLightRoom;
+in vec4 FragPosLightFlash;
+in float IsLiquid;
 
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
@@ -190,7 +191,12 @@ void main() {
         float roomBias = max(0.05 * (1.0 - clamp(dot(geoNormal, L_room_dir), 0.0, 1.0)), 0.005);
         float shadowRoom = shadowCalculation(FragPosLightRoom, u_roomShadowMap, roomBias);
         float shadowFactor = 1.0 - shadowRoom;
-        litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
+        if (IsLiquid > 0.5) {
+            shadowFactor = 1.0;
+            litRoom = albedo * u_ambient_light;
+        } else {
+            litRoom = albedo * NdotL_room * u_ambient_light * shadowFactor;
+        }
         // Volumetric fog
         float volRoom = 0.0;
         if (u_volumetricSteps > 0) {

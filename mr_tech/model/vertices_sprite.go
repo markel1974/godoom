@@ -106,7 +106,7 @@ func (v *VerticesSprite) GetAABB() *physics.AABB {
 // The returned faces represent the geometry of the vertex material at the given moment in time.
 func (v *VerticesSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	f, c := v.volume.GetFaces()
-	return f, c, f, c, 0.0, v.GetBillboard()
+	return f, c, f, c, 0.0, v.GetRenderMode()
 }
 
 // SetAction sets the action index for the VerticesSprite, modifying its behavior or state based on the specified index.
@@ -120,9 +120,9 @@ func (v *VerticesSprite) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetBottomCenter()
 }
 
-// GetBillboard retrieves the billboard value associated with the Face instance.
-func (v *VerticesSprite) GetBillboard() float64 {
-	return 1.0
+// GetRenderMode retrieves the renderMode value associated with the Face instance.
+func (v *VerticesSprite) GetRenderMode() float64 {
+	return RenderModeBillboard
 }
 
 // SetThing assigns an IThing instance to the underlying Volume of the VerticesSprite.

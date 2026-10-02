@@ -3,7 +3,7 @@
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aTexCoords;
 layout (location = 2) in vec3 aOrigin;
-layout (location = 3) in float aIsBillboard;
+layout (location = 3) in float aRenderMode;
 layout (location = 4) in vec3 aPosNext;
 layout (location = 5) in float aLerp;
 layout (location = 6) in float aYaw;
@@ -19,13 +19,13 @@ void main()
     TexCoords = aTexCoords;
     vec4 worldPos;
 
-    if (aIsBillboard >= 1.0 && aIsBillboard < 1.5) {
+    if (aRenderMode >= 1.0 && aRenderMode < 1.5) {
         // --- VIEWPOINT BILLBOARDING ---
         vec3 camPos = -transpose(mat3(u_view)) * u_view[3].xyz;
         vec3 toCamera = camPos - aOrigin;
         vec3 right, up;
 
-        if (aIsBillboard > 1.05) {
+        if (aRenderMode > 1.05) {
             // --- BILLBOARD SFERICO ---
             if (length(toCamera) < 0.001) {
                 toCamera = vec3(0.0, 0.0, 1.0);
@@ -49,7 +49,7 @@ void main()
             up = vec3(0.0, 1.0, 0.0);
         }
         worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
-    } else if (aIsBillboard > 1.5) {
+    } else if (aRenderMode > 1.5) {
         // --- MODELLI 3D (MD2 / MDL) ---
         vec3 lPos = mix(aPos, aPosNext, aLerp);
         float cosY = cos(aYaw);
@@ -60,7 +60,7 @@ void main()
         float rotY = (origX * sinY) + (origY * cosY);
         vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
-    } else if (aIsBillboard > 0.4 && aIsBillboard < 0.6) {
+    } else if (aRenderMode > 0.4 && aRenderMode < 0.6) {
         // --- MATERIALI ANIMATI O TRASPARENTI ---
         worldPos = vec4(aPos, 1.0);
         worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;

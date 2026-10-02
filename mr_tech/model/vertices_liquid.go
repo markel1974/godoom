@@ -82,7 +82,7 @@ func (v *VerticesLiquid) GetAABB() *physics.AABB {
 // Returns two sets of face pointers, their counts, and a float64 placeholder.
 func (v *VerticesLiquid) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	f, c := v.volume.GetFaces()
-	return f, c, f, c, 0.0, v.GetBillboard()
+	return f, c, f, c, 0.0, v.GetRenderMode()
 }
 
 // SetAction updates the state or behavior of the liquid vertices at the specified index.
@@ -95,7 +95,7 @@ func (v *VerticesLiquid) GetDisplacement() (float64, float64, float64) {
 	return v.volume.entity.GetBottomLeft()
 }
 
-// GetBillboard returns a float64 value representing the default billboard value associated with the VerticesLiquid instance.
-func (v *VerticesLiquid) GetBillboard() float64 {
-	return 0.0
+// GetRenderMode returns a float64 value representing the default renderMode value associated with the VerticesLiquid instance.
+func (v *VerticesLiquid) GetRenderMode() float64 {
+	return RenderModeAnimated
 }

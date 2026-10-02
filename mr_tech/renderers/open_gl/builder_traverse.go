@@ -280,7 +280,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 	}
 	for idx := 0; idx < thingsCount; idx++ {
 		thing := things[idx]
-		faces2, faceCount, nextFaces2, _, lp, billBoard := thing.GetVertices(textures.GlobalTick())
+		faces2, faceCount, nextFaces2, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
 		if faceCount == 0 {
 			continue
 		}
@@ -288,7 +288,7 @@ func (w *BuilderTraverse) pushThings(fv *FrameVertices, dc *DrawCommands, vi *mo
 		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetEntity().GetBottomLeft()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		b := float32(billBoard)
+		b := float32(renderMode)
 		startIndices := fv.GetIndicesLen()
 		for fx := 0; fx < faceCount; fx++ {
 			f := (*faces2)[fx]

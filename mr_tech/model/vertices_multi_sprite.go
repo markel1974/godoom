@@ -60,7 +60,7 @@ func (v *VerticesMultiSprite) GetAABB() *physics.AABB {
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
 func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	f, c := v.viewVolume.GetFaces()
-	return f, c, f, c, 0.0, v.GetBillboard()
+	return f, c, f, c, 0.0, v.GetRenderMode()
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
@@ -96,9 +96,9 @@ func (v *VerticesMultiSprite) GetDisplacement() (float64, float64, float64) {
 	return v.viewVolume.GetEntity().GetBottomCenter()
 }
 
-// GetBillboard returns a constant value of 1.0, typically used to represent a uniform scaling factor for billboards.
-func (v *VerticesMultiSprite) GetBillboard() float64 {
-	return 1.0 //3.0 Debug
+// GetRenderMode returns a constant value of 1.0, typically used to represent a uniform scaling factor for renderModes.
+func (v *VerticesMultiSprite) GetRenderMode() float64 {
+	return RenderModeBillboard //3.0 Debug
 }
 
 // SetThing assigns the specified IThing instance to all volumes in the VerticesMultiSprite object.

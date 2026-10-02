@@ -108,7 +108,7 @@ func (s *Main) Init() error {
 		gl.VertexAttribPointer(2, 3, gl.FLOAT, false, strideBytes, gl.PtrOffset(6*4))
 		gl.EnableVertexAttribArray(2)
 
-		// Location 3: aIsBillboard (flag) - 1 float
+		// Location 3: aRenderMode (flag) - 1 float
 		gl.VertexAttribPointer(3, 1, gl.FLOAT, false, strideBytes, gl.PtrOffset(9*4))
 		gl.EnableVertexAttribArray(3)
 

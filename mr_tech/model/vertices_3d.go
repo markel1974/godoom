@@ -9,12 +9,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// VerticesMD3 represents a higher-level structure containing multiple VerticesMD1 instances and related face data.
-type VerticesMD3 struct {
-	lower  *VerticesMD1
-	upper  *VerticesMD1
-	head   *VerticesMD1
-	weapon *VerticesMD1
+// Vertices3D represents a structure containing 3D vertices, along with metadata, actions, faces, and associated entities.
+type Vertices3D struct {
+	lower  *Vertices3DEntry
+	upper  *Vertices3DEntry
+	head   *Vertices3DEntry
+	weapon *Vertices3DEntry
 
 	facesA    []*Face
 	facesB    []*Face
@@ -27,36 +27,36 @@ type VerticesMD3 struct {
 	upperActionMap []int
 }
 
-// NewVerticesMD3 initializes and returns a new instance of VerticesMD3 based on the given configuration and materials.
-// It creates vertices for the lower, upper, head, and optionally a weapon, combining their faces into a unified structure.
-func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
-	if cfg.MD3 == nil {
-		panic(fmt.Sprintf("no MD3 for thing %s", cfg.Id))
+// NewVertices3D constructs and initializes a Vertices3D object using the provided configuration and materials.
+// It processes the model parts (lower, upper, head, weapon) and combines their face data into a unified structure.
+func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
+	if cfg.Model3D == nil {
+		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
 	}
 
 	cfgLower := cfg.Clone()
-	cfgLower.MD1 = cfg.MD3.Lower
-	cfgLower.MD3 = nil
-	lower := NewVerticesMD1(cfgLower, materials)
+	cfgLower.Model3DEntry = cfg.Model3D.Lower
+	cfgLower.Model3D = nil
+	lower := NewVertices3DEntry(cfgLower, materials)
 
 	cfgUpper := cfg.Clone()
-	cfgUpper.MD1 = cfg.MD3.Upper
-	cfgUpper.MD3 = nil
-	upper := NewVerticesMD1(cfgUpper, materials)
+	cfgUpper.Model3DEntry = cfg.Model3D.Upper
+	cfgUpper.Model3D = nil
+	upper := NewVertices3DEntry(cfgUpper, materials)
 
 	cfgHead := cfg.Clone()
-	cfgHead.MD1 = cfg.MD3.Head
-	cfgHead.MD3 = nil
-	head := NewVerticesMD1(cfgHead, materials)
+	cfgHead.Model3DEntry = cfg.Model3D.Head
+	cfgHead.Model3D = nil
+	head := NewVertices3DEntry(cfgHead, materials)
 
-	var weapon *VerticesMD1
+	var weapon *Vertices3DEntry
 	var countW int
 	var weaponFaces *[]*Face
-	if cfg.MD3.Weapon != nil {
+	if cfg.Model3D.Weapon != nil {
 		cfgWeapon := cfg.Clone()
-		cfgWeapon.MD1 = cfg.MD3.Weapon
-		cfgWeapon.MD3 = nil
-		weapon = NewVerticesMD1(cfgWeapon, materials)
+		cfgWeapon.Model3DEntry = cfg.Model3D.Weapon
+		cfgWeapon.Model3D = nil
+		weapon = NewVertices3DEntry(cfgWeapon, materials)
 		weaponFaces, countW = weapon.volumes[0].GetFaces()
 	}
 
@@ -69,18 +69,18 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	for idx, name := range lower.GetActions() {
 		upperIdx := 0 // default
 		if strings.HasPrefix(name, "both_") {
-			upperIdx = md3FindActionIndex(upper, name)
+			upperIdx = v3dFindActionIndex(upper, name)
 		} else if strings.HasPrefix(name, "legs_") {
 			if strings.Contains(name, "idle") || strings.Contains(name, "stand") {
-				upperIdx = md3FindActionIndex(upper, "torso_stand")
+				upperIdx = v3dFindActionIndex(upper, "torso_stand")
 			} else {
-				upperIdx = md3FindActionIndex(upper, "torso_stand")
+				upperIdx = v3dFindActionIndex(upper, "torso_stand")
 			}
 		}
 		upperActionMap[idx] = upperIdx
 	}
 
-	v := &VerticesMD3{
+	v := &Vertices3D{
 		lower:          lower,
 		upper:          upper,
 		head:           head,
@@ -123,23 +123,23 @@ func NewVerticesMD3(cfg *config.Thing, materials *Materials) *VerticesMD3 {
 	return v
 }
 
-// GetVolume retrieves the Volume instance associated with the lower VerticesMD1 of the VerticesMD3.
-func (v *VerticesMD3) GetVolume() *Volume {
+// GetVolume returns the Volume associated with the lower component of the Vertices3D object.
+func (v *Vertices3D) GetVolume() *Volume {
 	return v.lower.viewVolume
 }
 
-// GetEntity retrieves the physics.Entity instance associated with the VerticesMD3 object.
-func (v *VerticesMD3) GetEntity() *physics.Entity {
+// GetEntity retrieves the physics.Entity instance associated with the Vertices3D.
+func (v *Vertices3D) GetEntity() *physics.Entity {
 	return v.entity
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity of the VerticesMD3 instance.
-func (v *VerticesMD3) GetAABB() *physics.AABB {
+// GetAABB retrieves the axis-aligned bounding box (AABB) of the entity associated with the Vertices3D instance.
+func (v *Vertices3D) GetAABB() *physics.AABB {
 	return v.entity.GetAABB()
 }
 
-// SetAction updates the actions for the lower, upper, head, and weapon vertices based on the provided index.
-func (v *VerticesMD3) SetAction(idx int) {
+// SetAction updates the current action index of the 3D model and propagates the action change to all associated components.
+func (v *Vertices3D) SetAction(idx int) {
 	if v.currentAction == idx {
 		return
 	}
@@ -159,18 +159,18 @@ func (v *VerticesMD3) SetAction(idx int) {
 	}
 }
 
-// GetDisplacement returns the displacement vector (dx, dy, dz) from the lower part of the model in the 3D space.
-func (v *VerticesMD3) GetDisplacement() (float64, float64, float64) {
+// GetDisplacement retrieves the 3D displacement components (dx, dy, dz) from the lower Vertices3DEntry instance.
+func (v *Vertices3D) GetDisplacement() (float64, float64, float64) {
 	return v.lower.GetDisplacement()
 }
 
-// GetBillboard retrieves the billboard distance value from the underlying lower VerticesMD1 instance.
-func (v *VerticesMD3) GetBillboard() float64 {
-	return v.lower.GetBillboard()
+// GetRenderMode retrieves the render mode value associated with the Vertices3D instance by proxying to its lower entry.
+func (v *Vertices3D) GetRenderMode() float64 {
+	return v.lower.GetRenderMode()
 }
 
-// SetThing assigns the specified IThing instance to all components of VerticesMD3, including lower, upper, head, and weapon.
-func (v *VerticesMD3) SetThing(t IThing) {
+// SetThing assigns the specified IThing instance to all associated Vertices3DEntry components.
+func (v *Vertices3D) SetThing(t IThing) {
 	v.lower.SetThing(t)
 	v.upper.SetThing(t)
 	v.head.SetThing(t)
@@ -179,9 +179,9 @@ func (v *VerticesMD3) SetThing(t IThing) {
 	}
 }
 
-// GetVertices retrieves and transforms the vertex data for the current tick, including interpolation and hierarchical adjustments.
-func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	facesL_A, countL, facesL_B, _, lerpT, billboard := v.lower.GetVertices(tick)
+// GetVertices retrieves vertex data for rendering at a given tick, including lower, upper, head, and optional weapon parts.
+func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+	facesL_A, countL, facesL_B, _, lerpT, renderMode := v.lower.GetVertices(tick)
 	facesU_A, countU, facesU_B, _, _, _ := v.upper.GetVertices(tick)
 	facesH_A, countH, facesH_B, _, _, _ := v.head.GetVertices(tick)
 
@@ -201,18 +201,18 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	combinedHeadB := geometry.XYZ{X: tagTorsoB.X + tagHeadB.X, Y: tagTorsoB.Y + tagHeadB.Y, Z: tagTorsoB.Z + tagHeadB.Z}
 
 	for i := 0; i < countL; i++ {
-		md3CopyFacePoints(v.facesA[i], (*facesL_A)[i])
-		md3CopyFacePoints(v.facesB[i], (*facesL_B)[i])
+		v3dCopyFacePoints(v.facesA[i], (*facesL_A)[i])
+		v3dCopyFacePoints(v.facesB[i], (*facesL_B)[i])
 	}
 
 	for i := 0; i < countU; i++ {
-		md3TransformPoints(v.facesA[countL+i], (*facesU_A)[i], tagTorsoA)
-		md3TransformPoints(v.facesB[countL+i], (*facesU_B)[i], tagTorsoB)
+		v3dTransformPoints(v.facesA[countL+i], (*facesU_A)[i], tagTorsoA)
+		v3dTransformPoints(v.facesB[countL+i], (*facesU_B)[i], tagTorsoB)
 	}
 
 	for i := 0; i < countH; i++ {
-		md3TransformPoints(v.facesA[countL+countU+i], (*facesH_A)[i], combinedHeadA)
-		md3TransformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
+		v3dTransformPoints(v.facesA[countL+countU+i], (*facesH_A)[i], combinedHeadA)
+		v3dTransformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
 	}
 
 	if v.weapon != nil {
@@ -226,18 +226,16 @@ func (v *VerticesMD3) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 		combinedWeaponB := geometry.XYZ{X: tagTorsoB.X + tagWeaponB.X, Y: tagTorsoB.Y + tagWeaponB.Y, Z: tagTorsoB.Z + tagWeaponB.Z}
 
 		for i := 0; i < countW; i++ {
-			md3TransformPoints(v.facesA[countL+countU+countH+i], (*facesW_A)[i], combinedWeaponA)
-			md3TransformPoints(v.facesB[countL+countU+countH+i], (*facesW_B)[i], combinedWeaponB)
+			v3dTransformPoints(v.facesA[countL+countU+countH+i], (*facesW_A)[i], combinedWeaponA)
+			v3dTransformPoints(v.facesB[countL+countU+countH+i], (*facesW_B)[i], combinedWeaponB)
 		}
 	}
 
-	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpT, billboard
+	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpT, renderMode
 }
 
-// md3FindActionIndex returns the index of an action in the provided VerticesMD1 instance by matching the action name, ignoring case.
-// If no exact match is found for a "BOTH_" prefixed name, it attempts to find a "TORSO_" prefixed fallback.
-// Returns 0 if no matching index is found.
-func md3FindActionIndex(md1 *VerticesMD1, name1 string) int {
+// v3dFindActionIndex retrieves the index of the specified action name from a Vertices3DEntry instance, checking for fallbacks.
+func v3dFindActionIndex(md1 *Vertices3DEntry, name1 string) int {
 	nameLower := strings.ToLower(name1)
 	if n, ok := md1.FindActionIndex(nameLower); ok {
 		return n
@@ -252,16 +250,16 @@ func md3FindActionIndex(md1 *VerticesMD1, name1 string) int {
 	return 0
 }
 
-// transformPoints updates the destination face points by translating source face points by the given origin offset.
-func md3TransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
+// v3dTransformPoints transforms the points of the `src` Face by adding the `origin` offset and stores the results in `dst`.
+func v3dTransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
 	pts := src.GetPoints()
 	dst.tri[0] = geometry.XYZ{X: pts[0].X + origin.X, Y: pts[0].Y + origin.Y, Z: pts[0].Z + origin.Z}
 	dst.tri[1] = geometry.XYZ{X: pts[1].X + origin.X, Y: pts[1].Y + origin.Y, Z: pts[1].Z + origin.Z}
 	dst.tri[2] = geometry.XYZ{X: pts[2].X + origin.X, Y: pts[2].Y + origin.Y, Z: pts[2].Z + origin.Z}
 }
 
-// copyFacePoints copies the vertex points from the source Face to the destination Face.
-func md3CopyFacePoints(dst *Face, src *Face) {
+// v3dCopyFacePoints copies the vertices of the triangle from the source Face to the destination Face.
+func v3dCopyFacePoints(dst *Face, src *Face) {
 	pts := src.GetPoints()
 	dst.tri[0] = pts[0]
 	dst.tri[1] = pts[1]

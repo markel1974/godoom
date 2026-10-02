@@ -43,14 +43,14 @@ type MD1TexCoord struct {
 	T      int32
 }
 
-// MD1Triangle represents a triangular face in a 3D model with vertex indices and a front-facing flag.
-type MD1Triangle struct {
+// Model3DEntryTriangle represents a triangular face in a 3D model with vertex indices and a front-facing flag.
+type Model3DEntryTriangle struct {
 	FacesFront int32
 	Vertices   [3]int32
 }
 
-// MD1Vertex represents a single vertex in an MDL model, including its position and associated normal vector index.
-type MD1Vertex struct {
+// Model3DEntryVertex represents a single vertex in an MDL model, including its position and associated normal vector index.
+type Model3DEntryVertex struct {
 	V           [3]uint8
 	NormalIndex uint8
 }
@@ -60,7 +60,7 @@ type MD1Resource struct {
 	Header     *MD1Header
 	Skins      []*MD1Skin
 	TexCoords  []*MD1TexCoord
-	Triangles  []*MD1Triangle
+	Triangles  []*Model3DEntryTriangle
 	Frames     [][][3]float64
 	FrameNames []string
 }
@@ -69,7 +69,7 @@ func NewMD1Resource() *MD1Resource {
 	return &MD1Resource{}
 }
 
-// Parse a Quake MD1 3D model from the given io.ReadSeeker and returns a fully populated MD1Resource.
+// Parse a Quake Model3DEntry 3D model from the given io.ReadSeeker and returns a fully populated MD1Resource.
 func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	var header MD1Header
 	if err := binary.Read(rs, binary.LittleEndian, &header); err != nil {
@@ -84,7 +84,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	md1.Header = &header
 	md1.Skins = make([]*MD1Skin, header.NumSkins)
 	md1.TexCoords = make([]*MD1TexCoord, header.NumVerts)
-	md1.Triangles = make([]*MD1Triangle, header.NumTris)
+	md1.Triangles = make([]*Model3DEntryTriangle, header.NumTris)
 	// Pre-allochiamo a 0 per i frame, perché i Group Frame espanderanno l'array oltre NumFrames
 	md1.Frames = make([][][3]float64, 0, header.NumFrames)
 	md1.FrameNames = make([]string, 0, header.NumFrames)
@@ -142,7 +142,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	}
 
 	// 3. Lettura Triangoli (Topologia)
-	triArray := make([]MD1Triangle, header.NumTris)
+	triArray := make([]Model3DEntryTriangle, header.NumTris)
 	if err := binary.Read(rs, binary.LittleEndian, triArray); err != nil {
 		return fmt.Errorf("failed to read triangles: %w", err)
 	}
@@ -159,7 +159,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 
 		if group == 0 {
 			// Single Frame
-			var bboxMin, bboxMax MD1Vertex
+			var bboxMin, bboxMax Model3DEntryVertex
 			var name [16]byte
 			if err := binary.Read(rs, binary.LittleEndian, &bboxMin); err != nil {
 				return err
@@ -171,7 +171,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 				return err
 			}
 
-			pVerts := make([]MD1Vertex, header.NumVerts)
+			pVerts := make([]Model3DEntryVertex, header.NumVerts)
 			if err := binary.Read(rs, binary.LittleEndian, pVerts); err != nil {
 				return err
 			}
@@ -187,7 +187,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 			}
 
 			// Bounding box generale dell'intero gruppo (ignorato ai fini geometrici)
-			var groupBboxMin, groupBboxMax MD1Vertex
+			var groupBboxMin, groupBboxMax Model3DEntryVertex
 			if err := binary.Read(rs, binary.LittleEndian, &groupBboxMin); err != nil {
 				return err
 			}
@@ -203,7 +203,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 
 			// "Spalmiamo" tutti i sub-frame del gruppo nell'array principale dei frame
 			for j := int32(0); j < numGroupFrames; j++ {
-				var bboxMin, bboxMax MD1Vertex
+				var bboxMin, bboxMax Model3DEntryVertex
 				var name [16]byte
 				if err := binary.Read(rs, binary.LittleEndian, &bboxMin); err != nil {
 					return err
@@ -215,7 +215,7 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 					return err
 				}
 
-				pVerts := make([]MD1Vertex, header.NumVerts)
+				pVerts := make([]Model3DEntryVertex, header.NumVerts)
 				if err := binary.Read(rs, binary.LittleEndian, pVerts); err != nil {
 					return err
 				}
@@ -230,8 +230,8 @@ func (md1 *MD1Resource) Parse(rs io.ReadSeeker) error {
 	return nil
 }
 
-// processVertices transforms MD1Vertex array positions into scaled and translated [3]float64 coordinates using header data.
-func (md1 *MD1Resource) processVertices(pVerts []MD1Vertex, header MD1Header) [][3]float64 {
+// processVertices transforms Model3DEntryVertex array positions into scaled and translated [3]float64 coordinates using header data.
+func (md1 *MD1Resource) processVertices(pVerts []Model3DEntryVertex, header MD1Header) [][3]float64 {
 	frameVerts := make([][3]float64, header.NumVerts)
 	for vIdx, v := range pVerts {
 		x := (float64(v.V[0]) * float64(header.Scale[0])) + float64(header.Translate[0])

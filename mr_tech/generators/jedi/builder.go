@@ -396,8 +396,8 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	thingCfg.GForce = gForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.MD1 != nil {
-			actions = thingCfg.MD1.ActionDefinitions
+		if thingCfg.Model3DEntry != nil {
+			actions = thingCfg.Model3DEntry.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
@@ -424,7 +424,7 @@ func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArc
 	}
 	id := fmt.Sprintf("%s_%s", "3DO", fileName)
 
-	var allTriangles []config.MD1Triangle
+	var allTriangles []config.Model3DEntryTriangle
 
 	texMap := make(map[string]*config.Material)
 	for _, obj := range threedoObj.Objects {
@@ -460,21 +460,21 @@ func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArc
 					uv1 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i]]
 					uv2 = obj.TexVertices[obj.TexQuads[qIdx].TexVertIndices[i+1]]
 				}
-				tri := config.NewMD1Triangle(material)
-				tri.Vertices[0] = config.MD1Vertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
-				tri.Vertices[1] = config.MD1Vertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
-				tri.Vertices[2] = config.MD1Vertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
+				tri := config.NewModel3DEntryTriangle(material)
+				tri.Vertices[0] = config.Model3DEntryVertex{Pos: v0, U: float32(uv0[0]), V: float32(uv0[1])}
+				tri.Vertices[1] = config.Model3DEntryVertex{Pos: v1, U: float32(uv1[0]), V: float32(uv1[1])}
+				tri.Vertices[2] = config.Model3DEntryVertex{Pos: v2, U: float32(uv2[0]), V: float32(uv2[1])}
 				allTriangles = append(allTriangles, tri)
 			}
 		}
 	}
 
-	// Create a single-frame MD1
+	// Create a single-frame Model3DEntry
 	cModel := config.NewMD1(1, []string{"stand"})
-	cModel.Frames[0] = config.NewMD1Frame(allTriangles)
+	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
-	cThing.MD1 = cModel
+	cThing.Model3DEntry = cModel
 	return cThing, nil
 }
 

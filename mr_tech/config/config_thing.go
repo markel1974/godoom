@@ -33,26 +33,26 @@ const (
 
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
-	Id             string       `json:"id"`
-	Position       geometry.XYZ `json:"position"`
-	Kind           ThingType    `json:"kind"`
-	Angle          float64      `json:"angle"`
-	Mass           float64      `json:"mass"`
-	Restitution    float64      `json:"restitution"`
-	Friction       float64      `json:"friction"`
-	Radius         float64      `json:"radius"`
-	Height         float64      `json:"height"`
-	Speed          float64      `json:"speed"`
-	Acceleration   float64      `json:"acceleration"`
-	JumpForce      float64      `json:"jumpForce"`
-	Pitch          float64      `json:"pitch"`
-	WakeUpDistance float64      `json:"wakeUpDistance"`
-	GForce         float64      `json:"gForce"`
-	MD1            *MD1         `json:"md1"`
-	MD3            *MD3         `json:"md3"`
-	Liquid         *Liquid      `json:"liquid"`
-	MultiSprite    *MultiSprite `json:"multiSprite"`
-	Sprite         *Sprite      `json:"sprite"`
+	Id             string        `json:"id"`
+	Position       geometry.XYZ  `json:"position"`
+	Kind           ThingType     `json:"kind"`
+	Angle          float64       `json:"angle"`
+	Mass           float64       `json:"mass"`
+	Restitution    float64       `json:"restitution"`
+	Friction       float64       `json:"friction"`
+	Radius         float64       `json:"radius"`
+	Height         float64       `json:"height"`
+	Speed          float64       `json:"speed"`
+	Acceleration   float64       `json:"acceleration"`
+	JumpForce      float64       `json:"jumpForce"`
+	Pitch          float64       `json:"pitch"`
+	WakeUpDistance float64       `json:"wakeUpDistance"`
+	GForce         float64       `json:"gForce"`
+	Model3DEntry   *Model3DEntry `json:"md1"`
+	Model3D        *Model3D      `json:"md3"`
+	Liquid         *Liquid       `json:"liquid"`
+	MultiSprite    *MultiSprite  `json:"multiSprite"`
+	Sprite         *Sprite       `json:"sprite"`
 
 	OnThinking  ThinkingFunc
 	OnCollision CollisionFunc
@@ -101,8 +101,8 @@ func (t *Thing) Clone() *Thing {
 		Pitch:          t.Pitch,
 		WakeUpDistance: t.WakeUpDistance,
 		GForce:         t.GForce,
-		MD1:            t.MD1,
-		MD3:            t.MD3,
+		Model3DEntry:   t.Model3DEntry,
+		Model3D:        t.Model3D,
 		MultiSprite:    t.MultiSprite,
 		Sprite:         t.Sprite,
 		OnThinking:     t.OnThinking,

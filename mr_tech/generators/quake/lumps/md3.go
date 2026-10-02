@@ -101,7 +101,7 @@ func (m *MD3Resource) Parse(rs io.ReadSeeker) (*MD3Resource, error) {
 	}
 
 	if header3.Magic != MD3Magic || header3.Version != MD3Version {
-		return nil, fmt.Errorf("formato MD3 non valido: magic %d, version %d", header3.Magic, header3.Version)
+		return nil, fmt.Errorf("formato Model3D non valido: magic %d, version %d", header3.Magic, header3.Version)
 	}
 
 	// Leggi i frame names per l'animazione

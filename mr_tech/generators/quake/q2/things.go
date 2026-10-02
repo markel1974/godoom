@@ -97,9 +97,9 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 	skinH := float32(md2.Header.SkinHeight)
 
 	for idx, f := range md2.Frames.Frames {
-		triangles := make([]config.MD1Triangle, int(md2.Header.NumTris))
+		triangles := make([]config.Model3DEntryTriangle, int(md2.Header.NumTris))
 		for tIdx, tri := range md2.Triangles.Triangles {
-			cTri := config.NewMD1Triangle(anim)
+			cTri := config.NewModel3DEntryTriangle(anim)
 			for v := 0; v < 3; v++ {
 				vx := tri.VertexIndices[v]
 				if int(vx) >= len(f) {
@@ -114,7 +114,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 				t := float32(tc.T)
 				nU := s / skinW
 				nV := 1.0 - (t / skinH)
-				cTri.Vertices[v] = config.MD1Vertex{
+				cTri.Vertices[v] = config.Model3DEntryVertex{
 					Pos: lumps.CreateXYZ(f[vx][0], f[vx][1], f[vx][2]),
 					U:   nU,
 					V:   nV,
@@ -122,7 +122,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 			}
 			triangles[tIdx] = cTri
 		}
-		cFrame := config.NewMD1Frame(triangles)
+		cFrame := config.NewModel3DEntryFrame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
 	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
@@ -130,7 +130,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 }
 
 // CreateThingBSP creates a new Thing instance from a BSP file, defining its geometry, materials, and position in the game world.
-// It loads BSP models, textures, and raw faces, translating geometry into MD1 format without animations.
+// It loads BSP models, textures, and raw faces, translating geometry into Model3DEntry format without animations.
 // Parameters:
 // bspPath - Path to the BSP file.
 // position - The XYZ coordinates where the Thing will be placed.
@@ -158,8 +158,8 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	}
 
 	texManager := reader.GetTextures()
-	// Geometry translation into agnostic MD1, collect all triangles in this single frame
-	var allTriangles []config.MD1Triangle
+	// Geometry translation into agnostic Model3DEntry, collect all triangles in this single frame
+	var allTriangles []config.Model3DEntryTriangle
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
@@ -176,7 +176,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
-			tri := config.NewMD1Triangle(specificMaterial)
+			tri := config.NewModel3DEntryTriangle(specificMaterial)
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
@@ -190,28 +190,28 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 						break
 					}
 				}
-				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewMD1(1, []string{"default"})
-	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
+	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 
 // doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
-func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
+func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
-	thingCfg.MD1 = cModel
+	thingCfg.Model3DEntry = cModel
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.MD1 != nil {
-			actions = thingCfg.MD1.ActionDefinitions
+		if thingCfg.Model3DEntry != nil {
+			actions = thingCfg.Model3DEntry.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking

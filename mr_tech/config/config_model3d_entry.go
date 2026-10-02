@@ -6,53 +6,53 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// MD1Vertex represents a single vertex in an MD1 3D model with position and texture coordinates.
-type MD1Vertex struct {
+// Model3DEntryVertex represents a single vertex in an Model3DEntry 3D model with position and texture coordinates.
+type Model3DEntryVertex struct {
 	Pos geometry.XYZ
 	U   float32
 	V   float32
 }
 
-// MD1Triangle represents a triangular mesh with 3 vertices and an associated material.
-type MD1Triangle struct {
-	Vertices [3]MD1Vertex
+// Model3DEntryTriangle represents a triangular mesh with 3 vertices and an associated material.
+type Model3DEntryTriangle struct {
+	Vertices [3]Model3DEntryVertex
 	Material *Material
 }
 
-// NewMD1Triangle creates a new MD1Triangle with the specified material and initializes its vertices to default values.
-func NewMD1Triangle(material *Material) MD1Triangle {
-	tri := MD1Triangle{
+// NewModel3DEntryTriangle creates a new Model3DEntryTriangle with the specified material and initializes its vertices to default values.
+func NewModel3DEntryTriangle(material *Material) Model3DEntryTriangle {
+	tri := Model3DEntryTriangle{
 		Material: material,
 	}
 	return tri
 }
 
-// MD1Frame represents a collection of triangles that define a single frame in an MD1 animation sequence.
-type MD1Frame struct {
-	Triangles []MD1Triangle
+// Model3DEntryFrame represents a collection of triangles that define a single frame in an Model3DEntry animation sequence.
+type Model3DEntryFrame struct {
+	Triangles []Model3DEntryTriangle
 	Tags      map[string]geometry.XYZ
 }
 
-// NewMD1Frame creates a new MD1Frame with the specified list of MD1Triangle structures.
-func NewMD1Frame(triangles []MD1Triangle) MD1Frame {
-	return MD1Frame{
+// NewModel3DEntryFrame creates a new Model3DEntryFrame with the specified list of Model3DEntryTriangle structures.
+func NewModel3DEntryFrame(triangles []Model3DEntryTriangle) Model3DEntryFrame {
+	return Model3DEntryFrame{
 		Triangles: triangles,
 		Tags:      make(map[string]geometry.XYZ),
 	}
 }
 
-// MD1 represents a structure holding animation frames, action definitions, and corresponding action intervals.
-type MD1 struct {
-	Frames            []MD1Frame
+// Model3DEntry represents a structure holding animation frames, action definitions, and corresponding action intervals.
+type Model3DEntry struct {
+	Frames            []Model3DEntryFrame
 	ActionClamp       []string
 	ActionDefinitions []string
 	ActionIntervals   [][2]int
 }
 
-// NewMD1 creates a new MD1 instance with the specified number of frames and initializes it using the provided frame names.
-func NewMD1(numFrames int, frameNames []string) *MD1 {
-	m := &MD1{
-		Frames: make([]MD1Frame, numFrames),
+// NewMD1 creates a new Model3DEntry instance with the specified number of frames and initializes it using the provided frame names.
+func NewMD1(numFrames int, frameNames []string) *Model3DEntry {
+	m := &Model3DEntry{
+		Frames: make([]Model3DEntryFrame, numFrames),
 	}
 	for i := 0; i < numFrames; i++ {
 		m.Frames[i].Tags = make(map[string]geometry.XYZ)
@@ -63,7 +63,7 @@ func NewMD1(numFrames int, frameNames []string) *MD1 {
 }
 
 // compute processes the given frameNames, grouping frames into intervals based on their base names and populating relevant fields.
-func (m *MD1) compute(frameNames []string) {
+func (m *Model3DEntry) compute(frameNames []string) {
 	if len(frameNames) == 0 {
 		return
 	}
@@ -95,7 +95,7 @@ func (m *MD1) compute(frameNames []string) {
 }
 
 // getBaseName extracts the base name from a string by removing trailing numeric characters and returns the result.
-func (m *MD1) getBaseName(fn string) string {
+func (m *Model3DEntry) getBaseName(fn string) string {
 	for i := len(fn) - 1; i >= 0; i-- {
 		if fn[i] < '0' || fn[i] > '9' {
 			return fn[:i+1]

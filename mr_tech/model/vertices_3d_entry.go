@@ -11,8 +11,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VerticesMD1 represents a structured collection of 3D model data, including frames, actions, and volume association.
-type VerticesMD1 struct {
+// Vertices3DEntry represents a structured collection of 3D model data, including frames, actions, and volume association.
+type Vertices3DEntry struct {
 	viewVolume      *Volume
 	volumes         []*Volume
 	startFrame      int
@@ -26,36 +26,36 @@ type VerticesMD1 struct {
 	clampAnim       bool
 }
 
-// NewVerticesMD1 creates a new VerticesMD1 instance with frames, actions, and volume based on the provided configuration.
-func NewVerticesMD1(cfg *config.Thing, materials *Materials) *VerticesMD1 {
-	if len(cfg.MD1.Frames) == 0 {
-		panic(fmt.Sprintf("no MD1 frames for thing %s", cfg.Id))
+// NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
+func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntry {
+	if len(cfg.Model3DEntry.Frames) == 0 {
+		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
 	}
 
-	actionClamps := make([]bool, len(cfg.MD1.ActionDefinitions))
-	actionNames := make([]string, len(cfg.MD1.ActionDefinitions))
+	actionClamps := make([]bool, len(cfg.Model3DEntry.ActionDefinitions))
+	actionNames := make([]string, len(cfg.Model3DEntry.ActionDefinitions))
 	actionNamesC := make(map[string]int)
 
-	for idx, name := range cfg.MD1.ActionDefinitions {
-		nameC := md1CleanString(name)
+	for idx, name := range cfg.Model3DEntry.ActionDefinitions {
+		nameC := v3dCleanString(name)
 		actionNames[idx] = nameC
 		actionNamesC[nameC] = idx
-		for _, z := range cfg.MD1.ActionClamp {
-			if strings.Contains(nameC, md1CleanString(z)) {
+		for _, z := range cfg.Model3DEntry.ActionClamp {
+			if strings.Contains(nameC, v3dCleanString(z)) {
 				actionClamps[idx] = true
 				break
 			}
 		}
 	}
 
-	v := &VerticesMD1{
-		volumes:         make([]*Volume, len(cfg.MD1.Frames)),
-		actionIntervals: cfg.MD1.ActionIntervals,
+	v := &Vertices3DEntry{
+		volumes:         make([]*Volume, len(cfg.Model3DEntry.Frames)),
+		actionIntervals: cfg.Model3DEntry.ActionIntervals,
 		actionNames:     actionNames,
 		actionNamesC:    actionNamesC,
 		actionClamps:    actionClamps,
 		startFrame:      0,
-		endFrame:        len(cfg.MD1.Frames) - 1,
+		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
 		currentAction:   -1,
 	}
 	if v.endFrame < 0 {
@@ -65,7 +65,7 @@ func NewVerticesMD1(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 		v.SetAction(0)
 	}
 	//entity := physics.NewEntity(x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	for frameIdx, cfgFrame := range cfg.MD1.Frames {
+	for frameIdx, cfgFrame := range cfg.Model3DEntry.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
 		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
@@ -90,27 +90,27 @@ func NewVerticesMD1(cfg *config.Thing, materials *Materials) *VerticesMD1 {
 }
 
 // GetVolume retrieves the Volume instance associated with the VertexMD2.
-func (v *VerticesMD1) GetVolume() *Volume {
+func (v *Vertices3DEntry) GetVolume() *Volume {
 	return v.viewVolume
 }
 
-// GetActions returns the list of action names associated with the VerticesMD1 instance.
-func (v *VerticesMD1) GetActions() []string {
+// GetActions returns the list of action names associated with the Vertices3DEntry instance.
+func (v *Vertices3DEntry) GetActions() []string {
 	return v.actionNames
 }
 
-// GetEntity returns the physics.Entity instance associated with the VerticesMD1 viewVolume.
-func (v *VerticesMD1) GetEntity() *physics.Entity {
+// GetEntity returns the physics.Entity instance associated with the Vertices3DEntry viewVolume.
+func (v *Vertices3DEntry) GetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the associated entity in the view volume.
-func (v *VerticesMD1) GetAABB() *physics.AABB {
+func (v *Vertices3DEntry) GetAABB() *physics.AABB {
 	return v.viewVolume.GetEntity().GetAABB()
 }
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
-func (v *VerticesMD1) SetAction(idx int) {
+func (v *Vertices3DEntry) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actionIntervals) {
 		return
 	}
@@ -128,23 +128,23 @@ func (v *VerticesMD1) SetAction(idx int) {
 }
 
 // FindActionIndex searches for the index of the given action name in the actionNames list, ignoring case and returning success status.
-func (v *VerticesMD1) FindActionIndex(name string) (int, bool) {
-	nameLower := md1CleanString(name)
+func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
+	nameLower := v3dCleanString(name)
 	n, k := v.actionNamesC[nameLower]
 	return n, k
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	// Se non ci sono frame, restituisce vuoto
 	if len(v.volumes) == 0 {
-		return nil, 0, nil, 0, 0.0, v.GetBillboard()
+		return nil, 0, nil, 0, 0.0, v.GetRenderMode()
 	}
 	// Se c'è un solo frame nell'animazione, restituisce lo stesso frame due volte senza lerp
 	if v.startFrame == v.endFrame {
 		s := v.volumes[v.startFrame]
 		faces, faceCount := s.GetFaces()
-		return faces, faceCount, faces, faceCount, 0.0, v.GetBillboard()
+		return faces, faceCount, faces, faceCount, 0.0, v.GetRenderMode()
 	}
 	const groupSize = 6.0
 	var frameFloat float64
@@ -192,11 +192,11 @@ func (v *VerticesMD1) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, fl
 	facesA, faceCountA := curr.GetFaces()
 	facesB, faceCountB := next.GetFaces()
 
-	return facesA, faceCountA, facesB, faceCountB, lerpT, v.GetBillboard()
+	return facesA, faceCountA, facesB, faceCountB, lerpT, v.GetRenderMode()
 }
 
 // GetVolumesAt calculates and returns the volumes for a specific tick, without mutating state.
-func (v *VerticesMD1) GetVolumesAt(tick uint64) (*Volume, *Volume) {
+func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume) {
 	if len(v.volumes) == 0 {
 		return nil, nil
 	}
@@ -239,23 +239,23 @@ func (v *VerticesMD1) GetVolumesAt(tick uint64) (*Volume, *Volume) {
 }
 
 // GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
-func (v *VerticesMD1) GetDisplacement() (float64, float64, float64) {
+func (v *Vertices3DEntry) GetDisplacement() (float64, float64, float64) {
 	return v.viewVolume.GetEntity().GetCenter()
 }
 
-// GetBillboard returns a constant value, typically used to represent the billboard distance for the VerticesMD1 instance.
-func (v *VerticesMD1) GetBillboard() float64 {
-	return 2.0
+// GetRenderMode returns a constant value, typically used to represent the renderMode distance for the Vertices3DEntry instance.
+func (v *Vertices3DEntry) GetRenderMode() float64 {
+	return RenderModeModel3D
 }
 
-// SetThing sets the IThing instance associated with the VerticesMD1 volume.
-func (v *VerticesMD1) SetThing(t IThing) {
+// SetThing sets the IThing instance associated with the Vertices3DEntry volume.
+func (v *Vertices3DEntry) SetThing(t IThing) {
 	for _, f := range v.volumes {
 		f.SetThing(t)
 	}
 }
 
-// md1CleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
-func md1CleanString(s string) string {
+// v3dCleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
+func v3dCleanString(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }

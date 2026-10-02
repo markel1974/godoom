@@ -60,13 +60,13 @@ func (w *FrameVertices) AddVertex6(x, y, z, u, v, texLayer float32) uint32 {
 	return w.AddVertex15(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
-// AddVertex10 adds a vertex with position, texture coordinates, origin, and a billboard flag to the vertex buffer.
-func (w *FrameVertices) AddVertex10(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32) uint32 {
-	return w.AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0)
+// AddVertex10 adds a vertex with position, texture coordinates, origin, and a render mode flag to the vertex buffer.
+func (w *FrameVertices) AddVertex10(x, y, z, u, v, texLayer, ox, oy, oz, renderMode float32) uint32 {
+	return w.AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, renderMode, 0, 0, 0, 0, 0)
 }
 
 // AddVertex15 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
-func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw float32) uint32 {
+func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, renderMode, nx, ny, nz, lerp, yaw float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount > int32(len(w.vertices)) {
@@ -84,8 +84,8 @@ func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	w.vertices[head+6] = ox
 	w.vertices[head+7] = oy
 	w.vertices[head+8] = oz
-	// Location 3: aIsBillboard
-	w.vertices[head+9] = isBB
+	// Location 3: aRenderMode
+	w.vertices[head+9] = renderMode
 	// Location 4: aPosNext
 	w.vertices[head+10] = nx
 	w.vertices[head+11] = ny

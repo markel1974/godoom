@@ -60,11 +60,11 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 	partName = strings.Replace(partName, ".md3", "", 1)
 	cModel, err := t.loadMD3Part(partName, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("can't load MD3 %s: %s", classname, err.Error())
+		return nil, fmt.Errorf("can't load Model3D %s: %s", classname, err.Error())
 	}
 
 	il := NewImageLoader(t.arc, t.texManager, t.shaders)
-	// Load materials for the MD3 model
+	// Load materials for the Model3D model
 	for _, frame := range cModel.Frames {
 		for _, tri := range frame.Triangles {
 			if tri.Material != nil && len(tri.Material.Frames) > 0 {
@@ -103,8 +103,8 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		return nil, err
 	}
 	texManager := reader.GetTextures()
-	// Geometry translation into agnostic MD1, collect all triangles in this single frame
-	var allTriangles []config.MD1Triangle
+	// Geometry translation into agnostic Model3DEntry, collect all triangles in this single frame
+	var allTriangles []config.Model3DEntryTriangle
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
@@ -126,7 +126,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
-			tri := config.NewMD1Triangle(specificMaterial)
+			tri := config.NewModel3DEntryTriangle(specificMaterial)
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
@@ -140,28 +140,28 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 						break
 					}
 				}
-				tri.Vertices[k] = config.MD1Vertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewMD1(1, []string{"default"})
-	model3d.Frames[0] = config.NewMD1Frame(allTriangles)
+	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := t.doCreate(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
 }
 
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
-func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.MD1, angle, mass, radius, height, speed float64) *config.Thing {
+func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	const gForce = 9.8 * 14
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
-	thingCfg.MD1 = cModel
+	thingCfg.Model3DEntry = cModel
 	if thingCfg.Kind == config.ThingEnemyDef {
 		var actions []string
-		if thingCfg.MD1 != nil {
-			actions = thingCfg.MD1.ActionDefinitions
+		if thingCfg.Model3DEntry != nil {
+			actions = thingCfg.Model3DEntry.ActionDefinitions
 		}
 		enemyLogic := common.NewEnemy(actions, 300)
 		thingCfg.OnThinking = enemyLogic.OnThinking
@@ -180,7 +180,7 @@ func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingT
 func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname string) (*config.Thing, error) {
 	const idleDef = "idle"
 
-	loadMaterial := func(il *ImageLoader, part *config.MD1) {
+	loadMaterial := func(il *ImageLoader, part *config.Model3DEntry) {
 		for _, frame := range part.Frames {
 			for _, tri := range frame.Triangles {
 				if tri.Material != nil && len(tri.Material.Frames) > 0 {
@@ -262,17 +262,17 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 
 	// We pass md3.Lower to doCreate so that it can extract the ActionDefinitions for the enemy logic.
-	// We'll set MD1 to nil afterwards since this is an MD3 model.
+	// We'll set Model3DEntry to nil afterwards since this is an Model3D model.
 	thingCfg := t.doCreate(classname, pos, config.ThingEnemyDef, md3.Lower, 0, 30.0, 16.0, 56, 600.0)
-	thingCfg.MD1 = nil
-	thingCfg.MD3 = md3
+	thingCfg.Model3DEntry = nil
+	thingCfg.Model3D = md3
 
 	return thingCfg, nil
 }
 
-// MD3ToConfig converts an MD3 model into an MD1 configuration, applying scaling and texture mapping if provided.
-func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
-	// Scale MD3 vertices (which are short ints) to float
+// MD3ToConfig converts an Model3D model into an Model3DEntry configuration, applying scaling and texture mapping if provided.
+func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, error) {
+	// Scale Model3D vertices (which are short ints) to float
 	const md3Scale = 1.0 / 64.0
 
 	md3Path := basePath + partName + ".md3"
@@ -288,7 +288,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 
 	rsMd3, err := t.arc.Open(md3Path)
 	if err != nil {
-		return nil, fmt.Errorf("can't open MD3 %s: %s", md3Path, err.Error())
+		return nil, fmt.Errorf("can't open Model3D %s: %s", md3Path, err.Error())
 	}
 	md3 := lumps.NewMD3Resource()
 	res, err := md3.Parse(rsMd3)
@@ -301,7 +301,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 			for j := 0; j < int(res.Header.NumTags); j++ {
 				tag := res.Tags[i*int(res.Header.NumTags)+j]
 				tagName := lumps.FromNullTerminatingString(tag.Name[:])
-				// MD3 tags don't seem to be scaled by 1/64, but let's check later, wait, MD3 tags coordinates are float32, so no md3Scale needed!
+				// Model3D tags don't seem to be scaled by 1/64, but let's check later, wait, Model3D tags coordinates are float32, so no md3Scale needed!
 				cfg.Frames[i].Tags[tagName] = geometry.XYZ{
 					X: float64(tag.Origin[0]),
 					Y: float64(tag.Origin[1]),
@@ -344,7 +344,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 		// Assemble triangles for each frame
 		for i := 0; i < int(surf.Header.NumFrames); i++ {
 			for t := 0; t < int(surf.Header.NumTriangles); t++ {
-				var configTri config.MD1Triangle
+				var configTri config.Model3DEntryTriangle
 				configTri.Material = material
 
 				for k := 0; k < 3; k++ {
@@ -355,7 +355,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.MD1, error) {
 					v := surf.Vertices[globVIndex]
 					uv := surf.TexCoords[vIndex]
 
-					configTri.Vertices[k] = config.MD1Vertex{
+					configTri.Vertices[k] = config.Model3DEntryVertex{
 						Pos: geometry.XYZ{
 							X: float64(v.Coord[0]) * md3Scale,
 							Y: float64(v.Coord[1]) * md3Scale,

@@ -253,9 +253,7 @@ void main() {
     vec3 lightTint = (u_isAbsolute == 1) ? vec3(1.0) : vec3(1.0, 0.98, 0.9);
     vec3 litFlash = (albedo * diffFlash + vec3(specularFlash)) * (flashIntensity * intensityMultiplier) * flashLightOcclusion * lightTint;
 
-    int dLight = u_debugLights;
-    dLight = 1;
-    if (dLight == 1) {
+    if (u_debugLights == 1) {
         vec3 rayDir = normalize(ViewPos);
         float t = dot(flashPosView, rayDir);
         if (t > 0.0 && t < length(ViewPos)) {

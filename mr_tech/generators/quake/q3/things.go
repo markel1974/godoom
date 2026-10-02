@@ -220,50 +220,106 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		loadMaterial(il, weapon)
 	}
 
-	md3 := config.NewMD3(lower, upper, head, weapon)
+	parts := []*config.Model3DEntry{lower, upper, head, weapon}
+	links := []config.Model3DLink{
+		{-1, ""},
+		{0, "tag_torso"},
+		{1, "tag_head"},
+		{1, "tag_weapon"},
+	}
+	md3 := config.NewMD3(parts, links)
 
 	if rsAnim, err := t.arc.Open(basePath + "animation.cfg"); err == nil {
 		if animCfg, err := lumps.NewAnimConfig3(rsAnim); err == nil {
 			// Map animations to intervals based on the parsed file
 			for _, anim := range animCfg.Animations {
 				if strings.HasPrefix(anim.Name, "BOTH_") {
-					md3.Lower.ActionDefinitions = append(md3.Lower.ActionDefinitions, anim.Name)
-					md3.Lower.ActionIntervals = append(md3.Lower.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
-					md3.Upper.ActionDefinitions = append(md3.Upper.ActionDefinitions, anim.Name)
-					md3.Upper.ActionIntervals = append(md3.Upper.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+					md3.Parts[0].ActionDefinitions = append(md3.Parts[0].ActionDefinitions, anim.Name)
+					md3.Parts[0].ActionIntervals = append(md3.Parts[0].ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+					md3.Parts[1].ActionDefinitions = append(md3.Parts[1].ActionDefinitions, anim.Name)
+					md3.Parts[1].ActionIntervals = append(md3.Parts[1].ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
 				} else if strings.HasPrefix(anim.Name, "TORSO_") {
-					md3.Upper.ActionDefinitions = append(md3.Upper.ActionDefinitions, anim.Name)
-					md3.Upper.ActionIntervals = append(md3.Upper.ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+					md3.Parts[1].ActionDefinitions = append(md3.Parts[1].ActionDefinitions, anim.Name)
+					md3.Parts[1].ActionIntervals = append(md3.Parts[1].ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
 				} else if strings.HasPrefix(anim.Name, "LEGS_") {
 					// Apply LegsOffset to correct the frame index for lower.md3
 					adjustedFirst := anim.FirstFrame - animCfg.LegsOffset
-					md3.Lower.ActionDefinitions = append(md3.Lower.ActionDefinitions, anim.Name)
-					md3.Lower.ActionIntervals = append(md3.Lower.ActionIntervals, [2]int{adjustedFirst, adjustedFirst + anim.NumFrames - 1})
+					md3.Parts[0].ActionDefinitions = append(md3.Parts[0].ActionDefinitions, anim.Name)
+					md3.Parts[0].ActionIntervals = append(md3.Parts[0].ActionIntervals, [2]int{adjustedFirst, adjustedFirst + anim.NumFrames - 1})
 				}
 			}
 		}
 	}
 
 	// Fallback if animation.cfg is missing or empty
-	if len(md3.Lower.ActionDefinitions) == 0 {
-		md3.Lower.ActionDefinitions = []string{idleDef}
-		md3.Lower.ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
-		md3.Upper.ActionDefinitions = []string{idleDef}
-		md3.Upper.ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
+	if len(md3.Parts[0].ActionDefinitions) == 0 {
+		md3.Parts[0].ActionDefinitions = []string{idleDef}
+		md3.Parts[0].ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
+		md3.Parts[1].ActionDefinitions = []string{idleDef}
+		md3.Parts[1].ActionIntervals = [][2]int{{0, len(upper.Frames) - 1}}
 	}
 
 	// Head has no specific animations in Q3, just loop frame 0
-	md3.Head.ActionDefinitions = []string{idleDef}
-	md3.Head.ActionIntervals = [][2]int{{0, 0}}
+	md3.Parts[2].ActionDefinitions = []string{idleDef}
+	md3.Parts[2].ActionIntervals = [][2]int{{0, 0}}
 
 	if weapon != nil {
-		md3.Weapon.ActionDefinitions = []string{idleDef}
-		md3.Weapon.ActionIntervals = [][2]int{{0, 0}}
+		md3.Parts[3].ActionDefinitions = []string{idleDef}
+		md3.Parts[3].ActionIntervals = [][2]int{{0, 0}}
 	}
 
-	// We pass md3.Lower to doCreate so that it can extract the ActionDefinitions for the enemy logic.
+	md3.ActionMaps = make([][]int, 4)
+
+	md3.ActionMaps[0] = make([]int, len(md3.Parts[0].ActionDefinitions))
+	for idx := range md3.Parts[0].ActionDefinitions {
+		md3.ActionMaps[0][idx] = idx
+	}
+
+	md3.ActionMaps[1] = make([]int, len(md3.Parts[0].ActionDefinitions))
+	for idx, lowerName := range md3.Parts[0].ActionDefinitions {
+		upperIdx := 0
+		nameLower := strings.ToLower(lowerName)
+		found := false
+
+		for ui, uName := range md3.Parts[1].ActionDefinitions {
+			if strings.ToLower(uName) == nameLower {
+				upperIdx = ui
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			if strings.HasPrefix(nameLower, "both_") {
+				torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
+				for ui, uName := range md3.Parts[1].ActionDefinitions {
+					if strings.ToLower(uName) == torsoName {
+						upperIdx = ui
+						found = true
+						break
+					}
+				}
+			} else if strings.HasPrefix(nameLower, "legs_") {
+				torsoName := "torso_stand"
+				for ui, uName := range md3.Parts[1].ActionDefinitions {
+					if strings.ToLower(uName) == torsoName {
+						upperIdx = ui
+						found = true
+						break
+					}
+				}
+			}
+		}
+
+		md3.ActionMaps[1][idx] = upperIdx
+	}
+
+	md3.ActionMaps[2] = make([]int, len(md3.Parts[0].ActionDefinitions))
+	md3.ActionMaps[3] = make([]int, len(md3.Parts[0].ActionDefinitions))
+
+	// We pass md3.Parts[0] to doCreate so that it can extract the ActionDefinitions for the enemy logic.
 	// We'll set Model3DEntry to nil afterwards since this is an Model3D model.
-	thingCfg := t.doCreate(classname, pos, config.ThingEnemyDef, md3.Lower, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := t.doCreate(classname, pos, config.ThingEnemyDef, md3.Parts[0], 0, 30.0, 16.0, 56, 600.0)
 	thingCfg.Model3DEntry = nil
 	thingCfg.Model3D = md3
 

@@ -9,13 +9,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+const (
+	LowerIdx = iota
+	UpperIdx
+	HeadIdx
+	WeaponIdx
+)
+
 // Vertices3D represents a structure containing 3D vertices, along with metadata, actions, faces, and associated entities.
 type Vertices3D struct {
-	lower  *Vertices3DEntry
-	upper  *Vertices3DEntry
-	head   *Vertices3DEntry
-	weapon *Vertices3DEntry
-
 	facesA    []*Face
 	facesB    []*Face
 	facesAPtr *[]*Face
@@ -25,6 +27,7 @@ type Vertices3D struct {
 	entity         *physics.Entity
 	currentAction  int
 	upperActionMap []int
+	elements       []*Vertices3DEntry
 }
 
 // NewVertices3D constructs and initializes a Vertices3D object using the provided configuration and materials.
@@ -81,10 +84,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	}
 
 	v := &Vertices3D{
-		lower:          lower,
-		upper:          upper,
-		head:           head,
-		weapon:         weapon,
+		elements:       []*Vertices3DEntry{lower, upper, head, weapon},
 		totalFaces:     totalFaces,
 		currentAction:  -1,
 		upperActionMap: upperActionMap,
@@ -125,7 +125,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 
 // GetVolume returns the Volume associated with the lower component of the Vertices3D object.
 func (v *Vertices3D) GetVolume() *Volume {
-	return v.lower.viewVolume
+	return v.elements[LowerIdx].viewVolume
 }
 
 // GetEntity retrieves the physics.Entity instance associated with the Vertices3D.
@@ -145,51 +145,48 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 	v.currentAction = idx
 	// idx is the index from lower's actions (since we passed lower's ActionDefinitions to doCreate)
-	v.lower.SetAction(idx)
-
+	v.elements[LowerIdx].SetAction(idx)
 	if idx >= 0 && idx < len(v.upperActionMap) {
-		v.upper.SetAction(v.upperActionMap[idx])
+		v.elements[UpperIdx].SetAction(v.upperActionMap[idx])
 	} else {
-		v.upper.SetAction(0)
+		v.elements[UpperIdx].SetAction(0)
 	}
-
-	v.head.SetAction(0)
-	if v.weapon != nil {
-		v.weapon.SetAction(0)
+	v.elements[HeadIdx].SetAction(0)
+	if v.elements[WeaponIdx] != nil {
+		v.elements[WeaponIdx].SetAction(0)
 	}
 }
 
 // GetDisplacement retrieves the 3D displacement components (dx, dy, dz) from the lower Vertices3DEntry instance.
 func (v *Vertices3D) GetDisplacement() (float64, float64, float64) {
-	return v.lower.GetDisplacement()
+	return v.elements[LowerIdx].GetDisplacement()
 }
 
 // GetRenderMode retrieves the render mode value associated with the Vertices3D instance by proxying to its lower entry.
 func (v *Vertices3D) GetRenderMode() float64 {
-	return v.lower.GetRenderMode()
+	return v.elements[LowerIdx].GetRenderMode()
 }
 
 // SetThing assigns the specified IThing instance to all associated Vertices3DEntry components.
 func (v *Vertices3D) SetThing(t IThing) {
-	v.lower.SetThing(t)
-	v.upper.SetThing(t)
-	v.head.SetThing(t)
-	if v.weapon != nil {
-		v.weapon.SetThing(t)
+	for _, e := range v.elements {
+		if e != nil {
+			e.SetThing(t)
+		}
 	}
 }
 
 // GetVertices retrieves vertex data for rendering at a given tick, including lower, upper, head, and optional weapon parts.
 func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	facesL_A, countL, facesL_B, _, lerpT, renderMode := v.lower.GetVertices(tick)
-	facesU_A, countU, facesU_B, _, _, _ := v.upper.GetVertices(tick)
-	facesH_A, countH, facesH_B, _, _, _ := v.head.GetVertices(tick)
+	facesL_A, countL, facesL_B, _, lerpT, renderMode := v.elements[LowerIdx].GetVertices(tick)
+	facesU_A, countU, facesU_B, _, _, _ := v.elements[UpperIdx].GetVertices(tick)
+	facesH_A, countH, facesH_B, _, _, _ := v.elements[HeadIdx].GetVertices(tick)
 
 	// The actual frames were just calculated inside lower.GetVertices, upper.GetVertices, etc.
 	// We can retrieve them directly:
-	volL_A, volL_B := v.lower.GetVolumesAt(tick)
-	volU_A, volU_B := v.upper.GetVolumesAt(tick)
-	_, _ = v.head.GetVolumesAt(tick) // Execute to keep state synced but discard volumes
+	volL_A, volL_B := v.elements[LowerIdx].GetVolumesAt(tick)
+	volU_A, volU_B := v.elements[UpperIdx].GetVolumesAt(tick)
+	_, _ = v.elements[HeadIdx].GetVolumesAt(tick) // Execute to keep state synced but discard volumes
 
 	tagTorsoA, _ := volL_A.GetVertexTag("tag_torso")
 	tagTorsoB, _ := volL_B.GetVertexTag("tag_torso")
@@ -215,9 +212,9 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		v3dTransformPoints(v.facesB[countL+countU+i], (*facesH_B)[i], combinedHeadB)
 	}
 
-	if v.weapon != nil {
-		facesW_A, countW, facesW_B, _, _, _ := v.weapon.GetVertices(tick)
-		_, _ = v.weapon.GetVolumesAt(tick)
+	if v.elements[WeaponIdx] != nil {
+		facesW_A, countW, facesW_B, _, _, _ := v.elements[WeaponIdx].GetVertices(tick)
+		_, _ = v.elements[WeaponIdx].GetVolumesAt(tick)
 
 		tagWeaponA, _ := volU_A.GetVertexTag("tag_weapon")
 		tagWeaponB, _ := volU_B.GetVertexTag("tag_weapon")

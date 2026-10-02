@@ -24,6 +24,7 @@ type Vertices3DEntry struct {
 	actionNamesC    map[string]int
 	actionClamps    []bool
 	clampAnim       bool
+	tagMap          map[string]int
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
@@ -57,6 +58,17 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		startFrame:      0,
 		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
 		currentAction:   -1,
+		tagMap:          make(map[string]int),
+	}
+
+	tagCounter := 0
+	for _, cfgFrame := range cfg.Model3DEntry.Frames {
+		for tagName := range cfgFrame.Tags {
+			if _, exists := v.tagMap[tagName]; !exists {
+				v.tagMap[tagName] = tagCounter
+				tagCounter++
+			}
+		}
 	}
 	if v.endFrame < 0 {
 		v.endFrame = 0
@@ -79,7 +91,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		}
 		// Copy tags to volume
 		for tagName, tagVec := range cfgFrame.Tags {
-			volume.SetVertexTag(tagVec, tagName)
+			volume.SetVertexTag(v.tagMap[tagName], tagVec)
 		}
 		volume.Rebuild()
 		v.volumes[frameIdx] = volume
@@ -258,4 +270,12 @@ func (v *Vertices3DEntry) SetThing(t IThing) {
 // v3dCleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
 func v3dCleanString(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
+}
+
+// GetTagIndex returns the internal index of a tag by its name, or -1 if not found.
+func (v *Vertices3DEntry) GetTagIndex(name string) int {
+	if idx, ok := v.tagMap[name]; ok {
+		return idx
+	}
+	return -1
 }

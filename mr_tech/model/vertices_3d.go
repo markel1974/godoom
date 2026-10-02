@@ -8,27 +8,26 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Vertices3D represents a structure containing 3D vertices, along with metadata, actions, faces, and associated entities.
+// Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
 type Vertices3D struct {
-	facesA    []*Face
-	facesB    []*Face
-	facesAPtr *[]*Face
-	facesBPtr *[]*Face
-
-	totalFaces    int
-	entity        *physics.Entity
-	currentAction int
-	actionMaps    [][]int
-	elements      []*Vertices3DEntry
-	links         []config.Model3DLink
-	volsA         []*Volume
-	volsB         []*Volume
-	originsA      []geometry.XYZ
-	originsB      []geometry.XYZ
+	facesA         []*Face
+	facesB         []*Face
+	facesAPtr      *[]*Face
+	facesBPtr      *[]*Face
+	totalFaces     int
+	entity         *physics.Entity
+	currentAction  int
+	actionMaps     [][]int
+	elements       []*Vertices3DEntry
+	links          []config.Model3DLink
+	linkTagIndices []int
+	volsA          []*Volume
+	volsB          []*Volume
+	originsA       []geometry.XYZ
+	originsB       []geometry.XYZ
 }
 
-// NewVertices3D constructs and initializes a Vertices3D object using the provided configuration and materials.
-// It processes the model parts (lower, upper, head, weapon) and combines their face data into a unified structure.
+// NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
 func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	if cfg.Model3D == nil {
 		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
@@ -52,14 +51,24 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	actionMaps := cfg.Model3D.ActionMaps
 	links := cfg.Model3D.Links
 
+	linkTagIndices := make([]int, len(links))
+	for i, link := range links {
+		if link.Parent >= 0 && link.Parent < len(elements) && elements[link.Parent] != nil {
+			linkTagIndices[i] = elements[link.Parent].GetTagIndex(link.Tag)
+		} else {
+			linkTagIndices[i] = -1
+		}
+	}
+
 	v := &Vertices3D{
-		elements:      elements,
-		totalFaces:    totalFaces,
-		currentAction: -1,
-		actionMaps:    actionMaps,
-		facesA:        make([]*Face, totalFaces),
-		facesB:        make([]*Face, totalFaces),
-		links:         links,
+		elements:       elements,
+		totalFaces:     totalFaces,
+		currentAction:  -1,
+		actionMaps:     actionMaps,
+		facesA:         make([]*Face, totalFaces),
+		facesB:         make([]*Face, totalFaces),
+		links:          links,
+		linkTagIndices: linkTagIndices,
 	}
 	v.facesAPtr = &v.facesA
 	v.facesBPtr = &v.facesB
@@ -97,22 +106,22 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	return v
 }
 
-// GetVolume returns the Volume associated with the lower component of the Vertices3D object.
+// GetVolume retrieves the first Volume instance associated with the Vertices3D object.
 func (v *Vertices3D) GetVolume() *Volume {
 	return v.elements[0].viewVolume
 }
 
-// GetEntity retrieves the physics.Entity instance associated with the Vertices3D.
+// GetEntity retrieves the associated physics.Entity instance of the Vertices3D object.
 func (v *Vertices3D) GetEntity() *physics.Entity {
 	return v.entity
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) of the entity associated with the Vertices3D instance.
+// GetAABB returns the axis-aligned bounding box (AABB) of the `Vertices3D` instance by delegating to its associated entity.
 func (v *Vertices3D) GetAABB() *physics.AABB {
 	return v.entity.GetAABB()
 }
 
-// SetAction updates the current action index of the 3D model and propagates the action change to all associated components.
+// SetAction updates the current action of Vertices3D and propagates the action change to all associated elements.
 func (v *Vertices3D) SetAction(idx int) {
 	if v.currentAction == idx {
 		return
@@ -129,17 +138,17 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 }
 
-// GetDisplacement retrieves the 3D displacement components (dx, dy, dz) from the lower Vertices3DEntry instance.
+// GetDisplacement returns the displacement vector (dx, dy, dz) of the first element in the Vertices3D instance.
 func (v *Vertices3D) GetDisplacement() (float64, float64, float64) {
 	return v.elements[0].GetDisplacement()
 }
 
-// GetRenderMode retrieves the render mode value associated with the Vertices3D instance by proxying to its lower entry.
+// GetRenderMode returns the current render mode as a float64, used to determine how the 3D model is rendered.
 func (v *Vertices3D) GetRenderMode() float64 {
-	return v.elements[0].GetRenderMode()
+	return RenderModeModel3D
 }
 
-// SetThing assigns the specified IThing instance to all associated Vertices3DEntry components.
+// SetThing assigns the provided IThing instance to all non-nil entries in the elements slice of Vertices3D.
 func (v *Vertices3D) SetThing(t IThing) {
 	for _, e := range v.elements {
 		if e != nil {
@@ -148,7 +157,7 @@ func (v *Vertices3D) SetThing(t IThing) {
 	}
 }
 
-// GetVertices retrieves vertex data for rendering at a given tick, iterating dynamically through all elements.
+// GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
 func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	for i, el := range v.elements {
 		if el != nil {
@@ -161,31 +170,39 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 	for i := 0; i < len(v.elements); i++ {
 		pIdx := v.links[i].Parent
 		if pIdx >= 0 && pIdx < len(v.elements) && v.volsA[pIdx] != nil && v.volsB[pIdx] != nil {
-			tagA, _ := v.volsA[pIdx].GetVertexTag(v.links[i].Tag)
-			tagB, _ := v.volsB[pIdx].GetVertexTag(v.links[i].Tag)
+			tagIdx := v.linkTagIndices[i]
+			tagA, _ := v.volsA[pIdx].GetVertexTag(tagIdx)
+			tagB, _ := v.volsB[pIdx].GetVertexTag(tagIdx)
 
-			v.originsA[i] = geometry.XYZ{X: v.originsA[pIdx].X + tagA.X, Y: v.originsA[pIdx].Y + tagA.Y, Z: v.originsA[pIdx].Z + tagA.Z}
-			v.originsB[i] = geometry.XYZ{X: v.originsB[pIdx].X + tagB.X, Y: v.originsB[pIdx].Y + tagB.Y, Z: v.originsB[pIdx].Z + tagB.Z}
+			v.originsA[i].X = v.originsA[pIdx].X + tagA.X
+			v.originsA[i].Y = v.originsA[pIdx].Y + tagA.Y
+			v.originsA[i].Z = v.originsA[pIdx].Z + tagA.Z
+
+			v.originsB[i].X = v.originsB[pIdx].X + tagB.X
+			v.originsB[i].Y = v.originsB[pIdx].Y + tagB.Y
+			v.originsB[i].Z = v.originsB[pIdx].Z + tagB.Z
 		} else {
-			v.originsA[i] = geometry.XYZ{}
-			v.originsB[i] = geometry.XYZ{}
+			v.originsA[i].X = 0
+			v.originsA[i].Y = 0
+			v.originsA[i].Z = 0
+
+			v.originsB[i].X = 0
+			v.originsB[i].Y = 0
+			v.originsB[i].Z = 0
 		}
 	}
 
 	var lerpTRet float64
-	var renderModeRet float64
 	offset := 0
 
 	for i, el := range v.elements {
 		if el == nil {
 			continue
 		}
-		facesA, count, facesB, _, lerpT, renderMode := el.GetVertices(tick)
+		facesA, count, facesB, _, lerpT, _ := el.GetVertices(tick)
 		if i == 0 {
 			lerpTRet = lerpT
-			renderModeRet = renderMode
 		}
-
 		for j := 0; j < count; j++ {
 			if v.originsA[i].X == 0 && v.originsA[i].Y == 0 && v.originsA[i].Z == 0 && v.originsB[i].X == 0 && v.originsB[i].Y == 0 && v.originsB[i].Z == 0 {
 				v3dCopyFacePoints(v.facesA[offset+j], (*facesA)[j])
@@ -198,21 +215,32 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		offset += count
 	}
 
-	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpTRet, renderModeRet
+	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpTRet, v.GetRenderMode()
 }
 
-// v3dTransformPoints transforms the points of the `src` Face by adding the `origin` offset and stores the results in `dst`.
+// v3dTransformPoints transforms the points of `src` Face to a new position relative to `origin`, storing them in `dst`.
 func v3dTransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
 	pts := src.GetPoints()
-	dst.tri[0] = geometry.XYZ{X: pts[0].X + origin.X, Y: pts[0].Y + origin.Y, Z: pts[0].Z + origin.Z}
-	dst.tri[1] = geometry.XYZ{X: pts[1].X + origin.X, Y: pts[1].Y + origin.Y, Z: pts[1].Z + origin.Z}
-	dst.tri[2] = geometry.XYZ{X: pts[2].X + origin.X, Y: pts[2].Y + origin.Y, Z: pts[2].Z + origin.Z}
+	dst.tri[0].X = pts[0].X + origin.X
+	dst.tri[0].Y = pts[0].Y + origin.Y
+	dst.tri[0].Z = pts[0].Z + origin.Z
+	dst.tri[1].X = pts[1].X + origin.X
+	dst.tri[1].Y = pts[1].Y + origin.Y
+	dst.tri[1].Z = pts[1].Z + origin.Z
+	dst.tri[2].X = pts[2].X + origin.X
+	dst.tri[2].Y = pts[2].Y + origin.Y
+	dst.tri[2].Z = pts[2].Z + origin.Z
 }
 
-// v3dCopyFacePoints copies the vertices of the triangle from the source Face to the destination Face.
+// v3dCopyFacePoints copies the vertex coordinates from the source Face to the destination Face.
 func v3dCopyFacePoints(dst *Face, src *Face) {
-	pts := src.GetPoints()
-	dst.tri[0] = pts[0]
-	dst.tri[1] = pts[1]
-	dst.tri[2] = pts[2]
+	dst.tri[0].X = src.tri[0].X
+	dst.tri[0].Y = src.tri[0].Y
+	dst.tri[0].Z = src.tri[0].Z
+	dst.tri[1].X = src.tri[1].X
+	dst.tri[1].Y = src.tri[1].Y
+	dst.tri[1].Z = src.tri[1].Z
+	dst.tri[2].X = src.tri[2].X
+	dst.tri[2].Y = src.tri[2].Y
+	dst.tri[2].Z = src.tri[2].Z
 }

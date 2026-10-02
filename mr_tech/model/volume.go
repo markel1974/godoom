@@ -20,7 +20,7 @@ type Volume struct {
 	facesTree  *physics.AABBTree
 	thing      IThing
 	sector     *Sector
-	vertexTags map[string]geometry.XYZ
+	vertexTags []geometry.XYZ
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
@@ -33,7 +33,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faceCount:  0,
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  physics.NewAABBTree(64, 0.0),
-		vertexTags: make(map[string]geometry.XYZ),
+		vertexTags: make([]geometry.XYZ, 0),
 	}
 	v.facesPtr = &v.faces
 	return v
@@ -173,15 +173,22 @@ func (v *Volume) SetSector(s *Sector) {
 	v.sector = s
 }
 
-// SetVertexTag associates the given tag with the specified vertex in the Volume's vertexTags map.
-func (v *Volume) SetVertexTag(vertex geometry.XYZ, tag string) {
-	v.vertexTags[tag] = vertex
+// SetVertexTag associates the given tag index with the specified vertex in the Volume's vertexTags array.
+func (v *Volume) SetVertexTag(idx int, vertex geometry.XYZ) {
+	if idx >= len(v.vertexTags) {
+		newTags := make([]geometry.XYZ, idx+1)
+		copy(newTags, v.vertexTags)
+		v.vertexTags = newTags
+	}
+	v.vertexTags[idx] = vertex
 }
 
-// GetVertexTag retrieves the vertex associated with a given tag from the Volume's vertexTags map. Returns the vertex and a bool indicating success.
-func (v *Volume) GetVertexTag(tag string) (geometry.XYZ, bool) {
-	vertex, ok := v.vertexTags[tag]
-	return vertex, ok
+// GetVertexTag retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
+func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, bool) {
+	if idx >= 0 && idx < len(v.vertexTags) {
+		return v.vertexTags[idx], true
+	}
+	return geometry.XYZ{}, false
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.

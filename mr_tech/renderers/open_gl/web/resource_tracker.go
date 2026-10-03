@@ -1,6 +1,6 @@
 //go:build js && wasm
 
-package core_web
+package web
 
 // ResourceTracker manages a collection of reusable resources and tracks free slots within the collection.
 type ResourceTracker struct {

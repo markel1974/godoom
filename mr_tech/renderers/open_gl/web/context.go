@@ -1,8 +1,9 @@
 //go:build js && wasm
 
-package core_web
+package web
 
 import (
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"sync"
 	"syscall/js"
 	"unsafe"
@@ -10,7 +11,8 @@ import (
 
 // Context represents a WebGL rendering context, managing WebGL resources and interactions with the underlying JS environment.
 type Context struct {
-	gl js.Value
+	win *Window
+	gl  js.Value
 
 	buffers  ResourceTracker
 	textures ResourceTracker
@@ -29,9 +31,14 @@ type Context struct {
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
-func NewContextWeb(gl js.Value) *Context {
-	return &Context{
-		gl:       gl,
+func NewContext(width int, height int) *Context {
+	bounds := Rect{X: 0, Y: 0, W: float64(width), H: float64(height)}
+	cfg := WindowConfig{
+		Width:  width,
+		Height: height,
+		VSync:  true,
+	}
+	ctx := &Context{
 		buffers:  NewResourceTracker(),
 		textures: NewResourceTracker(),
 		programs: NewResourceTracker(),
@@ -43,6 +50,19 @@ func NewContextWeb(gl js.Value) *Context {
 		ptrMap:   make(map[uintptr]interface{}),
 		jsBuffer: js.Global().Get("Uint8Array"),
 	}
+	ctx.win = NewGLWindow(ctx, cfg)
+	return ctx
+}
+
+func (d *Context) Setup(r api.IRender) error {
+	if err := d.win.Setup(r); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *Context) Start() {
+	d.win.Start()
 }
 
 // getSliceBytes converts various slice types (e.g., []float32, []uint32, []uint8, []int32) to a byte slice representation.

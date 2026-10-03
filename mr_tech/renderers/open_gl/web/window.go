@@ -1,8 +1,9 @@
 //go:build js && wasm
 
-package core_web
+package web
 
 import (
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"syscall/js"
 )
 
@@ -32,6 +33,51 @@ type Rect struct {
 // Button represents an input device button or key, such as a keyboard key or mouse button.
 type Button int
 
+// Button constants mirroring the desktop API
+const (
+	KeyEscape    = Button(256)
+	KeyW         = Button(87)
+	KeyS         = Button(83)
+	KeyA         = Button(65)
+	KeyD         = Button(68)
+	KeyUp        = Button(265)
+	KeyDown      = Button(264)
+	KeyLeft      = Button(263)
+	KeyRight     = Button(262)
+	KeyL         = Button(76)
+	KeyK         = Button(75)
+	KeyO         = Button(79)
+	KeyP         = Button(80)
+	KeyC         = Button(67)
+	KeyTab       = Button(258)
+	KeySpace     = Button(32)
+	KeyM         = Button(77)
+	KeyN         = Button(78)
+	MouseButton1 = Button(0)
+	MouseButton2 = Button(1)
+)
+
+var codeToButton = map[string]Button{
+	"Escape":     KeyEscape,
+	"KeyW":       KeyW,
+	"KeyS":       KeyS,
+	"KeyA":       KeyA,
+	"KeyD":       KeyD,
+	"ArrowUp":    KeyUp,
+	"ArrowDown":  KeyDown,
+	"ArrowLeft":  KeyLeft,
+	"ArrowRight": KeyRight,
+	"KeyL":       KeyL,
+	"KeyK":       KeyK,
+	"KeyO":       KeyO,
+	"KeyP":       KeyP,
+	"KeyC":       KeyC,
+	"Tab":        KeyTab,
+	"Space":      KeySpace,
+	"KeyM":       KeyM,
+	"KeyN":       KeyN,
+}
+
 // Window represents a browser-based rendering window using WebGL for graphics rendering. It includes input handling capabilities.
 type Window struct {
 	canvas js.Value
@@ -44,14 +90,28 @@ type Window struct {
 	keysPressed  map[Button]bool
 	keysReleased map[Button]bool
 
-	mouseX  float64
-	mouseY  float64
-	scrollX float64
-	scrollY float64
+	mouseX                float64
+	mouseY                float64
+	prevMouseX            float64
+	prevMouseY            float64
+	scrollX               float64
+	scrollY               float64
+	renderPrepareFn       func() error
+	renderStartFn         func(int, int)
+	playerMouseMoveFn     func(float64, float64)
+	playerMovesFn         func(float64, bool, bool, bool, bool)
+	playerThrowFn         func()
+	playerFireFn          func()
+	playerDuckingToggleFn func()
+	playerJumpFn          func(multi bool)
+	toggleShadowsFn       func()
+	enableClearFn         func()
+	decreaseFlashFactorFn func()
+	increaseFlashFactorFn func()
 }
 
 // NewGLWindow creates a new OpenGL window with the specified configuration and initializes WebGL2 context.
-func NewGLWindow(cfg WindowConfig) (*Window, error) {
+func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
 	doc := js.Global().Get("document")
 	canvas := doc.Call("getElementById", "canvas")
 	if canvas.IsUndefined() || canvas.IsNull() {
@@ -84,39 +144,80 @@ func NewGLWindow(cfg WindowConfig) (*Window, error) {
 
 	w.bindEvents()
 
-	return w, nil
-}
-
-// GetContext initializes and returns a new ContextWeb associated with the Window's WebGL context.
-func (w *Window) GetContext() *Context {
-	return NewContextWeb(w.gl)
+	ctx.gl = gl
+	return w
 }
 
 // bindEvents binds event listeners for key and mouse events, updating internal state based on user interactions.
 func (w *Window) bindEvents() {
-	// Keydown
 	js.Global().Set("onkeydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
-		// code := e.Get("code").String()
-		// Map JS code to internal Button here
+		code := e.Get("code").String()
+		if btn, ok := codeToButton[code]; ok {
+			if !w.keysDown[btn] {
+				w.keysPressed[btn] = true
+			}
+			w.keysDown[btn] = true
+		}
 		return nil
 	}))
 
-	// Keyup
 	js.Global().Set("onkeyup", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		e := args[0]
+		code := e.Get("code").String()
+		if btn, ok := codeToButton[code]; ok {
+			w.keysDown[btn] = false
+			w.keysReleased[btn] = true
+		}
 		return nil
 	}))
 
-	// Mouse Move
 	w.canvas.Set("onmousemove", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
 		w.mouseX = e.Get("clientX").Float()
 		w.mouseY = e.Get("clientY").Float()
 		return nil
 	}))
+
+	w.canvas.Set("onmousedown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		e := args[0]
+		btnIdx := e.Get("button").Int()
+		btn := MouseButton1
+		if btnIdx == 2 {
+			btn = MouseButton2
+		}
+		if !w.keysDown[btn] {
+			w.keysPressed[btn] = true
+		}
+		w.keysDown[btn] = true
+		return nil
+	}))
+
+	w.canvas.Set("onmouseup", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		e := args[0]
+		btnIdx := e.Get("button").Int()
+		btn := MouseButton1
+		if btnIdx == 2 {
+			btn = MouseButton2
+		}
+		w.keysDown[btn] = false
+		w.keysReleased[btn] = true
+		return nil
+	}))
+
+	w.canvas.Set("oncontextmenu", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		args[0].Call("preventDefault")
+		return nil
+	}))
+
+	w.canvas.Set("onwheel", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		e := args[0]
+		w.scrollX += e.Get("deltaX").Float()
+		w.scrollY += e.Get("deltaY").Float()
+		return nil
+	}))
 }
 
-// Begin resets the scroll values for the current frame to zero.
 func (w *Window) Begin() {
 	w.scrollX = 0
 	w.scrollY = 0
@@ -180,12 +281,99 @@ func (w *Window) SetCursorDisabled() {}
 // MouseScroll returns the current mouse scroll offset as an XY struct containing horizontal (X) and vertical (Y) values.
 func (w *Window) MouseScroll() XY { return XY{X: w.scrollX, Y: w.scrollY} }
 
-// Run executes the main game loop using the browser's requestAnimationFrame for smooth execution.
-func (w *Window) Run(tick func()) {
+func (w *Window) Setup(r api.IRender) error {
+	w.renderPrepareFn = r.RenderPrepare
+	w.renderStartFn = r.RenderStart
+	w.playerMouseMoveFn = r.RenderPlayerMouseMove
+	w.playerMovesFn = r.RenderPlayerMoves
+	w.playerThrowFn = r.RenderPlayerThrow
+	w.playerFireFn = r.RenderPlayerFire
+	w.playerDuckingToggleFn = r.RenderPlayerDuckingToggle
+	w.playerJumpFn = r.RenderPlayerJump
+	w.toggleShadowsFn = r.RenderToggleShadows
+	w.enableClearFn = r.RenderEnableClear
+	w.decreaseFlashFactorFn = r.RenderDecreaseFlashFactor
+	w.increaseFlashFactorFn = r.RenderIncreaseFlashFactor
+	return nil
+}
+
+// Start begins the main loop via requestAnimationFrame.
+func (w *Window) Start() {
+	if err := w.renderPrepareFn(); err != nil {
+		panic(err)
+	}
+
 	var renderFrame js.Func
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		w.Begin()
-		tick()
+
+		if w.mouseX != w.prevMouseX || w.mouseY != w.prevMouseY {
+			w.playerMouseMoveFn(w.mouseX-w.prevMouseX, w.mouseY-w.prevMouseY)
+			w.prevMouseX = w.mouseX
+			w.prevMouseY = w.mouseY
+		}
+		w.renderStartFn(w.width, w.height)
+		var up, down, left, right bool
+
+		if w.scrollX != 0 || w.scrollY != 0 {
+			if w.scrollY < 0 { // Web wheel delta negative means scroll up
+				up = true
+			} else if w.scrollY > 0 {
+				down = true
+			}
+		}
+
+		impulse := 0.06
+		for v, down := range w.keysDown {
+			if !down {
+				continue
+			}
+			switch v {
+			case KeyW:
+				up = true
+				impulse = 0.01
+			case KeyUp:
+				up = true
+			case KeyS:
+				down = true
+				impulse = 0.01
+			case KeyDown:
+				down = true
+			case KeyLeft:
+				left = true
+			case KeyRight:
+				right = true
+			case KeyL:
+				w.increaseFlashFactorFn()
+			case KeyK:
+				w.decreaseFlashFactorFn()
+			}
+		}
+
+		w.playerMovesFn(impulse, up, down, left, right)
+
+		if w.JustPressed(KeyO) {
+			w.playerThrowFn()
+		}
+		if w.JustPressed(KeyP) {
+			w.playerFireFn()
+		}
+		if w.JustPressed(KeyC) {
+			w.enableClearFn()
+		}
+		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
+			w.playerDuckingToggleFn()
+		}
+		if w.JustPressed(KeySpace) {
+			w.playerJumpFn(false)
+		}
+		if w.Pressed(MouseButton1) {
+			w.playerJumpFn(true)
+		}
+		if w.JustPressed(KeyN) {
+			w.toggleShadowsFn()
+		}
+
 		w.UpdateInputAndSwap()
 
 		if !w.Closed() {

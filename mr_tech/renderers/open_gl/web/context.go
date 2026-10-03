@@ -1024,8 +1024,8 @@ func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
 	loc := d.uniforms[location]
 	slice := unsafe.Slice(value, count)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), count*4)
-	jsArr := d.getSharedJSArray(bytes)
-	i32Arr := d.jsInt32Array.New(jsArr.Get("buffer"), 0, count)
+	offset := uintptr(unsafe.Pointer(&bytes[0]))
+	i32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(count), "int32")
 	d.fn_uniform1iv.Invoke(loc, i32Arr)
 }
 
@@ -1054,8 +1054,8 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 	total := count * 3
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	jsArr := d.getSharedJSArray(bytes)
-	f32Arr := d.jsFloat32Array.New(jsArr.Get("buffer"), 0, total)
+	offset := uintptr(unsafe.Pointer(&bytes[0]))
+	f32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(total), "float32")
 	d.fn_uniform3fv.Invoke(loc, f32Arr)
 }
 
@@ -1077,8 +1077,8 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 	total := count * 16
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	jsArr := d.getSharedJSArray(bytes)
-	f32Arr := d.jsFloat32Array.New(jsArr.Get("buffer"), 0, total)
+	offset := uintptr(unsafe.Pointer(&bytes[0]))
+	f32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(total), "float32")
 	d.fn_uniformMatrix4fv.Invoke(loc, transpose, f32Arr)
 }
 
@@ -1119,12 +1119,9 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 }
 
 func (d *Context) getSharedJSArray(bytes []byte) js.Value {
-	size := len(bytes)
-	if size > d.sharedBufferCap {
-		d.sharedBufferCap = size * 2
-		d.sharedBuffer = d.jsBuffer.New(d.sharedBufferCap)
+	if len(bytes) == 0 {
+		return js.Null()
 	}
-	jsView := d.sharedBuffer.Call("subarray", 0, size)
-	js.CopyBytesToJS(jsView, bytes)
-	return jsView
+	offset := uintptr(unsafe.Pointer(&bytes[0]))
+	return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
 }

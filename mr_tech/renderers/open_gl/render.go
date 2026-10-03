@@ -82,8 +82,8 @@ func (w *RenderOpenGL) Start() {
 	w.ctx.Start()
 }
 
-// RenderSetup initializes shaders, textures, and builder components required for rendering and configures global settings.
-func (w *RenderOpenGL) RenderSetup() error {
+// RenderPrepare initializes shaders, textures, and builder components required for rendering and configures global settings.
+func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
 	w.tex = NewTextures(w.ctx)
 	w.buildersCounter = 0

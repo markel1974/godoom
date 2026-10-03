@@ -1,7 +1,7 @@
 package api
 
 type IRender interface {
-	RenderSetup() error
+	RenderPrepare() error
 
 	RenderStart(fbW, fbH int)
 

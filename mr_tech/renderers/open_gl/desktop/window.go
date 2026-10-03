@@ -46,6 +46,7 @@ type WindowPos struct {
 
 // Window represents a graphical application window and manages its configuration, state, input, and rendering behavior.
 type Window struct {
+	ctx                              api.IContext
 	th                               *executor.MainThread
 	window                           *glfw.Window
 	cfg                              WindowConfig
@@ -60,7 +61,7 @@ type Window struct {
 	releaseEvents, tempReleaseEvents [KeyLast + 1]bool
 	prevJoy, currJoy, tempJoy        GLJoystick
 
-	renderSetupFn         func() error
+	renderPrepareFn       func() error
 	renderStartFn         func(int, int)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
@@ -75,28 +76,23 @@ type Window struct {
 }
 
 // currWin holds a pointer to the currently active Window instance, ensuring only one context is active at a time.
-var currWin *Window
+var _currWin *Window
 
 // NewGLWindow creates and initializes a new OpenGL window using the specified context and window configuration.
 func NewGLWindow(ctx api.IContext, cfg WindowConfig) *Window {
 	w := &Window{
+		ctx:           ctx,
 		th:            _thread,
 		cfg:           cfg,
 		cursorVisible: true,
 		keysPressed:   make(map[Button]bool),
 	}
-	w.th.SetContext(ctx)
 	return w
-}
-
-// Start initializes and begins the primary execution loop for the window's main thread.
-func (w *Window) Start() {
-	w.th.Run(w.doRun)
 }
 
 // Setup initializes rendering functions for the Window object using the provided IRender instance.
 func (w *Window) Setup(r api.IRender) error {
-	w.renderSetupFn = r.RenderSetup
+	w.renderPrepareFn = r.RenderPrepare
 	w.renderStartFn = r.RenderStart
 	w.playerMouseMoveFn = r.RenderPlayerMouseMove
 	w.playerMovesFn = r.RenderPlayerMoves
@@ -109,6 +105,23 @@ func (w *Window) Setup(r api.IRender) error {
 	w.decreaseFlashFactorFn = r.RenderDecreaseFlashFactor
 	w.increaseFlashFactorFn = r.RenderIncreaseFlashFactor
 	return nil
+}
+
+// Start initializes and begins the primary execution loop for the window's main thread.
+func (w *Window) Start() {
+	err := glfw.Init()
+	if err != nil {
+		panic(errors.New("failed to initialize glfw"))
+	}
+	//async Run
+	done := make(chan bool)
+	go func() {
+		w.doRun()
+		done <- true
+	}()
+
+	w.th.Start(done)
+	glfw.Terminate()
 }
 
 // Destroy gracefully shuts down and releases any resources held by the window object.
@@ -296,9 +309,9 @@ func (w *Window) GetFramebufferSize() (int, int) {
 
 // begin sets the current OpenGL context to the window if it is not already active.
 func (w *Window) begin() {
-	if currWin != w {
+	if _currWin != w {
 		w.window.MakeContextCurrent()
-		currWin = w
+		_currWin = w
 	}
 }
 
@@ -484,6 +497,46 @@ func (w *Window) UpdateInputWait(timeout time.Duration) {
 	w.doUpdateInput()
 }
 
+// JoystickPresent checks if the specified joystick is currently connected to the system.
+func (w *Window) JoystickPresent(js Joystick) bool {
+	return w.currJoy.connected[js]
+}
+
+// JoystickName returns the name of the specified joystick.
+func (w *Window) JoystickName(js Joystick) string {
+	return w.currJoy.name[js]
+}
+
+// JoystickButtonCount returns the number of buttons available on the specified joystick.
+func (w *Window) JoystickButtonCount(js Joystick) int {
+	return len(w.currJoy.buttons[js])
+}
+
+// JoystickAxisCount returns the number of axes available on the specified joystick.
+func (w *Window) JoystickAxisCount(js Joystick) int {
+	return len(w.currJoy.axis[js])
+}
+
+// JoystickPressed checks if the specified gamepad button on the given joystick is currently being pressed.
+func (w *Window) JoystickPressed(js Joystick, button GamepadButton) bool {
+	return w.currJoy.getButton(js, int(button))
+}
+
+// JoystickJustPressed checks if a specific joystick button was just pressed down during the current frame.
+func (w *Window) JoystickJustPressed(js Joystick, button GamepadButton) bool {
+	return w.currJoy.getButton(js, int(button)) && !w.prevJoy.getButton(js, int(button))
+}
+
+// JoystickJustReleased checks if a joystick button was released during the last input update. Returns true if just released.
+func (w *Window) JoystickJustReleased(js Joystick, button GamepadButton) bool {
+	return !w.currJoy.getButton(js, int(button)) && w.prevJoy.getButton(js, int(button))
+}
+
+// JoystickAxis retrieves the current value of the specified joystick axis, returning it as a floating-point value.
+func (w *Window) JoystickAxis(js Joystick, axis GamepadAxis) float64 {
+	return w.currJoy.getAxis(js, int(axis))
+}
+
 // doUpdateInput updates the current input state for the window, including keyboard, mouse, and joystick data.
 func (w *Window) doUpdateInput() {
 	//keyboard
@@ -527,46 +580,6 @@ func (w *Window) doUpdateInput() {
 	w.currJoy = w.tempJoy
 }
 
-// JoystickPresent checks if the specified joystick is currently connected to the system.
-func (w *Window) JoystickPresent(js Joystick) bool {
-	return w.currJoy.connected[js]
-}
-
-// JoystickName returns the name of the specified joystick.
-func (w *Window) JoystickName(js Joystick) string {
-	return w.currJoy.name[js]
-}
-
-// JoystickButtonCount returns the number of buttons available on the specified joystick.
-func (w *Window) JoystickButtonCount(js Joystick) int {
-	return len(w.currJoy.buttons[js])
-}
-
-// JoystickAxisCount returns the number of axes available on the specified joystick.
-func (w *Window) JoystickAxisCount(js Joystick) int {
-	return len(w.currJoy.axis[js])
-}
-
-// JoystickPressed checks if the specified gamepad button on the given joystick is currently being pressed.
-func (w *Window) JoystickPressed(js Joystick, button GamepadButton) bool {
-	return w.currJoy.getButton(js, int(button))
-}
-
-// JoystickJustPressed checks if a specific joystick button was just pressed down during the current frame.
-func (w *Window) JoystickJustPressed(js Joystick, button GamepadButton) bool {
-	return w.currJoy.getButton(js, int(button)) && !w.prevJoy.getButton(js, int(button))
-}
-
-// JoystickJustReleased checks if a joystick button was released during the last input update. Returns true if just released.
-func (w *Window) JoystickJustReleased(js Joystick, button GamepadButton) bool {
-	return !w.currJoy.getButton(js, int(button)) && w.prevJoy.getButton(js, int(button))
-}
-
-// JoystickAxis retrieves the current value of the specified joystick axis, returning it as a floating-point value.
-func (w *Window) JoystickAxis(js Joystick, axis GamepadAxis) float64 {
-	return w.currJoy.getAxis(js, int(axis))
-}
-
 // doPrepare initializes and configures the GLFW window based on the provided configuration settings.
 func (w *Window) doPrepare() error {
 	bool2int := map[bool]int{true: glfw.True, false: glfw.False}
@@ -595,8 +608,8 @@ func (w *Window) doPrepare() error {
 			glfw.WindowHint(glfw.Visible, glfw.False)
 		}
 		var share *glfw.Window
-		if currWin != nil {
-			share = currWin.window
+		if _currWin != nil {
+			share = _currWin.window
 		}
 		_, _, width, height := w.cfg.Bounds.Bounds()
 		w.window, err = glfw.CreateWindow(int(width), int(height), w.cfg.Title, nil, share)
@@ -609,7 +622,17 @@ func (w *Window) doPrepare() error {
 		}
 		// enter the OpenGL context
 		w.begin()
-		w.th.Init(w.cfg.DisableScissorTest)
+		if err = w.ctx.Init(); err != nil {
+			panic(err)
+		}
+		w.ctx.Enable(api.BLEND)
+		if !w.cfg.DisableScissorTest {
+			w.ctx.Enable(api.SCISSOR_TEST)
+		}
+		w.ctx.BlendEquation(api.FUNC_ADD)
+		w.ctx.Enable(api.MULTISAMPLE)
+
+		//w.th.Init(w.cfg.DisableScissorTest)
 		w.end()
 
 		return nil
@@ -649,7 +672,7 @@ func (w *Window) doRun() {
 	}
 
 	if err := w.th.CallErr(func() error {
-		return w.renderSetupFn()
+		return w.renderPrepareFn()
 	}); err != nil {
 		panic(err)
 		return

@@ -57,7 +57,7 @@ float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
+float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias, float volumetricSteps) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
@@ -79,13 +79,13 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     // Usa le coordinate del frammento per creare una variante spaziale "stabile"
     float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
 
-    for(int i = 0; i < u_volumetricSteps; ++i) {
+    for(int i = 0; i < volumetricSteps; ++i) {
         float r = sqrt(float(i) + 0.5) / sqrt(float(u_volumetricSteps));
         float theta = float(i) * GOLDEN_ANGLE + noise;
         vec2 offset = vec2(cos(theta), sin(theta)) * r * spread;
         shadow += texture(shadowMap, vec3(projCoords.xy + offset * texelSize, currentDepth - bias));
     }
-    return 1.0 - (shadow / float(u_volumetricSteps));
+    return 1.0 - (shadow / float(volumetricSteps));
 }
 
 vec3 calculateNormal() {
@@ -186,7 +186,7 @@ void main() {
         if(projMain.z > 1.0 || projMain.x < 0.0 || projMain.x > 1.0 || projMain.y < 0.0 || projMain.y > 1.0) {
             shadowFlash = 0.0;
         } else {
-            shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, bias);
+            shadowFlash = shadowCalculation(FragPosLightFlash, u_flashShadowMap, bias, u_volumetricSteps);
             float edgeFadeDist = smoothstep(0.0, 0.1, projMain.x) * smoothstep(1.0, 0.9, projMain.x) *
             smoothstep(0.0, 0.1, projMain.y) * smoothstep(1.0, 0.9, projMain.y);
             shadowFlash = mix(0.0, shadowFlash, edgeFadeDist);

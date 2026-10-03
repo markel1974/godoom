@@ -57,8 +57,7 @@ func main() {
 	}
 
 	res := NewResources()
-
-	mode = 6
+	//mode = 6
 	basePath := "resources"
 
 	switch mode {

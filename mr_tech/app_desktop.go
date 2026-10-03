@@ -21,6 +21,14 @@ func waitExit() {
 	// quindi qui non dobbiamo fare nulla.
 }
 
+func updateMode(mode int) int {
+	return mode
+}
+
+func updatePath(mode int, path string) string {
+	return path
+}
+
 // Resources represents a type that provides methods for accessing and interacting with external file-based resources.
 type Resources struct {
 }

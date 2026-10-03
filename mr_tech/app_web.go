@@ -18,6 +18,14 @@ import (
 //go:embed html/asset/*
 var assets embed.FS
 
+func updateMode(mode int) int {
+	return 6
+}
+
+func updatePath(mode int, path string) string {
+	return "html/asset/pak0.pak"
+}
+
 // getContext creates and returns a new graphics context with the specified width and height.
 func getContext(width, height int) api.IContext {
 	return web.NewContext(width, height)

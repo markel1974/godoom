@@ -130,6 +130,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if (w.w != fbW) || (w.h != fbH) {
+		//fmt.Println("CHANGING RESOLUTION", fbW, fbH)
 		w.w = fbW
 		w.h = fbH
 		w.metrics.Rebuild(w.w, w.h)

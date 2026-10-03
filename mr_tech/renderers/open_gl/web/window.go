@@ -185,20 +185,21 @@ func (w *Window) bindEvents() {
 		return nil
 	}))
 
-	w.canvas.Set("onmousemove", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		e := args[0]
-		movX := e.Get("movementX")
-		movY := e.Get("movementY")
-		if !movX.IsUndefined() && !movX.IsNull() {
-			w.mouseX += movX.Float()
-			// Inverting Y axis to fix the 'inverted' feeling
-			w.mouseY -= movY.Float()
-		} else {
-			w.mouseX = e.Get("clientX").Float()
-			w.mouseY = e.Get("clientY").Float()
-		}
-		return nil
-	}))
+	js.Global().Set("mouseTracker", js.Global().Get("Object").New())
+	js.Global().Get("mouseTracker").Set("x", 0)
+	js.Global().Get("mouseTracker").Set("y", 0)
+	js.Global().Get("window").Call("eval", `
+		window.gameMouseTracker = { x: 0, y: 0 };
+		document.getElementById('canvas').onmousemove = function(e) {
+			if (e.movementX !== undefined) {
+				window.gameMouseTracker.x += e.movementX;
+				window.gameMouseTracker.y -= e.movementY;
+			} else {
+				window.gameMouseTracker.x = e.clientX;
+				window.gameMouseTracker.y = e.clientY;
+			}
+		};
+	`)
 
 	w.canvas.Set("onmousedown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
@@ -328,6 +329,13 @@ func (w *Window) Start() {
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		w.Begin()
 
+		tracker := js.Global().Get("window").Get("gameMouseTracker")
+		w.mouseX += tracker.Get("x").Float()
+		w.mouseY += tracker.Get("y").Float()
+		// Reset in JS
+		tracker.Set("x", 0)
+		tracker.Set("y", 0)
+
 		if w.mouseX != w.prevMouseX || w.mouseY != w.prevMouseY {
 			w.playerMouseMoveFn(w.mouseX-w.prevMouseX, w.mouseY-w.prevMouseY)
 			w.prevMouseX = w.mouseX
@@ -345,8 +353,8 @@ func (w *Window) Start() {
 		}
 
 		impulse := 0.06
-		for v, down := range w.keysDown {
-			if !down {
+		for v, isDown := range w.keysDown {
+			if !isDown {
 				continue
 			}
 			switch v {
@@ -360,8 +368,12 @@ func (w *Window) Start() {
 				impulse = 0.01
 			case KeyDown:
 				down = true
+			case KeyA:
+				left = true
 			case KeyLeft:
 				left = true
+			case KeyD:
+				right = true
 			case KeyRight:
 				right = true
 			case KeyL:

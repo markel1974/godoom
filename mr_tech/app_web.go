@@ -19,11 +19,11 @@ import (
 var assets embed.FS
 
 func updateMode(mode int) int {
-	return 6
+	return 8
 }
 
 func updatePath(mode int, path string) string {
-	return "html/asset/pak0.pak"
+	return "html/asset/pak0.pk3"
 }
 
 // getContext creates and returns a new graphics context with the specified width and height.

@@ -1,6 +1,7 @@
 #version 330 core
 in vec3 v_ray;
-out vec4 FragColor;
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
 
 uniform sampler2DArray u_sky[4];
 uniform float u_skyLayer;
@@ -23,5 +24,7 @@ void main() {
     float v = asin(d.y) / PI + 0.5 + u_scrollV;
 
     // Assembliamo U, V e Layer
-    FragColor = getSky(vec3(u, v, u_skyLayer));
+    vec4 skyCol = getSky(vec3(u, v, u_skyLayer));
+    FragColor = skyCol;
+    BrightColor = vec4(dot(skyCol.rgb, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? skyCol.rgb : vec3(0.0), 1.0);
 }

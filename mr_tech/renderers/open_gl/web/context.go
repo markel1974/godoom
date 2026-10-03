@@ -785,6 +785,15 @@ func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 	}
 
 	d.gl.Call("texImage2D", target, 0, internalformat, width, height, 0, format, xtype, js.Null())
+
+	// CRITICAL: WebGL defaults to NEAREST_MIPMAP_LINEAR for TEXTURE_2D.
+	// Since we downgraded an MSAA texture (which doesn't have mipmaps) to TEXTURE_2D,
+	// we MUST force NEAREST or LINEAR filtering to make the texture "mipmap complete".
+	// Otherwise CheckFramebufferStatus will return FRAMEBUFFER_INCOMPLETE_ATTACHMENT.
+	d.gl.Call("texParameteri", target, 0x2801 /* TEXTURE_MIN_FILTER */, 0x2600 /* NEAREST */)
+	d.gl.Call("texParameteri", target, 0x2800 /* TEXTURE_MAG_FILTER */, 0x2600 /* NEAREST */)
+	d.gl.Call("texParameteri", target, 0x2802 /* TEXTURE_WRAP_S */, 0x812F /* CLAMP_TO_EDGE */)
+	d.gl.Call("texParameteri", target, 0x2803 /* TEXTURE_WRAP_T */, 0x812F /* CLAMP_TO_EDGE */)
 }
 
 // TexImage3D specifies a three-dimensional texture image for a target texture.
@@ -832,7 +841,24 @@ func (d *Context) TexParameteri(target uint32, pname uint32, param int32) {
 
 // TexSubImage3D updates a portion of a 3D texture with new pixel data for the specified level and offset coordinates.
 func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffset int32, zoffset int32, width int32, height int32, depth int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	// TODO: Check implementation
+	if pixels == nil || uintptr(pixels) == 0 {
+		return
+	}
+	d.ptrMutex.Lock()
+	dataVal, ok := d.ptrMap[uintptr(pixels)]
+	if ok {
+		delete(d.ptrMap, uintptr(pixels))
+	}
+	d.ptrMutex.Unlock()
+
+	if !ok || dataVal == nil {
+		return
+	}
+
+	bytes := d.getSliceBytes(dataVal)
+	jsArr := d.jsBuffer.New(len(bytes))
+	js.CopyBytesToJS(jsArr, bytes)
+	d.gl.Call("texSubImage3D", target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, getJSView(jsArr, xtype))
 }
 
 // Uniform1f sets the value of a float uniform variable at the given location in the WebGL program context.

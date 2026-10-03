@@ -255,7 +255,9 @@ func (s *Post) allocate(width, height int32) {
 
 	s.ctx.DrawBuffers(2, &attachments[0])
 
-	if s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER) != api.FRAMEBUFFER_COMPLETE {
+	status2 := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)
+	if status2 != api.FRAMEBUFFER_COMPLETE {
+		println("RESOLVE FBO ERROR STATUS:", status2)
 		panic("post Resolve FBO not complete")
 	}
 

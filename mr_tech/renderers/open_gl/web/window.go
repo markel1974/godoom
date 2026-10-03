@@ -178,10 +178,23 @@ func (w *Window) bindEvents() {
 		return nil
 	}))
 
+	w.canvas.Set("onclick", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		w.canvas.Call("requestPointerLock")
+		return nil
+	}))
+
 	w.canvas.Set("onmousemove", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
-		w.mouseX = e.Get("clientX").Float()
-		w.mouseY = e.Get("clientY").Float()
+		movX := e.Get("movementX")
+		movY := e.Get("movementY")
+		if !movX.IsUndefined() && !movX.IsNull() {
+			w.mouseX += movX.Float()
+			// Inverting Y axis to fix the 'inverted' feeling
+			w.mouseY -= movY.Float()
+		} else {
+			w.mouseX = e.Get("clientX").Float()
+			w.mouseY = e.Get("clientY").Float()
+		}
 		return nil
 	}))
 

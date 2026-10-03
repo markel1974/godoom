@@ -35,7 +35,9 @@ type Context struct {
 	ptrMap   map[uintptr]interface{}
 	ptrMutex sync.Mutex
 
-	jsBuffer js.Value
+	jsBuffer        js.Value
+	sharedBuffer    js.Value
+	sharedBufferCap int
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
@@ -46,16 +48,18 @@ func NewContext(width int, height int) *Context {
 		VSync:  true,
 	}
 	ctx := &Context{
-		buffers:  NewResourceTracker(),
-		textures: NewResourceTracker(),
-		programs: NewResourceTracker(),
-		shaders:  NewResourceTracker(),
-		vaos:     NewResourceTracker(),
-		fbos:     NewResourceTracker(),
-		rbos:     NewResourceTracker(),
-		uniforms: []js.Value{js.Null()},
-		ptrMap:   make(map[uintptr]interface{}),
-		jsBuffer: js.Global().Get("Uint8Array"),
+		buffers:         NewResourceTracker(),
+		textures:        NewResourceTracker(),
+		programs:        NewResourceTracker(),
+		shaders:         NewResourceTracker(),
+		vaos:            NewResourceTracker(),
+		fbos:            NewResourceTracker(),
+		rbos:            NewResourceTracker(),
+		uniforms:        []js.Value{js.Null()},
+		ptrMap:          make(map[uintptr]interface{}),
+		jsBuffer:        js.Global().Get("Uint8Array"),
+		sharedBuffer:    js.Global().Get("Uint8Array").New(1024 * 1024 * 8),
+		sharedBufferCap: 1024 * 1024 * 8,
 	}
 	ctx.win = NewGLWindow(ctx, cfg)
 	return ctx
@@ -196,8 +200,7 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 	if len(bytes) > size {
 		bytes = bytes[:size]
 	}
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
+	jsArr := d.getSharedJSArray(bytes)
 	d.gl.Call("bufferData", target, jsArr, usage)
 }
 
@@ -225,8 +228,7 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 	if len(bytes) > size {
 		bytes = bytes[:size]
 	}
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
+	jsArr := d.getSharedJSArray(bytes)
 	d.gl.Call("bufferSubData", target, offset, jsArr)
 }
 
@@ -766,8 +768,7 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
+	jsArr := d.getSharedJSArray(bytes)
 	d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, getJSView(jsArr, xtype))
 }
 
@@ -815,8 +816,7 @@ func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, w
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
+	jsArr := d.getSharedJSArray(bytes)
 	d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, getJSView(jsArr, xtype))
 }
 
@@ -856,8 +856,7 @@ func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffs
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
+	jsArr := d.getSharedJSArray(bytes)
 	d.gl.Call("texSubImage3D", target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, getJSView(jsArr, xtype))
 }
 
@@ -885,9 +884,8 @@ func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
 	loc := d.uniforms[location]
 	slice := unsafe.Slice(value, count)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), count*4)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
-	i32Arr := js.Global().Get("Int32Array").New(jsArr.Get("buffer"))
+	jsArr := d.getSharedJSArray(bytes)
+	i32Arr := js.Global().Get("Int32Array").New(jsArr.Get("buffer"), 0, count)
 	d.gl.Call("uniform1iv", loc, i32Arr)
 }
 
@@ -916,9 +914,8 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 	total := count * 3
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
-	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"))
+	jsArr := d.getSharedJSArray(bytes)
+	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"), 0, total)
 	d.gl.Call("uniform3fv", loc, f32Arr)
 }
 
@@ -940,9 +937,8 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 	total := count * 16
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	jsArr := d.jsBuffer.New(len(bytes))
-	js.CopyBytesToJS(jsArr, bytes)
-	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"))
+	jsArr := d.getSharedJSArray(bytes)
+	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"), 0, total)
 	d.gl.Call("uniformMatrix4fv", loc, transpose, f32Arr)
 }
 
@@ -980,4 +976,15 @@ func getJSView(buffer js.Value, xtype uint32) js.Value {
 		return js.Global().Get("Float32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
 	}
 	return buffer
+}
+
+func (d *Context) getSharedJSArray(bytes []byte) js.Value {
+	size := len(bytes)
+	if size > d.sharedBufferCap {
+		d.sharedBufferCap = size * 2
+		d.sharedBuffer = d.jsBuffer.New(d.sharedBufferCap)
+	}
+	jsView := d.sharedBuffer.Call("subarray", 0, size)
+	js.CopyBytesToJS(jsView, bytes)
+	return jsView
 }

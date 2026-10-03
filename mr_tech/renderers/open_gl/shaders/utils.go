@@ -38,6 +38,13 @@ func ShaderCompile(ctx api.IContext, id string, source string, shaderType uint32
 
 // ShaderCreateProgram links a vertex and fragment shader into a shader program, validates it, and returns the program ID.
 func ShaderCreateProgram(ctx api.IContext, id string, vertexShader uint32, fragmentShader uint32) (uint32, error) {
+	//fmt.Printf(
+	//	"ShaderCreateProgram: id=%s vertexShader=%d fragmentShader=%d\n",
+	//	id,
+	//	vertexShader,
+	//	fragmentShader,
+	//)
+
 	shaderProgram := ctx.CreateProgram()
 	ctx.AttachShader(shaderProgram, vertexShader)
 	ctx.AttachShader(shaderProgram, fragmentShader)

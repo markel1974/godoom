@@ -103,6 +103,21 @@ func (d *Context) ActiveTexture(texture uint32) {
 
 // AttachShader associates a compiled shader object to a program object for linking in a graphics rendering pipeline.
 func (d *Context) AttachShader(program uint32, shader uint32) {
+	programObj := d.programs.Get(program)
+	shaderObj := d.shaders.Get(shader)
+	shaderType := d.gl.Call("getShaderParameter", shaderObj, 0x8B4F) // GL_SHADER_TYPE
+
+	fmt.Printf(
+		"AttachShader: program=%d shader=%d type=%d program=%s shader=%s\n",
+		program,
+		shader,
+		shaderType.Int(),
+		programObj.String(),
+		shaderObj.String(),
+	)
+
+	//d.gl.Call("attachShader", programObj, shaderObj)
+
 	d.gl.Call("attachShader", d.programs.Get(program), d.shaders.Get(shader))
 }
 
@@ -216,8 +231,13 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 }
 
 // CheckFramebufferStatus checks the completeness status of a framebuffer object for the given target.
+//func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
+//	return api.FRAMEBUFFER_COMPLETE
+//}
+
 func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
-	return api.FRAMEBUFFER_COMPLETE
+	status := d.gl.Call("checkFramebufferStatus", int(target))
+	return uint32(status.Int())
 }
 
 // Clear resets the specified bits in the context state based on the provided mask.
@@ -238,13 +258,27 @@ func (d *Context) CompileShader(shader uint32) {
 // CreateProgram creates a new shader program, adds it to the internal program manager, and returns its unique ID.
 func (d *Context) CreateProgram() uint32 {
 	obj := d.gl.Call("createProgram")
-	return d.programs.Add(obj)
+	id := d.programs.Add(obj)
+	fmt.Printf(
+		"CreateProgram: id=%d JS=%s\n",
+		id,
+		obj.String(),
+	)
+	return id
 }
 
 // CreateShader creates a shader of the specified type and returns its unique identifier from the shader registry.
 func (d *Context) CreateShader(xtype uint32) uint32 {
 	obj := d.gl.Call("createShader", xtype)
-	return d.shaders.Add(obj)
+	id := d.shaders.Add(obj)
+	shaderType := d.gl.Call("getShaderParameter", obj, 0x8B4F) // GL_SHADER_TYPE
+	fmt.Printf(
+		"CreateShader: GL type=%d id=%d JS type=%d\n",
+		xtype,
+		id,
+		shaderType.Int(),
+	)
+	return id
 }
 
 // DeleteFramebuffers deletes framebuffer objects referenced by the IDs in the provided array.
@@ -268,8 +302,23 @@ func (d *Context) DeleteRenderbuffers(n int32, renderbuffers *uint32) {
 }
 
 // DeleteShader deletes a compiled shader object given its ID, freeing associated resources.
+//func (d *Context) DeleteShader(shader uint32) {
+// TODO: Check implementation
+//	panic("DeleteShader not implemented")
+//}
+
 func (d *Context) DeleteShader(shader uint32) {
-	// TODO: Check implementation
+	shaderObj := d.shaders.Get(shader)
+	if shaderObj.IsNull() || shaderObj.IsUndefined() {
+		return
+	}
+	d.gl.Call("deleteShader", shaderObj)
+	// Do not remove the shader from the tracker or recycle its ID here.
+	// OpenGL allows a deleted shader to remain attached to programs, and
+	// the engine may reuse the same shader handle for subsequent programs.
+	// Keeping the WebGLShader object associated with the virtual handle
+	// preserves this OpenGL lifetime semantics.
+	//d.shaders.Remove(shader)
 }
 
 // DeleteTextures deletes a number of textures specified by the `n` parameter, referenced by the `textures` pointer.
@@ -306,22 +355,32 @@ func (d *Context) DrawArrays(mode uint32, first int32, count int32) {
 
 // DrawBuffer sets the destination buffer for rendering operations.
 func (d *Context) setDrawBuffers(bufs []uint32) {
+	if len(bufs) == 0 {
+		arr := js.Global().Get("Uint32Array").New(0)
+		d.gl.Call("drawBuffers", arr)
+		return
+	}
 	maxIndex := 0
 	for _, buf := range bufs {
-		if buf >= glColorAttachment0 {
-			index := int(buf - glColorAttachment0)
-			if index > maxIndex {
-				maxIndex = index
-			}
+		if buf < glColorAttachment0 {
+			continue
+		}
+
+		index := int(buf - glColorAttachment0)
+		if index > maxIndex {
+			maxIndex = index
 		}
 	}
+
 	arr := js.Global().Get("Uint32Array").New(maxIndex + 1)
-	// WebGL richiede NONE per gli attachment non esplicitamente specificati.
 	for i := 0; i <= maxIndex; i++ {
 		arr.SetIndex(i, int(glNone))
 	}
 	for _, buf := range bufs {
 		if buf == glNone {
+			continue
+		}
+		if buf < glColorAttachment0 {
 			continue
 		}
 		index := int(buf - glColorAttachment0)

@@ -35,9 +35,85 @@ type Context struct {
 	ptrMap   map[uintptr]interface{}
 	ptrMutex sync.Mutex
 
-	jsBuffer        js.Value
-	sharedBuffer    js.Value
-	sharedBufferCap int
+	jsBuffer                   js.Value
+	sharedBuffer               js.Value
+	sharedBufferCap            int
+	fn_activeTexture           js.Value
+	fn_attachShader            js.Value
+	fn_bindBuffer              js.Value
+	fn_bindBufferBase          js.Value
+	fn_bindFramebuffer         js.Value
+	fn_bindRenderbuffer        js.Value
+	fn_bindTexture             js.Value
+	fn_bindVertexArray         js.Value
+	fn_blendEquation           js.Value
+	fn_blendFunc               js.Value
+	fn_blitFramebuffer         js.Value
+	fn_bufferData              js.Value
+	fn_bufferSubData           js.Value
+	fn_checkFramebufferStatus  js.Value
+	fn_clear                   js.Value
+	fn_clearColor              js.Value
+	fn_compileShader           js.Value
+	fn_createBuffer            js.Value
+	fn_createFramebuffer       js.Value
+	fn_createProgram           js.Value
+	fn_createRenderbuffer      js.Value
+	fn_createShader            js.Value
+	fn_createTexture           js.Value
+	fn_createVertexArray       js.Value
+	fn_deleteFramebuffer       js.Value
+	fn_deleteRenderbuffer      js.Value
+	fn_deleteShader            js.Value
+	fn_deleteTexture           js.Value
+	fn_depthFunc               js.Value
+	fn_depthMask               js.Value
+	fn_disable                 js.Value
+	fn_drawArrays              js.Value
+	fn_drawBuffers             js.Value
+	fn_drawElements            js.Value
+	fn_enable                  js.Value
+	fn_enableVertexAttribArray js.Value
+	fn_framebufferRenderbuffer js.Value
+	fn_framebufferTexture2D    js.Value
+	fn_generateMipmap          js.Value
+	fn_getExtension            js.Value
+	fn_getParameter            js.Value
+	fn_getProgramInfoLog       js.Value
+	fn_getProgramParameter     js.Value
+	fn_getShaderInfoLog        js.Value
+	fn_getShaderParameter      js.Value
+	fn_getUniformBlockIndex    js.Value
+	fn_getUniformLocation      js.Value
+	fn_linkProgram             js.Value
+	fn_polygonOffset           js.Value
+	fn_readBuffer              js.Value
+	fn_renderbufferStorage     js.Value
+	fn_shaderSource            js.Value
+	fn_texImage2D              js.Value
+	fn_texImage3D              js.Value
+	fn_texParameterf           js.Value
+	fn_texParameteri           js.Value
+	fn_texSubImage3D           js.Value
+	fn_uniform1f               js.Value
+	fn_uniform1i               js.Value
+	fn_uniform1iv              js.Value
+	fn_uniform2f               js.Value
+	fn_uniform3f               js.Value
+	fn_uniform3fv              js.Value
+	fn_uniformBlockBinding     js.Value
+	fn_uniformMatrix4fv        js.Value
+	fn_useProgram              js.Value
+	fn_vertexAttribPointer     js.Value
+	fn_viewport                js.Value
+	jsInt8Array                js.Value
+	jsUint8Array               js.Value
+	jsInt16Array               js.Value
+	jsUint16Array              js.Value
+	jsInt32Array               js.Value
+	jsUint32Array              js.Value
+	jsFloat32Array             js.Value
+	jsConsole                  js.Value
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
@@ -61,7 +137,84 @@ func NewContext(width int, height int) *Context {
 		sharedBuffer:    js.Global().Get("Uint8Array").New(1024 * 1024 * 8),
 		sharedBufferCap: 1024 * 1024 * 8,
 	}
+
+	ctx.jsInt8Array = js.Global().Get("Int8Array")
+	ctx.jsUint8Array = js.Global().Get("Uint8Array")
+	ctx.jsInt16Array = js.Global().Get("Int16Array")
+	ctx.jsUint16Array = js.Global().Get("Uint16Array")
+	ctx.jsInt32Array = js.Global().Get("Int32Array")
+	ctx.jsUint32Array = js.Global().Get("Uint32Array")
+	ctx.jsFloat32Array = js.Global().Get("Float32Array")
+	ctx.jsConsole = js.Global().Get("console")
 	ctx.win = NewGLWindow(ctx, cfg)
+	ctx.fn_activeTexture = ctx.gl.Get("activeTexture").Call("bind", ctx.gl)
+	ctx.fn_attachShader = ctx.gl.Get("attachShader").Call("bind", ctx.gl)
+	ctx.fn_bindBuffer = ctx.gl.Get("bindBuffer").Call("bind", ctx.gl)
+	ctx.fn_bindBufferBase = ctx.gl.Get("bindBufferBase").Call("bind", ctx.gl)
+	ctx.fn_bindFramebuffer = ctx.gl.Get("bindFramebuffer").Call("bind", ctx.gl)
+	ctx.fn_bindRenderbuffer = ctx.gl.Get("bindRenderbuffer").Call("bind", ctx.gl)
+	ctx.fn_bindTexture = ctx.gl.Get("bindTexture").Call("bind", ctx.gl)
+	ctx.fn_bindVertexArray = ctx.gl.Get("bindVertexArray").Call("bind", ctx.gl)
+	ctx.fn_blendEquation = ctx.gl.Get("blendEquation").Call("bind", ctx.gl)
+	ctx.fn_blendFunc = ctx.gl.Get("blendFunc").Call("bind", ctx.gl)
+	ctx.fn_blitFramebuffer = ctx.gl.Get("blitFramebuffer").Call("bind", ctx.gl)
+	ctx.fn_bufferData = ctx.gl.Get("bufferData").Call("bind", ctx.gl)
+	ctx.fn_bufferSubData = ctx.gl.Get("bufferSubData").Call("bind", ctx.gl)
+	ctx.fn_checkFramebufferStatus = ctx.gl.Get("checkFramebufferStatus").Call("bind", ctx.gl)
+	ctx.fn_clear = ctx.gl.Get("clear").Call("bind", ctx.gl)
+	ctx.fn_clearColor = ctx.gl.Get("clearColor").Call("bind", ctx.gl)
+	ctx.fn_compileShader = ctx.gl.Get("compileShader").Call("bind", ctx.gl)
+	ctx.fn_createBuffer = ctx.gl.Get("createBuffer").Call("bind", ctx.gl)
+	ctx.fn_createFramebuffer = ctx.gl.Get("createFramebuffer").Call("bind", ctx.gl)
+	ctx.fn_createProgram = ctx.gl.Get("createProgram").Call("bind", ctx.gl)
+	ctx.fn_createRenderbuffer = ctx.gl.Get("createRenderbuffer").Call("bind", ctx.gl)
+	ctx.fn_createShader = ctx.gl.Get("createShader").Call("bind", ctx.gl)
+	ctx.fn_createTexture = ctx.gl.Get("createTexture").Call("bind", ctx.gl)
+	ctx.fn_createVertexArray = ctx.gl.Get("createVertexArray").Call("bind", ctx.gl)
+	ctx.fn_deleteFramebuffer = ctx.gl.Get("deleteFramebuffer").Call("bind", ctx.gl)
+	ctx.fn_deleteRenderbuffer = ctx.gl.Get("deleteRenderbuffer").Call("bind", ctx.gl)
+	ctx.fn_deleteShader = ctx.gl.Get("deleteShader").Call("bind", ctx.gl)
+	ctx.fn_deleteTexture = ctx.gl.Get("deleteTexture").Call("bind", ctx.gl)
+	ctx.fn_depthFunc = ctx.gl.Get("depthFunc").Call("bind", ctx.gl)
+	ctx.fn_depthMask = ctx.gl.Get("depthMask").Call("bind", ctx.gl)
+	ctx.fn_disable = ctx.gl.Get("disable").Call("bind", ctx.gl)
+	ctx.fn_drawArrays = ctx.gl.Get("drawArrays").Call("bind", ctx.gl)
+	ctx.fn_drawBuffers = ctx.gl.Get("drawBuffers").Call("bind", ctx.gl)
+	ctx.fn_drawElements = ctx.gl.Get("drawElements").Call("bind", ctx.gl)
+	ctx.fn_enable = ctx.gl.Get("enable").Call("bind", ctx.gl)
+	ctx.fn_enableVertexAttribArray = ctx.gl.Get("enableVertexAttribArray").Call("bind", ctx.gl)
+	ctx.fn_framebufferRenderbuffer = ctx.gl.Get("framebufferRenderbuffer").Call("bind", ctx.gl)
+	ctx.fn_framebufferTexture2D = ctx.gl.Get("framebufferTexture2D").Call("bind", ctx.gl)
+	ctx.fn_generateMipmap = ctx.gl.Get("generateMipmap").Call("bind", ctx.gl)
+	ctx.fn_getExtension = ctx.gl.Get("getExtension").Call("bind", ctx.gl)
+	ctx.fn_getParameter = ctx.gl.Get("getParameter").Call("bind", ctx.gl)
+	ctx.fn_getProgramInfoLog = ctx.gl.Get("getProgramInfoLog").Call("bind", ctx.gl)
+	ctx.fn_getProgramParameter = ctx.gl.Get("getProgramParameter").Call("bind", ctx.gl)
+	ctx.fn_getShaderInfoLog = ctx.gl.Get("getShaderInfoLog").Call("bind", ctx.gl)
+	ctx.fn_getShaderParameter = ctx.gl.Get("getShaderParameter").Call("bind", ctx.gl)
+	ctx.fn_getUniformBlockIndex = ctx.gl.Get("getUniformBlockIndex").Call("bind", ctx.gl)
+	ctx.fn_getUniformLocation = ctx.gl.Get("getUniformLocation").Call("bind", ctx.gl)
+	ctx.fn_linkProgram = ctx.gl.Get("linkProgram").Call("bind", ctx.gl)
+	ctx.fn_polygonOffset = ctx.gl.Get("polygonOffset").Call("bind", ctx.gl)
+	ctx.fn_readBuffer = ctx.gl.Get("readBuffer").Call("bind", ctx.gl)
+	ctx.fn_renderbufferStorage = ctx.gl.Get("renderbufferStorage").Call("bind", ctx.gl)
+	ctx.fn_shaderSource = ctx.gl.Get("shaderSource").Call("bind", ctx.gl)
+	ctx.fn_texImage2D = ctx.gl.Get("texImage2D").Call("bind", ctx.gl)
+	ctx.fn_texImage3D = ctx.gl.Get("texImage3D").Call("bind", ctx.gl)
+	ctx.fn_texParameterf = ctx.gl.Get("texParameterf").Call("bind", ctx.gl)
+	ctx.fn_texParameteri = ctx.gl.Get("texParameteri").Call("bind", ctx.gl)
+	ctx.fn_texSubImage3D = ctx.gl.Get("texSubImage3D").Call("bind", ctx.gl)
+	ctx.fn_uniform1f = ctx.gl.Get("uniform1f").Call("bind", ctx.gl)
+	ctx.fn_uniform1i = ctx.gl.Get("uniform1i").Call("bind", ctx.gl)
+	ctx.fn_uniform1iv = ctx.gl.Get("uniform1iv").Call("bind", ctx.gl)
+	ctx.fn_uniform2f = ctx.gl.Get("uniform2f").Call("bind", ctx.gl)
+	ctx.fn_uniform3f = ctx.gl.Get("uniform3f").Call("bind", ctx.gl)
+	ctx.fn_uniform3fv = ctx.gl.Get("uniform3fv").Call("bind", ctx.gl)
+	ctx.fn_uniformBlockBinding = ctx.gl.Get("uniformBlockBinding").Call("bind", ctx.gl)
+	ctx.fn_uniformMatrix4fv = ctx.gl.Get("uniformMatrix4fv").Call("bind", ctx.gl)
+	ctx.fn_useProgram = ctx.gl.Get("useProgram").Call("bind", ctx.gl)
+	ctx.fn_vertexAttribPointer = ctx.gl.Get("vertexAttribPointer").Call("bind", ctx.gl)
+	ctx.fn_viewport = ctx.gl.Get("viewport").Call("bind", ctx.gl)
 	return ctx
 }
 
@@ -104,14 +257,14 @@ func (d *Context) getSliceBytes(data interface{}) []byte {
 
 // ActiveTexture selects the active texture unit for subsequent texture state modifications.
 func (d *Context) ActiveTexture(texture uint32) {
-	d.gl.Call("activeTexture", texture)
+	d.fn_activeTexture.Invoke(texture)
 }
 
 // AttachShader associates a compiled shader object to a program object for linking in a graphics rendering pipeline.
 func (d *Context) AttachShader(program uint32, shader uint32) {
 	programObj := d.programs.Get(program)
 	shaderObj := d.shaders.Get(shader)
-	shaderType := d.gl.Call("getShaderParameter", shaderObj, 0x8B4F) // GL_SHADER_TYPE
+	shaderType := d.fn_getShaderParameter.Invoke(shaderObj, 0x8B4F) // GL_SHADER_TYPE
 
 	fmt.Printf(
 		"AttachShader: program=%d shader=%d type=%d program=%s shader=%s\n",
@@ -122,29 +275,29 @@ func (d *Context) AttachShader(program uint32, shader uint32) {
 		shaderObj.String(),
 	)
 
-	//d.gl.Call("attachShader", programObj, shaderObj)
+	//d.fn_attachShader.Invoke(programObj, shaderObj)
 
-	d.gl.Call("attachShader", d.programs.Get(program), d.shaders.Get(shader))
+	d.fn_attachShader.Invoke(d.programs.Get(program), d.shaders.Get(shader))
 }
 
 // BindBuffer binds a given buffer object to a specified target for subsequent GPU operations.
 func (d *Context) BindBuffer(target uint32, buffer uint32) {
-	d.gl.Call("bindBuffer", target, d.buffers.Get(buffer))
+	d.fn_bindBuffer.Invoke(target, d.buffers.Get(buffer))
 }
 
 // BindBufferBase binds a buffer object to an indexed buffer target.
 func (d *Context) BindBufferBase(target uint32, index uint32, buffer uint32) {
-	d.gl.Call("bindBufferBase", target, index, d.buffers.Get(buffer))
+	d.fn_bindBufferBase.Invoke(target, index, d.buffers.Get(buffer))
 }
 
 // BindFramebuffer binds the specified framebuffer to the given target within the WebGL rendering context.
 func (d *Context) BindFramebuffer(target uint32, framebuffer uint32) {
-	d.gl.Call("bindFramebuffer", target, d.fbos.Get(framebuffer))
+	d.fn_bindFramebuffer.Invoke(target, d.fbos.Get(framebuffer))
 }
 
 // BindRenderbuffer binds a renderbuffer to the specified renderbuffer target within the current graphics context.
 func (d *Context) BindRenderbuffer(target uint32, renderbuffer uint32) {
-	d.gl.Call("bindRenderbuffer", target, d.rbos.Get(renderbuffer))
+	d.fn_bindRenderbuffer.Invoke(target, d.rbos.Get(renderbuffer))
 }
 
 // BindTexture binds a named texture to a specified target in the WebGL rendering context.
@@ -152,22 +305,22 @@ func (d *Context) BindTexture(target uint32, texture uint32) {
 	if target == 0x9100 { // TEXTURE_2D_MULTISAMPLE
 		target = 0x0DE1 // TEXTURE_2D
 	}
-	d.gl.Call("bindTexture", target, d.textures.Get(texture))
+	d.fn_bindTexture.Invoke(target, d.textures.Get(texture))
 }
 
 // BindVertexArray binds the specified vertex array object, enabling its state for subsequent rendering operations.
 func (d *Context) BindVertexArray(array uint32) {
-	d.gl.Call("bindVertexArray", d.vaos.Get(array))
+	d.fn_bindVertexArray.Invoke(d.vaos.Get(array))
 }
 
 // BlendEquation sets the blend equation mode, controlling how source and destination colors are combined.
 func (d *Context) BlendEquation(mode uint32) {
-	d.gl.Call("blendEquation", mode)
+	d.fn_blendEquation.Invoke(mode)
 }
 
 // BlendFunc sets the blending factors for source and destination in the rendering pipeline.
 func (d *Context) BlendFunc(sfactor uint32, dfactor uint32) {
-	d.gl.Call("blendFunc", sfactor, dfactor)
+	d.fn_blendFunc.Invoke(sfactor, dfactor)
 }
 
 // BlitFramebuffer transfers a block of pixels from one framebuffer to another with specified source and destination bounds.
@@ -177,13 +330,13 @@ func (d *Context) BlendFunc(sfactor uint32, dfactor uint32) {
 // filter specifies the interpolation to apply during scaling, such as nearest or linear filtering.
 // This method is commonly used for resolving multisampled framebuffers or copying pixels between framebuffers.
 func (d *Context) BlitFramebuffer(srcX0 int32, srcY0 int32, srcX1 int32, srcY1 int32, dstX0 int32, dstY0 int32, dstX1 int32, dstY1 int32, mask uint32, filter uint32) {
-	d.gl.Call("blitFramebuffer", srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter)
+	d.fn_blitFramebuffer.Invoke(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter)
 }
 
 // BufferData uploads data to a buffer object for the specified target with the given usage pattern.
 func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage uint32) {
 	if data == nil || uintptr(data) == 0 {
-		d.gl.Call("bufferData", target, size, usage)
+		d.fn_bufferData.Invoke(target, size, usage)
 		return
 	}
 	d.ptrMutex.Lock()
@@ -194,7 +347,7 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {
-		d.gl.Call("bufferData", target, size, usage)
+		d.fn_bufferData.Invoke(target, size, usage)
 		return
 	}
 
@@ -203,7 +356,7 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 		bytes = bytes[:size]
 	}
 	jsArr := d.getSharedJSArray(bytes)
-	d.gl.Call("bufferData", target, jsArr, usage)
+	d.fn_bufferData.Invoke(target, jsArr, usage)
 }
 
 // BufferSubData updates a subset of a buffer object's data store with new data from a specified source in memory.
@@ -231,33 +384,33 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 		bytes = bytes[:size]
 	}
 	jsArr := d.getSharedJSArray(bytes)
-	d.gl.Call("bufferSubData", target, offset, jsArr)
+	d.fn_bufferSubData.Invoke(target, offset, jsArr)
 }
 
 // CheckFramebufferStatus queries the completeness status of a framebuffer object for the specified target.
 func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
-	status := d.gl.Call("checkFramebufferStatus", int(target))
+	status := d.fn_checkFramebufferStatus.Invoke(int(target))
 	return uint32(status.Int())
 }
 
 // Clear resets the specified bits in the context state based on the provided mask.
 func (d *Context) Clear(mask uint32) {
-	d.gl.Call("clear", mask)
+	d.fn_clear.Invoke(mask)
 }
 
 // ClearColor sets the color used to clear the color buffer with specified red, green, blue, and alpha values.
 func (d *Context) ClearColor(red float32, green float32, blue float32, alpha float32) {
-	d.gl.Call("clearColor", red, green, blue, alpha)
+	d.fn_clearColor.Invoke(red, green, blue, alpha)
 }
 
 // CompileShader compiles the specified shader within the current graphics context.
 func (d *Context) CompileShader(shader uint32) {
-	d.gl.Call("compileShader", d.shaders.Get(shader))
+	d.fn_compileShader.Invoke(d.shaders.Get(shader))
 }
 
 // CreateProgram creates a new shader program, adds it to the internal program manager, and returns its unique ID.
 func (d *Context) CreateProgram() uint32 {
-	obj := d.gl.Call("createProgram")
+	obj := d.fn_createProgram.Invoke()
 	id := d.programs.Add(obj)
 	fmt.Printf(
 		"CreateProgram: id=%d JS=%s\n",
@@ -269,9 +422,9 @@ func (d *Context) CreateProgram() uint32 {
 
 // CreateShader creates a shader of the specified type and returns its unique identifier from the shader registry.
 func (d *Context) CreateShader(xtype uint32) uint32 {
-	obj := d.gl.Call("createShader", xtype)
+	obj := d.fn_createShader.Invoke(xtype)
 	id := d.shaders.Add(obj)
-	shaderType := d.gl.Call("getShaderParameter", obj, 0x8B4F) // GL_SHADER_TYPE
+	shaderType := d.fn_getShaderParameter.Invoke(obj, 0x8B4F) // GL_SHADER_TYPE
 	fmt.Printf(
 		"CreateShader: GL type=%d id=%d JS type=%d\n",
 		xtype,
@@ -286,7 +439,7 @@ func (d *Context) CreateShader(xtype uint32) uint32 {
 func (d *Context) DeleteFramebuffers(n int32, framebuffers *uint32) {
 	arr := unsafe.Slice(framebuffers, n)
 	for i := int32(0); i < n; i++ {
-		d.gl.Call("deleteFramebuffer", d.fbos.Get(arr[i]))
+		d.fn_deleteFramebuffer.Invoke(d.fbos.Get(arr[i]))
 		d.fbos.Remove(arr[i])
 	}
 }
@@ -296,23 +449,18 @@ func (d *Context) DeleteFramebuffers(n int32, framebuffers *uint32) {
 func (d *Context) DeleteRenderbuffers(n int32, renderbuffers *uint32) {
 	arr := unsafe.Slice(renderbuffers, n)
 	for i := int32(0); i < n; i++ {
-		d.gl.Call("deleteRenderbuffer", d.rbos.Get(arr[i]))
+		d.fn_deleteRenderbuffer.Invoke(d.rbos.Get(arr[i]))
 		d.rbos.Remove(arr[i])
 	}
 }
 
-// DeleteShader deletes a compiled shader object given its ID, freeing associated resources.
-//func (d *Context) DeleteShader(shader uint32) {
-// TODO: Check implementation
-//	panic("DeleteShader not implemented")
-//}
-
+// DeleteShader deletes the specified shader from the WebGL context but retains its reference for OpenGL lifetime semantics.
 func (d *Context) DeleteShader(shader uint32) {
 	shaderObj := d.shaders.Get(shader)
 	if shaderObj.IsNull() || shaderObj.IsUndefined() {
 		return
 	}
-	d.gl.Call("deleteShader", shaderObj)
+	d.fn_deleteShader.Invoke(shaderObj)
 	// Do not remove the shader from the tracker or recycle its ID here.
 	// OpenGL allows a deleted shader to remain attached to programs, and
 	// the engine may reuse the same shader handle for subsequent programs.
@@ -325,19 +473,19 @@ func (d *Context) DeleteShader(shader uint32) {
 func (d *Context) DeleteTextures(n int32, textures *uint32) {
 	arr := unsafe.Slice(textures, n)
 	for i := int32(0); i < n; i++ {
-		d.gl.Call("deleteTexture", d.textures.Get(arr[i]))
+		d.fn_deleteTexture.Invoke(d.textures.Get(arr[i]))
 		d.textures.Remove(arr[i])
 	}
 }
 
 // DepthFunc sets the function used for depth buffer comparisons to control whether a fragment passes the depth test.
 func (d *Context) DepthFunc(xfunc uint32) {
-	d.gl.Call("depthFunc", xfunc)
+	d.fn_depthFunc.Invoke(xfunc)
 }
 
 // DepthMask sets whether writing into the depth buffer is enabled or disabled based on the given boolean flag.
 func (d *Context) DepthMask(flag bool) {
-	d.gl.Call("depthMask", flag)
+	d.fn_depthMask.Invoke(flag)
 }
 
 // Disable disables a specific capability for the given context based on the provided capability identifier.
@@ -345,19 +493,19 @@ func (d *Context) Disable(cap uint32) {
 	if cap == 0x864F { // DEPTH_CLAMP
 		return
 	}
-	d.gl.Call("disable", cap)
+	d.fn_disable.Invoke(cap)
 }
 
 // DrawArrays renders primitives from array data based on the specified mode, starting index, and number of vertices.
 func (d *Context) DrawArrays(mode uint32, first int32, count int32) {
-	d.gl.Call("drawArrays", mode, first, count)
+	d.fn_drawArrays.Invoke(mode, first, count)
 }
 
 // DrawBuffer sets the destination buffer for rendering operations.
 func (d *Context) setDrawBuffers(bufs []uint32) {
 	if len(bufs) == 0 {
-		arr := js.Global().Get("Uint32Array").New(0)
-		d.gl.Call("drawBuffers", arr)
+		arr := d.jsUint32Array.New(0)
+		d.fn_drawBuffers.Invoke(arr)
 		return
 	}
 	maxIndex := 0
@@ -372,7 +520,7 @@ func (d *Context) setDrawBuffers(bufs []uint32) {
 		}
 	}
 
-	arr := js.Global().Get("Uint32Array").New(maxIndex + 1)
+	arr := d.jsUint32Array.New(maxIndex + 1)
 	for i := 0; i <= maxIndex; i++ {
 		arr.SetIndex(i, int(glNone))
 	}
@@ -386,7 +534,7 @@ func (d *Context) setDrawBuffers(bufs []uint32) {
 		index := int(buf - glColorAttachment0)
 		arr.SetIndex(index, int(buf))
 	}
-	d.gl.Call("drawBuffers", arr)
+	d.fn_drawBuffers.Invoke(arr)
 }
 
 func (d *Context) DrawBuffer(buf uint32) {
@@ -403,17 +551,17 @@ func (d *Context) Enable(cap uint32) {
 	if cap == 0x864F || cap == 0x809D { // DEPTH_CLAMP, MULTISAMPLE
 		return
 	}
-	d.gl.Call("enable", cap)
+	d.fn_enable.Invoke(cap)
 }
 
 // EnableVertexAttribArray enables a generic vertex attribute array at the specified index.
 func (d *Context) EnableVertexAttribArray(index uint32) {
-	d.gl.Call("enableVertexAttribArray", index)
+	d.fn_enableVertexAttribArray.Invoke(index)
 }
 
 // FramebufferRenderbuffer attaches a renderbuffer to a framebuffer object at a specific attachment point.
 func (d *Context) FramebufferRenderbuffer(target uint32, attachment uint32, renderbuffertarget uint32, renderbuffer uint32) {
-	d.gl.Call("framebufferRenderbuffer", target, attachment, renderbuffertarget, d.rbos.Get(renderbuffer))
+	d.fn_framebufferRenderbuffer.Invoke(target, attachment, renderbuffertarget, d.rbos.Get(renderbuffer))
 }
 
 // FramebufferTexture2D attaches a texture image to a framebuffer at the specified attachment point and mipmap level.
@@ -421,14 +569,14 @@ func (d *Context) FramebufferTexture2D(target uint32, attachment uint32, textarg
 	if textarget == 0x9100 { // TEXTURE_2D_MULTISAMPLE
 		textarget = 0x0DE1 // TEXTURE_2D
 	}
-	d.gl.Call("framebufferTexture2D", target, attachment, textarget, d.textures.Get(texture), level)
+	d.fn_framebufferTexture2D.Invoke(target, attachment, textarget, d.textures.Get(texture), level)
 }
 
 // GenBuffers generates n buffer object names and stores them in the provided buffers pointer.
 func (d *Context) GenBuffers(n int32, buffers *uint32) {
 	arr := unsafe.Slice(buffers, n)
 	for i := int32(0); i < n; i++ {
-		arr[i] = d.buffers.Add(d.gl.Call("createBuffer"))
+		arr[i] = d.buffers.Add(d.fn_createBuffer.Invoke())
 	}
 }
 
@@ -436,7 +584,7 @@ func (d *Context) GenBuffers(n int32, buffers *uint32) {
 func (d *Context) GenFramebuffers(n int32, framebuffers *uint32) {
 	arr := unsafe.Slice(framebuffers, n)
 	for i := int32(0); i < n; i++ {
-		arr[i] = d.fbos.Add(d.gl.Call("createFramebuffer"))
+		arr[i] = d.fbos.Add(d.fn_createFramebuffer.Invoke())
 	}
 }
 
@@ -444,7 +592,7 @@ func (d *Context) GenFramebuffers(n int32, framebuffers *uint32) {
 func (d *Context) GenRenderbuffers(n int32, renderbuffers *uint32) {
 	arr := unsafe.Slice(renderbuffers, n)
 	for i := int32(0); i < n; i++ {
-		arr[i] = d.rbos.Add(d.gl.Call("createRenderbuffer"))
+		arr[i] = d.rbos.Add(d.fn_createRenderbuffer.Invoke())
 	}
 }
 
@@ -452,7 +600,7 @@ func (d *Context) GenRenderbuffers(n int32, renderbuffers *uint32) {
 func (d *Context) GenTextures(n int32, textures *uint32) {
 	arr := unsafe.Slice(textures, n)
 	for i := int32(0); i < n; i++ {
-		arr[i] = d.textures.Add(d.gl.Call("createTexture"))
+		arr[i] = d.textures.Add(d.fn_createTexture.Invoke())
 	}
 }
 
@@ -460,30 +608,30 @@ func (d *Context) GenTextures(n int32, textures *uint32) {
 func (d *Context) GenVertexArrays(n int32, arrays *uint32) {
 	arr := unsafe.Slice(arrays, n)
 	for i := int32(0); i < n; i++ {
-		arr[i] = d.vaos.Add(d.gl.Call("createVertexArray"))
+		arr[i] = d.vaos.Add(d.fn_createVertexArray.Invoke())
 	}
 }
 
 // GenerateMipmap generates mipmaps for the specified texture target to enhance rendering performance and visual quality.
 func (d *Context) GenerateMipmap(target uint32) {
-	d.gl.Call("generateMipmap", target)
+	d.fn_generateMipmap.Invoke(target)
 }
 
 // GetFloatv retrieves the value or values of a specified floating-point state variable.
 // pname specifies the state variable to query, and data is a pointer where the result is stored.
 func (d *Context) GetFloatv(pname uint32, data *float32) {
 	if pname == 0x84FF {
-		ext := d.gl.Call("getExtension", "EXT_texture_filter_anisotropic")
-		d.gl.Call("getExtension", "EXT_color_buffer_float")
-		d.gl.Call("getExtension", "OES_texture_float_linear")
+		ext := d.fn_getExtension.Invoke("EXT_texture_filter_anisotropic")
+		d.fn_getExtension.Invoke("EXT_color_buffer_float")
+		d.fn_getExtension.Invoke("OES_texture_float_linear")
 		if ext.IsNull() || ext.IsUndefined() {
-			ext = d.gl.Call("getExtension", "MOZ_EXT_texture_filter_anisotropic")
+			ext = d.fn_getExtension.Invoke("MOZ_EXT_texture_filter_anisotropic")
 		}
 		if ext.IsNull() || ext.IsUndefined() {
-			ext = d.gl.Call("getExtension", "WEBKIT_EXT_texture_filter_anisotropic")
+			ext = d.fn_getExtension.Invoke("WEBKIT_EXT_texture_filter_anisotropic")
 		}
 		if !ext.IsNull() && !ext.IsUndefined() {
-			maxAniso := d.gl.Call("getParameter", ext.Get("MAX_TEXTURE_MAX_ANISOTROPY_EXT"))
+			maxAniso := d.fn_getParameter.Invoke(ext.Get("MAX_TEXTURE_MAX_ANISOTROPY_EXT"))
 			if !maxAniso.IsUndefined() {
 				*data = float32(maxAniso.Float())
 				return
@@ -492,7 +640,7 @@ func (d *Context) GetFloatv(pname uint32, data *float32) {
 		*data = 1.0
 		return
 	}
-	v := d.gl.Call("getParameter", pname)
+	v := d.fn_getParameter.Invoke(pname)
 	if !v.IsUndefined() && !v.IsNull() {
 		if v.Type() == js.TypeNumber {
 			*data = float32(v.Float())
@@ -502,14 +650,14 @@ func (d *Context) GetFloatv(pname uint32, data *float32) {
 
 // GetProgramiv retrieves a parameter from a program object, such as its link status or active attribute count.
 func (d *Context) GetProgramiv(program uint32, pname uint32, params *int32) {
-	val := d.gl.Call("getProgramParameter", d.programs.Get(program), pname)
+	val := d.fn_getProgramParameter.Invoke(d.programs.Get(program), pname)
 	if val.Type() == js.TypeBoolean {
 		if val.Bool() {
 			*params = 1
 		} else {
 			*params = 0
 			if pname == 0x8B82 { // LINK_STATUS
-				log := d.gl.Call("getProgramInfoLog", d.programs.Get(program))
+				log := d.fn_getProgramInfoLog.Invoke(d.programs.Get(program))
 				if !log.IsUndefined() && !log.IsNull() {
 					fmt.Println("CRITICAL LINK ERROR:", log.String())
 				}
@@ -524,7 +672,7 @@ func (d *Context) GetProgramiv(program uint32, pname uint32, params *int32) {
 
 // GetShaderInfoLog retrieves the information log for a shader object, including messages from the shader compilation process.
 func (d *Context) GetShaderInfoLog(shader uint32, bufSize int32, length *int32, infoLog *uint8) {
-	log := d.gl.Call("getShaderInfoLog", d.shaders.Get(shader))
+	log := d.fn_getShaderInfoLog.Invoke(d.shaders.Get(shader))
 	if !log.IsUndefined() && !log.IsNull() {
 		str := log.String()
 		if str != "" {
@@ -537,16 +685,16 @@ func (d *Context) GetShaderInfoLog(shader uint32, bufSize int32, length *int32, 
 // The parameter is specified by pname, and the result is stored in params.
 // Shader is the name of the shader object to query.
 func (d *Context) GetShaderiv(shader uint32, pname uint32, params *int32) {
-	val := d.gl.Call("getShaderParameter", d.shaders.Get(shader), pname)
+	val := d.fn_getShaderParameter.Invoke(d.shaders.Get(shader), pname)
 	if val.Type() == js.TypeBoolean {
 		if val.Bool() {
 			*params = 1
 		} else {
 			*params = 0
 			if pname == 0x8B81 { // COMPILE_STATUS
-				log := d.gl.Call("getShaderInfoLog", d.shaders.Get(shader))
+				log := d.fn_getShaderInfoLog.Invoke(d.shaders.Get(shader))
 				if !log.IsUndefined() && !log.IsNull() {
-					js.Global().Get("console").Call("error", "Shader Compile Error:", log.String())
+					d.jsConsole.Call("error", "Shader Compile Error:", log.String())
 				}
 			}
 		}
@@ -569,7 +717,7 @@ func (d *Context) GetUniformBlockIndex(program uint32, uniformBlockName *uint8) 
 	}
 	strName = strings.ReplaceAll(strName, "\x00", "")
 
-	loc := d.gl.Call("getUniformBlockIndex", d.programs.Get(program), strName)
+	loc := d.fn_getUniformBlockIndex.Invoke(d.programs.Get(program), strName)
 	if loc.Type() == js.TypeNumber {
 		return uint32(loc.Int())
 	}
@@ -589,7 +737,7 @@ func (d *Context) GetUniformLocation(program uint32, name *uint8) int32 {
 	}
 	strName = strings.ReplaceAll(strName, "\x00", "")
 
-	loc := d.gl.Call("getUniformLocation", d.programs.Get(program), strName)
+	loc := d.fn_getUniformLocation.Invoke(d.programs.Get(program), strName)
 	if loc.IsNull() || loc.IsUndefined() {
 		return -1
 	}
@@ -604,7 +752,7 @@ func (d *Context) Init() error {
 
 // LinkProgram links a compiled shader program, making it executable within the current OpenGL rendering context.
 func (d *Context) LinkProgram(program uint32) {
-	d.gl.Call("linkProgram", d.programs.Get(program))
+	d.fn_linkProgram.Invoke(d.programs.Get(program))
 }
 
 // MultiDrawElements renders multiple sets of primitives by specifying multiple indices, counts, and modes in a single call.
@@ -617,13 +765,13 @@ func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, ind
 	c_arr := unsafe.Slice(count, drawcount)
 	i_arr := unsafe.Slice(indices, drawcount)
 	for i := int32(0); i < drawcount; i++ {
-		d.gl.Call("drawElements", mode, c_arr[i], xtype, uintptr(i_arr[i]))
+		d.fn_drawElements.Invoke(mode, c_arr[i], xtype, uintptr(i_arr[i]))
 	}
 }
 
 // PolygonOffset sets the scale and units used to calculate depth offset for polygons to avoid depth-fighting.
 func (d *Context) PolygonOffset(factor float32, units float32) {
-	d.gl.Call("polygonOffset", factor, units)
+	d.fn_polygonOffset.Invoke(factor, units)
 }
 
 // Ptr registers the given data and returns an unsafe.Pointer that can be used to reference it in memory.
@@ -643,7 +791,7 @@ func (d *Context) PtrOffset(offset int) unsafe.Pointer {
 
 // ReadBuffer binds a buffer object to a source target for the current context.
 func (d *Context) ReadBuffer(src uint32) {
-	d.gl.Call("readBuffer", src)
+	d.fn_readBuffer.Invoke(src)
 }
 
 // RenderbufferStorage defines storage parameters for a renderbuffer object currently bound to the specified target.
@@ -652,13 +800,13 @@ func (d *Context) ReadBuffer(src uint32) {
 // width specifies the width of the renderbuffer in pixels.
 // height specifies the height of the renderbuffer in pixels.
 func (d *Context) RenderbufferStorage(target uint32, internalformat uint32, width int32, height int32) {
-	d.gl.Call("renderbufferStorage", target, internalformat, width, height)
+	d.fn_renderbufferStorage.Invoke(target, internalformat, width, height)
 }
 
 // RenderbufferStorageMultisample specifies storage format and dimensions for a multisample renderbuffer object.
 func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32) {
 	// Downgrade MSAA renderbuffers to standard renderbuffers to match downgraded MSAA textures
-	d.gl.Call("renderbufferStorage", target, internalformat, width, height)
+	d.fn_renderbufferStorage.Invoke(target, internalformat, width, height)
 }
 
 // ShaderSource sets the source code in a shader object to the specified string array.
@@ -703,9 +851,9 @@ func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, leng
 		source = strings.Replace(source, version, version+"\n"+strings.Join(missing, "\n"), 1)
 	}
 
-	//js.Global().Get("console").Call("info", source)
+	//d.jsConsole.Call("info", source)
 
-	d.gl.Call("shaderSource", d.shaders.Get(shader), source)
+	d.fn_shaderSource.Invoke(d.shaders.Get(shader), source)
 }
 
 // Str converts the provided string into a pointer to a uint8 and returns it, enabling compatibility with C-style strings.
@@ -744,7 +892,7 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 	}
 
 	if pixels == nil || uintptr(pixels) == 0 {
-		d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, js.Null())
+		d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, js.Null())
 		return
 	}
 	d.ptrMutex.Lock()
@@ -755,13 +903,13 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {
-		d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, js.Null())
+		d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, js.Null())
 		return
 	}
 
 	bytes := d.getSliceBytes(dataVal)
 	jsArr := d.getSharedJSArray(bytes)
-	d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, getJSView(jsArr, xtype))
+	d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, d.getJSView(jsArr, xtype))
 }
 
 // TexImage2DMultisample specifies storage for a 2D multisample texture.
@@ -777,22 +925,22 @@ func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 		xtype = 0x1406 // FLOAT
 	}
 
-	d.gl.Call("texImage2D", target, 0, internalformat, width, height, 0, format, xtype, js.Null())
+	d.fn_texImage2D.Invoke(target, 0, internalformat, width, height, 0, format, xtype, js.Null())
 
 	// CRITICAL: WebGL defaults to NEAREST_MIPMAP_LINEAR for TEXTURE_2D.
 	// Since we downgraded an MSAA texture (which doesn't have mipmaps) to TEXTURE_2D,
 	// we MUST force NEAREST or LINEAR filtering to make the texture "mipmap complete".
 	// Otherwise CheckFramebufferStatus will return FRAMEBUFFER_INCOMPLETE_ATTACHMENT.
-	d.gl.Call("texParameteri", target, 0x2801 /* TEXTURE_MIN_FILTER */, 0x2600 /* NEAREST */)
-	d.gl.Call("texParameteri", target, 0x2800 /* TEXTURE_MAG_FILTER */, 0x2600 /* NEAREST */)
-	d.gl.Call("texParameteri", target, 0x2802 /* TEXTURE_WRAP_S */, 0x812F /* CLAMP_TO_EDGE */)
-	d.gl.Call("texParameteri", target, 0x2803 /* TEXTURE_WRAP_T */, 0x812F /* CLAMP_TO_EDGE */)
+	d.fn_texParameteri.Invoke(target, 0x2801 /* TEXTURE_MIN_FILTER */, 0x2600 /* NEAREST */)
+	d.fn_texParameteri.Invoke(target, 0x2800 /* TEXTURE_MAG_FILTER */, 0x2600 /* NEAREST */)
+	d.fn_texParameteri.Invoke(target, 0x2802 /* TEXTURE_WRAP_S */, 0x812F /* CLAMP_TO_EDGE */)
+	d.fn_texParameteri.Invoke(target, 0x2803 /* TEXTURE_WRAP_T */, 0x812F /* CLAMP_TO_EDGE */)
 }
 
 // TexImage3D specifies a three-dimensional texture image for a target texture.
 func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, width int32, height int32, depth int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
 	if pixels == nil || uintptr(pixels) == 0 {
-		d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
+		d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
 		return
 	}
 	d.ptrMutex.Lock()
@@ -803,18 +951,18 @@ func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, w
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {
-		d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
+		d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
 		return
 	}
 
 	bytes := d.getSliceBytes(dataVal)
 	jsArr := d.getSharedJSArray(bytes)
-	d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, getJSView(jsArr, xtype))
+	d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, d.getJSView(jsArr, xtype))
 }
 
 // TexParameterf sets the float parameter for a specific texture target and property.
 func (d *Context) TexParameterf(target uint32, pname uint32, param float32) {
-	d.gl.Call("texParameterf", target, pname, param)
+	d.fn_texParameterf.Invoke(target, pname, param)
 }
 
 // TexParameterfv sets float parameters for a texture target, specified by target, pname, and the pointer params.
@@ -828,7 +976,7 @@ func (d *Context) TexParameteri(target uint32, pname uint32, param int32) {
 	if param == 0x812D { // CLAMP_TO_BORDER
 		param = 0x812F // CLAMP_TO_EDGE
 	}
-	d.gl.Call("texParameteri", target, pname, param)
+	d.fn_texParameteri.Invoke(target, pname, param)
 }
 
 // TexSubImage3D updates a portion of a 3D texture with new pixel data for the specified level and offset coordinates.
@@ -849,7 +997,7 @@ func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffs
 
 	bytes := d.getSliceBytes(dataVal)
 	jsArr := d.getSharedJSArray(bytes)
-	d.gl.Call("texSubImage3D", target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, getJSView(jsArr, xtype))
+	d.fn_texSubImage3D.Invoke(target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, d.getJSView(jsArr, xtype))
 }
 
 // Uniform1f sets the value of a float uniform variable at the given location in the WebGL program context.
@@ -857,7 +1005,7 @@ func (d *Context) Uniform1f(location int32, v0 float32) {
 	if location == -1 {
 		return
 	}
-	d.gl.Call("uniform1f", d.uniforms[location], v0)
+	d.fn_uniform1f.Invoke(d.uniforms[location], v0)
 }
 
 // Uniform1i specifies the integer value of a uniform variable for the current shader program.
@@ -865,7 +1013,7 @@ func (d *Context) Uniform1i(location int32, v0 int32) {
 	if location == -1 {
 		return
 	}
-	d.gl.Call("uniform1i", d.uniforms[location], v0)
+	d.fn_uniform1i.Invoke(d.uniforms[location], v0)
 }
 
 // Uniform1iv sets the value of a uniform variable array in the active shader program as a slice of integers.
@@ -877,8 +1025,8 @@ func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
 	slice := unsafe.Slice(value, count)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), count*4)
 	jsArr := d.getSharedJSArray(bytes)
-	i32Arr := js.Global().Get("Int32Array").New(jsArr.Get("buffer"), 0, count)
-	d.gl.Call("uniform1iv", loc, i32Arr)
+	i32Arr := d.jsInt32Array.New(jsArr.Get("buffer"), 0, count)
+	d.fn_uniform1iv.Invoke(loc, i32Arr)
 }
 
 // Uniform2f sets the values of a 2-component floating-point uniform variable for the current shader program.
@@ -886,7 +1034,7 @@ func (d *Context) Uniform2f(location int32, v0 float32, v1 float32) {
 	if location == -1 {
 		return
 	}
-	d.gl.Call("uniform2f", d.uniforms[location], v0, v1)
+	d.fn_uniform2f.Invoke(d.uniforms[location], v0, v1)
 }
 
 // Uniform3f sets the values of a 3-component floating-point uniform variable for the current shader program.
@@ -894,7 +1042,7 @@ func (d *Context) Uniform3f(location int32, v0 float32, v1 float32, v2 float32) 
 	if location == -1 {
 		return
 	}
-	d.gl.Call("uniform3f", d.uniforms[location], v0, v1, v2)
+	d.fn_uniform3f.Invoke(d.uniforms[location], v0, v1, v2)
 }
 
 // Uniform3fv sets the value of a 3-component floating point uniform variable or an array of such variables in a program.
@@ -907,13 +1055,13 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
 	jsArr := d.getSharedJSArray(bytes)
-	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"), 0, total)
-	d.gl.Call("uniform3fv", loc, f32Arr)
+	f32Arr := d.jsFloat32Array.New(jsArr.Get("buffer"), 0, total)
+	d.fn_uniform3fv.Invoke(loc, f32Arr)
 }
 
 // UniformBlockBinding assigns a binding point to a uniform block within the specified program's shader.
 func (d *Context) UniformBlockBinding(program uint32, uniformBlockIndex uint32, uniformBlockBinding uint32) {
-	d.gl.Call("uniformBlockBinding", d.programs.Get(program), uniformBlockIndex, uniformBlockBinding)
+	d.fn_uniformBlockBinding.Invoke(d.programs.Get(program), uniformBlockIndex, uniformBlockBinding)
 }
 
 // UniformMatrix4fv sets the value of a 4x4 floating-point matrix uniform variable in the current WebGL program.
@@ -930,42 +1078,42 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 	slice := unsafe.Slice(value, total)
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
 	jsArr := d.getSharedJSArray(bytes)
-	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"), 0, total)
-	d.gl.Call("uniformMatrix4fv", loc, transpose, f32Arr)
+	f32Arr := d.jsFloat32Array.New(jsArr.Get("buffer"), 0, total)
+	d.fn_uniformMatrix4fv.Invoke(loc, transpose, f32Arr)
 }
 
 // UseProgram sets the active shader program to the one specified by the given program ID.
 func (d *Context) UseProgram(program uint32) {
-	d.gl.Call("useProgram", d.programs.Get(program))
+	d.fn_useProgram.Invoke(d.programs.Get(program))
 }
 
 // VertexAttribPointer specifies the location and data format of the array of generic vertex attributes.
 func (d *Context) VertexAttribPointer(index uint32, size int32, xtype uint32, normalized bool, stride int32, pointer unsafe.Pointer) {
 	offset := uintptr(pointer)
-	d.gl.Call("vertexAttribPointer", index, size, xtype, normalized, stride, offset)
+	d.fn_vertexAttribPointer.Invoke(index, size, xtype, normalized, stride, offset)
 }
 
 // Viewport sets the viewport dimensions and position using specified x, y, width, and height parameters.
 func (d *Context) Viewport(x int32, y int32, width int32, height int32) {
-	d.gl.Call("viewport", x, y, width, height)
+	d.fn_viewport.Invoke(x, y, width, height)
 }
 
-func getJSView(buffer js.Value, xtype uint32) js.Value {
+func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	switch xtype {
 	case 0x1400: // BYTE
-		return js.Global().Get("Int8Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+		return d.jsInt8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
 	case 0x1401: // UNSIGNED_BYTE
-		return js.Global().Get("Uint8Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+		return d.jsUint8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
 	case 0x1402: // SHORT
-		return js.Global().Get("Int16Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+		return d.jsInt16Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
 	case 0x1403: // UNSIGNED_SHORT
-		return js.Global().Get("Uint16Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+		return d.jsUint16Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
 	case 0x1404: // INT
-		return js.Global().Get("Int32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return d.jsInt32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
 	case 0x1405: // UNSIGNED_INT
-		return js.Global().Get("Uint32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return d.jsUint32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
 	case 0x1406: // FLOAT
-		return js.Global().Get("Float32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return d.jsFloat32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
 	}
 	return buffer
 }

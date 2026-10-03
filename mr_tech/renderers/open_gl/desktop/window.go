@@ -39,6 +39,7 @@ type WindowPos struct {
 type Window struct {
 	th                               *executor.MainThread
 	window                           *glfw.Window
+	cfg                              WindowConfig
 	bounds                           Rect
 	vsync                            bool
 	cursorVisible                    bool
@@ -55,62 +56,64 @@ type Window struct {
 var currWin *Window
 
 // NewGLWindow creates and initializes a new OpenGL-based window with the specified configuration, returning a Window instance.
-func NewGLWindow(th *executor.MainThread, cfg WindowConfig) (*Window, error) {
-	bool2int := map[bool]int{
-		true:  glfw.True,
-		false: glfw.False,
-	}
-
-	if !cfg.CheckSampleMSAA() {
-		return nil, fmt.Errorf("invalid value '%v' for SamplesMSAA", cfg.SamplesMSAA)
-	}
-
+func NewGLWindow(th *executor.MainThread, cfg WindowConfig) *Window {
 	w := &Window{
 		th:            th,
-		bounds:        cfg.Bounds,
+		cfg:           cfg,
 		cursorVisible: true,
 		keysPressed:   make(map[Button]bool),
 	}
+	return w
+}
 
-	err := th.CallErr(func() error {
+func (w *Window) Setup() error {
+	bool2int := map[bool]int{true: glfw.True, false: glfw.False}
+
+	if !w.cfg.CheckSampleMSAA() {
+		return fmt.Errorf("invalid value '%v' for SamplesMSAA", w.cfg.SamplesMSAA)
+	}
+
+	w.bounds = w.cfg.Bounds
+
+	err := w.th.CallErr(func() error {
 		var err error
 		glfw.WindowHint(glfw.ContextVersionMajor, 3)
 		glfw.WindowHint(glfw.ContextVersionMinor, 3)
 		glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 		glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-		glfw.WindowHint(glfw.Resizable, bool2int[cfg.Resizable])
-		glfw.WindowHint(glfw.Decorated, bool2int[!cfg.Undecorated])
-		glfw.WindowHint(glfw.Floating, bool2int[cfg.AlwaysOnTop])
-		glfw.WindowHint(glfw.AutoIconify, bool2int[!cfg.NoIconify])
-		glfw.WindowHint(glfw.TransparentFramebuffer, bool2int[cfg.TransparentFramebuffer])
-		glfw.WindowHint(glfw.Maximized, bool2int[cfg.Maximized])
-		glfw.WindowHint(glfw.Visible, bool2int[!cfg.Invisible])
-		glfw.WindowHint(glfw.Samples, cfg.SamplesMSAA)
-		if cfg.Position.X != 0 || cfg.Position.Y != 0 {
+		glfw.WindowHint(glfw.Resizable, bool2int[w.cfg.Resizable])
+		glfw.WindowHint(glfw.Decorated, bool2int[!w.cfg.Undecorated])
+		glfw.WindowHint(glfw.Floating, bool2int[w.cfg.AlwaysOnTop])
+		glfw.WindowHint(glfw.AutoIconify, bool2int[!w.cfg.NoIconify])
+		glfw.WindowHint(glfw.TransparentFramebuffer, bool2int[w.cfg.TransparentFramebuffer])
+		glfw.WindowHint(glfw.Maximized, bool2int[w.cfg.Maximized])
+		glfw.WindowHint(glfw.Visible, bool2int[!w.cfg.Invisible])
+		glfw.WindowHint(glfw.Samples, w.cfg.SamplesMSAA)
+		if w.cfg.Position.X != 0 || w.cfg.Position.Y != 0 {
 			glfw.WindowHint(glfw.Visible, glfw.False)
 		}
 		var share *glfw.Window
 		if currWin != nil {
 			share = currWin.window
 		}
-		_, _, width, height := cfg.Bounds.Bounds()
-		w.window, err = glfw.CreateWindow(int(width), int(height), cfg.Title, nil, share)
+		_, _, width, height := w.cfg.Bounds.Bounds()
+		w.window, err = glfw.CreateWindow(int(width), int(height), w.cfg.Title, nil, share)
 		if err != nil {
 			return err
 		}
-		if cfg.Position.X != 0 || cfg.Position.Y != 0 {
-			w.window.SetPos(int(cfg.Position.X), int(cfg.Position.Y))
+		if w.cfg.Position.X != 0 || w.cfg.Position.Y != 0 {
+			w.window.SetPos(int(w.cfg.Position.X), int(w.cfg.Position.Y))
 			w.window.Show()
 		}
 		// enter the OpenGL context
 		w.begin()
-		th.Init(cfg.DisableScissorTest)
+		w.th.Init(w.cfg.DisableScissorTest)
 		w.end()
 
 		return nil
 	})
 	if err != nil {
-		return nil, errors.New("creating window failed")
+		return errors.New("creating window failed")
 	}
 
 	//if len(cfg.Icon) > 0 {
@@ -125,15 +128,15 @@ func NewGLWindow(th *executor.MainThread, cfg WindowConfig) (*Window, error) {
 	//	})
 	//}
 
-	w.SetVSync(cfg.VSync)
+	w.SetVSync(w.cfg.VSync)
 
 	w.initInput()
 
-	w.SetMonitor(cfg.Monitor)
+	w.SetMonitor(w.cfg.Monitor)
 
 	runtime.SetFinalizer(w, (*Window).Destroy)
 
-	return w, nil
+	return nil
 }
 
 // Destroy releases the resources associated with the window and cleans up its context.

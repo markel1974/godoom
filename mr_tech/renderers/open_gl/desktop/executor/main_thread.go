@@ -38,14 +38,17 @@ type MainThread struct {
 }
 
 // NewMainThread creates and returns a new instance of MainThread with initialized callQueue and respChan channels.
-func NewMainThread(ctx api.IContext) *MainThread {
+func NewMainThread() *MainThread {
 	runtime.LockOSThread()
 	th := &MainThread{
-		ctx:       ctx,
 		callQueue: make(chan func(), CallQueueCap),
 		respChan:  make(chan interface{}),
 	}
 	return th
+}
+
+func (m *MainThread) SetContext(ctx api.IContext) {
+	m.ctx = ctx
 }
 
 // Init initializes the essential OpenGL state, enabling blending, multisampling, and optionally scissor testing.

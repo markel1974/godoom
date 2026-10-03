@@ -15,21 +15,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
 type IRender interface {
 	Setup(engine *engine.Engine) error
 	Start()
-}
-
-var _ctx *desktop.Context
-var _thread *executor.MainThread
-
-func init() {
-	_ctx = desktop.NewContext()
-	_thread = executor.NewMainThread(_ctx)
 }
 
 func main() {
@@ -118,7 +109,9 @@ func main() {
 		return
 	}
 
-	render := open_gl.NewRender(_ctx, _thread, int32(width), int32(height))
+	ctx := desktop.NewContext(width, height)
+
+	render := open_gl.NewRender(ctx, int32(width), int32(height))
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return

@@ -4,6 +4,12 @@ import "unsafe"
 
 // IContext represents an interface for OpenGL-like graphics operations.
 type IContext interface {
+	Setup(r IRender) error
+
+	Start()
+
+	Init() error
+
 	ActiveTexture(texture uint32)
 
 	AttachShader(program uint32, shader uint32)
@@ -93,8 +99,6 @@ type IContext interface {
 	GetUniformBlockIndex(program uint32, uniformBlockName *uint8) uint32
 
 	GetUniformLocation(program uint32, name *uint8) int32
-
-	Init() error
 
 	LinkProgram(program uint32)
 

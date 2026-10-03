@@ -7,6 +7,8 @@ import (
 	"embed"
 	"io"
 	"os"
+	"path/filepath"
+	"syscall/js"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -15,15 +17,18 @@ import (
 
 // assets is an embedded filesystem containing files from the "assets" directory.
 //
-//go:embed html/asset/*
+// removed embed
 var assets embed.FS
 
 func updateMode(mode int) int {
-	return 8
+	return mode
 }
 
 func updatePath(mode int, path string) string {
-	return "html/asset/pak0.pk3"
+	// Estraiamo solo il nome del file (es. "DOOM.WAD" o "pak0.pak")
+	_, file := filepath.Split(path)
+	// E lo mappiamo nella cartella embedded del web!
+	return "html/asset/" + file
 }
 
 // getContext creates and returns a new graphics context with the specified width and height.
@@ -66,6 +71,20 @@ func NewResources() *Resources {
 
 // Open retrieves the specified resource as a reader interface or returns an error if the resource is unavailable.
 func (r *Resources) Open(in string) (common.IReader, error) {
+	// First check if JS provided a buffer
+	jsBuf := js.Global().Get("window").Get("gameAssetBuffer")
+	if !jsBuf.IsUndefined() && !jsBuf.IsNull() {
+		length := jsBuf.Get("length").Int()
+		data := make([]byte, length)
+		js.CopyBytesToGo(data, jsBuf)
+
+		// Free the JS reference so browser can GC it
+		js.Global().Get("window").Set("gameAssetBuffer", js.Null())
+
+		return NewAssetReader(data), nil
+	}
+
+	// Fallback to embedded assets if no JS buffer was provided
 	f, err := assets.Open(in)
 	if err != nil {
 		return nil, err

@@ -6,29 +6,171 @@
     <style>
         body { margin: 0; background: black; overflow: hidden; }
         canvas { display: block; width: 100vw; height: 100vh; }
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0f0; font-family: monospace; font-size: 24px; }
+        #loading { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; color: #0f0; font-family: monospace; font-size: 24px; z-index: 20; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
-<div id="loading">Initializing ...</div>
-<canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+<div id="loading" style="display:none;">
+    <div id="loadingText">Initializing Engine...</div>
+</div>
+
+<div id="ui" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); color: white; padding: 40px; font-family: sans-serif; border: 2px solid #555; border-radius: 12px; z-index: 10; box-shadow: 0 0 30px rgba(0,0,0,0.9); text-align: center; min-width: 450px;">
+    <h1 style="margin-top: 0; color: #ff5555; letter-spacing: 2px;">GoDoom Web</h1>
+
+    <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; border: 1px solid #444; margin-bottom: 25px;">
+        <div style="font-size: 18px; font-weight: bold; color: #aaa; margin-bottom: 15px; text-transform: uppercase;">Step 1: Choose Generator</div>
+
+        <div style="display: flex; justify-content: center; gap: 20px;">
+            <div>
+                <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Mode</label>
+                <select id="selMode" style="padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white;">
+                    <option value="2">Wolf3D</option>
+                    <option value="3" selected>Doom</option>
+                    <option value="4">Jedi Knight</option>
+                    <option value="5">Outlaws</option>
+                    <option value="6">Quake 1</option>
+                    <option value="7">Quake 2</option>
+                    <option value="8">Quake 3 Arena</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Level</label>
+                <input type="number" id="inpLevel" value="1" style="width: 70px; padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white; text-align: center;">
+            </div>
+        </div>
+    </div>
+
+    <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; border: 1px solid #444;">
+        <div style="font-size: 18px; font-weight: bold; color: #aaa; margin-bottom: 15px; text-transform: uppercase;">Step 2: Provide Game Data</div>
+
+        <button id="btnShareware" style="width: 100%; padding: 15px; font-size: 16px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 6px; font-weight: bold; margin-bottom: 15px; transition: background 0.2s;">
+            Play Default / Shareware
+        </button>
+
+        <div style="display: flex; align-items: center; text-align: center; color: #777; margin: 15px 0;">
+            <div style="flex: 1; height: 1px; background: #444;"></div>
+            <div style="margin: 0 15px; font-size: 14px;">OR</div>
+            <div style="flex: 1; height: 1px; background: #444;"></div>
+        </div>
+
+        <div id="dropZone" style="border: 2px dashed #666; border-radius: 8px; padding: 30px 20px; cursor: pointer; background: #1a1a1a; transition: all 0.2s;">
+            <div style="font-size: 18px; margin-bottom: 5px; pointer-events: none; color: #eee;">Drag & Drop your WAD / PAK here</div>
+            <div style="font-size: 14px; color: #888; pointer-events: none;">or click to browse</div>
+            <input type="file" id="inpFile" style="display: none;">
+        </div>
+    </div>
+
+    <div id="status" style="margin-top: 20px; color: #ffaa00; font-size: 14px; min-height: 20px;"></div>
+</div>
+
+<canvas id="canvas" oncontextmenu="event.preventDefault()" style="display:none;"></canvas>
+
 <script src="wasm_exec.js"></script>
 <script>
-    if (!WebAssembly.instantiateStreaming) {
-        WebAssembly.instantiateStreaming = async (resp, importObject) => {
-            const source = await (await resp).arrayBuffer();
-            return await WebAssembly.instantiate(source, importObject);
-        };
-    }
+    let wasmInstance = null;
     const go = new Go();
+
+    function showLoading(text) {
+        document.getElementById("ui").style.display = "none";
+        let l = document.getElementById("loading");
+        l.style.display = "flex";
+        document.getElementById("loadingText").innerText = text;
+    }
+
+    // Initialize Wasm
+    document.getElementById("status").innerText = "Downloading Engine...";
     WebAssembly.instantiateStreaming(fetch("godoom.wasm?t=" + Date.now()), go.importObject).then((result) => {
-        document.getElementById("loading").style.display = "none";
-        go.run(result.instance);
+        wasmInstance = result.instance;
+        document.getElementById("status").innerText = "Engine Ready. Select asset to play.";
+        document.getElementById("status").style.color = "#0f0";
     }).catch(err => {
         console.error("WASM Error:", err);
-        document.getElementById("loading").innerText = "Error: check your console (F12)";
-        document.getElementById("loading").style.color = "red";
+        document.getElementById("status").innerText = "Engine failed to load. Check console.";
+        document.getElementById("status").style.color = "red";
     });
+
+    function startGame(buffer) {
+        showLoading("Starting Engine...");
+        setTimeout(() => {
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("canvas").style.display = "block";
+
+            window.gameAssetBuffer = new Uint8Array(buffer);
+            let mode = document.getElementById("selMode").value;
+            let level = document.getElementById("inpLevel").value;
+            go.argv = ["godoom.wasm", "-m", mode, "-l", level];
+            go.run(wasmInstance);
+        }, 100);
+    }
+
+    document.getElementById("btnShareware").onclick = async () => {
+        if (!wasmInstance) return;
+        let mode = document.getElementById("selMode").value;
+        let url = "";
+        if (mode == "3") url = "asset/DOOM.WAD";
+        else if (mode == "6") url = "asset/pak0.pak";
+        else if (mode == "8") url = "asset/pak0.pk3";
+
+        if (url === "") {
+            document.getElementById("status").innerText = "No default asset mapped for this mode.";
+            document.getElementById("status").style.color = "red";
+            return;
+        }
+
+        showLoading("Downloading " + url + "...");
+        try {
+            let resp = await fetch(url);
+            if (!resp.ok) throw new Error("File not found on server");
+            let buffer = await resp.arrayBuffer();
+            startGame(buffer);
+        } catch(e) {
+            document.getElementById("ui").style.display = "block";
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("status").innerText = "Failed to fetch asset: " + e.message;
+            document.getElementById("status").style.color = "red";
+        }
+    };
+
+    // File Selection & Drag Drop
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('inpFile');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.background = '#444';
+        dropZone.style.borderColor = '#aaa';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.style.background = '#222';
+        dropZone.style.borderColor = '#888';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.background = '#222';
+        dropZone.style.borderColor = '#888';
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    function handleFile(file) {
+        if (!wasmInstance) return;
+        showLoading("Reading local file: " + file.name + "...");
+        let reader = new FileReader();
+        reader.onload = (e) => {
+            startGame(e.target.result);
+        };
+        reader.readAsArrayBuffer(file);
+    }
 </script>
 </body>
 </html>

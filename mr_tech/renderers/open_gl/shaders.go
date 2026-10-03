@@ -6,7 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
-const full3d = true
+//const full3d = true
 
 // enableAdditiveLights configures OpenGL to use additive blending for rendering by adjusting depth and blend settings.
 func enableAdditiveLights(ctx api.IContext) {
@@ -32,45 +32,47 @@ type IShader interface {
 
 // Shaders manages multiple shader programs and related resources used in rendering, including main, sky, SSAO, and others.
 type Shaders struct {
-	ctx           api.IContext
-	tex           *Textures
-	flash         *model.Flash
-	main          *shaders.Main
-	sky           *shaders.Sky
-	geometry      *shaders.Geometry
-	ssao          *shaders.SSAO
-	blur          *shaders.Blur
-	depth         *shaders.Depth
-	lights        *shaders.Lights
-	shadowLight   *shaders.ShadowLight
-	post          *shaders.Post
-	bloom         *shaders.Bloom
-	container     []IShader
-	enableShadows bool
-	metrics       *shaders.MapMetrics
-	cal           *model.Calibration
-	w             int32
-	h             int32
-	scaleX        float32
-	scaleY        float32
+	ctx               api.IContext
+	tex               *Textures
+	flash             *model.Flash
+	main              *shaders.Main
+	sky               *shaders.Sky
+	geometry          *shaders.Geometry
+	ssao              *shaders.SSAO
+	blur              *shaders.Blur
+	depth             *shaders.Depth
+	lights            *shaders.Lights
+	shadowLight       *shaders.ShadowLight
+	post              *shaders.Post
+	bloom             *shaders.Bloom
+	container         []IShader
+	enableShadows     bool
+	metrics           *shaders.MapMetrics
+	cal               *model.Calibration
+	w                 int32
+	h                 int32
+	scaleX            float32
+	scaleY            float32
+	dynaLightMatrices [][16]float32
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
 func NewShaders(ctx api.IContext) *Shaders {
 	c := &Shaders{
-		ctx:           ctx,
-		tex:           nil,
-		main:          nil,
-		sky:           nil,
-		geometry:      nil,
-		ssao:          nil,
-		blur:          nil,
-		depth:         nil,
-		lights:        nil,
-		shadowLight:   nil,
-		post:          nil,
-		bloom:         nil,
-		enableShadows: false,
+		ctx:               ctx,
+		tex:               nil,
+		main:              nil,
+		sky:               nil,
+		geometry:          nil,
+		ssao:              nil,
+		blur:              nil,
+		depth:             nil,
+		lights:            nil,
+		shadowLight:       nil,
+		post:              nil,
+		bloom:             nil,
+		enableShadows:     false,
+		dynaLightMatrices: nil,
 	}
 	return c
 }
@@ -135,11 +137,11 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		w.h = fbH
 		w.metrics.Rebuild(w.w, w.h)
 
-		if full3d {
-			w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
-		} else {
-			w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
-		}
+		//if full3d {
+		w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
+		//} else {
+		//	w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
+		//}
 	}
 
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
@@ -170,7 +172,9 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	roomSpaceMatrix, mainViewMatrix := w.metrics.CreateRoomSpace(vi)
 	flashSpaceMatrix := w.metrics.CreateFlashSpace(mainViewMatrix, flashX, flashY)
 
-	var dynaLightMatrices [][16]float32
+	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
+		w.dynaLightMatrices = make([][16]float32, shadowLightsNum*2)
+	}
 
 	for lx := int32(0); lx < shadowLightsNum; lx++ {
 		light := shadowLights[lx]
@@ -186,18 +190,12 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		if effectiveRadius < 256.0 {
 			effectiveRadius = 256.0
 		}
-		lightMatrix := w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
-		dynaLightMatrices = append(dynaLightMatrices, lightMatrix)
+		w.dynaLightMatrices[lx] = w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
 	}
 
-	var projMatrix, viewMatrix, invViewMatrix = [16]float32{}, [16]float32{}, [16]float32{}
-	if full3d {
-		projMatrix, viewMatrix, invViewMatrix = w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
-	} else {
-		projMatrix, viewMatrix, invViewMatrix = w.main.UpdateUniforms2d(vi, w.scaleX, w.scaleY)
-	}
+	projMatrix, viewMatrix, invViewMatrix := w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, dynaLightMatrices)
+	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, w.dynaLightMatrices, uint32(shadowLightsNum))
 	w.geometry.UpdateUniforms(viewMatrix, projMatrix)
 	w.ssao.UpdateUniforms(viewMatrix, projMatrix)
 	w.sky.UpdateUniforms(viewMatrix, projMatrix)
@@ -218,6 +216,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN OPAQUE
+
 	w.main.Render(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 	// MAIN ADDITIVE
 	if dcAdditive != nil {

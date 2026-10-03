@@ -199,11 +199,11 @@ func (s *Depth) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32, dynaLight [][16]float32) {
+func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32, dynaLight [][16]float32, dynaLightCount uint32) {
 	s.viewMatrix = viewMatrix
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
-	s.shadowLightCount = uint32(len(dynaLight))
+	s.shadowLightCount = dynaLightCount //len(dynaLight))
 	if s.shadowLightCount >= uint32(len(s.shadowLights)) {
 		s.shadowLightCount = uint32(len(s.shadowLights)) - 1
 	}

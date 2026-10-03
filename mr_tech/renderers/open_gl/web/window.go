@@ -3,8 +3,9 @@
 package web
 
 import (
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"syscall/js"
+
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // WindowConfig defines the configuration options for initializing a window, including size, title, fullscreen, and VSync.
@@ -131,6 +132,11 @@ func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
 	glArgs.Set("stencil", true)
 
 	gl := canvas.Call("getContext", "webgl2", glArgs)
+
+	// Enable extensions
+	gl.Call("getExtension", "EXT_color_buffer_float")
+	gl.Call("getExtension", "OES_texture_float_linear")
+	gl.Call("getExtension", "EXT_color_buffer_half_float")
 
 	w := &Window{
 		canvas:       canvas,

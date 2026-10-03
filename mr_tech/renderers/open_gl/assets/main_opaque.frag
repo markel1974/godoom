@@ -6,7 +6,6 @@ layout (location = 1) out vec4 BrightColor;
 in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
-in vec3 NormalView;
 
 uniform sampler2D u_ssao;
 uniform vec2 u_screenResolution;

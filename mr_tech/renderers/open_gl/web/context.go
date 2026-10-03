@@ -3,6 +3,8 @@
 package web
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"syscall/js"
 	"unsafe"
@@ -314,7 +316,7 @@ func (d *Context) DrawBuffers(n int32, bufs *uint32) {
 
 // Enable enables the specified capability for the current context, identified by the provided cap parameter.
 func (d *Context) Enable(cap uint32) {
-	if cap == 0x864F { // DEPTH_CLAMP
+	if cap == 0x864F || cap == 0x809D { // DEPTH_CLAMP, MULTISAMPLE
 		return
 	}
 	d.gl.Call("enable", cap)
@@ -414,31 +416,95 @@ func (d *Context) GetFloatv(pname uint32, data *float32) {
 
 // GetProgramiv retrieves a parameter from a program object, such as its link status or active attribute count.
 func (d *Context) GetProgramiv(program uint32, pname uint32, params *int32) {
-	// TODO: Check implementation
+	val := d.gl.Call("getProgramParameter", d.programs.Get(program), pname)
+	if val.Type() == js.TypeBoolean {
+		if val.Bool() {
+			*params = 1
+		} else {
+			*params = 0
+			if pname == 0x8B82 { // LINK_STATUS
+				log := d.gl.Call("getProgramInfoLog", d.programs.Get(program))
+				if !log.IsUndefined() && !log.IsNull() {
+					fmt.Println("CRITICAL LINK ERROR:", log.String())
+				}
+			}
+		}
+	} else if val.Type() == js.TypeNumber {
+		*params = int32(val.Int())
+	} else {
+		*params = 0
+	}
 }
 
 // GetShaderInfoLog retrieves the information log for a shader object, including messages from the shader compilation process.
 func (d *Context) GetShaderInfoLog(shader uint32, bufSize int32, length *int32, infoLog *uint8) {
-	// TODO: Check implementation
+	log := d.gl.Call("getShaderInfoLog", d.shaders.Get(shader))
+	if !log.IsUndefined() && !log.IsNull() {
+		str := log.String()
+		if str != "" {
+			fmt.Println("Shader Compile Error:", str)
+		}
+	}
 }
 
 // GetShaderiv retrieves a parameter value from a shader object.
 // The parameter is specified by pname, and the result is stored in params.
 // Shader is the name of the shader object to query.
 func (d *Context) GetShaderiv(shader uint32, pname uint32, params *int32) {
-	// TODO: Check implementation
+	val := d.gl.Call("getShaderParameter", d.shaders.Get(shader), pname)
+	if val.Type() == js.TypeBoolean {
+		if val.Bool() {
+			*params = 1
+		} else {
+			*params = 0
+			if pname == 0x8B81 { // COMPILE_STATUS
+				log := d.gl.Call("getShaderInfoLog", d.shaders.Get(shader))
+				if !log.IsUndefined() && !log.IsNull() {
+					js.Global().Get("console").Call("error", "Shader Compile Error:", log.String())
+				}
+			}
+		}
+	} else if val.Type() == js.TypeNumber {
+		*params = int32(val.Int())
+	} else {
+		*params = 0
+	}
 }
 
 // GetUniformBlockIndex retrieves the index of a uniform block within a program by its name.
 func (d *Context) GetUniformBlockIndex(program uint32, uniformBlockName *uint8) uint32 {
-	return 0
+	d.ptrMutex.Lock()
+	val, ok := d.ptrMap[uintptr(unsafe.Pointer(uniformBlockName))]
+	d.ptrMutex.Unlock()
+
+	strName := ""
+	if ok && val != nil {
+		strName = val.(string)
+	}
+	strName = strings.ReplaceAll(strName, "\x00", "")
+
+	loc := d.gl.Call("getUniformBlockIndex", d.programs.Get(program), strName)
+	if loc.Type() == js.TypeNumber {
+		return uint32(loc.Int())
+	}
+	return 0xFFFFFFFF // GL_INVALID_INDEX
 }
 
 // GetUniformLocation retrieves the location of a uniform variable within a given WebGL program object.
 // Returns the index of the uniform or -1 if the uniform does not exist.
 func (d *Context) GetUniformLocation(program uint32, name *uint8) int32 {
-	loc := d.gl.Call("getUniformLocation", d.programs.Get(program), string(*name)) // Hack for *uint8
-	if loc.IsNull() {
+	d.ptrMutex.Lock()
+	val, ok := d.ptrMap[uintptr(unsafe.Pointer(name))]
+	d.ptrMutex.Unlock()
+
+	strName := ""
+	if ok && val != nil {
+		strName = val.(string)
+	}
+	strName = strings.ReplaceAll(strName, "\x00", "")
+
+	loc := d.gl.Call("getUniformLocation", d.programs.Get(program), strName)
+	if loc.IsNull() || loc.IsUndefined() {
 		return -1
 	}
 	d.uniforms = append(d.uniforms, loc)
@@ -510,12 +576,59 @@ func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, i
 
 // ShaderSource sets the source code in a shader object to the specified string array.
 func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, length *int32) {
-	d.gl.Call("shaderSource", d.shaders.Get(shader), count, xstring, length)
+	const version = "#version 300 es"
+
+	d.ptrMutex.Lock()
+	val, ok := d.ptrMap[uintptr(unsafe.Pointer(xstring))]
+	d.ptrMutex.Unlock()
+
+	source := ""
+	if ok && val != nil {
+		source = val.(string)
+	}
+
+	// Remove embedded NUL characters.
+	source = strings.ReplaceAll(source, "\x00", "")
+
+	// Convert GLSL version from desktop OpenGL to OpenGL ES.
+	if !strings.Contains(source, version) {
+		source = strings.ReplaceAll(source, "#version 330 core", version)
+	}
+
+	// Collect missing precision specifiers.
+	precisionSpecifiers := []string{
+		"precision highp sampler2DShadow;",
+		"precision highp sampler2D;",
+		"precision highp sampler2DArray;",
+		"precision highp float;",
+	}
+
+	var missing []string
+
+	for _, specifier := range precisionSpecifiers {
+		if !strings.Contains(source, specifier) {
+			missing = append(missing, specifier)
+		}
+	}
+
+	// Inject all missing precision specifiers at once.
+	if len(missing) > 0 {
+		source = strings.Replace(source, version, version+"\n"+strings.Join(missing, "\n"), 1)
+	}
+
+	//js.Global().Get("console").Call("info", source)
+
+	d.gl.Call("shaderSource", d.shaders.Get(shader), source)
 }
 
 // Str converts the provided string into a pointer to a uint8 and returns it, enabling compatibility with C-style strings.
 func (d *Context) Str(str string) *uint8 {
-	return nil
+	d.ptrMutex.Lock()
+	defer d.ptrMutex.Unlock()
+	b := new(uint8)
+	ptr := (*uint8)(unsafe.Pointer(b))
+	d.ptrMap[uintptr(unsafe.Pointer(ptr))] = str
+	return ptr
 }
 
 // Strs converts a variadic list of strings into a C-style string array and returns a pointer and a cleanup function.
@@ -530,6 +643,11 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 
 // TexImage2D defines a two-dimensional texture image in the current WebGL rendering context.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
+	// WebGL2 strictness for RGBA16F (0x881A)
+	if internalformat == 0x881A && xtype == 0x1406 { // FLOAT
+		xtype = 0x140B // HALF_FLOAT
+	}
+
 	if pixels == nil || uintptr(pixels) == 0 {
 		d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, js.Null())
 		return
@@ -591,7 +709,8 @@ func (d *Context) TexParameterf(target uint32, pname uint32, param float32) {
 
 // TexParameterfv sets float parameters for a texture target, specified by target, pname, and the pointer params.
 func (d *Context) TexParameterfv(target uint32, pname uint32, params *float32) {
-	d.gl.Call("texParameterfv", target, pname, params)
+	// WebGL2 does not support texParameterfv and TEXTURE_BORDER_COLOR natively.
+	// CLAMP_TO_BORDER is already downgraded to CLAMP_TO_EDGE in TexParameteri.
 }
 
 // TexParameteri sets parameters for a texture object, specified by target, pname, and param values.

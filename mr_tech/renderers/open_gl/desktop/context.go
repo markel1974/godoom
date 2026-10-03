@@ -1,6 +1,6 @@
 //go:build !js
 
-package core
+package desktop
 
 import (
 	"unsafe"

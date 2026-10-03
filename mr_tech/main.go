@@ -14,8 +14,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
@@ -24,11 +24,11 @@ type IRender interface {
 	Start()
 }
 
-var _ctx *core.Context
+var _ctx *desktop.Context
 var _thread *executor.MainThread
 
 func init() {
-	_ctx = core.NewContext()
+	_ctx = desktop.NewContext()
 	_thread = executor.NewMainThread(_ctx)
 }
 

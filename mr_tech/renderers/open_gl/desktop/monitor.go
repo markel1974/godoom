@@ -1,8 +1,8 @@
-package core
+package desktop
 
 import (
 	"github.com/go-gl/glfw/v3.3/glfw"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 )
 
 // VideoMode represents a video mode with specific resolution and refresh rate.

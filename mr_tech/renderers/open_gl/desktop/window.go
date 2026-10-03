@@ -1,4 +1,4 @@
-package core
+package desktop
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )

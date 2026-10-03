@@ -4,19 +4,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	core2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/core"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/core/executor"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// scaleFactor defines a constant value for scaling factors used in the application.
-// maxBatchVertices specifies the maximum number of vertices that can be processed in a single batch.
-// maxFrameCommands sets the limit on the number of commands that can be issued per frame.
-//const (
-//	startBatchVertices = 16384
-//	startFrameCommands = 1024
-//)
-
+// IBuilder is an interface for constructing and managing draw commands, vertex data, and lighting in a rendering pipeline.
 type IBuilder interface {
 	Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine)
 
@@ -52,7 +45,7 @@ type RenderOpenGL struct {
 	engine          *engine.Engine
 	vi              *model.ViewMatrix
 	player          *model.ThingPlayer
-	win             *core2.Window
+	win             *desktop.Window
 	shaders         *Shaders
 	tex             *Textures
 	builder         IBuilder
@@ -89,8 +82,8 @@ func (w *RenderOpenGL) Setup(en *engine.Engine) error {
 
 // doInitialize initializes the OpenGL rendering environment and compiles shaders and textures for the renderer.
 func (w *RenderOpenGL) doInitialize() error {
-	bounds := core2.R(0, 0, float64(w.startWidth), float64(w.startHeight))
-	cfg := core2.WindowConfig{
+	bounds := desktop.R(0, 0, float64(w.startWidth), float64(w.startHeight))
+	cfg := desktop.WindowConfig{
 		Bounds:             bounds,
 		VSync:              true,
 		Undecorated:        false,
@@ -99,7 +92,7 @@ func (w *RenderOpenGL) doInitialize() error {
 		DisableScissorTest: true,
 	}
 	var winErr error
-	w.win, winErr = core2.NewGLWindow(w.th, cfg)
+	w.win, winErr = desktop.NewGLWindow(w.th, cfg)
 	if winErr != nil {
 		return winErr
 	}
@@ -203,56 +196,56 @@ func (w *RenderOpenGL) doRun() {
 		var impulse = 0.06
 		for v := range w.win.KeysPressed() {
 			switch v {
-			case core2.KeyEscape:
+			case desktop.KeyEscape:
 				return
-			case core2.KeyW:
+			case desktop.KeyW:
 				up = true
 				impulse = 0.01
-			case core2.KeyUp:
+			case desktop.KeyUp:
 				up = true
-			case core2.KeyS:
+			case desktop.KeyS:
 				down = true
 				impulse = 0.01
-			case core2.KeyDown:
+			case desktop.KeyDown:
 				down = true
-			case core2.KeyLeft:
+			case desktop.KeyLeft:
 				left = true
-			case core2.KeyRight:
+			case desktop.KeyRight:
 				right = true
-			case core2.KeyL:
+			case desktop.KeyL:
 				w.player.GetFlash().IncreaseFlashFactor()
-			case core2.KeyK:
+			case desktop.KeyK:
 				w.player.GetFlash().DecreaseFlashFactor()
 			}
 		}
 
 		w.doPlayerMoves(impulse, up, down, left, right)
 
-		if w.win.JustPressed(core2.KeyO) {
+		if w.win.JustPressed(desktop.KeyO) {
 			w.doPlayerThrow()
 		}
-		if w.win.JustPressed(core2.KeyP) {
+		if w.win.JustPressed(desktop.KeyP) {
 			w.doPlayerFire()
 		}
-		if w.win.JustPressed(core2.KeyC) {
+		if w.win.JustPressed(desktop.KeyC) {
 			w.enableClear = true
 		}
-		if w.win.JustPressed(core2.KeyTab) || w.win.Pressed(core2.MouseButton2) {
+		if w.win.JustPressed(desktop.KeyTab) || w.win.Pressed(desktop.MouseButton2) {
 			w.doPlayerDuckingToggle()
 		}
-		if w.win.JustPressed(core2.KeySpace) {
+		if w.win.JustPressed(desktop.KeySpace) {
 			w.doPlayerJump(false)
 		}
-		if w.win.Pressed(core2.MouseButton1) {
+		if w.win.Pressed(desktop.MouseButton1) {
 			w.doPlayerJump(true)
 		}
-		if w.win.JustPressed(core2.KeyM) {
+		if w.win.JustPressed(desktop.KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		if w.win.JustPressed(core2.KeyN) {
+		if w.win.JustPressed(desktop.KeyN) {
 			w.shaders.ToggleShadows()
 		}
-		if w.win.JustPressed(core2.KeyT) {
+		if w.win.JustPressed(desktop.KeyT) {
 			w.buildersCounter++
 			index := w.buildersCounter % (len(w.builders))
 			w.builder = w.builders[index]

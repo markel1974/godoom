@@ -4,8 +4,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	//"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
-	//"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 

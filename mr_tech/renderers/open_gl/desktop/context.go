@@ -7,32 +7,11 @@ import (
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 )
-
-var _thread *executor.MainThread
-
-func init() {
-	_thread = executor.NewMainThread()
-}
 
 // Context represents an abstraction for managing OpenGL state and issuing rendering commands.
 type Context struct {
-	th  *executor.MainThread
 	win *Window
-
-	renderSetupFn         func() error
-	renderStartFn         func(int, int)
-	playerMouseMoveFn     func(float64, float64)
-	playerMovesFn         func(float64, bool, bool, bool, bool)
-	playerThrowFn         func()
-	playerFireFn          func()
-	playerDuckingToggleFn func()
-	playerJumpFn          func(multi bool)
-	toggleShadowsFn       func()
-	enableClearFn         func()
-	decreaseFlashFactorFn func()
-	increaseFlashFactorFn func()
 }
 
 // NewContext creates and returns a new instance of Context.
@@ -46,133 +25,22 @@ func NewContext(width int, height int) *Context {
 		Resizable:          true,
 		DisableScissorTest: true,
 	}
-
-	ctx := &Context{
-		th:  _thread,
-		win: NewGLWindow(_thread, cfg),
-	}
-	_thread.SetContext(ctx)
+	ctx := &Context{}
+	ctx.win = NewGLWindow(ctx, cfg)
 	return ctx
 }
 
+// Setup initializes the rendering context using the provided IRender instance and returns an error if setup fails.
 func (d *Context) Setup(r api.IRender) error {
-	d.renderSetupFn = r.RenderSetup
-	d.renderStartFn = r.RenderStart
-	d.playerMouseMoveFn = r.RenderPlayerMouseMove
-	d.playerMovesFn = r.RenderPlayerMoves
-	d.playerThrowFn = r.RenderPlayerThrow
-	d.playerFireFn = r.RenderPlayerFire
-	d.playerDuckingToggleFn = r.RenderPlayerDuckingToggle
-	d.playerJumpFn = r.RenderPlayerJump
-	d.toggleShadowsFn = r.RenderToggleShadows
-	d.enableClearFn = r.RenderEnableClear
-	d.decreaseFlashFactorFn = r.RenderDecreaseFlashFactor
-	d.increaseFlashFactorFn = r.RenderIncreaseFlashFactor
+	if err := d.win.Setup(r); err != nil {
+		return err
+	}
 	return nil
 }
 
+// Start initializes and begins the execution flow for the current context.
 func (d *Context) Start() {
-	d.th.Run(d.doRun)
-}
-
-func (d *Context) doRun() {
-	if err := d.win.Setup(); err != nil {
-		panic(err)
-		return
-	}
-
-	if err := d.th.CallErr(func() error {
-		return d.renderSetupFn()
-	}); err != nil {
-		panic(err)
-		return
-	}
-
-	mouseConnected := true
-	for !d.win.Closed() {
-		d.th.Call(func() {
-			d.win.Begin()
-			fbW, fbH := d.win.GetFramebufferSize()
-			d.renderStartFn(fbW, fbH)
-		})
-
-		if mouseConnected && d.win.MouseInsideWindow() {
-			mousePos := d.win.MousePosition()
-			mousePrevPos := d.win.MousePreviousPosition()
-			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
-				mouseX := mousePos.X - mousePrevPos.X
-				mouseY := mousePos.Y - mousePrevPos.Y
-				d.playerMouseMoveFn(mouseX, mouseY)
-			}
-		}
-
-		var up, down, left, right bool
-
-		if scroll := d.win.MouseScroll(); scroll.Y != 0 {
-			if scroll.Y > 0 {
-				up = true
-			} else {
-				down = true
-			}
-		}
-
-		var impulse = 0.06
-		for v := range d.win.KeysPressed() {
-			switch v {
-			case KeyEscape:
-				return
-			case KeyW:
-				up = true
-				impulse = 0.01
-			case KeyUp:
-				up = true
-			case KeyS:
-				down = true
-				impulse = 0.01
-			case KeyDown:
-				down = true
-			case KeyLeft:
-				left = true
-			case KeyRight:
-				right = true
-			case KeyL:
-				d.increaseFlashFactorFn()
-			case KeyK:
-				d.decreaseFlashFactorFn()
-			}
-		}
-
-		d.playerMovesFn(impulse, up, down, left, right)
-
-		if d.win.JustPressed(KeyO) {
-			d.playerThrowFn()
-		}
-		if d.win.JustPressed(KeyP) {
-			d.playerFireFn()
-		}
-		if d.win.JustPressed(KeyC) {
-			d.enableClearFn()
-		}
-		if d.win.JustPressed(KeyTab) || d.win.Pressed(MouseButton2) {
-			d.playerDuckingToggleFn()
-		}
-		if d.win.JustPressed(KeySpace) {
-			d.playerJumpFn(false)
-		}
-		if d.win.Pressed(MouseButton1) {
-			d.playerJumpFn(true)
-		}
-		if d.win.JustPressed(KeyM) {
-			mouseConnected = !mouseConnected
-		}
-		if d.win.JustPressed(KeyN) {
-			d.toggleShadowsFn()
-		}
-		//	if d.win.JustPressed(KeyT) {
-		//	d.BuildersUpdate()
-		//}
-		d.win.UpdateInputAndSwap()
-	}
+	d.win.Start()
 }
 
 // ActiveTexture selects which texture unit to make active for subsequent texture state calls.

@@ -3,10 +3,11 @@
 package web
 
 import (
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"sync"
 	"syscall/js"
 	"unsafe"
+
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
 // Context represents a WebGL rendering context, managing WebGL resources and interactions with the underlying JS environment.
@@ -32,7 +33,6 @@ type Context struct {
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
 func NewContext(width int, height int) *Context {
-	bounds := Rect{X: 0, Y: 0, W: float64(width), H: float64(height)}
 	cfg := WindowConfig{
 		Width:  width,
 		Height: height,
@@ -91,7 +91,7 @@ func (d *Context) getSliceBytes(data interface{}) []byte {
 
 // ActiveTexture selects the active texture unit for subsequent texture state modifications.
 func (d *Context) ActiveTexture(texture uint32) {
-	d.gl.Call("activeTexture", d.textures.Get(texture))
+	d.gl.Call("activeTexture", texture)
 }
 
 // AttachShader associates a compiled shader object to a program object for linking in a graphics rendering pipeline.
@@ -121,6 +121,9 @@ func (d *Context) BindRenderbuffer(target uint32, renderbuffer uint32) {
 
 // BindTexture binds a named texture to a specified target in the WebGL rendering context.
 func (d *Context) BindTexture(target uint32, texture uint32) {
+	if target == 0x9100 { // TEXTURE_2D_MULTISAMPLE
+		target = 0x0DE1 // TEXTURE_2D
+	}
 	d.gl.Call("bindTexture", target, d.textures.Get(texture))
 }
 
@@ -151,11 +154,26 @@ func (d *Context) BlitFramebuffer(srcX0 int32, srcY0 int32, srcX1 int32, srcY1 i
 
 // BufferData uploads data to a buffer object for the specified target with the given usage pattern.
 func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage uint32) {
+	if data == nil || uintptr(data) == 0 {
+		d.gl.Call("bufferData", target, size, usage)
+		return
+	}
 	d.ptrMutex.Lock()
-	dataVal := d.ptrMap[uintptr(data)]
-	delete(d.ptrMap, uintptr(data))
+	dataVal, ok := d.ptrMap[uintptr(data)]
+	if ok {
+		delete(d.ptrMap, uintptr(data))
+	}
 	d.ptrMutex.Unlock()
+
+	if !ok || dataVal == nil {
+		d.gl.Call("bufferData", target, size, usage)
+		return
+	}
+
 	bytes := d.getSliceBytes(dataVal)
+	if len(bytes) > size {
+		bytes = bytes[:size]
+	}
 	jsArr := d.jsBuffer.New(len(bytes))
 	js.CopyBytesToJS(jsArr, bytes)
 	d.gl.Call("bufferData", target, jsArr, usage)
@@ -167,11 +185,24 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 // size specifies the size in bytes of the data store region being replaced.
 // data specifies a pointer to the source data in memory.
 func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe.Pointer) {
+	if data == nil || uintptr(data) == 0 {
+		return
+	}
 	d.ptrMutex.Lock()
-	dataVal := d.ptrMap[uintptr(data)]
-	delete(d.ptrMap, uintptr(data))
+	dataVal, ok := d.ptrMap[uintptr(data)]
+	if ok {
+		delete(d.ptrMap, uintptr(data))
+	}
 	d.ptrMutex.Unlock()
+
+	if !ok || dataVal == nil {
+		return
+	}
+
 	bytes := d.getSliceBytes(dataVal)
+	if len(bytes) > size {
+		bytes = bytes[:size]
+	}
 	jsArr := d.jsBuffer.New(len(bytes))
 	js.CopyBytesToJS(jsArr, bytes)
 	d.gl.Call("bufferSubData", target, offset, jsArr)
@@ -214,9 +245,8 @@ func (d *Context) CreateShader(xtype uint32) uint32 {
 func (d *Context) DeleteFramebuffers(n int32, framebuffers *uint32) {
 	arr := unsafe.Slice(framebuffers, n)
 	for i := int32(0); i < n; i++ {
-		id := arr[i]
-		d.gl.Call("deleteFramebuffer", d.fbos.get(id))
-		d.fbos.remove(id)
+		d.gl.Call("deleteFramebuffer", d.fbos.Get(arr[i]))
+		d.fbos.Remove(arr[i])
 	}
 }
 
@@ -225,9 +255,8 @@ func (d *Context) DeleteFramebuffers(n int32, framebuffers *uint32) {
 func (d *Context) DeleteRenderbuffers(n int32, renderbuffers *uint32) {
 	arr := unsafe.Slice(renderbuffers, n)
 	for i := int32(0); i < n; i++ {
-		id := arr[i]
-		d.gl.Call("deleteRenderbuffer", d.rbos.get(id))
-		d.rbos.remove(id)
+		d.gl.Call("deleteRenderbuffer", d.rbos.Get(arr[i]))
+		d.rbos.Remove(arr[i])
 	}
 }
 
@@ -240,9 +269,8 @@ func (d *Context) DeleteShader(shader uint32) {
 func (d *Context) DeleteTextures(n int32, textures *uint32) {
 	arr := unsafe.Slice(textures, n)
 	for i := int32(0); i < n; i++ {
-		id := arr[i]
-		d.gl.Call("deleteTexture", d.textures.get(id))
-		d.textures.remove(id)
+		d.gl.Call("deleteTexture", d.textures.Get(arr[i]))
+		d.textures.Remove(arr[i])
 	}
 }
 
@@ -258,6 +286,9 @@ func (d *Context) DepthMask(flag bool) {
 
 // Disable disables a specific capability for the given context based on the provided capability identifier.
 func (d *Context) Disable(cap uint32) {
+	if cap == 0x864F { // DEPTH_CLAMP
+		return
+	}
 	d.gl.Call("disable", cap)
 }
 
@@ -268,16 +299,24 @@ func (d *Context) DrawArrays(mode uint32, first int32, count int32) {
 
 // DrawBuffer sets the destination buffer for rendering operations.
 func (d *Context) DrawBuffer(buf uint32) {
-	d.gl.Call("drawBuffer", buf)
+	d.gl.Call("drawBuffers", []interface{}{buf})
 }
 
 // DrawBuffers defines a list of color buffers to be drawn into for rendering operations.
 func (d *Context) DrawBuffers(n int32, bufs *uint32) {
-	d.gl.Call("drawBuffers", n, bufs)
+	slice := unsafe.Slice(bufs, n)
+	arr := make([]interface{}, n)
+	for i := int32(0); i < n; i++ {
+		arr[i] = slice[i]
+	}
+	d.gl.Call("drawBuffers", arr)
 }
 
 // Enable enables the specified capability for the current context, identified by the provided cap parameter.
 func (d *Context) Enable(cap uint32) {
+	if cap == 0x864F { // DEPTH_CLAMP
+		return
+	}
 	d.gl.Call("enable", cap)
 }
 
@@ -293,46 +332,49 @@ func (d *Context) FramebufferRenderbuffer(target uint32, attachment uint32, rend
 
 // FramebufferTexture2D attaches a texture image to a framebuffer at the specified attachment point and mipmap level.
 func (d *Context) FramebufferTexture2D(target uint32, attachment uint32, textarget uint32, texture uint32, level int32) {
+	if textarget == 0x9100 { // TEXTURE_2D_MULTISAMPLE
+		textarget = 0x0DE1 // TEXTURE_2D
+	}
 	d.gl.Call("framebufferTexture2D", target, attachment, textarget, d.textures.Get(texture), level)
 }
 
 // GenBuffers generates n buffer object names and stores them in the provided buffers pointer.
 func (d *Context) GenBuffers(n int32, buffers *uint32) {
+	arr := unsafe.Slice(buffers, n)
 	for i := int32(0); i < n; i++ {
-		obj := d.gl.Call("createBuffer")
-		*buffers = d.buffers.Add(obj)
+		arr[i] = d.buffers.Add(d.gl.Call("createBuffer"))
 	}
 }
 
 // GenFramebuffers generates n framebuffer object names and stores them in the memory pointed to by framebuffers.
 func (d *Context) GenFramebuffers(n int32, framebuffers *uint32) {
+	arr := unsafe.Slice(framebuffers, n)
 	for i := int32(0); i < n; i++ {
-		obj := d.gl.Call("createFramebuffer")
-		*framebuffers = d.fbos.Add(obj)
+		arr[i] = d.fbos.Add(d.gl.Call("createFramebuffer"))
 	}
 }
 
 // GenRenderbuffers generates n renderbuffer object names and stores them in the memory pointed to by renderbuffers.
 func (d *Context) GenRenderbuffers(n int32, renderbuffers *uint32) {
+	arr := unsafe.Slice(renderbuffers, n)
 	for i := int32(0); i < n; i++ {
-		obj := d.gl.Call("createRenderbuffer")
-		*renderbuffers = d.rbos.Add(obj)
+		arr[i] = d.rbos.Add(d.gl.Call("createRenderbuffer"))
 	}
 }
 
 // GenTextures generates texture objects and stores their identifiers in the provided textures pointer.
 func (d *Context) GenTextures(n int32, textures *uint32) {
+	arr := unsafe.Slice(textures, n)
 	for i := int32(0); i < n; i++ {
-		obj := d.gl.Call("createTexture")
-		*textures = d.textures.Add(obj)
+		arr[i] = d.textures.Add(d.gl.Call("createTexture"))
 	}
 }
 
 // GenVertexArrays generates `n` vertex array objects and stores their IDs in the memory pointed to by `arrays`.
 func (d *Context) GenVertexArrays(n int32, arrays *uint32) {
+	arr := unsafe.Slice(arrays, n)
 	for i := int32(0); i < n; i++ {
-		obj := d.gl.Call("createVertexArray")
-		*arrays = d.vaos.add(obj)
+		arr[i] = d.vaos.Add(d.gl.Call("createVertexArray"))
 	}
 }
 
@@ -344,7 +386,30 @@ func (d *Context) GenerateMipmap(target uint32) {
 // GetFloatv retrieves the value or values of a specified floating-point state variable.
 // pname specifies the state variable to query, and data is a pointer where the result is stored.
 func (d *Context) GetFloatv(pname uint32, data *float32) {
-	d.gl.Call("getFloatv", pname, data)
+	if pname == 0x84FF {
+		ext := d.gl.Call("getExtension", "EXT_texture_filter_anisotropic")
+		if ext.IsNull() || ext.IsUndefined() {
+			ext = d.gl.Call("getExtension", "MOZ_EXT_texture_filter_anisotropic")
+		}
+		if ext.IsNull() || ext.IsUndefined() {
+			ext = d.gl.Call("getExtension", "WEBKIT_EXT_texture_filter_anisotropic")
+		}
+		if !ext.IsNull() && !ext.IsUndefined() {
+			maxAniso := d.gl.Call("getParameter", ext.Get("MAX_TEXTURE_MAX_ANISOTROPY_EXT"))
+			if !maxAniso.IsUndefined() {
+				*data = float32(maxAniso.Float())
+				return
+			}
+		}
+		*data = 1.0
+		return
+	}
+	v := d.gl.Call("getParameter", pname)
+	if !v.IsUndefined() && !v.IsNull() {
+		if v.Type() == js.TypeNumber {
+			*data = float32(v.Float())
+		}
+	}
 }
 
 // GetProgramiv retrieves a parameter from a program object, such as its link status or active attribute count.
@@ -397,7 +462,11 @@ func (d *Context) LinkProgram(program uint32) {
 // indices is a pointer to the starting point of each index array.
 // drawcount specifies the number of draw calls to execute.
 func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
-	// TODO: Check implementation
+	c_arr := unsafe.Slice(count, drawcount)
+	i_arr := unsafe.Slice(indices, drawcount)
+	for i := int32(0); i < drawcount; i++ {
+		d.gl.Call("drawElements", mode, c_arr[i], xtype, uintptr(i_arr[i]))
+	}
 }
 
 // PolygonOffset sets the scale and units used to calculate depth offset for polygons to avoid depth-fighting.
@@ -461,39 +530,58 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 
 // TexImage2D defines a two-dimensional texture image in the current WebGL rendering context.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	if pixels == nil {
+	if pixels == nil || uintptr(pixels) == 0 {
 		d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, js.Null())
 		return
 	}
 	d.ptrMutex.Lock()
-	dataVal := d.ptrMap[uintptr(pixels)]
-	delete(d.ptrMap, uintptr(pixels))
+	dataVal, ok := d.ptrMap[uintptr(pixels)]
+	if ok {
+		delete(d.ptrMap, uintptr(pixels))
+	}
 	d.ptrMutex.Unlock()
+
+	if !ok || dataVal == nil {
+		d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, js.Null())
+		return
+	}
+
 	bytes := d.getSliceBytes(dataVal)
 	jsArr := d.jsBuffer.New(len(bytes))
 	js.CopyBytesToJS(jsArr, bytes)
-	d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, jsArr)
+	d.gl.Call("texImage2D", target, level, internalformat, width, height, border, format, xtype, getJSView(jsArr, xtype))
 }
 
 // TexImage2DMultisample specifies storage for a 2D multisample texture.
 func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32, fixedsamplelocations bool) {
-	// TODO: Check implementation
+	if target == 0x9100 { // TEXTURE_2D_MULTISAMPLE
+		target = 0x0DE1 // TEXTURE_2D
+	}
+	d.gl.Call("texStorage2D", target, 1, internalformat, width, height)
 }
 
 // TexImage3D specifies a three-dimensional texture image for a target texture.
 func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, width int32, height int32, depth int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	if pixels == nil {
+	if pixels == nil || uintptr(pixels) == 0 {
 		d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
 		return
 	}
 	d.ptrMutex.Lock()
-	dataVal := d.ptrMap[uintptr(pixels)]
-	delete(d.ptrMap, uintptr(pixels))
+	dataVal, ok := d.ptrMap[uintptr(pixels)]
+	if ok {
+		delete(d.ptrMap, uintptr(pixels))
+	}
 	d.ptrMutex.Unlock()
+
+	if !ok || dataVal == nil {
+		d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
+		return
+	}
+
 	bytes := d.getSliceBytes(dataVal)
 	jsArr := d.jsBuffer.New(len(bytes))
 	js.CopyBytesToJS(jsArr, bytes)
-	d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, jsArr)
+	d.gl.Call("texImage3D", target, level, internalformat, width, height, depth, border, format, xtype, getJSView(jsArr, xtype))
 }
 
 // TexParameterf sets the float parameter for a specific texture target and property.
@@ -508,6 +596,9 @@ func (d *Context) TexParameterfv(target uint32, pname uint32, params *float32) {
 
 // TexParameteri sets parameters for a texture object, specified by target, pname, and param values.
 func (d *Context) TexParameteri(target uint32, pname uint32, param int32) {
+	if param == 0x812D { // CLAMP_TO_BORDER
+		param = 0x812F // CLAMP_TO_EDGE
+	}
 	d.gl.Call("texParameteri", target, pname, param)
 }
 
@@ -518,32 +609,63 @@ func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffs
 
 // Uniform1f sets the value of a float uniform variable at the given location in the WebGL program context.
 func (d *Context) Uniform1f(location int32, v0 float32) {
-	d.gl.Call("uniform1f", location, v0)
+	if location == -1 {
+		return
+	}
+	d.gl.Call("uniform1f", d.uniforms[location], v0)
 }
 
 // Uniform1i specifies the integer value of a uniform variable for the current shader program.
 func (d *Context) Uniform1i(location int32, v0 int32) {
-	d.gl.Call("uniform1i", location, v0)
+	if location == -1 {
+		return
+	}
+	d.gl.Call("uniform1i", d.uniforms[location], v0)
 }
 
 // Uniform1iv sets the value of a uniform variable array in the active shader program as a slice of integers.
 func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
-	// TODO: Check implementation
+	if location == -1 {
+		return
+	}
+	loc := d.uniforms[location]
+	slice := unsafe.Slice(value, count)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), count*4)
+	jsArr := d.jsBuffer.New(len(bytes))
+	js.CopyBytesToJS(jsArr, bytes)
+	i32Arr := js.Global().Get("Int32Array").New(jsArr.Get("buffer"))
+	d.gl.Call("uniform1iv", loc, i32Arr)
 }
 
 // Uniform2f sets the values of a 2-component floating-point uniform variable for the current shader program.
 func (d *Context) Uniform2f(location int32, v0 float32, v1 float32) {
-	d.gl.Call("uniform2f", location, v0, v1)
+	if location == -1 {
+		return
+	}
+	d.gl.Call("uniform2f", d.uniforms[location], v0, v1)
 }
 
 // Uniform3f sets the values of a 3-component floating-point uniform variable for the current shader program.
 func (d *Context) Uniform3f(location int32, v0 float32, v1 float32, v2 float32) {
-	d.gl.Call("uniform3f", location, v0, v1, v2)
+	if location == -1 {
+		return
+	}
+	d.gl.Call("uniform3f", d.uniforms[location], v0, v1, v2)
 }
 
 // Uniform3fv sets the value of a 3-component floating point uniform variable or an array of such variables in a program.
 func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
-	// TODO: Check implementation
+	if location == -1 {
+		return
+	}
+	loc := d.uniforms[location]
+	total := count * 3
+	slice := unsafe.Slice(value, total)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
+	jsArr := d.jsBuffer.New(len(bytes))
+	js.CopyBytesToJS(jsArr, bytes)
+	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"))
+	d.gl.Call("uniform3fv", loc, f32Arr)
 }
 
 // UniformBlockBinding assigns a binding point to a uniform block within the specified program's shader.
@@ -557,15 +679,17 @@ func (d *Context) UniformBlockBinding(program uint32, uniformBlockIndex uint32, 
 // transpose indicates whether the matrix should be transposed when transferred.
 // value is a pointer to the first element of the matrix data.
 func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, value *float32) {
-	d.ptrMutex.Lock()
-	dataVal := d.ptrMap[uintptr(unsafe.Pointer(value))]
-	delete(d.ptrMap, uintptr(unsafe.Pointer(value)))
-	d.ptrMutex.Unlock()
-	bytes := d.getSliceBytes(dataVal)
+	if location == -1 {
+		return
+	}
+	loc := d.uniforms[location]
+	total := count * 16
+	slice := unsafe.Slice(value, total)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
 	jsArr := d.jsBuffer.New(len(bytes))
 	js.CopyBytesToJS(jsArr, bytes)
 	f32Arr := js.Global().Get("Float32Array").New(jsArr.Get("buffer"))
-	d.gl.Call("uniformMatrix4fv", d.uniforms[location], transpose, f32Arr)
+	d.gl.Call("uniformMatrix4fv", loc, transpose, f32Arr)
 }
 
 // UseProgram sets the active shader program to the one specified by the given program ID.
@@ -582,4 +706,24 @@ func (d *Context) VertexAttribPointer(index uint32, size int32, xtype uint32, no
 // Viewport sets the viewport dimensions and position using specified x, y, width, and height parameters.
 func (d *Context) Viewport(x int32, y int32, width int32, height int32) {
 	d.gl.Call("viewport", x, y, width, height)
+}
+
+func getJSView(buffer js.Value, xtype uint32) js.Value {
+	switch xtype {
+	case 0x1400: // BYTE
+		return js.Global().Get("Int8Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+	case 0x1401: // UNSIGNED_BYTE
+		return js.Global().Get("Uint8Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+	case 0x1402: // SHORT
+		return js.Global().Get("Int16Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+	case 0x1403: // UNSIGNED_SHORT
+		return js.Global().Get("Uint16Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+	case 0x1404: // INT
+		return js.Global().Get("Int32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+	case 0x1405: // UNSIGNED_INT
+		return js.Global().Get("Uint32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+	case 0x1406: // FLOAT
+		return js.Global().Get("Float32Array").New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+	}
+	return buffer
 }

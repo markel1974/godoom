@@ -2,15 +2,17 @@
 
 package web
 
+import "syscall/js"
+
 // ResourceTracker manages a collection of reusable resources and tracks free slots within the collection.
 type ResourceTracker struct {
 	items []js.Value
 	free  []uint32
 }
 
-// NewResourceTracker creates and returns a new instance of resourceTracker with a reserved null value in its items list.
-func NewResourceTracker() resourceTracker {
-	return resourceTracker{items: []js.Value{js.Null()}} // 0 is reserved/null
+// NewResourceTracker creates and returns a new instance of ResourceTracker with a reserved null value in its items list.
+func NewResourceTracker() ResourceTracker {
+	return ResourceTracker{items: []js.Value{js.Null()}} // 0 is reserved/null
 }
 
 // Add inserts the given `js.Value` into the tracker and returns its index. Reuses an existing free index if available.

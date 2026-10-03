@@ -1,4 +1,6 @@
 #!/bin/bash
+unset GOROOT
+# cp /Users/tinmr305/Development/go/1.24.4/go1.24.4/lib/wasm/wasm_exec.js html/
 echo "=> Compilazione dell'engine in WebAssembly..."
 # Metti qui il path corretto al tuo main se non è la root
 GOOS=js GOARCH=wasm go build -o html/godoom.wasm .

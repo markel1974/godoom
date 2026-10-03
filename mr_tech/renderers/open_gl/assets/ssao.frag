@@ -57,5 +57,5 @@ void main() {
         occlusion += (sampleDepth >= samplePos.z + u_bias ? 1.0 : 0.0) * rangeCheck;
     }
 
-    FragColor = 1.0 - (occlusion / u_kernelSize);
+    FragColor = 1.0 - (occlusion / float(u_kernelSize));
 }

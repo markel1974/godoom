@@ -14,7 +14,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
@@ -109,12 +108,13 @@ func main() {
 		return
 	}
 
-	ctx := desktop.NewContext(width, height)
-
+	//ctx := desktop.NewContext(width, height)
+	ctx := getContext(width, height)
 	render := open_gl.NewRender(ctx, int32(width), int32(height))
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return
 	}
 	render.Start()
+	waitExit()
 }

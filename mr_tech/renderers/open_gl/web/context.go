@@ -476,6 +476,8 @@ func (d *Context) GenerateMipmap(target uint32) {
 func (d *Context) GetFloatv(pname uint32, data *float32) {
 	if pname == 0x84FF {
 		ext := d.gl.Call("getExtension", "EXT_texture_filter_anisotropic")
+		d.gl.Call("getExtension", "EXT_color_buffer_float")
+		d.gl.Call("getExtension", "OES_texture_float_linear")
 		if ext.IsNull() || ext.IsUndefined() {
 			ext = d.gl.Call("getExtension", "MOZ_EXT_texture_filter_anisotropic")
 		}
@@ -730,18 +732,10 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 
 // TexImage2D defines a two-dimensional texture image in the current WebGL rendering context.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	// Fallback RGBA16F to standard RGBA8 (sized)
-	if internalformat == 0x881A {
-		internalformat = 0x8058 // RGBA8
-		format = 0x1908         // RGBA
-		xtype = 0x1401          // UNSIGNED_BYTE
-	}
 
-	// Fallback RED+FLOAT to R8+UNSIGNED_BYTE
+	// Fallback RED+FLOAT to R32F
 	if internalformat == 0x1903 && xtype == 0x1406 {
-		internalformat = 0x8229 // R8
-		format = 0x1903         // RED
-		xtype = 0x1401          // UNSIGNED_BYTE
+		internalformat = 0x822E // R32F
 	}
 
 	// Fallback DEPTH_COMPONENT+FLOAT to DEPTH_COMPONENT24
@@ -782,7 +776,7 @@ func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 	xtype := uint32(0x1401)  // UNSIGNED_BYTE
 
 	if internalformat == 0x881A {
-		internalformat = 0x8058 // RGBA8
+		xtype = 0x1406 // FLOAT
 	}
 
 	d.gl.Call("texImage2D", target, 0, internalformat, width, height, 0, format, xtype, js.Null())

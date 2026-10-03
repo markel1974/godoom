@@ -1,66 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoDoom - WebGL2 Engine</title>
+    <meta charset="utf-8">
+    <title>GoDoom Wasm</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* Evita lo scroll quando usi il mouse */
-            background-color: #000;
-        }
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #00ff00;
-            font-family: monospace;
-            font-size: 24px;
-        }
+        body { margin: 0; background: black; overflow: hidden; }
+        canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0f0; font-family: monospace; font-size: 24px; }
     </style>
 </head>
 <body>
-    <div id="loading">Inizializzazione GoDoom Wasm...</div>
-    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-
-    <!-- Lo script di supporto ufficiale di Go per WebAssembly -->
-    <script src="wasm_exec.js"></script>
-    <script>
-        if (!WebAssembly.instantiateStreaming) {
-            // Polyfill per browser vecchi come Safari
-            WebAssembly.instantiateStreaming = async (resp, importObject) => {
-                const source = await (await resp).arrayBuffer();
-                return await WebAssembly.instantiate(source, importObject);
-            };
-        }
-
-        const go = new Go();
-        
-        // Disattiva il loading element quando wasm e' caricato
-        WebAssembly.instantiateStreaming(fetch("godoom.wasm"), go.importObject).then(async (result) => {
-            document.getElementById("loading").style.display = "none";
-            
-            try {
-                // Esegue il binario Go (che avviera' window.Run)
-                await go.run(result.instance);
-            } catch (err) {
-                console.error("Go Wasm Error:", err);
-            }
-        }).catch((err) => {
-            console.error("Fetch/Instantiate Wasm Error:", err);
-            document.getElementById("loading").innerText = "Errore di caricamento: controlla la console.";
-            document.getElementById("loading").style.color = "red";
-        });
-    </script>
+<div id="loading">Initializing ...</div>
+<canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+<script src="wasm_exec.js"></script>
+<script>
+    if (!WebAssembly.instantiateStreaming) {
+        WebAssembly.instantiateStreaming = async (resp, importObject) => {
+            const source = await (await resp).arrayBuffer();
+            return await WebAssembly.instantiate(source, importObject);
+        };
+    }
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("godoom.wasm?t=" + Date.now()), go.importObject).then((result) => {
+        document.getElementById("loading").style.display = "none";
+        go.run(result.instance);
+    }).catch(err => {
+        console.error("WASM Error:", err);
+        document.getElementById("loading").innerText = "Error: check your console (F12)";
+        document.getElementById("loading").style.color = "red";
+    });
+</script>
 </body>
 </html>

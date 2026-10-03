@@ -58,7 +58,7 @@ func main() {
 
 	res := NewResources()
 
-	//mode = 6
+	mode = 6
 	basePath := "resources"
 
 	switch mode {
@@ -84,8 +84,8 @@ func main() {
 		jf := jedi.NewBuilder()
 		cfg, err = jf.Build(res, 1, jFile, level)
 	case 6:
-		quakeFile := basePath + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
-		//quakeFile = "html/asset/PAK0.PAK"
+		quakeFile := basePath + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "pak0.pak"
+		//quakeFile = "html/asset/pak0.pak"
 		wb := quake.NewBuilder()
 		cfg, err = wb.Setup(res, quakeFile, level)
 	case 7:

@@ -240,6 +240,7 @@ func (w *Window) bindEvents() {
 	}))
 }
 
+// Begin resets the scroll offsets (scrollX and scrollY) of the window to zero.
 func (w *Window) Begin() {
 	w.scrollX = 0
 	w.scrollY = 0
@@ -325,11 +326,12 @@ func (w *Window) Start() {
 		panic(err)
 	}
 
+	tracker := js.Global().Get("window").Get("gameMouseTracker")
+
 	var renderFrame js.Func
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		w.Begin()
 
-		tracker := js.Global().Get("window").Get("gameMouseTracker")
 		w.mouseX += tracker.Get("x").Float()
 		w.mouseY += tracker.Get("y").Float()
 		// Reset in JS

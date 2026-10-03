@@ -65,6 +65,7 @@ func NewContext(width int, height int) *Context {
 	return ctx
 }
 
+// Setup initializes the rendering context for the given renderer and propagates setup errors from the underlying window.
 func (d *Context) Setup(r api.IRender) error {
 	if err := d.win.Setup(r); err != nil {
 		return err
@@ -72,6 +73,7 @@ func (d *Context) Setup(r api.IRender) error {
 	return nil
 }
 
+// Start initializes and begins the operation of the associated window.
 func (d *Context) Start() {
 	d.win.Start()
 }
@@ -232,11 +234,7 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 	d.gl.Call("bufferSubData", target, offset, jsArr)
 }
 
-// CheckFramebufferStatus checks the completeness status of a framebuffer object for the given target.
-//func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
-//	return api.FRAMEBUFFER_COMPLETE
-//}
-
+// CheckFramebufferStatus queries the completeness status of a framebuffer object for the specified target.
 func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
 	status := d.gl.Call("checkFramebufferStatus", int(target))
 	return uint32(status.Int())

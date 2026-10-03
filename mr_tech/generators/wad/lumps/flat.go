@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 )
 
 // Flat represents a flat texture consisting of raw byte data, typically used in Doom-engine WAD files.
@@ -11,7 +11,7 @@ type Flat struct {
 }
 
 // NewFlat reads flat texture data from the specified lump in the WAD file and returns a Flat instance.
-func NewFlat(f *os.File, lumpInfo *LumpInfo) (*Flat, error) {
+func NewFlat(f io.ReadSeekCloser, lumpInfo *LumpInfo) (*Flat, error) {
 	if err := Seek(f, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -15,7 +15,7 @@ type Vertex struct {
 }
 
 // NewVertexes reads vertex data from the given file and lump information and returns an array of vertex pointers or an error.
-func NewVertexes(f *os.File, lumpInfo *LumpInfo) ([]*Vertex, error) {
+func NewVertexes(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Vertex, error) {
 	var pVertex Vertex
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pVertex))
 	pVertexes := make([]Vertex, count, count)

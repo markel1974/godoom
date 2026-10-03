@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -17,7 +17,7 @@ type Seg struct {
 }
 
 // NewSegments reads segment data from the given file based on LumpInfo and returns a slice of Seg pointers or an error.
-func NewSegments(f *os.File, lumpInfo *LumpInfo) ([]*Seg, error) {
+func NewSegments(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Seg, error) {
 	var pSeg Seg
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSeg))
 	pSegments := make([]Seg, count, count)

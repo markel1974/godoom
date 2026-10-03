@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -35,7 +35,7 @@ func (b *BBox) IntersectInside(x int16, y int16) bool {
 }
 
 // NewNodes reads node data from the provided file and returns a slice of pointers to Node structures or an error.
-func NewNodes(f *os.File, lumpInfo *LumpInfo) ([]*Node, error) {
+func NewNodes(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Node, error) {
 	var pNode Node
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pNode))
 	pNodes := make([]Node, count, count)

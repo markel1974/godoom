@@ -2,7 +2,6 @@ package script
 
 import (
 	"io"
-	"os"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -14,11 +13,11 @@ type Textures struct {
 }
 
 // NewTextures loads textures from files in the specified directory and returns a Textures instance or an error.
-func NewTextures(basePath string) (*Textures, error) {
+func NewTextures(res common.IFileSystem, basePath string) (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}
-	files, err := os.ReadDir(basePath)
+	files, err := res.ReadDir(basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +29,12 @@ func NewTextures(basePath string) (*Textures, error) {
 			if name[0] == '*' || name[0] == '+' {
 				emissive = true
 			}
-			tex, err := common.PPMToTexture(basePath+f.Name(), f.Name(), uint32(idx), emissive)
+			file, err := res.Open(basePath + f.Name())
+			if err != nil {
+				return nil, err
+			}
+			tex, err := common.PPMToTexture(file, f.Name(), uint32(idx), emissive)
+			file.Close()
 			if err == nil || err == io.EOF {
 				t.resources[f.Name()] = tex
 			} else {

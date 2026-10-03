@@ -3,7 +3,7 @@ package lumps
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 )
 
@@ -34,7 +34,7 @@ type Patch struct {
 }
 
 // NewPatchNames reads a lump containing patch names from the file and returns the names as a slice of strings.
-func NewPatchNames(f *os.File, info *LumpInfo) ([]string, error) {
+func NewPatchNames(f io.ReadSeekCloser, info *LumpInfo) ([]string, error) {
 	if err := Seek(f, info.Filepos); err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewPatchNames(f *os.File, info *LumpInfo) ([]string, error) {
 }
 
 // NewTextures reads texture data from the given file and lump information, returning a slice of textures or an error.
-func NewTextures(f *os.File, lumpInfo *LumpInfo) ([]*Texture, error) {
+func NewTextures(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Texture, error) {
 	if err := Seek(f, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}

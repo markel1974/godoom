@@ -83,12 +83,12 @@ func NewBuilder() *Builder {
 }
 
 // Build constructs a game configuration based on the provided mode, directory, and level number. Returns a config.Root or error.
-func (b *Builder) Build(mode int, dir string, levelNumber int) (*config.Root, error) {
+func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber int) (*config.Root, error) {
 	var archive IArchive
 	if mode >= 1 {
-		archive = NewArchiveLab()
+		archive = NewArchiveLab(fs)
 	} else {
-		archive = NewArchiveGob()
+		archive = NewArchiveGob(fs)
 	}
 
 	levelNumber -= 1

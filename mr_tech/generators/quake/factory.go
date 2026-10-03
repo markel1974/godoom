@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/q1"
@@ -48,9 +49,9 @@ func NewBSPReader(arc interfaces.IArchive, bspPath string) (interfaces.IBSPReade
 }
 
 // NewArchive creates a new reader.go instance based on the file extension, supporting ".pk3" and other formats.
-func NewArchive(pakPath string) (interfaces.IArchive, error) {
+func NewArchive(res common.IFileSystem, pakPath string) (interfaces.IArchive, error) {
 	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
-		return lumps.NewPk3(), nil
+		return lumps.NewPk3(res), nil
 	}
-	return lumps.NewPak(), nil
+	return lumps.NewPak(res), nil
 }

@@ -30,9 +30,9 @@ func NewBuilder() *Builder {
 }
 
 // Build processes the given data string to construct a Root configuration object, parsing vertices, sectors, and player info.
-func (p *Builder) Build(id string) (*config.Root, error) {
+func (p *Builder) Build(res common.IFileSystem, id string) (*config.Root, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, tErr := NewTextures(basePath)
+	t, tErr := NewTextures(res, basePath)
 	if tErr != nil {
 		return nil, tErr
 	}

@@ -45,8 +45,9 @@ func (g *LabFile) Read() ([]byte, error) {
 
 // ArchiveLab represents a structure for managing LAB file archives and their extracted data.
 type ArchiveLab struct {
+	fs            common.IFileSystem
 	container     map[string]*LabFile
-	files         []*os.File
+	files         []common.IReader
 	levels        []string
 	level         *Level
 	bm            *BM
@@ -57,8 +58,9 @@ type ArchiveLab struct {
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
-func NewArchiveLab() *ArchiveLab {
+func NewArchiveLab(fs common.IFileSystem) *ArchiveLab {
 	return &ArchiveLab{
+		fs:            fs,
 		container:     make(map[string]*LabFile),
 		textures:      NewTextures(),
 		colorPalIndex: 0,
@@ -72,7 +74,7 @@ func (al *ArchiveLab) GetLevels() []string {
 
 // Parse scans the specified directory for `.LAB` files, processes them, and adds their data to the instance container.
 func (al *ArchiveLab) Parse(dirPath string) error {
-	entries, dErr := os.ReadDir(dirPath)
+	entries, dErr := al.fs.ReadDir(dirPath)
 	if dErr != nil {
 		return dErr
 	}
@@ -107,7 +109,7 @@ func (al *ArchiveLab) add(path string) error {
 		FourCC     [4]byte
 	}
 
-	file, err := os.Open(path)
+	file, err := al.fs.Open(path)
 	if err != nil {
 		return err
 	}

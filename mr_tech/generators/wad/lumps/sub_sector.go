@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -13,7 +13,7 @@ type SubSector struct {
 }
 
 // NewSubSectors reads and parses subsectors from a file based on the provided lump information, returning a slice of SubSector pointers.
-func NewSubSectors(f *os.File, lumpInfo *LumpInfo) ([]*SubSector, error) {
+func NewSubSectors(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*SubSector, error) {
 	var pSubSector SubSector
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pSubSector))
 	pSubSectors := make([]SubSector, count, count)

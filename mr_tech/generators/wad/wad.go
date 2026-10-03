@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"os"
 	"sort"
 
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/wad/lumps"
 )
 
 // WAD represents a data structure for manipulating Doom-engine WAD files, including textures, levels, and graphics.
 type WAD struct {
-	file                    *os.File
+	file                    common.IReader
 	lumpInfos               []*lumps.LumpInfo
 	playPal                 *lumps.PlayPal
 	patches                 map[string]*lumps.Image
@@ -39,9 +39,9 @@ func New() *WAD {
 }
 
 // Load opens the WAD file, loads its internal structures, and initializes its resources.
-func (w *WAD) Load(filename string) error {
+func (w *WAD) Load(fs common.IFileSystem, filename string) error {
 	var err error
-	if w.file, err = os.Open(filename); err != nil {
+	if w.file, err = fs.Open(filename); err != nil {
 		return err
 	}
 	if err = w.loadInfoTables(); err != nil {

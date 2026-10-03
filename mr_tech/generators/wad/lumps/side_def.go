@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -17,7 +17,7 @@ type SideDef struct {
 }
 
 // NewSideDefs reads SIDEDEFS lump data from the given file and parses it into a slice of SideDef structures.
-func NewSideDefs(f *os.File, lumpInfo *LumpInfo) ([]*SideDef, error) {
+func NewSideDefs(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*SideDef, error) {
 	type PrivateSideDef struct {
 		XOffset       int16
 		YOffset       int16

@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"strings"
 	"unsafe"
 )
@@ -85,7 +85,7 @@ func (l *LineDef) PrintBits() string {
 }
 
 // NewLineDefs reads LineDef data from the file based on lumpInfo and returns a slice of LineDef pointers or an error.
-func NewLineDefs(f *os.File, lumpInfo *LumpInfo) ([]*LineDef, error) {
+func NewLineDefs(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*LineDef, error) {
 	var pLineDef LineDef
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pLineDef))
 	pLineDefs := make([]LineDef, count)

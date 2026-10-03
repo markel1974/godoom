@@ -76,9 +76,9 @@ func NewBuilder() *Builder {
 }
 
 // Build generates a Root configuration by loading level data from a WAD file and populating sectors, things, and player.
-func (bld *Builder) Build(wadFile string, levelNumber int) (*config.Root, error) {
+func (bld *Builder) Build(fs common.IFileSystem, wadFile string, levelNumber int) (*config.Root, error) {
 	wad := New()
-	if err := wad.Load(wadFile); err != nil {
+	if err := wad.Load(fs, wadFile); err != nil {
 		return nil, err
 	}
 	levelIdx := levelNumber - 1

@@ -25,14 +25,14 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the game environment by loading and processing BSP data, textures, entities, and lights from a .pak file.
-func (p *Builder) Setup(pakPath string, lev int) (*config.Root, error) {
+func (p *Builder) Setup(res common.IFileSystem, pakPath string, lev int) (*config.Root, error) {
 	if lev < 1 {
 		lev = 1
 	}
 	levelIndex := lev - 1
 	//bpsPath := "maps" + lumps.PakSeparator + "e1m" + strconv.Itoa(level) + ".bsp"
 
-	arc, aErr := NewArchive(pakPath)
+	arc, aErr := NewArchive(res, pakPath)
 	if aErr != nil {
 		return nil, aErr
 	}

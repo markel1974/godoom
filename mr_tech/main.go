@@ -56,43 +56,49 @@ func main() {
 		return
 	}
 
+	res := NewResources()
+
+	//mode = 6
+	basePath := "resources"
+
 	switch mode {
 	case 0:
 		p := script.NewBuilder()
-		cfg, err = p.Build(script.StubOld2)
+		cfg, err = p.Build(res, script.StubOld2)
 	case 1:
 		db := dungeon.NewBuilder()
-		cfg, err = db.Build(level)
+		cfg, err = db.Build(res, level)
 	case 2:
 		wb := wolfstein.NewBuilder()
 		cfg, err = wb.Build(level)
 	case 3:
-		wadFile := "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
+		wadFile := basePath + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
 		wb := wad.NewBuilder()
-		cfg, err = wb.Build(wadFile, level)
+		cfg, err = wb.Build(res, wadFile, level)
 	case 4:
-		jFile := "resources" + string(os.PathSeparator) + "jedi"
+		jFile := basePath + string(os.PathSeparator) + "jedi"
 		jf := jedi.NewBuilder()
-		cfg, err = jf.Build(0, jFile, level)
+		cfg, err = jf.Build(res, 0, jFile, level)
 	case 5:
-		jFile := "resources" + string(os.PathSeparator) + "outlaws"
+		jFile := basePath + string(os.PathSeparator) + "outlaws"
 		jf := jedi.NewBuilder()
-		cfg, err = jf.Build(1, jFile, level)
+		cfg, err = jf.Build(res, 1, jFile, level)
 	case 6:
-		quakeFile := "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
+		quakeFile := basePath + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "PAK0.PAK"
+		//quakeFile = "html/asset/PAK0.PAK"
 		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(quakeFile, level)
+		cfg, err = wb.Setup(res, quakeFile, level)
 	case 7:
-		quakeFile := "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak"
+		quakeFile := basePath + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "PAK0.PAK"
 		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(quakeFile, level)
+		cfg, err = wb.Setup(res, quakeFile, level)
 	case 8:
-		quakeFile := "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
+		quakeFile := basePath + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
 		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(quakeFile, level)
+		cfg, err = wb.Setup(res, quakeFile, level)
 	default:
 		db := dungeon.NewBuilder()
-		cfg, err = db.Build(level)
+		cfg, err = db.Build(res, level)
 	}
 
 	if err != nil {

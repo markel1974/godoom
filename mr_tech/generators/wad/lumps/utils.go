@@ -3,7 +3,6 @@ package lumps
 import (
 	"errors"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -20,7 +19,7 @@ func ToString(s [8]byte) string {
 
 // Seek moves the file pointer of the provided file to the specified offset relative to the start of the file.
 // Returns an error if the seek operation fails or if the resulting position does not match the requested offset.
-func Seek(f *os.File, offset int64) error {
+func Seek(f io.ReadSeekCloser, offset int64) error {
 	//off, err := f.Seek(offset, os.SEEK_SET)
 	off, err := f.Seek(offset, io.SeekStart)
 	if err != nil {

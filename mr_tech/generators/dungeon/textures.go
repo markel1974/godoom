@@ -1,8 +1,6 @@
 package dungeon
 
 import (
-	"os"
-
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -13,11 +11,11 @@ type Textures struct {
 }
 
 // NewTextures loads textures from files in the specified directory and returns a Textures instance or an error.
-func NewTextures(basePath string) (*Textures, error) {
+func NewTextures(res common.IFileSystem, basePath string) (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}
-	files, err := os.ReadDir(basePath)
+	files, err := res.ReadDir(basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -29,8 +27,13 @@ func NewTextures(basePath string) (*Textures, error) {
 			if name[0] == '*' || name[0] == '+' {
 				emissive = true
 			}
+			file, err := res.Open(basePath + name)
+			if err != nil {
+				return nil, err
+			}
 			// Load the texture directly, which now parses dimensions and creates the texture object
-			tex, err := common.PPMToTexture(basePath+name, name, uint32(idx), emissive)
+			tex, err := common.PPMToTexture(file, name, uint32(idx), emissive)
+			file.Close()
 			if err == nil {
 				t.resources[name] = tex
 			} else {

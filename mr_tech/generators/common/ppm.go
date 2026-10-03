@@ -2,21 +2,15 @@ package common
 
 import (
 	"bufio"
+	"io"
 	"os"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// PPMToTexture reads a PPM (P6) texture file, dynamically parses its header for dimensions, and populates pixel values.
-func PPMToTexture(filename string, name string, idx uint32, emissive bool) (*textures.Texture, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	br := bufio.NewReader(file)
-
+// PPMToTexture converts a binary PPM image to a Texture object with the specified properties (name, ID, emissive flag).
+func PPMToTexture(reader io.Reader, name string, idx uint32, emissive bool) (*textures.Texture, error) {
+	br := bufio.NewReader(reader)
 	// Helper to read next token (ignoring whitespace and # comments)
 	readToken := func() (string, error) {
 		var token []byte

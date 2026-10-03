@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // ExtLevel is the file extension used to identify level files in the archive.
@@ -54,8 +56,9 @@ func (g *Gob) Read() ([]byte, error) {
 
 // ArchiveGob represents a collection of game assets, including entries, files, levels, textures, and entities.
 type ArchiveGob struct {
+	fs       common.IFileSystem
 	entries  map[string]*Gob
-	files    []*os.File
+	files    []common.IReader
 	levels   []string
 	level    *Level
 	bm       *BM
@@ -65,8 +68,9 @@ type ArchiveGob struct {
 }
 
 // NewArchiveGob initializes and returns a new ArchiveGob instance with default maps and textures.
-func NewArchiveGob() *ArchiveGob {
+func NewArchiveGob(fs common.IFileSystem) *ArchiveGob {
 	return &ArchiveGob{
+		fs:       fs,
 		entries:  make(map[string]*Gob),
 		textures: NewTextures(),
 	}
@@ -75,7 +79,7 @@ func NewArchiveGob() *ArchiveGob {
 // Parse scans the specified directory for .GOB files, parses them, and adds their entries to the ArchiveGob instance.
 // Returns an error if the directory cannot be read or if any parsing operation fails.
 func (g *ArchiveGob) Parse(dirPath string) error {
-	entries, dErr := os.ReadDir(dirPath)
+	entries, dErr := g.fs.ReadDir(dirPath)
 	if dErr != nil {
 		return dErr
 	}
@@ -96,7 +100,7 @@ func (g *ArchiveGob) Parse(dirPath string) error {
 
 // add reads a GOB file, parses its header and entries, and adds them to the ArchiveGob instance.
 func (g *ArchiveGob) add(filename string) error {
-	f, fErr := os.Open(filename)
+	f, fErr := g.fs.Open(filename)
 	if fErr != nil {
 		return fErr
 	}

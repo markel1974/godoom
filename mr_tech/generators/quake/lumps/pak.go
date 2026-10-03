@@ -4,23 +4,24 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 const PakSeparator = "/"
 
 // EntryPAK represents a file entry within a PAK reader.go, containing metadata such as file, name, offset, and size.
 type EntryPAK struct {
-	file   *os.File
+	file   common.IReader
 	offset int64
 	size   int64
 }
 
 // NewEntryPak creates a new EntryPAK instance with the specified file, name, offset, and size.
-func NewEntryPak(file *os.File, offset int64, size int64) *EntryPAK {
+func NewEntryPak(file common.IReader, offset int64, size int64) *EntryPAK {
 	return &EntryPAK{
 		file:   file,
 		offset: offset,
@@ -106,12 +107,15 @@ func (np *NodePak) GetNode(parts []string) *NodePak {
 
 // Pak represents a container for a hierarchical structure of files and directories.
 type Pak struct {
+	res  common.IFileSystem
 	root *NodePak
 }
 
 // NewPak initializes and returns a new instance of the Pak structure.
-func NewPak() *Pak {
-	return &Pak{}
+func NewPak(res common.IFileSystem) *Pak {
+	return &Pak{
+		res: res,
+	}
 }
 
 // Setup initializes the Pak structure by reading the PAK file at the given path and building its directory hierarchy.
@@ -126,7 +130,7 @@ func (pk *Pak) Setup(path string) error {
 		Offset int32
 		Size   int32
 	}
-	file, err := os.Open(path)
+	file, err := pk.res.Open(path)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -18,7 +18,7 @@ type Sector struct {
 }
 
 // NewSectors reads sector data from the provided file using lump metadata and returns a slice of Sector or an error.
-func NewSectors(f *os.File, lumpInfo *LumpInfo) ([]*Sector, error) {
+func NewSectors(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Sector, error) {
 	type privateSector struct {
 		FloorHeight   int16
 		CeilingHeight int16

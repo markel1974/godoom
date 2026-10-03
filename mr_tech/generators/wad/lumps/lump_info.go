@@ -3,7 +3,7 @@ package lumps
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
+	"io"
 )
 
 // Header represents the file header containing metadata for lump management in a binary format.
@@ -33,7 +33,7 @@ func NewLumpInfo(pos int64, size int32, name string) *LumpInfo {
 }
 
 // NewLumpInfos reads lump information from a WAD file and returns a slice of LumpInfo or an error if parsing fails.
-func NewLumpInfos(f *os.File) ([]*LumpInfo, error) {
+func NewLumpInfos(f io.ReadSeekCloser) ([]*LumpInfo, error) {
 	header := &Header{}
 	if err := binary.Read(f, binary.LittleEndian, header); err != nil {
 		return nil, err

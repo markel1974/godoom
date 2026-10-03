@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 )
 
 // RGB represents a color in the RGB color model with 8-bit intensity values for red, green, and blue components.
@@ -23,7 +23,7 @@ type PlayPal struct {
 }
 
 // NewPlayPal reads the PLAYPAL lump data from the given file and initializes a new PlayPal structure.
-func NewPlayPal(f *os.File, lumpInfo *LumpInfo) (*PlayPal, error) {
+func NewPlayPal(f io.ReadSeekCloser, lumpInfo *LumpInfo) (*PlayPal, error) {
 	if err := Seek(f, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}

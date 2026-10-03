@@ -2,7 +2,7 @@ package lumps
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 	"unsafe"
 )
 
@@ -16,7 +16,7 @@ type Thing struct {
 }
 
 // NewThings reads and parses Thing objects from the given file and lumpInfo, returning a slice of pointers to Things.
-func NewThings(f *os.File, lumpInfo *LumpInfo) ([]*Thing, error) {
+func NewThings(f io.ReadSeekCloser, lumpInfo *LumpInfo) ([]*Thing, error) {
 	var pThing Thing
 	count := int(lumpInfo.Size) / int(unsafe.Sizeof(pThing))
 	pThings := make([]Thing, count)

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // NodePk3 represents a hierarchical node structure for managing PK3 archive files.
@@ -100,18 +102,32 @@ func (np *NodePk3) pathCleaner(in string) string {
 
 // Pk3 represents a structure for handling and navigating through PK3 archive files.
 type Pk3 struct {
+	res    common.IFileSystem
 	root   *NodePk3
-	reader *zip.ReadCloser
+	reader *zip.Reader
 }
 
 // NewPk3 creates and returns a new instance of the Pk3 structure for handling PK3 archives.
-func NewPk3() *Pk3 {
-	return &Pk3{}
+func NewPk3(res common.IFileSystem) *Pk3 {
+	return &Pk3{
+		res: res,
+	}
 }
 
 // Setup initializes the Pk3 structure by reading a PK3 file and building an in-memory representation of its contents.
 func (pk *Pk3) Setup(path string) error {
-	r, err := zip.OpenReader(path)
+	k, err := pk.res.Open(path)
+	if err != nil {
+		return err
+	}
+	size, err := k.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	if _, err = k.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	r, err := zip.NewReader(k, size)
 	if err != nil {
 		return err
 	}

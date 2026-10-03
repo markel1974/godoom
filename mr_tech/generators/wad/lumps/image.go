@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
-	"os"
 )
 
 type Post struct {
@@ -23,7 +23,7 @@ type Image struct {
 	Columns []Column
 }
 
-func NewImage(f *os.File, lumpInfo *LumpInfo, _ byte) (*Image, error) {
+func NewImage(f io.ReadSeekCloser, lumpInfo *LumpInfo, _ byte) (*Image, error) {
 	if err := Seek(f, lumpInfo.Filepos); err != nil {
 		return nil, err
 	}

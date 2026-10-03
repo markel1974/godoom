@@ -230,7 +230,7 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepthMSAA)
 
 	if s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER) != api.FRAMEBUFFER_COMPLETE {
-		panic("post MSAA FBO not complete")
+		panic("post MSAA FBO not complete: " + string(s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)))
 	}
 
 	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---

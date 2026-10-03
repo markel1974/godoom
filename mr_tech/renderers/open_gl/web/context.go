@@ -12,6 +12,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
+const (
+	glNone             = uint32(0)
+	glColorAttachment0 = uint32(0x8CE0)
+)
+
 // Context represents a WebGL rendering context, managing WebGL resources and interactions with the underlying JS environment.
 type Context struct {
 	win *Window
@@ -212,7 +217,7 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 
 // CheckFramebufferStatus checks the completeness status of a framebuffer object for the given target.
 func (d *Context) CheckFramebufferStatus(target uint32) uint32 {
-	return 0
+	return api.FRAMEBUFFER_COMPLETE
 }
 
 // Clear resets the specified bits in the context state based on the provided mask.
@@ -300,18 +305,38 @@ func (d *Context) DrawArrays(mode uint32, first int32, count int32) {
 }
 
 // DrawBuffer sets the destination buffer for rendering operations.
-func (d *Context) DrawBuffer(buf uint32) {
-	d.gl.Call("drawBuffers", []interface{}{buf})
-}
-
-// DrawBuffers defines a list of color buffers to be drawn into for rendering operations.
-func (d *Context) DrawBuffers(n int32, bufs *uint32) {
-	slice := unsafe.Slice(bufs, n)
-	arr := make([]interface{}, n)
-	for i := int32(0); i < n; i++ {
-		arr[i] = slice[i]
+func (d *Context) setDrawBuffers(bufs []uint32) {
+	maxIndex := 0
+	for _, buf := range bufs {
+		if buf >= glColorAttachment0 {
+			index := int(buf - glColorAttachment0)
+			if index > maxIndex {
+				maxIndex = index
+			}
+		}
+	}
+	arr := js.Global().Get("Uint32Array").New(maxIndex + 1)
+	// WebGL richiede NONE per gli attachment non esplicitamente specificati.
+	for i := 0; i <= maxIndex; i++ {
+		arr.SetIndex(i, int(glNone))
+	}
+	for _, buf := range bufs {
+		if buf == glNone {
+			continue
+		}
+		index := int(buf - glColorAttachment0)
+		arr.SetIndex(index, int(buf))
 	}
 	d.gl.Call("drawBuffers", arr)
+}
+
+func (d *Context) DrawBuffer(buf uint32) {
+	d.setDrawBuffers([]uint32{buf})
+}
+
+func (d *Context) DrawBuffers(n int32, bufs *uint32) {
+	slice := unsafe.Slice(bufs, n)
+	d.setDrawBuffers(slice)
 }
 
 // Enable enables the specified capability for the current context, identified by the provided cap parameter.
@@ -571,7 +596,8 @@ func (d *Context) RenderbufferStorage(target uint32, internalformat uint32, widt
 
 // RenderbufferStorageMultisample specifies storage format and dimensions for a multisample renderbuffer object.
 func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32) {
-	d.gl.Call("renderbufferStorageMultisample", target, samples, internalformat, width, height)
+	// Downgrade MSAA renderbuffers to standard renderbuffers to match downgraded MSAA textures
+	d.gl.Call("renderbufferStorage", target, internalformat, width, height)
 }
 
 // ShaderSource sets the source code in a shader object to the specified string array.
@@ -643,9 +669,25 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 
 // TexImage2D defines a two-dimensional texture image in the current WebGL rendering context.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	// WebGL2 strictness for RGBA16F (0x881A)
-	if internalformat == 0x881A && xtype == 0x1406 { // FLOAT
-		xtype = 0x140B // HALF_FLOAT
+	// Fallback RGBA16F to standard RGBA8 (sized)
+	if internalformat == 0x881A {
+		internalformat = 0x8058 // RGBA8
+		format = 0x1908         // RGBA
+		xtype = 0x1401          // UNSIGNED_BYTE
+	}
+
+	// Fallback RED+FLOAT to R8+UNSIGNED_BYTE
+	if internalformat == 0x1903 && xtype == 0x1406 {
+		internalformat = 0x8229 // R8
+		format = 0x1903         // RED
+		xtype = 0x1401          // UNSIGNED_BYTE
+	}
+
+	// Fallback DEPTH_COMPONENT+FLOAT to DEPTH_COMPONENT24
+	if internalformat == 0x1902 && xtype == 0x1406 {
+		internalformat = 0x81A6 // DEPTH_COMPONENT24
+		format = 0x1902         // DEPTH_COMPONENT
+		xtype = 0x1405          // UNSIGNED_INT
 	}
 
 	if pixels == nil || uintptr(pixels) == 0 {
@@ -675,7 +717,15 @@ func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 	if target == 0x9100 { // TEXTURE_2D_MULTISAMPLE
 		target = 0x0DE1 // TEXTURE_2D
 	}
-	d.gl.Call("texStorage2D", target, 1, internalformat, width, height)
+
+	format := uint32(0x1908) // RGBA
+	xtype := uint32(0x1401)  // UNSIGNED_BYTE
+
+	if internalformat == 0x881A {
+		internalformat = 0x8058 // RGBA8
+	}
+
+	d.gl.Call("texImage2D", target, 0, internalformat, width, height, 0, format, xtype, js.Null())
 }
 
 // TexImage3D specifies a three-dimensional texture image for a target texture.

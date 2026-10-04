@@ -232,7 +232,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 		dcOpaque.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, shadowSpaceMatrix,
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
-		float32(w.flash.GetFactor()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
+		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
 
 	// DYNAMIC LIGHTS
 	for lx := int32(0); lx < shadowLightsNum; lx++ {

@@ -365,7 +365,7 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player.JumpForce = 1000
 
 	player.Flash.ZFar = 8192
-	player.Flash.Factor = 0.02
+	player.Flash.Intensity = 0.02
 	player.Flash.Falloff = 1500
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1

@@ -89,7 +89,7 @@ func (p *Builder) Setup(res common.IFileSystem, pakPath string, lev int) (*confi
 	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
-	root.Player.Flash.Factor = 0.02
+	root.Player.Flash.Intensity = 0.02
 	root.Player.Flash.Falloff = 2000
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1

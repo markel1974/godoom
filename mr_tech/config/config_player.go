@@ -31,7 +31,7 @@ type Flash struct {
 	ShadowFovFactor float64 `json:"flashShadowFovDeg"`
 	ZNear           float64 `json:"flashZNear"`
 	ZFar            float64 `json:"flashZFar"`
-	Factor          float64 `json:"flashFactor"`
+	Intensity       float64 `json:"flashIntensity"`
 	Falloff         float64 `json:"flashFalloff"`
 	OffsetX         float64 `json:"flashOffsetX"`
 	OffsetY         float64 `json:"flashOffsetY"`
@@ -57,7 +57,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 	p.Flash.ZNear = 0.1
 	p.Flash.ZFar = 2048.0
 	p.Flash.Falloff = 200
-	p.Flash.Factor = 0.4
+	p.Flash.Intensity = 0.4
 	p.Flash.OffsetX = 0.2
 	p.Flash.OffsetY = -0.4
 	p.Bobbing.SwayOffsetX = 3.0

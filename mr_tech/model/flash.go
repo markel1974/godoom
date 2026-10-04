@@ -21,7 +21,7 @@ type Flash struct {
 	shadowFovRad   float64
 	zNear          float64
 	zFar           float64
-	factor         float64
+	intensity      float64
 	falloff        float64
 	offsetX        float64
 	offsetY        float64
@@ -43,7 +43,7 @@ func NewFlash(c *config.Flash) *Flash {
 		fovRad:       degreesToRadians(c.FovDeg),
 		zNear:        c.ZNear,
 		zFar:         c.ZFar,
-		factor:       c.Factor,
+		intensity:    c.Intensity,
 		falloff:      c.Falloff,
 		offsetX:      c.OffsetX,
 		offsetY:      c.OffsetY,
@@ -100,9 +100,9 @@ func (p *Flash) GetZFar() float64 {
 	return p.zFar
 }
 
-// GetFactor returns the current intensity factor of the Flash.
-func (p *Flash) GetFactor() float64 {
-	return p.factor
+// GetIntensity returns the current intensity factor of the Flash.
+func (p *Flash) GetIntensity() float64 {
+	return p.intensity
 }
 
 // GetFalloff returns the falloff value of the Flash object, which influences the intensity decay over distance.
@@ -132,12 +132,12 @@ func (p *Flash) GetOffsetY() float64 {
 
 // IncreaseFlashFactor increments the flash factor by a predefined constant value, enhancing the intensity of the flash effect.
 func (p *Flash) IncreaseFlashFactor() {
-	p.factor += flashFactorIncrement
+	p.intensity += flashFactorIncrement
 }
 
 // DecreaseFlashFactor reduces the flash factor by a fixed increment if the current factor is greater than zero.
 func (p *Flash) DecreaseFlashFactor() {
-	if p.factor > 0 {
-		p.factor -= flashFactorIncrement
+	if p.intensity > 0 {
+		p.intensity -= flashFactorIncrement
 	}
 }

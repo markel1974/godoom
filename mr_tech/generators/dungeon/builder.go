@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	scaleW = 1.0
-	scaleH = 1.0
+	textureScaleW = 1
+	textureScaleH = 1
+	lightFalloff  = 100.0
+	cellSize      = 16.0
 )
 
 // availableCeil contains a list of available ceiling texture file names in PPM format.
@@ -57,20 +59,19 @@ func (b *Builder) Build(res common.IFileSystem, level int) (*config.Root, error)
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(res, basePath)
 	//return b.generateSimple(t, 16, 16)
-	return b.generateDungeon(t, 16, 16, 16.0)
+	return b.generateDungeon(t, 16, 16, cellSize)
 }
 
 // createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.
 func (b *Builder) createCube(x float64, y float64, max float64, floor float64, ceil float64) *config.Sector {
-	const falloff = 10.0
-	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient, falloff)
+	sector := config.NewConfigSector(utils.NextUUId(), rnd.Float64(), config.LightKindAmbient, lightFalloff)
 	sector.FloorY = floor
 	sector.CeilY = ceil
 
 	floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
 
 	pts := [4]geometry.XY{
 		{X: x, Y: y},
@@ -89,9 +90,9 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 		lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 		middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -102,10 +103,18 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
 	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
+	player.Flash.ZFar = 8192
+	player.Flash.Intensity = 0.02
+	player.Flash.Falloff = 0
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
 	player.OnImpact = playerLogic.OnImpact
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal.AspectRatio = 1.0
+
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
 	s1 := b.createCube(0, 0, 8, 0, 20)
@@ -135,15 +144,22 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 }
 
 func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
+	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 150, 1, 10)
+	player.Flash.ZFar = 8192
+	player.Flash.Intensity = 0.015
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+
 	playerLogic := common.NewPlayer()
 	player.OnCollision = playerLogic.OnCollision
 	player.OnImpact = playerLogic.OnImpact
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal.AspectRatio = 1.0
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
 
-	// 1. Generazione Logica (Drunkard's Walk)
+	//  Generazione Logica (Drunkard's Walk)
 	grid := make([][]bool, gridWidth)
 	for i := range grid {
 		grid[i] = make([]bool, gridHeight)
@@ -171,7 +187,7 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 		}
 	}
 
-	// 2. Creazione Settori e Altitudini
+	// Creazione Settori e Altitudini
 	sectorGrid := make([][]*config.Sector, gridWidth)
 	for i := range sectorGrid {
 		sectorGrid[i] = make([]*config.Sector, gridHeight)
@@ -182,9 +198,10 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 			if !grid[x][y] {
 				continue
 			}
-			const falloff = 10.0
+
 			id := fmt.Sprintf("cell_%d_%d", x, y)
-			sector := config.NewConfigSector(id, randomF(0.2, 1.0), config.LightKindAmbient, falloff)
+			lightIntensity := randomF(0.2, 1.0)
+			sector := config.NewConfigSector(id, lightIntensity, config.LightKindAmbient, lightFalloff)
 
 			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline
 			distFromCenter := math.Abs(float64(x-gridWidth/2)) + math.Abs(float64(y-gridHeight/2))
@@ -193,15 +210,15 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 			floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
 
 			sectorGrid[x][y] = sector
 			cfg.Sectors = append(cfg.Sectors, sector)
 		}
 	}
 
-	// 3. Generazione Topologica (Edge e Portali)
+	// Generazione Topologica (Edge e Portali)
 	for x := 0; x < gridWidth; x++ {
 		for y := 0; y < gridHeight; y++ {
 			sector := sectorGrid[x][y]
@@ -239,16 +256,16 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 				upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 				lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 				middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
-				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, scaleW, scaleH, 0, 0)
+				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
 
 				sector.Segments = append(sector.Segments, seg)
 			}
 		}
 	}
 
-	// 4. Spawn del Giocatore al centro esatto
+	// Spawn del Giocatore al centro esatto
 	cfg.Player.Position = geometry.XYZ{X: float64(gridWidth/2)*cellSize + cellSize/2, Y: float64(gridHeight/2)*cellSize + cellSize/2, Z: 0}
 	cfg.Player.Angle = 0.0
 

@@ -10,6 +10,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const (
+	lightTargetName = "targetname"
+)
+
 // _q2LightStyle0 defines a static light style with a constant intensity of 1.0.
 var _q2LightStyle0 = []float64{1.0}
 
@@ -139,7 +143,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	targetEntities := make(map[string]*lumps.Entity)
 
 	for _, ent := range entities {
-		if targetStr, _ := ent.GetProperty("targetname"); len(targetStr) > 0 {
+		if targetStr, _ := ent.GetProperty(lightTargetName); len(targetStr) > 0 {
 			targetEntities[targetStr] = ent
 		}
 	}
@@ -151,14 +155,14 @@ func NewLights(entities []*lumps.Entity) *Lights {
 
 // CreateLight generates a light source based on a Quake 2 entity's
 // properties, position, and subclass.
-func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
+func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light {
 	kind := config.LightKindAmbient
-	q1Intensity := 300.0
+	q2Intensity := 300.0
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
 	coneAngle := 10.0                  // Quake 2 spotlight default.
 	lightStr, _ := ent.GetProperty("light")
 	lightAltStr, _ := ent.GetProperty("_light")
-	targetStr, _ := ent.GetProperty("target")
+	targetStr, _ := ent.GetProperty(lightTargetName)
 	angleStr, _ := ent.GetProperty("angle")
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")
@@ -166,14 +170,11 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	coneStr, _ := ent.GetProperty("_cone")
 
 	if v, ok := lumps.ParseFloat(lightStr); ok {
-		q1Intensity = v
+		q2Intensity = v
 	} else if v, ok = lumps.ParseFloat(lightAltStr); ok {
-		q1Intensity = v
+		q2Intensity = v
 	}
-	//fmt.Printf("light: %f %s %s\n", intensity, targetStr, subClass)
-	//fmt.Println(ent)
 
-	// Spotlight
 	//   target     -> spotlight directed toward target entity
 	//   light_spot -> spotlight directed by "angle"
 	if len(targetStr) > 0 {
@@ -197,7 +198,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			dirY = dy / length
 			dirZ = dz / length
 		}
-	} else if subClass == "light_spot" {
+	} else if len(coneStr) > 0 || len(angleStr) > 0 {
 		kind = config.LightKindSpot
 		angle := 0.0
 		if v, ok := lumps.ParseFloat(angleStr); ok {
@@ -235,14 +236,14 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	var desiredRadius float64
 	var desiredBrightness float64
 	if kind == config.LightKindSpot {
-		desiredRadius = q1RadiusQuadScaleSpot * (q1Intensity * q1Intensity)
-		desiredBrightness = q1Intensity * 0.1
+		desiredRadius = q1RadiusQuadScaleSpot * (q2Intensity * q2Intensity)
+		desiredBrightness = q2Intensity * 1.1
 		if c, valid := lumps.ParseFloat(angleStr); valid {
 			coneAngle = c
 		}
 	} else {
-		desiredRadius = q1RadiusQuadScalePoint * (q1Intensity * q1Intensity)
-		desiredBrightness = q1Intensity * 0.4
+		desiredRadius = q1RadiusQuadScalePoint * (q2Intensity * q2Intensity)
+		desiredBrightness = q2Intensity * 0.4
 	}
 
 	// Engine Rule

@@ -111,10 +111,17 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
-		baseClass, subClass := classname, ""
-		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass, subClass = z[0], z[1]
-		}
+		parts := strings.Split(classname, "_")
+		nameSpace := parts[0]
+		//class := ""
+		//subType := ""
+		//if len(parts) > 1 {
+		//	class = parts[1]
+		//}
+		//if len(parts) > 2 {
+		//	subType = parts[2]
+		//}
+
 		var pos geometry.XYZ
 		if origin, ok := ent.GetProperty("origin"); ok {
 			x, y, z, _ := lumps.ParseVector(origin)
@@ -139,7 +146,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 			continue
 		}
 
-		switch baseClass {
+		switch nameSpace {
 		case "worldspawn":
 			// Ignored: it is the base map, geometry is already handled by worldModel
 		case "info":
@@ -155,7 +162,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			if light := lights.CreateLight(ent, pos, subClass); light != nil {
+			if light := lights.CreateLight(ent, pos); light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":

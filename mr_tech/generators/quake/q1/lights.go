@@ -10,6 +10,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const lightTargetName = "targetname"
+
 // _q1LightStyle0 represents a light style with a constant intensity value of 1.0 throughout.
 var _q1LightStyle0 = []float64{1.0}
 
@@ -137,7 +139,7 @@ type Lights struct {
 func NewLights(entities []*lumps.Entity) *Lights {
 	targetEntities := make(map[string]*lumps.Entity)
 	for _, ent := range entities {
-		if targetStr, _ := ent.GetProperty("targetname"); len(targetStr) > 0 {
+		if targetStr, _ := ent.GetProperty(lightTargetName); len(targetStr) > 0 {
 			targetEntities[targetStr] = ent
 		}
 	}
@@ -153,7 +155,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
 	coneAngle := 40.0                  // Quake default
 	lightStr, _ := ent.GetProperty("light")
-	targetStr, _ := ent.GetProperty("target")
+	targetStr, _ := ent.GetProperty(lightTargetName)
 	mangleStr, _ := ent.GetProperty("mangle")
 	angleStr, _ := ent.GetProperty("angle")
 	colorStr, _ := ent.GetProperty("_color")
@@ -187,8 +189,6 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			dirZ = dz / length
 		}
 	} else if len(mangleStr) > 0 {
-		//TODO DISABLED FOR THE MOMENT
-		//return nil
 		kind = config.LightKindSpot
 		yaw, pitch, _, valid := lumps.ParseVector(mangleStr)
 		if !valid {
@@ -196,9 +196,6 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 			return nil
 		}
 		dirX, dirY, dirZ = lumps.CalcDirection(yaw, pitch)
-		//dirZ = dirZ
-		//dirY = -dirY
-		//dirX = -dirX
 	}
 
 	r, g, b, ok := lumps.ParseColorVector(colorStr)
@@ -225,8 +222,6 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	// Engine Rule
 	intensity := desiredBrightness
 	falloff := desiredRadius / (engineDecayConstant * intensity)
-
-	//fmt.Printf("Light intensity: %f, falloff: %f\n", intensity, falloff)
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
 	light.R = r

@@ -186,6 +186,7 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
 func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
 	s.ctx.UseProgram(s.prg)
+
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, &proj[0])
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, &invView[0])

@@ -170,6 +170,13 @@ void main() {
     vec3 L_flash = normalize(flashPosView - ViewPos);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
+    //int debugLights = 1;
+    //if (debugLights == 1) {
+    //    FragColor = vec4(flashCone, flashCone, flashCone, 1.0);
+    //    BrightColor = vec4(0.0);
+    //   return;
+    //}
+
     vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
     projMain = projMain * 0.5 + 0.5;
 

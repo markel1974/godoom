@@ -121,7 +121,7 @@ func (m *MapMetrics) Rebuild(width, height int32) {
 		m.shadowAspect = 1.0
 	}
 	m.flash.Rebuild(ndcRange)
-	m.updateFlashProj()
+	m.updateShadowProj()
 }
 
 // SetMapCenter updates the map's center coordinates and light camera Y position, recalculating the room view matrix.
@@ -178,8 +178,8 @@ func (m *MapMetrics) updateRoomView(lX, lY, lZ float32) {
 }
 
 // updateFlashProj computes and updates the flashlight projection matrix using its field of view and near/far plane distances.
-func (m *MapMetrics) updateFlashProj() {
-	shadowFov := float32(m.flash.GetShadowFov())
+func (m *MapMetrics) updateShadowProj() {
+	shadowFov := float32(m.flash.GetShadowFovScale())
 	zNearFlash := float32(m.flash.GetZNear())
 	zFarFlash := float32(m.flash.GetZFar())
 

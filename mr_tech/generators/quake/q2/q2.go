@@ -180,6 +180,8 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 			//TODO
 		case "misc":
 			//TODO
+		case "turret":
+			//TODO
 		default:
 			thingPath := q2.GetModelFileName(classname)
 			cThing, err := things.CreateThing(thingPath, pos, classname)

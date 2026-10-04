@@ -192,50 +192,6 @@ func (m *MapMetrics) updateFlashProj() {
 	}
 }
 
-// CreateSpaces2d generates transformation matrices for 2D projections, including room space, flashlight space, and main view.
-func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
-	// Clean extraction (World Space: Z-UP)
-	// Setup Camera (Main View)
-	sinA, cosA := vi.GetAngleFull()
-	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
-	rX, rY, rZ := -fZ, float32(0.0), fX
-	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
-	wX, wY, wZ := vi.GetView()
-	// Spatial mapping for OpenGL (X, Z, -Y)
-	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
-	mainView := [16]float32{
-		rX, uX, -fX, 0,
-		rY, uY, -fY, 0,
-		rZ, uZ, -fZ, 0,
-		-dot(rX, rY, rZ, camX, camY, camZ),
-		-dot(uX, uY, uZ, camX, camY, camZ),
-		dot(fX, fY, fZ, camX, camY, camZ), 1,
-	}
-	// Local ShadowLight Space (LookAt calculation)
-	pitchShear := float32(-vi.GetPitch())
-	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
-	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	targetX, targetY, targetZ := float32(0.0), flashDirY*float32(m.flash.GetZFar()), -float32(m.flash.GetZFar())
-	// Forward, Right, Up for the flashlight
-	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
-	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
-	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
-	// Local Translation
-	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
-	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
-	tLocZ := dot(ffX, ffY, ffZ, posViewX, posViewY, posViewZ)
-	flashViewLocal := [16]float32{
-		rrX, uuX, -ffX, 0,
-		rrY, uuY, -ffY, 0,
-		rrZ, uuZ, -ffZ, 0,
-		tLocX, tLocY, tLocZ, 1,
-	}
-	// Final Matrices
-	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
-	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
-	return m.roomSpace, flashSpace, mainView
-}
-
 // CreateRoomSpace generates and returns the room space and main view transformation matrices based on the provided view matrix.
 func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]float32) {
 	// Clean extraction (World Space: Z-UP)
@@ -285,7 +241,7 @@ func (m *MapMetrics) CreateFlashSpace(mainView [16]float32, flashOffsetX, flashO
 
 // CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.
 func (m *MapMetrics) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) [16]float32 {
-	// 1. Projection Matrix (Perspective)
+	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
 	fovRad := fovDeg * math.Pi / 180.0
 	f := float32(1.0 / math.Tan(float64(fovRad)/2.0))
@@ -295,36 +251,29 @@ func (m *MapMetrics) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ flo
 		0, 0, (far + near) / (near - far), -1.0,
 		0, 0, (2.0 * far * near) / (near - far), 0,
 	}
-
-	// 2. View Matrix (LookAt)
+	// View Matrix (LookAt)
 	ffX, ffY, ffZ := normalize(dirX, dirY, dirZ)
-
 	// Standard UP vector (Y-up in OpenGL)
 	upX, upY, upZ := float32(0.0), float32(1.0), float32(0.0)
-
 	// Anti-Gimbal-Lock safety: if the spotlight points straight up or down (floor/ceiling)
 	// the cross product would fail. Use -Z as alternative UP.
 	if math.Abs(float64(ffY)) > 0.999 {
 		upX, upY, upZ = 0.0, 0.0, -1.0
 	}
-
 	// R = Right, U = Recalculated Up
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, upX, upY, upZ))
 	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
-
 	// Negative translation (dot product between inverted axes and position)
 	tX := -dot(rrX, rrY, rrZ, posX, posY, posZ)
 	tY := -dot(uuX, uuY, uuZ, posX, posY, posZ)
 	tZ := dot(ffX, ffY, ffZ, posX, posY, posZ)
-
 	view := [16]float32{
 		rrX, uuX, -ffX, 0,
 		rrY, uuY, -ffY, 0,
 		rrZ, uuZ, -ffZ, 0,
 		tX, tY, tZ, 1,
 	}
-
-	// 3. Final Light Space (Proj * View)
+	// Final Light Space (Proj * View)
 	return MatrixMultiply4x4(proj, view)
 }
 
@@ -376,6 +325,52 @@ func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
 	}
 	return inv, true
 }
+
+/*
+// CreateSpaces2d generates transformation matrices for 2D projections, including room space, flashlight space, and main view.
+func (m *MapMetrics) CreateSpaces2d(vi *model.ViewMatrix, flashOffsetX, flashOffsetY float32) ([16]float32, [16]float32, [16]float32) {
+	// Clean extraction (World Space: Z-UP)
+	// Setup Camera (Main View)
+	sinA, cosA := vi.GetAngleFull()
+	fX, fY, fZ := float32(cosA), float32(0.0), float32(-sinA)
+	rX, rY, rZ := -fZ, float32(0.0), fX
+	uX, uY, uZ := float32(0.0), float32(1.0), float32(0.0)
+	wX, wY, wZ := vi.GetView()
+	// Spatial mapping for OpenGL (X, Z, -Y)
+	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
+	mainView := [16]float32{
+		rX, uX, -fX, 0,
+		rY, uY, -fY, 0,
+		rZ, uZ, -fZ, 0,
+		-dot(rX, rY, rZ, camX, camY, camZ),
+		-dot(uX, uY, uZ, camX, camY, camZ),
+		dot(fX, fY, fZ, camX, camY, camZ), 1,
+	}
+	// Local ShadowLight Space (LookAt calculation)
+	pitchShear := float32(-vi.GetPitch())
+	flashDirY := pitchShear / (ndcRange * float32(model.VFov))
+	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
+	targetX, targetY, targetZ := float32(0.0), flashDirY*float32(m.flash.GetZFar()), -float32(m.flash.GetZFar())
+	// Forward, Right, Up for the flashlight
+	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
+	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
+	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+	// Local Translation
+	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
+	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
+	tLocZ := dot(ffX, ffY, ffZ, posViewX, posViewY, posViewZ)
+	flashViewLocal := [16]float32{
+		rrX, uuX, -ffX, 0,
+		rrY, uuY, -ffY, 0,
+		rrZ, uuZ, -ffZ, 0,
+		tLocX, tLocY, tLocZ, 1,
+	}
+	// Final Matrices
+	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
+	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
+	return m.roomSpace, flashSpace, mainView
+}
+*/
 
 // GetFovScaleFactor retrieves the scaling factor applied to the field of view (FOV) for perspective calculations.
 //func (m *MapMetrics) GetFovScaleFactor() float32 {

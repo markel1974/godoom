@@ -249,7 +249,7 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	var desiredBrightness float64
 	if kind == config.LightKindSpot {
 		desiredRadius = q1RadiusQuadScaleSpot * (q3Intensity * q3Intensity)
-		desiredBrightness = q3Intensity * 0.05
+		desiredBrightness = q3Intensity * 0.10
 		//TODO RADIUS
 		//if rs, valid := lumps.ParseFloat(radiusStr); valid {
 		//	radius = rs

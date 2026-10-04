@@ -161,96 +161,104 @@ func NewLights(entities []*lumps.Entity) *Lights {
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light {
 	kind := config.LightKindAmbient
 	q2Intensity := 300.0
-	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
-	coneAngle := 10.0                  // Quake 2 spotlight default.
+	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default Q2 light direction: down.
+	coneAngle := 10.0                  // qrad3/Q2 default spotlight cone.
+
 	lightStr, _ := ent.GetProperty("light")
 	lightAltStr, _ := ent.GetProperty("_light")
 	targetStr, _ := ent.GetProperty("target")
-	angleStr, _ := ent.GetProperty("angle")
+	classname, _ := ent.GetProperty("classname")
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")
 	styleAltStr, _ := ent.GetProperty("_style")
 	coneStr, _ := ent.GetProperty("_cone")
 
+	// Intensity
+	// Q2 uses "light" as the normal intensity key.
+	// "_light" is accepted as an alternative.
 	if v, ok := lumps.ParseFloat(lightStr); ok {
 		q2Intensity = v
-	} else if v, ok = lumps.ParseFloat(lightAltStr); ok {
+	} else if v, ok := lumps.ParseFloat(lightAltStr); ok {
 		q2Intensity = v
 	}
 
-	//   target     -> spotlight directed toward target entity
-	//   light_spot -> spotlight directed by "angle"
+	// Spotlight
+	// In Q2 a spotlight can be represented by a light having a "target".
+	// The target is NOT a group: it identifies the entity used to determine
+	// the direction. If multiple entities have the same targetname, the
+	// target lookup uses the first one.
+	// targetname itself has no directional meaning for a light.
 	if len(targetStr) > 0 {
 		kind = config.LightKindSpot
 		targetEnt := l.targets[targetStr]
 		if targetEnt == nil {
-			fmt.Printf("warning: target entity %q not found\n", targetStr)
+			fmt.Printf("warning: light target entity %q not found\n", targetStr)
 			return nil
 		}
 		originStr, _ := targetEnt.GetProperty("origin")
 		tx, ty, tz, ok := lumps.ParseVector(originStr)
 		if !ok {
-			fmt.Printf("warning: invalid origin for target %q: %q\n", targetStr, originStr)
+			fmt.Printf("warning: invalid origin for light target %q: %q\n", targetStr, originStr)
 			return nil
 		}
+
 		dx := tx - pos.X
 		dy := ty - pos.Y
 		dz := tz - pos.Z
+
 		if length := math.Sqrt(dx*dx + dy*dy + dz*dz); length > 0 {
 			dirX = dx / length
 			dirY = dy / length
 			dirZ = dz / length
 		}
-	} else if len(coneStr) > 0 || len(angleStr) > 0 {
-		kind = config.LightKindSpot
-		angle := 0.0
-		if v, ok := lumps.ParseFloat(angleStr); ok {
-			angle = v
-		}
-
-		//   -1 = straight up
-		//   -2 = straight down
-		// Otherwise angle is the horizontal yaw.
-		switch angle {
-		case -1:
-			dirX, dirY, dirZ = 0.0, 0.0, 1.0
-		case -2:
-			dirX, dirY, dirZ = 0.0, 0.0, -1.0
-		default:
-			dirX, dirY, dirZ = lumps.CalcAngleDirection(angle)
-		}
 	}
 
+	// Optional light_spot compatibility
+	// The retail Q2 levels examined so far use "light", not "light_spot",
+	// and no such entity was found in levels 12 and 18.
+	// Keep support here for maps/tools using the extended light_spot
+	// representation, but do not confuse it with targetname semantics.
+	if kind != config.LightKindSpot && classname == "light_spot" {
+		kind = config.LightKindSpot
+	}
+
+	// Color
 	r, g, b, ok := lumps.ParseColorVector(colorStr)
 	if !ok {
 		r, g, b = 1.0, 1.0, 1.0
 	}
+
 	// Cone
+	// Q2/qrad3 uses "_cone" for the spotlight cone.
+	// Default is 10 degrees.
 	if kind == config.LightKindSpot {
-		if c, valid := lumps.ParseFloat(coneStr); valid {
+		if c, valid := lumps.ParseFloat(coneStr); valid && c > 0 {
 			coneAngle = c
 		}
 	}
 
+	// Radius / brightness conversion
 	const engineDecayConstant = 4.605
-	const q1RadiusQuadScalePoint = 0.004605
-	const q1RadiusQuadScaleSpot = 0.0115
+	const q2RadiusQuadScalePoint = 0.004605
+	const q2RadiusQuadScaleSpot = 0.0115
 
 	var desiredRadius float64
 	var desiredBrightness float64
 	if kind == config.LightKindSpot {
-		desiredRadius = q1RadiusQuadScaleSpot * (q2Intensity * q2Intensity)
+		desiredRadius = q2RadiusQuadScaleSpot * (q2Intensity * q2Intensity)
 		desiredBrightness = q2Intensity * 1.1
-		if c, valid := lumps.ParseFloat(angleStr); valid {
-			coneAngle = c
-		}
 	} else {
-		desiredRadius = q1RadiusQuadScalePoint * (q2Intensity * q2Intensity)
+		desiredRadius = q2RadiusQuadScalePoint * (q2Intensity * q2Intensity)
 		desiredBrightness = q2Intensity * 0.4
 	}
-	// Engine Rule
+
+	// Engine rule: radius = falloff * decayConstant * intensity
+	// Therefore: falloff = radius / (decayConstant * intensity)
 	intensity := desiredBrightness
-	falloff := desiredRadius / (engineDecayConstant * intensity)
+	falloff := 0.0
+	if intensity > 0 {
+		falloff = desiredRadius / (engineDecayConstant * intensity)
+	}
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
 	light.R = r
@@ -260,16 +268,16 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 	light.DirY = dirY
 	light.DirZ = dirZ
 
-	// Q2 supports both style and _style.
+	// style
 	if len(styleStr) > 0 {
 		light.Style = LightStyle(styleStr)
-	} else {
+	} else if len(styleAltStr) > 0 {
 		light.Style = LightStyle(styleAltStr)
 	}
 
+	// Spotlight cone
 	light.CutOff = coneAngle
 	light.OuterCutOff = coneAngle + 5.0
-
 	if light.Intensity <= 0 {
 		fmt.Println("warning: light intensity is zero")
 	}

@@ -156,8 +156,9 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 	player.OnImpact = playerLogic.OnImpact
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = 1.0
-	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
-	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
+
+	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	cfg := config.NewConfigRoot(cal, nil, player, nil, scale, t)
 
 	//  Generazione Logica (Drunkard's Walk)
 	grid := make([][]bool, gridWidth)

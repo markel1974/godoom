@@ -14,7 +14,6 @@ uniform float u_emissiveIntensity;
 uniform float u_aoFactor;
 
 uniform sampler2DArray u_texture[4];
-uniform sampler2DArray u_normalMap[4];
 uniform sampler2DArray u_emissiveMap[4];
 
 vec4 getDiffuse(vec3 tc) {

@@ -7,6 +7,16 @@ in vec3 TexCoords;
 in float FragDepth;
 
 uniform sampler2DArray u_texture[4];
+uniform sampler2DArray u_normalMap[4];
+
+vec3 getNormal(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
+    if (b == 1) return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
+    if (b == 2) return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
+    return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
+}
 
 vec4 getDiffuse(vec3 tc) {
     int b = int(tc.z) / 1000;
@@ -38,6 +48,30 @@ void main() {
         geoNormal = -geoNormal;
     }
 
-    // Scrive la normale geometrica nel G-Buffer
-    gNormal = vec4(geoNormal, 1.0);
+    // Lettura della Normal Map
+    vec3 mapColor = getNormal(TexCoords);
+    vec3 finalNormal = geoNormal;
+    
+    if (length(mapColor) > 0.1) {
+        vec3 unpacked = (mapColor * 2.0) - 1.0;
+        vec3 mapNormal = normalize(unpacked);
+
+        vec2 duv1 = dFdx(TexCoords.xy);
+        vec2 duv2 = dFdy(TexCoords.xy);
+        
+        vec3 dp2perp = cross(dp2, geoNormal);
+        vec3 dp1perp = cross(geoNormal, dp1);
+        vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+        vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+        
+        float lenT = length(T);
+        float lenB = length(B);
+        if (lenT > 1e-8 && lenB > 1e-8) {
+            mat3 TBN = mat3(T / lenT, B / lenB, geoNormal);
+            finalNormal = normalize(TBN * mapNormal);
+        }
+    }
+
+    // Scrive la normale calcolata nel G-Buffer per un SSAO molto più dettagliato
+    gNormal = vec4(finalNormal, 1.0);
 }

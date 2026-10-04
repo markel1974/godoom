@@ -15,6 +15,7 @@ type GeometryLoc int
 // GeometryLocLast marks the end of the GeometryLoc constants.
 const (
 	GeometryLocTexture = GeometryLoc(iota)
+	GeometryLocNormalMap
 	GeometryLocView
 	GeometryLocProjection
 	GeometryLocLast
@@ -42,7 +43,9 @@ func NewGeometry(ctx api.IContext) *Geometry {
 func (s *Geometry) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
+	normalUnits := []int32{4, 5, 6, 7}
 	s.ctx.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocNormalMap), 4, &normalUnits[0])
 	return nil
 }
 
@@ -84,6 +87,7 @@ func (s *Geometry) Compile(assets IAssets) error {
 		return err
 	}
 	s.table[GeometryLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[GeometryLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
 	s.table[GeometryLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 	s.table[GeometryLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	for idx, v := range s.table {

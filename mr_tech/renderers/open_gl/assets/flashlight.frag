@@ -57,7 +57,7 @@ float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias, float volumetricSteps) {
+float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias, int volumetricSteps) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
@@ -103,7 +103,7 @@ vec3 calculateNormal() {
         return geoNormal;
     }
     vec3 unpacked = (mapColor * 2.0) - 1.0;
-    vec3 mapNormal = normalize(mix(vec3(0.0, 0.0, 1.0), unpacked, 0.7));
+    vec3 mapNormal = normalize(unpacked);
 
     vec2 duv1 = dFdx(TexCoords.xy);
     vec2 duv2 = dFdy(TexCoords.xy);
@@ -112,10 +112,10 @@ vec3 calculateNormal() {
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
-    float denom = max(dot(T, T), dot(B, B));
-    if (denom > 1e-5 && denom < 1e6) {
-        float invmax = inversesqrt(denom);
-        mat3 TBN = mat3(T * invmax, B * invmax, geoNormal);
+    float lenT = length(T);
+    float lenB = length(B);
+    if (lenT > 1e-8 && lenB > 1e-8) {
+        mat3 TBN = mat3(T / lenT, B / lenB, geoNormal);
         return normalize(TBN * mapNormal);
     }
     return geoNormal;

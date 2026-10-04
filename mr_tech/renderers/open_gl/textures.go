@@ -133,7 +133,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			resizedPixels = UpscaleBicubic(pixels, w, h, size, size, stride)
 		}
 		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
-		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 7.0)
+		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3)
 
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
@@ -260,7 +260,12 @@ func generateNormalMap(pixels []uint8, width, height, stride int, strength float
 // stride is the number of bytes per pixel; typically 4 for RGBA data.
 // strength controls the influence of the detected edges on the resulting normal map.
 // Returns the RGBA pixel data for the generated normal map.
-func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength float64) []uint8 {
+func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength float64, sCenterWeight float64, sSideWeight float64) []uint8 {
+	//const sCenterWeight = 10.0
+	//const sSideWeight = 3.0
+	sPositive := 2.0*sSideWeight + sCenterWeight
+	sRange := 2.0 * sPositive
+
 	size := width * height
 	luma := make([]float64, size)
 
@@ -286,8 +291,9 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 		return luma[y*width+x]
 	}
 
-	// Fattore di normalizzazione per i pesi di Scharr (3 + 10 + 3 = 16 -> span 32)
-	weightNorm := strength / 32.0
+	// Fattore di normalizzazione in base ai pesi del kernel.
+	// Il range teorico è il doppio della somma dei pesi positivi.
+	weightNorm := strength / sRange
 
 	// Convoluzione di Scharr 3x3
 	for y := 0; y < height; y++ {
@@ -304,16 +310,16 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 			br := getLuma(x+1, y+1)
 
 			// Operatore Scharr X e Y
-			dX := ((tr + 10.0*r + br) - (tl + 10.0*l + bl)) * weightNorm
-			dY := ((bl + 10.0*bc + br) - (tl + 10.0*tc + tr)) * weightNorm
+			dX := ((sSideWeight*tr + sCenterWeight*r + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*l + sSideWeight*bl)) * weightNorm
+			dY := ((sSideWeight*bl + sCenterWeight*bc + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*tc + sSideWeight*tr)) * weightNorm
 
 			invLen := 1.0 / math.Sqrt(dX*dX+dY*dY+1.0)
 			idx := (y*width + x) * stride
 
 			// Packing nel range [0, 255]
-			normPixels[idx] = uint8(((dX * invLen) + 1.0) * 127.5)
-			normPixels[idx+1] = uint8(((-dY * invLen) + 1.0) * 127.5)
-			normPixels[idx+2] = uint8((invLen + 1.0) * 127.5)
+			normPixels[idx] = uint8(((dX*invLen)+1.0)*127.5 + 0.5)
+			normPixels[idx+1] = uint8(((-dY*invLen)+1.0)*127.5 + 0.5)
+			normPixels[idx+2] = uint8((invLen+1.0)*127.5 + 0.5)
 
 			if stride >= 4 {
 				normPixels[idx+3] = 255

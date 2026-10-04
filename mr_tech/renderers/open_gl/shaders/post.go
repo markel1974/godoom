@@ -38,10 +38,10 @@ type Post struct {
 	texBrightBuffer uint32
 
 	// FBO Multisampled per il rendering 3D
-	msaaFbo             uint32
-	texColorBufferMSAA  uint32
-	texBrightBufferMSAA uint32
-	rboDepthMSAA        uint32
+	msaaFbo       uint32
+	rboColorMSAA  uint32
+	rboBrightMSAA uint32
+	rboDepthMSAA  uint32
 
 	vao uint32
 	vbo uint32
@@ -198,8 +198,8 @@ func (s *Post) allocate(width, height int32) {
 	// Prevenzione memory leak: distruzione esplicita dei buffer precedenti
 	if s.msaaFbo != 0 {
 		s.ctx.DeleteFramebuffers(1, &s.msaaFbo)
-		s.ctx.DeleteTextures(1, &s.texColorBufferMSAA)
-		s.ctx.DeleteTextures(1, &s.texBrightBufferMSAA)
+		s.ctx.DeleteRenderbuffers(1, &s.rboColorMSAA)
+		s.ctx.DeleteRenderbuffers(1, &s.rboBrightMSAA)
 		s.ctx.DeleteRenderbuffers(1, &s.rboDepthMSAA)
 
 		s.ctx.DeleteFramebuffers(1, &s.fbo)
@@ -211,15 +211,15 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.GenFramebuffers(1, &s.msaaFbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
 
-	s.ctx.GenTextures(1, &s.texColorBufferMSAA)
-	s.ctx.BindTexture(api.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA)
-	s.ctx.TexImage2DMultisample(api.TEXTURE_2D_MULTISAMPLE, 4, api.RGBA16F, s.w, s.h, true)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D_MULTISAMPLE, s.texColorBufferMSAA, 0)
+	s.ctx.GenRenderbuffers(1, &s.rboColorMSAA)
+	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboColorMSAA)
+	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.RGBA16F, s.w, s.h)
+	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.RENDERBUFFER, s.rboColorMSAA)
 
-	s.ctx.GenTextures(1, &s.texBrightBufferMSAA)
-	s.ctx.BindTexture(api.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA)
-	s.ctx.TexImage2DMultisample(api.TEXTURE_2D_MULTISAMPLE, 4, api.RGBA16F, s.w, s.h, true)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D_MULTISAMPLE, s.texBrightBufferMSAA, 0)
+	s.ctx.GenRenderbuffers(1, &s.rboBrightMSAA)
+	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboBrightMSAA)
+	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.RGBA16F, s.w, s.h)
+	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.RENDERBUFFER, s.rboBrightMSAA)
 
 	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
 	s.ctx.DrawBuffers(2, &attachments[0])

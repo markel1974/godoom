@@ -205,19 +205,28 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	if !ok {
 		r, g, b = 1.0, 1.0, 1.0
 	}
+	const engineDecayConstant = 4.605
+	const q1RadiusQuadScalePoint = 0.004605
+	const q1RadiusQuadScaleSpot = 0.0115
 
-	var falloff float64
-	var intensity float64
+	var desiredRadius float64
+	var desiredBrightness float64
 	if kind == config.LightKindSpot {
-		falloff = q1Intensity * 0.05
-		intensity = q1Intensity * 0.1
+		desiredRadius = q1RadiusQuadScaleSpot * (q1Intensity * q1Intensity)
+		desiredBrightness = q1Intensity * 0.008
 		if c, valid := lumps.ParseFloat(angleStr); valid {
 			coneAngle = c
 		}
 	} else {
-		falloff = q1Intensity * 0.01
-		intensity = q1Intensity * 0.1
+		desiredRadius = q1RadiusQuadScalePoint * (q1Intensity * q1Intensity)
+		desiredBrightness = q1Intensity * 0.1
 	}
+
+	// Engine Rule
+	intensity := desiredBrightness
+	falloff := desiredRadius / (engineDecayConstant * intensity)
+
+	fmt.Printf("Light intensity: %f, falloff: %f\n", intensity, falloff)
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
 	light.R = r

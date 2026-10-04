@@ -35,85 +35,86 @@ type Context struct {
 	ptrMap   map[uintptr]interface{}
 	ptrMutex sync.Mutex
 
-	jsBuffer                   js.Value
-	sharedBuffer               js.Value
-	sharedBufferCap            int
-	fn_activeTexture           js.Value
-	fn_attachShader            js.Value
-	fn_bindBuffer              js.Value
-	fn_bindBufferBase          js.Value
-	fn_bindFramebuffer         js.Value
-	fn_bindRenderbuffer        js.Value
-	fn_bindTexture             js.Value
-	fn_bindVertexArray         js.Value
-	fn_blendEquation           js.Value
-	fn_blendFunc               js.Value
-	fn_blitFramebuffer         js.Value
-	fn_bufferData              js.Value
-	fn_bufferSubData           js.Value
-	fn_checkFramebufferStatus  js.Value
-	fn_clear                   js.Value
-	fn_clearColor              js.Value
-	fn_compileShader           js.Value
-	fn_createBuffer            js.Value
-	fn_createFramebuffer       js.Value
-	fn_createProgram           js.Value
-	fn_createRenderbuffer      js.Value
-	fn_createShader            js.Value
-	fn_createTexture           js.Value
-	fn_createVertexArray       js.Value
-	fn_deleteFramebuffer       js.Value
-	fn_deleteRenderbuffer      js.Value
-	fn_deleteShader            js.Value
-	fn_deleteTexture           js.Value
-	fn_depthFunc               js.Value
-	fn_depthMask               js.Value
-	fn_disable                 js.Value
-	fn_drawArrays              js.Value
-	fn_drawBuffers             js.Value
-	fn_drawElements            js.Value
-	fn_enable                  js.Value
-	fn_enableVertexAttribArray js.Value
-	fn_framebufferRenderbuffer js.Value
-	fn_framebufferTexture2D    js.Value
-	fn_generateMipmap          js.Value
-	fn_getExtension            js.Value
-	fn_getParameter            js.Value
-	fn_getProgramInfoLog       js.Value
-	fn_getProgramParameter     js.Value
-	fn_getShaderInfoLog        js.Value
-	fn_getShaderParameter      js.Value
-	fn_getUniformBlockIndex    js.Value
-	fn_getUniformLocation      js.Value
-	fn_linkProgram             js.Value
-	fn_polygonOffset           js.Value
-	fn_readBuffer              js.Value
-	fn_renderbufferStorage     js.Value
-	fn_shaderSource            js.Value
-	fn_texImage2D              js.Value
-	fn_texImage3D              js.Value
-	fn_texParameterf           js.Value
-	fn_texParameteri           js.Value
-	fn_texSubImage3D           js.Value
-	fn_uniform1f               js.Value
-	fn_uniform1i               js.Value
-	fn_uniform1iv              js.Value
-	fn_uniform2f               js.Value
-	fn_uniform3f               js.Value
-	fn_uniform3fv              js.Value
-	fn_uniformBlockBinding     js.Value
-	fn_uniformMatrix4fv        js.Value
-	fn_useProgram              js.Value
-	fn_vertexAttribPointer     js.Value
-	fn_viewport                js.Value
-	jsInt8Array                js.Value
-	jsUint8Array               js.Value
-	jsInt16Array               js.Value
-	jsUint16Array              js.Value
-	jsInt32Array               js.Value
-	jsUint32Array              js.Value
-	jsFloat32Array             js.Value
-	jsConsole                  js.Value
+	jsBuffer                          js.Value
+	sharedBuffer                      js.Value
+	sharedBufferCap                   int
+	fn_activeTexture                  js.Value
+	fn_attachShader                   js.Value
+	fn_bindBuffer                     js.Value
+	fn_bindBufferBase                 js.Value
+	fn_bindFramebuffer                js.Value
+	fn_bindRenderbuffer               js.Value
+	fn_bindTexture                    js.Value
+	fn_bindVertexArray                js.Value
+	fn_blendEquation                  js.Value
+	fn_blendFunc                      js.Value
+	fn_blitFramebuffer                js.Value
+	fn_bufferData                     js.Value
+	fn_bufferSubData                  js.Value
+	fn_checkFramebufferStatus         js.Value
+	fn_clear                          js.Value
+	fn_clearColor                     js.Value
+	fn_compileShader                  js.Value
+	fn_createBuffer                   js.Value
+	fn_createFramebuffer              js.Value
+	fn_createProgram                  js.Value
+	fn_createRenderbuffer             js.Value
+	fn_createShader                   js.Value
+	fn_createTexture                  js.Value
+	fn_createVertexArray              js.Value
+	fn_deleteFramebuffer              js.Value
+	fn_deleteRenderbuffer             js.Value
+	fn_deleteShader                   js.Value
+	fn_deleteTexture                  js.Value
+	fn_depthFunc                      js.Value
+	fn_depthMask                      js.Value
+	fn_disable                        js.Value
+	fn_drawArrays                     js.Value
+	fn_drawBuffers                    js.Value
+	fn_drawElements                   js.Value
+	fn_enable                         js.Value
+	fn_enableVertexAttribArray        js.Value
+	fn_framebufferRenderbuffer        js.Value
+	fn_framebufferTexture2D           js.Value
+	fn_generateMipmap                 js.Value
+	fn_getExtension                   js.Value
+	fn_getParameter                   js.Value
+	fn_getProgramInfoLog              js.Value
+	fn_getProgramParameter            js.Value
+	fn_getShaderInfoLog               js.Value
+	fn_getShaderParameter             js.Value
+	fn_getUniformBlockIndex           js.Value
+	fn_getUniformLocation             js.Value
+	fn_linkProgram                    js.Value
+	fn_polygonOffset                  js.Value
+	fn_readBuffer                     js.Value
+	fn_renderbufferStorage            js.Value
+	fn_renderbufferStorageMultisample js.Value
+	fn_shaderSource                   js.Value
+	fn_texImage2D                     js.Value
+	fn_texImage3D                     js.Value
+	fn_texParameterf                  js.Value
+	fn_texParameteri                  js.Value
+	fn_texSubImage3D                  js.Value
+	fn_uniform1f                      js.Value
+	fn_uniform1i                      js.Value
+	fn_uniform1iv                     js.Value
+	fn_uniform2f                      js.Value
+	fn_uniform3f                      js.Value
+	fn_uniform3fv                     js.Value
+	fn_uniformBlockBinding            js.Value
+	fn_uniformMatrix4fv               js.Value
+	fn_useProgram                     js.Value
+	fn_vertexAttribPointer            js.Value
+	fn_viewport                       js.Value
+	jsInt8Array                       js.Value
+	jsUint8Array                      js.Value
+	jsInt16Array                      js.Value
+	jsUint16Array                     js.Value
+	jsInt32Array                      js.Value
+	jsUint32Array                     js.Value
+	jsFloat32Array                    js.Value
+	jsConsole                         js.Value
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
@@ -198,6 +199,7 @@ func NewContext(width int, height int) *Context {
 	ctx.fn_polygonOffset = ctx.gl.Get("polygonOffset").Call("bind", ctx.gl)
 	ctx.fn_readBuffer = ctx.gl.Get("readBuffer").Call("bind", ctx.gl)
 	ctx.fn_renderbufferStorage = ctx.gl.Get("renderbufferStorage").Call("bind", ctx.gl)
+	ctx.fn_renderbufferStorageMultisample = ctx.gl.Get("renderbufferStorageMultisample").Call("bind", ctx.gl)
 	ctx.fn_shaderSource = ctx.gl.Get("shaderSource").Call("bind", ctx.gl)
 	ctx.fn_texImage2D = ctx.gl.Get("texImage2D").Call("bind", ctx.gl)
 	ctx.fn_texImage3D = ctx.gl.Get("texImage3D").Call("bind", ctx.gl)
@@ -805,8 +807,7 @@ func (d *Context) RenderbufferStorage(target uint32, internalformat uint32, widt
 
 // RenderbufferStorageMultisample specifies storage format and dimensions for a multisample renderbuffer object.
 func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32) {
-	// Downgrade MSAA renderbuffers to standard renderbuffers to match downgraded MSAA textures
-	d.fn_renderbufferStorage.Invoke(target, internalformat, width, height)
+	d.fn_renderbufferStorageMultisample.Invoke(target, samples, internalformat, width, height)
 }
 
 // ShaderSource sets the source code in a shader object to the specified string array.

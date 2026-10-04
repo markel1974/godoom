@@ -81,7 +81,7 @@ func (p *Builder) Setup(res common.IFileSystem, pakPath string, lev int) (*confi
 
 	playerAngle, playerPos := reader.GetPlayerInfo()
 
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 40)
+	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact

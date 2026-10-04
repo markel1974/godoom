@@ -45,6 +45,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		definition = c[1]
 	}
 	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
+	speed := 0.0
 	switch category {
 	case "item":
 		kind = config.ThingItemDef
@@ -55,8 +56,10 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		kind = config.ThingItemDef
 	case "enemy":
 		kind = config.ThingEnemyDef
+		speed = 1000
 	case "monster":
 		kind = config.ThingEnemyDef
+		speed = 1000
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
@@ -104,7 +107,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, speed)
 
 	return thingCfg, nil
 }

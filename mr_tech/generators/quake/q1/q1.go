@@ -215,9 +215,9 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 		case "func":
 			// TODO:
 		case "trigger":
-		// TODO:
-		//case "trap":
-		//TODO
+			// TODO:
+		case "trap":
+			//TODO
 		default:
 			cThing, err := things.CreateThing(pos, classname)
 			if err != nil {

@@ -245,7 +245,6 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 		desiredRadius = q1RadiusQuadScalePoint * (q2Intensity * q2Intensity)
 		desiredBrightness = q2Intensity * 0.4
 	}
-
 	// Engine Rule
 	intensity := desiredBrightness
 	falloff := desiredRadius / (engineDecayConstant * intensity)

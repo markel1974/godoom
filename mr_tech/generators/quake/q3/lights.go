@@ -108,7 +108,7 @@ var _q3LightStyles = [][]float64{
 }
 
 // lightTargetName defines the property key for identifying an entity's target in a mapping or lighting context.
-const lightTargetName = "targetname"
+const lightTargetName = "target"
 
 // Lights is a type that manages a collection of entities and their relationships to produce light configurations.
 // It maps target names to entities and provides methods for creating and configuring light objects.
@@ -137,22 +137,21 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	mangleStr, _ := ent.GetProperty("mangle")
 	colorStr, _ := ent.GetProperty("_color")
 	angleStr, _ := ent.GetProperty("angle")
-	targetStr, hasTarget := ent.GetProperty("target")
+	targetStr, _ := ent.GetProperty(lightTargetName)
 	lightStr, _ := ent.GetProperty("light")
 	angle, _ := lumps.ParseFloat(angleStr)
 	kind := config.LightKindAmbient
+
 	//dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Q3 world coordinates: default direction is down.
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0
 	r, g, b := 1.0, 1.0, 1.0 // White light.
 	style := _q3LightStyle0
 
-	baseIntensity := 300.0 // Quake III default light intensity.
-	intensity := 0.0
-	falloff := 0.0
+	q3Intensity := 300.0 // Quake III default light intensity.
 
 	if len(lightStr) > 0 {
 		if v, ok := lumps.ParseFloat(lightStr); ok {
-			baseIntensity = v
+			q3Intensity = v
 		}
 	}
 
@@ -193,7 +192,7 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	// property.
 	// -------------------------------------------------------------------------
 
-	if hasTarget && len(targetStr) > 0 {
+	if len(targetStr) > 0 {
 		kind = config.LightKindSpot
 		if otherEnt, ok := l.targets[targetStr]; ok {
 			if originStr, ok := otherEnt.GetProperty("origin"); ok {
@@ -230,13 +229,24 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 			dirX, dirY, dirZ = lumps.CalcDirection(angle, 0)
 		}
 	}
+	const engineDecayConstant = 4.605
+	const q1RadiusQuadScalePoint = 0.004605
+	const q1RadiusQuadScaleSpot = 0.0115
+
+	var desiredRadius float64
+	var desiredBrightness float64
 	if kind == config.LightKindSpot {
-		intensity = baseIntensity * 0.01
-		falloff = baseIntensity * 0.04
+		desiredRadius = q1RadiusQuadScaleSpot * (q3Intensity * q3Intensity)
+		desiredBrightness = q3Intensity * 1
 	} else {
-		intensity = baseIntensity * 0.04
-		falloff = intensity * 0.6
+		desiredRadius = q1RadiusQuadScalePoint * (q3Intensity * q3Intensity)
+		desiredBrightness = q3Intensity * 0.002
 	}
+
+	// Engine Rule
+	intensity := desiredBrightness
+	falloff := desiredRadius / (engineDecayConstant * intensity)
+
 	cl := config.NewConfigLight(pos, intensity, kind, falloff)
 	cl.R = r
 	cl.G = g

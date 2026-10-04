@@ -153,7 +153,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 // properties, position, and subclass.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
 	kind := config.LightKindAmbient
-	intensity := 300.0
+	q1Intensity := 300.0
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
 	coneAngle := 10.0                  // Quake 2 spotlight default.
 	lightStr, _ := ent.GetProperty("light")
@@ -166,9 +166,9 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	coneStr, _ := ent.GetProperty("_cone")
 
 	if v, ok := lumps.ParseFloat(lightStr); ok {
-		intensity = v
+		q1Intensity = v
 	} else if v, ok = lumps.ParseFloat(lightAltStr); ok {
-		intensity = v
+		q1Intensity = v
 	}
 	//fmt.Printf("light: %f %s %s\n", intensity, targetStr, subClass)
 	//fmt.Println(ent)
@@ -221,28 +221,33 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	if !ok {
 		r, g, b = 1.0, 1.0, 1.0
 	}
-	// -----------------------------------------------------------------
 	// Cone
-	// -----------------------------------------------------------------
 	if kind == config.LightKindSpot {
 		if c, valid := lumps.ParseFloat(coneStr); valid {
 			coneAngle = c
 		}
 	}
 
-	// -----------------------------------------------------------------
-	// Falloff / intensity
-	// -----------------------------------------------------------------
+	const engineDecayConstant = 4.605
+	const q1RadiusQuadScalePoint = 0.004605
+	const q1RadiusQuadScaleSpot = 0.0115
 
-	var falloff float64
-
+	var desiredRadius float64
+	var desiredBrightness float64
 	if kind == config.LightKindSpot {
-		falloff = intensity * 0.1
-		intensity = intensity * 0.1
+		desiredRadius = q1RadiusQuadScaleSpot * (q1Intensity * q1Intensity)
+		desiredBrightness = q1Intensity * 0.1
+		if c, valid := lumps.ParseFloat(angleStr); valid {
+			coneAngle = c
+		}
 	} else {
-		falloff = intensity * 0.01
-		intensity = intensity * 0.3
+		desiredRadius = q1RadiusQuadScalePoint * (q1Intensity * q1Intensity)
+		desiredBrightness = q1Intensity * 0.4
 	}
+
+	// Engine Rule
+	intensity := desiredBrightness
+	falloff := desiredRadius / (engineDecayConstant * intensity)
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
 	light.R = r

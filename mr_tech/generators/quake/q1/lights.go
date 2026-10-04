@@ -226,7 +226,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass strin
 	intensity := desiredBrightness
 	falloff := desiredRadius / (engineDecayConstant * intensity)
 
-	fmt.Printf("Light intensity: %f, falloff: %f\n", intensity, falloff)
+	//fmt.Printf("Light intensity: %f, falloff: %f\n", intensity, falloff)
 
 	light := config.NewConfigLight(pos, intensity, kind, falloff)
 	light.R = r

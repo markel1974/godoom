@@ -107,7 +107,6 @@ func (s *Lights) SetupSamplers() error {
 	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in flashlight.go
 	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
 	s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
-
 	return nil
 }
 
@@ -186,11 +185,6 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
 func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj, invView, roomSpace [16]float32, ambient float32, screenW, screenH float32) {
-	shadows := s.shadows
-	volSteps := int32(s.cal.VolSteps)
-	//TODO disabled for performance tuning
-	shadows = 0
-
 	s.ctx.UseProgram(s.prg)
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, &proj[0])
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, &view[0])
@@ -199,8 +193,8 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 	s.ctx.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
 	s.ctx.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	s.ctx.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), shadows)
-	s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), volSteps)
+	s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
+	s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
 	s.ctx.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	s.ctx.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
 	s.ctx.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))

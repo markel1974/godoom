@@ -184,7 +184,12 @@ void main() {
     vec3 litRoom = albedo * NdotL_room * u_ambient_light;
     vec3 roomBeam = vec3(0.0); // By default, no volumetric fog
 
-    if (u_enableShadows == 1) {
+    //Shadow lights are in flashlights.frag
+    //we ha to remove u_enableShadows, u_volumetricSteps, u_roomShadowMap
+    int enableShadows = u_enableShadows;
+    enableShadows = 0;
+
+    if (enableShadows == 1) {
         // Rom shadows
         // Use the geometric normal already blended by TBN
         vec3 geoNormal = finalNormal;
@@ -263,7 +268,7 @@ void main() {
         float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V, isHorizontal);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
-        // Finakl accumulation
+        // Final accumulation
         dynamicLights += (diffuse + specular) * intensity * falloff * spotEffect;
     }
 

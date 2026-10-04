@@ -145,6 +145,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 	for _, ent := range entities {
 		if targetStr, _ := ent.GetProperty(lightTargetName); len(targetStr) > 0 {
 			targetEntities[targetStr] = ent
+			//fmt.Println("Target entity found:", ent)
 		}
 	}
 
@@ -162,7 +163,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 	coneAngle := 10.0                  // Quake 2 spotlight default.
 	lightStr, _ := ent.GetProperty("light")
 	lightAltStr, _ := ent.GetProperty("_light")
-	targetStr, _ := ent.GetProperty(lightTargetName)
+	targetStr, _ := ent.GetProperty("target")
 	angleStr, _ := ent.GetProperty("angle")
 	colorStr, _ := ent.GetProperty("_color")
 	styleStr, _ := ent.GetProperty("style")

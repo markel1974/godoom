@@ -155,7 +155,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
 	coneAngle := 40.0                  // Quake default
 	lightStr, _ := ent.GetProperty("light")
-	targetStr, _ := ent.GetProperty(lightTargetName)
+	targetStr, _ := ent.GetProperty("target")
 	mangleStr, _ := ent.GetProperty("mangle")
 	angleStr, _ := ent.GetProperty("angle")
 	colorStr, _ := ent.GetProperty("_color")

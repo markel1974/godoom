@@ -154,9 +154,9 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
-		baseClass, subClass := classname, ""
+		baseClass := classname
 		if z := strings.Split(classname, "_"); len(z) > 1 {
-			baseClass, subClass = z[0], z[1]
+			baseClass = z[0]
 		}
 		var pos geometry.XYZ
 		if origin, ok := ent.GetProperty("origin"); ok {
@@ -204,7 +204,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 				// TODO: Save them in a gameplay waypoint/spawnpoint list.
 			}
 		case "light":
-			if light := lights.CreateLight(ent, pos, subClass); light != nil {
+			if light := lights.CreateLight(ent, pos); light != nil {
 				root.Lights = append(root.Lights, light)
 			}
 		case "path":

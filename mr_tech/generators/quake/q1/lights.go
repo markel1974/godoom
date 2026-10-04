@@ -149,7 +149,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 }
 
 // CreateLight generates a light source based on an entity's properties, position, and subclass, returning the configured light.
-func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ, subClass string) *config.Light {
+func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light {
 	kind := config.LightKindAmbient
 	q1Intensity := 300.0
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.

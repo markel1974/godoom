@@ -1,6 +1,8 @@
 package open_gl
 
-import "math"
+import (
+	"math"
+)
 
 // __srgbToLin is a lookup table for converting sRGB values (0-255) to linear color space values in the range [0.0, 1.0].
 var __srgbToLin [256]float64
@@ -256,15 +258,13 @@ func UpscaleBicubic(src []uint8, oldW, oldH, newW, newH, stride int) []uint8 {
 // The function preserves color accuracy by operating in linear color space and converting back to sRGB after processing.
 // If the new dimensions match the old dimensions, the original source image is returned unchanged.
 func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []uint8 {
-	linToSRGB := func(c float64) uint8 {
-		if c <= 0.0 {
-			return 0
-		}
-		if c >= 1.0 {
-			return 255
-		}
-		idx := int(c * 4095.0)
-		return __linToSrgb[idx]
+	if oldW == newW && oldH == newH {
+		return src
+	}
+
+	type tap struct {
+		offset int
+		w      float32
 	}
 
 	sinc := func(x float64) float64 {
@@ -274,6 +274,7 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 		x *= math.Pi
 		return math.Sin(x) / x
 	}
+
 	lanczos3 := func(x float64) float64 {
 		if x < 0 {
 			x = -x
@@ -284,15 +285,7 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 		return sinc(x) * sinc(x/3.0)
 	}
 
-	if oldW == newW && oldH == newH {
-		return src
-	}
-
-	type tap struct {
-		offset int
-		w      float64
-	}
-
+	// Precompute horizontal taps
 	xRatio := float64(oldW) / float64(newW)
 	hTaps := make([][6]tap, newW)
 	for x := 0; x < newW; x++ {
@@ -307,16 +300,23 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 				sx = oldW - 1
 			}
 			w := lanczos3(cx - float64(ix+j))
-			hTaps[x][j+2] = tap{offset: sx * stride, w: w}
+			hTaps[x][j+2] = tap{
+				offset: sx * stride,
+				w:      float32(w),
+			}
 			wSum += w
 		}
+
 		if wSum != 0 {
+			invSum := float32(1.0 / wSum)
+
 			for j := 0; j < 6; j++ {
-				hTaps[x][j].w /= wSum
+				hTaps[x][j].w *= invSum
 			}
 		}
 	}
 
+	// Precompute vertical taps
 	yRatio := float64(oldH) / float64(newH)
 	vTaps := make([][6]tap, newH)
 	for y := 0; y < newH; y++ {
@@ -331,35 +331,54 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 				sy = oldH - 1
 			}
 			w := lanczos3(cy - float64(iy+j))
-			vTaps[y][j+2] = tap{offset: sy * newW * stride, w: w}
+			vTaps[y][j+2] = tap{
+				offset: sy * newW * stride,
+				w:      float32(w),
+			}
 			wSum += w
 		}
+
 		if wSum != 0 {
+			invSum := float32(1.0 / wSum)
 			for j := 0; j < 6; j++ {
-				vTaps[y][j].w /= wSum
+				vTaps[y][j].w *= invSum
 			}
 		}
 	}
-
-	// Intermediate buffer in linear space (float64 to preserve gradient precision)
-	temp := make([]float64, newW*oldH*stride)
-
-	// Horizontal Convolution (src -> temp)
+	// Convert source to linear space once
+	srcLinear := make([]float32, len(src))
+	for i, v := range src {
+		srcLinear[i] = float32(__srgbToLin[v])
+	}
+	// Intermediate buffer
+	temp := make([]float32, newW*oldH*stride)
+	// Horizontal convolution
 	for y := 0; y < oldH; y++ {
-		rowOffset := y * oldW * stride
-		tempRowOffset := y * newW * stride
+		srcRow := y * oldW * stride
+		tempRow := y * newW * stride
 		for x := 0; x < newW; x++ {
-			taps := hTaps[x]
+			t := hTaps[x]
+			i0 := srcRow + t[0].offset
+			i1 := srcRow + t[1].offset
+			i2 := srcRow + t[2].offset
+			i3 := srcRow + t[3].offset
+			i4 := srcRow + t[4].offset
+			i5 := srcRow + t[5].offset
+			w0 := t[0].w
+			w1 := t[1].w
+			w2 := t[2].w
+			w3 := t[3].w
+			w4 := t[4].w
+			w5 := t[5].w
+			dst := tempRow + x*stride
 			for c := 0; c < stride; c++ {
-				val0 := __srgbToLin[src[rowOffset+taps[0].offset+c]]
-				val1 := __srgbToLin[src[rowOffset+taps[1].offset+c]]
-				val2 := __srgbToLin[src[rowOffset+taps[2].offset+c]]
-				val3 := __srgbToLin[src[rowOffset+taps[3].offset+c]]
-				val4 := __srgbToLin[src[rowOffset+taps[4].offset+c]]
-				val5 := __srgbToLin[src[rowOffset+taps[5].offset+c]]
-
-				res := val0*taps[0].w + val1*taps[1].w + val2*taps[2].w + val3*taps[3].w + val4*taps[4].w + val5*taps[5].w
-
+				val0 := srcLinear[i0+c]
+				val1 := srcLinear[i1+c]
+				val2 := srcLinear[i2+c]
+				val3 := srcLinear[i3+c]
+				val4 := srcLinear[i4+c]
+				val5 := srcLinear[i5+c]
+				res := val0*w0 + val1*w1 + val2*w2 + val3*w3 + val4*w4 + val5*w5
 				minV := val2
 				maxV := val2
 				if val3 < minV {
@@ -367,35 +386,59 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 				} else if val3 > maxV {
 					maxV = val3
 				}
-
 				if res < minV {
 					res = minV
 				} else if res > maxV {
 					res = maxV
 				}
-				temp[tempRowOffset+x*stride+c] = res
+				temp[dst+c] = res
 			}
 		}
 	}
 
+	// Vertical convolution + linear -> sRGB
 	dst := make([]uint8, newW*newH*stride)
+	linToSRGB := func(c float32) uint8 {
+		if c <= 0 {
+			return 0
+		}
+		if c >= 1 {
+			return 255
+		}
+		idx := int(c * 4095.0)
+		return __linToSrgb[idx]
+	}
 
-	// Vertical Convolution (temp -> dst)
 	for y := 0; y < newH; y++ {
-		dstRowOffset := y * newW * stride
-		taps := vTaps[y]
+		dstRow := y * newW * stride
+		t := vTaps[y]
+
+		i0 := t[0].offset
+		i1 := t[1].offset
+		i2 := t[2].offset
+		i3 := t[3].offset
+		i4 := t[4].offset
+		i5 := t[5].offset
+
+		w0 := t[0].w
+		w1 := t[1].w
+		w2 := t[2].w
+		w3 := t[3].w
+		w4 := t[4].w
+		w5 := t[5].w
+
 		for x := 0; x < newW; x++ {
-			colOffset := x * stride
+			col := x * stride
+			dstPos := dstRow + col
+
 			for c := 0; c < stride; c++ {
-				val0 := temp[taps[0].offset+colOffset+c]
-				val1 := temp[taps[1].offset+colOffset+c]
-				val2 := temp[taps[2].offset+colOffset+c]
-				val3 := temp[taps[3].offset+colOffset+c]
-				val4 := temp[taps[4].offset+colOffset+c]
-				val5 := temp[taps[5].offset+colOffset+c]
-
-				res := val0*taps[0].w + val1*taps[1].w + val2*taps[2].w + val3*taps[3].w + val4*taps[4].w + val5*taps[5].w
-
+				val0 := temp[i0+col+c]
+				val1 := temp[i1+col+c]
+				val2 := temp[i2+col+c]
+				val3 := temp[i3+col+c]
+				val4 := temp[i4+col+c]
+				val5 := temp[i5+col+c]
+				res := val0*w0 + val1*w1 + val2*w2 + val3*w3 + val4*w4 + val5*w5
 				minV := val2
 				maxV := val2
 				if val3 < minV {
@@ -403,13 +446,12 @@ func UpscaleLanczosSeparable(src []uint8, oldW, oldH, newW, newH, stride int) []
 				} else if val3 > maxV {
 					maxV = val3
 				}
-
 				if res < minV {
 					res = minV
 				} else if res > maxV {
 					res = maxV
 				}
-				dst[dstRowOffset+colOffset+c] = linToSRGB(res)
+				dst[dstPos+c] = linToSRGB(res)
 			}
 		}
 	}

@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	scaleW = 10.0
-	scaleH = 50.0
+	scaleW = 1.0
+	scaleH = 1.0
 )
 
 // availableCeil contains a list of available ceiling texture file names in PPM format.

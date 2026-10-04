@@ -16,8 +16,8 @@ import (
 // scaleW defines the scaling factor for width calculations.
 // scaleH defines the scaling factor for height calculations.
 const (
-	scaleW = 10.0
-	scaleH = 50.0
+	scaleW = 1.0
+	scaleH = 1.0
 )
 
 // Builder is a type used to construct and configure complex objects or data structures.

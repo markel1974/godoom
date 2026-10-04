@@ -169,16 +169,47 @@ void main() {
     // Now L_flash and flashCone use unified and consistent math
     vec3 L_flash = normalize(flashPosView - ViewPos);
     float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
-
-    //int debugLights = 1;
-    //if (debugLights == 1) {
-    //    FragColor = vec4(flashCone, flashCone, flashCone, 1.0);
-    //    BrightColor = vec4(0.0);
-    //   return;
-    //}
-
     vec3 projMain = FragPosLightFlash.xyz / FragPosLightFlash.w;
     projMain = projMain * 0.5 + 0.5;
+
+    int debugFlashCone = 0;
+    if (debugFlashCone == 1) {
+        FragColor = vec4(flashCone, flashCone, flashCone, 1.0);
+        BrightColor = vec4(0.0);
+       return;
+    }
+
+    int debugShadowCone = 0;
+    if (debugShadowCone == 1) {
+        bool shadowProjectionValid =
+        FragPosLightFlash.w > 0.0 &&
+        projMain.x >= 0.0 && projMain.x <= 1.0 &&
+        projMain.y >= 0.0 && projMain.y <= 1.0 &&
+        projMain.z <= 1.0;
+        float coneDebug = clamp(flashCone, 0.0, 1.0);
+        if (!shadowProjectionValid) {
+            // Fuori dalla proiezione della shadow map
+            FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            BrightColor = vec4(0.0);
+            return;
+        }
+        // Dentro la shadow projection: verde = cono di luce, nero = fuori dal cono
+        FragColor = vec4(0.0, coneDebug, 0.0, 1.0);
+        BrightColor = vec4(0.0);
+        float coneEdge = smoothstep(0.02, 0.0, flashCone);
+        vec3 debugColor;
+        if (!shadowProjectionValid) {
+            debugColor = vec3(1.0, 0.0, 0.0);
+        } else {
+            debugColor = vec3(0.0, 1.0, 0.0);
+        }
+        if (coneEdge > 0.0) {
+            debugColor = vec3(0.0, 0.0, 1.0);
+        }
+        FragColor = vec4(debugColor, 1.0);
+        BrightColor = vec4(0.0);
+        return;
+    }
 
     float shadowFlash = 0.0;
     if (u_enableShadows == 1) {

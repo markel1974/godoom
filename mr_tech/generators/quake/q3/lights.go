@@ -1,6 +1,7 @@
 package q3
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 
@@ -108,7 +109,8 @@ var _q3LightStyles = [][]float64{
 }
 
 // lightTargetName defines the property key for identifying an entity's target in a mapping or lighting context.
-const lightTargetName = "target"
+const targetNameDefinition = "targetname"
+const targetDefinition = "target"
 
 // Lights is a type that manages a collection of entities and their relationships to produce light configurations.
 // It maps target names to entities and provides methods for creating and configuring light objects.
@@ -123,9 +125,17 @@ func NewLights(entities []*lumps.Entity) *Lights {
 		entities: entities,
 		targets:  make(map[string]*lumps.Entity),
 	}
+
+	//targetname = t74	Io sono t74
+	//target = t74	Voglio raggiungere t74
+
 	for _, ent := range entities {
-		if targetName, ok := ent.Properties[lightTargetName]; ok {
-			l.targets[targetName] = ent
+		if targetName, ok := ent.Properties[targetNameDefinition]; ok {
+			if _, ok := l.targets[targetName]; !ok {
+				l.targets[targetName] = ent
+			} else {
+				fmt.Printf("Warning: Duplicate target name '%s' found in entity '%s'\n", targetName, ent)
+			}
 		}
 	}
 	return l
@@ -137,10 +147,12 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	mangleStr, _ := ent.GetProperty("mangle")
 	colorStr, _ := ent.GetProperty("_color")
 	angleStr, _ := ent.GetProperty("angle")
-	targetStr, _ := ent.GetProperty(lightTargetName)
+	targetStr, _ := ent.GetProperty(targetDefinition)
 	lightStr, _ := ent.GetProperty("light")
+	//radiusStr, _ := ent.GetProperty("radius")
 	angle, _ := lumps.ParseFloat(angleStr)
 	kind := config.LightKindAmbient
+	radius := 40.0
 
 	//dirX, dirY, dirZ := 0.0, -1.0, 0.0 // Q3 world coordinates: default direction is down.
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0
@@ -237,7 +249,11 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	var desiredBrightness float64
 	if kind == config.LightKindSpot {
 		desiredRadius = q1RadiusQuadScaleSpot * (q3Intensity * q3Intensity)
-		desiredBrightness = q3Intensity * 1
+		desiredBrightness = q3Intensity * 0.05
+		//TODO RADIUS
+		//if rs, valid := lumps.ParseFloat(radiusStr); valid {
+		//	radius = rs
+		//}
 	} else {
 		desiredRadius = q1RadiusQuadScalePoint * (q3Intensity * q3Intensity)
 		desiredBrightness = q3Intensity * 0.002
@@ -254,6 +270,8 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	cl.DirX = dirX
 	cl.DirY = dirY
 	cl.DirZ = dirZ
+	cl.CutOff = radius
+	cl.OuterCutOff = radius + 5.0
 	cl.Style = style
 
 	return cl, nil

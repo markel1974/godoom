@@ -179,14 +179,17 @@ func (m *MapMetrics) updateRoomView(lX, lY, lZ float32) {
 
 // updateFlashProj computes and updates the flashlight projection matrix using its field of view and near/far plane distances.
 func (m *MapMetrics) updateFlashProj() {
-	flashFov, zNearFlash, zFarFlash := float32(m.flash.GetFov()), float32(m.flash.GetZNear()), float32(m.flash.GetZFar())
+	shadowFov := float32(m.flash.GetShadowFov())
+	zNearFlash := float32(m.flash.GetZNear())
+	zFarFlash := float32(m.flash.GetZFar())
+
 	diffZ := zNearFlash - zFarFlash
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
 	m.flashProj = [16]float32{
-		flashFov / m.shadowAspect, 0, 0, 0,
-		0, flashFov, 0, 0,
+		shadowFov / m.shadowAspect, 0, 0, 0,
+		0, shadowFov, 0, 0,
 		0, 0, (zFarFlash + zNearFlash) / diffZ, -1,
 		0, 0, (2 * zFarFlash * zNearFlash) / diffZ, 0,
 	}

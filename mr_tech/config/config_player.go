@@ -53,7 +53,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 		Flash:   &Flash{},
 	}
 	p.Flash.FovDeg = 80.0
-	p.Flash.ShadowFovDeg = 128.0
+	p.Flash.ShadowFovDeg = 140.0
 	p.Flash.ZNear = 0.1
 	p.Flash.ZFar = 2048.0
 	p.Flash.Falloff = 200

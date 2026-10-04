@@ -27,14 +27,14 @@ type Bobbing struct {
 }
 
 type Flash struct {
-	FovDeg       float64 `json:"flashFovDeg"`
-	ShadowFovDeg float64 `json:"flashShadowFovDeg"`
-	ZNear        float64 `json:"flashZNear"`
-	ZFar         float64 `json:"flashZFar"`
-	Factor       float64 `json:"flashFactor"`
-	Falloff      float64 `json:"flashFalloff"`
-	OffsetX      float64 `json:"flashOffsetX"`
-	OffsetY      float64 `json:"flashOffsetY"`
+	FovDeg          float64 `json:"flashFovDeg"`
+	ShadowFovFactor float64 `json:"flashShadowFovDeg"`
+	ZNear           float64 `json:"flashZNear"`
+	ZFar            float64 `json:"flashZFar"`
+	Factor          float64 `json:"flashFactor"`
+	Falloff         float64 `json:"flashFalloff"`
+	OffsetX         float64 `json:"flashOffsetX"`
+	OffsetY         float64 `json:"flashOffsetY"`
 }
 
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
@@ -53,7 +53,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 		Flash:   &Flash{},
 	}
 	p.Flash.FovDeg = 80.0
-	p.Flash.ShadowFovDeg = 140.0
+	p.Flash.ShadowFovFactor = 1.75
 	p.Flash.ZNear = 0.1
 	p.Flash.ZFar = 2048.0
 	p.Flash.Falloff = 200

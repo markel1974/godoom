@@ -35,10 +35,11 @@ type Flash struct {
 
 // NewFlash creates and initializes a new Flash object based on the provided configuration structure.
 func NewFlash(c *config.Flash) *Flash {
+	shadowFovDeg := c.FovDeg * c.ShadowFovFactor
 	f := &Flash{
 		fovDeg:       c.FovDeg,
-		shadowFovDeg: c.ShadowFovDeg,
-		shadowFovRad: degreesToRadians(c.ShadowFovDeg),
+		shadowFovDeg: shadowFovDeg,
+		shadowFovRad: degreesToRadians(shadowFovDeg),
 		fovRad:       degreesToRadians(c.FovDeg),
 		zNear:        c.ZNear,
 		zFar:         c.ZFar,

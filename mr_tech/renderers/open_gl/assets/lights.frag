@@ -146,7 +146,12 @@ vec3 calculateNormal() {
     float lenT = length(T);
     float lenB = length(B);
     if (lenT > 1e-8 && lenB > 1e-8) {
-        mat3 TBN = mat3(T / lenT, B / lenB, geoNormal);
+        T /= lenT;
+        // Gram-Schmidt: T ortogonale alla normale
+        T = normalize(T - geoNormal * dot(geoNormal, T));
+        // Ricostruzione di B per avere un TBN ortonormale coerente
+        B = normalize(cross(geoNormal, T));
+        mat3 TBN = mat3(T, B, geoNormal);
         return normalize(TBN * mapNormal);
     }
     return geoNormal;

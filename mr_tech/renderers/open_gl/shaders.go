@@ -170,7 +170,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	roomTex := w.depth.GetRoomShadowTextures()
 
 	roomSpaceMatrix, mainViewMatrix := w.metrics.CreateRoomSpace(vi)
-	flashSpaceMatrix := w.metrics.CreateFlashSpace(mainViewMatrix, flashX, flashY)
+	shadowSpaceMatrix := w.metrics.CreateShadowSpace(mainViewMatrix, flashX, flashY)
 
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
 		w.dynaLightMatrices = make([][16]float32, shadowLightsNum*2)
@@ -195,7 +195,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 
 	projMatrix, viewMatrix, invViewMatrix := w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, flashSpaceMatrix, mainViewMatrix, w.dynaLightMatrices, uint32(shadowLightsNum))
+	w.depth.UpdateUniforms(roomSpaceMatrix, shadowSpaceMatrix, mainViewMatrix, w.dynaLightMatrices, uint32(shadowLightsNum))
 	w.geometry.UpdateUniforms(viewMatrix, projMatrix)
 	w.ssao.UpdateUniforms(viewMatrix, projMatrix)
 	w.sky.UpdateUniforms(viewMatrix, projMatrix)
@@ -229,7 +229,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dcOpaque.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, flashSpaceMatrix,
+		dcOpaque.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, shadowSpaceMatrix,
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetFactor()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))

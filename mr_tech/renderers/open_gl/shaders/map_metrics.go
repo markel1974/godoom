@@ -39,7 +39,7 @@ type MapMetrics struct {
 	roomProj     [16]float32
 	roomView     [16]float32
 	roomSpace    [16]float32
-	flashProj    [16]float32
+	shadowProj   [16]float32
 	flash        *model.Flash
 }
 
@@ -187,7 +187,7 @@ func (m *MapMetrics) updateShadowProj() {
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	m.flashProj = [16]float32{
+	m.shadowProj = [16]float32{
 		shadowFov / m.shadowAspect, 0, 0, 0,
 		0, shadowFov, 0, 0,
 		0, 0, (zFarFlash + zNearFlash) / diffZ, -1,
@@ -217,29 +217,29 @@ func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]flo
 	return m.roomSpace, mainView
 }
 
-// CreateFlashSpace computes the flashlight's transformation matrix in view space with given offset and transformation details.
-func (m *MapMetrics) CreateFlashSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) [16]float32 {
+// CreateShadowSpace calculates the shadow space matrix for rendering shadow maps using a flashlight position and projection.
+// It generates a local shadow view matrix based on the flashlight's LookAt calculation and combines it with the main view matrix.
+func (m *MapMetrics) CreateShadowSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) [16]float32 {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetX, targetY, targetZ := float32(0.0), float32(0.0), -float32(m.flash.GetZFar())
 	// Forward, Right, Up for the flashlight
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)
 	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, 0.0, 1.0, 0.0))
-	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ)
 	// Local Translation
 	tLocX := -dot(rrX, rrY, rrZ, posViewX, posViewY, posViewZ)
 	tLocY := -dot(uuX, uuY, uuZ, posViewX, posViewY, posViewZ)
 	tLocZ := dot(ffX, ffY, ffZ, posViewX, posViewY, posViewZ)
-	flashViewLocal := [16]float32{
+	shadowViewLocal := [16]float32{
 		rrX, uuX, -ffX, 0,
 		rrY, uuY, -ffY, 0,
 		rrZ, uuZ, -ffZ, 0,
 		tLocX, tLocY, tLocZ, 1,
 	}
-	// Final Matrices
-	flashView := MatrixMultiply4x4(flashViewLocal, mainView)
-	flashSpace := MatrixMultiply4x4(m.flashProj, flashView)
-	return flashSpace
+	shadowView := MatrixMultiply4x4(shadowViewLocal, mainView)
+	shadowSpace := MatrixMultiply4x4(m.shadowProj, shadowView)
+	return shadowSpace
 }
 
 // CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.

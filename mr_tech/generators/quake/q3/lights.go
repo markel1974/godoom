@@ -1,7 +1,6 @@
 package q3
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 
@@ -125,18 +124,17 @@ func NewLights(entities []*lumps.Entity) *Lights {
 		entities: entities,
 		targets:  make(map[string]*lumps.Entity),
 	}
-
-	//targetname = t74	Io sono t74
-	//target = t74	Voglio raggiungere t74
-
+	//targetname = identifier
+	//target = destination
 	for _, ent := range entities {
-		if targetName, ok := ent.Properties[targetNameDefinition]; ok {
-			if _, ok := l.targets[targetName]; !ok {
-				l.targets[targetName] = ent
-			} else {
-				fmt.Printf("Warning: Duplicate target name '%s' found in entity '%s'\n", targetName, ent)
-			}
+		targetName, ok := ent.GetProperty("targetname")
+		if !ok || len(targetName) == 0 {
+			continue
 		}
+		if _, exists := l.targets[targetName]; exists {
+			continue
+		}
+		l.targets[targetName] = ent
 	}
 	return l
 }
@@ -249,7 +247,7 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	var desiredBrightness float64
 	if kind == config.LightKindSpot {
 		desiredRadius = q1RadiusQuadScaleSpot * (q3Intensity * q3Intensity)
-		desiredBrightness = q3Intensity * 0.10
+		desiredBrightness = q3Intensity * 0.12
 		//TODO RADIUS
 		//if rs, valid := lumps.ParseFloat(radiusStr); valid {
 		//	radius = rs

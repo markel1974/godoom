@@ -134,24 +134,26 @@ func LightStyle(styleStr string) []float64 {
 
 // Lights manages Quake 2 light entities and their target relationships.
 type Lights struct {
-	targetEntities map[string]*lumps.Entity
+	targets map[string]*lumps.Entity
 }
 
 // NewLights initializes a Lights structure by mapping entity targetnames
 // to their corresponding entities.
 func NewLights(entities []*lumps.Entity) *Lights {
-	targetEntities := make(map[string]*lumps.Entity)
-
+	l := &Lights{targets: make(map[string]*lumps.Entity)}
+	//targetname = identifier
+	//target = destination
 	for _, ent := range entities {
-		if targetStr, _ := ent.GetProperty(lightTargetName); len(targetStr) > 0 {
-			targetEntities[targetStr] = ent
-			//fmt.Println("Target entity found:", ent)
+		targetName, ok := ent.GetProperty("targetname")
+		if !ok || len(targetName) == 0 {
+			continue
 		}
+		if _, exists := l.targets[targetName]; exists {
+			continue
+		}
+		l.targets[targetName] = ent
 	}
-
-	return &Lights{
-		targetEntities: targetEntities,
-	}
+	return l
 }
 
 // CreateLight generates a light source based on a Quake 2 entity's
@@ -180,7 +182,7 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 	//   light_spot -> spotlight directed by "angle"
 	if len(targetStr) > 0 {
 		kind = config.LightKindSpot
-		targetEnt := l.targetEntities[targetStr]
+		targetEnt := l.targets[targetStr]
 		if targetEnt == nil {
 			fmt.Printf("warning: target entity %q not found\n", targetStr)
 			return nil

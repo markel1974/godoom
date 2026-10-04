@@ -8,33 +8,42 @@ import (
 
 const flashFactorIncrement = 0.001
 
+func degreesToRadians(degrees float64) float64 {
+	return (degrees * math.Pi) / 180.0
+}
+
 // Flash represents a lighting system with configurable parameters including field of view, range, intensity, and offsets.
 type Flash struct {
-	fovDeg    float64
-	zNear     float64
-	zFar      float64
-	factor    float64
-	falloff   float64
-	offsetX   float64
-	offsetY   float64
-	fov       float64
-	fovRad    float64
-	coneStart float64
-	coneEnd   float64
-	aspect    float64
+	shadowFov    float64
+	shadowFovDeg float64
+	shadowFovRad float64
+	zNear        float64
+	zFar         float64
+	factor       float64
+	falloff      float64
+	offsetX      float64
+	offsetY      float64
+	fov          float64
+	fovDeg       float64
+	fovRad       float64
+	coneStart    float64
+	coneEnd      float64
+	aspect       float64
 }
 
 // NewFlash initializes a new Flash instance using the provided configuration values from the Flash configuration struct.
 func NewFlash(c *config.Flash) *Flash {
 	f := &Flash{
-		fovDeg:  c.FovDeg,
-		fovRad:  (c.FovDeg * math.Pi) / 180.0,
-		zNear:   c.ZNear,
-		zFar:    c.ZFar,
-		factor:  c.Factor,
-		falloff: c.Falloff,
-		offsetX: c.OffsetX,
-		offsetY: c.OffsetY,
+		fovDeg:       c.FovDeg,
+		shadowFovDeg: c.ShadowFovDeg,
+		shadowFovRad: degreesToRadians(c.ShadowFovDeg),
+		fovRad:       degreesToRadians(c.FovDeg),
+		zNear:        c.ZNear,
+		zFar:         c.ZFar,
+		factor:       c.Factor,
+		falloff:      c.Falloff,
+		offsetX:      c.OffsetX,
+		offsetY:      c.OffsetY,
 	}
 	f.Rebuild(2.0)
 	return f
@@ -43,6 +52,7 @@ func NewFlash(c *config.Flash) *Flash {
 // Rebuild recalculates the field of view and cone boundaries based on the given normalized device coordinate range.
 func (p *Flash) Rebuild(ndcRange float64) {
 	p.fov = 1.0 / math.Tan(p.fovRad/ndcRange)
+	p.shadowFov = 1.0 / math.Tan(p.shadowFovRad/ndcRange)
 	p.coneStart = math.Cos(p.fovDeg/ndcRange*math.Pi/180.0) + 0.01
 	p.coneEnd = math.Cos(p.fovDeg / ndcRange * 0.6 * math.Pi / 180.0)
 }
@@ -60,6 +70,21 @@ func (p *Flash) GetFovDeg() float64 {
 // GetFovRad returns the field of view in radians for the Flash instance.
 func (p *Flash) GetFovRad() float64 {
 	return p.fovRad
+}
+
+// GetShadowFov returns the shadow field of view value for the Flash instance.
+func (p *Flash) GetShadowFov() float64 {
+	return p.shadowFov
+}
+
+// GetShadowFovDeg retrieves the shadow field of view value of the Flash object in degrees.
+func (p *Flash) GetShadowFovDeg() float64 {
+	return p.shadowFovDeg
+}
+
+// GetShadowFovRad returns the shadow field of view in radians for the Flash instance.
+func (p *Flash) GetShadowFovRad() float64 {
+	return p.shadowFovRad
 }
 
 // GetZNear returns the near clipping plane distance for the flash.

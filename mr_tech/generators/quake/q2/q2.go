@@ -111,8 +111,6 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
-
-		fmt.Println("classname", classname, ent)
 		parts := strings.Split(classname, "_")
 		nameSpace := parts[0]
 		//class := ""
@@ -177,7 +175,8 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 		case "trigger":
 			//TODO
 		case "target":
-			fmt.Println("target", classname)
+			//TODO
+		case "point":
 			//TODO
 		case "misc":
 			//TODO

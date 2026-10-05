@@ -102,7 +102,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcLiquid.DeepReset()
 	w.cSky = nil
 
-	// TODO RIATTIVARE
+	// TODO VERIFICARE QUANDO FARE IL RESET
 	//w.occlusion.Reset()
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
@@ -218,6 +218,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 	q := func(object physics.IAABB) bool {
 		thing := object.(model.IThing)
 
+		//TODO RIATTIVARE
 		//occState := w.occlusion.GetState(thing.GetEntity().GetId())
 		//if occState != nil && !occState.IsVisible {
 		//	w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
@@ -225,6 +226,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		//}
 
 		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+
+		//TODO RIATTIVARE
 		//if faceCount == 0 {
 		//	w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
 		//	return false

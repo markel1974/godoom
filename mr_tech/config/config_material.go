@@ -15,6 +15,7 @@ const (
 	BlendModeOpaque = iota
 	BlendModeAdditive
 	BlendModeAlpha
+	BlendModeLiquid
 )
 
 const (
@@ -83,7 +84,7 @@ type Material struct {
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
 func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v float64) *Material {
-	return &Material{
+	m := &Material{
 		Id:         utils.NextUUId(),
 		Frames:     frames,
 		Kind:       kind,
@@ -93,7 +94,14 @@ func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v 
 		V:          v,
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
+		BlendMode:  BlendModeOpaque,
 	}
+	if kind == MaterialKindLiquid {
+		m.BlendMode = BlendModeLiquid
+		println("WATER CREATED:", frames[0])
+		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco!
+	}
+	return m
 }
 
 // HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.

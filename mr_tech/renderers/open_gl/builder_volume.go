@@ -1,8 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -18,9 +16,11 @@ type BuilderVolume struct {
 	fv               *FrameVertices
 	dc               *DrawCommands
 	dcAdditive       *DrawCommands
+	dcLiquid         *DrawCommands
 	fl               *FrameLights
 	dcRender         *DrawCommandsRender
 	dcRenderAdditive *DrawCommandsRender
+	dcRenderLiquid   *DrawCommandsRender
 	cSky             *textures.Texture
 	cSkyU, cSkyV     float64
 	cal              *model.Calibration
@@ -36,9 +36,11 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		fv:               NewFrameVertices(1048576),
 		dc:               NewDrawCommands(32768),
 		dcAdditive:       NewDrawCommands(4096),
+		dcLiquid:         NewDrawCommands(4096),
 		fl:               NewFrameLights(1024),
-		dcRender:         NewDrawCommandsRender(ctx),
-		dcRenderAdditive: NewDrawCommandsRender(ctx),
+		dcRender:         NewDrawCommandsRender(ctx, false),
+		dcRenderAdditive: NewDrawCommandsRender(ctx, true),
+		dcRenderLiquid:   NewDrawCommandsRender(ctx, true),
 		cSky:             nil,
 		cSkyU:            0.0,
 		cSkyV:            0.0,
@@ -91,6 +93,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.fv.DeepReset()
 	w.dc.DeepReset()
 	w.dcAdditive.DeepReset()
+	w.dcLiquid.DeepReset()
 	w.cSky = nil
 
 	//w.pushQVolumesOcclusion(engine.GetVolumes(), frustumFront, fm, px, py, pz)
@@ -101,6 +104,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 	w.dcRender.Prepare(w.dc.GetDrawCommands())
 	w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
+	w.dcRenderLiquid.Prepare(w.dcLiquid.GetDrawCommands())
 }
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
@@ -180,6 +184,7 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 
 	pushPass(int(config.BlendModeOpaque), w.dc)
 	pushPass(int(config.BlendModeAdditive), w.dcAdditive)
+	pushPass(int(config.BlendModeLiquid), w.dcLiquid)
 }
 
 // pushQVolumesOcclusion applies frustum culling and occlusion testing on volumes and populates draw buffers with visible geometry.
@@ -248,6 +253,8 @@ func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFro
 			if startIdx != endIdx {
 				if matObj.BlendMode() == int(config.BlendModeAdditive) {
 					w.dcAdditive.Compute(startIdx, endIdx, matObj)
+				} else if matObj.BlendMode() == int(config.BlendModeLiquid) {
+					w.dcLiquid.Compute(startIdx, endIdx, matObj)
 				} else {
 					w.dc.Compute(startIdx, endIdx, matObj)
 				}
@@ -302,6 +309,8 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 			if startIdx != endIdx {
 				if matObj.BlendMode() == int(config.BlendModeAdditive) {
 					w.dcAdditive.Compute(startIdx, endIdx, matObj)
+				} else if matObj.BlendMode() == int(config.BlendModeLiquid) {
+					w.dcLiquid.Compute(startIdx, endIdx, matObj)
 				} else {
 					w.dc.Compute(startIdx, endIdx, matObj)
 				}
@@ -314,7 +323,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 
 	volumes.QueryFrustum(frustumFront, queryGeom)
 
-	fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
+	//fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
 }
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
@@ -362,10 +371,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 				if mat == nil || matObj == nil {
 					continue
 				}
-				blendMode := config.BlendModeOpaque
-				if mat.IsEmissive() {
-					blendMode = config.BlendModeAdditive
-				}
+				blendMode := matObj.BlendMode()
 				if blendMode != targetBlendMode {
 					continue
 				}
@@ -394,6 +400,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 
 		pushPassThing(int(config.BlendModeOpaque), w.dc)
 		pushPassThing(int(config.BlendModeAdditive), w.dcAdditive)
+		pushPassThing(int(config.BlendModeLiquid), w.dcLiquid)
 		counter++
 		return false
 	}
@@ -406,4 +413,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 // GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.
 func (w *BuilderVolume) GetDrawCommandsAdditive() *DrawCommandsRender {
 	return w.dcRenderAdditive
+}
+
+// GetDrawCommandsLiquid returns the liquid draw commands prepared for rendering.
+func (w *BuilderVolume) GetDrawCommandsLiquid() *DrawCommandsRender {
+	return w.dcRenderLiquid
 }

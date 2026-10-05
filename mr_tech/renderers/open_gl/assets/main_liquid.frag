@@ -1,7 +1,11 @@
 #version 330 core
 
 in vec3 TexCoords;
+in float FragDepth;
 in vec3 ViewPos;
+in vec4 FragPosLightRoom;
+in vec4 FragPosLightFlash;
+in float IsFullbright;
 
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;

@@ -6,33 +6,76 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
+// RenderBatch is a structure to hold batched rendering data such as index counts and memory pointers.
+// It is used to optimize rendering by grouping draw calls with similar states together.
 type RenderBatch struct {
 	mc            []int32
 	mi            []unsafe.Pointer
 	depthWrite    int
 	polygonOffset int
+	len           int
 }
 
-// DrawCommandsRender manages batched GPU drawing commands, storing index counts and memory offsets for rendering.
-type DrawCommandsRender struct {
-	ctx             api.IContext
-	batches         []RenderBatch
-	batchesAdditive []RenderBatch
-}
-
-// NewDrawCommandsRender initializes and returns a new instance of DrawCommandsRender with preallocated internal arrays.
-func NewDrawCommandsRender(ctx api.IContext) *DrawCommandsRender {
-	return &DrawCommandsRender{
-		ctx:             ctx,
-		batches:         make([]RenderBatch, 0, 16),
-		batchesAdditive: make([]RenderBatch, 0, 16),
+// NewRenderBatch creates and initializes a new RenderBatch with default starting size for internal slices.
+func NewRenderBatch() *RenderBatch {
+	const startSize = 1024
+	return &RenderBatch{
+		mc:  make([]int32, startSize),
+		mi:  make([]unsafe.Pointer, startSize),
+		len: 0,
 	}
 }
 
-func (w *DrawCommandsRender) buildBatches(dc []*DrawCommand, isAdditive bool) []RenderBatch {
-	var batches []RenderBatch
+// Reset resets the RenderBatch, clearing its length and setting depthWrite and polygonOffset to the provided values.
+func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int) {
+	rb.len = 0
+	rb.depthWrite = depthWrite
+	rb.polygonOffset = polygonOffset
+}
+
+// Add appends a new draw command to the RenderBatch with specified index count and pointer.
+func (rb *RenderBatch) Add(indexCount int32, pointer unsafe.Pointer) {
+	if rb.len >= len(rb.mc) {
+		mc := rb.mc
+		mi := rb.mi
+		newLen := rb.len * 2
+		rb.mc = make([]int32, newLen)
+		rb.mi = make([]unsafe.Pointer, newLen)
+		copy(rb.mc, mc)
+		copy(rb.mi, mi)
+	}
+	rb.mc[rb.len] = indexCount
+	rb.mi[rb.len] = pointer
+	rb.len++
+}
+
+// DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
+type DrawCommandsRender struct {
+	ctx        api.IContext
+	batches    []*RenderBatch
+	batchesLen int
+	isAdditive bool
+}
+
+// NewDrawCommandsRender creates and initializes a new DrawCommandsRender with specified context and batch type.
+func NewDrawCommandsRender(ctx api.IContext, isAdditive bool) *DrawCommandsRender {
+	const startSize = 16
+	dcr := &DrawCommandsRender{
+		ctx:        ctx,
+		batches:    make([]*RenderBatch, startSize),
+		isAdditive: isAdditive,
+	}
+	for idx := range dcr.batches {
+		dcr.batches[idx] = NewRenderBatch()
+	}
+	return dcr
+}
+
+// Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
+func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
+	w.batchesLen = 0
 	if len(dc) == 0 {
-		return batches
+		return
 	}
 
 	currentDepthWrite := -1
@@ -49,7 +92,7 @@ func (w *DrawCommandsRender) buildBatches(dc []*DrawCommand, isAdditive bool) []
 		var polygonOffset int
 
 		if cmd.material != nil {
-			if isAdditive {
+			if w.isAdditive {
 				depthWrite = 0
 			} else if cmd.material.GetDepthWrite() {
 				depthWrite = 1
@@ -63,7 +106,7 @@ func (w *DrawCommandsRender) buildBatches(dc []*DrawCommand, isAdditive bool) []
 				polygonOffset = 0
 			}
 		} else {
-			if isAdditive {
+			if w.isAdditive {
 				depthWrite = 0
 			} else {
 				depthWrite = 1
@@ -72,81 +115,68 @@ func (w *DrawCommandsRender) buildBatches(dc []*DrawCommand, isAdditive bool) []
 		}
 
 		if depthWrite != currentDepthWrite || polygonOffset != currentPolygonOffset || currentBatch == nil {
-			batches = append(batches, RenderBatch{
-				mc:            make([]int32, 0, 1024),
-				mi:            make([]unsafe.Pointer, 0, 1024),
-				depthWrite:    depthWrite,
-				polygonOffset: polygonOffset,
-			})
-			currentBatch = &batches[len(batches)-1]
+			if w.batchesLen >= len(w.batches) {
+				batches := w.batches
+				newLen := len(w.batches) * 2
+				w.batches = make([]*RenderBatch, newLen)
+				copy(w.batches, batches)
+				for i := len(batches); i < newLen; i++ {
+					w.batches[i] = NewRenderBatch()
+				}
+			}
+			currentBatch = w.batches[w.batchesLen]
+			currentBatch.Reset(depthWrite, polygonOffset)
+			w.batchesLen++
 			currentDepthWrite = depthWrite
 			currentPolygonOffset = polygonOffset
 		}
-
-		currentBatch.mc = append(currentBatch.mc, cmd.indexCount)
-		currentBatch.mi = append(currentBatch.mi, w.ctx.PtrOffset(int(cmd.firstIndex*4)))
+		currentBatch.Add(cmd.indexCount, w.ctx.PtrOffset(int(cmd.firstIndex*4)))
 	}
-	return batches
 }
 
-// Prepare initializes the draw command buffers and sets up data for rendering based on the provided draw commands.
-func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
-	w.batches = w.buildBatches(dc, false)
-	w.batchesAdditive = w.buildBatches(dc, true)
-}
-
-// Render executes the rendering process for the prepared draw commands using multi-draw elements in OpenGL.
+// Render executes the rendering process for all batched draw commands, managing depth writes and polygon offset states.
 func (w *DrawCommandsRender) Render() {
-	w.renderInternal(false)
-}
-
-// RenderAdditive executes the rendering process for the additive draw commands without forcing depth write.
-func (w *DrawCommandsRender) RenderAdditive() {
-	w.renderInternal(true)
-}
-
-func (w *DrawCommandsRender) renderInternal(isAdditive bool) {
-	batches := w.batches
-	if isAdditive {
-		batches = w.batchesAdditive
-	}
-
-	if len(batches) == 0 {
+	if w.batchesLen == 0 {
 		return
 	}
 
 	currentDepthWrite := -1 // -1 means unknown
 	currentPolygonOffset := -1
 
-	for i := 0; i < len(batches); i++ {
-		b := &batches[i]
+	for i := 0; i < w.batchesLen; i++ {
+		b2 := w.batches[i]
 
-		if b.depthWrite != currentDepthWrite {
-			if b.depthWrite == 1 {
+		if b2.depthWrite != currentDepthWrite {
+			if b2.depthWrite == 1 {
 				w.ctx.DepthMask(true)
 			} else {
 				w.ctx.DepthMask(false)
 			}
-			currentDepthWrite = b.depthWrite
+			currentDepthWrite = b2.depthWrite
 		}
 
-		if b.polygonOffset != currentPolygonOffset {
-			if b.polygonOffset == 1 {
+		if b2.polygonOffset != currentPolygonOffset {
+			if b2.polygonOffset == 1 {
 				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
 				w.ctx.PolygonOffset(-1.0, -1.0)
 			} else {
 				w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 			}
-			currentPolygonOffset = b.polygonOffset
+			currentPolygonOffset = b2.polygonOffset
 		}
 
-		w.ctx.MultiDrawElements(api.TRIANGLES, &b.mc[0], api.UNSIGNED_INT, &b.mi[0], int32(len(b.mc)))
+		w.ctx.MultiDrawElements(api.TRIANGLES, &b2.mc[0], api.UNSIGNED_INT, &b2.mi[0], int32(b2.len))
 	}
 
-	if currentDepthWrite != 1 && !isAdditive {
+	if currentDepthWrite != 1 && !w.isAdditive {
 		w.ctx.DepthMask(true)
 	}
 	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	}
+}
+
+// HasCommands returns true if there are render batches available to process; otherwise, it returns false.
+func (w *DrawCommandsRender) HasCommands() bool {
+	return w.batchesLen > 0
 }

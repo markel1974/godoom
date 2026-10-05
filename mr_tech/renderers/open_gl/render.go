@@ -23,6 +23,8 @@ type IBuilder interface {
 
 	GetDrawCommandsAdditive() *DrawCommandsRender
 
+	GetDrawCommandsLiquid() *DrawCommandsRender
+
 	GetVertices() ([]float32, int32, []uint32, int32)
 
 	GetLights() ([]float32, int32)
@@ -108,8 +110,9 @@ func (w *RenderOpenGL) RenderStart(fbW int, fbH int) {
 	w.engine.Compute(w.player, w.vi)
 	w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 	cSky := w.builder.GetSkyTexture()
-	commands := w.builder.GetDrawCommands()
-	commandsAdditive := w.builder.GetDrawCommandsAdditive()
+	dcOpaque := w.builder.GetDrawCommands()
+	dcAdditive := w.builder.GetDrawCommandsAdditive()
+	dcLiquid := w.builder.GetDrawCommandsLiquid()
 	vert, vertLen, indices, indicesLen := w.builder.GetVertices()
 	light, lightsCount := w.builder.GetLights()
 
@@ -128,7 +131,7 @@ func (w *RenderOpenGL) RenderStart(fbW int, fbH int) {
 		//	fmt.Println("SKY DEBUG: Name=", cSky.GetName(), " Layer=", skyLayer, " Enabled=", skyEnabled, " U=", skyU, " V=", skyV)
 		//}
 	}
-	w.shaders.Render(w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, commands, commandsAdditive, skyEnabled, skyLayer, skyU, skyV, light, lightsCount, shadowLights, shadowLightsCount)
+	w.shaders.Render(dcOpaque, dcAdditive, dcLiquid, w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, skyEnabled, skyLayer, skyU, skyV, light, lightsCount, shadowLights, shadowLightsCount)
 }
 
 // BuilderUpdate increments the buildersCounter and updates the current builder using a round-robin approach.

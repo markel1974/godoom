@@ -43,8 +43,10 @@ type Main struct {
 	ctx               api.IContext
 	prgOpaque         uint32
 	prgAdditive       uint32
+	prgLiquid         uint32
 	tableOpaque       [MainLocLast]int32
 	tableAdditive     [MainLocLast]int32
+	tableLiquid       [MainLocLast]int32
 	mainVAO           [mainDoubleBuffer]uint32
 	mainVBO           [mainDoubleBuffer]uint32
 	mainEBO           [mainDoubleBuffer]uint32
@@ -232,6 +234,35 @@ func (s *Main) Compile(a IAssets) error {
 	s.tableAdditive[MainLocProjection] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_projection\x00"))
 	s.tableAdditive[MainLocTexture] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_texture\x00"))
 	s.tableAdditive[MainLocTime] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_time\x00"))
+
+	// Compile Liquid Program
+	fragmentLiquidSrc, err := a.Read("main_liquid.frag")
+	if err != nil {
+		return err
+	}
+	fragLiquidShader, err := ShaderCompile(s.ctx, "main_liquid.frag", string(fragmentLiquidSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		return err
+	}
+	s.prgLiquid, err = ShaderCreateProgram(s.ctx, "main_liquid", vertexShader, fragLiquidShader)
+	if err != nil {
+		return err
+	}
+
+	s.tableLiquid[MainLocView] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_view\x00"))
+	s.tableLiquid[MainLocProjection] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_projection\x00"))
+	s.tableLiquid[MainLocScreenResolution] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_resolution\x00"))
+	s.tableLiquid[MainLocTexture] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_texture\x00"))
+	s.tableLiquid[MainLocTime] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_time\x00"))
+
+	println("DEBUG LOCATIONS! View:", s.tableLiquid[MainLocView], "Proj:", s.tableLiquid[MainLocProjection], "Time:", s.tableLiquid[MainLocTime])
+
+	s.ctx.UseProgram(s.prgLiquid)
+	texUnits := []int32{0, 1, 2, 3}
+	s.ctx.Uniform1iv(s.tableLiquid[MainLocTexture], 4, &texUnits[0])
+	s.ctx.Uniform1i(s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_refractionTex\x00")), 12)
+	s.ctx.Uniform1i(s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_depthTex\x00")), 13)
+	s.ctx.UseProgram(0)
 
 	return nil
 }
@@ -440,5 +471,41 @@ func (s *Main) RenderAdditive(renderGeometry func()) {
 	s.ctx.Disable(api.BLEND)
 	s.ctx.Enable(api.DEPTH_TEST)
 	s.ctx.DepthFunc(api.LESS)
+	s.ctx.DepthMask(true)
+}
+
+// RenderLiquid executes the rendering commands for liquid geometry using a specialized shader.
+func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint32, fbW, fbH int32) {
+	s.ctx.UseProgram(s.prgLiquid)
+
+	s.ctx.Enable(api.BLEND)
+	s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
+	s.ctx.DepthMask(false) // Do not write to depth buffer
+
+	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocView], 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocProjection], 1, false, &s.proj[0])
+
+	// textures.GlobalTick() is in github.com/markel1974/godoom/mr_tech/textures
+	// I will just use 1.0 for time if textures is not imported, but it is imported!
+	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], float32(textures.GlobalTick())*0.05)
+
+	s.ctx.Uniform2f(s.tableLiquid[MainLocScreenResolution], float32(fbW), float32(fbH))
+
+	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
+
+	s.ctx.ActiveTexture(api.TEXTURE12)
+	s.ctx.BindTexture(api.TEXTURE_2D, refractionTex)
+	s.ctx.ActiveTexture(api.TEXTURE13)
+	s.ctx.BindTexture(api.TEXTURE_2D, depthTex)
+
+	renderGeometry()
+
+	// UNBIND TEXTURES TO PREVENT FEEDBACK LOOPS IN POST RESOLVE
+	s.ctx.ActiveTexture(api.TEXTURE12)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.ActiveTexture(api.TEXTURE13)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+
+	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)
 }

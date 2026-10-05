@@ -130,18 +130,12 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
+func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, dcLiquid *DrawCommandsRender, vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if (w.w != fbW) || (w.h != fbH) {
-		//fmt.Println("CHANGING RESOLUTION", fbW, fbH)
 		w.w = fbW
 		w.h = fbH
 		w.metrics.Rebuild(w.w, w.h)
-
-		//if full3d {
 		w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
-		//} else {
-		//	w.scaleX, w.scaleY = w.metrics.GetScale2d(fbW, fbH)
-		//}
 	}
 
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
@@ -216,11 +210,18 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, vert []floa
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN OPAQUE
-
 	w.main.Render(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 	// MAIN ADDITIVE
-	if dcAdditive != nil {
-		w.main.RenderAdditive(dcAdditive.RenderAdditive)
+	if dcAdditive.HasCommands() {
+		w.main.RenderAdditive(dcAdditive.Render)
+	}
+
+	// MAIN LIQUID (Refraction & Depth Fog)
+	if dcLiquid.HasCommands() {
+		// Resolve MSAA to the intermediate FBO so we can sample Color and Depth textures
+		w.post.ResolveMSAA(fbW, fbH)
+		// Render water sampling the resolved textures
+		w.main.RenderLiquid(dcLiquid.Render, w.post.GetColorBuffer(), w.post.GetDepthBuffer(), fbW, fbH)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)

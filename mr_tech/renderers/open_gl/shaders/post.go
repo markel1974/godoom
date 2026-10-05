@@ -36,6 +36,7 @@ type Post struct {
 	fbo             uint32
 	texColorBuffer  uint32
 	texBrightBuffer uint32
+	texDepthBuffer  uint32
 
 	// FBO Multisampled per il rendering 3D
 	msaaFbo       uint32
@@ -69,6 +70,16 @@ func NewPost(ctx api.IContext) *Post {
 }
 
 // GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
+// GetColorBuffer returns the resolved color texture ID
+func (s *Post) GetColorBuffer() uint32 {
+	return s.texColorBuffer
+}
+
+// GetDepthBuffer returns the resolved depth texture ID
+func (s *Post) GetDepthBuffer() uint32 {
+	return s.texDepthBuffer
+}
+
 func (s *Post) GetBrightBuffer() uint32 {
 	return s.texBrightBuffer
 }
@@ -142,7 +153,7 @@ func (s *Post) Prepare(fbw, fbh int32) {
 		s.allocate(fbw, fbh)
 	}
 	// Physically resolve the multisampled FBO before 2D filters
-	s.resolveMSAA(fbw, fbh)
+	s.ResolveMSAA(fbw, fbh)
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
@@ -170,7 +181,7 @@ func (s *Post) Render(bloomTex uint32, fbW, fbH int32) {
 }
 
 // resolveMSAA resolves a multisample anti-aliasing (MSAA) framebuffer to a standard framebuffer for post-processing.
-func (s *Post) resolveMSAA(fbw, fbh int32) {
+func (s *Post) ResolveMSAA(fbw, fbh int32) {
 	s.ctx.BindFramebuffer(api.READ_FRAMEBUFFER, s.msaaFbo)
 	s.ctx.BindFramebuffer(api.DRAW_FRAMEBUFFER, s.fbo)
 
@@ -184,10 +195,14 @@ func (s *Post) resolveMSAA(fbw, fbh int32) {
 	s.ctx.DrawBuffer(api.COLOR_ATTACHMENT1)
 	s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
 
+	// Blit Depth
+	s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.DEPTH_BUFFER_BIT, api.NEAREST)
+
 	// Restore FBO state for subsequent frames
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
 	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
 	s.ctx.DrawBuffers(2, &attachments[0])
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+	s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
 }
 
 // Allocate gestisce la creazione e il ridimensionamento lazy dei Framebuffer per il post-processing (MSAA + Resolve).
@@ -205,6 +220,7 @@ func (s *Post) allocate(width, height int32) {
 		s.ctx.DeleteFramebuffers(1, &s.fbo)
 		s.ctx.DeleteTextures(1, &s.texColorBuffer)
 		s.ctx.DeleteTextures(1, &s.texBrightBuffer)
+		s.ctx.DeleteTextures(1, &s.texDepthBuffer)
 	}
 
 	// --- 1. MSAA FBO (Target Principale 4x Anti-Aliasing) ---
@@ -249,16 +265,19 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, s.w, s.h, 0, api.RGBA, api.FLOAT, nil)
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D, s.texBrightBuffer, 0)
+
+	s.ctx.GenTextures(1, &s.texDepthBuffer)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.texDepthBuffer)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT24, s.w, s.h, 0, api.DEPTH_COMPONENT, api.UNSIGNED_INT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, s.texDepthBuffer, 0)
 
 	s.ctx.DrawBuffers(2, &attachments[0])
 
-	status2 := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)
-	if status2 != api.FRAMEBUFFER_COMPLETE {
-		println("RESOLVE FBO ERROR STATUS:", status2)
-		panic("post Resolve FBO not complete")
+	if s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER) != api.FRAMEBUFFER_COMPLETE {
+		panic("post Resolve FBO not complete: " + string(s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)))
 	}
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)

@@ -29,23 +29,28 @@ type AABBTest struct {
 
 // OcclusionHW manages hardware-based occlusion queries using OpenGL-like graphics operations.
 type OcclusionHW struct {
-	ctx    api.IContext
-	states []OcclusionState
-	tests  []AABBTest
-
-	cubeVAO uint32
-	cubeVBO uint32
+	ctx      api.IContext
+	states   []OcclusionState
+	tests    []*AABBTest
+	testsLen int
+	cubeVAO  uint32
+	cubeVBO  uint32
 }
 
 // NewOcclusionHW initializes a new hardware occlusion object with context and maximum entity support.
 func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	hw := &OcclusionHW{
-		ctx:    ctx,
-		states: make([]OcclusionState, maxEntities),
-		tests:  make([]AABBTest, 0, 1024),
+		ctx:      ctx,
+		states:   make([]OcclusionState, maxEntities),
+		tests:    make([]*AABBTest, 1024),
+		testsLen: 0,
 	}
 
-	// 1. Allocate HW queries in batch
+	for idx := range hw.tests {
+		hw.tests[idx] = &AABBTest{}
+	}
+
+	// Allocate HW queries in batch
 	queryIDs := make([]uint32, maxEntities)
 	ctx.GenQueries(int32(maxEntities), &queryIDs[0])
 
@@ -94,23 +99,37 @@ func (hw *OcclusionHW) GetState(index int) *OcclusionState {
 
 // Reset clears all AABB tests stored in the OcclusionHW instance.
 func (hw *OcclusionHW) Reset() {
-	hw.tests = hw.tests[:0]
+	hw.testsLen = 0
 }
 
 // Add appends a new AABBTest containing the given AABB and OcclusionState to the tests slice if state is not nil.
 func (hw *OcclusionHW) Add(aabb *physics.AABB, state *OcclusionState) {
-	if state != nil {
-		hw.tests = append(hw.tests, AABBTest{AABB: aabb, State: state})
+	if state == nil {
+		return
 	}
+	if hw.testsLen >= len(hw.tests) {
+		t := hw.tests
+		oldLen := len(hw.tests)
+		newLen := len(hw.tests) + 1024
+		hw.tests = make([]*AABBTest, newLen)
+		copy(hw.tests, t)
+		for i := oldLen; i < newLen; i++ {
+			hw.tests[i] = &AABBTest{}
+		}
+	}
+	test := hw.tests[hw.testsLen]
+	test.AABB = aabb
+	test.State = state
+	hw.testsLen++
 }
 
 // RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
 func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locModel int32, viewMatrix, projMatrix [16]float32) {
-	if len(hw.tests) == 0 {
+	if hw.testsLen == 0 {
 		return
 	}
 
-	// 1. GPU setup for queries
+	// GPU setup for queries
 	// hw.ctx.ColorMask(false, false, false, false) // Optional if ColorMask is not available in the API, but useful! If missing, set rgba=false
 	hw.ctx.DepthMask(false) // Do not write Z, perform READ test only (LEQUAL)
 
@@ -125,7 +144,8 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 	var allVertices []float32
 	validCount := 0
 
-	for _, test := range hw.tests {
+	for i := 0; i < hw.testsLen; i++ {
+		test := hw.tests[i]
 		if !test.State.QueryActive {
 			mX, mY, mZ := float32(test.AABB.GetMinX()), float32(test.AABB.GetMinY()), float32(test.AABB.GetMinZ())
 			xX, xY, xZ := float32(test.AABB.GetMaxX()), float32(test.AABB.GetMaxY()), float32(test.AABB.GetMaxZ())
@@ -167,7 +187,8 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 		hw.ctx.BufferData(api.ARRAY_BUFFER, len(allVertices)*4, hw.ctx.Ptr(allVertices), api.DYNAMIC_DRAW)
 
 		idx := int32(0)
-		for _, test := range hw.tests {
+		for i := 0; i < hw.testsLen; i++ {
+			test := hw.tests[i]
 			if !test.State.QueryActive {
 				hw.ctx.BeginQuery(ANY_SAMPLES_PASSED, test.State.QueryID)
 				hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
@@ -184,7 +205,8 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 	hw.ctx.DepthMask(true)
 
 	// DEFERRED READ-BACK (Non-blocking)
-	for _, test := range hw.tests {
+	for i := 0; i < hw.testsLen; i++ {
+		test := hw.tests[i]
 		if test.State.QueryActive {
 			var available uint32
 			hw.ctx.GetQueryObjectuiv(test.State.QueryID, QUERY_RESULT_AVAILABLE, &available)

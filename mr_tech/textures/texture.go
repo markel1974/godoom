@@ -6,30 +6,40 @@ package textures
 // w and h define the width and height of the texture in pixels.
 // data holds the actual pixel information as a 2D array of integers.
 type Texture struct {
-	name     string
-	id       uint32
-	w        int
-	h        int
-	data     [][]int
-	scaleW   float64
-	scaleH   float64
-	wScaled  float64
-	hScaled  float64
-	emissive bool
+	name       string
+	id         uint32
+	w          int
+	h          int
+	data       [][]int
+	scaleW     float64
+	scaleH     float64
+	wScaled    float64
+	hScaled    float64
+	emissive   bool
+	identifier float32
 }
 
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
 func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	z := &Texture{
 		name: name, id: id, w: w, h: h,
-		data:     make([][]int, w),
-		emissive: emissive,
+		data:       make([][]int, w),
+		emissive:   emissive,
+		identifier: -1,
 	}
 	for i := range z.data {
 		z.data[i] = make([]int, h)
 	}
 	z.SetScaleFactor(1.0, 1.0)
 	return z
+}
+
+func (t *Texture) GetIdentifier() float32 {
+	return t.identifier
+}
+
+func (t *Texture) SetIdentifier(identifier float32) {
+	t.identifier = identifier
 }
 
 // SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.

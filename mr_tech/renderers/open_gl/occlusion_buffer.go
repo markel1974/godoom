@@ -42,7 +42,8 @@ func (ob *OcclusionBuffer) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]fl
 	var sx, sy, sw [3]float32
 
 	for i, pt := range pts {
-		x, y, z := float32(pt.X), float32(pt.Y), float32(pt.Z)
+		// SWAP to OpenGL coordinate system!
+		x, y, z := float32(pt.X), float32(pt.Z), float32(-pt.Y)
 		clipX := x*mvp[0] + y*mvp[4] + z*mvp[8] + mvp[12]
 		clipY := x*mvp[1] + y*mvp[5] + z*mvp[9] + mvp[13]
 		clipW := x*mvp[3] + y*mvp[7] + z*mvp[11] + mvp[15]
@@ -117,7 +118,8 @@ func (ob *OcclusionBuffer) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) b
 	minW := float32(math.MaxFloat32)
 
 	for _, pt := range corners {
-		x, y, z := pt[0], pt[1], pt[2]
+		// SWAP to OpenGL coordinate system!
+		x, y, z := pt[0], pt[2], -pt[1]
 		clipX := x*mvp[0] + y*mvp[4] + z*mvp[8] + mvp[12]
 		clipY := x*mvp[1] + y*mvp[5] + z*mvp[9] + mvp[13]
 		clipW := x*mvp[3] + y*mvp[7] + z*mvp[11] + mvp[15]

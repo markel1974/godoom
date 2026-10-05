@@ -29,6 +29,7 @@ type Context struct {
 	vaos     ResourceTracker
 	fbos     ResourceTracker
 	rbos     ResourceTracker
+	queries  ResourceTracker
 
 	uniforms []js.Value
 
@@ -60,6 +61,11 @@ type Context struct {
 	fn_createProgram                  js.Value
 	fn_createRenderbuffer             js.Value
 	fn_createShader                   js.Value
+	fn_createQuery                    js.Value
+	fn_deleteQuery                    js.Value
+	fn_beginQuery                     js.Value
+	fn_endQuery                       js.Value
+	fn_getQueryParameter              js.Value
 	fn_createTexture                  js.Value
 	fn_createVertexArray              js.Value
 	fn_deleteFramebuffer              js.Value
@@ -132,6 +138,7 @@ func NewContext(width int, height int) *Context {
 		vaos:            NewResourceTracker(),
 		fbos:            NewResourceTracker(),
 		rbos:            NewResourceTracker(),
+		queries:         NewResourceTracker(),
 		uniforms:        []js.Value{js.Null()},
 		ptrMap:          make(map[uintptr]interface{}),
 		jsBuffer:        js.Global().Get("Uint8Array"),
@@ -1099,6 +1106,52 @@ func (d *Context) Viewport(x int32, y int32, width int32, height int32) {
 	d.fn_viewport.Invoke(x, y, width, height)
 }
 
+// GenQueries generates `n` queries and stores the results in the provided slice, starting at the memory location of `queries`.
+func (d *Context) GenQueries(n int32, queries *uint32) {
+	arr := unsafe.Slice(queries, n)
+	for i := int32(0); i < n; i++ {
+		arr[i] = d.queries.Add(d.fn_createQuery.Invoke())
+	}
+}
+
+// DeleteQueries removes the specified number of queries from the context using their identifiers.
+func (d *Context) DeleteQueries(n int32, queries *uint32) {
+	arr := unsafe.Slice(queries, n)
+	for i := int32(0); i < n; i++ {
+		d.fn_deleteQuery.Invoke(d.queries.Get(arr[i]))
+		d.queries.Remove(arr[i])
+	}
+}
+
+// BeginQuery starts measuring a query object target, associating it with the provided unique query ID.
+func (d *Context) BeginQuery(target uint32, id uint32) {
+	d.fn_beginQuery.Invoke(target, d.queries.Get(id))
+}
+
+// EndQuery signals the end of a query operation on the specified target.
+func (d *Context) EndQuery(target uint32) {
+	d.fn_endQuery.Invoke(target)
+}
+
+// GetQueryObjectuiv retrieves parameter data for a query object identified by `id`, specified by the parameter name `pname`.
+func (d *Context) GetQueryObjectuiv(id uint32, pname uint32, params *uint32) {
+	res := d.fn_getQueryParameter.Invoke(d.queries.Get(id), pname)
+	if res.Type() == js.TypeBoolean {
+		if res.Bool() {
+			*params = 1
+		} else {
+			*params = 0
+		}
+	} else if res.Type() == js.TypeNumber {
+		*params = uint32(res.Int())
+	} else {
+		*params = 0
+	}
+}
+
+// getJSView creates a JavaScript typed array view for the given buffer based on the specified xtype.
+// Supported xtypes include BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, and FLOAT.
+// Returns the constructed js.Value or the original buffer for unsupported xtypes.
 func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	switch xtype {
 	case 0x1400: // BYTE
@@ -1119,6 +1172,7 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	return buffer
 }
 
+// getSharedJSArray retrieves a JavaScript array view of the given byte slice using WebAssembly memory.
 func (d *Context) getSharedJSArray(bytes []byte) js.Value {
 	if len(bytes) == 0 {
 		return js.Null()

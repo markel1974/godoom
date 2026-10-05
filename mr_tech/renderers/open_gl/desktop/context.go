@@ -417,3 +417,23 @@ func (d *Context) VertexAttribPointer(index uint32, size int32, xtype uint32, no
 func (d *Context) Viewport(x int32, y int32, width int32, height int32) {
 	gl.Viewport(x, y, width, height)
 }
+
+func (d *Context) GenQueries(n int32, queries *uint32) {
+	gl.GenQueries(n, queries)
+}
+
+func (d *Context) DeleteQueries(n int32, queries *uint32) {
+	gl.DeleteQueries(n, queries)
+}
+
+func (d *Context) BeginQuery(target uint32, id uint32) {
+	gl.BeginQuery(target, id)
+}
+
+func (d *Context) EndQuery(target uint32) {
+	gl.EndQuery(target)
+}
+
+func (d *Context) GetQueryObjectuiv(id uint32, pname uint32, params *uint32) {
+	gl.GetQueryObjectuiv(id, pname, params)
+}

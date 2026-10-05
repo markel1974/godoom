@@ -80,6 +80,16 @@ type IContext interface {
 
 	GenFramebuffers(n int32, framebuffers *uint32)
 
+	GenQueries(n int32, queries *uint32)
+
+	DeleteQueries(n int32, queries *uint32)
+
+	BeginQuery(target uint32, id uint32)
+
+	EndQuery(target uint32)
+
+	GetQueryObjectuiv(id uint32, pname uint32, params *uint32)
+
 	GenRenderbuffers(n int32, renderbuffers *uint32)
 
 	GenTextures(n int32, textures *uint32)

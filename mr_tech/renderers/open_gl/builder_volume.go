@@ -24,9 +24,9 @@ type BuilderVolume struct {
 	cSky             *textures.Texture
 	cSkyU, cSkyV     float64
 	cal              *model.Calibration
-	occBuffer        *OcclusionBuffer
-	visibleVol       *VisibleVolumes
-	modes            []*DrawCommands
+	//occBuffer        *OcclusionBuffer
+	visibleVol *VisibleVolumes
+	modes      []*DrawCommands
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -46,9 +46,9 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		cSkyU:            0.0,
 		cSkyV:            0.0,
 		cal:              calibration,
-		occBuffer:        NewOcclusionBuffer(640, 480),
-		visibleVol:       NewVisibleVols(8192),
-		modes:            make([]*DrawCommands, config.BlendModeLates),
+		//occBuffer:        NewOcclusionBuffer(640, 480),
+		visibleVol: NewVisibleVols(8192),
+		modes:      make([]*DrawCommands, config.BlendModeLates),
 	}
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
@@ -101,9 +101,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcLiquid.DeepReset()
 	w.cSky = nil
 
-	//w.pushQVolumesOcclusion(engine.GetVolumes(), frustumFront, fm, px, py, pz)
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
-	w.pushQVolumesHardware(engine.GetVolumes(), frustumFront, px, py, pz)
+	w.pushQVolumes(engine.GetVolumes(), frustumFront, fm, px, py, pz)
 	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, fm, px, py, pz)
 	w.pushQThings(engine.GetThings(), frustumFront, fm)
 
@@ -114,9 +113,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFront *physics.Frustum, pX, pY, pZ float64) {
-	//camX, camY, camZ := pX, pZ, -pY
-	camX, camY, camZ := pX, pY, pZ
+func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum, mvp [16]float32, camX, camY, camZ float64) {
+	//w.occBuffer.Clear()
 
 	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
 
@@ -168,6 +166,7 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 				id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, renderMode)
 				id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, renderMode)
 				w.fv.AddTriangle(id0, id1, id2)
+				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
 				added++
 
 				endIdx := w.fv.GetIndicesLen()
@@ -188,83 +187,100 @@ func (w *BuilderVolume) pushQVolumesHardware(volumes *model.Volumes, frustumFron
 	pushPass()
 }
 
-// pushQVolumesOcclusion applies frustum culling and occlusion testing on volumes and populates draw buffers with visible geometry.
-func (w *BuilderVolume) pushQVolumesOcclusion(volumes *model.Volumes, frustumFront *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
-	w.occBuffer.Clear()
-
-	//camX, camY, camZ := pX, pZ, -pY
-	camX, camY, camZ := pX, pY, pZ
-	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
-
-	// Raccolta dal DBVH (Broad-Phase)
-	volumes.QueryFrustum(frustumFront, func(object physics.IAABB) bool {
-		w.visibleVol.Add(object.(*model.Volume))
-		return false
-	})
-
-	w.visibleVol.Sort()
-
+// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
+// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
+func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
+	w.fl.DeepReset()
+	w.fl.Prepare(pX, pY, pZ)
 	counter := 0
-
-	// Test di occlusione e ingestione facce
-	for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
-		vol := w.visibleVol.At(vIdx)
-		aabb := vol.GetAABB()
-
-		// READ: Testiamo l'AABB dell'intero chunk contro il buffer
-		if w.occBuffer.IsAABBOccluded(aabb, mvp) {
-			continue
-		}
-
-		faces, faceCount := vol.GetFaces()
-
-		for fIdx := 0; fIdx < faceCount; fIdx++ {
-			face := (*faces)[fIdx]
-			mat, texKind := face.GetMaterialDetails()
-			matObj := face.GetMaterialObj()
-			if mat == nil || matObj == nil {
-				continue
-			}
-			if texKind == int(config.MaterialKindSky) {
-				w.cSky = mat
-				w.cSkyU = matObj.U()
-				w.cSkyV = matObj.V()
-				continue
-			}
-			tId := float32(0)
-			if tId = mat.GetIdentifier(); tId < 0 {
-				tId, _ = w.tex.Get(mat)
-				mat.SetIdentifier(tId)
-			}
-
-			startIdx := w.fv.GetIndicesLen()
-
-			p := face.GetPoints()
-			u, v := face.GetUV()
-			renderMode := float32(0.0)
-			if texKind == int(config.MaterialKindLiquid) {
-				renderMode = 0.5
-			}
-			id0 := w.fv.AddVertex10(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, renderMode)
-			id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, renderMode)
-			id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, renderMode)
-			w.fv.AddTriangle(id0, id1, id2)
-			w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-
-			endIdx := w.fv.GetIndicesLen()
-			if startIdx != endIdx {
-				blendMode := matObj.BlendMode()
-				targetDc := w.modes[blendMode]
-				targetDc.Compute(startIdx, endIdx, matObj)
-				startIdx = endIdx
-			}
-		}
+	queryLights := func(object physics.IAABB) bool {
+		light := object.(*model.Light)
+		//if w.occBuffer.IsAABBOccluded(light.GetAABB(), mvp) {
+		//	return false
+		//}
+		w.fl.Create(light)
 		counter++
+		return false
 	}
+	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
 
-	//fmt.Printf("FRUSTUM VOLUMES: %d, CULLED: %d, DRAW: %d\n", w.visibleVolsIndex, w.visibleVolsIndex-counter, counter)
+	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
 }
 
+// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
+	counter := 0
+	q := func(object physics.IAABB) bool {
+		thing := object.(model.IThing)
+		//if w.occBuffer.IsAABBOccluded(thing.GetAABB(), mvp) {
+		//	return false
+		//}
+		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if faceCount == 0 {
+			return false
+		}
+		lerp := float32(lp)
+		yaw := float32(thing.GetAngle())
+		tPosX, tPosY, zBot := thing.GetDisplacement()
+		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+
+		pushPassThing := func() {
+			faces := *pFaces
+			nextFaces := *pNextFaces
+			b := float32(renderMode)
+			for fx := 0; fx < faceCount; fx++ {
+				f := faces[fx]
+				mat := f.GetMaterial()
+				matObj := f.GetMaterialObj()
+				if mat == nil || matObj == nil {
+					continue
+				}
+				tId := float32(0)
+				if tId = mat.GetIdentifier(); tId < 0 {
+					tId, _ = w.tex.Get(mat)
+					mat.SetIdentifier(tId)
+				}
+				nf := nextFaces[fx]
+				np := nf.GetPoints()
+				startIndices := w.fv.GetIndicesLen()
+				p := f.GetPoints()
+				u, v := f.GetUV()
+				id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
+				w.fv.AddTriangle(id0, id1, id2)
+
+				currentIndices := w.fv.GetIndicesLen()
+				if startIndices != currentIndices {
+					blendMode := matObj.BlendMode()
+					targetDc := w.modes[blendMode]
+					targetDc.Compute(startIndices, currentIndices, matObj)
+					startIndices = currentIndices
+				}
+			}
+		}
+
+		pushPassThing()
+		counter++
+		return false
+	}
+
+	things.QueryFrustum(frustumFront, q)
+
+	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
+}
+
+// GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.
+func (w *BuilderVolume) GetDrawCommandsAdditive() *DrawCommandsRender {
+	return w.dcRenderAdditive
+}
+
+// GetDrawCommandsLiquid returns the liquid draw commands prepared for rendering.
+func (w *BuilderVolume) GetDrawCommandsLiquid() *DrawCommandsRender {
+	return w.dcRenderLiquid
+}
+
+/*
 // pushQVolumes processes and renders visible volumes intersecting the given frustum, applying material and texture filtering.
 func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
 	counter := 0
@@ -320,96 +336,4 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 
 	//fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
 }
-
-// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
-// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
-	w.fl.DeepReset()
-	w.fl.Prepare(pX, pY, pZ)
-	counter := 0
-	queryLights := func(object physics.IAABB) bool {
-		light := object.(*model.Light)
-		//if w.occBuffer.IsAABBOccluded(light.GetAABB(), mvp) {
-		//	return false
-		//}
-		w.fl.Create(light)
-		counter++
-		return false
-	}
-	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
-
-	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
-}
-
-// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
-	counter := 0
-	q := func(object physics.IAABB) bool {
-		thing := object.(model.IThing)
-		//if w.occBuffer.IsAABBOccluded(thing.GetAABB(), mvp) {
-		//	return false
-		//}
-		faces2, faceCount, nextFaces2, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		if faceCount == 0 {
-			return false
-		}
-		lerp := float32(lp)
-		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetDisplacement()
-		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-
-		pushPassThing := func() {
-			faces := *faces2
-			nextFaces := *nextFaces2
-			b := float32(renderMode)
-			for fx := 0; fx < faceCount; fx++ {
-				f := faces[fx]
-				mat := f.GetMaterial()
-				matObj := f.GetMaterialObj()
-				if mat == nil || matObj == nil {
-					continue
-				}
-				tId := float32(0)
-				if tId = mat.GetIdentifier(); tId < 0 {
-					tId, _ = w.tex.Get(mat)
-					mat.SetIdentifier(tId)
-				}
-				nf := nextFaces[fx]
-				np := nf.GetPoints()
-				startIndices := w.fv.GetIndicesLen()
-				p := f.GetPoints()
-				u, v := f.GetUV()
-				id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
-				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
-				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
-				w.fv.AddTriangle(id0, id1, id2)
-
-				currentIndices := w.fv.GetIndicesLen()
-				if startIndices != currentIndices {
-					blendMode := matObj.BlendMode()
-					targetDc := w.modes[blendMode]
-					targetDc.Compute(startIndices, currentIndices, matObj)
-					startIndices = currentIndices
-				}
-			}
-		}
-
-		pushPassThing()
-		counter++
-		return false
-	}
-
-	things.QueryFrustum(frustumFront, q)
-
-	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
-}
-
-// GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.
-func (w *BuilderVolume) GetDrawCommandsAdditive() *DrawCommandsRender {
-	return w.dcRenderAdditive
-}
-
-// GetDrawCommandsLiquid returns the liquid draw commands prepared for rendering.
-func (w *BuilderVolume) GetDrawCommandsLiquid() *DrawCommandsRender {
-	return w.dcRenderLiquid
-}
+*/

@@ -8,23 +8,26 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// MainLoc represents an enumerated type for identifying shader uniform locations.
+// MainLoc represents an integer-based enumerator used as an identifier for uniform locations within shaders.
 type MainLoc int
 
-// mainDoubleBuffer defines the number of buffers used in double buffering for efficient rendering operations.
+// mainDoubleBuffer defines the number of buffer sets used for double buffering operations in rendering pipelines.
 const (
 	mainDoubleBuffer = 2
 )
 
-// MainLocView represents the location index for the view matrix.
-// MainLocProjection represents the location index for the projection matrix.
-// MainLocTexture represents the location index for the texture sampler.
-// MainLocSSAO represents the location index for the SSAO effect.
-// MainLocScreenResolution represents the location index for the screen resolution.
-// MainLocEmissiveMap represents the location index for the emissive map texture.
-// MainLocEmissiveIntensity represents the location index for the emissive light intensity.
-// MainLocAoFactor represents the location index for the ambient occlusion factor.
-// MainLocLast represents the last index in the MainLoc enumeration.
+// MainLocView represents the location of the view matrix.
+// MainLocProjection represents the location of the projection matrix.
+// MainLocTexture represents the location of the texture data.
+// MainLocSSAO represents the location of the screen space ambient occlusion (SSAO) data.
+// MainLocScreenResolution represents the location of the screen resolution data.
+// MainLocEmissiveMap represents the location of the emissive map data.
+// MainLocEmissiveIntensity represents the location of the emissive intensity value.
+// MainLocAoFactor represents the location of the ambient occlusion factor.
+// MainLocTime represents the location of the time data.
+// MainLocNear represents the location of the near plane distance in the projection matrix.
+// MainLocFar represents the location of the far plane distance in the projection matrix.
+// MainLocLast is the last location identifier, used as a sentinel or limit.
 const (
 	MainLocView = MainLoc(iota)
 	MainLocProjection
@@ -35,10 +38,12 @@ const (
 	MainLocEmissiveIntensity
 	MainLocAoFactor
 	MainLocTime
+	MainLocNear
+	MainLocFar
 	MainLocLast
 )
 
-// Main represents the primary rendering configuration and state for a graphics pipeline.
+// Main represents the central structure for managing rendering states and operations.
 type Main struct {
 	ctx               api.IContext
 	prgOpaque         uint32
@@ -63,7 +68,7 @@ type Main struct {
 	metrics           *MapMetrics
 }
 
-// NewMain creates and initializes a new instance of Main with the provided vertex stride value.
+// NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
 func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
 	return &Main{
 		ctx:               ctx,
@@ -76,7 +81,7 @@ func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
 	}
 }
 
-// Init initializes OpenGL buffers and vertex array objects, configures memory layout, and enables depth testing.
+// Init initializes the necessary OpenGL resources, such as VAOs, VBOs, and EBOs, and configures the vertex attributes.
 func (s *Main) Init() error {
 	vboBytesSize := 131072 * int(s.stride)
 	eboBytesSize := 262144 * 4
@@ -134,7 +139,7 @@ func (s *Main) Init() error {
 	return nil
 }
 
-// SetupSamplers initializes and binds sampler uniforms for texture, SSAO, and emissive maps to the shader program.
+// SetupSamplers initializes sampler uniforms for opaque and additive shaders, binding texture units for diffuse and emissive maps.
 func (s *Main) SetupSamplers() error {
 	diffuseUnits := []int32{0, 1, 2, 3}
 	emissiveUnits := []int32{8, 9, 10, 11}
@@ -152,42 +157,39 @@ func (s *Main) SetupSamplers() error {
 	return nil
 }
 
-// GetProgram returns the program ID associated with the Main instance.
+// GetProgramOpaque returns the program ID used for rendering opaque objects.
 func (s *Main) GetProgramOpaque() uint32 {
 	return s.prgOpaque
 }
 
-// GetProgramAdditive returns the additive program identifier.
+// GetProgramAdditive returns the program ID associated with additive rendering.
 func (s *Main) GetProgramAdditive() uint32 {
 	return s.prgAdditive
 }
 
-// GetUniformOpaque returns the uniform location for opaque shader.
+// GetUniformOpaque retrieves the uniform location for the opaque shader program using the given MainLoc identifier.
 func (s *Main) GetUniformOpaque(id MainLoc) int32 {
 	return s.tableOpaque[id]
 }
 
-// GetUniformAdditive returns the uniform location for additive shader.
+// GetUniformAdditive returns the additive uniform location associated with the given MainLoc identifier.
 func (s *Main) GetUniformAdditive(id MainLoc) int32 {
 	return s.tableAdditive[id]
 }
 
-// GetVAO returns the vertex array object identifier for the current frame buffer.
+// GetVAO returns the Vertex Array Object (VAO) associated with the current frame index.
 func (s *Main) GetVAO() uint32 {
 	return s.mainVAO[s.frameIdx]
 }
 
-// Compile loads, compiles, and links the vertex and fragment shaders into a program, and sets up uniform locations.
+// Compile initializes and compiles shader programs for opaque, additive, and liquid rendering using provided asset sources.
 func (s *Main) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragOpaqueId = "main_opaque.frag"
 	const fragAdditiveId = "main_additive.frag"
+	const fragLiquidId = "main_liquid.frag"
 
 	vertexSrc, fragmentOpaqueSrc, err := a.ReadMulti(vertId, fragOpaqueId)
-	if err != nil {
-		return err
-	}
-	fragmentAdditiveSrc, err := a.Read(fragAdditiveId)
 	if err != nil {
 		return err
 	}
@@ -200,20 +202,37 @@ func (s *Main) Compile(a IAssets) error {
 	// Compile Opaque Program
 	fragOpaqueShader, err := ShaderCompile(s.ctx, fragOpaqueId, string(fragmentOpaqueSrc), api.FRAGMENT_SHADER)
 	if err != nil {
-		s.ctx.DeleteShader(vertexShader)
+		//s.ctx.DeleteShader(vertexShader)
 		return err
 	}
 	s.prgOpaque, err = ShaderCreateProgram(s.ctx, "main_opaque", vertexShader, fragOpaqueShader)
 	if err != nil {
 		return err
 	}
-
 	// Compile Additive Program
+
+	fragmentAdditiveSrc, err := a.Read(fragAdditiveId)
+	if err != nil {
+		return err
+	}
 	fragAdditiveShader, err := ShaderCompile(s.ctx, fragAdditiveId, string(fragmentAdditiveSrc), api.FRAGMENT_SHADER)
 	if err != nil {
 		return err
 	}
 	s.prgAdditive, err = ShaderCreateProgram(s.ctx, "main_additive", vertexShader, fragAdditiveShader)
+	if err != nil {
+		return err
+	}
+	// Compile Liquid Program
+	fragmentLiquidSrc, err := a.Read(fragLiquidId)
+	if err != nil {
+		return err
+	}
+	fragLiquidShader, err := ShaderCompile(s.ctx, fragLiquidId, string(fragmentLiquidSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		return err
+	}
+	s.prgLiquid, err = ShaderCreateProgram(s.ctx, "main_liquid", vertexShader, fragLiquidShader)
 	if err != nil {
 		return err
 	}
@@ -235,27 +254,15 @@ func (s *Main) Compile(a IAssets) error {
 	s.tableAdditive[MainLocTexture] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_texture\x00"))
 	s.tableAdditive[MainLocTime] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_time\x00"))
 
-	// Compile Liquid Program
-	fragmentLiquidSrc, err := a.Read("main_liquid.frag")
-	if err != nil {
-		return err
-	}
-	fragLiquidShader, err := ShaderCompile(s.ctx, "main_liquid.frag", string(fragmentLiquidSrc), api.FRAGMENT_SHADER)
-	if err != nil {
-		return err
-	}
-	s.prgLiquid, err = ShaderCreateProgram(s.ctx, "main_liquid", vertexShader, fragLiquidShader)
-	if err != nil {
-		return err
-	}
-
 	s.tableLiquid[MainLocView] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_view\x00"))
 	s.tableLiquid[MainLocProjection] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_projection\x00"))
 	s.tableLiquid[MainLocScreenResolution] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_resolution\x00"))
 	s.tableLiquid[MainLocTexture] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_texture\x00"))
 	s.tableLiquid[MainLocTime] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_time\x00"))
+	s.tableLiquid[MainLocNear] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_near\x00"))
+	s.tableLiquid[MainLocFar] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_far\x00"))
 
-	println("DEBUG LOCATIONS! View:", s.tableLiquid[MainLocView], "Proj:", s.tableLiquid[MainLocProjection], "Time:", s.tableLiquid[MainLocTime])
+	//println("DEBUG LOCATIONS! View:", s.tableLiquid[MainLocView], "Proj:", s.tableLiquid[MainLocProjection], "Time:", s.tableLiquid[MainLocTime])
 
 	s.ctx.UseProgram(s.prgLiquid)
 	texUnits := []int32{0, 1, 2, 3}
@@ -267,7 +274,7 @@ func (s *Main) Compile(a IAssets) error {
 	return nil
 }
 
-// Prepare updates vertex and index buffer data for the current frame using double buffering.
+// Prepare configures the rendering pipeline, updates buffer data, and manages double buffering for rendering operations.
 func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32, fbW, fbH int32) {
 	//if fbW != s.w || fbH != s.h {
 	//	s.w = fbW
@@ -301,7 +308,8 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, s.ctx.Ptr(indices))
 }
 
-// UpdateUniforms3d calculates and updates the projection, view, and inverse view matrices based on the given ViewMatrix.
+// UpdateUniforms3d computes and updates projection, view, and inverse view matrices for 3D rendering.
+// It uses the provided view matrix and scaling factors for calculations and returns the matrices.
 func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	// Acquire angles
 	sinY, cosY := vi.GetAngleFull()
@@ -367,6 +375,8 @@ func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	return s.proj, s.view, invView
 }
 
+// UpdateUniforms2d updates the 2D projection and view matrices based on the provided view matrix and scaling factors.
+// Returns the updated projection matrix, view matrix, and the inverse view matrix.
 func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
 	pitchShear := float32(-vi.GetPitch())
 	sinA, cosA := vi.GetAngleFull()
@@ -417,7 +427,7 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	return s.proj, s.view, invView
 }
 
-// Render prepares and executes the rendering pipeline using the provided geometry and SSAO texture.
+// Render executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
 func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
 	// target FBO preparation
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
@@ -450,7 +460,7 @@ func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint3
 	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
 }
 
-// RenderAdditive executes the rendering commands for additive geometry (e.g. flames, flares) using a specialized shader.
+// RenderAdditive configures and executes additive rendering by applying blending settings and invoking the provided geometry rendering function.
 func (s *Main) RenderAdditive(renderGeometry func()) {
 	s.ctx.UseProgram(s.GetProgramAdditive())
 
@@ -474,7 +484,7 @@ func (s *Main) RenderAdditive(renderGeometry func()) {
 	s.ctx.DepthMask(true)
 }
 
-// RenderLiquid executes the rendering commands for liquid geometry using a specialized shader.
+// RenderLiquid executes the rendering of liquid effects using the provided geometry and textures.
 func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint32, fbW, fbH int32) {
 	s.ctx.UseProgram(s.prgLiquid)
 
@@ -490,6 +500,9 @@ func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint3
 	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], float32(textures.GlobalTick())*0.05)
 
 	s.ctx.Uniform2f(s.tableLiquid[MainLocScreenResolution], float32(fbW), float32(fbH))
+
+	s.ctx.Uniform1f(s.tableLiquid[MainLocNear], 0.1)
+	s.ctx.Uniform1f(s.tableLiquid[MainLocFar], 1000.0)
 
 	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
 

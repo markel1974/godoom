@@ -14,8 +14,8 @@ type MaterialKind int
 const (
 	BlendModeOpaque = iota
 	BlendModeAdditive
-	BlendModeAlpha
 	BlendModeLiquid
+	BlendModeLates
 )
 
 const (

@@ -15,17 +15,24 @@ type DrawCommands struct {
 	freezeLen            int
 	len                  int
 	freezeLastIndexCount int32
+	blendMode            int
 }
 
 // NewDrawCommands creates and initializes a new DrawCommands instance with a preallocated slice of the given size.
-func NewDrawCommands(s int) *DrawCommands {
+func NewDrawCommands(mode int, s int) *DrawCommands {
 	dc := &DrawCommands{
-		commands: make([]*DrawCommand, s),
+		blendMode: mode,
+		commands:  make([]*DrawCommand, s),
 	}
 	for i := range dc.commands {
 		dc.commands[i] = &DrawCommand{}
 	}
 	return dc
+}
+
+// GetBlendMode returns the current blend mode used by the DrawCommands instance.
+func (w *DrawCommands) GetBlendMode() int {
+	return w.blendMode
 }
 
 // Compute updates or creates a draw command using the provided start and current index values and material.

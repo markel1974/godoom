@@ -71,6 +71,11 @@ func NewDrawCommandsRender(ctx api.IContext, isAdditive bool) *DrawCommandsRende
 	return dcr
 }
 
+// HasCommands returns true if there are render batches available to process; otherwise, it returns false.
+func (w *DrawCommandsRender) HasCommands() bool {
+	return w.batchesLen > 0
+}
+
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
 func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.batchesLen = 0
@@ -174,9 +179,4 @@ func (w *DrawCommandsRender) Render() {
 	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	}
-}
-
-// HasCommands returns true if there are render batches available to process; otherwise, it returns false.
-func (w *DrawCommandsRender) HasCommands() bool {
-	return w.batchesLen > 0
 }

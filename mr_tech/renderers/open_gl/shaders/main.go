@@ -427,8 +427,8 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	return s.proj, s.view, invView
 }
 
-// Render executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
-func (s *Main) Render(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
+// RenderOpaque executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
+func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
 	// target FBO preparation
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
 	s.ctx.Viewport(0, 0, fbW, fbH)

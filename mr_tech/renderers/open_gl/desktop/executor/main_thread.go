@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"errors"
 	"runtime"
 	"sync"
 )
@@ -13,17 +12,21 @@ const CallQueueCap = 16
 // It ensures thread-safe operations using a call queue and synchronization primitives.
 // Functions can be posted or called with optional return values or errors.
 type MainThread struct {
-	callQueue chan func()
-	respMutex sync.Mutex
-	respChan  chan interface{}
+	callQueue         chan func()
+	respMutex         sync.Mutex
+	respChanInterface chan interface{}
+	respChanError     chan error
+	respChanRes       chan bool
 }
 
 // NewMainThread creates and returns a new instance of MainThread with initialized callQueue and respChan channels.
 func NewMainThread() *MainThread {
 	runtime.LockOSThread()
 	th := &MainThread{
-		callQueue: make(chan func(), CallQueueCap),
-		respChan:  make(chan interface{}),
+		callQueue:         make(chan func(), CallQueueCap),
+		respChanInterface: make(chan interface{}),
+		respChanError:     make(chan error),
+		respChanRes:       make(chan bool),
 	}
 	return th
 }
@@ -50,9 +53,9 @@ func (m *MainThread) Call(f func()) {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
 		f()
-		m.respChan <- true
+		m.respChanRes <- true
 	}
-	<-m.respChan
+	<-m.respChanRes
 	m.respMutex.Unlock()
 }
 
@@ -60,26 +63,20 @@ func (m *MainThread) Call(f func()) {
 func (m *MainThread) CallErr(f func() error) error {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
-		m.respChan <- f()
+		m.respChanError <- f()
 	}
-	resp := <-m.respChan
+	err := <-m.respChanError
 	m.respMutex.Unlock()
-	if resp == nil {
-		return nil
-	}
-	if err, ok := resp.(error); ok {
-		return err
-	}
-	return errors.New("invalid response")
+	return err
 }
 
 // CallVal executes the provided function on the main thread and returns its result through a synchronized call.
 func (m *MainThread) CallVal(f func() interface{}) interface{} {
 	m.respMutex.Lock()
 	m.callQueue <- func() {
-		m.respChan <- f()
+		m.respChanInterface <- f()
 	}
-	val := <-m.respChan
+	val := <-m.respChanInterface
 	m.respMutex.Unlock()
 	return val
 }

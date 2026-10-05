@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
@@ -69,7 +70,6 @@ func NewPost(ctx api.IContext) *Post {
 	}
 }
 
-// GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
 // GetColorBuffer returns the resolved color texture ID
 func (s *Post) GetColorBuffer() uint32 {
 	return s.texColorBuffer
@@ -80,6 +80,7 @@ func (s *Post) GetDepthBuffer() uint32 {
 	return s.texDepthBuffer
 }
 
+// GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
 func (s *Post) GetBrightBuffer() uint32 {
 	return s.texBrightBuffer
 }
@@ -147,7 +148,7 @@ func (s *Post) Init() error {
 	return nil
 }
 
-// Prepare prepares the post-processing pipeline by resolving the multisample anti-aliasing (MSAA) buffers to standard buffers.
+// Prepare prepares the post-processing pipeline by resolving the multisample antialiasing (MSAA) buffers to standard buffers.
 func (s *Post) Prepare(fbw, fbh int32) {
 	if fbw != s.w || fbh != s.h {
 		s.allocate(fbw, fbh)
@@ -157,7 +158,7 @@ func (s *Post) Prepare(fbw, fbh int32) {
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
-func (s *Post) Render(bloomTex uint32, fbW, fbH int32) {
+func (s *Post) Render(bloomTex uint32, _, _ int32) {
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	s.ctx.Disable(api.DEPTH_TEST)
 
@@ -180,7 +181,7 @@ func (s *Post) Render(bloomTex uint32, fbW, fbH int32) {
 	s.ctx.Enable(api.DEPTH_TEST)
 }
 
-// resolveMSAA resolves a multisample anti-aliasing (MSAA) framebuffer to a standard framebuffer for post-processing.
+// ResolveMSAA resolves a multisample antialiasing (MSAA) framebuffer to a standard framebuffer for post-processing.
 func (s *Post) ResolveMSAA(fbw, fbh int32) {
 	s.ctx.BindFramebuffer(api.READ_FRAMEBUFFER, s.msaaFbo)
 	s.ctx.BindFramebuffer(api.DRAW_FRAMEBUFFER, s.fbo)
@@ -245,8 +246,8 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.DEPTH_COMPONENT24, s.w, s.h)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepthMSAA)
 
-	if s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER) != api.FRAMEBUFFER_COMPLETE {
-		panic("post MSAA FBO not complete: " + string(s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)))
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("post MSAA FBO not complete: " + strconv.Itoa(int(v)))
 	}
 
 	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---
@@ -276,8 +277,8 @@ func (s *Post) allocate(width, height int32) {
 
 	s.ctx.DrawBuffers(2, &attachments[0])
 
-	if s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER) != api.FRAMEBUFFER_COMPLETE {
-		panic("post Resolve FBO not complete: " + string(s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER)))
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("post Resolve FBO not complete: " + strconv.Itoa(int(v)))
 	}
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)

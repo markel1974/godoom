@@ -17,6 +17,16 @@ const (
 	glColorAttachment0 = uint32(0x8CE0)
 )
 
+const fnMultiDrawElements = `
+(function() {
+    return function(gl, mode, counts, type, offsets, drawcount) {
+        for (let i = 0; i < drawcount; ++i) {
+            gl.drawElements(mode, counts[i], type, offsets[i]);
+        }
+    };
+})()
+`
+
 // Context represents a WebGL rendering context, managing WebGL resources and interactions with the underlying JS environment.
 type Context struct {
 	win *Window
@@ -78,6 +88,7 @@ type Context struct {
 	fn_drawArrays                     js.Value
 	fn_drawBuffers                    js.Value
 	fn_drawElements                   js.Value
+	fn_multiDrawElements              js.Value
 	fn_enable                         js.Value
 	fn_enableVertexAttribArray        js.Value
 	fn_framebufferRenderbuffer        js.Value
@@ -224,6 +235,14 @@ func NewContext(width int, height int) *Context {
 	ctx.fn_useProgram = ctx.gl.Get("useProgram").Call("bind", ctx.gl)
 	ctx.fn_vertexAttribPointer = ctx.gl.Get("vertexAttribPointer").Call("bind", ctx.gl)
 	ctx.fn_viewport = ctx.gl.Get("viewport").Call("bind", ctx.gl)
+
+	ctx.fn_getQueryParameter = ctx.gl.Get("getQueryParameter").Call("bind", ctx.gl)
+	ctx.fn_createQuery = ctx.gl.Get("createQuery").Call("bind", ctx.gl)
+	ctx.fn_deleteQueries = ctx.gl.Get("deleteQuery").Call("bind", ctx.gl)
+	ctx.fn_beginQuery = ctx.gl.Get("beginQuery").Call("bind", ctx.gl)
+	ctx.fn_endQuery = ctx.gl.Get("endQuery").Call("bind", ctx.gl)
+
+	ctx.fn_multiDrawElements = js.Global().Call("eval", fnMultiDrawElements)
 	return ctx
 }
 
@@ -771,6 +790,12 @@ func (d *Context) LinkProgram(program uint32) {
 // indices is a pointer to the starting point of each index array.
 // drawcount specifies the number of draw calls to execute.
 func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
+	counts := d.getSharedJSArray(unsafe.Slice(count, drawcount))
+	offsets := d.getSharedJSArray(unsafe.Slice(indices, drawcount))
+	d.fn_multiDrawElements.Invoke(d.gl, mode, counts, xtype, offsets, drawcount)
+}
+
+func (d *Context) MultiDrawElementsOld(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
 	c_arr := unsafe.Slice(count, drawcount)
 	i_arr := unsafe.Slice(indices, drawcount)
 	for i := int32(0); i < drawcount; i++ {

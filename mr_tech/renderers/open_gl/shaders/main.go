@@ -522,3 +522,5 @@ func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint3
 	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)
 }
+func (s *Main) GetLocView() int32 { return s.tableOpaque[MainLocView] }
+func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }

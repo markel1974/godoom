@@ -30,7 +30,9 @@ type AABBTest struct {
 // OcclusionHW manages hardware-based occlusion queries using OpenGL-like graphics operations.
 type OcclusionHW struct {
 	ctx      api.IContext
-	states   []OcclusionState
+	states   map[uint64]*OcclusionState
+	queryIDs []uint32
+	queryIdx int
 	tests    []*AABBTest
 	testsLen int
 	cubeVAO  uint32
@@ -41,9 +43,11 @@ type OcclusionHW struct {
 func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	hw := &OcclusionHW{
 		ctx:      ctx,
-		states:   make([]OcclusionState, maxEntities),
+		states:   make(map[uint64]*OcclusionState, maxEntities),
 		tests:    make([]*AABBTest, 1024),
 		testsLen: 0,
+		queryIDs: make([]uint32, maxEntities),
+		queryIdx: 0,
 	}
 
 	for idx := range hw.tests {
@@ -51,18 +55,9 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	}
 
 	// Allocate HW queries in batch
-	queryIDs := make([]uint32, maxEntities)
-	ctx.GenQueries(int32(maxEntities), &queryIDs[0])
+	ctx.GenQueries(int32(maxEntities), &hw.queryIDs[0])
 
-	for i := 0; i < maxEntities; i++ {
-		hw.states[i] = OcclusionState{
-			QueryID:     queryIDs[i],
-			QueryActive: false,
-			IsVisible:   true, // Conservative: if not tested, it is visible
-		}
-	}
-
-	// 2. Create the bounding box geometry (1x1x1 cube from 0.0 to 1.0)
+	// Create the bounding box geometry (1x1x1 cube from 0.0 to 1.0)
 	// This way, by multiplying by (Max-Min) and translating to (Min),
 	// the cube will perfectly cover any AABB.
 	vertices := []float32{
@@ -90,11 +85,22 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 }
 
 // GetState retrieves the OcclusionState at the specified index if the index is within bounds; otherwise, it returns nil.
-func (hw *OcclusionHW) GetState(index int) *OcclusionState {
-	if index >= 0 && index < len(hw.states) {
-		return &hw.states[index]
+func (hw *OcclusionHW) GetState(id uint64) *OcclusionState {
+	state, exists := hw.states[id]
+	if !exists {
+		// Alloca una nuova query dalla pool pre-allocata
+		if hw.queryIdx >= len(hw.queryIDs) {
+			return nil // Pool esaurito!
+		}
+		state = &OcclusionState{
+			QueryID:     hw.queryIDs[hw.queryIdx],
+			QueryActive: false,
+			IsVisible:   true,
+		}
+		hw.states[id] = state
+		hw.queryIdx++
 	}
-	return nil
+	return state
 }
 
 // Reset clears all AABB tests stored in the OcclusionHW instance.

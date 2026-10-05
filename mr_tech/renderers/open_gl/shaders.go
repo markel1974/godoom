@@ -130,7 +130,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, dcLiquid *DrawCommandsRender, vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
+func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, dcLiquid *DrawCommandsRender, hwOcc *OcclusionHW, vi *model.ViewMatrix, fbW int32, fbH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
@@ -211,6 +211,11 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN OPAQUE
 	w.main.RenderOpaque(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
+
+	//TODO COMPLETARE
+	if hwOcc != nil {
+		hwOcc.RenderQueries(w.main.GetProgramOpaque(), w.main.GetLocView(), w.main.GetLocProj(), -1, viewMatrix, projMatrix)
+	}
 	// MAIN ADDITIVE
 	if dcAdditive.HasCommands() {
 		w.main.RenderAdditive(dcAdditive.Render)

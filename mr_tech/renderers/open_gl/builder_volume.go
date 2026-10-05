@@ -24,9 +24,9 @@ type BuilderVolume struct {
 	cSky             *textures.Texture
 	cSkyU, cSkyV     float64
 	cal              *model.Calibration
-	//occBuffer        *OcclusionBuffer
-	visibleVol *VisibleVolumes
-	modes      []*DrawCommands
+	visibleVol       *VisibleVolumes
+	modes            []*DrawCommands
+	occlusion        *OcclusionHW
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -46,9 +46,10 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		cSkyU:            0.0,
 		cSkyV:            0.0,
 		cal:              calibration,
-		//occBuffer:        NewOcclusionBuffer(640, 480),
-		visibleVol: NewVisibleVols(8192),
-		modes:      make([]*DrawCommands, config.BlendModeLates),
+		visibleVol:       NewVisibleVols(8192),
+		modes:            make([]*DrawCommands, config.BlendModeLates),
+		//occlusion:      NewOcclusionHW(ctx, 4096),
+		//occBuffer:      NewOcclusionBuffer(640, 480),
 	}
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
@@ -100,6 +101,9 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcAdditive.DeepReset()
 	w.dcLiquid.DeepReset()
 	w.cSky = nil
+
+	// TODO RIATTIVARE
+	//w.occlusion.Reset()
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, fm, px, py, pz)
@@ -210,15 +214,27 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
 	counter := 0
+
 	q := func(object physics.IAABB) bool {
 		thing := object.(model.IThing)
-		//if w.occBuffer.IsAABBOccluded(thing.GetAABB(), mvp) {
+
+		//occState := w.occlusion.GetState(thing.GetEntity().GetId())
+		//if occState != nil && !occState.IsVisible {
+		//	w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
+		//	return false                               // CULLATO! Non generiamo i vertici
+		//}
+
+		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		//if faceCount == 0 {
+		//	w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
 		//	return false
 		//}
-		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		//w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
+
 		if faceCount == 0 {
 			return false
 		}
+
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetDisplacement()
@@ -280,60 +296,64 @@ func (w *BuilderVolume) GetDrawCommandsLiquid() *DrawCommandsRender {
 	return w.dcRenderLiquid
 }
 
+// GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
+func (w *BuilderVolume) GetHWOcclusion() *OcclusionHW { return w.occlusion }
+
 /*
 // pushQVolumes processes and renders visible volumes intersecting the given frustum, applying material and texture filtering.
-func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
-	counter := 0
 
-	queryGeom := func(object physics.IAABB) bool {
-		vol := object.(*model.Volume)
-		faces, faceCount := vol.GetFaces()
-		for x := 0; x < faceCount; x++ {
-			face := (*faces)[x]
-			mat, texKind := face.GetMaterialDetails()
-			matObj := face.GetMaterialObj()
-			if mat == nil || matObj == nil {
-				continue
-			}
-			if texKind == int(config.MaterialKindSky) {
-				w.cSky = mat
-				w.cSkyU = matObj.U()
-				w.cSkyV = matObj.V()
-				continue
-			}
-			tId := float32(0)
-			if tId = mat.GetIdentifier(); tId < 0 {
-				tId, _ = w.tex.Get(mat)
-				mat.SetIdentifier(tId)
-			}
+	func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum) {
+		counter := 0
 
-			startIdx := w.fv.GetIndicesLen()
+		queryGeom := func(object physics.IAABB) bool {
+			vol := object.(*model.Volume)
+			faces, faceCount := vol.GetFaces()
+			for x := 0; x < faceCount; x++ {
+				face := (*faces)[x]
+				mat, texKind := face.GetMaterialDetails()
+				matObj := face.GetMaterialObj()
+				if mat == nil || matObj == nil {
+					continue
+				}
+				if texKind == int(config.MaterialKindSky) {
+					w.cSky = mat
+					w.cSkyU = matObj.U()
+					w.cSkyV = matObj.V()
+					continue
+				}
+				tId := float32(0)
+				if tId = mat.GetIdentifier(); tId < 0 {
+					tId, _ = w.tex.Get(mat)
+					mat.SetIdentifier(tId)
+				}
 
-			p := face.GetPoints()
-			u, v := face.GetUV()
-			renderMode := float32(0.0)
-			if texKind == int(config.MaterialKindLiquid) {
-				renderMode = 0.5
-			}
-			id0 := w.fv.AddVertex10(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, renderMode)
-			id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, renderMode)
-			id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, renderMode)
-			w.fv.AddTriangle(id0, id1, id2)
+				startIdx := w.fv.GetIndicesLen()
 
-			endIdx := w.fv.GetIndicesLen()
-			if startIdx != endIdx {
-				blendMode := matObj.BlendMode()
-				targetDc := w.modes[blendMode]
-				targetDc.Compute(startIdx, endIdx, matObj)
-				startIdx = endIdx
+				p := face.GetPoints()
+				u, v := face.GetUV()
+				renderMode := float32(0.0)
+				if texKind == int(config.MaterialKindLiquid) {
+					renderMode = 0.5
+				}
+				id0 := w.fv.AddVertex10(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, renderMode)
+				id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, renderMode)
+				id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, renderMode)
+				w.fv.AddTriangle(id0, id1, id2)
+
+				endIdx := w.fv.GetIndicesLen()
+				if startIdx != endIdx {
+					blendMode := matObj.BlendMode()
+					targetDc := w.modes[blendMode]
+					targetDc.Compute(startIdx, endIdx, matObj)
+					startIdx = endIdx
+				}
 			}
+			counter++
+			return false
 		}
-		counter++
-		return false
+
+		volumes.QueryFrustum(frustumFront, queryGeom)
+
+		//fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
 	}
-
-	volumes.QueryFrustum(frustumFront, queryGeom)
-
-	//fmt.Println("VOLUMES", volumes.Len(), "DRAW", counter)
-}
 */

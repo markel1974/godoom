@@ -40,6 +40,8 @@ const (
 	NEAREST_MIPMAP_NEAREST     = 0x2700
 	NONE                       = 0
 	ONE                        = 1
+	SRC_ALPHA                  = 0x0302
+	ONE_MINUS_SRC_ALPHA        = 0x0303
 	POLYGON_OFFSET_FILL        = 0x8037
 	READ_FRAMEBUFFER           = 0x8CA8
 	RED                        = 0x1903
@@ -60,6 +62,8 @@ const (
 	TEXTURE14                  = 0x84CE
 	TEXTURE2                   = 0x84C2
 	TEXTURE4                   = 0x84C4
+	TEXTURE5                   = 0x84C5
+	TEXTURE6                   = 0x84C6
 	TEXTURE8                   = 0x84C8
 	TEXTURE_2D                 = 0x0DE1
 	TEXTURE_2D_ARRAY           = 0x8C1A

@@ -145,30 +145,25 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 				if mat == nil || matObj == nil {
 					continue
 				}
-				if texKind == int(config.MaterialKindSky) {
-					w.cSky = mat
-					w.cSkyU = matObj.U()
-					w.cSkyV = matObj.V()
-					//fmt.Println("sky ", w.cSkyU, w.cSkyV)
-					continue
-				}
 				tId := float32(0)
 				if tId = mat.GetIdentifier(); tId < 0 {
 					tId, _ = w.tex.Get(mat)
 					mat.SetIdentifier(tId)
 				}
-
+				faceBlendT := float32(0.0)
+				switch texKind {
+				case int(config.MaterialKindSky):
+					w.cSky, w.cSkyU, w.cSkyV = mat, matObj.U(), matObj.V()
+					continue
+				case int(config.MaterialKindLiquid):
+					faceBlendT = 0.5
+				}
 				startIdx := w.fv.GetIndicesLen()
-
 				p := face.GetPoints()
 				u, v := face.GetUV()
-				renderMode := float32(0.0)
-				if texKind == int(config.MaterialKindLiquid) {
-					renderMode = 0.5
-				}
-				id0 := w.fv.AddVertex10(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, renderMode)
-				id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, renderMode)
-				id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, renderMode)
+				id0 := w.fv.AddVertex10(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, faceBlendT)
+				id1 := w.fv.AddVertex10(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, faceBlendT)
+				id2 := w.fv.AddVertex10(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, faceBlendT)
 				w.fv.AddTriangle(id0, id1, id2)
 				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
 				added++
@@ -226,7 +221,6 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		//}
 
 		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-
 		//TODO RIATTIVARE
 		//if faceCount == 0 {
 		//	w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
@@ -246,11 +240,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 		pushPassThing := func() {
 			faces := *pFaces
 			nextFaces := *pNextFaces
-			b := float32(renderMode)
+
 			for fx := 0; fx < faceCount; fx++ {
-				f := faces[fx]
-				mat := f.GetMaterial()
-				matObj := f.GetMaterialObj()
+				face := faces[fx]
+				mat := face.GetMaterial()
+				matObj := face.GetMaterialObj()
 				if mat == nil || matObj == nil {
 					continue
 				}
@@ -259,14 +253,14 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 					tId, _ = w.tex.Get(mat)
 					mat.SetIdentifier(tId)
 				}
+				p := face.GetPoints()
+				u, v := face.GetUV()
 				nf := nextFaces[fx]
 				np := nf.GetPoints()
 				startIndices := w.fv.GetIndicesLen()
-				p := f.GetPoints()
-				u, v := f.GetUV()
-				id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, b, float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
-				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, b, float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
-				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, b, float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
+				id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
 				w.fv.AddTriangle(id0, id1, id2)
 
 				currentIndices := w.fv.GetIndicesLen()

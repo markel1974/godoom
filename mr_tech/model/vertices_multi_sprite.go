@@ -80,7 +80,7 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 			}
 			if mat := f.GetMaterialObj(); mat != nil {
 				mat.RestartAnim()
-				// In Doom, action 3 is death and 4 is extreme death
+				// Action 3 is death and 4 is extreme death
 				if idx == 3 || idx == 4 {
 					mat.SetClampAnim(true)
 				} else {

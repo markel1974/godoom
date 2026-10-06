@@ -35,11 +35,6 @@ func (st *ShaderStage) IsAdditive() bool {
 		(st.blendSrc == "gl_src_alpha" && st.blendDst == "gl_one")
 }
 
-// Shaders represents a collection of Shader objects organized in a map with shader names as keys.
-type Shaders struct {
-	container map[string]*Shader
-}
-
 // Shader represents a graphics shader with specific properties, shader stages, and parameters for rendering operations.
 type Shader struct {
 	name            string
@@ -76,6 +71,11 @@ func NewShader(name string, cull string) *Shader {
 		qerParms:     make(map[string][]string),
 		q3mapParms:   make(map[string][]string),
 	}
+}
+
+// Shaders represents a collection of Shader objects organized in a map with shader names as keys.
+type Shaders struct {
+	container map[string]*Shader
 }
 
 // NewShaders initializes a new instance of the Shaders struct with an empty container map and returns its pointer.

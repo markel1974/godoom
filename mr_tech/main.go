@@ -75,7 +75,7 @@ func main() {
 	case 7:
 		target = "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "PAK0.PAK"
 	case 8:
-		target = "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
+		target = "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "q3_pak0.pk3"
 	default:
 	}
 

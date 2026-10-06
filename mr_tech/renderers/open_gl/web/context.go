@@ -238,7 +238,7 @@ func NewContext(width int, height int) *Context {
 
 	ctx.fn_getQueryParameter = ctx.gl.Get("getQueryParameter").Call("bind", ctx.gl)
 	ctx.fn_createQuery = ctx.gl.Get("createQuery").Call("bind", ctx.gl)
-	ctx.fn_deleteQueries = ctx.gl.Get("deleteQuery").Call("bind", ctx.gl)
+	ctx.fn_deleteQuery = ctx.gl.Get("deleteQuery").Call("bind", ctx.gl)
 	ctx.fn_beginQuery = ctx.gl.Get("beginQuery").Call("bind", ctx.gl)
 	ctx.fn_endQuery = ctx.gl.Get("endQuery").Call("bind", ctx.gl)
 
@@ -783,6 +783,17 @@ func (d *Context) LinkProgram(program uint32) {
 	d.fn_linkProgram.Invoke(d.programs.Get(program))
 }
 
+func (d *Context) MultiDrawElementsFast(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
+	// Otteniamo i puntatori raw
+	cOffset := int(uintptr(unsafe.Pointer(count)))
+	oOffset := int(uintptr(unsafe.Pointer(indices)))
+	// Istanziamo direttamente gli Int32Array dal JS
+	counts32 := js.Global().Call("getWasmMemoryView", cOffset, int(drawcount), "int32")
+	offsets32 := js.Global().Call("getWasmMemoryView", oOffset, int(drawcount), "int32")
+	// Invochiamo WebGL passando le view non corrotte
+	d.fn_multiDrawElements.Invoke(d.gl, mode, counts32, xtype, offsets32, drawcount)
+}
+
 // MultiDrawElements renders multiple sets of primitives by specifying multiple indices, counts, and modes in a single call.
 // mode specifies the kind of primitives to render.
 // count is a pointer to an array specifying the number of elements to render per draw call.
@@ -790,12 +801,6 @@ func (d *Context) LinkProgram(program uint32) {
 // indices is a pointer to the starting point of each index array.
 // drawcount specifies the number of draw calls to execute.
 func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
-	counts := d.getSharedJSArray(unsafe.Slice(count, drawcount))
-	offsets := d.getSharedJSArray(unsafe.Slice(indices, drawcount))
-	d.fn_multiDrawElements.Invoke(d.gl, mode, counts, xtype, offsets, drawcount)
-}
-
-func (d *Context) MultiDrawElementsOld(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
 	c_arr := unsafe.Slice(count, drawcount)
 	i_arr := unsafe.Slice(indices, drawcount)
 	for i := int32(0); i < drawcount; i++ {

@@ -75,7 +75,7 @@ func (q3 *BSPReader) GetTextures() *lumps.Textures {
 func (q3 *BSPReader) GetHeaders() lumps.Headers3 {
 	return q3.headers
 }
-func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace3, error) {
 	noDraws := q3.shaders.NoDraws()
 	rawFaces, err := lumps.NewRawFaces3(q3.rs, q3.headers, modelIdx, noDraws)
 	if err != nil {
@@ -86,7 +86,7 @@ func (q3 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 }
 
 // compileTextures loads and registers unique textures from a list of faces, supporting JPEG and TGA formats.
-func (q3 *BSPReader) compileTextures(faces []*lumps.RawFace) {
+func (q3 *BSPReader) compileTextures(faces []*lumps.RawFace3) {
 	// Map to track if a physical texture NEEDS alpha test.
 	// If it doesn't need alpha test, we can force it to be opaque.
 	needsAlphaTest := make(map[string]bool)

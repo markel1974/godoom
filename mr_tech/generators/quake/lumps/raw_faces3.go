@@ -10,7 +10,7 @@ import (
 )
 
 // NewRawFaces3 processes a 3D model's data to extract and create raw face representations from a Quake 3 BSP file.
-func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[string]bool) ([]*RawFace, error) {
+func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[string]bool) ([]*RawFace3, error) {
 	lModels := headers.Lumps[LumpModels3]
 	if _, err := rs.Seek(int64(lModels.Offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("failed to seek to models lump: %w", err)
@@ -59,7 +59,7 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 		return nil, fmt.Errorf("failed to read textures lump: %w", err)
 	}
 
-	var rawFaces []*RawFace
+	var rawFaces []*RawFace3
 
 	// 3. Risoluzione Topologica
 	for i := int32(0); i < targetModel.NumFaces; i++ {
@@ -79,7 +79,6 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 		if _, found := noDraw[texName]; found {
 			continue
 		}
-		isSky := (tex.Flags & 0x4) != 0 // SURF_SKY
 		switch face.Type {
 		case 1, 3: // Poligono Convesso (1) o Mesh Complessa (3)
 			// usiamo l'indicizzazione per formare direttamente triangoli
@@ -92,12 +91,7 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 					tri = append(tri, CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
 					uvs = append(uvs, [2]float64{float64(v.TexCoord[0]), float64(v.TexCoord[1])})
 				}
-				rawFaces = append(rawFaces, &RawFace{
-					Points:  tri, // non dovremo fare il Fan se riceve già 3 punti
-					UVs:     uvs,
-					TexName: texName,
-					IsSky:   isSky,
-				})
+				rawFaces = append(rawFaces, NewRawFace3(tri, uvs, texName, tex))
 			}
 
 		case 2: // PATCH DI BEZIER (Biquadratica)
@@ -120,14 +114,10 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 
 					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
 					triangles, uvs := Tessellate(cp, 5)
-
 					for t := 0; t < len(triangles); t += 3 {
-						rawFaces = append(rawFaces, &RawFace{
-							Points:  []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]},
-							UVs:     [][2]float64{uvs[t], uvs[t+1], uvs[t+2]},
-							TexName: texName,
-							IsSky:   isSky,
-						})
+						triC := []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]}
+						uvsC := [][2]float64{uvs[t], uvs[t+1], uvs[t+2]}
+						rawFaces = append(rawFaces, NewRawFace3(triC, uvsC, texName, tex))
 					}
 				}
 			}

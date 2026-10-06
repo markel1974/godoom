@@ -10,3 +10,8 @@ type Texture3 struct {
 	Flags    uint32
 	Contents uint32
 }
+
+// IsSky determines if the RawFace3 object represents a sky surface by checking if the SURF_SKY flag is set in Info.Flags.
+func (t *Texture3) IsSky() bool {
+	return (t.Flags & 0x4) != 0 // SURF_SKY
+}

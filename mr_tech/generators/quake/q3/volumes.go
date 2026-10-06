@@ -23,7 +23,7 @@ func NewVolumes(shaders *Shaders) *Volumes {
 }
 
 // Create generates and groups faces into 3D volumes based on spatial hashing, material properties, and shader configurations.
-func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, error) {
+func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, error) {
 	const chunkSize = float64(1024)
 
 	var volumes []*config.Volume
@@ -32,7 +32,7 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 	for _, v := range faces {
 		animKind := config.MaterialKindLoop
 		texNameLC := strings.ToLower(v.TexName)
-		if v.IsSky {
+		if v.Info.IsSky() {
 			animKind = config.MaterialKindSky
 		} else {
 			if f.shaders.IsLiquid(texNameLC) {
@@ -49,7 +49,7 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 				animMapLC[i] = strings.ToLower(frame)
 			}
 			material = config.NewConfigMaterial(animMapLC, animKind, 1.0, 1.0, scrollU, scrollV)
-		} else if v.IsSky {
+		} else if v.Info.IsSky() {
 			// Sky textures might have a specific editor image, or we try to extract the map
 			if diffMap := f.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
 				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, 1.0, 1.0, scrollU, scrollV)

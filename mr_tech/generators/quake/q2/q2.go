@@ -198,7 +198,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 }
 
 // GetRawFaces extracts raw face geometry and texture mapping data for a specified model index in the BSP file.
-func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
+func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace2, error) {
 	// Read models to find face offsets
 	lumpModels := q2.header.Lumps[lumps.LumpModels2]
 	if _, err := q2.rs.Seek(int64(lumpModels.Offset), io.SeekStart); err != nil {
@@ -262,7 +262,7 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 	}
 
 	// Resolve indirection and generate RawFaces
-	var rawFaces []*lumps.RawFace
+	var rawFaces []*lumps.RawFace2
 	for i := int32(0); i < targetModel.NumFaces; i++ {
 		faceIdx := targetModel.FirstFace + i
 		face := faces[faceIdx]
@@ -307,7 +307,7 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 				float64(texInfo.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / float64(texW), vt / float64(texH)})
 		}
-		rf := lumps.NewRawFace(points, uvs, texName, texInfo.IsSky())
+		rf := lumps.NewRawFace2(points, uvs, texName, texInfo.Flags)
 		rawFaces = append(rawFaces, rf)
 	}
 

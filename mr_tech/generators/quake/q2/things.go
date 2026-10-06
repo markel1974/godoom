@@ -164,7 +164,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := config.MaterialKindLoop
-		if bspFace.IsSky {
+		if bspFace.IsSky() {
 			animKind = config.MaterialKindSky
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)

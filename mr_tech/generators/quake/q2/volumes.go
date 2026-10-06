@@ -24,14 +24,16 @@ func NewVolumes(mIdx int, chunkSize float64) *Volumes {
 }
 
 // Create processes a list of RawFace instances, organizes them into spatial chunks, and converts them into Volumes.
-func (vs *Volumes) Create(faces []*lumps.RawFace) []*config.Volume {
+func (vs *Volumes) Create(faces []*lumps.RawFace2) []*config.Volume {
 	chunks := make(map[string]*config.Volume)
 	var res []*config.Volume
 
 	for _, v := range faces {
 		animKind := config.MaterialKindLoop
-		if v.IsSky {
+		if v.IsSky() {
 			animKind = config.MaterialKindSky
+		} else if v.IsWarp() {
+			animKind = config.MaterialKindLiquid
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
 		triangles := lumps.TriangulateConvex3d(v.Points)

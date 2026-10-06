@@ -163,12 +163,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
-		animKind := config.MaterialKindLoop
-		if bspFace.Info.IsSky() {
-			animKind = config.MaterialKindSky
-		} else if bspFace.Info.IsWarp() {
-			animKind = config.MaterialKindLiquid
-		}
+		animKind := TextInfo2ToMaterialKind(bspFace.Info)
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {

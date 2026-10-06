@@ -29,12 +29,7 @@ func (vs *Volumes) Create(faces []*lumps.RawFace2) []*config.Volume {
 	var res []*config.Volume
 
 	for _, v := range faces {
-		animKind := config.MaterialKindLoop
-		if v.Info.IsSky() {
-			animKind = config.MaterialKindSky
-		} else if v.Info.IsWarp() {
-			animKind = config.MaterialKindLiquid
-		}
+		animKind := TextInfo2ToMaterialKind(v.Info)
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)
 		triangles := lumps.TriangulateConvex3d(v.Points)
 

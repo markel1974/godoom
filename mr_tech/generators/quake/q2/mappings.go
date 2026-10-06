@@ -1,5 +1,10 @@
 package q2
 
+import (
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+)
+
 var _q2DictModelFilename = map[string]string{
 
 	"monster_berserk": "models/monsters/berserk/tris.md2",
@@ -148,4 +153,14 @@ var _q2DictModelFilename = map[string]string{
 var _q2DictBModel = map[string]string{
 	// A differenza di Q1, Q2 usa pochissimi BModel esterni per gli item, la maggior parte usa i tris.md2.
 	// BModel interni (*1, *2) per func_door, func_plat saranno gestiti dinamicamente nel builder.
+}
+
+func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
+	animKind := config.MaterialKindLoop
+	if info.IsSky() {
+		animKind = config.MaterialKindSky
+	} else if info.IsWarp() {
+		animKind = config.MaterialKindLiquid
+	}
+	return animKind
 }

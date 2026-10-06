@@ -365,6 +365,16 @@ func (s *Shaders) GetFogGen(target string) []string {
 	return nil
 }
 
+// IsLiquid determines if the target shader represents a liquid surface, such as water, lava, slime, or fog.
+func (s *Shaders) IsLiquid(target string) bool {
+	if parms := s.GetSurfaceParms(target); len(parms) > 0 {
+		if parms["water"] || parms["lava"] || parms["slime"] || parms["fog"] {
+			return true
+		}
+	}
+	return false
+}
+
 // IsLightning checks if this is a lightning shader.
 func (s *Shaders) IsLightning(target string) bool {
 	if k, ok := s.container[target]; ok {

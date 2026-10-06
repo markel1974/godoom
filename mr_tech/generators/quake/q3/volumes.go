@@ -35,8 +35,7 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace) ([]*config.Volume, er
 		if v.IsSky {
 			animKind = config.MaterialKindSky
 		} else {
-			parms := f.shaders.GetSurfaceParms(texNameLC)
-			if parms["water"] || parms["lava"] || parms["slime"] {
+			if f.shaders.IsLiquid(texNameLC) {
 				animKind = config.MaterialKindLiquid
 			}
 		}

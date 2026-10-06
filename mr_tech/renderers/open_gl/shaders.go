@@ -227,7 +227,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
 		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
 		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		w.main.RenderLiquid(dcLiquid.Render, w.post.GetColorBuffer(), w.post.GetDepthBuffer(), false, fbW, fbH)
+		w.main.RenderLiquid(dcLiquid.Render, w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)

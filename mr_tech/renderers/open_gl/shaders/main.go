@@ -16,8 +16,6 @@ const (
 	mainDoubleBuffer = 2
 )
 
-const liquidTimeScale = 0.02
-
 // MainLocView represents the location of the view matrix.
 // MainLocProjection represents the location of the projection matrix.
 // MainLocTexture represents the location of the texture data.
@@ -183,6 +181,10 @@ func (s *Main) GetUniformAdditive(id MainLoc) int32 {
 func (s *Main) GetVAO() uint32 {
 	return s.mainVAO[s.frameIdx]
 }
+
+func (s *Main) GetLocView() int32 { return s.tableOpaque[MainLocView] }
+
+func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
 
 // Compile initializes and compiles shader programs for opaque, additive, and liquid rendering using provided asset sources.
 func (s *Main) Compile(a IAssets) error {
@@ -431,6 +433,7 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 
 // RenderOpaque executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
 func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
+	interval := float32(0) //unused
 	// target FBO preparation
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
 	s.ctx.Viewport(0, 0, fbW, fbH)
@@ -441,7 +444,7 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 
 	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*liquidTimeScale)
+	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), interval)
 
 	s.ctx.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
@@ -464,11 +467,13 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 
 // RenderAdditive configures and executes additive rendering by applying blending settings and invoking the provided geometry rendering function.
 func (s *Main) RenderAdditive(renderGeometry func()) {
+	interval := float32(0) //unused
+
 	s.ctx.UseProgram(s.GetProgramAdditive())
 
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*liquidTimeScale)
+	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), interval)
 
 	s.ctx.DepthMask(false)
 	s.ctx.Enable(api.DEPTH_TEST)
@@ -487,23 +492,25 @@ func (s *Main) RenderAdditive(renderGeometry func()) {
 }
 
 // RenderLiquid executes the rendering of liquid effects using the provided geometry and textures.
-func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint32, fbW, fbH int32) {
+func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint32, transparent bool, fbW, fbH int32) {
 	s.ctx.UseProgram(s.prgLiquid)
 
-	s.ctx.Enable(api.BLEND)
-	s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
-	s.ctx.DepthMask(false) // Do not write to depth buffer
-
+	//TODO from config
+	const liquidTimeScale = 0.02
+	interval := float32(textures.GlobalTick()) * liquidTimeScale
+	//TODO from config
+	if transparent {
+		s.ctx.Enable(api.BLEND)
+		s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
+		s.ctx.DepthMask(false) // Do not write to depth buffer
+	} else {
+		s.ctx.Disable(api.BLEND)
+		s.ctx.DepthMask(true)
+	}
 	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocView], 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocProjection], 1, false, &s.proj[0])
-
-	// textures.GlobalTick() is in github.com/markel1974/godoom/mr_tech/textures
-	// I will just use 1.0 for time if textures is not imported, but it is imported!
-	//TODO REMOVE
-	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], float32(textures.GlobalTick())*liquidTimeScale)
-
+	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], interval)
 	s.ctx.Uniform2f(s.tableLiquid[MainLocScreenResolution], float32(fbW), float32(fbH))
-
 	s.ctx.Uniform1f(s.tableLiquid[MainLocNear], 0.1)
 	s.ctx.Uniform1f(s.tableLiquid[MainLocFar], 1000.0)
 
@@ -525,5 +532,3 @@ func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint3
 	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)
 }
-func (s *Main) GetLocView() int32 { return s.tableOpaque[MainLocView] }
-func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }

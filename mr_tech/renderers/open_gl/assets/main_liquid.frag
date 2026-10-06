@@ -160,12 +160,20 @@ void main() {
     vec3 waterFogColor = vec3(WATER_FOG_R, WATER_FOG_G, WATER_FOG_B);
     float transmittance = exp(-depthDiff * WATER_ABSORPTION);
     vec3 finalColor = refractionColor * transmittance + waterFogColor * (1.0 - transmittance);
-
     // Mix water texture
     finalColor = mix(finalColor, finalColor * texColor, 0.35);
-
     // Output
     FragColor = vec4(finalColor, 0.85);
+    /*
+     vec3 lavaBaseColor = texColor;
+    // Lava color variation
+    float lavaNoise = mix(n1, n2, 0.5);
+    vec3 lavaDark = lavaBaseColor * 0.25;
+    vec3 lavaHot = vec3(1.0, 0.18, 0.01);
+    finalColor = mix(lavaDark, lavaHot, lavaNoise);
+    FragColor = vec4(finalColor, 1.0);
+    */
+
     float brightness = dot(finalColor, vec3(0.2126, 0.7152, 0.0722));
     BrightColor = vec4(brightness > 3.0? finalColor: vec3(0.0), 1.0);
 }

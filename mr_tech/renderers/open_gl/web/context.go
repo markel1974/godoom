@@ -1187,7 +1187,7 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	case 0x1400: // BYTE
 		return d.jsInt8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
 	case 0x1401: // UNSIGNED_BYTE
-		return d.jsUint8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+		return buffer //d.jsUint8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
 	case 0x1402: // SHORT
 		return d.jsInt16Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
 	case 0x1403: // UNSIGNED_SHORT

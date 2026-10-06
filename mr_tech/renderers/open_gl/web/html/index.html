@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <title>GoDoom Wasm</title>
@@ -16,13 +16,14 @@
 
     <div id="ui" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); color: white; padding: 40px; font-family: sans-serif; border: 2px solid #555; border-radius: 12px; z-index: 10; box-shadow: 0 0 30px rgba(0,0,0,0.9); text-align: center; min-width: 450px;">
         <h1 style="margin-top: 0; color: #ff5555; letter-spacing: 2px;">GoDoom Web</h1>
-        
+
         <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; border: 1px solid #444; margin-bottom: 25px;">
             <div style="font-size: 18px; font-weight: bold; color: #aaa; margin-bottom: 15px; text-transform: uppercase;">Step 1: Choose Generator</div>
-            
+
             <div style="display: flex; justify-content: center; gap: 20px;">
                 <div>
                     <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Mode</label>
+                    <label for="selMode"></label>
                     <select id="selMode" style="padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white;">
                         <option value="2">Wolf3D</option>
                         <option value="3" selected>Doom</option>
@@ -35,35 +36,35 @@
                 </div>
                 <div>
                     <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Level</label>
-                    <input type="number" id="inpLevel" value="1" style="width: 70px; padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white; text-align: center;">
+                    <label for="inpLevel"></label><input type="number" id="inpLevel" value="1" style="width: 70px; padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white; text-align: center;">
                 </div>
             </div>
         </div>
-        
+
         <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; border: 1px solid #444;">
             <div style="font-size: 18px; font-weight: bold; color: #aaa; margin-bottom: 15px; text-transform: uppercase;">Step 2: Provide Game Data</div>
-            
+
             <button id="btnShareware" style="width: 100%; padding: 15px; font-size: 16px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 6px; font-weight: bold; margin-bottom: 15px; transition: background 0.2s;">
                 Play Default / Shareware
             </button>
-            
+
             <div style="display: flex; align-items: center; text-align: center; color: #777; margin: 15px 0;">
                 <div style="flex: 1; height: 1px; background: #444;"></div>
                 <div style="margin: 0 15px; font-size: 14px;">OR</div>
                 <div style="flex: 1; height: 1px; background: #444;"></div>
             </div>
-            
+
             <div id="dropZone" style="border: 2px dashed #666; border-radius: 8px; padding: 30px 20px; cursor: pointer; background: #1a1a1a; transition: all 0.2s;">
                 <div style="font-size: 18px; margin-bottom: 5px; pointer-events: none; color: #eee;">Drag & Drop your WAD / PAK here</div>
                 <div style="font-size: 14px; color: #888; pointer-events: none;">or click to browse</div>
                 <input type="file" id="inpFile" style="display: none;">
             </div>
         </div>
-        
+
         <div id="status" style="margin-top: 20px; color: #ffaa00; font-size: 14px; min-height: 20px;"></div>
     </div>
 
-    
+
     <!-- Touch UI -->
     <div id="touchUI" style="display:none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 15; pointer-events: none; overflow: hidden; user-select: none; -webkit-user-select: none;">
         <!-- Left Joystick Base -->
@@ -71,10 +72,10 @@
             <!-- Joystick Stick -->
             <div id="joyStick" style="position: absolute; top: 30px; left: 30px; width: 60px; height: 60px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); pointer-events: none;"></div>
         </div>
-        
+
         <!-- Right Look Area (captures touch for looking) -->
         <div id="lookArea" style="position: absolute; top: 0; right: 0; width: 50vw; height: 100vh; pointer-events: auto;"></div>
-        
+
         <!-- Action Buttons -->
         <div id="btnShoot" style="position: absolute; bottom: 50px; right: 150px; width: 70px; height: 70px; border-radius: 50%; background: rgba(255, 50, 50, 0.5); border: 2px solid rgba(255,100,100,0.8); pointer-events: auto; display: flex; align-items: center; justify-content: center; color: white; font-family: sans-serif; font-weight: bold;">SHOOT</div>
         <div id="btnJump" style="position: absolute; bottom: 140px; right: 50px; width: 70px; height: 70px; border-radius: 50%; background: rgba(50, 150, 255, 0.5); border: 2px solid rgba(100,200,255,0.8); pointer-events: auto; display: flex; align-items: center; justify-content: center; color: white; font-family: sans-serif; font-weight: bold;">JUMP</div>
@@ -82,12 +83,12 @@
     </div>
 
     <canvas id="canvas" oncontextmenu="event.preventDefault()" style="display:none;"></canvas>
-    
+
     <script src="wasm_exec.js"></script>
     <script>
         let wasmInstance = null;
         const go = new Go();
-        
+
         function showLoading(text) {
             document.getElementById("ui").style.display = "none";
             let l = document.getElementById("loading");
@@ -107,12 +108,14 @@
             document.getElementById("status").style.color = "red";
         });
 
-        
+
         // --- TOUCH CONTROLS ---
         function initTouch() {
-            if (!('ontouchstart' in window) || navigator.maxTouchPoints <= 0) return; // Only show on mobile
+            if (!('ontouchstart' in window) || navigator.maxTouchPoints <= 0) {
+                return; // Only show on mobile
+            }
             document.getElementById("touchUI").style.display = "block";
-            
+
             // Helpers to simulate keyboard/mouse for Go
             function simKey(code, isDown) {
                 let e = { code: code };
@@ -132,7 +135,7 @@
             let joyActive = false;
             let joyCenter = { x: 0, y: 0 };
             let currentKeys = { w: false, a: false, s: false, d: false };
-            
+
             joyBase.addEventListener("touchstart", (e) => {
                 e.preventDefault();
                 let rect = joyBase.getBoundingClientRect();
@@ -140,12 +143,12 @@
                 joyActive = true;
                 handleJoy(e.targetTouches[0]);
             }, {passive: false});
-            
+
             joyBase.addEventListener("touchmove", (e) => {
                 e.preventDefault();
                 if (joyActive) handleJoy(e.targetTouches[0]);
             }, {passive: false});
-            
+
             joyBase.addEventListener("touchend", (e) => {
                 e.preventDefault();
                 joyActive = false;
@@ -158,22 +161,22 @@
                 let dy = touch.clientY - joyCenter.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
                 let maxDist = 40;
-                
+
                 if (dist > maxDist) {
                     dx = (dx / dist) * maxDist;
                     dy = (dy / dist) * maxDist;
                 }
                 joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-                
+
                 // Deadzone
                 if (dist < 10) { updateKeys(0, 0); return; }
                 updateKeys(dx, dy);
             }
-            
+
             function updateKeys(dx, dy) {
                 let w = dy < -15; let s = dy > 15;
                 let a = dx < -15; let d = dx > 15;
-                
+
                 if (w !== currentKeys.w) { simKey("KeyW", w); currentKeys.w = w; }
                 if (s !== currentKeys.s) { simKey("KeyS", s); currentKeys.s = s; }
                 if (a !== currentKeys.a) { simKey("KeyA", a); currentKeys.a = a; }
@@ -183,22 +186,22 @@
             // Look Area Logic (Simulate Mouse Move)
             let lookArea = document.getElementById("lookArea");
             let lastLook = { x: 0, y: 0 };
-            
+
             lookArea.addEventListener("touchstart", (e) => {
                 e.preventDefault();
                 lastLook = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
             }, {passive: false});
-            
+
             lookArea.addEventListener("touchmove", (e) => {
                 e.preventDefault();
                 let touch = e.targetTouches[0];
                 let dx = touch.clientX - lastLook.x;
                 let dy = touch.clientY - lastLook.y;
                 lastLook = { x: touch.clientX, y: touch.clientY };
-                
+
                 // Sensitivity multiplier for mobile
                 if (window.gameMouseTracker) {
-                    window.gameMouseTracker.x += dx * 2.5; 
+                    window.gameMouseTracker.x += dx * 2.5;
                     window.gameMouseTracker.y -= dy * 2.5;
                 }
             }, {passive: false});
@@ -207,25 +210,49 @@
             let btnShoot = document.getElementById("btnShoot");
             btnShoot.addEventListener("touchstart", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.8)"; simKey("KeyP", true); }, {passive: false});
             btnShoot.addEventListener("touchend", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.5)"; simKey("KeyP", false); }, {passive: false});
-            
+
             let btnJump = document.getElementById("btnJump");
             btnJump.addEventListener("touchstart", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simMouseBtn(0, true); }, {passive: false});
             btnJump.addEventListener("touchend", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.5)"; simMouseBtn(0, false); }, {passive: false});
-            
+
             let btnThrow = document.getElementById("btnThrow");
             btnThrow.addEventListener("touchstart", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.8)"; simKey("KeyO", true); }, {passive: false});
             btnThrow.addEventListener("touchend", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.5)"; simKey("KeyO", false); }, {passive: false});
         }
 
-        
+
         // --- ZERO COPY WASM MEMORY ---
         window.getWasmMemoryView = function(offset, length, type) {
-            if (!wasmInstance) return null;
+            //if (!wasmInstance) {
+            //    return null;
+            //}
+            if (length === 0) {
+                switch (type) {
+                    case 'uint8':
+                        return new Uint8Array(0);
+                    case 'float32':
+                        return new Float32Array(0);
+                    case 'int32':
+                        return new Int32Array(0);
+                    case 'uint32':
+                        return new Uint32Array(0);
+                }
+                return new Uint8Array(0);
+            }
             let mem = wasmInstance.exports.mem.buffer;
-            if (type === 'uint8') return new Uint8Array(mem, offset, length);
-            if (type === 'float32') return new Float32Array(mem, offset, length);
-            if (type === 'int32') return new Int32Array(mem, offset, length);
-            if (type === 'uint32') return new Uint32Array(mem, offset, length);
+            if (type === 'uint8') {
+                return new Uint8Array(mem, offset, length);
+            }
+            if (type === 'float32') {
+                const view = new Float32Array(mem, offset, length);
+                return view;
+            }
+            if (type === 'int32') {
+                return new Int32Array(mem, offset, length);
+            }
+            if (type === 'uint32') {
+                return new Uint32Array(mem, offset, length);
+            }
             return new Uint8Array(mem, offset, length);
         };
 
@@ -234,7 +261,7 @@
             setTimeout(() => {
                 document.getElementById("loading").style.display = "none";
                 document.getElementById("canvas").style.display = "block";
-                
+
                 window.gameAssetBuffer = new Uint8Array(buffer);
                 initTouch();
                 let mode = document.getElementById("selMode").value;
@@ -248,20 +275,23 @@
             if (!wasmInstance) return;
             let mode = document.getElementById("selMode").value;
             let url = "";
-            if (mode == "3") url = "asset/DOOM.WAD";
-            else if (mode == "6") url = "asset/pak0.pak";
-            else if (mode == "8") url = "asset/pak0.pk3";
-            
+            if (mode === "3") url = "asset/DOOM.WAD";
+            else if (mode === "6") url = "asset/q1_pak0.pak";
+            else if (mode === "7") url = "asset/q2_pak0.pak";
+            else if (mode === "8") url = "asset/q3_pak0.pk3";
+
             if (url === "") {
                 document.getElementById("status").innerText = "No default asset mapped for this mode.";
                 document.getElementById("status").style.color = "red";
                 return;
             }
-            
+
             showLoading("Downloading " + url + "...");
             try {
                 let resp = await fetch(url);
-                if (!resp.ok) throw new Error("File not found on server");
+                if (!resp.ok) {
+                    throw new Error("File not found on server");
+                }
                 let buffer = await resp.arrayBuffer();
                 startGame(buffer);
             } catch(e) {
@@ -277,7 +307,7 @@
         const fileInput = document.getElementById('inpFile');
 
         dropZone.addEventListener('click', () => fileInput.click());
-        
+
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) handleFile(e.target.files[0]);
         });
@@ -304,7 +334,9 @@
         });
 
         function handleFile(file) {
-            if (!wasmInstance) return;
+            if (!wasmInstance) {
+                return;
+            }
             showLoading("Reading local file: " + file.name + "...");
             let reader = new FileReader();
             reader.onload = (e) => {

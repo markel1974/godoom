@@ -148,6 +148,15 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	lights := NewLights(entities)
 	volumes := NewVolumes(q3.shaders)
 
+	playersIdx := 0
+	var playersBot []string
+	const playersPath = "models/players/"
+	if ps, _ := q3.arc.ReadDir(playersPath); len(ps) > 0 {
+		for _, player := range ps {
+			playersBot = append(playersBot, playersPath+player+"/")
+		}
+	}
+
 	playerSpawned := false
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
@@ -192,15 +201,21 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 					playerSpawned = true
 				} else {
 					// We use remaining spawn points as Bot spawners
-					enemyClass := "enemy_bot"
-					thingPath := q3.GetModelFileName(enemyClass)
+					if len(playersBot) == 0 {
+						continue
+					}
+					playerPath := playersBot[playersIdx%len(playersBot)]
+					playersIdx++
+					classname = "enemy_bot"
+
+					//thingPath := q3.GetModelFileName(enemyClass)
 
 					var cThing *config.Thing
 					var err error
-					if strings.HasSuffix(thingPath, "/") {
-						cThing, err = things.CreatePlayer(thingPath, pos, enemyClass)
+					if strings.HasSuffix(playerPath, "/") {
+						cThing, err = things.CreatePlayer(playerPath, pos, classname)
 					} else {
-						cThing, err = things.Create(thingPath, pos, enemyClass)
+						cThing, err = things.Create(playerPath, pos, classname)
 					}
 
 					if err == nil {

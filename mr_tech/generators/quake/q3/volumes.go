@@ -87,12 +87,12 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, e
 				}
 			}
 
-			// 2. Find the triangle centroid
+			// Find the triangle centroid
 			cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 			cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 			cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
 
-			// 3. Calculate the spatial hashing key (grid coordinates)
+			// Calculate the spatial hashing key (grid coordinates)
 			gridX := int(math.Floor(cx / chunkSize))
 			gridY := int(math.Floor(cy / chunkSize))
 			gridZ := int(math.Floor(cz / chunkSize))

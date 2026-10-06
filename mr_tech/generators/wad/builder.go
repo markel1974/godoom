@@ -150,6 +150,10 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	floorType := config.MaterialKindLoop
 	light, kind, falloff, r, g, b := bld.heuristicLight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
 
+	//if v, ok := bld.heuristicMaterial(floorPic); ok {
+	//	floorType = v
+	//}
+
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
 	miSector.Light.R = r
 	miSector.Light.G = g
@@ -363,12 +367,33 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 	return sectorsEdges
 }
 
+// heuristicMaterial determines the material type and whether it matches known liquid kinds based on the texture name.
+func (bld *Builder) heuristicMaterial(floorPic string) (config.MaterialKind, bool) {
+	floorPic = strings.TrimSpace(strings.ToUpper(floorPic))
+	// Acido / Radioattività (Nukage, Slime) -> Verde
+	if strings.Contains(floorPic, "NUKAGE") || strings.Contains(floorPic, "SLIME") {
+		return config.MaterialKindLiquid, true
+	}
+	// Lava / Sangue -> Rosso
+	if strings.Contains(floorPic, "LAVA") || strings.Contains(floorPic, "BLOOD") {
+		return config.MaterialKindLiquid, true
+	}
+	// Acqua / Computer -> Blu
+	if strings.Contains(floorPic, "FWATER") {
+		return config.MaterialKindLiquid, true
+	}
+	return config.MaterialKindNone, false
+}
+
 // heuristicLight determines the light intensity, kind, falloff, and color values for a scene based on provided parameters.
 func (bld *Builder) heuristicLight(lightLevel int16, ceilPic string, ceilY float64, floorPic string, floorY float64, edges []Edge) (float64, config.LightKind, float64, float64, float64, float64) {
 	intensity := float64(lightLevel) * ScaleLight
 	kind := config.LightKindAmbient
 	falloff := ((ceilY - floorY) * ScaleSectorH) * 2.0
 	r, g, b := 1.0, 0.95, 0.9
+
+	floorPic = strings.TrimSpace(strings.ToUpper(floorPic))
+	ceilPic = strings.TrimSpace(strings.ToUpper(ceilPic))
 
 	// --- EURISTICA DEL COLORE ---
 	// 1. Acido / Radioattività (Nukage, Slime) -> Verde

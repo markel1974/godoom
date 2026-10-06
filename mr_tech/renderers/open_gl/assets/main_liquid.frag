@@ -76,7 +76,7 @@ void main() {
     const float WATER_FOG_B = 0.3;
     const float WATER_ABSORPTION = 0.02;
     // Overall temporal speed. Lower = slower water movement.
-    const float WATER_TIME_SCALE = 0.22;
+    const float WATER_TIME_SCALE = 0.4;
     // Temporal frequencies.
     const float WAVE1_SPEED_X = 1.31;
     const float WAVE1_SPEED_Y = 1.07;

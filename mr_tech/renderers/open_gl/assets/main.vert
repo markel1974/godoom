@@ -79,13 +79,22 @@ void main() {
         worldPos = vec4(aOrigin + rotatedPos, 1.0);
     } else if (aRenderMode > 0.4 && aRenderMode < 0.6) {
         // ANIMATED MATERIALS (e.g., Water, Lava, or Conveyor Belts)
+        const float WATER_VERTEX_TIME_SCALE = 0.4;
+        const float WATER_WAVE_X_FREQUENCY = 0.05;
+        const float WATER_WAVE_Z_FREQUENCY = 0.05;
+        const float WATER_WAVE_X_SPEED = 2.0;
+        const float WATER_WAVE_Z_SPEED = 1.5;
+        const float WATER_WAVE_AMPLITUDE = 2.0;
+        const float WATER_UV_SPEED_X = 0.1;
+        const float WATER_UV_SPEED_Y = 0.05;
         worldPos = vec4(aPos, 1.0);
         // Generate physical wave motion on vertices
-        worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
-        worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
+        float waterTime = u_time * WATER_VERTEX_TIME_SCALE;
+        worldPos.y += sin(worldPos.x * WATER_WAVE_X_FREQUENCY + waterTime * WATER_WAVE_X_SPEED) * WATER_WAVE_AMPLITUDE;
+        worldPos.y += cos(worldPos.z * WATER_WAVE_Z_FREQUENCY + waterTime * WATER_WAVE_Z_SPEED) * WATER_WAVE_AMPLITUDE;
         // Scroll UV coordinates to simulate flow
-        TexCoords.x += u_time * 0.1;
-        TexCoords.y += u_time * 0.05;
+        TexCoords.x += waterTime * WATER_UV_SPEED_X;
+        TexCoords.y += waterTime * WATER_UV_SPEED_Y;
     } else {
         worldPos = vec4(aPos, 1.0);
     }

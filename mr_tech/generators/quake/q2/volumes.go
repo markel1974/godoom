@@ -30,9 +30,9 @@ func (vs *Volumes) Create(faces []*lumps.RawFace2) []*config.Volume {
 
 	for _, v := range faces {
 		animKind := config.MaterialKindLoop
-		if v.IsSky() {
+		if v.Info.IsSky() {
 			animKind = config.MaterialKindSky
-		} else if v.IsWarp() {
+		} else if v.Info.IsWarp() {
 			animKind = config.MaterialKindLiquid
 		}
 		material := config.NewConfigMaterial([]string{v.TexName}, animKind, 1.0, 1.0, 0, 0)

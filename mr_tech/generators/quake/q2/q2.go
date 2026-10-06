@@ -307,7 +307,7 @@ func (q2 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace2, error) {
 				float64(texInfo.Vecs[1][3])
 			uvs = append(uvs, [2]float64{u / float64(texW), vt / float64(texH)})
 		}
-		rf := lumps.NewRawFace2(points, uvs, texName, texInfo.Flags)
+		rf := lumps.NewRawFace2(points, uvs, texName, texInfo)
 		rawFaces = append(rawFaces, rf)
 	}
 

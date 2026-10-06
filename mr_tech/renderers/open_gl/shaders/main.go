@@ -16,6 +16,8 @@ const (
 	mainDoubleBuffer = 2
 )
 
+const liquidTimeScale = 0.02
+
 // MainLocView represents the location of the view matrix.
 // MainLocProjection represents the location of the projection matrix.
 // MainLocTexture represents the location of the texture data.
@@ -439,7 +441,7 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 
 	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*0.05)
+	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), float32(textures.GlobalTick())*liquidTimeScale)
 
 	s.ctx.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
@@ -466,7 +468,7 @@ func (s *Main) RenderAdditive(renderGeometry func()) {
 
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*0.05)
+	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), float32(textures.GlobalTick())*liquidTimeScale)
 
 	s.ctx.DepthMask(false)
 	s.ctx.Enable(api.DEPTH_TEST)
@@ -497,7 +499,8 @@ func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint3
 
 	// textures.GlobalTick() is in github.com/markel1974/godoom/mr_tech/textures
 	// I will just use 1.0 for time if textures is not imported, but it is imported!
-	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], float32(textures.GlobalTick())*0.05)
+	//TODO REMOVE
+	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], float32(textures.GlobalTick())*liquidTimeScale)
 
 	s.ctx.Uniform2f(s.tableLiquid[MainLocScreenResolution], float32(fbW), float32(fbH))
 

@@ -69,14 +69,11 @@ float fbm(vec2 p) {
     return value;
 }
 
-
 void main() {
     const float WATER_FOG_R = 0.0;
     const float WATER_FOG_G = 0.2;
     const float WATER_FOG_B = 0.3;
     const float WATER_ABSORPTION = 0.02;
-    // Overall temporal speed. Lower = slower water movement.
-    const float WATER_TIME_SCALE = 0.4;
     // Temporal frequencies.
     const float WAVE1_SPEED_X = 1.31;
     const float WAVE1_SPEED_Y = 1.07;
@@ -126,7 +123,7 @@ void main() {
     float lum = dot(texColor, vec3(0.299, 0.587, 0.114));
 
     // TIME
-    float t = u_time * WATER_TIME_SCALE;
+    float t = u_time;
     // NOISE
     float n1 = fbm(TexCoords.xy * NOISE1_SCALE + vec2(t * NOISE1_SPEED_X, t * NOISE1_SPEED_Y));
     float n2 = fbm(TexCoords.xy * NOISE2_SCALE + vec2(t * NOISE2_SPEED_X, t * NOISE2_SPEED_Y));

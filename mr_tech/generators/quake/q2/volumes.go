@@ -9,6 +9,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 )
 
+const (
+	CONTENTS_SOLID  = 1
+	CONTENTS_WINDOW = 2
+	CONTENTS_AUX    = 4
+	CONTENTS_LAVA   = 8
+	CONTENTS_SLIME  = 16
+	CONTENTS_WATER  = 32
+	CONTENTS_MIST   = 64
+)
+
 // Volumes is a structure for managing 3D spatial data partitioning, identified by an index and a chunk size.
 type Volumes struct {
 	vIdx      string

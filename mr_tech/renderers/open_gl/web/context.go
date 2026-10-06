@@ -132,6 +132,7 @@ type Context struct {
 	jsUint32Array                     js.Value
 	jsFloat32Array                    js.Value
 	jsConsole                         js.Value
+	jsGetWasmMemoryView               js.Value
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
@@ -157,6 +158,7 @@ func NewContext(width int, height int) *Context {
 		sharedBufferCap: 1024 * 1024 * 8,
 	}
 
+	ctx.jsGetWasmMemoryView = js.Global().Get("getWasmMemoryView")
 	ctx.jsInt8Array = js.Global().Get("Int8Array")
 	ctx.jsUint8Array = js.Global().Get("Uint8Array")
 	ctx.jsInt16Array = js.Global().Get("Int16Array")
@@ -383,7 +385,7 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 	if len(bytes) > size {
 		bytes = bytes[:size]
 	}
-	jsArr := d.getSharedJSArray(bytes)
+	jsArr := d.getUint8haredJSArray(bytes)
 	d.fn_bufferData.Invoke(target, jsArr, usage)
 }
 
@@ -411,7 +413,7 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 	if len(bytes) > size {
 		bytes = bytes[:size]
 	}
-	jsArr := d.getSharedJSArray(bytes)
+	jsArr := d.getUint8haredJSArray(bytes)
 	d.fn_bufferSubData.Invoke(target, offset, jsArr)
 }
 
@@ -784,14 +786,19 @@ func (d *Context) LinkProgram(program uint32) {
 }
 
 func (d *Context) MultiDrawElementsFast(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
-	// Otteniamo i puntatori raw
-	cOffset := int(uintptr(unsafe.Pointer(count)))
-	oOffset := int(uintptr(unsafe.Pointer(indices)))
-	// Istanziamo direttamente gli Int32Array dal JS
-	counts32 := js.Global().Call("getWasmMemoryView", cOffset, int(drawcount), "int32")
-	offsets32 := js.Global().Call("getWasmMemoryView", oOffset, int(drawcount), "int32")
-	// Invochiamo WebGL passando le view non corrotte
+	cSlice := unsafe.Slice(count, drawcount)
+	// Per gli indici/offsets, interpretiamo il blocco di puntatori come uint32 (compatibile con i ptr a 32-bit di WASM)
+	iSlice := unsafe.Slice((*uint32)(unsafe.Pointer(indices)), drawcount)
+	// 2. Generazione delle view tramite gli helper cachati con d.jsWasmMemoryView
+	counts32 := d.getInt32SharedJSArray(cSlice)
+	offsets32 := d.getUint32SharedJSArray(iSlice)
+	// 3. Esecuzione batch interamente gestita nel loop JS
 	d.fn_multiDrawElements.Invoke(d.gl, mode, counts32, xtype, offsets32, drawcount)
+	// 4. FONDAMENTALE: Impedisce al GC di ripulire le slice prima che la GPU esegua il draw
+	//runtime.KeepAlive(cSlice)
+	//runtime.KeepAlive(iSlice)
+	//runtime.KeepAlive(count)
+	//runtime.KeepAlive(indices)
 }
 
 // MultiDrawElements renders multiple sets of primitives by specifying multiple indices, counts, and modes in a single call.
@@ -916,7 +923,6 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 
 // TexImage2D defines a two-dimensional texture image in the current WebGL rendering context.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-
 	// Fallback RED+FLOAT to R32F
 	if internalformat == 0x1903 && xtype == 0x1406 {
 		internalformat = 0x822E // R32F
@@ -946,7 +952,7 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getSharedJSArray(bytes)
+	jsArr := d.getUint8haredJSArray(bytes)
 	d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, d.getJSView(jsArr, xtype))
 }
 
@@ -994,7 +1000,7 @@ func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, w
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getSharedJSArray(bytes)
+	jsArr := d.getUint8haredJSArray(bytes)
 	d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, d.getJSView(jsArr, xtype))
 }
 
@@ -1034,7 +1040,7 @@ func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffs
 	}
 
 	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getSharedJSArray(bytes)
+	jsArr := d.getUint8haredJSArray(bytes)
 	d.fn_texSubImage3D.Invoke(target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, d.getJSView(jsArr, xtype))
 }
 
@@ -1061,9 +1067,7 @@ func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
 	}
 	loc := d.uniforms[location]
 	slice := unsafe.Slice(value, count)
-	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), count*4)
-	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	i32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(count), "int32")
+	i32Arr := d.getInt32SharedJSArray(slice)
 	d.fn_uniform1iv.Invoke(loc, i32Arr)
 }
 
@@ -1091,9 +1095,7 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 	loc := d.uniforms[location]
 	total := count * 3
 	slice := unsafe.Slice(value, total)
-	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	f32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(total), "float32")
+	f32Arr := d.getFloat32SharedJSArray(slice)
 	d.fn_uniform3fv.Invoke(loc, f32Arr)
 }
 
@@ -1114,9 +1116,7 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 	loc := d.uniforms[location]
 	total := count * 16
 	slice := unsafe.Slice(value, total)
-	bytes := unsafe.Slice((*byte)(unsafe.Pointer(&slice[0])), total*4)
-	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	f32Arr := js.Global().Call("getWasmMemoryView", int(offset), int(total), "float32")
+	f32Arr := d.getFloat32SharedJSArray(slice)
 	d.fn_uniformMatrix4fv.Invoke(loc, transpose, f32Arr)
 }
 
@@ -1202,11 +1202,51 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	return buffer
 }
 
-// getSharedJSArray retrieves a JavaScript array view of the given byte slice using WebAssembly memory.
-func (d *Context) getSharedJSArray(bytes []byte) js.Value {
+// getUint8haredJSArray returns a shared JavaScript Uint8Array view over the provided Go byte slice.
+func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
 	if len(bytes) == 0 {
 		return js.Null()
 	}
 	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
+	//return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(bytes), "uint8")
 }
+
+// getInt32SharedJSArray creates a JavaScript shared array from a slice of int32 values using the WebAssembly memory view.
+func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "int32")
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "int32")
+}
+
+// getUint32SharedJSArray converts a Go slice of uint32 to a shared JavaScript Uint32Array using the JS WebAssembly memory.
+func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "uint32")
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "uint32")
+}
+
+// getFloat32SharedJSArray creates a JavaScript shared array from a slice of float32 values using the WebAssembly memory view.
+func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "float32")
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
+}
+
+// getUint8haredJSArray retrieves a JavaScript array view of the given byte slice using WebAssembly memory.
+//func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
+//	if len(bytes) == 0 {
+//		return js.Null()
+//	}
+//	offset := uintptr(unsafe.Pointer(&bytes[0]))
+//	return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
+//}

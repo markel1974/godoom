@@ -117,11 +117,6 @@ func (m *Map) GetMainViewPtr() *float32 {
 	return m.mainViewPtr
 }
 
-// GetMainView returns the 4x4 transformation matrix representing the main view of the map.
-func (m *Map) GetMainView() [16]float32 {
-	return m.mainView
-}
-
 // CreateRoomSpace configures the main view matrix using the provided ViewMatrix instance to establish room spatial mapping.
 func (m *Map) CreateRoomSpace(vi *model.ViewMatrix) {
 	// Clean extraction (World Space: Z-UP)

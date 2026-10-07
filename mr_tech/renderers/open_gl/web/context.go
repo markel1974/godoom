@@ -49,6 +49,8 @@ type Context struct {
 	jsBuffer                          js.Value
 	sharedBuffer                      js.Value
 	sharedBufferCap                   int
+	sharedOffset                      int
+	scratchOffsets                    []uint32
 	fn_activeTexture                  js.Value
 	fn_attachShader                   js.Value
 	fn_bindBuffer                     js.Value
@@ -785,20 +787,30 @@ func (d *Context) LinkProgram(program uint32) {
 	d.fn_linkProgram.Invoke(d.programs.Get(program))
 }
 
-func (d *Context) MultiDrawElementsFast(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
+func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
+	if drawcount == 0 {
+		return
+	}
+
 	cSlice := unsafe.Slice(count, drawcount)
-	// Per gli indici/offsets, interpretiamo il blocco di puntatori come uint32 (compatibile con i ptr a 32-bit di WASM)
-	iSlice := unsafe.Slice((*uint32)(unsafe.Pointer(indices)), drawcount)
-	// 2. Generazione delle view tramite gli helper cachati con d.jsWasmMemoryView
+	ptrSlice := unsafe.Slice(indices, drawcount)
+
+	// Assicurati che il buffer di scratch sia capiente abbastanza (zero-alloc a regime)
+	if int32(len(d.scratchOffsets)) < drawcount {
+		d.scratchOffsets = make([]uint32, drawcount*2) // *2 per ridurre eventuali re-allocazioni
+	}
+
+	// Estrazione corretta: casta il puntatore a uintptr, poi a uint32
+	for i := int32(0); i < drawcount; i++ {
+		d.scratchOffsets[i] = uint32(uintptr(ptrSlice[i]))
+	}
+
+	// Sfruttiamo l'Arena Allocator condiviso per passare le slice a JS
 	counts32 := d.getInt32SharedJSArray(cSlice)
-	offsets32 := d.getUint32SharedJSArray(iSlice)
-	// 3. Esecuzione batch interamente gestita nel loop JS
+	offsets32 := d.getUint32SharedJSArray(d.scratchOffsets[:drawcount])
+
+	// Esecuzione batch interamente gestita nel loop JS
 	d.fn_multiDrawElements.Invoke(d.gl, mode, counts32, xtype, offsets32, drawcount)
-	// 4. FONDAMENTALE: Impedisce al GC di ripulire le slice prima che la GPU esegua il draw
-	//runtime.KeepAlive(cSlice)
-	//runtime.KeepAlive(iSlice)
-	//runtime.KeepAlive(count)
-	//runtime.KeepAlive(indices)
 }
 
 // MultiDrawElements renders multiple sets of primitives by specifying multiple indices, counts, and modes in a single call.
@@ -807,7 +819,7 @@ func (d *Context) MultiDrawElementsFast(mode uint32, count *int32, xtype uint32,
 // xtype specifies the type of data in the indices array (e.g., GL_UNSIGNED_BYTE, GL_UNSIGNED_SHORT, GL_UNSIGNED_INT).
 // indices is a pointer to the starting point of each index array.
 // drawcount specifies the number of draw calls to execute.
-func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
+func (d *Context) MultiDrawElementsSlow(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
 	c_arr := unsafe.Slice(count, drawcount)
 	i_arr := unsafe.Slice(indices, drawcount)
 	for i := int32(0); i < drawcount; i++ {
@@ -1202,51 +1214,97 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	return buffer
 }
 
-// getUint8haredJSArray returns a shared JavaScript Uint8Array view over the provided Go byte slice.
-func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
-	if len(bytes) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	//return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(bytes), "uint8")
-}
-
-// getInt32SharedJSArray creates a JavaScript shared array from a slice of int32 values using the WebAssembly memory view.
-func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "int32")
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "int32")
-}
-
-// getUint32SharedJSArray converts a Go slice of uint32 to a shared JavaScript Uint32Array using the JS WebAssembly memory.
-func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "uint32")
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "uint32")
-}
-
-// getFloat32SharedJSArray creates a JavaScript shared array from a slice of float32 values using the WebAssembly memory view.
+// getFloat32SharedJSArray creates a JavaScript Float32Array from a slice of float32 values.
 func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
 	if len(data) == 0 {
 		return js.Null()
 	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	//return js.Global().Call("getWasmMemoryView", int(offset), len(data), "float32")
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
+	byteLen := len(data) * 4
+	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
+
+	// Fallback per buffer giganti
+	if byteLen > d.sharedBufferCap {
+		jsArr := d.jsUint8Array.New(byteLen)
+		js.CopyBytesToJS(jsArr, byteSlice)
+		return d.jsFloat32Array.New(jsArr.Get("buffer"))
+	}
+
+	offset, dstView := d.allocateShared(byteLen)
+	js.CopyBytesToJS(dstView, byteSlice)
+	return d.jsFloat32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
 }
 
-// getUint8haredJSArray retrieves a JavaScript array view of the given byte slice using WebAssembly memory.
-//func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
-//	if len(bytes) == 0 {
-//		return js.Null()
-//	}
-//	offset := uintptr(unsafe.Pointer(&bytes[0]))
-//	return js.Global().Call("getWasmMemoryView", int(offset), len(bytes), "uint8")
-//}
+// getInt32SharedJSArray creates a JavaScript Int32Array from a slice of int32 values.
+func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	byteLen := len(data) * 4
+	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
+
+	if byteLen > d.sharedBufferCap {
+		jsArr := d.jsUint8Array.New(byteLen)
+		js.CopyBytesToJS(jsArr, byteSlice)
+		return d.jsInt32Array.New(jsArr.Get("buffer"))
+	}
+
+	offset, dstView := d.allocateShared(byteLen)
+	js.CopyBytesToJS(dstView, byteSlice)
+	return d.jsInt32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
+}
+
+// getUint32SharedJSArray creates a JavaScript Uint32Array from a slice of uint32 values.
+func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	byteLen := len(data) * 4
+	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
+
+	if byteLen > d.sharedBufferCap {
+		jsArr := d.jsUint8Array.New(byteLen)
+		js.CopyBytesToJS(jsArr, byteSlice)
+		return d.jsUint32Array.New(jsArr.Get("buffer"))
+	}
+
+	offset, dstView := d.allocateShared(byteLen)
+	js.CopyBytesToJS(dstView, byteSlice)
+	return d.jsUint32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
+}
+
+// getUint8haredJSArray retrieves a JavaScript Uint8Array view of the given byte slice.
+func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
+	if len(bytes) == 0 {
+		return js.Null()
+	}
+	byteLen := len(bytes)
+
+	if byteLen > d.sharedBufferCap {
+		jsArr := d.jsUint8Array.New(byteLen)
+		js.CopyBytesToJS(jsArr, bytes)
+		return jsArr
+	}
+
+	_, dstView := d.allocateShared(byteLen)
+	js.CopyBytesToJS(dstView, bytes)
+	return dstView
+}
+
+func (d *Context) allocateShared(byteLen int) (int, js.Value) {
+	// Allinea l'offset a 8 byte per i requisiti strutturali di WebGL/JS TypedArrays
+	align := 8
+	d.sharedOffset = (d.sharedOffset + align - 1) & ^(align - 1)
+
+	// Se non c'è abbastanza spazio, riavvolgiamo il buffer a 0.
+	// E' sicuro perché le precedenti chiamate WebGL hanno già consumato i loro dati.
+	if d.sharedOffset+byteLen > d.sharedBufferCap {
+		d.sharedOffset = 0
+	}
+
+	offset := d.sharedOffset
+	d.sharedOffset += byteLen
+
+	// Crea solo una "vista" leggerissima, NON alloca nuova memoria heap!
+	dstView := d.jsUint8Array.New(d.sharedBuffer.Get("buffer"), offset, byteLen)
+	return offset, dstView
+}

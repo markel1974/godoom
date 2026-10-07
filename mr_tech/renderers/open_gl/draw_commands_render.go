@@ -14,16 +14,20 @@ type RenderBatch struct {
 	depthWrite    int
 	polygonOffset int
 	len           int
+	mcPtr         *int32
+	miPtr         *unsafe.Pointer
 }
 
 // NewRenderBatch creates and initializes a new RenderBatch with default starting size for internal slices.
 func NewRenderBatch() *RenderBatch {
-	const startSize = 1024
-	return &RenderBatch{
-		mc:  make([]int32, startSize),
-		mi:  make([]unsafe.Pointer, startSize),
+	const startSize = 4096
+	rb := &RenderBatch{
+		mc:  nil,
+		mi:  nil,
 		len: 0,
 	}
+	rb.rebuild(startSize)
+	return rb
 }
 
 // Reset resets the RenderBatch, clearing its length and setting depthWrite and polygonOffset to the provided values.
@@ -36,17 +40,25 @@ func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int) {
 // Add appends a new draw command to the RenderBatch with specified index count and pointer.
 func (rb *RenderBatch) Add(indexCount int32, pointer unsafe.Pointer) {
 	if rb.len >= len(rb.mc) {
-		mc := rb.mc
-		mi := rb.mi
+		mc, mi := rb.mc, rb.mi
 		newLen := rb.len * 2
-		rb.mc = make([]int32, newLen)
-		rb.mi = make([]unsafe.Pointer, newLen)
+		rb.rebuild(newLen)
 		copy(rb.mc, mc)
 		copy(rb.mi, mi)
 	}
 	rb.mc[rb.len] = indexCount
 	rb.mi[rb.len] = pointer
 	rb.len++
+}
+
+func (rb *RenderBatch) rebuild(newLen int) {
+	if newLen < 1 {
+		newLen = 1
+	}
+	rb.mc = make([]int32, newLen)
+	rb.mi = make([]unsafe.Pointer, newLen)
+	rb.mcPtr = &rb.mc[0]
+	rb.miPtr = &rb.mi[0]
 }
 
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
@@ -169,8 +181,7 @@ func (w *DrawCommandsRender) Render() {
 			}
 			currentPolygonOffset = b2.polygonOffset
 		}
-
-		w.ctx.MultiDrawElements(api.TRIANGLES, &b2.mc[0], api.UNSIGNED_INT, &b2.mi[0], int32(b2.len))
+		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 	}
 
 	if currentDepthWrite != 1 && !w.isAdditive {

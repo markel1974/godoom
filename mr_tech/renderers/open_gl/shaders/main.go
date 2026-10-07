@@ -467,10 +467,9 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 
 // RenderAdditive configures and executes additive rendering by applying blending settings and invoking the provided geometry rendering function.
 func (s *Main) RenderAdditive(renderGeometry func()) {
-	interval := float32(0) //unused
-
 	s.ctx.UseProgram(s.GetProgramAdditive())
 
+	interval := float32(0) //unused
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
 	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
 	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), interval)

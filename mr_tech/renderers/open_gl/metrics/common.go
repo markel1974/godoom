@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"math"
+	"unsafe"
 )
 
 // ndcRange represents the normalized device coordinate range used for various scaling and projection calculations.
@@ -39,6 +40,25 @@ func MatrixMultiply4x4(a [16]float32, b [16]float32) [16]float32 {
 		}
 	}
 	return out
+}
+
+func MatrixMultiply4x4Ptr(out, a, b *float32) {
+	pOut := unsafe.Pointer(out)
+	pA := unsafe.Pointer(a)
+	pB := unsafe.Pointer(b)
+
+	for col := uintptr(0); col < 4; col++ {
+		colOffset := col * 4
+		for row := uintptr(0); row < 4; row++ {
+			var sum float32
+			for i := uintptr(0); i < 4; i++ {
+				aVal := *(*float32)(unsafe.Add(pA, (i*4+row)*4))
+				bVal := *(*float32)(unsafe.Add(pB, (colOffset+i)*4))
+				sum += aVal * bVal
+			}
+			*(*float32)(unsafe.Add(pOut, (colOffset+row)*4)) = sum
+		}
+	}
 }
 
 // MatrixInverse4x4 computes the inverse of a 4x4 matrix represented as a 16-element float32 array in column-major order.

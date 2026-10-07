@@ -6,27 +6,25 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 )
 
-// Map represents settings and transformations for rendering maps, including orthographic size, view parameters, and shadows.
+// Map represents a data structure used to manage orthographic settings, transformations, and camera projections.
 type Map struct {
-	orthoSize  float32
-	roomZNear  float32
-	roomZFar   float32
-	lightCamY  float32
-	mapCenterX float32
-	mapCenterZ float32
-
-	mainView  [16]float32
-	roomProj  [16]float32
-	roomView  [16]float32
-	roomSpace [16]float32
-
+	orthoSize    float32
+	roomZNear    float32
+	roomZFar     float32
+	lightCamY    float32
+	mapCenterX   float32
+	mapCenterZ   float32
+	mainView     [16]float32
+	roomProj     [16]float32
+	roomView     [16]float32
+	roomSpace    [16]float32
 	mainViewPtr  *float32
 	roomProjPtr  *float32
 	roomViewPtr  *float32
 	roomSpacePtr *float32
 }
 
-// NewMap initializes and returns a pointer to a Map instance configured using the given Flash object.
+// NewMap creates and initializes a new Map instance with default settings and returns a pointer to it.
 func NewMap() *Map {
 	m := &Map{}
 	m.mainViewPtr = &m.mainView[0]
@@ -38,7 +36,7 @@ func NewMap() *Map {
 	return m
 }
 
-// GetScale2d calculates the horizontal and vertical scales based on the given width and height of the viewport.
+// GetScale2d calculates and returns the horizontal and vertical scale factors for a 2D scene based on window dimensions.
 func (m *Map) GetScale2d(width, height int32) (float32, float32) {
 	aspect := float32(width) / float32(height)
 	scaleX := (ndcRange / aspect) * float32(model.HFov)
@@ -46,7 +44,7 @@ func (m *Map) GetScale2d(width, height int32) (float32, float32) {
 	return scaleX, scaleY
 }
 
-// GetScale3d calculates and returns the scaling factors for 3D projection based on screen dimensions, aspect ratio, and FOV.
+// GetScale3d calculates and returns the 3D scaling factors along the X and Y axes based on aspect ratio and vertical FOV.
 func (m *Map) GetScale3d(width, height int32, aspectRatio float32, fovVerticalDegrees float32) (float32, float32) {
 	// Window aspect ratio (e.g. 1280/960 = 1.333)
 	aspect := float32(width) / float32(height)
@@ -63,12 +61,12 @@ func (m *Map) GetScale3d(width, height int32, aspectRatio float32, fovVerticalDe
 	return scaleX, scaleY
 }
 
-// GetOrthoSize retrieves the orthographic size associated with the current Map instance.
+// GetOrthoSize returns the orthographic size of the map.
 func (m *Map) GetOrthoSize() float32 {
 	return m.orthoSize
 }
 
-// SetOrthoSize sets the orthographic size and near/far room clipping planes, updating the room projection matrix.
+// SetOrthoSize sets the orthographic size, near plane, and far plane values and updates the room projection matrix.
 func (m *Map) SetOrthoSize(orthoSize, zNearRoom, zFarRoom float32) {
 	m.orthoSize = orthoSize
 	m.roomZNear = zNearRoom
@@ -76,17 +74,17 @@ func (m *Map) SetOrthoSize(orthoSize, zNearRoom, zFarRoom float32) {
 	m.updateRoomProj(m.orthoSize, m.roomZNear, m.roomZFar)
 }
 
-// GetRoomZNear returns the near clipping plane distance for the room projection.
+// GetRoomZNear retrieves the near clipping plane value used for the room's projection matrix.
 func (m *Map) GetRoomZNear() float32 {
 	return m.roomZNear
 }
 
-// GetRoomZFar retrieves the far clipping distance of the room's projection matrix.
+// GetRoomZFar retrieves the far clipping plane distance for the room projection matrix.
 func (m *Map) GetRoomZFar() float32 {
 	return m.roomZFar
 }
 
-// SetMapCenter updates the map's center coordinates and light camera Y position, recalculating the room view matrix.
+// SetMapCenter updates the map's center coordinates (cx, cz) and light camera height (lightCamY), and refreshes the room view.
 func (m *Map) SetMapCenter(cx float32, cz float32, lightCamY float32) {
 	m.mapCenterX = cx
 	m.lightCamY = lightCamY
@@ -94,22 +92,37 @@ func (m *Map) SetMapCenter(cx float32, cz float32, lightCamY float32) {
 	m.updateRoomView(m.mapCenterX, m.lightCamY, m.mapCenterZ)
 }
 
-// GetLightCamY retrieves the Y-coordinate of the light camera position stored in the Map instance.
+// GetLightCamY returns the Y-coordinate of the light camera position.
 func (m *Map) GetLightCamY() float32 {
 	return m.lightCamY
 }
 
-// GetMapCenterX returns the X-coordinate of the map's center.
+// GetMapCenterX returns the X-coordinate of the map center stored in the Map structure.
 func (m *Map) GetMapCenterX() float32 {
 	return m.mapCenterX
 }
 
-// GetMapCenterZ retrieves the Z-coordinate of the map's center position.
+// GetMapCenterZ returns the Z-coordinate of the map's center point.
 func (m *Map) GetMapCenterZ() float32 {
 	return m.mapCenterZ
 }
 
-// CreateRoomSpace generates and returns the room space and main view transformation matrices based on the provided view matrix.
+// GetRoomSpacePtr returns a pointer to the room space matrix.
+func (m *Map) GetRoomSpacePtr() *float32 {
+	return m.roomSpacePtr
+}
+
+// GetMainViewPtr returns a pointer to the main view matrix of the map as a float32.
+func (m *Map) GetMainViewPtr() *float32 {
+	return m.mainViewPtr
+}
+
+// GetMainView returns the 4x4 transformation matrix representing the main view of the map.
+func (m *Map) GetMainView() [16]float32 {
+	return m.mainView
+}
+
+// CreateRoomSpace configures the main view matrix using the provided ViewMatrix instance to establish room spatial mapping.
 func (m *Map) CreateRoomSpace(vi *model.ViewMatrix) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
@@ -120,30 +133,25 @@ func (m *Map) CreateRoomSpace(vi *model.ViewMatrix) {
 	wX, wY, wZ := vi.GetView()
 	// Spatial mapping for OpenGL (X, Z, -Y)
 	camX, camY, camZ := float32(wX), float32(wZ), float32(-wY)
-	mainView := [16]float32{
-		rX, uX, -fX, 0,
-		rY, uY, -fY, 0,
-		rZ, uZ, -fZ, 0,
-		-dotProduct(rX, rY, rZ, camX, camY, camZ),
-		-dotProduct(uX, uY, uZ, camX, camY, camZ),
-		dotProduct(fX, fY, fZ, camX, camY, camZ), 1,
-	}
-	copy(m.mainView[:], mainView[:])
+	m.mainView[0] = rX
+	m.mainView[1] = uX
+	m.mainView[2] = -fX
+	m.mainView[3] = 0
+	m.mainView[4] = rY
+	m.mainView[5] = uY
+	m.mainView[6] = -fY
+	m.mainView[7] = 0
+	m.mainView[8] = rZ
+	m.mainView[9] = uZ
+	m.mainView[10] = -fZ
+	m.mainView[11] = 0
+	m.mainView[12] = -dotProduct(rX, rY, rZ, camX, camY, camZ)
+	m.mainView[13] = -dotProduct(uX, uY, uZ, camX, camY, camZ)
+	m.mainView[14] = dotProduct(fX, fY, fZ, camX, camY, camZ)
+	m.mainView[15] = 1
 }
 
-func (m *Map) GetRoomSpacePtr() *float32 {
-	return m.roomSpacePtr
-}
-
-func (m *Map) GetMainViewPtr() *float32 {
-	return m.mainViewPtr
-}
-
-func (m *Map) GetMainView() [16]float32 {
-	return m.mainView
-}
-
-// updateRoomProj updates the room projection matrix and computes the room space matrix based on the given parameters.
+// updateRoomProj updates the room projection matrix based on orthographic size, near, and far room depth values.
 func (m *Map) updateRoomProj(orthoSize, zNearRoom, zFarRoom float32) {
 	if orthoSize == 0 {
 		orthoSize = 1.0
@@ -152,29 +160,45 @@ func (m *Map) updateRoomProj(orthoSize, zNearRoom, zFarRoom float32) {
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	roomProj := [16]float32{
-		1.0 / orthoSize, 0, 0, 0,
-		0, 1.0 / orthoSize, 0, 0,
-		0, 0, -ndcRange / diffZ, 0,
-		0, 0, -(zFarRoom + zNearRoom) / diffZ, 1,
-	}
-	copy(m.roomProj[:], roomProj[:])
-	roomSpace := MatrixMultiply4x4(m.roomProj, m.roomView)
-	copy(m.roomSpace[:], roomSpace[:])
+	m.roomProj[0] = 1.0 / orthoSize
+	m.roomProj[1] = 0
+	m.roomProj[2] = 0
+	m.roomProj[3] = 0
+	m.roomProj[4] = 0
+	m.roomProj[5] = 1.0 / orthoSize
+	m.roomProj[6] = 0
+	m.roomProj[7] = 0
+	m.roomProj[8] = 0
+	m.roomProj[9] = 0
+	m.roomProj[10] = -ndcRange / diffZ
+	m.roomProj[11] = 0
+	m.roomProj[12] = 0
+	m.roomProj[13] = 0
+	m.roomProj[14] = -(zFarRoom + zNearRoom) / diffZ
+	m.roomProj[15] = 1
+	MatrixMultiply4x4Ptr(m.roomSpacePtr, m.roomProjPtr, m.roomViewPtr)
 }
 
-// updateRoomView updates the room view matrix and recalculates the combined room space matrix.
+// updateRoomView updates the transformation matrix for the room view based on the specified light camera position.
 func (m *Map) updateRoomView(lX, lY, lZ float32) {
 	const skew = 0.02
-	roomView := [16]float32{
-		1, 0, 0, 0,
-		skew, skew, 1, 0,
-		0, -1, 0, 0,
-		-lX, lY, -lZ, 1,
-	}
-	copy(m.roomView[:], roomView[:])
-	roomSpace := MatrixMultiply4x4(m.roomProj, m.roomView)
-	copy(m.roomSpace[:], roomSpace[:])
+	m.roomView[0] = 1
+	m.roomView[1] = 0
+	m.roomView[2] = 0
+	m.roomView[3] = 0
+	m.roomView[4] = skew
+	m.roomView[5] = skew
+	m.roomView[6] = 1
+	m.roomView[7] = 0
+	m.roomView[8] = 0
+	m.roomView[9] = -1
+	m.roomView[10] = 0
+	m.roomView[11] = 0
+	m.roomView[12] = -lX
+	m.roomView[13] = lY
+	m.roomView[14] = -lZ
+	m.roomView[15] = 1
+	MatrixMultiply4x4Ptr(m.roomSpacePtr, m.roomProjPtr, m.roomViewPtr)
 }
 
 /*

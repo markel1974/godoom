@@ -2,19 +2,23 @@ package metrics
 
 import "math"
 
-type Spotlight struct {
-	spotLightSpace2   [16]float32
+// Spotlights represents a structure used for managing spotlight transformation matrices in rendering contexts.
+type Spotlights struct {
+	spotLightSpace    [16]float32
 	spotLightSpacePtr *float32
 }
 
-func NewSpotlight() *Spotlight {
-	return &Spotlight{
-		spotLightSpacePtr: _emptyMatrixPtr,
+// NewSpotlight initializes a new instance of Spotlights with a default transformation matrix pointer.
+func NewSpotlight() *Spotlights {
+	s := &Spotlights{
+		spotLightSpacePtr: nil,
 	}
+	s.spotLightSpacePtr = &s.spotLightSpace[0]
+	return s
 }
 
 // CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.
-func (m *Spotlight) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
+func (m *Spotlights) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
 	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
 	fovRad := fovDeg * math.Pi / 180.0
@@ -35,12 +39,12 @@ func (m *Spotlight) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ floa
 		upX, upY, upZ = 0.0, 0.0, -1.0
 	}
 	// R = Right, U = Recalculated Up
-	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, upX, upY, upZ))
-	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
+	rrX, rrY, rrZ := normalize(crossProduct(ffX, ffY, ffZ, upX, upY, upZ))
+	uuX, uuY, uuZ := crossProduct(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
 	// Negative translation (dot product between inverted axes and position)
-	tX := -dot(rrX, rrY, rrZ, posX, posY, posZ)
-	tY := -dot(uuX, uuY, uuZ, posX, posY, posZ)
-	tZ := dot(ffX, ffY, ffZ, posX, posY, posZ)
+	tX := -dotProduct(rrX, rrY, rrZ, posX, posY, posZ)
+	tY := -dotProduct(uuX, uuY, uuZ, posX, posY, posZ)
+	tZ := dotProduct(ffX, ffY, ffZ, posX, posY, posZ)
 	view := [16]float32{
 		rrX, uuX, -ffX, 0,
 		rrY, uuY, -ffY, 0,
@@ -49,9 +53,9 @@ func (m *Spotlight) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ floa
 	}
 	// Final Light Space (Proj * View)
 	spotLightSpace := MatrixMultiply4x4(proj, view)
-	copy(m.spotLightSpace2[:], spotLightSpace[:])
+	copy(m.spotLightSpace[:], spotLightSpace[:])
 }
 
-func (m *Spotlight) GetSpotLightSpacePtr() *float32 {
+func (m *Spotlights) GetSpotLightSpacePtr() *float32 {
 	return m.spotLightSpacePtr
 }

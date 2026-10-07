@@ -70,11 +70,11 @@ type Main struct {
 	stride            int32
 	w                 int32
 	h                 int32
-	metrics           *metrics2.MapMetrics
+	metrics           *metrics2.Map
 }
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
-func NewMain(ctx api.IContext, stride int32, metrics *metrics2.MapMetrics) *Main {
+func NewMain(ctx api.IContext, stride int32, metrics *metrics2.Map) *Main {
 	m := &Main{
 		ctx:               ctx,
 		prgOpaque:         0,

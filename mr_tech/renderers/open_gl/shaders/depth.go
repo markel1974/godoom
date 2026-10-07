@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -99,7 +99,8 @@ type Depth struct {
 	flashMap         *DepthMap
 	shadowLights     []*DepthMap
 	shadows          bool
-	metrics          *metrics2.MapMetrics
+	mapMetrics       *metrics.Map
+	shadowMetrics    *metrics.Shadows
 	shadowLightCount uint32
 	matrixEmpty      [16]float32
 	matrixEmptyPtr   *float32
@@ -107,10 +108,11 @@ type Depth struct {
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(ctx api.IContext, m *metrics2.MapMetrics, shadowLights int) *Depth {
+func NewDepth(ctx api.IContext, m *metrics.Map, sm *metrics.Shadows, shadowLights int) *Depth {
 	d := &Depth{
 		ctx:              ctx,
-		metrics:          m,
+		mapMetrics:       m,
+		shadowMetrics:    sm,
 		roomMap:          NewDepthMap(ctx),
 		flashMap:         NewDepthMap(ctx),
 		shadowLightCount: 0,
@@ -229,7 +231,7 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	if !s.shadows {
 		return
 	}
-	sWidth, sHeight := s.metrics.GetShadowSize()
+	sWidth, sHeight := s.shadowMetrics.GetShadowSize()
 	if sWidth != s.sWidth || sHeight != s.sHeight {
 		s.allocate(sWidth, sHeight)
 	}

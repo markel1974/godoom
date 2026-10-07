@@ -48,14 +48,15 @@ type Shaders struct {
 	bloom             *shaders.Bloom
 	container         []IShader
 	enableShadows     bool
-	metrics           *metrics.MapMetrics
+	mapMetrics        *metrics.Map
+	shadowMetrics     *metrics.Shadows
 	cal               *model.Calibration
 	w                 int32
 	h                 int32
 	scaleX            float32
 	scaleY            float32
 	dynaLightMatrices []*float32
-	dynaLightMetrics  []*metrics.Spotlight
+	dynaLightMetrics  []*metrics.Spotlights
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -88,16 +89,17 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.flash = p.GetFlash()
 	w.tex = tex
 	w.cal = cal
-	w.metrics = metrics.NewMapMetrics(w.flash)
-	w.metrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
-	w.metrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
+	w.mapMetrics = metrics.NewMap()
+	w.mapMetrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
+	w.mapMetrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
+	w.shadowMetrics = metrics.NewShadows(w.flash)
 
-	w.main = shaders.NewMain(w.ctx, vStride, w.metrics)
+	w.main = shaders.NewMain(w.ctx, vStride, w.mapMetrics)
 	w.sky = shaders.NewSky(w.ctx)
 	w.geometry = shaders.NewGeometry(w.ctx)
 	w.ssao = shaders.NewSSAO(w.ctx)
 	w.blur = shaders.NewBlur(w.ctx)
-	w.depth = shaders.NewDepth(w.ctx, w.metrics, 8)
+	w.depth = shaders.NewDepth(w.ctx, w.mapMetrics, w.shadowMetrics, 8)
 	w.lights = shaders.NewLights(w.ctx, lStride, w.cal)
 	w.shadowLight = shaders.NewShaderShadowLight(w.ctx, w.cal)
 	w.post = shaders.NewPost(w.ctx)
@@ -137,8 +139,8 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
-		w.metrics.Rebuild(w.w, w.h)
-		w.scaleX, w.scaleY = w.metrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
+		w.shadowMetrics.Rebuild(w.w, w.h)
+		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 	}
 
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
@@ -153,7 +155,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	}
 
 	px, _, pz := vi.GetView()
-	w.metrics.SetMapCenter(float32(px), float32(pz), w.metrics.GetLightCamY())
+	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
 
 	//dirX, dirY, dirZ := vi.GetForwardVector()
 	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
@@ -166,17 +168,17 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	flashTex := w.depth.GetFlashShadowTextures()
 	roomTex := w.depth.GetRoomShadowTextures()
 
-	w.metrics.CreateRoomSpace(vi)
-	roomSpaceMatrixPtr := w.metrics.GetRoomSpacePtr()
-	mainViewMatrixPtr := w.metrics.GetMainViewPtr()
+	w.mapMetrics.CreateRoomSpace(vi)
+	roomSpaceMatrixPtr := w.mapMetrics.GetRoomSpacePtr()
+	mainViewMatrixPtr := w.mapMetrics.GetMainViewPtr()
 
-	w.metrics.CreateShadowSpace(w.metrics.GetMainView(), flashX, flashY)
-	shadowSpaceMatrixPtr := w.metrics.GetShadowSpacePtr()
+	w.shadowMetrics.CreateShadowSpace(w.mapMetrics.GetMainView(), flashX, flashY)
+	shadowSpaceMatrixPtr := w.shadowMetrics.GetShadowSpacePtr()
 
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
 		dynaLightsLen := shadowLightsNum * 2
 		w.dynaLightMatrices = make([]*float32, dynaLightsLen)
-		w.dynaLightMetrics = make([]*metrics.Spotlight, dynaLightsLen)
+		w.dynaLightMetrics = make([]*metrics.Spotlights, dynaLightsLen)
 		for lx := int32(0); lx < dynaLightsLen; lx++ {
 			w.dynaLightMetrics[lx] = metrics.NewSpotlight()
 		}

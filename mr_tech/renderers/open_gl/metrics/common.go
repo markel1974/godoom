@@ -1,9 +1,31 @@
 package metrics
 
-import "unsafe"
+import (
+	"math"
+	"unsafe"
+)
 
-var _emptyMatrix [16]float32
-var _emptyMatrixPtr = &_emptyMatrix[0]
+// ndcRange represents the normalized device coordinate range used for various scaling and projection calculations.
+const ndcRange = 2.0
+
+//var _emptyMatrix [16]float32
+//var _emptyMatrixPtr = &_emptyMatrix[0]
+
+// cross calculates the cross product of two 3D vectors (a and b) and returns the resulting vector components.
+func crossProduct(ax, ay, az, bx, by, bz float32) (float32, float32, float32) {
+	return ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx
+}
+
+// normalize calculates the unit vector of the input vector (x, y, z) to normalize its magnitude to 1.
+func normalize(x, y, z float32) (float32, float32, float32) {
+	invLen := float32(1.0 / math.Sqrt(float64(x*x+y*y+z*z)))
+	return x * invLen, y * invLen, z * invLen
+}
+
+// dot calculates the dot product of two 3D vectors defined by their components.
+func dotProduct(ax, ay, az, bx, by, bz float32) float32 {
+	return ax*bx + ay*by + az*bz
+}
 
 // MatrixMultiply4x4 multiplies two 4x4 matrices represented as flat arrays and returns the resulting matrix.
 func MatrixMultiply4x4(a [16]float32, b [16]float32) [16]float32 {

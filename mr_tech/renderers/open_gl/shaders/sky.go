@@ -25,13 +25,13 @@ const (
 
 // Sky is a type that manages the state and rendering of the sky shader in a graphics application.
 type Sky struct {
-	ctx    api.IContext
-	prg    uint32
-	table  [ShaderSkyLocLast]int32
-	skyVAO uint32
-	skyVBO uint32
-	view   [16]float32
-	proj   [16]float32
+	ctx     api.IContext
+	prg     uint32
+	table   [ShaderSkyLocLast]int32
+	skyVAO  uint32
+	skyVBO  uint32
+	viewPtr *float32
+	projPtr *float32
 }
 
 // NewSky creates and returns a new instance of Sky with default uninitialized properties.
@@ -79,9 +79,9 @@ func (s *Sky) GetUniform(id ShaderSkyLoc) int32 {
 }
 
 // UpdateUniforms updates the view and projection matrices for the shader.
-func (s *Sky) UpdateUniforms(view, proj [16]float32) {
-	s.view = view
-	s.proj = proj
+func (s *Sky) UpdateUniforms(viewPtr, projPtr *float32) {
+	s.viewPtr = viewPtr
+	s.projPtr = projPtr
 }
 
 // GetVAO retrieves the vertex array object (VAO) associated with the Sky instance.
@@ -135,8 +135,8 @@ func (s *Sky) Render(skyLayer float32, skyEnabled bool, u, v float32) {
 	s.ctx.DepthFunc(api.LEQUAL)
 	s.ctx.DepthMask(false)
 
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, &s.proj[0])
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, &s.view[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, s.projPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, s.viewPtr)
 
 	s.ctx.BindVertexArray(s.skyVAO)
 

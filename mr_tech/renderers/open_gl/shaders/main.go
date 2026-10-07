@@ -60,6 +60,10 @@ type Main struct {
 	frameIdx          int
 	view              [16]float32
 	proj              [16]float32
+	invView           [16]float32
+	viewPtr           *float32
+	projPtr           *float32
+	invViewPtr        *float32
 	emissiveIntensity float32
 	aoFactor          float32
 	stride            int32
@@ -70,7 +74,7 @@ type Main struct {
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
 func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
-	return &Main{
+	m := &Main{
 		ctx:               ctx,
 		prgOpaque:         0,
 		prgAdditive:       0,
@@ -79,6 +83,10 @@ func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
 		stride:            stride,
 		metrics:           metrics,
 	}
+	m.viewPtr = &m.view[0]
+	m.projPtr = &m.proj[0]
+	m.invViewPtr = &m.invView[0]
+	return m
 }
 
 // Init initializes the necessary OpenGL resources, such as VAOs, VBOs, and EBOs, and configures the vertex attributes.
@@ -314,7 +322,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 
 // UpdateUniforms3d computes and updates projection, view, and inverse view matrices for 3D rendering.
 // It uses the provided view matrix and scaling factors for calculations and returns the matrices.
-func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
+func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) (*float32, *float32, *float32) {
 	// Acquire angles
 	sinY, cosY := vi.GetAngleFull()
 	pitch := -vi.GetPitch()
@@ -358,25 +366,26 @@ func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	// Pure Projection Matrix (No Pitch Shearing)
 	zFarRoom := s.metrics.GetRoomZFar()
 	zNearRoom := s.metrics.GetRoomZNear()
-	s.proj = [16]float32{
+	proj := [16]float32{
 		scaleX, 0, 0, 0,
 		0, scaleY, 0, 0,
 		0, 0, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
 		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
 	}
+	copy(s.proj[:], proj[:])
 	// View Matrix (Standard OpenGL Column-Major Layout)
-	s.view = [16]float32{
+	view := [16]float32{
 		rX, uX, -fX, 0, // Column 0 (Screen X vector)
 		rY, uY, -fY, 0, // Column 1 (Screen Y vector)
 		rZ, uZ, -fZ, 0, // Column 2 (Screen Z vector)
 		tx, ty, tz, 1, // Column 3 (Positional translation)
 	}
+	copy(s.view[:], view[:])
 	// Matrix inversion (Useful for dynamic Skyboxes or advanced Frustum Culling)
-	var invView [16]float32
 	if inv, ok := MatrixInverse4x4(s.view); ok {
-		invView = inv
+		copy(s.invView[:], inv[:])
 	}
-	return s.proj, s.view, invView
+	return s.projPtr, s.viewPtr, s.invViewPtr
 }
 
 // UpdateUniforms2d updates the 2D projection and view matrices based on the provided view matrix and scaling factors.

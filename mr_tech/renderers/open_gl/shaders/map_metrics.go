@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"math"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 )
@@ -27,20 +28,29 @@ func dot(ax, ay, az, bx, by, bz float32) float32 {
 
 // MapMetrics represents settings and transformations for rendering maps, including orthographic size, view parameters, and shadows.
 type MapMetrics struct {
-	orthoSize    float32
-	roomZNear    float32
-	roomZFar     float32
-	lightCamY    float32
-	mapCenterX   float32
-	mapCenterZ   float32
-	shadowWidth  int32
-	shadowHeight int32
-	shadowAspect float32
-	roomProj     [16]float32
-	roomView     [16]float32
-	roomSpace    [16]float32
-	shadowProj   [16]float32
-	flash        *model.Flash
+	orthoSize      float32
+	roomZNear      float32
+	roomZFar       float32
+	lightCamY      float32
+	mapCenterX     float32
+	mapCenterZ     float32
+	shadowWidth    int32
+	shadowHeight   int32
+	shadowAspect   float32
+	mainView2      [16]float32
+	roomProj2      [16]float32
+	roomView2      [16]float32
+	roomSpace2     [16]float32
+	shadowProj2    [16]float32
+	shadowSpace2   [16]float32
+	mainViewPtr    *float32
+	roomProjPtr    *float32
+	roomViewPtr    *float32
+	roomSpacePtr   *float32
+	shadowProjPtr  *float32
+	shadowSpacePtr *float32
+
+	flash *model.Flash
 }
 
 // NewMapMetrics initializes and returns a pointer to a MapMetrics instance configured using the given Flash object.
@@ -48,6 +58,13 @@ func NewMapMetrics(flash *model.Flash) *MapMetrics {
 	m := &MapMetrics{
 		flash: flash,
 	}
+	m.mainViewPtr = &m.mainView2[0]
+	m.roomProjPtr = &m.roomProj2[0]
+	m.roomViewPtr = &m.roomView2[0]
+	m.roomSpacePtr = &m.roomSpace2[0]
+	m.shadowProjPtr = &m.shadowProj2[0]
+	m.shadowSpacePtr = &m.shadowSpace2[0]
+
 	m.SetOrthoSize(float32(640), 0.0, 8192.0)
 	m.Rebuild(1024, 1024)
 	m.SetMapCenter(0.0, 0.0, 0.0)
@@ -156,25 +173,29 @@ func (m *MapMetrics) updateRoomProj(orthoSize, zNearRoom, zFarRoom float32) {
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	m.roomProj = [16]float32{
+	roomProj := [16]float32{
 		1.0 / orthoSize, 0, 0, 0,
 		0, 1.0 / orthoSize, 0, 0,
 		0, 0, -ndcRange / diffZ, 0,
 		0, 0, -(zFarRoom + zNearRoom) / diffZ, 1,
 	}
-	m.roomSpace = MatrixMultiply4x4(m.roomProj, m.roomView)
+	copy(m.roomProj2[:], roomProj[:])
+	roomSpace := MatrixMultiply4x4(m.roomProj2, m.roomView2)
+	copy(m.roomSpace2[:], roomSpace[:])
 }
 
 // updateRoomView updates the room view matrix and recalculates the combined room space matrix.
 func (m *MapMetrics) updateRoomView(lX, lY, lZ float32) {
 	const skew = 0.02
-	m.roomView = [16]float32{
+	roomView := [16]float32{
 		1, 0, 0, 0,
 		skew, skew, 1, 0,
 		0, -1, 0, 0,
 		-lX, lY, -lZ, 1,
 	}
-	m.roomSpace = MatrixMultiply4x4(m.roomProj, m.roomView)
+	copy(m.roomView2[:], roomView[:])
+	roomSpace := MatrixMultiply4x4(m.roomProj2, m.roomView2)
+	copy(m.roomSpace2[:], roomSpace[:])
 }
 
 // updateFlashProj computes and updates the flashlight projection matrix using its field of view and near/far plane distances.
@@ -187,16 +208,17 @@ func (m *MapMetrics) updateShadowProj() {
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	m.shadowProj = [16]float32{
+	shadowProj := [16]float32{
 		shadowFov / m.shadowAspect, 0, 0, 0,
 		0, shadowFov, 0, 0,
 		0, 0, (zFarFlash + zNearFlash) / diffZ, -1,
 		0, 0, (2 * zFarFlash * zNearFlash) / diffZ, 0,
 	}
+	copy(m.shadowProj2[:], shadowProj[:])
 }
 
 // CreateRoomSpace generates and returns the room space and main view transformation matrices based on the provided view matrix.
-func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]float32) {
+func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngleFull()
@@ -214,12 +236,24 @@ func (m *MapMetrics) CreateRoomSpace(vi *model.ViewMatrix) ([16]float32, [16]flo
 		-dot(uX, uY, uZ, camX, camY, camZ),
 		dot(fX, fY, fZ, camX, camY, camZ), 1,
 	}
-	return m.roomSpace, mainView
+	copy(m.mainView2[:], mainView[:])
+}
+
+func (m *MapMetrics) GetRoomSpacePtr() *float32 {
+	return m.roomSpacePtr
+}
+
+func (m *MapMetrics) GetMainViewPtr() *float32 {
+	return m.mainViewPtr
+}
+
+func (m *MapMetrics) GetMainView() [16]float32 {
+	return m.mainView2
 }
 
 // CreateShadowSpace calculates the shadow space matrix for rendering shadow maps using a flashlight position and projection.
 // It generates a local shadow view matrix based on the flashlight's LookAt calculation and combines it with the main view matrix.
-func (m *MapMetrics) CreateShadowSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) [16]float32 {
+func (m *MapMetrics) CreateShadowSpace(mainView [16]float32, flashOffsetX, flashOffsetY float32) {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetX, targetY, targetZ := float32(0.0), float32(0.0), -float32(m.flash.GetZFar())
@@ -238,12 +272,30 @@ func (m *MapMetrics) CreateShadowSpace(mainView [16]float32, flashOffsetX, flash
 		tLocX, tLocY, tLocZ, 1,
 	}
 	shadowView := MatrixMultiply4x4(shadowViewLocal, mainView)
-	shadowSpace := MatrixMultiply4x4(m.shadowProj, shadowView)
-	return shadowSpace
+	shadowSpace := MatrixMultiply4x4(m.shadowProj2, shadowView)
+	copy(m.shadowSpace2[:], shadowSpace[:])
+}
+
+func (m *MapMetrics) GetShadowSpacePtr() *float32 {
+	return m.shadowSpacePtr
+}
+
+var _emptyMatrix [16]float32
+var _emptyMatrixPtr = &_emptyMatrix[0]
+
+type MetricsSpotlight struct {
+	spotLightSpace2   [16]float32
+	spotLightSpacePtr *float32
+}
+
+func NewMetricsSpotlight() *MetricsSpotlight {
+	return &MetricsSpotlight{
+		spotLightSpacePtr: _emptyMatrixPtr,
+	}
 }
 
 // CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.
-func (m *MapMetrics) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) [16]float32 {
+func (m *MetricsSpotlight) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
 	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
 	fovRad := fovDeg * math.Pi / 180.0
@@ -277,7 +329,12 @@ func (m *MapMetrics) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ flo
 		tX, tY, tZ, 1,
 	}
 	// Final Light Space (Proj * View)
-	return MatrixMultiply4x4(proj, view)
+	spotLightSpace := MatrixMultiply4x4(proj, view)
+	copy(m.spotLightSpace2[:], spotLightSpace[:])
+}
+
+func (m *MetricsSpotlight) GetSpotLightSpacePtr() *float32 {
+	return m.spotLightSpacePtr
 }
 
 // MatrixMultiply4x4 multiplies two 4x4 matrices represented as flat arrays and returns the resulting matrix.
@@ -292,6 +349,22 @@ func MatrixMultiply4x4(a [16]float32, b [16]float32) [16]float32 {
 			out[col*4+row] = sum
 		}
 	}
+	return out
+}
+
+func MatrixMultiply4x4Ptr(a [16]float32, b *float32) [16]float32 {
+	var out [16]float32
+	bs := unsafe.Slice(b, 16)
+	for col := 0; col < 4; col++ {
+		for row := 0; row < 4; row++ {
+			sum := float32(0.0)
+			for i := 0; i < 4; i++ {
+				sum += a[i*4+row] * bs[col*4+i]
+			}
+			out[col*4+row] = sum
+		}
+	}
+
 	return out
 }
 

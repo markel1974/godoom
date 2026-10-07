@@ -27,8 +27,8 @@ type Geometry struct {
 	ctx   api.IContext
 	prg   uint32
 	table [GeometryLocLast]int32
-	view  [16]float32
-	proj  [16]float32
+	view  *float32
+	proj  *float32
 }
 
 // NewGeometry initializes and returns a new Geometry instance with default properties.
@@ -99,7 +99,7 @@ func (s *Geometry) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the view and projection matrices used by the shader with the given values.
-func (s *Geometry) UpdateUniforms(view, proj [16]float32) {
+func (s *Geometry) UpdateUniforms(view, proj *float32) {
 	s.view = view
 	s.proj = proj
 }
@@ -108,7 +108,7 @@ func (s *Geometry) UpdateUniforms(view, proj [16]float32) {
 func (s *Geometry) Render(renderScene func()) {
 	s.ctx.UseProgram(s.GetProgram())
 	// RIMOSSO: s.ctx.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
-	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, &s.view[0])
-	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, &s.proj[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, s.view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, s.proj)
 	renderScene()
 }

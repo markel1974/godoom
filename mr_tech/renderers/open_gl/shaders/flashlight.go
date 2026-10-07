@@ -176,17 +176,17 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace [16]float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace *float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
 	if intensity <= 0 {
 		return
 	}
 
 	s.ctx.UseProgram(s.prg)
 
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, &proj[0])
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, &view[0])
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, &invView[0])
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, &lightSpace[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, proj)
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, invView)
+	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, lightSpace)
 
 	s.ctx.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
 

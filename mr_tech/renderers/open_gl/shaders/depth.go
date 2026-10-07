@@ -23,19 +23,25 @@ const (
 
 // DepthMap represents a structure for managing depth framebuffers and textures for shadow mapping and depth rendering.
 type DepthMap struct {
-	ctx    api.IContext
-	fbo    uint32
-	tex    uint32
-	matrix [16]float32
+	ctx            api.IContext
+	fbo            uint32
+	tex            uint32
+	matrixPtr      *float32
+	emptyMatrix    [16]float32
+	emptyMatrixPtr *float32
 }
 
 // NewDepthMap creates and returns a new instance of DepthMap with default uninitialized properties.
 func NewDepthMap(ctx api.IContext) *DepthMap {
-	return &DepthMap{
-		ctx: ctx,
-		fbo: 0,
-		tex: 0,
+	dm := &DepthMap{
+		ctx:       ctx,
+		fbo:       0,
+		tex:       0,
+		matrixPtr: nil,
 	}
+	dm.emptyMatrixPtr = &dm.emptyMatrix[0]
+	dm.matrixPtr = dm.emptyMatrixPtr
+	return dm
 }
 
 // Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
@@ -66,8 +72,8 @@ func (d *DepthMap) Update(width, height int32) {
 }
 
 // SetMatrix assigns a 4x4 transformation matrix to the DepthMap instance.
-func (d *DepthMap) SetMatrix(matrix [16]float32) {
-	d.matrix = matrix
+func (d *DepthMap) SetMatrix(matrix *float32) {
+	d.matrixPtr = matrix
 }
 
 // Shutdown releases OpenGL resources associated with the framebuffer and texture of the DepthMap.
@@ -91,10 +97,12 @@ type Depth struct {
 	roomMap          *DepthMap
 	flashMap         *DepthMap
 	shadowLights     []*DepthMap
-	viewMatrix       [16]float32
 	shadows          bool
 	metrics          *MapMetrics
 	shadowLightCount uint32
+	matrixEmpty      [16]float32
+	matrixEmptyPtr   *float32
+	viewMatrixPtr    *float32
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
@@ -106,6 +114,9 @@ func NewDepth(ctx api.IContext, m *MapMetrics, shadowLights int) *Depth {
 		flashMap:         NewDepthMap(ctx),
 		shadowLightCount: 0,
 	}
+
+	d.matrixEmptyPtr = &d.matrixEmpty[0]
+	d.viewMatrixPtr = d.matrixEmptyPtr
 	for i := 0; i < shadowLights; i++ {
 		d.shadowLights = append(d.shadowLights, NewDepthMap(ctx))
 	}
@@ -156,11 +167,11 @@ func (s *Depth) GetFlashShadowTextures() uint32 {
 }
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
-func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, [16]float32) {
+func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
 	if idx >= s.shadowLightCount {
-		return 0, 0, [16]float32{}
+		return 0, 0, s.matrixEmptyPtr
 	}
-	return s.shadowLights[idx].tex, s.shadowLights[idx].fbo, s.shadowLights[idx].matrix
+	return s.shadowLights[idx].tex, s.shadowLights[idx].fbo, s.shadowLights[idx].matrixPtr
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
@@ -199,8 +210,8 @@ func (s *Depth) Compile(assets IAssets) error {
 }
 
 // UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix [16]float32, flashSpaceMatrix [16]float32, viewMatrix [16]float32, dynaLight [][16]float32, dynaLightCount uint32) {
-	s.viewMatrix = viewMatrix
+func (s *Depth) UpdateUniforms(roomSpaceMatrix *float32, flashSpaceMatrix *float32, viewMatrix *float32, dynaLight []*float32, dynaLightCount uint32) {
+	s.viewMatrixPtr = viewMatrix
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
 	s.shadowLightCount = dynaLightCount //len(dynaLight))
@@ -240,10 +251,10 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	s.ctx.UseProgram(s.GetProgram())
 	s.ctx.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
 	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, &s.viewMatrix[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, s.viewMatrixPtr)
 
 	// ROOM
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.roomMap.matrix[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.roomMap.matrixPtr)
 	//s.ctx.Uniform1i(s.GetUniform(DepthLocTexture), 0)
 	renderScene()
 
@@ -251,14 +262,14 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	s.ctx.PolygonOffset(0.5, 1.0)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.flashMap.fbo)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.flashMap.matrix[0])
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.flashMap.matrixPtr)
 	renderScene()
 
 	for x := 0; x < int(s.shadowLightCount); x++ {
 		s.ctx.PolygonOffset(0.5, 1.0)
 		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowLights[x].fbo)
 		s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, &s.shadowLights[x].matrix[0])
+		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.shadowLights[x].matrixPtr)
 		renderScene()
 	}
 

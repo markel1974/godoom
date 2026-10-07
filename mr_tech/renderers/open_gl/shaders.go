@@ -53,7 +53,8 @@ type Shaders struct {
 	h                 int32
 	scaleX            float32
 	scaleY            float32
-	dynaLightMatrices [][16]float32
+	dynaLightMatrices []*float32
+	dynaLightMetrics  []*shaders.MetricsSpotlight
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -73,6 +74,7 @@ func NewShaders(ctx api.IContext) *Shaders {
 		bloom:             nil,
 		enableShadows:     false,
 		dynaLightMatrices: nil,
+		dynaLightMetrics:  nil,
 	}
 	return c
 }
@@ -163,11 +165,20 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	flashTex := w.depth.GetFlashShadowTextures()
 	roomTex := w.depth.GetRoomShadowTextures()
 
-	roomSpaceMatrix, mainViewMatrix := w.metrics.CreateRoomSpace(vi)
-	shadowSpaceMatrix := w.metrics.CreateShadowSpace(mainViewMatrix, flashX, flashY)
+	w.metrics.CreateRoomSpace(vi)
+	roomSpaceMatrixPtr := w.metrics.GetRoomSpacePtr()
+	mainViewMatrixPtr := w.metrics.GetMainViewPtr()
+
+	w.metrics.CreateShadowSpace(w.metrics.GetMainView(), flashX, flashY)
+	shadowSpaceMatrixPtr := w.metrics.GetShadowSpacePtr()
 
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
-		w.dynaLightMatrices = make([][16]float32, shadowLightsNum*2)
+		dynaLightsLen := shadowLightsNum * 2
+		w.dynaLightMatrices = make([]*float32, dynaLightsLen)
+		w.dynaLightMetrics = make([]*shaders.MetricsSpotlight, dynaLightsLen)
+		for lx := int32(0); lx < dynaLightsLen; lx++ {
+			w.dynaLightMetrics[lx] = shaders.NewMetricsSpotlight()
+		}
 	}
 
 	for lx := int32(0); lx < shadowLightsNum; lx++ {
@@ -180,19 +191,23 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		near := float32(0.1)
 		factor := light.Intensity
 		falloff := light.Falloff
+		//TODO FROM CONFIG
 		effectiveRadius := float32(4.605) * falloff * factor
+		//TODO WRONG
 		if effectiveRadius < 256.0 {
 			effectiveRadius = 256.0
 		}
-		w.dynaLightMatrices[lx] = w.metrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
+		dynaMetrics := w.dynaLightMetrics[lx]
+		dynaMetrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
+		w.dynaLightMatrices[lx] = dynaMetrics.GetSpotLightSpacePtr()
 	}
 
-	projMatrix, viewMatrix, invViewMatrix := w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
+	projMatrixPtr, viewMatrixPtr, invViewMatrixPtr := w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
 
-	w.depth.UpdateUniforms(roomSpaceMatrix, shadowSpaceMatrix, mainViewMatrix, w.dynaLightMatrices, uint32(shadowLightsNum))
-	w.geometry.UpdateUniforms(viewMatrix, projMatrix)
-	w.ssao.UpdateUniforms(viewMatrix, projMatrix)
-	w.sky.UpdateUniforms(viewMatrix, projMatrix)
+	w.depth.UpdateUniforms(roomSpaceMatrixPtr, shadowSpaceMatrixPtr, mainViewMatrixPtr, w.dynaLightMatrices, uint32(shadowLightsNum))
+	w.geometry.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
+	w.ssao.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
+	w.sky.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
 
 	// MAIN PREPARE (VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen, fbW, fbH)
@@ -214,7 +229,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 
 	//TODO COMPLETARE
 	if hwOcc != nil {
-		hwOcc.RenderQueries(w.main.GetProgramOpaque(), w.main.GetLocView(), w.main.GetLocProj(), -1, viewMatrix, projMatrix)
+		hwOcc.RenderQueries(w.main.GetProgramOpaque(), w.main.GetLocView(), w.main.GetLocProj(), -1, viewMatrixPtr, projMatrixPtr)
 	}
 	// MAIN ADDITIVE
 	if dcAdditive.HasCommands() {
@@ -236,7 +251,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dcOpaque.Render, flashTex, viewMatrix, projMatrix, invViewMatrix, shadowSpaceMatrix,
+		dcOpaque.Render, flashTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, shadowSpaceMatrixPtr,
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
@@ -251,14 +266,14 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		//CutOff 0.7, OuterCutOff 0.9
 		w.shadowLight.Render(
-			dcOpaque.Render, lTex, viewMatrix, projMatrix, invViewMatrix, lMatrix,
+			dcOpaque.Render, lTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
 			factor, falloff, light.OuterCutOff, light.CutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS
-	w.lights.Render(dcOpaque.Render, roomTex, viewMatrix, projMatrix, invViewMatrix, roomSpaceMatrix, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dcOpaque.Render, roomTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, roomSpaceMatrixPtr, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights(w.ctx)

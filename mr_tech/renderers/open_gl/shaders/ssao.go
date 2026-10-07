@@ -48,7 +48,7 @@ type SSAO struct {
 	blurTexture      uint32
 	blurFbo          uint32
 	rboDepth         uint32
-	proj             [16]float32
+	projPtr          *float32
 	w                int32
 	h                int32
 }
@@ -202,8 +202,8 @@ func (s *SSAO) Prepare(fbw, fbh int32) {
 }
 
 // UpdateUniforms updates the shader's projection matrix uniform with the provided projection matrix.
-func (s *SSAO) UpdateUniforms(view, proj [16]float32) {
-	s.proj = proj
+func (s *SSAO) UpdateUniforms(view, projPtr *float32) {
+	s.projPtr = projPtr
 }
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
@@ -223,7 +223,7 @@ func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool)
 	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
 
 	if skyEnabled {
-		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, &s.proj[0])
+		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, s.projPtr)
 		s.ctx.BindVertexArray(skyVAO)
 		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}

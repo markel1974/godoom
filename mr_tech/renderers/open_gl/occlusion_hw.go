@@ -130,7 +130,7 @@ func (hw *OcclusionHW) Add(aabb *physics.AABB, state *OcclusionState) {
 }
 
 // RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
-func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locModel int32, viewMatrix, projMatrix [16]float32) {
+func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locModel int32, viewMatrixPtr, projMatrixPtr *float32) {
 	if hw.testsLen == 0 {
 		return
 	}
@@ -140,8 +140,8 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 	hw.ctx.DepthMask(false) // Do not write Z, perform READ test only (LEQUAL)
 
 	hw.ctx.UseProgram(prgOpaque)
-	hw.ctx.UniformMatrix4fv(locView, 1, false, &viewMatrix[0])
-	hw.ctx.UniformMatrix4fv(locProj, 1, false, &projMatrix[0])
+	hw.ctx.UniformMatrix4fv(locView, 1, false, viewMatrixPtr)
+	hw.ctx.UniformMatrix4fv(locProj, 1, false, projMatrixPtr)
 
 	// AABBs are Z-Up (X, Y, Z where Z is height).
 	// The Opaque vertex shader expects Y-Up (X, Z, -Y).

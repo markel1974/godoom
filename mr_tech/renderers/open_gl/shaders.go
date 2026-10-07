@@ -172,7 +172,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	roomSpaceMatrixPtr := w.mapMetrics.GetRoomSpacePtr()
 	mainViewMatrixPtr := w.mapMetrics.GetMainViewPtr()
 
-	w.shadowMetrics.CreateShadowSpace(w.mapMetrics.GetMainView(), flashX, flashY)
+	w.shadowMetrics.CreateShadowSpace(mainViewMatrixPtr, flashX, flashY)
 	shadowSpaceMatrixPtr := w.shadowMetrics.GetShadowSpacePtr()
 
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {

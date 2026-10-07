@@ -31,16 +31,12 @@ type LightLoc int
 const (
 	LightLocProjection = LightLoc(iota)
 	LightLocView
-	LightLocInvView
-	LightLocRoomSpaceMatrix
 	LightLocTexture
 	LightLocNormalMap
-	LightLocRoomShadowMap
+
 	LightLocScreenResolution
 	LightLocAmbientLight
-	LightLocEnableShadows
-	LightLocVolumetricSteps
-	LightLocBeamRatioFactor
+
 	LightLocNumLights
 	LightLocShininessWall
 	LightLocShininessFloor
@@ -49,6 +45,13 @@ const (
 	LightLocDebugLights
 	LightLocLast
 )
+
+//LightLocInvView
+//LightLocVolumetricSteps
+//LightLocRoomSpaceMatrix
+//LightLocRoomShadowMap
+//LightLocEnableShadows
+//LightLocBeamRatioFactor
 
 // Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
@@ -106,7 +109,7 @@ func (s *Lights) SetupSamplers() error {
 	normalUnits := []int32{4, 5, 6, 7}
 	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in flashlight.go
 	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
-	s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
+	//s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
 	return nil
 }
 
@@ -140,16 +143,16 @@ func (s *Lights) Compile(a IAssets) error {
 
 	s.table[LightLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	s.table[LightLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
-	s.table[LightLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
-	s.table[LightLocRoomSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomSpaceMatrix\x00"))
+	//s.table[LightLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
+	//s.table[LightLocRoomSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomSpaceMatrix\x00"))
 	s.table[LightLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
 	s.table[LightLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
-	s.table[LightLocRoomShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomShadowMap\x00"))
+	//s.table[LightLocRoomShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_roomShadowMap\x00"))
 	s.table[LightLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
 	s.table[LightLocAmbientLight] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_ambient_light\x00"))
-	s.table[LightLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
-	s.table[LightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
-	s.table[LightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
+	//s.table[LightLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
+	//s.table[LightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
+	//s.table[LightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
 	s.table[LightLocNumLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_numLights\x00"))
 	s.table[LightLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
 	s.table[LightLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
@@ -159,7 +162,7 @@ func (s *Lights) Compile(a IAssets) error {
 
 	for idx, v := range s.table {
 		if v < 0 {
-			return fmt.Errorf("unused uniform location in lights: %d\n", idx)
+			fmt.Printf("[warning] unused uniform location in lights [table index: %d]\n", idx)
 		}
 	}
 
@@ -189,14 +192,14 @@ func (s *Lights) Render(renderGeometry func(), roomShadowTex uint32, view, proj,
 
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocProjection), 1, false, proj)
 	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocView), 1, false, view)
-	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, invView)
-	s.ctx.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, roomSpace)
+	//s.ctx.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, invView)
+	//s.ctx.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, roomSpace)
 	s.ctx.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
 	s.ctx.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
 	s.ctx.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
-	s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
-	s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
-	s.ctx.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	//s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
+	//s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
+	//s.ctx.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	s.ctx.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
 	s.ctx.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
 	s.ctx.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))

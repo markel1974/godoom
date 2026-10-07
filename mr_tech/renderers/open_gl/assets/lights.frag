@@ -13,16 +13,16 @@ in float IsFullbright;
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
 
-uniform sampler2DShadow u_roomShadowMap;
+//uniform sampler2DShadow u_roomShadowMap;
 uniform mat4 u_view;
-uniform mat4 u_invView;
-uniform mat4 u_roomSpaceMatrix;
+//uniform mat4 u_invView;
+//uniform mat4 u_roomSpaceMatrix;
 
 uniform vec2 u_screenResolution;
 uniform float u_ambient_light;
-uniform int u_enableShadows;
-uniform int u_volumetricSteps;
-uniform float u_beamRatioFactor;
+//uniform int u_enableShadows;
+//uniform int u_volumetricSteps;
+//uniform float u_beamRatioFactor;
 uniform int u_numLights;
 
 uniform float u_shininessWall;
@@ -79,6 +79,7 @@ float randomNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+/*
 float sampleVolumetricShadow(vec3 posView, mat4 lightSpaceMatrix, sampler2DShadow shadowMap) {
     vec4 worldPos = u_invView * vec4(posView, 1.0);
     vec4 shadowPos = lightSpaceMatrix * worldPos;
@@ -89,7 +90,9 @@ float sampleVolumetricShadow(vec3 posView, mat4 lightSpaceMatrix, sampler2DShado
     }
     return texture(shadowMap, vec3(proj.xy, proj.z - 0.005));
 }
+*/
 
+/*
 float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float bias) {
     if (fragPosLightSpace.w <= 0.0) return 0.0;
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
@@ -114,6 +117,7 @@ float shadowCalculation(vec4 fragPosLightSpace, sampler2DShadow shadowMap, float
     }
     return 1.0 - (shadow / float(SAMPLES));
 }
+*/
 
 vec3 calculateNormal() {
     vec3 dp1 = dFdx(ViewPos);
@@ -191,9 +195,10 @@ void main() {
 
     //Shadow lights are in flashlights.frag
     //we ha to remove u_enableShadows, u_volumetricSteps, u_roomShadowMap
-    int enableShadows = u_enableShadows;
-    enableShadows = 0;
+    //int enableShadows = u_enableShadows;
+    //enableShadows = 0;
 
+    /*
     if (enableShadows == 1) {
         // Rom shadows
         // Use the geometric normal already blended by TBN
@@ -223,6 +228,7 @@ void main() {
         // Calculate roomBeam ONLY if raymarching was performed
         roomBeam = vec3(1.0, 0.95, 0.85) * volRoom * (u_beamRatioFactor / float(u_volumetricSteps)) * edgeFade;
     }
+    */
 
     vec3 dynamicLights = vec3(0.0);
 

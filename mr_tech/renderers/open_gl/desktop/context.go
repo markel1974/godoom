@@ -437,3 +437,7 @@ func (d *Context) EndQuery(target uint32) {
 func (d *Context) GetQueryObjectuiv(id uint32, pname uint32, params *uint32) {
 	gl.GetQueryObjectuiv(id, pname, params)
 }
+
+func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
+	gl.ColorMask(r, g, b, a)
+}

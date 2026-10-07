@@ -42,6 +42,8 @@ type IContext interface {
 
 	ClearColor(red float32, green float32, blue float32, alpha float32)
 
+	ColorMask(r bool, g bool, b bool, a bool)
+
 	CompileShader(shader uint32)
 
 	CreateProgram() uint32

@@ -67,6 +67,7 @@ type Context struct {
 	fn_bufferSubData                  js.Value
 	fn_checkFramebufferStatus         js.Value
 	fn_clear                          js.Value
+	fn_colorMask                      js.Value
 	fn_clearColor                     js.Value
 	fn_compileShader                  js.Value
 	fn_createBuffer                   js.Value
@@ -1272,4 +1273,7 @@ func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
 	}
 	offset := uintptr(unsafe.Pointer(&data[0]))
 	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
+}
+func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
+	d.fn_colorMask.Invoke(r, g, b, a)
 }

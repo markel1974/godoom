@@ -245,14 +245,13 @@ func NewContext(width int, height int) *Context {
 	ctx.fn_useProgram = ctx.gl.Get("useProgram").Call("bind", ctx.gl)
 	ctx.fn_vertexAttribPointer = ctx.gl.Get("vertexAttribPointer").Call("bind", ctx.gl)
 	ctx.fn_viewport = ctx.gl.Get("viewport").Call("bind", ctx.gl)
-
 	ctx.fn_getQueryParameter = ctx.gl.Get("getQueryParameter").Call("bind", ctx.gl)
 	ctx.fn_createQuery = ctx.gl.Get("createQuery").Call("bind", ctx.gl)
 	ctx.fn_deleteQuery = ctx.gl.Get("deleteQuery").Call("bind", ctx.gl)
 	ctx.fn_beginQuery = ctx.gl.Get("beginQuery").Call("bind", ctx.gl)
 	ctx.fn_endQuery = ctx.gl.Get("endQuery").Call("bind", ctx.gl)
-
 	ctx.fn_multiDrawElements = js.Global().Call("eval", fnMultiDrawElements)
+
 	return ctx
 }
 

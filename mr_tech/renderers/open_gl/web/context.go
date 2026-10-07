@@ -47,9 +47,10 @@ type Context struct {
 	ptrMutex sync.Mutex
 
 	jsBuffer                          js.Value
-	sharedBuffer                      js.Value
-	sharedBufferCap                   int
-	sharedOffset                      int
+	scratchMatrixBuffer               js.Value
+	scratchMatrixBytes                js.Value
+	scratch3fvBuffer                  js.Value
+	scratch3fvBytes                   js.Value
 	scratchOffsets                    []uint32
 	fn_activeTexture                  js.Value
 	fn_attachShader                   js.Value
@@ -145,20 +146,25 @@ func NewContext(width int, height int) *Context {
 		VSync:  true,
 	}
 	ctx := &Context{
-		buffers:         NewResourceTracker(),
-		textures:        NewResourceTracker(),
-		programs:        NewResourceTracker(),
-		shaders:         NewResourceTracker(),
-		vaos:            NewResourceTracker(),
-		fbos:            NewResourceTracker(),
-		rbos:            NewResourceTracker(),
-		queries:         NewResourceTracker(),
-		uniforms:        []js.Value{js.Null()},
-		ptrMap:          make(map[uintptr]interface{}),
-		jsBuffer:        js.Global().Get("Uint8Array"),
-		sharedBuffer:    js.Global().Get("Uint8Array").New(1024 * 1024 * 8),
-		sharedBufferCap: 1024 * 1024 * 8,
+		buffers:  NewResourceTracker(),
+		textures: NewResourceTracker(),
+		programs: NewResourceTracker(),
+		shaders:  NewResourceTracker(),
+		vaos:     NewResourceTracker(),
+		fbos:     NewResourceTracker(),
+		rbos:     NewResourceTracker(),
+		queries:  NewResourceTracker(),
+		uniforms: []js.Value{js.Null()},
+		ptrMap:   make(map[uintptr]interface{}),
+		jsBuffer: js.Global().Get("Uint8Array"),
+		//sharedBuffer:    js.Global().Get("Uint8Array").New(1024 * 1024 * 8),
+		//sharedBufferCap: 1024 * 1024 * 8,
 	}
+
+	ctx.scratchMatrixBuffer = js.Global().Get("Float32Array").New(16)
+	ctx.scratchMatrixBytes = js.Global().Get("Uint8Array").New(ctx.scratchMatrixBuffer.Get("buffer"))
+	ctx.scratch3fvBuffer = js.Global().Get("Float32Array").New(3)
+	ctx.scratch3fvBytes = js.Global().Get("Uint8Array").New(ctx.scratch3fvBuffer.Get("buffer"))
 
 	ctx.jsGetWasmMemoryView = js.Global().Get("getWasmMemoryView")
 	ctx.jsInt8Array = js.Global().Get("Int8Array")
@@ -1099,18 +1105,6 @@ func (d *Context) Uniform3f(location int32, v0 float32, v1 float32, v2 float32) 
 	d.fn_uniform3f.Invoke(d.uniforms[location], v0, v1, v2)
 }
 
-// Uniform3fv sets the value of a 3-component floating point uniform variable or an array of such variables in a program.
-func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
-	if location == -1 {
-		return
-	}
-	loc := d.uniforms[location]
-	total := count * 3
-	slice := unsafe.Slice(value, total)
-	f32Arr := d.getFloat32SharedJSArray(slice)
-	d.fn_uniform3fv.Invoke(loc, f32Arr)
-}
-
 // UniformBlockBinding assigns a binding point to a uniform block within the specified program's shader.
 func (d *Context) UniformBlockBinding(program uint32, uniformBlockIndex uint32, uniformBlockBinding uint32) {
 	d.fn_uniformBlockBinding.Invoke(d.programs.Get(program), uniformBlockIndex, uniformBlockBinding)
@@ -1122,14 +1116,45 @@ func (d *Context) UniformBlockBinding(program uint32, uniformBlockIndex uint32, 
 // transpose indicates whether the matrix should be transposed when transferred.
 // value is a pointer to the first element of the matrix data.
 func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, value *float32) {
+	if count <= 0 {
+		return
+	}
 	if location == -1 {
 		return
 	}
 	loc := d.uniforms[location]
+	// Fast-path zero-allocation per matrici singole (la quasi totalità delle chiamate)
+	if count == 1 {
+		byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(value)), 64)
+		js.CopyBytesToJS(d.scratchMatrixBytes, byteSlice)
+		d.fn_uniformMatrix4fv.Invoke(loc, transpose, d.scratchMatrixBuffer)
+		return
+	}
+	// Fallback standard per array di matrici (es. animazioni scheletriche)
 	total := count * 16
 	slice := unsafe.Slice(value, total)
 	f32Arr := d.getFloat32SharedJSArray(slice)
 	d.fn_uniformMatrix4fv.Invoke(loc, transpose, f32Arr)
+}
+
+func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
+	if count <= 0 {
+		return
+	}
+	if location == -1 {
+		return
+	}
+	loc := d.uniforms[location]
+	if count == 1 {
+		byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(value)), 12)
+		js.CopyBytesToJS(d.scratch3fvBytes, byteSlice)
+		d.fn_uniform3fv.Invoke(loc, d.scratch3fvBuffer)
+		return
+	}
+	total := count * 3
+	slice := unsafe.Slice(value, total)
+	f32Arr := d.getFloat32SharedJSArray(slice)
+	d.fn_uniform3fv.Invoke(loc, f32Arr)
 }
 
 // UseProgram sets the active shader program to the one specified by the given program ID.
@@ -1214,97 +1239,38 @@ func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
 	return buffer
 }
 
-// getFloat32SharedJSArray creates a JavaScript Float32Array from a slice of float32 values.
-func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	byteLen := len(data) * 4
-	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
-
-	// Fallback per buffer giganti
-	if byteLen > d.sharedBufferCap {
-		jsArr := d.jsUint8Array.New(byteLen)
-		js.CopyBytesToJS(jsArr, byteSlice)
-		return d.jsFloat32Array.New(jsArr.Get("buffer"))
-	}
-
-	offset, dstView := d.allocateShared(byteLen)
-	js.CopyBytesToJS(dstView, byteSlice)
-	return d.jsFloat32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
-}
-
-// getInt32SharedJSArray creates a JavaScript Int32Array from a slice of int32 values.
-func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	byteLen := len(data) * 4
-	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
-
-	if byteLen > d.sharedBufferCap {
-		jsArr := d.jsUint8Array.New(byteLen)
-		js.CopyBytesToJS(jsArr, byteSlice)
-		return d.jsInt32Array.New(jsArr.Get("buffer"))
-	}
-
-	offset, dstView := d.allocateShared(byteLen)
-	js.CopyBytesToJS(dstView, byteSlice)
-	return d.jsInt32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
-}
-
-// getUint32SharedJSArray creates a JavaScript Uint32Array from a slice of uint32 values.
-func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	byteLen := len(data) * 4
-	byteSlice := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), byteLen)
-
-	if byteLen > d.sharedBufferCap {
-		jsArr := d.jsUint8Array.New(byteLen)
-		js.CopyBytesToJS(jsArr, byteSlice)
-		return d.jsUint32Array.New(jsArr.Get("buffer"))
-	}
-
-	offset, dstView := d.allocateShared(byteLen)
-	js.CopyBytesToJS(dstView, byteSlice)
-	return d.jsUint32Array.New(d.sharedBuffer.Get("buffer"), offset, len(data))
-}
-
 // getUint8haredJSArray retrieves a JavaScript Uint8Array view of the given byte slice.
 func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
 	if len(bytes) == 0 {
 		return js.Null()
 	}
-	byteLen := len(bytes)
-
-	if byteLen > d.sharedBufferCap {
-		jsArr := d.jsUint8Array.New(byteLen)
-		js.CopyBytesToJS(jsArr, bytes)
-		return jsArr
-	}
-
-	_, dstView := d.allocateShared(byteLen)
-	js.CopyBytesToJS(dstView, bytes)
-	return dstView
+	offset := uintptr(unsafe.Pointer(&bytes[0]))
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(bytes), "uint8")
 }
 
-func (d *Context) allocateShared(byteLen int) (int, js.Value) {
-	// Allinea l'offset a 8 byte per i requisiti strutturali di WebGL/JS TypedArrays
-	align := 8
-	d.sharedOffset = (d.sharedOffset + align - 1) & ^(align - 1)
-
-	// Se non c'è abbastanza spazio, riavvolgiamo il buffer a 0.
-	// E' sicuro perché le precedenti chiamate WebGL hanno già consumato i loro dati.
-	if d.sharedOffset+byteLen > d.sharedBufferCap {
-		d.sharedOffset = 0
+// getInt32SharedJSArray creates a JavaScript shared array from a slice of int32 values.
+func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
 	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "int32")
+}
 
-	offset := d.sharedOffset
-	d.sharedOffset += byteLen
+// getUint32SharedJSArray converts a Go slice of uint32 to a shared JavaScript Uint32Array.
+func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "uint32")
+}
 
-	// Crea solo una "vista" leggerissima, NON alloca nuova memoria heap!
-	dstView := d.jsUint8Array.New(d.sharedBuffer.Get("buffer"), offset, byteLen)
-	return offset, dstView
+// getFloat32SharedJSArray creates a JavaScript shared array from a slice of float32 values.
+func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
+	if len(data) == 0 {
+		return js.Null()
+	}
+	offset := uintptr(unsafe.Pointer(&data[0]))
+	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
 }

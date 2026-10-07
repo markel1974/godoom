@@ -136,8 +136,8 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 	}
 
 	// GPU setup for queries
-	// hw.ctx.ColorMask(false, false, false, false) // Optional if ColorMask is not available in the API, but useful! If missing, set rgba=false
-	hw.ctx.DepthMask(false) // Do not write Z, perform READ test only (LEQUAL)
+	hw.ctx.ColorMask(false, false, false, false) // Optional if ColorMask is not available in the API, but useful! If missing, set rgba=false
+	hw.ctx.DepthMask(false)                      // Do not write Z, perform READ test only (LEQUAL)
 
 	hw.ctx.UseProgram(prgOpaque)
 	hw.ctx.UniformMatrix4fv(locView, 1, false, viewMatrixPtr)
@@ -207,7 +207,7 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 	}
 
 	// RESTORE GPU STATE
-	// hw.ctx.ColorMask(true, true, true, true)
+	hw.ctx.ColorMask(true, true, true, true)
 	hw.ctx.DepthMask(true)
 
 	// DEFERRED READ-BACK (Non-blocking)

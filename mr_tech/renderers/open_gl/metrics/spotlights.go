@@ -2,13 +2,13 @@ package metrics
 
 import "math"
 
-// Spotlights represents a structure used for managing spotlight transformation matrices in rendering contexts.
+// Spotlights represents a structure used to handle spotlight space matrices and their pointer for shadow mapping operations.
 type Spotlights struct {
 	spotLightSpace    [16]float32
 	spotLightSpacePtr *float32
 }
 
-// NewSpotlight initializes a new instance of Spotlights with a default transformation matrix pointer.
+// NewSpotlight creates and initializes a new Spotlights instance with a pointer to the first element of its array.
 func NewSpotlight() *Spotlights {
 	s := &Spotlights{
 		spotLightSpacePtr: nil,
@@ -17,7 +17,7 @@ func NewSpotlight() *Spotlights {
 	return s
 }
 
-// CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.
+// CreateSpotLightSpace computes a spotlight's light space matrix based on its position, direction, FOV, near, and far planes.
 func (m *Spotlights) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
 	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
@@ -56,6 +56,7 @@ func (m *Spotlights) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ flo
 	copy(m.spotLightSpace[:], spotLightSpace[:])
 }
 
+// GetSpotLightSpacePtr returns a pointer to the spotLightSpace matrix used for spotlight transformation calculations.
 func (m *Spotlights) GetSpotLightSpacePtr() *float32 {
 	return m.spotLightSpacePtr
 }

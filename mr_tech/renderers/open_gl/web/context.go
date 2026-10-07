@@ -251,6 +251,7 @@ func NewContext(width int, height int) *Context {
 	ctx.fn_deleteQuery = ctx.gl.Get("deleteQuery").Call("bind", ctx.gl)
 	ctx.fn_beginQuery = ctx.gl.Get("beginQuery").Call("bind", ctx.gl)
 	ctx.fn_endQuery = ctx.gl.Get("endQuery").Call("bind", ctx.gl)
+	ctx.fn_colorMask = ctx.gl.Get("colorMask").Call("bind", ctx.gl)
 	ctx.fn_multiDrawElements = js.Global().Call("eval", fnMultiDrawElements)
 
 	return ctx
@@ -1216,6 +1217,10 @@ func (d *Context) GetQueryObjectuiv(id uint32, pname uint32, params *uint32) {
 	}
 }
 
+func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
+	d.fn_colorMask.Invoke(r, g, b, a)
+}
+
 // getJSView creates a JavaScript typed array view for the given buffer based on the specified xtype.
 // Supported xtypes include BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, and FLOAT.
 // Returns the constructed js.Value or the original buffer for unsupported xtypes.
@@ -1273,7 +1278,4 @@ func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
 	}
 	offset := uintptr(unsafe.Pointer(&data[0]))
 	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
-}
-func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
-	d.fn_colorMask.Invoke(r, g, b, a)
 }

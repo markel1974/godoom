@@ -1,8 +1,7 @@
-package shaders
+package metrics
 
 import (
 	"math"
-	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 )
@@ -59,9 +58,11 @@ func NewMapMetrics(flash *model.Flash) *MapMetrics {
 		flash: flash,
 	}
 	m.mainViewPtr = &m.mainView2[0]
+
 	m.roomProjPtr = &m.roomProj2[0]
 	m.roomViewPtr = &m.roomView2[0]
 	m.roomSpacePtr = &m.roomSpace2[0]
+
 	m.shadowProjPtr = &m.shadowProj2[0]
 	m.shadowSpacePtr = &m.shadowSpace2[0]
 
@@ -278,128 +279,6 @@ func (m *MapMetrics) CreateShadowSpace(mainView [16]float32, flashOffsetX, flash
 
 func (m *MapMetrics) GetShadowSpacePtr() *float32 {
 	return m.shadowSpacePtr
-}
-
-var _emptyMatrix [16]float32
-var _emptyMatrixPtr = &_emptyMatrix[0]
-
-type MetricsSpotlight struct {
-	spotLightSpace2   [16]float32
-	spotLightSpacePtr *float32
-}
-
-func NewMetricsSpotlight() *MetricsSpotlight {
-	return &MetricsSpotlight{
-		spotLightSpacePtr: _emptyMatrixPtr,
-	}
-}
-
-// CreateSpotLightSpace generates a 4x4 transformation matrix for a spotlight's view and projection in shadow mapping.
-func (m *MetricsSpotlight) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
-	// Projection Matrix (Perspective)
-	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
-	fovRad := fovDeg * math.Pi / 180.0
-	f := float32(1.0 / math.Tan(float64(fovRad)/2.0))
-	proj := [16]float32{
-		f, 0, 0, 0,
-		0, f, 0, 0,
-		0, 0, (far + near) / (near - far), -1.0,
-		0, 0, (2.0 * far * near) / (near - far), 0,
-	}
-	// View Matrix (LookAt)
-	ffX, ffY, ffZ := normalize(dirX, dirY, dirZ)
-	// Standard UP vector (Y-up in OpenGL)
-	upX, upY, upZ := float32(0.0), float32(1.0), float32(0.0)
-	// Anti-Gimbal-Lock safety: if the spotlight points straight up or down (floor/ceiling)
-	// the cross product would fail. Use -Z as alternative UP.
-	if math.Abs(float64(ffY)) > 0.999 {
-		upX, upY, upZ = 0.0, 0.0, -1.0
-	}
-	// R = Right, U = Recalculated Up
-	rrX, rrY, rrZ := normalize(cross(ffX, ffY, ffZ, upX, upY, upZ))
-	uuX, uuY, uuZ := cross(rrX, rrY, rrZ, ffX, ffY, ffZ) // Already normalized
-	// Negative translation (dot product between inverted axes and position)
-	tX := -dot(rrX, rrY, rrZ, posX, posY, posZ)
-	tY := -dot(uuX, uuY, uuZ, posX, posY, posZ)
-	tZ := dot(ffX, ffY, ffZ, posX, posY, posZ)
-	view := [16]float32{
-		rrX, uuX, -ffX, 0,
-		rrY, uuY, -ffY, 0,
-		rrZ, uuZ, -ffZ, 0,
-		tX, tY, tZ, 1,
-	}
-	// Final Light Space (Proj * View)
-	spotLightSpace := MatrixMultiply4x4(proj, view)
-	copy(m.spotLightSpace2[:], spotLightSpace[:])
-}
-
-func (m *MetricsSpotlight) GetSpotLightSpacePtr() *float32 {
-	return m.spotLightSpacePtr
-}
-
-// MatrixMultiply4x4 multiplies two 4x4 matrices represented as flat arrays and returns the resulting matrix.
-func MatrixMultiply4x4(a [16]float32, b [16]float32) [16]float32 {
-	var out [16]float32
-	for col := 0; col < 4; col++ {
-		for row := 0; row < 4; row++ {
-			sum := float32(0.0)
-			for i := 0; i < 4; i++ {
-				sum += a[i*4+row] * b[col*4+i]
-			}
-			out[col*4+row] = sum
-		}
-	}
-	return out
-}
-
-func MatrixMultiply4x4Ptr(a [16]float32, b *float32) [16]float32 {
-	var out [16]float32
-	bs := unsafe.Slice(b, 16)
-	for col := 0; col < 4; col++ {
-		for row := 0; row < 4; row++ {
-			sum := float32(0.0)
-			for i := 0; i < 4; i++ {
-				sum += a[i*4+row] * bs[col*4+i]
-			}
-			out[col*4+row] = sum
-		}
-	}
-
-	return out
-}
-
-// MatrixInverse4x4 computes the inverse of a 4x4 matrix represented as a 16-element float32 array in column-major order.
-// Returns the inverted matrix and a boolean indicating success (true) or failure (false) if the determinant is zero.
-func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
-	var inv [16]float32
-	var det float32
-
-	inv[0] = m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10]
-	inv[4] = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10]
-	inv[8] = m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9]
-	inv[12] = -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9]
-	inv[1] = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10]
-	inv[5] = m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10]
-	inv[9] = -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9]
-	inv[13] = m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9]
-	inv[2] = m[1]*m[5]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[5]
-	inv[6] = -m[0]*m[5]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[5]
-	inv[10] = m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5]
-	inv[14] = -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5]
-	inv[3] = -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6]
-	inv[7] = m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6]
-	inv[11] = -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11] - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5]
-	inv[15] = m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10] + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5]
-
-	det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12]
-	if det == 0 {
-		return [16]float32{}, false
-	}
-	invDet := 1.0 / det
-	for i := 0; i < 16; i++ {
-		inv[i] *= invDet
-	}
-	return inv, true
 }
 
 /*

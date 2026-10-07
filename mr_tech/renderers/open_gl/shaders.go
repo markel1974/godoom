@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
@@ -47,14 +48,14 @@ type Shaders struct {
 	bloom             *shaders.Bloom
 	container         []IShader
 	enableShadows     bool
-	metrics           *shaders.MapMetrics
+	metrics           *metrics.MapMetrics
 	cal               *model.Calibration
 	w                 int32
 	h                 int32
 	scaleX            float32
 	scaleY            float32
 	dynaLightMatrices []*float32
-	dynaLightMetrics  []*shaders.MetricsSpotlight
+	dynaLightMetrics  []*metrics.Spotlight
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -87,7 +88,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.flash = p.GetFlash()
 	w.tex = tex
 	w.cal = cal
-	w.metrics = shaders.NewMapMetrics(w.flash)
+	w.metrics = metrics.NewMapMetrics(w.flash)
 	w.metrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
 	w.metrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
 
@@ -175,9 +176,9 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
 		dynaLightsLen := shadowLightsNum * 2
 		w.dynaLightMatrices = make([]*float32, dynaLightsLen)
-		w.dynaLightMetrics = make([]*shaders.MetricsSpotlight, dynaLightsLen)
+		w.dynaLightMetrics = make([]*metrics.Spotlight, dynaLightsLen)
 		for lx := int32(0); lx < dynaLightsLen; lx++ {
-			w.dynaLightMetrics[lx] = shaders.NewMetricsSpotlight()
+			w.dynaLightMetrics[lx] = metrics.NewSpotlight()
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -69,11 +70,11 @@ type Main struct {
 	stride            int32
 	w                 int32
 	h                 int32
-	metrics           *MapMetrics
+	metrics           *metrics2.MapMetrics
 }
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
-func NewMain(ctx api.IContext, stride int32, metrics *MapMetrics) *Main {
+func NewMain(ctx api.IContext, stride int32, metrics *metrics2.MapMetrics) *Main {
 	m := &Main{
 		ctx:               ctx,
 		prgOpaque:         0,
@@ -382,7 +383,7 @@ func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 	}
 	copy(s.view[:], view[:])
 	// Matrix inversion (Useful for dynamic Skyboxes or advanced Frustum Culling)
-	if inv, ok := MatrixInverse4x4(s.view); ok {
+	if inv, ok := metrics2.MatrixInverse4x4(s.view); ok {
 		copy(s.invView[:], inv[:])
 	}
 	return s.projPtr, s.viewPtr, s.invViewPtr
@@ -434,7 +435,7 @@ func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY flo
 		tx, ty, tz, 1, // Col 3
 	}
 	var invView [16]float32
-	if inv, ok := MatrixInverse4x4(s.view); ok {
+	if inv, ok := metrics2.MatrixInverse4x4(s.view); ok {
 		invView = inv
 	}
 	return s.proj, s.view, invView

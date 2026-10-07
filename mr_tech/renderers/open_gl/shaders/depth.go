@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -98,7 +99,7 @@ type Depth struct {
 	flashMap         *DepthMap
 	shadowLights     []*DepthMap
 	shadows          bool
-	metrics          *MapMetrics
+	metrics          *metrics2.MapMetrics
 	shadowLightCount uint32
 	matrixEmpty      [16]float32
 	matrixEmptyPtr   *float32
@@ -106,7 +107,7 @@ type Depth struct {
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(ctx api.IContext, m *MapMetrics, shadowLights int) *Depth {
+func NewDepth(ctx api.IContext, m *metrics2.MapMetrics, shadowLights int) *Depth {
 	d := &Depth{
 		ctx:              ctx,
 		metrics:          m,

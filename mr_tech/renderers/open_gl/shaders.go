@@ -46,6 +46,9 @@ type Shaders struct {
 	shadowLight       *shaders.ShadowLight
 	post              *shaders.Post
 	bloom             *shaders.Bloom
+	occlusion         *shaders.Occlusion
+	additive          *shaders.Additive
+	liquid            *shaders.Liquid
 	container         []IShader
 	enableShadows     bool
 	mapMetrics        *metrics.Map
@@ -104,8 +107,11 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.shadowLight = shaders.NewShaderShadowLight(w.ctx, w.cal)
 	w.post = shaders.NewPost(w.ctx)
 	w.bloom = shaders.NewBloom(w.ctx)
+	w.occlusion = shaders.NewOcclusion(w.ctx)
+	w.additive = shaders.NewAdditive(w.ctx)
+	w.liquid = shaders.NewLiquid(w.ctx)
 	w.enableShadows = false
-	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom)
+	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
 	w.SetShadowEnabled(true)
 
 	for _, s := range w.container {
@@ -230,13 +236,13 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	// MAIN OPAQUE
 	w.main.RenderOpaque(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 
-	//TODO COMPLETARE
+	// HW OCCLUSION
 	if hwOcc != nil {
-		hwOcc.RenderQueries(w.main.GetProgramOcclusion(), w.main.GetLocOccView(), w.main.GetLocOccProj(), -1, viewMatrixPtr, projMatrixPtr)
+		w.occlusion.Render(func() { hwOcc.RenderQueries() }, viewMatrixPtr, projMatrixPtr)
 	}
 	// MAIN ADDITIVE
 	if dcAdditive.HasCommands() {
-		w.main.RenderAdditive(dcAdditive.Render)
+		w.additive.RenderAdditive(dcAdditive.Render, w.main.GetVAO(), viewMatrixPtr, projMatrixPtr)
 	}
 
 	// MAIN LIQUID (Refraction & Depth Fog)
@@ -245,7 +251,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
 		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
 		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		w.main.RenderLiquid(dcLiquid.Render, w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH)
+		w.liquid.Render(dcLiquid.Render, w.main.GetVAO(), w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH, viewMatrixPtr, projMatrixPtr)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)

@@ -6,7 +6,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // MainLoc represents an integer-based enumerator used as an identifier for uniform locations within shaders.
@@ -48,11 +47,7 @@ const (
 type Main struct {
 	ctx               api.IContext
 	prgOpaque         uint32
-	prgAdditive       uint32
-	prgLiquid         uint32
 	tableOpaque       [MainLocLast]int32
-	tableAdditive     [MainLocLast]int32
-	tableLiquid       [MainLocLast]int32
 	mainVAO           [mainDoubleBuffer]uint32
 	mainVBO           [mainDoubleBuffer]uint32
 	mainEBO           [mainDoubleBuffer]uint32
@@ -78,7 +73,6 @@ func NewMain(ctx api.IContext, stride int32, metrics *metrics2.Map) *Main {
 	m := &Main{
 		ctx:               ctx,
 		prgOpaque:         0,
-		prgAdditive:       0,
 		emissiveIntensity: 4.0,
 		aoFactor:          0.8,
 		stride:            stride,
@@ -160,8 +154,6 @@ func (s *Main) SetupSamplers() error {
 	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
 
 	// Setup Additive Samplers
-	s.ctx.UseProgram(s.prgAdditive)
-	s.ctx.Uniform1iv(s.GetUniformAdditive(MainLocTexture), 4, &diffuseUnits[0])
 
 	return nil
 }
@@ -171,19 +163,9 @@ func (s *Main) GetProgramOpaque() uint32 {
 	return s.prgOpaque
 }
 
-// GetProgramAdditive returns the program ID associated with additive rendering.
-func (s *Main) GetProgramAdditive() uint32 {
-	return s.prgAdditive
-}
-
 // GetUniformOpaque retrieves the uniform location for the opaque shader program using the given MainLoc identifier.
 func (s *Main) GetUniformOpaque(id MainLoc) int32 {
 	return s.tableOpaque[id]
-}
-
-// GetUniformAdditive returns the additive uniform location associated with the given MainLoc identifier.
-func (s *Main) GetUniformAdditive(id MainLoc) int32 {
-	return s.tableAdditive[id]
 }
 
 // GetVAO returns the Vertex Array Object (VAO) associated with the current frame index.
@@ -199,8 +181,8 @@ func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
 func (s *Main) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragOpaqueId = "main_opaque.frag"
-	const fragAdditiveId = "main_additive.frag"
-	const fragLiquidId = "main_liquid.frag"
+	const vertOccId = "main_occlusion.vert"
+	const fragOccId = "main_occlusion.frag"
 
 	vertexSrc, fragmentOpaqueSrc, err := a.ReadMulti(vertId, fragOpaqueId)
 	if err != nil {
@@ -222,34 +204,6 @@ func (s *Main) Compile(a IAssets) error {
 	if err != nil {
 		return err
 	}
-	// Compile Additive Program
-
-	fragmentAdditiveSrc, err := a.Read(fragAdditiveId)
-	if err != nil {
-		return err
-	}
-	fragAdditiveShader, err := ShaderCompile(s.ctx, fragAdditiveId, string(fragmentAdditiveSrc), api.FRAGMENT_SHADER)
-	if err != nil {
-		return err
-	}
-	s.prgAdditive, err = ShaderCreateProgram(s.ctx, "main_additive", vertexShader, fragAdditiveShader)
-	if err != nil {
-		return err
-	}
-	// Compile Liquid Program
-	fragmentLiquidSrc, err := a.Read(fragLiquidId)
-	if err != nil {
-		return err
-	}
-	fragLiquidShader, err := ShaderCompile(s.ctx, fragLiquidId, string(fragmentLiquidSrc), api.FRAGMENT_SHADER)
-	if err != nil {
-		return err
-	}
-	s.prgLiquid, err = ShaderCreateProgram(s.ctx, "main_liquid", vertexShader, fragLiquidShader)
-	if err != nil {
-		return err
-	}
-
 	// Setup Uniforms Opaque
 	s.tableOpaque[MainLocView] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_view\x00"))
 	s.tableOpaque[MainLocProjection] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_projection\x00"))
@@ -260,29 +214,6 @@ func (s *Main) Compile(a IAssets) error {
 	s.tableOpaque[MainLocEmissiveIntensity] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveIntensity\x00"))
 	s.tableOpaque[MainLocAoFactor] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_aoFactor\x00"))
 	s.tableOpaque[MainLocTime] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_time\x00"))
-
-	// Setup Uniforms Additive
-	s.tableAdditive[MainLocView] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_view\x00"))
-	s.tableAdditive[MainLocProjection] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_projection\x00"))
-	s.tableAdditive[MainLocTexture] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_texture\x00"))
-	s.tableAdditive[MainLocTime] = s.ctx.GetUniformLocation(s.prgAdditive, s.ctx.Str("u_time\x00"))
-
-	s.tableLiquid[MainLocView] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_view\x00"))
-	s.tableLiquid[MainLocProjection] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_projection\x00"))
-	s.tableLiquid[MainLocScreenResolution] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_resolution\x00"))
-	s.tableLiquid[MainLocTexture] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_texture\x00"))
-	s.tableLiquid[MainLocTime] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_time\x00"))
-	s.tableLiquid[MainLocNear] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_near\x00"))
-	s.tableLiquid[MainLocFar] = s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_far\x00"))
-
-	//println("DEBUG LOCATIONS! View:", s.tableLiquid[MainLocView], "Proj:", s.tableLiquid[MainLocProjection], "Time:", s.tableLiquid[MainLocTime])
-
-	s.ctx.UseProgram(s.prgLiquid)
-	texUnits := []int32{0, 1, 2, 3}
-	s.ctx.Uniform1iv(s.tableLiquid[MainLocTexture], 4, &texUnits[0])
-	s.ctx.Uniform1i(s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_refractionTex\x00")), 12)
-	s.ctx.Uniform1i(s.ctx.GetUniformLocation(s.prgLiquid, s.ctx.Str("u_depthTex\x00")), 13)
-	s.ctx.UseProgram(0)
 
 	return nil
 }
@@ -473,71 +404,4 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 	renderGeometry()
 	// disable it immediately to not destroy light passes
 	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
-}
-
-// RenderAdditive configures and executes additive rendering by applying blending settings and invoking the provided geometry rendering function.
-func (s *Main) RenderAdditive(renderGeometry func()) {
-	s.ctx.UseProgram(s.GetProgramAdditive())
-
-	interval := float32(0) //unused
-	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocView), 1, false, &s.view[0])
-	s.ctx.UniformMatrix4fv(s.GetUniformAdditive(MainLocProjection), 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.GetUniformAdditive(MainLocTime), interval)
-
-	s.ctx.DepthMask(false)
-	s.ctx.Enable(api.DEPTH_TEST)
-	s.ctx.DepthFunc(api.LEQUAL)
-	s.ctx.Enable(api.BLEND)
-	s.ctx.BlendFunc(api.ONE, api.ONE)
-
-	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
-
-	renderGeometry()
-
-	s.ctx.Disable(api.BLEND)
-	s.ctx.Enable(api.DEPTH_TEST)
-	s.ctx.DepthFunc(api.LESS)
-	s.ctx.DepthMask(true)
-}
-
-// RenderLiquid executes the rendering of liquid effects using the provided geometry and textures.
-func (s *Main) RenderLiquid(renderGeometry func(), refractionTex, depthTex uint32, transparent bool, fbW, fbH int32) {
-	s.ctx.UseProgram(s.prgLiquid)
-
-	//TODO from config
-	const liquidTimeScale = 0.02
-	interval := float32(textures.GlobalTick()) * liquidTimeScale
-	//TODO from config
-	if transparent {
-		s.ctx.Enable(api.BLEND)
-		s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
-		s.ctx.DepthMask(false) // Do not write to depth buffer
-	} else {
-		s.ctx.Disable(api.BLEND)
-		s.ctx.DepthMask(true)
-	}
-	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocView], 1, false, &s.view[0])
-	s.ctx.UniformMatrix4fv(s.tableLiquid[MainLocProjection], 1, false, &s.proj[0])
-	s.ctx.Uniform1f(s.tableLiquid[MainLocTime], interval)
-	s.ctx.Uniform2f(s.tableLiquid[MainLocScreenResolution], float32(fbW), float32(fbH))
-	s.ctx.Uniform1f(s.tableLiquid[MainLocNear], 0.1)
-	s.ctx.Uniform1f(s.tableLiquid[MainLocFar], 1000.0)
-
-	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
-
-	s.ctx.ActiveTexture(api.TEXTURE12)
-	s.ctx.BindTexture(api.TEXTURE_2D, refractionTex)
-	s.ctx.ActiveTexture(api.TEXTURE13)
-	s.ctx.BindTexture(api.TEXTURE_2D, depthTex)
-
-	renderGeometry()
-
-	// UNBIND TEXTURES TO PREVENT FEEDBACK LOOPS IN POST RESOLVE
-	s.ctx.ActiveTexture(api.TEXTURE12)
-	s.ctx.BindTexture(api.TEXTURE_2D, 0)
-	s.ctx.ActiveTexture(api.TEXTURE13)
-	s.ctx.BindTexture(api.TEXTURE_2D, 0)
-
-	s.ctx.Disable(api.BLEND)
-	s.ctx.DepthMask(true)
 }

@@ -130,21 +130,11 @@ func (hw *OcclusionHW) Add(aabb *physics.AABB, state *OcclusionState) {
 }
 
 // RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
-func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locModel int32, viewMatrixPtr, projMatrixPtr *float32) {
+// RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
+func (hw *OcclusionHW) RenderQueries() {
 	if hw.testsLen == 0 {
 		return
 	}
-
-	// GPU setup for queries
-	hw.ctx.ColorMask(false, false, false, false) // Optional if ColorMask is not available in the API, but useful! If missing, set rgba=false
-	hw.ctx.DepthMask(false)                      // Do not write Z, perform READ test only (LEQUAL)
-
-	hw.ctx.UseProgram(prgOpaque)
-	hw.ctx.UniformMatrix4fv(locView, 1, false, viewMatrixPtr)
-	hw.ctx.UniformMatrix4fv(locProj, 1, false, projMatrixPtr)
-
-	// AABBs are Z-Up (X, Y, Z where Z is height).
-	// The Opaque vertex shader expects Y-Up (X, Z, -Y).
 
 	// Regenerate the VBO buffer with all valid AABBs
 	var allVertices []float32
@@ -205,10 +195,6 @@ func (hw *OcclusionHW) RenderQueries(prgOpaque uint32, locView, locProj, locMode
 		}
 		hw.ctx.BindVertexArray(0)
 	}
-
-	// RESTORE GPU STATE
-	hw.ctx.ColorMask(true, true, true, true)
-	hw.ctx.DepthMask(true)
 
 	// DEFERRED READ-BACK (Non-blocking)
 	for i := 0; i < hw.testsLen; i++ {

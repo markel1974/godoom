@@ -131,7 +131,7 @@ func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
 	glArgs.Set("depth", true)
 	glArgs.Set("stencil", true)
 	glArgs.Set("powerPreference", "high-performance")
-	glArgs.Set("desynchronized", true)
+	//glArgs.Set("desynchronized", true)
 
 	gl := canvas.Call("getContext", "webgl2", glArgs)
 

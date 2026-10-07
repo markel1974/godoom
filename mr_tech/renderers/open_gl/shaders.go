@@ -232,7 +232,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 
 	//TODO COMPLETARE
 	if hwOcc != nil {
-		hwOcc.RenderQueries(w.main.GetProgramOpaque(), w.main.GetLocView(), w.main.GetLocProj(), -1, viewMatrixPtr, projMatrixPtr)
+		hwOcc.RenderQueries(w.main.GetProgramOcclusion(), w.main.GetLocOccView(), w.main.GetLocOccProj(), -1, viewMatrixPtr, projMatrixPtr)
 	}
 	// MAIN ADDITIVE
 	if dcAdditive.HasCommands() {

@@ -54,8 +54,12 @@ func (m *Shadows) Rebuild(width, height int32) {
 	m.updateShadowProj()
 }
 
+func (m *Shadows) Update(mainView *float32, flashOffsetX, flashOffsetY float32) {
+	m.createShadowSpace(mainView, flashOffsetX, flashOffsetY)
+}
+
 // CreateShadowSpace computes the shadow-space matrix by integrating view and projection matrices for shadow mapping.
-func (m *Shadows) CreateShadowSpace(mainView *float32, flashOffsetX, flashOffsetY float32) {
+func (m *Shadows) createShadowSpace(mainView *float32, flashOffsetX, flashOffsetY float32) {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetX, targetY, targetZ := float32(0.0), float32(0.0), -float32(m.flash.GetZFar())

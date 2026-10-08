@@ -26,7 +26,7 @@ type BuilderVolume struct {
 	cal              *model.Calibration
 	visibleVol       *VisibleVolumes
 	modes            []*DrawCommands
-	//occlusion        *OcclusionHW
+	occlusion        *OcclusionHW
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -48,7 +48,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		cal:              calibration,
 		visibleVol:       NewVisibleVols(8192),
 		modes:            make([]*DrawCommands, config.BlendModeLates),
-		//occlusion:        NewOcclusionHW(ctx, 4096),
+		occlusion:        NewOcclusionHW(ctx, 4096),
 		//occBuffer:      NewOcclusionSW(640, 480),
 	}
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
@@ -102,9 +102,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.dcLiquid.DeepReset()
 	w.cSky = nil
 
-	//if w.occlusion != nil {
-	//	w.occlusion.Reset()
-	//}
+	w.occlusion.Reset()
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, fm, px, py, pz)
@@ -214,25 +212,20 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.
 	q := func(object physics.IAABB) bool {
 		thing := object.(model.IThing)
 
-		/*
-			occState := w.occlusion.GetState(thing.GetEntity().GetId())
-			if occState != nil && !occState.IsVisible {
-				w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
-				return false                               // CULLATO! Non generiamo i vertici
-			}
-
-		*/
+		occState := w.occlusion.GetState(thing.GetEntity().GetId())
+		if occState != nil && !occState.IsVisible {
+			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
+			return false                               // CULLATO! Non generiamo i vertici
+		}
 
 		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		/*
-			if faceCount == 0 {
-				w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
-				return false
-			}
-			w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
 
+		if faceCount == 0 {
+			w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
+			return false
+		}
+		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
 
-		*/
 		if faceCount == 0 {
 			return false
 		}
@@ -300,8 +293,8 @@ func (w *BuilderVolume) GetDrawCommandsLiquid() *DrawCommandsRender {
 
 // GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
 func (w *BuilderVolume) GetHWOcclusion() *OcclusionHW {
-	return nil
-	//return w.occlusion
+	//return nil
+	return w.occlusion
 }
 
 /*

@@ -258,7 +258,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dcOpaque.Render, flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(),
+		dcOpaque.Render, w.main.GetVAO(), flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(),
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
@@ -273,14 +273,14 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		//CutOff 0.7, OuterCutOff 0.9
 		w.shadowLight.Render(
-			dcOpaque.Render, lTex, viewPtr, projPtr, invViewPtr, lMatrix,
+			dcOpaque.Render, w.main.GetVAO(), lTex, viewPtr, projPtr, invViewPtr, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
 			factor, falloff, light.OuterCutOff, light.CutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS
-	w.lights.Render(dcOpaque.Render, roomTex, viewPtr, projPtr, invViewPtr, w.mapMetrics.GetRoomSpacePtr(), float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dcOpaque.Render, w.main.GetVAO(), roomTex, viewPtr, projPtr, invViewPtr, w.mapMetrics.GetRoomSpacePtr(), float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights(w.ctx)

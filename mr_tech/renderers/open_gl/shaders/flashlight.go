@@ -176,12 +176,13 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
-func (s *ShadowLight) Render(renderGeometry func(), shadowTex uint32, view, proj, invView, lightSpace *float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32, view, proj, invView, lightSpace *float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
 	if intensity <= 0 {
 		return
 	}
 
 	s.ctx.UseProgram(s.prg)
+	s.ctx.BindVertexArray(vao)
 
 	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, proj)
 	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, view)

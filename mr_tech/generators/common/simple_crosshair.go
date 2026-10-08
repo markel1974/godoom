@@ -51,7 +51,7 @@ func (c *SimpleCrosshair) Create() *config.Thing {
 		"crosshair",
 		geometry.XYZ{X: 0, Y: 0, Z: 0},
 		0,
-		config.ThingHudDef,
+		config.ThingInterfaceDef,
 		1, 0, 0, 0,
 	)
 	thing.OnImpact = func(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {

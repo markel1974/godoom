@@ -184,8 +184,8 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 		thing = NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
 		thing = NewThingItem(th, ct, volume)
-	case config.ThingHudDef:
-		thing = NewThingHud(th, ct, volume)
+	case config.ThingInterfaceDef:
+		thing = NewThingInterface(th, ct, volume)
 	case config.ThingItemDef:
 		thing = NewThingItem(th, ct, volume)
 	default:

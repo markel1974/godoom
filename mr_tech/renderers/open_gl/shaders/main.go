@@ -131,22 +131,6 @@ func (s *Main) Init() error {
 	return nil
 }
 
-// SetupSamplers initializes sampler uniforms for opaque and additive shaders, binding texture units for diffuse and emissive maps.
-func (s *Main) SetupSamplers() error {
-	diffuseUnits := []int32{0, 1, 2, 3}
-	emissiveUnits := []int32{8, 9, 10, 11}
-
-	// Setup Opaque Samplers
-	s.ctx.UseProgram(s.prgOpaque)
-	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
-	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
-
-	// Setup Additive Samplers
-
-	return nil
-}
-
 // GetProgramOpaque returns the program ID used for rendering opaque objects.
 func (s *Main) GetProgramOpaque() uint32 {
 	return s.prgOpaque
@@ -165,6 +149,20 @@ func (s *Main) GetVAO() uint32 {
 func (s *Main) GetLocView() int32 { return s.tableOpaque[MainLocView] }
 
 func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
+
+// SetupSamplers initializes sampler uniforms for opaque and additive shaders, binding texture units for diffuse and emissive maps.
+func (s *Main) SetupSamplers() error {
+	diffuseUnits := []int32{0, 1, 2, 3}
+	emissiveUnits := []int32{8, 9, 10, 11}
+
+	// Setup Opaque Samplers
+	s.ctx.UseProgram(s.prgOpaque)
+	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
+	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
+
+	return nil
+}
 
 // Compile initializes and compiles shader programs for opaque, additive, and liquid rendering using provided asset sources.
 func (s *Main) Compile(a IAssets) error {

@@ -105,9 +105,9 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	w.occlusion.Reset()
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
-	w.pushQVolumes(engine.GetVolumes(), frustumFront, fm, px, py, pz)
-	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, fm, px, py, pz)
-	w.pushQThings(engine.GetThings(), frustumFront, fm)
+	w.pushQVolumes(engine.GetVolumes(), frustumFront, px, py, pz)
+	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, px, py, pz)
+	w.pushQThings(engine.GetThings(), frustumFront)
 
 	w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
 	w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
@@ -116,7 +116,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum, mvp [16]float32, camX, camY, camZ float64) {
+func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physics.Frustum, camX, camY, camZ float64) {
 	//w.occBuffer.Clear()
 
 	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
@@ -187,7 +187,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *physi
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
 // It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, mvp [16]float32, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *physics.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare(pX, pY, pZ)
 	counter := 0
@@ -206,77 +206,79 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum, mvp [16]float32) {
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *physics.Frustum) {
 	counter := 0
 
-	q := func(object physics.IAABB) bool {
-		thing := object.(model.IThing)
+	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
+		lerp := float32(lp)
+		yaw := float32(thing.GetAngle())
+		tPosX, tPosY, zBot := thing.GetDisplacement()
+		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+		faces := *pFaces
+		nextFaces := *pNextFaces
 
+		for fx := 0; fx < faceCount; fx++ {
+			face := faces[fx]
+			mat := face.GetMaterial()
+			matObj := face.GetMaterialObj()
+			if mat == nil || matObj == nil {
+				continue
+			}
+			tId := float32(0)
+			if tId = mat.GetIdentifier(); tId < 0 {
+				tId, _ = w.tex.Get(mat)
+				mat.SetIdentifier(tId)
+			}
+			p := face.GetPoints()
+			u, v := face.GetUV()
+			nf := nextFaces[fx]
+			np := nf.GetPoints()
+			startIndices := w.fv.GetIndicesLen()
+			id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
+			id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
+			id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
+			w.fv.AddTriangle(id0, id1, id2)
+
+			currentIndices := w.fv.GetIndicesLen()
+			if startIndices != currentIndices {
+				blendMode := matObj.BlendMode()
+				targetDc := w.modes[blendMode]
+				targetDc.Compute(startIndices, currentIndices, matObj)
+				startIndices = currentIndices
+			}
+		}
+	}
+
+	qOcclusion := func(object physics.IAABB) bool {
+		thing := object.(model.IThing)
 		occState := w.occlusion.GetState(thing.GetEntity().GetId())
 		if occState != nil && !occState.IsVisible {
 			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
 			return false                               // CULLATO! Non generiamo i vertici
 		}
-
-		pFaces, faceCount, pNextFaces, _, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
 		if faceCount == 0 {
 			w.occlusion.Add(thing.GetAABB(), occState) // Anche se non ha facce, teniamo vivo il test
 			return false
 		}
 		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
 
-		if faceCount == 0 {
-			return false
-		}
-
-		lerp := float32(lp)
-		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetDisplacement()
-		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-
-		pushPassThing := func() {
-			faces := *pFaces
-			nextFaces := *pNextFaces
-
-			for fx := 0; fx < faceCount; fx++ {
-				face := faces[fx]
-				mat := face.GetMaterial()
-				matObj := face.GetMaterialObj()
-				if mat == nil || matObj == nil {
-					continue
-				}
-				tId := float32(0)
-				if tId = mat.GetIdentifier(); tId < 0 {
-					tId, _ = w.tex.Get(mat)
-					mat.SetIdentifier(tId)
-				}
-				p := face.GetPoints()
-				u, v := face.GetUV()
-				nf := nextFaces[fx]
-				np := nf.GetPoints()
-				startIndices := w.fv.GetIndicesLen()
-				id0 := w.fv.AddVertex15(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw)
-				id1 := w.fv.AddVertex15(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw)
-				id2 := w.fv.AddVertex15(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw)
-				w.fv.AddTriangle(id0, id1, id2)
-
-				currentIndices := w.fv.GetIndicesLen()
-				if startIndices != currentIndices {
-					blendMode := matObj.BlendMode()
-					targetDc := w.modes[blendMode]
-					targetDc.Compute(startIndices, currentIndices, matObj)
-					startIndices = currentIndices
-				}
-			}
-		}
-
-		pushPassThing()
+		pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
 		counter++
 		return false
 	}
 
-	things.QueryFrustum(frustumFront, q)
+	qStatic := func(object physics.IAABB) bool {
+		thing := object.(model.IThing)
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if faceCount > 0 {
+			pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
+		}
+		return false
+	}
+
+	things.QueryStatic(qStatic)
+	things.QueryFrustum(frustumFront, qOcclusion)
 
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }

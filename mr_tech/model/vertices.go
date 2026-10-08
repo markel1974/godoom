@@ -11,6 +11,7 @@ const (
 	RenderModeBillboard          = 1.0
 	RenderModeBillboardSpherical = 1.1
 	RenderModeModel3D            = 2.0
+	RenderModeInterface          = 3.0
 )
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.

@@ -1,8 +1,6 @@
 package model
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
@@ -19,55 +17,21 @@ func NewThingHud(things *Things, cfg *config.Thing, volume *Volume) *ThingHud {
 }
 
 // PostMessage sends an ThingEvent instance to the ThingItem's inbox channel for processing.
-func (t *ThingHud) PostMessage(ec *ThingEvent) {
-	t.inbox <- ec
+func (t *ThingHud) PostMessage(_ *ThingEvent) {
 }
 
 // StartLoop begins a goroutine that processes incoming events.
 func (t *ThingHud) StartLoop() {
-	go func() {
-		for {
-			select {
-			case evt := <-t.inbox:
-				switch evt.GetKind() {
-				case StageThinking:
-					t.StageThinking(evt.GetCoords())
-
-					// Stick it right in front of the player's camera!
-					player := t.things.GetPlayer()
-					if player != nil {
-						px, py, pz := player.GetVisualPosition()
-						angle, pitch := player.GetAngle(), player.GetPitch()
-
-						// Distance from camera (e.g., 20 units)
-						dist := 20.0
-
-						// Compute direction vector from angle and pitch
-						dirX := math.Cos(pitch) * math.Cos(angle)
-						dirY := math.Cos(pitch) * math.Sin(angle)
-						dirZ := math.Sin(pitch)
-
-						// Position the HUD element
-						nx := px + dirX*dist
-						ny := py + dirY*dist
-						nz := pz + 40.0 + dirZ*dist // Adjust +40.0 for player eye height
-
-						t.GetEntity().MoveTo(nx, ny, nz)
-					}
-
-				case StageCompute:
-				case StageResolve:
-					t.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
-				case StageApply:
-					t.StageApply(evt.GetSolverJitter())
-				}
-				evt.Done()
-			case <-t.done:
-				return
-			}
-		}
-	}()
 }
 
 func (t *ThingHud) StageThinking(playerX float64, playerY float64, playerZ float64) {
+}
+
+// GetVertices overrides the default GetVertices to use the HUD render mode.
+// The vertex shader will bypass the view matrix completely and place it in screen space.
+func (t *ThingHud) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+	f1, c1, f2, c2, lp, _ := t.ThingBase.GetVertices(tick)
+	// RenderMode 3.0 triggers the 2D HUD screen-space bypass in main.vert!
+	// It doesn't move in the 3D world at all.
+	return f1, c1, f2, c2, lp, RenderModeInterface
 }

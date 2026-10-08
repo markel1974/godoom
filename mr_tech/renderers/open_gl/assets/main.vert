@@ -36,7 +36,7 @@ void main() {
             // SPHERICAL BILLBOARD (Smoke, Projectiles, Plasma)
             // The sprite faces directly towards the camera from any elevation
             if (length(toCamera) < 0.001) {
-                toCamera = vec3(0.0, 0.0, 1.0);
+                toCamera = vec3(0.0, -0.99, 1.0);
             }
             vec3 forward = normalize(toCamera);
             vec3 worldUp = vec3(0.0, 1.0, 0.0);
@@ -52,7 +52,7 @@ void main() {
             // Zero out Y axis: sprite rotates horizontally only and remains grounded
             toCamera.y = 0.0;
             if (length(toCamera) < 0.001) {
-                toCamera = vec3(0.0, 0.0, 1.0); // Safety fallback
+                toCamera = vec3(0.0, -0.99, 1.0); // Safety fallback
             }
             vec3 forward = normalize(toCamera);
             // Right is orthogonal to world Y axis and direction towards the player
@@ -94,6 +94,25 @@ void main() {
         // Scroll UV coordinates to simulate flow
         TexCoords.x += waterTime * WATER_UV_SPEED_X;
         TexCoords.y += waterTime * WATER_UV_SPEED_Y;
+    } else if (aRenderMode >= 2.5 && aRenderMode < 3.5) {
+        // HUD / SCREEN SPACE (2D)
+        // Bypass the world matrix and u_view completely!
+        float aspect = 1.777;
+        float scale = 0.05; // 10x BIGGER so we can definitely see it!
+        float ndcX = (aPos.x * scale) / aspect;
+        float ndcY = (aPos.y - 8.0) * scale;
+        
+        // Z = 0.5 ensures it is perfectly in the middle of the clip volume!
+        // This guarantees it won't be culled by the near or far planes.
+        gl_Position = vec4(ndcX, ndcY, 0.5, 1.0);
+        
+        TexCoords = aTexCoords;
+        ViewPos = vec3(0.0, 0.0, -1.0); 
+        FragDepth = 0.0;
+        FragPosLightRoom = vec4(0.0);
+        FragPosLightFlash = vec4(0.0);
+        IsFullbright = 1.0;
+        return;
     } else {
         worldPos = vec4(aPos, 1.0);
     }

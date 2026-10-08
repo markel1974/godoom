@@ -390,6 +390,12 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		rFace := faces.rFace
 		lFace := faces.lFace
 
+		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
+		if mat := rFace.material; mat != nil && mat.Kind() == int(config.MaterialKindLiquid) {
+			//fmt.Println("Liquid material detected")
+			continue
+		}
+
 		var b BucketType
 		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
 
@@ -405,6 +411,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			//rMaxZ = manifold.RMaxZ
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
+
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
 

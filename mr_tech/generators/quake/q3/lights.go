@@ -138,6 +138,7 @@ func NewLights(entities []*lumps.Entity) *Lights {
 // Create initializes and returns a Light object based on the provided entity,
 // position, and Quake III light properties.
 func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, error) {
+	const maxIntensity = 230.0 //300.0
 	mangleStr, _ := ent.GetProperty("mangle")
 	colorStr, _ := ent.GetProperty("_color")
 	angleStr, _ := ent.GetProperty("angle")
@@ -150,7 +151,7 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 	r, g, b := 1.0, 1.0, 1.0
 	style := _q3LightStyle0
 
-	q3Intensity := 300.0
+	q3Intensity := maxIntensity
 	q3Radius := 0.0
 	coneAngle := 40.0
 	if v, ok := lumps.ParseFloat(lightStr); ok {
@@ -234,15 +235,17 @@ func (l *Lights) Create(ent *lumps.Entity, pos geometry.XYZ) (*config.Light, err
 
 	if kind == config.LightKindSpot {
 		desiredRadius = q1RadiusQuadScaleSpot * (q3Intensity * q3Intensity)
-		desiredBrightness = q3Intensity * 0.12
-
+		desiredBrightness = q3Intensity * 0.001
 		// Q3 angle is the spotlight cone angle.
 		if a, valid := lumps.ParseFloat(angleStr); valid && angle > 0 {
 			coneAngle = a
 		}
 	} else {
+		if q3Intensity > maxIntensity {
+			q3Intensity = maxIntensity
+		}
 		desiredRadius = q1RadiusQuadScalePoint * (q3Intensity * q3Intensity)
-		desiredBrightness = q3Intensity * 0.002
+		desiredBrightness = q3Intensity * 1.38
 	}
 
 	intensity := desiredBrightness

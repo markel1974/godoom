@@ -267,5 +267,10 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	} else {
 		root.Volumes = cVolumes
 	}
+
+	if sun := q3.shaders.GetSun(); sun != nil {
+		root.Lights = append(root.Lights, sun)
+	}
+
 	return nil
 }

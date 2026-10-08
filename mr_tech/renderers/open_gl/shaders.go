@@ -212,9 +212,9 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 		//TODO FROM CONFIG
 		effectiveRadius := float32(4.605) * falloff * factor
 		//TODO WRONG
-		if effectiveRadius < 256.0 {
-			effectiveRadius = 256.0
-		}
+		//if effectiveRadius < 256.0 {
+		//	effectiveRadius = 256.0
+		//}
 		dynaMetrics := w.dynaLightMetrics[lx]
 		dynaMetrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
 		w.dynaLightMatrices[lx] = dynaMetrics.GetSpotLightSpacePtr()

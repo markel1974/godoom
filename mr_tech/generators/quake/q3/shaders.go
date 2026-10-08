@@ -3,8 +3,11 @@ package q3
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/geometry"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
@@ -837,4 +840,48 @@ func (s *Shaders) parseData(data string) {
 		shaderId := strings.TrimSpace(strings.ToLower(shader.name))
 		s.container[shaderId] = shader
 	}
+}
+
+// GetSun searches for a sky shader with q3map_sun or q3map_sunExt and creates a directional light.
+func (s *Shaders) GetSun() *config.Light {
+	for _, k := range s.container {
+		if !s.IsSky(k.name) {
+			continue
+		}
+		var sunParms []string
+		if p, ok := k.q3mapParms["q3map_sunext"]; ok {
+			sunParms = p
+		} else if p, ok = k.q3mapParms["q3map_sun"]; ok {
+			sunParms = p
+		}
+
+		if len(sunParms) >= 6 {
+			r, _ := strconv.ParseFloat(sunParms[0], 64)
+			g, _ := strconv.ParseFloat(sunParms[1], 64)
+			b, _ := strconv.ParseFloat(sunParms[2], 64)
+			intensity, _ := strconv.ParseFloat(sunParms[3], 64)
+			degrees, _ := strconv.ParseFloat(sunParms[4], 64)
+			elevation, _ := strconv.ParseFloat(sunParms[5], 64)
+
+			yaw := degrees * math.Pi / 180.0
+			pitch := elevation * math.Pi / 180.0
+
+			// Light shines down
+			dirX := math.Cos(pitch) * math.Cos(yaw)
+			dirY := math.Cos(pitch) * math.Sin(yaw)
+			dirZ := -math.Sin(pitch)
+
+			brightness := 1.0 + (intensity * 0.005)
+			cl := config.NewConfigLight(geometry.XYZ{X: 0, Y: 0, Z: 0}, brightness, config.LightKindDirectional, 0)
+			cl.R = r
+			cl.G = g
+			cl.B = b
+			cl.DirX = dirX
+			cl.DirY = dirY
+			cl.DirZ = dirZ
+
+			return cl
+		}
+	}
+	return nil
 }

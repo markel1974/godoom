@@ -42,6 +42,11 @@ func (m *Shadows) GetFlashAspect() float32 {
 	return m.shadowAspect
 }
 
+// GetShadowSpacePtr returns a pointer to the shadow space data buffer used for shadow matrix transformations.
+func (m *Shadows) GetShadowSpacePtr() *float32 {
+	return m.shadowSpacePtr
+}
+
 // Rebuild updates shadow dimensions, calculates shadow aspect ratio, and refreshes shadow projection matrices.
 func (m *Shadows) Rebuild(width, height int32) {
 	m.shadowWidth = width   // * 0.5)
@@ -54,6 +59,7 @@ func (m *Shadows) Rebuild(width, height int32) {
 	m.updateShadowProj()
 }
 
+// Update recalculates the shadow-space matrix using the main view matrix and flashlight offset values.
 func (m *Shadows) Update(mainView *float32, flashOffsetX, flashOffsetY float32) {
 	m.createShadowSpace(mainView, flashOffsetX, flashOffsetY)
 }
@@ -91,11 +97,6 @@ func (m *Shadows) createShadowSpace(mainView *float32, flashOffsetX, flashOffset
 
 	MatrixMultiply4x4Ptr(m.shadowViewPtr, m.shadowViewLocalPtr, mainView)
 	MatrixMultiply4x4Ptr(m.shadowSpacePtr, m.shadowProjPtr, m.shadowViewPtr)
-}
-
-// GetShadowSpacePtr returns a pointer to the shadow space data buffer used for shadow matrix transformations.
-func (m *Shadows) GetShadowSpacePtr() *float32 {
-	return m.shadowSpacePtr
 }
 
 // updateShadowProj updates the shadow projection matrix based on the flashlight's field of view, aspect ratio, and z-planes.

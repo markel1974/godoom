@@ -25,7 +25,7 @@ const (
 	ThingThrowableDef
 	ThingKeyDef
 	ThingItemDef
-	ThingHudDef
+	ThingInterfaceDef
 	ThingDoorDef
 	ThingPlatformDef
 	ThingButtonDef

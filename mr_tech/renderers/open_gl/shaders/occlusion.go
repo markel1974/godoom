@@ -87,6 +87,7 @@ func (s *Occlusion) Init() error {
 func (s *Occlusion) Render(renderQueries func(), viewMatrixPtr, projMatrixPtr *float32) {
 	s.ctx.ColorMask(false, false, false, false)
 	s.ctx.DepthMask(false)
+	s.ctx.DepthFunc(api.LEQUAL)
 
 	s.ctx.UseProgram(s.prg)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocView), 1, false, viewMatrixPtr)
@@ -96,4 +97,5 @@ func (s *Occlusion) Render(renderQueries func(), viewMatrixPtr, projMatrixPtr *f
 
 	s.ctx.ColorMask(true, true, true, true)
 	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 }

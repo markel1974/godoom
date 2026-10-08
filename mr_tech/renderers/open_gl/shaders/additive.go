@@ -10,6 +10,7 @@ const (
 	ShaderAdditiveLocProjection = ShaderAdditiveLoc(iota)
 	ShaderAdditiveLocView
 	ShaderAdditiveLocTime
+	ShaderAdditiveLocTexture
 	ShaderAdditiveLocLast
 )
 
@@ -27,6 +28,9 @@ func NewAdditive(ctx api.IContext) *Additive {
 }
 
 func (s *Additive) SetupSamplers() error {
+	s.ctx.UseProgram(s.prg)
+	diffuseUnits := [4]int32{0, 1, 2, 3}
+	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 4, &diffuseUnits[0])
 	return nil
 }
 
@@ -65,6 +69,7 @@ func (s *Additive) Compile(a IAssets) error {
 	s.table[ShaderAdditiveLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 	s.table[ShaderAdditiveLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	s.table[ShaderAdditiveLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
+	s.table[ShaderAdditiveLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
 
 	return nil
 }

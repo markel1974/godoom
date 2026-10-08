@@ -7,18 +7,18 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// OcclusionBuffer represents a 2D depth buffer used for visibility testing within a 3D rendering pipeline.
-type OcclusionBuffer struct {
+// OcclusionSW represents a 2D depth buffer used for visibility testing within a 3D rendering pipeline.
+type OcclusionSW struct {
 	width  int
 	height int
 	depth  []float32 // Memorizza la distanza dalla telecamera (clipW)
 	void   []float32
 }
 
-// NewOcclusionBuffer creates and returns a new OcclusionBuffer with the specified width and height, initializing its depth buffer.
-func NewOcclusionBuffer(width, height int) *OcclusionBuffer {
+// NewOcclusionSW creates and returns a new OcclusionSW with the specified width and height, initializing its depth buffer.
+func NewOcclusionSW(width, height int) *OcclusionSW {
 	s := width * height
-	ob := &OcclusionBuffer{
+	ob := &OcclusionSW{
 		width:  width,
 		height: height,
 		depth:  make([]float32, s),
@@ -32,12 +32,12 @@ func NewOcclusionBuffer(width, height int) *OcclusionBuffer {
 }
 
 // Clear resets all depth values in the occlusion buffer to the maximum float32 value.
-func (ob *OcclusionBuffer) Clear() {
+func (ob *OcclusionSW) Clear() {
 	copy(ob.depth, ob.void)
 }
 
 // RasterizeTriangle rasterize a 3D triangle and updates the depth buffer for occlusion testing.
-func (ob *OcclusionBuffer) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]float32) {
+func (ob *OcclusionSW) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]float32) {
 	pts := [3]geometry.XYZ{p0, p1, p2}
 	var sx, sy, sw [3]float32
 
@@ -102,7 +102,7 @@ func (ob *OcclusionBuffer) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]fl
 }
 
 // IsAABBOccluded determines if a given axis-aligned bounding box (AABB) is occluded based on the occlusion buffer and view matrix.
-func (ob *OcclusionBuffer) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) bool {
+func (ob *OcclusionSW) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) bool {
 	mX, mY, mZ := aabb.GetMinX(), aabb.GetMinY(), aabb.GetMinZ()
 	xX, xY, xZ := aabb.GetMaxX(), aabb.GetMaxY(), aabb.GetMaxZ()
 

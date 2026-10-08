@@ -112,6 +112,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.liquid = shaders.NewLiquid(w.ctx)
 	w.enableShadows = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
+
 	w.SetShadowEnabled(true)
 
 	for _, s := range w.container {

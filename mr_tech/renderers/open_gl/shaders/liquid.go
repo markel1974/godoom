@@ -22,6 +22,7 @@ const (
 	ShaderLiquidLocScreenResolution
 	ShaderLiquidLocNear
 	ShaderLiquidLocFar
+	ShaderLiquidLocTexture
 	ShaderLiquidLocLast
 )
 
@@ -44,12 +45,14 @@ func NewLiquid(ctx api.IContext) *Liquid {
 func (s *Liquid) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 
-	locRefraction := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_refractionTexture\x00"))
+	diffuseUnits := [4]int32{0, 1, 2, 3}
+	s.ctx.Uniform1iv(s.GetUniform(ShaderLiquidLocTexture), 4, &diffuseUnits[0])
+	locRefraction := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_refractionTex\x00"))
 	if locRefraction != -1 {
 		s.ctx.Uniform1i(locRefraction, 12)
 	}
 
-	locDepth := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTexture\x00"))
+	locDepth := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTex\x00"))
 	if locDepth != -1 {
 		s.ctx.Uniform1i(locDepth, 13)
 	}
@@ -95,9 +98,10 @@ func (s *Liquid) Compile(a IAssets) error {
 	s.table[ShaderLiquidLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 	s.table[ShaderLiquidLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	s.table[ShaderLiquidLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
-	s.table[ShaderLiquidLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
+	s.table[ShaderLiquidLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_resolution\x00"))
 	s.table[ShaderLiquidLocNear] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_near\x00"))
 	s.table[ShaderLiquidLocFar] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_far\x00"))
+	s.table[ShaderLiquidLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
 
 	return nil
 }
@@ -144,4 +148,7 @@ func (s *Liquid) Render(renderGeometry func(), vao uint32, refractionTex, depthT
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.ActiveTexture(api.TEXTURE13)
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+
+	s.ctx.Disable(api.BLEND)
+	s.ctx.DepthMask(true)
 }

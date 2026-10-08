@@ -49,7 +49,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		visibleVol:       NewVisibleVols(8192),
 		modes:            make([]*DrawCommands, config.BlendModeLates),
 		//occlusion:        NewOcclusionHW(ctx, 4096),
-		//occBuffer:      NewOcclusionBuffer(640, 480),
+		//occBuffer:      NewOcclusionSW(640, 480),
 	}
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive

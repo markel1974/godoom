@@ -194,6 +194,7 @@ func (hw *OcclusionHW) RenderQueries() {
 			}
 		}
 		hw.ctx.BindVertexArray(0)
+		hw.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
 	}
 
 	// DEFERRED READ-BACK (Non-blocking)

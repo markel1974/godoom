@@ -107,7 +107,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 }
 
 // RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-func (w *RenderOpenGL) RenderStart(fbW int, fbH int) {
+func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int) {
 	w.engine.Compute(w.player, w.vi)
 	w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 	cSky := w.builder.GetSkyTexture()
@@ -133,7 +133,7 @@ func (w *RenderOpenGL) RenderStart(fbW int, fbH int) {
 		//	fmt.Println("SKY DEBUG: Name=", cSky.GetName(), " Layer=", skyLayer, " Enabled=", skyEnabled, " U=", skyU, " V=", skyV)
 		//}
 	}
-	w.shaders.Render(dcOpaque, dcAdditive, dcLiquid, hwOcc, w.vi, int32(fbW), int32(fbH), vert, vertLen, indices, indicesLen, skyEnabled, skyLayer, skyU, skyV, light, lightsCount, shadowLights, shadowLightsCount)
+	w.shaders.Render(dcOpaque, dcAdditive, dcLiquid, hwOcc, w.vi, int32(fbW), int32(fbH), int32(winW), int32(winH), vert, vertLen, indices, indicesLen, skyEnabled, skyLayer, skyU, skyV, light, lightsCount, shadowLights, shadowLightsCount)
 }
 
 // BuilderUpdate increments the buildersCounter and updates the current builder using a round-robin approach.

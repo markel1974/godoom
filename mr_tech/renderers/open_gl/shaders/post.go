@@ -158,7 +158,8 @@ func (s *Post) Prepare(fbw, fbh int32) {
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
-func (s *Post) Render(bloomTex uint32, _, _ int32) {
+func (s *Post) Render(bloomTex uint32, _, _ int32, winW int32, winH int32) {
+	s.ctx.Viewport(0, 0, winW, winH)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	s.ctx.Disable(api.DEPTH_TEST)
 

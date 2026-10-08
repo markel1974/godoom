@@ -98,7 +98,7 @@ type Window struct {
 	scrollX               float64
 	scrollY               float64
 	renderPrepareFn       func() error
-	renderStartFn         func(int, int)
+	renderStartFn         func(int, int, int, int)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
@@ -350,12 +350,7 @@ func (w *Window) Start() {
 
 		canvasWidth := getCanvasWidth.Invoke(w.canvas).Int()
 		canvasHeight := getCanvasHeight.Invoke(w.canvas).Int()
-		if canvasWidth > 0 && canvasHeight > 0 && (w.width != canvasWidth || w.height != canvasHeight) {
-			w.width = canvasWidth
-			w.height = canvasHeight
-		}
-
-		w.renderStartFn(w.width, w.height)
+		w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight)
 		var up, down, left, right bool
 
 		if w.scrollX != 0 || w.scrollY != 0 {

@@ -98,7 +98,7 @@ type Window struct {
 	scrollX               float64
 	scrollY               float64
 	renderPrepareFn       func() error
-	renderStartFn         func(int, int, int, int)
+	renderStartFn         func(int, int, int, int, bool)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
@@ -332,13 +332,29 @@ func (w *Window) Start() {
 
 	tracker := js.Global().Get("window").Get("gameMouseTracker")
 
+	// 60 FPS target
+	const targetFPS = 120
+	const targetFrameDuration = 1000.0 / targetFPS // ms
+
+	var lastTime float64
+	var accumulator float64
+
 	var renderFrame js.Func
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		now := js.Global().Get("performance").Call("now").Float()
+
+		if lastTime == 0 {
+			lastTime = now
+		}
+
+		delta := now - lastTime
+		lastTime = now
+		accumulator += delta
+
 		w.Begin()
 
 		w.mouseX += tracker.Get("x").Float()
 		w.mouseY += tracker.Get("y").Float()
-		// Reset in JS
 		tracker.Set("x", 0)
 		tracker.Set("y", 0)
 
@@ -350,71 +366,69 @@ func (w *Window) Start() {
 
 		canvasWidth := getCanvasWidth.Invoke(w.canvas).Int()
 		canvasHeight := getCanvasHeight.Invoke(w.canvas).Int()
-		w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight)
-		var up, down, left, right bool
 
-		if w.scrollX != 0 || w.scrollY != 0 {
-			if w.scrollY < 0 { // Web wheel delta negative means scroll up
-				up = true
-			} else if w.scrollY > 0 {
-				down = true
+		// Esegui update logica solo se è passato almeno un frame a 60fps
+		for accumulator >= targetFrameDuration {
+			var up, down, left, right bool
+
+			if w.scrollX != 0 || w.scrollY != 0 {
+				if w.scrollY < 0 {
+					up = true
+				} else if w.scrollY > 0 {
+					down = true
+				}
 			}
-		}
 
-		impulse := 0.06
-		for v, isDown := range w.keysDown {
-			if !isDown {
-				continue
+			impulse := 0.06
+			for v, isDown := range w.keysDown {
+				if !isDown {
+					continue
+				}
+				switch v {
+				case KeyW, KeyUp:
+					up = true
+				case KeyS, KeyDown:
+					down = true
+				case KeyA, KeyLeft:
+					left = true
+				case KeyD, KeyRight:
+					right = true
+				case KeyL:
+					w.increaseFlashFactorFn()
+				case KeyK:
+					w.decreaseFlashFactorFn()
+				}
 			}
-			switch v {
-			case KeyW:
-				up = true
-			case KeyUp:
-				up = true
-			case KeyS:
-				down = true
-			case KeyDown:
-				down = true
-			case KeyA:
-				left = true
-			case KeyLeft:
-				left = true
-			case KeyD:
-				right = true
-			case KeyRight:
-				right = true
-			case KeyL:
-				w.increaseFlashFactorFn()
-			case KeyK:
-				w.decreaseFlashFactorFn()
+
+			w.playerMovesFn(impulse, up, down, left, right)
+
+			if w.JustPressed(KeyO) {
+				w.playerThrowFn()
 			}
-		}
+			if w.JustPressed(KeyP) {
+				w.playerDuckingToggleFn()
+			}
+			if w.JustPressed(KeyC) {
+				w.enableClearFn()
+			}
+			if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
+				w.playerJumpFn(true)
+			}
+			if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
+				w.playerFireFn()
+			}
+			if w.JustPressed(KeyN) {
+				w.toggleShadowsFn()
+			}
 
-		w.playerMovesFn(impulse, up, down, left, right)
+			w.UpdateInputAndSwap()
 
-		if w.JustPressed(KeyO) {
-			w.playerThrowFn()
-		}
-		if w.JustPressed(KeyP) {
-			w.playerDuckingToggleFn()
-		}
-		if w.JustPressed(KeyC) {
-			w.enableClearFn()
-		}
-		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
-			w.playerJumpFn(true)
-		}
-		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
-			w.playerFireFn()
-		}
-		if w.JustPressed(KeyM) {
-			//mouseConnected = !mouseConnected
-		}
-		if w.JustPressed(KeyN) {
-			w.toggleShadowsFn()
-		}
+			accumulator -= targetFrameDuration
 
-		w.UpdateInputAndSwap()
+			jump := accumulator > targetFrameDuration
+			// Rendering (puoi farlo ogni frame o solo ogni “step” logico)
+			w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight, jump)
+		}
 
 		if !w.Closed() {
 			reqAnimFrame.Invoke(renderFrame)
@@ -423,5 +437,6 @@ func (w *Window) Start() {
 		}
 		return nil
 	})
+
 	reqAnimFrame.Invoke(renderFrame)
 }

@@ -112,8 +112,11 @@ func (w *RenderOpenGL) RenderPrepare() error {
 }
 
 // RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int) {
+func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int, advance bool) {
 	w.engine.Compute(w.player, w.vi)
+	if advance {
+		return
+	}
 	w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 	cSky := w.builder.GetSkyTexture()
 	vert, vertLen, indices, indicesLen := w.builder.GetVertices()

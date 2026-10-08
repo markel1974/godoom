@@ -12,7 +12,7 @@ const (
 	// SegmentUnknown represents an unspecified or undefined configuration type in the context of segment definition.
 	SegmentUnknown = iota
 
-	// SegmentWall represents a configuration segment identified as a wall within the level's geometry or structure.
+	// SegmentWall represents a configuration segment identified as a wall within the level's geometry or structure.c
 	SegmentWall
 )
 

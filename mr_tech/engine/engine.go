@@ -117,11 +117,13 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	textures.Tick()
 }
 
+/*
 // Traverse processes the given ViewMatrix through the portal system, returning a list of compiled volumes and their count.
 func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledVolume, int) {
 	cs, count := e.portal.Traverse(fbw, fbh, vi)
 	return cs, count
 }
+*/
 
 // Build generates and retrieves the list of compiled volumes, their count, active game things, and lights in the engine.
 func (e *Engine) Build() ([]*model.CompiledVolume, int) {

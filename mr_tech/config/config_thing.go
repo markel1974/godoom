@@ -50,9 +50,9 @@ type Thing struct {
 	GForce         float64       `json:"gForce"`
 	Model3DEntry   *Model3DEntry `json:"md1"`
 	Model3D        *Model3D      `json:"md3"`
-	Liquid         *Liquid       `json:"liquid"`
-	MultiSprite    *MultiSprite  `json:"multiSprite"`
-	Sprite         *Sprite       `json:"sprite"`
+	//Liquid         *Liquid       `json:"liquid"`
+	MultiSprite *MultiSprite `json:"multiSprite"`
+	Sprite      *Sprite      `json:"sprite"`
 
 	OnThinking  ThinkingFunc
 	OnCollision CollisionFunc

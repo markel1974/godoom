@@ -42,8 +42,6 @@ func VerticesFactory(thing IThing, cfg *config.Thing, materials *Materials) IVer
 		out = NewVertices3DEntry(cfg, materials)
 	} else if cfg.MultiSprite != nil {
 		out = NewVerticesMultiSprite(cfg, materials)
-	} else if cfg.Liquid != nil {
-		out = NewVerticesLiquid(cfg, materials)
 	} else {
 		out = NewVerticesSprite(cfg, materials)
 	}

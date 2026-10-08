@@ -62,7 +62,7 @@ type Window struct {
 	prevJoy, currJoy, tempJoy        GLJoystick
 
 	renderPrepareFn       func() error
-	renderStartFn         func(int, int, int, int)
+	renderStartFn         func(int, int, int, int, bool)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
@@ -683,7 +683,7 @@ func (w *Window) doRun() {
 		w.th.Call(func() {
 			w.Begin()
 			fbW, fbH := w.GetFramebufferSize()
-			w.renderStartFn(fbW, fbH, fbW, fbH)
+			w.renderStartFn(fbW, fbH, fbW, fbH, false)
 		})
 
 		if mouseConnected && w.MouseInsideWindow() {

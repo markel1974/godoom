@@ -255,13 +255,13 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	enableAdditiveLights(w.ctx)
 
 	// FLASHLIGHTS
-	fConeStart := float32(w.flash.GetConeStart())
-	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dcOpaque.Render, w.main.GetVAO(), flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(),
-		0, flashX, flashY, 0.0,
+		dcOpaque.Render, w.main.GetVAO(), flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(), 0,
+		flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
-		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
+		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()),
+		float32(w.flash.GetConeStart()), float32(w.flash.GetConeEnd()),
+		float32(fbW), float32(fbH))
 
 	// DYNAMIC LIGHTS
 	for lx := int32(0); lx < shadowLightsNum; lx++ {

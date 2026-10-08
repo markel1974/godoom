@@ -396,19 +396,19 @@ func (w *Window) Start() {
 			w.playerThrowFn()
 		}
 		if w.JustPressed(KeyP) {
-			w.playerFireFn()
+			w.playerDuckingToggleFn()
 		}
 		if w.JustPressed(KeyC) {
 			w.enableClearFn()
 		}
 		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
-			w.playerDuckingToggleFn()
-		}
-		if w.JustPressed(KeySpace) {
-			w.playerJumpFn(false)
-		}
-		if w.Pressed(MouseButton1) {
 			w.playerJumpFn(true)
+		}
+		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
+			w.playerFireFn()
+		}
+		if w.JustPressed(KeyM) {
+			//mouseConnected = !mouseConnected
 		}
 		if w.JustPressed(KeyN) {
 			w.toggleShadowsFn()

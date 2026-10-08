@@ -60,6 +60,10 @@ type Shaders struct {
 	scaleY            float32
 	dynaLightMatrices []*float32
 	dynaLightMetrics  []*metrics.Spotlights
+	dcOpaque          *DrawCommandsRender
+	dcAdditive        *DrawCommandsRender
+	dcLiquid          *DrawCommandsRender
+	hwOcc             *OcclusionHW
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
@@ -85,13 +89,18 @@ func NewShaders(ctx api.IContext) *Shaders {
 }
 
 // Setup initializes shaders with the provided dimensions and strides, compiles them, and sets up vertex array buffers and samplers.
-func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model.Calibration, tex *Textures) error {
+func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model.Calibration, tex *Textures, dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, dcLiquid *DrawCommandsRender, hwOcc *OcclusionHW) error {
 	w.ctx.Enable(api.MULTISAMPLE)
 	//w.ctx.Enable(gl_api.SAMPLE_ALPHA_TO_COVERAGE)
 	a := &Assets{}
 	w.flash = p.GetFlash()
 	w.tex = tex
 	w.cal = cal
+	w.dcOpaque = dcOpaque
+	w.dcAdditive = dcAdditive
+	w.dcLiquid = dcLiquid
+	w.hwOcc = hwOcc
+
 	w.mapMetrics = metrics.NewMap()
 	w.mapMetrics.SetOrthoSize(float32(w.cal.OrthoSize), float32(w.cal.ZNearRoom), float32(w.cal.ZFarRoom)+4.0)
 	w.mapMetrics.SetMapCenter(float32(w.cal.MapCenterX), float32(w.cal.MapCenterZ), float32(w.cal.LightCamY)+2.0)
@@ -142,7 +151,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 }
 
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsRender, dcLiquid *DrawCommandsRender, hwOcc *OcclusionHW, vi *model.ViewMatrix, fbW int32, fbH int32, winW int32, winH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
+func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32, winH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if (w.w != fbW) || (w.h != fbH) {
 		w.w = fbW
 		w.h = fbH
@@ -224,39 +233,39 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	w.bindTextureBuckets()
 
 	// OMBRE
-	w.depth.Render(dcOpaque.Render, w.main.GetVAO(), fbW, fbH)
+	w.depth.Render(w.dcOpaque.Render, w.main.GetVAO(), fbW, fbH)
 	// SSAO PREPARE
 	w.ssao.Prepare(fbW, fbH)
 	// GEOMETRY
-	w.geometry.Render(dcOpaque.Render)
+	w.geometry.Render(w.dcOpaque.Render)
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN OPAQUE
-	w.main.Render(dcOpaque.Render, viewPtr, projPtr, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
+	w.main.Render(w.dcOpaque.Render, viewPtr, projPtr, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 
 	// HW OCCLUSION
-	if hwOcc != nil {
-		w.occlusion.Render(func() { hwOcc.RenderQueries() }, viewPtr, projPtr)
+	if w.hwOcc != nil {
+		w.occlusion.Render(func() { w.hwOcc.RenderQueries() }, viewPtr, projPtr)
 	}
 	// MAIN ADDITIVE
-	if dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(dcAdditive.Render, w.main.GetVAO(), viewPtr, projPtr)
+	if w.dcAdditive.HasCommands() {
+		w.additive.RenderAdditive(w.dcAdditive.Render, w.main.GetVAO(), viewPtr, projPtr)
 	}
 
 	// MAIN LIQUID (Refraction & Depth Fog)
-	if dcLiquid.HasCommands() {
+	if w.dcLiquid.HasCommands() {
 		// OPTIMIZATION: We DO NOT call w.post.ResolveMSAA here.
 		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
 		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
 		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		w.liquid.Render(dcLiquid.Render, w.main.GetVAO(), w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH, viewPtr, projPtr)
+		w.liquid.Render(w.dcLiquid.Render, w.main.GetVAO(), w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH, viewPtr, projPtr)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)
 
 	// FLASHLIGHTS
 	w.shadowLight.Render(
-		dcOpaque.Render, w.main.GetVAO(), flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(), 0,
+		w.dcOpaque.Render, w.main.GetVAO(), flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(), 0,
 		flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()),
@@ -273,14 +282,14 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		//CutOff 0.7, OuterCutOff 0.9
 		w.shadowLight.Render(
-			dcOpaque.Render, w.main.GetVAO(), lTex, viewPtr, projPtr, invViewPtr, lMatrix,
+			w.dcOpaque.Render, w.main.GetVAO(), lTex, viewPtr, projPtr, invViewPtr, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
 			factor, falloff, light.OuterCutOff, light.CutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS
-	w.lights.Render(dcOpaque.Render, w.main.GetVAO(), roomTex, viewPtr, projPtr, invViewPtr, w.mapMetrics.GetRoomSpacePtr(), float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(w.dcOpaque.Render, w.main.GetVAO(), roomTex, viewPtr, projPtr, invViewPtr, w.mapMetrics.GetRoomSpacePtr(), float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights(w.ctx)

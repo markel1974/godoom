@@ -155,8 +155,9 @@ func NewLights(entities []*lumps.Entity) *Lights {
 
 // CreateLight generates a light source based on an entity's properties, position, and subclass, returning the configured light.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light {
+	const maxIntensity = 230.0
 	kind := config.LightKindAmbient
-	q1Intensity := 300.0
+	q1Intensity := maxIntensity
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default direction: down.
 	coneAngle := 40.0                  // Quake default
 	lightStr, _ := ent.GetProperty("light")
@@ -220,8 +221,11 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 			coneAngle = c
 		}
 	} else {
+		if q1Intensity > maxIntensity {
+			q1Intensity = maxIntensity
+		}
 		desiredRadius = q1RadiusQuadScalePoint * (q1Intensity * q1Intensity)
-		desiredBrightness = q1Intensity * 0.1
+		desiredBrightness = q1Intensity * 0.25
 	}
 
 	// Engine Rule

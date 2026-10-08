@@ -159,8 +159,9 @@ func NewLights(entities []*lumps.Entity) *Lights {
 // CreateLight generates a light source based on a Quake 2 entity's
 // properties, position, and subclass.
 func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light {
+	const maxIntensity = 230.0
 	kind := config.LightKindAmbient
-	q2Intensity := 300.0
+	q2Intensity := maxIntensity
 	dirX, dirY, dirZ := 0.0, 0.0, -1.0 // Default Q2 light direction: down.
 	coneAngle := 10.0                  // qrad3/Q2 default spotlight cone.
 
@@ -248,8 +249,11 @@ func (l *Lights) CreateLight(ent *lumps.Entity, pos geometry.XYZ) *config.Light 
 		desiredRadius = q2RadiusQuadScaleSpot * (q2Intensity * q2Intensity)
 		desiredBrightness = q2Intensity * 1.1
 	} else {
+		if q2Intensity > maxIntensity {
+			q2Intensity = maxIntensity
+		}
 		desiredRadius = q2RadiusQuadScalePoint * (q2Intensity * q2Intensity)
-		desiredBrightness = q2Intensity * 0.4
+		desiredBrightness = q2Intensity * 0.5
 	}
 
 	// Engine rule: radius = falloff * decayConstant * intensity

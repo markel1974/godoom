@@ -376,12 +376,10 @@ func (w *Window) Start() {
 			switch v {
 			case KeyW:
 				up = true
-
 			case KeyUp:
 				up = true
 			case KeyS:
 				down = true
-
 			case KeyDown:
 				down = true
 			case KeyA:

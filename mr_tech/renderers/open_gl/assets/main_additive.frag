@@ -18,8 +18,7 @@ vec4 getDiffuse(vec3 tc) {
     return texture(u_texture[3], vec3(tc.xy, l));
 }
 
-void main()
-{
+void main() {
     vec4 texColor = getDiffuse(TexCoords);
 
     // Fill-rate optimization: discard completely black/transparent pixels

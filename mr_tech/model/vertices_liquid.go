@@ -97,5 +97,5 @@ func (v *VerticesLiquid) GetDisplacement() (float64, float64, float64) {
 
 // GetRenderMode returns a float64 value representing the default renderMode value associated with the VerticesLiquid instance.
 func (v *VerticesLiquid) GetRenderMode() float64 {
-	return RenderModeAnimated
+	return RenderModeLiquid
 }

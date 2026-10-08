@@ -85,7 +85,7 @@ void renderModel3D() {
     gl_Position = u_projection * viewPos;
 }
 
-void renderAnimated() {
+void renderLiquid() {
     vec4 worldPos = vec4(aPos, 1.0);
     worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
     worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
@@ -114,16 +114,15 @@ void renderDefault() {
 
 void main() {
     TexCoords = aTexCoords;
-    if (aRenderMode >= 2.5 && aRenderMode < 3.5) {
-        renderInterface();
-        return;
-    }
-    if (aRenderMode >= 1.0 && aRenderMode < 1.5) {
+
+    if (aRenderMode > 0.4 && aRenderMode < 1.0) {
+        renderLiquid();
+    } else if (aRenderMode >= 1.0 && aRenderMode < 1.5) {
         renderBillboard();
-    } else if (aRenderMode > 1.5 && aRenderMode < 2.5) {
+    } else if (aRenderMode >= 1.5 && aRenderMode < 2.5) {
         renderModel3D();
-    } else if (aRenderMode > 0.4 && aRenderMode < 0.6) {
-        renderAnimated();
+    } else if (aRenderMode >= 2.5 && aRenderMode < 3.5) {
+        renderInterface();
     } else {
         renderDefault();
     }

@@ -270,7 +270,7 @@
             initTouch();
             let mode = document.getElementById("selMode").value;
             let level = document.getElementById("inpLevel").value;
-            go.argv = ["godoom.wasm", "-m", mode, "-l", level];
+            go.argv = ["godoom.wasm", "-m", mode, "-l", level, "-width", "640", "-height", "480"];
             go.run(wasmInstance);
         }, 100);
     }

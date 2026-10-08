@@ -326,6 +326,10 @@ func (w *Window) Start() {
 		panic(err)
 	}
 
+	reqAnimFrame := js.Global().Get("requestAnimationFrame")
+	getClientWidth := js.Global().Call("eval", `(function(c) { return c.clientWidth; })`)
+	getClientHeight := js.Global().Call("eval", `(function(c) { return c.clientHeight; })`)
+
 	tracker := js.Global().Get("window").Get("gameMouseTracker")
 
 	var renderFrame js.Func
@@ -343,6 +347,16 @@ func (w *Window) Start() {
 			w.prevMouseX = w.mouseX
 			w.prevMouseY = w.mouseY
 		}
+
+		clientWidth := getClientWidth.Invoke(w.canvas).Int()
+		clientHeight := getClientHeight.Invoke(w.canvas).Int()
+		if clientWidth > 0 && clientHeight > 0 && (w.width != clientWidth || w.height != clientHeight) {
+			w.width = clientWidth
+			w.height = clientHeight
+			w.canvas.Set("width", w.width)
+			w.canvas.Set("height", w.height)
+		}
+
 		w.renderStartFn(w.width, w.height)
 		var up, down, left, right bool
 
@@ -412,11 +426,11 @@ func (w *Window) Start() {
 		w.UpdateInputAndSwap()
 
 		if !w.Closed() {
-			js.Global().Call("requestAnimationFrame", renderFrame)
+			reqAnimFrame.Invoke(renderFrame)
 		} else {
 			renderFrame.Release()
 		}
 		return nil
 	})
-	js.Global().Call("requestAnimationFrame", renderFrame)
+	reqAnimFrame.Invoke(renderFrame)
 }

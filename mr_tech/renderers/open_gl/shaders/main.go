@@ -1,9 +1,6 @@
 package shaders
 
 import (
-	"math"
-
-	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
@@ -54,12 +51,6 @@ type Main struct {
 	vboBytesCap       [mainDoubleBuffer]int
 	eboBytesCap       [mainDoubleBuffer]int
 	frameIdx          int
-	view              [16]float32
-	proj              [16]float32
-	invView           [16]float32
-	viewPtr           *float32
-	projPtr           *float32
-	invViewPtr        *float32
 	emissiveIntensity float32
 	aoFactor          float32
 	stride            int32
@@ -78,9 +69,7 @@ func NewMain(ctx api.IContext, stride int32, metrics *metrics2.Map) *Main {
 		stride:            stride,
 		metrics:           metrics,
 	}
-	m.viewPtr = &m.view[0]
-	m.projPtr = &m.proj[0]
-	m.invViewPtr = &m.invView[0]
+
 	return m
 }
 
@@ -181,8 +170,6 @@ func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
 func (s *Main) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragOpaqueId = "main_opaque.frag"
-	const vertOccId = "main_occlusion.vert"
-	const fragOccId = "main_occlusion.frag"
 
 	vertexSrc, fragmentOpaqueSrc, err := a.ReadMulti(vertId, fragOpaqueId)
 	if err != nil {
@@ -252,128 +239,8 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, s.ctx.Ptr(indices))
 }
 
-// UpdateUniforms3d computes and updates projection, view, and inverse view matrices for 3D rendering.
-// It uses the provided view matrix and scaling factors for calculations and returns the matrices.
-func (s *Main) UpdateUniforms3d(vi *model.ViewMatrix, scaleX float32, scaleY float32) (*float32, *float32, *float32) {
-	// Acquire angles
-	sinY, cosY := vi.GetAngleFull()
-	pitch := -vi.GetPitch()
-	roll := vi.GetRoll()
-	// Sine and Cosine of Pitch and Roll
-	sinP, cosP := math.Sin(pitch), math.Cos(pitch)
-	sinR, cosR := math.Sin(roll), math.Cos(roll)
-	// Calculate camera base vectors (Quake-style True 3D)
-	// Start from pure Yaw orientation mapped for OpenGL, and apply Pitch (up/down)
-	// Forward vector (The direction the camera is looking)
-	fX := float32(cosY * cosP)
-	fY := float32(sinP)
-	fZ := float32(-sinY * cosP)
-	// Temporary Up vector (Tilted by Pitch, but without Roll)
-	upX := float32(-cosY * sinP)
-	upY := float32(cosP)
-	upZ := float32(sinY * sinP)
-	// Temporary Right vector (Always parallel to the floor before Roll)
-	rightX := float32(sinY)
-	rightY := float32(0)
-	rightZ := float32(cosY)
-	// Apply Roll (Bobbing/Tilt), rotate Right and Up vectors around the Forward axis
-	rX := rightX*float32(cosR) + upX*float32(sinR)
-	rY := rightY*float32(cosR) + upY*float32(sinR)
-	rZ := rightZ*float32(cosR) + upZ*float32(sinR)
-
-	uX := upX*float32(cosR) - rightX*float32(sinR)
-	uY := upY*float32(cosR) - rightY*float32(sinR)
-	uZ := upZ*float32(cosR) - rightZ*float32(sinR)
-
-	// Spatial Mapping and Translation
-	// Transform position from Model (Z-Up) to OpenGL space (Y-Up)
-	viX, viY, viZ := vi.GetView()
-	ex := float32(viX)
-	ey := float32(viZ)
-	ez := float32(-viY)
-	// View Matrix Translation (Inverse dot product)
-	tx := -(rX*ex + rY*ey + rZ*ez)
-	ty := -(uX*ex + uY*ey + uZ*ez)
-	tz := fX*ex + fY*ey + fZ*ez // Note: positive because OpenGL looks toward -F
-	// Pure Projection Matrix (No Pitch Shearing)
-	zFarRoom := s.metrics.GetRoomZFar()
-	zNearRoom := s.metrics.GetRoomZNear()
-	proj := [16]float32{
-		scaleX, 0, 0, 0,
-		0, scaleY, 0, 0,
-		0, 0, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
-		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
-	}
-	copy(s.proj[:], proj[:])
-	// View Matrix (Standard OpenGL Column-Major Layout)
-	view := [16]float32{
-		rX, uX, -fX, 0, // Column 0 (Screen X vector)
-		rY, uY, -fY, 0, // Column 1 (Screen Y vector)
-		rZ, uZ, -fZ, 0, // Column 2 (Screen Z vector)
-		tx, ty, tz, 1, // Column 3 (Positional translation)
-	}
-	copy(s.view[:], view[:])
-	// Matrix inversion (Useful for dynamic Skyboxes or advanced Frustum Culling)
-	if inv, ok := metrics2.MatrixInverse4x4(s.view); ok {
-		copy(s.invView[:], inv[:])
-	}
-	return s.projPtr, s.viewPtr, s.invViewPtr
-}
-
-// UpdateUniforms2d updates the 2D projection and view matrices based on the provided view matrix and scaling factors.
-// Returns the updated projection matrix, view matrix, and the inverse view matrix.
-func (s *Main) UpdateUniforms2d(vi *model.ViewMatrix, scaleX float32, scaleY float32) ([16]float32, [16]float32, [16]float32) {
-	pitchShear := float32(-vi.GetPitch())
-	sinA, cosA := vi.GetAngleFull()
-	// Base Forward (Z) and Right (X) vectors from Yaw only
-	fX, fZ := float32(cosA), float32(-sinA)
-	rX, rZ := float32(sinA), float32(cosA)
-	// Roll
-	roll := float32(vi.GetRoll())
-	sinR, cosR := float32(math.Sin(float64(roll))), float32(math.Cos(float64(roll)))
-	// Rotate Right (X) and Up (Y) vectors around the Forward (Z) axis
-	// Original local Up was (0, 1, 0)
-	// Original local Right was (rX, 0, rZ)
-	// New Right vector (X)
-	newRx := rX * cosR
-	newRy := sinR
-	newRz := rZ * cosR
-	// New Up vector (Y)
-	newUx := -rX * sinR
-	newUy := cosR
-	newUz := -rZ * sinR
-
-	viX, viY, viZ := vi.GetView()
-	ex, ey, ez := float32(viX), float32(viZ), float32(-viY)
-	// Translation uses the new oriented vectors to shift the world
-	tx := -(newRx*ex + newRy*ey + newRz*ez)
-	ty := -(newUx*ex + newUy*ey + newUz*ez)
-	// Up/Right rotate around Forward, Dir is unchanged
-	tz := -((-fX)*ex + (-fZ)*ez)
-	zFarRoom := s.metrics.GetRoomZFar()
-	zNearRoom := s.metrics.GetRoomZNear()
-	s.proj = [16]float32{
-		-scaleX, 0, 0, 0,
-		0, scaleY, 0, 0,
-		0, pitchShear, (zFarRoom + zNearRoom) / (zNearRoom - zFarRoom), -1,
-		0, 0, (2 * zFarRoom * zNearRoom) / (zNearRoom - zFarRoom), 0,
-	}
-	// Updated View Matrix (Column-Major)
-	s.view = [16]float32{
-		newRx, newUx, -fX, 0, // Col 0
-		newRy, newUy, 0, 0, // Col 1
-		newRz, newUz, -fZ, 0, // Col 2
-		tx, ty, tz, 1, // Col 3
-	}
-	var invView [16]float32
-	if inv, ok := metrics2.MatrixInverse4x4(s.view); ok {
-		invView = inv
-	}
-	return s.proj, s.view, invView
-}
-
-// RenderOpaque executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
-func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
+// Render executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
+func (s *Main) Render(renderGeometry func(), view, proj *float32, ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
 	interval := float32(0) //unused
 	// target FBO preparation
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
@@ -383,8 +250,8 @@ func (s *Main) RenderOpaque(renderGeometry func(), ssaoBlurTex uint32, targetFbo
 
 	s.ctx.UseProgram(s.GetProgramOpaque())
 
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, &s.view[0])
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, &s.proj[0])
+	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), interval)
 
 	s.ctx.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))

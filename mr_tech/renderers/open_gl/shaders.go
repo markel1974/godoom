@@ -162,6 +162,10 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 
 	px, _, pz := vi.GetView()
 	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
+	w.mapMetrics.Update(vi, w.scaleX, w.scaleY)
+	projPtr := w.mapMetrics.GetProjPtr()
+	viewPtr := w.mapMetrics.GetViewPtr()
+	invViewPtr := w.mapMetrics.GetInvViewPtr()
 
 	//dirX, dirY, dirZ := vi.GetForwardVector()
 	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
@@ -174,12 +178,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	flashTex := w.depth.GetFlashShadowTextures()
 	roomTex := w.depth.GetRoomShadowTextures()
 
-	w.mapMetrics.CreateRoomSpace(vi)
-	roomSpaceMatrixPtr := w.mapMetrics.GetRoomSpacePtr()
-	mainViewMatrixPtr := w.mapMetrics.GetMainViewPtr()
-
-	w.shadowMetrics.CreateShadowSpace(mainViewMatrixPtr, flashX, flashY)
-	shadowSpaceMatrixPtr := w.shadowMetrics.GetShadowSpacePtr()
+	w.shadowMetrics.Update(w.mapMetrics.GetMainViewPtr(), flashX, flashY)
 
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
 		dynaLightsLen := shadowLightsNum * 2
@@ -211,12 +210,10 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		w.dynaLightMatrices[lx] = dynaMetrics.GetSpotLightSpacePtr()
 	}
 
-	projMatrixPtr, viewMatrixPtr, invViewMatrixPtr := w.main.UpdateUniforms3d(vi, w.scaleX, w.scaleY)
-
-	w.depth.UpdateUniforms(roomSpaceMatrixPtr, shadowSpaceMatrixPtr, mainViewMatrixPtr, w.dynaLightMatrices, uint32(shadowLightsNum))
-	w.geometry.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
-	w.ssao.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
-	w.sky.UpdateUniforms(viewMatrixPtr, projMatrixPtr)
+	w.depth.UpdateUniforms(w.mapMetrics.GetRoomSpacePtr(), w.shadowMetrics.GetShadowSpacePtr(), w.mapMetrics.GetMainViewPtr(), w.dynaLightMatrices, uint32(shadowLightsNum))
+	w.geometry.UpdateUniforms(viewPtr, projPtr)
+	w.ssao.UpdateUniforms(viewPtr, projPtr)
+	w.sky.UpdateUniforms(viewPtr, projPtr)
 
 	// MAIN PREPARE (VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen, fbW, fbH)
@@ -234,15 +231,15 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	// SSAO
 	w.ssao.Render(w.blur.GetProgram(), w.main.GetVAO(), w.sky.GetVAO(), w.post.GetFBO(), skyEnabled)
 	// MAIN OPAQUE
-	w.main.RenderOpaque(dcOpaque.Render, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
+	w.main.Render(dcOpaque.Render, viewPtr, projPtr, w.ssao.GetSSAOBlurTexture(), w.post.GetFBO(), fbW, fbH)
 
 	// HW OCCLUSION
 	if hwOcc != nil {
-		w.occlusion.Render(func() { hwOcc.RenderQueries() }, viewMatrixPtr, projMatrixPtr)
+		w.occlusion.Render(func() { hwOcc.RenderQueries() }, viewPtr, projPtr)
 	}
 	// MAIN ADDITIVE
 	if dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(dcAdditive.Render, w.main.GetVAO(), viewMatrixPtr, projMatrixPtr)
+		w.additive.RenderAdditive(dcAdditive.Render, w.main.GetVAO(), viewPtr, projPtr)
 	}
 
 	// MAIN LIQUID (Refraction & Depth Fog)
@@ -251,7 +248,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
 		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
 		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		w.liquid.Render(dcLiquid.Render, w.main.GetVAO(), w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH, viewMatrixPtr, projMatrixPtr)
+		w.liquid.Render(dcLiquid.Render, w.main.GetVAO(), w.post.GetColorBuffer(), w.post.GetDepthBuffer(), true, fbW, fbH, viewPtr, projPtr)
 	}
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)
@@ -260,7 +257,7 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 	fConeStart := float32(w.flash.GetConeStart())
 	fConeEnd := float32(w.flash.GetConeEnd())
 	w.shadowLight.Render(
-		dcOpaque.Render, flashTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, shadowSpaceMatrixPtr,
+		dcOpaque.Render, flashTex, viewPtr, projPtr, invViewPtr, w.shadowMetrics.GetShadowSpacePtr(),
 		0, flashX, flashY, 0.0,
 		flashDirX, flashDirY, -1.0,
 		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()), fConeStart, fConeEnd, float32(fbW), float32(fbH))
@@ -275,14 +272,14 @@ func (w *Shaders) Render(dcOpaque *DrawCommandsRender, dcAdditive *DrawCommandsR
 		wDirX, wDirY, wDirZ := light.DirX, light.DirY, light.DirZ
 		//CutOff 0.7, OuterCutOff 0.9
 		w.shadowLight.Render(
-			dcOpaque.Render, lTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, lMatrix,
+			dcOpaque.Render, lTex, viewPtr, projPtr, invViewPtr, lMatrix,
 			1, wPosX, wPosY, wPosZ,
 			wDirX, wDirY, wDirZ,
 			factor, falloff, light.OuterCutOff, light.CutOff, float32(fbW), float32(fbH),
 		)
 	}
 	// LIGHTS
-	w.lights.Render(dcOpaque.Render, roomTex, viewMatrixPtr, projMatrixPtr, invViewMatrixPtr, roomSpaceMatrixPtr, float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
+	w.lights.Render(dcOpaque.Render, roomTex, viewPtr, projPtr, invViewPtr, w.mapMetrics.GetRoomSpacePtr(), float32(vi.GetLightIntensity()), float32(fbW), float32(fbH))
 
 	// DISABLE ADDITIVE LIGHTS
 	disableAdditiveLights(w.ctx)

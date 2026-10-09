@@ -6,7 +6,7 @@ import "math"
 Limiti Matematici dell'Implementazione Attuale
 Assenza di Dinamica Rotazionale (Torque e Inerzia)
 Il modulo Cinematic descrive il moto traslazionale di un punto materiale, non la dinamica di un corpo rigido vero e proprio.
-Manca totalmente il concetto di Momento d'Inerzia (tensore d'inerzia $I$), Velocità Angolare ($\omega$) e Momento Torcente ($\tau$).
+Manca totalmente il concetto di Momento d'Inerzia (tensore d'inerzia I), Velocità Angolare (omega) e Momento Torcente (tau).
 Attualmente, quando calcoli gli impulsi in ResolveImpact, assumi che la forza colpisca sempre esattamente il centro di massa dell'oggetto.
 In un motore fisico generico, l'impulso applicato a una distanza $\vec{r}$ dal centro di massa deve generare
 una rotazione $\Delta\omega = I^{-1} (\vec{r} \times \vec{J})$.

@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 const (
@@ -20,7 +21,7 @@ type IVertices interface {
 
 	GetVolume() *Volume
 
-	GetAABB() *physics.AABB
+	GetAABB() *aabb.AABB
 
 	GetEntity() *physics.Entity
 

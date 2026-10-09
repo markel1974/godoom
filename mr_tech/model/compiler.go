@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -144,7 +144,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	modelSectorId := 0
 	var container []*Sector
 	var fixSegments []*Segment
-	facesTree := physics.NewAABBTree(1024, epsilon)
+	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetMaterial(nil)
 
 	ve := NewSectorsEdges(epsilon)
@@ -258,7 +258,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		}
 		bestDistSq := math.MaxFloat64
 		var bestNeighborSegment *Segment
-		facesTree.QueryOverlaps(segment, func(object physics.IAABB) bool {
+		facesTree.QueryOverlaps(segment, func(object aabb.IAABB) bool {
 			overlapFace, ok := object.(*Segment)
 			if !ok {
 				return false
@@ -490,7 +490,7 @@ func (r *Compiler) compile3d(volumes []*config.Volume, anim *Materials) []*Volum
 	var container []*Volume
 	var fixFaces []*Face
 	modelSectorId := 0
-	facesTree := physics.NewAABBTree(1024, 0.001)
+	facesTree := aabb.NewTree(1024, 0.001)
 	for _, cv := range volumes {
 		// cv.Id and cv.Tag come from the BSP parser
 		volume := NewVolumeConcrete(modelSectorId, cv.Id, cv.Tag)

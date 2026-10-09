@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // OcclusionSW represents a 2D depth buffer used for visibility testing within a 3D rendering pipeline.
@@ -102,7 +102,7 @@ func (ob *OcclusionSW) RasterizeTriangle(p0, p1, p2 geometry.XYZ, mvp [16]float3
 }
 
 // IsAABBOccluded determines if a given axis-aligned bounding box (AABB) is occluded based on the occlusion buffer and view matrix.
-func (ob *OcclusionSW) IsAABBOccluded(aabb *physics.AABB, mvp [16]float32) bool {
+func (ob *OcclusionSW) IsAABBOccluded(aabb *aabb.AABB, mvp [16]float32) bool {
 	mX, mY, mZ := aabb.GetMinX(), aabb.GetMinY(), aabb.GetMinZ()
 	xX, xY, xZ := aabb.GetMaxX(), aabb.GetMaxY(), aabb.GetMaxZ()
 

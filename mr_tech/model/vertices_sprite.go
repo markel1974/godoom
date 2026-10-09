@@ -4,6 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -98,7 +99,7 @@ func (v *VerticesSprite) GetEntity() *physics.Entity {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the VerticesSprite, represented by its associated entity.
-func (v *VerticesSprite) GetAABB() *physics.AABB {
+func (v *VerticesSprite) GetAABB() *aabb.AABB {
 	return v.volume.GetEntity().GetAABB()
 }
 

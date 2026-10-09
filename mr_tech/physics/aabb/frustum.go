@@ -1,4 +1,4 @@
-package physics
+package aabb
 
 // Frustum represents a view frustum in 3D space, defined by six planes.
 type Frustum struct {

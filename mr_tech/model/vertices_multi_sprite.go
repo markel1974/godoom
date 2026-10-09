@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -53,7 +54,7 @@ func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
-func (v *VerticesMultiSprite) GetAABB() *physics.AABB {
+func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 	return v.viewVolume.GetEntity().GetAABB()
 }
 

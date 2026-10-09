@@ -1,18 +1,20 @@
 package model
 
-import "github.com/markel1974/godoom/mr_tech/physics"
+import (
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+)
 
 // Lights represents a collection of Light instances managed within a spatial partitioning structure (AABBTree).
 type Lights struct {
 	container []*Light
-	tree      *physics.AABBTree
+	tree      *aabb.Tree
 }
 
 // NewLights initializes and returns a new Lights object with an empty container and a new AABBTree with a capacity of 1024.
 func NewLights() *Lights {
 	l := &Lights{
 		container: make([]*Light, 0),
-		tree:      physics.NewAABBTree(1024, 4.0),
+		tree:      aabb.NewTree(1024, 4.0),
 	}
 	return l
 }
@@ -41,11 +43,11 @@ func (l *Lights) Get() []*Light {
 }
 
 // QueryFrustum performs a spatial query using the specified frustum and invokes the callback for each intersected object.
-func (l *Lights) QueryFrustum(front *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (l *Lights) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	l.tree.QueryFrustum(front, callback)
 }
 
 // QueryMultiFrustum performs a query on the spatial tree using two frustums and invokes a callback for each intersected object.
-func (l *Lights) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (l *Lights) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	l.tree.QueryMultiFrustum(rear, front, callback)
 }

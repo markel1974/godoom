@@ -1,6 +1,8 @@
 package physics
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+)
 
 var _dt float64
 

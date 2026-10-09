@@ -5,7 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -19,7 +19,7 @@ type Light struct {
 	falloff          float64
 	kind             config.LightKind
 	pos              geometry.XYZ
-	aabb             *physics.AABB
+	aabb             *aabb.AABB
 	r                float64
 	g                float64
 	b                float64
@@ -40,7 +40,7 @@ func NewLight() *Light {
 		intensityDefault: 0.0,
 		falloff:          defaultFalloff,
 		kind:             config.LightKindNone,
-		aabb:             physics.NewAABB(),
+		aabb:             aabb.NewAABB(),
 		r:                1.0,
 		g:                1.0,
 		b:                1.0,
@@ -107,7 +107,7 @@ func (cl *Light) GetParent() *Volume {
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) associated with the Light object. Returns a pointer to AABB.
-func (cl *Light) GetAABB() *physics.AABB {
+func (cl *Light) GetAABB() *aabb.AABB {
 	return cl.aabb
 }
 

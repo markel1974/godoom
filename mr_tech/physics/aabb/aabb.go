@@ -1,4 +1,4 @@
-package physics
+package aabb
 
 // IAABB represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.

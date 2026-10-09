@@ -3,7 +3,7 @@ package engine
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -57,12 +57,12 @@ func (e *Engine) GetLights() *model.Lights {
 }
 
 // QueryFrustum checks which objects intersect the provided frustum and invokes the callback for each intersecting object.
-func (e *Engine) QueryFrustum(frustum *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (e *Engine) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	e.volumes.QueryFrustum(frustum, callback)
 }
 
 // QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
-func (e *Engine) QueryMultiFrustum(front, rear *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	e.volumes.QueryMultiFrustum(front, rear, callback)
 }
 

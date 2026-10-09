@@ -2,7 +2,7 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -15,7 +15,7 @@ type Segment struct {
 	tag       string
 	parent    *Sector
 	neighbor  *Sector
-	aabb      *physics.AABB
+	aabb      *aabb.AABB
 }
 
 // NewSegment creates and initializes a new Segment with the specified neighbor, start/end points, tag, and materials.
@@ -25,7 +25,7 @@ func NewSegment(neighbor *Sector, start geometry.XY, end geometry.XY, tag string
 		tag:       tag,
 		minZ:      0,
 		maxZ:      0,
-		aabb:      physics.NewAABB(),
+		aabb:      aabb.NewAABB(),
 		materials: []*textures.Material{nil},
 	}
 	if len(materials) > 0 {
@@ -54,7 +54,7 @@ func (s *Segment) SetParent(parent *Sector) {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) for the segment.
-func (s *Segment) GetAABB() *physics.AABB {
+func (s *Segment) GetAABB() *aabb.AABB {
 	return s.aabb
 }
 

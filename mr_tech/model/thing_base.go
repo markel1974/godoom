@@ -5,7 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
@@ -310,7 +310,7 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 
 	// Usiamo l'origine (pos) e il vettore direzione (dir) calcolato esternamente.
 	// QueryRay richiede invDir (1.0/dir) che viene calcolato internamente.
-	t.things.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, maxDistance, func(object physics.IAABB, distance float64) (float64, bool) {
+	t.things.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, maxDistance, func(object aabb.IAABB, distance float64) (float64, bool) {
 		// Self-hit culling: l'entità che spara non deve colpire se stessa
 		other, ok := object.(IThing)
 		if !ok {

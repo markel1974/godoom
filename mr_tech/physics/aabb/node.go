@@ -1,10 +1,10 @@
-package physics
+package aabb
 
 // AABBNullNode represents an invalid or uninitialized node in an AABBTree, commonly used as a sentinel value.
 const AABBNullNode = 0xffffffff
 
-// AABBNode represents a node in an AABB tree, used for spatial partitioning of objects in a 3D space.
-type AABBNode struct {
+// Node represents a node in an AABB tree, used for spatial partitioning of objects in a 3D space.
+type Node struct {
 	aabb            *AABB
 	object          IAABB
 	parentNodeIndex uint
@@ -13,9 +13,9 @@ type AABBNode struct {
 	nextNodeIndex   uint
 }
 
-// NewAABBNode creates and returns a new instance of an AABBNode with default uninitialized values.
-func NewAABBNode() *AABBNode {
-	node := &AABBNode{
+// NewNode creates and returns a new instance of an Node with default uninitialized values.
+func NewNode() *Node {
+	node := &Node{
 		aabb:            &AABB{},
 		object:          nil,
 		parentNodeIndex: AABBNullNode,
@@ -26,7 +26,7 @@ func NewAABBNode() *AABBNode {
 	return node
 }
 
-// IsLeaf checks if the current AABBNode is a leaf node by verifying if its leftNodeIndex is equal to AABBNullNode.
-func (a *AABBNode) IsLeaf() bool {
+// IsLeaf checks if the current Node is a leaf node by verifying if its leftNodeIndex is equal to AABBNullNode.
+func (a *Node) IsLeaf() bool {
 	return a.leftNodeIndex == AABBNullNode
 }

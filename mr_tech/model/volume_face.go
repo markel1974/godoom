@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -13,7 +13,7 @@ type Face struct {
 	id       int
 	parent   *Volume
 	tag      string
-	aabb     *physics.AABB
+	aabb     *aabb.AABB
 	tri      [3]geometry.XYZ
 	n        geometry.XYZ
 	nAbs     geometry.XYZ
@@ -28,7 +28,7 @@ func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face
 	out := &Face{
 		tag:      tag,
 		material: material,
-		aabb:     physics.NewAABB(),
+		aabb:     aabb.NewAABB(),
 		tri:      tri,
 	}
 	out.Rebuild()
@@ -123,7 +123,7 @@ func (s *Face) Rebuild() {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
-func (s *Face) GetAABB() *physics.AABB {
+func (s *Face) GetAABB() *aabb.AABB {
 	return s.aabb
 }
 

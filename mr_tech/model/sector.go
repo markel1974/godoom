@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -29,7 +30,7 @@ type Sector struct {
 	segmentCount int
 	light        *Light
 	entity       *physics.Entity
-	segmentsTree *physics.AABBTree
+	segmentsTree *aabb.Tree
 	slopeF       *Slope
 	slopeC       *Slope
 }
@@ -51,7 +52,7 @@ func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*
 		segmentCount: 0,
 		light:        nil,
 		entity:       physics.NewEntity(concreteMass, concreteRestitution, concreteFriction, concreteGForce),
-		segmentsTree: physics.NewAABBTree(64, 0.0),
+		segmentsTree: aabb.NewTree(64, 0.0),
 		slopeF:       nil,
 		slopeC:       nil,
 	}
@@ -77,7 +78,7 @@ func (s *Sector) GetEntity() *physics.Entity {
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) of the Sector's associated physics entity.
-func (s *Sector) GetAABB() *physics.AABB {
+func (s *Sector) GetAABB() *aabb.AABB {
 	return s.entity.GetAABB()
 }
 

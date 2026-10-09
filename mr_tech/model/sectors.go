@@ -1,13 +1,13 @@
 package model
 
 import (
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Sectors represents a collection of spatial sectors with a tree structure for efficient spatial queries.
 type Sectors struct {
 	container []*Sector
-	tree      *physics.AABBTree
+	tree      *aabb.Tree
 	cache     map[string]*Sector
 	fullZ     bool
 }
@@ -21,7 +21,7 @@ func NewSectors(container []*Sector, fullZ bool) *Sectors {
 	vs := &Sectors{
 		container: container,
 		cache:     cache,
-		tree:      physics.NewAABBTree(uint(len(container)), 4.0),
+		tree:      aabb.NewTree(uint(len(container)), 4.0),
 		fullZ:     fullZ,
 	}
 	return vs
@@ -44,7 +44,7 @@ func (s *Sectors) GetSectors() []*Sector {
 // QueryPoint performs a 2D point query to find and return the Sector containing the point (px, py), or nil if none is found.
 func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	var target *Sector = nil
-	s.tree.QueryPoint2d(px, py, func(object physics.IAABB) bool {
+	s.tree.QueryPoint2d(px, py, func(object aabb.IAABB) bool {
 		sector := object.(*Sector)
 		if target == nil {
 			target = sector

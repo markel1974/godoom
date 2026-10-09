@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -19,7 +19,7 @@ type Things struct {
 	config           []*config.Thing
 	volumes          *Volumes
 	materials        *Materials
-	tree             *physics.AABBTree
+	tree             *aabb.Tree
 	pending          []IThing
 	pendingIdx       atomic.Int32
 	entities         map[uint64]IThing
@@ -42,7 +42,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 	e := &Things{
 		gScale:           gScale,
 		solverIterations: solverIterations,
-		tree:             physics.NewAABBTree(uint(len(cfg)*2), 4.0),
+		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
 		entities:         make(map[uint64]IThing),
 		active:           make([]IThing, defaultLen),
 		container:        make([]IThing, defaultLen),
@@ -84,7 +84,7 @@ func (th *Things) Len() int {
 }
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
-	th.tree.QueryOverlaps(lCage, func(object physics.IAABB) bool {
+	th.tree.QueryOverlaps(lCage, func(object aabb.IAABB) bool {
 		rThing := object.(IThing)
 		if lThing == rThing {
 			return false
@@ -96,11 +96,11 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
-		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt physics.IAABB) bool {
+		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IAABB) bool {
 			rFace := rEnt.(*Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
 			// 3. Query sul BVH del Self
-			lThing.GetVolume().QueryOverlaps(z, func(lEnt physics.IAABB) bool {
+			lThing.GetVolume().QueryOverlaps(z, func(lEnt aabb.IAABB) bool {
 				lFace := lEnt.(*Face)
 				// Integrazione nel Manifold (Assicurati che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
@@ -115,17 +115,17 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
-func (th *Things) QueryMultiFrustum(rear *physics.Frustum, front *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	th.tree.QueryMultiFrustum(rear, front, callback)
 }
 
 // QueryFrustum performs a spatial query within the specified frustum, invoking the callback for each intersected object.
-func (th *Things) QueryFrustum(front *physics.Frustum, callback func(object physics.IAABB) bool) {
+func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
 	th.tree.QueryFrustum(front, callback)
 }
 
 // QueryStatic iterates over all static objects, applying the provided callback function to each object.
-func (th *Things) QueryStatic(callback func(object physics.IAABB) bool) {
+func (th *Things) QueryStatic(callback func(object aabb.IAABB) bool) {
 	for _, st := range th.static {
 		callback(st)
 	}
@@ -162,7 +162,7 @@ func (th *Things) GetActive() ([]IThing, int) {
 // - dirX, dirY, dirZ: Direction vector of the ray.
 // - maxDistance: Maximum distance the ray can travel.
 // - callback: Function invoked for each intersected object, receives the object and its distance as arguments.
-func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object physics.IAABB, distance float64) (float64, bool)) {
+func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IAABB, distance float64) (float64, bool)) {
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 

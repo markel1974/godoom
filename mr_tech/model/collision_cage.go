@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 const (
@@ -458,7 +459,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 }
 
 // computeFace computes the collision interaction with a given face and returns bucket type, distances, penetration, normals, and vertex coordinates.
-func (s *CollisionCage) computeFace(lAABB *physics.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
@@ -811,7 +812,7 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 }
 
 // TranslateCage computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
-func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (physics.IAABB, float64, float64, float64) {
+func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAABB, float64, float64, float64) {
 	lCx, lCy, lCz := s.object.GetEntity().GetCenter()
 	rCx, rCy, rCz := rCage.object.GetEntity().GetCenter()
 	//lCx, lCy, lCz := s.GetAABB().GetCentroid()
@@ -821,7 +822,7 @@ func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (physics.I
 }
 
 // Translate updates an ellipsoid slot's dimensions by applying delta values to the target AABB coordinates in world space.
-func (s *CollisionCage) Translate(slot int, src physics.IAABB, deltaX, deltaY, deltaZ float64) *physics.Entity {
+func (s *CollisionCage) Translate(slot int, src aabb.IAABB, deltaX, deltaY, deltaZ float64) *physics.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
 	lMinX := to.GetMinX() + deltaX
@@ -875,4 +876,4 @@ func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, 
 func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
-func (s *CollisionCage) GetAABB() *physics.AABB { return s.ellipsoid.GetAABB() }
+func (s *CollisionCage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }

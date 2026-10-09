@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
@@ -17,7 +18,7 @@ type Volume struct {
 	tag        string
 	light      *Light
 	entity     *physics.Entity
-	facesTree  *physics.AABBTree
+	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *Sector
 	vertexTags []geometry.XYZ
@@ -32,7 +33,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faces:      make([]*Face, 128),
 		faceCount:  0,
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
-		facesTree:  physics.NewAABBTree(64, 0.0),
+		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]geometry.XYZ, 0),
 	}
 	v.facesPtr = &v.faces
@@ -105,7 +106,7 @@ func (v *Volume) GetEntity() *physics.Entity {
 }
 
 // GetAABB returns the Axis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
-func (v *Volume) GetAABB() *physics.AABB {
+func (v *Volume) GetAABB() *aabb.AABB {
 	return v.entity.GetAABB()
 }
 
@@ -183,7 +184,7 @@ func (v *Volume) SetVertexTag(idx int, vertex geometry.XYZ) {
 	v.vertexTags[idx] = vertex
 }
 
-// GetTagVertex retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
+// GetVertexTag retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
 func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, bool) {
 	if idx >= 0 && idx < len(v.vertexTags) {
 		return v.vertexTags[idx], true
@@ -222,11 +223,11 @@ func (v *Volume) GetCentroid() geometry.XYZ {
 }
 
 // QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.
-func (v *Volume) QueryOverlaps(object physics.IAABB, callback func(object physics.IAABB) bool) {
+func (v *Volume) QueryOverlaps(object aabb.IAABB, callback func(object aabb.IAABB) bool) {
 	v.facesTree.QueryOverlaps(object, callback)
 }
 
-func (v *Volume) QueryPoint(px, py, pz float64, callback func(object physics.IAABB) bool) {
+func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IAABB) bool) {
 	v.facesTree.QueryPoint3d(px, py, pz, callback)
 }
 

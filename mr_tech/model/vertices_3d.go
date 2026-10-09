@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
@@ -146,7 +147,7 @@ func (v *Vertices3D) GetEntity() *physics.Entity {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the `Vertices3D` instance by delegating to its associated entity.
-func (v *Vertices3D) GetAABB() *physics.AABB {
+func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return v.entity.GetAABB()
 }
 

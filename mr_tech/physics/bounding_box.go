@@ -1,6 +1,10 @@
 package physics
 
-import "math"
+import (
+	"math"
+
+	aabb "github.com/markel1974/godoom/mr_tech/physics/aabb"
+)
 
 // BoundingBox represents a 3D rectangular region defined by its position, dimensions, and axis-aligned bounding box (AABB).
 type BoundingBox struct {
@@ -8,7 +12,7 @@ type BoundingBox struct {
 	bottomCenter Point
 	center       Point
 	size         Size
-	aabb         *AABB
+	aabb         *aabb.AABB
 }
 
 // NewBoundingBox initializes and returns a pointer to a BoundingBox with the specified position, dimensions, and depth.
@@ -18,7 +22,7 @@ func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 		bottomCenter: NewPoint(0, 0, 0),
 		center:       NewPoint(0, 0, 0),
 		size:         NewSize(w, h, d),
-		aabb:         NewAABB(),
+		aabb:         aabb.NewAABB(),
 	}
 	r.rebuild()
 	return r
@@ -46,7 +50,7 @@ func (r *BoundingBox) rebuild() {
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the BoundingBox.
-func (r *BoundingBox) GetAABB() *AABB { return r.aabb }
+func (r *BoundingBox) GetAABB() *aabb.AABB { return r.aabb }
 
 // GetWidth returns the width of the bounding box as a float64 value.
 func (r *BoundingBox) GetWidth() float64 { return r.size.GetWidth() }

@@ -1,9 +1,9 @@
-package physics
+package aabb
 
-// AABBTree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
-type AABBTree struct {
+// Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
+type Tree struct {
 	objectNodeIndexMap map[IAABB]uint
-	nodes              []*AABBNode
+	nodes              []*Node
 	rootNodeIndex      uint
 	allocatedNodeCount uint
 	nextFreeNodeIndex  uint
@@ -13,18 +13,18 @@ type AABBTree struct {
 	stack              []uint
 }
 
-// NewAABBTree initializes and returns a new instance of AABBTree with a specified initial node capacity.
-func NewAABBTree(initialSize uint, margin float64) *AABBTree {
+// NewTree initializes and returns a new instance of Tree with a specified initial node capacity.
+func NewTree(initialSize uint, margin float64) *Tree {
 	if initialSize == 0 {
 		initialSize = 1
 	}
-	t := &AABBTree{
+	t := &Tree{
 		rootNodeIndex:      AABBNullNode,
 		allocatedNodeCount: 0,
 		nextFreeNodeIndex:  0,
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
-		nodes:              make([]*AABBNode, initialSize),
+		nodes:              make([]*Node, initialSize),
 		objectNodeIndexMap: make(map[IAABB]uint),
 		stack:              make([]uint, initialSize),
 		margin:             margin,
@@ -32,7 +32,7 @@ func NewAABBTree(initialSize uint, margin float64) *AABBTree {
 	var nodeIndex uint
 
 	for nodeIndex = 0; nodeIndex < initialSize; nodeIndex++ {
-		node := NewAABBNode()
+		node := NewNode()
 		t.nodes[nodeIndex] = node
 		node.nextNodeIndex = nodeIndex + 1
 	}
@@ -42,7 +42,7 @@ func NewAABBTree(initialSize uint, margin float64) *AABBTree {
 }
 
 // GetRoot returns the root AABB of the tree along with a boolean indicating its existence.
-func (a *AABBTree) GetRoot() (*AABB, bool) {
+func (a *Tree) GetRoot() (*AABB, bool) {
 	if a.rootNodeIndex == AABBNullNode {
 		return nil, false
 	}
@@ -50,13 +50,13 @@ func (a *AABBTree) GetRoot() (*AABB, bool) {
 }
 
 // Nodes returns a map linking objects implementing IAABB to their corresponding node indices in the AABB tree.
-func (a *AABBTree) Nodes() map[IAABB]uint {
+func (a *Tree) Nodes() map[IAABB]uint {
 	return a.objectNodeIndexMap
 }
 
-// Clear resets the AABBTree to its initial empty state without deallocating the underlying structures.
+// Clear resets the Tree to its initial empty state without deallocating the underlying structures.
 // It rebuilds the internal free-node list and clears the object map, making it ready for reuse.
-func (a *AABBTree) Clear() {
+func (a *Tree) Clear() {
 	a.rootNodeIndex = AABBNullNode
 	a.allocatedNodeCount = 0
 	a.nextFreeNodeIndex = 0
@@ -74,8 +74,8 @@ func (a *AABBTree) Clear() {
 	a.objectNodeIndexMap = make(map[IAABB]uint)
 }
 
-// InsertObject inserts a new object into the AABBTree, updates its AABB, and associates it with a node index.
-func (a *AABBTree) InsertObject(object IAABB) {
+// InsertObject inserts a new object into the Tree, updates its AABB, and associates it with a node index.
+func (a *Tree) InsertObject(object IAABB) {
 	nodeIndex, node := a.allocateNode()
 	node.object = object
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
@@ -83,8 +83,8 @@ func (a *AABBTree) InsertObject(object IAABB) {
 	a.objectNodeIndexMap[object] = nodeIndex
 }
 
-// RemoveObject removes the specified object from the AABBTree if it exists.
-func (a *AABBTree) RemoveObject(object IAABB) {
+// RemoveObject removes the specified object from the Tree if it exists.
+func (a *Tree) RemoveObject(object IAABB) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
 		a.removeLeaf(nodeIndex)
 		a.deallocateNode(nodeIndex)
@@ -93,7 +93,7 @@ func (a *AABBTree) RemoveObject(object IAABB) {
 }
 
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
-func (a *AABBTree) UpdateObject(object IAABB) {
+func (a *Tree) UpdateObject(object IAABB) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
 		node := a.nodes[nodeIndex]
 		// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
@@ -107,7 +107,7 @@ func (a *AABBTree) UpdateObject(object IAABB) {
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
-func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
+func (a *Tree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
 	testAabb := object.GetAABB()
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
@@ -142,7 +142,7 @@ func (a *AABBTree) QueryOverlaps(object IAABB, callback func(object IAABB) bool)
 }
 
 // QueryPoint2d searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
-func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
+func (a *Tree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -173,7 +173,7 @@ func (a *AABBTree) QueryPoint2d(px, py float64, callback func(object IAABB) bool
 }
 
 // QueryPoint3d searches the tree for objects whose AABBs contain the given 3D point.
-func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool) {
+func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -204,7 +204,7 @@ func (a *AABBTree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) 
 }
 
 // QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
-func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
+func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -236,7 +236,7 @@ func (a *AABBTree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bo
 }
 
 // QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
-func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bool) {
+func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -272,7 +272,7 @@ func (a *AABBTree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB
 // dirX, dirY, dirZ represent the direction vector of the ray.
 // maxDistance specifies the maximum distance for the ray to query.
 // callback is invoked with each intersected object and its distance, and may update the maxDistance dynamically.
-func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) (float64, bool)) {
+func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) (float64, bool)) {
 	// Pre-calcolo delle inverse per la vettorizzazione dello Slab Method
 	invDirX := 1.0 / dirX
 	invDirY := 1.0 / dirY
@@ -313,14 +313,14 @@ func (a *AABBTree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance fl
 }
 
 // allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
-func (a *AABBTree) allocateNode() (uint, *AABBNode) {
+func (a *Tree) allocateNode() (uint, *Node) {
 	if a.nextFreeNodeIndex == AABBNullNode {
 		a.nodeCapacity += a.growthSize
-		nodes := make([]*AABBNode, a.nodeCapacity)
+		nodes := make([]*Node, a.nodeCapacity)
 		copy(nodes, a.nodes)
 		a.nodes = nodes
 		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
-			node := NewAABBNode()
+			node := NewNode()
 			a.nodes[nodeIndex] = node
 			node.nextNodeIndex = nodeIndex + 1
 		}
@@ -340,7 +340,7 @@ func (a *AABBTree) allocateNode() (uint, *AABBNode) {
 }
 
 // deallocateNode removes a node from the tree, marking it as free and linking it to the free list for reuse.
-func (a *AABBTree) deallocateNode(nodeIndex uint) {
+func (a *Tree) deallocateNode(nodeIndex uint) {
 	if len(a.nodes) == 0 {
 		return
 	}
@@ -355,7 +355,7 @@ func (a *AABBTree) deallocateNode(nodeIndex uint) {
 }
 
 // insertLeaf inserts a new leaf node with the given index into the AABB tree, adjusting the tree structure as needed.
-func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
+func (a *Tree) insertLeaf(leafNodeIndex uint) {
 	// if the tree is empty, then we make the root the leaf
 	if a.rootNodeIndex == AABBNullNode {
 		a.rootNodeIndex = leafNodeIndex
@@ -446,8 +446,8 @@ func (a *AABBTree) insertLeaf(leafNodeIndex uint) {
 	a.fixUpwardsTree(treeNodeIndex)
 }
 
-// removeLeaf removes a leaf node from the AABBTree by reassigning its sibling and restructuring the tree as necessary.
-func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
+// removeLeaf removes a leaf node from the Tree by reassigning its sibling and restructuring the tree as necessary.
+func (a *Tree) removeLeaf(leafNodeIndex uint) {
 	// if the leaf is the root then we can just clear the root pointer and return
 	if leafNodeIndex == a.rootNodeIndex {
 		a.rootNodeIndex = AABBNullNode
@@ -489,7 +489,7 @@ func (a *AABBTree) removeLeaf(leafNodeIndex uint) {
 
 // updateLeaf updates the AABB of a leaf node if the new AABB does not fit within the current margin.
 // It removes the leaf, updates its AABB, and reinserts it into the tree.
-func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
+func (a *Tree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	node := a.nodes[leafNodeIndex]
 	// Branch Prediction amichevole: nel 99% dei frame le entità restano nel loro Fat Margin
 	if node.aabb.Contains(newAABB) {
@@ -502,8 +502,8 @@ func (a *AABBTree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	a.insertLeaf(leafNodeIndex)
 }
 
-// fixUpwardsTree recalculates the bounding volumes and heights of nodes moving upwards in the AABBTree from a given node index.
-func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
+// fixUpwardsTree recalculates the bounding volumes and heights of nodes moving upwards in the Tree from a given node index.
+func (a *Tree) fixUpwardsTree(treeNodeIndex uint) {
 	for treeNodeIndex != AABBNullNode {
 		treeNode := a.nodes[treeNodeIndex]
 
@@ -517,7 +517,7 @@ func (a *AABBTree) fixUpwardsTree(treeNodeIndex uint) {
 }
 
 // stackGrow doubles the size of the internal stack and copies existing elements into the expanded stack.
-func (a *AABBTree) stackGrow() {
+func (a *Tree) stackGrow() {
 	newStack := make([]uint, len(a.stack)*2)
 	copy(newStack, a.stack)
 	a.stack = newStack

@@ -5,32 +5,32 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // VertexNode represents a graph vertex with an identifier, 2D position, and an associated axis-aligned bounding box (AABB).
 type VertexNode struct {
 	Id   int
-	aabb *physics.AABB
+	aabb *aabb.AABB
 	geometry.XY
 }
 
 // NewVertexNode creates and returns a new VertexNode with the specified ID and 2D coordinates (XY) initialized with an AABB.
 func NewVertexNode(id int, xy geometry.XY, eps float64) *VertexNode {
-	vn := &VertexNode{Id: id, XY: xy, aabb: physics.NewAABB()}
+	vn := &VertexNode{Id: id, XY: xy, aabb: aabb.NewAABB()}
 	vn.aabb.Rebuild(xy.X-eps, xy.Y-eps, 0, xy.X+eps, xy.Y+eps, 0)
 	return vn
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the VertexNode.
-func (v *VertexNode) GetAABB() *physics.AABB {
+func (v *VertexNode) GetAABB() *aabb.AABB {
 	return v.aabb
 }
 
 // SectorEdges represents a structure that associates a polygon with an AABB tree and its corresponding sector edges.
 type SectorEdges struct {
 	vertexes     geometry.Polygon
-	tree         *physics.AABBTree
+	tree         *aabb.Tree
 	sectorsEdges [][]geometry.Edge
 	eps          float64
 }
@@ -38,7 +38,7 @@ type SectorEdges struct {
 // NewSectorsEdges creates and initializes a new instance of SectorEdges with an empty vertex list and a new AABBTree.
 func NewSectorsEdges(eps float64) *SectorEdges {
 	return &SectorEdges{
-		tree:         physics.NewAABBTree(1024, 4.0),
+		tree:         aabb.NewTree(1024, 4.0),
 		vertexes:     nil,
 		sectorsEdges: nil,
 		eps:          eps,
@@ -48,7 +48,7 @@ func NewSectorsEdges(eps float64) *SectorEdges {
 // getOrAddVertex retrieves the ID of an existing vertex matching the given point or adds a new vertex and returns its ID.
 func (t *SectorEdges) getOrAddVertex(p geometry.XY) int {
 	foundId := -1
-	t.tree.QueryPoint2d(p.X, p.Y, func(object physics.IAABB) bool {
+	t.tree.QueryPoint2d(p.X, p.Y, func(object aabb.IAABB) bool {
 		if v, ok := object.(*VertexNode); ok {
 			if v.X == p.X && v.Y == p.Y {
 				foundId = v.Id

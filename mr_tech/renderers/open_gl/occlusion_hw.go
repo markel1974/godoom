@@ -1,7 +1,7 @@
 package open_gl
 
 import (
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -23,7 +23,7 @@ type OcclusionState struct {
 
 // AABBTest represents a test case for occlusion queries involving an axis-aligned bounding box and its state.
 type AABBTest struct {
-	AABB  *physics.AABB
+	AABB  *aabb.AABB
 	State *OcclusionState
 }
 
@@ -109,7 +109,7 @@ func (hw *OcclusionHW) Reset() {
 }
 
 // Add appends a new AABBTest containing the given AABB and OcclusionState to the tests slice if state is not nil.
-func (hw *OcclusionHW) Add(aabb *physics.AABB, state *OcclusionState) {
+func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
 	if state == nil {
 		return
 	}

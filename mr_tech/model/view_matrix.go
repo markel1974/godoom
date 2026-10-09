@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // HFov represents the horizontal field of view in radians.
@@ -29,15 +29,15 @@ type ViewMatrix struct {
 	swayX           float64
 	swayY           float64
 	swaySensitivity float64
-	front           *physics.Frustum
-	rear            *physics.Frustum
+	front           *aabb.Frustum
+	rear            *aabb.Frustum
 }
 
 // NewViewMatrix creates and returns a new instance of ViewMatrix with default values.
 func NewViewMatrix() *ViewMatrix {
 	return &ViewMatrix{
-		front: physics.NewFrustum(),
-		rear:  physics.NewFrustum(),
+		front: aabb.NewFrustum(),
+		rear:  aabb.NewFrustum(),
 	}
 }
 
@@ -128,18 +128,18 @@ func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
 }
 
 // GetFrustum computes and returns the front and rear frustums of the ViewMatrix based on the provided matrices.
-func (vi *ViewMatrix) GetFrustum(f [16]float32, r [16]float32) (*physics.Frustum, *physics.Frustum) {
+func (vi *ViewMatrix) GetFrustum(f [16]float32, r [16]float32) (*aabb.Frustum, *aabb.Frustum) {
 	return vi.GetFrontFrustum(f), vi.GetRearFrustum(r)
 }
 
 // GetFrontFrustum computes and returns the front frustum based on the given 4x4 view-projection matrix.
-func (vi *ViewMatrix) GetFrontFrustum(f [16]float32) *physics.Frustum {
+func (vi *ViewMatrix) GetFrontFrustum(f [16]float32) *aabb.Frustum {
 	vi.front.Rebuild(f)
 	return vi.front
 }
 
 // GetRearFrustum rebuilds and returns the rear frustum using the provided 4x4 column-major matrix.
-func (vi *ViewMatrix) GetRearFrustum(f [16]float32) *physics.Frustum {
+func (vi *ViewMatrix) GetRearFrustum(f [16]float32) *aabb.Frustum {
 	vi.rear.Rebuild(f)
 	return vi.rear
 }

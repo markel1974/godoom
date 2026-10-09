@@ -681,17 +681,15 @@ func (w *Window) doRun() {
 		cycles := int(accumulator / targetCycleDuration)
 		accumulator -= time.Duration(cycles) * targetCycleDuration
 
+		// 1. Poll events from OS
 		w.th.Call(func() {
-			w.begin()
-			fbW, fbH := w.GetFramebufferSize()
-			for i := 0; i < cycles; i++ {
-				w.renderAdvanceFn()
-			}
-			w.renderStartFn(fbW, fbH, fbW, fbH)
-			glfw.SwapInterval(w.vsync)
-			w.window.SwapBuffers()
 			glfw.PollEvents()
 		})
+
+		// 2. Transfer tempInp -> currInp
+		w.doUpdateInput()
+
+		// 3. Process Input
 
 		if mouseConnected && w.MouseInsideWindow() {
 			mousePos := w.MousePosition()
@@ -765,6 +763,15 @@ func (w *Window) doRun() {
 		//	if d.win.JustPressed(KeyT) {
 		//	d.BuildersUpdate()
 		//}
-		w.doUpdateInput()
+		// 4. Advance Logic & Render
+		w.th.Call(func() {
+			w.begin()
+			fbW, fbH := w.GetFramebufferSize()
+			for i := 0; i < cycles; i++ {
+				w.renderAdvanceFn()
+			}
+			w.renderStartFn(fbW, fbH, fbW, fbH)
+			w.window.SwapBuffers()
+		})
 	}
 }

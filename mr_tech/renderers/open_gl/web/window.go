@@ -324,6 +324,7 @@ func (w *Window) Start() {
 	reqAnimFrame := js.Global().Get("requestAnimationFrame")
 	getCanvasWidth := js.Global().Call("eval", `(function(c) { return c.width; })`)
 	getCanvasHeight := js.Global().Call("eval", `(function(c) { return c.height; })`)
+	getNow := js.Global().Call("eval", `(function() { return performance.now(); })`)
 
 	tracker := js.Global().Get("window").Get("gameMouseTracker")
 
@@ -336,7 +337,7 @@ func (w *Window) Start() {
 
 	var renderFrame js.Func
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		now := js.Global().Get("performance").Call("now").Float()
+		now := getNow.Invoke().Float()
 
 		if lastTime == 0 {
 			lastTime = now
@@ -344,7 +345,27 @@ func (w *Window) Start() {
 
 		delta := now - lastTime
 		lastTime = now
+		if delta < 0 {
+			delta = 0
+		}
+		if delta > 250.0 {
+			delta = 250.0
+		}
+
 		accumulator += delta
+
+		if accumulator < targetFrameDuration {
+			// browser equivalent of time.Sleep + continue
+			if !w.Closed() {
+				reqAnimFrame.Invoke(renderFrame)
+			} else {
+				renderFrame.Release()
+			}
+			return nil
+		}
+
+		cycles := int(accumulator / targetFrameDuration)
+		accumulator -= float64(cycles) * targetFrameDuration
 
 		w.Begin()
 
@@ -362,70 +383,65 @@ func (w *Window) Start() {
 		canvasWidth := getCanvasWidth.Invoke(w.canvas).Int()
 		canvasHeight := getCanvasHeight.Invoke(w.canvas).Int()
 
-		// Esegui update logica solo se è passato almeno un frame a 60fps
-		for accumulator >= targetFrameDuration {
-			var up, down, left, right bool
+		var up, down, left, right bool
 
-			if w.scrollX != 0 || w.scrollY != 0 {
-				if w.scrollY < 0 {
-					up = true
-				} else if w.scrollY > 0 {
-					down = true
-				}
-			}
-
-			impulse := 0.06
-			for v, isDown := range w.keysDown {
-				if !isDown {
-					continue
-				}
-				switch v {
-				case KeyW, KeyUp:
-					up = true
-				case KeyS, KeyDown:
-					down = true
-				case KeyA, KeyLeft:
-					left = true
-				case KeyD, KeyRight:
-					right = true
-				case KeyL:
-					w.increaseFlashFactorFn()
-				case KeyK:
-					w.decreaseFlashFactorFn()
-				}
-			}
-
-			w.playerMovesFn(impulse, up, down, left, right)
-
-			if w.JustPressed(KeyO) {
-				w.playerThrowFn()
-			}
-			if w.JustPressed(KeyP) {
-				w.playerDuckingToggleFn()
-			}
-			if w.JustPressed(KeyC) {
-				w.enableClearFn()
-			}
-			if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
-				w.playerJumpFn(true)
-			}
-			if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
-				w.playerFireFn()
-			}
-			if w.JustPressed(KeyN) {
-				w.toggleShadowsFn()
-			}
-
-			w.UpdateInputAndSwap()
-
-			accumulator -= targetFrameDuration
-
-			w.renderAdvanceFn()
-
-			if jump := accumulator > targetFrameDuration; !jump {
-				w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight)
+		if w.scrollX != 0 || w.scrollY != 0 {
+			if w.scrollY < 0 {
+				up = true
+			} else if w.scrollY > 0 {
+				down = true
 			}
 		}
+
+		impulse := 0.06
+		for v, isDown := range w.keysDown {
+			if !isDown {
+				continue
+			}
+			switch v {
+			case KeyW, KeyUp:
+				up = true
+			case KeyS, KeyDown:
+				down = true
+			case KeyA, KeyLeft:
+				left = true
+			case KeyD, KeyRight:
+				right = true
+			case KeyL:
+				w.increaseFlashFactorFn()
+			case KeyK:
+				w.decreaseFlashFactorFn()
+			}
+		}
+
+		w.playerMovesFn(impulse, up, down, left, right)
+
+		if w.JustPressed(KeyO) {
+			w.playerThrowFn()
+		}
+		if w.JustPressed(KeyP) {
+			w.playerDuckingToggleFn()
+		}
+		if w.JustPressed(KeyC) {
+			w.enableClearFn()
+		}
+		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
+			w.playerJumpFn(true)
+		}
+		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
+			w.playerFireFn()
+		}
+		if w.JustPressed(KeyN) {
+			w.toggleShadowsFn()
+		}
+
+		w.UpdateInputAndSwap()
+
+		for i := 0; i < cycles; i++ {
+			w.renderAdvanceFn()
+		}
+
+		w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight)
 
 		if !w.Closed() {
 			reqAnimFrame.Invoke(renderFrame)

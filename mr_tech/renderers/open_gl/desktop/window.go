@@ -681,43 +681,37 @@ func (w *Window) doRun() {
 	}
 
 	const targetFPS = 120
-	const targetCycleDuration = 1000.0 / targetFPS // ms
-	const maxDelta = float64(250 * time.Millisecond)
+	targetCycleDuration := time.Second / targetFPS
+	maxDelta := 250 * time.Millisecond
 
-	lastTime := float64(time.Now().UnixMilli())
-	var accumulator float64
+	lastTime := time.Now()
+	var accumulator time.Duration
 
 	mouseConnected := true
 	for !w.Closed() {
-		cyclesBacklog := 0
-		now := float64(time.Now().UnixMilli())
-		delta := now - lastTime
+		now := time.Now()
+		delta := now.Sub(lastTime)
+		lastTime = now
 		if delta < 0 {
 			delta = 0
 		}
 		if delta > maxDelta {
 			delta = maxDelta
 		}
-		if delta < targetCycleDuration {
-			time.Sleep(time.Duration(targetCycleDuration-delta) * time.Millisecond)
-			accumulator = 0
-			now = float64(time.Now().UnixMilli())
-		} else {
-			accumulator += delta
-			cyclesBacklog = int(accumulator / targetCycleDuration)
+		accumulator += delta
+		if accumulator < targetCycleDuration {
+			time.Sleep(targetCycleDuration - accumulator)
+			continue
 		}
-		lastTime = now
+		cycles := int(accumulator / targetCycleDuration)
+		accumulator -= time.Duration(cycles) * targetCycleDuration
 
 		w.th.Call(func() {
 			w.Begin()
 			fbW, fbH := w.GetFramebufferSize()
-			if cyclesBacklog > 0 {
-				for i := cyclesBacklog; i > 0; i-- {
-					accumulator -= targetCycleDuration
-					w.renderAdvanceFn()
-				}
+			for i := 0; i < cycles; i++ {
+				w.renderAdvanceFn()
 			}
-			w.renderAdvanceFn()
 			w.renderStartFn(fbW, fbH, fbW, fbH)
 		})
 

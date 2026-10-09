@@ -51,7 +51,7 @@ type Window struct {
 	window                           *glfw.Window
 	cfg                              WindowConfig
 	bounds                           Rect
-	vsync                            bool
+	vsync                            int
 	cursorVisible                    bool
 	cursorInsideWindow               bool
 	restore                          WindowPos
@@ -265,12 +265,16 @@ func (w *Window) Focused() bool {
 
 // SetVSync enables or disables vertical synchronization (VSync) for the window.
 func (w *Window) SetVSync(vsync bool) {
-	w.vsync = vsync
+	if vsync {
+		w.vsync = 1
+	} else {
+		w.vsync = 0
+	}
 }
 
 // VSync returns the current vertical synchronization (VSync) setting for the window.
 func (w *Window) VSync() bool {
-	return w.vsync
+	return w.vsync == 1
 }
 
 // SetCursorVisible sets the visibility of the cursor for the current window based on the provided boolean value.
@@ -346,7 +350,7 @@ func (w *Window) SetClipboard(str string) {
 }
 
 // KeysPressed returns a map indicating the state of each key, where the key is the Button and the value is a boolean.
-func (w *Window) KeysPressed() map[Button]bool {
+func (w *Window) KeysPressed2() map[Button]bool {
 	return w.keysPressed
 }
 
@@ -470,33 +474,6 @@ func (w *Window) initInput() {
 			w.tempInp.typed += string(r)
 		})
 	})
-}
-
-// UpdateInputAndSwap updates input state, swaps buffers, and polls events for a window, with optional vertical sync control.
-func (w *Window) UpdateInputAndSwap() {
-	w.th.Call(func() {
-		w.begin()
-		if w.vsync {
-			glfw.SwapInterval(1)
-		} else {
-			glfw.SwapInterval(0)
-		}
-		w.window.SwapBuffers()
-		glfw.PollEvents()
-	})
-	w.doUpdateInput()
-}
-
-// UpdateInputWait handles input event processing with an optional timeout duration to control wait behavior.
-func (w *Window) UpdateInputWait(timeout time.Duration) {
-	w.th.Call(func() {
-		if timeout <= 0 {
-			glfw.WaitEvents()
-		} else {
-			glfw.WaitEventsTimeout(timeout.Seconds())
-		}
-	})
-	w.doUpdateInput()
 }
 
 // JoystickPresent checks if the specified joystick is currently connected to the system.
@@ -707,12 +684,15 @@ func (w *Window) doRun() {
 		accumulator -= time.Duration(cycles) * targetCycleDuration
 
 		w.th.Call(func() {
-			w.Begin()
+			w.begin()
 			fbW, fbH := w.GetFramebufferSize()
 			for i := 0; i < cycles; i++ {
 				w.renderAdvanceFn()
 			}
 			w.renderStartFn(fbW, fbH, fbW, fbH)
+			glfw.SwapInterval(w.vsync)
+			w.window.SwapBuffers()
+			glfw.PollEvents()
 		})
 
 		if mouseConnected && w.MouseInsideWindow() {
@@ -736,7 +716,7 @@ func (w *Window) doRun() {
 		}
 
 		var impulse = 0.06
-		for v := range w.KeysPressed() {
+		for v := range w.keysPressed {
 			switch v {
 			case KeyEscape:
 				return
@@ -787,6 +767,6 @@ func (w *Window) doRun() {
 		//	if d.win.JustPressed(KeyT) {
 		//	d.BuildersUpdate()
 		//}
-		w.UpdateInputAndSwap()
+		w.doUpdateInput()
 	}
 }

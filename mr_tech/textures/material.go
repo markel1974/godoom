@@ -4,39 +4,6 @@ import (
 	"fmt"
 )
 
-// _tickInterval defines the number of global ticks between frame updates in animations.
-var _tickInterval = uint64(32)
-
-// _globalTick is a monotonically increasing counter used to track global animation or system ticks within the application.
-var _globalTick uint64
-
-var _currentTick uint64
-
-// SetTickInterval sets the tick interval duration in arbitrary units.
-func SetTickInterval(interval uint64) {
-	_tickInterval = interval
-}
-
-func TickInterval() uint64 {
-	return _tickInterval
-}
-
-// Tick increments the global tick counter used for tracking application-wide progression or state updates.
-func Tick() {
-	_globalTick++
-	_currentTick = _globalTick / _tickInterval
-}
-
-func GlobalTick() uint64 {
-	return _globalTick
-}
-
-// TickGrouped calculates the tick grouped by the specified group size and returns the result as an integer.
-func TickGrouped(tick uint64, groupSize int) float64 {
-	frameFloat := float64(tick) / float64(groupSize)
-	return frameFloat
-}
-
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
 type Material struct {
 	blendMode   int
@@ -71,6 +38,9 @@ type Material struct {
 	isLightning     bool
 	isSky           bool
 	isBacksided     bool
+
+	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
+	tickInterval uint64
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
@@ -92,6 +62,8 @@ func NewMaterial(shader string, frames []*Texture, kind int, scaleW, scaleH, u, 
 		scaleH:      scaleH,
 		u:           u,
 		v:           v,
+		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
+		tickInterval: 32,
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -142,17 +114,19 @@ func (m *Material) CurrentFrame() *Texture {
 		if m.clampAnim {
 			return m.clampedFrame()
 		}
-		return m.frames[_currentTick%m.totalFrames]
+		currentTick := GlobalTick() / m.tickInterval
+		return m.frames[currentTick%m.totalFrames]
 	}
 	return m.frame
 }
 
 func (m *Material) clampedFrame() *Texture {
+
 	elapsed := uint64(0)
 	if _globalTick > m.startTick {
 		elapsed = _globalTick - m.startTick
 	}
-	elapsedTick := elapsed / _tickInterval
+	elapsedTick := elapsed / m.tickInterval
 	if elapsedTick >= m.totalFrames-1 {
 		elapsedTick = m.totalFrames - 1
 	}

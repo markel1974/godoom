@@ -2,22 +2,23 @@ package physics
 
 import "sync/atomic"
 
-// dt60 defines the fixed time step duration (in seconds) for 60 frames per second simulations.
-// dt120 defines the fixed time step duration (in seconds) for 120 frames per second simulations.
-const (
-	// dt60 represents the fixed time step duration in seconds, commonly used for 60 frames per second simulations.
-	dt60 float64 = 1.0 / 60.0
+var _dt float64
 
-	// dt120 represents the fixed time step duration equivalent to 1/120th of a second.
-	dt120 float64 = 1.0 / 120.0
-)
+func SetFps(fps uint64) {
+	_dt = 1.0 / (float64(fps) / 2.0)
+}
 
 // _globalId is an internal counter used to generate unique identifiers in a thread-safe manner.
-var _globalId int64 = -1
+var _globalId int64
 
 // GetGlobalId generates and returns a unique globally incremental identifier using atomic operations.
 func GetGlobalId() int64 {
 	return atomic.AddInt64(&_globalId, 1)
+}
+
+func init() {
+	_globalId = -1
+	SetFps(120)
 }
 
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
@@ -32,7 +33,7 @@ func NewEntity(mass, restitution, groundFriction, gForce float64) *Entity {
 	e := &Entity{
 		id:          uint64(GetGlobalId()),
 		BoundingBox: NewBoundingBox(0, 0, 0, 0, 0, 0),
-		Cinematic:   NewCinematic(dt60, mass, restitution, groundFriction, gForce),
+		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, gForce),
 	}
 	return e
 }

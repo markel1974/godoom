@@ -4,13 +4,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics"
-	"github.com/markel1974/godoom/mr_tech/portal"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Engine represents a core game simulation system, managing things, volumes, player, and rendering configurations.
 type Engine struct {
-	portal      *portal.Portal
 	maxQueue    int
 	viewFactor  float64
 	things      *model.Things
@@ -24,7 +22,6 @@ type Engine struct {
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
 func NewEngine(maxQueue int, viewFactor float64) *Engine {
 	return &Engine{
-		portal:     nil,
 		maxQueue:   maxQueue,
 		viewFactor: viewFactor,
 		things:     nil,
@@ -59,11 +56,6 @@ func (e *Engine) GetLights() *model.Lights {
 	return e.lights
 }
 
-// PortalSectorAt returns the volume at the specified index from the portal within the engine.
-func (e *Engine) PortalSectorAt(idx int) *model.Sector {
-	return e.portal.SectorAt(idx)
-}
-
 // QueryFrustum checks which objects intersect the provided frustum and invokes the callback for each intersecting object.
 func (e *Engine) QueryFrustum(frustum *physics.Frustum, callback func(object physics.IAABB) bool) {
 	e.volumes.QueryFrustum(frustum, callback)
@@ -72,11 +64,6 @@ func (e *Engine) QueryFrustum(frustum *physics.Frustum, callback func(object phy
 // QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
 func (e *Engine) QueryMultiFrustum(front, rear *physics.Frustum, callback func(object physics.IAABB) bool) {
 	e.volumes.QueryMultiFrustum(front, rear, callback)
-}
-
-// PortalLen returns the number of volumes currently managed by the Engine.
-func (e *Engine) PortalLen() int {
-	return e.portal.Len()
 }
 
 // Setup initializes the Engine using the provided configuration, creating volumes, player, things, things, and the portal.
@@ -91,16 +78,11 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
-	e.portal = portal.NewPortal(e.maxQueue, e.viewFactor)
-
 	var sectors []*model.Sector
 	for _, v := range e.volumes.GetVolumes() {
 		if sector := v.GetSector(); sector != nil {
 			sectors = append(sectors, sector)
 		}
-	}
-	if err := e.portal.Setup(sectors); err != nil {
-		return err
 	}
 	return nil
 }
@@ -124,12 +106,6 @@ func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.Compil
 	return cs, count
 }
 */
-
-// Build generates and retrieves the list of compiled volumes, their count, active game things, and lights in the engine.
-func (e *Engine) Build() ([]*model.CompiledVolume, int) {
-	cs, count := e.portal.Build()
-	return cs, count
-}
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.
 func (e *Engine) GetCalibration() *model.Calibration {

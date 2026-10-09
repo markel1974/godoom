@@ -656,9 +656,7 @@ func (w *Window) doRun() {
 		panic(err)
 		return
 	}
-
-	const targetFPS = 120
-	targetCycleDuration := time.Second / targetFPS
+	targetCycleDuration := time.Second / time.Duration(w.cfg.Fps)
 	maxDelta := 250 * time.Millisecond
 
 	lastTime := time.Now()

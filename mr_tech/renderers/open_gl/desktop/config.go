@@ -4,6 +4,12 @@ package desktop
 type WindowConfig struct {
 	Title string
 
+	Width int
+
+	Height int
+
+	Fps int
+
 	//Icon []IPicture
 
 	Bounds Rect

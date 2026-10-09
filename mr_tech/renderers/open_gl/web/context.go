@@ -30,6 +30,7 @@ const fnMultiDrawElements = `
 // Context represents a WebGL rendering context, managing WebGL resources and interactions with the underlying JS environment.
 type Context struct {
 	win *Window
+	cfg WindowConfig
 	gl  js.Value
 
 	buffers  ResourceTracker
@@ -140,13 +141,15 @@ type Context struct {
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
-func NewContext(width int, height int) *Context {
+func NewContext(width int, height int, fps int) *Context {
 	cfg := WindowConfig{
 		Width:  width,
 		Height: height,
+		Fps:    fps,
 		VSync:  true,
 	}
 	ctx := &Context{
+		cfg:      cfg,
 		buffers:  NewResourceTracker(),
 		textures: NewResourceTracker(),
 		programs: NewResourceTracker(),

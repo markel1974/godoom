@@ -51,13 +51,11 @@ type RenderOpenGL struct {
 	builder         IBuilder
 	enableClear     bool
 	builders        []IBuilder
-	startWidth      int32
-	startHeight     int32
 	buildersCounter int
 }
 
 // NewRender initializes a new OpenGL rendering instance with the given context and dimensions.
-func NewRender(ctx api.IContext, w, h int32) *RenderOpenGL {
+func NewRender(ctx api.IContext) *RenderOpenGL {
 	r := &RenderOpenGL{
 		ctx:         ctx,
 		engine:      nil,
@@ -65,8 +63,6 @@ func NewRender(ctx api.IContext, w, h int32) *RenderOpenGL {
 		player:      nil,
 		enableClear: false,
 		shaders:     nil,
-		startWidth:  w,
-		startHeight: h,
 	}
 	return r
 }

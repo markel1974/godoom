@@ -32,8 +32,8 @@ func updatePath(mode int, path string) string {
 }
 
 // getContext creates and returns a new graphics context with the specified width and height.
-func getContext(width, height int) api.IContext {
-	return web.NewContext(width, height)
+func getContext(width, height, fps int) api.IContext {
+	return web.NewContext(width, height, fps)
 }
 
 // waitExit prevents the premature exit of a Go program in a Wasm environment where requestAnimationFrame is non-blocking.

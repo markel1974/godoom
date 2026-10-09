@@ -13,7 +13,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
+	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
@@ -121,6 +123,11 @@ func main() {
 	//if full3d {
 	//	cfg.Calibration.Full3d = true
 	//}
+	const fpsTarget = 120
+
+	textures.SetFps(fpsTarget)
+	physics.SetFps(fpsTarget)
+
 	en := engine.NewEngine(maxQueue, 3.0)
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)
@@ -128,8 +135,8 @@ func main() {
 	}
 
 	//ctx := desktop.NewContext(width, height)
-	ctx := getContext(width, height)
-	render := open_gl.NewRender(ctx, int32(width), int32(height))
+	ctx := getContext(width, height, fpsTarget)
+	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return

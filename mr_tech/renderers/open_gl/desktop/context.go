@@ -12,10 +12,11 @@ import (
 // Context represents an abstraction for managing OpenGL state and issuing rendering commands.
 type Context struct {
 	win *Window
+	cfg WindowConfig
 }
 
 // NewContext creates and returns a new instance of Context.
-func NewContext(width int, height int) *Context {
+func NewContext(width int, height int, fps int) *Context {
 	bounds := R(0, 0, float64(width), float64(height))
 	cfg := WindowConfig{
 		Bounds:             bounds,
@@ -24,8 +25,13 @@ func NewContext(width int, height int) *Context {
 		Smooth:             false,
 		Resizable:          true,
 		DisableScissorTest: true,
+		Width:              width,
+		Height:             height,
+		Fps:                fps,
 	}
-	ctx := &Context{}
+	ctx := &Context{
+		cfg: cfg,
+	}
 	ctx.win = NewGLWindow(ctx, cfg)
 	return ctx
 }

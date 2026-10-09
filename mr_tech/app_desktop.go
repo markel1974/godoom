@@ -11,8 +11,8 @@ import (
 )
 
 // getContext creates and returns an OpenGL-like graphics context with the specified width and height.
-func getContext(width, height int) api.IContext {
-	return desktop.NewContext(width, height)
+func getContext(width, height, fps int) api.IContext {
+	return desktop.NewContext(width, height, fps)
 }
 
 // waitExit blocks execution until the rendering process is explicitly terminated, requiring no additional actions here.

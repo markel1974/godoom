@@ -8,15 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
-// WindowConfig defines the configuration options for initializing a window, including size, title, fullscreen, and VSync.
-type WindowConfig struct {
-	Title      string
-	Width      int
-	Height     int
-	Fullscreen bool
-	VSync      bool
-}
-
 // XY represents a 2D point or vector with X and Y coordinates as float64 values.
 type XY struct {
 	X float64
@@ -83,6 +74,7 @@ var codeToButton = map[string]Button{
 type Window struct {
 	canvas js.Value
 	gl     js.Value
+	cfg    WindowConfig
 	closed bool
 	width  int
 	height int
@@ -144,6 +136,7 @@ func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
 	w := &Window{
 		canvas:       canvas,
 		gl:           gl,
+		cfg:          cfg,
 		width:        cfg.Width,
 		height:       cfg.Height,
 		keysDown:     make(map[Button]bool),
@@ -335,8 +328,8 @@ func (w *Window) Start() {
 	tracker := js.Global().Get("window").Get("gameMouseTracker")
 
 	// 60 FPS target
-	const targetFPS = 120
-	const targetFrameDuration = 1000.0 / targetFPS // ms
+
+	targetFrameDuration := 1000.0 / float64(w.cfg.Fps) // ms
 
 	var lastTime float64
 	var accumulator float64

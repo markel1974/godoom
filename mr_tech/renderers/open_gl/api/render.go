@@ -3,7 +3,9 @@ package api
 type IRender interface {
 	RenderPrepare() error
 
-	RenderStart(fbW, fbH, winW, winH int, advance bool)
+	RenderAdvance()
+
+	RenderStart(fbW, fbH, winW, winH int)
 
 	RenderPlayerMouseMove(mouseX float64, mouseY float64)
 

@@ -62,7 +62,8 @@ type Window struct {
 	prevJoy, currJoy, tempJoy        GLJoystick
 
 	renderPrepareFn       func() error
-	renderStartFn         func(int, int, int, int, bool)
+	renderAdvanceFn       func()
+	renderStartFn         func(int, int, int, int)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
@@ -93,6 +94,7 @@ func NewGLWindow(ctx api.IContext, cfg WindowConfig) *Window {
 // Setup initializes rendering functions for the Window object using the provided IRender instance.
 func (w *Window) Setup(r api.IRender) error {
 	w.renderPrepareFn = r.RenderPrepare
+	w.renderAdvanceFn = r.RenderAdvance
 	w.renderStartFn = r.RenderStart
 	w.playerMouseMoveFn = r.RenderPlayerMouseMove
 	w.playerMovesFn = r.RenderPlayerMoves
@@ -678,12 +680,45 @@ func (w *Window) doRun() {
 		return
 	}
 
+	const targetFPS = 120
+	const targetCycleDuration = 1000.0 / targetFPS // ms
+	const maxDelta = float64(250 * time.Millisecond)
+
+	lastTime := float64(time.Now().UnixMilli())
+	var accumulator float64
+
 	mouseConnected := true
 	for !w.Closed() {
+		cyclesBacklog := 0
+		now := float64(time.Now().UnixMilli())
+		delta := now - lastTime
+		if delta < 0 {
+			delta = 0
+		}
+		if delta > maxDelta {
+			delta = maxDelta
+		}
+		if delta < targetCycleDuration {
+			time.Sleep(time.Duration(targetCycleDuration-delta) * time.Millisecond)
+			accumulator = 0
+			now = float64(time.Now().UnixMilli())
+		} else {
+			accumulator += delta
+			cyclesBacklog = int(accumulator / targetCycleDuration)
+		}
+		lastTime = now
+
 		w.th.Call(func() {
 			w.Begin()
 			fbW, fbH := w.GetFramebufferSize()
-			w.renderStartFn(fbW, fbH, fbW, fbH, false)
+			if cyclesBacklog > 0 {
+				for i := cyclesBacklog; i > 0; i-- {
+					accumulator -= targetCycleDuration
+					w.renderAdvanceFn()
+				}
+			}
+			w.renderAdvanceFn()
+			w.renderStartFn(fbW, fbH, fbW, fbH)
 		})
 
 		if mouseConnected && w.MouseInsideWindow() {

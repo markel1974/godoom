@@ -98,7 +98,8 @@ type Window struct {
 	scrollX               float64
 	scrollY               float64
 	renderPrepareFn       func() error
-	renderStartFn         func(int, int, int, int, bool)
+	renderAdvanceFn       func()
+	renderStartFn         func(int, int, int, int)
 	playerMouseMoveFn     func(float64, float64)
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
@@ -306,6 +307,7 @@ func (w *Window) MouseScroll() XY { return XY{X: w.scrollX, Y: w.scrollY} }
 
 func (w *Window) Setup(r api.IRender) error {
 	w.renderPrepareFn = r.RenderPrepare
+	w.renderAdvanceFn = r.RenderAdvance
 	w.renderStartFn = r.RenderStart
 	w.playerMouseMoveFn = r.RenderPlayerMouseMove
 	w.playerMovesFn = r.RenderPlayerMoves
@@ -425,9 +427,11 @@ func (w *Window) Start() {
 
 			accumulator -= targetFrameDuration
 
-			jump := accumulator > targetFrameDuration
-			// Rendering (puoi farlo ogni frame o solo ogni “step” logico)
-			w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight, jump)
+			w.renderAdvanceFn()
+
+			if jump := accumulator > targetFrameDuration; !jump {
+				w.renderStartFn(w.width, w.height, canvasWidth, canvasHeight)
+			}
 		}
 
 		if !w.Closed() {

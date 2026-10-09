@@ -111,12 +111,13 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	return nil
 }
 
-// RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int, advance bool) {
+// RenderAdvance triggers the execution of the engine's computation pipeline with the current player and view matrix state.
+func (w *RenderOpenGL) RenderAdvance() {
 	w.engine.Compute(w.player, w.vi)
-	if advance {
-		return
-	}
+}
+
+// RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
+func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int) {
 	w.builder.Compute(int32(fbW), int32(fbH), w.vi, w.engine)
 	cSky := w.builder.GetSkyTexture()
 	vert, vertLen, indices, indicesLen := w.builder.GetVertices()

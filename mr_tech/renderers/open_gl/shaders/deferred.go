@@ -7,12 +7,37 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
+// deferredDoubleBuffer defines the number of buffers utilized in a double buffering mechanism for deferred rendering.
 const (
 	deferredDoubleBuffer = 2
 )
 
+// DeferredLoc represents a unique identifier for a specific uniform location within a deferred rendering pipeline.
 type DeferredLoc int
 
+// DeferredLocView represents the view matrix location in a deferred rendering pipeline.
+// DeferredLocGPositionDepth represents the position and depth buffer location.
+// DeferredLocGNormal represents the normal buffer location.
+// DeferredLocGAlbedoSpec represents the albedo and specular buffer location.
+// DeferredLocGEmissive represents the emissive buffer location.
+// DeferredLocSSAO represents the screen space ambient occlusion (SSAO) buffer location.
+// DeferredLocScreenResolution represents the screen resolution location.
+// DeferredLocAoFactor represents the ambient occlusion factor location.
+// DeferredLocAmbientLight represents the ambient light factor location.
+// DeferredLocNumLights represents the number of active lights location.
+// DeferredLocShininessWall represents the shininess value for wall materials.
+// DeferredLocShininessFloor represents the shininess value for floor materials.
+// DeferredLocSpecBoostWall represents the specular boost factor for wall materials.
+// DeferredLocSpecBoostFloor represents the specular boost factor for floor materials.
+// DeferredLocFlashSpaceMatrix represents the space transformation matrix for a flashlight.
+// DeferredLocFlashPosView represents the view-space position of the flashlight.
+// DeferredLocFlashSpotDir represents the direction of the flashlight spotlight.
+// DeferredLocFlashCutOff represents the inner cutoff angle of the flashlight spotlight.
+// DeferredLocFlashOuterCutOff represents the outer cutoff angle of the flashlight spotlight.
+// DeferredLocFlashIntensityFactor represents the intensity factor of the flashlight.
+// DeferredLocFlashShadowMap represents the shadow map associated with the flashlight.
+// DeferredLocRoomShadowMap represents the shadow map associated with the room environment.
+// DeferredLocLast represents the last enumeration value for DeferredLoc, used for boundary validation.
 const (
 	DeferredLocView = DeferredLoc(iota)
 	DeferredLocGPositionDepth
@@ -39,6 +64,7 @@ const (
 	DeferredLocLast
 )
 
+// Deferred represents a structure for managing deferred rendering operations in a 3D rendering pipeline.
 type Deferred struct {
 	ctx          api.IContext
 	prg          uint32
@@ -53,6 +79,7 @@ type Deferred struct {
 	vbo uint32
 }
 
+// NewDeferred creates a new Deferred object configured with a rendering context, stride, and calibration data.
 func NewDeferred(ctx api.IContext, stride int32, cal *model.Calibration) *Deferred {
 	return &Deferred{
 		ctx:      ctx,
@@ -62,6 +89,7 @@ func NewDeferred(ctx api.IContext, stride int32, cal *model.Calibration) *Deferr
 	}
 }
 
+// Init initializes the uniform buffer objects used for lighting with dynamic draw usage and prepares them for rendering.
 func (s *Deferred) Init() error {
 	size := 1024 * int(s.stride)
 	s.ctx.GenBuffers(deferredDoubleBuffer, &s.uboLights[0])
@@ -73,6 +101,7 @@ func (s *Deferred) Init() error {
 	return nil
 }
 
+// SetupSamplers initializes OpenGL samplers, binds buffer objects, and configures attributes for rendering a fullscreen quad.
 func (s *Deferred) SetupSamplers() error {
 	s.ctx.Disable(api.DEPTH_TEST)
 	s.ctx.UseProgram(s.prg)
@@ -97,10 +126,12 @@ func (s *Deferred) SetupSamplers() error {
 	return nil
 }
 
+// GetUniform retrieves the uniform location for the specified identifier from the internal table.
 func (s *Deferred) GetUniform(id DeferredLoc) int32 {
 	return s.table[id]
 }
 
+// Compile compiles and links shader programs using provided assets and initializes uniform locations for deferred rendering.
 func (s *Deferred) Compile(a IAssets) error {
 	const vertId = "deferred.vert"
 	const fragId = "deferred.frag"
@@ -161,6 +192,7 @@ func (s *Deferred) Compile(a IAssets) error {
 	return nil
 }
 
+// Prepare initializes the lighting data for the current frame and updates the uniform buffer with the provided light data.
 func (s *Deferred) Prepare(frameLights []float32, numLights int32) {
 	s.activeLights = numLights
 	s.frameIdx = (s.frameIdx + 1) % deferredDoubleBuffer
@@ -171,6 +203,7 @@ func (s *Deferred) Prepare(frameLights []float32, numLights int32) {
 	}
 }
 
+// Render performs the deferred rendering process, applying lighting and shading effects using multiple input textures.
 func (s *Deferred) Render(view *float32, ambient, aoFactor float32, screenW, screenH float32,
 	gPosDepth, gNormal, gAlbedo, gEmissive, ssaoTex, flashShadowTex, roomShadowTex uint32,
 	flashMatrix *float32, flashPosView, flashSpotDir []float32, flashCutOff, flashOuterCutOff, flashIntensity float32) {

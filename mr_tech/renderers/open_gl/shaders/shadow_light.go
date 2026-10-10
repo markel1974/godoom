@@ -7,70 +7,72 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
-// FlashlightLoc represents a uniform location identifier used in the ShadowLight's shader program.
-type FlashlightLoc int
+// ShadowLightLoc represents an integer-based enumeration for shader uniform locations related to shadow and light properties.
+type ShadowLightLoc int
 
-// FlashLocProjection specifies the location of the projection matrix for the flashlight.
-// FlashLocView specifies the location of the view matrix for the flashlight.
-// FlashLocInvView specifies the location of the inverse view matrix for the flashlight.
-// FlashLocFlashSpaceMatrix specifies the location of the flashlight space matrix.
-// FlashLocTexture specifies the location of the flashlight texture.
-// FlashLocNormalMap specifies the location of the flashlight normal map.
-// FlashLocFlashShadowMap specifies the location of the flashlight shadow map.
-// FlashLocScreenResolution specifies the location of the screen resolution data.
-// FlashLocFlashDir specifies the location of the flashlight direction data.
-// FlashLocFlashIntensityFactor specifies the location of the flashlight intensity factor.
-// FlashLocFlashOffset specifies the location of the flashlight offset data.
-// FlashLocFlashConeStart specifies the location of the flashlight cone start parameter.
-// FlashLocFlashConeEnd specifies the location of the flashlight cone end parameter.
-// FlashLocFlashBase specifies the location of the base position of the flashlight.
-// FlashLocEnableShadows specifies the location of the flashlight shadow enable flag.
-// FlashLocShininessWall specifies the location of the wall shininess factor for the flashlight effect.
-// FlashLocShininessFloor specifies the location of the floor shininess factor for the flashlight effect.
-// FlashLocSpecBoostWall specifies the location of the wall specular boost factor for the flashlight effect.
-// FlashLocSpecBoostFloor specifies the location of the floor specular boost factor for the flashlight effect.
-// FlashLocBeamRatioFactor specifies the location of the flashlight beam ratio factor.
-// FlashLocVolumetricSteps specifies the location of the number of volumetric rendering steps for the flashlight.
-// FlashLocLast represents the last flashlight location, marking the end of the enumeration.
+// ShadowLightLocProjection represents the projection location for shadow lighting.
+// ShadowLightLocView represents the view location for shadow lighting.
+// ShadowLightLocInvView represents the inverse view location for shadow lighting.
+// ShadowLightLocFlashSpaceMatrix represents the flash space matrix location for shadow lighting.
+// ShadowLightLocTexture represents the texture location for shadow lighting.
+// ShadowLightLocNormalMap represents the normal map location for shadow lighting.
+// ShadowLightLocFlashShadowMap represents the flash shadow map location for shadow lighting.
+// ShadowLightLocScreenResolution represents the screen resolution location for shadow lighting.
+// ShadowLightLocFlashDir represents the flash direction location for shadow lighting.
+// ShadowLightLocFlashIntensityFactor represents the intensity factor for flash lighting.
+// ShadowLightLocFlashOffset represents the offset location for flash lighting.
+// ShadowLightLocFlashConeStart represents the start of the flash cone for shadow lighting calculations.
+// ShadowLightLocFlashConeEnd represents the end of the flash cone for shadow lighting calculations.
+// ShadowLightLocFalloff represents the falloff factor for shadow lighting.
+// ShadowLightLocEnableShadows represents whether shadows are enabled for shadow lighting.
+// ShadowLightLocShininessWall represents shininess for wall calculations in shadow lighting.
+// ShadowLightLocShininessFloor represents shininess for floor calculations in shadow lighting.
+// ShadowLightLocSpecBoostWall represents the specular boost for walls in shadow lighting.
+// ShadowLightLocSpecBoostFloor represents the specular boost for floors in shadow lighting.
+// ShadowLightLocBeamRatioFactor represents the beam ratio factor for volumetric lighting effects.
+// ShadowLightLocVolumetricSteps represents the number of steps for volumetric lighting calculations.
+// ShadowLightLocIsAbsolute determines if absolute positioning is used for shadow lighting.
+// ShadowLightLocDebugLights enables debugging for lights within the shadow lighting system.
+// ShadowLightLocLast is the last enum value for the shadow lighting locations.
 const (
-	FlashLocProjection = FlashlightLoc(iota)
-	FlashLocView
-	FlashLocInvView
-	FlashLocFlashSpaceMatrix
-	FlashLocTexture
-	FlashLocNormalMap
-	FlashLocFlashShadowMap
-	FlashLocScreenResolution
-	FlashLocFlashDir
-	FlashLocFlashIntensityFactor
-	FlashLocFlashOffset
-	FlashLocFlashConeStart
-	FlashLocFlashConeEnd
-	FlashLocFalloff
-	FlashLocEnableShadows
-	FlashLocShininessWall
-	FlashLocShininessFloor
-	FlashLocSpecBoostWall
-	FlashLocSpecBoostFloor
-	FlashLocBeamRatioFactor
-	FlashLocVolumetricSteps
-	FlashLocIsAbsolute
-	FlashLocDebugLights
-	FlashLocLast
+	ShadowLightLocProjection = ShadowLightLoc(iota)
+	ShadowLightLocView
+	ShadowLightLocInvView
+	ShadowLightLocFlashSpaceMatrix
+	ShadowLightLocTexture
+	ShadowLightLocNormalMap
+	ShadowLightLocFlashShadowMap
+	ShadowLightLocScreenResolution
+	ShadowLightLocFlashDir
+	ShadowLightLocFlashIntensityFactor
+	ShadowLightLocFlashOffset
+	ShadowLightLocFlashConeStart
+	ShadowLightLocFlashConeEnd
+	ShadowLightLocFalloff
+	ShadowLightLocEnableShadows
+	ShadowLightLocShininessWall
+	ShadowLightLocShininessFloor
+	ShadowLightLocSpecBoostWall
+	ShadowLightLocSpecBoostFloor
+	ShadowLightLocBeamRatioFactor
+	ShadowLightLocVolumetricSteps
+	ShadowLightLocIsAbsolute
+	ShadowLightLocDebugLights
+	ShadowLightLocLast
 )
 
-// ShadowLight represents a flashlight shader utility for rendering with advanced lighting and shadow effects.
+// ShadowLight represents a structure for managing lighting and shadow parameters in a 3D rendering context.
 type ShadowLight struct {
 	ctx         api.IContext
 	prg         uint32
-	table       [FlashLocLast]int32
+	table       [ShadowLightLocLast]int32
 	shadows     bool
 	shadowsInt  int32
 	cal         *model.Calibration
 	debugLights int
 }
 
-// NewShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
+// NewShadowLight creates and returns a new instance of ShadowLight with the provided context and calibration settings.
 func NewShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
 	f := &ShadowLight{
 		ctx:         ctx,
@@ -83,7 +85,7 @@ func NewShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
 	return f
 }
 
-// EnableShadows toggles shadow rendering for the flashlight and updates related shadow parameters.
+// EnableShadows sets the shadow rendering state by enabling or disabling shadows and updates the internal shadow flag.
 func (s *ShadowLight) EnableShadows(e bool) {
 	s.shadows = e
 	if s.shadows {
@@ -93,33 +95,33 @@ func (s *ShadowLight) EnableShadows(e bool) {
 	}
 }
 
-// HasShadow checks if the flashlight has shadows enabled and returns true if shadows are active.
+// HasShadow returns true if the shadow light has shadows enabled, otherwise false.
 func (s *ShadowLight) HasShadow() bool {
 	return s.shadows
 }
 
-// SetupSamplers configures the shader program with uniform texture bindings for standard, normal, and shadow maps.
+// SetupSamplers configures texture samplers for the shadow light, mapping specific texture units to shader uniforms.
 func (s *ShadowLight) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
 	normalUnits := []int32{4, 5, 6, 7}
-	s.ctx.Uniform1iv(s.GetUniform(FlashLocTexture), 4, &diffuseUnits[0])
-	s.ctx.Uniform1iv(s.GetUniform(FlashLocNormalMap), 4, &normalUnits[0])
-	s.ctx.Uniform1i(s.GetUniform(FlashLocFlashShadowMap), 13)
+	s.ctx.Uniform1iv(s.GetUniform(ShadowLightLocTexture), 4, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(ShadowLightLocNormalMap), 4, &normalUnits[0])
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocFlashShadowMap), 13)
 	return nil
 }
 
-// Init initializes the Depth instance by setting up necessary resources and ensuring its readiness for rendering.
+// Init initializes the ShadowLight instance and prepares it for use, returning an error if initialization fails.
 func (s *ShadowLight) Init() error {
 	return nil
 }
 
-// GetUniform retrieves the uniform location associated with the given FlashlightLoc ID from the internal table.
-func (s *ShadowLight) GetUniform(id FlashlightLoc) int32 {
+// GetUniform returns the uniform location corresponding to the provided ShadowLightLoc identifier.
+func (s *ShadowLight) GetUniform(id ShadowLightLoc) int32 {
 	return s.table[id]
 }
 
-// Compile builds and links the shader program for the flashlight, resolving uniforms and handling shader errors.
+// Compile initializes and compiles the shaders and shader program for the ShadowLight, and retrieves uniform locations.
 func (s *ShadowLight) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragId = "shadow_light.frag"
@@ -144,29 +146,29 @@ func (s *ShadowLight) Compile(a IAssets) error {
 		return err
 	}
 
-	s.table[FlashLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
-	s.table[FlashLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
-	s.table[FlashLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
-	s.table[FlashLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashSpaceMatrix\x00"))
-	s.table[FlashLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
-	s.table[FlashLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
-	s.table[FlashLocFlashShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashShadowMap\x00"))
-	s.table[FlashLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
-	s.table[FlashLocFlashDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashDir\x00"))
-	s.table[FlashLocFlashIntensityFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashIntensityFactor\x00"))
-	s.table[FlashLocFlashOffset] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashOffset\x00"))
-	s.table[FlashLocFlashConeStart] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeStart\x00"))
-	s.table[FlashLocFlashConeEnd] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeEnd\x00"))
-	s.table[FlashLocFalloff] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashFalloff\x00"))
-	s.table[FlashLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
-	s.table[FlashLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
-	s.table[FlashLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
-	s.table[FlashLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
-	s.table[FlashLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
-	s.table[FlashLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
-	s.table[FlashLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
-	s.table[FlashLocIsAbsolute] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_isAbsolute\x00"))
-	s.table[FlashLocDebugLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debugLights\x00"))
+	s.table[ShadowLightLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[ShadowLightLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[ShadowLightLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
+	s.table[ShadowLightLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashSpaceMatrix\x00"))
+	s.table[ShadowLightLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[ShadowLightLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
+	s.table[ShadowLightLocFlashShadowMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashShadowMap\x00"))
+	s.table[ShadowLightLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_screenResolution\x00"))
+	s.table[ShadowLightLocFlashDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashDir\x00"))
+	s.table[ShadowLightLocFlashIntensityFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashIntensityFactor\x00"))
+	s.table[ShadowLightLocFlashOffset] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashOffset\x00"))
+	s.table[ShadowLightLocFlashConeStart] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeStart\x00"))
+	s.table[ShadowLightLocFlashConeEnd] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeEnd\x00"))
+	s.table[ShadowLightLocFalloff] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashFalloff\x00"))
+	s.table[ShadowLightLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
+	s.table[ShadowLightLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
+	s.table[ShadowLightLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
+	s.table[ShadowLightLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
+	s.table[ShadowLightLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
+	s.table[ShadowLightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
+	s.table[ShadowLightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
+	s.table[ShadowLightLocIsAbsolute] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_isAbsolute\x00"))
+	s.table[ShadowLightLocDebugLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debugLights\x00"))
 	for idx, v := range s.table {
 		if v < 0 {
 			return fmt.Errorf("unused uniform location in flashlight: %d\n", idx)
@@ -175,7 +177,7 @@ func (s *ShadowLight) Compile(a IAssets) error {
 	return nil
 }
 
-// Render applies flashlight rendering techniques, configuring shader uniforms and invoking provided geometry rendering logic.
+// Render configures the ShadowLight uniforms and executes the provided renderGeometry function.
 func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32, view, proj, invView, lightSpace *float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
 	if intensity <= 0 {
 		return
@@ -184,32 +186,32 @@ func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32
 	s.ctx.UseProgram(s.prg)
 	s.ctx.BindVertexArray(vao)
 
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocProjection), 1, false, proj)
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocView), 1, false, view)
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocInvView), 1, false, invView)
-	s.ctx.UniformMatrix4fv(s.GetUniform(FlashLocFlashSpaceMatrix), 1, false, lightSpace)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocProjection), 1, false, proj)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocInvView), 1, false, invView)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocFlashSpaceMatrix), 1, false, lightSpace)
 
-	s.ctx.Uniform2f(s.GetUniform(FlashLocScreenResolution), screenW, screenH)
+	s.ctx.Uniform2f(s.GetUniform(ShadowLightLocScreenResolution), screenW, screenH)
 
 	// Passaggio diretto dei vettori in View-Space
-	s.ctx.Uniform3f(s.GetUniform(FlashLocFlashDir), dirViewX, dirViewY, dirViewZ)
-	s.ctx.Uniform3f(s.GetUniform(FlashLocFlashOffset), posViewX, posViewY, posViewZ)
+	s.ctx.Uniform3f(s.GetUniform(ShadowLightLocFlashDir), dirViewX, dirViewY, dirViewZ)
+	s.ctx.Uniform3f(s.GetUniform(ShadowLightLocFlashOffset), posViewX, posViewY, posViewZ)
 
-	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashIntensityFactor), intensity)
-	s.ctx.Uniform1f(s.GetUniform(FlashLocFalloff), falloff)
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocFlashIntensityFactor), intensity)
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocFalloff), falloff)
 
-	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashConeStart), coneStart)
-	s.ctx.Uniform1f(s.GetUniform(FlashLocFlashConeEnd), coneEnd)
-	s.ctx.Uniform1i(s.GetUniform(FlashLocEnableShadows), s.shadowsInt)
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocFlashConeStart), coneStart)
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocFlashConeEnd), coneEnd)
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocEnableShadows), s.shadowsInt)
 
-	s.ctx.Uniform1f(s.GetUniform(FlashLocShininessWall), float32(s.cal.ShininessWall))
-	s.ctx.Uniform1f(s.GetUniform(FlashLocShininessFloor), float32(s.cal.ShininessFloor))
-	s.ctx.Uniform1f(s.GetUniform(FlashLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	s.ctx.Uniform1f(s.GetUniform(FlashLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
-	s.ctx.Uniform1f(s.GetUniform(FlashLocBeamRatioFactor), float32(s.cal.BeamRatio))
-	s.ctx.Uniform1i(s.GetUniform(FlashLocVolumetricSteps), int32(s.cal.VolSteps))
-	s.ctx.Uniform1i(s.GetUniform(FlashLocIsAbsolute), isAbsolute)
-	s.ctx.Uniform1i(s.GetUniform(FlashLocDebugLights), int32(s.debugLights))
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocShininessWall), float32(s.cal.ShininessWall))
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocShininessFloor), float32(s.cal.ShininessFloor))
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
+	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocBeamRatioFactor), float32(s.cal.BeamRatio))
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocVolumetricSteps), int32(s.cal.VolSteps))
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocIsAbsolute), isAbsolute)
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocDebugLights), int32(s.debugLights))
 	if s.shadows {
 		s.ctx.ActiveTexture(api.TEXTURE13)
 		s.ctx.BindTexture(api.TEXTURE_2D, shadowTex)

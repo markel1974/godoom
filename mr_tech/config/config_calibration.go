@@ -16,6 +16,7 @@ type Calibration struct {
 	SpecBoostFloor     float64 `json:"specBoostFloor"`
 	BeamRatio          float64 `json:"beamRatio"`
 	VolSteps           float64 `json:"volSteps"`
+	AoFactor           float64 `json:"aoFactor"`
 
 	Auto bool `json:"auto"`
 }
@@ -44,6 +45,7 @@ func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoo
 	c.SpecBoostFloor = 0.1
 	c.BeamRatio = 0.05
 	c.VolSteps = 8
+	c.AoFactor = 0.8
 
 	return c
 }

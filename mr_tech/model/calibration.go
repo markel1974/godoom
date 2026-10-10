@@ -19,6 +19,7 @@ type Calibration struct {
 	SpecBoostFloor     float64
 	BeamRatio          float64
 	VolSteps           float64
+	AoFactor           float64
 	volumes            *Volumes
 }
 
@@ -40,6 +41,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		SpecBoostFloor:     cfg.SpecBoostFloor,
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
+		AoFactor:           cfg.AoFactor,
 		volumes:            volumes,
 	}
 	c.init()

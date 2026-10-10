@@ -70,8 +70,8 @@ type ShadowLight struct {
 	debugLights int
 }
 
-// NewShaderShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
-func NewShaderShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
+// NewShadowLight creates and returns a new instance of ShadowLight with default values and shadows disabled.
+func NewShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
 	f := &ShadowLight{
 		ctx:         ctx,
 		cal:         cal,
@@ -122,7 +122,7 @@ func (s *ShadowLight) GetUniform(id FlashlightLoc) int32 {
 // Compile builds and links the shader program for the flashlight, resolving uniforms and handling shader errors.
 func (s *ShadowLight) Compile(a IAssets) error {
 	const vertId = "main.vert"
-	const fragId = "flashlight.frag"
+	const fragId = "shadow_light.frag"
 
 	vSrc, fSrc, err := a.ReadMulti(vertId, fragId)
 	if err != nil {

@@ -113,7 +113,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.blur = shaders.NewBlur(w.ctx)
 	w.depth = shaders.NewDepth(w.ctx, w.mapMetrics, w.shadowMetrics, 8)
 	w.lights = shaders.NewLights(w.ctx, lStride, w.cal)
-	w.shadowLight = shaders.NewShaderShadowLight(w.ctx, w.cal)
+	w.shadowLight = shaders.NewShadowLight(w.ctx, w.cal)
 	w.post = shaders.NewPost(w.ctx)
 	w.bloom = shaders.NewBloom(w.ctx)
 	w.occlusion = shaders.NewOcclusion(w.ctx)

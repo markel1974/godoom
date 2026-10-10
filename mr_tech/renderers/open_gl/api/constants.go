@@ -7,6 +7,8 @@ const (
 	CLAMP_TO_EDGE              = 0x812F
 	COLOR_ATTACHMENT0          = 0x8CE0
 	COLOR_ATTACHMENT1          = 0x8CE1
+	COLOR_ATTACHMENT2          = 0x8CE2
+	COLOR_ATTACHMENT3          = 0x8CE3
 	COLOR_BUFFER_BIT           = 0x00004000
 	COMPARE_REF_TO_TEXTURE     = 0x884E
 	COMPILE_STATUS             = 0x8B81
@@ -51,6 +53,7 @@ const (
 	RGB32F                     = 0x8815
 	RGBA                       = 0x1908
 	RGBA16F                    = 0x881A
+	RGBA32F                    = 0x8814
 	RGBA8                      = 0x8058
 	SAMPLE_ALPHA_TO_COVERAGE   = 0x809E
 	SCISSOR_TEST               = 0x0C11
@@ -61,6 +64,7 @@ const (
 	TEXTURE13                  = 0x84CD
 	TEXTURE14                  = 0x84CE
 	TEXTURE2                   = 0x84C2
+	TEXTURE3                   = 0x84C3
 	TEXTURE4                   = 0x84C4
 	TEXTURE5                   = 0x84C5
 	TEXTURE6                   = 0x84C6

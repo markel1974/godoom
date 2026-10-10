@@ -51,11 +51,13 @@ type SSAO struct {
 	projPtr          *float32
 	w                int32
 	h                int32
+	attachments      []uint32
+	attachmentsPtr   *uint32
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.
 func NewSSAO(ctx api.IContext) *SSAO {
-	return &SSAO{
+	s := &SSAO{
 		ctx:              ctx,
 		prg:              0,
 		kernelSize:       64,
@@ -63,7 +65,10 @@ func NewSSAO(ctx api.IContext) *SSAO {
 		radius:           12.0,
 		bias:             0.025,
 		rboDepth:         0,
+		attachments:      []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1},
 	}
+	s.attachmentsPtr = &s.attachments[0]
+	return s
 }
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
@@ -289,16 +294,15 @@ func (s *SSAO) allocate(width, height int32) {
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D, s.normal, 0)
 
-	// Aggiungi il depth Renderbuffer (ora salvato nella struct)
+	// Depth Renderbuffer (salvato nella struct)
 	s.ctx.GenRenderbuffers(1, &s.rboDepth)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepth)
 	s.ctx.RenderbufferStorage(api.RENDERBUFFER, api.DEPTH_COMPONENT24, width, height)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepth)
 
-	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
-	s.ctx.DrawBuffers(2, &attachments[0])
+	s.ctx.DrawBuffers(2, s.attachmentsPtr)
 
-	// 2. SSAO FBO
+	// SSAO FBO
 	s.ctx.GenFramebuffers(1, &s.fbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
 	s.ctx.GenTextures(1, &s.colorBuffer)
@@ -306,7 +310,7 @@ func (s *SSAO) allocate(width, height int32) {
 	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RED, width, height, 0, api.RED, api.FLOAT, nil)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.colorBuffer, 0)
 
-	// 3. SSAO Blur FBO
+	// SSAO Blur FBO
 	s.ctx.GenFramebuffers(1, &s.blurFbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
 	s.ctx.GenTextures(1, &s.blurTexture)

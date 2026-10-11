@@ -1,6 +1,7 @@
 package api
 
 const (
+	ALWAYS                     = 0x0207
 	ARRAY_BUFFER               = 0x8892
 	BLEND                      = 0x0BE2
 	CLAMP_TO_BORDER            = 0x812D

@@ -32,17 +32,26 @@ type Bloom struct {
 	vbo              uint32
 	w                int32
 	h                int32
+	handler          *Handler
+	post             *Post
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
-func NewBloom(ctx api.IContext) *Bloom {
-	return &Bloom{
-		ctx:              ctx,
-		hvPassages:       5, //passaggi orizzontali e verticali
-		internalPassages: 3,
-	}
+func NewBloom() *Bloom {
+	return &Bloom{}
 }
 
+// Setup initializes the Bloom instance by assigning the rendering context from the provided Handler.
+func (s *Bloom) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.post = h.GetPost()
+	s.hvPassages = h.GetHvPassages()
+	s.internalPassages = h.GetInternalPassages()
+	return nil
+}
+
+// GetBloomTexture retrieves the OpenGL texture ID of the final bloom-texture used in the bloom post-processing effect.
 func (s *Bloom) GetBloomTexture() uint32 {
 	return s.pingPongTex[1] // L'ultima scrittura cade sull'indice 1
 }
@@ -101,16 +110,19 @@ func (s *Bloom) Compile(a IAssets) error {
 }
 
 // Render applies a multi-pass Gaussian blur to the bright regions of the texture and returns the final blurred texture ID.
-func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
-	if fbw != s.w || fbh != s.h {
-		s.allocate(fbw, fbh)
+func (s *Bloom) Render() {
+	fbW, fbH := s.handler.GetSize()
+	brightTex := s.post.GetBrightBuffer()
+
+	if fbW != s.w || fbH != s.h {
+		s.allocate(fbW, fbH)
 	}
 
 	s.ctx.UseProgram(s.prg)
 	s.ctx.Uniform1i(s.table[BloomLocImage], 0)
 	s.ctx.BindVertexArray(s.vao)
 	s.ctx.Disable(api.DEPTH_TEST)
-	s.ctx.Viewport(0, 0, fbw/2, fbh/2)
+	s.ctx.Viewport(0, 0, fbW/2, fbH/2)
 
 	horizontal := true
 	firstIteration := true
@@ -145,7 +157,7 @@ func (s *Bloom) Render(brightTex uint32, fbw, fbh int32) {
 		horizontal = !horizontal
 	}
 
-	s.ctx.Viewport(0, 0, fbw, fbh)
+	s.ctx.Viewport(0, 0, fbW, fbH)
 	s.ctx.Enable(api.DEPTH_TEST)
 }
 

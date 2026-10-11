@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // ShaderOccLoc represents uniform locations for shader program configuration in occlusion rendering contexts.
@@ -19,17 +20,24 @@ const (
 // Occlusion represents a shader-based rendering system for managing occlusion queries in a graphics pipeline.
 // It encapsulates context, compiled program ID, and uniform location mappings for shader operations.
 type Occlusion struct {
-	ctx   api.IContext
-	prg   uint32
-	table [ShaderOccLocLast]int32
+	ctx     api.IContext
+	prg     uint32
+	table   [ShaderOccLocLast]int32
+	metrics *metrics.Map
 }
 
 // NewOcclusion creates and initializes a new Occlusion instance using the provided graphics context.
-func NewOcclusion(ctx api.IContext) *Occlusion {
+func NewOcclusion() *Occlusion {
 	return &Occlusion{
-		ctx: ctx,
 		prg: 0,
 	}
+}
+
+// Setup initializes the Occlusion instance by assigning the rendering context from the provided Handler.
+func (s *Occlusion) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	s.metrics = h.GetMapMetrics()
+	return nil
 }
 
 // SetupSamplers initializes the texture samplers required for the occlusion shader and binds them to the appropriate locations.
@@ -84,14 +92,17 @@ func (s *Occlusion) Init() error {
 }
 
 // Render executes occlusion queries using provided view and projection matrices and a render callback.
-func (s *Occlusion) Render(renderQueries func(), viewMatrixPtr, projMatrixPtr *float32) {
+func (s *Occlusion) Render(renderQueries func()) {
+	view := s.metrics.GetViewPtr()
+	proj := s.metrics.GetProjPtr()
+
 	s.ctx.ColorMask(false, false, false, false)
 	s.ctx.DepthMask(false)
 	s.ctx.DepthFunc(api.LEQUAL)
 
 	s.ctx.UseProgram(s.prg)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocView), 1, false, viewMatrixPtr)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocProjection), 1, false, projMatrixPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocProjection), 1, false, proj)
 
 	renderQueries()
 

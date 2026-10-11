@@ -120,6 +120,8 @@ func (w *RenderOpenGL) RenderStart(fbW int, fbH int, winW int, winH int) {
 	light, lightsCount := w.builder.GetLights()
 
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
+
+	// TODO RISCRIVERE E SPOSTARE COMPLETAMENTE
 	skyLayer := float32(-1.0)
 	skyEnabled := false
 	skyU, skyV := float32(0), float32(0)

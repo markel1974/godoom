@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // ShadowLightLoc represents an integer-based enumeration for shader uniform locations related to shadow and light properties.
@@ -63,26 +64,41 @@ const (
 
 // ShadowLight represents a structure for managing lighting and shadow parameters in a 3D rendering context.
 type ShadowLight struct {
-	ctx         api.IContext
-	prg         uint32
-	table       [ShadowLightLocLast]int32
-	shadows     bool
-	shadowsInt  int32
-	cal         *model.Calibration
-	debugLights int
+	ctx           api.IContext
+	prg           uint32
+	table         [ShadowLightLocLast]int32
+	shadows       bool
+	shadowsInt    int32
+	cal           *model.Calibration
+	debugLights   int
+	handler       *Handler
+	main          *Main
+	depth         *Depth
+	mapMetrics    *metrics.Map
+	shadowMetrics *metrics.Shadows
 }
 
 // NewShadowLight creates and returns a new instance of ShadowLight with the provided context and calibration settings.
-func NewShadowLight(ctx api.IContext, cal *model.Calibration) *ShadowLight {
+func NewShadowLight() *ShadowLight {
 	f := &ShadowLight{
-		ctx:         ctx,
-		cal:         cal,
 		shadows:     false,
 		shadowsInt:  0,
 		debugLights: 0,
 	}
 	f.EnableShadows(false)
 	return f
+}
+
+// Setup initializes the ShadowLight instance by assigning the rendering context from the provided Handler.
+func (s *ShadowLight) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.cal = h.GetCalibration()
+	s.mapMetrics = h.GetMapMetrics()
+	s.shadowMetrics = h.GetShadowMetrics()
+	s.depth = h.GetDepth()
+	s.main = h.GetMain()
+	return nil
 }
 
 // EnableShadows sets the shadow rendering state by enabling or disabling shadows and updates the internal shadow flag.
@@ -178,9 +194,26 @@ func (s *ShadowLight) Compile(a IAssets) error {
 }
 
 // Render configures the ShadowLight uniforms and executes the provided renderGeometry function.
-func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32, view, proj, invView, lightSpace *float32, isAbsolute int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd, screenW, screenH float32) {
+func (s *ShadowLight) Render(renderGeometry func(), lightIndex int32, posViewX, posViewY, posViewZ, dirViewX, dirViewY, dirViewZ, intensity, falloff, coneStart, coneEnd float32) {
 	if intensity <= 0 {
 		return
+	}
+	vao := s.main.GetVAO()
+	proj := s.mapMetrics.GetProjPtr()
+	view := s.mapMetrics.GetViewPtr()
+	invView := s.mapMetrics.GetInvViewPtr()
+	fbW, fbH := s.handler.GetSize()
+
+	var lTex uint32
+	var lMatrix *float32
+	var isAbsolute int32
+
+	if lightIndex < 0 {
+		lTex, lMatrix = s.depth.GetFlashShadowTextures(), s.shadowMetrics.GetShadowSpacePtr()
+		isAbsolute = 0
+	} else {
+		lTex, _, lMatrix = s.depth.GetShadowLightTextures(uint32(lightIndex))
+		isAbsolute = 1
 	}
 
 	s.ctx.UseProgram(s.prg)
@@ -189,9 +222,9 @@ func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocProjection), 1, false, proj)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocView), 1, false, view)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocInvView), 1, false, invView)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocFlashSpaceMatrix), 1, false, lightSpace)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShadowLightLocFlashSpaceMatrix), 1, false, lMatrix)
 
-	s.ctx.Uniform2f(s.GetUniform(ShadowLightLocScreenResolution), screenW, screenH)
+	s.ctx.Uniform2f(s.GetUniform(ShadowLightLocScreenResolution), float32(fbW), float32(fbH))
 
 	// Passaggio diretto dei vettori in View-Space
 	s.ctx.Uniform3f(s.GetUniform(ShadowLightLocFlashDir), dirViewX, dirViewY, dirViewZ)
@@ -214,7 +247,7 @@ func (s *ShadowLight) Render(renderGeometry func(), vao uint32, shadowTex uint32
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocDebugLights), int32(s.debugLights))
 	if s.shadows {
 		s.ctx.ActiveTexture(api.TEXTURE13)
-		s.ctx.BindTexture(api.TEXTURE_2D, shadowTex)
+		s.ctx.BindTexture(api.TEXTURE_2D, lTex)
 	}
 
 	renderGeometry()

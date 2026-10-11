@@ -80,13 +80,18 @@ type Deferred struct {
 }
 
 // NewDeferred creates a new Deferred object configured with a rendering context, stride, and calibration data.
-func NewDeferred(ctx api.IContext, stride int32, cal *model.Calibration) *Deferred {
+func NewDeferred(stride int32) *Deferred {
 	return &Deferred{
-		ctx:      ctx,
-		cal:      cal,
 		stride:   stride,
 		frameIdx: 0,
 	}
+}
+
+// Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
+func (s *Deferred) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	s.cal = h.GetCalibration()
+	return nil
 }
 
 // Init initializes the uniform buffer objects used for lighting with dynamic draw usage and prepares them for rendering.

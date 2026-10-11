@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -31,14 +32,28 @@ type Liquid struct {
 	ctx   api.IContext
 	prg   uint32
 	table [ShaderLiquidLocLast]int32
+
+	handler *Handler
+	main    *Main
+	post    *Post
+	metrics *metrics.Map
 }
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
-func NewLiquid(ctx api.IContext) *Liquid {
+func NewLiquid() *Liquid {
 	return &Liquid{
-		ctx: ctx,
 		prg: 0,
 	}
+}
+
+// Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
+func (s *Liquid) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.main = h.GetMain()
+	s.post = h.GetPost()
+	s.metrics = h.GetMapMetrics()
+	return nil
 }
 
 // SetupSamplers binds texture samplers to specific uniform locations in the shader program.
@@ -112,7 +127,14 @@ func (s *Liquid) Init() error {
 }
 
 // Render handles the rendering logic for the liquid, applying shaders, setting up textures, and drawing geometry based on parameters.
-func (s *Liquid) Render(renderGeometry func(), vao uint32, refractionTex, depthTex uint32, transparent bool, fbW, fbH int32, viewMatrixPtr, projMatrixPtr *float32) {
+func (s *Liquid) Render(renderGeometry func(), transparent bool) {
+	vao := s.main.GetVAO()
+	refractionTex := s.post.GetColorBuffer()
+	depthTex := s.post.GetDepthBuffer()
+	view := s.metrics.GetViewPtr()
+	proj := s.metrics.GetProjPtr()
+	fbW, fbH := s.handler.GetSize()
+
 	s.ctx.UseProgram(s.prg)
 
 	//TODO from config
@@ -127,8 +149,8 @@ func (s *Liquid) Render(renderGeometry func(), vao uint32, refractionTex, depthT
 		s.ctx.Disable(api.BLEND)
 		s.ctx.DepthMask(true)
 	}
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocView), 1, false, viewMatrixPtr)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocProjection), 1, false, projMatrixPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocTime), interval)
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), 0.1)

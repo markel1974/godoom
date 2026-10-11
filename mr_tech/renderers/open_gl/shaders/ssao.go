@@ -6,6 +6,7 @@ import (
 	rnd "math/rand"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // SSAOLoc represents an identifier for accessing SSAO shader uniform locations.
@@ -48,27 +49,46 @@ type SSAO struct {
 	blurTexture      uint32
 	blurFbo          uint32
 	rboDepth         uint32
-	projPtr          *float32
 	w                int32
 	h                int32
 	attachments      []uint32
 	attachmentsPtr   *uint32
+
+	handler    *Handler
+	blur       *Blur
+	main       *Main
+	sky        *Sky
+	post       *Post
+	mapMetrics *metrics.Map
 }
 
 // NewSSAO initializes and returns a new instance of SSAO with default values.
-func NewSSAO(ctx api.IContext) *SSAO {
+func NewSSAO() *SSAO {
 	s := &SSAO{
-		ctx:              ctx,
-		prg:              0,
-		kernelSize:       64,
-		noiseTextureSize: 4 * 4,
-		radius:           12.0,
-		bias:             0.025,
-		rboDepth:         0,
-		attachments:      []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1},
+		prg:         0,
+		rboDepth:    0,
+		attachments: []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1},
 	}
 	s.attachmentsPtr = &s.attachments[0]
 	return s
+}
+
+// Setup initializes the Sky instance by assigning the rendering context from the provided Handler.
+func (s *SSAO) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.kernelSize = h.GetKernelSize()
+	s.noiseTextureSize = h.GetNoiseTextureSize()
+	s.radius = h.GetRadius()
+	s.bias = h.GetBias()
+
+	s.blur = h.GetBlur()
+	s.main = h.GetMain()
+	s.sky = h.GetSky()
+	s.post = h.GetPost()
+
+	s.mapMetrics = h.GetMapMetrics()
+	return nil
 }
 
 // SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
@@ -175,7 +195,7 @@ func (s *SSAO) createKernel() error {
 		s.kernel[i*3+2] = (sample[2] / mag) * scale
 	}
 
-	// --- 5. SSAO: GENERAZIONE NOISE TEXTURE (4x4) ---
+	// SSAO: GENERAZIONE NOISE TEXTURE (4x4)
 	noiseData := make([]float32, s.noiseTextureSize*3)
 	for i := int32(0); i < s.noiseTextureSize; i++ {
 		noiseData[i*3] = rnd.Float32()*2.0 - 1.0
@@ -195,9 +215,10 @@ func (s *SSAO) createKernel() error {
 }
 
 // Prepare initializes the framebuffer and clears buffers to set up for SSAO rendering.
-func (s *SSAO) Prepare(fbw, fbh int32) {
-	if fbw != s.w || fbh != s.h {
-		s.allocate(fbw, fbh)
+func (s *SSAO) Prepare() {
+	fbW, fbH := s.handler.GetSize()
+	if fbW != s.w || fbH != s.h {
+		s.allocate(fbW, fbH)
 	}
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
 	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
@@ -206,13 +227,14 @@ func (s *SSAO) Prepare(fbw, fbh int32) {
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
 }
 
-// UpdateUniforms updates the shader's projection matrix uniform with the provided projection matrix.
-func (s *SSAO) UpdateUniforms(view, projPtr *float32) {
-	s.projPtr = projPtr
-}
-
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool) {
+func (s *SSAO) Render(skyEnabled bool) {
+	blurPgr := s.blur.GetProgram()
+	mainVAO := s.main.GetVAO()
+	skyVAO := s.sky.GetVAO()
+	postFBO := s.post.GetFBO()
+	projPtr := s.mapMetrics.GetProjPtr()
+
 	s.ctx.BindVertexArray(mainVAO)
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
@@ -228,7 +250,7 @@ func (s *SSAO) Render(blurPgr, mainVAO, skyVAO, postFBO uint32, skyEnabled bool)
 	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
 
 	if skyEnabled {
-		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, s.projPtr)
+		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, projPtr)
 		s.ctx.BindVertexArray(skyVAO)
 		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}

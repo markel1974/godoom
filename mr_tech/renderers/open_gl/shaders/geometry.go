@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // GeometryLoc represents a location identifier for shader geometry uniforms.
@@ -24,19 +25,24 @@ const (
 // Geometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
 type Geometry struct {
-	ctx   api.IContext
-	prg   uint32
-	table [GeometryLocLast]int32
-	view  *float32
-	proj  *float32
+	ctx        api.IContext
+	prg        uint32
+	table      [GeometryLocLast]int32
+	mapMetrics *metrics.Map
 }
 
 // NewGeometry initializes and returns a new Geometry instance with default properties.
-func NewGeometry(ctx api.IContext) *Geometry {
+func NewGeometry() *Geometry {
 	return &Geometry{
-		ctx: ctx,
 		prg: 0,
 	}
+}
+
+// Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
+func (s *Geometry) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	s.mapMetrics = h.GetMapMetrics()
+	return nil
 }
 
 // SetupSamplers initializes and configures texture samplers for the Geometry instance.
@@ -98,17 +104,14 @@ func (s *Geometry) Compile(assets IAssets) error {
 	return nil
 }
 
-// UpdateUniforms updates the view and projection matrices used by the shader with the given values.
-func (s *Geometry) UpdateUniforms(view, proj *float32) {
-	s.view = view
-	s.proj = proj
-}
-
 // Render applies shader program, updates uniform values, and executes the provided rendering function.
 func (s *Geometry) Render(renderScene func()) {
+	view := s.mapMetrics.GetViewPtr()
+	proj := s.mapMetrics.GetProjPtr()
+
 	s.ctx.UseProgram(s.GetProgram())
 	// RIMOSSO: s.ctx.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
-	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, s.view)
-	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, s.proj)
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, proj)
 	renderScene()
 }

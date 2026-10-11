@@ -54,40 +54,29 @@ type Post struct {
 	bloomIntensity float32
 	bloomBlur      int32
 
+	handler *Handler
+	bloom   *Bloom
+
 	w int32
 	h int32
 }
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
-func NewPost(ctx api.IContext) *Post {
-	return &Post{
-		ctx:            ctx,
-		exposure:       0.1,
-		contrast:       1.05,
-		saturation:     1.0,
-		bloomIntensity: 0.05,
-		bloomBlur:      1.0,
-	}
+func NewPost() *Post {
+	return &Post{}
 }
 
-// GetColorBuffer returns the resolved color texture ID
-func (s *Post) GetColorBuffer() uint32 {
-	return s.texColorBuffer
-}
-
-// GetDepthBuffer returns the resolved depth texture ID
-func (s *Post) GetDepthBuffer() uint32 {
-	return s.texDepthBuffer
-}
-
-// GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
-func (s *Post) GetBrightBuffer() uint32 {
-	return s.texBrightBuffer
-}
-
-// GetFBO returns the ID of the multisampled framebuffer object (FBO) used for 3D rendering in the post-processing pipeline.
-func (s *Post) GetFBO() uint32 {
-	return s.msaaFbo
+// Setup initializes the Post instance by assigning the rendering context from the provided Handler.
+func (s *Post) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.bloom = h.GetBloom()
+	s.exposure = h.GetExposure()
+	s.contrast = h.GetContrast()
+	s.saturation = h.GetSaturation()
+	s.bloomIntensity = h.GetBloomIntensity()
+	s.bloomBlur = h.GetBloomBlur()
+	return nil
 }
 
 // SetupSamplers initializes the samplers and VAO/VBO for rendering a screen quad in the post-processing pipeline.
@@ -149,16 +138,18 @@ func (s *Post) Init() error {
 }
 
 // Prepare prepares the post-processing pipeline by resolving the multisample antialiasing (MSAA) buffers to standard buffers.
-func (s *Post) Prepare(fbw, fbh int32) {
-	if fbw != s.w || fbh != s.h {
-		s.allocate(fbw, fbh)
+func (s *Post) Prepare() {
+	fbW, fbH := s.handler.GetSize()
+	if fbW != s.w || fbH != s.h {
+		s.allocate(fbW, fbH)
 	}
 	// Physically resolve the multisampled FBO before 2D filters
-	s.ResolveMSAA(fbw, fbh)
+	s.ResolveMSAA(fbW, fbH)
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
-func (s *Post) Render(bloomTex uint32, _, _ int32, winW int32, winH int32) {
+func (s *Post) Render(winW, winH int32) {
+	bloomTex := s.bloom.GetBloomTexture()
 	s.ctx.Viewport(0, 0, winW, winH)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	s.ctx.Disable(api.DEPTH_TEST)
@@ -283,4 +274,24 @@ func (s *Post) allocate(width, height int32) {
 	}
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+}
+
+// GetColorBuffer returns the resolved color texture ID
+func (s *Post) GetColorBuffer() uint32 {
+	return s.texColorBuffer
+}
+
+// GetDepthBuffer returns the resolved depth texture ID
+func (s *Post) GetDepthBuffer() uint32 {
+	return s.texDepthBuffer
+}
+
+// GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
+func (s *Post) GetBrightBuffer() uint32 {
+	return s.texBrightBuffer
+}
+
+// GetFBO returns the ID of the multisampled framebuffer object (FBO) used for 3D rendering in the post-processing pipeline.
+func (s *Post) GetFBO() uint32 {
+	return s.msaaFbo
 }

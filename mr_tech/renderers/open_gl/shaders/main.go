@@ -2,7 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	metrics2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // MainLoc represents an integer-based enumerator used as an identifier for uniform locations within shaders.
@@ -56,21 +56,33 @@ type Main struct {
 	stride            int32
 	w                 int32
 	h                 int32
-	metrics           *metrics2.Map
+	handler           *Handler
+	metrics           *metrics.Map
+	ssao              *SSAO
+	post              *Post
 }
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
-func NewMain(ctx api.IContext, stride int32, metrics *metrics2.Map) *Main {
+func NewMain(stride int32) *Main {
 	m := &Main{
-		ctx:               ctx,
-		prgOpaque:         0,
-		emissiveIntensity: 4.0,
-		aoFactor:          0.8,
-		stride:            stride,
-		metrics:           metrics,
+		prgOpaque: 0,
+		stride:    stride,
 	}
-
 	return m
+}
+
+// Setup initializes the Main instance by setting its context using the provided Handler and returns an error if any.
+func (s *Main) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.metrics = h.GetMapMetrics()
+	s.emissiveIntensity = h.GetEmissiveIntensity()
+	s.aoFactor = h.GetAoFactor()
+
+	s.ssao = h.GetSSAO()
+	s.post = h.GetPost()
+
+	return nil
 }
 
 // Init initializes the necessary OpenGL resources, such as VAOs, VBOs, and EBOs, and configures the vertex attributes.
@@ -204,13 +216,8 @@ func (s *Main) Compile(a IAssets) error {
 }
 
 // Prepare configures the rendering pipeline, updates buffer data, and manages double buffering for rendering operations.
-func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32, fbW, fbH int32) {
-	//if fbW != s.w || fbH != s.h {
-	//	s.w = fbW
-	//	s.h = fbH
-	//	s.scaleX, s.scaleY = s.metrics.GetScale(fbW, fbH)
-	//}
-
+func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32) {
+	fbW, fbH := s.handler.GetSize()
 	s.ctx.Viewport(0, 0, fbW, fbH)
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
 	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
@@ -238,7 +245,12 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 }
 
 // Render executes the main rendering pipeline, applying geometries, shaders, and SSAO textures to the target framebuffer.
-func (s *Main) Render(renderGeometry func(), view, proj *float32, ssaoBlurTex uint32, targetFbo uint32, fbW, fbH int32) {
+func (s *Main) Render(renderGeometry func()) {
+	ssaoBlurTex := s.ssao.GetSSAOBlurTexture()
+	targetFbo := s.post.GetFBO()
+	view := s.metrics.GetViewPtr()
+	proj := s.metrics.GetProjPtr()
+	fbW, fbH := s.handler.GetSize()
 	interval := float32(0) //unused
 	// target FBO preparation
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)

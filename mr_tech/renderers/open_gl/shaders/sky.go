@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // ShaderSkyLoc represents the location index of shader uniforms specific to the Sky renderer.
@@ -25,21 +26,26 @@ const (
 
 // Sky is a type that manages the state and rendering of the sky shader in a graphics application.
 type Sky struct {
-	ctx     api.IContext
-	prg     uint32
-	table   [ShaderSkyLocLast]int32
-	skyVAO  uint32
-	skyVBO  uint32
-	viewPtr *float32
-	projPtr *float32
+	ctx        api.IContext
+	prg        uint32
+	table      [ShaderSkyLocLast]int32
+	skyVAO     uint32
+	skyVBO     uint32
+	mapMetrics *metrics.Map
 }
 
 // NewSky creates and returns a new instance of Sky with default uninitialized properties.
-func NewSky(ctx api.IContext) *Sky {
+func NewSky() *Sky {
 	return &Sky{
-		ctx: ctx,
 		prg: 0,
 	}
+}
+
+// Setup initializes the Sky instance by assigning the rendering context from the provided Handler.
+func (s *Sky) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	s.mapMetrics = h.GetMapMetrics()
+	return nil
 }
 
 // SetupSamplers initializes the sky vertex array and buffer objects and prepares the sampler for rendering sky elements.
@@ -76,12 +82,6 @@ func (s *Sky) GetProgram() uint32 {
 // GetUniform retrieves the location of a shader uniform variable by its ID.
 func (s *Sky) GetUniform(id ShaderSkyLoc) int32 {
 	return s.table[id]
-}
-
-// UpdateUniforms updates the view and projection matrices for the shader.
-func (s *Sky) UpdateUniforms(viewPtr, projPtr *float32) {
-	s.viewPtr = viewPtr
-	s.projPtr = projPtr
 }
 
 // GetVAO retrieves the vertex array object (VAO) associated with the Sky instance.
@@ -126,17 +126,17 @@ func (s *Sky) Compile(a IAssets) error {
 }
 
 // Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
-func (s *Sky) Render(skyLayer float32, skyEnabled bool, u, v float32) {
-	if !skyEnabled {
-		return
-	}
+func (s *Sky) Render(skyLayer float32, u, v float32) {
+	viewPtr := s.mapMetrics.GetViewPtr()
+	projPtr := s.mapMetrics.GetProjPtr()
+
 	s.ctx.UseProgram(s.GetProgram())
 
 	s.ctx.DepthFunc(api.LEQUAL)
 	s.ctx.DepthMask(false)
 
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, s.projPtr)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, s.viewPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocProjection), 1, false, projPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderSkyLocView), 1, false, viewPtr)
 
 	s.ctx.BindVertexArray(s.skyVAO)
 

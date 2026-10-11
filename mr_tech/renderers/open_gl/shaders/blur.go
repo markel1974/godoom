@@ -24,11 +24,16 @@ type Blur struct {
 }
 
 // NewBlur initializes and returns a new instance of Blur with default uninitialized properties.
-func NewBlur(ctx api.IContext) *Blur {
+func NewBlur() *Blur {
 	return &Blur{
-		ctx: ctx,
 		prg: 0,
 	}
+}
+
+// Setup initializes the Blur instance by assigning the rendering context from the provided Handler.
+func (s *Blur) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	return nil
 }
 
 // Init initializes the Blur instance by setting up necessary resources and ensuring its readiness for rendering.

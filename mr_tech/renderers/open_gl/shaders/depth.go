@@ -91,6 +91,7 @@ func (d *DepthMap) Shutdown() {
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
 	ctx              api.IContext
+	handler          *Handler
 	prg              uint32
 	table            [DepthLocLast]int32
 	sWidth           int32
@@ -105,25 +106,37 @@ type Depth struct {
 	matrixEmpty      [16]float32
 	matrixEmptyPtr   *float32
 	viewMatrixPtr    *float32
+
+	maxShadowLights int
+	main            *Main
 }
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
-func NewDepth(ctx api.IContext, m *metrics.Map, sm *metrics.Shadows, shadowLights int) *Depth {
+func NewDepth(maxShadowLights int) *Depth {
 	d := &Depth{
-		ctx:              ctx,
-		mapMetrics:       m,
-		shadowMetrics:    sm,
-		roomMap:          NewDepthMap(ctx),
-		flashMap:         NewDepthMap(ctx),
+		maxShadowLights:  maxShadowLights,
 		shadowLightCount: 0,
 	}
 
-	d.matrixEmptyPtr = &d.matrixEmpty[0]
-	d.viewMatrixPtr = d.matrixEmptyPtr
-	for i := 0; i < shadowLights; i++ {
-		d.shadowLights = append(d.shadowLights, NewDepthMap(ctx))
-	}
 	return d
+}
+
+// Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
+func (s *Depth) Setup(h *Handler) error {
+	//ctx api.IContext, m *metrics.Map, sm *metrics.Shadows,
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.mapMetrics = h.GetMapMetrics()
+	s.shadowMetrics = h.GetShadowMetrics()
+	s.main = h.GetMain()
+	s.roomMap = NewDepthMap(s.ctx)
+	s.flashMap = NewDepthMap(s.ctx)
+	s.matrixEmptyPtr = &s.matrixEmpty[0]
+	s.viewMatrixPtr = s.matrixEmptyPtr
+	for i := 0; i < s.maxShadowLights; i++ {
+		s.shadowLights = append(s.shadowLights, NewDepthMap(s.ctx))
+	}
+	return nil
 }
 
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
@@ -212,8 +225,12 @@ func (s *Depth) Compile(assets IAssets) error {
 	return nil
 }
 
-// UpdateUniforms updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) UpdateUniforms(roomSpaceMatrix *float32, flashSpaceMatrix *float32, viewMatrix *float32, dynaLight []*float32, dynaLightCount uint32) {
+// Prepare updates the uniform matrix values for room and flashlight space transformations for the shader.
+func (s *Depth) Prepare(dynaLight []*float32, dynaLightCount uint32) {
+	roomSpaceMatrix := s.mapMetrics.GetRoomSpacePtr()
+	flashSpaceMatrix := s.shadowMetrics.GetShadowSpacePtr()
+	viewMatrix := s.mapMetrics.GetMainViewPtr()
+
 	s.viewMatrixPtr = viewMatrix
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
@@ -227,10 +244,12 @@ func (s *Depth) UpdateUniforms(roomSpaceMatrix *float32, flashSpaceMatrix *float
 }
 
 // Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
-func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
+func (s *Depth) Render(renderScene func()) {
 	if !s.shadows {
 		return
 	}
+	fbW, fbH := s.handler.GetSize()
+	mainVao := s.main.GetVAO()
 	sWidth, sHeight := s.shadowMetrics.GetShadowSize()
 	if sWidth != s.sWidth || sHeight != s.sHeight {
 		s.allocate(sWidth, sHeight)
@@ -279,7 +298,7 @@ func (s *Depth) Render(renderScene func(), mainVao uint32, fbw, fbh int32) {
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
 	s.ctx.Disable(api.DEPTH_CLAMP)
 	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
-	s.ctx.Viewport(0, 0, fbw, fbh)
+	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
 // allocate configures the internal shadow map dimensions and updates the associated depth maps for rendering.

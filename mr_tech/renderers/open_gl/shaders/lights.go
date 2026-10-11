@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 const (
@@ -63,28 +64,32 @@ type Lights struct {
 	activeLights int32
 	shadows      int32
 	stride       int32
+	handler      *Handler
 	cal          *model.Calibration
+	main         *Main
+	depth        *Depth
+	mapMetrics   *metrics.Map
 	debugLights  int
 }
 
 // NewLights initializes and returns a new instance of Lights with default settings.
-func NewLights(ctx api.IContext, stride int32, cal *model.Calibration) *Lights {
+func NewLights(stride int32) *Lights {
 	return &Lights{
-		ctx:         ctx,
-		cal:         cal,
 		stride:      stride,
 		frameIdx:    0,
 		debugLights: 0,
 	}
 }
 
-// EnableShadows enables or disables shadow rendering based on the provided boolean value.
-func (s *Lights) EnableShadows(e bool) {
-	if e {
-		s.shadows = 1
-	} else {
-		s.shadows = 0
-	}
+// Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
+func (s *Lights) Setup(h *Handler) error {
+	s.handler = h
+	s.ctx = h.GetContext()
+	s.cal = h.GetCalibration()
+	s.main = h.GetMain()
+	s.depth = h.GetDepth()
+	s.mapMetrics = h.GetMapMetrics()
+	return nil
 }
 
 // Init initializes the uniform buffer object (UBO) for storing light data with the specified stride size.
@@ -187,7 +192,13 @@ func (s *Lights) Prepare(frameLights []float32, numLights int32) {
 }
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
-func (s *Lights) Render(renderGeometry func(), vao uint32, roomShadowTex uint32, view, proj, invView, roomSpace *float32, ambient float32, screenW, screenH float32) {
+func (s *Lights) Render(renderGeometry func(), ambient float32) {
+	vao := s.main.GetVAO()
+	roomShadowTex := s.depth.GetRoomShadowTextures()
+	proj := s.mapMetrics.GetProjPtr()
+	view := s.mapMetrics.GetViewPtr()
+	fbW, fbH := s.handler.GetSize()
+
 	s.ctx.UseProgram(s.prg)
 	s.ctx.BindVertexArray(vao)
 
@@ -196,7 +207,7 @@ func (s *Lights) Render(renderGeometry func(), vao uint32, roomShadowTex uint32,
 	//s.ctx.UniformMatrix4fv(s.GetUniform(LightLocInvView), 1, false, invView)
 	//s.ctx.UniformMatrix4fv(s.GetUniform(LightLocRoomSpaceMatrix), 1, false, roomSpace)
 	s.ctx.Uniform1i(s.GetUniform(LightLocNumLights), s.activeLights)
-	s.ctx.Uniform2f(s.GetUniform(LightLocScreenResolution), screenW, screenH)
+	s.ctx.Uniform2f(s.GetUniform(LightLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(LightLocAmbientLight), ambient)
 	//s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
 	//s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
@@ -212,4 +223,13 @@ func (s *Lights) Render(renderGeometry func(), vao uint32, roomShadowTex uint32,
 		s.ctx.BindTexture(api.TEXTURE_2D, roomShadowTex)
 	}
 	renderGeometry()
+}
+
+// EnableShadows enables or disables shadow rendering based on the provided boolean value.
+func (s *Lights) EnableShadows(e bool) {
+	if e {
+		s.shadows = 1
+	} else {
+		s.shadows = 0
+	}
 }

@@ -2,10 +2,17 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
+// ShaderAdditiveLoc represents uniform locations used in additive shader programs.
 type ShaderAdditiveLoc int
 
+// ShaderAdditiveLocProjection specifies the location index for the projection matrix in additive shader programs.
+// ShaderAdditiveLocView specifies the location index for the view matrix in additive shader programs.
+// ShaderAdditiveLocTime specifies the location index for the time parameter in additive shader programs.
+// ShaderAdditiveLocTexture specifies the location index for the texture sampler in additive shader programs.
+// ShaderAdditiveLocLast represents the last location index in additive shader programs.
 const (
 	ShaderAdditiveLocProjection = ShaderAdditiveLoc(iota)
 	ShaderAdditiveLocView
@@ -14,19 +21,37 @@ const (
 	ShaderAdditiveLocLast
 )
 
+// Additive represents a shader-based rendering effect supporting additive blending for dynamic rendering.
 type Additive struct {
 	ctx   api.IContext
 	prg   uint32
 	table [ShaderAdditiveLocLast]int32
+
+	main    *Main
+	metrics *metrics.Map
 }
 
-func NewAdditive(ctx api.IContext) *Additive {
+// NewAdditive creates and returns a new instance of Additive initialized with the provided graphics context.
+func NewAdditive() *Additive {
 	return &Additive{
-		ctx: ctx,
 		prg: 0,
 	}
 }
 
+// Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
+func (s *Additive) Setup(h *Handler) error {
+	s.ctx = h.GetContext()
+	s.main = h.GetMain()
+	s.metrics = h.GetMapMetrics()
+	return nil
+}
+
+// Init initializes the Additive object, preparing it for rendering operations. Returns an error if initialization fails.
+func (s *Additive) Init() error {
+	return nil
+}
+
+// SetupSamplers assigns texture sampler units to the shader program and binds them to the appropriate uniform locations.
 func (s *Additive) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	diffuseUnits := [4]int32{0, 1, 2, 3}
@@ -34,14 +59,17 @@ func (s *Additive) SetupSamplers() error {
 	return nil
 }
 
+// GetProgram returns the current shader program identifier stored in the Additive instance.
 func (s *Additive) GetProgram() uint32 {
 	return s.prg
 }
 
+// GetUniform retrieves the OpenGL uniform location for the specified ShaderAdditiveLoc from the cached table.
 func (s *Additive) GetUniform(u ShaderAdditiveLoc) int32 {
 	return s.table[u]
 }
 
+// Compile initializes and compiles the shaders, creates the shader program, and retrieves uniform locations.
 func (s *Additive) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragId = "main_additive.frag"
@@ -74,16 +102,18 @@ func (s *Additive) Compile(a IAssets) error {
 	return nil
 }
 
-func (s *Additive) Init() error {
-	return nil
-}
+// RenderAdditive applies additive blending and manages OpenGL state for rendering with given geometry and matrices.
+func (s *Additive) RenderAdditive(renderGeometry func()) {
+	view := s.metrics.GetViewPtr()
+	proj := s.metrics.GetProjPtr()
 
-func (s *Additive) RenderAdditive(renderGeometry func(), vao uint32, viewMatrixPtr, projMatrixPtr *float32) {
+	vao := s.main.GetVAO()
+
 	s.ctx.UseProgram(s.prg)
 
 	interval := float32(0) //unused
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocView), 1, false, viewMatrixPtr)
-	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocProjection), 1, false, projMatrixPtr)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocView), 1, false, view)
+	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniform(ShaderAdditiveLocTime), interval)
 
 	s.ctx.DepthMask(false)

@@ -205,7 +205,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	dx := playerX - selfX
 	dy := playerY - selfY
 	dz := targetZ - selfZ
-	// 1. Attivazione (Aggro): Utilizza la distanza sferica 3D
+	// Attivazione (Aggro): Utilizza la distanza sferica 3D
 	playerDist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !e.active {
 		if playerDist3d < e.wakeUpDistance { // Raggio di risveglio
@@ -264,7 +264,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	}
 }
 
-// tryJump allows the enemy to perform a jump if blocked or the player is at a higher elevation.
+// handleJump allows the enemy to perform a jump if blocked or the player is at a higher elevation.
 func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
 	entity := self.GetEntity()
 	if !entity.IsOnGround() {
@@ -278,8 +278,7 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 	floorDz := float64(int(playerZ) - int(thingZ))
 	playerIsHigher := floorDz > self.GetMaxStep() && playerDist2d < 20.0
 	if isBlocked || playerIsHigher {
-		//1. Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso
-		//saltino in modo coerente. Regola l'800.0 in base alla tua gravità.
+		//Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso saltino in modo coerente.
 		leapForceXY := entity.GetMass() * 200.0
 		self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
 	}

@@ -36,23 +36,16 @@ type IBuilder interface {
 	GetShadowLights() ([8]*metrics.Light, int32)
 }
 
-// SpriteNode represents a node in a sprite rendering system, associating an entity with its distance-squared value.
-type SpriteNode struct {
-	Thing  model.IThing
-	DistSq float64
-}
-
 // RenderOpenGL encapsulates rendering logic using the OpenGL API.
 type RenderOpenGL struct {
-	ctx             api.IContext
-	engine          *engine.Engine
-	vi              *model.ViewMatrix
-	player          *model.ThingPlayer
-	tex             *Textures
-	builder         IBuilder
-	enableClear     bool
-	builders        []IBuilder
-	buildersCounter int
+	ctx    api.IContext
+	engine *engine.Engine
+	vi     *model.ViewMatrix
+	player *model.ThingPlayer
+	tex    *Textures
+	//builder     IBuilder
+	builder     *BuilderVolume
+	enableClear bool
 
 	flash         *model.Flash
 	container     []IShader
@@ -121,27 +114,19 @@ func (w *RenderOpenGL) Start() {
 func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
 	w.tex = NewTextures(w.ctx)
-	w.buildersCounter = 0
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
 	w.builder = NewBuilderVolume(w.ctx, w.tex, cal)
-	w.builders = append(w.builders, w.builder)
-	vStride := w.builder.GetVerticesStride()
-	lStride := w.builder.GetLightsStride()
-	dcOpaque := w.builder.GetDrawCommands()
-	dcAdditive := w.builder.GetDrawCommandsAdditive()
-	dcLiquid := w.builder.GetDrawCommandsLiquid()
-	hwOcc := w.builder.GetHWOcclusion()
-
-	w.ctx.Enable(api.MULTISAMPLE)
-	//w.ctx.Enable(gl_api.SAMPLE_ALPHA_TO_COVERAGE)
-	a := &Assets{}
+	w.dcOpaque = w.builder.GetDrawCommandsOpaque()
+	w.dcAdditive = w.builder.GetDrawCommandsAdditive()
+	w.dcLiquid = w.builder.GetDrawCommandsLiquid()
+	w.hwOcc = w.builder.GetHWOcclusion()
 	w.flash = w.player.GetFlash()
 	w.cal = cal
-	w.dcOpaque = dcOpaque
-	w.dcAdditive = dcAdditive
-	w.dcLiquid = dcLiquid
-	w.hwOcc = hwOcc
-
+	vStride := w.builder.GetVerticesStride()
+	lStride := w.builder.GetLightsStride()
+	a := &Assets{}
+	w.ctx.Enable(api.MULTISAMPLE)
+	//w.ctx.Enable(gl_api.SAMPLE_ALPHA_TO_COVERAGE)
 	w.handler = shaders.NewHandler(vStride, lStride)
 	if err := w.handler.Setup(w.ctx, cal, w.flash, 0, 0); err != nil {
 		return err
@@ -372,112 +357,6 @@ func (w *RenderOpenGL) SetShadowEnabled(v bool) {
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)
 }
-
-/*
-// Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
-func (w *RenderOpenGL) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32, winH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*metrics.Light, shadowLightsNum int32) {
-	if w.handler.SetSize(fbW, fbH) {
-		w.flashlightMetrics.Rebuild(fbW, fbH)
-		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
-	}
-
-	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
-	for i := 0; i < w.tex.GetBucketsLen(); i++ {
-		diffuse, normal, emissive := w.tex.GetBucket(i)
-		w.ctx.ActiveTexture(api.TEXTURE0 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
-		w.ctx.ActiveTexture(api.TEXTURE4 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
-		w.ctx.ActiveTexture(api.TEXTURE8 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
-	}
-
-	px, _, pz := vi.GetView()
-	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
-	w.mapMetrics.Update(vi, w.scaleX, w.scaleY)
-
-	//dirX, dirY, dirZ := vi.GetForwardVector()
-	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
-	if w.flashlight.HasShadow() {
-		swayX, swayY, swaySensitivity := vi.GetSway()
-		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
-	}
-
-	w.flashlightMetrics.Update(w.mapMetrics.GetMainViewPtr(), flashX, flashY)
-
-	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsNum))
-
-	//RENDER START HERE
-	w.depth.Prepare()
-	// MAIN PREPARE (VBO che EBO)
-	w.main.Prepare(vert, vertLen, indices, indicesLen)
-	// LIGHTS PREPARE
-	w.lights.Prepare(lights, lightsNum)
-	// BIND TEXTURE
-	w.bindTextureBuckets()
-	// OMBRE
-	w.depth.Render(w.dcOpaque.Render)
-	// SSAO PREPARE
-	w.ssao.Prepare()
-	// GEOMETRY
-	w.geometry.Render(w.dcOpaque.Render)
-	// SSAO
-	w.ssao.Render(skyEnabled)
-	// MAIN OPAQUE
-	w.main.Render(w.dcOpaque.Render)
-	// HW OCCLUSION
-	if w.hwOcc != nil {
-		w.occlusion.Render(func() { w.hwOcc.RenderQueries() })
-	}
-	// MAIN ADDITIVE
-	if w.dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(w.dcAdditive.Render)
-	}
-	// MAIN LIQUID (Refraction & Depth Fog)
-	if w.dcLiquid.HasCommands() {
-		// OPTIMIZATION: We DO NOT call w.post.ResolveMSAA here.
-		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
-		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
-		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		w.liquid.Render(w.dcLiquid.Render, true)
-	}
-	// ENABLE ADDITIVE LIGHTS
-	enableAdditiveLights(w.ctx)
-	// FLASHLIGHTS
-	w.flashlight.Render(
-		w.dcOpaque.Render, -1,
-		flashX, flashY, 0.0,
-		float32(w.flash.GetOffsetX())-(flashX*flashSensitivity),
-		float32(w.flash.GetOffsetY())+(flashY*flashSensitivity),
-		-1.0,
-		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()),
-		float32(w.flash.GetConeStart()), float32(w.flash.GetConeEnd()))
-	// SHADOW LIGHTS
-	for lightIdx := int32(0); lightIdx < shadowLightsNum; lightIdx++ {
-		light := shadowLights[lightIdx]
-		w.flashlight.Render(w.dcOpaque.Render, lightIdx,
-			light.X, light.Y, light.Z,
-			light.DirX, light.DirY, light.DirZ,
-			light.Intensity, light.Falloff, light.OuterCutOff, light.CutOff)
-	}
-	// AMBIENT LIGHTS
-	w.lights.Render(w.dcOpaque.Render, float32(vi.GetLightIntensity()))
-	// DISABLE ADDITIVE LIGHTS
-	disableAdditiveLights(w.ctx)
-	w.bindTextureBuckets() // Restore texture arrays!
-	// SKYBOX
-	if skyEnabled {
-		w.sky.Render(skyLayer, skyU, skyV)
-	}
-	// MSAA resolution
-	w.post.Prepare()
-	// BLOOM
-	w.bloom.Render()
-	// POST
-	w.post.Render(winW, winH)
-}
-
-*/
 
 func (w *RenderOpenGL) bindTextureBuckets() {
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive

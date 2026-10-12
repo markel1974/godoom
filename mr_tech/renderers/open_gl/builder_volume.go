@@ -69,8 +69,8 @@ func (w *BuilderVolume) GetVerticesStride() int32 { return w.fv.VerticesStride()
 // GetLightsStride returns the stride size of the lights buffer in bytes.
 func (w *BuilderVolume) GetLightsStride() int32 { return w.fl.LightsStride() }
 
-// GetDrawCommands returns the prepared DrawCommandsRender object containing batched GPU drawing commands for rendering.
-func (w *BuilderVolume) GetDrawCommands() *DrawCommandsRender { return w.dcRenderOpaque }
+// GetDrawCommandsOpaque returns the prepared DrawCommandsRender object containing batched GPU drawing commands for rendering.
+func (w *BuilderVolume) GetDrawCommandsOpaque() *DrawCommandsRender { return w.dcRenderOpaque }
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the builder volume.
 func (w *BuilderVolume) GetVertices() ([]float32, int32, []uint32, int32) { return w.fv.GetVertices() }

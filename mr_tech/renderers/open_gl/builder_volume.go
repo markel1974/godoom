@@ -37,7 +37,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 	bv := &BuilderVolume{
 		ctx:              ctx,
 		tex:              tex,
-		fv:               NewFrameVertices(1048576),
+		fv:               NewFrameVertices(ctx, 1048576),
 		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
 		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
 		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
@@ -75,7 +75,9 @@ func (w *BuilderVolume) GetLightsStride() int32 { return w.fl.LightsStride() }
 func (w *BuilderVolume) GetDrawCommandsOpaque() *DrawCommandsRender { return w.dcRenderOpaque }
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the builder volume.
-func (w *BuilderVolume) GetVertices() ([]float32, int32, []uint32, int32) { return w.fv.GetVertices() }
+func (w *BuilderVolume) GetVertices() (unsafe.Pointer, int, int32, unsafe.Pointer, int, int32) {
+	return w.fv.GetVertices()
+}
 
 // GetLights retrieves the light data and their count from the frame lights. It returns a slice of float32 and an int32 count.
 func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl.GetLights() }

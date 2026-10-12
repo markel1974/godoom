@@ -1,6 +1,7 @@
 package open_gl
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -147,6 +148,7 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 			currentDepthWrite = depthWrite
 			currentPolygonOffset = polygonOffset
 		}
+		fmt.Println("[info] adding draw command", cmd.firstIndex*4)
 		currentBatch.Add(cmd.indexCount, w.ctx.PtrOffset(int(cmd.firstIndex*4)))
 	}
 }

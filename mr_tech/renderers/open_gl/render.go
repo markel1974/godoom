@@ -183,7 +183,8 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	fbW, fbH := int32(fbW1), int32(fbH1)
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
-	vert, vertLen, indices, indicesLen := w.builder.GetVertices()
+	vert, vertSize, vertCount, indices, indexSize, indicesCount := w.builder.GetVertices()
+	//fmt.Println("TEST", vertSize, vertCount, indexSize, indicesCount)
 	lights, lightSize, lightsCount := w.builder.GetLights()
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 
@@ -207,7 +208,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// RENDER START HERE
 	w.depth.Prepare()
 	// MAIN PREPARE (VBO and EBO)
-	w.main.Prepare(vert, vertLen, indices, indicesLen)
+	w.main.Prepare(vert, vertSize, vertCount, indices, indexSize, indicesCount)
 	// LIGHTS PREPARE (UBO)
 	w.lights.Prepare(lights, lightSize, lightsCount)
 	// OMBRE

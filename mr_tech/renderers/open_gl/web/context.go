@@ -385,21 +385,20 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 	}
 	d.ptrMutex.Lock()
 	dataVal, ok := d.ptrMap[uintptr(data)]
-	if ok {
-		delete(d.ptrMap, uintptr(data))
-	}
 	d.ptrMutex.Unlock()
 
-	if !ok || dataVal == nil {
-		d.fn_bufferData.Invoke(target, size, usage)
+	if ok && dataVal != nil {
+		bytes := d.getSliceBytes(dataVal)
+		if len(bytes) > size {
+			bytes = bytes[:size]
+		}
+		jsArr := d.getUint8haredJSArray(bytes)
+		d.fn_bufferData.Invoke(target, jsArr, usage)
 		return
 	}
 
-	bytes := d.getSliceBytes(dataVal)
-	if len(bytes) > size {
-		bytes = bytes[:size]
-	}
-	jsArr := d.getUint8haredJSArray(bytes)
+	// Direct Wasm memory pointer (zero-copy, zero-alloc)
+	jsArr := d.jsGetWasmMemoryView.Invoke(int(uintptr(data)), size, "uint8")
 	d.fn_bufferData.Invoke(target, jsArr, usage)
 }
 
@@ -409,25 +408,25 @@ func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage
 // size specifies the size in bytes of the data store region being replaced.
 // data specifies a pointer to the source data in memory.
 func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe.Pointer) {
-	if data == nil || uintptr(data) == 0 {
+	if data == nil || uintptr(data) == 0 || size <= 0 {
 		return
 	}
 	d.ptrMutex.Lock()
 	dataVal, ok := d.ptrMap[uintptr(data)]
-	if ok {
-		delete(d.ptrMap, uintptr(data))
-	}
 	d.ptrMutex.Unlock()
 
-	if !ok || dataVal == nil {
+	if ok && dataVal != nil {
+		bytes := d.getSliceBytes(dataVal)
+		if len(bytes) > size {
+			bytes = bytes[:size]
+		}
+		jsArr := d.getUint8haredJSArray(bytes)
+		d.fn_bufferSubData.Invoke(target, offset, jsArr)
 		return
 	}
 
-	bytes := d.getSliceBytes(dataVal)
-	if len(bytes) > size {
-		bytes = bytes[:size]
-	}
-	jsArr := d.getUint8haredJSArray(bytes)
+	// Direct Wasm memory pointer (zero-copy, zero-alloc)
+	jsArr := d.jsGetWasmMemoryView.Invoke(int(uintptr(data)), size, "uint8")
 	d.fn_bufferSubData.Invoke(target, offset, jsArr)
 }
 
@@ -846,12 +845,56 @@ func (d *Context) PolygonOffset(factor float32, units float32) {
 
 // Ptr registers the given data and returns an unsafe.Pointer that can be used to reference it in memory.
 func (d *Context) Ptr(data interface{}) unsafe.Pointer {
-	d.ptrMutex.Lock()
-	defer d.ptrMutex.Unlock()
-	b := new(byte)
-	ptr := unsafe.Pointer(b)
-	d.ptrMap[uintptr(ptr)] = data
-	return ptr
+	if data == nil {
+		return nil
+	}
+	switch v := data.(type) {
+	case unsafe.Pointer:
+		return v
+	case []float32:
+		if len(v) == 0 {
+			return nil
+		}
+		ptr := unsafe.Pointer(&v[0])
+		d.ptrMutex.Lock()
+		d.ptrMap[uintptr(ptr)] = data
+		d.ptrMutex.Unlock()
+		return ptr
+	case []uint32:
+		if len(v) == 0 {
+			return nil
+		}
+		ptr := unsafe.Pointer(&v[0])
+		d.ptrMutex.Lock()
+		d.ptrMap[uintptr(ptr)] = data
+		d.ptrMutex.Unlock()
+		return ptr
+	case []byte:
+		if len(v) == 0 {
+			return nil
+		}
+		ptr := unsafe.Pointer(&v[0])
+		d.ptrMutex.Lock()
+		d.ptrMap[uintptr(ptr)] = data
+		d.ptrMutex.Unlock()
+		return ptr
+	case []int32:
+		if len(v) == 0 {
+			return nil
+		}
+		ptr := unsafe.Pointer(&v[0])
+		d.ptrMutex.Lock()
+		d.ptrMap[uintptr(ptr)] = data
+		d.ptrMutex.Unlock()
+		return ptr
+	default:
+		d.ptrMutex.Lock()
+		defer d.ptrMutex.Unlock()
+		b := new(byte)
+		ptr := unsafe.Pointer(b)
+		d.ptrMap[uintptr(ptr)] = data
+		return ptr
+	}
 }
 
 // PtrOffset returns a pointer calculated by applying the given offset to the base address of the context.
@@ -965,9 +1008,6 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 	}
 	d.ptrMutex.Lock()
 	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	if ok {
-		delete(d.ptrMap, uintptr(pixels))
-	}
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {
@@ -1013,9 +1053,6 @@ func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, w
 	}
 	d.ptrMutex.Lock()
 	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	if ok {
-		delete(d.ptrMap, uintptr(pixels))
-	}
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {
@@ -1054,9 +1091,6 @@ func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffs
 	}
 	d.ptrMutex.Lock()
 	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	if ok {
-		delete(d.ptrMap, uintptr(pixels))
-	}
 	d.ptrMutex.Unlock()
 
 	if !ok || dataVal == nil {

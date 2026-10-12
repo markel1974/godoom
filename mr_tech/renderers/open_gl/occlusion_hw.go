@@ -1,6 +1,8 @@
 package open_gl
 
 import (
+	"unsafe"
+
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
@@ -29,26 +31,30 @@ type AABBTest struct {
 
 // OcclusionHW manages hardware-based occlusion queries using OpenGL-like graphics operations.
 type OcclusionHW struct {
-	ctx      api.IContext
-	states   map[uint64]*OcclusionState
-	queryIDs []uint32
-	queryIdx int
-	tests    []*AABBTest
-	testsLen int
-	cubeVAO  uint32
-	cubeVBO  uint32
+	ctx            api.IContext
+	states         map[uint64]*OcclusionState
+	queryIDs       []uint32
+	queryIdx       int
+	tests          []*AABBTest
+	testsLen       int
+	cubeVAO        uint32
+	cubeVBO        uint32
+	allVertices    []float32
+	allVerticesPtr unsafe.Pointer
 }
 
 // NewOcclusionHW initializes a new hardware occlusion object with context and maximum entity support.
 func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	hw := &OcclusionHW{
-		ctx:      ctx,
-		states:   make(map[uint64]*OcclusionState, maxEntities),
-		tests:    make([]*AABBTest, 1024),
-		testsLen: 0,
-		queryIDs: make([]uint32, maxEntities),
-		queryIdx: 0,
+		ctx:         ctx,
+		states:      make(map[uint64]*OcclusionState, maxEntities),
+		tests:       make([]*AABBTest, 8192),
+		allVertices: make([]float32, 1024*1024),
+		testsLen:    0,
+		queryIDs:    make([]uint32, maxEntities),
+		queryIdx:    0,
 	}
+	hw.allVerticesPtr = ctx.Ptr(hw.allVertices)
 
 	for idx := range hw.tests {
 		hw.tests[idx] = &AABBTest{}
@@ -136,8 +142,9 @@ func (hw *OcclusionHW) Render() {
 	}
 
 	// Regenerate the VBO buffer with all valid AABBs
-	var allVertices []float32
-	validCount := 0
+	vc := 0
+
+	tc := 0
 
 	for i := 0; i < hw.testsLen; i++ {
 		test := hw.tests[i]
@@ -163,7 +170,7 @@ func (hw *OcclusionHW) Render() {
 			v4, v5, v6, v7 := sw(p4), sw(p5), sw(p6), sw(p7)
 
 			// 36 vertices (12 triangles)
-			vertices := []float32{
+			vertices := [108]float32{
 				v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v0[0], v0[1], v0[2], // Back
 				v1[0], v1[1], v1[2], v5[0], v5[1], v5[2], v6[0], v6[1], v6[2], v6[0], v6[1], v6[2], v2[0], v2[1], v2[2], v1[0], v1[1], v1[2], // Right
 				v5[0], v5[1], v5[2], v4[0], v4[1], v4[2], v7[0], v7[1], v7[2], v7[0], v7[1], v7[2], v6[0], v6[1], v6[2], v5[0], v5[1], v5[2], // Front
@@ -171,15 +178,22 @@ func (hw *OcclusionHW) Render() {
 				v3[0], v3[1], v3[2], v2[0], v2[1], v2[2], v6[0], v6[1], v6[2], v6[0], v6[1], v6[2], v7[0], v7[1], v7[2], v3[0], v3[1], v3[2], // Top
 				v4[0], v4[1], v4[2], v5[0], v5[1], v5[2], v1[0], v1[1], v1[2], v1[0], v1[1], v1[2], v0[0], v0[1], v0[2], v4[0], v4[1], v4[2], // Bottom
 			}
-			allVertices = append(allVertices, vertices...)
-			validCount++
+
+			for _, v := range vertices {
+				if tc >= len(hw.allVertices) {
+					hw.grow()
+				}
+				hw.allVertices[tc] = v
+				tc++
+			}
+			vc++
 		}
 	}
 
-	if validCount > 0 {
+	if vc > 0 {
 		hw.ctx.BindVertexArray(hw.cubeVAO)
 		hw.ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
-		hw.ctx.BufferData(api.ARRAY_BUFFER, len(allVertices)*4, hw.ctx.Ptr(allVertices), api.DYNAMIC_DRAW)
+		hw.ctx.BufferData(api.ARRAY_BUFFER, tc*4, hw.allVerticesPtr, api.DYNAMIC_DRAW)
 
 		idx := int32(0)
 		for i := 0; i < hw.testsLen; i++ {
@@ -211,4 +225,13 @@ func (hw *OcclusionHW) Render() {
 			}
 		}
 	}
+}
+
+// grow doubles the size of the allVertices slice, copies existing data into the new slice, and updates its GPU pointer.
+func (hw *OcclusionHW) grow() {
+	newSize := len(hw.allVertices) * 2
+	newData := make([]float32, newSize)
+	copy(newData, hw.allVertices)
+	hw.allVertices = newData
+	hw.allVerticesPtr = hw.ctx.Ptr(hw.allVertices)
 }

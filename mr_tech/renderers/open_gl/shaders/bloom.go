@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
@@ -34,11 +35,14 @@ type Bloom struct {
 	h                int32
 	handler          *Handler
 	post             *Post
+	quad             []float32
+	quadPtr          unsafe.Pointer
 }
 
 // NewBloom creates and returns a new instance of the Bloom structure.
 func NewBloom() *Bloom {
-	return &Bloom{}
+	b := &Bloom{}
+	return b
 }
 
 // Setup initializes the Bloom instance by assigning the rendering context from the provided Handler.
@@ -48,6 +52,9 @@ func (s *Bloom) Setup(h *Handler) error {
 	s.post = h.GetPost()
 	s.hvPassages = h.GetHvPassages()
 	s.internalPassages = h.GetInternalPassages()
+
+	s.quad = []float32{-1, -1, 1, -1, -1, 1, 1, 1}
+	s.quadPtr = s.ctx.Ptr(s.quad)
 	return nil
 }
 
@@ -67,8 +74,8 @@ func (s *Bloom) SetupSamplers() error {
 	s.ctx.BindVertexArray(s.vao)
 	s.ctx.GenBuffers(1, &s.vbo)
 	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.vbo)
-	quad := []float32{-1, -1, 1, -1, -1, 1, 1, 1}
-	s.ctx.BufferData(api.ARRAY_BUFFER, len(quad)*4, s.ctx.Ptr(quad), api.STATIC_DRAW)
+
+	s.ctx.BufferData(api.ARRAY_BUFFER, len(s.quad)*4, s.quadPtr, api.STATIC_DRAW)
 	s.ctx.VertexAttribPointer(0, 2, api.FLOAT, false, 0, nil)
 	s.ctx.EnableVertexAttribArray(0)
 	return nil

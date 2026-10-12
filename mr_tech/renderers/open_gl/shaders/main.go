@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -304,7 +305,7 @@ func (s *Main) Compile(a IAssets) error {
 }
 
 // Prepare configures the rendering pipeline, updates buffer data, and manages double buffering for rendering operations.
-func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32) {
+func (s *Main) Prepare(vPtr unsafe.Pointer, vSize int, vCount int32, iPtr unsafe.Pointer, iSize int, iCount int32) {
 	fbW, fbH := s.handler.GetSize()
 	s.ctx.Viewport(0, 0, fbW, fbH)
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
@@ -312,24 +313,21 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 
 	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
 
-	vTotal := int(verticesLen) * 4
-	iTotal := int(indicesLen) * 4
-
 	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
-	if vTotal > s.vboBytesCap[s.frameIdx] {
-		newCap := vTotal * 2
+	if vSize > s.vboBytesCap[s.frameIdx] {
+		newCap := vSize * 2
 		s.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.vboBytesCap[s.frameIdx] = newCap
 	}
-	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vTotal, s.ctx.Ptr(vertices))
+	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vSize, vPtr)
 
 	s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
-	if iTotal > s.eboBytesCap[s.frameIdx] {
-		newCap := iTotal * 2
+	if iSize > s.eboBytesCap[s.frameIdx] {
+		newCap := iSize * 2
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.eboBytesCap[s.frameIdx] = newCap
 	}
-	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, s.ctx.Ptr(indices))
+	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iSize, iPtr)
 }
 
 // Render executes the single-pass forward rendering pipeline, combining all lights and shadows directly onto geometry.

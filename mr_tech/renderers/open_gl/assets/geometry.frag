@@ -1,13 +1,18 @@
 #version 330 core
 layout (location = 0) out vec4 gPositionDepth;
 layout (location = 1) out vec4 gNormal;
+layout (location = 2) out vec4 gAlbedoSpec;
+layout (location = 3) out vec4 gEmissive;
 
 in vec3 ViewPos;
 in vec3 TexCoords;
 in float FragDepth;
+in float IsFullbright;
 
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
+uniform sampler2DArray u_emissiveMap[4];
+uniform float u_emissiveIntensity;
 
 vec3 getNormal(vec3 tc) {
     int b = int(tc.z) / 1000;
@@ -27,24 +32,29 @@ vec4 getDiffuse(vec3 tc) {
     return texture(u_texture[3], vec3(tc.xy, l));
 }
 
-void main() {
-    // Early discard per la trasparenza
-    if(getDiffuse(TexCoords).a < 0.5) discard;
+vec3 getEmissive(vec3 tc) {
+    int b = int(tc.z) / 1000;
+    float l = mod(tc.z, 1000.0);
+    if (b == 0) return texture(u_emissiveMap[0], vec3(tc.xy, l)).rgb;
+    if (b == 1) return texture(u_emissiveMap[1], vec3(tc.xy, l)).rgb;
+    if (b == 2) return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
+    return texture(u_emissiveMap[3], vec3(tc.xy, l)).rgb;
+}
 
-    // Scrive Posizione e Profondità (necessari per SSAO)
+void main() {
+    vec4 texColor = getDiffuse(TexCoords);
+    if(texColor.a < 0.5) discard;
+
+    // Scrive Posizione e Profondità
     gPositionDepth = vec4(ViewPos, FragDepth);
 
     // Calcoliamo la variazione di ViewPos rispetto alle coordinate schermo X e Y
     vec3 dp1 = dFdx(ViewPos);
     vec3 dp2 = dFdy(ViewPos);
 
-    // Il prodotto vettoriale delle derivate ci dà la normale geometrica perfetta
+    // Il prodotto vettoriale delle derivate produce una normale geometrica coerente
     vec3 geoNormal = normalize(cross(dp1, dp2));
-
-    // Sicurezza Anti-Backface (Winding safety)
-    // In View Space la telecamera guarda verso -Z, una normale che guarda
-    // verso la telecamera deve avere Z positiva.
-    if (geoNormal.z < 0.0) {
+    if (dot(geoNormal, ViewPos) > 0.0) {
         geoNormal = -geoNormal;
     }
 
@@ -77,6 +87,9 @@ void main() {
         }
     }
 
-    // Scrive la normale calcolata nel G-Buffer per un SSAO molto più dettagliato
     gNormal = vec4(finalNormal, 1.0);
+    gAlbedoSpec = vec4(texColor.rgb, 1.0);
+
+    vec3 emColor = getEmissive(TexCoords) * u_emissiveIntensity;
+    gEmissive = vec4(emColor, IsFullbright);
 }

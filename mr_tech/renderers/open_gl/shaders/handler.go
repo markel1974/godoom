@@ -72,7 +72,7 @@ func NewHandler(vStride, lStride int32) *Handler {
 		additive:    NewAdditive(),
 		bloom:       NewBloom(), //TODO passaggi orizzontali e verticali dalla configurazione
 		blur:        NewBlur(),
-		deferred:    NewDeferred(vStride),
+		deferred:    NewDeferred(lStride),
 		depth:       NewDepth(8), //TODO numero di shadowLights dalla configurazione
 		geometry:    NewGeometry(),
 		lights:      NewLights(lStride),
@@ -108,9 +108,9 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 	if err := h.blur.Setup(h); err != nil {
 		return err
 	}
-	//if err := h.deferred.Setup(h); err != nil {
-	//	return err
-	//}
+	if err := h.deferred.Setup(h); err != nil {
+		return err
+	}
 	if err := h.depth.Setup(h); err != nil {
 		return err
 	}

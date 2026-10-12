@@ -21,13 +21,13 @@ func NewSpotlight() *Spotlights {
 	return s
 }
 
-// GetSpotLightSpacePtr returns a pointer to the spotLightSpace matrix used for spotlight transformation calculations.
-func (m *Spotlights) GetSpotLightSpacePtr() *float32 {
+// GetSpacePtr returns a pointer to the spotLightSpace matrix used for spotlight transformation calculations.
+func (m *Spotlights) GetSpacePtr() *float32 {
 	return m.spacePtr
 }
 
-// CreateSpotLightSpace computes a spotlight's light space matrix based on its position, direction, FOV, near, and far planes.
-func (m *Spotlights) CreateSpotLightSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
+// CreateSpace computes a spotlight's light space matrix based on its position, direction, FOV, near, and far planes.
+func (m *Spotlights) CreateSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
 	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
 	fovRad := fovDeg * math.Pi / 180.0

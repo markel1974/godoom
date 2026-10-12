@@ -63,7 +63,7 @@ type Shaders struct {
 	scaleX            float32
 	scaleY            float32
 	dynaLightMatrices []*float32
-	dynaLightMetrics  []*metrics.Spotlights
+	spotlightMetrics  []*metrics.Spotlights
 	dcOpaque          *DrawCommandsRender
 	dcAdditive        *DrawCommandsRender
 	dcLiquid          *DrawCommandsRender
@@ -87,7 +87,7 @@ func NewShaders(ctx api.IContext) *Shaders {
 		bloom:             nil,
 		enableShadows:     false,
 		dynaLightMatrices: nil,
-		dynaLightMetrics:  nil,
+		spotlightMetrics:  nil,
 	}
 	return c
 }
@@ -191,9 +191,9 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
 		dynaLightsLen := shadowLightsNum * 2
 		w.dynaLightMatrices = make([]*float32, dynaLightsLen)
-		w.dynaLightMetrics = make([]*metrics.Spotlights, dynaLightsLen)
+		w.spotlightMetrics = make([]*metrics.Spotlights, dynaLightsLen)
 		for lx := int32(0); lx < dynaLightsLen; lx++ {
-			w.dynaLightMetrics[lx] = metrics.NewSpotlight()
+			w.spotlightMetrics[lx] = metrics.NewSpotlight()
 		}
 	}
 
@@ -203,15 +203,16 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 		dX, dY, dZ := light.DirX, light.DirY, light.DirZ
 		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
 		// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
+		//TODO FROM CONFIG
 		fovDeg := float32(90.0)
 		near := float32(0.1)
 		factor := light.Intensity
 		falloff := light.Falloff
 		//TODO FROM CONFIG
 		effectiveRadius := float32(4.605) * falloff * factor
-		dynaMetrics := w.dynaLightMetrics[lx]
-		dynaMetrics.CreateSpotLightSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
-		w.dynaLightMatrices[lx] = dynaMetrics.GetSpotLightSpacePtr()
+		dynaMetrics := w.spotlightMetrics[lx]
+		dynaMetrics.CreateSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
+		w.dynaLightMatrices[lx] = dynaMetrics.GetSpacePtr()
 	}
 
 	//RENDER START HERE

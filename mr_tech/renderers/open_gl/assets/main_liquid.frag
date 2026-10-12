@@ -73,7 +73,7 @@ void main() {
     const float WATER_FOG_R = 0.0;
     const float WATER_FOG_G = 0.2;
     const float WATER_FOG_B = 0.3;
-    const float WATER_ABSORPTION = 0.02;
+    const float WATER_ABSORPTION = 0.005;
     // Temporal frequencies.
     const float WAVE1_SPEED_X = 1.31;
     const float WAVE1_SPEED_Y = 1.07;
@@ -155,6 +155,9 @@ void main() {
     // Water surface depth
     float waterDepth = abs(ViewPos.z);
     float depthDiff = max(bgDepth - waterDepth, 0.0);
+    if (bgDepthRaw >= 0.9999) {
+        depthDiff = min(depthDiff, 60.0);
+    }
 
     // Beer-Lambert absorption
     vec3 waterFogColor = vec3(WATER_FOG_R, WATER_FOG_G, WATER_FOG_B);

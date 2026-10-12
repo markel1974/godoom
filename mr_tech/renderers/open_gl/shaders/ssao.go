@@ -44,6 +44,8 @@ type SSAO struct {
 	radius           float32
 	bias             float32
 	normal           uint32
+	albedo           uint32
+	emissive         uint32
 	fbo              uint32
 	colorBuffer      uint32
 	blurTexture      uint32
@@ -67,7 +69,7 @@ func NewSSAO() *SSAO {
 	s := &SSAO{
 		prg:         0,
 		rboDepth:    0,
-		attachments: []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1},
+		attachments: []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1, api.COLOR_ATTACHMENT2, api.COLOR_ATTACHMENT3},
 	}
 	s.attachmentsPtr = &s.attachments[0]
 	return s
@@ -112,6 +114,26 @@ func (s *SSAO) Init() error {
 // GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.
 func (s *SSAO) GetGBufferTextures() (uint32, uint32) {
 	return s.positionDepth, s.normal
+}
+
+// GetPositionDepthTexture returns the positionDepth texture ID.
+func (s *SSAO) GetPositionDepthTexture() uint32 {
+	return s.positionDepth
+}
+
+// GetNormalTexture returns the normal texture ID.
+func (s *SSAO) GetNormalTexture() uint32 {
+	return s.normal
+}
+
+// GetAlbedoTexture returns the albedo texture ID.
+func (s *SSAO) GetAlbedoTexture() uint32 {
+	return s.albedo
+}
+
+// GetEmissiveTexture returns the emissive texture ID.
+func (s *SSAO) GetEmissiveTexture() uint32 {
+	return s.emissive
 }
 
 // GetSSAOResources returns the ID of the texture containing the SSAO noise pattern.
@@ -266,7 +288,7 @@ func (s *SSAO) Render(skyEnabled bool) {
 		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}
 
-	// 3. FORWARD MULTI-PASS
+	// FORWARD MULTI-PASS
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, postFBO)
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
 	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
@@ -287,6 +309,8 @@ func (s *SSAO) allocate(width, height int32) {
 		s.ctx.DeleteFramebuffers(1, &s.bufferFbo)
 		s.ctx.DeleteTextures(1, &s.positionDepth)
 		s.ctx.DeleteTextures(1, &s.normal)
+		s.ctx.DeleteTextures(1, &s.albedo)
+		s.ctx.DeleteTextures(1, &s.emissive)
 		s.ctx.DeleteRenderbuffers(1, &s.rboDepth)
 
 		s.ctx.DeleteFramebuffers(1, &s.fbo)
@@ -300,10 +324,10 @@ func (s *SSAO) allocate(width, height int32) {
 	s.ctx.GenFramebuffers(1, &s.bufferFbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
 
-	// Position + depth (RGBA16F per precisione spaziale)
+	// Position + depth (RGBA32F per precisione spaziale ed eliminazione flickering)
 	s.ctx.GenTextures(1, &s.positionDepth)
 	s.ctx.BindTexture(api.TEXTURE_2D, s.positionDepth)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA32F, width, height, 0, api.RGBA, api.FLOAT, nil)
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.positionDepth, 0)
@@ -316,13 +340,29 @@ func (s *SSAO) allocate(width, height int32) {
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D, s.normal, 0)
 
+	// Albedo + Specular
+	s.ctx.GenTextures(1, &s.albedo)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.albedo)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA, width, height, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT2, api.TEXTURE_2D, s.albedo, 0)
+
+	// Emissive + Fullbright flag
+	s.ctx.GenTextures(1, &s.emissive)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.emissive)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT3, api.TEXTURE_2D, s.emissive, 0)
+
 	// Depth Renderbuffer (salvato nella struct)
 	s.ctx.GenRenderbuffers(1, &s.rboDepth)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepth)
 	s.ctx.RenderbufferStorage(api.RENDERBUFFER, api.DEPTH_COMPONENT24, width, height)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepth)
 
-	s.ctx.DrawBuffers(2, s.attachmentsPtr)
+	s.ctx.DrawBuffers(4, s.attachmentsPtr)
 
 	// SSAO FBO
 	s.ctx.GenFramebuffers(1, &s.fbo)

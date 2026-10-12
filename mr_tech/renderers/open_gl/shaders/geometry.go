@@ -17,6 +17,8 @@ type GeometryLoc int
 const (
 	GeometryLocTexture = GeometryLoc(iota)
 	GeometryLocNormalMap
+	GeometryLocEmissiveMap
+	GeometryLocEmissiveIntensity
 	GeometryLocView
 	GeometryLocProjection
 	GeometryLocLast
@@ -25,10 +27,11 @@ const (
 // Geometry represents a shader program used for geometry rendering in a graphics pipeline.
 // This type holds the OpenGL program ID, uniform locations, and state for view and projection matrices.
 type Geometry struct {
-	ctx        api.IContext
-	prg        uint32
-	table      [GeometryLocLast]int32
-	mapMetrics *metrics.Map
+	ctx               api.IContext
+	prg               uint32
+	table             [GeometryLocLast]int32
+	mapMetrics        *metrics.Map
+	emissiveIntensity float32
 }
 
 // NewGeometry initializes and returns a new Geometry instance with default properties.
@@ -42,6 +45,7 @@ func NewGeometry() *Geometry {
 func (s *Geometry) Setup(h *Handler) error {
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
+	s.emissiveIntensity = h.GetEmissiveIntensity()
 	return nil
 }
 
@@ -50,8 +54,10 @@ func (s *Geometry) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	diffuseUnits := []int32{0, 1, 2, 3}
 	normalUnits := []int32{4, 5, 6, 7}
+	emissiveUnits := []int32{8, 9, 10, 11}
 	s.ctx.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
 	s.ctx.Uniform1iv(s.GetUniform(GeometryLocNormalMap), 4, &normalUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocEmissiveMap), 4, &emissiveUnits[0])
 	return nil
 }
 
@@ -94,6 +100,8 @@ func (s *Geometry) Compile(assets IAssets) error {
 	}
 	s.table[GeometryLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
 	s.table[GeometryLocNormalMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normalMap\x00"))
+	s.table[GeometryLocEmissiveMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_emissiveMap\x00"))
+	s.table[GeometryLocEmissiveIntensity] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_emissiveIntensity\x00"))
 	s.table[GeometryLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 	s.table[GeometryLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	for idx, v := range s.table {
@@ -110,7 +118,7 @@ func (s *Geometry) Render(renderScene func()) {
 	proj := s.mapMetrics.GetProjPtr()
 
 	s.ctx.UseProgram(s.GetProgram())
-	// RIMOSSO: s.ctx.Uniform1i(s.GetUniform(GeometryLocTexture), 0) (Gestito ora da SetupSamplers)
+	s.ctx.Uniform1f(s.GetUniform(GeometryLocEmissiveIntensity), s.emissiveIntensity)
 	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocView), 1, false, view)
 	s.ctx.UniformMatrix4fv(s.GetUniform(GeometryLocProjection), 1, false, proj)
 	renderScene()

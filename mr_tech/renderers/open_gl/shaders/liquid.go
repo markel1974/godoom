@@ -149,12 +149,15 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 		s.ctx.Disable(api.BLEND)
 		s.ctx.DepthMask(true)
 	}
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LEQUAL)
+
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocView), 1, false, view)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocTime), interval)
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
-	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), 0.1)
-	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), 1000.0)
+	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), s.metrics.GetRoomZNear())
+	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), s.metrics.GetRoomZFar())
 
 	s.ctx.BindVertexArray(vao)
 
@@ -173,4 +176,5 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 
 	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 }

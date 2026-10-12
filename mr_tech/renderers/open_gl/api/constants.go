@@ -90,3 +90,13 @@ const (
 	UNSIGNED_INT               = 0x1405
 	VERTEX_SHADER              = 0x8B31
 )
+
+const (
+	TexUnitDiffuseBase  = 0
+	TexUnitNormalBase   = 4
+	TexUnitEmissiveBase = 8
+	TexUnitRefraction   = 12
+	TexUnitRoomShadow   = 12
+	TexUnitShadowMap    = 13
+	TexUnitSSAO         = 14
+)

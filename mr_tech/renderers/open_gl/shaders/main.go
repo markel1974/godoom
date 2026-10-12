@@ -164,14 +164,14 @@ func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
 
 // SetupSamplers initializes sampler uniforms for opaque and additive shaders, binding texture units for diffuse and emissive maps.
 func (s *Main) SetupSamplers() error {
-	diffuseUnits := []int32{0, 1, 2, 3}
-	emissiveUnits := []int32{8, 9, 10, 11}
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
+	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2, api.TexUnitEmissiveBase + 3}
 
 	// Setup Opaque Samplers
 	s.ctx.UseProgram(s.prgOpaque)
 	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
 	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), 14)
+	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocSSAO), api.TexUnitSSAO)
 
 	return nil
 }
@@ -273,7 +273,7 @@ func (s *Main) Render(renderGeometry func()) {
 
 	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
 
-	s.ctx.ActiveTexture(api.TEXTURE14)
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
 	s.ctx.BindTexture(api.TEXTURE_2D, ssaoBlurTex)
 
 	// enable Alpha To Coverage only for the main geometry

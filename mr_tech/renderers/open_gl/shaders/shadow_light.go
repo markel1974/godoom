@@ -119,11 +119,11 @@ func (s *ShadowLight) HasShadow() bool {
 // SetupSamplers configures texture samplers for the shadow light, mapping specific texture units to shader uniforms.
 func (s *ShadowLight) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := []int32{0, 1, 2, 3}
-	normalUnits := []int32{4, 5, 6, 7}
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
+	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(ShadowLightLocTexture), 4, &diffuseUnits[0])
 	s.ctx.Uniform1iv(s.GetUniform(ShadowLightLocNormalMap), 4, &normalUnits[0])
-	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocFlashShadowMap), 13)
+	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocFlashShadowMap), api.TexUnitShadowMap)
 	return nil
 }
 
@@ -247,7 +247,7 @@ func (s *ShadowLight) Render(renderGeometry func(), lightIndex int32, posViewX, 
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocIsAbsolute), isAbsolute)
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocDebugLights), int32(s.debugLights))
 	if s.shadows {
-		s.ctx.ActiveTexture(api.TEXTURE13)
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowMap)
 		s.ctx.BindTexture(api.TEXTURE_2D, lTex)
 	}
 

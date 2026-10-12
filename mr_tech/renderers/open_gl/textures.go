@@ -176,11 +176,11 @@ func (tx *Textures) BindBuckets() {
 		diffuse := tx.buckets[i].DiffuseArray
 		normal := tx.buckets[i].NormalArray
 		emissive := tx.buckets[i].EmissiveArray
-		tx.ctx.ActiveTexture(api.TEXTURE0 + i)
+		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitDiffuseBase + i)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
-		tx.ctx.ActiveTexture(api.TEXTURE4 + i)
+		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitNormalBase + i)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
-		tx.ctx.ActiveTexture(api.TEXTURE8 + i)
+		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + i)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
 	}
 }

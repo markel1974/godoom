@@ -60,16 +60,16 @@ func (s *Liquid) Setup(h *Handler) error {
 func (s *Liquid) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 
-	diffuseUnits := [4]int32{0, 1, 2, 3}
+	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(ShaderLiquidLocTexture), 4, &diffuseUnits[0])
 	locRefraction := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_refractionTex\x00"))
 	if locRefraction != -1 {
-		s.ctx.Uniform1i(locRefraction, 12)
+		s.ctx.Uniform1i(locRefraction, api.TexUnitRefraction)
 	}
 
 	locDepth := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTex\x00"))
 	if locDepth != -1 {
-		s.ctx.Uniform1i(locDepth, 13)
+		s.ctx.Uniform1i(locDepth, api.TexUnitShadowMap)
 	}
 
 	return nil
@@ -161,17 +161,17 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 
 	s.ctx.BindVertexArray(vao)
 
-	s.ctx.ActiveTexture(api.TEXTURE12)
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitRefraction)
 	s.ctx.BindTexture(api.TEXTURE_2D, refractionTex)
-	s.ctx.ActiveTexture(api.TEXTURE13)
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowMap)
 	s.ctx.BindTexture(api.TEXTURE_2D, depthTex)
 
 	renderGeometry()
 
 	// UNBIND TEXTURES TO PREVENT FEEDBACK LOOPS IN POST RESOLVE
-	s.ctx.ActiveTexture(api.TEXTURE12)
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitRefraction)
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
-	s.ctx.ActiveTexture(api.TEXTURE13)
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowMap)
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 
 	s.ctx.Disable(api.BLEND)

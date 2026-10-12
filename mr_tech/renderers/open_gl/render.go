@@ -193,7 +193,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.tex.BindBuckets()
 
 	px, _, pz := w.vi.GetView()
-	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
+	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
 
 	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)

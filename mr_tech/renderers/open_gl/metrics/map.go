@@ -44,7 +44,7 @@ func NewMap() *Map {
 	m.roomViewPtr = &m.roomView[0]
 	m.roomSpacePtr = &m.roomSpace[0]
 	m.SetOrthoSize(float32(640), 0.0, 8192.0)
-	m.SetMapCenter(0.0, 0.0, 0.0)
+	m.SetCenter(0.0, 0.0, 0.0)
 	return m
 }
 
@@ -136,14 +136,15 @@ func (m *Map) SetOrthoSize(orthoSize, zNearRoom, zFarRoom float32) {
 	m.updateRoomProj(m.orthoSize, m.roomZNear, m.roomZFar)
 }
 
-// SetMapCenter updates the map's center coordinates (cx, cz) and light camera height (lightCamY), and refreshes the room view.
-func (m *Map) SetMapCenter(cx float32, cz float32, lightCamY float32) {
+// SetCenter updates the map's center coordinates (cx, cz) and light camera height (lightCamY), and refreshes the room view.
+func (m *Map) SetCenter(cx float32, cz float32, lightCamY float32) {
 	m.mapCenterX = cx
 	m.lightCamY = lightCamY
 	m.mapCenterZ = cz
 	m.updateRoomView(m.mapCenterX, m.lightCamY, m.mapCenterZ)
 }
 
+// Update updates the room space and projection-view matrices using the provided view matrix and scaling factors.
 func (m *Map) Update(vi *model.ViewMatrix, scaleX float32, scaleY float32) {
 	m.createRoomSpace(vi)
 	m.createProjView(vi, scaleX, scaleY)

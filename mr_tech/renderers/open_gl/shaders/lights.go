@@ -110,8 +110,8 @@ func (s *Lights) Init() error {
 // SetupSamplers configures shader samplers for texture, normal map, and room shadow map locations.
 func (s *Lights) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := []int32{0, 1, 2, 3}
-	normalUnits := []int32{4, 5, 6, 7}
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
+	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in shadow_light.go
 	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
 	//s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
@@ -219,7 +219,7 @@ func (s *Lights) Render(renderGeometry func(), ambient float32) {
 	s.ctx.Uniform1i(s.GetUniform(LightLocDebugLights), int32(s.debugLights))
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 	if s.shadows != 0 {
-		s.ctx.ActiveTexture(api.TEXTURE12)
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitRoomShadow)
 		s.ctx.BindTexture(api.TEXTURE_2D, roomShadowTex)
 	}
 	renderGeometry()

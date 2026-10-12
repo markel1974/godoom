@@ -185,11 +185,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	lights, lightsCount := w.builder.GetLights()
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 
-	skyTex, skyEnabled := float32(-1.0), false
-	if cSky := w.builder.GetSkyTexture(); cSky != nil {
-		skyTex, skyEnabled = w.tex.Get(cSky)
-	}
-
 	if w.handler.SetSize(fbW, fbH) {
 		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 		w.flashlightMetrics.Rebuild(fbW, fbH)
@@ -217,8 +212,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.main.Prepare(vert, vertLen, indices, indicesLen)
 	// LIGHTS PREPARE
 	w.lights.Prepare(lights, lightsCount)
-	// BIND TEXTURE
-	//w.bindTextureBuckets()
 	// OMBRE
 	w.depth.Render(w.dcOpaque.Render)
 	// SSAO PREPARE
@@ -231,7 +224,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.main.Render(w.dcOpaque.Render)
 	// HW OCCLUSION
 	w.occlusion.Render(w.hwOcc.Render)
-
 	// MAIN ADDITIVE
 	if w.dcAdditive.HasCommands() {
 		w.additive.RenderAdditive(w.dcAdditive.Render)
@@ -268,12 +260,16 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.lights.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()))
 	// DISABLE ADDITIVE LIGHTS
 	DisableAdditiveLights(w.ctx)
-	//w.bindTextureBuckets() // Restore texture arrays!
 	// SKYBOX
-	if skyEnabled {
+	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
+		skyTexId := skyTex.GetIdentifier()
+		if skyTexId < 0 {
+			skyTexId, _ = w.tex.Get(skyTex)
+			skyTex.SetIdentifier(skyTexId)
+		}
 		u, v := w.builder.GetSkyUV()
 		tick := float32(textures.TickF())
-		w.sky.Render(skyTex, float32(u)*tick, float32(v)*tick)
+		w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
 	}
 	// MSAA resolution
 	w.post.Prepare()

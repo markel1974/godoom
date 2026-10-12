@@ -387,16 +387,19 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 	}
 
 	// Dynamic Shadow Lights
-	shadowLights, numShadowLights := s.shadowLightsMetrics.GetLights()
+	//shadowLights, numShadowLights := s.shadowLightsMetrics.GetLights()
+	numShadowLights := s.shadowLightsMetrics.GetLightCount()
 	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocNumShadowLights), int32(numShadowLights))
-	for i := 0; i < int(numShadowLights); i++ {
-		l := shadowLights[i]
-		loc := &s.shadowLightLocs[i]
-		s.ctx.Uniform4f(loc.posIntensity, l.X, l.Y, l.Z, l.Intensity)
-		s.ctx.Uniform4f(loc.dirFalloff, l.DirX, l.DirY, l.DirZ, l.Falloff)
-		s.ctx.Uniform4f(loc.colorType, l.R, l.G, l.B, l.Kind)
-		s.ctx.Uniform4f(loc.spotParams, l.OuterCutOff, l.CutOff, 0.0, 0.0)
-		s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, s.shadowLightsMetrics.GetSpacePtr(uint32(i)))
+	if numShadowLights > 0 {
+		for i := 0; i < int(numShadowLights); i++ {
+			l, lMatrix := s.shadowLightsMetrics.GetLight(i)
+			loc := &s.shadowLightLocs[i]
+			s.ctx.Uniform4f(loc.posIntensity, l.X, l.Y, l.Z, l.Intensity)
+			s.ctx.Uniform4f(loc.dirFalloff, l.DirX, l.DirY, l.DirZ, l.Falloff)
+			s.ctx.Uniform4f(loc.colorType, l.R, l.G, l.B, l.Kind)
+			s.ctx.Uniform4f(loc.spotParams, l.OuterCutOff, l.CutOff, 0.0, 0.0)
+			s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, lMatrix)
+		}
 	}
 
 	// Dynamic UBO Lights

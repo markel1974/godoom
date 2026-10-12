@@ -129,9 +129,8 @@ func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
 	hw.testsLen++
 }
 
-// RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
-// RenderQueries performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
-func (hw *OcclusionHW) RenderQueries() {
+// Render performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
+func (hw *OcclusionHW) Render() {
 	if hw.testsLen == 0 {
 		return
 	}

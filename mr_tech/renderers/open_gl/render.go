@@ -195,16 +195,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 		w.flashlightMetrics.Rebuild(fbW, fbH)
 	}
 
-	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
-	for i := 0; i < w.tex.GetBucketsLen(); i++ {
-		diffuse, normal, emissive := w.tex.GetBucket(i)
-		w.ctx.ActiveTexture(api.TEXTURE0 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
-		w.ctx.ActiveTexture(api.TEXTURE4 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
-		w.ctx.ActiveTexture(api.TEXTURE8 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
-	}
+	w.bindTextureBuckets()
 
 	px, _, pz := w.vi.GetView()
 	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
@@ -239,9 +230,8 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// MAIN OPAQUE
 	w.main.Render(w.dcOpaque.Render)
 	// HW OCCLUSION
-	if w.hwOcc != nil {
-		w.occlusion.Render(func() { w.hwOcc.RenderQueries() })
-	}
+	w.occlusion.Render(w.hwOcc.Render)
+
 	// MAIN ADDITIVE
 	if w.dcAdditive.HasCommands() {
 		w.additive.RenderAdditive(w.dcAdditive.Render)

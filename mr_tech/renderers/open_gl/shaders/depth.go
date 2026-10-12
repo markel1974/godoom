@@ -205,10 +205,8 @@ func (s *Depth) GetShadowAtlasTexture() uint32 {
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
 func (s *Depth) GetShadowLightTextures(idx int) (uint32, uint32, *float32) {
-	//if idx >= s.shadowLightCount {
-	//	return 0, 0, s.matrixEmptyPtr
-	//}
-	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, s.shadowLightsMetrics.GetSpacePtr(idx)
+	_, lMatrix := s.shadowLightsMetrics.GetLight(idx)
+	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, lMatrix
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.

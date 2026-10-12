@@ -57,11 +57,3 @@ func (s *ShadowLights) GetLightCount() uint32 {
 func (s *ShadowLights) GetLight(idx int) (*Light, *float32) {
 	return s.lights[idx], s.metrics[idx].GetSpacePtr()
 }
-
-// GetSpacePtr retrieves a pointer to the light's shadow space matrix at the specified index. Returns nil if out of range.
-func (s *ShadowLights) GetSpacePtr(idx int) *float32 {
-	if uint32(idx) >= s.count {
-		return nil
-	}
-	return s.metrics[idx].GetSpacePtr()
-}

@@ -39,55 +39,55 @@ type Shaders struct {
 	container     []IShader
 	enableShadows bool
 
-	handler       *shaders.Handler
-	mapMetrics    *metrics.Map
-	shadowMetrics *metrics.Shadows
-	main          *shaders.Main
-	sky           *shaders.Sky
-	geometry      *shaders.Geometry
-	ssao          *shaders.SSAO
-	blur          *shaders.Blur
-	depth         *shaders.Depth
-	lights        *shaders.Lights
-	shadowLight   *shaders.ShadowLight
-	post          *shaders.Post
-	bloom         *shaders.Bloom
-	occlusion     *shaders.Occlusion
-	additive      *shaders.Additive
-	liquid        *shaders.Liquid
-	deferred      *shaders.Deferred
+	handler           *shaders.Handler
+	mapMetrics        *metrics.Map
+	flashlightMetrics *metrics.Flashlight
+	main              *shaders.Main
+	sky               *shaders.Sky
+	geometry          *shaders.Geometry
+	ssao              *shaders.SSAO
+	blur              *shaders.Blur
+	depth             *shaders.Depth
+	lights            *shaders.Lights
+	flashlight        *shaders.ShadowLight
+	post              *shaders.Post
+	bloom             *shaders.Bloom
+	occlusion         *shaders.Occlusion
+	additive          *shaders.Additive
+	liquid            *shaders.Liquid
+	deferred          *shaders.Deferred
 
-	cal               *model.Calibration
-	width             int32
-	height            int32
-	scaleX            float32
-	scaleY            float32
-	dynaLightMatrices []*float32
-	spotlightMetrics  []*metrics.Spotlights
-	dcOpaque          *DrawCommandsRender
-	dcAdditive        *DrawCommandsRender
-	dcLiquid          *DrawCommandsRender
-	hwOcc             *OcclusionHW
+	cal                 *model.Calibration
+	width               int32
+	height              int32
+	scaleX              float32
+	scaleY              float32
+	shadowLightMatrices []*float32
+	shadowLightMetrics  []*metrics.ShadowLight
+	dcOpaque            *DrawCommandsRender
+	dcAdditive          *DrawCommandsRender
+	dcLiquid            *DrawCommandsRender
+	hwOcc               *OcclusionHW
 }
 
 // NewShaders initializes and returns a new instance of Shaders with default shader components and shadow settings.
 func NewShaders(ctx api.IContext) *Shaders {
 	c := &Shaders{
-		ctx:               ctx,
-		tex:               nil,
-		main:              nil,
-		sky:               nil,
-		geometry:          nil,
-		ssao:              nil,
-		blur:              nil,
-		depth:             nil,
-		lights:            nil,
-		shadowLight:       nil,
-		post:              nil,
-		bloom:             nil,
-		enableShadows:     false,
-		dynaLightMatrices: nil,
-		spotlightMetrics:  nil,
+		ctx:                 ctx,
+		tex:                 nil,
+		main:                nil,
+		sky:                 nil,
+		geometry:            nil,
+		ssao:                nil,
+		blur:                nil,
+		depth:               nil,
+		lights:              nil,
+		flashlight:          nil,
+		post:                nil,
+		bloom:               nil,
+		enableShadows:       false,
+		shadowLightMatrices: nil,
+		shadowLightMetrics:  nil,
 	}
 	return c
 }
@@ -110,7 +110,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 		return err
 	}
 	w.mapMetrics = w.handler.GetMapMetrics()
-	w.shadowMetrics = w.handler.GetShadowMetrics()
+	w.flashlightMetrics = w.handler.GetFlashlightMetrics()
 
 	w.main = w.handler.GetMain()
 	w.sky = w.handler.GetSky()
@@ -119,7 +119,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.blur = w.handler.GetBlur()
 	w.depth = w.handler.GetDepth()
 	w.lights = w.handler.GetLights()
-	w.shadowLight = w.handler.GetShadowLight()
+	w.flashlight = w.handler.GetShadowLight()
 	w.post = w.handler.GetPost()
 	w.bloom = w.handler.GetBloom()
 	w.occlusion = w.handler.GetOcclusion()
@@ -127,7 +127,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 	w.liquid = w.handler.GetLiquid()
 
 	w.enableShadows = false
-	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.shadowLight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
+	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
 
 	w.SetShadowEnabled(true)
 
@@ -152,7 +152,7 @@ func (w *Shaders) Setup(vStride, lStride int32, p *model.ThingPlayer, cal *model
 // SetShadowEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
 func (w *Shaders) SetShadowEnabled(v bool) {
 	w.enableShadows = v
-	w.shadowLight.EnableShadows(w.enableShadows)
+	w.flashlight.EnableShadows(w.enableShadows)
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)
 }
@@ -160,7 +160,7 @@ func (w *Shaders) SetShadowEnabled(v bool) {
 // Render handles the complete rendering pipeline, including geometry, lighting, post-processing, and optional sky rendering.
 func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32, winH int32, vert []float32, vertLen int32, indices []uint32, indicesLen int32, skyEnabled bool, skyLayer, skyU, skyV float32, lights []float32, lightsNum int32, shadowLights [8]*Light, shadowLightsNum int32) {
 	if w.handler.SetSize(fbW, fbH) {
-		w.shadowMetrics.Rebuild(fbW, fbH)
+		w.flashlightMetrics.Rebuild(fbW, fbH)
 		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 	}
 
@@ -181,19 +181,19 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 
 	//dirX, dirY, dirZ := vi.GetForwardVector()
 	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
-	if w.shadowLight.HasShadow() {
+	if w.flashlight.HasShadow() {
 		swayX, swayY, swaySensitivity := vi.GetSway()
 		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
 	}
 
-	w.shadowMetrics.Update(w.mapMetrics.GetMainViewPtr(), flashX, flashY)
+	w.flashlightMetrics.Update(w.mapMetrics.GetMainViewPtr(), flashX, flashY)
 
-	if int(shadowLightsNum) >= len(w.dynaLightMatrices) {
-		dynaLightsLen := shadowLightsNum * 2
-		w.dynaLightMatrices = make([]*float32, dynaLightsLen)
-		w.spotlightMetrics = make([]*metrics.Spotlights, dynaLightsLen)
-		for lx := int32(0); lx < dynaLightsLen; lx++ {
-			w.spotlightMetrics[lx] = metrics.NewSpotlight()
+	if int(shadowLightsNum) >= len(w.shadowLightMatrices) {
+		slLen := shadowLightsNum * 2
+		w.shadowLightMatrices = make([]*float32, slLen)
+		w.shadowLightMetrics = make([]*metrics.ShadowLight, slLen)
+		for lx := int32(0); lx < slLen; lx++ {
+			w.shadowLightMetrics[lx] = metrics.NewShadowLight()
 		}
 	}
 
@@ -210,13 +210,13 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 		falloff := light.Falloff
 		//TODO FROM CONFIG
 		effectiveRadius := float32(4.605) * falloff * factor
-		dynaMetrics := w.spotlightMetrics[lx]
-		dynaMetrics.CreateSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
-		w.dynaLightMatrices[lx] = dynaMetrics.GetSpacePtr()
+		shadowLightMetric := w.shadowLightMetrics[lx]
+		shadowLightMetric.CreateSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
+		w.shadowLightMatrices[lx] = shadowLightMetric.GetSpacePtr()
 	}
 
 	//RENDER START HERE
-	w.depth.Prepare(w.dynaLightMatrices, uint32(shadowLightsNum))
+	w.depth.Prepare(w.shadowLightMatrices, uint32(shadowLightsNum))
 	// MAIN PREPARE (VBO che EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen)
 	// LIGHTS PREPARE
@@ -252,7 +252,7 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 	// ENABLE ADDITIVE LIGHTS
 	enableAdditiveLights(w.ctx)
 	// FLASHLIGHTS
-	w.shadowLight.Render(
+	w.flashlight.Render(
 		w.dcOpaque.Render, -1,
 		flashX, flashY, 0.0,
 		float32(w.flash.GetOffsetX())-(flashX*flashSensitivity),
@@ -260,10 +260,10 @@ func (w *Shaders) Render(vi *model.ViewMatrix, fbW int32, fbH int32, winW int32,
 		-1.0,
 		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()),
 		float32(w.flash.GetConeStart()), float32(w.flash.GetConeEnd()))
-	// DYNAMIC LIGHTS
+	// SHADOW LIGHTS
 	for lightIdx := int32(0); lightIdx < shadowLightsNum; lightIdx++ {
 		light := shadowLights[lightIdx]
-		w.shadowLight.Render(w.dcOpaque.Render, lightIdx,
+		w.flashlight.Render(w.dcOpaque.Render, lightIdx,
 			light.X, light.Y, light.Z,
 			light.DirX, light.DirY, light.DirZ,
 			light.Intensity, light.Falloff, light.OuterCutOff, light.CutOff)

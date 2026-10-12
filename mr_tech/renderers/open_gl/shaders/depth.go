@@ -90,22 +90,22 @@ func (d *DepthMap) Shutdown() {
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
-	ctx              api.IContext
-	handler          *Handler
-	prg              uint32
-	table            [DepthLocLast]int32
-	sWidth           int32
-	sHeight          int32
-	roomMap          *DepthMap
-	flashMap         *DepthMap
-	shadowLights     []*DepthMap
-	shadows          bool
-	mapMetrics       *metrics.Map
-	shadowMetrics    *metrics.Shadows
-	shadowLightCount uint32
-	matrixEmpty      [16]float32
-	matrixEmptyPtr   *float32
-	viewMatrixPtr    *float32
+	ctx               api.IContext
+	handler           *Handler
+	prg               uint32
+	table             [DepthLocLast]int32
+	sWidth            int32
+	sHeight           int32
+	roomMap           *DepthMap
+	flashMap          *DepthMap
+	shadowLights      []*DepthMap
+	shadows           bool
+	mapMetrics        *metrics.Map
+	flashlightMetrics *metrics.Flashlight
+	shadowLightCount  uint32
+	matrixEmpty       [16]float32
+	matrixEmptyPtr    *float32
+	viewMatrixPtr     *float32
 
 	maxShadowLights int
 	main            *Main
@@ -127,7 +127,7 @@ func (s *Depth) Setup(h *Handler) error {
 	s.handler = h
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
-	s.shadowMetrics = h.GetShadowMetrics()
+	s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.main = h.GetMain()
 	s.roomMap = NewDepthMap(s.ctx)
 	s.flashMap = NewDepthMap(s.ctx)
@@ -228,7 +228,7 @@ func (s *Depth) Compile(assets IAssets) error {
 // Prepare updates the uniform matrix values for room and flashlight space transformations for the shader.
 func (s *Depth) Prepare(dynaLight []*float32, dynaLightCount uint32) {
 	roomSpaceMatrix := s.mapMetrics.GetRoomSpacePtr()
-	flashSpaceMatrix := s.shadowMetrics.GetShadowSpacePtr()
+	flashSpaceMatrix := s.flashlightMetrics.GetShadowSpacePtr()
 	viewMatrix := s.mapMetrics.GetMainViewPtr()
 
 	s.viewMatrixPtr = viewMatrix
@@ -250,7 +250,7 @@ func (s *Depth) Render(renderScene func()) {
 	}
 	fbW, fbH := s.handler.GetSize()
 	mainVao := s.main.GetVAO()
-	sWidth, sHeight := s.shadowMetrics.GetShadowSize()
+	sWidth, sHeight := s.flashlightMetrics.GetShadowSize()
 	if sWidth != s.sWidth || sHeight != s.sHeight {
 		s.allocate(sWidth, sHeight)
 	}

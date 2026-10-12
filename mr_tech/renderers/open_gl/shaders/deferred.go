@@ -49,25 +49,25 @@ const (
 
 // Deferred represents a structure for managing deferred rendering operations in a 3D rendering pipeline.
 type Deferred struct {
-	ctx             api.IContext
-	handler         *Handler
-	depth           *Depth
-	ssao            *SSAO
-	mapMetrics      *metrics.Map
-	shadowMetrics   *metrics.Shadows
-	flash           *model.Flash
-	post            *Post
-	prg             uint32
-	table           [DeferredLocLast]int32
-	uboLights       [deferredDoubleBuffer]uint32
-	uboShadowLights [deferredDoubleBuffer]uint32
-	frameIdx        int
-	activeLights    int32
-	numShadowLights int32
-	stride          int32
-	cal             *model.Calibration
-	shadows         bool
-	shadowsInt      int32
+	ctx               api.IContext
+	handler           *Handler
+	depth             *Depth
+	ssao              *SSAO
+	mapMetrics        *metrics.Map
+	flashlightMetrics *metrics.Flashlight
+	flash             *model.Flash
+	post              *Post
+	prg               uint32
+	table             [DeferredLocLast]int32
+	uboLights         [deferredDoubleBuffer]uint32
+	uboShadowLights   [deferredDoubleBuffer]uint32
+	frameIdx          int
+	activeLights      int32
+	numShadowLights   int32
+	stride            int32
+	cal               *model.Calibration
+	shadows           bool
+	shadowsInt        int32
 
 	vao uint32
 	vbo uint32
@@ -101,7 +101,7 @@ func (s *Deferred) Setup(h *Handler) error {
 	s.depth = h.GetDepth()
 	s.ssao = h.GetSSAO()
 	s.mapMetrics = h.GetMapMetrics()
-	s.shadowMetrics = h.GetShadowMetrics()
+	s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.flash = h.GetFlash()
 	s.post = h.GetPost()
 	return nil
@@ -302,7 +302,7 @@ func (s *Deferred) Render(ambient float32, flashX, flashY, flashDirX, flashDirY 
 	s.ctx.Uniform1f(s.GetUniform(DeferredLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 
 	// Flashlight
-	s.ctx.UniformMatrix4fv(s.GetUniform(DeferredLocFlashSpaceMatrix), 1, false, s.shadowMetrics.GetShadowSpacePtr())
+	s.ctx.UniformMatrix4fv(s.GetUniform(DeferredLocFlashSpaceMatrix), 1, false, s.flashlightMetrics.GetShadowSpacePtr())
 	s.ctx.Uniform3f(s.GetUniform(DeferredLocFlashPosView), flashX, flashY, 0.0)
 	s.ctx.Uniform3f(s.GetUniform(DeferredLocFlashSpotDir), flashDirX, flashDirY, -1.0)
 	s.ctx.Uniform1f(s.GetUniform(DeferredLocFlashCutOff), float32(s.flash.GetConeStart()))

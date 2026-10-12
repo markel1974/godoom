@@ -2,8 +2,8 @@ package metrics
 
 import "github.com/markel1974/godoom/mr_tech/model"
 
-// Shadows represents a structure for handling shadow-related transformations and projections in a rendering system.
-type Shadows struct {
+// Flashlight represents a structure for handling shadow-related transformations and projections in a rendering system.
+type Flashlight struct {
 	shadowWidth        int32
 	shadowHeight       int32
 	shadowAspect       float32
@@ -19,9 +19,9 @@ type Shadows struct {
 	flash *model.Flash
 }
 
-// NewShadows creates and initializes a new Shadows instance with a given Flash object and default shadow settings.
-func NewShadows(flash *model.Flash) *Shadows {
-	m := &Shadows{
+// NewFlashlight creates and initializes a new Flashlight instance with a given Flash object and default shadow settings.
+func NewFlashlight(flash *model.Flash) *Flashlight {
+	m := &Flashlight{
 		flash: flash,
 	}
 	m.shadowProjPtr = &m.shadowProj[0]
@@ -33,22 +33,22 @@ func NewShadows(flash *model.Flash) *Shadows {
 }
 
 // GetShadowSize retrieves the width and height of the shadow map as two int32 values.
-func (m *Shadows) GetShadowSize() (int32, int32) {
+func (m *Flashlight) GetShadowSize() (int32, int32) {
 	return m.shadowWidth, m.shadowHeight
 }
 
 // GetFlashAspect returns the aspect ratio of the shadow, calculated as the ratio of shadow width to shadow height.
-func (m *Shadows) GetFlashAspect() float32 {
+func (m *Flashlight) GetFlashAspect() float32 {
 	return m.shadowAspect
 }
 
 // GetShadowSpacePtr returns a pointer to the shadow space data buffer used for shadow matrix transformations.
-func (m *Shadows) GetShadowSpacePtr() *float32 {
+func (m *Flashlight) GetShadowSpacePtr() *float32 {
 	return m.shadowSpacePtr
 }
 
 // Rebuild updates shadow dimensions, calculates shadow aspect ratio, and refreshes shadow projection matrices.
-func (m *Shadows) Rebuild(width, height int32) {
+func (m *Flashlight) Rebuild(width, height int32) {
 	m.shadowWidth = width   // * 0.5)
 	m.shadowHeight = height // * 0.5)
 	m.shadowAspect = float32(m.shadowWidth) / float32(m.shadowHeight)
@@ -60,12 +60,12 @@ func (m *Shadows) Rebuild(width, height int32) {
 }
 
 // Update recalculates the shadow-space matrix using the main view matrix and flashlight offset values.
-func (m *Shadows) Update(mainView *float32, flashOffsetX, flashOffsetY float32) {
+func (m *Flashlight) Update(mainView *float32, flashOffsetX, flashOffsetY float32) {
 	m.createShadowSpace(mainView, flashOffsetX, flashOffsetY)
 }
 
 // CreateShadowSpace computes the shadow-space matrix by integrating view and projection matrices for shadow mapping.
-func (m *Shadows) createShadowSpace(mainView *float32, flashOffsetX, flashOffsetY float32) {
+func (m *Flashlight) createShadowSpace(mainView *float32, flashOffsetX, flashOffsetY float32) {
 	// Local ShadowLight Space (LookAt calculation)
 	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
 	targetX, targetY, targetZ := float32(0.0), float32(0.0), -float32(m.flash.GetZFar())
@@ -100,7 +100,7 @@ func (m *Shadows) createShadowSpace(mainView *float32, flashOffsetX, flashOffset
 }
 
 // updateShadowProj updates the shadow projection matrix based on the flashlight's field of view, aspect ratio, and z-planes.
-func (m *Shadows) updateShadowProj() {
+func (m *Flashlight) updateShadowProj() {
 	shadowFov := float32(m.flash.GetShadowFovScale())
 	zNearFlash := float32(m.flash.GetZNear())
 	zFarFlash := float32(m.flash.GetZFar())

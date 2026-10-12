@@ -64,18 +64,18 @@ const (
 
 // ShadowLight represents a structure for managing lighting and shadow parameters in a 3D rendering context.
 type ShadowLight struct {
-	ctx           api.IContext
-	prg           uint32
-	table         [ShadowLightLocLast]int32
-	shadows       bool
-	shadowsInt    int32
-	cal           *model.Calibration
-	debugLights   int
-	handler       *Handler
-	main          *Main
-	depth         *Depth
-	mapMetrics    *metrics.Map
-	shadowMetrics *metrics.Shadows
+	ctx         api.IContext
+	prg         uint32
+	table       [ShadowLightLocLast]int32
+	shadows     bool
+	shadowsInt  int32
+	cal         *model.Calibration
+	debugLights int
+	handler     *Handler
+	main        *Main
+	depth       *Depth
+	mapMetrics  *metrics.Map
+	//flashlightMetrics *metrics.Flashlight
 }
 
 // NewShadowLight creates and returns a new instance of ShadowLight with the provided context and calibration settings.
@@ -95,7 +95,7 @@ func (s *ShadowLight) Setup(h *Handler) error {
 	s.ctx = h.GetContext()
 	s.cal = h.GetCalibration()
 	s.mapMetrics = h.GetMapMetrics()
-	s.shadowMetrics = h.GetShadowMetrics()
+	//s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.depth = h.GetDepth()
 	s.main = h.GetMain()
 	return nil
@@ -209,7 +209,8 @@ func (s *ShadowLight) Render(renderGeometry func(), lightIndex int32, posViewX, 
 	var isAbsolute int32
 
 	if lightIndex < 0 {
-		lTex, lMatrix = s.depth.GetFlashShadowTextures(), s.shadowMetrics.GetShadowSpacePtr()
+		flashlightMetrics := s.handler.GetFlashlightMetrics()
+		lTex, lMatrix = s.depth.GetFlashShadowTextures(), flashlightMetrics.GetShadowSpacePtr()
 		isAbsolute = 0
 	} else {
 		lTex, _, lMatrix = s.depth.GetShadowLightTextures(uint32(lightIndex))

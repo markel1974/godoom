@@ -2,8 +2,8 @@ package metrics
 
 import "math"
 
-// Spotlights represents a structure used to handle spotlight space matrices and their pointer for shadow mapping operations.
-type Spotlights struct {
+// ShadowLight represents a structure used to handle spotlight space matrices and their pointer for shadow mapping operations.
+type ShadowLight struct {
 	proj     [16]float32
 	projPtr  *float32
 	view     [16]float32
@@ -12,22 +12,17 @@ type Spotlights struct {
 	spacePtr *float32
 }
 
-// NewSpotlight creates and initializes a new Spotlights instance with a pointer to the first element of its array.
-func NewSpotlight() *Spotlights {
-	s := &Spotlights{}
+// NewShadowLight creates and initializes a new Spotlights instance with a pointer to the first element of its array.
+func NewShadowLight() *ShadowLight {
+	s := &ShadowLight{}
 	s.projPtr = &s.proj[0]
 	s.viewPtr = &s.view[0]
 	s.spacePtr = &s.space[0]
 	return s
 }
 
-// GetSpacePtr returns a pointer to the spotLightSpace matrix used for spotlight transformation calculations.
-func (m *Spotlights) GetSpacePtr() *float32 {
-	return m.spacePtr
-}
-
 // CreateSpace computes a spotlight's light space matrix based on its position, direction, FOV, near, and far planes.
-func (m *Spotlights) CreateSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
+func (m *ShadowLight) CreateSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fovDeg, near, far float32) {
 	// Projection Matrix (Perspective)
 	// For a shadow map, aspect ratio is strictly 1.0 (it's square)
 	fovRad := fovDeg * math.Pi / 180.0
@@ -58,4 +53,9 @@ func (m *Spotlights) CreateSpace(posX, posY, posZ, dirX, dirY, dirZ float32, fov
 	m.view[12], m.view[13], m.view[14], m.view[15] = tX, tY, tZ, 1
 	// Final Light Space (Proj * View)
 	MatrixMultiply4x4Ptr(m.spacePtr, m.projPtr, m.viewPtr)
+}
+
+// GetSpacePtr returns a pointer to the spotLightSpace matrix used for spotlight transformation calculations.
+func (m *ShadowLight) GetSpacePtr() *float32 {
+	return m.spacePtr
 }

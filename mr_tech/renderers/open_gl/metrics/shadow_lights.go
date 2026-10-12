@@ -45,16 +45,24 @@ func (s *ShadowLights) Update(shadowLights [8]*Light, shadowLightsNum uint32) {
 	}
 }
 
+// GetShadowLightMatrices returns the array of pointers to shadow light matrices and the count of active shadow lights.
 func (s *ShadowLights) GetShadowLightMatrices() ([]*float32, uint32) {
 	return s.shadowLightMatrices, s.shadowLightsNum
 }
 
-func (s *ShadowLights) GetLights() ([8]*Light, uint32) {
-	return s.shadowLights, s.shadowLightsNum
+// GetLightCount returns the number of active shadow lights in the ShadowLights structure.
+func (s *ShadowLights) GetLightCount() uint32 {
+	return s.shadowLightsNum
 }
 
-func (s *ShadowLights) GetSpacePtr(idx uint32) *float32 {
-	if idx >= s.shadowLightsNum {
+// GetLight retrieves the light and its associated shadow light space pointer at the specified index.
+func (s *ShadowLights) GetLight(idx int) (*Light, *float32) {
+	return s.shadowLights[idx], s.shadowLightMetrics[idx].GetSpacePtr()
+}
+
+// GetSpacePtr retrieves a pointer to the light's shadow space matrix at the specified index. Returns nil if out of range.
+func (s *ShadowLights) GetSpacePtr(idx int) *float32 {
+	if uint32(idx) >= s.shadowLightsNum {
 		return nil
 	}
 	return s.shadowLightMetrics[idx].GetSpacePtr()

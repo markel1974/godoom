@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -304,7 +305,7 @@ func (s *Main) Compile(a IAssets) error {
 }
 
 // Prepare configures the rendering pipeline, updates buffer data, and manages double buffering for rendering operations.
-func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, indicesLen int32) {
+func (s *Main) Prepare(verticesPtr unsafe.Pointer, verticesLen int32, indicesPtr unsafe.Pointer, indicesLen int32) {
 	fbW, fbH := s.handler.GetSize()
 	s.ctx.Viewport(0, 0, fbW, fbH)
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
@@ -321,7 +322,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 		s.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.vboBytesCap[s.frameIdx] = newCap
 	}
-	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vTotal, s.ctx.Ptr(vertices))
+	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vTotal, verticesPtr)
 
 	s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
 	if iTotal > s.eboBytesCap[s.frameIdx] {
@@ -329,7 +330,7 @@ func (s *Main) Prepare(vertices []float32, verticesLen int32, indices []uint32, 
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		s.eboBytesCap[s.frameIdx] = newCap
 	}
-	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, s.ctx.Ptr(indices))
+	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iTotal, indicesPtr)
 }
 
 // Render executes the single-pass forward rendering pipeline, combining all lights and shadows directly onto geometry.
@@ -387,16 +388,16 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 	}
 
 	// Dynamic Shadow Lights
-	shadowLights, numShadowLights := s.shadowLightsMetrics.GetLights()
+	numShadowLights := s.shadowLightsMetrics.GetLightCount()
 	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocNumShadowLights), int32(numShadowLights))
 	for i := 0; i < int(numShadowLights); i++ {
-		l := shadowLights[i]
+		l, m := s.shadowLightsMetrics.GetLight(i)
 		loc := &s.shadowLightLocs[i]
 		s.ctx.Uniform4f(loc.posIntensity, l.X, l.Y, l.Z, l.Intensity)
 		s.ctx.Uniform4f(loc.dirFalloff, l.DirX, l.DirY, l.DirZ, l.Falloff)
 		s.ctx.Uniform4f(loc.colorType, l.R, l.G, l.B, l.Kind)
 		s.ctx.Uniform4f(loc.spotParams, l.OuterCutOff, l.CutOff, 0.0, 0.0)
-		s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, s.shadowLightsMetrics.GetSpacePtr(uint32(i)))
+		s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, m)
 	}
 
 	// Dynamic UBO Lights

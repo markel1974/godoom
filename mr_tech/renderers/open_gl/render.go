@@ -182,7 +182,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
 	vert, vertLen, indices, indicesLen := w.builder.GetVertices()
-	lights, lightsCount := w.builder.GetLights()
+	lights, lightSize, lightsNum := w.builder.GetLights()
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 
 	if w.handler.SetSize(fbW, fbH) {
@@ -207,7 +207,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// MAIN PREPARE (VBO and EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen)
 	// LIGHTS PREPARE (UBO)
-	w.lights.Prepare(lights, lightsCount)
+	w.lights.Prepare(lights, lightSize, lightsNum)
 	// OMBRE
 	w.depth.Render(w.dcOpaque.Render)
 	// MAIN OPAQUE (Single-Pass Forward with all lights & shadows)

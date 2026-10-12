@@ -119,7 +119,6 @@ type Depth struct {
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
 	flash               *model.Flash
-	shadowLightCount    uint32
 	matrixEmpty         [16]float32
 	matrixEmptyPtr      *float32
 	viewMatrixPtr       *float32
@@ -133,8 +132,7 @@ type Depth struct {
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
 func NewDepth(maxShadowLights int) *Depth {
 	d := &Depth{
-		maxShadowLights:  maxShadowLights,
-		shadowLightCount: 0,
+		maxShadowLights: maxShadowLights,
 	}
 
 	return d
@@ -192,7 +190,7 @@ func (s *Depth) GetRoomShadowTextures() uint32 {
 
 // GetShadowLightCount returns the count of dynamic shadow lights currently managed by the Depth instance.
 func (s *Depth) GetShadowLightCount() uint32 {
-	return s.shadowLightCount
+	return s.shadowLightsMetrics.GetLightCount()
 }
 
 // GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight shadow map (Master Shadow Atlas).
@@ -206,10 +204,10 @@ func (s *Depth) GetShadowAtlasTexture() uint32 {
 }
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
-func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
-	if idx >= s.shadowLightCount {
-		return 0, 0, s.matrixEmptyPtr
-	}
+func (s *Depth) GetShadowLightTextures(idx int) (uint32, uint32, *float32) {
+	//if idx >= s.shadowLightCount {
+	//	return 0, 0, s.matrixEmptyPtr
+	//}
 	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, s.shadowLightsMetrics.GetSpacePtr(idx)
 }
 
@@ -253,8 +251,8 @@ func (s *Depth) Prepare() {
 	s.roomSpaceMatrix = s.mapMetrics.GetRoomSpacePtr()
 	s.flashSpaceMatrix = s.flashlightMetrics.GetShadowSpacePtr()
 	s.viewMatrixPtr = s.mapMetrics.GetViewPtr()
-	_, shadowLightCount := s.shadowLightsMetrics.GetShadowLightMatrices()
-	s.shadowLightCount = shadowLightCount
+	//_, shadowLightCount := s.shadowLightsMetrics.GetShadowLightMatrices()
+	//s.shadowLightCount = shadowLightCount
 }
 
 // Render performs the depth render into the unified master shadow atlas.
@@ -300,18 +298,18 @@ func (s *Depth) Render(renderScene func()) {
 	}
 
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
-	if s.shadowLightCount > 0 {
+
+	if shadowLightCount := s.shadowLightsMetrics.GetLightCount(); shadowLightCount > 0 {
 		s.ctx.PolygonOffset(0.5, 1.0)
-		shadowLights, _ := s.shadowLightsMetrics.GetLights()
-		for x := 0; x < int(s.shadowLightCount); x++ {
-			if shadowLights[x] != nil && shadowLights[x].Intensity <= 0.001 {
-				continue
+		for x := 0; x < int(shadowLightCount); x++ {
+			light, lightMatrix := s.shadowLightsMetrics.GetLight(x)
+			if light.Intensity > 0.001 {
+				col := int32(x % 4)
+				row := int32(x / 4)
+				s.ctx.Viewport(col*512, row*512, 512, 512)
+				s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, lightMatrix)
+				renderScene()
 			}
-			col := int32(x % 4)
-			row := int32(x / 4)
-			s.ctx.Viewport(col*512, row*512, 512, 512)
-			s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.shadowLightsMetrics.GetSpacePtr(uint32(x)))
-			renderScene()
 		}
 	}
 

@@ -1,8 +1,11 @@
 package open_gl
 
 import (
+	"unsafe"
+
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -14,8 +17,9 @@ const ShadowLightNumber = 8
 
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
-	debug             bool
+	ctx               api.IContext
 	data              []float32
+	dataPtr           unsafe.Pointer
 	index             int
 	freezeIndex       int
 	stride            int32
@@ -24,18 +28,21 @@ type FrameLights struct {
 	glCamX            float32
 	glCamY            float32
 	glCamZ            float32
+	debug             bool
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
-func NewFrameLights(maxLights int) *FrameLights {
+func NewFrameLights(ctx api.IContext, maxLights int) *FrameLights {
 	const stride = 16
 	fl := &FrameLights{
+		ctx:               ctx,
 		data:              make([]float32, maxLights*stride),
 		index:             0,
 		freezeIndex:       0,
 		shadowLightsIndex: 0,
 		stride:            stride,
 	}
+	fl.dataPtr = ctx.Ptr(fl.data)
 	for idx := range fl.shadowLights {
 		fl.shadowLights[idx] = metrics.NewLight()
 	}
@@ -65,8 +72,8 @@ func (f *FrameLights) LightsStride() int32 {
 }
 
 // GetLights retrieves the current light data as a slice of float32 and the count of lights as an int32.
-func (f *FrameLights) GetLights() ([]float32, int32) {
-	return f.data[:f.index], int32(f.index) / f.stride
+func (f *FrameLights) GetLights() (unsafe.Pointer, int32, int32) {
+	return f.dataPtr, int32(f.index) * 4, int32(f.index) / f.stride
 }
 
 // GetShadowLights retrieves the shadow-casting lights and their count from the current frame's lighting configuration.
@@ -232,6 +239,7 @@ func (f *FrameLights) grow() {
 	newData := make([]float32, newSize)
 	copy(newData, f.data)
 	f.data = newData
+	f.dataPtr = f.ctx.Ptr(f.data)
 }
 
 // buildMinHeap constructs a min-heap for the shadowLights array based on their scores in O(n) time complexity.

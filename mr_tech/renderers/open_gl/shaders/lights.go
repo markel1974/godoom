@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -180,13 +181,13 @@ func (s *Lights) Compile(a IAssets) error {
 }
 
 // Prepare updates the uniform buffer object (UBO) with lighting data for rendering and sets the active lights count.
-func (s *Lights) Prepare(frameLights []float32, numLights int32) {
-	s.activeLights = numLights
+func (s *Lights) Prepare(frameLightsPtr unsafe.Pointer, lightSize int32, lightNum int32) {
+	s.activeLights = lightNum
 	s.frameIdx = (s.frameIdx + 1) % lightsDoubleBuffer
-	if numLights > 0 {
+	if lightNum > 0 {
 		s.ctx.BindBuffer(api.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
 		// Scrittura asincrona garantita sull'UBO inattivo
-		s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, len(frameLights)*4, s.ctx.Ptr(frameLights))
+		s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, int(lightSize), frameLightsPtr)
 		s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
 	}
 }

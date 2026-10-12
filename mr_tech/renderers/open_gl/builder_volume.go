@@ -1,6 +1,8 @@
 package open_gl
 
 import (
+	"unsafe"
+
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -35,11 +37,11 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 	bv := &BuilderVolume{
 		ctx:              ctx,
 		tex:              tex,
-		fv:               NewFrameVertices(1048576),
+		fv:               NewFrameVertices(ctx, 1048576),
 		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
 		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
 		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
-		fl:               NewFrameLights(1024),
+		fl:               NewFrameLights(ctx, 1024),
 		dcRenderOpaque:   NewDrawCommandsRender(ctx, false),
 		dcRenderAdditive: NewDrawCommandsRender(ctx, true),
 		dcRenderLiquid:   NewDrawCommandsRender(ctx, true),
@@ -73,10 +75,12 @@ func (w *BuilderVolume) GetLightsStride() int32 { return w.fl.LightsStride() }
 func (w *BuilderVolume) GetDrawCommandsOpaque() *DrawCommandsRender { return w.dcRenderOpaque }
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the builder volume.
-func (w *BuilderVolume) GetVertices() ([]float32, int32, []uint32, int32) { return w.fv.GetVertices() }
+func (w *BuilderVolume) GetVertices() (unsafe.Pointer, int32, unsafe.Pointer, int32) {
+	return w.fv.GetVertices()
+}
 
 // GetLights retrieves the light data and their count from the frame lights. It returns a slice of float32 and an int32 count.
-func (w *BuilderVolume) GetLights() ([]float32, int32) { return w.fl.GetLights() }
+func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl.GetLights() }
 
 // GetSkyTexture retrieves the current sky texture associated with the BuilderVolume. Returns nil if no texture is set.
 func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }

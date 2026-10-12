@@ -15,6 +15,8 @@ var _tickIntervalTarget uint64
 // _tickRatio represents the scaling factor between the reference tick interval and the target tick interval.
 var _tickRatio float64
 
+var _tickF float64
+
 func init() {
 	SetFps(tickIntervalRef)
 }
@@ -28,12 +30,19 @@ func SetFps(t uint64) {
 // Tick updates the monotonic tick counter, computes the global tick, and calculates the current tick based on the interval.
 func Tick() {
 	_monotonicTick++
-	_globalTick = uint64(float64(_monotonicTick) * _tickRatio)
+	t := float64(_monotonicTick) * _tickRatio
+	_globalTick = uint64(t)
+	_tickF = t / float64(_tickIntervalTarget)
 }
 
 // GlobalTick returns the current global tick value as a uint64.
 func GlobalTick() uint64 {
 	return _globalTick
+}
+
+// TickF returns the current value of the internal _tickF variable as a float64.
+func TickF() float64 {
+	return _tickF
 }
 
 // TickGrouped computes the floating-point frame index by dividing the tick by the group size.

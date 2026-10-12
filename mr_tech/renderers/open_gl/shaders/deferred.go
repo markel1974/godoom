@@ -282,7 +282,7 @@ func (s *Deferred) Render(ambient float32, flashX, flashY, flashDirX, flashDirY 
 
 	// Dynamic shadow textures on units 7..14
 	for i := int32(0); i < s.numShadowLights; i++ {
-		lTex, _, _ := s.depth.GetShadowLightTextures(int(i))
+		lTex, _, _ := s.depth.GetShadowLightTextures(uint32(i))
 		s.ctx.ActiveTexture(api.TEXTURE0 + uint32(7+i))
 		s.ctx.BindTexture(api.TEXTURE_2D, lTex)
 	}

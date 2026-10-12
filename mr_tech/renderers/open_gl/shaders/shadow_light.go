@@ -213,7 +213,7 @@ func (s *ShadowLight) Render(renderGeometry func(), lightIndex int32, posViewX, 
 		lTex, lMatrix = s.depth.GetFlashShadowTextures(), flashlightMetrics.GetShadowSpacePtr()
 		isAbsolute = 0
 	} else {
-		lTex, _, lMatrix = s.depth.GetShadowLightTextures(int(lightIndex))
+		lTex, _, lMatrix = s.depth.GetShadowLightTextures(uint32(lightIndex))
 		isAbsolute = 1
 	}
 

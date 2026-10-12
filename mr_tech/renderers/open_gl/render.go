@@ -4,6 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -31,7 +32,7 @@ type IBuilder interface {
 
 	GetLights() ([]float32, int32)
 
-	GetShadowLights() ([8]*Light, int32)
+	GetShadowLights() ([8]*metrics.Light, int32)
 }
 
 // SpriteNode represents a node in a sprite rendering system, associating an entity with its distance-squared value.

@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -58,7 +59,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 }
 
 // GetShadowLights retrieves up to 8 shadow-casting lights and their count from the current frame lighting data.
-func (w *BuilderVolume) GetShadowLights() ([8]*Light, int32) {
+func (w *BuilderVolume) GetShadowLights() ([8]*metrics.Light, int32) {
 	return w.fl.GetShadowLights()
 }
 

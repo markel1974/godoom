@@ -90,22 +90,23 @@ func (d *DepthMap) Shutdown() {
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
-	ctx               api.IContext
-	handler           *Handler
-	prg               uint32
-	table             [DepthLocLast]int32
-	sWidth            int32
-	sHeight           int32
-	roomMap           *DepthMap
-	flashMap          *DepthMap
-	shadowLights      []*DepthMap
-	shadows           bool
-	mapMetrics        *metrics.Map
-	flashlightMetrics *metrics.Flashlight
-	shadowLightCount  uint32
-	matrixEmpty       [16]float32
-	matrixEmptyPtr    *float32
-	viewMatrixPtr     *float32
+	ctx                 api.IContext
+	handler             *Handler
+	prg                 uint32
+	table               [DepthLocLast]int32
+	sWidth              int32
+	sHeight             int32
+	roomMap             *DepthMap
+	flashMap            *DepthMap
+	shadowLights        []*DepthMap
+	shadows             bool
+	mapMetrics          *metrics.Map
+	flashlightMetrics   *metrics.Flashlight
+	shadowLightsMetrics *metrics.ShadowLights
+	shadowLightCount    uint32
+	matrixEmpty         [16]float32
+	matrixEmptyPtr      *float32
+	viewMatrixPtr       *float32
 
 	maxShadowLights int
 	main            *Main
@@ -128,6 +129,7 @@ func (s *Depth) Setup(h *Handler) error {
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
 	s.flashlightMetrics = h.GetFlashlightMetrics()
+	s.shadowLightsMetrics = h.GetShadowLightsMetrics()
 	s.main = h.GetMain()
 	s.roomMap = NewDepthMap(s.ctx)
 	s.flashMap = NewDepthMap(s.ctx)
@@ -226,20 +228,21 @@ func (s *Depth) Compile(assets IAssets) error {
 }
 
 // Prepare updates the uniform matrix values for room and flashlight space transformations for the shader.
-func (s *Depth) Prepare(dynaLight []*float32, dynaLightCount uint32) {
+func (s *Depth) Prepare() {
 	roomSpaceMatrix := s.mapMetrics.GetRoomSpacePtr()
 	flashSpaceMatrix := s.flashlightMetrics.GetShadowSpacePtr()
 	viewMatrix := s.mapMetrics.GetMainViewPtr()
+	shadowLights, shadowLightCount := s.shadowLightsMetrics.GetShadowLightMatrices()
 
 	s.viewMatrixPtr = viewMatrix
 	s.roomMap.SetMatrix(roomSpaceMatrix)
 	s.flashMap.SetMatrix(flashSpaceMatrix)
-	s.shadowLightCount = dynaLightCount //len(dynaLight))
+	s.shadowLightCount = shadowLightCount
 	if s.shadowLightCount >= uint32(len(s.shadowLights)) {
 		s.shadowLightCount = uint32(len(s.shadowLights)) - 1
 	}
 	for x := uint32(0); x < s.shadowLightCount; x++ {
-		s.shadowLights[x].SetMatrix(dynaLight[x])
+		s.shadowLights[x].SetMatrix(shadowLights[x])
 	}
 }
 

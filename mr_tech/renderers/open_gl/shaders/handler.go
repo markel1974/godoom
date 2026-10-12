@@ -14,9 +14,11 @@ type Handler struct {
 	fbW int32
 	fbH int32
 
-	mapMetrics        *metrics.Map
-	flashlightMetrics *metrics.Flashlight
-	flash             *model.Flash
+	mapMetrics *metrics.Map
+
+	flash               *model.Flash
+	flashlightMetrics   *metrics.Flashlight
+	shadowLightsMetrics *metrics.ShadowLights
 
 	main        *Main
 	sky         *Sky
@@ -98,6 +100,7 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNearRoom), float32(h.cal.ZFarRoom)+4.0)
 	h.mapMetrics.SetMapCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)
 	h.flashlightMetrics = metrics.NewFlashlight(h.flash)
+	h.shadowLightsMetrics = metrics.NewShadowLights()
 
 	if err := h.additive.Setup(h); err != nil {
 		return err
@@ -162,6 +165,11 @@ func (h *Handler) GetMapMetrics() *metrics.Map {
 // GetFlashlightMetrics retrieves the shadow metrics associated with the Handler.
 func (h *Handler) GetFlashlightMetrics() *metrics.Flashlight {
 	return h.flashlightMetrics
+}
+
+// GetShadowLightsMetrics retrieves the shadow light metrics associated with the Handler.
+func (h *Handler) GetShadowLightsMetrics() *metrics.ShadowLights {
+	return h.shadowLightsMetrics
 }
 
 // GetFlash retrieves the Flash instance associated with the Handler, providing access to its rendering and shading parameters.

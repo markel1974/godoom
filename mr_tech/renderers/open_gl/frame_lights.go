@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -11,28 +12,6 @@ import (
 // ShadowLightNumber defines the maximum number of shadow-casting lights supported in the frame lighting system.
 const ShadowLightNumber = 8
 
-// Light represents the properties and attributes of a light source in 3D space, including position, direction, and intensity.
-type Light struct {
-	X, Y, Z                   float32
-	Kind                      float32
-	R, G, B, Intensity        float32
-	DirX, DirY, DirZ, Falloff float32
-	CutOff, OuterCutOff       float32
-	Score                     float32
-}
-
-// Assign sets the properties of a Light instance, including position, color, intensity, direction, falloff, and cutoff values.
-func (l *Light) Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score float32) {
-	l.X, l.Y, l.Z = posX, posY, posZ
-	l.Kind = lightType
-	l.R, l.G, l.B = colR, colG, colB
-	l.Intensity = intensity
-	l.DirX, l.DirY, l.DirZ = dirX, dirY, dirZ
-	l.Falloff = falloff
-	l.CutOff, l.OuterCutOff = cutOff, outerCutOff
-	l.Score = score
-}
-
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
 	debug             bool
@@ -40,7 +19,7 @@ type FrameLights struct {
 	index             int
 	freezeIndex       int
 	stride            int32
-	shadowLights      [ShadowLightNumber]*Light
+	shadowLights      [ShadowLightNumber]*metrics.Light
 	shadowLightsIndex int32
 	glCamX            float32
 	glCamY            float32
@@ -58,7 +37,7 @@ func NewFrameLights(maxLights int) *FrameLights {
 		stride:            stride,
 	}
 	for idx := range fl.shadowLights {
-		fl.shadowLights[idx] = &Light{}
+		fl.shadowLights[idx] = metrics.NewLight()
 	}
 	return fl
 }
@@ -91,7 +70,7 @@ func (f *FrameLights) GetLights() ([]float32, int32) {
 }
 
 // GetShadowLights retrieves the shadow-casting lights and their count from the current frame's lighting configuration.
-func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*Light, int32) {
+func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*metrics.Light, int32) {
 	return f.shadowLights, f.shadowLightsIndex
 }
 

@@ -3,10 +3,26 @@ package shaders
 import (
 	"fmt"
 
+	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+/*
+Y=2048 +------------------------+------------------------+
+       |                        |                        |
+       |      ROOM SHADOW       |    FLASHLIGHT SHADOW   |
+       |      (1024 x 1024)     |      (1024 x 1024)     |
+       |   UV: [0..0.5, 0.5..1] |  UV: [0.5..1, 0.5..1]  |
+       |                        |                        |
+Y=1024 +--------+--------+------+--+--------+------------+
+       | Light4 | Light5 |  Light6 | Light7 | (512x512)  |  Row 1 (Y: 512..1023)
+ Y=512 +--------+--------+---------+--------+------------+
+       | Light0 | Light1 |  Light2 | Light3 | (512x512)  |  Row 0 (Y: 0..511)
+   Y=0 +--------+--------+---------+--------+------------+
+       X=0     X=512   X=1024    X=1536   X=2048
+*/
 
 // DepthLoc represents the location identifiers for shader uniform variables used in depth shaders.
 type DepthLoc int
@@ -81,10 +97,11 @@ func (d *DepthMap) SetMatrix(matrix *float32) {
 func (d *DepthMap) Shutdown() {
 	if d.fbo != 0 {
 		d.ctx.DeleteFramebuffers(1, &d.fbo)
-		return
+		d.fbo = 0
 	}
 	if d.tex != 0 {
 		d.ctx.DeleteTextures(1, &d.tex)
+		d.tex = 0
 	}
 }
 
@@ -96,17 +113,18 @@ type Depth struct {
 	table               [DepthLocLast]int32
 	sWidth              int32
 	sHeight             int32
-	roomMap             *DepthMap
-	flashMap            *DepthMap
-	shadowLights        []*DepthMap
+	shadowAtlasMap      *DepthMap
 	shadows             bool
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
+	flash               *model.Flash
 	shadowLightCount    uint32
 	matrixEmpty         [16]float32
 	matrixEmptyPtr      *float32
 	viewMatrixPtr       *float32
+	roomSpaceMatrix     *float32
+	flashSpaceMatrix    *float32
 
 	maxShadowLights int
 	main            *Main
@@ -122,22 +140,20 @@ func NewDepth(maxShadowLights int) *Depth {
 	return d
 }
 
-// Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
+// Setup initializes the Depth instance by assigning the rendering context from the provided Handler.
 func (s *Depth) Setup(h *Handler) error {
-	//ctx api.IContext, m *metrics.Map, sm *metrics.Shadows,
 	s.handler = h
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
 	s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.shadowLightsMetrics = h.GetShadowLightsMetrics()
+	s.flash = h.GetFlash()
 	s.main = h.GetMain()
-	s.roomMap = NewDepthMap(s.ctx)
-	s.flashMap = NewDepthMap(s.ctx)
+	s.shadowAtlasMap = NewDepthMap(s.ctx)
 	s.matrixEmptyPtr = &s.matrixEmpty[0]
 	s.viewMatrixPtr = s.matrixEmptyPtr
-	for i := 0; i < s.maxShadowLights; i++ {
-		s.shadowLights = append(s.shadowLights, NewDepthMap(s.ctx))
-	}
+	s.roomSpaceMatrix = s.matrixEmptyPtr
+	s.flashSpaceMatrix = s.matrixEmptyPtr
 	return nil
 }
 
@@ -169,9 +185,9 @@ func (s *Depth) GetUniform(id DepthLoc) int32 {
 	return s.table[id]
 }
 
-// GetRoomShadowTextures retrieves the texture ID associated with the room shadow map.
+// GetRoomShadowTextures retrieves the texture ID associated with the room shadow map (Master Shadow Atlas).
 func (s *Depth) GetRoomShadowTextures() uint32 {
-	return s.roomMap.tex
+	return s.shadowAtlasMap.tex
 }
 
 // GetShadowLightCount returns the count of dynamic shadow lights currently managed by the Depth instance.
@@ -179,9 +195,14 @@ func (s *Depth) GetShadowLightCount() uint32 {
 	return s.shadowLightCount
 }
 
-// GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight's shadow map.
+// GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight shadow map (Master Shadow Atlas).
 func (s *Depth) GetFlashShadowTextures() uint32 {
-	return s.flashMap.tex
+	return s.shadowAtlasMap.tex
+}
+
+// GetShadowAtlasTexture retrieves the OpenGL texture ID of the master shadow atlas.
+func (s *Depth) GetShadowAtlasTexture() uint32 {
+	return s.shadowAtlasMap.tex
 }
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
@@ -189,7 +210,7 @@ func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
 	if idx >= s.shadowLightCount {
 		return 0, 0, s.matrixEmptyPtr
 	}
-	return s.shadowLights[idx].tex, s.shadowLights[idx].fbo, s.shadowLights[idx].matrixPtr
+	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, s.shadowLightsMetrics.GetSpacePtr(idx)
 }
 
 // Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
@@ -197,9 +218,9 @@ func (s *Depth) Compile(assets IAssets) error {
 	const vertId = "depth.vert"
 	const fragId = "depth.frag"
 	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertId, fragId)
-
-	//s.roomShadowFbo, s.roomShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
-	//s.flashShadowFbo, s.flashShadowTex = s.createDepthMap(s.shadowWidth, s.shadowHeight)
+	if err != nil {
+		return err
+	}
 
 	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
 	if err != nil {
@@ -229,73 +250,69 @@ func (s *Depth) Compile(assets IAssets) error {
 
 // Prepare updates the uniform matrix values for room and flashlight space transformations for the shader.
 func (s *Depth) Prepare() {
-	roomSpaceMatrix := s.mapMetrics.GetRoomSpacePtr()
-	flashSpaceMatrix := s.flashlightMetrics.GetShadowSpacePtr()
-	viewMatrix := s.mapMetrics.GetMainViewPtr()
-	shadowLights, shadowLightCount := s.shadowLightsMetrics.GetShadowLightMatrices()
-
-	s.viewMatrixPtr = viewMatrix
-	s.roomMap.SetMatrix(roomSpaceMatrix)
-	s.flashMap.SetMatrix(flashSpaceMatrix)
+	s.roomSpaceMatrix = s.mapMetrics.GetRoomSpacePtr()
+	s.flashSpaceMatrix = s.flashlightMetrics.GetShadowSpacePtr()
+	s.viewMatrixPtr = s.mapMetrics.GetViewPtr()
+	_, shadowLightCount := s.shadowLightsMetrics.GetShadowLightMatrices()
 	s.shadowLightCount = shadowLightCount
-	if s.shadowLightCount >= uint32(len(s.shadowLights)) {
-		s.shadowLightCount = uint32(len(s.shadowLights)) - 1
-	}
-	for x := uint32(0); x < s.shadowLightCount; x++ {
-		s.shadowLights[x].SetMatrix(shadowLights[x])
-	}
 }
 
-// Render performs the depth pre-pass for shadow mapping by rendering the scene to multiple framebuffers for shadows.
+// Render performs the depth render into the unified master shadow atlas.
 func (s *Depth) Render(renderScene func()) {
 	if !s.shadows {
 		return
 	}
 	fbW, fbH := s.handler.GetSize()
 	mainVao := s.main.GetVAO()
-	sWidth, sHeight := s.flashlightMetrics.GetShadowSize()
-	if sWidth != s.sWidth || sHeight != s.sHeight {
-		s.allocate(sWidth, sHeight)
+	const atlasSize = int32(2048)
+	if s.sWidth != atlasSize || s.sHeight != atlasSize {
+		s.allocate(atlasSize, atlasSize)
 	}
 	s.ctx.BindVertexArray(mainVao)
 
 	s.ctx.Disable(api.CULL_FACE)
 	s.ctx.Enable(api.POLYGON_OFFSET_FILL)
-
-	// Attiviamo il clamp della profondità.
-	// Impedisce che la geometria sparisca dalla mappa delle ombre
-	// quando la telecamera ci finisce letteralmente addosso.
 	s.ctx.Enable(api.DEPTH_CLAMP)
 
-	s.ctx.Viewport(0, 0, sWidth, sHeight)
-
-	// OMBRE STANZA (Ortografica)
-	s.ctx.PolygonOffset(2.0, 4.0)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.roomMap.fbo)
+	// Bind single master shadow atlas FBO and clear entire depth atlas in one go
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowAtlasMap.fbo)
+	s.ctx.Viewport(0, 0, atlasSize, atlasSize)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
+
 	s.ctx.UseProgram(s.GetProgram())
 	s.ctx.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
-	// Invia la View Matrix del Player per i calcoli del Billboard degli Sprite
+	// Player view matrix
 	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, s.viewMatrixPtr)
 
-	// ROOM
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.roomMap.matrixPtr)
-	//s.ctx.Uniform1i(s.GetUniform(DepthLocTexture), 0)
+	// OMBRA STANZA (Ortografica - Tile 1024x1024 in alto a sinistra: X: 0..1024, Y: 1024..2048)
+	s.ctx.Viewport(0, 1024, 1024, 1024)
+	s.ctx.PolygonOffset(2.0, 4.0)
+	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.roomSpaceMatrix)
 	renderScene()
 
-	// OMBRE TORCIA (Prospettica)
-	s.ctx.PolygonOffset(0.5, 1.0)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.flashMap.fbo)
-	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.flashMap.matrixPtr)
-	renderScene()
-
-	for x := 0; x < int(s.shadowLightCount); x++ {
+	// OMBRE TORCIA (Prospettica - Tile 1024x1024 in alto a destra: X: 1024..2048, Y: 1024..2048)
+	// Renderizza solo se la torcia è effettivamente accesa
+	if s.flash != nil && s.flash.GetIntensity() > 0.001 {
+		s.ctx.Viewport(1024, 1024, 1024, 1024)
 		s.ctx.PolygonOffset(0.5, 1.0)
-		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowLights[x].fbo)
-		s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.shadowLights[x].matrixPtr)
+		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.flashSpaceMatrix)
 		renderScene()
+	}
+
+	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
+	if s.shadowLightCount > 0 {
+		s.ctx.PolygonOffset(0.5, 1.0)
+		shadowLights, _ := s.shadowLightsMetrics.GetLights()
+		for x := 0; x < int(s.shadowLightCount); x++ {
+			if shadowLights[x] != nil && shadowLights[x].Intensity <= 0.001 {
+				continue
+			}
+			col := int32(x % 4)
+			row := int32(x / 4)
+			s.ctx.Viewport(col*512, row*512, 512, 512)
+			s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.shadowLightsMetrics.GetSpacePtr(uint32(x)))
+			renderScene()
+		}
 	}
 
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
@@ -304,15 +321,9 @@ func (s *Depth) Render(renderScene func()) {
 	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
-// allocate configures the internal shadow map dimensions and updates the associated depth maps for rendering.
+// allocate configures the unified master shadow map atlas dimensions.
 func (s *Depth) allocate(width, height int32) {
 	s.sWidth = width
 	s.sHeight = height
-	// roomShadowFbo e roomShadowTex gestiscono le ombre delle luci ambientali.
-	s.roomMap.Update(s.sWidth, s.sHeight)
-	// flashShadowFbo e flashShadowTex gestiscono l'ombra della torcia (ShadowLight).
-	s.flashMap.Update(s.sWidth, s.sHeight)
-	for _, sl := range s.shadowLights {
-		sl.Update(s.sWidth, s.sHeight)
-	}
+	s.shadowAtlasMap.Update(width, height)
 }

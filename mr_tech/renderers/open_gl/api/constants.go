@@ -96,7 +96,8 @@ const (
 	TexUnitNormalBase   = 4
 	TexUnitEmissiveBase = 8
 	TexUnitRefraction   = 12
-	TexUnitRoomShadow   = 12
 	TexUnitShadowMap    = 13
-	TexUnitSSAO         = 14
+	TexUnitShadowAtlas  = 14
+	TexUnitRoomShadow   = 14
+	TexUnitSSAO         = 15
 )

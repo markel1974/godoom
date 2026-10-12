@@ -11,6 +11,7 @@ layout (location = 6) in float aYaw;
 out vec3 TexCoords;
 out float FragDepth;
 out vec3 ViewPos;
+out vec3 WorldPos;
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
 out float IsFullbright;
@@ -30,6 +31,7 @@ void renderInterface() {
     float ndcY = (aPos.y - 8.0) * scale;
 
     ViewPos = vec3(0.0, 0.0, -1.0);
+    WorldPos = aPos;
     FragDepth = 0.0;
     FragPosLightRoom = vec4(0.0);
     FragPosLightFlash = vec4(0.0);
@@ -58,6 +60,7 @@ void renderBillboard() {
     vec4 worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
     vec4 viewPos = u_view * worldPos;
     ViewPos = viewPos.xyz;
+    WorldPos = worldPos.xyz;
     FragDepth = abs(viewPos.z);
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
@@ -78,6 +81,7 @@ void renderModel3D() {
     vec4 viewPos = u_view * worldPos;
 
     ViewPos = viewPos.xyz;
+    WorldPos = worldPos.xyz;
     FragDepth = abs(viewPos.z);
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
@@ -94,6 +98,7 @@ void renderLiquid() {
     vec4 viewPos = u_view * worldPos;
 
     ViewPos = viewPos.xyz;
+    WorldPos = worldPos.xyz;
     FragDepth = abs(viewPos.z);
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
@@ -105,6 +110,7 @@ void renderDefault() {
     vec4 worldPos = vec4(aPos, 1.0);
     vec4 viewPos = u_view * worldPos;
     ViewPos = viewPos.xyz;
+    WorldPos = worldPos.xyz;
     FragDepth = abs(viewPos.z);
     FragPosLightRoom = u_roomSpaceMatrix * worldPos;
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;

@@ -233,3 +233,13 @@ func (s *Lights) EnableShadows(e bool) {
 		s.shadows = 0
 	}
 }
+
+// GetActiveUBO returns the currently active UBO buffer for dynamic lights.
+func (s *Lights) GetActiveUBO() uint32 {
+	return s.uboLights[s.frameIdx]
+}
+
+// GetActiveLightsCount returns the number of active dynamic lights in the current frame.
+func (s *Lights) GetActiveLightsCount() int32 {
+	return s.activeLights
+}

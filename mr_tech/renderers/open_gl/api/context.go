@@ -160,6 +160,8 @@ type IContext interface {
 
 	Uniform3fv(location int32, count int32, value *float32)
 
+	Uniform4f(location int32, v0 float32, v1 float32, v2 float32, v3 float32)
+
 	UniformBlockBinding(program uint32, uniformBlockIndex uint32, uniformBlockBinding uint32)
 
 	UniformMatrix4fv(location int32, count int32, transpose bool, value *float32)

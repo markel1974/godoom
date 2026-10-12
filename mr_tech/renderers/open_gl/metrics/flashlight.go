@@ -49,12 +49,9 @@ func (m *Flashlight) GetShadowSpacePtr() *float32 {
 
 // Rebuild updates shadow dimensions, calculates shadow aspect ratio, and refreshes shadow projection matrices.
 func (m *Flashlight) Rebuild(width, height int32) {
-	m.shadowWidth = width   // * 0.5)
-	m.shadowHeight = height // * 0.5)
-	m.shadowAspect = float32(m.shadowWidth) / float32(m.shadowHeight)
-	if m.shadowAspect == 0 {
-		m.shadowAspect = 1.0
-	}
+	m.shadowWidth = 1024
+	m.shadowHeight = 1024
+	m.shadowAspect = 1.0
 	m.flash.Rebuild(ndcRange)
 	m.updateShadowProj()
 }
@@ -108,7 +105,7 @@ func (m *Flashlight) updateShadowProj() {
 	if diffZ == 0 {
 		diffZ = 1.0
 	}
-	m.shadowProj[0] = shadowFov / m.shadowAspect
+	m.shadowProj[0] = shadowFov
 	m.shadowProj[1] = 0
 	m.shadowProj[2] = 0
 	m.shadowProj[3] = 0

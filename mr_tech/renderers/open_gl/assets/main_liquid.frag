@@ -70,10 +70,7 @@ float fbm(vec2 p) {
 }
 
 void main() {
-    const float WATER_FOG_R = 0.0;
-    const float WATER_FOG_G = 0.2;
-    const float WATER_FOG_B = 0.3;
-    const float WATER_ABSORPTION = 0.005;
+    const float WATER_ABSORPTION = 0.0015;
     // Temporal frequencies.
     const float WAVE1_SPEED_X = 1.31;
     const float WAVE1_SPEED_Y = 1.07;
@@ -159,14 +156,24 @@ void main() {
         depthDiff = min(depthDiff, 60.0);
     }
 
-    // Beer-Lambert absorption
-    vec3 waterFogColor = vec3(WATER_FOG_R, WATER_FOG_G, WATER_FOG_B);
-    float transmittance = exp(-depthDiff * WATER_ABSORPTION);
+    // Beer-Lambert absorption with luminous aquatic fog tinted by the material texture
+    vec3 waterFogColor = mix(vec3(0.08, 0.38, 0.52), texColor * 1.3, 0.45);
+    float transmittance = clamp(exp(-depthDiff * WATER_ABSORPTION), 0.25, 1.0);
     vec3 finalColor = refractionColor * transmittance + waterFogColor * (1.0 - transmittance);
-    // Mix water texture
-    finalColor = mix(finalColor, finalColor * texColor, 0.35);
+
+    // Gently blend in the surface water texture without multiplying/darkening
+    finalColor = mix(finalColor, texColor, 0.22);
+
+    // Wave surface specular reflection for bright glistening motion
+    vec3 waveNormal = normalize(vec3(-distortion.x * 35.0, 1.0, -distortion.y * 35.0));
+    vec3 V = normalize(-ViewPos);
+    vec3 L = normalize(vec3(0.2, 0.8, 0.5));
+    vec3 H = normalize(L + V);
+    float spec = pow(max(dot(waveNormal, H), 0.0), 32.0) * 0.35;
+    finalColor += vec3(spec);
+
     // Output
-    FragColor = vec4(finalColor, 0.85);
+    FragColor = vec4(finalColor, 0.90);
     /*
      vec3 lavaBaseColor = texColor;
     // Lava color variation

@@ -2,6 +2,7 @@ package metrics
 
 // ShadowLights is a structure for managing shadow mapping metrics and transformation matrices for multiple lights.
 type ShadowLights struct {
+	shadowLights        [8]*Light
 	shadowLightMetrics  []*ShadowLight
 	shadowLightMatrices []*float32
 	shadowLightsNum     uint32
@@ -15,6 +16,7 @@ func NewShadowLights() *ShadowLights {
 // Update updates the shadow light metrics and transformation matrices based on the provided lights and their properties.
 func (s *ShadowLights) Update(shadowLights [8]*Light, shadowLightsNum uint32) {
 	s.shadowLightsNum = shadowLightsNum
+	s.shadowLights = shadowLights
 	if int(shadowLightsNum) >= len(s.shadowLightMatrices) {
 		slLen := shadowLightsNum * 2
 		s.shadowLightMatrices = make([]*float32, slLen)
@@ -45,4 +47,15 @@ func (s *ShadowLights) Update(shadowLights [8]*Light, shadowLightsNum uint32) {
 
 func (s *ShadowLights) GetShadowLightMatrices() ([]*float32, uint32) {
 	return s.shadowLightMatrices, s.shadowLightsNum
+}
+
+func (s *ShadowLights) GetLights() ([8]*Light, uint32) {
+	return s.shadowLights, s.shadowLightsNum
+}
+
+func (s *ShadowLights) GetSpacePtr(idx uint32) *float32 {
+	if idx >= s.shadowLightsNum {
+		return nil
+	}
+	return s.shadowLightMetrics[idx].GetSpacePtr()
 }

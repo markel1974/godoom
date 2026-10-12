@@ -124,6 +124,7 @@ type Context struct {
 	fn_uniform2f                      js.Value
 	fn_uniform3f                      js.Value
 	fn_uniform3fv                     js.Value
+	fn_uniform4f                      js.Value
 	fn_uniformBlockBinding            js.Value
 	fn_uniformMatrix4fv               js.Value
 	fn_useProgram                     js.Value
@@ -244,6 +245,7 @@ func NewContext(width int, height int, fps int) *Context {
 	ctx.fn_uniform2f = ctx.gl.Get("uniform2f").Call("bind", ctx.gl)
 	ctx.fn_uniform3f = ctx.gl.Get("uniform3f").Call("bind", ctx.gl)
 	ctx.fn_uniform3fv = ctx.gl.Get("uniform3fv").Call("bind", ctx.gl)
+	ctx.fn_uniform4f = ctx.gl.Get("uniform4f").Call("bind", ctx.gl)
 	ctx.fn_uniformBlockBinding = ctx.gl.Get("uniformBlockBinding").Call("bind", ctx.gl)
 	ctx.fn_uniformMatrix4fv = ctx.gl.Get("uniformMatrix4fv").Call("bind", ctx.gl)
 	ctx.fn_useProgram = ctx.gl.Get("useProgram").Call("bind", ctx.gl)
@@ -1107,6 +1109,14 @@ func (d *Context) Uniform3f(location int32, v0 float32, v1 float32, v2 float32) 
 		return
 	}
 	d.fn_uniform3f.Invoke(d.uniforms[location], v0, v1, v2)
+}
+
+// Uniform4f sets the values of a 4-component floating-point uniform variable for the current shader program.
+func (d *Context) Uniform4f(location int32, v0 float32, v1 float32, v2 float32, v3 float32) {
+	if location == -1 {
+		return
+	}
+	d.fn_uniform4f.Invoke(d.uniforms[location], v0, v1, v2, v3)
 }
 
 // UniformBlockBinding assigns a binding point to a uniform block within the specified program's shader.

@@ -399,6 +399,11 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 	gl.Uniform3fv(location, count, value)
 }
 
+// Uniform4f sets the value of a vec4 uniform variable in the active shader program.
+func (d *Context) Uniform4f(location int32, v0 float32, v1 float32, v2 float32, v3 float32) {
+	gl.Uniform4f(location, v0, v1, v2, v3)
+}
+
 // UniformBlockBinding assigns a binding point to a uniform block in a specified shader program.
 func (d *Context) UniformBlockBinding(program uint32, uniformBlockIndex uint32, uniformBlockBinding uint32) {
 	gl.UniformBlockBinding(program, uniformBlockIndex, uniformBlockBinding)

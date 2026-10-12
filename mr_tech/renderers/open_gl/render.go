@@ -196,32 +196,22 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
 
-	flashX, flashY, flashSensitivity := float32(0), float32(0), float32(0)
-	if w.flashlight.HasShadow() {
-		swayX, swayY, swaySensitivity := w.vi.GetSway()
-		flashX, flashY, flashSensitivity = float32(swayX), float32(swayY), float32(swaySensitivity)
-	}
-
-	w.flashlightMetrics.Update(w.mapMetrics.GetMainViewPtr(), flashX, flashY)
+	swayX, swayY, swaySensitivity := w.vi.GetSway()
+	flashX, flashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
+	w.flashlightMetrics.Update(w.mapMetrics.GetViewPtr(), flashX, flashY)
 
 	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
 
-	//RENDER START HERE
+	// RENDER START HERE
 	w.depth.Prepare()
-	// MAIN PREPARE (VBO che EBO)
+	// MAIN PREPARE (VBO and EBO)
 	w.main.Prepare(vert, vertLen, indices, indicesLen)
-	// LIGHTS PREPARE
+	// LIGHTS PREPARE (UBO)
 	w.lights.Prepare(lights, lightsCount)
 	// OMBRE
 	w.depth.Render(w.dcOpaque.Render)
-	// SSAO PREPARE
-	w.ssao.Prepare()
-	// GEOMETRY
-	w.geometry.Render(w.dcOpaque.Render)
-	// SSAO
-	w.ssao.Render()
-	// MAIN OPAQUE
-	w.main.Render(w.dcOpaque.Render)
+	// MAIN OPAQUE (Single-Pass Forward with all lights & shadows)
+	w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
 	// HW OCCLUSION
 	w.occlusion.Render(w.hwOcc.Render)
 	// MAIN ADDITIVE
@@ -230,36 +220,11 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	}
 	// MAIN LIQUID (Refraction & Depth Fog)
 	if w.dcLiquid.HasCommands() {
-		// OPTIMIZATION: We DO NOT call w.post.ResolveMSAA here.
-		// Sampling the PREVIOUS FRAME's resolved FBO for refraction and depth fog
-		// saves a massive 3x fullscreen MSAA blit (cutting ResolveMSAA time in half).
-		// The 1-frame lag (16ms) is totally imperceptible through the distortion.
-		// w.post.ResolveMSAA(fbW, fbH)
+		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
+		// without feedback-loop darkening from previous frame's water.
+		w.post.ResolveMSAA(fbW, fbH)
 		w.liquid.Render(w.dcLiquid.Render, true)
 	}
-	// ENABLE ADDITIVE LIGHTS
-	EnableAdditiveLights(w.ctx)
-	// FLASHLIGHTS
-	w.flashlight.Render(
-		w.dcOpaque.Render, -1,
-		flashX, flashY, 0.0,
-		float32(w.flash.GetOffsetX())-(flashX*flashSensitivity),
-		float32(w.flash.GetOffsetY())+(flashY*flashSensitivity),
-		-1.0,
-		float32(w.flash.GetIntensity()), float32(w.flash.GetFalloff()),
-		float32(w.flash.GetConeStart()), float32(w.flash.GetConeEnd()))
-	// SHADOW LIGHTS
-	for lightIdx := int32(0); lightIdx < shadowLightsCount; lightIdx++ {
-		light := shadowLights[lightIdx]
-		w.flashlight.Render(w.dcOpaque.Render, lightIdx,
-			light.X, light.Y, light.Z,
-			light.DirX, light.DirY, light.DirZ,
-			light.Intensity, light.Falloff, light.OuterCutOff, light.CutOff)
-	}
-	// AMBIENT LIGHTS
-	w.lights.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()))
-	// DISABLE ADDITIVE LIGHTS
-	DisableAdditiveLights(w.ctx)
 	// SKYBOX
 	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
 		skyTexId := skyTex.GetIdentifier()
@@ -339,6 +304,7 @@ func (w *RenderOpenGL) RenderDecreaseFlashFactor() {
 // SetShadowEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
 func (w *RenderOpenGL) SetShadowEnabled(v bool) {
 	w.enableShadows = v
+	w.main.EnableShadows(w.enableShadows)
 	w.flashlight.EnableShadows(w.enableShadows)
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)

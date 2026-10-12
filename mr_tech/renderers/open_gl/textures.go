@@ -155,7 +155,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		tx.buckets[bIdx].Layer++
 	}
 
-	// 5. Generazione MipMaps globali (aggiunto l'emissivo!)
+	// Generazione MipMaps globali (aggiunto l'emissivo!)
 	for i, l := range tx.buckets {
 		if l.Layer > 0 {
 			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].DiffuseArray)
@@ -167,6 +167,22 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		}
 	}
 	return nil
+}
+
+// BindBuckets binds texture buckets to specific OpenGL texture units for rendering diffuse, normal, and emissive maps.
+func (tx *Textures) BindBuckets() {
+	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
+	for i := uint32(0); i < uint32(len(tx.buckets)); i++ {
+		diffuse := tx.buckets[i].DiffuseArray
+		normal := tx.buckets[i].NormalArray
+		emissive := tx.buckets[i].EmissiveArray
+		tx.ctx.ActiveTexture(api.TEXTURE0 + i)
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
+		tx.ctx.ActiveTexture(api.TEXTURE4 + i)
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
+		tx.ctx.ActiveTexture(api.TEXTURE8 + i)
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
+	}
 }
 
 // createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.

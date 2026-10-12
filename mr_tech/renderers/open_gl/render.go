@@ -195,7 +195,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 		w.flashlightMetrics.Rebuild(fbW, fbH)
 	}
 
-	w.bindTextureBuckets()
+	w.tex.BindBuckets()
 
 	px, _, pz := w.vi.GetView()
 	w.mapMetrics.SetMapCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
@@ -226,7 +226,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// GEOMETRY
 	w.geometry.Render(w.dcOpaque.Render)
 	// SSAO
-	w.ssao.Render(skyEnabled)
+	w.ssao.Render()
 	// MAIN OPAQUE
 	w.main.Render(w.dcOpaque.Render)
 	// HW OCCLUSION
@@ -346,21 +346,4 @@ func (w *RenderOpenGL) SetShadowEnabled(v bool) {
 	w.flashlight.EnableShadows(w.enableShadows)
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)
-}
-
-// bindTextureBuckets binds texture buckets to specific OpenGL texture units for rendering diffuse, normal, and emissive maps.
-func (w *RenderOpenGL) bindTextureBuckets() {
-	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
-	for i := 0; i < w.tex.GetBucketsLen(); i++ {
-		diffuse, normal, emissive := w.tex.GetBucket(i)
-
-		w.ctx.ActiveTexture(api.TEXTURE0 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, diffuse)
-
-		w.ctx.ActiveTexture(api.TEXTURE4 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, normal)
-
-		w.ctx.ActiveTexture(api.TEXTURE8 + uint32(i))
-		w.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
-	}
 }

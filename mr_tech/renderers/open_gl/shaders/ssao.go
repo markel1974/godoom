@@ -250,14 +250,10 @@ func (s *SSAO) Prepare() {
 }
 
 // Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *SSAO) Render(skyEnabled bool) {
+func (s *SSAO) Render() {
 	blurPgr := s.blur.GetProgram()
-	mainVAO := s.main.GetVAO()
-	skyVAO := s.sky.GetVAO()
-	postFBO := s.post.GetFBO()
+	quadVAO := s.sky.GetVAO()
 	projPtr := s.mapMetrics.GetProjPtr()
-
-	s.ctx.BindVertexArray(mainVAO)
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
 	s.ctx.Clear(api.COLOR_BUFFER_BIT)
@@ -271,32 +267,18 @@ func (s *SSAO) Render(skyEnabled bool) {
 	s.ctx.ActiveTexture(api.TEXTURE2)
 	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
 
-	if skyEnabled {
-		s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, projPtr)
-		s.ctx.BindVertexArray(skyVAO)
-		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
-	}
+	s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, projPtr)
+	s.ctx.BindVertexArray(quadVAO)
+	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
 	s.ctx.Clear(api.COLOR_BUFFER_BIT)
 
-	if skyEnabled {
-		s.ctx.UseProgram(blurPgr)
-		s.ctx.ActiveTexture(api.TEXTURE0)
-		s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
-		s.ctx.BindVertexArray(skyVAO)
-		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
-	}
-
-	// FORWARD MULTI-PASS
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, postFBO)
-	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
-	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
-	s.ctx.BindVertexArray(mainVAO)
-
-	// PASS A: BASE
-	s.ctx.DepthFunc(api.LEQUAL)
-	s.ctx.DepthMask(true)
+	s.ctx.UseProgram(blurPgr)
+	s.ctx.ActiveTexture(api.TEXTURE0)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
+	s.ctx.BindVertexArray(quadVAO)
+	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 }
 
 // allocate initializes or reinitializes framebuffers, textures, and renderbuffers for the given width and height.

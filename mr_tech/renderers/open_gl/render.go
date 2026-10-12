@@ -218,7 +218,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// LIGHTS PREPARE
 	w.lights.Prepare(lights, lightsCount)
 	// BIND TEXTURE
-	w.bindTextureBuckets()
+	//w.bindTextureBuckets()
 	// OMBRE
 	w.depth.Render(w.dcOpaque.Render)
 	// SSAO PREPARE
@@ -268,7 +268,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.lights.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()))
 	// DISABLE ADDITIVE LIGHTS
 	DisableAdditiveLights(w.ctx)
-	w.bindTextureBuckets() // Restore texture arrays!
+	//w.bindTextureBuckets() // Restore texture arrays!
 	// SKYBOX
 	if skyEnabled {
 		u, v := w.builder.GetSkyUV()
@@ -348,6 +348,7 @@ func (w *RenderOpenGL) SetShadowEnabled(v bool) {
 	w.depth.EnableShadows(w.enableShadows)
 }
 
+// bindTextureBuckets binds texture buckets to specific OpenGL texture units for rendering diffuse, normal, and emissive maps.
 func (w *RenderOpenGL) bindTextureBuckets() {
 	// Unità 0-3: Diffuse | 4-7: Normal | 8-11: Emissive
 	for i := 0; i < w.tex.GetBucketsLen(); i++ {

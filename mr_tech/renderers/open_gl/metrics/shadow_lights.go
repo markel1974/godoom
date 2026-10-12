@@ -1,33 +1,36 @@
 package metrics
 
+const ShadowLightsCount = 8
+
 // ShadowLights is a structure for managing shadow mapping metrics and transformation matrices for multiple lights.
 type ShadowLights struct {
-	shadowLights        [8]*Light
-	shadowLightMetrics  []*ShadowLight
-	shadowLightMatrices []*float32
-	shadowLightsNum     uint32
+	lights   [ShadowLightsCount]*Light
+	metrics  [ShadowLightsCount]*ShadowLight
+	matrices [ShadowLightsCount]*float32
+	count    uint32
 }
 
 // NewShadowLights creates and initializes a new ShadowLights instance with default values.
 func NewShadowLights() *ShadowLights {
-	return &ShadowLights{}
+	sl := &ShadowLights{}
+	for lx := uint32(0); lx < ShadowLightsCount; lx++ {
+		sl.lights[lx] = nil
+		sl.matrices[lx] = nil
+		sl.metrics[lx] = NewShadowLight()
+	}
+	return sl
 }
 
 // Update updates the shadow light metrics and transformation matrices based on the provided lights and their properties.
-func (s *ShadowLights) Update(shadowLights [8]*Light, shadowLightsNum uint32) {
-	s.shadowLightsNum = shadowLightsNum
-	s.shadowLights = shadowLights
-	if int(shadowLightsNum) >= len(s.shadowLightMatrices) {
-		slLen := shadowLightsNum * 2
-		s.shadowLightMatrices = make([]*float32, slLen)
-		s.shadowLightMetrics = make([]*ShadowLight, slLen)
-		for lx := uint32(0); lx < slLen; lx++ {
-			s.shadowLightMetrics[lx] = NewShadowLight()
-		}
+func (s *ShadowLights) Update(shadowLights [ShadowLightsCount]*Light, count uint32) {
+	if count >= ShadowLightsCount {
+		count = ShadowLightsCount - 1
 	}
+	s.count = count
 
-	for lx := uint32(0); lx < shadowLightsNum; lx++ {
+	for lx := uint32(0); lx < count; lx++ {
 		light := shadowLights[lx]
+		s.lights[lx] = light
 		pX, pY, pZ := light.X, light.Y, light.Z
 		dX, dY, dZ := light.DirX, light.DirY, light.DirZ
 		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
@@ -39,31 +42,26 @@ func (s *ShadowLights) Update(shadowLights [8]*Light, shadowLightsNum uint32) {
 		falloff := light.Falloff
 		//TODO FROM CONFIG
 		effectiveRadius := float32(4.605) * falloff * factor
-		shadowLightMetric := s.shadowLightMetrics[lx]
+		shadowLightMetric := s.metrics[lx]
 		shadowLightMetric.CreateSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
-		s.shadowLightMatrices[lx] = shadowLightMetric.GetSpacePtr()
+		s.matrices[lx] = shadowLightMetric.GetSpacePtr()
 	}
-}
-
-// GetShadowLightMatrices returns the array of pointers to shadow light matrices and the count of active shadow lights.
-func (s *ShadowLights) GetShadowLightMatrices() ([]*float32, uint32) {
-	return s.shadowLightMatrices, s.shadowLightsNum
 }
 
 // GetLightCount returns the number of active shadow lights in the ShadowLights structure.
 func (s *ShadowLights) GetLightCount() uint32 {
-	return s.shadowLightsNum
+	return s.count
 }
 
 // GetLight retrieves the light and its associated shadow light space pointer at the specified index.
 func (s *ShadowLights) GetLight(idx int) (*Light, *float32) {
-	return s.shadowLights[idx], s.shadowLightMetrics[idx].GetSpacePtr()
+	return s.lights[idx], s.metrics[idx].GetSpacePtr()
 }
 
 // GetSpacePtr retrieves a pointer to the light's shadow space matrix at the specified index. Returns nil if out of range.
 func (s *ShadowLights) GetSpacePtr(idx int) *float32 {
-	if uint32(idx) >= s.shadowLightsNum {
+	if uint32(idx) >= s.count {
 		return nil
 	}
-	return s.shadowLightMetrics[idx].GetSpacePtr()
+	return s.metrics[idx].GetSpacePtr()
 }

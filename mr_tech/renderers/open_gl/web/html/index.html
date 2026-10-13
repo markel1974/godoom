@@ -122,7 +122,7 @@
     document.getElementById("status").innerText = "Downloading Engine...";
     WebAssembly.instantiateStreaming(fetch("godoom.wasm?t=" + Date.now()), go.importObject).then((result) => {
         wasmInstance = result.instance;
-        initializeWasmMemory(wasmInstance.exports.mem);
+        wasmMemory = wasmInstance.exports.mem;
         document.getElementById("status").innerText = "Engine Ready. Select asset to play.";
         document.getElementById("status").style.color = "#0f0";
     }).catch(err => {
@@ -243,9 +243,9 @@
         btnThrow.addEventListener("touchend", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.5)"; simKey("KeyO", false); }, {passive: false});
     }
 
+    /*
     let currentBuffer = null;
-    let viewCache = null;
-    let cachedViews = null;
+    let views = null;
 
     const PAGE_SIZE = 65536;
 
@@ -256,55 +256,42 @@
         uint32: Uint32Array
     };
 
-    function initializeWasmMemory(memory) {
-        wasmMemory = memory;
-        currentBuffer = memory.buffer;
-        viewCache = new Map();
-        cachedViews = [];
-        // per zero allocazioni nel runtime, registriamo tutte le combinazioni offset/length/type previste.
-    }
-
     function rebuildWasmViews() {
         const buffer = wasmMemory.buffer;
-        for (const entry of cachedViews) {
-            entry.view = new entry.Constructor(buffer, entry.offset, entry.length);
-        }
+
+        views = {
+            uint8: new Uint8Array(buffer),
+            float32: new Float32Array(buffer),
+            int32: new Int32Array(buffer),
+            uint32: new Uint32Array(buffer)
+        };
+
         currentBuffer = buffer;
     }
 
     window.getWasmMemoryView = function(offset, length, type) {
+        if (!wasmMemory) {
+            throw new Error("WASM memory is not initialized");
+        }
+
         const Constructor = constructors[type] || Uint8Array;
         const requiredBytes = offset + length * Constructor.BYTES_PER_ELEMENT;
 
-        let buffer = wasmMemory.buffer;
-
-        if (requiredBytes > buffer.byteLength) {
-            wasmMemory.grow(Math.ceil((requiredBytes - buffer.byteLength) / PAGE_SIZE));
-            buffer = wasmMemory.buffer;
+        if (requiredBytes > wasmMemory.buffer.byteLength) {
+            const missingBytes = requiredBytes - wasmMemory.buffer.byteLength;
+            wasmMemory.grow(Math.ceil(missingBytes / PAGE_SIZE));
         }
-        if (buffer !== currentBuffer) {
+
+        if (wasmMemory.buffer !== currentBuffer) {
             rebuildWasmViews();
         }
-        //type
-        let byType = viewCache.get(type);
-        if (!byType) {
-            viewCache.set(type, byType = new Map());
-        }
-        //offset
-        let byOffset = byType.get(offset);
-        if (!byOffset) {
-            byType.set(offset, byOffset = new Map());
-        }
-        let entry = byOffset.get(length);
-        if (!entry) {
-            entry = {offset, length, Constructor, view: new Constructor(buffer, offset, length)};
-            byOffset.set(length, entry);
-            cachedViews.push(entry);
-        }
-        return entry.view;
+
+        return views[constructors[type] ? type : "uint8"];
     };
 
-    /*
+     */
+
+
     // --- ZERO COPY WASM MEMORY ---
     window.getWasmMemoryView = function(offset, length, type) {
         if (length === 0) {
@@ -323,8 +310,6 @@
         if (type === 'uint32') return new Uint32Array(mem, offset, length);
         return new Uint8Array(mem, offset, length);
     };
-
-    */
 
     function startGame(buffer) {
         showLoading("Starting Engine...");

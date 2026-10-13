@@ -292,12 +292,14 @@ func (w *RenderOpenGL) RenderPlayerMouseMove(mouseX float64, mouseY float64) {
 	}
 	w.player.AddAngle(-mouseX * 0.03)
 	w.player.SetPitch(mouseY)
-	//w.player.MoveApply(0, 0, 0)
 }
 
+// RenderIncreaseFlashFactor increases the flash intensity factor for the player's flashlight component.
 func (w *RenderOpenGL) RenderIncreaseFlashFactor() {
 	w.player.GetFlash().IncreaseFlashFactor()
 }
+
+// RenderDecreaseFlashFactor decreases the player's flashlight intensity by reducing the flash factor.
 func (w *RenderOpenGL) RenderDecreaseFlashFactor() {
 	w.player.GetFlash().DecreaseFlashFactor()
 }

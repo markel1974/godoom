@@ -146,8 +146,7 @@ float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizon
     return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
 }
 
-void main()
-{
+void main() {
     vec4 texColor = getDiffuse(TexCoords);
     if (texColor.a < 0.5) {
         discard;
@@ -169,7 +168,7 @@ void main()
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos);
 
-    // 1. AMBIENT & ROOM LIGHT
+    //  AMBIENT & ROOM LIGHT
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     float roomShadow = 1.0;
@@ -183,7 +182,7 @@ void main()
     }
     vec3 litRoom = albedo * (u_ambient_light * (0.2 + 0.8 * NdotL_room * roomShadow));
 
-    // 2. FLASHLIGHT
+    // FLASHLIGHT
     vec3 litFlash = vec3(0.0);
     if (u_enableFlashlight == 1 && u_flashIntensityFactor > 0.001) {
         vec3 flashPosView = u_flashPosView;
@@ -225,7 +224,7 @@ void main()
         }
     }
 
-    // 3. DYNAMIC SHADOW LIGHTS (Spotlights with Shadow Atlas)
+    // DYNAMIC SHADOW LIGHTS (Spotlights with Shadow Atlas)
     vec3 shadowLightsTotal = vec3(0.0);
     for (int i = 0; i < u_numShadowLights; ++i) {
         vec3 lightPosWorld = u_shadowLights[i].pos_intensity.xyz;
@@ -285,7 +284,7 @@ void main()
         shadowLightsTotal += (albedo * lightColor * NdotL + vec3(spec) * lightColor) * (intensity * expFalloff * spotEffect * shadow);
     }
 
-    // 4. DYNAMIC POINT/AREA/DIR LIGHTS (UBO LightsBlock)
+    // DYNAMIC POINT/AREA/DIR LIGHTS (UBO LightsBlock)
     vec3 dynamicLightsTotal = vec3(0.0);
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
@@ -327,10 +326,10 @@ void main()
         dynamicLightsTotal += (diffuse + specular) * intensity * falloff * spotEffect;
     }
 
-    // 5. EMISSIVE
+    // EMISSIVE
     vec3 emissive = getEmissive(TexCoords) * u_emissiveIntensity * edgeFade;
 
-    // 6. TOTAL ACCUMULATION
+    // TOTAL ACCUMULATION
     vec3 finalColor = litRoom + litFlash + shadowLightsTotal + dynamicLightsTotal + emissive;
 
     FragColor = vec4(finalColor, texColor.a);

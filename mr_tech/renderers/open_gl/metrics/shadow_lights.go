@@ -23,12 +23,13 @@ func NewShadowLights() *ShadowLights {
 
 // Update updates the shadow light metrics and transformation matrices based on the provided lights and their properties.
 func (s *ShadowLights) Update(shadowLights [ShadowLightsCount]*Light, count uint32) {
-	if count >= ShadowLightsCount {
-		count = ShadowLightsCount - 1
-	}
 	s.count = count
-
-	for lx := uint32(0); lx < count; lx++ {
+	if s.count == 0 {
+		return
+	} else if s.count >= ShadowLightsCount {
+		s.count = ShadowLightsCount - 1
+	}
+	for lx := uint32(0); lx < s.count; lx++ {
 		light := shadowLights[lx]
 		s.lights[lx] = light
 		pX, pY, pZ := light.X, light.Y, light.Z

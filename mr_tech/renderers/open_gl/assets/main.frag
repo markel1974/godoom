@@ -34,8 +34,7 @@ vec3 getEmissive(vec3 tc) {
     return texture(u_emissiveMap[3], vec3(tc.xy, l)).rgb;
 }
 
-void main()
-{
+void main() {
     vec4 texColor = getDiffuse(TexCoords);
     if(texColor.a < 0.5) discard;
 
@@ -46,7 +45,7 @@ void main()
     // CAMPIONAMENTO SSAO
     float ao = texture(u_ssao, screenUV).r;
 
-    // Se è un materiale fullbright, disabilitiamo le ombre (SSAO) impostando l'ambient al massimo, 
+    // Se è un materiale fullbright, disabilitiamo le ombre (SSAO) impostando l'ambient al massimo,
     // come se fosse fullbright/emissivo naturale (tipico per materiali luminosi o fluidi emissivi).
     float linearAmbient = max(pow(ao * u_aoFactor, 2.2), 0.05);
     if (IsFullbright > 0.5) {

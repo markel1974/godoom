@@ -90,7 +90,7 @@
 
 <script src="wasm_exec.js"></script>
 <script>
-    // --- POINTER LOCK PROMISE CATCHER ---
+    // POINTER LOCK PROMISE CATCHER
     // Previene i crash di Chrome quando si clicca troppo in fretta dopo ESC
     const originalRequestPointerLock = HTMLCanvasElement.prototype.requestPointerLock;
     HTMLCanvasElement.prototype.requestPointerLock = function(options) {
@@ -106,9 +106,9 @@
         }
         return promise;
     };
-    // ------------------------------------
 
     let wasmInstance = null;
+    let wasmMemory = null;
     const go = new Go();
 
     function showLoading(text) {
@@ -122,6 +122,7 @@
     document.getElementById("status").innerText = "Downloading Engine...";
     WebAssembly.instantiateStreaming(fetch("godoom.wasm?t=" + Date.now()), go.importObject).then((result) => {
         wasmInstance = result.instance;
+        initializeWasmMemory(wasmInstance.exports.mem);
         document.getElementById("status").innerText = "Engine Ready. Select asset to play.";
         document.getElementById("status").style.color = "#0f0";
     }).catch(err => {
@@ -190,7 +191,7 @@
             }
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
 
-            // Dead-zone
+            // Deadzone
             if (dist < 10) { updateKeys(0, 0); return; }
             updateKeys(dx, dy);
         }
@@ -233,68 +234,74 @@
         btnShoot.addEventListener("touchend", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.5)"; simMouseBtn(0, false); }, {passive: false});
 
         let btnJump = document.getElementById("btnJump");
-        btnJump.addEventListener("touchstart", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simMouseBtn(1, true); }, {passive: false});
-        btnJump.addEventListener("touchend", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.5)"; simMouseBtn(1, false); }, {passive: false});
+        btnJump.addEventListener("touchstart", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simKey("Space", true); }, {passive: false});
+        btnJump.addEventListener("touchMove", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simKey("Space", true); }, {passive: false});
+        btnJump.addEventListener("touchend", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.5)"; simKey("Space", false); }, {passive: false});
 
         let btnThrow = document.getElementById("btnThrow");
         btnThrow.addEventListener("touchstart", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.8)"; simKey("KeyO", true); }, {passive: false});
         btnThrow.addEventListener("touchend", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.5)"; simKey("KeyO", false); }, {passive: false});
     }
 
-    // WASM
-    const wasmMemory = wasmInstance.exports.mem;
-    const PAGE_SIZE = 65536;
-    const constructors = {uint8: Uint8Array, float32: Float32Array, int32: Int32Array, uint32: Uint32Array};
     let currentBuffer = null;
-    let views = null;
+    let viewCache = null;
+    let cachedViews = null;
 
-    // Inizializzazione e ricostruzione dopo la crescita.
+    const PAGE_SIZE = 65536;
+
+    const constructors = {
+        uint8: Uint8Array,
+        float32: Float32Array,
+        int32: Int32Array,
+        uint32: Uint32Array
+    };
+
+    function initializeWasmMemory(memory) {
+        wasmMemory = memory;
+        currentBuffer = memory.buffer;
+        viewCache = new Map();
+        cachedViews = [];
+        // per zero allocazioni nel runtime, registriamo tutte le combinazioni offset/length/type previste.
+    }
+
     function rebuildWasmViews() {
         const buffer = wasmMemory.buffer;
-        views = {
-            uint8: new Uint8Array(buffer),
-            float32: new Float32Array(buffer),
-            int32: new Int32Array(buffer),
-            uint32: new Uint32Array(buffer)
-        };
+        for (const entry of cachedViews) {
+            entry.view = new entry.Constructor(buffer, entry.offset, entry.length);
+        }
         currentBuffer = buffer;
     }
 
-    // Inizializzazione all'avvio.
-    rebuildWasmViews();
-
-    // Accesso alla memoria WASM.
     window.getWasmMemoryView = function(offset, length, type) {
-        //const Constructor = constructors[type] || Uint8Array;
-        //const bytesPerElement = Constructor.BYTES_PER_ELEMENT;
-        /*
-        if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0) {
-            throw new RangeError("Invalid offset or length");
-        }
-        if (offset % bytesPerElement !== 0) {
-            throw new RangeError("Offset is not aligned for " + type);
-        }
-        const requiredBytes = offset + length * bytesPerElement;
-        if (!Number.isSafeInteger(requiredBytes)) {
-            throw new RangeError("Requested memory size is invalid");
-        }
-        */
         const Constructor = constructors[type] || Uint8Array;
-        const bytesPerElement = Constructor.BYTES_PER_ELEMENT;
-        const requiredBytes = offset + length * bytesPerElement;
+        const requiredBytes = offset + length * Constructor.BYTES_PER_ELEMENT;
 
-        // Cresce soltanto se la richiesta supera la capacità corrente.
-        const currentBytes = wasmMemory.buffer.byteLength;
-        if (requiredBytes > currentBytes) {
-            const missingBytes = requiredBytes - currentBytes;
-            const pages = Math.ceil(missingBytes / PAGE_SIZE);
-            wasmMemory.grow(pages);
+        let buffer = wasmMemory.buffer;
+
+        if (requiredBytes > buffer.byteLength) {
+            wasmMemory.grow(Math.ceil((requiredBytes - buffer.byteLength) / PAGE_SIZE));
+            buffer = wasmMemory.buffer;
         }
-        // Ricrea le viste esclusivamente se il buffer è cambiato.
-        if (wasmMemory.buffer !== currentBuffer) {
+        if (buffer !== currentBuffer) {
             rebuildWasmViews();
         }
-        return views[constructors[type] ? type : "uint8"];
+        //type
+        let byType = viewCache.get(type);
+        if (!byType) {
+            viewCache.set(type, byType = new Map());
+        }
+        //offset
+        let byOffset = byType.get(offset);
+        if (!byOffset) {
+            byType.set(offset, byOffset = new Map());
+        }
+        let entry = byOffset.get(length);
+        if (!entry) {
+            entry = {offset, length, Constructor, view: new Constructor(buffer, offset, length)};
+            byOffset.set(length, entry);
+            cachedViews.push(entry);
+        }
+        return entry.view;
     };
 
     /*

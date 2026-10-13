@@ -350,7 +350,7 @@ func (w *Window) SetClipboard(str string) {
 }
 
 // KeysPressed returns a map indicating the state of each key, where the key is the Button and the value is a boolean.
-func (w *Window) KeysPressed2() map[Button]bool {
+func (w *Window) KeysPressed() map[Button]bool {
 	return w.keysPressed
 }
 
@@ -716,24 +716,21 @@ func (w *Window) doRun() {
 			switch v {
 			case KeyEscape:
 				return
-			case KeyW:
+			case KeyW, KeyUp:
 				up = true
-
-			case KeyUp:
-				up = true
-			case KeyS:
+			case KeyS, KeyDown:
 				down = true
-
-			case KeyDown:
-				down = true
-			case KeyLeft:
+				impulse *= 0.5
+			case KeyLeft, KeyA:
 				left = true
-			case KeyRight:
+			case KeyRight, KeyD:
 				right = true
 			case KeyL:
 				w.increaseFlashFactorFn()
 			case KeyK:
 				w.decreaseFlashFactorFn()
+			case KeyLeftShift, KeyRightShift:
+				impulse *= 1.2
 			}
 		}
 

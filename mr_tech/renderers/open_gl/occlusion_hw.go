@@ -140,12 +140,9 @@ func (hw *OcclusionHW) Render() {
 	if hw.testsLen == 0 {
 		return
 	}
-
 	// Regenerate the VBO buffer with all valid AABBs
 	vc := 0
-
 	tc := 0
-
 	for i := 0; i < hw.testsLen; i++ {
 		test := hw.tests[i]
 		if !test.State.QueryActive {

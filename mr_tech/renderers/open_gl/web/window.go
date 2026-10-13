@@ -324,16 +324,11 @@ func (w *Window) Start() {
 	if err := w.renderPrepareFn(); err != nil {
 		panic(err)
 	}
-
 	reqAnimFrame := js.Global().Get("requestAnimationFrame")
 	getCanvasWidth := js.Global().Call("eval", `(function(c) { return c.width; })`)
 	getCanvasHeight := js.Global().Call("eval", `(function(c) { return c.height; })`)
 	getNow := js.Global().Call("eval", `(function() { return performance.now(); })`)
-
 	tracker := js.Global().Get("window").Get("gameMouseTracker")
-
-	// 60 FPS target
-
 	targetFrameDuration := 1000.0 / float64(w.cfg.Fps) // ms
 
 	var lastTime float64
@@ -342,11 +337,9 @@ func (w *Window) Start() {
 	var renderFrame js.Func
 	renderFrame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		now := getNow.Invoke().Float()
-
 		if lastTime == 0 {
 			lastTime = now
 		}
-
 		delta := now - lastTime
 		lastTime = now
 		if delta < 0 {
@@ -355,9 +348,7 @@ func (w *Window) Start() {
 		if delta > 250.0 {
 			delta = 250.0
 		}
-
 		accumulator += delta
-
 		if accumulator < targetFrameDuration {
 			// browser equivalent of time.Sleep + continue
 			if !w.Closed() {
@@ -367,28 +358,21 @@ func (w *Window) Start() {
 			}
 			return nil
 		}
-
 		cycles := int(accumulator / targetFrameDuration)
 		accumulator -= float64(cycles) * targetFrameDuration
-
 		w.Begin()
-
 		w.mouseX += tracker.Get("x").Float()
 		w.mouseY += tracker.Get("y").Float()
 		tracker.Set("x", 0)
 		tracker.Set("y", 0)
-
 		if w.mouseX != w.prevMouseX || w.mouseY != w.prevMouseY {
 			w.playerMouseMoveFn(w.mouseX-w.prevMouseX, w.mouseY-w.prevMouseY)
 			w.prevMouseX = w.mouseX
 			w.prevMouseY = w.mouseY
 		}
-
 		canvasWidth := getCanvasWidth.Invoke(w.canvas).Int()
 		canvasHeight := getCanvasHeight.Invoke(w.canvas).Int()
-
 		var up, down, left, right bool
-
 		if w.scrollX != 0 || w.scrollY != 0 {
 			if w.scrollY < 0 {
 				up = true
@@ -396,7 +380,6 @@ func (w *Window) Start() {
 				down = true
 			}
 		}
-
 		impulse := 0.06
 		for v, isDown := range w.keysDown {
 			if !isDown {

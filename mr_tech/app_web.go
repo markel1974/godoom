@@ -92,7 +92,8 @@ func NewApp() *App {
 
 // UpdateFPS updates the frames-per-second (FPS) value and returns the updated FPS.
 func (a *App) UpdateFPS(fps int) int {
-	return fps
+	//TODO FROM SWITCH
+	return 60
 }
 
 // UpdateCalibration updates the calibration by disabling shadow usage and shadow lights in the provided Calibration object.

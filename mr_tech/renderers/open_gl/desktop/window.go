@@ -757,10 +757,6 @@ func (w *Window) doRun() {
 		if w.JustPressed(KeyN) {
 			w.toggleShadowsFn()
 		}
-		//	if d.win.JustPressed(KeyT) {
-		//	d.BuildersUpdate()
-		//}
-		// 4. Advance Logic & Render
 		w.th.Call(func() {
 			w.begin()
 			fbW, fbH := w.GetFramebufferSize()

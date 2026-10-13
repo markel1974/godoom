@@ -82,7 +82,7 @@ func (w *FrameVertices) AddVertex10(x, y, z, u, v, texLayer, ox, oy, oz, isBB fl
 func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
-	if w.verticesCount > int32(len(w.vertices)) {
+	if w.verticesCount >= int32(len(w.vertices)) {
 		w.growVertices()
 	}
 	// Location 0: aPos

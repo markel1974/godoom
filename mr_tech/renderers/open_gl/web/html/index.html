@@ -190,7 +190,7 @@
             }
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
 
-            // Deadzone
+            // Dead-zone
             if (dist < 10) { updateKeys(0, 0); return; }
             updateKeys(dx, dy);
         }
@@ -229,18 +229,75 @@
 
         // Action Buttons
         let btnShoot = document.getElementById("btnShoot");
-        btnShoot.addEventListener("touchstart", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.8)"; simKey("KeyP", true); }, {passive: false});
-        btnShoot.addEventListener("touchend", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.5)"; simKey("KeyP", false); }, {passive: false});
+        btnShoot.addEventListener("touchstart", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.8)"; simMouseBtn(0, true); }, {passive: false});
+        btnShoot.addEventListener("touchend", (e) => { e.preventDefault(); btnShoot.style.background = "rgba(255, 50, 50, 0.5)"; simMouseBtn(0, false); }, {passive: false});
 
         let btnJump = document.getElementById("btnJump");
-        btnJump.addEventListener("touchstart", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simMouseBtn(0, true); }, {passive: false});
-        btnJump.addEventListener("touchend", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.5)"; simMouseBtn(0, false); }, {passive: false});
+        btnJump.addEventListener("touchstart", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.8)"; simMouseBtn(1, true); }, {passive: false});
+        btnJump.addEventListener("touchend", (e) => { e.preventDefault(); btnJump.style.background = "rgba(50, 150, 255, 0.5)"; simMouseBtn(1, false); }, {passive: false});
 
         let btnThrow = document.getElementById("btnThrow");
         btnThrow.addEventListener("touchstart", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.8)"; simKey("KeyO", true); }, {passive: false});
         btnThrow.addEventListener("touchend", (e) => { e.preventDefault(); btnThrow.style.background = "rgba(255, 150, 50, 0.5)"; simKey("KeyO", false); }, {passive: false});
     }
 
+    // WASM
+    const wasmMemory = wasmInstance.exports.mem;
+    const PAGE_SIZE = 65536;
+    const constructors = {uint8: Uint8Array, float32: Float32Array, int32: Int32Array, uint32: Uint32Array};
+    let currentBuffer = null;
+    let views = null;
+
+    // Inizializzazione e ricostruzione dopo la crescita.
+    function rebuildWasmViews() {
+        const buffer = wasmMemory.buffer;
+        views = {
+            uint8: new Uint8Array(buffer),
+            float32: new Float32Array(buffer),
+            int32: new Int32Array(buffer),
+            uint32: new Uint32Array(buffer)
+        };
+        currentBuffer = buffer;
+    }
+
+    // Inizializzazione all'avvio.
+    rebuildWasmViews();
+
+    // Accesso alla memoria WASM.
+    window.getWasmMemoryView = function(offset, length, type) {
+        //const Constructor = constructors[type] || Uint8Array;
+        //const bytesPerElement = Constructor.BYTES_PER_ELEMENT;
+        /*
+        if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0) {
+            throw new RangeError("Invalid offset or length");
+        }
+        if (offset % bytesPerElement !== 0) {
+            throw new RangeError("Offset is not aligned for " + type);
+        }
+        const requiredBytes = offset + length * bytesPerElement;
+        if (!Number.isSafeInteger(requiredBytes)) {
+            throw new RangeError("Requested memory size is invalid");
+        }
+        */
+        const Constructor = constructors[type] || Uint8Array;
+        const bytesPerElement = Constructor.BYTES_PER_ELEMENT;
+        const requiredBytes = offset + length * bytesPerElement;
+
+        // Cresce soltanto se la richiesta supera la capacità corrente.
+        const currentBytes = wasmMemory.buffer.byteLength;
+        if (requiredBytes > currentBytes) {
+            const missingBytes = requiredBytes - currentBytes;
+            const pages = Math.ceil(missingBytes / PAGE_SIZE);
+            wasmMemory.grow(pages);
+        }
+        // Ricrea le viste esclusivamente se il buffer è cambiato.
+        if (wasmMemory.buffer !== currentBuffer) {
+            rebuildWasmViews();
+        }
+        return views[constructors[type] ? type : "uint8"];
+    };
+
+    /*
     // --- ZERO COPY WASM MEMORY ---
     window.getWasmMemoryView = function(offset, length, type) {
         if (length === 0) {
@@ -259,6 +316,8 @@
         if (type === 'uint32') return new Uint32Array(mem, offset, length);
         return new Uint8Array(mem, offset, length);
     };
+
+    */
 
     function startGame(buffer) {
         showLoading("Starting Engine...");

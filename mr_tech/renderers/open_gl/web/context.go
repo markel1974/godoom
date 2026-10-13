@@ -806,7 +806,7 @@ func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, ind
 	cSlice := unsafe.Slice(count, drawcount)
 	ptrSlice := unsafe.Slice(indices, drawcount)
 
-	// Assicurati che il buffer di scratch sia capiente abbastanza (zero-alloc a regime)
+	// Assicuriamoci che il buffer di scratch sia capiente abbastanza (zero-alloc a regime)
 	if int32(len(d.scratchOffsets)) < drawcount {
 		d.scratchOffsets = make([]uint32, drawcount*2) // *2 per ridurre eventuali re-allocazioni
 	}

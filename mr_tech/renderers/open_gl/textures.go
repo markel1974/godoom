@@ -58,7 +58,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		return nil
 	}
 
-	slots := []int{64, 128, 256, 1024}
+	slots := []int{128, 256, 1024, 2048}
 
 	idxByDim := func(maxDim int) int {
 		bIdx := len(slots) - 1

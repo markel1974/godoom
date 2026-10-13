@@ -411,6 +411,8 @@ func (w *Window) Start() {
 				w.increaseFlashFactorFn()
 			case KeyK:
 				w.decreaseFlashFactorFn()
+			case KeySpace:
+				w.playerJumpFn(true)
 			}
 		}
 
@@ -425,10 +427,10 @@ func (w *Window) Start() {
 		if w.JustPressed(KeyC) {
 			w.enableClearFn()
 		}
-		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
-			w.playerJumpFn(true)
-		}
-		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
+		//if w.JustPressed(KeySpace) || w.Pressed(MouseButton2) {
+		//	w.playerJumpFn(true)
+		//}
+		if w.JustPressed(KeyTab) || w.Pressed(MouseButton1) {
 			w.playerFireFn()
 		}
 		if w.JustPressed(KeyN) {

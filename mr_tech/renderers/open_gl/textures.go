@@ -105,35 +105,24 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			continue
 		}
 		tex := tn[0]
-		//w, h, pixels := tex.RGBA()
 		wOrig, hOrig, pixelsOrig := tex.RGBA()
-		wScaled, hScaled := tex.GetSizeScaled()
-		w, h := int(wScaled), int(hScaled)
-		if w < 1 {
-			w = 1
+		if wOrig < 1 {
+			wOrig = 1
 		}
-		if h < 1 {
-			h = 1
+		if hOrig < 1 {
+			hOrig = 1
 		}
-		pixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, w, h, stride)
-		maxDim := w
-		if h > maxDim {
-			maxDim = h
+		maxDim := wOrig
+		if hOrig > maxDim {
+			maxDim = hOrig
 		}
 		bIdx := idxByDim(maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		var resizedPixels []uint8
-		if w == h {
-			//UpscaleFixedPoint UpscaleBicubic UpscaleLanczosSeparable
-			resizedPixels = UpscaleLanczosSeparable(pixels, w, h, size, size, stride)
-		} else {
-			//TODO SE W e H sono differenti usare PadPixels
-			//resizedPixels = PadPixels(pixels, w, h, size, stride)
-			resizedPixels = UpscaleBicubic(pixels, w, h, size, size, stride)
-		}
-		//normalPixels := generateNormalMap(resizedPixels, size, size, stride, 3.0)
-		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3)
+
+		resizedPixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, size, size, stride)
+		aspectRatio := float64(wOrig) / float64(hOrig)
+		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3, aspectRatio)
 
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
@@ -148,7 +137,6 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 			blackPixels := createBlackPixels(size, size, stride)
 			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(blackPixels))
 		}
-
 		//Impacchettiamo Bucket e Layer in un solo Float
 		packedValue := float32(bIdx*1000) + float32(layer)
 		tx.textures[tex] = packedValue
@@ -275,8 +263,9 @@ func generateNormalMap(pixels []uint8, width, height, stride int, strength float
 // width and height define the dimensions of the input image.
 // stride is the number of bytes per pixel; typically 4 for RGBA data.
 // strength controls the influence of the detected edges on the resulting normal map.
+// aspectRatio is the ratio of original width to original height (wOrig / hOrig) to preserve isotropic normals when non-square textures are upscaled into square layers.
 // Returns the RGBA pixel data for the generated normal map.
-func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength float64, sCenterWeight float64, sSideWeight float64) []uint8 {
+func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength float64, sCenterWeight float64, sSideWeight float64, aspectRatio float64) []uint8 {
 	//const sCenterWeight = 10.0
 	//const sSideWeight = 3.0
 	sPositive := 2.0*sSideWeight + sCenterWeight
@@ -309,7 +298,8 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 
 	// Fattore di normalizzazione in base ai pesi del kernel.
 	// Il range teorico è il doppio della somma dei pesi positivi.
-	weightNorm := strength / sRange
+	weightNormX := strength / sRange
+	weightNormY := weightNormX * aspectRatio
 
 	// Convoluzione di Scharr 3x3
 	for y := 0; y < height; y++ {
@@ -326,8 +316,8 @@ func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength
 			br := getLuma(x+1, y+1)
 
 			// Operatore Scharr X e Y
-			dX := ((sSideWeight*tr + sCenterWeight*r + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*l + sSideWeight*bl)) * weightNorm
-			dY := ((sSideWeight*bl + sCenterWeight*bc + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*tc + sSideWeight*tr)) * weightNorm
+			dX := ((sSideWeight*tr + sCenterWeight*r + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*l + sSideWeight*bl)) * weightNormX
+			dY := ((sSideWeight*bl + sCenterWeight*bc + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*tc + sSideWeight*tr)) * weightNormY
 
 			invLen := 1.0 / math.Sqrt(dX*dX+dY*dY+1.0)
 			idx := (y*width + x) * stride

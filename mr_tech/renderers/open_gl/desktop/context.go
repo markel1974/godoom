@@ -3,7 +3,6 @@
 package desktop
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
@@ -297,13 +296,13 @@ func (d *Context) PolygonOffset(factor float32, units float32) {
 
 // Ptr converts the given data to an unsafe.Pointer, enabling low-level memory operations within the context.
 func (d *Context) Ptr(data interface{}) unsafe.Pointer {
-	fmt.Println("[info] creating Ptr")
+	//fmt.Println("[info] creating Ptr")
 	return gl.Ptr(data)
 }
 
 // PtrOffset returns an unsafe.Pointer that represents the specified offset in memory.
 func (d *Context) PtrOffset(offset int) unsafe.Pointer {
-	fmt.Println("[info] creating Offset")
+	//fmt.Println("[info] creating Offset")
 	return gl.PtrOffset(offset)
 }
 

@@ -36,6 +36,7 @@ func main() {
 	var width int
 	var height int
 	var maxQueue int
+	var fps = 120
 
 	flag.BoolVar(&showHelp, "h", false, "show this help")
 	flag.BoolVar(&showVersion, "v", false, "show version")
@@ -61,6 +62,8 @@ func main() {
 	res := NewResources()
 
 	mode = updateMode(mode)
+
+	fps = updateFPS(fps)
 
 	var target string
 
@@ -123,10 +126,9 @@ func main() {
 	//if full3d {
 	//	cfg.Calibration.Full3d = true
 	//}
-	const fpsTarget = 120
 
-	textures.SetFps(fpsTarget)
-	physics.SetFps(fpsTarget)
+	textures.SetFps(uint64(fps))
+	physics.SetFps(uint64(fps))
 
 	en := engine.NewEngine(maxQueue, 3.0)
 	if err = en.Setup(cfg); err != nil {
@@ -135,7 +137,7 @@ func main() {
 	}
 
 	//ctx := desktop.NewContext(width, height)
-	ctx := getContext(width, height, fpsTarget)
+	ctx := getContext(width, height, fps)
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)

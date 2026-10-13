@@ -20,6 +20,10 @@ import (
 // removed embed
 var assets embed.FS
 
+func updateFPS(fps int) int {
+	return 60
+}
+
 func updateMode(mode int) int {
 	return mode
 }

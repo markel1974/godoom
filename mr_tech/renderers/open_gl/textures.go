@@ -48,8 +48,118 @@ func (tx *Textures) GetBucket(b int) (uint32, uint32, uint32) {
 	return tx.buckets[b].DiffuseArray, tx.buckets[b].NormalArray, tx.buckets[b].EmissiveArray
 }
 
-// Setup initializes texture buckets, allocates memory, and processes textures for VRAM usage and mipmap generation.
 func (tx *Textures) Setup(t textures.ITextures) error {
+	const stride = 4
+	tx.textures = make(map[*textures.Texture]float32)
+	names := t.GetNames()
+
+	if len(names) == 0 {
+		return nil
+	}
+
+	slots := []int{64, 128, 256, 1024}
+
+	idxByDim := func(maxDim int) int {
+		bIdx := len(slots) - 1
+		for x := 0; x < bIdx; x++ {
+			if maxDim <= slots[x] {
+				return x
+			}
+		}
+		return bIdx
+	}
+
+	tx.buckets = make([]Bucket, len(slots))
+	for i := range slots {
+		tx.buckets[i] = Bucket{Size: slots[i], Count: 0}
+	}
+
+	for _, id := range names {
+		tn := t.Get([]string{id})
+		if len(tn) == 0 {
+			continue
+		}
+		w, h := tn[0].Size()
+		maxDim := w
+		if h > maxDim {
+			maxDim = h
+		}
+		idx := idxByDim(maxDim)
+		tx.buckets[idx].Count++
+	}
+
+	// Allocazione VRAM selettiva
+	for i := range tx.buckets {
+		if tx.buckets[i].Count > 0 {
+			tx.buckets[i].DiffuseArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].NormalArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].EmissiveArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+		}
+	}
+
+	// Popolamento e Packing
+	for _, id := range names {
+		tn := t.Get([]string{id})
+		if len(tn) == 0 {
+			continue
+		}
+		tex := tn[0]
+		wOrig, hOrig, pixelsOrig := tex.RGBA()
+		if wOrig < 1 {
+			wOrig = 1
+		}
+		if hOrig < 1 {
+			hOrig = 1
+		}
+		maxDim := wOrig
+		if hOrig > maxDim {
+			maxDim = hOrig
+		}
+		bIdx := idxByDim(maxDim)
+		size := tx.buckets[bIdx].Size
+		layer := tx.buckets[bIdx].Layer
+
+		resizedPixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, size, size, stride)
+		aspectRatio := float64(wOrig) / float64(hOrig)
+		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3, aspectRatio)
+
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
+
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(normalPixels))
+
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
+		if tex.IsEmissive() {
+			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
+		} else {
+			blackPixels := createBlackPixels(size, size, stride)
+			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(blackPixels))
+		}
+
+		//Impacchettiamo Bucket e Layer in un solo Float
+		packedValue := float32(bIdx*1000) + float32(layer)
+		tx.textures[tex] = packedValue
+		tx.buckets[bIdx].Layer++
+	}
+
+	// Generazione MipMaps globali (aggiunto l'emissivo!)
+	for i, l := range tx.buckets {
+		if l.Layer > 0 {
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].DiffuseArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].NormalArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
+			tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[i].EmissiveArray)
+			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
+		}
+	}
+	return nil
+}
+
+/*
+// Setup initializes texture buckets, allocates memory, and processes textures for VRAM usage and mipmap generation.
+func (tx *Textures) SetupNew(t textures.ITextures) error {
 	const stride = 4
 	tx.textures = make(map[*textures.Texture]float32)
 	names := t.GetNames()
@@ -156,6 +266,8 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	}
 	return nil
 }
+
+*/
 
 // BindBuckets binds texture buckets to specific OpenGL texture units for rendering diffuse, normal, and emissive maps.
 func (tx *Textures) BindBuckets() {

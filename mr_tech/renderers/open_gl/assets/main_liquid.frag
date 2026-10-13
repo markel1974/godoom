@@ -70,7 +70,7 @@ float fbm(vec2 p) {
 }
 
 void main() {
-    const float WATER_ABSORPTION = 0.0015;
+    const float WATER_ABSORPTION = 0.009;
     // Temporal frequencies.
     const float WAVE1_SPEED_X = 1.31;
     const float WAVE1_SPEED_Y = 1.07;
@@ -153,27 +153,37 @@ void main() {
     float waterDepth = abs(ViewPos.z);
     float depthDiff = max(bgDepth - waterDepth, 0.0);
     if (bgDepthRaw >= 0.9999) {
-        depthDiff = min(depthDiff, 60.0);
+        depthDiff = max(depthDiff, 150.0);
     }
 
     // Beer-Lambert absorption with luminous aquatic fog tinted by the material texture
-    vec3 waterFogColor = mix(vec3(0.08, 0.38, 0.52), texColor * 1.3, 0.45);
-    float transmittance = clamp(exp(-depthDiff * WATER_ABSORPTION), 0.25, 1.0);
+    vec3 waterFogColor = mix(vec3(0.06, 0.32, 0.45), texColor * 1.2, 0.45);
+    float transmittance = clamp(exp(-depthDiff * WATER_ABSORPTION), 0.03, 1.0);
     vec3 finalColor = refractionColor * transmittance + waterFogColor * (1.0 - transmittance);
 
-    // Gently blend in the surface water texture without multiplying/darkening
-    finalColor = mix(finalColor, texColor, 0.22);
+    // View-dependent Fresnel calculation using geometric normal
+    vec3 dPdx = dFdx(ViewPos);
+    vec3 dPdy = dFdy(ViewPos);
+    vec3 faceNormal = cross(dPdx, dPdy);
+    float lenN = length(faceNormal);
+    faceNormal = lenN > 1e-6 ? faceNormal / lenN : vec3(0.0, 1.0, 0.0);
+    vec3 V = normalize(-ViewPos);
+    float NdotV = clamp(abs(dot(faceNormal, V)), 0.0, 1.0);
+    float fresnel = pow(1.0 - NdotV, 3.0);
+
+    // Blend in the surface water texture: clear enough to see bottom at steep angles, opaque at grazing angles
+    float surfaceMix = mix(0.40, 0.75, fresnel);
+    finalColor = mix(finalColor, texColor, surfaceMix);
 
     // Wave surface specular reflection for bright glistening motion
     vec3 waveNormal = normalize(vec3(-distortion.x * 35.0, 1.0, -distortion.y * 35.0));
-    vec3 V = normalize(-ViewPos);
     vec3 L = normalize(vec3(0.2, 0.8, 0.5));
     vec3 H = normalize(L + V);
-    float spec = pow(max(dot(waveNormal, H), 0.0), 32.0) * 0.35;
-    finalColor += vec3(spec);
+    float spec = pow(max(dot(waveNormal, H), 0.0), 32.0) * 0.40;
+    finalColor += vec3(spec * (0.35 + 0.65 * fresnel));
 
     // Output
-    FragColor = vec4(finalColor, 0.90);
+    FragColor = vec4(finalColor, 1.0);
     /*
      vec3 lavaBaseColor = texColor;
     // Lava color variation

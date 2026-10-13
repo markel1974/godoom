@@ -25,6 +25,10 @@ func updateMode(mode int) int {
 	return mode
 }
 
+func updateFPS(fps int) int {
+	return fps
+}
+
 func updatePath(mode int, path string) string {
 	return path
 }

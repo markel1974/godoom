@@ -51,7 +51,10 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 					for idx, pt := range v.Points {
 						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
 							if len(v.UVs) > idx {
-								rawTriUvs[k] = v.UVs[idx]
+								uv := v.UVs[idx]
+								uv[0] *= 1.0
+								uv[1] *= 1.0
+								rawTriUvs[k] = uv
 							}
 							break
 						}

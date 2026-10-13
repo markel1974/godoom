@@ -27,26 +27,28 @@ type Button int
 
 // Button constants mirroring the desktop API
 const (
-	KeyEscape    = Button(256)
-	KeyW         = Button(87)
-	KeyS         = Button(83)
-	KeyA         = Button(65)
-	KeyD         = Button(68)
-	KeyUp        = Button(265)
-	KeyDown      = Button(264)
-	KeyLeft      = Button(263)
-	KeyRight     = Button(262)
-	KeyL         = Button(76)
-	KeyK         = Button(75)
-	KeyO         = Button(79)
-	KeyP         = Button(80)
-	KeyC         = Button(67)
-	KeyTab       = Button(258)
-	KeySpace     = Button(32)
-	KeyM         = Button(77)
-	KeyN         = Button(78)
-	MouseButton1 = Button(0)
-	MouseButton2 = Button(1)
+	KeyEscape     = Button(256)
+	KeyW          = Button(87)
+	KeyS          = Button(83)
+	KeyA          = Button(65)
+	KeyD          = Button(68)
+	KeyLeftShift  = Button(340)
+	KeyRightShift = Button(344)
+	KeyUp         = Button(265)
+	KeyDown       = Button(264)
+	KeyLeft       = Button(263)
+	KeyRight      = Button(262)
+	KeyL          = Button(76)
+	KeyK          = Button(75)
+	KeyO          = Button(79)
+	KeyP          = Button(80)
+	KeyC          = Button(67)
+	KeyTab        = Button(258)
+	KeySpace      = Button(32)
+	KeyM          = Button(77)
+	KeyN          = Button(78)
+	MouseButton1  = Button(0)
+	MouseButton2  = Button(1)
 )
 
 var codeToButton = map[string]Button{
@@ -68,6 +70,8 @@ var codeToButton = map[string]Button{
 	"Space":      KeySpace,
 	"KeyM":       KeyM,
 	"KeyN":       KeyN,
+	"ShiftLeft":  KeyLeftShift,
+	"ShiftRight": KeyRightShift,
 }
 
 // Window represents a browser-based rendering window using WebGL for graphics rendering. It includes input handling capabilities.
@@ -403,6 +407,7 @@ func (w *Window) Start() {
 				up = true
 			case KeyS, KeyDown:
 				down = true
+				impulse *= 0.5
 			case KeyA, KeyLeft:
 				left = true
 			case KeyD, KeyRight:
@@ -413,6 +418,8 @@ func (w *Window) Start() {
 				w.decreaseFlashFactorFn()
 			case KeySpace:
 				w.playerJumpFn(true)
+			case KeyLeftShift, KeyRightShift:
+				impulse *= 1.4
 			}
 		}
 

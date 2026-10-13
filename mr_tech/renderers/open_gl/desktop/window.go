@@ -730,7 +730,7 @@ func (w *Window) doRun() {
 			case KeyK:
 				w.decreaseFlashFactorFn()
 			case KeyLeftShift, KeyRightShift:
-				impulse *= 1.2
+				impulse *= 1.4
 			}
 		}
 

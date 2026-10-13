@@ -41,7 +41,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
 		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
 		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
-		fl:               NewFrameLights(ctx, 1024, cal.UseShadowLight),
+		fl:               NewFrameLights(ctx, 1024, cal.UseShadowLights),
 		dcRenderOpaque:   NewDrawCommandsRender(ctx, false),
 		dcRenderAdditive: NewDrawCommandsRender(ctx, true),
 		dcRenderLiquid:   NewDrawCommandsRender(ctx, true),

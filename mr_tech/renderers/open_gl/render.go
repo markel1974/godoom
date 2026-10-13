@@ -149,7 +149,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.liquid = w.handler.GetLiquid()
 	w.enableShadows = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
-	w.SetShadowEnabled(true)
+	w.SetShadowEnabled(w.cal.EnableShadow)
 	for _, s := range w.container {
 		if err := s.Compile(a); err != nil {
 			return err
@@ -309,4 +309,5 @@ func (w *RenderOpenGL) SetShadowEnabled(v bool) {
 	w.flashlight.EnableShadows(w.enableShadows)
 	w.lights.EnableShadows(w.enableShadows)
 	w.depth.EnableShadows(w.enableShadows)
+	w.main.EnableShadows(w.enableShadows)
 }

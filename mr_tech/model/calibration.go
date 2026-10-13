@@ -20,7 +20,8 @@ type Calibration struct {
 	BeamRatio          float64
 	VolSteps           float64
 	AoFactor           float64
-	UseShadowLight     bool
+	UseShadowLights    bool
+	EnableShadow       bool
 	volumes            *Volumes
 }
 

@@ -59,11 +59,10 @@ func main() {
 		return
 	}
 
-	res := NewResources()
-
-	mode = updateMode(mode)
-	fps = updateFPS(fps)
-	shadowLight := useShadowLight()
+	app := NewApp()
+	res := app.GetResources()
+	mode = app.UpdateMode(mode)
+	fps = app.UpdateFPS(fps)
 
 	var target string
 	switch mode {
@@ -83,7 +82,7 @@ func main() {
 	default:
 	}
 
-	target = updatePath(mode, target)
+	target = app.UpdatePath(mode, target)
 
 	switch mode {
 	case 0:
@@ -122,9 +121,6 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	//if full3d {
-	//	cfg.Calibration.Full3d = true
-	//}
 
 	textures.SetFps(uint64(fps))
 	physics.SetFps(uint64(fps))
@@ -136,15 +132,15 @@ func main() {
 	}
 
 	cal := en.GetCalibration()
-	cal.UseShadowLight = shadowLight
 
-	//ctx := desktop.NewContext(width, height)
-	ctx := getContext(width, height, fps)
+	app.UpdateCalibration(cal)
+
+	ctx := app.GetContext(width, height, fps)
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
 		return
 	}
 	render.Start()
-	waitExit()
+	app.WaitExit()
 }

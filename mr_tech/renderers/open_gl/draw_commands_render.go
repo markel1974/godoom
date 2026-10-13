@@ -1,7 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -11,7 +10,7 @@ import (
 // It is used to optimize rendering by grouping draw calls with similar states together.
 type RenderBatch struct {
 	mc            []int32
-	mi            []unsafe.Pointer
+	mi            []uintptr
 	depthWrite    int
 	polygonOffset int
 	len           int
@@ -38,8 +37,8 @@ func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int) {
 	rb.polygonOffset = polygonOffset
 }
 
-// Add appends a new draw command to the RenderBatch with specified index count and pointer.
-func (rb *RenderBatch) Add(indexCount int32, pointer unsafe.Pointer) {
+// Add appends a new draw command to the RenderBatch with specified index count and EBO byte offset.
+func (rb *RenderBatch) Add(indexCount int32, byteOffset int32) {
 	if rb.len >= len(rb.mc) {
 		mc, mi := rb.mc, rb.mi
 		newLen := rb.len * 2
@@ -48,7 +47,7 @@ func (rb *RenderBatch) Add(indexCount int32, pointer unsafe.Pointer) {
 		copy(rb.mi, mi)
 	}
 	rb.mc[rb.len] = indexCount
-	rb.mi[rb.len] = pointer
+	rb.mi[rb.len] = uintptr(byteOffset)
 	rb.len++
 }
 
@@ -57,9 +56,9 @@ func (rb *RenderBatch) rebuild(newLen int) {
 		newLen = 1
 	}
 	rb.mc = make([]int32, newLen)
-	rb.mi = make([]unsafe.Pointer, newLen)
+	rb.mi = make([]uintptr, newLen)
 	rb.mcPtr = &rb.mc[0]
-	rb.miPtr = &rb.mi[0]
+	rb.miPtr = (*unsafe.Pointer)(unsafe.Pointer(&rb.mi[0]))
 }
 
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
@@ -148,8 +147,7 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 			currentDepthWrite = depthWrite
 			currentPolygonOffset = polygonOffset
 		}
-		fmt.Println("[info] adding draw command", cmd.firstIndex*4)
-		currentBatch.Add(cmd.indexCount, w.ctx.PtrOffset(int(cmd.firstIndex*4)))
+		currentBatch.Add(cmd.indexCount, cmd.firstIndex*4)
 	}
 }
 

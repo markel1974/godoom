@@ -149,22 +149,15 @@ func (hw *OcclusionHW) Render() {
 			mX, mY, mZ := float32(test.AABB.GetMinX()), float32(test.AABB.GetMinY()), float32(test.AABB.GetMinZ())
 			xX, xY, xZ := float32(test.AABB.GetMaxX()), float32(test.AABB.GetMaxY()), float32(test.AABB.GetMaxZ())
 
-			// AABB vertices in Engine space
-			p0 := [3]float32{mX, mY, mZ}
-			p1 := [3]float32{xX, mY, mZ}
-			p2 := [3]float32{xX, xY, mZ}
-			p3 := [3]float32{mX, xY, mZ}
-			p4 := [3]float32{mX, mY, xZ}
-			p5 := [3]float32{xX, mY, xZ}
-			p6 := [3]float32{xX, xY, xZ}
-			p7 := [3]float32{mX, xY, xZ}
-
-			// SWAP for the OpenGL shader: (X, Z, -Y)
-			sw := func(p [3]float32) [3]float32 {
-				return [3]float32{p[0], p[2], -p[1]}
-			}
-			v0, v1, v2, v3 := sw(p0), sw(p1), sw(p2), sw(p3)
-			v4, v5, v6, v7 := sw(p4), sw(p5), sw(p6), sw(p7)
+			// AABB vertices in Engine space SWAP for the OpenGL shader: (X, Z, -Y)
+			v0 := [3]float32{mX, mZ, -mY}
+			v1 := [3]float32{xX, mZ, -mY}
+			v2 := [3]float32{xX, mZ, -xY}
+			v3 := [3]float32{mX, mZ, -xY}
+			v4 := [3]float32{mX, xZ, -mY}
+			v5 := [3]float32{xX, xZ, -mY}
+			v6 := [3]float32{xX, xZ, -xY}
+			v7 := [3]float32{mX, xZ, -xY}
 
 			// 36 vertices (12 triangles)
 			vertices := [108]float32{

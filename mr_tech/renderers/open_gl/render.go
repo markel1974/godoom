@@ -177,8 +177,6 @@ func (w *RenderOpenGL) RenderAdvance() {
 }
 
 // RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-
-// RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
 func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	fbW, fbH := int32(fbW1), int32(fbH1)
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
@@ -246,77 +244,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// POST
 	w.post.Render(int32(winW), int32(winH))
 }
-
-/*
-// RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
-	fbW, fbH := int32(fbW1), int32(fbH1)
-	w.builder.Compute(fbW, fbH, w.vi, w.engine)
-
-	vert, vertLen, indices, indicesLen := w.builder.GetVertices()
-	lights, lightSize, lightsNum := w.builder.GetLights()
-	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
-
-	if w.handler.SetSize(fbW, fbH) {
-		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
-		w.flashlightMetrics.Rebuild(fbW, fbH)
-	}
-
-	w.tex.BindBuckets()
-
-	px, _, pz := w.vi.GetView()
-	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
-	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
-
-	swayX, swayY, swaySensitivity := w.vi.GetSway()
-	flashX, flashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
-	w.flashlightMetrics.Update(w.mapMetrics.GetViewPtr(), flashX, flashY)
-
-	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
-
-	// RENDER START HERE
-	w.depth.Prepare()
-	// MAIN PREPARE (VBO and EBO)
-	w.main.Prepare(vert, vertLen, indices, indicesLen)
-	// LIGHTS PREPARE (UBO)
-	w.lights.Prepare(lights, lightSize, lightsNum)
-	// OMBRE
-	w.depth.Render(w.dcOpaque.Render)
-	// MAIN OPAQUE (Single-Pass Forward with all lights & shadows)
-	w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
-	// HW OCCLUSION
-	w.occlusion.Render(w.hwOcc.Render)
-	// MAIN ADDITIVE
-	if w.dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(w.dcAdditive.Render)
-	}
-	// MAIN LIQUID (Refraction & Depth Fog)
-	if w.dcLiquid.HasCommands() {
-		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
-		// without feedback-loop darkening from previous frame's water.
-		w.post.ResolveMSAA(fbW, fbH)
-		w.liquid.Render(w.dcLiquid.Render, true)
-	}
-	// SKYBOX
-	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
-		skyTexId := skyTex.GetIdentifier()
-		if skyTexId < 0 {
-			skyTexId, _ = w.tex.Get(skyTex)
-			skyTex.SetIdentifier(skyTexId)
-		}
-		u, v := w.builder.GetSkyUV()
-		tick := float32(textures.TickF())
-		w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
-	}
-	// MSAA resolution
-	w.post.Prepare()
-	// BLOOM
-	w.bloom.Render()
-	// POST
-	w.post.Render(int32(winW), int32(winH))
-}
-
-*/
 
 // RenderToggleShadows toggles the shadow rendering state in the shaders, enabling or disabling shadows dynamically.
 func (w *RenderOpenGL) RenderToggleShadows() {

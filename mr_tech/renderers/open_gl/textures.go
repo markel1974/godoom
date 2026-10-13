@@ -118,24 +118,22 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		bIdx := idxByDim(maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-
-		resizedPixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, size, size, stride)
 		aspectRatio := float64(wOrig) / float64(hOrig)
+		resizedPixels := UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, size, size, stride)
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3, aspectRatio)
-
+		diffuse := resizedPixels
+		emissive := resizedPixels
+		if !tex.IsEmissive() {
+			emissive = createBlackPixels(size, size, stride)
+		}
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
-		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(diffuse))
 
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(normalPixels))
 
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
-		if tex.IsEmissive() {
-			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(resizedPixels))
-		} else {
-			blackPixels := createBlackPixels(size, size, stride)
-			tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(blackPixels))
-		}
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(emissive))
 
 		//Impacchettiamo Bucket e Layer in un solo Float
 		packedValue := float32(bIdx*1000) + float32(layer)

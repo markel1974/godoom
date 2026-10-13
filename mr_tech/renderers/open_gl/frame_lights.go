@@ -28,11 +28,12 @@ type FrameLights struct {
 	glCamX            float32
 	glCamY            float32
 	glCamZ            float32
+	useShadowLight    bool
 	debug             bool
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
-func NewFrameLights(ctx api.IContext, maxLights int) *FrameLights {
+func NewFrameLights(ctx api.IContext, maxLights int, useShadowLight bool) *FrameLights {
 	const stride = 16
 	fl := &FrameLights{
 		ctx:               ctx,
@@ -41,6 +42,7 @@ func NewFrameLights(ctx api.IContext, maxLights int) *FrameLights {
 		freezeIndex:       0,
 		shadowLightsIndex: 0,
 		stride:            stride,
+		useShadowLight:    useShadowLight,
 	}
 	fl.dataPtr = ctx.Ptr(fl.data2)
 	for idx := range fl.shadowLights {
@@ -115,17 +117,19 @@ func (f *FrameLights) Create(light *model.Light) {
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-		added := f.addShadowLight(
-			glPosX, glPosY, glPosZ,
-			f.glCamX, f.glCamY, f.glCamZ,
-			lType,
-			r, g, b, intensity,
-			glDirX, glDirY, glDirZ, falloff,
-			cutOff, outerCutOff,
-			float32(light.GetRadius()),
-		)
-		if added {
-			return
+		if f.useShadowLight {
+			added := f.addShadowLight(
+				glPosX, glPosY, glPosZ,
+				f.glCamX, f.glCamY, f.glCamZ,
+				lType,
+				r, g, b, intensity,
+				glDirX, glDirY, glDirZ, falloff,
+				cutOff, outerCutOff,
+				float32(light.GetRadius()),
+			)
+			if added {
+				return
+			}
 		}
 	case config.LightKindNone:
 		return

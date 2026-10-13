@@ -21,7 +21,11 @@ import (
 var assets embed.FS
 
 func updateFPS(fps int) int {
-	return 60
+	return fps
+}
+
+func useShadowLight() bool {
+	return false
 }
 
 func updateMode(mode int) int {

@@ -33,7 +33,7 @@ type BuilderVolume struct {
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
-func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibration) *BuilderVolume {
+func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
 		ctx:              ctx,
 		tex:              tex,
@@ -41,14 +41,14 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, calibration *model.Calibr
 		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
 		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
 		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
-		fl:               NewFrameLights(ctx, 1024),
+		fl:               NewFrameLights(ctx, 1024, cal.UseShadowLight),
 		dcRenderOpaque:   NewDrawCommandsRender(ctx, false),
 		dcRenderAdditive: NewDrawCommandsRender(ctx, true),
 		dcRenderLiquid:   NewDrawCommandsRender(ctx, true),
 		cSky:             nil,
 		cSkyU:            0.0,
 		cSkyV:            0.0,
-		cal:              calibration,
+		cal:              cal,
 		visibleVol:       NewVisibleVols(8192),
 		modes:            make([]*DrawCommands, config.BlendModeLates),
 		occlusion:        NewOcclusionHW(ctx, 4096),

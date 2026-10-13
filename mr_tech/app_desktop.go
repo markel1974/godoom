@@ -29,6 +29,10 @@ func updateFPS(fps int) int {
 	return fps
 }
 
+func useShadowLight() bool {
+	return true
+}
+
 func updatePath(mode int, path string) string {
 	return path
 }

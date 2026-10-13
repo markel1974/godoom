@@ -62,11 +62,10 @@ func main() {
 	res := NewResources()
 
 	mode = updateMode(mode)
-
 	fps = updateFPS(fps)
+	shadowLight := useShadowLight()
 
 	var target string
-
 	switch mode {
 	case 0, 1, 2:
 	case 3:
@@ -135,6 +134,9 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	cal := en.GetCalibration()
+	cal.UseShadowLight = shadowLight
 
 	//ctx := desktop.NewContext(width, height)
 	ctx := getContext(width, height, fps)

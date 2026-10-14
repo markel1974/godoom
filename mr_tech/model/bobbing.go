@@ -6,6 +6,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
+var _bobbingFPS = 60.0
+
+func BobbingSetFPS(f float64) {
+	_bobbingFPS = f
+}
+
 // Bobbing represents a procedural motion system for simulating walking and vertical head movement effects.
 type Bobbing struct {
 	maxAmplitudeX   float64
@@ -121,12 +127,12 @@ func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	if rawSpeed > frameMaxSpeed {
 		frameMaxSpeed = (frameMaxSpeed * 0.95) + (rawSpeed * 0.05)
 	}
-	timeLerpSpeed := min(p.speedLerp*dt*60.0, 1.0)
-	timeLerpAmp := min(p.ampLerp*dt*60.0, 1.0)
+	timeLerpSpeed := min(p.speedLerp*dt*_bobbingFPS, 1.0)
+	timeLerpAmp := min(p.ampLerp*dt*_bobbingFPS, 1.0)
 	// Time-corrected lerp protetto
 	p.smoothedSpeed = p.smoothedSpeed + (rawSpeed-p.smoothedSpeed)*timeLerpSpeed
 	// La fase deve accumularsi in base al tempo, non ai frame
-	p.phase += (p.idleDrift + (p.smoothedSpeed * p.strideLength)) * dt * 60.0
+	p.phase += (p.idleDrift + (p.smoothedSpeed * p.strideLength)) * dt * _bobbingFPS
 	ratio := 0.0
 	if frameMaxSpeed > 0 {
 		ratio = p.smoothedSpeed / frameMaxSpeed
@@ -143,8 +149,8 @@ func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	p.bobY = math.Abs(math.Sin(p.phase)) * p.ampY
 	// Integrazione di Eulero scalata nel tempo per la molla
 	accel := -(p.jumpBobOffset * p.springTension)
-	p.jumpBobVelocity += accel * dt * 60.0
+	p.jumpBobVelocity += accel * dt * _bobbingFPS
 	// Damping applicato come esponenziale negativo per essere framerate-independent
-	p.jumpBobVelocity *= math.Pow(p.springDamping, dt*60.0)
-	p.jumpBobOffset += p.jumpBobVelocity * dt * 60.0
+	p.jumpBobVelocity *= math.Pow(p.springDamping, dt*_bobbingFPS)
+	p.jumpBobOffset += p.jumpBobVelocity * dt * _bobbingFPS
 }

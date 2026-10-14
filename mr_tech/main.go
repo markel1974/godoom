@@ -26,6 +26,10 @@ type ModeDef struct {
 	Builder func(res common.IFileSystem, target string, level int) (*config.Root, error)
 }
 
+func IntToBool(i int) bool {
+	return i != 0
+}
+
 var _availableModes = []ModeDef{
 	{
 		Name:   "script",
@@ -109,8 +113,8 @@ func main() {
 	var width int
 	var height int
 	var fps int
-	var enableShadows bool
-	var enableShadowLights bool
+	var enableShadows int
+	var enableShadowLights int
 
 	var helpModes string
 	for idx, v := range _availableModes {
@@ -124,9 +128,8 @@ func main() {
 	flag.IntVar(&fps, "fps", 120, "fps")
 	flag.IntVar(&width, "width", 640, "width")
 	flag.IntVar(&height, "height", 480, "height")
-
-	flag.BoolVar(&enableShadows, "shadows", true, "enable shadows")
-	flag.BoolVar(&enableShadowLights, "shadowLights", true, "enable shadows lights")
+	flag.IntVar(&enableShadows, "shadows", 1, "enable shadows")
+	flag.IntVar(&enableShadowLights, "shadowLights", 1, "enable shadows lights")
 
 	flag.Parse()
 
@@ -170,8 +173,12 @@ func main() {
 	}
 
 	cal := en.GetCalibration()
-	cal.EnableShadows = enableShadows
-	cal.EnableShadowLights = enableShadowLights
+	cal.EnableShadows = IntToBool(enableShadows)
+	cal.EnableShadowLights = IntToBool(enableShadowLights)
+
+	fmt.Println("FPS", fps)
+	fmt.Println("EnableShadows", cal.EnableShadows)
+	fmt.Println("EnableShadowLights", cal.EnableShadowLights)
 
 	ctx := app.GetContext()
 	render := open_gl.NewRender(ctx)

@@ -2,8 +2,6 @@ package interfaces
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
-	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // IBSPReader defines an interface for reading and managing BSP (Binary Space Partitioning) files.
@@ -19,9 +17,5 @@ type IBSPReader interface {
 
 	GetArchive() IArchive
 
-	Build(root *config.Root) error
-
-	GetPlayerInfo() (float64, geometry.XYZ)
-
-	GetTextures() *lumps.Textures
+	Retrieve() (*config.Root, error)
 }

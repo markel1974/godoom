@@ -42,6 +42,7 @@ type Player struct {
 	*Thing
 	Bobbing *Bobbing `json:"bobbing"`
 	Flash   *Flash   `json:"flash"`
+	Impulse float64  `json:"impulse"`
 }
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
@@ -52,6 +53,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 		Bobbing: &Bobbing{},
 		Flash:   &Flash{},
 	}
+	p.Impulse = 0.06
 	p.Flash.FovDeg = 80.0
 	p.Flash.ShadowFovFactor = 1.75
 	p.Flash.ZNear = 0.1

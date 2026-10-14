@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop/executor"
 
@@ -47,6 +48,7 @@ type WindowPos struct {
 // Window represents a graphical application window and manages its configuration, state, input, and rendering behavior.
 type Window struct {
 	ctx                              api.IContext
+	player                           *config.Player
 	th                               *executor.MainThread
 	window                           *glfw.Window
 	cfg                              WindowConfig
@@ -80,11 +82,12 @@ type Window struct {
 var _currWin *Window
 
 // NewGLWindow creates and initializes a new OpenGL window using the specified context and window configuration.
-func NewGLWindow(ctx api.IContext, cfg WindowConfig) *Window {
+func NewGLWindow(ctx api.IContext, cfg WindowConfig, player *config.Player) *Window {
 	w := &Window{
 		ctx:           ctx,
 		th:            _thread,
 		cfg:           cfg,
+		player:        player,
 		cursorVisible: true,
 		keysPressed:   make(map[Button]bool),
 	}
@@ -711,7 +714,7 @@ func (w *Window) doRun() {
 			}
 		}
 
-		var impulse = 0.06
+		var impulse = w.player.Impulse //0.06
 		for v := range w.keysPressed {
 			switch v {
 			case KeyEscape:

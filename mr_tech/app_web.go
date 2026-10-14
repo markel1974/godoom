@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall/js"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/web"
@@ -107,8 +108,8 @@ func (a *App) UpdatePath(path string) string {
 }
 
 // GetContext returns a new instance of api.IContext configured with the app's width, height, and frames per second (fps).
-func (a *App) GetContext() api.IContext {
-	return web.NewContext(a.width, a.height, a.fps)
+func (a *App) GetContext(player *config.Player) api.IContext {
+	return web.NewContext(a.width, a.height, a.fps, player)
 }
 
 // GetResources returns the Resources instance associated with the App.

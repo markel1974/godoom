@@ -5,6 +5,7 @@ package web
 import (
 	"syscall/js"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -79,6 +80,7 @@ type Window struct {
 	canvas js.Value
 	gl     js.Value
 	cfg    WindowConfig
+	player *config.Player
 	closed bool
 	width  int
 	height int
@@ -109,7 +111,7 @@ type Window struct {
 }
 
 // NewGLWindow creates a new OpenGL window with the specified configuration and initializes WebGL2 context.
-func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
+func NewGLWindow(ctx *Context, cfg WindowConfig, player *config.Player) *Window {
 	doc := js.Global().Get("document")
 	canvas := doc.Call("getElementById", "canvas")
 	if canvas.IsUndefined() || canvas.IsNull() {
@@ -143,6 +145,7 @@ func NewGLWindow(ctx *Context, cfg WindowConfig) *Window {
 		cfg:          cfg,
 		width:        cfg.Width,
 		height:       cfg.Height,
+		player:       player,
 		keysDown:     make(map[Button]bool),
 		keysPressed:  make(map[Button]bool),
 		keysReleased: make(map[Button]bool),
@@ -380,7 +383,7 @@ func (w *Window) Start() {
 				down = true
 			}
 		}
-		impulse := 0.06
+		impulse := w.player.Impulse
 		for v, isDown := range w.keysDown {
 			if !isDown {
 				continue

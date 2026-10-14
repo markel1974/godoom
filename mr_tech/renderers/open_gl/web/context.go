@@ -9,6 +9,7 @@ import (
 	"syscall/js"
 	"unsafe"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -142,7 +143,7 @@ type Context struct {
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
-func NewContext(width int, height int, fps int) *Context {
+func NewContext(width int, height int, fps int, player *config.Player) *Context {
 	cfg := WindowConfig{
 		Width:  width,
 		Height: height,
@@ -180,7 +181,7 @@ func NewContext(width int, height int, fps int) *Context {
 	ctx.jsUint32Array = js.Global().Get("Uint32Array")
 	ctx.jsFloat32Array = js.Global().Get("Float32Array")
 	ctx.jsConsole = js.Global().Get("console")
-	ctx.win = NewGLWindow(ctx, cfg)
+	ctx.win = NewGLWindow(ctx, cfg, player)
 	ctx.fn_activeTexture = ctx.gl.Get("activeTexture").Call("bind", ctx.gl)
 	ctx.fn_attachShader = ctx.gl.Get("attachShader").Call("bind", ctx.gl)
 	ctx.fn_bindBuffer = ctx.gl.Get("bindBuffer").Call("bind", ctx.gl)

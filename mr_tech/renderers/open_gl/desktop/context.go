@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -16,7 +17,7 @@ type Context struct {
 }
 
 // NewContext creates and returns a new instance of Context.
-func NewContext(width int, height int, fps int) *Context {
+func NewContext(width int, height int, fps int, player *config.Player) *Context {
 	bounds := R(0, 0, float64(width), float64(height))
 	cfg := WindowConfig{
 		Bounds:             bounds,
@@ -32,7 +33,7 @@ func NewContext(width int, height int, fps int) *Context {
 	ctx := &Context{
 		cfg: cfg,
 	}
-	ctx.win = NewGLWindow(ctx, cfg)
+	ctx.win = NewGLWindow(ctx, cfg, player)
 	return ctx
 }
 

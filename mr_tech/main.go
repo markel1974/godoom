@@ -176,7 +176,7 @@ func main() {
 	cal.EnableShadows = IntToBool(enableShadows)
 	cal.EnableShadowLights = IntToBool(enableShadowLights)
 
-	ctx := app.GetContext()
+	ctx := app.GetContext(cfg.Player)
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)

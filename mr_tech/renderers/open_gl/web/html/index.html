@@ -43,6 +43,18 @@
                 <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Level</label>
                 <label for="inpLevel"></label><input type="number" id="inpLevel" value="1" style="width: 70px; padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white; text-align: center;">
             </div>
+            <div>
+                <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">FPS</label>
+                <label for="inpFPS"></label><input type="number" id="inpFPS" value="60" style="width: 70px; padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white; text-align: center;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Shadows</label>
+                <label for="inpShadows"></label><input type="checkbox" id="inpShadows" name="shadows" checked />
+            </div>
+            <div>
+                <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Shadows Light</label>
+                <label for="inpShadowsLights"></label><input type="checkbox" id="inpShadowsLights" name="shadowsLights" />
+            </div>
         </div>
     </div>
 
@@ -91,7 +103,6 @@
 <script src="wasm_exec.js"></script>
 <script>
     // POINTER LOCK PROMISE CATCHER
-    // Previene i crash di Chrome quando si clicca troppo in fretta dopo ESC
     const originalRequestPointerLock = HTMLCanvasElement.prototype.requestPointerLock;
     HTMLCanvasElement.prototype.requestPointerLock = function(options) {
         const promise = originalRequestPointerLock.call(this, options);
@@ -321,7 +332,25 @@
             initTouch();
             let mode = document.getElementById("selMode").value;
             let level = document.getElementById("inpLevel").value;
-            go.argv = ["godoom.wasm", "-m", mode, "-l", level, "-width", "640", "-height", "480"];
+            let fps = document.getElementById("inpFPS").value;
+            const shadows = document.getElementById("inpShadows").checked ? 1 : 0;
+            const shadowsLights = document.getElementById("inpShadowsLights").checked ? 1 : 0;
+
+            console.log("START FPS", fps);
+            console.log("START Shadows", shadows);
+            console.log("START ShadowLights", shadowsLights);
+
+            //TODO FROM PAGE
+            go.argv = [
+                "godoom.wasm",
+                "-m", mode,
+                "-l", level,
+                "-width", "640",
+                "-height", "480",
+                "-fps", fps,
+                "-shadows", shadows,
+                "-shadowLights", shadowsLights
+            ];
             go.run(wasmInstance);
         }, 100);
     }

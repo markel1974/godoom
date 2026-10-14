@@ -176,10 +176,6 @@ func main() {
 	cal.EnableShadows = IntToBool(enableShadows)
 	cal.EnableShadowLights = IntToBool(enableShadowLights)
 
-	fmt.Println("FPS", fps)
-	fmt.Println("EnableShadows", cal.EnableShadows)
-	fmt.Println("EnableShadowLights", cal.EnableShadowLights)
-
 	ctx := app.GetContext()
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {

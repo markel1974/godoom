@@ -98,7 +98,7 @@ func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v 
 	}
 	if kind == MaterialKindLiquid {
 		m.BlendMode = BlendModeLiquid
-		println("WATER CREATED:", frames[0])
+		//println("WATER CREATED:", frames[0])
 		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco!
 	}
 	return m

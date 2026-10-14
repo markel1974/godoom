@@ -7,6 +7,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/dungeon"
 	"github.com/markel1974/godoom/mr_tech/generators/jedi"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
@@ -19,34 +20,114 @@ import (
 	"github.com/markel1974/godoom/mr_tech/version"
 )
 
-type IRender interface {
-	Setup(engine *engine.Engine) error
-	Start()
+type ModeDef struct {
+	Name    string
+	Target  string
+	Builder func(res common.IFileSystem, target string, level int) (*config.Root, error)
+}
+
+var _availableModes = []ModeDef{
+	{
+		Name:   "script",
+		Target: "",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			p := script.NewBuilder()
+			return p.Build(res, script.StubOld2)
+		},
+	},
+	{
+		Name:   "generate",
+		Target: "",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			db := dungeon.NewBuilder()
+			return db.Build(res, level)
+		},
+	},
+	{
+		Name:   "wolfstein",
+		Target: "",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			p := wolfstein.NewBuilder()
+			return p.Build(level)
+		},
+	},
+	{
+		Name:   "doom",
+		Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			wb := wad.NewBuilder()
+			return wb.Build(res, target, level)
+		},
+	},
+	{
+		Name:   "jedi",
+		Target: "resources" + string(os.PathSeparator) + "jedi",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			jf := jedi.NewBuilder()
+			return jf.Build(res, 1, target, level)
+		},
+	},
+	{
+		Name:   "outlaws",
+		Target: "resources" + string(os.PathSeparator) + "outlaws",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			jf := jedi.NewBuilder()
+			return jf.Build(res, 1, target, level)
+		},
+	},
+	{
+		Name:   "quake",
+		Target: "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "pak0.pak",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			qb := quake.NewBuilder()
+			return qb.Setup(res, target, level)
+		},
+	},
+	{
+		Name:   "quake2",
+		Target: "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			qb := quake.NewBuilder()
+			return qb.Setup(res, target, level)
+		},
+	},
+	{
+		Name:   "quake3",
+		Target: "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			qb := quake.NewBuilder()
+			return qb.Setup(res, target, level)
+		},
+	},
 }
 
 func main() {
-	var cfg *config.Root
-	var err error
 	var showHelp bool
 	var showVersion bool
-	var softwareRender bool
-	var full3d bool
 	var mode int
 	var level int
 	var width int
 	var height int
-	var maxQueue int
-	var fps = 120
+	var fps int
+	var enableShadows bool
+	var enableShadowLights bool
+
+	var helpModes string
+	for idx, v := range _availableModes {
+		helpModes += fmt.Sprintf("[%d = %s]", idx, v.Name)
+	}
 
 	flag.BoolVar(&showHelp, "h", false, "show this help")
 	flag.BoolVar(&showVersion, "v", false, "show version")
-	flag.BoolVar(&softwareRender, "s", false, "enable software renderer")
-	flag.BoolVar(&full3d, "d", false, "show this help")
-	flag.IntVar(&mode, "m", 2, "mode 0 = legacy, 1 = Generate, 2 = Doom")
+	flag.IntVar(&mode, "m", 2, helpModes)
 	flag.IntVar(&level, "l", 1, "level number")
+	flag.IntVar(&fps, "fps", 120, "fps")
 	flag.IntVar(&width, "width", 640, "width")
 	flag.IntVar(&height, "height", 480, "height")
-	flag.IntVar(&maxQueue, "queue", 32, "max queue size")
+
+	flag.BoolVar(&enableShadows, "shadows", true, "enable shadows")
+	flag.BoolVar(&enableShadowLights, "shadowLights", true, "enable shadows lights")
+
 	flag.Parse()
 
 	if showHelp {
@@ -59,83 +140,40 @@ func main() {
 		return
 	}
 
+	if mode < 0 || mode >= len(_availableModes) {
+		fmt.Println("Invalid mode")
+		return
+	}
+
 	app := NewApp()
-	res := app.GetResources()
-	mode = app.UpdateMode(mode)
-	fps = app.UpdateFPS(fps)
-
-	var target string
-	switch mode {
-	case 0, 1, 2:
-	case 3:
-		target = "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD"
-	case 4:
-		target = "resources" + string(os.PathSeparator) + "jedi"
-	case 5:
-		target = "resources" + string(os.PathSeparator) + "outlaws"
-	case 6:
-		target = "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "pak0.pak"
-	case 7:
-		target = "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak"
-	case 8:
-		target = "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3"
-	default:
-	}
-
-	target = app.UpdatePath(mode, target)
-
-	switch mode {
-	case 0:
-		p := script.NewBuilder()
-		cfg, err = p.Build(res, script.StubOld2)
-	case 1:
-		db := dungeon.NewBuilder()
-		cfg, err = db.Build(res, level)
-	case 2:
-		wb := wolfstein.NewBuilder()
-		cfg, err = wb.Build(level)
-	case 3:
-		wb := wad.NewBuilder()
-		cfg, err = wb.Build(res, target, level)
-	case 4:
-		jf := jedi.NewBuilder()
-		cfg, err = jf.Build(res, 0, target, level)
-	case 5:
-		jf := jedi.NewBuilder()
-		cfg, err = jf.Build(res, 1, target, level)
-	case 6:
-		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(res, target, level)
-	case 7:
-		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(res, target, level)
-	case 8:
-		wb := quake.NewBuilder()
-		cfg, err = wb.Setup(res, target, level)
-	default:
-		db := dungeon.NewBuilder()
-		cfg, err = db.Build(res, level)
-	}
-
-	if err != nil {
-		fmt.Println(err)
+	if err := app.Setup(width, height, fps); err != nil {
+		fmt.Println("Error setting up application:", err)
 		return
 	}
 
 	textures.SetFps(uint64(fps))
 	physics.SetFps(uint64(fps))
 
-	en := engine.NewEngine(maxQueue, 3.0)
+	res := app.GetResources()
+	target := app.UpdatePath(_availableModes[mode].Target)
+	fn := _availableModes[mode].Builder
+	cfg, err := fn(res, target, level)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	en := engine.NewEngine()
 	if err = en.Setup(cfg); err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	cal := en.GetCalibration()
+	cal.EnableShadows = enableShadows
+	cal.EnableShadowLights = enableShadowLights
 
-	app.UpdateCalibration(cal)
-
-	ctx := app.GetContext(width, height, fps)
+	ctx := app.GetContext()
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)

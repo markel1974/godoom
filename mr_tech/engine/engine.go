@@ -7,10 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Engine represents a core game simulation system, managing things, volumes, player, and rendering configurations.
+// Engine represents the core structure for managing game components and interactions.
 type Engine struct {
-	maxQueue    int
-	viewFactor  float64
 	things      *model.Things
 	player      *model.ThingPlayer
 	crosshair   model.IThing
@@ -20,14 +18,12 @@ type Engine struct {
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
-func NewEngine(maxQueue int, viewFactor float64) *Engine {
+func NewEngine() *Engine {
 	return &Engine{
-		maxQueue:   maxQueue,
-		viewFactor: viewFactor,
-		things:     nil,
-		volumes:    nil,
-		player:     nil,
-		lights:     nil,
+		things:  nil,
+		volumes: nil,
+		player:  nil,
+		lights:  nil,
 	}
 }
 

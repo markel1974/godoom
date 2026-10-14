@@ -5,9 +5,17 @@ import (
 )
 
 var _dt float64
+var _fps uint64
 
+// SetFps sets the desired frames per second (fps) and adjusts the internal frame time interval (_dt) accordingly.
 func SetFps(fps uint64) {
-	_dt = 1.0 / (float64(fps) / 2.0)
+	_fps = fps
+	_dt = 1.0 / (float64(fps) * 0.5)
+}
+
+// GetFps returns the current frames-per-second (FPS) value as an unsigned 64-bit integer.
+func GetFps() uint64 {
+	return _fps
 }
 
 // _globalId is an internal counter used to generate unique identifiers in a thread-safe manner.

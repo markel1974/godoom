@@ -375,8 +375,8 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 
 	player.Bobbing.MaxAmplitudeX = playerHeight * 0.2
 	player.Bobbing.MaxAmplitudeY = playerHeight * 0.2
-	player.Bobbing.StrideLength = 0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
-	player.Bobbing.IdleAmpX = 0.9        // Respiro
+	player.Bobbing.StrideLength = 0.48 //0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
+	player.Bobbing.IdleAmpX = 0.9      // Respiro
 	player.Bobbing.IdleAmpY = 0.9
 	player.Bobbing.IdleDrift = 0.01
 	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità

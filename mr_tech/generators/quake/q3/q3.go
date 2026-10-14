@@ -318,8 +318,8 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
-	root.Player.Bobbing.StrideLength = 0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
-	root.Player.Bobbing.IdleAmpX = 0.9        // Breathing
+	root.Player.Bobbing.StrideLength = 0.09 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	root.Player.Bobbing.IdleAmpX = 0.9      // Breathing
 	root.Player.Bobbing.IdleAmpY = 0.9
 	root.Player.Bobbing.IdleDrift = 0.01
 	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed

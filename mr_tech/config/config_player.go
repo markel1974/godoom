@@ -70,7 +70,7 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 	p.Bobbing.SwayMultiplierY = 1.2
 	p.Bobbing.MaxAmplitudeX = 0.05
 	p.Bobbing.MaxAmplitudeY = 0.80
-	p.Bobbing.StrideLength = 0.015
+	p.Bobbing.StrideLength = 0.09 //0.015
 	p.Bobbing.IdleAmpX = 0.02
 	p.Bobbing.IdleAmpY = 0.02
 	p.Bobbing.IdleDrift = 0.03

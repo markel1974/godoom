@@ -1,9 +1,24 @@
 package shaders
 
 import (
+	"math"
+	"unsafe"
+
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
+)
+
+// LiquidType represents the type of liquid medium being rendered by the Liquid shader.
+type LiquidType int32
+
+const (
+	LiquidTypeWater LiquidType = 0 // Acqua limpida e trasparente (default)
+	LiquidTypeSea   LiquidType = 1 // Mare oceanico (con onde ampie e schiuma su creste e riva)
+	LiquidTypeLava  LiquidType = 2 // Lava incandescente opaca con vene di magma
+	LiquidTypeSlime LiquidType = 3 // Slime / Nukage acido radioattivo torbido
+	LiquidTypeBlood LiquidType = 4 // Sangue denso e viscoso
+	LiquidTypeFog   LiquidType = 5 // Nebbia volumetrica atmosferica
 )
 
 // ShaderLiquidLoc represents an enumerator for shader uniform locations specific to the Liquid shader system.
@@ -15,6 +30,9 @@ type ShaderLiquidLoc int
 // ShaderLiquidLocScreenResolution represents the location for the liquid shader's screen resolution uniform.
 // ShaderLiquidLocNear represents the location for the liquid shader's near clipping plane distance.
 // ShaderLiquidLocFar represents the location for the liquid shader's far clipping plane distance.
+// ShaderLiquidLocTexture represents the location for the liquid shader's texture sampler array.
+// ShaderLiquidLocLightDir represents the location for the liquid shader's view-space light direction uniform.
+// ShaderLiquidLocLiquidType represents the location for the liquid type uniform.
 // ShaderLiquidLocLast signifies the last valid location for the liquid shader.
 const (
 	ShaderLiquidLocProjection = ShaderLiquidLoc(iota)
@@ -24,6 +42,8 @@ const (
 	ShaderLiquidLocNear
 	ShaderLiquidLocFar
 	ShaderLiquidLocTexture
+	ShaderLiquidLocLightDir
+	ShaderLiquidLocLiquidType
 	ShaderLiquidLocLast
 )
 
@@ -33,17 +53,29 @@ type Liquid struct {
 	prg   uint32
 	table [ShaderLiquidLocLast]int32
 
-	handler *Handler
-	main    *Main
-	post    *Post
-	metrics *metrics.Map
+	handler    *Handler
+	main       *Main
+	post       *Post
+	metrics    *metrics.Map
+	liquidType LiquidType
 }
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
 	return &Liquid{
-		prg: 0,
+		prg:        0,
+		liquidType: LiquidTypeWater,
 	}
+}
+
+// SetLiquidType sets the active liquid rendering type (Water, Sea, Lava, Slime, Blood, Fog).
+func (s *Liquid) SetLiquidType(t LiquidType) {
+	s.liquidType = t
+}
+
+// GetLiquidType returns the currently set liquid type.
+func (s *Liquid) GetLiquidType() LiquidType {
+	return s.liquidType
 }
 
 // Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
@@ -117,6 +149,8 @@ func (s *Liquid) Compile(a IAssets) error {
 	s.table[ShaderLiquidLocNear] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_near\x00"))
 	s.table[ShaderLiquidLocFar] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_far\x00"))
 	s.table[ShaderLiquidLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[ShaderLiquidLocLightDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightDir\x00"))
+	s.table[ShaderLiquidLocLiquidType] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_liquidType\x00"))
 
 	return nil
 }
@@ -158,6 +192,26 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), s.metrics.GetRoomZNear())
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), s.metrics.GetRoomZFar())
+	s.ctx.Uniform1i(s.GetUniform(ShaderLiquidLocLiquidType), 10) //int32(s.liquidType))
+
+	if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
+		const (
+			normLx float32 = 0.2977
+			normLy float32 = 0.8437
+			normLz float32 = 0.4467
+		)
+		vSlice := unsafe.Slice(view, 16)
+		lvX := vSlice[0]*normLx + vSlice[4]*normLy + vSlice[8]*normLz
+		lvY := vSlice[1]*normLx + vSlice[5]*normLy + vSlice[9]*normLz
+		lvZ := vSlice[2]*normLx + vSlice[6]*normLy + vSlice[10]*normLz
+		lenSq := lvX*lvX + lvY*lvY + lvZ*lvZ
+		if lenSq > 1e-6 {
+			invLen := float32(1.0 / math.Sqrt(float64(lenSq)))
+			s.ctx.Uniform3f(loc, lvX*invLen, lvY*invLen, lvZ*invLen)
+		} else {
+			s.ctx.Uniform3f(loc, 0.35, 0.85, 0.40)
+		}
+	}
 
 	s.ctx.BindVertexArray(vao)
 

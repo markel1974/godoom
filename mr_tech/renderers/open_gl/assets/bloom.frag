@@ -6,7 +6,6 @@ uniform sampler2D image;
 uniform bool horizontal;
 const float weight[5] = float[] (0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
 
-//uniform int u_enableShadows;
 uniform int u_passages;
 
 void main() {

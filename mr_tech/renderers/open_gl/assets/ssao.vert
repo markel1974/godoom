@@ -4,8 +4,7 @@ layout (location = 0) in vec2 aPos;
 
 out vec2 TexCoords;
 
-void main()
-{
+void main() {
     // Trasforma le coordinate da [-1, 1] a [0, 1] per il campionamento delle texture
     TexCoords = aPos * 0.5 + 0.5;
 

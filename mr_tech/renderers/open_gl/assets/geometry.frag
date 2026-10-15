@@ -43,9 +43,10 @@ vec3 getEmissive(vec3 tc) {
 
 void main() {
     vec4 texColor = getDiffuse(TexCoords);
-    if(texColor.a < 0.5) discard;
-
-    // Scrive Posizione e Profondità
+    if(texColor.a < 0.5) {
+        discard;
+    }
+    // Scriviamo Posizione e Profondità
     gPositionDepth = vec4(ViewPos, FragDepth);
 
     // Calcoliamo la variazione di ViewPos rispetto alle coordinate schermo X e Y

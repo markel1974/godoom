@@ -14,62 +14,81 @@ uniform mat4 u_lightSpaceMatrix;
 uniform mat4 u_view; // Necessario per far orientare l'ombra in base a dove guarda il player
 uniform float u_time;
 
-void main()
-{
+
+void render3DModels() {
+    //MODELLI 3D
     TexCoords = aTexCoords;
-    vec4 worldPos;
-
-    if (aRenderMode >= 1.0 && aRenderMode < 1.5) {
-        // --- VIEWPOINT BILLBOARDING ---
-        vec3 camPos = -transpose(mat3(u_view)) * u_view[3].xyz;
-        vec3 toCamera = camPos - aOrigin;
-        vec3 right, up;
-
-        if (aRenderMode > 1.05) {
-            // --- BILLBOARD SFERICO ---
-            if (length(toCamera) < 0.001) {
-                toCamera = vec3(0.0, 0.0, 1.0);
-            }
-            vec3 forward = normalize(toCamera);
-            vec3 worldUp = vec3(0.0, 1.0, 0.0);
-            if (abs(forward.y) > 0.999) {
-                right = vec3(1.0, 0.0, 0.0);
-            } else {
-                right = normalize(cross(worldUp, forward));
-            }
-            up = cross(forward, right);
-        } else {
-            // --- BILLBOARD CILINDRICO ---
-            toCamera.y = 0.0;
-            if (length(toCamera) < 0.001) {
-                toCamera = vec3(0.0, 0.0, 1.0);
-            }
-            vec3 forward = normalize(toCamera);
-            right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
-            up = vec3(0.0, 1.0, 0.0);
-        }
-        worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
-    } else if (aRenderMode > 1.5) {
-        // --- MODELLI 3D (MD2 / MDL) ---
-        vec3 lPos = mix(aPos, aPosNext, aLerp);
-        float cosY = cos(aYaw);
-        float sinY = sin(aYaw);
-        float origX = lPos.x;
-        float origY = -lPos.z;
-        float rotX = (origX * cosY) - (origY * sinY);
-        float rotY = (origX * sinY) + (origY * cosY);
-        vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
-        worldPos = vec4(aOrigin + rotatedPos, 1.0);
-    } else if (aRenderMode > 0.4 && aRenderMode < 0.6) {
-        // --- MATERIALI ANIMATI O TRASPARENTI ---
-        worldPos = vec4(aPos, 1.0);
-        worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
-        worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
-        // Scroll UV non necessario per la depth
-    } else {
-        // --- GEOMETRIA BSP ---
-        worldPos = vec4(aPos, 1.0);
-    }
+    vec3 lPos = mix(aPos, aPosNext, aLerp);
+    float cosY = cos(aYaw);
+    float sinY = sin(aYaw);
+    float origX = lPos.x;
+    float origY = -lPos.z;
+    float rotX = (origX * cosY) - (origY * sinY);
+    float rotY = (origX * sinY) + (origY * cosY);
+    vec3 rotatedPos = vec3(rotX, lPos.y, -rotY);
+    vec4 worldPos = vec4(aOrigin + rotatedPos, 1.0);
 
     gl_Position = u_lightSpaceMatrix * worldPos;
+}
+
+void renderBillboarding() {
+    // VIEWPOINT BILLBOARDING
+    TexCoords = aTexCoords;
+    vec3 camPos = -transpose(mat3(u_view)) * u_view[3].xyz;
+    vec3 toCamera = camPos - aOrigin;
+    vec3 right, up;
+    if (aRenderMode > 1.05) {
+        // BILLBOARD SFERICO
+        if (length(toCamera) < 0.001) {
+            toCamera = vec3(0.0, 0.0, 1.0);
+        }
+        vec3 forward = normalize(toCamera);
+        vec3 worldUp = vec3(0.0, 1.0, 0.0);
+        if (abs(forward.y) > 0.999) {
+            right = vec3(1.0, 0.0, 0.0);
+        } else {
+            right = normalize(cross(worldUp, forward));
+        }
+        up = cross(forward, right);
+    } else {
+        // BILLBOARD CILINDRICO
+        toCamera.y = 0.0;
+        if (length(toCamera) < 0.001) {
+            toCamera = vec3(0.0, 0.0, 1.0);
+        }
+        vec3 forward = normalize(toCamera);
+        right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+        up = vec3(0.0, 1.0, 0.0);
+    }
+    vec4 worldPos = vec4(aOrigin + (right * aPos.x) + (up * aPos.y), 1.0);
+    gl_Position = u_lightSpaceMatrix * worldPos;
+}
+
+void renderLiquid() {
+    // MATERIALI ANIMATI O TRASPARENTI
+    TexCoords = aTexCoords;
+    vec4 worldPos = vec4(aPos, 1.0);
+    worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
+    worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
+    // Scroll UV non necessario per la depth
+    gl_Position = u_lightSpaceMatrix * worldPos;
+}
+
+void renderAll() {
+    // --- GEOMETRIA BSP ---
+    TexCoords = aTexCoords;
+    vec4 worldPos = vec4(aPos, 1.0);
+    gl_Position = u_lightSpaceMatrix * worldPos;
+}
+
+void main() {
+    if (aRenderMode >= 1.0 && aRenderMode < 1.5) {
+        renderBillboarding();
+    } else if (aRenderMode > 1.5) {
+        render3DModels();
+    } else if (aRenderMode > 0.4 && aRenderMode < 0.6) {
+        renderLiquid();
+    } else {
+        renderAll();
+    }
 }

@@ -69,7 +69,7 @@ func NewHandler(vStride, lStride int32) *Handler {
 		bias:             0.025,
 
 		hvPassages:       5,
-		internalPassages: 3,
+		internalPassages: 3, //GPU ITERATION
 
 		additive:    NewAdditive(),
 		bloom:       NewBloom(), //TODO passaggi orizzontali e verticali dalla configurazione

@@ -21,11 +21,11 @@ type IBuilder interface {
 
 	GetLightsStride() int32
 
-	GetDrawCommands() *DrawCommandsRender
+	GetDrawCommands() *shaders.DrawCommandsRender
 
-	GetDrawCommandsAdditive() *DrawCommandsRender
+	GetDrawCommandsAdditive() *shaders.DrawCommandsRender
 
-	GetDrawCommandsLiquid() *DrawCommandsRender
+	GetDrawCommandsLiquid() *shaders.DrawCommandsRender
 
 	GetHWOcclusion() *OcclusionHW
 
@@ -77,9 +77,9 @@ type RenderOpenGL struct {
 	scaleX float32
 	scaleY float32
 
-	dcOpaque   *DrawCommandsRender
-	dcAdditive *DrawCommandsRender
-	dcLiquid   *DrawCommandsRender
+	dcOpaque   *shaders.DrawCommandsRender
+	dcAdditive *shaders.DrawCommandsRender
+	dcLiquid   *shaders.DrawCommandsRender
 	hwOcc      *OcclusionHW
 
 	gpuProfiler *shaders.GpuProfiler
@@ -249,135 +249,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.bloom.Render()
 	// POST
 	w.post.Render(int32(winW), int32(winH))
-}
-
-func (w *RenderOpenGL) RenderStartPROFILE(fbW1 int, fbH1 int, winW int, winH int) {
-	p := w.gpuProfiler
-
-	fbW, fbH := int32(fbW1), int32(fbH1)
-
-	p.MeasureCPU("builder.Compute", func() {
-		w.builder.Compute(fbW, fbH, w.vi, w.engine)
-	})
-
-	vert, vertSize, vertCount, indices, indexSize, indicesCount := w.builder.GetVertices()
-
-	lights, lightSize, lightsCount := w.builder.GetLights()
-	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
-
-	if w.handler.SetSize(fbW, fbH) {
-		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(
-			fbW,
-			fbH,
-			float32(w.cal.AspectRatio),
-			float32(w.cal.FovVerticalDegrees),
-		)
-
-		w.flashlightMetrics.Rebuild(fbW, fbH)
-	}
-
-	w.tex.BindBuckets()
-
-	px, _, pz := w.vi.GetView()
-	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
-	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
-
-	swayX, swayY, swaySensitivity := w.vi.GetSway()
-	flashX := float32(swayX)
-	flashY := float32(swayY)
-	flashSensitivity := float32(swaySensitivity)
-
-	w.flashlightMetrics.Update(
-		w.mapMetrics.GetViewPtr(),
-		flashX,
-		flashY,
-	)
-
-	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
-
-	// CPU: preparazione.
-	p.MeasureCPU("depth.Prepare", func() {
-		w.depth.Prepare()
-	})
-
-	p.MeasureCPU("main.Prepare", func() {
-		w.main.Prepare(vert, vertSize, vertCount, indices, indexSize, indicesCount)
-	})
-
-	p.MeasureCPU("lights.Prepare", func() {
-		w.lights.Prepare(lights, lightSize, lightsCount)
-	})
-
-	// GPU: depth pass.
-	p.MeasureGPU("depth.Render", func() {
-		w.depth.Render(w.dcOpaque.Render)
-	})
-
-	// GPU: opaque pass.
-	p.MeasureGPU("main.Render", func() {
-		w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
-	})
-
-	// GPU: hardware occlusion.
-	p.MeasureGPU("occlusion.Render", func() {
-		w.occlusion.Render(w.hwOcc.Render)
-	})
-
-	// GPU: additive.
-	if w.dcAdditive.HasCommands() {
-		p.MeasureGPU("additive.Render", func() {
-			w.additive.RenderAdditive(w.dcAdditive.Render)
-		})
-	}
-
-	// GPU: resolve MSAA e rendering liquidi.
-	if w.dcLiquid.HasCommands() {
-		p.MeasureGPU("liquid.ResolveMSAA", func() {
-			w.post.ResolveMSAA(fbW, fbH)
-		})
-
-		p.MeasureGPU("liquid.Render", func() {
-			w.liquid.Render(w.dcLiquid.Render, true)
-		})
-	}
-
-	// GPU: skybox.
-	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
-		skyTexId := skyTex.GetIdentifier()
-
-		if skyTexId < 0 {
-			skyTexId, _ = w.tex.Get(skyTex)
-			skyTex.SetIdentifier(skyTexId)
-		}
-
-		u, v := w.builder.GetSkyUV()
-		tick := float32(textures.TickF())
-
-		p.MeasureGPU("sky.Render", func() {
-			w.sky.Render(
-				skyTexId,
-				float32(u)*tick,
-				float32(v)*tick,
-			)
-		})
-	}
-
-	// Preparazione post-processing.
-	p.MeasureCPU("post.Prepare", func() {
-		w.post.Prepare()
-	})
-
-	// GPU: bloom.
-	p.MeasureGPU("bloom.Render", func() {
-		w.bloom.Render()
-	})
-
-	// GPU: post-processing finale.
-	p.MeasureGPU("post.Render", func() {
-		w.post.Render(int32(winW), int32(winH))
-	})
-
-	p.EndFrame()
 }
 
 // RenderToggleShadows toggles the shadow rendering state in the shaders, enabling or disabling shadows dynamically.

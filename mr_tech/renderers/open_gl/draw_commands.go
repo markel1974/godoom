@@ -1,17 +1,13 @@
 package open_gl
 
-import "github.com/markel1974/godoom/mr_tech/textures"
-
-// DrawCommand represents a rendering command with a starting index and the number of indices to be drawn.
-type DrawCommand struct {
-	firstIndex int32
-	indexCount int32
-	material   *textures.Material
-}
+import (
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/textures"
+)
 
 // DrawCommands manages a collection of draw command objects used to define rendering batches in a graphics pipeline.
 type DrawCommands struct {
-	commands             []*DrawCommand
+	commands             []*shaders.DrawCommand
 	freezeLen            int
 	len                  int
 	freezeLastIndexCount int32
@@ -22,10 +18,10 @@ type DrawCommands struct {
 func NewDrawCommands(mode int, s int) *DrawCommands {
 	dc := &DrawCommands{
 		blendMode: mode,
-		commands:  make([]*DrawCommand, s),
+		commands:  make([]*shaders.DrawCommand, s),
 	}
 	for i := range dc.commands {
-		dc.commands[i] = &DrawCommand{}
+		dc.commands[i] = shaders.NewDrawCommand()
 	}
 	return dc
 }
@@ -37,14 +33,14 @@ func (w *DrawCommands) GetBlendMode() int {
 
 // Compute updates or creates a draw command using the provided start and current index values and material.
 func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *textures.Material) {
-	var cmd *DrawCommand
+	var cmd *shaders.DrawCommand
 
 	// Se abbiamo già un comando e la nuova geometria inizia esattamente
 	// dove finisce la precedente, fondiamo tutto in un singolo batch gigante!
 	// MA SOLO se lo stato OpenGL (DepthWrite, PolygonOffset) è identico!
 	canMerge := false
-	if w.len > 0 && (w.commands[w.len-1].firstIndex+w.commands[w.len-1].indexCount) == startIndices {
-		prevMat := w.commands[w.len-1].material
+	if w.len > 0 && (w.commands[w.len-1].GetFirstIndex()+w.commands[w.len-1].GetIndexCount()) == startIndices {
+		prevMat := w.commands[w.len-1].GetMaterial()
 		if prevMat == material {
 			canMerge = true
 		} else if prevMat != nil && material != nil {
@@ -64,13 +60,13 @@ func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *tex
 			w.Grow()
 		}
 		cmd = w.commands[w.len]
-		cmd.firstIndex = startIndices
-		cmd.indexCount = 0
-		cmd.material = material
+		cmd.SetFirstIndex(startIndices)
+		cmd.SetIndexCount(0)
+		cmd.SetMaterial(material)
 		w.len++
 	}
 
-	cmd.indexCount += currentIndices - startIndices
+	cmd.IncIndexCount(currentIndices - startIndices)
 }
 
 // DeepReset clears all commands and resets freeze-related state to initial values in the DrawCommands instance.
@@ -84,7 +80,7 @@ func (w *DrawCommands) DeepReset() {
 func (w *DrawCommands) Reset() {
 	w.len = w.freezeLen
 	if w.len > 0 {
-		w.commands[w.len-1].indexCount = w.freezeLastIndexCount
+		w.commands[w.len-1].SetIndexCount(w.freezeLastIndexCount)
 	}
 }
 
@@ -92,17 +88,17 @@ func (w *DrawCommands) Reset() {
 func (w *DrawCommands) Freeze() {
 	w.freezeLen = w.len
 	if w.len > 0 {
-		w.freezeLastIndexCount = w.commands[w.len-1].indexCount
+		w.freezeLastIndexCount = w.commands[w.len-1].GetIndexCount()
 	}
 }
 
 // Get retrieves the list of draw commands up to the current length.
-func (w *DrawCommands) Get() []*DrawCommand {
+func (w *DrawCommands) Get() []*shaders.DrawCommand {
 	return w.commands[0:w.len]
 }
 
 // GetDrawCommands returns the current list of DrawCommand instances up to the active length.
-func (w *DrawCommands) GetDrawCommands() []*DrawCommand {
+func (w *DrawCommands) GetDrawCommands() []*shaders.DrawCommand {
 	return w.Get()
 }
 
@@ -113,10 +109,10 @@ func (w *DrawCommands) Grow() {
 	if newSize == 0 {
 		newSize = 128
 	}
-	newCommands := make([]*DrawCommand, newSize)
+	newCommands := make([]*shaders.DrawCommand, newSize)
 	copy(newCommands, w.commands)
 	for i := oldLen; i < newSize; i++ {
-		newCommands[i] = &DrawCommand{}
+		newCommands[i] = shaders.NewDrawCommand()
 	}
 	w.commands = newCommands
 }

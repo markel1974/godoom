@@ -1,12 +1,59 @@
-package open_gl
+package shaders
 
 import (
 	"fmt"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+// DrawCommand represents a rendering command with a starting index and the number of indices to be drawn.
+type DrawCommand struct {
+	firstIndex int32
+	indexCount int32
+	material   *textures.Material
+}
+
+// NewDrawCommand initializes and returns a pointer to a new DrawCommand instance with default values.
+func NewDrawCommand() *DrawCommand {
+	return &DrawCommand{}
+}
+
+// SetMaterial assigns a new material to the DrawCommand for rendering.
+func (w *DrawCommand) SetMaterial(material *textures.Material) {
+	w.material = material
+}
+
+// SetFirstIndex sets the starting index for the draw command.
+func (w *DrawCommand) SetFirstIndex(firstIndex int32) {
+	w.firstIndex = firstIndex
+}
+
+// SetIndexCount sets the count of indices to be drawn for the draw command.
+func (w *DrawCommand) SetIndexCount(indexCount int32) {
+	w.indexCount = indexCount
+}
+
+// IncIndexCount increments the index count of the draw command by the specified amount.
+func (w *DrawCommand) IncIndexCount(count int32) {
+	w.indexCount += count
+}
+
+// GetMaterial retrieves the material associated with the DrawCommand.
+func (w *DrawCommand) GetMaterial() *textures.Material {
+	return w.material
+}
+
+// GetFirstIndex returns the starting index of the draw command used for rendering.
+func (w *DrawCommand) GetFirstIndex() int32 {
+	return w.firstIndex
+}
+
+// GetIndexCount returns the total number of indices to be drawn in this draw command.
+func (w *DrawCommand) GetIndexCount() int32 {
+	return w.indexCount
+}
 
 // RenderBatch is a structure to hold batched rendering data such as index counts and memory pointers.
 // It is used to optimize rendering by grouping draw calls with similar states together.
@@ -76,7 +123,7 @@ type DrawCommandsRender struct {
 	batchesLen   int
 	isAdditive   bool
 	name         string
-	profiler     *shaders.GpuProfiler
+	profiler     *GpuProfiler
 	totalDraws   uint64
 	totalIndices uint64
 }
@@ -97,7 +144,7 @@ func NewDrawCommandsRender(ctx api.IContext, name string, isAdditive bool) *Draw
 }
 
 // SetProfiler sets the GpuProfiler instance to be used for profiling GPU performance in DrawCommandsRender.
-func (w *DrawCommandsRender) SetProfiler(profiler *shaders.GpuProfiler) {
+func (w *DrawCommandsRender) SetProfiler(profiler *GpuProfiler) {
 	w.profiler = profiler
 }
 

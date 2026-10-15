@@ -40,17 +40,14 @@ func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int) {
 // Add appends a new draw command to the RenderBatch with specified index count and EBO byte offset.
 func (rb *RenderBatch) Add(indexCount int32, byteOffset int32) {
 	if rb.len >= len(rb.mc) {
-		mc, mi := rb.mc, rb.mi
-		newLen := rb.len * 2
-		rb.rebuild(newLen)
-		copy(rb.mc, mc)
-		copy(rb.mi, mi)
+		rb.grow()
 	}
 	rb.mc[rb.len] = indexCount
 	rb.mi[rb.len] = uintptr(byteOffset)
 	rb.len++
 }
 
+// rebuild recreates and resizes the internal slices mc and mi to the specified length, ensuring a minimum size of 1.
 func (rb *RenderBatch) rebuild(newLen int) {
 	if newLen < 1 {
 		newLen = 1
@@ -61,19 +58,30 @@ func (rb *RenderBatch) rebuild(newLen int) {
 	rb.miPtr = (*unsafe.Pointer)(unsafe.Pointer(&rb.mi[0]))
 }
 
+// grow increases the capacity of the RenderBatch's internal buffers to accommodate additional draw commands.
+func (rb *RenderBatch) grow() {
+	mc, mi := rb.mc, rb.mi
+	newLen := rb.len * 2
+	rb.rebuild(newLen)
+	copy(rb.mc, mc)
+	copy(rb.mi, mi)
+}
+
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
 type DrawCommandsRender struct {
 	ctx        api.IContext
 	batches    []*RenderBatch
 	batchesLen int
 	isAdditive bool
+	name       string
 }
 
 // NewDrawCommandsRender creates and initializes a new DrawCommandsRender with specified context and batch type.
-func NewDrawCommandsRender(ctx api.IContext, isAdditive bool) *DrawCommandsRender {
+func NewDrawCommandsRender(ctx api.IContext, name string, isAdditive bool) *DrawCommandsRender {
 	const startSize = 16
 	dcr := &DrawCommandsRender{
 		ctx:        ctx,
+		name:       name,
 		batches:    make([]*RenderBatch, startSize),
 		isAdditive: isAdditive,
 	}
@@ -133,13 +141,7 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 
 		if depthWrite != currentDepthWrite || polygonOffset != currentPolygonOffset || currentBatch == nil {
 			if w.batchesLen >= len(w.batches) {
-				batches := w.batches
-				newLen := len(w.batches) * 2
-				w.batches = make([]*RenderBatch, newLen)
-				copy(w.batches, batches)
-				for i := len(batches); i < newLen; i++ {
-					w.batches[i] = NewRenderBatch()
-				}
+				w.grow()
 			}
 			currentBatch = w.batches[w.batchesLen]
 			currentBatch.Reset(depthWrite, polygonOffset)
@@ -160,9 +162,9 @@ func (w *DrawCommandsRender) Render() {
 	currentDepthWrite := -1 // -1 means unknown
 	currentPolygonOffset := -1
 
+	//totalDraws := 0
 	for i := 0; i < w.batchesLen; i++ {
 		b2 := w.batches[i]
-
 		if b2.depthWrite != currentDepthWrite {
 			if b2.depthWrite == 1 {
 				w.ctx.DepthMask(true)
@@ -171,7 +173,6 @@ func (w *DrawCommandsRender) Render() {
 			}
 			currentDepthWrite = b2.depthWrite
 		}
-
 		if b2.polygonOffset != currentPolygonOffset {
 			if b2.polygonOffset == 1 {
 				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
@@ -181,13 +182,25 @@ func (w *DrawCommandsRender) Render() {
 			}
 			currentPolygonOffset = b2.polygonOffset
 		}
+		//totalDraws += int(b2.len)
 		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 	}
-
 	if currentDepthWrite != 1 && !w.isAdditive {
 		w.ctx.DepthMask(true)
 	}
 	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	}
+
+	//fmt.Printf("[%s] batches=%d draws=%d additive=%v\n", w.name, w.batchesLen, totalDraws, w.isAdditive, )
+}
+
+func (w *DrawCommandsRender) grow() {
+	batches := w.batches
+	newLen := len(w.batches) * 2
+	w.batches = make([]*RenderBatch, newLen)
+	copy(w.batches, batches)
+	for i := len(batches); i < newLen; i++ {
+		w.batches[i] = NewRenderBatch()
 	}
 }

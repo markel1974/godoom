@@ -96,6 +96,11 @@ func (w *DrawCommandsRender) HasCommands() bool {
 	return w.batchesLen > 0
 }
 
+// GetName retrieves the name of the DrawCommandsRender instance.
+func (w *DrawCommandsRender) GetName() string {
+	return w.name
+}
+
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
 func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.batchesLen = 0
@@ -191,10 +196,10 @@ func (w *DrawCommandsRender) Render() {
 	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	}
-
 	//fmt.Printf("[%s] batches=%d draws=%d additive=%v\n", w.name, w.batchesLen, totalDraws, w.isAdditive, )
 }
 
+// grow doubles the capacity of the render batches slice and initializes new RenderBatch instances for added capacity.
 func (w *DrawCommandsRender) grow() {
 	batches := w.batches
 	newLen := len(w.batches) * 2

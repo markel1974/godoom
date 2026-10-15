@@ -226,8 +226,8 @@ func (s *Lights) Render(renderGeometry func(), ambient float32) {
 	renderGeometry()
 }
 
-// EnableShadows enables or disables shadow rendering based on the provided boolean value.
-func (s *Lights) EnableShadows(e bool) {
+// SetShadowsEnabled enables or disables shadow rendering based on the provided boolean value.
+func (s *Lights) SetShadowsEnabled(e bool) {
 	if e {
 		s.shadows = 1
 	} else {

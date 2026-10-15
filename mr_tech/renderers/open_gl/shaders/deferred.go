@@ -79,12 +79,12 @@ func NewDeferred(stride int32) *Deferred {
 		stride:   stride,
 		frameIdx: 0,
 	}
-	d.EnableShadows(true)
+	d.SetShadowsEnabled(true)
 	return d
 }
 
-// EnableShadows updates the shadows state.
-func (s *Deferred) EnableShadows(e bool) {
+// SetShadowsEnabled updates the shadows state.
+func (s *Deferred) SetShadowsEnabled(e bool) {
 	s.shadows = e
 	if s.shadows {
 		s.shadowsInt = 1

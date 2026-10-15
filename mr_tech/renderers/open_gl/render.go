@@ -119,6 +119,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
 	w.builder = NewBuilderVolume(w.ctx, w.tex, cal)
 	w.dcOpaque = w.builder.GetDrawCommandsOpaque()
+
 	w.dcAdditive = w.builder.GetDrawCommandsAdditive()
 	w.dcLiquid = w.builder.GetDrawCommandsLiquid()
 	w.hwOcc = w.builder.GetHWOcclusion()
@@ -134,6 +135,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 		return err
 	}
 	w.gpuProfiler = w.handler.GetProfiler()
+	//w.dcOpaque.SetProfiler(w.gpuProfiler)
 	w.mapMetrics = w.handler.GetMapMetrics()
 	w.flashlightMetrics = w.handler.GetFlashlightMetrics()
 	w.shadowLightsMetrics = w.handler.GetShadowLightsMetrics()
@@ -152,7 +154,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.liquid = w.handler.GetLiquid()
 	w.enableShadows = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
-	w.SetShadowEnabled(w.cal.EnableShadows)
+	w.SetShadowsEnabled(w.cal.EnableShadows)
 	for _, s := range w.container {
 		if err := s.Compile(a); err != nil {
 			return err
@@ -248,9 +250,138 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	w.post.Render(int32(winW), int32(winH))
 }
 
+func (w *RenderOpenGL) RenderStartPROFILE(fbW1 int, fbH1 int, winW int, winH int) {
+	p := w.gpuProfiler
+
+	fbW, fbH := int32(fbW1), int32(fbH1)
+
+	p.MeasureCPU("builder.Compute", func() {
+		w.builder.Compute(fbW, fbH, w.vi, w.engine)
+	})
+
+	vert, vertSize, vertCount, indices, indexSize, indicesCount := w.builder.GetVertices()
+
+	lights, lightSize, lightsCount := w.builder.GetLights()
+	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
+
+	if w.handler.SetSize(fbW, fbH) {
+		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(
+			fbW,
+			fbH,
+			float32(w.cal.AspectRatio),
+			float32(w.cal.FovVerticalDegrees),
+		)
+
+		w.flashlightMetrics.Rebuild(fbW, fbH)
+	}
+
+	w.tex.BindBuckets()
+
+	px, _, pz := w.vi.GetView()
+	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
+	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
+
+	swayX, swayY, swaySensitivity := w.vi.GetSway()
+	flashX := float32(swayX)
+	flashY := float32(swayY)
+	flashSensitivity := float32(swaySensitivity)
+
+	w.flashlightMetrics.Update(
+		w.mapMetrics.GetViewPtr(),
+		flashX,
+		flashY,
+	)
+
+	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
+
+	// CPU: preparazione.
+	p.MeasureCPU("depth.Prepare", func() {
+		w.depth.Prepare()
+	})
+
+	p.MeasureCPU("main.Prepare", func() {
+		w.main.Prepare(vert, vertSize, vertCount, indices, indexSize, indicesCount)
+	})
+
+	p.MeasureCPU("lights.Prepare", func() {
+		w.lights.Prepare(lights, lightSize, lightsCount)
+	})
+
+	// GPU: depth pass.
+	p.MeasureGPU("depth.Render", func() {
+		w.depth.Render(w.dcOpaque.Render)
+	})
+
+	// GPU: opaque pass.
+	p.MeasureGPU("main.Render", func() {
+		w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
+	})
+
+	// GPU: hardware occlusion.
+	p.MeasureGPU("occlusion.Render", func() {
+		w.occlusion.Render(w.hwOcc.Render)
+	})
+
+	// GPU: additive.
+	if w.dcAdditive.HasCommands() {
+		p.MeasureGPU("additive.Render", func() {
+			w.additive.RenderAdditive(w.dcAdditive.Render)
+		})
+	}
+
+	// GPU: resolve MSAA e rendering liquidi.
+	if w.dcLiquid.HasCommands() {
+		p.MeasureGPU("liquid.ResolveMSAA", func() {
+			w.post.ResolveMSAA(fbW, fbH)
+		})
+
+		p.MeasureGPU("liquid.Render", func() {
+			w.liquid.Render(w.dcLiquid.Render, true)
+		})
+	}
+
+	// GPU: skybox.
+	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
+		skyTexId := skyTex.GetIdentifier()
+
+		if skyTexId < 0 {
+			skyTexId, _ = w.tex.Get(skyTex)
+			skyTex.SetIdentifier(skyTexId)
+		}
+
+		u, v := w.builder.GetSkyUV()
+		tick := float32(textures.TickF())
+
+		p.MeasureGPU("sky.Render", func() {
+			w.sky.Render(
+				skyTexId,
+				float32(u)*tick,
+				float32(v)*tick,
+			)
+		})
+	}
+
+	// Preparazione post-processing.
+	p.MeasureCPU("post.Prepare", func() {
+		w.post.Prepare()
+	})
+
+	// GPU: bloom.
+	p.MeasureGPU("bloom.Render", func() {
+		w.bloom.Render()
+	})
+
+	// GPU: post-processing finale.
+	p.MeasureGPU("post.Render", func() {
+		w.post.Render(int32(winW), int32(winH))
+	})
+
+	p.EndFrame()
+}
+
 // RenderToggleShadows toggles the shadow rendering state in the shaders, enabling or disabling shadows dynamically.
 func (w *RenderOpenGL) RenderToggleShadows() {
-	w.SetShadowEnabled(!w.enableShadows)
+	w.SetShadowsEnabled(!w.enableShadows)
 }
 
 // RenderEnableClear sets the enableClear flag to true, indicating that the rendering system should clear buffers.
@@ -307,12 +438,11 @@ func (w *RenderOpenGL) RenderDecreaseFlashFactor() {
 	w.player.GetFlash().DecreaseFlashFactor()
 }
 
-// SetShadowEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
-func (w *RenderOpenGL) SetShadowEnabled(v bool) {
+// SetShadowsEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
+func (w *RenderOpenGL) SetShadowsEnabled(v bool) {
 	w.enableShadows = v
-	w.main.EnableShadows(w.enableShadows)
-	w.flashlight.EnableShadows(w.enableShadows)
-	w.lights.EnableShadows(w.enableShadows)
-	w.depth.EnableShadows(w.enableShadows)
-	w.main.EnableShadows(w.enableShadows)
+	w.main.SetShadowsEnabled(true) //w.enableShadows)
+	w.flashlight.SetShadowsEnabled(w.enableShadows)
+	w.lights.SetShadowsEnabled(w.enableShadows)
+	w.depth.SetShadowsEnabled(true) //w.enableShadows)
 }

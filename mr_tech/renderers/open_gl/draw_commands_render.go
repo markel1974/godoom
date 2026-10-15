@@ -1,9 +1,11 @@
 package open_gl
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 )
 
 // RenderBatch is a structure to hold batched rendering data such as index counts and memory pointers.
@@ -69,11 +71,14 @@ func (rb *RenderBatch) grow() {
 
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
 type DrawCommandsRender struct {
-	ctx        api.IContext
-	batches    []*RenderBatch
-	batchesLen int
-	isAdditive bool
-	name       string
+	ctx          api.IContext
+	batches      []*RenderBatch
+	batchesLen   int
+	isAdditive   bool
+	name         string
+	profiler     *shaders.GpuProfiler
+	totalDraws   uint64
+	totalIndices uint64
 }
 
 // NewDrawCommandsRender creates and initializes a new DrawCommandsRender with specified context and batch type.
@@ -91,6 +96,11 @@ func NewDrawCommandsRender(ctx api.IContext, name string, isAdditive bool) *Draw
 	return dcr
 }
 
+// SetProfiler sets the GpuProfiler instance to be used for profiling GPU performance in DrawCommandsRender.
+func (w *DrawCommandsRender) SetProfiler(profiler *shaders.GpuProfiler) {
+	w.profiler = profiler
+}
+
 // HasCommands returns true if there are render batches available to process; otherwise, it returns false.
 func (w *DrawCommandsRender) HasCommands() bool {
 	return w.batchesLen > 0
@@ -104,6 +114,7 @@ func (w *DrawCommandsRender) GetName() string {
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
 func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.batchesLen = 0
+
 	if len(dc) == 0 {
 		return
 	}
@@ -117,6 +128,9 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 		if cmd.indexCount == 0 {
 			continue
 		}
+
+		w.totalDraws++
+		w.totalIndices += uint64(cmd.indexCount)
 
 		var depthWrite int
 		var polygonOffset int
@@ -164,39 +178,50 @@ func (w *DrawCommandsRender) Render() {
 		return
 	}
 
-	currentDepthWrite := -1 // -1 means unknown
-	currentPolygonOffset := -1
+	render := func() {
+		currentDepthWrite := -1
+		currentPolygonOffset := -1
 
-	//totalDraws := 0
-	for i := 0; i < w.batchesLen; i++ {
-		b2 := w.batches[i]
-		if b2.depthWrite != currentDepthWrite {
-			if b2.depthWrite == 1 {
-				w.ctx.DepthMask(true)
-			} else {
-				w.ctx.DepthMask(false)
+		for i := 0; i < w.batchesLen; i++ {
+			b2 := w.batches[i]
+			if b2.depthWrite != currentDepthWrite {
+				w.ctx.DepthMask(b2.depthWrite == 1)
+				currentDepthWrite = b2.depthWrite
 			}
-			currentDepthWrite = b2.depthWrite
-		}
-		if b2.polygonOffset != currentPolygonOffset {
-			if b2.polygonOffset == 1 {
-				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
-				w.ctx.PolygonOffset(-1.0, -1.0)
-			} else {
-				w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+
+			if b2.polygonOffset != currentPolygonOffset {
+				if b2.polygonOffset == 1 {
+					w.ctx.Enable(api.POLYGON_OFFSET_FILL)
+					w.ctx.PolygonOffset(-1.0, -1.0)
+				} else {
+					w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+				}
+
+				currentPolygonOffset = b2.polygonOffset
 			}
-			currentPolygonOffset = b2.polygonOffset
+
+			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 		}
-		//totalDraws += int(b2.len)
-		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
+
+		if currentDepthWrite != 1 && !w.isAdditive {
+			w.ctx.DepthMask(true)
+		}
+
+		if currentPolygonOffset == 1 {
+			w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+		}
 	}
-	if currentDepthWrite != 1 && !w.isAdditive {
-		w.ctx.DepthMask(true)
+
+	if w.profiler != nil {
+		w.profiler.MeasureGPU("DrawCommandsRender.MultiDraw", render)
+		if w.profiler.EndFrame() {
+			fmt.Printf("[%s] batches=%d draws=%d indices=%d triangles~=%d\n", w.name, w.batchesLen, w.totalDraws, w.totalIndices, w.totalIndices/3)
+			w.totalDraws = 0
+			w.totalIndices = 0
+		}
+	} else {
+		render()
 	}
-	if currentPolygonOffset == 1 {
-		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
-	}
-	//fmt.Printf("[%s] batches=%d draws=%d additive=%v\n", w.name, w.batchesLen, totalDraws, w.isAdditive, )
 }
 
 // grow doubles the capacity of the render batches slice and initializes new RenderBatch instances for added capacity.

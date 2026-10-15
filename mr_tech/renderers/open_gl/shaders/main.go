@@ -128,8 +128,8 @@ func (s *Main) Setup(h *Handler) error {
 	return nil
 }
 
-// EnableShadows enables or disables shadow evaluation in the main shader.
-func (s *Main) EnableShadows(e bool) {
+// SetShadowsEnabled enables or disables shadow evaluation in the main shader.
+func (s *Main) SetShadowsEnabled(e bool) {
 	if e {
 		s.shadows = 1
 	} else {

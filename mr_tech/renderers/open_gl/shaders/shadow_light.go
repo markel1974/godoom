@@ -85,7 +85,7 @@ func NewShadowLight() *ShadowLight {
 		shadowsInt:  0,
 		debugLights: 0,
 	}
-	f.EnableShadows(false)
+	f.SetShadowsEnabled(false)
 	return f
 }
 
@@ -101,8 +101,8 @@ func (s *ShadowLight) Setup(h *Handler) error {
 	return nil
 }
 
-// EnableShadows sets the shadow rendering state by enabling or disabling shadows and updates the internal shadow flag.
-func (s *ShadowLight) EnableShadows(e bool) {
+// SetShadowsEnabled sets the shadow rendering state by enabling or disabling shadows and updates the internal shadow flag.
+func (s *ShadowLight) SetShadowsEnabled(e bool) {
 	s.shadows = e
 	if s.shadows {
 		s.shadowsInt = 1

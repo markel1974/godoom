@@ -21,7 +21,7 @@ void main() {
     vec2 noiseScale = vec2(textureSize(u_position, 0)) / 4.0;
     vec3 randomVec = normalize(texture(u_texNoise, TexCoords * noiseScale).rgb);
 
-    // 1. PROTEZIONE ANTI-NaN: Evita i buchi neri geometrici se i vettori sono paralleli
+    // PROTEZIONE ANTI-NaN: Evita i buchi neri geometrici se i vettori sono paralleli
     vec3 tangent = randomVec - normal * dot(randomVec, normal);
 
     if (length(tangent) > 0.001) {
@@ -48,7 +48,7 @@ void main() {
 
         float sampleDepth = texture(u_position, offset.xy).z;
 
-        // 2. FIX ALONI NERI: Inversione logica del Range Check
+        // FIX ALONI NERI: Inversione logica del Range Check
         // Calcoliamo la distanza assoluta e usiamo un falloff decrescente da 1.0 a 0.0.
         // Se la differenza supera il radius, l'occlusione diventa un perfetto 0.0 senza sbavature.
         float depthDiff = abs(fragPos.z - sampleDepth);

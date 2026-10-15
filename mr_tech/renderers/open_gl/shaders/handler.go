@@ -63,7 +63,7 @@ func NewHandler(vStride, lStride int32) *Handler {
 		bloomIntensity: 0.05,
 		bloomBlur:      1,
 
-		kernelSize:       64,
+		kernelSize:       64, //GPU ITERATION
 		noiseTextureSize: 4 * 4,
 		radius:           12.0,
 		bias:             0.025,

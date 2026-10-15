@@ -9,6 +9,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
+const maxSAOSamples = 64 * 2 // defined in
+
 // SSAOLoc represents an identifier for accessing SSAO shader uniform locations.
 type SSAOLoc int
 
@@ -36,7 +38,8 @@ type SSAO struct {
 	prg              uint32
 	table            [SSAOLocLast]int32
 	noiseTex         uint32    // Texture di rumore 4x4
-	kernel           []float32 // 64 campioni vec3
+	samples          []float32 // 64 campioni vec3
+	samplesPtr       *float32
 	noiseTextureSize int32
 	bufferFbo        uint32
 	positionDepth    uint32
@@ -99,7 +102,7 @@ func (s *SSAO) SetupSamplers() error {
 	s.ctx.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
 	s.ctx.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
 	s.ctx.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
-	s.ctx.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, &s.kernel[0])
+	s.ctx.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, s.samplesPtr)
 	s.ctx.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
 	s.ctx.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
 	s.ctx.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
@@ -201,7 +204,8 @@ func (s *SSAO) Compile(a IAssets) error {
 
 // createKernel generates the kernel samples and noise texture required for performing SSAO calculations.
 func (s *SSAO) createKernel() error {
-	s.kernel = make([]float32, s.kernelSize*3)
+	s.samples = make([]float32, s.kernelSize*3)
+	s.samplesPtr = &s.samples[0]
 	for i := int32(0); i < s.kernelSize; i++ {
 		sample := [3]float32{
 			(rnd.Float32() * 2.0) - 1.0,
@@ -212,9 +216,9 @@ func (s *SSAO) createKernel() error {
 		mag := float32(math.Sqrt(float64(sample[0]*sample[0] + sample[1]*sample[1] + sample[2]*sample[2])))
 		z := float32(i) / float32(s.kernelSize)
 		scale := 0.1 + (z*z)*(1.0-0.1) // Lerp per concentrare i campioni vicino all'origine
-		s.kernel[i*3] = (sample[0] / mag) * scale
-		s.kernel[i*3+1] = (sample[1] / mag) * scale
-		s.kernel[i*3+2] = (sample[2] / mag) * scale
+		s.samples[i*3] = (sample[0] / mag) * scale
+		s.samples[i*3+1] = (sample[1] / mag) * scale
+		s.samples[i*3+2] = (sample[2] / mag) * scale
 	}
 
 	// SSAO: GENERAZIONE NOISE TEXTURE (4x4)

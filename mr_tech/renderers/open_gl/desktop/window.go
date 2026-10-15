@@ -681,19 +681,14 @@ func (w *Window) doRun() {
 			time.Sleep(targetCycleDuration - accumulator)
 			continue
 		}
+
 		cycles := int(accumulator / targetCycleDuration)
 		accumulator -= time.Duration(cycles) * targetCycleDuration
 
-		// 1. Poll events from OS
-		w.th.Call(func() {
-			glfw.PollEvents()
-		})
-
-		// 2. Transfer tempInp -> currInp
+		// Transfer tempInp -> currInp
 		w.doUpdateInput()
 
-		// 3. Process Input
-
+		// Process Input
 		if mouseConnected && w.MouseInsideWindow() {
 			mousePos := w.MousePosition()
 			mousePrevPos := w.MousePreviousPosition()
@@ -761,6 +756,7 @@ func (w *Window) doRun() {
 			w.toggleShadowsFn()
 		}
 		w.th.Call(func() {
+			glfw.PollEvents()
 			w.begin()
 			fbW, fbH := w.GetFramebufferSize()
 			for i := 0; i < cycles; i++ {

@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
@@ -97,7 +98,7 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 	h.fbW = fbW
 	h.fbH = fbH
 
-	h.profiler = NewGpuProfiler(h.ctx)
+	h.profiler = NewGpuProfiler(h.ctx, physics.GetFps())
 	h.mapMetrics = metrics.NewMap()
 	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNearRoom), float32(h.cal.ZFarRoom)+4.0)
 	h.mapMetrics.SetCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)

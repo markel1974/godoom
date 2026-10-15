@@ -29,15 +29,17 @@ type GpuProfiler struct {
 	cpu      map[string]*cpuTimer
 	frame    uint64
 	reportAt uint64
+	start    time.Time
 }
 
 // NewGpuProfiler creates and returns a new instance of GpuProfiler configured with the provided IContext.
-func NewGpuProfiler(ctx api.IContext) *GpuProfiler {
+func NewGpuProfiler(ctx api.IContext, fps uint64) *GpuProfiler {
 	return &GpuProfiler{
 		ctx:      ctx,
 		gpu:      make(map[string]*gpuTimer),
 		cpu:      make(map[string]*cpuTimer),
-		reportAt: 120,
+		reportAt: fps,
+		start:    time.Now(),
 	}
 }
 
@@ -102,7 +104,8 @@ func (p *GpuProfiler) EndFrame() bool {
 		return false
 	}
 
-	fmt.Printf("\n===== PROFILER frame=%d =====\n", p.frame)
+	now := time.Now()
+	fmt.Printf("\n===== PROFILER frame=%d (elapsed=%s) =====\n", p.frame, now.Sub(p.start))
 
 	gpuNames := make([]string, 0, len(p.gpu))
 	for name := range p.gpu {
@@ -156,6 +159,8 @@ func (p *GpuProfiler) EndFrame() bool {
 	}
 
 	fmt.Println("============================")
+	p.frame = 0
+	p.start = time.Now()
 
 	return true
 }

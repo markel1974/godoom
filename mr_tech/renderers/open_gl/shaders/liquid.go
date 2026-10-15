@@ -192,7 +192,7 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), s.metrics.GetRoomZNear())
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), s.metrics.GetRoomZFar())
-	s.ctx.Uniform1i(s.GetUniform(ShaderLiquidLocLiquidType), 10) //int32(s.liquidType))
+	s.ctx.Uniform1i(s.GetUniform(ShaderLiquidLocLiquidType), int32(s.liquidType))
 
 	if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
 		const (

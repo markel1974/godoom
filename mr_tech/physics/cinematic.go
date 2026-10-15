@@ -1,6 +1,8 @@
 package physics
 
-import "math"
+import (
+	"math"
+)
 
 /*
 Limiti Matematici dell'Implementazione Attuale
@@ -213,7 +215,8 @@ func (e *Cinematic) GetDisplacement() (float64, float64, float64) {
 
 // IsMoving returns true if the object has any non-zero velocity components (vx, vy, or vz), indicating it is in motion.
 func (e *Cinematic) IsMoving() bool {
-	return e.vx != 0 || e.vy != 0 || e.vz != 0
+	moving := e.vx != 0 || e.vy != 0 || e.vz != 0
+	return moving
 }
 
 // AddForce applies a force to the object by modifying its acceleration components (ax, ay, az) using the force and inverse mass.

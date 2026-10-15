@@ -78,6 +78,12 @@ func (p *ThingPlayer) PostMessage(ec *ThingEvent) {
 	p.inbox <- ec
 }
 
+// StagePrepare prepares the stage for the ThingPlayer by invoking the StagePrepare method of its ThingBase.
+func (p *ThingPlayer) StagePrepare() bool {
+	_ = p.ThingBase.StagePrepare()
+	return true
+}
+
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.
 func (p *ThingPlayer) StartLoop() {
 	go func() {
@@ -258,6 +264,11 @@ func (p *ThingPlayer) SetLightIntensity(lightIntensity float64) {
 // GetPitch returns the current pitch angle of the ThingPlayer as a float64 value.
 func (p *ThingPlayer) GetPitch() float64 {
 	return p.pitch
+}
+
+// HasThinking determines if the ThingPlayer instance has a thinking function assigned. Returns true if it is set.
+func (p *ThingPlayer) HasThinking() bool {
+	return true
 }
 
 // StageThinking updates the player's internal state based on the provided x, y, and z coordinates.

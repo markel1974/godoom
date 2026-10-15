@@ -228,7 +228,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 	player.Bobbing.StrideLength = 0.048 //0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
 	player.Bobbing.IdleAmpX = 0.9       // Respiro
 	player.Bobbing.IdleAmpY = 0.9
-	player.Bobbing.IdleDrift = 0.01
+	player.Bobbing.IdleDrift = 0.6  //0.01
 	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
 	player.Bobbing.AmpLerp = 0.20
 	player.Bobbing.ImpactMax = 1000.0

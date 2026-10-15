@@ -18,6 +18,8 @@ type IThing interface {
 
 	SetActive(active bool)
 
+	HasThinking() bool
+
 	StageThinking(playerX float64, playerY float64, playerZ float64)
 
 	StagePrepare() bool

@@ -321,7 +321,7 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Bobbing.StrideLength = 0.09 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
 	root.Player.Bobbing.IdleAmpX = 0.9      // Breathing
 	root.Player.Bobbing.IdleAmpY = 0.9
-	root.Player.Bobbing.IdleDrift = 0.01
+	root.Player.Bobbing.IdleDrift = 0.6  //0.01
 	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
 	root.Player.Bobbing.AmpLerp = 0.20
 	root.Player.Bobbing.ImpactMax = 1000.0

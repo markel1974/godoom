@@ -62,6 +62,11 @@ func (t *ThingThrowable) StartLoop() {
 	}()
 }
 
+// HasThinking checks if the ThingThrowable instance has a "thinking" state behavior enabled and returns false by default.
+func (t *ThingThrowable) HasThinking() bool {
+	return false
+}
+
 // StageThinking calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
 func (t *ThingThrowable) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui

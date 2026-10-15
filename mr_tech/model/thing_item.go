@@ -45,6 +45,11 @@ func (t *ThingItem) StartLoop() {
 	}()
 }
 
+// HasThinking determines if the ThingItem instance has a thinking function assigned. Returns true if it is set.
+func (t *ThingItem) HasThinking() bool {
+	return false
+}
+
 // StageThinking updates the state of the ThingItem instance based on the provided player coordinates (X, Y, Z).
 func (t *ThingItem) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }

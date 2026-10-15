@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
@@ -20,20 +21,21 @@ type Things struct {
 	volumes          *Volumes
 	materials        *Materials
 	tree             *aabb.Tree
-	pending          []IThing
-	pendingIdx       atomic.Int32
-	entities         map[uint64]IThing
-	active           []IThing
-	static           []IThing
-	activeIdx        int
 	player           *ThingPlayer
-	inactive         []IThing
-	inactiveIdx      int
-	containerIdx     int
-	container        []IThing
+	entities         map[uint64]IThing
+	running          []IThing
+	inactives        []IThing
+	pending          []IThing
+	ready            []IThing
+	thinkers         []IThing
+	statics          []IThing
+	runningLen       int
+	readyLen         int
+	thinkersLen      int
+	pendingLen       atomic.Int32
 	hasPending       bool
-	event            *ThingEvent
 	solverIterations int
+	event            *ThingEvent
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -44,19 +46,21 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		solverIterations: solverIterations,
 		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
 		entities:         make(map[uint64]IThing),
-		active:           make([]IThing, defaultLen),
-		container:        make([]IThing, defaultLen),
+		running:          make([]IThing, defaultLen),
+		ready:            make([]IThing, defaultLen),
+		thinkers:         make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
-		activeIdx:        0,
-		containerIdx:     0,
+		runningLen:       0,
+		readyLen:         0,
+		thinkersLen:      0,
 		hasPending:       false,
 		config:           cfg,
 		volumes:          volumes,
 		materials:        materials,
 		event:            NewThingEvent(0, solverJitter),
-		static:           make([]IThing, 0, 16),
+		statics:          make([]IThing, 0, 16),
 	}
-	e.pendingIdx.Store(0)
+	e.pendingLen.Store(0)
 	const enableThingsCreation = true
 	if enableThingsCreation {
 		for _, ct := range cfg {
@@ -70,6 +74,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 			e.addThing(t2)
 		}
 	}
+	e.updateCollections()
 	return e
 }
 
@@ -80,7 +85,7 @@ func (th *Things) GetMaterials() *Materials {
 
 // Len returns the number of elements in the container.
 func (th *Things) Len() int {
-	return len(th.container)
+	return len(th.ready)
 }
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
@@ -126,16 +131,17 @@ func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IA
 
 // QueryStatic iterates over all static objects, applying the provided callback function to each object.
 func (th *Things) QueryStatic(callback func(object aabb.IAABB) bool) {
-	for _, st := range th.static {
+	for _, st := range th.statics {
 		callback(st)
 	}
 }
 
-// SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
 // GetPlayer returns the current player instance.
 func (th *Things) GetPlayer() *ThingPlayer {
 	return th.player
 }
+
+// SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
 func (th *Things) SetPlayer(p *ThingPlayer) {
 	th.player = p
 	th.addThing(p)
@@ -153,7 +159,7 @@ func (th *Things) GetTextures() textures.ITextures {
 
 // GetActive returns the slice of active IThing objects and the current index of active things.
 func (th *Things) GetActive() ([]IThing, int) {
-	return th.container, th.containerIdx
+	return th.ready, th.readyLen
 }
 
 // QueryRay performs a raycast query within the spatial tree, invoking the callback for each intersected object.
@@ -212,7 +218,7 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	dst.Speed = speed
 	dst.OnCollision = onCollision
 	dst.OnImpact = onImpact
-	slot := th.pendingIdx.Add(1) - 1
+	slot := th.pendingLen.Add(1) - 1
 	if slot >= int32(len(th.pending)) {
 		fmt.Println("max slot reached!")
 		return
@@ -223,64 +229,92 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	th.hasPending = true
 }
 
+var _test = uint64(0)
+
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
+	_test++
+	if _test == physics.GetFps() {
+		_test = 0
+		th.updateCollections()
+	}
 	th.computeActive(pX, pY, pZ)
 	th.processCollision()
 }
 
-// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
-func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
-	th.containerIdx = 0
-	th.activeIdx = 0
-	th.inactiveIdx = 0
-	th.event.SetStage(StageThinking)
-	th.event.SetCoords(pX, pY, pZ)
+// updateCollections restructures and updates the internal collections of entities based on their current state and activity.
+func (th *Things) updateCollections() {
+	th.readyLen = 0
+	th.thinkersLen = 0
+	inactivesLen := 0
+
 	for _, t2 := range th.entities {
 		if !t2.IsActive() {
-			th.inactive[th.inactiveIdx] = t2
-			th.inactiveIdx++
+			th.inactives[inactivesLen] = t2
+			inactivesLen++
 			continue
 		}
-		th.container[th.containerIdx] = t2
-		th.containerIdx++
-		th.event.wg.Add(1)
-		t2.PostMessage(th.event)
-	}
-	th.event.wg.Wait()
-	if th.inactiveIdx > 0 {
-		for x := 0; x < th.inactiveIdx; x++ {
-			th.removeThing(th.inactive[x])
+		th.ready[th.readyLen] = t2
+		th.readyLen++
+		if t2.HasThinking() {
+			th.thinkers[th.thinkersLen] = t2
+			th.thinkersLen++
 		}
-		th.inactiveIdx = 0
 	}
+
+	//Remove inactive entities
+	if inactivesLen > 0 {
+		for x := 0; x < inactivesLen; x++ {
+			th.removeThing(th.inactives[x])
+		}
+		inactivesLen = 0
+	}
+
+	//Adding Pending entities
 	if th.hasPending {
-		pendingIdx := int(th.pendingIdx.Load())
+		pendingIdx := int(th.pendingLen.Load())
 		for x := 0; x < pendingIdx; x++ {
 			th.addThing(th.pending[x])
 		}
-		th.pendingIdx.Store(0)
+		th.pendingLen.Store(0)
 		th.hasPending = false
 	}
-	for x := 0; x < th.containerIdx; x++ {
-		thing := th.container[x]
-		if !thing.StagePrepare() {
+}
+
+// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
+func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
+	//Apply thinking
+	if th.thinkersLen > 0 {
+		th.event.SetStage(StageThinking)
+		th.event.SetCoords(pX, pY, pZ)
+		for x := 0; x < th.thinkersLen; x++ {
+			t2 := th.thinkers[x]
+			th.event.wg.Add(1)
+			t2.PostMessage(th.event)
+		}
+		th.event.wg.Wait()
+	}
+
+	//Apply Physics
+	th.runningLen = 0
+	for x := 0; x < th.readyLen; x++ {
+		t2 := th.ready[x]
+		if !t2.StagePrepare() {
 			continue
 		}
-		//th.tree.UpdateObject(thing)
-		th.active[th.activeIdx] = thing
-		th.activeIdx++
+		th.running[th.runningLen] = t2
+		th.runningLen++
 	}
 }
 
 // Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.
 func (th *Things) processCollision() {
-	if th.activeIdx == 0 {
+	if th.runningLen == 0 {
 		return
 	}
 	//th.event.SetStage(StageCompute)
-	for x := 0; x < th.activeIdx; x++ {
-		t2 := th.active[x]
+	for x := 0; x < th.runningLen; x++ {
+		t2 := th.running[x]
 		// Collisioni Statiche (Mondo/Mappa)
 		th.volumes.QueryCollisionCage(t2.GetCage())
 		// Collisioni Dinamiche (Entità)
@@ -293,8 +327,8 @@ func (th *Things) processCollision() {
 	for si := 0; si < th.solverIterations; si++ {
 		//th.event.SetSolver(si, solverJitter)
 		//th.event.SetStage(StageResolve)
-		for x := 0; x < th.activeIdx; x++ {
-			t2 := th.active[x]
+		for x := 0; x < th.runningLen; x++ {
+			t2 := th.running[x]
 			//th.event.wg.Add(1)
 			//t2.PostMessage(th.event)
 			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
@@ -304,35 +338,31 @@ func (th *Things) processCollision() {
 	}
 	th.event.SetStage(StageApply)
 	// PHYSYCS APPLY
-	for x := 0; x < th.activeIdx; x++ {
-		t2 := th.active[x]
+	for x := 0; x < th.runningLen; x++ {
+		t2 := th.running[x]
 		th.event.wg.Add(1)
 		t2.PostMessage(th.event)
 	}
 	th.event.wg.Wait()
 	// COMMIT SPAZIALE E INTEGRAZIONE
-	for x := 0; x < th.activeIdx; x++ {
-		t2 := th.active[x]
+	for x := 0; x < th.runningLen; x++ {
+		t2 := th.running[x]
 		th.tree.UpdateObject(t2)
 	}
 }
 
 // AddStaticThing adds a static object to the scene without physics or spatial partitioning.
 func (th *Things) AddStaticThing(ent IThing) {
-	th.static = append(th.static, ent)
+	th.statics = append(th.statics, ent)
 }
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
 func (th *Things) addThing(ent IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
-	if len(th.entities) > cap(th.active) {
-		th.active = make([]IThing, len(th.entities)*4)
-		th.inactive = make([]IThing, len(th.entities)*4)
+	if len(th.entities) > cap(th.running) {
+		th.running = make([]IThing, len(th.entities)*4)
+		th.inactives = make([]IThing, len(th.entities)*4)
 		th.pending = make([]IThing, len(th.entities)*4)
-		//th.contacts = make([]*Contact, len(th.entities)*4)
-		//for idx := range th.contacts {
-		//	th.contacts[idx] = &Contact{}
-		//}
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()

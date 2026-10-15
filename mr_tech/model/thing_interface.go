@@ -24,6 +24,11 @@ func (t *ThingInterface) PostMessage(_ *ThingEvent) {
 func (t *ThingInterface) StartLoop() {
 }
 
+// HasThinking determines if the ThingInterface instance has a thinking function assigned. Returns true if it is set.
+func (t *ThingInterface) HasThinking() bool {
+	return false
+}
+
 func (t *ThingInterface) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 

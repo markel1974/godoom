@@ -95,11 +95,11 @@ func (p *GpuProfiler) MeasureCPU(name string, fn func()) {
 }
 
 // EndFrame processes profiling data for GPU and CPU, prints results if needed, and resets collected statistics.
-func (p *GpuProfiler) EndFrame() {
+func (p *GpuProfiler) EndFrame() bool {
 	p.frame++
 
 	if p.frame%p.reportAt != 0 {
-		return
+		return false
 	}
 
 	fmt.Printf("\n===== PROFILER frame=%d =====\n", p.frame)
@@ -156,6 +156,8 @@ func (p *GpuProfiler) EndFrame() {
 	}
 
 	fmt.Println("============================")
+
+	return true
 }
 
 // Close releases all GPU queries associated with the profiler, cleaning up resources allocated during profiling activities.

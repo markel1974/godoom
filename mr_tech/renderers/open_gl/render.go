@@ -155,6 +155,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.enableShadows = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
 	w.SetShadowsEnabled(w.cal.EnableShadows)
+
 	for _, s := range w.container {
 		if err := s.Compile(a); err != nil {
 			return err
@@ -439,10 +440,10 @@ func (w *RenderOpenGL) RenderDecreaseFlashFactor() {
 }
 
 // SetShadowsEnabled controls the global shadow rendering state by enabling or disabling shadows for all relevant shaders.
-func (w *RenderOpenGL) SetShadowsEnabled(v bool) {
-	w.enableShadows = v
-	w.main.SetShadowsEnabled(true) //w.enableShadows)
+func (w *RenderOpenGL) SetShadowsEnabled(shadows bool) {
+	w.enableShadows = shadows
+	w.main.SetShadowsEnabled(w.enableShadows)
 	w.flashlight.SetShadowsEnabled(w.enableShadows)
 	w.lights.SetShadowsEnabled(w.enableShadows)
-	w.depth.SetShadowsEnabled(true) //w.enableShadows)
+	w.depth.SetShadowsEnabled(w.enableShadows)
 }

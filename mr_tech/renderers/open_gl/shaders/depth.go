@@ -115,6 +115,7 @@ type Depth struct {
 	sHeight             int32
 	shadowAtlasMap      *DepthMap
 	shadows             bool
+	shadowLights        bool
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
@@ -147,6 +148,7 @@ func (s *Depth) Setup(h *Handler) error {
 	s.shadowLightsMetrics = h.GetShadowLightsMetrics()
 	s.flash = h.GetFlash()
 	s.main = h.GetMain()
+	s.shadowLights = s.handler.GetCalibration().EnableShadowLights
 	s.shadowAtlasMap = NewDepthMap(s.ctx)
 	s.matrixEmptyPtr = &s.matrixEmpty[0]
 	s.viewMatrixPtr = s.matrixEmptyPtr
@@ -169,8 +171,8 @@ func (s *Depth) Init() error {
 }
 
 // SetShadowsEnabled toggles shadow rendering by setting the internal shadows flag to the provided boolean value.
-func (s *Depth) SetShadowsEnabled(e bool) {
-	s.shadows = e
+func (s *Depth) SetShadowsEnabled(shadows bool) {
+	s.shadows = shadows
 }
 
 // GetProgram retrieves the OpenGL program ID associated with the Depth instance.
@@ -293,18 +295,20 @@ func (s *Depth) Render(renderScene func()) {
 	}
 
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
-	if shadowLightCount := s.shadowLightsMetrics.GetLightCount(); shadowLightCount > 0 {
-		s.ctx.PolygonOffset(0.5, 1.0)
-		for x := 0; x < int(shadowLightCount); x++ {
-			shadowLights, lMatrix := s.shadowLightsMetrics.GetLight(x)
-			if shadowLights.Intensity <= 0.001 {
-				continue
+	if s.shadowLights {
+		if shadowLightCount := s.shadowLightsMetrics.GetLightCount(); shadowLightCount > 0 {
+			s.ctx.PolygonOffset(0.5, 1.0)
+			for x := 0; x < int(shadowLightCount); x++ {
+				shadowLights, lMatrix := s.shadowLightsMetrics.GetLight(x)
+				if shadowLights.Intensity <= 0.001 {
+					continue
+				}
+				col := int32(x % 4)
+				row := int32(x / 4)
+				s.ctx.Viewport(col*512, row*512, 512, 512)
+				s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, lMatrix)
+				renderScene()
 			}
-			col := int32(x % 4)
-			row := int32(x / 4)
-			s.ctx.Viewport(col*512, row*512, 512, 512)
-			s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, lMatrix)
-			renderScene()
 		}
 	}
 

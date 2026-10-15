@@ -61,7 +61,7 @@ func (t *ThingEnemy) StartLoop() {
 
 // HasThinking determines if the ThingEnemy instance has a thinking function assigned. Returns true if it is set.
 func (t *ThingEnemy) HasThinking() bool {
-	return true
+	return t.onThinking != nil
 }
 
 // StageThinking processes the enemy's thinking phase using the player's coordinates (X, Y, Z) as input.

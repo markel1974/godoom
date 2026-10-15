@@ -252,6 +252,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.OnCollision = playerLogic.OnCollision
 	player.OnImpact = playerLogic.OnImpact
 	player.GForce = GForce
+	player.Impulse = 0.13 //mod
 	player.JumpForce = 1800
 
 	player.Flash.ZFar = 8192
@@ -262,12 +263,15 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Bobbing.SwayScale = 2.0
 	player.Bobbing.SwayOffsetX = 20
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = playerHeight * 0.2
-	player.Bobbing.MaxAmplitudeY = playerHeight * 0.2
+	player.Bobbing.MaxAmplitudeX = playerHeight * 0.15
+	player.Bobbing.MaxAmplitudeY = playerHeight * 0.15
 	player.Bobbing.StrideLength = 0.048 //0.0008 // FREQUENZA: 1000 * 0.0007 = 0.7 rad/frame.
-	player.Bobbing.IdleAmpX = 0.9       // Respiro
-	player.Bobbing.IdleAmpY = 0.9
-	player.Bobbing.IdleDrift = 0.6  //0.01
+
+	// Breathing
+	player.Bobbing.IdleAmpX = 0.9  //mod 0.9
+	player.Bobbing.IdleAmpY = 0.9  //mod 0.9
+	player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
+
 	player.Bobbing.SpeedLerp = 0.30 // Reattività istantanea alla velocità
 	player.Bobbing.AmpLerp = 0.20
 	player.Bobbing.ImpactMax = 1000.0

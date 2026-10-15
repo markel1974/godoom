@@ -3,6 +3,7 @@
 package web
 
 import (
+	"strconv"
 	"syscall/js"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -89,6 +90,7 @@ type Window struct {
 	keysPressed  map[Button]bool
 	keysReleased map[Button]bool
 
+	intensity             float64
 	mouseX                float64
 	mouseY                float64
 	prevMouseX            float64
@@ -149,6 +151,7 @@ func NewGLWindow(ctx *Context, cfg WindowConfig, player *config.Player) *Window 
 		keysDown:     make(map[Button]bool),
 		keysPressed:  make(map[Button]bool),
 		keysReleased: make(map[Button]bool),
+		intensity:    1.0,
 	}
 
 	w.bindEvents()
@@ -162,6 +165,15 @@ func (w *Window) bindEvents() {
 	js.Global().Set("onkeydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
 		code := e.Get("code").String()
+		if intensityVal := e.Get("intensity"); !intensityVal.IsUndefined() && !intensityVal.IsNull() {
+			if intensityVal.Type() == js.TypeNumber {
+				w.intensity = intensityVal.Float()
+			} else if s := intensityVal.String(); s != "" {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					w.intensity = f
+				}
+			}
+		}
 		if btn, ok := codeToButton[code]; ok {
 			if !w.keysDown[btn] {
 				w.keysPressed[btn] = true
@@ -177,6 +189,16 @@ func (w *Window) bindEvents() {
 		if btn, ok := codeToButton[code]; ok {
 			w.keysDown[btn] = false
 			w.keysReleased[btn] = true
+		}
+		allUp := true
+		for _, down := range w.keysDown {
+			if down {
+				allUp = false
+				break
+			}
+		}
+		if allUp {
+			w.intensity = 1.0
 		}
 		return nil
 	}))
@@ -384,6 +406,9 @@ func (w *Window) Start() {
 			}
 		}
 		impulse := w.player.Impulse
+		if w.intensity > 0 {
+			impulse *= w.intensity
+		}
 		for v, isDown := range w.keysDown {
 			if !isDown {
 				continue

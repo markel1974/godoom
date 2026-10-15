@@ -152,6 +152,8 @@
 
 
     // --- TOUCH CONTROLS ---
+    let impulse = 0.5;
+
     function initTouch() {
         if (!('ontouchstart' in window) || navigator.maxTouchPoints <= 0) {
             return; // Only show on mobile
@@ -159,8 +161,8 @@
         document.getElementById("touchUI").style.display = "block";
 
         // Helpers to simulate keyboard/mouse for Go
-        function simKey(code, isDown) {
-            let e = { code: code };
+        function simKey(code, isDown, intensity) {
+            let e = { code: code, intensity: intensity !== undefined ? intensity : impulse };
             if (isDown && window.onkeydown) window.onkeydown(e);
             if (!isDown && window.onkeyup) window.onkeyup(e);
         }
@@ -195,7 +197,7 @@
             e.preventDefault();
             joyActive = false;
             joyStick.style.transform = `translate(0px, 0px)`;
-            updateKeys(0, 0); // Release all
+            updateKeys(0, 0, 0); // Release all
         }, {passive: false});
 
         function handleJoy(touch) {
@@ -211,18 +213,21 @@
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
 
             // Deadzone
-            if (dist < 10) { updateKeys(0, 0); return; }
-            updateKeys(dx, dy);
+            if (dist < 10) { updateKeys(0, 0, 0); return; }
+
+            // Quantità di moto in base alla distanza e a impulse
+            let intensity = (dist / maxDist) * impulse;
+            updateKeys(dx, dy, intensity);
         }
 
-        function updateKeys(dx, dy) {
+        function updateKeys(dx, dy, intensity) {
             let w = dy < -15; let s = dy > 15;
             let a = dx < -15; let d = dx > 15;
 
-            if (w !== currentKeys.w) { simKey("KeyW", w); currentKeys.w = w; }
-            if (s !== currentKeys.s) { simKey("KeyS", s); currentKeys.s = s; }
-            if (a !== currentKeys.a) { simKey("KeyA", a); currentKeys.a = a; }
-            if (d !== currentKeys.d) { simKey("KeyD", d); currentKeys.d = d; }
+            if (w !== currentKeys.w || (w && intensity)) { simKey("KeyW", w, intensity); currentKeys.w = w; }
+            if (s !== currentKeys.s || (s && intensity)) { simKey("KeyS", s, intensity); currentKeys.s = s; }
+            if (a !== currentKeys.a || (a && intensity)) { simKey("KeyA", a, intensity); currentKeys.a = a; }
+            if (d !== currentKeys.d || (d && intensity)) { simKey("KeyD", d, intensity); currentKeys.d = d; }
         }
 
         // Look Area Logic

@@ -306,6 +306,7 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact
 	root.Player.GForce = gForce
+	root.Player.Impulse = 0.13 //mod
 	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
@@ -313,15 +314,17 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Flash.Falloff = 2000
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1
-	root.Player.Bobbing.SwayScale = 2.0
+	root.Player.Bobbing.SwayScale = 1.0 //mod 2.0
 	root.Player.Bobbing.SwayOffsetX = 50
 	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5
-	root.Player.Bobbing.StrideLength = 0.09 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
-	root.Player.Bobbing.IdleAmpX = 0.9      // Breathing
-	root.Player.Bobbing.IdleAmpY = 0.9
-	root.Player.Bobbing.IdleDrift = 0.6  //0.01
+	root.Player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	// Breathing
+	root.Player.Bobbing.IdleAmpX = 0.9  //mod 0.9
+	root.Player.Bobbing.IdleAmpY = 0.9  //mod 0.9
+	root.Player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
+
 	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
 	root.Player.Bobbing.AmpLerp = 0.20
 	root.Player.Bobbing.ImpactMax = 1000.0

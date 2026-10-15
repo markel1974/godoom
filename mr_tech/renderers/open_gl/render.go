@@ -43,7 +43,7 @@ type RenderOpenGL struct {
 	vi     *model.ViewMatrix
 	player *model.ThingPlayer
 	tex    *Textures
-	//builder     IBuilder
+
 	builder     *BuilderVolume
 	enableClear bool
 
@@ -81,6 +81,8 @@ type RenderOpenGL struct {
 	dcAdditive *DrawCommandsRender
 	dcLiquid   *DrawCommandsRender
 	hwOcc      *OcclusionHW
+
+	gpuProfiler *shaders.GpuProfiler
 }
 
 // NewRender initializes a new OpenGL rendering instance with the given context and dimensions.
@@ -131,6 +133,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	if err := w.handler.Setup(w.ctx, cal, w.flash, 0, 0); err != nil {
 		return err
 	}
+	w.gpuProfiler = w.handler.GetProfiler()
 	w.mapMetrics = w.handler.GetMapMetrics()
 	w.flashlightMetrics = w.handler.GetFlashlightMetrics()
 	w.shadowLightsMetrics = w.handler.GetShadowLightsMetrics()

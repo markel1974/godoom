@@ -34,6 +34,7 @@ type Handler struct {
 	additive    *Additive
 	liquid      *Liquid
 	deferred    *Deferred
+	profiler    *GpuProfiler
 
 	emissiveIntensity float32
 	aoFactor          float32
@@ -96,6 +97,7 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 	h.fbW = fbW
 	h.fbH = fbH
 
+	h.profiler = NewGpuProfiler(h.ctx)
 	h.mapMetrics = metrics.NewMap()
 	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNearRoom), float32(h.cal.ZFarRoom)+4.0)
 	h.mapMetrics.SetCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)
@@ -150,6 +152,11 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 // GetContext retrieves the IContext instance associated with the Handler.
 func (h *Handler) GetContext() api.IContext {
 	return h.ctx
+}
+
+// GetProfiler retrieves the GpuProfiler instance associated with the Handler.
+func (h *Handler) GetProfiler() *GpuProfiler {
+	return h.profiler
 }
 
 // GetCalibration retrieves the calibration settings associated with the Handler, returning a pointer to a Calibration object.

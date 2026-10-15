@@ -171,4 +171,8 @@ type IContext interface {
 	VertexAttribPointer(index uint32, size int32, xtype uint32, normalized bool, stride int32, pointer unsafe.Pointer)
 
 	Viewport(x int32, y int32, width int32, height int32)
+
+	GetQueryObjectiv(query uint32, pname uint32, params *int32)
+
+	GetQueryObjectui64v(query uint32, pname uint32, params *uint64)
 }

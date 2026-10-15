@@ -89,6 +89,9 @@ const (
 	UNSIGNED_BYTE              = 0x1401
 	UNSIGNED_INT               = 0x1405
 	VERTEX_SHADER              = 0x8B31
+	QUERY_RESULT_AVAILABLE     = 0x8867
+	QUERY_RESULT               = 0x8866
+	TIME_ELAPSED               = 0x88BF
 )
 
 const (

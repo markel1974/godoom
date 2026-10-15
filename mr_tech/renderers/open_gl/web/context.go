@@ -1269,6 +1269,14 @@ func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
 	d.fn_colorMask.Invoke(r, g, b, a)
 }
 
+func (d *Context) GetQueryObjectiv(query uint32, pname uint32, params *int32) {
+	fmt.Println("GetQueryObjectiv unimplemented")
+}
+
+func (d *Context) GetQueryObjectui64v(query uint32, pname uint32, params *uint64) {
+	fmt.Println("GetQueryObjectui64v unimplemented")
+}
+
 // getJSView creates a JavaScript typed array view for the given buffer based on the specified xtype.
 // Supported xtypes include BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, and FLOAT.
 // Returns the constructed js.Value or the original buffer for unsupported xtypes.

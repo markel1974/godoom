@@ -455,3 +455,11 @@ func (d *Context) GetQueryObjectuiv(id uint32, pname uint32, params *uint32) {
 func (d *Context) ColorMask(r bool, g bool, b bool, a bool) {
 	gl.ColorMask(r, g, b, a)
 }
+
+func (d *Context) GetQueryObjectiv(query uint32, pname uint32, params *int32) {
+	gl.GetQueryObjectiv(query, pname, params)
+}
+
+func (d *Context) GetQueryObjectui64v(query uint32, pname uint32, params *uint64) {
+	gl.GetQueryObjectui64v(query, pname, params)
+}

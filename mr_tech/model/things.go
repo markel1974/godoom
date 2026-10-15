@@ -6,7 +6,6 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
@@ -32,10 +31,12 @@ type Things struct {
 	runningLen       int
 	readyLen         int
 	thinkersLen      int
+	inactivesLen     int
 	pendingLen       atomic.Int32
 	hasPending       bool
 	solverIterations int
 	event            *ThingEvent
+	updated          bool
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -53,12 +54,14 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		runningLen:       0,
 		readyLen:         0,
 		thinkersLen:      0,
+		inactivesLen:     0,
 		hasPending:       false,
 		config:           cfg,
 		volumes:          volumes,
 		materials:        materials,
 		event:            NewThingEvent(0, solverJitter),
 		statics:          make([]IThing, 0, 16),
+		updated:          false,
 	}
 	e.pendingLen.Store(0)
 	const enableThingsCreation = true
@@ -74,7 +77,6 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 			e.addThing(t2)
 		}
 	}
-	e.updateCollections()
 	return e
 }
 
@@ -229,13 +231,10 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	th.hasPending = true
 }
 
-var _test = uint64(0)
-
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
-	_test++
-	if _test == physics.GetFps() {
-		_test = 0
+	if !th.updated || th.hasPending || th.inactivesLen > 0 {
+		th.updated = true
 		th.updateCollections()
 	}
 	th.computeActive(pX, pY, pZ)
@@ -244,40 +243,33 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 // updateCollections restructures and updates the internal collections of entities based on their current state and activity.
 func (th *Things) updateCollections() {
+	//Remove inactive entities
+	if th.inactivesLen > 0 {
+		for x := 0; x < th.inactivesLen; x++ {
+			th.removeThing(th.inactives[x])
+		}
+		th.inactivesLen = 0
+	}
+
+	//Adding Pending entities
+	if th.hasPending {
+		for x := 0; x < int(th.pendingLen.Load()); x++ {
+			th.addThing(th.pending[x])
+		}
+		th.pendingLen.Store(0)
+		th.hasPending = false
+	}
+
+	//Rebuild ready and thinkers collections
 	th.readyLen = 0
 	th.thinkersLen = 0
-	inactivesLen := 0
-
 	for _, t2 := range th.entities {
-		if !t2.IsActive() {
-			th.inactives[inactivesLen] = t2
-			inactivesLen++
-			continue
-		}
 		th.ready[th.readyLen] = t2
 		th.readyLen++
 		if t2.HasThinking() {
 			th.thinkers[th.thinkersLen] = t2
 			th.thinkersLen++
 		}
-	}
-
-	//Remove inactive entities
-	if inactivesLen > 0 {
-		for x := 0; x < inactivesLen; x++ {
-			th.removeThing(th.inactives[x])
-		}
-		inactivesLen = 0
-	}
-
-	//Adding Pending entities
-	if th.hasPending {
-		pendingIdx := int(th.pendingLen.Load())
-		for x := 0; x < pendingIdx; x++ {
-			th.addThing(th.pending[x])
-		}
-		th.pendingLen.Store(0)
-		th.hasPending = false
 	}
 }
 
@@ -299,6 +291,11 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	th.runningLen = 0
 	for x := 0; x < th.readyLen; x++ {
 		t2 := th.ready[x]
+		if !t2.IsActive() {
+			th.inactives[th.inactivesLen] = t2
+			th.inactivesLen++
+			continue
+		}
 		if !t2.StagePrepare() {
 			continue
 		}

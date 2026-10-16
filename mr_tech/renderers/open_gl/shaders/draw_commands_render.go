@@ -179,30 +179,20 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 		w.totalDraws++
 		w.totalIndices += uint64(cmd.indexCount)
 
-		var depthWrite int
-		var polygonOffset int
+		depthWrite := 0
+		polygonOffset := 0
 
 		if cmd.material != nil {
-			if w.isAdditive {
-				depthWrite = 0
-			} else if cmd.material.GetDepthWrite() {
+			if !w.isAdditive && cmd.material.GetDepthWrite() {
 				depthWrite = 1
-			} else {
-				depthWrite = 0
 			}
-
 			if cmd.material.GetPolygonOffset() {
 				polygonOffset = 1
-			} else {
-				polygonOffset = 0
 			}
 		} else {
-			if w.isAdditive {
-				depthWrite = 0
-			} else {
+			if !w.isAdditive {
 				depthWrite = 1
 			}
-			polygonOffset = 0
 		}
 
 		if depthWrite != currentDepthWrite || polygonOffset != currentPolygonOffset || currentBatch == nil {
@@ -225,49 +215,45 @@ func (w *DrawCommandsRender) Render() {
 		return
 	}
 
-	render := func() {
-		currentDepthWrite := -1
-		currentPolygonOffset := -1
+	currentDepthWrite := -1
+	currentPolygonOffset := -1
 
-		for i := 0; i < w.batchesLen; i++ {
-			b2 := w.batches[i]
-			if b2.depthWrite != currentDepthWrite {
-				w.ctx.DepthMask(b2.depthWrite == 1)
-				currentDepthWrite = b2.depthWrite
+	for i := 0; i < w.batchesLen; i++ {
+		b2 := w.batches[i]
+		if b2.depthWrite != currentDepthWrite {
+			w.ctx.DepthMask(b2.depthWrite == 1)
+			currentDepthWrite = b2.depthWrite
+		}
+
+		if b2.polygonOffset != currentPolygonOffset {
+			if b2.polygonOffset == 1 {
+				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
+				w.ctx.PolygonOffset(-1.0, -1.0)
+			} else {
+				w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 			}
 
-			if b2.polygonOffset != currentPolygonOffset {
-				if b2.polygonOffset == 1 {
-					w.ctx.Enable(api.POLYGON_OFFSET_FILL)
-					w.ctx.PolygonOffset(-1.0, -1.0)
-				} else {
-					w.ctx.Disable(api.POLYGON_OFFSET_FILL)
-				}
-
-				currentPolygonOffset = b2.polygonOffset
-			}
-
-			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
+			currentPolygonOffset = b2.polygonOffset
 		}
 
-		if currentDepthWrite != 1 && !w.isAdditive {
-			w.ctx.DepthMask(true)
-		}
-
-		if currentPolygonOffset == 1 {
-			w.ctx.Disable(api.POLYGON_OFFSET_FILL)
-		}
+		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 	}
 
-	if w.profiler != nil {
-		w.profiler.MeasureGPU("DrawCommandsRender.MultiDraw", render)
-		if w.profiler.EndFrame() {
-			fmt.Printf("[%s] batches=%d draws=%d indices=%d triangles~=%d\n", w.name, w.batchesLen, w.totalDraws, w.totalIndices, w.totalIndices/3)
-			w.totalDraws = 0
-			w.totalIndices = 0
-		}
-	} else {
-		render()
+	if currentDepthWrite != 1 && !w.isAdditive {
+		w.ctx.DepthMask(true)
+	}
+
+	if currentPolygonOffset == 1 {
+		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	}
+}
+
+func (w *DrawCommandsRender) RenderProfiled() {
+	w.profiler.MeasureGPU("DrawCommandsRender.MultiDraw", w.Render)
+	if w.profiler.EndFrame() {
+		fmt.Printf("[%s] batches=%d draws=%d indices=%d triangles~=%d\n", w.name, w.batchesLen, w.totalDraws, w.totalIndices, w.totalIndices/3)
+		w.totalDraws = 0
+		w.totalIndices = 0
 	}
 }
 

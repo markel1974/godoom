@@ -349,8 +349,8 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 		impactZ := pos.Z + (dirZ * closestDist)
 
 		fmt.Println("IMPACT: ", force, closestThing.GetId(), impactX, impactY, impactZ)
-		// 3. Risoluzione dell'impatto
-		force *= 100
+		// Risoluzione dell'impatto
+		//closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 
 		closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 		closestThing.Impact(closestThing, id, force, closestDist, dirX, dirY, dirZ)

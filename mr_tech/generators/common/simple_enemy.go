@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -11,270 +12,529 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Enemy represents an enemy character in the game with state, actions, and behaviors controlled during game logic.
-type Enemy struct {
-	active        bool
-	isDead        bool
-	firstTick     bool
-	health        float64 // Add health
-	throwCooldown float64
-	throwMin      float64
-	actions       map[string]int
-	painCooldown  float64 // Timer to prevent pain animation spam
+// EnemyState represents the various states an enemy entity can be in during its lifecycle.
+type EnemyState uint8
 
-	// Cached actions for zero allocations during run loop
-	actionRun    int
-	actionWalk   int
-	actionIdle   int
-	actionStand  int
-	actionPain   int
-	actionDeath  int
-	actionAttack int
-	actionShoot  int
+// EnemyStateUnknown represents an undefined or unknown state of an enemy.
+// EnemyStateIdle represents the state of an enemy when it is not performing any action.
+// EnemyStateChase represents the state of an enemy when it is chasing a target.
+// EnemyStateShoot represents the state of an enemy when it is shooting at a target.
+// EnemyStateMelee represents the state of an enemy when it is engaging in melee combat.
+// EnemyStatePain represents the state of an enemy when it is experiencing pain or being damaged.
+// EnemyStateDead represents the state of an enemy when it is defeated or dead.
+// EnemyStateSwim represents the state of an enemy when it is swimming or in water.
+// EnemyStateJump represents the state of an enemy when it is jumping.
+// EnemyStateOther represents any state of an enemy that does not fit into predefined categories.
+const (
+	EnemyStateUnknown EnemyState = iota
+	EnemyStateIdle
+	EnemyStateChase
+	EnemyStateShoot
+	EnemyStateMelee
+	EnemyStatePain
+	EnemyStateDead
+	EnemyStateSwim
+	EnemyStateJump
+	EnemyStateOther
+)
+
+// EnemyAnimations represents a collection of animation sequences categorized by enemy behaviors or states.
+type EnemyAnimations struct {
+	Idle  []int
+	Chase []int
+	Shoot []int
+	Melee []int
+	Pain  []int
+	Dead  []int
+	Swim  []int
+	Jump  []int
+	Other []int
 }
 
-// NewEnemy initializes and returns a new Enemy instance with default attributes and actions mapping.
+// normalizeAction converts the input action name to lowercase and trims surrounding whitespace.
+func normalizeAction(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+// baseAction normalizes an action name by removing specific prefixes iteratively until no matching prefix is found.
+func baseAction(name string) string {
+	for {
+		switch {
+		case strings.HasPrefix(name, "legs_"):
+			name = strings.TrimPrefix(name, "legs_")
+		case strings.HasPrefix(name, "both_"):
+			name = strings.TrimPrefix(name, "both_")
+		case strings.HasPrefix(name, "torso_"):
+			name = strings.TrimPrefix(name, "torso_")
+		default:
+			return name
+		}
+	}
+}
+
+// Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
+type Enemy struct {
+	state         EnemyState
+	health        float64
+	throwCooldown float64
+	throwMin      float64
+	painTimer     float64
+	shootTimer    float64
+	actions       map[string]int
+	animations    EnemyAnimations
+	lastAnimation map[EnemyState]int
+}
+
+// NewEnemy creates and initializes a new Enemy instance with default properties and animations based on provided actions.
 func NewEnemy(actions []string) *Enemy {
-	const throwMin, throwMax = 5, 10
+	const (
+		throwMin = 2
+		throwMax = 6
+	)
+
 	e := &Enemy{
-		actions:       make(map[string]int),
-		active:        false,
-		isDead:        false,
-		health:        100.0, // Set default health
+		state:         EnemyStateUnknown,
+		health:        100,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
-		throwCooldown: 0.0,
-		painCooldown:  0.0,
+		actions:       make(map[string]int, len(actions)),
+		lastAnimation: make(map[EnemyState]int),
 	}
+
 	for idx, action := range actions {
-		lowerAction := strings.ToLower(strings.TrimSpace(action))
-		e.actions[lowerAction] = idx
-		// Map common Quake 3 suffixes to standard action names
-		if strings.Contains(lowerAction, "run") {
-			e.actions["run"] = idx
+		name := normalizeAction(action)
+		if name == "" || strings.HasPrefix(name, "(") {
+			continue
 		}
-		if strings.Contains(lowerAction, "walk") {
-			e.actions["walk"] = idx
-		}
-		if strings.Contains(lowerAction, "death") || strings.Contains(lowerAction, "die") || strings.Contains(lowerAction, "dead") {
-			if _, exists := e.actions["death"]; !exists {
-				e.actions["death"] = idx
-			}
-		}
-		if strings.Contains(lowerAction, "pain") {
-			e.actions["pain"] = idx
-		}
-		if strings.Contains(lowerAction, "idle") || strings.Contains(lowerAction, "stand") {
-			e.actions["idle"] = idx
-		}
+		e.actions[name] = idx
 	}
 
-	e.actionAttack, _ = e.findAction("attack")
-	e.actionShoot, _ = e.findAction("shoot")
-
-	e.actionRun, _ = e.findAction("run")
-	e.actionWalk, _ = e.findAction("walk")
-	e.actionIdle, _ = e.findAction("idle")
-	e.actionStand, _ = e.findAction("stand")
-	e.actionPain, _ = e.findAction("pain")
-	if e.actionPain == 0 {
-		e.actionPain, _ = e.findAction("pain1")
+	e.animations = EnemyAnimations{
+		Idle: e.collectAnimations(
+			[]string{"idle", "stand"},
+			[]string{"idle", "stand"},
+		),
+		Chase: e.collectAnimations(
+			[]string{"walk", "run", "back"},
+			[]string{"walk", "run", "back"},
+		),
+		Shoot: e.collectAnimations(
+			[]string{"shoot", "fire", "gun"},
+			[]string{"shoot", "fire", "gun"},
+		),
+		Melee: e.collectAnimations(
+			[]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"},
+			[]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"},
+		),
+		Pain: e.collectAnimations(
+			[]string{"pain"},
+			[]string{"pain"},
+		),
+		Dead: e.collectAnimations(
+			[]string{"death", "dead", "bdeath", "die"},
+			[]string{"death", "dead", "bdeath", "die"},
+		),
+		Swim: e.collectAnimations(
+			[]string{"swim"},
+			[]string{"swim"},
+		),
+		Jump: e.collectAnimations(
+			[]string{"jump", "jumpb", "land", "landb"},
+			[]string{"jump", "land"},
+		),
+		Other: e.collectAnimations(
+			[]string{"pull", "turn", "duck", "block"},
+			nil,
+		),
 	}
-	e.actionDeath, _ = e.findAction("death")
 
-	if e.actionDeath == 0 {
-		e.actionDeath, _ = e.findAction("die")
-	}
+	e.logUnassignedAnimations()
 
-	e.firstTick = true
 	return e
 }
 
-// OnCollision handles the interaction logic when the Enemy object collides with another object.
-func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig) {
-	//otherId := "UNKNOW"
-	//if other != nil {
-	//	otherId = other.GetId()
-	//}
-	//fmt.Println("Enemy.OnCollision:", self.GetId(), otherId)
+// collectAnimations filters and returns the indices of animations matching exact names or prefixes specified.
+func (e *Enemy) collectAnimations(exactNames []string, prefixes []string) []int {
+	exact := make(map[string]struct{}, len(exactNames))
+	for _, name := range exactNames {
+		exact[baseAction(normalizeAction(name))] = struct{}{}
+	}
+
+	normalizedPrefixes := make([]string, 0, len(prefixes))
+
+	for _, prefix := range prefixes {
+		normalizedPrefixes = append(
+			normalizedPrefixes,
+			baseAction(normalizeAction(prefix)),
+		)
+	}
+	seen := make(map[int]struct{})
+	result := make([]int, 0)
+	for name, idx := range e.actions {
+		base := baseAction(name)
+		_, matched := exact[base]
+		if !matched {
+			for _, prefix := range normalizedPrefixes {
+				if prefix != "" &&
+					strings.HasPrefix(base, prefix) &&
+					len(base) > len(prefix) {
+					matched = true
+					break
+				}
+			}
+		}
+		if !matched {
+			continue
+		}
+		if _, exists := seen[idx]; exists {
+			continue
+		}
+		seen[idx] = struct{}{}
+		result = append(result, idx)
+	}
+	sort.Ints(result)
+	return result
 }
 
-// OnImpact handles the reaction of the enemy when impacted, including damage, knockback, and state changes like aggro or death.
+// logUnassignedAnimations identifies and logs actions that are not assigned to any animation group in the Enemy entity.
+func (e *Enemy) logUnassignedAnimations() {
+	assigned := make(map[int]struct{})
+
+	groups := [][]int{
+		e.animations.Idle,
+		e.animations.Chase,
+		e.animations.Shoot,
+		e.animations.Melee,
+		e.animations.Pain,
+		e.animations.Dead,
+		e.animations.Swim,
+		e.animations.Jump,
+		e.animations.Other,
+	}
+
+	for _, group := range groups {
+		for _, idx := range group {
+			assigned[idx] = struct{}{}
+		}
+	}
+
+	type unassignedAction struct {
+		index int
+		name  string
+	}
+
+	var unassigned []unassignedAction
+
+	for name, idx := range e.actions {
+		if _, ok := assigned[idx]; ok {
+			continue
+		}
+
+		unassigned = append(unassigned, unassignedAction{index: idx, name: name})
+	}
+
+	sort.Slice(unassigned, func(i, j int) bool {
+		if unassigned[i].index != unassigned[j].index {
+			return unassigned[i].index < unassigned[j].index
+		}
+		return unassigned[i].name < unassigned[j].name
+	})
+
+	for _, action := range unassigned {
+		fmt.Printf("[Enemy] unrecognized action: index=%d name=%q\n", action.index, action.name)
+	}
+}
+
+// chooseAnimation selects an animation index from a list of options based on the enemy's current state, ensuring variation.
+// It avoids repeating the last animation for the given state, if possible, and stores the selected animation.
+func (e *Enemy) chooseAnimation(state EnemyState, animations []int) (int, bool) {
+	if len(animations) == 0 {
+		return 0, false
+	}
+
+	if len(animations) == 1 {
+		e.lastAnimation[state] = animations[0]
+		return animations[0], true
+	}
+
+	last, hasLast := e.lastAnimation[state]
+	candidates := animations
+
+	if hasLast {
+		candidates = make([]int, 0, len(animations))
+
+		for _, idx := range animations {
+			if idx != last {
+				candidates = append(candidates, idx)
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return 0, false
+	}
+
+	idx := candidates[rand.Intn(len(candidates))]
+	e.lastAnimation[state] = idx
+
+	return idx, true
+}
+
+// playAnimation selects an appropriate animation for the enemy and sets it as the current action in the given config.
+func (e *Enemy) playAnimation(self config.IThingConfig, category EnemyState, animations []int) bool {
+	action, ok := e.chooseAnimation(category, animations)
+	if !ok {
+		return false
+	}
+
+	self.SetAction(action)
+	return true
+}
+
+// setState updates the enemy's current state and triggers the corresponding animation unless the state is unchanged or dead.
+func (e *Enemy) setState(self config.IThingConfig, state EnemyState) {
+	if e.state == state || e.state == EnemyStateDead {
+		return
+	}
+
+	var animations []int
+
+	switch state {
+	case EnemyStateIdle:
+		animations = e.animations.Idle
+	case EnemyStateChase:
+		animations = e.animations.Chase
+	case EnemyStateShoot:
+		animations = e.animations.Shoot
+	case EnemyStateMelee:
+		animations = e.animations.Melee
+	case EnemyStatePain:
+		animations = e.animations.Pain
+	case EnemyStateDead:
+		animations = e.animations.Dead
+	case EnemyStateSwim:
+		animations = e.animations.Swim
+	case EnemyStateJump:
+		animations = e.animations.Jump
+	case EnemyStateOther:
+		animations = e.animations.Other
+	default:
+		return
+	}
+
+	e.state = state
+	e.playAnimation(self, state, animations)
+}
+
+// OnCollision defines the optional behavior when this Enemy collides with another object.
+func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig) {
+	// Comportamento di collisione opzionale.
+}
+
+// OnImpact handles the behavior of the enemy when impacted by another object, adjusting health and state accordingly.
 func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
-	if e.isDead {
-		return // Dead enemies don't react to new impacts
+	if e.state == EnemyStateDead {
+		return
 	}
-
-	// 1. Calculate and apply damage
-	// Assuming 'force' correlates to damage. Adjust the multiplier as needed.
-	damage := force * 0.5
-	e.health -= damage
-
-	// 2. Apply Knockback Physics
-	// Push the enemy back along the impact direction vector
-	knockbackMultiplier := 50.0 // Adjust based on your physics scale
-	entity := self.GetEntity()
-	entity.AddForce(dirX*force*knockbackMultiplier, dirY*force*knockbackMultiplier, dirZ*force*knockbackMultiplier)
-
-	// Instant Aggro
-	if !e.active {
-		e.active = true
-		e.throwCooldown = e.throwMin
-	}
-
-	// Handle Death or Pain
+	e.health -= force * 0.5
 	if e.health <= 0 {
 		e.handleDeath(self)
-	} else {
-		e.handlePain(self)
-	}
-}
-
-// handleDeath marks the enemy as dead and initiates the death animation if defined. It may also adjust collision behavior.
-func (e *Enemy) handleDeath(self config.IThingConfig) {
-	e.isDead = true
-	fmt.Println("ENEMY DEAD!!!!")
-
-	// Set death animation
-	if e.actionDeath != 0 {
-		self.SetAction(e.actionDeath)
-	}
-
-	// Optional: Disable collisions or change collision group so player walks over the corpse
-	// self.SetSolid(false)
-}
-
-// handlePain manages the enemy's reaction to taking damage by triggering a pain animation and setting a cooldown timer.
-func (e *Enemy) handlePain(self config.IThingConfig) {
-	// Don't restart the pain animation if we are already in pain
-	if e.painCooldown > 0 {
 		return
 	}
-	// Set pain animation
-	if e.actionPain != 0 {
-		self.SetAction(e.actionPain)
-		e.painCooldown = 0.5 // Lock in pain state for 0.5 seconds
+	if e.state == EnemyStateIdle ||
+		e.state == EnemyStateUnknown {
+		e.throwCooldown = e.throwMin
 	}
+	e.handlePain(self)
 }
 
-// findAction searches for an action by name in the Enemy's action map. It supports prefixes like "legs_" and "both_".
-// Returns the action's index and a boolean indicating if it was found.
-func (e *Enemy) findAction(name string) (int, bool) {
-	if idx, ok := e.actions[name]; ok {
-		return idx, true
-	}
-	if idx, ok := e.actions["legs_"+name]; ok {
-		return idx, true
-	}
-	if idx, ok := e.actions["both_"+name]; ok {
-		return idx, true
-	}
-	return 0, false
-}
+// OnThinking handles the behavior logic for the Enemy, updating its state and actions based on its environment and player position.
+func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenterZ float64) {
+	const (
+		throwPlayerDistance = 300.0
+		meleeDuration       = 0.7
+		meleeCooldown       = 1.0
+	)
 
-// OnThinking handles the behavior and decision-making process of the enemy based on the player's position and game context.
-func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ float64) {
-	const throwPlayerDistance = 100.0
-
-	if e.isDead {
-		return // Stop thinking if dead
+	if e.state == EnemyStateDead {
+		return
 	}
 
-	if e.firstTick {
-		e.firstTick = false
-		if e.actionIdle != 0 {
-			self.SetAction(e.actionIdle)
-		} else if e.actionStand != 0 {
-			self.SetAction(e.actionStand)
-		} else if e.actionRun != 0 {
-			self.SetAction(e.actionRun)
-		} else if e.actionWalk != 0 {
-			self.SetAction(e.actionWalk)
+	fps := physics.GetFps()
+	if fps <= 0 {
+		return
+	}
+
+	dt := 1.0 / float64(fps)
+
+	if e.throwCooldown > 0 {
+		e.throwCooldown -= dt
+		if e.throwCooldown < 0 {
+			e.throwCooldown = 0
 		}
 	}
 
-	// Process pain timer
-	if e.painCooldown > 0 {
-		e.painCooldown -= 1.0 / float64(physics.GetFps())
-		if e.painCooldown <= 0 {
-			// Pain finished, return to running/chasing
-			if e.actionRun != 0 {
-				self.SetAction(e.actionRun)
-			}
+	if e.state == EnemyStateUnknown {
+		e.setState(self, EnemyStateIdle)
+	}
+	if e.state == EnemyStatePain {
+		e.painTimer -= dt
+
+		if e.painTimer <= 0 {
+			e.painTimer = 0
+			e.setState(self, EnemyStateChase)
+		}
+
+		return
+	}
+
+	if e.state == EnemyStateShoot ||
+		e.state == EnemyStateMelee {
+		e.shootTimer -= dt
+		if e.shootTimer <= 0 {
+			e.shootTimer = 0
+			e.setState(self, EnemyStateChase)
 		}
 		return
 	}
 
 	entity := self.GetEntity()
-	// Il target Z deve essere circa a metà altezza del giocatore (es. petto) per mirare bene
-	targetZ := playerZ + (entity.GetDepth() / 2)
-	selfX, selfY, selfZ := entity.GetBottomCenter()
-	dx := playerX - selfX
-	dy := playerY - selfY
+	targetZ := pCenterZ + entity.GetDepth()/2
+	selfX, selfY, selfZ := entity.GetCenter()
+
+	dx := pCenterX - selfX
+	dy := pCenterY - selfY
 	dz := targetZ - selfZ
-	// Attivazione (Aggro): Utilizza la distanza sferica 3D
-	playerDist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
-	if !e.active {
-		if playerDist3d < self.GetWakeUpDistance() { // Raggio di risveglio
-			e.active = true
+
+	dist2dSq := dx*dx + dy*dy
+	dist3dSq := dist2dSq + dz*dz
+
+	if e.state == EnemyStateIdle {
+		wakeDistance := self.GetWakeUpDistance()
+
+		if dist3dSq < wakeDistance*wakeDistance {
 			e.throwCooldown = e.throwMin
-			if e.actionRun != 0 {
-				self.SetAction(e.actionRun)
-			}
+			e.setState(self, EnemyStateChase)
 		}
+
 		return
 	}
-	// Aggiornamento timer armi
-	if e.throwCooldown > 0 {
-		e.throwCooldown -= 1.0 / float64(physics.GetFps())
-		if e.throwCooldown <= 0 {
-			if e.actionRun != 0 {
-				self.SetAction(e.actionRun)
-			}
-		}
-	}
-	// Inseguimento Terrestre
-	playerDist2d := math.Sqrt(dx*dx + dy*dy)
-	if playerDist2d <= 0.001 {
+
+	if dist2dSq <= 0.000001 {
 		return
 	}
-	// Aggiorniamo l'angolo del nemico affinché lo material o il modello si giri verso il bersaglio
+
+	playerDist2d := math.Sqrt(dist2dSq)
+	playerDist3d := math.Sqrt(dist3dSq)
+
 	angle := math.Atan2(dy, dx)
 	self.SetAngle(angle)
-	invDist := 1.0 / playerDist2d
-	nx := dx * invDist
-	ny := dy * invDist
-	targetImpulse := self.GetImpulse()
-	// Distanza di stop (es. somma dei raggi per non compenetrare)
-	stopDistance := (entity.GetWidth() * 0.5) + 5.0
-	if playerDist2d < stopDistance {
-		targetImpulse = 0.0
-	} else if playerDist3d < throwPlayerDistance && e.throwCooldown <= 0 {
-		targetImpulse = 0.0
+
+	nx := dx / playerDist2d
+	ny := dy / playerDist2d
+
+	stopDistance := entity.GetWidth()*0.5 + 5.0
+
+	// Attacco corpo a corpo se il modello dispone dell'animazione.
+	if playerDist2d <= stopDistance &&
+		e.throwCooldown <= 0 &&
+		len(e.animations.Melee) > 0 {
+		e.setState(self, EnemyStateMelee)
+		e.shootTimer = meleeDuration
+		e.throwCooldown = meleeCooldown
+		return
 	}
-	thingZ := selfZ
-	acceleration := self.GetAcceleration()
-	speed := self.GetSpeed()
-	self.MoveTowards(nx, ny, speed*targetImpulse, acceleration)
+
+	// Movimento conservativo: nessuna modifica dinamica all'impulso.
+	targetImpulse := self.GetImpulse()
+
+	if playerDist2d < stopDistance {
+		targetImpulse = 0
+	}
+
+	self.MoveTowards(nx, ny, self.GetSpeed()*targetImpulse, self.GetAcceleration())
 
 	if entity.IsOnGround() {
-		e.handleJump(self, playerZ, thingZ, playerDist2d, nx, ny)
+		e.handleJump(self, pCenterZ, selfZ, playerDist2d, nx, ny)
 	}
 
-	const throwableIndex = 2
-	const throwableSpeed = 100
-	if e.throwCooldown <= 0 && playerDist3d < throwPlayerDistance {
-		fmt.Println("ATTACKING!!!!")
-		self.SetAction(e.actionShoot)
-		weaponForward := entity.GetWidth()
-		spawnX := selfX + (math.Cos(angle) * weaponForward)
-		spawnY := selfY + (math.Sin(angle) * weaponForward)
-		spawnZ := selfZ + (entity.GetDepth() * 0.5)
-		bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
-		aimPitch := math.Atan2(dz, playerDist2d)
-		self.LaunchObject(throwableIndex, e.OnCollision, e.OnImpact, bulletPos, angle, aimPitch, throwableSpeed)
-		// Resetta il timer
-		e.throwCooldown = e.throwMin
+	if e.throwCooldown <= 0 && playerDist3d < throwPlayerDistance && len(e.animations.Shoot) > 0 {
+		e.handleShoot(self, selfX, selfY, selfZ, dz, angle, playerDist2d)
 	}
+}
+
+// handleLaunch handles the logic for launching a throwable object, including positioning and aiming calculations.
+func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float64, dz, angle, playerDist2d float64) {
+	const (
+		throwableIndex = 2
+		throwableSpeed = 100.0
+		shootDuration  = 0.5
+	)
+
+	if e.state == EnemyStateDead {
+		return
+	}
+
+	e.setState(self, EnemyStateShoot)
+	e.shootTimer = shootDuration
+	e.throwCooldown = e.throwMin
+
+	entity := self.GetEntity()
+
+	weaponForward := entity.GetWidth()
+	spawnX := selfX + math.Cos(angle)*weaponForward
+	spawnY := selfY + math.Sin(angle)*weaponForward
+	spawnZ := selfZ + entity.GetDepth()*0.5
+
+	bulletPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+
+	aimPitch := math.Atan2(dz, playerDist2d)
+
+	self.LaunchObject(throwableIndex, e.OnCollision, e.OnImpact, bulletPos, angle, aimPitch, throwableSpeed)
+}
+
+// handleShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
+func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float64, dz, angle, playerDist2d float64) {
+	const shootDuration = 0.5
+	if e.state == EnemyStateDead {
+		return
+	}
+	e.setState(self, EnemyStateShoot)
+	e.shootTimer = shootDuration
+	e.throwCooldown = e.throwMin
+	entity := self.GetEntity()
+
+	weaponForward := entity.GetWidth()
+	spawnX := selfX + math.Cos(angle)*weaponForward
+	spawnY := selfY + math.Sin(angle)*weaponForward
+	spawnZ := selfZ + entity.GetDepth()*0.5
+
+	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+	aimPitch := math.Atan2(dz, playerDist2d)
+
+	dirX := math.Cos(angle) * math.Cos(aimPitch)
+	dirY := math.Sin(angle) * math.Cos(aimPitch)
+	dirZ := math.Sin(aimPitch)
+	const weaponForce = 50000.0 * 50.0 // TODO: CONFIG
+	self.FireHitscan("gun", spawnPos, weaponForce, dirX, dirY, dirZ)
+}
+
+// handleDeath transitions the Enemy to a dead state, resets timers, and ensures no action is taken if already dead.
+func (e *Enemy) handleDeath(self config.IThingConfig) {
+	if e.state == EnemyStateDead {
+		return
+	}
+	e.painTimer = 0
+	e.shootTimer = 0
+	e.setState(self, EnemyStateDead)
+}
+
+// handlePain handles the enemy's reaction to pain by resetting the pain timer and transitioning to the pain state if not dead.
+func (e *Enemy) handlePain(self config.IThingConfig) {
+	if e.state == EnemyStateDead {
+		return
+	}
+	e.painTimer = 0.5
+	e.setState(self, EnemyStatePain)
 }
 
 // handleJump checks and handles the jump behavior of the enemy based on ground status, player position, and movement constraints.
@@ -283,16 +543,15 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 	if !entity.IsOnGround() {
 		return
 	}
-	vx, vy, _ := entity.GetVelocity()
-	speedSq := (vx * vx) + (vy * vy)
 	// Euristica A: bloccato contro un muro/ostacolo
-	isBlocked := speedSq < 0.1
-	// Euristica B: il giocatore è più in alto
+	//isBlocked := speedSq < 0.1
 	floorDz := float64(int(playerZ) - int(thingZ))
-	playerIsHigher := floorDz > self.GetMaxStep() && playerDist2d < 20.0
-	if isBlocked || playerIsHigher {
+	playerIsHigher := floorDz > self.GetMaxStep()
+	if playerIsHigher { //isBlocked || playerIsHigher {
+		//e.setState(self, EnemyStateJump)
 		//Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso saltino in modo coerente.
-		leapForceXY := entity.GetMass() * 200.0
-		self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
+		//leapForceXY := entity.GetMass() * 8.0
+		//self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
+		self.Jump(0, 0, 8)
 	}
 }

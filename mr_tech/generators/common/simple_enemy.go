@@ -142,7 +142,7 @@ func NewEnemy(actions []string) *Enemy {
 			[]string{"jump", "land"},
 		),
 		Other: e.collectAnimations(
-			[]string{"pull", "turn", "duck", "block"},
+			[]string{"pull", "turn", "duck"},
 			nil,
 		),
 	}
@@ -457,7 +457,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 		e.handleJump(self, pCenterZ, selfZ, playerDist2d, nx, ny)
 	}
 
-	if e.throwCooldown <= 0 && playerDist3d < throwPlayerDistance && len(e.animations.Shoot) > 0 {
+	if e.throwCooldown <= 0 && playerDist3d < throwPlayerDistance {
 		e.handleShoot(self, selfX, selfY, selfZ, dz, angle, playerDist2d)
 	}
 }
@@ -498,8 +498,12 @@ func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float6
 	if e.state == EnemyStateDead {
 		return
 	}
-	e.setState(self, EnemyStateShoot)
-	e.shootTimer = shootDuration
+	if len(e.animations.Shoot) > 0 {
+		e.setState(self, EnemyStateShoot)
+		e.shootTimer = shootDuration
+	} else {
+		fmt.Println("No shoot animation available")
+	}
 	e.throwCooldown = e.throwMin
 	entity := self.GetEntity()
 

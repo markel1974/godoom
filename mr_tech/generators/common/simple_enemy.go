@@ -8,9 +8,10 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Enemy represents an in-game enemy with activation, attack cooldown, and wake-up behavior based on distance.
+// Enemy represents an enemy character in the game with state, actions, and behaviors controlled during game logic.
 type Enemy struct {
 	active        bool
 	isDead        bool
@@ -29,9 +30,10 @@ type Enemy struct {
 	actionPain   int
 	actionDeath  int
 	actionAttack int
+	actionShoot  int
 }
 
-// NewEnemy creates and initializes a new Enemy instance with the specified wake-up distance.
+// NewEnemy initializes and returns a new Enemy instance with default attributes and actions mapping.
 func NewEnemy(actions []string) *Enemy {
 	const throwMin, throwMax = 5, 10
 	e := &Enemy{
@@ -66,6 +68,9 @@ func NewEnemy(actions []string) *Enemy {
 		}
 	}
 
+	e.actionAttack, _ = e.findAction("attack")
+	e.actionShoot, _ = e.findAction("shoot")
+
 	e.actionRun, _ = e.findAction("run")
 	e.actionWalk, _ = e.findAction("walk")
 	e.actionIdle, _ = e.findAction("idle")
@@ -75,7 +80,7 @@ func NewEnemy(actions []string) *Enemy {
 		e.actionPain, _ = e.findAction("pain1")
 	}
 	e.actionDeath, _ = e.findAction("death")
-	e.actionAttack, _ = e.findAction("attack")
+
 	if e.actionDeath == 0 {
 		e.actionDeath, _ = e.findAction("die")
 	}
@@ -84,7 +89,7 @@ func NewEnemy(actions []string) *Enemy {
 	return e
 }
 
-// OnCollision is triggered when the enemy collides with another object, handling interaction logic between entities.
+// OnCollision handles the interaction logic when the Enemy object collides with another object.
 func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig) {
 	//otherId := "UNKNOW"
 	//if other != nil {
@@ -93,6 +98,7 @@ func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig)
 	//fmt.Println("Enemy.OnCollision:", self.GetId(), otherId)
 }
 
+// OnImpact handles the reaction of the enemy when impacted, including damage, knockback, and state changes like aggro or death.
 func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	if e.isDead {
 		return // Dead enemies don't react to new impacts
@@ -109,13 +115,13 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 	entity := self.GetEntity()
 	entity.AddForce(dirX*force*knockbackMultiplier, dirY*force*knockbackMultiplier, dirZ*force*knockbackMultiplier)
 
-	// 3. Instant Aggro
+	// Instant Aggro
 	if !e.active {
 		e.active = true
 		e.throwCooldown = e.throwMin
 	}
 
-	// 4. Handle Death or Pain
+	// Handle Death or Pain
 	if e.health <= 0 {
 		e.handleDeath(self)
 	} else {
@@ -123,6 +129,7 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 	}
 }
 
+// handleDeath marks the enemy as dead and initiates the death animation if defined. It may also adjust collision behavior.
 func (e *Enemy) handleDeath(self config.IThingConfig) {
 	e.isDead = true
 	fmt.Println("ENEMY DEAD!!!!")
@@ -136,14 +143,12 @@ func (e *Enemy) handleDeath(self config.IThingConfig) {
 	// self.SetSolid(false)
 }
 
+// handlePain manages the enemy's reaction to taking damage by triggering a pain animation and setting a cooldown timer.
 func (e *Enemy) handlePain(self config.IThingConfig) {
 	// Don't restart the pain animation if we are already in pain
 	if e.painCooldown > 0 {
 		return
 	}
-
-	fmt.Println("ENEMY IN PAIN!!!! Health:", e.health)
-
 	// Set pain animation
 	if e.actionPain != 0 {
 		self.SetAction(e.actionPain)
@@ -151,7 +156,8 @@ func (e *Enemy) handlePain(self config.IThingConfig) {
 	}
 }
 
-// findAction is a helper to find action by prefix or exact match
+// findAction searches for an action by name in the Enemy's action map. It supports prefixes like "legs_" and "both_".
+// Returns the action's index and a boolean indicating if it was found.
 func (e *Enemy) findAction(name string) (int, bool) {
 	if idx, ok := e.actions[name]; ok {
 		return idx, true
@@ -165,8 +171,10 @@ func (e *Enemy) findAction(name string) (int, bool) {
 	return 0, false
 }
 
-// OnThinking handles the logic for enemy behavior, including activation, movement, aiming, and attack decision-making.
+// OnThinking handles the behavior and decision-making process of the enemy based on the player's position and game context.
 func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ float64) {
+	const throwPlayerDistance = 100.0
+
 	if e.isDead {
 		return // Stop thinking if dead
 	}
@@ -186,7 +194,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 
 	// Process pain timer
 	if e.painCooldown > 0 {
-		e.painCooldown -= 1.0 / 60.0 // Assuming 60 ticks per second
+		e.painCooldown -= 1.0 / float64(physics.GetFps())
 		if e.painCooldown <= 0 {
 			// Pain finished, return to running/chasing
 			if e.actionRun != 0 {
@@ -215,9 +223,14 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 		}
 		return
 	}
-	// Aggiornamento timer armi (assumendo dt fisso a 1/60)
+	// Aggiornamento timer armi
 	if e.throwCooldown > 0 {
-		e.throwCooldown -= 1.0 / 60.0
+		e.throwCooldown -= 1.0 / float64(physics.GetFps())
+		if e.throwCooldown <= 0 {
+			if e.actionRun != 0 {
+				self.SetAction(e.actionRun)
+			}
+		}
 	}
 	// Inseguimento Terrestre
 	playerDist2d := math.Sqrt(dx*dx + dy*dy)
@@ -235,7 +248,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	stopDistance := (entity.GetWidth() * 0.5) + 5.0
 	if playerDist2d < stopDistance {
 		targetImpulse = 0.0
-	} else if playerDist3d < 20.0 && e.throwCooldown <= 0 {
+	} else if playerDist3d < throwPlayerDistance && e.throwCooldown <= 0 {
 		targetImpulse = 0.0
 	}
 	thingZ := selfZ
@@ -249,7 +262,9 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 
 	const throwableIndex = 2
 	const throwableSpeed = 100
-	if e.throwCooldown <= 0 && playerDist3d < 20.0 {
+	if e.throwCooldown <= 0 && playerDist3d < throwPlayerDistance {
+		fmt.Println("ATTACKING!!!!")
+		self.SetAction(e.actionShoot)
 		weaponForward := entity.GetWidth()
 		spawnX := selfX + (math.Cos(angle) * weaponForward)
 		spawnY := selfY + (math.Sin(angle) * weaponForward)
@@ -262,7 +277,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	}
 }
 
-// handleJump allows the enemy to perform a jump if blocked or the player is at a higher elevation.
+// handleJump checks and handles the jump behavior of the enemy based on ground status, player position, and movement constraints.
 func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
 	entity := self.GetEntity()
 	if !entity.IsOnGround() {

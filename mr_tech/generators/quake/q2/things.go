@@ -125,7 +125,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		cFrame := config.NewModel3DEntryFrame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
-	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 1300.0)
 	return thingCfg, nil
 }
 
@@ -211,10 +211,11 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 		}
 		const wakeupDistance = 400
 		enemyLogic := common.NewEnemy(actions)
-		thingCfg.JumpForce = JumpForce
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision
 		thingCfg.OnImpact = enemyLogic.OnImpact
+		thingCfg.JumpForce = JumpForce
+		thingCfg.Impulse = 3
 		thingCfg.WakeupDistance = wakeupDistance
 	} else {
 		itemLogic := common.NewItem()

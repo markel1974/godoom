@@ -399,11 +399,11 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		if thingCfg.Model3DEntry != nil {
 			actions = thingCfg.Model3DEntry.ActionDefinitions
 		}
-		enemyLogic := common.NewEnemy(actions, 300)
+		enemyLogic := common.NewEnemy(actions)
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision
 		thingCfg.OnImpact = enemyLogic.OnImpact
-		thingCfg.WakeUpDistance = 400
+		thingCfg.WakeupDistance = 400
 	} else {
 		itemLogic := common.NewItem()
 		thingCfg.OnCollision = itemLogic.OnCollision

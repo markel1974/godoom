@@ -34,7 +34,7 @@ const ScaleWThings = 1.0
 const ScaleHThings = 1.0
 
 // GForce represents the standard gravitational force multiplier applied to game entities, with a value of 9.8 * 8.
-const GForce = 9.8 * 20
+const GForce = 9.8 * 50
 
 // playerHeight defines the height of a player entity in game units, used for calculations related to geometry and physics.
 const playerHeight = 62.0
@@ -222,18 +222,20 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	}
 	if cfgThing.Kind == config.ThingEnemyDef {
 		actions := []string{"run", "attack", "pain", "death", "xdeath"}
-		enemyLogic := common.NewEnemy(actions, 100)
+		enemyLogic := common.NewEnemy(actions)
 		cfgThing.OnThinking = enemyLogic.OnThinking
 		cfgThing.OnCollision = enemyLogic.OnCollision
 		cfgThing.OnImpact = enemyLogic.OnImpact
+		cfgThing.WakeupDistance = 500
 	} else {
 		itemLogic := common.NewItem()
 		cfgThing.OnCollision = itemLogic.OnCollision
 		cfgThing.OnImpact = itemLogic.OnImpact
 	}
 	cfgThing.GForce = GForce
-	cfgThing.WakeUpDistance = 500
-	cfgThing.JumpForce = 400
+	cfgThing.JumpForce = GForce * 8
+	//cfgThing.WakeUpDistance = 500
+
 	return cfgThing
 }
 
@@ -252,8 +254,8 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.OnCollision = playerLogic.OnCollision
 	player.OnImpact = playerLogic.OnImpact
 	player.GForce = GForce
+	player.JumpForce = GForce * 8
 	player.Impulse = 0.13 //mod
-	player.JumpForce = 1800
 
 	player.Flash.ZFar = 8192
 	player.Flash.Intensity = 0.02

@@ -20,6 +20,10 @@ const (
 	BSPVersionQ1 int = 29
 )
 
+const GForce = 9.8 * 50
+
+const JumpForce = GForce * 8
+
 // BSPReader reads and processes Quake 1 BSP files by managing lumps, textures, and geometry data.
 type BSPReader struct {
 	arc         interfaces.IArchive
@@ -325,8 +329,6 @@ func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 
 // Retrieve creates and initializes a Root configuration object, processing BSP data and setting player and rendering properties.
 func (q1 *BSPReader) Retrieve() (*config.Root, error) {
-	const gForce = 9.8 * 14
-
 	texManager := q1.GetTextures()
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	//cal.Auto = false
@@ -353,9 +355,9 @@ func (q1 *BSPReader) Retrieve() (*config.Root, error) {
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact
-	root.Player.GForce = gForce
+	root.Player.GForce = GForce
+	root.Player.JumpForce = JumpForce
 	root.Player.Impulse = 0.13 //mod
-	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Intensity = 0.02

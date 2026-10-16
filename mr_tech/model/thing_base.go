@@ -11,17 +11,19 @@ import (
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
 	IVertices
-	id           string
-	kind         config.ThingType
-	angle        float64
-	maxStep      float64
-	speed        float64
-	acceleration float64
-	jumpForce    float64
-	location     *Volume
-	things       *Things
-	isActive     bool
-	cage         *CollisionCage
+	id             string
+	kind           config.ThingType
+	angle          float64
+	maxStep        float64
+	speed          float64
+	impulse        float64
+	wakeupDistance float64
+	acceleration   float64
+	jumpForce      float64
+	location       *Volume
+	things         *Things
+	isActive       bool
+	cage           *CollisionCage
 
 	inbox       chan *ThingEvent
 	onCollision config.CollisionFunc
@@ -43,22 +45,24 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 
 	//const cageMargin = 0.001
 	t := &ThingBase{
-		IVertices:    VerticesFactory(thing, cfg, things.GetMaterials()),
-		id:           cfg.Id,
-		angle:        cfg.Angle, // * (math.Pi / 180.0),
-		kind:         cfg.Kind,
-		speed:        cfg.Speed,
-		acceleration: cfg.Acceleration,
-		jumpForce:    cfg.JumpForce,
-		location:     location,
-		things:       things,
-		maxStep:      0,
-		isActive:     true,
-		inbox:        make(chan *ThingEvent, 16),
-		done:         make(chan struct{}),
-		cage:         nil,
-		onImpact:     cfg.OnImpact,
-		onCollision:  cfg.OnCollision,
+		IVertices:      VerticesFactory(thing, cfg, things.GetMaterials()),
+		id:             cfg.Id,
+		angle:          cfg.Angle, // * (math.Pi / 180.0),
+		kind:           cfg.Kind,
+		speed:          cfg.Speed,
+		impulse:        cfg.Impulse,
+		acceleration:   cfg.Acceleration,
+		wakeupDistance: cfg.WakeupDistance,
+		jumpForce:      cfg.JumpForce,
+		location:       location,
+		things:         things,
+		maxStep:        0,
+		isActive:       true,
+		inbox:          make(chan *ThingEvent, 16),
+		done:           make(chan struct{}),
+		cage:           nil,
+		onImpact:       cfg.OnImpact,
+		onCollision:    cfg.OnCollision,
 	}
 
 	entity := t.GetEntity()
@@ -112,6 +116,16 @@ func (t *ThingBase) GetAcceleration() float64 {
 // GetSpeed returns the current speed of the ThingBase instance as a float64.
 func (t *ThingBase) GetSpeed() float64 {
 	return t.speed
+}
+
+// GetImpulse returns the
+func (t *ThingBase) GetImpulse() float64 {
+	return t.impulse
+}
+
+// GetWakeUpDistance retrieves the
+func (t *ThingBase) GetWakeUpDistance() float64 {
+	return t.wakeupDistance
 }
 
 // IsActive checks if the ThingBase instance is currently active.

@@ -126,10 +126,11 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					cfgThing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6)
 					cfgThing.Sprite = config.NewConfigSprite(anim)
 					if cfgThing.Kind == config.ThingEnemyDef {
-						enemyLogic := common.NewEnemy(nil, 100)
+						enemyLogic := common.NewEnemy(nil)
 						cfgThing.OnThinking = enemyLogic.OnThinking
 						cfgThing.OnCollision = enemyLogic.OnCollision
 						cfgThing.OnImpact = enemyLogic.OnImpact
+						cfgThing.WakeupDistance = 100
 					} else {
 						itemLogic := common.NewItem()
 						cfgThing.OnCollision = itemLogic.OnCollision

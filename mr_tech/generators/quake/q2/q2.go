@@ -17,6 +17,10 @@ import (
 
 const BSPVersionQ2 int = 38
 
+const GForce = 9.8 * 50
+
+const JumpForce = GForce * 8
+
 // BSPReader reads and processes Quake 2 BSP map files, managing textures, palettes, and player metadata.
 type BSPReader struct {
 	arc         interfaces.IArchive
@@ -336,8 +340,6 @@ func (q2 *BSPReader) registerTexture(texName string) (int, int, error) {
 
 // Retrieve initializes and constructs the root configuration, player settings, textures, and game world from BSP data.
 func (q2 *BSPReader) Retrieve() (*config.Root, error) {
-	const gForce = 9.8 * 14
-
 	texManager := q2.GetTextures()
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	//cal.Auto = false
@@ -364,9 +366,9 @@ func (q2 *BSPReader) Retrieve() (*config.Root, error) {
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact
-	root.Player.GForce = gForce
+	root.Player.GForce = GForce
+	root.Player.JumpForce = JumpForce
 	root.Player.Impulse = 0.13 //mod
-	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Intensity = 0.02

@@ -12,15 +12,14 @@ import (
 
 // Enemy represents an in-game enemy with activation, attack cooldown, and wake-up behavior based on distance.
 type Enemy struct {
-	active         bool
-	isDead         bool
-	firstTick      bool
-	health         float64 // Add health
-	throwCooldown  float64
-	throwMin       float64
-	wakeUpDistance float64
-	actions        map[string]int
-	painCooldown   float64 // Timer to prevent pain animation spam
+	active        bool
+	isDead        bool
+	firstTick     bool
+	health        float64 // Add health
+	throwCooldown float64
+	throwMin      float64
+	actions       map[string]int
+	painCooldown  float64 // Timer to prevent pain animation spam
 
 	// Cached actions for zero allocations during run loop
 	actionRun    int
@@ -33,17 +32,16 @@ type Enemy struct {
 }
 
 // NewEnemy creates and initializes a new Enemy instance with the specified wake-up distance.
-func NewEnemy(actions []string, wakeUpDistance float64) *Enemy {
+func NewEnemy(actions []string) *Enemy {
 	const throwMin, throwMax = 5, 10
 	e := &Enemy{
-		actions:        make(map[string]int),
-		active:         false,
-		isDead:         false,
-		health:         100.0, // Set default health
-		throwMin:       float64(rand.Intn(throwMax-throwMin+1) + throwMin),
-		throwCooldown:  0.0,
-		wakeUpDistance: wakeUpDistance,
-		painCooldown:   0.0,
+		actions:       make(map[string]int),
+		active:        false,
+		isDead:        false,
+		health:        100.0, // Set default health
+		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
+		throwCooldown: 0.0,
+		painCooldown:  0.0,
 	}
 	for idx, action := range actions {
 		lowerAction := strings.ToLower(strings.TrimSpace(action))
@@ -208,7 +206,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	// Attivazione (Aggro): Utilizza la distanza sferica 3D
 	playerDist3d := math.Sqrt(dx*dx + dy*dy + dz*dz)
 	if !e.active {
-		if playerDist3d < e.wakeUpDistance { // Raggio di risveglio
+		if playerDist3d < self.GetWakeUpDistance() { // Raggio di risveglio
 			e.active = true
 			e.throwCooldown = e.throwMin
 			if e.actionRun != 0 {
@@ -232,18 +230,18 @@ func (e *Enemy) OnThinking(self config.IThingConfig, playerX, playerY, playerZ f
 	invDist := 1.0 / playerDist2d
 	nx := dx * invDist
 	ny := dy * invDist
-	impulse := 1.0
+	targetImpulse := self.GetImpulse()
 	// Distanza di stop (es. somma dei raggi per non compenetrare)
 	stopDistance := (entity.GetWidth() * 0.5) + 5.0
 	if playerDist2d < stopDistance {
-		impulse = 0.0
+		targetImpulse = 0.0
 	} else if playerDist3d < 20.0 && e.throwCooldown <= 0 {
-		impulse = 0.0
+		targetImpulse = 0.0
 	}
 	thingZ := selfZ
 	acceleration := self.GetAcceleration()
 	speed := self.GetSpeed()
-	self.MoveTowards(nx, ny, speed*impulse, acceleration)
+	self.MoveTowards(nx, ny, speed*targetImpulse, acceleration)
 
 	if entity.IsOnGround() {
 		e.handleJump(self, playerZ, thingZ, playerDist2d, nx, ny)

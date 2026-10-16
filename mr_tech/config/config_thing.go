@@ -43,16 +43,16 @@ type Thing struct {
 	Radius         float64       `json:"radius"`
 	Height         float64       `json:"height"`
 	Speed          float64       `json:"speed"`
+	Impulse        float64       `json:"impulse"`
 	Acceleration   float64       `json:"acceleration"`
 	JumpForce      float64       `json:"jumpForce"`
 	Pitch          float64       `json:"pitch"`
-	WakeUpDistance float64       `json:"wakeUpDistance"`
+	WakeupDistance float64       `json:"wakeupDistance"`
 	GForce         float64       `json:"gForce"`
 	Model3DEntry   *Model3DEntry `json:"md1"`
 	Model3D        *Model3D      `json:"md3"`
-	//Liquid         *Liquid       `json:"liquid"`
-	MultiSprite *MultiSprite `json:"multiSprite"`
-	Sprite      *Sprite      `json:"sprite"`
+	MultiSprite    *MultiSprite  `json:"multiSprite"`
+	Sprite         *Sprite       `json:"sprite"`
 
 	OnThinking  ThinkingFunc
 	OnCollision CollisionFunc
@@ -71,7 +71,8 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Height:         height,
 		Speed:          speed,
 		Restitution:    0.0,
-		WakeUpDistance: 100.0,
+		Impulse:        3.0,
+		WakeupDistance: 300.0,
 		JumpForce:      600,
 		Friction:       0.2,
 		GForce:         9.8,
@@ -86,27 +87,27 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
 	return &Thing{
-		Id:             t.Id,
-		Position:       t.Position,
-		Kind:           t.Kind,
-		Angle:          t.Angle,
-		Mass:           t.Mass,
-		Restitution:    t.Restitution,
-		Friction:       t.Friction,
-		Radius:         t.Radius,
-		Height:         t.Height,
-		Speed:          t.Speed,
-		Acceleration:   t.Acceleration,
-		JumpForce:      t.JumpForce,
-		Pitch:          t.Pitch,
-		WakeUpDistance: t.WakeUpDistance,
-		GForce:         t.GForce,
-		Model3DEntry:   t.Model3DEntry,
-		Model3D:        t.Model3D,
-		MultiSprite:    t.MultiSprite,
-		Sprite:         t.Sprite,
-		OnThinking:     t.OnThinking,
-		OnCollision:    t.OnCollision,
-		OnImpact:       t.OnImpact,
+		Id:           t.Id,
+		Position:     t.Position,
+		Kind:         t.Kind,
+		Angle:        t.Angle,
+		Mass:         t.Mass,
+		Restitution:  t.Restitution,
+		Friction:     t.Friction,
+		Radius:       t.Radius,
+		Height:       t.Height,
+		Speed:        t.Speed,
+		Acceleration: t.Acceleration,
+		JumpForce:    t.JumpForce,
+		Pitch:        t.Pitch,
+		//WakeUpDistance: t.WakeUpDistance,
+		GForce:       t.GForce,
+		Model3DEntry: t.Model3DEntry,
+		Model3D:      t.Model3D,
+		MultiSprite:  t.MultiSprite,
+		Sprite:       t.Sprite,
+		OnThinking:   t.OnThinking,
+		OnCollision:  t.OnCollision,
+		OnImpact:     t.OnImpact,
 	}
 }

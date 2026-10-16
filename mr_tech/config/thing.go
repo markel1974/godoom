@@ -44,6 +44,10 @@ type IThingConfig interface {
 
 	GetSpeed() float64
 
+	GetImpulse() float64
+
+	GetWakeUpDistance() float64
+
 	//GetWidth() float64
 
 	//GetMass() float64

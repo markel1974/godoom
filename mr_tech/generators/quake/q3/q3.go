@@ -17,6 +17,10 @@ import (
 // BSPVersionQ3 represents the BSP version number used for Quake 3 map files.
 const BSPVersionQ3 int = 46
 
+const GForce = 9.8 * 50
+
+const JumpForce = GForce * 8
+
 // BSPReader provides functionality to parse and read Quake 3 BSP (Binary Space Partitioning) map files.
 type BSPReader struct {
 	arc         interfaces.IArchive
@@ -277,8 +281,6 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 
 // Retrieve constructs and returns a populated config.Root object based on BSPReader state or an error if the process fails.
 func (q3 *BSPReader) Retrieve() (*config.Root, error) {
-	const gForce = 9.8 * 14
-
 	texManager := q3.GetTextures()
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	//cal.Auto = false
@@ -305,9 +307,9 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	playerLogic := common.NewPlayer()
 	root.Player.OnCollision = playerLogic.OnCollision
 	root.Player.OnImpact = playerLogic.OnImpact
-	root.Player.GForce = gForce
+	root.Player.GForce = GForce
+	root.Player.JumpForce = JumpForce
 	root.Player.Impulse = 0.13 //mod
-	root.Player.JumpForce = 1000
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Intensity = 0.02

@@ -92,6 +92,7 @@ const (
 	QUERY_RESULT_AVAILABLE     = 0x8867
 	QUERY_RESULT               = 0x8866
 	TIME_ELAPSED               = 0x88BF
+	ANY_SAMPLES_PASSED         = 0x8C2F
 )
 
 const (

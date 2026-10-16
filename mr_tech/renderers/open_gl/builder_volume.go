@@ -293,8 +293,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		return false
 	}
 
-	things.QueryStatic(qStatic)
+	things.QueryStatic(qStatic) //UI Objects
 	things.QueryFrustum(frustumFront, qOcclusion)
+
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 

@@ -7,20 +7,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
-// ANY_SAMPLES_PASSED is a constant representing a query target for checking if any samples passed the test.
-// QUERY_RESULT_AVAILABLE is a constant representing the status of whether the query result is available.
-// QUERY_RESULT is a constant representing the result value of a query.
-const (
-	ANY_SAMPLES_PASSED     = 0x8C2F
-	QUERY_RESULT_AVAILABLE = 0x8867
-	QUERY_RESULT           = 0x8866
-)
-
 // OcclusionState represents the state of a hardware occlusion query, including its ID, activation status, and visibility.
 type OcclusionState struct {
 	QueryID     uint32
 	QueryActive bool
 	IsVisible   bool
+}
+
+func NewOcclusionState(id uint32, isVisible bool) *OcclusionState {
+	state := &OcclusionState{
+		QueryID:     id,
+		QueryActive: false,
+		IsVisible:   isVisible,
+	}
+	return state
 }
 
 // AABBTest represents a test case for occlusion queries involving an axis-aligned bounding box and its state.
@@ -98,11 +98,7 @@ func (hw *OcclusionHW) GetState(id uint64) *OcclusionState {
 		if hw.queryIdx >= len(hw.queryIDs) {
 			return nil // Pool esaurito!
 		}
-		state = &OcclusionState{
-			QueryID:     hw.queryIDs[hw.queryIdx],
-			QueryActive: false,
-			IsVisible:   true,
-		}
+		state = NewOcclusionState(hw.queryIDs[hw.queryIdx], true)
 		hw.states[id] = state
 		hw.queryIdx++
 	}
@@ -169,13 +165,13 @@ func (hw *OcclusionHW) Render() {
 				v4[0], v4[1], v4[2], v5[0], v5[1], v5[2], v1[0], v1[1], v1[2], v1[0], v1[1], v1[2], v0[0], v0[1], v0[2], v4[0], v4[1], v4[2], // Bottom
 			}
 
-			for _, v := range vertices {
-				if tc >= len(hw.allVertices) {
-					hw.grow()
-				}
-				hw.allVertices[tc] = v
-				tc++
+			if tc+len(vertices) >= len(hw.allVertices) {
+				hw.grow()
 			}
+
+			copy(hw.allVertices[tc:], vertices[:])
+
+			tc += len(vertices)
 			vc++
 		}
 	}
@@ -189,9 +185,9 @@ func (hw *OcclusionHW) Render() {
 		for i := 0; i < hw.testsLen; i++ {
 			test := hw.tests[i]
 			if !test.State.QueryActive {
-				hw.ctx.BeginQuery(ANY_SAMPLES_PASSED, test.State.QueryID)
+				hw.ctx.BeginQuery(api.ANY_SAMPLES_PASSED, test.State.QueryID)
 				hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
-				hw.ctx.EndQuery(ANY_SAMPLES_PASSED)
+				hw.ctx.EndQuery(api.ANY_SAMPLES_PASSED)
 				test.State.QueryActive = true
 				idx++
 			}
@@ -205,10 +201,10 @@ func (hw *OcclusionHW) Render() {
 		test := hw.tests[i]
 		if test.State.QueryActive {
 			var available uint32
-			hw.ctx.GetQueryObjectuiv(test.State.QueryID, QUERY_RESULT_AVAILABLE, &available)
+			hw.ctx.GetQueryObjectuiv(test.State.QueryID, api.QUERY_RESULT_AVAILABLE, &available)
 			if available == 1 {
 				var passed uint32
-				hw.ctx.GetQueryObjectuiv(test.State.QueryID, QUERY_RESULT, &passed)
+				hw.ctx.GetQueryObjectuiv(test.State.QueryID, api.QUERY_RESULT, &passed)
 
 				test.State.IsVisible = passed > 0
 				test.State.QueryActive = false

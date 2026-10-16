@@ -14,21 +14,45 @@ type SimpleCrosshair struct {
 
 // NewSimpleCrosshair creates a new SimpleCrosshair instance with a predefined texture and dimensions.
 func NewSimpleCrosshair() *SimpleCrosshair {
+	const borderSize = 2
 	name := "__CROSSHAIR__"
 	w, h := 16, 16
 	tex := textures.NewTexture(name, 999999, w, h, true)
 
+	isCrosshair := func(i, j int) bool {
+		return ((i == w/2 || i == w/2-1) && (j >= h/2-4 && j <= h/2+3)) || ((j == h/2 || j == h/2-1) && (i >= w/2-4 && i <= w/2+3))
+	}
+
 	for i := 0; i < w; i++ {
 		for j := 0; j < h; j++ {
-			if (i == w/2 || i == w/2-1) && (j >= h/2-4 && j <= h/2+3) {
-				tex.Set(i, j, 0xFFFFFFFF) // Centro
-			} else if (j == h/2 || j == h/2-1) && (i >= w/2-4 && i <= w/2+3) {
-				tex.Set(i, j, 0xFFFFFFFF) // Centro
-			} else {
-				tex.Set(i, j, 0x00000000) // Trasparente
+			if isCrosshair(i, j) {
+				// Bordo nero: controlla gli 8 pixel adiacenti.
+				for dx := -borderSize; dx <= borderSize; dx++ {
+					for dy := -borderSize; dy <= borderSize; dy++ {
+						x, y := i+dx, j+dy
+						if x >= 0 && x < w && y >= 0 && y < h {
+							if !isCrosshair(x, y) {
+								tex.Set(x, y, 0xff1111ff)
+							}
+						}
+					}
+				}
 			}
 		}
 	}
+
+	// Disegna il mirino bianco sopra il bordo nero.
+	for i := 0; i < w; i++ {
+		for j := 0; j < h; j++ {
+			if isCrosshair(i, j) {
+				tex.Set(i, j, 0xFFFFFFFF)
+			} else {
+				// I pixel non coinvolti nel bordo restano trasparenti.
+				// Il bordo nero già disegnato viene preservato.
+			}
+		}
+	}
+
 	return &SimpleCrosshair{
 		name: name,
 		tex:  tex,

@@ -127,15 +127,10 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					cfgThing.Sprite = config.NewConfigSprite(anim)
 					if cfgThing.Kind == config.ThingEnemyDef {
 						animations := config.NewEnemyAnimations()
-						enemyLogic := common.NewEnemy(animations)
-						cfgThing.OnThinking = enemyLogic.OnThinking
-						cfgThing.OnCollision = enemyLogic.OnCollision
-						cfgThing.OnImpact = enemyLogic.OnImpact
+						_ = common.NewEnemy(cfgThing, animations)
 						cfgThing.WakeupDistance = 100
 					} else {
-						itemLogic := common.NewItem()
-						cfgThing.OnCollision = itemLogic.OnCollision
-						cfgThing.OnImpact = itemLogic.OnImpact
+						_ = common.NewItem(cfgThing)
 					}
 					root.Things = append(root.Things, cfgThing)
 				}
@@ -212,7 +207,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 
 	player := config.NewConfigPlayer(playerPos, 0, 60, 900, 20, playerHeight)
 	root.Player = player
-	playerLogic := common.NewPlayer()
+	_ = common.NewPlayer(root.Player)
 
 	player.GForce = GForce
 	player.JumpForce = 1800
@@ -238,9 +233,6 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 	player.Bobbing.SpringTension = 0.20 // Molla più rigida (ritorno rapido)
 	player.Bobbing.SpringDamping = 0.80
 	player.Bobbing.TiltAmp = 0.05
-
-	root.Player.OnCollision = playerLogic.OnCollision
-	root.Player.OnImpact = playerLogic.OnImpact
 	return root, nil
 }
 

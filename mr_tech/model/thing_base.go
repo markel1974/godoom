@@ -68,6 +68,9 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 	//TODO FROM CONFIG
 	t.maxStep = entity.GetDepth() * 0.5 //cfg.Height * 0.5,
 	t.cage = NewCollisionCage(thing)    //, cageMargin),
+
+	cfg.OnBind(t)
+
 	return t
 }
 
@@ -276,7 +279,7 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 		rFace := slot.GetRemoteFace()
 		rParent := rFace.GetParent()
 		if thing := rParent.GetThing(); thing != nil {
-			t.onCollision(t, thing)
+			t.onCollision(thing)
 		}
 	}
 }
@@ -359,7 +362,7 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 // closestDist represents the closest penetration between the objects upon collision.
 // dirX, dirY, and dirZ specify the directional vector of the impact in 3D space.
 func (t *ThingBase) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
-	t.onImpact(t, other, id, force, closestDist, dirX, dirY, dirZ)
+	t.onImpact(other, id, force, closestDist, dirX, dirY, dirZ)
 }
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.

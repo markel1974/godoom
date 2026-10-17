@@ -54,6 +54,7 @@ type Thing struct {
 	MultiSprite    *MultiSprite  `json:"multiSprite"`
 	Sprite         *Sprite       `json:"sprite"`
 
+	OnBind      BindFunc
 	OnThinking  ThinkingFunc
 	OnCollision CollisionFunc
 	OnImpact    ImpactFunc

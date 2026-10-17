@@ -363,9 +363,7 @@ func (q2 *BSPReader) Retrieve() (*config.Root, error) {
 	playerAngle, playerPos := q2.GetPlayerInfo()
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
-	playerLogic := common.NewPlayer()
-	root.Player.OnCollision = playerLogic.OnCollision
-	root.Player.OnImpact = playerLogic.OnImpact
+	_ = common.NewPlayer(root.Player)
 	root.Player.GForce = GForce
 	root.Player.JumpForce = JumpForce
 	root.Player.Impulse = 0.13 //mod

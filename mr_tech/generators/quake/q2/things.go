@@ -210,17 +210,12 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
 		const wakeupDistance = 400
-		enemyLogic := common.NewEnemy(actions)
-		thingCfg.OnThinking = enemyLogic.OnThinking
-		thingCfg.OnCollision = enemyLogic.OnCollision
-		thingCfg.OnImpact = enemyLogic.OnImpact
+		_ = common.NewEnemy(thingCfg, actions)
 		thingCfg.JumpForce = JumpForce
 		thingCfg.Impulse = 3
 		thingCfg.WakeupDistance = wakeupDistance
 	} else {
-		itemLogic := common.NewItem()
-		thingCfg.OnCollision = itemLogic.OnCollision
-		thingCfg.OnImpact = itemLogic.OnImpact
+		_ = common.NewItem(thingCfg)
 	}
 	return thingCfg
 }

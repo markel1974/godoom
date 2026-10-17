@@ -225,15 +225,10 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		intervals := [5][2]int{{0, 10}, {0, 10}, {0, 10}, {0, 10}, {0, 10}}
 		animations := config.NewEnemyAnimations()
 		ConvertAnimation(animations, actions[:], intervals[:])
-		enemyLogic := common.NewEnemy(animations)
-		cfgThing.OnThinking = enemyLogic.OnThinking
-		cfgThing.OnCollision = enemyLogic.OnCollision
-		cfgThing.OnImpact = enemyLogic.OnImpact
+		_ = common.NewEnemy(cfgThing, animations)
 		cfgThing.WakeupDistance = 500
 	} else {
-		itemLogic := common.NewItem()
-		cfgThing.OnCollision = itemLogic.OnCollision
-		cfgThing.OnImpact = itemLogic.OnImpact
+		_ = common.NewItem(cfgThing)
 	}
 	cfgThing.GForce = GForce
 	cfgThing.JumpForce = GForce * 8
@@ -253,9 +248,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	}
 
 	player := config.NewConfigPlayer(geometry.XYZ{X: pX, Y: pY, Z: 0}, pAngle, playerMass, playerSpeed, playerRadius, playerHeight)
-	playerLogic := common.NewPlayer()
-	player.OnCollision = playerLogic.OnCollision
-	player.OnImpact = playerLogic.OnImpact
+	_ = common.NewPlayer(player)
 	player.GForce = GForce
 	player.JumpForce = GForce * 8
 	player.Impulse = 0.13 //mod

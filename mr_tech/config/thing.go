@@ -5,11 +5,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-type ThinkingFunc func(self IThingConfig, playerX, playerY, playerZ float64)
+type BindFunc func(self IThingConfig)
 
-type CollisionFunc func(self IThingConfig, other IThingConfig)
+type ThinkingFunc func(playerX, playerY, playerZ float64)
 
-type ImpactFunc func(self IThingConfig, other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)
+type CollisionFunc func(other IThingConfig)
+
+type ImpactFunc func(other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)
 
 type IThingConfig interface {
 	GetId() string

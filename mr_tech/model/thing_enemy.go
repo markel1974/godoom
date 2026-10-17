@@ -7,7 +7,7 @@ import (
 // ThingEnemy represents an enemy entity that extends ThingBase and defines behavior through a custom thinking function.
 type ThingEnemy struct {
 	*ThingBase
-	onThinking func(self config.IThingConfig, playerX, playerY, playerZ float64)
+	onThinking func(playerX, playerY, playerZ float64)
 }
 
 // NewThingEnemy initializes and returns a new instance of ThingEnemy with the specified configuration and parameters.
@@ -66,5 +66,5 @@ func (t *ThingEnemy) HasThinking() bool {
 
 // StageThinking processes the enemy's thinking phase using the player's coordinates (X, Y, Z) as input.
 func (t *ThingEnemy) StageThinking(playerX float64, playerY float64, playerZ float64) {
-	t.onThinking(t, playerX, playerY, playerZ)
+	t.onThinking(playerX, playerY, playerZ)
 }

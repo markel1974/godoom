@@ -109,9 +109,7 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 
-	playerLogic := common.NewPlayer()
-	player.OnCollision = playerLogic.OnCollision
-	player.OnImpact = playerLogic.OnImpact
+	_ = common.NewPlayer(player)
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = 1.0
 
@@ -151,9 +149,7 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 
-	playerLogic := common.NewPlayer()
-	player.OnCollision = playerLogic.OnCollision
-	player.OnImpact = playerLogic.OnImpact
+	_ = common.NewPlayer(player)
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = 1.0
 

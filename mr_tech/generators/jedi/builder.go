@@ -358,9 +358,7 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 // buildPlayer initializes and returns a configured Player instance with specified position and predefined attributes.
 func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
-	playerLogic := common.NewPlayer()
-	player.OnCollision = playerLogic.OnCollision
-	player.OnImpact = playerLogic.OnImpact
+	_ = common.NewPlayer(player)
 	player.GForce = gForce
 	player.JumpForce = 1000
 
@@ -399,15 +397,10 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 		if thingCfg.Model3DEntry != nil {
 			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
-		enemyLogic := common.NewEnemy(actions)
-		thingCfg.OnThinking = enemyLogic.OnThinking
-		thingCfg.OnCollision = enemyLogic.OnCollision
-		thingCfg.OnImpact = enemyLogic.OnImpact
+		_ = common.NewEnemy(thingCfg, actions)
 		thingCfg.WakeupDistance = 400
 	} else {
-		itemLogic := common.NewItem()
-		thingCfg.OnCollision = itemLogic.OnCollision
-		thingCfg.OnImpact = itemLogic.OnImpact
+		_ = common.NewItem(thingCfg)
 	}
 	return thingCfg
 }

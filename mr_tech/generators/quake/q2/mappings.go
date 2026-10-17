@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 )
 
+// _q2DictModelFilename maps Quake 2 entity class names to their corresponding model file paths.
 var _q2DictModelFilename = map[string]string{
 
 	"monster_berserk": "models/monsters/berserk/tris.md2",
@@ -153,11 +154,13 @@ var _q2DictModelFilename = map[string]string{
 	"viewthing": "models/objects/viewthing/tris.md2",
 }
 
+// _q2DictBModel maps Quake 2 classnames to their corresponding external BModel filenames.
 var _q2DictBModel = map[string]string{
 	// A differenza di Q1, Q2 usa pochissimi BModel esterni per gli item, la maggior parte usa i tris.md2.
 	// BModel interni (*1, *2) per func_door, func_plat saranno gestiti dinamicamente nel builder.
 }
 
+// TextInfo2ToMaterialKind converts a TexInfo2 object into a corresponding MaterialKind based on surface attributes.
 func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
 	animKind := config.MaterialKindLoop
 	if info.IsSky() {
@@ -168,46 +171,47 @@ func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
 	return animKind
 }
 
+// ConvertAnimation maps a list of animations and frame intervals to EnemyState values and adds them to EnemyAnimations.
 func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, animation := range animations {
-		duration := intervals[idx][1] - intervals[idx][0]
+		frames := intervals[idx][1] - intervals[idx][0]
 		animation = strings.TrimSpace(strings.ToLower(animation))
 		if strings.HasPrefix(animation, "stand") {
-			r.Add(config.EnemyStateIdle, idx, duration)
+			r.Add(config.EnemyStateIdle, idx, frames)
 		} else if strings.HasPrefix(animation, "hover") {
-			r.Add(config.EnemyStateIdle, idx, duration)
+			r.Add(config.EnemyStateIdle, idx, frames)
 		} else if strings.HasPrefix(animation, "walk") {
-			r.Add(config.EnemyStateWalk, idx, duration)
+			r.Add(config.EnemyStateWalk, idx, frames)
 		} else if strings.HasPrefix(animation, "run") {
-			r.Add(config.EnemyStateChase, idx, duration)
+			r.Add(config.EnemyStateChase, idx, frames)
 		} else if strings.HasPrefix(animation, "prowl") {
-			r.Add(config.EnemyStateProwl, idx, duration)
+			r.Add(config.EnemyStateProwl, idx, frames)
 		} else if strings.HasPrefix(animation, "leap") {
-			r.Add(config.EnemyStateJump, idx, duration)
+			r.Add(config.EnemyStateJump, idx, frames)
 		} else if strings.HasPrefix(animation, "attack") || strings.HasPrefix(animation, "attak") {
-			r.Add(config.EnemyStateMelee, idx, duration)
+			r.Add(config.EnemyStateMelee, idx, frames)
 		} else if strings.HasPrefix(animation, "shoot") || strings.HasPrefix(animation, "gun") {
-			r.Add(config.EnemyStateShoot, idx, duration)
+			r.Add(config.EnemyStateShoot, idx, frames)
 		} else if strings.HasPrefix(animation, "smash") {
-			r.Add(config.EnemyStateShoot, idx, duration)
+			r.Add(config.EnemyStateShoot, idx, frames)
 		} else if strings.HasPrefix(animation, "load") {
-			r.Add(config.EnemyStateReload, idx, duration)
+			r.Add(config.EnemyStateReload, idx, frames)
 		} else if strings.HasPrefix(animation, "pain") {
-			r.Add(config.EnemyStatePain, idx, duration)
+			r.Add(config.EnemyStatePain, idx, frames)
 		} else if strings.HasPrefix(animation, "death") {
-			r.Add(config.EnemyStateDead, idx, duration)
+			r.Add(config.EnemyStateDead, idx, frames)
 		} else if strings.HasPrefix(animation, "bdeath") {
-			r.Add(config.EnemyStateDead, idx, duration)
+			r.Add(config.EnemyStateDead, idx, frames)
 		} else if strings.HasPrefix(animation, "pull") {
-			r.Add(config.EnemyStatePull, idx, duration)
+			r.Add(config.EnemyStatePull, idx, frames)
 		} else if strings.HasPrefix(animation, "swing") {
-			r.Add(config.EnemyStateSwing, idx, duration)
+			r.Add(config.EnemyStateSwing, idx, frames)
 		} else if strings.HasPrefix(animation, "fly") {
-			r.Add(config.EnemyStateFly, idx, duration)
+			r.Add(config.EnemyStateFly, idx, frames)
 		} else if strings.HasPrefix(animation, "kneel") || strings.HasPrefix(animation, "duck") {
-			r.Add(config.EnemyStateKneel, idx, duration)
+			r.Add(config.EnemyStateKneel, idx, frames)
 		} else if strings.HasPrefix(animation, "block") {
-			r.Add(config.EnemyStateBlock, idx, duration)
+			r.Add(config.EnemyStateBlock, idx, frames)
 		} else {
 			fmt.Printf("Unknown animation: %s\n", animation)
 		}

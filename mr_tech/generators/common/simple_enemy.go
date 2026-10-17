@@ -12,15 +12,16 @@ import (
 
 // Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
 type Enemy struct {
-	state         config.EnemyState
-	health        float64
-	throwCooldown float64
-	throwMin      float64
-	painTimer     float64
-	shootTimer    float64
-	actions       map[string]int
-	animations    *config.EnemyAnimations
-	lastAnimation map[config.EnemyState]int
+	state                   config.EnemyState
+	health                  float64
+	throwCooldown           float64
+	throwMin                float64
+	painTimer               float64
+	shootTimer              float64
+	actions                 map[string]int
+	animations              *config.EnemyAnimations
+	lastAnimation           map[config.EnemyState]int
+	animationDurationFrames int
 }
 
 // NewEnemy initializes and returns a new Enemy instance with default state, health, and animations.
@@ -30,7 +31,7 @@ func NewEnemy(actions *config.EnemyAnimations) *Enemy {
 		throwMax = 6
 	)
 	e := &Enemy{
-		state:         config.EnemyStateIdle,
+		state:         config.EnemyStateUnknown,
 		health:        100,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		actions:       make(map[string]int, len(actions.Content)),
@@ -42,60 +43,94 @@ func NewEnemy(actions *config.EnemyAnimations) *Enemy {
 
 // chooseAnimation selects an animation index from a list of options based on the enemy's current state, ensuring variation.
 // It avoids repeating the last animation for the given state, if possible, and stores the selected animation.
-func (e *Enemy) chooseAnimation(state config.EnemyState, animations *config.EnemyAnimation) (int, bool) {
-	if len(animations.Indices) == 0 {
-		return 0, false
+func (e *Enemy) chooseAnimation(state config.EnemyState, animations *config.EnemyAnimation) (int, int, bool) {
+	if animations == nil || len(animations.Indices) == 0 {
+		return 0, 0, false
 	}
-
 	if len(animations.Indices) == 1 {
+		duration := 0
+		if len(animations.Duration) > 0 {
+			duration = animations.Duration[0]
+		}
 		e.lastAnimation[state] = animations.Indices[0]
-		return animations.Indices[0], true
+		return animations.Indices[0], duration, true
 	}
-
-	var index int
-
-	if last, hasLast := e.lastAnimation[state]; hasLast {
-		candidates := make([]int, 0, len(animations.Indices))
-		for _, idx := range animations.Indices {
-			if idx != last {
-				candidates = append(candidates, idx)
+	last, hasLast := e.lastAnimation[state]
+	// Conta le animazioni candidate, escludendo l'ultima scelta.
+	candidateCount := 0
+	for _, idx := range animations.Indices {
+		if hasLast && idx == last {
+			continue
+		}
+		candidateCount++
+	}
+	// Se sono tutte uguali all'ultima scelta, usa la prima posizione.
+	if candidateCount == 0 {
+		e.lastAnimation[state] = animations.Indices[0]
+		duration := 0
+		if len(animations.Duration) > 0 {
+			duration = animations.Duration[0]
+		}
+		return animations.Indices[0], duration, true
+	}
+	target := rand.Intn(candidateCount)
+	for pos, idx := range animations.Indices {
+		if hasLast && idx == last {
+			continue
+		}
+		if target == 0 {
+			duration := 0
+			if pos < len(animations.Duration) {
+				duration = animations.Duration[pos]
 			}
+			e.lastAnimation[state] = idx
+			return idx, duration, true
 		}
-		if len(candidates) == 0 {
-			return 0, false
-		}
-		index = candidates[rand.Intn(len(candidates))]
-	} else {
-		index = animations.Indices[rand.Intn(len(animations.Indices))]
+		target--
 	}
-
-	e.lastAnimation[state] = index
-
-	return index, true
+	return 0, 0, false
 }
 
-// playAnimation selects an appropriate animation for the enemy and sets it as the current action in the given config.
-func (e *Enemy) playAnimation(self config.IThingConfig, category config.EnemyState, animations *config.EnemyAnimation) bool {
-	action, ok := e.chooseAnimation(category, animations)
+// playAnimation selects an animation and returns its duration in frames.
+func (e *Enemy) playAnimation(self config.IThingConfig, category config.EnemyState, animations *config.EnemyAnimation) (int, bool) {
+	action, durationFrames, ok := e.chooseAnimation(category, animations)
 	if !ok {
-		return false
+		return 0, false
 	}
-
 	self.SetAction(action)
-	return true
+	return durationFrames, true
 }
 
 // setState updates the enemy's current state and triggers the corresponding animation unless the state is unchanged or dead.
-func (e *Enemy) setState(self config.IThingConfig, state config.EnemyState) {
-	if e.state == state || e.state == config.EnemyStateDead {
-		return
+func (e *Enemy) setState(self config.IThingConfig, state config.EnemyState) int {
+	if e.state == state {
+		return e.animationDurationFrames
 	}
-	if len(e.animations.Content[state].Indices) > 0 {
-		e.state = state
-		e.playAnimation(self, state, e.animations.Content[state])
-	} else {
+	if e.state == config.EnemyStateDead || state >= config.EnemyStateLast {
+		return 0
+	}
+	if e.animations == nil || e.animations.Content[state] == nil ||
+		len(e.animations.Content[state].Indices) == 0 {
 		fmt.Println("No animations for state:", state)
+		return 0
 	}
+	durationFrames, ok := e.playAnimation(self, state, e.animations.Content[state])
+	if !ok {
+		return 0
+	}
+	e.state = state
+	e.animationDurationFrames = durationFrames
+	return durationFrames
+}
+
+// framesToSeconds converts an animation frame count to seconds using the
+// current animation/update FPS. Missing durations remain zero; no duration is guessed.
+func framesToSeconds(frames int) float64 {
+	fps := physics.GetFps()
+	if frames <= 0 || fps <= 0 {
+		return 0
+	}
+	return float64(frames) / float64(fps)
 }
 
 // OnCollision defines the optional behavior when this Enemy collides with another object.
@@ -124,7 +159,6 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenterZ float64) {
 	const (
 		throwPlayerDistance = 300.0
-		meleeDuration       = 0.7
 		meleeCooldown       = 1.0
 	)
 
@@ -206,8 +240,8 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 
 	// Attacco corpo a corpo se il modello dispone dell'animazione.
 	if playerDist2d <= stopDistance && e.throwCooldown <= 0 && len(e.animations.Content[config.EnemyStateMelee].Indices) > 0 {
-		e.setState(self, config.EnemyStateMelee)
-		e.shootTimer = meleeDuration
+		durationFrames := e.setState(self, config.EnemyStateMelee)
+		e.shootTimer = framesToSeconds(durationFrames)
 		e.throwCooldown = meleeCooldown
 		return
 	}
@@ -234,15 +268,14 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 	const (
 		throwableIndex = 2
 		throwableSpeed = 100.0
-		shootDuration  = 0.5
 	)
 
 	if e.state == config.EnemyStateDead {
 		return
 	}
 
-	e.setState(self, config.EnemyStateShoot)
-	e.shootTimer = shootDuration
+	durationFrames := e.setState(self, config.EnemyStateShoot)
+	e.shootTimer = framesToSeconds(durationFrames)
 	e.throwCooldown = e.throwMin
 
 	entity := self.GetEntity()
@@ -261,13 +294,12 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 
 // handleShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
 func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float64, dz, angle, playerDist2d float64) {
-	const shootDuration = 0.5
 	if e.state == config.EnemyStateDead {
 		return
 	}
 
-	e.setState(self, config.EnemyStateShoot)
-	e.shootTimer = shootDuration
+	durationFrames := e.setState(self, config.EnemyStateShoot)
+	e.shootTimer = framesToSeconds(durationFrames)
 	e.throwCooldown = e.throwMin
 	entity := self.GetEntity()
 
@@ -301,8 +333,8 @@ func (e *Enemy) handlePain(self config.IThingConfig) {
 	if e.state == config.EnemyStateDead {
 		return
 	}
-	e.painTimer = 0.5
-	e.setState(self, config.EnemyStatePain)
+	durationFrames := e.setState(self, config.EnemyStatePain)
+	e.painTimer = framesToSeconds(durationFrames)
 }
 
 // handleJump checks and handles the jump behavior of the enemy based on ground status, player position, and movement constraints.

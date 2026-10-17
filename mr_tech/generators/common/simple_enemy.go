@@ -10,6 +10,18 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+// framesToSeconds converts an animation frame count to seconds using the
+// current animation/update FPS. Missing durations remain zero; no duration is guessed.
+func framesToSeconds(frames int) float64 {
+	fps := physics.GetFps()
+	if frames <= 0 || fps <= 0 {
+		return 0
+	}
+	t := float64(frames) / float64(fps)
+	t *= 5
+	return t
+}
+
 // Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
 type Enemy struct {
 	state                   config.EnemyState
@@ -28,7 +40,7 @@ type Enemy struct {
 func NewEnemy(actions *config.EnemyAnimations) *Enemy {
 	const (
 		throwMin = 2
-		throwMax = 6
+		throwMax = 4
 	)
 	e := &Enemy{
 		state:         config.EnemyStateUnknown,
@@ -123,16 +135,6 @@ func (e *Enemy) setState(self config.IThingConfig, state config.EnemyState) int 
 	return durationFrames
 }
 
-// framesToSeconds converts an animation frame count to seconds using the
-// current animation/update FPS. Missing durations remain zero; no duration is guessed.
-func framesToSeconds(frames int) float64 {
-	fps := physics.GetFps()
-	if frames <= 0 || fps <= 0 {
-		return 0
-	}
-	return float64(frames) / float64(fps)
-}
-
 // OnCollision defines the optional behavior when this Enemy collides with another object.
 func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig) {
 	// Comportamento di collisione opzionale.
@@ -159,18 +161,15 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenterZ float64) {
 	const (
 		throwPlayerDistance = 300.0
-		meleeCooldown       = 1.0
+		throwCooldown       = 0.5
 	)
-
 	if e.state == config.EnemyStateDead {
 		return
 	}
-
 	fps := physics.GetFps()
 	if fps <= 0 {
 		return
 	}
-
 	dt := 1.0 / float64(fps)
 
 	if e.throwCooldown > 0 {
@@ -226,23 +225,19 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 	if dist2dSq <= 0.000001 {
 		return
 	}
-
 	playerDist2d := math.Sqrt(dist2dSq)
 	playerDist3d := math.Sqrt(dist3dSq)
-
 	angle := math.Atan2(dy, dx)
 	self.SetAngle(angle)
-
 	nx := dx / playerDist2d
 	ny := dy / playerDist2d
-
 	stopDistance := entity.GetWidth()*0.5 + 5.0
 
 	// Attacco corpo a corpo se il modello dispone dell'animazione.
 	if playerDist2d <= stopDistance && e.throwCooldown <= 0 && len(e.animations.Content[config.EnemyStateMelee].Indices) > 0 {
 		durationFrames := e.setState(self, config.EnemyStateMelee)
 		e.shootTimer = framesToSeconds(durationFrames)
-		e.throwCooldown = meleeCooldown
+		e.throwCooldown = throwCooldown
 		return
 	}
 
@@ -293,28 +288,28 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 }
 
 // handleShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
-func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float64, dz, angle, playerDist2d float64) {
+func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, angle, playerDist2d float64) {
 	if e.state == config.EnemyStateDead {
 		return
 	}
-
 	durationFrames := e.setState(self, config.EnemyStateShoot)
 	e.shootTimer = framesToSeconds(durationFrames)
 	e.throwCooldown = e.throwMin
 	entity := self.GetEntity()
-
 	weaponForward := entity.GetWidth()
 	spawnX := selfX + math.Cos(angle)*weaponForward
 	spawnY := selfY + math.Sin(angle)*weaponForward
 	spawnZ := selfZ + entity.GetDepth()*0.5
-
 	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+	// dz deve essere: quota bersaglio - quota spawn
 	aimPitch := math.Atan2(dz, playerDist2d)
+	// Stessa convenzione del player: pitch positivo = verso il basso
+	pitchRad := -aimPitch
+	dirX := math.Cos(angle) * math.Cos(pitchRad)
+	dirY := math.Sin(angle) * math.Cos(pitchRad)
+	dirZ := math.Sin(pitchRad)
 
-	dirX := math.Cos(angle) * math.Cos(aimPitch)
-	dirY := math.Sin(angle) * math.Cos(aimPitch)
-	dirZ := math.Sin(aimPitch)
-	const weaponForce = 50000.0 * 50.0 // TODO: CONFIG
+	const weaponForce = 50000.0 * 500.0 // TODO: CONFIG
 	self.FireHitscan("gun", spawnPos, weaponForce, dirX, dirY, dirZ)
 }
 
@@ -343,11 +338,14 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 	if !entity.IsOnGround() {
 		return
 	}
+	//vx, vy, _ := entity.GetVelocity()
+	//speedSq := (vx * vx) + (vy * vy)
 	// Euristica A: bloccato contro un muro/ostacolo
 	//isBlocked := speedSq < 0.1
 	floorDz := float64(int(playerZ) - int(thingZ))
-	playerIsHigher := floorDz > self.GetMaxStep()
-	if playerIsHigher { //isBlocked || playerIsHigher {
+	playerIsHigher := floorDz > (self.GetMaxStep() * 4)
+	if playerIsHigher {
+		//if isBlocked || playerIsHigher {
 		//e.setState(self, EnemyStateJump)
 		//Forza verticale: Moltiplichiamo per la massa affinché demoni di peso diverso saltino in modo coerente.
 		//leapForceXY := entity.GetMass() * 8.0

@@ -341,14 +341,10 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 	})
 
 	if closestThing != nil {
-		// 2. Calcolo del punto d'impatto reale (Origine + Direzione * Distanza)
+		// Calcolo del punto d'impatto reale (Origine + Direzione * Distanza)
 		impactX := pos.X + (dirX * closestDist)
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
-
-		//fmt.Println("IMPACT: ", force, closestThing.GetId(), impactX, impactY, impactZ)
-		// Risoluzione dell'impatto
-		//closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 
 		closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 		closestThing.Impact(closestThing, id, force, closestDist, impactX, impactY, impactZ)

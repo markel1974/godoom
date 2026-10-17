@@ -314,18 +314,18 @@ func (p *ThingPlayer) Throw(throwableIndex int, speed float64) {
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
 func (p *ThingPlayer) Fire(id string) {
-	// 1. Origine della vista (include Bobbing e Crouch)
+	// Origine della vista (include Bobbing e Crouch)
 	camX, camY, camZ := p.GetVisualPosition()
-	// 2. Calcolo del vettore direzione (Radianti)
+	// Calcolo del vettore direzione (Radianti)
 	// Usiamo lo angle invertito per la telecamera e lo scaliamo per il FOV
 	pitchRad := -p.pitch
 	dirX := p.angleCos * math.Cos(pitchRad)
 	dirY := p.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
-	// 3. Punto di spawn fuori dalla hitbox del player
+	// Punto di spawn fuori dalla hitbox del player
 	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
-	weaponForward := p.GetEntity().GetWidth() //p.GetRadius() * 2.0
-	const weaponForce = 50000.0 * 50.0        // TODO CONFIG
+	weaponForward := p.GetEntity().GetWidth()
+	const weaponForce = 50000.0 * 10.0 // TODO CONFIG
 	spawnX := camX + (p.angleCos * weaponForward)
 	spawnY := camY + (p.angleSin * weaponForward)
 	spawnZ := camZ - (p.getEyeHeight() * 0.5)

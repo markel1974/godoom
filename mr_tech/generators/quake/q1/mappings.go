@@ -133,8 +133,4 @@ func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals 
 			fmt.Printf("Unknown animation: %s\n", animation)
 		}
 	}
-	if len(r.Content[config.EnemyStateIdle].Indices) == 0 {
-		fmt.Println("ERROR")
-		//r.Add(config.EnemyStateIdle, 0, 0)
-	}
 }

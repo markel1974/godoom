@@ -31,6 +31,9 @@ const (
 	EnemyStateSwing
 	EnemyStateFly
 	EnemyStateKneel
+	EnemyStateBlock
+	EnemyStateTurn
+	EnemyStateBack
 	EnemyStateOther
 	EnemyStateLast
 )

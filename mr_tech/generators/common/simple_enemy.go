@@ -93,13 +93,10 @@ func (e *Enemy) OnImpact(other config.IThingConfig, id string, force, closestDis
 
 // OnThinking handles the behavior logic for the Enemy, updating its state and actions based on its environment and player position.
 func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
-	const (
-		shootPlayerDistance = 300.0
-		shootCooldown       = 0.5
-	)
 	if e.state == config.EnemyStateDead {
 		return
 	}
+
 	fps := physics.GetFps()
 	if fps <= 0 {
 		return
@@ -107,12 +104,11 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 	dt := 1.0 / float64(fps)
 
 	entity := e.self.GetEntity()
-	targetZ := pCenterZ + entity.GetDepth()/2
 	selfX, selfY, selfZ := entity.GetCenter()
 
 	dx := pCenterX - selfX
 	dy := pCenterY - selfY
-	dz := targetZ - selfZ
+	dz := pCenterZ - selfZ
 
 	dist2dSq := dx*dx + dy*dy
 	dist3dSq := dist2dSq + dz*dz
@@ -124,76 +120,66 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		}
 	}
 
-	//if dist2dSq <= 0.000001 {
-	//	return
-	//}
-
-	playerDist2d := math.Sqrt(dist2dSq)
-	//playerDist3d := math.Sqrt(dist3dSq)
-	angle := math.Atan2(dy, dx)
-	e.self.SetAngle(angle)
-
 	switch e.state {
 	case config.EnemyStateUnknown:
 		e.setState(config.EnemyStateIdle)
 		return
+
 	case config.EnemyStateIdle:
 		wakeDistance := e.self.GetWakeUpDistance()
 		if dist3dSq < wakeDistance*wakeDistance {
-			e.shootCooldown = e.shotIntervalMin
 			e.setState(config.EnemyStateChase)
 		}
 		return
+
 	case config.EnemyStateChase:
 		wakeDistance := e.self.GetWakeUpDistance()
 		if dist3dSq > wakeDistance*wakeDistance {
-			e.shootCooldown = e.shotIntervalMin
 			e.setState(config.EnemyStateIdle)
 			return
 		}
+		if dist2dSq > 0.000001 {
+			playerDist2d := math.Sqrt(dist2dSq)
+			angle := math.Atan2(dy, dx)
+			e.self.SetAngle(angle)
+			nx := dx / playerDist2d
+			ny := dy / playerDist2d
+			stopDistance := entity.GetWidth()
+			targetImpulse := e.self.GetImpulse()
+			if playerDist2d < stopDistance {
+				targetImpulse = 0
+			}
+			e.self.MoveTowards(nx, ny, e.self.GetSpeed()*targetImpulse, e.self.GetAcceleration())
+		}
+		if entity.IsOnGround() {
+			e.handleJump(e.self, pCenterZ, selfZ, math.Sqrt(dist2dSq), dx, dy)
+		}
 		if e.shootCooldown <= 0 {
-			e.shootCooldown = e.shotIntervalMin
 			durationFrames := e.setState(config.EnemyStateShoot)
 			e.shootTimer = framesToSeconds(durationFrames) + 0.1
 		}
-	case config.EnemyStateShoot: //, config.EnemyStateMelee:
-		if e.shootTimer -= dt; e.shootTimer <= 0 {
+		return
+
+	case config.EnemyStateShoot:
+		e.shootTimer -= dt
+		if e.shootTimer <= 0 {
 			e.shootTimer = 0
+			angle := math.Atan2(dy, dx)
+			playerDist2d := math.Sqrt(dist2dSq)
 			e.handleShoot(e.self, selfX, selfY, selfZ, dz, angle, playerDist2d)
+			e.shootCooldown = e.shotIntervalMin
 			e.setState(config.EnemyStateChase)
 		}
 		return
+
 	case config.EnemyStatePain:
-		if e.painTimer -= dt; e.painTimer <= 0 {
+		e.painTimer -= dt
+		if e.painTimer <= 0 {
 			e.painTimer = 0
 			e.setState(config.EnemyStateChase)
 		}
 		return
 	default:
-	}
-
-	//TODO
-	// Attacco corpo a corpo se il modello dispone dell'animazione.
-	//if playerDist2d <= stopDistance && e.shootCooldown <= 0 && len(e.animations.Content[config.EnemyStateMelee].Indices) > 0 {
-	//	durationFrames := e.setState(config.EnemyStateMelee)
-	//	e.shootTimer = framesToSeconds(durationFrames)
-	//	e.shootCooldown = shootCooldown
-	//	return
-	//}
-
-	nx := dx / playerDist2d
-	ny := dy / playerDist2d
-	stopDistance := entity.GetWidth()*0.5 + 5.0
-	// Movimento conservativo: nessuna modifica dinamica all'impulso.
-	targetImpulse := e.self.GetImpulse()
-	if playerDist2d < stopDistance {
-		targetImpulse = 0
-	}
-
-	e.self.MoveTowards(nx, ny, e.self.GetSpeed()*targetImpulse, e.self.GetAcceleration())
-
-	if entity.IsOnGround() {
-		e.handleJump(e.self, pCenterZ, selfZ, playerDist2d, nx, ny)
 	}
 }
 
@@ -228,9 +214,6 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 
 // handleShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
 func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, angle, playerDist2d float64) {
-	//durationFrames := e.setState(config.EnemyStateShoot)
-	//e.shootTimer = framesToSeconds(durationFrames)
-	//e.shootCooldown = e.shotIntervalMin
 	entity := self.GetEntity()
 	weaponForward := entity.GetWidth()
 	spawnX := selfX + math.Cos(angle)*weaponForward
@@ -244,7 +227,6 @@ func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, a
 	dirX := math.Cos(angle) * math.Cos(pitchRad)
 	dirY := math.Sin(angle) * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
-
 	const weaponForce = 50000.0 * 500.0 // TODO: CONFIG
 	self.FireHitscan("gun", spawnPos, weaponForce, dirX, dirY, dirZ)
 }

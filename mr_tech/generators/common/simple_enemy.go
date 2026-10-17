@@ -12,44 +12,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// EnemyState represents the various states an enemy entity can be in during its lifecycle.
-type EnemyState uint8
-
-// EnemyStateUnknown represents an undefined or unknown state of an enemy.
-// EnemyStateIdle represents the state of an enemy when it is not performing any action.
-// EnemyStateChase represents the state of an enemy when it is chasing a target.
-// EnemyStateShoot represents the state of an enemy when it is shooting at a target.
-// EnemyStateMelee represents the state of an enemy when it is engaging in melee combat.
-// EnemyStatePain represents the state of an enemy when it is experiencing pain or being damaged.
-// EnemyStateDead represents the state of an enemy when it is defeated or dead.
-// EnemyStateSwim represents the state of an enemy when it is swimming or in water.
-// EnemyStateJump represents the state of an enemy when it is jumping.
-// EnemyStateOther represents any state of an enemy that does not fit into predefined categories.
-const (
-	EnemyStateUnknown EnemyState = iota
-	EnemyStateIdle
-	EnemyStateChase
-	EnemyStateShoot
-	EnemyStateMelee
-	EnemyStatePain
-	EnemyStateDead
-	EnemyStateSwim
-	EnemyStateJump
-	EnemyStateOther
-)
-
 // EnemyAnimations represents a collection of animation sequences categorized by enemy behaviors or states.
-type EnemyAnimations struct {
-	Idle  []int
-	Chase []int
-	Shoot []int
-	Melee []int
-	Pain  []int
-	Dead  []int
-	Swim  []int
-	Jump  []int
-	Other []int
+
+type EnemyAnimation struct {
+	Indices  []int
+	Duration []int
 }
+type EnemyAnimations [config.EnemyStateLast]*EnemyAnimation
 
 // normalizeAction converts the input action name to lowercase and trims surrounding whitespace.
 func normalizeAction(name string) string {
@@ -74,7 +43,7 @@ func baseAction(name string) string {
 
 // Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
 type Enemy struct {
-	state         EnemyState
+	state         config.EnemyState
 	health        float64
 	throwCooldown float64
 	throwMin      float64
@@ -82,7 +51,7 @@ type Enemy struct {
 	shootTimer    float64
 	actions       map[string]int
 	animations    EnemyAnimations
-	lastAnimation map[EnemyState]int
+	lastAnimation map[config.EnemyState]int
 }
 
 // NewEnemy creates and initializes a new Enemy instance with default properties and animations based on provided actions.
@@ -93,11 +62,11 @@ func NewEnemy(actions []string) *Enemy {
 	)
 
 	e := &Enemy{
-		state:         EnemyStateUnknown,
+		state:         config.EnemyStateUnknown,
 		health:        100,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		actions:       make(map[string]int, len(actions)),
-		lastAnimation: make(map[EnemyState]int),
+		lastAnimation: make(map[config.EnemyState]int),
 	}
 
 	for idx, action := range actions {
@@ -108,44 +77,16 @@ func NewEnemy(actions []string) *Enemy {
 		e.actions[name] = idx
 	}
 
-	e.animations = EnemyAnimations{
-		Idle: e.collectAnimations(
-			[]string{"idle", "stand"},
-			[]string{"idle", "stand"},
-		),
-		Chase: e.collectAnimations(
-			[]string{"walk", "run", "back"},
-			[]string{"walk", "run", "back"},
-		),
-		Shoot: e.collectAnimations(
-			[]string{"shoot", "fire", "gun"},
-			[]string{"shoot", "fire", "gun"},
-		),
-		Melee: e.collectAnimations(
-			[]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"},
-			[]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"},
-		),
-		Pain: e.collectAnimations(
-			[]string{"pain"},
-			[]string{"pain"},
-		),
-		Dead: e.collectAnimations(
-			[]string{"death", "dead", "bdeath", "die"},
-			[]string{"death", "dead", "bdeath", "die"},
-		),
-		Swim: e.collectAnimations(
-			[]string{"swim"},
-			[]string{"swim"},
-		),
-		Jump: e.collectAnimations(
-			[]string{"jump", "jumpb", "land", "landb"},
-			[]string{"jump", "land"},
-		),
-		Other: e.collectAnimations(
-			[]string{"pull", "turn", "duck"},
-			nil,
-		),
-	}
+	e.animations[config.EnemyStateUnknown] = &EnemyAnimation{}
+	e.animations[config.EnemyStateIdle] = e.collectAnimations([]string{"idle", "stand"}, []string{"idle", "stand"})
+	e.animations[config.EnemyStateChase] = e.collectAnimations([]string{"walk", "run", "back"}, []string{"walk", "run", "back"})
+	e.animations[config.EnemyStateShoot] = e.collectAnimations([]string{"shoot", "fire", "gun"}, []string{"shoot", "fire", "gun"})
+	e.animations[config.EnemyStateMelee] = e.collectAnimations([]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"}, []string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"})
+	e.animations[config.EnemyStatePain] = e.collectAnimations([]string{"pain"}, []string{"pain"})
+	e.animations[config.EnemyStateDead] = e.collectAnimations([]string{"death", "dead", "bdeath", "die"}, []string{"death", "dead", "bdeath", "die"})
+	e.animations[config.EnemyStateSwim] = e.collectAnimations([]string{"swim"}, []string{"swim"})
+	e.animations[config.EnemyStateJump] = e.collectAnimations([]string{"jump", "jumpb", "land", "landb"}, []string{"jump", "land"})
+	e.animations[config.EnemyStateOther] = e.collectAnimations([]string{"pull", "turn", "duck", "load", "prowl_", "leap"}, nil)
 
 	e.logUnassignedAnimations()
 
@@ -153,22 +94,17 @@ func NewEnemy(actions []string) *Enemy {
 }
 
 // collectAnimations filters and returns the indices of animations matching exact names or prefixes specified.
-func (e *Enemy) collectAnimations(exactNames []string, prefixes []string) []int {
+func (e *Enemy) collectAnimations(exactNames []string, prefixes []string) *EnemyAnimation {
 	exact := make(map[string]struct{}, len(exactNames))
 	for _, name := range exactNames {
 		exact[baseAction(normalizeAction(name))] = struct{}{}
 	}
-
 	normalizedPrefixes := make([]string, 0, len(prefixes))
-
 	for _, prefix := range prefixes {
-		normalizedPrefixes = append(
-			normalizedPrefixes,
-			baseAction(normalizeAction(prefix)),
-		)
+		normalizedPrefixes = append(normalizedPrefixes, baseAction(normalizeAction(prefix)))
 	}
 	seen := make(map[int]struct{})
-	result := make([]int, 0)
+	result := &EnemyAnimation{}
 	for name, idx := range e.actions {
 		base := baseAction(name)
 		_, matched := exact[base]
@@ -189,9 +125,9 @@ func (e *Enemy) collectAnimations(exactNames []string, prefixes []string) []int 
 			continue
 		}
 		seen[idx] = struct{}{}
-		result = append(result, idx)
+		result.Indices = append(result.Indices, idx)
 	}
-	sort.Ints(result)
+	sort.Ints(result.Indices)
 	return result
 }
 
@@ -200,15 +136,15 @@ func (e *Enemy) logUnassignedAnimations() {
 	assigned := make(map[int]struct{})
 
 	groups := [][]int{
-		e.animations.Idle,
-		e.animations.Chase,
-		e.animations.Shoot,
-		e.animations.Melee,
-		e.animations.Pain,
-		e.animations.Dead,
-		e.animations.Swim,
-		e.animations.Jump,
-		e.animations.Other,
+		e.animations[config.EnemyStateIdle].Indices,
+		e.animations[config.EnemyStateChase].Indices,
+		e.animations[config.EnemyStateShoot].Indices,
+		e.animations[config.EnemyStateMelee].Indices,
+		e.animations[config.EnemyStatePain].Indices,
+		e.animations[config.EnemyStateDead].Indices,
+		e.animations[config.EnemyStateSwim].Indices,
+		e.animations[config.EnemyStateJump].Indices,
+		e.animations[config.EnemyStateOther].Indices,
 	}
 
 	for _, group := range groups {
@@ -246,7 +182,7 @@ func (e *Enemy) logUnassignedAnimations() {
 
 // chooseAnimation selects an animation index from a list of options based on the enemy's current state, ensuring variation.
 // It avoids repeating the last animation for the given state, if possible, and stores the selected animation.
-func (e *Enemy) chooseAnimation(state EnemyState, animations []int) (int, bool) {
+func (e *Enemy) chooseAnimation(state config.EnemyState, animations []int) (int, bool) {
 	if len(animations) == 0 {
 		return 0, false
 	}
@@ -280,7 +216,7 @@ func (e *Enemy) chooseAnimation(state EnemyState, animations []int) (int, bool) 
 }
 
 // playAnimation selects an appropriate animation for the enemy and sets it as the current action in the given config.
-func (e *Enemy) playAnimation(self config.IThingConfig, category EnemyState, animations []int) bool {
+func (e *Enemy) playAnimation(self config.IThingConfig, category config.EnemyState, animations []int) bool {
 	action, ok := e.chooseAnimation(category, animations)
 	if !ok {
 		return false
@@ -291,38 +227,16 @@ func (e *Enemy) playAnimation(self config.IThingConfig, category EnemyState, ani
 }
 
 // setState updates the enemy's current state and triggers the corresponding animation unless the state is unchanged or dead.
-func (e *Enemy) setState(self config.IThingConfig, state EnemyState) {
-	if e.state == state || e.state == EnemyStateDead {
+func (e *Enemy) setState(self config.IThingConfig, state config.EnemyState) {
+	if e.state == state || e.state == config.EnemyStateDead {
 		return
 	}
-
-	var animations []int
-
-	switch state {
-	case EnemyStateIdle:
-		animations = e.animations.Idle
-	case EnemyStateChase:
-		animations = e.animations.Chase
-	case EnemyStateShoot:
-		animations = e.animations.Shoot
-	case EnemyStateMelee:
-		animations = e.animations.Melee
-	case EnemyStatePain:
-		animations = e.animations.Pain
-	case EnemyStateDead:
-		animations = e.animations.Dead
-	case EnemyStateSwim:
-		animations = e.animations.Swim
-	case EnemyStateJump:
-		animations = e.animations.Jump
-	case EnemyStateOther:
-		animations = e.animations.Other
-	default:
-		return
+	if len(e.animations[state].Indices) > 0 {
+		e.state = state
+		e.playAnimation(self, state, e.animations[state].Indices)
+	} else {
+		fmt.Println("No animations for state:", state)
 	}
-
-	e.state = state
-	e.playAnimation(self, state, animations)
 }
 
 // OnCollision defines the optional behavior when this Enemy collides with another object.
@@ -332,7 +246,7 @@ func (e *Enemy) OnCollision(self config.IThingConfig, other config.IThingConfig)
 
 // OnImpact handles the behavior of the enemy when impacted by another object, adjusting health and state accordingly.
 func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
 	e.health -= force * 0.5
@@ -340,8 +254,8 @@ func (e *Enemy) OnImpact(self config.IThingConfig, other config.IThingConfig, id
 		e.handleDeath(self)
 		return
 	}
-	if e.state == EnemyStateIdle ||
-		e.state == EnemyStateUnknown {
+	if e.state == config.EnemyStateIdle ||
+		e.state == config.EnemyStateUnknown {
 		e.throwCooldown = e.throwMin
 	}
 	e.handlePain(self)
@@ -355,7 +269,7 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 		meleeCooldown       = 1.0
 	)
 
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
 
@@ -373,26 +287,25 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 		}
 	}
 
-	if e.state == EnemyStateUnknown {
-		e.setState(self, EnemyStateIdle)
+	if e.state == config.EnemyStateUnknown {
+		e.setState(self, config.EnemyStateIdle)
 	}
-	if e.state == EnemyStatePain {
+	if e.state == config.EnemyStatePain {
 		e.painTimer -= dt
 
 		if e.painTimer <= 0 {
 			e.painTimer = 0
-			e.setState(self, EnemyStateChase)
+			e.setState(self, config.EnemyStateChase)
 		}
 
 		return
 	}
 
-	if e.state == EnemyStateShoot ||
-		e.state == EnemyStateMelee {
+	if e.state == config.EnemyStateShoot || e.state == config.EnemyStateMelee {
 		e.shootTimer -= dt
 		if e.shootTimer <= 0 {
 			e.shootTimer = 0
-			e.setState(self, EnemyStateChase)
+			e.setState(self, config.EnemyStateChase)
 		}
 		return
 	}
@@ -408,14 +321,12 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 	dist2dSq := dx*dx + dy*dy
 	dist3dSq := dist2dSq + dz*dz
 
-	if e.state == EnemyStateIdle {
+	if e.state == config.EnemyStateIdle {
 		wakeDistance := self.GetWakeUpDistance()
-
 		if dist3dSq < wakeDistance*wakeDistance {
 			e.throwCooldown = e.throwMin
-			e.setState(self, EnemyStateChase)
+			e.setState(self, config.EnemyStateChase)
 		}
-
 		return
 	}
 
@@ -435,10 +346,8 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 	stopDistance := entity.GetWidth()*0.5 + 5.0
 
 	// Attacco corpo a corpo se il modello dispone dell'animazione.
-	if playerDist2d <= stopDistance &&
-		e.throwCooldown <= 0 &&
-		len(e.animations.Melee) > 0 {
-		e.setState(self, EnemyStateMelee)
+	if playerDist2d <= stopDistance && e.throwCooldown <= 0 && len(e.animations[config.EnemyStateMelee].Indices) > 0 {
+		e.setState(self, config.EnemyStateMelee)
 		e.shootTimer = meleeDuration
 		e.throwCooldown = meleeCooldown
 		return
@@ -446,7 +355,6 @@ func (e *Enemy) OnThinking(self config.IThingConfig, pCenterX, pCenterY, pCenter
 
 	// Movimento conservativo: nessuna modifica dinamica all'impulso.
 	targetImpulse := self.GetImpulse()
-
 	if playerDist2d < stopDistance {
 		targetImpulse = 0
 	}
@@ -470,11 +378,11 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 		shootDuration  = 0.5
 	)
 
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
 
-	e.setState(self, EnemyStateShoot)
+	e.setState(self, config.EnemyStateShoot)
 	e.shootTimer = shootDuration
 	e.throwCooldown = e.throwMin
 
@@ -495,15 +403,12 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 // handleShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
 func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float64, dz, angle, playerDist2d float64) {
 	const shootDuration = 0.5
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
-	if len(e.animations.Shoot) > 0 {
-		e.setState(self, EnemyStateShoot)
-		e.shootTimer = shootDuration
-	} else {
-		fmt.Println("No shoot animation available")
-	}
+
+	e.setState(self, config.EnemyStateShoot)
+	e.shootTimer = shootDuration
 	e.throwCooldown = e.throwMin
 	entity := self.GetEntity()
 
@@ -524,21 +429,21 @@ func (e *Enemy) handleShoot(self config.IThingConfig, selfX, selfY, selfZ float6
 
 // handleDeath transitions the Enemy to a dead state, resets timers, and ensures no action is taken if already dead.
 func (e *Enemy) handleDeath(self config.IThingConfig) {
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
 	e.painTimer = 0
 	e.shootTimer = 0
-	e.setState(self, EnemyStateDead)
+	e.setState(self, config.EnemyStateDead)
 }
 
 // handlePain handles the enemy's reaction to pain by resetting the pain timer and transitioning to the pain state if not dead.
 func (e *Enemy) handlePain(self config.IThingConfig) {
-	if e.state == EnemyStateDead {
+	if e.state == config.EnemyStateDead {
 		return
 	}
 	e.painTimer = 0.5
-	e.setState(self, EnemyStatePain)
+	e.setState(self, config.EnemyStatePain)
 }
 
 // handleJump checks and handles the jump behavior of the enemy based on ground status, player position, and movement constraints.

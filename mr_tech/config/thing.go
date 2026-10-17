@@ -20,23 +20,9 @@ type IThingConfig interface {
 
 	SetAction(idx int)
 
-	//IsOnGround() bool
-
-	//SetOnGround(g bool)
-
-	//GetBottomLeft() (float64, float64, float64)
-
-	//GetBottomCenter() (float64, float64, float64)
-
-	//GetCenter() (float64, float64, float64)
-
-	//GetSize() (float64, float64, float64)
-
 	GetAngle() float64
 
 	SetAngle(angle float64)
-
-	//GetDepth() float64
 
 	GetAcceleration() float64
 

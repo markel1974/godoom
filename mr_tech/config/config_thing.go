@@ -31,6 +31,33 @@ const (
 	ThingButtonDef
 )
 
+// EnemyState represents the various states an enemy entity can be in during its lifecycle.
+type EnemyState uint8
+
+// EnemyStateUnknown represents an undefined or unknown state of an enemy.
+// EnemyStateIdle represents the state of an enemy when it is not performing any action.
+// EnemyStateChase represents the state of an enemy when it is chasing a target.
+// EnemyStateShoot represents the state of an enemy when it is shooting at a target.
+// EnemyStateMelee represents the state of an enemy when it is engaging in melee combat.
+// EnemyStatePain represents the state of an enemy when it is experiencing pain or being damaged.
+// EnemyStateDead represents the state of an enemy when it is defeated or dead.
+// EnemyStateSwim represents the state of an enemy when it is swimming or in water.
+// EnemyStateJump represents the state of an enemy when it is jumping.
+// EnemyStateOther represents any state of an enemy that does not fit into predefined categories.
+const (
+	EnemyStateUnknown EnemyState = iota
+	EnemyStateIdle
+	EnemyStateChase
+	EnemyStateShoot
+	EnemyStateMelee
+	EnemyStatePain
+	EnemyStateDead
+	EnemyStateSwim
+	EnemyStateJump
+	EnemyStateOther
+	EnemyStateLast
+)
+
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
 	Id             string        `json:"id"`

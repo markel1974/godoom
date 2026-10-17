@@ -163,7 +163,7 @@ func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingT
 		if thingCfg.Model3DEntry != nil {
 			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
-		enemyLogic := common.NewEnemyNew(actions)
+		enemyLogic := common.NewEnemy(actions)
 		thingCfg.JumpForce = JumpForce
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision

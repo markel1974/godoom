@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"sort"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -48,48 +47,7 @@ type Enemy struct {
 	lastAnimation map[config.EnemyState]int
 }
 
-// NewEnemy creates and initializes a new Enemy instance with default properties and animations based on provided actions.
-func NewEnemy(actions []string) *Enemy {
-	const (
-		throwMin = 2
-		throwMax = 6
-	)
-
-	e := &Enemy{
-		state:         config.EnemyStateUnknown,
-		health:        100,
-		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
-		actions:       make(map[string]int, len(actions)),
-		lastAnimation: make(map[config.EnemyState]int),
-		animations:    config.NewEnemyAnimations(),
-	}
-
-	for idx, action := range actions {
-		name := normalizeAction(action)
-		if name == "" || strings.HasPrefix(name, "(") {
-			continue
-		}
-		e.actions[name] = idx
-	}
-
-	e.animations.Content[config.EnemyStateUnknown] = &config.EnemyAnimation{}
-	e.animations.Content[config.EnemyStateIdle] = e.collectAnimations([]string{"idle", "stand"}, []string{"idle", "stand"})
-	e.animations.Content[config.EnemyStateChase] = e.collectAnimations([]string{"walk", "run", "back"}, []string{"walk", "run", "back"})
-	e.animations.Content[config.EnemyStateShoot] = e.collectAnimations([]string{"shoot", "fire", "gun"}, []string{"shoot", "fire", "gun"})
-	e.animations.Content[config.EnemyStateMelee] = e.collectAnimations([]string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"}, []string{"melee", "attack", "attak", "swing", "smash", "bite", "claw"})
-	e.animations.Content[config.EnemyStatePain] = e.collectAnimations([]string{"pain"}, []string{"pain"})
-	e.animations.Content[config.EnemyStateDead] = e.collectAnimations([]string{"death", "dead", "bdeath", "die"}, []string{"death", "dead", "bdeath", "die"})
-	e.animations.Content[config.EnemyStateSwim] = e.collectAnimations([]string{"swim"}, []string{"swim"})
-	e.animations.Content[config.EnemyStateJump] = e.collectAnimations([]string{"jump", "jumpb"}, []string{"jump"})
-	e.animations.Content[config.EnemyStateLand] = e.collectAnimations([]string{"land", "landb"}, []string{"land"})
-	e.animations.Content[config.EnemyStateOther] = e.collectAnimations([]string{"pull", "turn", "duck", "load", "prowl_", "leap"}, nil)
-
-	e.logUnassignedAnimations()
-
-	return e
-}
-
-func NewEnemyNew(actions *config.EnemyAnimations) *Enemy {
+func NewEnemy(actions *config.EnemyAnimations) *Enemy {
 	const (
 		throwMin = 2
 		throwMax = 6
@@ -103,92 +61,6 @@ func NewEnemyNew(actions *config.EnemyAnimations) *Enemy {
 		animations:    actions,
 	}
 	return e
-}
-
-// collectAnimations filters and returns the indices of animations matching exact names or prefixes specified.
-func (e *Enemy) collectAnimations(exactNames []string, prefixes []string) *config.EnemyAnimation {
-	exact := make(map[string]struct{}, len(exactNames))
-	for _, name := range exactNames {
-		exact[baseAction(normalizeAction(name))] = struct{}{}
-	}
-	normalizedPrefixes := make([]string, 0, len(prefixes))
-	for _, prefix := range prefixes {
-		normalizedPrefixes = append(normalizedPrefixes, baseAction(normalizeAction(prefix)))
-	}
-	seen := make(map[int]struct{})
-	result := &config.EnemyAnimation{}
-	for name, idx := range e.actions {
-		base := baseAction(name)
-		_, matched := exact[base]
-		if !matched {
-			for _, prefix := range normalizedPrefixes {
-				if prefix != "" &&
-					strings.HasPrefix(base, prefix) &&
-					len(base) > len(prefix) {
-					matched = true
-					break
-				}
-			}
-		}
-		if !matched {
-			continue
-		}
-		if _, exists := seen[idx]; exists {
-			continue
-		}
-		seen[idx] = struct{}{}
-		result.Indices = append(result.Indices, idx)
-	}
-	sort.Ints(result.Indices)
-	return result
-}
-
-// logUnassignedAnimations identifies and logs actions that are not assigned to any animation group in the Enemy entity.
-func (e *Enemy) logUnassignedAnimations() {
-	assigned := make(map[int]struct{})
-
-	groups := [][]int{
-		e.animations.Content[config.EnemyStateIdle].Indices,
-		e.animations.Content[config.EnemyStateChase].Indices,
-		e.animations.Content[config.EnemyStateShoot].Indices,
-		e.animations.Content[config.EnemyStateMelee].Indices,
-		e.animations.Content[config.EnemyStatePain].Indices,
-		e.animations.Content[config.EnemyStateDead].Indices,
-		e.animations.Content[config.EnemyStateSwim].Indices,
-		e.animations.Content[config.EnemyStateJump].Indices,
-		e.animations.Content[config.EnemyStateOther].Indices,
-	}
-
-	for _, group := range groups {
-		for _, idx := range group {
-			assigned[idx] = struct{}{}
-		}
-	}
-
-	type unassignedAction struct {
-		index int
-		name  string
-	}
-
-	var unassigned []unassignedAction
-
-	for name, idx := range e.actions {
-		if _, ok := assigned[idx]; ok {
-			continue
-		}
-		unassigned = append(unassigned, unassignedAction{index: idx, name: name})
-	}
-
-	sort.Slice(unassigned, func(i, j int) bool {
-		if unassigned[i].index != unassigned[j].index {
-			return unassigned[i].index < unassigned[j].index
-		}
-		return unassigned[i].name < unassigned[j].name
-	})
-
-	for _, action := range unassigned {
-		fmt.Printf("[Enemy] unrecognized action: index=%d name=%q\n", action.index, action.name)
-	}
 }
 
 // chooseAnimation selects an animation index from a list of options based on the enemy's current state, ensuring variation.

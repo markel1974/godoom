@@ -395,9 +395,9 @@ func (b *Builder) createConfigThing(classname string, pos geometry.XYZ, kind con
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = gForce
 	if thingCfg.Kind == config.ThingEnemyDef {
-		var actions []string
+		actions := config.NewEnemyAnimations()
 		if thingCfg.Model3DEntry != nil {
-			actions = thingCfg.Model3DEntry.ActionDefinitions
+			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
 		enemyLogic := common.NewEnemy(actions)
 		thingCfg.OnThinking = enemyLogic.OnThinking

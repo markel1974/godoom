@@ -221,8 +221,11 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 		cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
 	}
 	if cfgThing.Kind == config.ThingEnemyDef {
-		actions := []string{"run", "attack", "pain", "death", "xdeath"}
-		enemyLogic := common.NewEnemy(actions)
+		actions := [5]string{"run", "attack", "pain", "death", "xdeath"}
+		intervals := [5][2]int{{0, 10}, {0, 10}, {0, 10}, {0, 10}, {0, 10}}
+		animations := config.NewEnemyAnimations()
+		ConvertAnimation(animations, actions[:], intervals[:])
+		enemyLogic := common.NewEnemy(animations)
 		cfgThing.OnThinking = enemyLogic.OnThinking
 		cfgThing.OnCollision = enemyLogic.OnCollision
 		cfgThing.OnImpact = enemyLogic.OnImpact

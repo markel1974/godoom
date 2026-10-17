@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // EnemyState represents the various states an enemy entity can be in during its lifecycle.
 type EnemyState uint8
 
@@ -37,6 +39,57 @@ const (
 	EnemyStateOther
 	EnemyStateLast
 )
+
+func (s EnemyState) String() string {
+	switch s {
+	case EnemyStateUnknown:
+		return "Unknown"
+	case EnemyStateIdle:
+		return "Idle"
+	case EnemyStateWalk:
+		return "Walk"
+	case EnemyStateProwl:
+		return "Prowl"
+	case EnemyStateChase:
+		return "Chase"
+	case EnemyStateShoot:
+		return "Shoot"
+	case EnemyStateReload:
+		return "Reload"
+	case EnemyStateMelee:
+		return "Melee"
+	case EnemyStatePain:
+		return "Pain"
+	case EnemyStateDead:
+		return "Dead"
+	case EnemyStatePull:
+		return "Pull"
+	case EnemyStateSwim:
+		return "Swim"
+	case EnemyStateJump:
+		return "Jump"
+	case EnemyStateLand:
+		return "Land"
+	case EnemyStateSwing:
+		return "Swing"
+	case EnemyStateFly:
+		return "Fly"
+	case EnemyStateKneel:
+		return "Kneel"
+	case EnemyStateBlock:
+		return "Block"
+	case EnemyStateTurn:
+		return "Turn"
+	case EnemyStateBack:
+		return "Back"
+	case EnemyStateOther:
+		return "Other"
+	case EnemyStateLast:
+		return "Last"
+	default:
+		return fmt.Sprintf("EnemyState(%d)", uint8(s))
+	}
+}
 
 // EnemyAnimation defines the structure for managing enemy animation sequences with frame indices and durations.
 type EnemyAnimation struct {

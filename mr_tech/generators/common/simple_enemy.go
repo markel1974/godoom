@@ -85,7 +85,8 @@ func NewEnemy(actions []string) *Enemy {
 	e.animations[config.EnemyStatePain] = e.collectAnimations([]string{"pain"}, []string{"pain"})
 	e.animations[config.EnemyStateDead] = e.collectAnimations([]string{"death", "dead", "bdeath", "die"}, []string{"death", "dead", "bdeath", "die"})
 	e.animations[config.EnemyStateSwim] = e.collectAnimations([]string{"swim"}, []string{"swim"})
-	e.animations[config.EnemyStateJump] = e.collectAnimations([]string{"jump", "jumpb", "land", "landb"}, []string{"jump", "land"})
+	e.animations[config.EnemyStateJump] = e.collectAnimations([]string{"jump", "jumpb"}, []string{"jump"})
+	e.animations[config.EnemyStateLand] = e.collectAnimations([]string{"land", "landb"}, []string{"land"})
 	e.animations[config.EnemyStateOther] = e.collectAnimations([]string{"pull", "turn", "duck", "load", "prowl_", "leap"}, nil)
 
 	e.logUnassignedAnimations()
@@ -164,7 +165,6 @@ func (e *Enemy) logUnassignedAnimations() {
 		if _, ok := assigned[idx]; ok {
 			continue
 		}
-
 		unassigned = append(unassigned, unassignedAction{index: idx, name: name})
 	}
 
@@ -182,41 +182,40 @@ func (e *Enemy) logUnassignedAnimations() {
 
 // chooseAnimation selects an animation index from a list of options based on the enemy's current state, ensuring variation.
 // It avoids repeating the last animation for the given state, if possible, and stores the selected animation.
-func (e *Enemy) chooseAnimation(state config.EnemyState, animations []int) (int, bool) {
-	if len(animations) == 0 {
+func (e *Enemy) chooseAnimation(state config.EnemyState, animations *EnemyAnimation) (int, bool) {
+	if len(animations.Indices) == 0 {
 		return 0, false
 	}
 
-	if len(animations) == 1 {
-		e.lastAnimation[state] = animations[0]
-		return animations[0], true
+	if len(animations.Indices) == 1 {
+		e.lastAnimation[state] = animations.Indices[0]
+		return animations.Indices[0], true
 	}
 
-	last, hasLast := e.lastAnimation[state]
-	candidates := animations
+	var index int
 
-	if hasLast {
-		candidates = make([]int, 0, len(animations))
-
-		for _, idx := range animations {
+	if last, hasLast := e.lastAnimation[state]; hasLast {
+		candidates := make([]int, 0, len(animations.Indices))
+		for _, idx := range animations.Indices {
 			if idx != last {
 				candidates = append(candidates, idx)
 			}
 		}
+		if len(candidates) == 0 {
+			return 0, false
+		}
+		index = candidates[rand.Intn(len(candidates))]
+	} else {
+		index = animations.Indices[rand.Intn(len(animations.Indices))]
 	}
 
-	if len(candidates) == 0 {
-		return 0, false
-	}
+	e.lastAnimation[state] = index
 
-	idx := candidates[rand.Intn(len(candidates))]
-	e.lastAnimation[state] = idx
-
-	return idx, true
+	return index, true
 }
 
 // playAnimation selects an appropriate animation for the enemy and sets it as the current action in the given config.
-func (e *Enemy) playAnimation(self config.IThingConfig, category config.EnemyState, animations []int) bool {
+func (e *Enemy) playAnimation(self config.IThingConfig, category config.EnemyState, animations *EnemyAnimation) bool {
 	action, ok := e.chooseAnimation(category, animations)
 	if !ok {
 		return false
@@ -233,7 +232,7 @@ func (e *Enemy) setState(self config.IThingConfig, state config.EnemyState) {
 	}
 	if len(e.animations[state].Indices) > 0 {
 		e.state = state
-		e.playAnimation(self, state, e.animations[state].Indices)
+		e.playAnimation(self, state, e.animations[state])
 	} else {
 		fmt.Println("No animations for state:", state)
 	}

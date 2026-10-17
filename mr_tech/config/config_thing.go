@@ -54,6 +54,7 @@ const (
 	EnemyStateDead
 	EnemyStateSwim
 	EnemyStateJump
+	EnemyStateLand
 	EnemyStateOther
 	EnemyStateLast
 )

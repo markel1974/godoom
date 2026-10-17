@@ -58,6 +58,7 @@ func NewEnemy(thingCfg *config.Thing, actions *config.EnemyAnimations) *Enemy {
 	return e
 }
 
+// OnBind associates the Enemy instance with its configuration, enabling interaction and behavior initialization.
 func (e *Enemy) OnBind(self config.IThingConfig) {
 	e.self = self
 }
@@ -84,8 +85,7 @@ func (e *Enemy) OnImpact(other config.IThingConfig, id string, force, closestDis
 		e.handleDeath()
 		return
 	}
-	if e.state == config.EnemyStateIdle ||
-		e.state == config.EnemyStateUnknown {
+	if e.state == config.EnemyStateIdle || e.state == config.EnemyStateUnknown {
 		e.shootCooldown = e.shotIntervalMin
 	}
 	e.handlePain()

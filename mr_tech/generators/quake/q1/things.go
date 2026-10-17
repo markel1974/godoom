@@ -251,11 +251,11 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
 	if thingCfg.Kind == config.ThingEnemyDef {
-		var actions []string
+		actions := config.NewEnemyAnimations()
 		if thingCfg.Model3DEntry != nil {
-			actions = thingCfg.Model3DEntry.ActionDefinitions
+			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
-		enemyLogic := common.NewEnemy(actions)
+		enemyLogic := common.NewEnemyNew(actions)
 		thingCfg.JumpForce = JumpForce
 		thingCfg.OnThinking = enemyLogic.OnThinking
 		thingCfg.OnCollision = enemyLogic.OnCollision

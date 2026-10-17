@@ -4,35 +4,11 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
-
-// EnemyAnimations represents a collection of animation sequences categorized by enemy behaviors or states.
-
-// normalizeAction converts the input action name to lowercase and trims surrounding whitespace.
-func normalizeAction(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
-}
-
-// baseAction normalizes an action name by removing specific prefixes iteratively until no matching prefix is found.
-func baseAction(name string) string {
-	for {
-		switch {
-		case strings.HasPrefix(name, "legs_"):
-			name = strings.TrimPrefix(name, "legs_")
-		case strings.HasPrefix(name, "both_"):
-			name = strings.TrimPrefix(name, "both_")
-		case strings.HasPrefix(name, "torso_"):
-			name = strings.TrimPrefix(name, "torso_")
-		default:
-			return name
-		}
-	}
-}
 
 // Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
 type Enemy struct {
@@ -47,13 +23,14 @@ type Enemy struct {
 	lastAnimation map[config.EnemyState]int
 }
 
+// NewEnemy initializes and returns a new Enemy instance with default state, health, and animations.
 func NewEnemy(actions *config.EnemyAnimations) *Enemy {
 	const (
 		throwMin = 2
 		throwMax = 6
 	)
 	e := &Enemy{
-		state:         config.EnemyStateUnknown,
+		state:         config.EnemyStateIdle,
 		health:        100,
 		throwMin:      float64(rand.Intn(throwMax-throwMin+1) + throwMin),
 		actions:       make(map[string]int, len(actions.Content)),

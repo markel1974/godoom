@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -67,14 +68,25 @@ func (m *Model3DEntry) compute(frameNames []string) {
 	if len(frameNames) == 0 {
 		return
 	}
-	currentBase := m.getBaseName(frameNames[0])
+	currentBase, counter := m.getBaseName(frameNames[0])
 	startIdx := 0
 	for i := 1; i <= len(frameNames); i++ {
 		var base string
+		update := false
 		if i < len(frameNames) {
-			base = m.getBaseName(frameNames[i])
+			var nc int
+			base, nc = m.getBaseName(frameNames[i])
+			if base != currentBase {
+				update = true
+			} else if nc != counter+1 {
+				update = true
+			}
+			counter = nc
 		}
-		if i == len(frameNames) || base != currentBase {
+		if i == len(frameNames) {
+			update = true
+		}
+		if update {
 			if startIdx < 0 || startIdx > len(m.Frames) {
 				fmt.Println("startIdx out of range")
 				continue
@@ -85,7 +97,8 @@ func (m *Model3DEntry) compute(frameNames []string) {
 				continue
 			}
 			m.ActionIntervals = append(m.ActionIntervals, [2]int{startIdx, i - 1})
-			m.ActionDefinitions = append(m.ActionDefinitions, currentBase)
+			name := currentBase + strconv.Itoa(len(m.ActionDefinitions))
+			m.ActionDefinitions = append(m.ActionDefinitions, name)
 			if i < len(frameNames) {
 				currentBase = base
 				startIdx = i
@@ -95,11 +108,24 @@ func (m *Model3DEntry) compute(frameNames []string) {
 }
 
 // getBaseName extracts the base name from a string by removing trailing numeric characters and returns the result.
-func (m *Model3DEntry) getBaseName(fn string) string {
-	for i := len(fn) - 1; i >= 0; i-- {
-		if fn[i] < '0' || fn[i] > '9' {
-			return fn[:i+1]
+func (m *Model3DEntry) getBaseName(fn string) (string, int) {
+	pos := -1
+	for x := 0; x < len(fn); x++ {
+		t := fn[x]
+		if t >= '0' && t <= '9' {
+			pos = x
+			break
 		}
 	}
-	return fn
+	if pos < 0 {
+		return fn, 0
+	}
+	a := fn[:pos]
+	num := fn[pos:]
+	val, err := strconv.Atoi(num)
+	if err != nil {
+		fmt.Println("Error converting string to int:", err)
+		return a, 0
+	}
+	return a, val
 }

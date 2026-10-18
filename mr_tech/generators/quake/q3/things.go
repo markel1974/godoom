@@ -244,6 +244,18 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 	md3 := config.NewMD3(parts, links)
 
+	// Reset any dummy actions generated from raw MD3 frame names
+	lower.ActionDefinitions = nil
+	lower.ActionIntervals = nil
+	upper.ActionDefinitions = nil
+	upper.ActionIntervals = nil
+	head.ActionDefinitions = nil
+	head.ActionIntervals = nil
+	if weapon != nil {
+		weapon.ActionDefinitions = nil
+		weapon.ActionIntervals = nil
+	}
+
 	var globalActionNames []string
 	var globalActionIntervals [][2]int
 
@@ -387,7 +399,9 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 	if err != nil {
 		return nil, err
 	}
-	cfg := config.NewMD1(int(res.Header.NumFrames), res.FrameNames)
+	cfg := config.NewMD1(int(res.Header.NumFrames), nil)
+	cfg.ActionDefinitions = []string{"idle"}
+	cfg.ActionIntervals = [][2]int{{0, int(res.Header.NumFrames) - 1}}
 	if res.Header.NumTags > 0 && res.Header.OfsTags > 0 {
 		for i := 0; i < int(res.Header.NumFrames); i++ {
 			for j := 0; j < int(res.Header.NumTags); j++ {

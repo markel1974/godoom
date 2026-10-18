@@ -119,17 +119,21 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	}
 
 	// Validate and normalize ActionMaps
-	expectedActions := 0
-	if len(elements) > 0 && elements[0] != nil {
-		expectedActions = len(elements[0].actionIntervals)
-	}
-
 	rawActionMaps := cfg.Model3D.ActionMaps
 	if rawActionMaps == nil || len(rawActionMaps) == 0 {
 		fmt.Printf("[warning] Vertices3D %s: Model3D has no ActionMaps defined\n", cfg.Id)
 	} else if len(rawActionMaps) != numParts {
 		fmt.Printf("[warning] Vertices3D %s: ActionMaps count (%d) does not match parts count (%d)\n",
 			cfg.Id, len(rawActionMaps), numParts)
+	}
+
+	expectedActions := 0
+	if cfg.Model3D != nil && len(cfg.Model3D.ActionDefinitions) > 0 {
+		expectedActions = len(cfg.Model3D.ActionDefinitions)
+	} else if len(rawActionMaps) > 0 && len(rawActionMaps[0]) > 0 {
+		expectedActions = len(rawActionMaps[0])
+	} else if len(elements) > 0 && elements[0] != nil {
+		expectedActions = len(elements[0].actionIntervals)
 	}
 
 	actionMaps := make([][]int, numParts)

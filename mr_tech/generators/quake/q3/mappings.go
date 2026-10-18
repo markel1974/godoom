@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
+// _q3DictModelFilename maps Quake 3 entity classnames to their corresponding model file paths in the game assets.
 var _q3DictModelFilename = map[string]string{
 	// Weapons (Q3 usa .md3)
 	"weapon_shotgun":         "models/weapons2/shotgun/shotgun.md3",
@@ -51,10 +52,12 @@ var _q3DictModelFilename = map[string]string{
 	"enemy_bot":      "models/players/sarge/",
 }
 
+// _q3DictBModel is a map linking entity classnames to specific internal BSP model filenames used in the Quake 3 architecture.
 var _q3DictBModel = map[string]string{
 	// Q3 usa bmodels interni per l'architettura mobile (*1, *2) ma non modelli BSP esterni precompilati per le armi.
 }
 
+// _q3ShaderFallback maps Quake 3 shader texture paths to their fallback textures for use when assets are unavailable.
 var _q3ShaderFallback = map[string]string{
 	"textures/sfx/flame1side":  "textures/sfx/flame1",
 	"textures/sfx/flame1_hell": "textures/sfx/flame1",
@@ -95,6 +98,7 @@ var _q3ShaderFallback = map[string]string{
 3 = killsky_2.jpg ->
 */
 
+// toAnimationString converts a given string into a sanitized lowercase string containing only valid characters.
 func toAnimationString(in string) string {
 	var out []rune
 	for _, v := range in {
@@ -126,6 +130,7 @@ func toAnimationString(in string) string {
 	return string(ret)
 }
 
+// ConvertAnimation processes a set of animations and maps them to enemy states based on the provided intervals and animation data.
 func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, inData := range animations {
 		animData := toAnimationString(inData)

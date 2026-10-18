@@ -562,7 +562,8 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
 
-	// Punto di ancoraggio del piano remoto in World Space
+	// Punto di ancoraggio del piano remoto in World Space a fine frame (t = 1),
+	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.
 	p0x := rFace.tri[0].X + rOffX
 	p0y := rFace.tri[0].Y + rOffY
 	p0z := rFace.tri[0].Z + rOffZ
@@ -579,23 +580,36 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	rTz := rCz0 + rDZ
 	rRadX, rRadY, rRadZ := rEnt.GetSizeCenter()
 
-	// Orientiamo la normale sempre verso l'esterno del volume remoto
+	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)
+	p0x0 := p0x - rDX
+	p0y0 := p0y - rDY
+	p0z0 := p0z - rDZ
+
+	relX := s.cX - rCx0
+	relY := s.cY - rCy0
+	relZ := s.cZ - rCz0
+
+	// Orientiamo la normale verso l'esterno del volume remoto (valutato in modo coerente a t = 1).
+	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).
 	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
-	if outDot < -planeEpsilon {
+	if math.Abs(outDot) <= planeEpsilon {
+		if rFace.GetTag() == "" {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		if relX*nX+relY*nY+relZ*nZ < 0 {
+			nX, nY, nZ = -nX, -nY, -nZ
+		}
+	} else if outDot < 0 {
 		nX, nY, nZ = -nX, -nY, -nZ
-		outDot = -outDot
-	} else if math.Abs(outDot) <= planeEpsilon {
-		// Piano interno passante per il centro del volume (es. piano visivo billboard): ignoriamo per la fisica
-		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// Il centro pre-movimento dell'entità locale deve trovarsi sul semispazio esterno della faccia remota
-	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+	// Distanza iniziale a t = 0 del centro locale rispetto al piano remoto a t = 0
+	distStart := (s.cX-p0x0)*nX + (s.cY-p0y0)*nY + (s.cZ-p0z0)*nZ
 	if distStart < -planeEpsilon {
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// Direzione d'impatto relativa tra i due oggetti
+	// Spostamento relativo nel frame corrente (Locale rispetto a Remoto)
 	impX := s.dX - rDX
 	impY := s.dY - rDY
 	impZ := s.dZ - rDZ
@@ -604,18 +618,88 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// Sovrapposizione volumetrica 3D pre-movimento (inizio frame) e post-movimento (target)
-	prevOX := math.Max(0.0, math.Min((s.cX+s.eRadX)-(rCx0-rRadX), (rCx0+rRadX)-(s.cX-s.eRadX)))
-	prevOY := math.Max(0.0, math.Min((s.cY+s.eRadY)-(rCy0-rRadY), (rCy0+rRadY)-(s.cY-s.eRadY)))
-	prevOZ := math.Max(0.0, math.Min((s.cZ+s.eRadZ)-(rCz0-rRadZ), (rCz0+rRadZ)-(s.cZ-s.eRadZ)))
+	// Sovrapposizione volumetrica AABB a fine frame (t = 1)
+	sumRadX := s.eRadX + rRadX
+	sumRadY := s.eRadY + rRadY
+	sumRadZ := s.eRadZ + rRadZ
 
-	boxOX := math.Max(0.0, math.Min((s.tX+s.eRadX)-(rTx-rRadX), (rTx+rRadX)-(s.tX-s.eRadX)))
-	boxOY := math.Max(0.0, math.Min((s.tY+s.eRadY)-(rTy-rRadY), (rTy+rRadY)-(s.tY-s.eRadY)))
-	boxOZ := math.Max(0.0, math.Min((s.tZ+s.eRadZ)-(rTz-rRadZ), (rTz+rRadZ)-(s.tZ-s.eRadZ)))
+	boxOX := sumRadX - math.Abs(s.tX-rTx)
+	boxOY := sumRadY - math.Abs(s.tY-rTy)
+	boxOZ := sumRadZ - math.Abs(s.tZ-rTz)
+	if boxOX <= 0 || boxOY <= 0 || boxOZ <= 0 {
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
 
-	relX := s.cX - rCx0
-	relY := s.cY - rCy0
-	relZ := s.cZ - rCz0
+	// Separazione segnata a inizio frame (t = 0):
+	// sep > 0 indica assi inizialmente separati; sep <= 0 indica sovrapposizione iniziale (prevO = -sep).
+	sepX := math.Abs(relX) - sumRadX
+	sepY := math.Abs(relY) - sumRadY
+	sepZ := math.Abs(relZ) - sumRadZ
+
+	prevOX := math.Max(0.0, -sepX)
+	prevOY := math.Max(0.0, -sepY)
+	prevOZ := math.Max(0.0, -sepZ)
+
+	// Calcolo del Time of Impact (TOI) normalizzato tEnter in [0, 1] per gli assi separati a t = 0
+	const toiTieEpsilon = 1e-4
+	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
+	tEnterX, tEnterY, tEnterZ := -1.0, -1.0, -1.0
+	tFirst := -1.0
+
+	if sweptMode {
+		if sepX > planeEpsilon {
+			if relX*impX >= -1e-9 {
+				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+			}
+			tEnterX = sepX / math.Abs(impX)
+			if tEnterX > tFirst {
+				tFirst = tEnterX
+			}
+		}
+		if sepY > planeEpsilon {
+			if relY*impY >= -1e-9 {
+				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+			}
+			tEnterY = sepY / math.Abs(impY)
+			if tEnterY > tFirst {
+				tFirst = tEnterY
+			}
+		}
+		if sepZ > planeEpsilon {
+			if relZ*impZ >= -1e-9 {
+				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+			}
+			tEnterZ = sepZ / math.Abs(impZ)
+			if tEnterZ > tFirst {
+				tFirst = tEnterZ
+			}
+		}
+		if tFirst > 1.0+toiTieEpsilon {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+	}
+
+	// Verifica se un asse candidato (con overlap iniziale prevA, overlap finale boxA, tEnterA e moto lungo la normale impNorm)
+	// è l'asse effettivo di contatto rispetto agli altri due assi B e C.
+	isContactAxis := func(tEnterA, prevA, boxA, impNorm, prevB, boxB, prevC, boxC float64) bool {
+		if sweptMode {
+			return tEnterA >= tFirst-toiTieEpsilon && impNorm < -planeEpsilon
+		}
+		// Fallback per compenetrazione/contatto già presente a t = 0 su tutti gli assi:
+		// l'asse deve essere quello di minima compenetrazione iniziale, risolvendo eventuali pareggi sugli spigoli con boxO.
+		if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
+			return false
+		}
+		tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
+		tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
+		if tieB && boxA > boxB+satFilterEpsilon && impNorm >= -planeEpsilon {
+			return false
+		}
+		if tieC && boxA > boxC+satFilterEpsilon && impNorm >= -planeEpsilon {
+			return false
+		}
+		return true
+	}
 
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
@@ -627,11 +711,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		if relX*nX <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		validVsY := (boxOX <= boxOY+satFilterEpsilon || (prevOX <= prevOY+satFilterEpsilon && impX*nX < -planeEpsilon)) &&
-			!(prevOX > prevOY+satFilterEpsilon && math.Abs(impY) > math.Abs(impX))
-		validVsZ := (boxOX <= boxOZ+satFilterEpsilon || (prevOX <= prevOZ+satFilterEpsilon && impX*nX < -planeEpsilon)) &&
-			!(prevOX > prevOZ+satFilterEpsilon && math.Abs(impZ) > math.Abs(impX))
-		if !validVsY || !validVsZ {
+		if !isContactAxis(tEnterX, prevOX, boxOX, impX*nX, prevOY, boxOY, prevOZ, boxOZ) {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		axisOverlap = boxOX
@@ -644,11 +724,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		if relY*nY <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		validVsX := (boxOY <= boxOX+satFilterEpsilon || (prevOY <= prevOX+satFilterEpsilon && impY*nY < -planeEpsilon)) &&
-			!(prevOY > prevOX+satFilterEpsilon && math.Abs(impX) > math.Abs(impY))
-		validVsZ := (boxOY <= boxOZ+satFilterEpsilon || (prevOY <= prevOZ+satFilterEpsilon && impY*nY < -planeEpsilon)) &&
-			!(prevOY > prevOZ+satFilterEpsilon && math.Abs(impZ) > math.Abs(impY))
-		if !validVsX || !validVsZ {
+		if !isContactAxis(tEnterY, prevOY, boxOY, impY*nY, prevOX, boxOX, prevOZ, boxOZ) {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		axisOverlap = boxOY
@@ -658,21 +734,16 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 			bucket = BucketWallSouth
 		}
 	} else {
-		// Impatto verticale (Floor/Ceiling): valido solo se l'asse verticale era ed è quello di separazione/impatto
 		if relZ*nZ <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		if prevOZ > prevOX+satFilterEpsilon || prevOZ > prevOY+satFilterEpsilon {
-			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-		}
-		if (boxOZ > boxOX+satFilterEpsilon || boxOZ > boxOY+satFilterEpsilon) && impZ*nZ >= -planeEpsilon {
+		if !isContactAxis(tEnterZ, prevOZ, boxOZ, impZ*nZ, prevOX, boxOX, prevOY, boxOY) {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		axisOverlap = boxOZ
 		if nZ > 0 {
 			bucket = BucketFloor
 		} else {
-			// Il soffitto può essere colpito solo con movimento relativo verso l'alto
 			if impZ <= planeEpsilon {
 				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 			}
@@ -680,7 +751,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		}
 	}
 
-	// Verifica che l'intero volume dell'entità non superi l'overlap fisico lungo la normale
+	// Verifica che l'intero volume dell'entità a t = 1 non superi l'overlap fisico lungo la normale
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	bodyPen := rayEff - distTarget
@@ -688,12 +759,12 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
+	// 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano a t = 1
 	maxPenetration := -math.MaxFloat64
 	var hitDist float64
 
 	for i := 0; i < 3; i++ {
-		// Trasliamo il vertice della nostra mesh in World Space
+		// Trasliamo il vertice della nostra mesh in World Space (configurazione a t = 1)
 		vx := lFace.tri[i].X + lOffX
 		vy := lFace.tri[i].Y + lOffY
 		vz := lFace.tri[i].Z + lOffZ

@@ -9,6 +9,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+// ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
+// ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
+// ImpactStep is a constant representing a collision mode where the entity encounters a step or small height difference.
 const (
 	// ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
 	ImpactInelastic = 1
@@ -18,18 +21,21 @@ const (
 	ImpactStep = 3
 )
 
+// satFilterEpsilon defines the tolerance threshold used in SAT to filter phantom plane projections in collision detection.
 const satFilterEpsilon = 0.05
+
+// planeEpsilon is a tolerance value used for floating-point precision when comparing coplanar planes or distances.
 const planeEpsilon = 0.01
 
-// BucketType represents the type of bucket categorizing spatial elements such as walls, ceiling, and floor in 3D space.
+// BucketType represents a categorized type for spatial partitioning or collision detection in 3D environments.
 type BucketType int
 
-// BucketWallWest represents the wall bucket located in the -X direction.
-// BucketWallEast represents the wall bucket located in the +X direction.
-// BucketWallNorth represents the wall bucket located in the -Y direction.
-// BucketWallSouth represents the wall bucket located in the +Y direction.
-// BucketCeiling represents the ceiling bucket located in the -Z direction.
-// BucketFloor represents the floor bucket located in the +Z direction.
+// BucketWallWest represents the west (-X) wall bucket type.
+// BucketWallEast represents the east (+X) wall bucket type.
+// BucketWallNorth represents the north (-Y) wall bucket type.
+// BucketWallSouth represents the south (+Y) wall bucket type.
+// BucketCeiling represents the ceiling (-Z) bucket type.
+// BucketFloor represents the floor (+Z) bucket type.
 const (
 	BucketWallWest  = BucketType(0) // -X
 	BucketWallEast  = BucketType(1) // +X
@@ -59,20 +65,21 @@ func (p BucketType) String() string {
 	}
 }
 
-// IsWall checks if the BucketType represents any wall (west, east, north, or south).
+// IsWall determines if the BucketType value represents a wall (west, east, north, or south).
 func (p BucketType) IsWall() bool {
 	return p == BucketWallWest || p == BucketWallEast || p == BucketWallNorth || p == BucketWallSouth
 }
 
-// BucketSize defines the size of a bucket as one more than the BucketFloor.
-// FacesPerBucket specifies the fixed number of faces in each bucket.
-// TotalSlots calculates the total number of slots using BucketSize and FacesPerBucket.
+// BucketSize defines the size of a single bucket, calculated as BucketFloor + 1.
+// FacesPerBucket specifies the number of faces allocated per bucket.
+// TotalSlots represents the total available slots, computed as BucketSize * FacesPerBucket.
 const (
 	BucketSize     = BucketFloor + 1
 	FacesPerBucket = 4
 	TotalSlots     = BucketSize * FacesPerBucket
 )
 
+// ContactManifold represents the result of a collision detection process, including contact details and metadata.
 type ContactManifold struct {
 	Hit           bool
 	Bucket        BucketType
@@ -89,12 +96,13 @@ type ContactManifold struct {
 	RMaxZ         float64 // RMaxZ originale
 }
 
+// CageFaces represents a pair of adjacent faces (left and right) within a collision cage structure.
 type CageFaces struct {
 	lFace *Face
 	rFace *Face
 }
 
-// CageEntry represents a single entry within a collision cage, storing data about collisions and their properties.
+// CageEntry represents a collision entry used during spatial computations in the collision detection system.
 type CageEntry struct {
 	bucket      BucketType
 	rCage       *CollisionCage
@@ -112,38 +120,38 @@ type CageEntry struct {
 	iMode       int
 }
 
-// GetRemoteFace retrieves the remote Face associated with this CageEntry.
+// GetRemoteFace returns the remote face associated with the CageEntry structure.
 func (s *CageEntry) GetRemoteFace() *Face { return s.rFace }
 
-// GetDistance returns the distance value of the CageEntry.
+// GetDistance returns the precomputed distance value associated with the CageEntry instance.
 func (s *CageEntry) GetDistance() float64 { return s.dist }
 
-// IsDynamic checks if the CageEntry has an associated remote collision cage (rCage) and returns true if it does.
+// IsDynamic determines if the instance is associated with a remote collision cage.
 func (s *CageEntry) IsDynamic() bool { return s.rCage != nil }
 
-// GetMaxZ returns the maximum Z-coordinate value associated with the CageEntry instance.
+// GetMaxZ returns the maximum Z-coordinate of the CageEntry.
 func (s *CageEntry) GetMaxZ() float64 { return s.maxZ }
 
-// GetBucket retrieves the collision bucket type associated with the CageEntry.
+// GetBucket retrieves the BucketType associated with the CageEntry instance.
 func (s *CageEntry) GetBucket() BucketType { return s.bucket }
 
-// GetImpactMode returns the impact mode as an integer, representing the type of collision or interaction detected.
+// GetImpactMode returns the impact mode of the collision as an integer value.
 func (s *CageEntry) GetImpactMode() int {
 	return s.iMode
 }
 
-// GetNormal returns the normal vector components (nX, nY, nZ) of the collision.
+// GetNormal returns the components of the contact normal vector (nX, nY, nZ) as a tuple of three float64 values.
 func (s *CageEntry) GetNormal() (float64, float64, float64) { return s.nX, s.nY, s.nZ }
 
-// GetPenetration returns the penetration distance indicating the overlap depth with another object in the collision system.
+// GetPenetration returns the penetration depth of the collision measured by the cage entry.
 func (s *CageEntry) GetPenetration() float64 { return s.penetration }
 
-// NewCollisionFace creates and returns a pointer to a new, uninitialized CageEntry structure.
+// NewCollisionFace creates and returns a new instance of CageEntry initialized with default zero values.
 func NewCollisionFace() *CageEntry {
 	return &CageEntry{}
 }
 
-// Rebuild reinitializes the CageEntry with the provided parameters to update collision and interaction state.
+// Rebuild reinitializes the CageEntry with the given parameters and updates all its attributes accordingly.
 func (s *CageEntry) Rebuild(bucket BucketType, lCage *CollisionCage, rCage *CollisionCage, rFace *Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
 	s.bucket = bucket
 	s.lCage = lCage
@@ -157,7 +165,7 @@ func (s *CageEntry) Rebuild(bucket BucketType, lCage *CollisionCage, rCage *Coll
 	s.iMode = iMode
 }
 
-// Penetrable checks if the cage entry can be penetrated based on its impact mode and the state of the associated remote cage.
+// Penetrable determines if the CageEntry can be penetrated based on its collision mode and the state of adjacent entities.
 func (s *CageEntry) Penetrable() bool {
 	if s.iMode == ImpactInelastic {
 		return false
@@ -172,7 +180,7 @@ func (s *CageEntry) Penetrable() bool {
 	return v.Penetrable(s.lCage.object.GetEntity().GetId())
 }
 
-// CollisionBucket represents a storage container for collision detection entities within a specific spatial bucket.
+// CollisionBucket holds collision data for a specific bucket, including spare and active cage entries and counters.
 type CollisionBucket struct {
 	bucket           BucketType
 	spare            [FacesPerBucket]*CageEntry
@@ -180,8 +188,7 @@ type CollisionBucket struct {
 	containerCounter int
 }
 
-// NewCollisionBucket initializes a new CollisionBucket with the specified BucketType.
-// It pre-allocates collision faces and resets container counters.
+// NewCollisionBucket creates a new CollisionBucket for a given BucketType, initializing its spare and container arrays.
 func NewCollisionBucket(bucket BucketType) *CollisionBucket {
 	b := &CollisionBucket{
 		bucket:           bucket,
@@ -194,18 +201,18 @@ func NewCollisionBucket(bucket BucketType) *CollisionBucket {
 	return b
 }
 
-// Rebuild resets the collision bucket's container counter to zero, clearing any previously stored entries.
+// Rebuild resets the containerCounter to 0, clearing the current collision state for the bucket.
 func (b *CollisionBucket) Rebuild() {
 	b.containerCounter = 0
 }
 
-// Count returns the number of entries currently stored in the CollisionBucket.
+// Count returns the total number of entries currently stored in the CollisionBucket.
 func (b *CollisionBucket) Count() int {
 	return b.containerCounter
 }
 
-// Penetrable determines if the CollisionBucket can be traversed based on its contents and the provided entity ID.
-// It checks for inelastic resistance or recursively evaluates dynamic entities. Returns false if any resistance is detected.
+// Penetrable determines if the CollisionBucket can be penetrated starting from a specified entity ID.
+// Returns false if any entity in the bucket provides infinite inelastic resistance or cannot be recursively pushed.
 func (b *CollisionBucket) Penetrable(from uint64) bool {
 	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
 	for i := 0; i < b.containerCounter; i++ {
@@ -228,7 +235,7 @@ func (b *CollisionBucket) Penetrable(from uint64) bool {
 	return true
 }
 
-// Add inserts or updates a collision entry in the bucket based on penetration depth and topological deduplication criteria.
+// Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
 func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *CollisionCage, rFace *Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode int) *CageEntry {
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
@@ -291,7 +298,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 	return nil
 }
 
-// CollisionCage represents a spatial structure used for managing collision detection and resolution in a 3D environment.
+// CollisionCage represents a data structure for managing collision information for a physical entity.
 type CollisionCage struct {
 	seen                map[*CollisionCage]bool
 	object              IThing
@@ -311,7 +318,7 @@ type CollisionCage struct {
 	facesIdx            int
 }
 
-// NewCollisionCage initializes and returns a pointer to a new CollisionCage instance for the provided IThing entity.
+// NewCollisionCage creates and returns a new instance of CollisionCage initialized with the specified IThing object.
 func NewCollisionCage(object IThing) *CollisionCage {
 	c := &CollisionCage{
 		seen:      make(map[*CollisionCage]bool),
@@ -335,7 +342,7 @@ func NewCollisionCage(object IThing) *CollisionCage {
 	return c
 }
 
-// Rebuild updates the collision cage's geometry, displacement, and internal buckets based on the provided maximum step size.
+// Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *CollisionCage) Rebuild(maxStep float64) {
 	entity := s.object.GetEntity()
 	// Calculate Half-Extents
@@ -373,7 +380,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.maxStep = maxStep
 }
 
-// AddFace adds a face to the CollisionCage, expanding the storage if necessary to accommodate new entries.
+// AddFace adds a pair of faces (rFace and lFace) to the CollisionCage, resizing the internal slice if needed.
 func (s *CollisionCage) AddFace(rFace *Face, lFace *Face) {
 	if s.facesIdx >= len(s.faces) {
 		n := make([]*CageFaces, len(s.faces)*2)
@@ -390,7 +397,7 @@ func (s *CollisionCage) AddFace(rFace *Face, lFace *Face) {
 	s.facesIdx++
 }
 
-// Commit resolves collisions between the current CollisionCage and an optional target CollisionCage.
+// Commit processes collision data between two CollisionCages, resolving interactions based on material and displacement factors.
 func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	lAABB := s.ellipsoid.GetAABB()
 
@@ -481,7 +488,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	s.facesIdx = 0
 }
 
-// computeFace computes the collision interaction with a given face and returns bucket type, distances, penetration, normals, and vertex coordinates.
+// computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.
 func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
@@ -602,9 +609,8 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
-// sweptAxisInterval computes the normalized time interval [tEnter, tExit] during which
-// two 1D intervals with initial center offset rel = cL - cR, combined half-extent sumRad,
-// and relative frame displacement imp = dL - dR overlap.
+// sweptAxisInterval calculates the time interval of penetration in a swept axis-aligned scenario.
+// Returns start and end of interval, and a boolean indicating if penetration occurs.
 func sweptAxisInterval(rel, sumRad, imp float64) (float64, float64, bool) {
 	if math.Abs(imp) <= 1e-9 {
 		if math.Abs(rel) > sumRad+planeEpsilon {
@@ -620,11 +626,8 @@ func sweptAxisInterval(rel, sumRad, imp float64) (float64, float64, bool) {
 	return t2, t1, true
 }
 
-// computeFaceMeshVsMesh performs collision detection between two 3D faces, calculating penetration depth and overlap metrics.
-// rFace and lFace represent the remote and local mesh faces, respectively.
-// rOffX, rOffY, rOffZ specify the position offsets for the remote face in world space.
-// lOffX, lOffY, lOffZ specify the position offsets for the local face in world space.
-// Returns the collision bucket, hit distance, maximum penetration depth, normal vector, anchor point, and overlap metrics.
+// computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
+// It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
 func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	// Dati del piano remoto (Il Muro/Ostacolo)
 	nX, nY, nZ := rFace.GetNormal()
@@ -901,6 +904,8 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }
 
+// computeManifold calculates the collision manifold between two 3D faces with offset transformations.
+// Returns a ContactManifold containing collision details or non-collision state.
 func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) ContactManifold {
 	cm := ContactManifold{Hit: false}
 
@@ -1049,7 +1054,7 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 	return cm
 }
 
-// addToBucket adds a CollisionCage or Face into the specified bucket with given parameters to manage collision resolution.
+// addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
 func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
@@ -1058,7 +1063,7 @@ func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFa
 	}
 }
 
-// TranslateWorldToLocal translates the AABB of a target `CollisionCage` from world space to local space for a given slot.
+// TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.
 func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *physics.Entity {
 	w := s.ellipsoidLocal[slot]
 	from := s.ellipsoid.GetAABB()
@@ -1072,7 +1077,7 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 	return w
 }
 
-// TranslateCage computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
+// TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAABB, float64, float64, float64) {
 	lOx, lOy, lOz := s.object.GetDisplacement()
 	lOx += s.dX
@@ -1087,7 +1092,7 @@ func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAAB
 	return lEntityL, rOx - lOx, rOy - lOy, rOz - lOz
 }
 
-// Translate updates an ellipsoid slot's dimensions by applying delta values to the target AABB coordinates in world space.
+// Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
 func (s *CollisionCage) Translate(slot int, src aabb.IAABB, deltaX, deltaY, deltaZ float64) *physics.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
@@ -1113,45 +1118,45 @@ func (s *CollisionCage) Translate(slot int, src aabb.IAABB, deltaX, deltaY, delt
 	return w
 }
 
-// HasSeen checks if the given CollisionCage has already been encountered in the current context.
+// HasSeen checks if the given CollisionCage has already been marked as seen in the current CollisionCage.
 func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
 	return s.seen[rCage]
 }
 
-// Seen marks the given CollisionCage as seen by the current CollisionCage.
+// Seen marks a given CollisionCage as observed by the current CollisionCage within its internal tracking.
 func (s *CollisionCage) Seen(rCage *CollisionCage) {
 	s.seen[rCage] = true
 }
 
-// GetBaseZ computes and returns the base Z-coordinate of the collision cage considering its center and Z-radius.
+// GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.
 func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
-// GetSlotsLen returns the count of active collision slots currently in use within the CollisionCage.
+// GetSlotsLen returns the current number of active slots in the CollisionCage.
 func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
 
-// GetSlot retrieves the CageEntry at the specified index from the slots array in the CollisionCage.
+// GetSlot returns the CageEntry at the specified index in the slots slice.
 func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
 
-// GetThing returns the IThing object associated with the CollisionCage.
+// GetThing retrieves the IThing object associated with the CollisionCage.
 func (s *CollisionCage) GetThing() IThing { return s.object }
 
-// GetVolume retrieves the current volume associated with the collision cage. Returns nil if no volume is set.
+// GetVolume returns the volume associated with the CollisionCage.
 func (s *CollisionCage) GetVolume() *Volume { return s.volume }
 
-// GetRad returns the half-extents (eRadX, eRadY, eRadZ) of the collision cage's bounding ellipsoid.
+// GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.
 func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
 
-// GetC retrieves the central coordinates (cX, cY, cZ) of the CollisionCage object.
+// GetC returns the center coordinates (cX, cY, cZ) of the CollisionCage.
 func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
-// GetDisplacement returns the displacement vector (dX, dY, dZ) of the CollisionCage.
+// GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.
 func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
 
-// GetT retrieves the transformed coordinates (tX, tY, tZ) of the CollisionCage.
+// GetT retrieves the current transformed coordinates (tX, tY, tZ) of the CollisionCage.
 func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
 
-// BucketCount returns the total number of entries in the specified bucket.
+// BucketCount returns the number of entries in the specified bucket.
 func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
 
-// GetAABB returns the axis-aligned bounding box (AABB) associated with the collision cage.
+// GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.
 func (s *CollisionCage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }

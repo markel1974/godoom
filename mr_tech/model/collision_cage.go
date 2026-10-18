@@ -695,7 +695,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	sumRadY := s.eRadY + rRadY
 	sumRadZ := s.eRadZ + rRadZ
 
-	// 1. Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
+	// Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
 	const toiTieEpsilon = 1e-4
 	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, impX)
 	if !okX {
@@ -782,7 +782,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		}
 	}
 
-	// 2. Determinazione degli assi temporali/MTV attivi (indipendente dall'asse dominante della faccia)
+	// Determinazione degli assi temporali/MTV attivi (indipendente dall'asse dominante della faccia)
 	var activeX, activeY, activeZ bool
 
 	if sweptMode {
@@ -813,7 +813,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		activeZ = isDiscreteMTV(prevOZ, boxOZ, relZ, impZ, prevOX, boxOX, prevOY, boxOY)
 	}
 
-	// 3. Verifica di compatibilità geometrica tra la normale del piano remoto e gli assi di contatto attivi
+	// Verifica di compatibilità geometrica tra la normale del piano remoto e gli assi di contatto attivi
 	var axisOverlap float64
 	matchedAxis := false
 
@@ -850,7 +850,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// 4. Calcolo Penetrazione Esatta Vertice-Piano (valutata a t = 1 per il push-out di StageApply)
+	// Calcolo Penetrazione Esatta Vertice-Piano (valutata a t = 1 per il push-out di StageApply)
 	maxPenetration := -math.MaxFloat64
 	var hitDist float64
 
@@ -870,7 +870,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return 0, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// 5. Classificazione finale del Bucket sulla normale di contatto già determinata e orientata
+	// Classificazione finale del Bucket sulla normale di contatto già determinata e orientata
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
 

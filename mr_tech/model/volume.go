@@ -21,7 +21,13 @@ type Volume struct {
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *Sector
-	vertexTags []geometry.XYZ
+	vertexTags []Tag
+}
+
+// Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
+type Tag struct {
+	Origin geometry.XYZ
+	Axis   [3]geometry.XYZ
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
@@ -34,7 +40,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faceCount:  0,
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
-		vertexTags: make([]geometry.XYZ, 0),
+		vertexTags: make([]Tag, 0),
 	}
 	v.facesPtr = &v.faces
 	return v
@@ -174,22 +180,34 @@ func (v *Volume) SetSector(s *Sector) {
 	v.sector = s
 }
 
-// SetVertexTag associates the given tag index with the specified vertex in the Volume's vertexTags array.
-func (v *Volume) SetVertexTag(idx int, vertex geometry.XYZ) {
+// SetVertexTag associates the given tag index with the specified origin and orientation axes in the Volume's vertexTags array.
+func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
-		newTags := make([]geometry.XYZ, idx+1)
+		newTags := make([]Tag, idx+1)
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	v.vertexTags[idx] = vertex
+	if axis[0].X == 0 && axis[0].Y == 0 && axis[0].Z == 0 &&
+		axis[1].X == 0 && axis[1].Y == 0 && axis[1].Z == 0 &&
+		axis[2].X == 0 && axis[2].Y == 0 && axis[2].Z == 0 {
+		axis[0] = geometry.XYZ{X: 1, Y: 0, Z: 0}
+		axis[1] = geometry.XYZ{X: 0, Y: 1, Z: 0}
+		axis[2] = geometry.XYZ{X: 0, Y: 0, Z: 1}
+	}
+	v.vertexTags[idx] = Tag{Origin: origin, Axis: axis}
 }
 
-// GetVertexTag retrieves the vertex associated with a given tag index from the Volume's vertexTags array. Returns the vertex and a bool indicating success.
-func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, bool) {
+// GetVertexTag retrieves the tag origin and orientation axes associated with a given tag index from the Volume's vertexTags array.
+func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, [3]geometry.XYZ, bool) {
 	if idx >= 0 && idx < len(v.vertexTags) {
-		return v.vertexTags[idx], true
+		return v.vertexTags[idx].Origin, v.vertexTags[idx].Axis, true
 	}
-	return geometry.XYZ{}, false
+	identity := [3]geometry.XYZ{
+		{X: 1, Y: 0, Z: 0},
+		{X: 0, Y: 1, Z: 0},
+		{X: 0, Y: 0, Z: 1},
+	}
+	return geometry.XYZ{}, identity, false
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.

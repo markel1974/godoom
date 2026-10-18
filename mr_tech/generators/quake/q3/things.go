@@ -373,11 +373,25 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			for j := 0; j < int(res.Header.NumTags); j++ {
 				tag := res.Tags[i*int(res.Header.NumTags)+j]
 				tagName := lumps.FromNullTerminatingString(tag.Name[:])
-				// Model3D tags don't seem to be scaled by 1/64, but let's check later, wait, Model3D tags coordinates are float32, so no md3Scale needed!
-				cfg.Frames[i].Tags[tagName] = geometry.XYZ{
-					X: float64(tag.Origin[0]),
-					Y: float64(tag.Origin[1]),
-					Z: float64(tag.Origin[2]),
+				axis := [3]geometry.XYZ{
+					{X: float64(tag.Axis[0][0]), Y: float64(tag.Axis[0][1]), Z: float64(tag.Axis[0][2])},
+					{X: float64(tag.Axis[1][0]), Y: float64(tag.Axis[1][1]), Z: float64(tag.Axis[1][2])},
+					{X: float64(tag.Axis[2][0]), Y: float64(tag.Axis[2][1]), Z: float64(tag.Axis[2][2])},
+				}
+				if axis[0].X == 0 && axis[0].Y == 0 && axis[0].Z == 0 &&
+					axis[1].X == 0 && axis[1].Y == 0 && axis[1].Z == 0 &&
+					axis[2].X == 0 && axis[2].Y == 0 && axis[2].Z == 0 {
+					axis[0] = geometry.XYZ{X: 1, Y: 0, Z: 0}
+					axis[1] = geometry.XYZ{X: 0, Y: 1, Z: 0}
+					axis[2] = geometry.XYZ{X: 0, Y: 0, Z: 1}
+				}
+				cfg.Frames[i].Tags[tagName] = config.Model3DTag{
+					Origin: geometry.XYZ{
+						X: float64(tag.Origin[0]),
+						Y: float64(tag.Origin[1]),
+						Z: float64(tag.Origin[2]),
+					},
+					Axis: axis,
 				}
 			}
 		}

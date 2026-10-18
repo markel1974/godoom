@@ -113,7 +113,10 @@ func toAnimationString(in string) string {
 		}
 		break
 	}
-
+	if len(out) == 0 {
+		return ""
+	}
+	fmt.Println("PARTNAME", string(out))
 	var ret []rune
 	for _, v := range out {
 		if v >= '0' && v <= '9' {

@@ -91,8 +91,8 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 			volume.AddFace(face)
 		}
 		// Copy tags to volume
-		for tagName, tagVec := range cfgFrame.Tags {
-			volume.SetVertexTag(v.tagMap[tagName], tagVec)
+		for tagName, tagData := range cfgFrame.Tags {
+			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
 		v.volumes[frameIdx] = volume

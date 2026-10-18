@@ -28,17 +28,31 @@ func NewModel3DEntryTriangle(material *Material) Model3DEntryTriangle {
 	return tri
 }
 
+// Model3DTag represents a coordinate attachment tag with spatial origin and 3x3 orientation axes.
+type Model3DTag struct {
+	Origin geometry.XYZ
+	Axis   [3]geometry.XYZ
+}
+
+// NewModel3DTag creates a new Model3DTag with the specified origin and orientation axis.
+func NewModel3DTag(origin geometry.XYZ, axis [3]geometry.XYZ) Model3DTag {
+	return Model3DTag{
+		Origin: origin,
+		Axis:   axis,
+	}
+}
+
 // Model3DEntryFrame represents a collection of triangles that define a single frame in an Model3DEntry animation sequence.
 type Model3DEntryFrame struct {
 	Triangles []Model3DEntryTriangle
-	Tags      map[string]geometry.XYZ
+	Tags      map[string]Model3DTag
 }
 
 // NewModel3DEntryFrame creates a new Model3DEntryFrame with the specified list of Model3DEntryTriangle structures.
 func NewModel3DEntryFrame(triangles []Model3DEntryTriangle) Model3DEntryFrame {
 	return Model3DEntryFrame{
 		Triangles: triangles,
-		Tags:      make(map[string]geometry.XYZ),
+		Tags:      make(map[string]Model3DTag),
 	}
 }
 
@@ -56,7 +70,7 @@ func NewMD1(numFrames int, frameNames []string) *Model3DEntry {
 		Frames: make([]Model3DEntryFrame, numFrames),
 	}
 	for i := 0; i < numFrames; i++ {
-		m.Frames[i].Tags = make(map[string]geometry.XYZ)
+		m.Frames[i].Tags = make(map[string]Model3DTag)
 	}
 	m.ActionClamp = []string{"death", "die"}
 	m.compute(frameNames)

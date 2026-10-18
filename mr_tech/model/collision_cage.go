@@ -251,8 +251,15 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 					(p0z-existing.p0Z)*existing.nZ,
 			)
 			if planeDistance < planeEpsilon {
-				// Aggiorniamo il vincolo solo se la nuova penetrazione è più profonda
-				if penetration > existing.penetration {
+				// Un vincolo anelastico (muro solido) ha sempre priorità su uno scalino (ImpactStep) coplanare
+				if existing.iMode == ImpactStep && iMode == ImpactInelastic {
+					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+					return nil
+				}
+				if existing.iMode == ImpactInelastic && iMode == ImpactStep {
+					return nil
+				}
+				if penetration > existing.penetration || (iMode == ImpactStep && math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
 				return nil
@@ -428,6 +435,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			//rMaxZ = manifold.RMaxZ
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
+
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
 
@@ -474,23 +482,26 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 }
 
 // computeFace computes the collision interaction with a given face and returns bucket type, distances, penetration, normals, and vertex coordinates.
-func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *CollisionCage) computeFace(_ *aabb.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
+		return 0, math.MaxFloat64, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	}
+
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
+
 	// Translation (Local -> World)
 	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+
 	var bucket BucketType
-	// Universal normalization
 	if solidWE || solidNS {
-		// Facing Normalization: Forces the plane to oppose the thing
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
-		// Wall Bucket Assignment
 		if solidWE {
 			if nX < 0 {
 				bucket = BucketWallWest
@@ -505,7 +516,6 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 			}
 		}
 	} else {
-		// Exact elevation evaluation (Plane Z at Center X,Y)
 		planeZ := p0z
 		if nAbsZ > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
@@ -524,26 +534,126 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 			}
 		}
 	}
-	// Minkowski / Support Mapping for Ellipsoids
-	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
-	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-	dist := distTarget - rayEff
-	penetration := rayEff - distTarget
 
-	// sat filter (Anti-Phantom Plane)
 	rFaceAABB := rFace.GetAABB()
-	// world space translation
 	rMinX := rFaceAABB.GetMinX() + offX
 	rMaxX := rFaceAABB.GetMaxX() + offX
 	rMinY := rFaceAABB.GetMinY() + offY
 	rMaxY := rFaceAABB.GetMaxY() + offY
 	rMinZ := rFaceAABB.GetMinZ() + offZ
 	rMaxZ := rFaceAABB.GetMaxZ() + offZ
-	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
-	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
-	// La reale penetrazione volumetrica massima possibile per questa specifica faccia
-	minOverlap := math.Min(oX, math.Min(oY, oZ))
+
+	// Minkowski / Support Mapping for Ellipsoids
+	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
+	dist := distTarget - rayEff
+	penetration := rayEff - distTarget
+
+	if penetration <= 0 {
+		return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
+	// Il moto nel frame non deve allontanarsi dal piano; un soffitto può essere colpito solo salendo
+	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
+	if impDot > planeEpsilon {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+	if bucket == BucketCeiling && s.dZ <= planeEpsilon {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
+	// Verifica temporale Swept AABB tra l'entità e l'AABB della faccia statica
+	const toiTieEpsilon = 1e-4
+	rCx := (rMinX + rMaxX) * 0.5
+	rCy := (rMinY + rMaxY) * 0.5
+	rCz := (rMinZ + rMaxZ) * 0.5
+	rRadX := (rMaxX - rMinX) * 0.5
+	rRadY := (rMaxY - rMinY) * 0.5
+	rRadZ := (rMaxZ - rMinZ) * 0.5
+
+	relX := s.cX - rCx
+	relY := s.cY - rCy
+	relZ := s.cZ - rCz
+
+	sumRadX := s.eRadX + rRadX
+	sumRadY := s.eRadY + rRadY
+	sumRadZ := s.eRadZ + rRadZ
+
+	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, s.dX)
+	if !okX {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+	tEnterY, tExitY, okY := sweptAxisInterval(relY, sumRadY, s.dY)
+	if !okY {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+	tEnterZ, tExitZ, okZ := sweptAxisInterval(relZ, sumRadZ, s.dZ)
+	if !okZ {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
+	tEnter := math.Max(tEnterX, math.Max(tEnterY, tEnterZ))
+	tExit := math.Min(tExitX, math.Min(tExitY, tExitZ))
+	if tEnter > tExit+toiTieEpsilon || tExit < -toiTieEpsilon || tEnter > 1.0+toiTieEpsilon {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
+	// Penetrazione unidirezionale lungo l'asse dominante (a t = 0 e t = 1) e overlap tangenziali a t = 0
+	var entryPrevO, minTangentialPrevO, minOverlap float64
+	prevOX := math.Max(0.0, sumRadX-math.Abs(relX))
+	prevOY := math.Max(0.0, sumRadY-math.Abs(relY))
+	prevOZ := math.Max(0.0, sumRadZ-math.Abs(relZ))
+
+	if solidWE {
+		if nX > 0 {
+			entryPrevO = (rMaxX - (s.cX - s.eRadX)) / nAbsX
+			minOverlap = (rMaxX - (s.tX - s.eRadX)) / nAbsX
+		} else {
+			entryPrevO = ((s.cX + s.eRadX) - rMinX) / nAbsX
+			minOverlap = ((s.tX + s.eRadX) - rMinX) / nAbsX
+		}
+		minTangentialPrevO = math.Min(prevOY, prevOZ)
+	} else if solidNS {
+		if nY > 0 {
+			entryPrevO = (rMaxY - (s.cY - s.eRadY)) / nAbsY
+			minOverlap = (rMaxY - (s.tY - s.eRadY)) / nAbsY
+		} else {
+			entryPrevO = ((s.cY + s.eRadY) - rMinY) / nAbsY
+			minOverlap = ((s.tY + s.eRadY) - rMinY) / nAbsY
+		}
+		minTangentialPrevO = math.Min(prevOX, prevOZ)
+	} else {
+		if nZ > 0 {
+			entryPrevO = (rMaxZ - (s.cZ - s.eRadZ)) / nAbsZ
+			minOverlap = (rMaxZ - (s.tZ - s.eRadZ)) / nAbsZ
+		} else {
+			entryPrevO = ((s.cZ + s.eRadZ) - rMinZ) / nAbsZ
+			minOverlap = ((s.tZ + s.eRadZ) - rMinZ) / nAbsZ
+		}
+		minTangentialPrevO = math.Min(prevOX, prevOY)
+	}
+
+	// Filtro Anti-Phantom Plane:
+	// - Se a t = 0 il supporto era davanti al piano (suppStart > planeEpsilon), l'ingresso nel piano deve cadere in [tEnter, min(1, tExit)].
+	// - Se a t = 0 il supporto era già oltre il prolungamento infinito del piano (pen0 > satFilterEpsilon),
+	//   è un piano fantasma se l'entità era separata dall'AABB della faccia (tEnter > 0) o se pen0 supera l'overlap iniziale.
+	suppStart := distStart - rayEff
+	tWindowEnd := math.Min(1.0, tExit)
+	if suppStart > planeEpsilon {
+		if impDot >= -1e-9 {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
+		tEnterPlane := suppStart / (-impDot)
+		if tEnterPlane < tEnter-toiTieEpsilon || tEnterPlane > tWindowEnd+toiTieEpsilon {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
+	} else {
+		pen0 := -suppStart
+		minPrevO := math.Min(entryPrevO, minTangentialPrevO)
+		if pen0 > satFilterEpsilon && (tEnter > toiTieEpsilon || pen0 > minPrevO+satFilterEpsilon) {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
+	}
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }

@@ -207,8 +207,8 @@ func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) 
 	return v.volumes[frameA], v.volumes[frameB], lerpT
 }
 
-// GetDisplacement retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
-func (v *Vertices3DEntry) GetDisplacement() (float64, float64, float64) {
+// GetVerticesCenter retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
+func (v *Vertices3DEntry) GetVerticesCenter() (float64, float64, float64) {
 	return v.viewVolume.GetEntity().GetCenter()
 }
 

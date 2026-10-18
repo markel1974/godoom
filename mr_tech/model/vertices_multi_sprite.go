@@ -92,9 +92,9 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 }
 
-// GetDisplacement retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
-func (v *VerticesMultiSprite) GetDisplacement() (float64, float64, float64) {
-	return v.viewVolume.GetEntity().GetBottomCenter()
+// GetVerticesCenter retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
+func (v *VerticesMultiSprite) GetVerticesCenter() (float64, float64, float64) {
+	return v.viewVolume.GetEntity().GetCenter()
 }
 
 // GetRenderMode returns a constant value of 1.0, typically used to represent a uniform scaling factor for renderModes.
@@ -136,18 +136,18 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 	height := float64(texH) * scaleH
 
 	halfW := width * 0.5
-	halfY := halfW // Profondità dell'AABB fisico
+	halfY := halfW
+	halfHeight := height * 0.5
 
-	// Vertici del Box 3D (Fisica)
-	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: 0.0}
-	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: 0.0}
-	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: 0.0}
-	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: 0.0}
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfHeight}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfHeight}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfHeight}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfHeight}
 
-	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: height}
-	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: height}
-	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: height}
-	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: height}
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfHeight}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfHeight}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfHeight}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfHeight}
 
 	var faces []*Face
 
@@ -176,18 +176,18 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 	// 2. PIANO VISIVO (Render)
 	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
 	t0 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: height}, // TL
-		{X: -halfW, Y: 0.0, Z: 0.0},    // BL
-		{X: halfW, Y: 0.0, Z: 0.0},     // BR
+		{X: -halfW, Y: 0.0, Z: halfHeight},  // TL
+		{X: -halfW, Y: 0.0, Z: -halfHeight}, // BL
+		{X: halfW, Y: 0.0, Z: -halfHeight},  // BR
 	}
 	f0 := NewFace(t0, "", material)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
 
 	t1 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: height}, // TL
-		{X: halfW, Y: 0.0, Z: 0.0},     // BR
-		{X: halfW, Y: 0.0, Z: height},  // TR
+		{X: -halfW, Y: 0.0, Z: halfHeight}, // TL
+		{X: halfW, Y: 0.0, Z: -halfHeight}, // BR
+		{X: halfW, Y: 0.0, Z: halfHeight},  // TR
 	}
 	f1 := NewFace(t1, "", material)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)

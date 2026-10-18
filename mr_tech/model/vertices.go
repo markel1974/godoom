@@ -27,7 +27,7 @@ type IVertices interface {
 
 	SetAction(idx int)
 
-	GetDisplacement() (float64, float64, float64)
+	GetVerticesCenter() (float64, float64, float64)
 
 	GetRenderMode() float64
 

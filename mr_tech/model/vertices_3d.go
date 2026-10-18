@@ -356,10 +356,10 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 }
 
-// GetDisplacement returns the displacement vector (dx, dy, dz) of the first element in the Vertices3D instance.
-func (v *Vertices3D) GetDisplacement() (float64, float64, float64) {
+// GetVerticesCenter returns the displacement vector (dx, dy, dz) of the first element in the Vertices3D instance.
+func (v *Vertices3D) GetVerticesCenter() (float64, float64, float64) {
 	if len(v.elements) > 0 && v.elements[0] != nil {
-		return v.elements[0].GetDisplacement()
+		return v.elements[0].GetVerticesCenter()
 	}
 	return 0, 0, 0
 }

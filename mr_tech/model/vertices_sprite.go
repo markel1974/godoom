@@ -39,15 +39,28 @@ func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite 
 	f := &VerticesSprite{volume: volume}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
-	v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: 0.0}
-	v100 := geometry.XYZ{X: halfX, Y: -halfY, Z: 0.0}
-	v110 := geometry.XYZ{X: halfX, Y: halfY, Z: 0.0}
-	v010 := geometry.XYZ{X: -halfX, Y: halfY, Z: 0.0}
+	/*
+		v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: 0.0}
+		v100 := geometry.XYZ{X: halfX, Y: -halfY, Z: 0.0}
+		v110 := geometry.XYZ{X: halfX, Y: halfY, Z: 0.0}
+		v010 := geometry.XYZ{X: -halfX, Y: halfY, Z: 0.0}
 
-	v001 := geometry.XYZ{X: -halfX, Y: -halfY, Z: d}
-	v101 := geometry.XYZ{X: halfX, Y: -halfY, Z: d}
-	v111 := geometry.XYZ{X: halfX, Y: halfY, Z: d}
-	v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: d}
+		v001 := geometry.XYZ{X: -halfX, Y: -halfY, Z: d}
+		v101 := geometry.XYZ{X: halfX, Y: -halfY, Z: d}
+		v111 := geometry.XYZ{X: halfX, Y: halfY, Z: d}
+		v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: d}
+	*/
+	halfD := d * 0.5
+
+	v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: -halfD}
+	v100 := geometry.XYZ{X: halfX, Y: -halfY, Z: -halfD}
+	v110 := geometry.XYZ{X: halfX, Y: halfY, Z: -halfD}
+	v010 := geometry.XYZ{X: -halfX, Y: halfY, Z: -halfD}
+
+	v001 := geometry.XYZ{X: -halfX, Y: -halfY, Z: halfD}
+	v101 := geometry.XYZ{X: halfX, Y: -halfY, Z: halfD}
+	v111 := geometry.XYZ{X: halfX, Y: halfY, Z: halfD}
+	v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: halfD}
 
 	f.volume.ClearFaces()
 
@@ -116,9 +129,9 @@ func (v *VerticesSprite) SetAction(idx int) {
 	return
 }
 
-// GetDisplacement retrieves the bottom-left coordinates of the entity associated with the VerticesSprite's Volume.
-func (v *VerticesSprite) GetDisplacement() (float64, float64, float64) {
-	return v.volume.entity.GetBottomCenter()
+// GetVerticesCenter retrieves the bottom-left coordinates of the entity associated with the VerticesSprite's Volume.
+func (v *VerticesSprite) GetVerticesCenter() (float64, float64, float64) {
+	return v.volume.entity.GetCenter()
 }
 
 // GetRenderMode retrieves the renderMode value associated with the Face instance.

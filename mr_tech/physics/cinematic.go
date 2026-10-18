@@ -208,8 +208,8 @@ func (e *Cinematic) GetVelocity() (float64, float64, float64) {
 	return e.vx, e.vy, e.vz
 }
 
-// GetDisplacement calculates and returns the displacement in the x, y, and z directions based on velocity and time step.
-func (e *Cinematic) GetDisplacement() (float64, float64, float64) {
+// GetFrameDisplacement calculates and returns the displacement in the x, y, and z directions based on velocity and time step.
+func (e *Cinematic) GetFrameDisplacement() (float64, float64, float64) {
 	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt
 }
 

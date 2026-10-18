@@ -350,7 +350,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	// Calculate center for Broad-Phase
 	s.cX, s.cY, s.cZ = entity.GetCenter()
 	// Calculate Position
-	s.dX, s.dY, s.dZ = entity.GetDisplacement()
+	s.dX, s.dY, s.dZ = entity.GetFrameDisplacement()
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
@@ -404,13 +404,13 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.object.GetDisplacement()
-		rDX, rDY, rDZ := rCage.object.GetEntity().GetDisplacement()
+		rOffX, rOffY, rOffZ = rCage.object.GetVerticesCenter()
+		rDX, rDY, rDZ := rCage.object.GetEntity().GetFrameDisplacement()
 		rOffX += rDX
 		rOffY += rDY
 		rOffZ += rDZ
 
-		lOffX, lOffY, lOffZ = s.object.GetDisplacement()
+		lOffX, lOffY, lOffZ = s.object.GetVerticesCenter()
 		lOffX += s.dX
 		lOffY += s.dY
 		lOffZ += s.dZ
@@ -648,7 +648,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	}
 	rEnt := rParent.GetEntity()
 	rCx0, rCy0, rCz0 := rEnt.GetCenter()
-	rDX, rDY, rDZ := rEnt.GetDisplacement()
+	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rTx := rCx0 + rDX
 	rTy := rCy0 + rDY
 	rTz := rCz0 + rDZ
@@ -1079,12 +1079,12 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAABB, float64, float64, float64) {
-	lOx, lOy, lOz := s.object.GetDisplacement()
+	lOx, lOy, lOz := s.object.GetVerticesCenter()
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rOx, rOy, rOz := rCage.object.GetDisplacement()
-	rDX, rDY, rDZ := rCage.object.GetEntity().GetDisplacement()
+	rOx, rOy, rOz := rCage.object.GetVerticesCenter()
+	rDX, rDY, rDZ := rCage.object.GetEntity().GetFrameDisplacement()
 	rOx += rDX
 	rOy += rDY
 	rOz += rDZ

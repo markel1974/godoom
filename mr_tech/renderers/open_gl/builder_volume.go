@@ -228,7 +228,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetDisplacement()
+		tPosX, tPosY, zBot := thing.GetVerticesCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 		faces := *pFaces
 		nextFaces := *pNextFaces

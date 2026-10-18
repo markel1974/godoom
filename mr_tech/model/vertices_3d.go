@@ -155,10 +155,14 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			aMap = make([]int, len(rawActionMaps[i]))
 			copy(aMap, rawActionMaps[i])
 			if expectedActions > 0 && len(aMap) < expectedActions {
-				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d\n", cfg.Id, i, len(aMap), expectedActions)
+				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d, falling back to action 0 for missing entries\n",
+					cfg.Id, i, len(aMap), expectedActions)
+				padded := make([]int, expectedActions)
+				copy(padded, aMap)
+				aMap = padded
 			}
 		} else {
-			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, creating default map (action 0)\n", cfg.Id, i)
+			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, falling back to action 0\n", cfg.Id, i)
 			aMap = make([]int, expectedActions)
 		}
 
@@ -166,8 +170,9 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			numActions := len(elements[i].actionIntervals)
 			for actionIdx, targetIdx := range aMap {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
-					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d)\n",
+					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
 						cfg.Id, i, actionIdx, targetIdx, numActions-1)
+					aMap[actionIdx] = 0
 				}
 			}
 		}
@@ -182,7 +187,17 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			tagIdx := elements[link.Parent].GetTagIndex(link.Tag)
 			linkTagIndices[i] = tagIdx
 			if tagIdx < 0 {
-				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d\n", cfg.Id, link.Tag, link.Parent, i)
+				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
+					cfg.Id, link.Tag, link.Parent, i)
+			} else {
+				for frameIdx, vol := range elements[link.Parent].volumes {
+					if vol != nil {
+						if _, _, ok := vol.GetVertexTag(tagIdx); !ok {
+							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
+								cfg.Id, link.Tag, tagIdx, frameIdx, link.Parent, i)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -330,9 +345,12 @@ func (v *Vertices3D) SetAction(idx int) {
 			if targetAction >= 0 && targetAction < len(el.actionIntervals) {
 				el.SetAction(targetAction)
 			} else {
+				fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
+					i, idx, targetAction, len(el.actionIntervals)-1)
 				el.SetAction(0)
 			}
 		} else {
+			fmt.Printf("[warning] Vertices3D: part %d has no mapping for action %d, falling back to action 0\n", i, idx)
 			el.SetAction(0)
 		}
 	}
@@ -417,6 +435,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigA.Z
 					v.rotationsA[i] = v3dMultiplyMatrix(tagAxisA, v.rotationsA[pIdx])
 				} else {
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
+						v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsA[i] = v.originsA[pIdx]
 					v.rotationsA[i] = v.rotationsA[pIdx]
 				}
@@ -428,10 +448,14 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigB.Z
 					v.rotationsB[i] = v3dMultiplyMatrix(tagAxisB, v.rotationsB[pIdx])
 				} else {
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
+						v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsB[i] = v.originsB[pIdx]
 					v.rotationsB[i] = v.rotationsB[pIdx]
 				}
 			} else {
+				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
+					v.links[i].Tag, pIdx, i)
 				v.originsA[i] = v.originsA[pIdx]
 				v.originsB[i] = v.originsB[pIdx]
 				v.rotationsA[i] = v.rotationsA[pIdx]

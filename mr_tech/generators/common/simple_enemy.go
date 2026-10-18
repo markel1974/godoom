@@ -76,16 +76,32 @@ func (e *Enemy) OnBind(self config.IThingConfig) {
 	e.self = self
 }
 
-/*
-if self.GetId() == "monster_soldier" {
-fmt.Println("handleLaunch called for monster_soldier")
-}
-
-*/
-
 // OnCollision defines the optional behavior when this Enemy collides with another object.
 func (e *Enemy) OnCollision(other config.IThingConfig) {
-	// Comportamento di collisione opzionale.
+	if e.state == EnemyStateDead {
+		return
+	}
+	otherEntity := other.GetEntity()
+	selfEntity := e.self.GetEntity()
+	ovx, ovy, ovz := otherEntity.GetVelocity()
+	svx, svy, svz := selfEntity.GetVelocity()
+	otherMass := otherEntity.GetMass()
+	selfMass := selfEntity.GetMass()
+	dvx := ovx - svx
+	dvy := ovy - svy
+	dvz := ovz - svz
+	relativeSpeedSq := dvx*dvx + dvy*dvy + dvz*dvz
+	totalMass := otherMass + selfMass
+	if otherMass <= 0 || selfMass <= 0 || totalMass <= 0 {
+		return
+	}
+	reducedMass := (otherMass * selfMass) / totalMass
+	impactEnergy := 0.5 * reducedMass * relativeSpeedSq
+	//fmt.Println("impact energy:", impactEnergy)
+	const painfulEnergy = 10.0
+	if impactEnergy >= painfulEnergy {
+		e.handleHit()
+	}
 }
 
 // OnImpact handles the behavior of the enemy when impacted by another object, adjusting health and state accordingly.
@@ -94,17 +110,7 @@ func (e *Enemy) OnImpact(other config.IThingConfig, id string, force, closestDis
 		return
 	}
 	e.health -= force * 0.5
-	if e.health <= 0 {
-		e.painTimer = 0
-		e.shootTimer = 0
-		e.state = EnemyStateDead
-		e.setAnimationState(config.EnemyStateDead)
-		return
-	}
-
-	e.state = EnemyStatePain
-	durationFrames := e.setAnimationState(config.EnemyStatePain)
-	e.painTimer = framesToSeconds(durationFrames)
+	e.handleHit()
 }
 
 // OnThinking handles the behavior logic for the Enemy, updating its state and actions based on its environment and player position.
@@ -355,4 +361,20 @@ func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist
 		//self.Jump(nx*leapForceXY, ny*leapForceXY, 1.0)
 		self.Jump(0, 0, 8)
 	}
+}
+
+// handleHealth adjusts the Enemy's state and timers when its health drops to or below zero.
+func (e *Enemy) handleHit() bool {
+	if e.health > 0 {
+		e.state = EnemyStatePain
+		durationFrames := e.setAnimationState(config.EnemyStatePain)
+		e.painTimer = framesToSeconds(durationFrames)
+		e.shootTimer = 0
+		return true
+	}
+	e.painTimer = 0
+	e.shootTimer = 0
+	e.state = EnemyStateDead
+	e.setAnimationState(config.EnemyStateDead)
+	return false
 }

@@ -39,15 +39,16 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	var totalFaces int
 
 	for i, part := range cfg.Model3D.Parts {
-		if part != nil {
-			c := cfg.Clone()
-			c.Model3DEntry = part
-			c.Model3D = nil
-			entry := NewVertices3DEntry(c, materials)
-			elements[i] = entry
-			_, count := entry.volumes[0].GetFaces()
-			totalFaces += count
+		if part == nil {
+			continue
 		}
+		c := cfg.Clone()
+		c.Model3DEntry = part
+		c.Model3D = nil
+		entry := NewVertices3DEntry(c, materials)
+		elements[i] = entry
+		_, count := entry.volumes[0].GetFaces()
+		totalFaces += count
 	}
 
 	actionMaps := cfg.Model3D.ActionMaps
@@ -109,7 +110,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	v.originsB = make([]geometry.XYZ, len(v.elements))
 
 	offset := 0
-	for _, el := range elements {
+	for _, el := range v.elements {
 		if el == nil {
 			continue
 		}
@@ -131,7 +132,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		offset += count
 	}
 
-	v.entity = elements[0].GetEntity()
+	v.entity = v.elements[0].GetEntity()
 
 	return v
 }
@@ -159,12 +160,13 @@ func (v *Vertices3D) SetAction(idx int) {
 	v.currentAction = idx
 	for _, i := range v.executionOrder {
 		el := v.elements[i]
-		if el != nil {
-			if i < len(v.actionMaps) && idx >= 0 && idx < len(v.actionMaps[i]) {
-				el.SetAction(v.actionMaps[i][idx])
-			} else {
-				el.SetAction(0)
-			}
+		if el == nil {
+			continue
+		}
+		if i < len(v.actionMaps) && idx >= 0 && idx < len(v.actionMaps[i]) {
+			el.SetAction(v.actionMaps[i][idx])
+		} else {
+			el.SetAction(0)
 		}
 	}
 }

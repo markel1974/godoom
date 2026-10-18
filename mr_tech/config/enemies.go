@@ -7,7 +7,7 @@ type EnemyState uint8
 
 // EnemyStateUnknown represents an undefined or unknown state of an enemy.
 // EnemyStateIdle represents the state of an enemy when it is not performing any action.
-// EnemyStateChase represents the state of an enemy when it is chasing a target.
+// EnemyStateRun represents the state of an enemy when it is chasing a target.
 // EnemyStateShoot represents the state of an enemy when it is shooting at a target.
 // EnemyStateMelee represents the state of an enemy when it is engaging in melee combat.
 // EnemyStatePain represents the state of an enemy when it is experiencing pain or being damaged.
@@ -20,10 +20,13 @@ const (
 	EnemyStateIdle
 	EnemyStateWalk
 	EnemyStateProwl
-	EnemyStateChase
+	EnemyStateRun
 	EnemyStateShoot
+	EnemyStateHit
+	EnemyStateSmash
 	EnemyStateReload
 	EnemyStateMelee
+	EnemyStateAttack
 	EnemyStatePain
 	EnemyStateDead
 	EnemyStatePull
@@ -50,14 +53,20 @@ func (s EnemyState) String() string {
 		return "Walk"
 	case EnemyStateProwl:
 		return "Prowl"
-	case EnemyStateChase:
-		return "Chase"
+	case EnemyStateRun:
+		return "Run"
 	case EnemyStateShoot:
 		return "Shoot"
+	case EnemyStateHit:
+		return "Hit"
+	case EnemyStateSmash:
+		return "Smash"
 	case EnemyStateReload:
 		return "Reload"
 	case EnemyStateMelee:
 		return "Melee"
+	case EnemyStateAttack:
+		return "Attack"
 	case EnemyStatePain:
 		return "Pain"
 	case EnemyStateDead:
@@ -93,6 +102,7 @@ func (s EnemyState) String() string {
 
 // EnemyAnimation defines the structure for managing enemy animation sequences with frame indices and durations.
 type EnemyAnimation struct {
+	Name     string
 	Indices  []int
 	Duration []int
 }
@@ -117,7 +127,8 @@ func NewEnemyAnimations() *EnemyAnimations {
 }
 
 // Add appends the given indices and duration to the corresponding enemy state's animation data.
-func (e *EnemyAnimations) Add(idx EnemyState, indices int, duration int) {
-	e.Content[idx].Indices = append(e.Content[idx].Indices, indices)
-	e.Content[idx].Duration = append(e.Content[idx].Duration, duration)
+func (e *EnemyAnimations) Add(es EnemyState, indices int, duration int) {
+	e.Content[es].Name = es.String()
+	e.Content[es].Indices = append(e.Content[es].Indices, indices)
+	e.Content[es].Duration = append(e.Content[es].Duration, duration)
 }

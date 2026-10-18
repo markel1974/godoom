@@ -221,7 +221,7 @@ func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals 
 		} else if strings.HasPrefix(animation, "walk") {
 			r.Add(config.EnemyStateWalk, idx, intervals[idx][1]-intervals[idx][0])
 		} else if strings.HasPrefix(animation, "run") {
-			r.Add(config.EnemyStateChase, idx, intervals[idx][1]-intervals[idx][0])
+			r.Add(config.EnemyStateRun, idx, intervals[idx][1]-intervals[idx][0])
 		} else if strings.HasPrefix(animation, "prowl") {
 			r.Add(config.EnemyStateProwl, idx, intervals[idx][1]-intervals[idx][0])
 		} else if strings.HasPrefix(animation, "leap") {

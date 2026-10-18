@@ -171,48 +171,69 @@ func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
 	return animKind
 }
 
+func ToAnimationString(in string) string {
+	in = strings.TrimSpace(strings.ToLower(in))
+	var out []rune
+	for _, v := range in {
+		if v >= '0' && v <= '9' {
+			break
+		}
+		out = append(out, v)
+	}
+	return string(out)
+}
+
 // ConvertAnimation maps a list of animations and frame intervals to EnemyState values and adds them to EnemyAnimations.
 func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, animation := range animations {
 		frames := intervals[idx][1] - intervals[idx][0]
-		animation = strings.TrimSpace(strings.ToLower(animation))
-		if strings.HasPrefix(animation, "stand") {
+		animation = ToAnimationString(animation)
+		switch animation {
+		case "stand":
 			r.Add(config.EnemyStateIdle, idx, frames)
-		} else if strings.HasPrefix(animation, "hover") {
+		case "hover":
 			r.Add(config.EnemyStateIdle, idx, frames)
-		} else if strings.HasPrefix(animation, "walk") {
+		case "walk":
 			r.Add(config.EnemyStateWalk, idx, frames)
-		} else if strings.HasPrefix(animation, "run") {
-			r.Add(config.EnemyStateChase, idx, frames)
-		} else if strings.HasPrefix(animation, "prowl") {
+		case "run":
+			r.Add(config.EnemyStateRun, idx, frames)
+		case "runs":
+			//r.Add(config.EnemyStateRun, idx, frames)
+		case "runt":
+			//r.Add(config.EnemyStateRun, idx, frames) //CADUTA
+		case "prowl":
 			r.Add(config.EnemyStateProwl, idx, frames)
-		} else if strings.HasPrefix(animation, "leap") {
+		case "leap":
 			r.Add(config.EnemyStateJump, idx, frames)
-		} else if strings.HasPrefix(animation, "attack") || strings.HasPrefix(animation, "attak") {
-			r.Add(config.EnemyStateMelee, idx, frames)
-		} else if strings.HasPrefix(animation, "shoot") || strings.HasPrefix(animation, "gun") {
+		case "attack":
+			r.Add(config.EnemyStateAttack, idx, frames)
+		case "attak":
+			r.Add(config.EnemyStateAttack, idx, frames)
+		case "shoot":
 			r.Add(config.EnemyStateShoot, idx, frames)
-		} else if strings.HasPrefix(animation, "smash") {
-			r.Add(config.EnemyStateShoot, idx, frames)
-		} else if strings.HasPrefix(animation, "load") {
+		case "gun":
+			//r.Add(config.EnemyStateShoot, idx, frames)
+		case "smash":
+			r.Add(config.EnemyStateSmash, idx, frames)
+		case "load":
 			r.Add(config.EnemyStateReload, idx, frames)
-		} else if strings.HasPrefix(animation, "pain") {
+		case "pain":
 			r.Add(config.EnemyStatePain, idx, frames)
-		} else if strings.HasPrefix(animation, "death") {
+		case "death":
 			r.Add(config.EnemyStateDead, idx, frames)
-		} else if strings.HasPrefix(animation, "bdeath") {
+		case "bdeath":
 			r.Add(config.EnemyStateDead, idx, frames)
-		} else if strings.HasPrefix(animation, "pull") {
+		case "pull":
 			r.Add(config.EnemyStatePull, idx, frames)
-		} else if strings.HasPrefix(animation, "swing") {
+		case "swing":
 			r.Add(config.EnemyStateSwing, idx, frames)
-		} else if strings.HasPrefix(animation, "fly") {
+		case "fly":
 			r.Add(config.EnemyStateFly, idx, frames)
-		} else if strings.HasPrefix(animation, "kneel") || strings.HasPrefix(animation, "duck") {
+		case "kneel", "duck":
 			r.Add(config.EnemyStateKneel, idx, frames)
-		} else if strings.HasPrefix(animation, "block") {
+		case "block":
 			r.Add(config.EnemyStateBlock, idx, frames)
-		} else {
+		default:
 			fmt.Printf("Unknown animation: %s\n", animation)
 		}
 	}

@@ -161,7 +161,29 @@ func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingT
 	if thingCfg.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
 		if thingCfg.Model3DEntry != nil {
-			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
+			ConvertAnimation(actions, 0, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
+		}
+		_ = common.NewEnemy(thingCfg, actions)
+		thingCfg.JumpForce = JumpForce
+		thingCfg.WakeupDistance = wakeupDistance
+	} else {
+		_ = common.NewItem(thingCfg)
+	}
+	return thingCfg
+}
+
+func (t *Things) doCreateParts(classname string, pos geometry.XYZ, kind config.ThingType, md3 *config.Model3D, angle, mass, radius, height, speed float64) *config.Thing {
+	const wakeupDistance = 300
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
+	thingCfg.Model3D = md3
+	thingCfg.GForce = GForce
+	if thingCfg.Kind == config.ThingEnemyDef {
+		actions := config.NewEnemyAnimations()
+		for partIdx, part := range md3.Parts {
+			if part == nil {
+				continue
+			}
+			ConvertAnimation(actions, partIdx, part.ActionDefinitions, part.ActionIntervals)
 		}
 		_ = common.NewEnemy(thingCfg, actions)
 		thingCfg.JumpForce = JumpForce
@@ -315,9 +337,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 
 	// We pass md3.Parts[0] to doCreate so that it can extract the ActionDefinitions for the enemy logic.
 	// We'll set Model3DEntry to nil afterwards since this is an Model3D model.
-	thingCfg := t.doCreate(classname, pos, config.ThingEnemyDef, md3.Parts[0], 0, 30.0, 16.0, 56, 600.0)
-	thingCfg.Model3DEntry = nil
-	thingCfg.Model3D = md3
+	thingCfg := t.doCreateParts(classname, pos, config.ThingEnemyDef, md3, 0, 30.0, 16.0, 56, 600.0)
 
 	return thingCfg, nil
 }

@@ -229,6 +229,7 @@ func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	if idx, ok := v.tagMap[name]; ok {
 		return idx
 	}
+	fmt.Printf("[warning] Vertices3DEntry %s: tag not found\n", name)
 	return -1
 }
 

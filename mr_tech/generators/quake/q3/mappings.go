@@ -3,6 +3,7 @@ package q3
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 )
@@ -94,9 +95,45 @@ var _q3ShaderFallback = map[string]string{
 3 = killsky_2.jpg ->
 */
 
-func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
-	for idx, animData := range animations {
-		animData = strings.TrimSpace(strings.ToLower(animData))
+func toAnimationString(in string) string {
+	var out []rune
+	for _, v := range in {
+		if v >= 'a' && v <= 'z' {
+			out = append(out, v)
+			continue
+		} else if v >= 'A' && v <= 'Z' {
+			out = append(out, unicode.ToLower(v))
+			continue
+		} else if v >= '0' && v <= '9' {
+			out = append(out, v)
+			continue
+		} else if v == '_' {
+			out = append(out, v)
+			continue
+		}
+		break
+	}
+
+	var ret []rune
+	for _, v := range out {
+		if v >= '0' && v <= '9' {
+			break
+		}
+		ret = append(ret, v)
+	}
+	return string(ret)
+}
+
+func ConvertAnimation(r *config.EnemyAnimations, partId int, animations []string, intervals [][2]int) {
+	for idx, inData := range animations {
+		//PATCH MOMENTANEA
+		if partId != 0 {
+			continue
+		}
+		animData := toAnimationString(inData)
+		if len(animData) == 0 {
+			continue
+		}
 		anim := strings.Split(animData, "_")
 		var animation string
 		if len(anim) > 1 {
@@ -104,50 +141,59 @@ func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals 
 		} else {
 			animation = anim[0]
 		}
-		if strings.HasPrefix(animation, "(") {
+		//animation = toAnimationString(animation)
+		frames := intervals[idx][1] - intervals[idx][0]
+		if frames <= 1 {
 			continue
 		}
-		if strings.HasPrefix(animation, "stand") || strings.HasPrefix(animation, "idle") {
-			r.Add(config.EnemyStateIdle, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "hover") {
-			r.Add(config.EnemyStateIdle, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "walk") {
-			r.Add(config.EnemyStateWalk, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "run") {
-			r.Add(config.EnemyStateChase, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "prowl") {
-			r.Add(config.EnemyStateProwl, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "jump") {
-			r.Add(config.EnemyStateJump, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "attack") {
-			r.Add(config.EnemyStateMelee, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "shoot") {
-			r.Add(config.EnemyStateShoot, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "smash") {
-			r.Add(config.EnemyStateShoot, idx, intervals[idx][1]-intervals[idx][0]) // TODO IMPLEMENT
-		} else if strings.HasPrefix(animation, "load") {
-			r.Add(config.EnemyStateReload, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "pain") {
-			r.Add(config.EnemyStatePain, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "dead") || strings.HasPrefix(animation, "death") {
-			r.Add(config.EnemyStateDead, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "pull") {
-			r.Add(config.EnemyStatePull, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "swing") {
-			r.Add(config.EnemyStateSwing, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "fly") {
-			r.Add(config.EnemyStateFly, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "duck") {
-			r.Add(config.EnemyStateKneel, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "swim") {
-			r.Add(config.EnemyStateSwim, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "land") {
-			r.Add(config.EnemyStateLand, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "turn") {
-			r.Add(config.EnemyStateTurn, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "back") {
-			r.Add(config.EnemyStateBack, idx, intervals[idx][1]-intervals[idx][0])
-		} else {
+
+		//fmt.Println("PARTNAME", animData, frames)
+
+		//fmt.Println(inData, animation)
+		switch animation {
+		case "idle", "idlecr":
+			r.Add(config.EnemyStateIdle, idx, frames)
+		case "hover":
+			r.Add(config.EnemyStateIdle, idx, frames)
+		case "walk", "walkcr":
+			r.Add(config.EnemyStateWalk, idx, frames)
+		case "run":
+			r.Add(config.EnemyStateRun, idx, frames)
+		case "gesture":
+			//r.Add(config.EnemyStateRun, idx, frames)
+		case "prowl":
+			r.Add(config.EnemyStateProwl, idx, frames)
+		case "jump", "jumpb", "jumpcr":
+			r.Add(config.EnemyStateJump, idx, frames)
+		case "attack":
+			r.Add(config.EnemyStateAttack, idx, frames)
+		case "shoot":
+			r.Add(config.EnemyStateShoot, idx, frames)
+		case "smash":
+			r.Add(config.EnemyStateShoot, idx, frames)
+		case "load":
+			r.Add(config.EnemyStateReload, idx, frames)
+		case "pain":
+			r.Add(config.EnemyStatePain, idx, frames)
+		case "dead", "death":
+			r.Add(config.EnemyStateDead, idx, frames)
+		case "pull":
+			r.Add(config.EnemyStatePull, idx, frames)
+		case "swing":
+			r.Add(config.EnemyStateSwing, idx, frames)
+		case "fly":
+			r.Add(config.EnemyStateFly, idx, frames)
+		case "duck":
+			r.Add(config.EnemyStateKneel, idx, frames)
+		case "swim":
+			r.Add(config.EnemyStateSwim, idx, frames)
+		case "land", "landb":
+			r.Add(config.EnemyStateLand, idx, frames)
+		case "turn":
+			r.Add(config.EnemyStateTurn, idx, frames)
+		case "back":
+			r.Add(config.EnemyStateBack, idx, frames)
+		default:
 			fmt.Printf("Unknown animation: %s\n", animation)
 		}
 	}

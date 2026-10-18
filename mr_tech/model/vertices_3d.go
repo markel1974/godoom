@@ -15,11 +15,6 @@ var _identityMatrix = [3]geometry.XYZ{
 	{X: 0, Y: 0, Z: 1},
 }
 
-// v3dIdentityMatrix returns a 3x3 identity matrix.
-func v3dIdentityMatrix() [3]geometry.XYZ {
-	return _identityMatrix
-}
-
 // Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
 type Vertices3D struct {
 	facesA          []*Face
@@ -94,27 +89,52 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			links[i].Parent = -1
 			links[i].Tag = ""
 		} else if links[i].Parent >= numParts {
-			fmt.Printf("[warning] Vertices3D %s: part %d links to invalid parent %d (numParts=%d), disconnecting link\n",
-				cfg.Id, i, links[i].Parent, numParts)
+			fmt.Printf("[warning] Vertices3D %s: part %d links to invalid parent %d (numParts=%d), disconnecting link\n", cfg.Id, i, links[i].Parent, numParts)
 			links[i].Parent = -1
 			links[i].Tag = ""
 		}
 	}
 
-	// Reject circular dependencies by checking ancestor chains
+	// Reject circular dependencies by checking ancestor chains using 3-state tracking
+	const (
+		cycleUnvisited = 0
+		cycleVisiting  = 1
+		cycleVisited   = 2
+	)
+	cycleState := make([]int, numParts)
 	for i := 0; i < numParts; i++ {
-		visited := make([]bool, numParts)
+		if cycleState[i] != cycleUnvisited {
+			continue
+		}
 		curr := i
+		prev := -1
 		for curr >= 0 && curr < numParts {
-			if visited[curr] {
-				fmt.Printf("[warning] Vertices3D %s: circular link detected involving part %d, disconnecting link to parent %d\n",
-					cfg.Id, i, links[i].Parent)
-				links[i].Parent = -1
-				links[i].Tag = ""
+			if cycleState[curr] == cycleVisited {
 				break
 			}
-			visited[curr] = true
+			if cycleState[curr] == cycleVisiting {
+				// curr was encountered again while visiting the current chain.
+				// prev is the node that links to curr, closing the cycle.
+				// Disconnect exclusively the edge prev -> curr (which belongs to the cycle),
+				// preserving valid upstream parent connections (e.g. A -> B when B <-> C).
+				if prev >= 0 {
+					fmt.Printf("[warning] Vertices3D %s: circular link detected from part %d to parent %d, disconnecting link\n", cfg.Id, prev, links[prev].Parent)
+					links[prev].Parent = -1
+					links[prev].Tag = ""
+				}
+				break
+			}
+			cycleState[curr] = cycleVisiting
+			prev = curr
 			curr = links[curr].Parent
+		}
+
+		// Mark all nodes visited in this chain as fully processed (now acyclic)
+		curr = i
+		for curr >= 0 && curr < numParts && cycleState[curr] == cycleVisiting {
+			next := links[curr].Parent
+			cycleState[curr] = cycleVisited
+			curr = next
 		}
 	}
 
@@ -123,8 +143,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	if rawActionMaps == nil || len(rawActionMaps) == 0 {
 		fmt.Printf("[warning] Vertices3D %s: Model3D has no ActionMaps defined\n", cfg.Id)
 	} else if len(rawActionMaps) != numParts {
-		fmt.Printf("[warning] Vertices3D %s: ActionMaps count (%d) does not match parts count (%d)\n",
-			cfg.Id, len(rawActionMaps), numParts)
+		fmt.Printf("[warning] Vertices3D %s: ActionMaps count (%d) does not match parts count (%d)\n", cfg.Id, len(rawActionMaps), numParts)
 	}
 
 	expectedActions := 0
@@ -143,12 +162,10 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			aMap = make([]int, len(rawActionMaps[i]))
 			copy(aMap, rawActionMaps[i])
 			if expectedActions > 0 && len(aMap) < expectedActions {
-				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d\n",
-					cfg.Id, i, len(aMap), expectedActions)
+				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d\n", cfg.Id, i, len(aMap), expectedActions)
 			}
 		} else {
-			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, creating default map (action 0)\n",
-				cfg.Id, i)
+			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, creating default map (action 0)\n", cfg.Id, i)
 			aMap = make([]int, expectedActions)
 		}
 
@@ -216,10 +233,9 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 
 	rotationsA := make([][3]geometry.XYZ, numParts)
 	rotationsB := make([][3]geometry.XYZ, numParts)
-	identityMat := v3dIdentityMatrix()
 	for i := 0; i < numParts; i++ {
-		rotationsA[i] = identityMat
-		rotationsB[i] = identityMat
+		rotationsA[i] = _identityMatrix
+		rotationsB[i] = _identityMatrix
 	}
 
 	v := &Vertices3D{
@@ -358,17 +374,15 @@ func (v *Vertices3D) SetThing(t IThing) {
 func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	var lerpTRet float64
 
-	identityMat := v3dIdentityMatrix()
-
 	for _, i := range v.executionOrder {
 		el := v.elements[i]
 		if el == nil {
 			v.volsA[i] = nil
 			v.volsB[i] = nil
-			v.originsA[i] = geometry.XYZ{}
-			v.originsB[i] = geometry.XYZ{}
-			v.rotationsA[i] = identityMat
-			v.rotationsB[i] = identityMat
+			v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
+			v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
+			v.rotationsA[i] = _identityMatrix
+			v.rotationsB[i] = _identityMatrix
 			continue
 		}
 
@@ -431,10 +445,10 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				v.rotationsB[i] = v.rotationsB[pIdx]
 			}
 		} else {
-			v.originsA[i] = geometry.XYZ{}
-			v.originsB[i] = geometry.XYZ{}
-			v.rotationsA[i] = identityMat
-			v.rotationsB[i] = identityMat
+			v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
+			v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
+			v.rotationsA[i] = _identityMatrix
+			v.rotationsB[i] = _identityMatrix
 		}
 
 		offset := v.partFaceOffsets[i]

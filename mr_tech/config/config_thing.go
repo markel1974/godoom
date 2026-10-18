@@ -107,6 +107,7 @@ func (t *Thing) Clone() *Thing {
 		Model3D:      t.Model3D,
 		MultiSprite:  t.MultiSprite,
 		Sprite:       t.Sprite,
+		OnBind:       t.OnBind,
 		OnThinking:   t.OnThinking,
 		OnCollision:  t.OnCollision,
 		OnImpact:     t.OnImpact,

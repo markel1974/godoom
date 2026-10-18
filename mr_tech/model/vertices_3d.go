@@ -95,46 +95,39 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		}
 	}
 
-	// Reject circular dependencies by checking ancestor chains using 3-state tracking
-	const (
-		cycleUnvisited = 0
-		cycleVisiting  = 1
-		cycleVisited   = 2
-	)
-	cycleState := make([]int, numParts)
+	// Reject circular dependencies by recording node positions in the current chain
+	visited := make([]bool, numParts)
+	pathIndex := make([]int, numParts)
+	path := make([]int, 0, numParts)
 	for i := 0; i < numParts; i++ {
-		if cycleState[i] != cycleUnvisited {
+		if visited[i] {
 			continue
 		}
+		for k := range pathIndex {
+			pathIndex[k] = -1
+		}
+		path = path[:0]
 		curr := i
-		prev := -1
 		for curr >= 0 && curr < numParts {
-			if cycleState[curr] == cycleVisited {
+			if visited[curr] {
 				break
 			}
-			if cycleState[curr] == cycleVisiting {
-				// curr was encountered again while visiting the current chain.
-				// prev is the node that links to curr, closing the cycle.
-				// Disconnect exclusively the edge prev -> curr (which belongs to the cycle),
-				// preserving valid upstream parent connections (e.g. A -> B when B <-> C).
-				if prev >= 0 {
-					fmt.Printf("[warning] Vertices3D %s: circular link detected from part %d to parent %d, disconnecting link\n", cfg.Id, prev, links[prev].Parent)
-					links[prev].Parent = -1
-					links[prev].Tag = ""
-				}
+			if pos := pathIndex[curr]; pos >= 0 {
+				// Cycle detected starting at path[pos] (curr) and closed by path[len(path)-1] -> curr.
+				// Disconnect exclusively the edge closing the cycle, preserving upstream links.
+				prev := path[len(path)-1]
+				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n",
+					cfg.Id, curr, prev, links[prev].Parent)
+				links[prev].Parent = -1
+				links[prev].Tag = ""
 				break
 			}
-			cycleState[curr] = cycleVisiting
-			prev = curr
+			pathIndex[curr] = len(path)
+			path = append(path, curr)
 			curr = links[curr].Parent
 		}
-
-		// Mark all nodes visited in this chain as fully processed (now acyclic)
-		curr = i
-		for curr >= 0 && curr < numParts && cycleState[curr] == cycleVisiting {
-			next := links[curr].Parent
-			cycleState[curr] = cycleVisited
-			curr = next
+		for _, node := range path {
+			visited[node] = true
 		}
 	}
 
@@ -399,7 +392,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		v.volsA[i] = volA
 		v.volsB[i] = volB
 
-		if (len(v.executionOrder) > 0 && i == v.executionOrder[0]) || (lerpTRet == 0 && lerpT > 0) {
+		if i == 0 {
 			lerpTRet = lerpT
 		}
 

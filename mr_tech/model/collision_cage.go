@@ -19,6 +19,7 @@ const (
 )
 
 const satFilterEpsilon = 0.05
+const planeEpsilon = 0.01
 
 // BucketType represents the type of bucket categorizing spatial elements such as walls, ceiling, and floor in 3D space.
 type BucketType int
@@ -231,7 +232,7 @@ func (b *CollisionBucket) Penetrable(from uint64) bool {
 func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *CollisionCage, rFace *Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode int) *CageEntry {
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
-		// 1. DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
+		// DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
 			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
@@ -241,14 +242,21 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 				return nil // Interrompiamo: abbiamo già gestito questo oggetto in questo bucket
 			}
 		}
-		// 2. DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
+		// DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
 		// Se il dot product è ~1.0, i due triangoli formano un piano continuo (Triangle Soup statica)
 		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
-			// Aggiorniamo il vincolo solo se la nuova penetrazione è più profonda
-			if penetration > existing.penetration {
-				existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+			planeDistance := math.Abs(
+				(p0x-existing.p0X)*existing.nX +
+					(p0y-existing.p0Y)*existing.nY +
+					(p0z-existing.p0Z)*existing.nZ,
+			)
+			if planeDistance < planeEpsilon {
+				// Aggiorniamo il vincolo solo se la nuova penetrazione è più profonda
+				if penetration > existing.penetration {
+					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 
@@ -382,8 +390,16 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.object.GetEntity().GetCenter()
-		lOffX, lOffY, lOffZ = s.object.GetEntity().GetCenter()
+		rOffX, rOffY, rOffZ = rCage.object.GetDisplacement()
+		rDX, rDY, rDZ := rCage.object.GetEntity().GetDisplacement()
+		rOffX += rDX
+		rOffY += rDY
+		rOffZ += rDZ
+
+		lOffX, lOffY, lOffZ = s.object.GetDisplacement()
+		lOffX += s.dX
+		lOffY += s.dY
+		lOffZ += s.dZ
 	}
 
 	for x := 0; x < s.facesIdx; x++ {
@@ -539,55 +555,137 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 // lOffX, lOffY, lOffZ specify the position offsets for the local face in world space.
 // Returns the collision bucket, hit distance, maximum penetration depth, normal vector, anchor point, and overlap metrics.
 func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	// 1. Dati del piano remoto (Il Muro/Ostacolo)
+	// Dati del piano remoto (Il Muro/Ostacolo)
 	nX, nY, nZ := rFace.GetNormal()
+	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
+		return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	}
 
 	// Punto di ancoraggio del piano remoto in World Space
 	p0x := rFace.tri[0].X + rOffX
 	p0y := rFace.tri[0].Y + rOffY
 	p0z := rFace.tri[0].Z + rOffZ
 
-	// 2. Normalizzazione
-	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
+	rParent := rFace.GetParent()
+	if rParent == nil {
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
+	rEnt := rParent.GetEntity()
+	rCx0, rCy0, rCz0 := rEnt.GetCenter()
+	rDX, rDY, rDZ := rEnt.GetDisplacement()
+	rTx := rCx0 + rDX
+	rTy := rCy0 + rDY
+	rTz := rCz0 + rDZ
+	rRadX, rRadY, rRadZ := rEnt.GetSizeCenter()
+
+	// Orientiamo la normale sempre verso l'esterno del volume remoto
+	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
+	if outDot < -planeEpsilon {
+		nX, nY, nZ = -nX, -nY, -nZ
+		outDot = -outDot
+	} else if math.Abs(outDot) <= planeEpsilon {
+		// Piano interno passante per il centro del volume (es. piano visivo billboard): ignoriamo per la fisica
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
+
+	// Il centro pre-movimento dell'entità locale deve trovarsi sul semispazio esterno della faccia remota
+	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+	if distStart < -planeEpsilon {
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
+
+	// Direzione d'impatto relativa tra i due oggetti
+	impX := s.dX - rDX
+	impY := s.dY - rDY
+	impZ := s.dZ - rDZ
+	impDot := impX*nX + impY*nY + impZ*nZ
+	if impDot > planeEpsilon {
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+	}
+
+	// Sovrapposizione volumetrica 3D pre-movimento (inizio frame) e post-movimento (target)
+	prevOX := math.Max(0.0, math.Min((s.cX+s.eRadX)-(rCx0-rRadX), (rCx0+rRadX)-(s.cX-s.eRadX)))
+	prevOY := math.Max(0.0, math.Min((s.cY+s.eRadY)-(rCy0-rRadY), (rCy0+rRadY)-(s.cY-s.eRadY)))
+	prevOZ := math.Max(0.0, math.Min((s.cZ+s.eRadZ)-(rCz0-rRadZ), (rCz0+rRadZ)-(s.cZ-s.eRadZ)))
+
+	boxOX := math.Max(0.0, math.Min((s.tX+s.eRadX)-(rTx-rRadX), (rTx+rRadX)-(s.tX-s.eRadX)))
+	boxOY := math.Max(0.0, math.Min((s.tY+s.eRadY)-(rTy-rRadY), (rTy+rRadY)-(s.tY-s.eRadY)))
+	boxOZ := math.Max(0.0, math.Min((s.tZ+s.eRadZ)-(rTz-rRadZ), (rTz+rRadZ)-(s.tZ-s.eRadZ)))
+
+	relX := s.cX - rCx0
+	relY := s.cY - rCy0
+	relZ := s.cZ - rCz0
+
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
 
-	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	var bucket BucketType
+	var axisOverlap float64
 
-	if solidWE || solidNS {
-		if distStart < 0 {
-			nX, nY, nZ = -nX, -nY, -nZ
+	if solidWE {
+		if relX*nX <= 0 {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		if solidWE {
-			if nX < 0 {
-				bucket = BucketWallWest
-			} else {
-				bucket = BucketWallEast
-			}
+		validVsY := (boxOX <= boxOY+satFilterEpsilon || (prevOX <= prevOY+satFilterEpsilon && impX*nX < -planeEpsilon)) &&
+			!(prevOX > prevOY+satFilterEpsilon && math.Abs(impY) > math.Abs(impX))
+		validVsZ := (boxOX <= boxOZ+satFilterEpsilon || (prevOX <= prevOZ+satFilterEpsilon && impX*nX < -planeEpsilon)) &&
+			!(prevOX > prevOZ+satFilterEpsilon && math.Abs(impZ) > math.Abs(impX))
+		if !validVsY || !validVsZ {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		axisOverlap = boxOX
+		if nX < 0 {
+			bucket = BucketWallWest
 		} else {
-			if nY < 0 {
-				bucket = BucketWallNorth
-			} else {
-				bucket = BucketWallSouth
-			}
+			bucket = BucketWallEast
+		}
+	} else if solidNS {
+		if relY*nY <= 0 {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		validVsX := (boxOY <= boxOX+satFilterEpsilon || (prevOY <= prevOX+satFilterEpsilon && impY*nY < -planeEpsilon)) &&
+			!(prevOY > prevOX+satFilterEpsilon && math.Abs(impX) > math.Abs(impY))
+		validVsZ := (boxOY <= boxOZ+satFilterEpsilon || (prevOY <= prevOZ+satFilterEpsilon && impY*nY < -planeEpsilon)) &&
+			!(prevOY > prevOZ+satFilterEpsilon && math.Abs(impZ) > math.Abs(impY))
+		if !validVsX || !validVsZ {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		axisOverlap = boxOY
+		if nY < 0 {
+			bucket = BucketWallNorth
+		} else {
+			bucket = BucketWallSouth
 		}
 	} else {
-		planeZ := p0z
-		if nAbsZ > 1e-5 {
-			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
+		// Impatto verticale (Floor/Ceiling): valido solo se l'asse verticale era ed è quello di separazione/impatto
+		if relZ*nZ <= 0 {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		if s.cZ >= planeZ {
+		if prevOZ > prevOX+satFilterEpsilon || prevOZ > prevOY+satFilterEpsilon {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		if (boxOZ > boxOX+satFilterEpsilon || boxOZ > boxOY+satFilterEpsilon) && impZ*nZ >= -planeEpsilon {
+			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		axisOverlap = boxOZ
+		if nZ > 0 {
 			bucket = BucketFloor
-			if nZ < 0 {
-				nX, nY, nZ = -nX, -nY, -nZ
-			}
 		} else {
-			bucket = BucketCeiling
-			if nZ > 0 {
-				nX, nY, nZ = -nX, -nY, -nZ
+			// Il soffitto può essere colpito solo con movimento relativo verso l'alto
+			if impZ <= planeEpsilon {
+				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 			}
+			bucket = BucketCeiling
 		}
+	}
+
+	// Verifica che l'intero volume dell'entità non superi l'overlap fisico lungo la normale
+	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
+	bodyPen := rayEff - distTarget
+	if bodyPen <= 0 || bodyPen > axisOverlap+satFilterEpsilon {
+		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
 	// 6 DOF: Calcolo Penetrazione Esatta Vertice-Piano
@@ -614,30 +712,10 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// SAT Filter basato sulle AABB locali portate in World Space
 	rFaceAABB := rFace.GetAABB()
-	rMinX := rFaceAABB.GetMinX() + rOffX
-	rMaxX := rFaceAABB.GetMaxX() + rOffX
-	rMinY := rFaceAABB.GetMinY() + rOffY
-	rMaxY := rFaceAABB.GetMaxY() + rOffY
-	rMinZ := rFaceAABB.GetMinZ() + rOffZ
 	rMaxZ := rFaceAABB.GetMaxZ() + rOffZ
 
-	lFaceAABB := lFace.GetAABB()
-	lMinX := lFaceAABB.GetMinX() + lOffX
-	lMaxX := lFaceAABB.GetMaxX() + lOffX
-	lMinY := lFaceAABB.GetMinY() + lOffY
-	lMaxY := lFaceAABB.GetMaxY() + lOffY
-	lMinZ := lFaceAABB.GetMinZ() + lOffZ
-	lMaxZ := lFaceAABB.GetMaxZ() + lOffZ
-
-	oX := math.Max(0.0, math.Min(lMaxX-rMinX, rMaxX-lMinX))
-	oY := math.Max(0.0, math.Min(lMaxY-rMinY, rMaxY-lMinY))
-	oZ := math.Max(0.0, math.Min(lMaxZ-rMinZ, rMaxZ-lMinZ))
-
-	minOverlap := math.Min(oX, math.Min(oY, oZ))
-
-	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
+	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }
 
 func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) ContactManifold {
@@ -813,12 +891,17 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 
 // TranslateCage computes the local translation of a target CollisionCage and returns relative position deltas in 3D space.
 func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAABB, float64, float64, float64) {
-	lCx, lCy, lCz := s.object.GetEntity().GetCenter()
-	rCx, rCy, rCz := rCage.object.GetEntity().GetCenter()
-	//lCx, lCy, lCz := s.GetAABB().GetCentroid()
-	//rCx, rCy, rCz := rCage.GetAABB().GetCentroid()
-	lEntityL := s.TranslateWorldToLocal(slot, rCx, rCy, rCz)
-	return lEntityL, rCx - lCx, rCy - lCy, rCz - lCz
+	lOx, lOy, lOz := s.object.GetDisplacement()
+	lOx += s.dX
+	lOy += s.dY
+	lOz += s.dZ
+	rOx, rOy, rOz := rCage.object.GetDisplacement()
+	rDX, rDY, rDZ := rCage.object.GetEntity().GetDisplacement()
+	rOx += rDX
+	rOy += rDY
+	rOz += rDZ
+	lEntityL := s.TranslateWorldToLocal(slot, rOx, rOy, rOz)
+	return lEntityL, rOx - lOx, rOy - lOy, rOz - lOz
 }
 
 // Translate updates an ellipsoid slot's dimensions by applying delta values to the target AABB coordinates in world space.
@@ -831,6 +914,18 @@ func (s *CollisionCage) Translate(slot int, src aabb.IAABB, deltaX, deltaY, delt
 	lMaxY := to.GetMaxY() + deltaY
 	lMinZ := to.GetMinZ() + deltaZ
 	lMaxZ := to.GetMaxZ() + deltaZ
+	if f, ok := src.(*Face); ok {
+		nX, nY, nZ := f.GetNormal()
+		padX := math.Abs(nX) * s.eRadX * 2.0
+		padY := math.Abs(nY) * s.eRadY * 2.0
+		padZ := math.Abs(nZ) * s.eRadZ * 2.0
+		lMinX -= padX
+		lMaxX += padX
+		lMinY -= padY
+		lMaxY += padY
+		lMinZ -= padZ
+		lMaxZ += padZ
+	}
 	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
 	return w
 }

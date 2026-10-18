@@ -9,6 +9,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+var _identityMatrix = [3]geometry.XYZ{
+	{X: 1, Y: 0, Z: 0},
+	{X: 0, Y: 1, Z: 0},
+	{X: 0, Y: 0, Z: 1},
+}
+
+// v3dIdentityMatrix returns a 3x3 identity matrix.
+func v3dIdentityMatrix() [3]geometry.XYZ {
+	return _identityMatrix
+}
+
 // Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
 type Vertices3D struct {
 	facesA          []*Face
@@ -370,7 +381,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		v.volsA[i] = volA
 		v.volsB[i] = volB
 
-		if len(v.executionOrder) > 0 && i == v.executionOrder[0] {
+		if (len(v.executionOrder) > 0 && i == v.executionOrder[0]) || (lerpTRet == 0 && lerpT > 0) {
 			lerpTRet = lerpT
 		}
 
@@ -536,15 +547,6 @@ func v3dZeroFace(dst *Face) {
 	dst.tri[0] = geometry.XYZ{}
 	dst.tri[1] = geometry.XYZ{}
 	dst.tri[2] = geometry.XYZ{}
-}
-
-// v3dIdentityMatrix returns a 3x3 identity matrix.
-func v3dIdentityMatrix() [3]geometry.XYZ {
-	return [3]geometry.XYZ{
-		{X: 1, Y: 0, Z: 0},
-		{X: 0, Y: 1, Z: 0},
-		{X: 0, Y: 0, Z: 1},
-	}
 }
 
 // v3dIsIdentity returns true if the matrix is an identity matrix.

@@ -8,9 +8,11 @@ type Model3DLink struct {
 
 // Model3D represents a multi-part 3D model used in Quake 3 (e.g. players).
 type Model3D struct {
-	Parts      []*Model3DEntry
-	Links      []Model3DLink
-	ActionMaps [][]int
+	Parts             []*Model3DEntry
+	Links             []Model3DLink
+	ActionMaps        [][]int
+	ActionDefinitions []string
+	ActionIntervals   [][2]int
 }
 
 // NewMD3 creates a new Model3D structure holding multiple parts.

@@ -161,7 +161,7 @@ func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingT
 	if thingCfg.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
 		if thingCfg.Model3DEntry != nil {
-			ConvertAnimation(actions, 0, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
+			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
 		_ = common.NewEnemy(thingCfg, actions)
 		thingCfg.JumpForce = JumpForce
@@ -179,11 +179,8 @@ func (t *Things) doCreateParts(classname string, pos geometry.XYZ, kind config.T
 	thingCfg.GForce = GForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
-		for partIdx, part := range md3.Parts {
-			if part == nil {
-				continue
-			}
-			ConvertAnimation(actions, partIdx, part.ActionDefinitions, part.ActionIntervals)
+		if md3 != nil && len(md3.ActionDefinitions) > 0 {
+			ConvertAnimation(actions, md3.ActionDefinitions, md3.ActionIntervals)
 		}
 		_ = common.NewEnemy(thingCfg, actions)
 		thingCfg.JumpForce = JumpForce
@@ -247,10 +244,16 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 	md3 := config.NewMD3(parts, links)
 
+	var globalActionNames []string
+	var globalActionIntervals [][2]int
+
 	if rsAnim, err := t.arc.Open(basePath + "animation.cfg"); err == nil {
 		if animCfg, err := lumps.NewAnimConfig3(rsAnim); err == nil {
 			// Map animations to intervals based on the parsed file
 			for _, anim := range animCfg.Animations {
+				globalActionNames = append(globalActionNames, anim.Name)
+				globalActionIntervals = append(globalActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
+
 				if strings.HasPrefix(anim.Name, "BOTH_") {
 					md3.Parts[0].ActionDefinitions = append(md3.Parts[0].ActionDefinitions, anim.Name)
 					md3.Parts[0].ActionIntervals = append(md3.Parts[0].ActionIntervals, [2]int{anim.FirstFrame, anim.FirstFrame + anim.NumFrames - 1})
@@ -270,7 +273,9 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 
 	// Fallback if animation.cfg is missing or empty
-	if len(md3.Parts[0].ActionDefinitions) == 0 {
+	if len(globalActionNames) == 0 {
+		globalActionNames = []string{idleDef}
+		globalActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
 		md3.Parts[0].ActionDefinitions = []string{idleDef}
 		md3.Parts[0].ActionIntervals = [][2]int{{0, len(lower.Frames) - 1}}
 		md3.Parts[1].ActionDefinitions = []string{idleDef}
@@ -286,57 +291,72 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		md3.Parts[3].ActionIntervals = [][2]int{{0, 0}}
 	}
 
-	md3.ActionMaps = make([][]int, 4)
+	md3.ActionDefinitions = globalActionNames
+	md3.ActionIntervals = globalActionIntervals
 
-	md3.ActionMaps[0] = make([]int, len(md3.Parts[0].ActionDefinitions))
-	for idx := range md3.Parts[0].ActionDefinitions {
-		md3.ActionMaps[0][idx] = idx
+	defaultLegsIdle := 0
+	for li, lName := range md3.Parts[0].ActionDefinitions {
+		if strings.EqualFold(lName, "legs_idle") {
+			defaultLegsIdle = li
+			break
+		}
 	}
 
-	md3.ActionMaps[1] = make([]int, len(md3.Parts[0].ActionDefinitions))
-	for idx, lowerName := range md3.Parts[0].ActionDefinitions {
-		upperIdx := 0
-		nameLower := strings.ToLower(lowerName)
-		found := false
+	defaultTorsoStand := 0
+	for ui, uName := range md3.Parts[1].ActionDefinitions {
+		if strings.EqualFold(uName, "torso_stand") {
+			defaultTorsoStand = ui
+			break
+		}
+	}
 
-		for ui, uName := range md3.Parts[1].ActionDefinitions {
-			if strings.ToLower(uName) == nameLower {
-				upperIdx = ui
-				found = true
+	numGlobal := len(globalActionNames)
+	md3.ActionMaps = make([][]int, 4)
+	md3.ActionMaps[0] = make([]int, numGlobal)
+	md3.ActionMaps[1] = make([]int, numGlobal)
+	md3.ActionMaps[2] = make([]int, numGlobal)
+	md3.ActionMaps[3] = make([]int, numGlobal)
+
+	for idx, gName := range globalActionNames {
+		// Part 0 (Legs / Lower)
+		lowerIdx := -1
+		for li, lName := range md3.Parts[0].ActionDefinitions {
+			if strings.EqualFold(lName, gName) {
+				lowerIdx = li
 				break
 			}
 		}
-
-		if !found {
-			if strings.HasPrefix(nameLower, "both_") {
-				torsoName := strings.Replace(nameLower, "both_", "torso_", 1)
-				for ui, uName := range md3.Parts[1].ActionDefinitions {
-					if strings.ToLower(uName) == torsoName {
-						upperIdx = ui
-						found = true
-						break
-					}
-				}
-			} else if strings.HasPrefix(nameLower, "legs_") {
-				torsoName := "torso_stand"
-				for ui, uName := range md3.Parts[1].ActionDefinitions {
-					if strings.ToLower(uName) == torsoName {
-						upperIdx = ui
-						found = true
-						break
-					}
-				}
+		if lowerIdx == -1 {
+			if strings.HasPrefix(strings.ToLower(gName), "torso_") {
+				lowerIdx = defaultLegsIdle
+			} else {
+				lowerIdx = 0
 			}
 		}
+		md3.ActionMaps[0][idx] = lowerIdx
 
+		// Part 1 (Torso / Upper)
+		upperIdx := -1
+		for ui, uName := range md3.Parts[1].ActionDefinitions {
+			if strings.EqualFold(uName, gName) {
+				upperIdx = ui
+				break
+			}
+		}
+		if upperIdx == -1 {
+			if strings.HasPrefix(strings.ToLower(gName), "legs_") {
+				upperIdx = defaultTorsoStand
+			} else {
+				upperIdx = 0
+			}
+		}
 		md3.ActionMaps[1][idx] = upperIdx
+
+		// Part 2 (Head) & Part 3 (Weapon)
+		md3.ActionMaps[2][idx] = 0
+		md3.ActionMaps[3][idx] = 0
 	}
 
-	md3.ActionMaps[2] = make([]int, len(md3.Parts[0].ActionDefinitions))
-	md3.ActionMaps[3] = make([]int, len(md3.Parts[0].ActionDefinitions))
-
-	// We pass md3.Parts[0] to doCreate so that it can extract the ActionDefinitions for the enemy logic.
-	// We'll set Model3DEntry to nil afterwards since this is an Model3D model.
 	thingCfg := t.doCreateParts(classname, pos, config.ThingEnemyDef, md3, 0, 30.0, 16.0, 56, 600.0)
 
 	return thingCfg, nil

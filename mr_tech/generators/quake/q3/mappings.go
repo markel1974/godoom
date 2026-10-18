@@ -116,7 +116,6 @@ func toAnimationString(in string) string {
 	if len(out) == 0 {
 		return ""
 	}
-	fmt.Println("PARTNAME", string(out))
 	var ret []rune
 	for _, v := range out {
 		if v >= '0' && v <= '9' {
@@ -127,12 +126,8 @@ func toAnimationString(in string) string {
 	return string(ret)
 }
 
-func ConvertAnimation(r *config.EnemyAnimations, partId int, animations []string, intervals [][2]int) {
+func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, inData := range animations {
-		//PATCH MOMENTANEA
-		if partId != 0 {
-			continue
-		}
 		animData := toAnimationString(inData)
 		if len(animData) == 0 {
 			continue
@@ -150,9 +145,6 @@ func ConvertAnimation(r *config.EnemyAnimations, partId int, animations []string
 			continue
 		}
 
-		//fmt.Println("PARTNAME", animData, frames)
-
-		//fmt.Println(inData, animation)
 		switch animation {
 		case "idle", "idlecr":
 			r.Add(config.EnemyStateIdle, idx, frames)
@@ -170,6 +162,7 @@ func ConvertAnimation(r *config.EnemyAnimations, partId int, animations []string
 			r.Add(config.EnemyStateJump, idx, frames)
 		case "attack":
 			r.Add(config.EnemyStateAttack, idx, frames)
+			r.Add(config.EnemyStateShoot, idx, frames)
 		case "shoot":
 			r.Add(config.EnemyStateShoot, idx, frames)
 		case "smash":

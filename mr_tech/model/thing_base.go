@@ -143,11 +143,8 @@ func (t *ThingBase) SetActive(active bool) {
 func (t *ThingBase) StagePrepare() bool {
 	entity := t.GetEntity()
 	entity.Update()
-	if !entity.IsMoving() {
-		return false
-	}
 	t.cage.Rebuild(t.maxStep)
-	return true
+	return entity.IsMoving()
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.

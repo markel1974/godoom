@@ -211,43 +211,59 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
 		return nil
 	}
-
+	animations := config.NewEnemyAnimations()
 	sd, hasAnim := _spriteDictionary[int(t.Type)]
 	tId := fmt.Sprintf("t_%d", i)
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
-	if !hasAnim {
-		fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
-	} else {
-		multiAngleAnim := CreateAnimation2(texHandler, sd.Sprite)
+	if hasAnim {
+		multiAngleAnim := CreateAnimation(texHandler, sd.Sprite)
 		ms := config.NewMultiSprite()
 		counter := 0
 		for _, angleAnim := range multiAngleAnim {
 			//for _, view := range temporalFrames {
-			var mat *config.Material
-			if len(angleAnim[0]) > 0 {
-				actionFrames := angleAnim[0]
-				mat = config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+			if len(angleAnim[0]) == 0 {
+				continue
 			}
-			ms.Add(mat)
+			actionFrames := angleAnim[0]
+			mat := config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+			_ = ms.Add(mat)
+			// TODO DISABLED FOR THE MOMENT
+			//animId := ms.Add(mat)
+			//for _, ad := range EnemyStateAdapter[idx] {
+			//	animations.Add(ad, animId, len(actionFrames))
+			//}
 			counter++
 		}
-
-		if counter > 0 {
-			cfgThing.MultiSprite = ms
+		// TODO REMOVE
+		if sd.Dead {
+			animations.Add(config.EnemyStateIdle, 4, 9)
+			animations.Add(config.EnemyStateRun, 4, 9)
+			animations.Add(config.EnemyStateShoot, 4, 9)
+			animations.Add(config.EnemyStatePain, 4, 9)
+			animations.Add(config.EnemyStateDead, 4, 9)
+			animations.Add(config.EnemyStateDead, 4, 9)
 		} else {
-			fmt.Printf("WARNING Empty animation for thing type %d, using default sprite\n", t.Type)
-			cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
+			animations.Add(config.EnemyStateIdle, 0, 4)
+			animations.Add(config.EnemyStateRun, 0, 4)
+			animations.Add(config.EnemyStateShoot, 0, 3)
+			animations.Add(config.EnemyStatePain, 0, 1)
+			animations.Add(config.EnemyStateDead, 0, 5)
+			animations.Add(config.EnemyStateDead, 0, 9)
 		}
+
+		cfgThing.MultiSprite = ms
 	}
 
+	//TODO REMOVE
+	//cfgThing.Kind = config.ThingEnemyDef
+
 	if cfgThing.Kind == config.ThingEnemyDef {
-		animations := config.NewEnemyAnimations()
-		animations.Add(config.EnemyStateIdle, 0, 4)
-		animations.Add(config.EnemyStateRun, 0, 4)
-		animations.Add(config.EnemyStateShoot, 1, 3)
-		animations.Add(config.EnemyStatePain, 2, 1)
-		animations.Add(config.EnemyStateDead, 3, 5)
-		animations.Add(config.EnemyStateDead, 4, 9)
+		//animations.Add(config.EnemyStateIdle, 0, 4)
+		//animations.Add(config.EnemyStateRun, 0, 4)
+		//animations.Add(config.EnemyStateShoot, 1, 3)
+		//animations.Add(config.EnemyStatePain, 2, 1)
+		//animations.Add(config.EnemyStateDead, 3, 5)
+		//animations.Add(config.EnemyStateDead, 4, 9)
 		_ = common.NewEnemy(cfgThing, animations)
 		cfgThing.WakeupDistance = 500
 	} else {

@@ -5,7 +5,6 @@ import (
 	"image"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -82,7 +81,7 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 		}
 	}
 	t.resources[srcId] = texture
-	//_ = common.SaveImage(srcId, src)
+	//_ = common.SaveImage("resources/wad/textures/"+srcId, src)
 	return texture
 }
 
@@ -158,6 +157,7 @@ func (t *Textures) FlatCreateAnimation(id string) []string {
 	return []string{targetId}
 }
 
+/*
 // SpriteCreateAnimation generates a list of sprite animation IDs for a given texture ID, resolving nested animations recursively.
 func (t *Textures) SpriteCreateAnimation(ids []string) []string {
 	var out []string
@@ -167,6 +167,9 @@ func (t *Textures) SpriteCreateAnimation(ids []string) []string {
 	}
 	return out
 }
+*/
+
+/*
 
 // BuildSprite estrae dal WAD le sequenze fornite e le compatta in un MultiSprite lineare.
 func (t *Textures) BuildSprite(prefix string) *config.MultiSprite {
@@ -249,6 +252,7 @@ func (t *Textures) BuildSprite(prefix string) *config.MultiSprite {
 
 	return ms
 }
+*/
 
 // AddDirect directly adds a texture to the Textures collection with the specified name and texture object.
 func (t *Textures) AddDirect(name string, tex *textures.Texture) {

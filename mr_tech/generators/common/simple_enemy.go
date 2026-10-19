@@ -50,7 +50,7 @@ type Enemy struct {
 }
 
 // NewEnemy initializes and returns a new Enemy instance with default state, health, and animations.
-func NewEnemy(thingCfg *config.Thing, actions *config.EnemyAnimations) *Enemy {
+func NewEnemy(thingCfg *config.Thing, animations *config.EnemyAnimations) *Enemy {
 	const (
 		shotIntervalMin = 2
 		shotIntervalMax = 4
@@ -60,9 +60,9 @@ func NewEnemy(thingCfg *config.Thing, actions *config.EnemyAnimations) *Enemy {
 		activeAnimation: config.EnemyStateUnknown,
 		health:          100,
 		shotIntervalMin: float64(rand.Intn(shotIntervalMax-shotIntervalMin+1) + shotIntervalMin),
-		actions:         make(map[string]int, len(actions.Content)),
+		actions:         make(map[string]int, len(animations.Content)),
 		lastAnimation:   make(map[config.EnemyState]int),
-		animations:      actions,
+		animations:      animations,
 	}
 	thingCfg.OnBind = e.OnBind
 	thingCfg.OnThinking = e.OnThinking
@@ -229,20 +229,21 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 		fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0
 	}
-	durationFrames, ok := e.playAnimation(state, e.animations.Content[state])
+	durationFrames, action, ok := e.playAnimation(state, e.animations.Content[state])
 	if !ok {
 		return 0
 	}
 	e.activeAnimation = state
 	e.animationDurationFrames = durationFrames
-	fmt.Println("State changed to:", e.self.GetId(), state)
+	fmt.Println("State changed to:", e.self.GetId(), state, action)
 	return durationFrames
 }
 
 // playAnimation selects an animation and returns its duration in frames.
-func (e *Enemy) playAnimation(category config.EnemyState, animations *config.EnemyAnimation) (int, bool) {
+func (e *Enemy) playAnimation(category config.EnemyState, eAnim *config.EnemyAnimation) (int, int, bool) {
 	chooseAnimation := func(state config.EnemyState, animations *config.EnemyAnimation) (int, int, bool) {
-		if animations == nil || len(animations.Indices) == 0 {
+		if len(animations.Indices) == 0 {
+			fmt.Println("No animations for state:", e.self.GetId(), state)
 			return 0, 0, false
 		}
 		if len(animations.Indices) == 1 {
@@ -289,12 +290,12 @@ func (e *Enemy) playAnimation(category config.EnemyState, animations *config.Ene
 		return 0, 0, false
 	}
 
-	action, durationFrames, ok := chooseAnimation(category, animations)
+	action, durationFrames, ok := chooseAnimation(category, eAnim)
 	if !ok {
-		return 0, false
+		return 0, 0, false
 	}
 	e.self.SetAction(action)
-	return durationFrames, true
+	return durationFrames, action, true
 }
 
 // handleLaunch handles the logic for launching a throwable object, including positioning and aiming calculations.

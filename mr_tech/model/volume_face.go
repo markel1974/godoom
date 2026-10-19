@@ -82,20 +82,25 @@ func (s *Face) GetNormalAbs() (float64, float64, float64) {
 	return s.nAbs.X, s.nAbs.Y, s.nAbs.Z
 }
 
-// GetMaterialDetails retrieves the material's texture, type, width scale, and height scale for the face.
-func (s *Face) GetMaterialDetails() (*textures.Texture, int) {
+// GetCurrentFrameTextureDetails retrieves the material's texture, type, width scale, and height scale for the face.
+func (s *Face) GetCurrentFrameTextureDetails() (*textures.Texture, int) {
 	if s.material == nil {
 		return nil, 0
 	}
 	return s.material.CurrentFrame(), s.material.Kind()
 }
 
-// GetMaterial returns the root texture material of the face, or nil if it does not exist.
-func (s *Face) GetMaterial() *textures.Texture {
+// GetCurrentFrameTexture returns the root texture material of the face, or nil if it does not exist.
+func (s *Face) GetCurrentFrameTexture() *textures.Texture {
 	if s.material == nil {
 		return nil
 	}
 	return s.material.CurrentFrame()
+}
+
+// GetMaterial retrieves the material object associated with the Face or nil if no material is set.
+func (s *Face) GetMaterial() *textures.Material {
+	return s.material
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
@@ -544,10 +549,3 @@ func (s *Face) RayIntersectDist(px, py, pz, dx, dy, dz float64) (bool, float64) 
 	return false, 0.0
 }
 */
-
-func (s *Face) GetMaterialObj() *textures.Material {
-	if s.material == nil {
-		return nil
-	}
-	return s.material
-}

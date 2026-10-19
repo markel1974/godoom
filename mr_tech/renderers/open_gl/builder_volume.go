@@ -145,8 +145,8 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 			var added int
 			for x := 0; x < faceCount; x++ {
 				face := (*faces)[x]
-				matObj := face.GetMaterialObj()
-				mat, texKind := face.GetMaterialDetails()
+				matObj := face.GetMaterial()
+				mat, texKind := face.GetCurrentFrameTextureDetails()
 				if mat == nil || matObj == nil {
 					continue
 				}
@@ -235,15 +235,15 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 		for fx := 0; fx < faceCount; fx++ {
 			face := faces[fx]
+			frameTex := face.GetCurrentFrameTexture()
 			mat := face.GetMaterial()
-			matObj := face.GetMaterialObj()
-			if mat == nil || matObj == nil {
+			if frameTex == nil || mat == nil {
 				continue
 			}
 			tId := float32(0)
-			if tId = mat.GetIdentifier(); tId < 0 {
-				tId, _ = w.tex.Get(mat)
-				mat.SetIdentifier(tId)
+			if tId = frameTex.GetIdentifier(); tId < 0 {
+				tId, _ = w.tex.Get(frameTex)
+				frameTex.SetIdentifier(tId)
 			}
 			p := face.GetPoints()
 			u, v := face.GetUV()
@@ -257,9 +257,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 			currentIndices := w.fv.GetIndicesLen()
 			if startIndices != currentIndices {
-				blendMode := matObj.BlendMode()
+				blendMode := mat.BlendMode()
 				targetDc := w.modes[blendMode]
-				targetDc.Compute(startIndices, currentIndices, matObj)
+				targetDc.Compute(startIndices, currentIndices, mat)
 				startIndices = currentIndices
 			}
 		}

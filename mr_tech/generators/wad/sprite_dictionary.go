@@ -13,11 +13,13 @@ type ThingDef struct {
 	Height float64
 	Speed  float64
 	Mass   float64
+	Dead   bool
 	Kind   config.ThingType
 }
 
 const sSpeed = 800
 
+/*
 // _spriteDictionary is a map that associates integer keys with ThingDef structures, defining game objects and their properties.
 var _spriteDictionary = map[int]ThingDef{
 	// --- MOSTRI ---
@@ -134,6 +136,141 @@ var _spriteDictionary = map[int]ThingDef{
 	60: {Sprite: "GOR2", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},  // Hanging victim (Non-blocking originale)
 }
 
+*/
+
+var _spriteDictionary = map[int]ThingDef{
+	// --- MOSTRI ---
+	3004: {Sprite: "POSS", Radius: 20.0, Height: 56.0, Mass: 100.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Zombieman
+	9:    {Sprite: "SPOS", Radius: 20.0, Height: 56.0, Mass: 100.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Shotgun Guy
+	65:   {Sprite: "CPOS", Radius: 20.0, Height: 56.0, Mass: 100.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Heavy Weapon Dude
+	3001: {Sprite: "TROO", Radius: 20.0, Height: 56.0, Mass: 100.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Imp
+	3002: {Sprite: "SARG", Radius: 30.0, Height: 56.0, Mass: 400.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Demon
+	58:   {Sprite: "SARG", Radius: 30.0, Height: 56.0, Mass: 400.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Spectre
+	3003: {Sprite: "BOSS", Radius: 24.0, Height: 64.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef},   // Baron of Hell
+	69:   {Sprite: "BOS2", Radius: 24.0, Height: 64.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef},   // Hell Knight
+	3005: {Sprite: "HEAD", Radius: 31.0, Height: 56.0, Mass: 400.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Cacodemon
+	3006: {Sprite: "SKUL", Radius: 16.0, Height: 56.0, Mass: 50.0, Speed: sSpeed, Kind: config.ThingEnemyDef},     // Lost Soul
+	68:   {Sprite: "BSPI", Radius: 64.0, Height: 64.0, Mass: 600.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Arachnotron
+	71:   {Sprite: "PAIN", Radius: 31.0, Height: 56.0, Mass: 400.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Pain Elemental
+	66:   {Sprite: "SKEL", Radius: 20.0, Height: 56.0, Mass: 500.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Revenant
+	67:   {Sprite: "FATT", Radius: 48.0, Height: 64.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef},   // Mancubus
+	64:   {Sprite: "VILE", Radius: 20.0, Height: 56.0, Mass: 500.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Arch-Vile
+	16:   {Sprite: "CYBR", Radius: 40.0, Height: 110.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef},  // Cyberdemon
+	7:    {Sprite: "SPID", Radius: 128.0, Height: 100.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef}, // Spider Mastermind
+	72:   {Sprite: "KEEN", Radius: 16.0, Height: 56.0, Mass: 1000.0, Speed: sSpeed, Kind: config.ThingEnemyDef},   // Commander Keen
+	84:   {Sprite: "SSWV", Radius: 20.0, Height: 56.0, Mass: 100.0, Speed: sSpeed, Kind: config.ThingEnemyDef},    // Wolfenstein SS
+
+	// --- ARMI ---
+	2001: {Sprite: "SHOT", Radius: 20.0, Height: 16.0, Mass: 4.0, Kind: config.ThingWeaponDef},  // Shotgun
+	82:   {Sprite: "SGN2", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingWeaponDef},  // Super Shotgun
+	2002: {Sprite: "MGUN", Radius: 20.0, Height: 16.0, Mass: 8.0, Kind: config.ThingWeaponDef},  // Chaingun
+	2003: {Sprite: "LAUN", Radius: 20.0, Height: 16.0, Mass: 12.0, Kind: config.ThingWeaponDef}, // Rocket Launcher
+	2004: {Sprite: "PLAS", Radius: 20.0, Height: 16.0, Mass: 10.0, Kind: config.ThingWeaponDef}, // Plasma Rifle
+	2005: {Sprite: "CSAW", Radius: 20.0, Height: 16.0, Mass: 6.0, Kind: config.ThingWeaponDef},  // Chainsaw
+	2006: {Sprite: "BFUG", Radius: 20.0, Height: 16.0, Mass: 25.0, Kind: config.ThingWeaponDef}, // BFG9000
+
+	// --- MUNIZIONI ---
+	2007: {Sprite: "CLIP", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingBulletDef},  // Ammo clip
+	2048: {Sprite: "AMMO", Radius: 20.0, Height: 16.0, Mass: 2.0, Kind: config.ThingBulletDef},  // Box of Ammo
+	2008: {Sprite: "SHEL", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingBulletDef},  // 4 Shells
+	2049: {Sprite: "SBOX", Radius: 20.0, Height: 16.0, Mass: 2.0, Kind: config.ThingBulletDef},  // Box of Shells
+	2010: {Sprite: "ROCK", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingBulletDef},  // 1 Rocket
+	2046: {Sprite: "BROK", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingBulletDef},  // Box of Rockets
+	2047: {Sprite: "CELL", Radius: 20.0, Height: 16.0, Mass: 1.5, Kind: config.ThingBulletDef},  // Energy Cell
+	17:   {Sprite: "CELP", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingBulletDef},  // Energy Cell Pack
+	8:    {Sprite: "BPAK", Radius: 20.0, Height: 16.0, Mass: 10.0, Kind: config.ThingBulletDef}, // Backpack
+
+	// --- CURE, ARMATURE E POWERUP ---
+	2011: {Sprite: "STIM", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingItemDef},  // Stimpack
+	2012: {Sprite: "MEDI", Radius: 20.0, Height: 16.0, Mass: 3.0, Kind: config.ThingItemDef},  // Medikit
+	2014: {Sprite: "BON1", Radius: 20.0, Height: 16.0, Mass: 0.2, Kind: config.ThingItemDef},  // Health Bonus
+	2015: {Sprite: "BON2", Radius: 20.0, Height: 16.0, Mass: 0.2, Kind: config.ThingItemDef},  // Armor Bonus
+	2018: {Sprite: "ARM1", Radius: 20.0, Height: 16.0, Mass: 15.0, Kind: config.ThingItemDef}, // Green Armor
+	2019: {Sprite: "ARM2", Radius: 20.0, Height: 16.0, Mass: 25.0, Kind: config.ThingItemDef}, // Blue Armor
+	2013: {Sprite: "SOUL", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingItemDef},  // Soulsphere
+	83:   {Sprite: "MEGA", Radius: 20.0, Height: 16.0, Mass: 2.0, Kind: config.ThingItemDef},  // Megasphere
+	2022: {Sprite: "PINV", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingItemDef},  // Invulnerability
+	2023: {Sprite: "PSTR", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingItemDef},  // Berserk
+	2024: {Sprite: "PINS", Radius: 20.0, Height: 16.0, Mass: 1.0, Kind: config.ThingItemDef},  // Partial Invisibility
+	2025: {Sprite: "SUIT", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef},  // Radiation Suit
+	2026: {Sprite: "PMAP", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingItemDef},  // Computer Map
+	2045: {Sprite: "PVIS", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingItemDef},  // Light Amplification Visor
+
+	// --- CHIAVI ---
+	5:  {Sprite: "BKEY", Radius: 20.0, Height: 16.0, Mass: 0.1, Kind: config.ThingKeyDef}, // Blue Keycard
+	13: {Sprite: "RKEY", Radius: 20.0, Height: 16.0, Mass: 0.1, Kind: config.ThingKeyDef}, // Red Keycard
+	6:  {Sprite: "YKEY", Radius: 20.0, Height: 16.0, Mass: 0.1, Kind: config.ThingKeyDef}, // Yellow Keycard
+	40: {Sprite: "BSKU", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingKeyDef}, // Blue Skull Key
+	38: {Sprite: "RSKU", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingKeyDef}, // Red Skull Key
+	39: {Sprite: "YSKU", Radius: 20.0, Height: 16.0, Mass: 0.5, Kind: config.ThingKeyDef}, // Yellow Skull Key
+
+	// --- OSTACOLI E DECORAZIONI ---
+	2035: {Sprite: "BAR1", Radius: 10.0, Height: 42.0, Mass: 100.0, Kind: config.ThingItemDef},   // Explosive Barrel
+	70:   {Sprite: "FCAN", Radius: 10.0, Height: 42.0, Mass: 100.0, Kind: config.ThingItemDef},   // Burning Barrel
+	25:   {Sprite: "POL1", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Impaled Human
+	26:   {Sprite: "POL6", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Twitching Impaled Human
+	27:   {Sprite: "POL4", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Skull on a Pole
+	28:   {Sprite: "POL2", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Five Skulls on a Pole
+	29:   {Sprite: "POL3", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Pile of Skulls and Candles
+	30:   {Sprite: "COL1", Radius: 16.0, Height: 128.0, Mass: 1000.0, Kind: config.ThingItemDef}, // Tall Green Pillar
+	31:   {Sprite: "COL2", Radius: 16.0, Height: 64.0, Mass: 1000.0, Kind: config.ThingItemDef},  // Short Green Pillar
+	32:   {Sprite: "COL3", Radius: 16.0, Height: 128.0, Mass: 1000.0, Kind: config.ThingItemDef}, // Tall Red Pillar
+	33:   {Sprite: "COL4", Radius: 16.0, Height: 64.0, Mass: 1000.0, Kind: config.ThingItemDef},  // Short Red Pillar
+	34:   {Sprite: "CAND", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef},     // Candle
+	35:   {Sprite: "CBRA", Radius: 16.0, Height: 60.0, Mass: 50.0, Kind: config.ThingItemDef},    // Candelabra
+	36:   {Sprite: "COL5", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Heart Column
+	37:   {Sprite: "COL6", Radius: 16.0, Height: 64.0, Mass: 100.0, Kind: config.ThingItemDef},   // Red Skull Column
+	41:   {Sprite: "CEYE", Radius: 16.0, Height: 54.0, Mass: 50.0, Kind: config.ThingItemDef},    // Evil Eye
+	42:   {Sprite: "FSKU", Radius: 16.0, Height: 54.0, Mass: 50.0, Kind: config.ThingItemDef},    // Floating Skull
+	43:   {Sprite: "TRE1", Radius: 16.0, Height: 54.0, Mass: 200.0, Kind: config.ThingItemDef},   // Burnt Tree
+	44:   {Sprite: "TBLU", Radius: 16.0, Height: 68.0, Mass: 100.0, Kind: config.ThingItemDef},   // Tall Blue Firestick
+	45:   {Sprite: "TGRN", Radius: 16.0, Height: 68.0, Mass: 100.0, Kind: config.ThingItemDef},   // Tall Green Firestick
+	46:   {Sprite: "TRED", Radius: 16.0, Height: 68.0, Mass: 100.0, Kind: config.ThingItemDef},   // Tall Red Firestick
+	47:   {Sprite: "SMIT", Radius: 16.0, Height: 64.0, Mass: 500.0, Kind: config.ThingItemDef},   // Stalagmite
+	48:   {Sprite: "ELEC", Radius: 16.0, Height: 64.0, Mass: 1000.0, Kind: config.ThingItemDef},  // Tall Techno Pillar
+	49:   {Sprite: "GOR1", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Twitching
+	50:   {Sprite: "GOR2", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Arms Out
+	51:   {Sprite: "GOR3", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, One-Legged
+	52:   {Sprite: "GOR4", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Pair of Legs
+	53:   {Sprite: "GOR5", Radius: 16.0, Height: 68.0, Mass: 20.0, Kind: config.ThingItemDef},    // Hanging Leg
+	54:   {Sprite: "TRE2", Radius: 32.0, Height: 108.0, Mass: 500.0, Kind: config.ThingItemDef},  // Large Brown Tree
+	55:   {Sprite: "SMBT", Radius: 16.0, Height: 16.0, Mass: 50.0, Kind: config.ThingItemDef},    // Short Blue Firestick
+	56:   {Sprite: "SMGT", Radius: 16.0, Height: 16.0, Mass: 50.0, Kind: config.ThingItemDef},    // Short Green Firestick
+	57:   {Sprite: "SMRT", Radius: 16.0, Height: 16.0, Mass: 50.0, Kind: config.ThingItemDef},    // Short Red Firestick
+	59:   {Sprite: "GOR2", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Arms Out
+	60:   {Sprite: "GOR4", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Pair of Legs
+	61:   {Sprite: "GOR3", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, One-Legged
+	62:   {Sprite: "GOR5", Radius: 16.0, Height: 68.0, Mass: 20.0, Kind: config.ThingItemDef},    // Hanging Leg
+	63:   {Sprite: "GOR1", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Twitching
+	73:   {Sprite: "HDB1", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Guts Removed
+	74:   {Sprite: "HDB2", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Victim, Guts and Brain Removed
+	75:   {Sprite: "HDB3", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Torso, Looking Down
+	76:   {Sprite: "HDB4", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Torso, Open Skull
+	77:   {Sprite: "HDB5", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Torso, Looking Up
+	78:   {Sprite: "HDB6", Radius: 16.0, Height: 68.0, Mass: 80.0, Kind: config.ThingItemDef},    // Hanging Torso, Brain Removed
+	79:   {Sprite: "POB1", Radius: 16.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef},     // Pool of Blood
+	80:   {Sprite: "POB2", Radius: 16.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef},     // Pool of Blood
+	81:   {Sprite: "BRS1", Radius: 16.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef},     // Pool of Brains
+	85:   {Sprite: "TLMP", Radius: 16.0, Height: 68.0, Mass: 100.0, Kind: config.ThingItemDef},   // Tall Techno Floor Lamp
+	86:   {Sprite: "TLP2", Radius: 16.0, Height: 54.0, Mass: 100.0, Kind: config.ThingItemDef},   // Short Techno Floor Lamp
+	2028: {Sprite: "COLU", Radius: 16.0, Height: 54.0, Mass: 100.0, Kind: config.ThingItemDef},   // Floor Lamp
+
+	// --- GORE E CADAVERI ---
+	10: {Sprite: "PLAY", Radius: 20.0, Height: 16.0, Mass: 80.0, Kind: config.ThingItemDef, Dead: true},  // Bloody Mess
+	12: {Sprite: "PLAY", Radius: 20.0, Height: 16.0, Mass: 80.0, Kind: config.ThingItemDef, Dead: true},  // Bloody Mess
+	15: {Sprite: "PLAY", Radius: 20.0, Height: 16.0, Mass: 80.0, Kind: config.ThingItemDef, Dead: true},  // Dead Player
+	18: {Sprite: "POSS", Radius: 20.0, Height: 16.0, Mass: 100.0, Kind: config.ThingItemDef, Dead: true}, // Dead Former Human
+	19: {Sprite: "SPOS", Radius: 20.0, Height: 16.0, Mass: 100.0, Kind: config.ThingItemDef, Dead: true}, // Dead Former Sergeant
+	20: {Sprite: "TROO", Radius: 20.0, Height: 16.0, Mass: 100.0, Kind: config.ThingItemDef, Dead: true}, // Dead Imp
+	21: {Sprite: "SARG", Radius: 30.0, Height: 16.0, Mass: 400.0, Kind: config.ThingItemDef, Dead: true}, // Dead Demon
+	22: {Sprite: "HEAD", Radius: 31.0, Height: 16.0, Mass: 400.0, Kind: config.ThingItemDef, Dead: true}, // Dead Cacodemon
+	23: {Sprite: "SKUL", Radius: 16.0, Height: 16.0, Mass: 50.0, Kind: config.ThingItemDef, Dead: true},  // Dead Lost Soul
+	24: {Sprite: "POL5", Radius: 20.0, Height: 16.0, Mass: 5.0, Kind: config.ThingItemDef, Dead: true},   // Pool of Blood and Flesh
+
+	// --- OGGETTI SPECIALI ---
+	88: {Sprite: "BBRN", Radius: 16.0, Height: 16.0, Mass: 1000.0, Kind: config.ThingItemDef}, // Boss Brain
+}
+
 // _animationsBase defines a collection of grouped texture and flat animation sequences used for visual transitions.
 var _animationsBase = [][]string{
 	//flats
@@ -210,17 +347,26 @@ func init() {
 	}
 }
 
-func CreateAnimation2(t *Textures, prefix string) [][][]string {
-	var enemyStateSequences = [][]byte{
-		{'A', 'B', 'C', 'D'},      // Walk / Chase
-		{'E', 'F', 'G'},           // Attack
-		{'H'},                     // Pain
-		{'I', 'J', 'K', 'L', 'M'}, // Death
-		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Extreme Death
-	}
+const EnemyActionCount = 5
 
+var EnemyStateAdapter = [EnemyActionCount][]config.EnemyState{
+	{config.EnemyStateIdle, config.EnemyStateRun}, // Walk / Chase
+	{config.EnemyStateShoot},                      // Attack
+	{config.EnemyStatePain},                       // EnemyStatePain
+	{config.EnemyStateDead},                       // Pain
+	{config.EnemyStateDead},                       // Extreme Death
+}
+
+var EnemyStateSequences = [EnemyActionCount][]byte{
+	{'A', 'B', 'C', 'D'},                     // Walk / Chase
+	{'E', 'F'},                               // Attack
+	{'G', 'H'},                               // Pain
+	{'I', 'J', 'K', 'L', 'M'},                // Death
+	{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U'}, // Extreme Death
+}
+
+func CreateAnimation(t *Textures, prefix string) [][][]string {
 	const angles = 8
-
 	if t == nil || len(prefix) < 4 {
 		return nil
 	}
@@ -228,7 +374,9 @@ func CreateAnimation2(t *Textures, prefix string) [][][]string {
 	target := SpriteCreateId(prefix[:4])
 
 	type frameData [angles]string
+
 	slots := make(map[byte]*frameData)
+	rotationZero := make(map[byte]string)
 
 	for res := range t.resources {
 		if !strings.HasPrefix(res, target) {
@@ -247,11 +395,10 @@ func CreateAnimation2(t *Textures, prefix string) [][][]string {
 			slots[frameChar] = &frameData{}
 		}
 
-		// Rotazione 0: sprite valido per tutte le direzioni.
 		if angleChar == '0' {
-			for angle := 0; angle < angles; angle++ {
-				slots[frameChar][angle] = spriteName
-			}
+			// La rotazione 0 è un fallback, non deve
+			// sovrascrivere le rotazioni specifiche.
+			rotationZero[frameChar] = spriteName
 		} else {
 			angleIdx := int(angleChar - '1')
 			if angleIdx < 0 || angleIdx >= angles {
@@ -261,14 +408,13 @@ func CreateAnimation2(t *Textures, prefix string) [][][]string {
 			slots[frameChar][angleIdx] = spriteName
 		}
 
-		// Seconda coppia frame/angolo, ad esempio A2A8.
-		// La specchiatura deve essere gestita dal renderer o
-		// dalla configurazione del materiale.
+		// Gestisce la seconda coppia frame/angolo,
+		// ad esempio A2A8.
 		if len(spriteName) == 8 {
 			frameChar2 := spriteName[6]
 			angleChar2 := spriteName[7]
-
 			angleIdx2 := int(angleChar2 - '1')
+
 			if angleIdx2 < 0 || angleIdx2 >= angles {
 				continue
 			}
@@ -281,113 +427,41 @@ func CreateAnimation2(t *Textures, prefix string) [][][]string {
 		}
 	}
 
-	// state -> angle -> temporal frames
-	out := make([][][]string, len(enemyStateSequences))
+	// Applica la rotazione 0 soltanto dove manca una
+	// rotazione specifica.
+	for frameChar, spriteName := range rotationZero {
+		for angle := 0; angle < angles; angle++ {
+			if slots[frameChar][angle] == "" {
+				slots[frameChar][angle] = spriteName
+			}
+		}
+	}
 
-	for stateIdx, sequence := range enemyStateSequences {
+	// Risultato: azione -> angolo -> frame temporale.
+	out := make([][][]string, len(EnemyStateSequences))
+	found := false
+
+	for stateIdx, sequence := range EnemyStateSequences {
 		out[stateIdx] = make([][]string, angles)
-
 		for angle := 0; angle < angles; angle++ {
 			for _, frameLetter := range sequence {
 				anglesData := slots[frameLetter]
 				if anglesData == nil {
 					continue
 				}
-
-				texId := anglesData[angle]
-
-				// Mantiene il fallback originale sulla rotazione 1.
-				if texId == "" {
-					texId = anglesData[0]
-				}
-
-				if texId == "" {
+				texID := anglesData[angle]
+				if texID == "" {
 					continue
 				}
-
-				out[stateIdx][angle] = append(
-					out[stateIdx][angle],
-					SpriteCreateId(texId),
-				)
+				out[stateIdx][angle] = append(out[stateIdx][angle], SpriteCreateId(texID))
+				found = true
 			}
 		}
 	}
 
-	return out
-}
-
-func CreateAnimation(t *Textures, prefix string) [][]string {
-	var EnemyStateSequences = [][]byte{
-		{'A', 'B', 'C', 'D'},      // Action 0: Walk / Chase
-		{'E', 'F', 'G'},           // Action 1: Attack (Melee/Missile)
-		{'H'},                     // Action 2: Pain
-		{'I', 'J', 'K', 'L', 'M'}, // Action 3: Death
-		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Action 4: Extreme Death (Gibs)
+	if !found {
+		return nil
 	}
 
-	const frames = 8
-
-	target := SpriteCreateId(prefix[:4])
-
-	type frameData [frames]string
-	slots := make(map[byte]*frameData)
-
-	for res := range t.resources {
-		if !strings.HasPrefix(res, target) {
-			continue
-		}
-		spriteName := strings.TrimPrefix(res, SpriteId)
-		if len(spriteName) <= 5 {
-			continue
-		}
-		frameChar := spriteName[4]
-		angleChar := spriteName[5]
-		if slots[frameChar] == nil {
-			slots[frameChar] = &frameData{}
-		}
-		if angleChar == '0' {
-			for i := 0; i < frames; i++ {
-				slots[frameChar][i] = spriteName
-			}
-		} else {
-			angleIdx := int(angleChar - '1')
-			if angleIdx >= 0 && angleIdx < frames {
-				slots[frameChar][angleIdx] = spriteName
-			}
-		}
-		// Gestione della specchiatura (es. A2A8)
-		if len(spriteName) == frames {
-			frameChar2 := spriteName[6]
-			angleChar2 := spriteName[7]
-			if slots[frameChar2] == nil {
-				slots[frameChar2] = &frameData{}
-			}
-			angleIdx2 := int(angleChar2 - '1')
-			if angleIdx2 >= 0 && angleIdx2 < frames {
-				slots[frameChar2][angleIdx2] = spriteName
-			}
-		}
-	}
-	out := make([][]string, len(EnemyStateSequences))
-	for idx, sequence := range EnemyStateSequences {
-		for angle := 0; angle < frames; angle++ {
-			var temporalFrames []string
-			for _, frameLetter := range sequence {
-				anglesData := slots[frameLetter]
-				if anglesData == nil {
-					continue
-				}
-				texId := anglesData[angle]
-				if texId == "" {
-					texId = anglesData[0]
-				}
-				temporalFrames = append(temporalFrames, SpriteCreateId(texId))
-			}
-			if len(temporalFrames) == 0 {
-				continue
-			}
-			out[idx] = temporalFrames
-		}
-	}
 	return out
 }

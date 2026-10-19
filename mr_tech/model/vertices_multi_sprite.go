@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -25,22 +26,34 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		currentAction: 0,
 		currentAngle:  0,
 	}
+
+	mCount := 0
+	for _, view := range cfg.MultiSprite.Materials {
+		if view != nil {
+			mCount++
+		}
+	}
+	counter := 0
 	for viewIdx, view := range cfg.MultiSprite.Materials {
 		baseId := fmt.Sprintf("%s_multisprite_frame_%d", cfg.Id, viewIdx)
 		volume := NewVolume(viewIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-		f.volumes[viewIdx] = volume
 		if view != nil && len(view.Frames) > 0 {
 			material := materials.GetMaterial(view)
-			//cfg.Radius * 2
-			faces := f.createFaces(material)
+			faces, err := f.createFaces(material)
+			if err != nil {
+				fmt.Println("[warnin] VerticesMultiSprite createFaces: ", err.Error())
+			}
 			for _, face := range faces {
 				volume.AddFace(face)
 			}
+			counter++
 		}
 		volume.Rebuild()
+		f.volumes[viewIdx] = volume
 	}
 	f.compute()
 	return f
+
 }
 
 // GetVolume retrieves the current active volume associated with the VerticesMultiSprite instance.
@@ -67,10 +80,17 @@ func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face,
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
 func (v *VerticesMultiSprite) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.volumes) {
+		fmt.Println("[warning] VerticesMultiSprite SetAction index out of bounds:", idx)
 		return
 	}
+	//fmt.Println("Current IDX", idx)
+	if idx == 1 {
+		fmt.Println("[warning] VerticesMultiSprite SetAction index out of bounds:", idx)
+	}
+
 	v.currentAction = idx
 	v.compute()
+	counter := 0
 
 	// Restart animation for all faces in the new action volume
 	if faces, count := v.volumes[idx].GetFaces(); faces != nil {
@@ -79,17 +99,24 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 			if f == nil {
 				continue
 			}
-			if mat := f.GetMaterialObj(); mat != nil {
-				mat.RestartAnim()
-				// Action 3 is death and 4 is extreme death
-				if idx == 3 || idx == 4 {
-					mat.SetClampAnim(true)
-				} else {
-					mat.SetClampAnim(false)
-				}
+			mat := f.GetMaterial()
+			if mat == nil {
+				//fmt.Println("[warning] VerticesMultiSprite Material is nil for face at index:", i)
+				continue
+			}
+			counter++
+			mat.RestartAnim()
+			// Action 3 is death and 4 is extreme death
+			if idx == 3 || idx == 4 {
+				mat.SetClampAnim(true)
+			} else {
+				mat.SetClampAnim(false)
 			}
 		}
 	}
+
+	//if counter == 0 {
+	//}
 }
 
 // GetVerticesCenter retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
@@ -111,24 +138,22 @@ func (v *VerticesMultiSprite) SetThing(t IThing) {
 
 // compute updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
 func (v *VerticesMultiSprite) compute() {
-	viewVolume := v.volumes[v.currentAngle]
-	if viewVolume == v.viewVolume {
-		return
-	}
-	v.viewVolume = viewVolume
+	//TODO current angle
+	//viewVolume := v.volumes[v.currentAngle]
+	v.viewVolume = v.volumes[v.currentAction]
 	if v.viewVolume == nil {
 		v.viewVolume = v.volumes[0]
 	}
 }
 
 // createFaces constructs 3D box geometry with optional visual material and returns its set of face objects for rendering and physics.
-func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
+func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face, error) {
 	if material == nil {
-		return nil
+		return nil, errors.New("material not found for MultiSprite frame")
 	}
 	tex := material.CurrentFrame()
 	if tex == nil {
-		return nil
+		return nil, errors.New("texture not found for MultiSprite frame")
 	}
 	texW, texH := tex.Size()
 	scaleW, scaleH := tex.GetScaleFactor()
@@ -158,7 +183,7 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 	}
 
 	var debug *textures.Material = nil
-	//debug = material
+	//debug := material
 
 	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
 	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back
@@ -167,13 +192,7 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 	addPhysicsQuad(v011, v001, v101, v111, "Top", debug)    // Top
 	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
 
-	//for _, test := range faces {
-	//	nX, nY, nZ := test.GetNormal()
-	//	fmt.Println("TAG", test.tag, nX, nY, nZ, test.tri)
-	//}
-	//os.Exit(1)
-
-	// 2. PIANO VISIVO (Render)
+	// PIANO VISIVO (Render)
 	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
 	t0 := [3]geometry.XYZ{
 		{X: -halfW, Y: 0.0, Z: halfHeight},  // TL
@@ -195,5 +214,5 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) []*Face {
 
 	faces = append(faces, f0, f1)
 
-	return faces
+	return faces, nil
 }

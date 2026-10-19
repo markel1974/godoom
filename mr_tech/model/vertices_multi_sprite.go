@@ -27,12 +27,6 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		currentAngle:  0,
 	}
 
-	mCount := 0
-	for _, view := range cfg.MultiSprite.Materials {
-		if view != nil {
-			mCount++
-		}
-	}
 	counter := 0
 	for viewIdx, view := range cfg.MultiSprite.Materials {
 		baseId := fmt.Sprintf("%s_multisprite_frame_%d", cfg.Id, viewIdx)
@@ -41,7 +35,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 			material := materials.GetMaterial(view)
 			faces, err := f.createFaces(material)
 			if err != nil {
-				fmt.Println("[warnin] VerticesMultiSprite createFaces: ", err.Error())
+				fmt.Println("[warning] VerticesMultiSprite createFaces: ", err.Error())
 			}
 			for _, face := range faces {
 				volume.AddFace(face)
@@ -51,7 +45,13 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		volume.Rebuild()
 		f.volumes[viewIdx] = volume
 	}
-	f.compute()
+	f.updateViewVolume()
+
+	if counter == 0 {
+		panic("[error] VerticesMultiSprite: no valid materials found")
+	}
+
+	fmt.Println("[info] VerticesMultiSprite: created", cfg.Id, counter, "valid volumes")
 	return f
 
 }
@@ -83,36 +83,34 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 		fmt.Println("[warning] VerticesMultiSprite SetAction index out of bounds:", idx)
 		return
 	}
-	//fmt.Println("Current IDX", idx)
-	if idx == 1 {
-		fmt.Println("[warning] VerticesMultiSprite SetAction index out of bounds:", idx)
-	}
 
 	v.currentAction = idx
-	v.compute()
-	counter := 0
+	v.updateViewVolume()
+	faces, count := v.viewVolume.GetFaces()
+	if count == 0 {
+		fmt.Println("[warning] VerticesMultiSprite GetVertices empty faces")
+		return
+	}
 
 	// Restart animation for all faces in the new action volume
-	if faces, count := v.volumes[idx].GetFaces(); faces != nil {
-		for i := 0; i < count; i++ {
-			f := (*faces)[i]
-			if f == nil {
-				continue
-			}
-			mat := f.GetMaterial()
-			if mat == nil {
-				//fmt.Println("[warning] VerticesMultiSprite Material is nil for face at index:", i)
-				continue
-			}
-			counter++
-			mat.RestartAnim()
-			// Action 3 is death and 4 is extreme death
-			if idx == 3 || idx == 4 {
-				mat.SetClampAnim(true)
-			} else {
-				mat.SetClampAnim(false)
-			}
+	for i := 0; i < count; i++ {
+		f := (*faces)[i]
+		if f == nil {
+			continue
 		}
+		mat := f.GetMaterial()
+		if mat == nil {
+			//fmt.Println("[warning] VerticesMultiSprite Material is nil for face at index:", i)
+			continue
+		}
+		mat.RestartAnim()
+		//TODO CLAMP FROM CONFIG
+		// Action 3 is death and 4 is extreme death
+		//if idx == 3 || idx == 4 {
+		//	mat.SetClampAnim(true)
+		//} else {
+		//	mat.SetClampAnim(false)
+		//}
 	}
 
 	//if counter == 0 {
@@ -136,14 +134,14 @@ func (v *VerticesMultiSprite) SetThing(t IThing) {
 	}
 }
 
-// compute updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
-func (v *VerticesMultiSprite) compute() {
+// updateViewVolume updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
+func (v *VerticesMultiSprite) updateViewVolume() {
+	if v.currentAction < 0 || v.currentAction >= len(v.volumes) {
+		return
+	}
 	//TODO current angle
 	//viewVolume := v.volumes[v.currentAngle]
 	v.viewVolume = v.volumes[v.currentAction]
-	if v.viewVolume == nil {
-		v.viewVolume = v.volumes[0]
-	}
 }
 
 // createFaces constructs 3D box geometry with optional visual material and returns its set of face objects for rendering and physics.

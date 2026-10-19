@@ -125,9 +125,14 @@ func (bld *Builder) Build(fs common.IFileSystem, wadFile string, levelNumber int
 
 	var things []*config.Thing
 	for i, lThing := range level.Things {
-		if thing := bld.buildThings(lThing, i, texHandler); thing != nil {
-			things = append(things, thing)
+		if lThing.Type == 1 || lThing.Type == 2 || lThing.Type == 3 || lThing.Type == 4 || lThing.Type == 11 {
+			continue
 		}
+		thing, tErr := bld.buildThings(lThing, i, texHandler)
+		if tErr != nil {
+			fmt.Println(tErr.Error())
+		}
+		things = append(things, thing)
 	}
 
 	player := bld.buildPlayer(level)
@@ -204,76 +209,64 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 }
 
 // buildThings creates a configuration object for a game "Thing" entity with its properties and associated materials.
-func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *config.Thing {
+func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*config.Thing, error) {
 	tX := float64(t.X)
 	tY := float64(t.Y)
 	tAngle := float64(t.Angle)
-	if t.Type == 1 || t.Type == 2 || t.Type == 3 || t.Type == 4 || t.Type == 11 {
-		return nil
+	sd, found := _spriteDictionary[int(t.Type)]
+	if !found {
+		return nil, fmt.Errorf("[warning] buildThings sprite not found %d\n", int(t.Type))
 	}
+
 	animations := config.NewEnemyAnimations()
-	sd, hasAnim := _spriteDictionary[int(t.Type)]
-	tId := fmt.Sprintf("t_%d", i)
-	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
-	if hasAnim {
-		multiAngleAnim := CreateAnimation(texHandler, sd.Sprite)
-		ms := config.NewMultiSprite()
-		counter := 0
-		for _, angleAnim := range multiAngleAnim {
+	multiAngleAnim := CreateAnimation(texHandler, sd.Sprite)
+	ms := config.NewMultiSprite()
+
+	if sd.Dead {
+		sd.Kind = config.ThingItemDef
+		angleAnim := multiAngleAnim[EnemyActionDead]
+		if len(angleAnim[0]) == 0 {
+			return nil, fmt.Errorf("[warning] buildThings dead not found %d\n", int(t.Type))
+		}
+		actionFrames := angleAnim[0]
+		latestFrame := actionFrames[len(actionFrames)-1]
+		mat := config.NewConfigMaterial([]string{latestFrame}, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+		_ = ms.Add(mat)
+	} else {
+		for idx, angleAnim := range multiAngleAnim {
 			//for _, view := range temporalFrames {
 			if len(angleAnim[0]) == 0 {
 				continue
 			}
 			actionFrames := angleAnim[0]
 			mat := config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-			_ = ms.Add(mat)
-			// TODO DISABLED FOR THE MOMENT
-			//animId := ms.Add(mat)
-			//for _, ad := range EnemyStateAdapter[idx] {
-			//	animations.Add(ad, animId, len(actionFrames))
-			//}
-			counter++
+			animId := ms.Add(mat)
+			//TODO PATCH
+			animId = 0
+			for _, ad := range EnemyStateAdapter[idx] {
+				animations.Add(ad, animId, len(actionFrames))
+			}
 		}
-		// TODO REMOVE
-		if sd.Dead {
-			animations.Add(config.EnemyStateIdle, 4, 9)
-			animations.Add(config.EnemyStateRun, 4, 9)
-			animations.Add(config.EnemyStateShoot, 4, 9)
-			animations.Add(config.EnemyStatePain, 4, 9)
-			animations.Add(config.EnemyStateDead, 4, 9)
-			animations.Add(config.EnemyStateDead, 4, 9)
-		} else {
-			animations.Add(config.EnemyStateIdle, 0, 4)
-			animations.Add(config.EnemyStateRun, 0, 4)
-			animations.Add(config.EnemyStateShoot, 0, 3)
-			animations.Add(config.EnemyStatePain, 0, 1)
-			animations.Add(config.EnemyStateDead, 0, 5)
-			animations.Add(config.EnemyStateDead, 0, 9)
-		}
-
-		cfgThing.MultiSprite = ms
 	}
 
-	//TODO REMOVE
-	//cfgThing.Kind = config.ThingEnemyDef
+	if ms.Len() == 0 {
+		return nil, fmt.Errorf("[warning] buildThings no material found %d\n", int(t.Type))
+	}
 
+	tId := fmt.Sprintf("%s_%d", sd.Sprite, i)
+	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
+	cfgThing.MultiSprite = ms
+	//TODO REMOVE
 	if cfgThing.Kind == config.ThingEnemyDef {
-		//animations.Add(config.EnemyStateIdle, 0, 4)
-		//animations.Add(config.EnemyStateRun, 0, 4)
-		//animations.Add(config.EnemyStateShoot, 1, 3)
-		//animations.Add(config.EnemyStatePain, 2, 1)
-		//animations.Add(config.EnemyStateDead, 3, 5)
-		//animations.Add(config.EnemyStateDead, 4, 9)
-		_ = common.NewEnemy(cfgThing, animations)
+		cfgThing.GForce = GForce
+		cfgThing.JumpForce = GForce * 8
 		cfgThing.WakeupDistance = 500
+		_ = common.NewEnemy(cfgThing, animations)
 	} else {
+		cfgThing.GForce = GForce
 		_ = common.NewItem(cfgThing)
 	}
-	cfgThing.GForce = GForce
-	cfgThing.JumpForce = GForce * 8
-	//cfgThing.WakeUpDistance = 500
-
-	return cfgThing
+	return cfgThing, nil
 }
 
 // buildPlayer creates and returns a Player object configured with position, angle, mass, speed, radius, and height.

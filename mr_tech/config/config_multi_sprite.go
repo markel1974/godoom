@@ -16,3 +16,8 @@ func (ms *MultiSprite) Add(material *Material) int {
 	ms.Materials = append(ms.Materials, material)
 	return counter
 }
+
+// Len returns the count of Materials in the MultiSprite.
+func (ms *MultiSprite) Len() int {
+	return len(ms.Materials)
+}

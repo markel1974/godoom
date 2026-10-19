@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -26,6 +25,9 @@ const satFilterEpsilon = 0.05
 
 // planeEpsilon is a tolerance value used for floating-point precision when comparing coplanar planes or distances.
 const planeEpsilon = 0.01
+
+// toiTieEpsilon represents a small positive threshold used to handle numerical imprecision in time of impact calculations.
+const toiTieEpsilon = 1e-4
 
 // BucketType represents a categorized type for spatial partitioning or collision detection in 3D environments.
 type BucketType int
@@ -79,21 +81,62 @@ const (
 	TotalSlots     = BucketSize * FacesPerBucket
 )
 
-// ContactManifold represents the result of a collision detection process, including contact details and metadata.
-type ContactManifold struct {
-	Hit           bool
-	Bucket        BucketType
-	NormalX       float64
-	NormalY       float64
-	NormalZ       float64
-	PointX        float64 // Esatto punto di impatto 3D per calcolo momento torcente
-	PointY        float64
-	PointZ        float64
-	Depth         float64 // Compenetrazione matematica lungo l'asse SAT vincente
-	HitDist       float64 // Distanza originale mantenuta per compatibilità
-	P0X, P0Y, P0Z float64 // Punto di ancoraggio piano originario
-	MinOverlap    float64 // Ovelap AABB originale
-	RMaxZ         float64 // RMaxZ originale
+// sweptAxisInterval calculates the time interval of penetration in a swept axis-aligned scenario.
+// Returns start and end of interval, and a boolean indicating if penetration occurs.
+func sweptAxisInterval(rel, sumRad, imp float64) (float64, float64, bool) {
+	if math.Abs(imp) <= 1e-9 {
+		if math.Abs(rel) > sumRad+planeEpsilon {
+			return 0, 0, false
+		}
+		return -math.MaxFloat64, math.MaxFloat64, true
+	}
+	t1 := (-sumRad - rel) / imp
+	t2 := (sumRad - rel) / imp
+	if t1 < t2 {
+		return t1, t2, true
+	}
+	return t2, t1, true
+}
+
+// computeTOI calculates the time of intersection (TOI) and related intervals for swept AABB collision on three axes.
+// Returns entry time, exit time, axis-specific entry times, and a boolean indicating if a valid TOI exists.
+func computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ float64) (float64, float64, float64, float64, float64, bool) {
+	// Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
+	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, impX)
+	if !okX {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnterY, tExitY, okY := sweptAxisInterval(relY, sumRadY, impY)
+	if !okY {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnterZ, tExitZ, okZ := sweptAxisInterval(relZ, sumRadZ, impZ)
+	if !okZ {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnter := math.Max(tEnterX, math.Max(tEnterY, tEnterZ))
+	tExit := math.Min(tExitX, math.Min(tExitY, tExitZ))
+	// Condizione necessaria e sufficiente di intersezione temporale AABB in t in [0, 1]
+	if tEnter > tExit+toiTieEpsilon || tExit < -toiTieEpsilon || tEnter > 1.0+toiTieEpsilon {
+		return 0, 0, 0, 0, 0, false
+	}
+	return tEnter, tExit, tEnterX, tEnterY, tEnterZ, true
+}
+
+// isDiscreteMTV determines if a box satisfies discrete Minimum Translation Vector (MTV) criteria under SAT constraints.
+func isDiscreteMTV(prevA, boxA, relA, impA, prevB, boxB, prevC, boxC float64) bool {
+	if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
+		return false
+	}
+	tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
+	tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
+	if tieB && boxA > boxB+satFilterEpsilon && relA*impA >= -planeEpsilon {
+		return false
+	}
+	if tieC && boxA > boxC+satFilterEpsilon && relA*impA >= -planeEpsilon {
+		return false
+	}
+	return true
 }
 
 // CageFaces represents a pair of adjacent faces (left and right) within a collision cage structure.
@@ -601,63 +644,6 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
-// sweptAxisInterval calculates the time interval of penetration in a swept axis-aligned scenario.
-// Returns start and end of interval, and a boolean indicating if penetration occurs.
-func sweptAxisInterval(rel, sumRad, imp float64) (float64, float64, bool) {
-	if math.Abs(imp) <= 1e-9 {
-		if math.Abs(rel) > sumRad+planeEpsilon {
-			return 0, 0, false
-		}
-		return -math.MaxFloat64, math.MaxFloat64, true
-	}
-	t1 := (-sumRad - rel) / imp
-	t2 := (sumRad - rel) / imp
-	if t1 < t2 {
-		return t1, t2, true
-	}
-	return t2, t1, true
-}
-
-const toiTieEpsilon = 1e-4
-
-func computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ float64) (float64, float64, float64, float64, float64, bool) {
-	// Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
-	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, impX)
-	if !okX {
-		return 0, 0, 0, 0, 0, false
-	}
-	tEnterY, tExitY, okY := sweptAxisInterval(relY, sumRadY, impY)
-	if !okY {
-		return 0, 0, 0, 0, 0, false
-	}
-	tEnterZ, tExitZ, okZ := sweptAxisInterval(relZ, sumRadZ, impZ)
-	if !okZ {
-		return 0, 0, 0, 0, 0, false
-	}
-	tEnter := math.Max(tEnterX, math.Max(tEnterY, tEnterZ))
-	tExit := math.Min(tExitX, math.Min(tExitY, tExitZ))
-	// Condizione necessaria e sufficiente di intersezione temporale AABB in t in [0, 1]
-	if tEnter > tExit+toiTieEpsilon || tExit < -toiTieEpsilon || tEnter > 1.0+toiTieEpsilon {
-		return 0, 0, 0, 0, 0, false
-	}
-	return tEnter, tExit, tEnterX, tEnterY, tEnterZ, true
-}
-
-func isDiscreteMTV(prevA, boxA, relA, impA, prevB, boxB, prevC, boxC float64) bool {
-	if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
-		return false
-	}
-	tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
-	tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
-	if tieB && boxA > boxB+satFilterEpsilon && relA*impA >= -planeEpsilon {
-		return false
-	}
-	if tieC && boxA > boxC+satFilterEpsilon && relA*impA >= -planeEpsilon {
-		return false
-	}
-	return true
-}
-
 // computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
 // It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
 func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
@@ -898,10 +884,26 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }
 
+/*
 // computeManifold calculates the collision manifold between two 3D faces with offset transformations.
 // Returns a ContactManifold containing collision details or non-collision state.
-func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) ContactManifold {
-	cm := ContactManifold{Hit: false}
+func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	type ContactManifold struct {
+		Hit           bool
+		Bucket        BucketType
+		NormalX       float64
+		NormalY       float64
+		NormalZ       float64
+		PointX        float64 // Esatto punto di impatto 3D per calcolo momento torcente
+		PointY        float64
+		PointZ        float64
+		Depth         float64 // Compenetrazione matematica lungo l'asse SAT vincente
+		HitDist       float64 // Distanza originale mantenuta per compatibilità
+		P0X, P0Y, P0Z float64 // Punto di ancoraggio piano originario
+		MinOverlap    float64 // Ovelap AABB originale
+		RMaxZ         float64 // RMaxZ originale
+	}
+	//cm := ContactManifold{Hit: false}
 
 	// FAST-FAIL: SAT Filter AABB spostato in testa
 	rFaceAABB := rFace.GetAABB()
@@ -1055,6 +1057,7 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 	//rMaxZ = cm.RMaxZ
 	return cm
 }
+*/
 
 // addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
 func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {

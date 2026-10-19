@@ -201,20 +201,25 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 
 // doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
 func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-	if thingCfg.Kind == config.ThingEnemyDef {
-		actions := config.NewEnemyAnimations()
-		if thingCfg.Model3DEntry != nil {
-			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
-		}
+	var thingCfg *config.Thing
+	if kind == config.ThingEnemyDef {
 		const wakeupDistance = 400
-		_ = common.NewEnemy(thingCfg, actions)
+		actions := config.NewEnemyAnimations()
+		if cModel != nil {
+			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+		}
+		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
+		thingCfg.GForce = GForce
+		thingCfg.Model3DEntry = cModel
 		thingCfg.JumpForce = JumpForce
 		thingCfg.Impulse = 3
 		thingCfg.WakeupDistance = wakeupDistance
+		_ = common.NewEnemy(thingCfg, actions)
 	} else {
+		cModel.DropToFloor()
+		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
+		thingCfg.GForce = GForce
+		thingCfg.Model3DEntry = cModel
 		_ = common.NewItem(thingCfg)
 	}
 	return thingCfg

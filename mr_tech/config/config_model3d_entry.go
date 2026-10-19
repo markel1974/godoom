@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -142,4 +143,48 @@ func (m *Model3DEntry) getBaseName(fn string) (string, int) {
 		return a, 0
 	}
 	return a, val
+}
+
+func (m *Model3DEntry) DropToFloor() {
+	if m == nil || len(m.Frames) == 0 {
+		return
+	}
+
+	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	hasVertices := false
+
+	for _, frame := range m.Frames {
+		for _, tri := range frame.Triangles {
+			for _, vertex := range tri.Vertices {
+				p := vertex.Pos
+				hasVertices = true
+
+				minX = math.Min(minX, p.X)
+				maxX = math.Max(maxX, p.X)
+				minY = math.Min(minY, p.Y)
+				maxY = math.Max(maxY, p.Y)
+				minZ = math.Min(minZ, p.Z)
+			}
+		}
+	}
+
+	if !hasVertices {
+		return
+	}
+
+	centerX := (minX + maxX) / 2
+	centerY := (minY + maxY) / 2
+
+	for frameIdx := range m.Frames {
+		for triIdx := range m.Frames[frameIdx].Triangles {
+			for vertexIdx := range m.Frames[frameIdx].Triangles[triIdx].Vertices {
+				p := &m.Frames[frameIdx].Triangles[triIdx].Vertices[vertexIdx].Pos
+
+				p.X -= centerX
+				p.Y -= centerY
+				p.Z -= minZ
+			}
+		}
+	}
 }

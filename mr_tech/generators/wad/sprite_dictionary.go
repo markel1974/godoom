@@ -1,7 +1,6 @@
 package wad
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -211,45 +210,184 @@ func init() {
 	}
 }
 
-func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
-	for idx, animation := range animations {
-		animation = strings.TrimSpace(strings.ToLower(animation))
-		if strings.HasPrefix(animation, "stand") {
-			r.Add(config.EnemyStateIdle, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "hover") {
-			r.Add(config.EnemyStateIdle, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "walk") {
-			r.Add(config.EnemyStateWalk, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "run") {
-			r.Add(config.EnemyStateRun, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "prowl") {
-			r.Add(config.EnemyStateProwl, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "leap") {
-			r.Add(config.EnemyStateJump, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "attack") {
-			r.Add(config.EnemyStateMelee, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "shoot") {
-			r.Add(config.EnemyStateShoot, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "smash") {
-			r.Add(config.EnemyStateShoot, idx, intervals[idx][1]-intervals[idx][0]) // TODO IMPLEMENT
-		} else if strings.HasPrefix(animation, "load") {
-			r.Add(config.EnemyStateReload, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "pain") {
-			r.Add(config.EnemyStatePain, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "death") {
-			r.Add(config.EnemyStateDead, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "xdeath") {
-			r.Add(config.EnemyStateDead, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "pull") {
-			r.Add(config.EnemyStatePull, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "swing") {
-			r.Add(config.EnemyStateSwing, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "fly") {
-			r.Add(config.EnemyStateFly, idx, intervals[idx][1]-intervals[idx][0])
-		} else if strings.HasPrefix(animation, "kneel") {
-			r.Add(config.EnemyStateKneel, idx, intervals[idx][1]-intervals[idx][0])
+func CreateAnimation2(t *Textures, prefix string) [][][]string {
+	var enemyStateSequences = [][]byte{
+		{'A', 'B', 'C', 'D'},      // Walk / Chase
+		{'E', 'F', 'G'},           // Attack
+		{'H'},                     // Pain
+		{'I', 'J', 'K', 'L', 'M'}, // Death
+		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Extreme Death
+	}
+
+	const angles = 8
+
+	if t == nil || len(prefix) < 4 {
+		return nil
+	}
+
+	target := SpriteCreateId(prefix[:4])
+
+	type frameData [angles]string
+	slots := make(map[byte]*frameData)
+
+	for res := range t.resources {
+		if !strings.HasPrefix(res, target) {
+			continue
+		}
+
+		spriteName := strings.TrimPrefix(res, SpriteId)
+		if len(spriteName) != 6 && len(spriteName) != 8 {
+			continue
+		}
+
+		frameChar := spriteName[4]
+		angleChar := spriteName[5]
+
+		if slots[frameChar] == nil {
+			slots[frameChar] = &frameData{}
+		}
+
+		// Rotazione 0: sprite valido per tutte le direzioni.
+		if angleChar == '0' {
+			for angle := 0; angle < angles; angle++ {
+				slots[frameChar][angle] = spriteName
+			}
 		} else {
-			fmt.Printf("Unknown animation: %s\n", animation)
+			angleIdx := int(angleChar - '1')
+			if angleIdx < 0 || angleIdx >= angles {
+				continue
+			}
+
+			slots[frameChar][angleIdx] = spriteName
+		}
+
+		// Seconda coppia frame/angolo, ad esempio A2A8.
+		// La specchiatura deve essere gestita dal renderer o
+		// dalla configurazione del materiale.
+		if len(spriteName) == 8 {
+			frameChar2 := spriteName[6]
+			angleChar2 := spriteName[7]
+
+			angleIdx2 := int(angleChar2 - '1')
+			if angleIdx2 < 0 || angleIdx2 >= angles {
+				continue
+			}
+
+			if slots[frameChar2] == nil {
+				slots[frameChar2] = &frameData{}
+			}
+
+			slots[frameChar2][angleIdx2] = spriteName
 		}
 	}
+
+	// state -> angle -> temporal frames
+	out := make([][][]string, len(enemyStateSequences))
+
+	for stateIdx, sequence := range enemyStateSequences {
+		out[stateIdx] = make([][]string, angles)
+
+		for angle := 0; angle < angles; angle++ {
+			for _, frameLetter := range sequence {
+				anglesData := slots[frameLetter]
+				if anglesData == nil {
+					continue
+				}
+
+				texId := anglesData[angle]
+
+				// Mantiene il fallback originale sulla rotazione 1.
+				if texId == "" {
+					texId = anglesData[0]
+				}
+
+				if texId == "" {
+					continue
+				}
+
+				out[stateIdx][angle] = append(
+					out[stateIdx][angle],
+					SpriteCreateId(texId),
+				)
+			}
+		}
+	}
+
+	return out
+}
+
+func CreateAnimation(t *Textures, prefix string) [][]string {
+	var EnemyStateSequences = [][]byte{
+		{'A', 'B', 'C', 'D'},      // Action 0: Walk / Chase
+		{'E', 'F', 'G'},           // Action 1: Attack (Melee/Missile)
+		{'H'},                     // Action 2: Pain
+		{'I', 'J', 'K', 'L', 'M'}, // Action 3: Death
+		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Action 4: Extreme Death (Gibs)
+	}
+
+	const frames = 8
+
+	target := SpriteCreateId(prefix[:4])
+
+	type frameData [frames]string
+	slots := make(map[byte]*frameData)
+
+	for res := range t.resources {
+		if !strings.HasPrefix(res, target) {
+			continue
+		}
+		spriteName := strings.TrimPrefix(res, SpriteId)
+		if len(spriteName) <= 5 {
+			continue
+		}
+		frameChar := spriteName[4]
+		angleChar := spriteName[5]
+		if slots[frameChar] == nil {
+			slots[frameChar] = &frameData{}
+		}
+		if angleChar == '0' {
+			for i := 0; i < frames; i++ {
+				slots[frameChar][i] = spriteName
+			}
+		} else {
+			angleIdx := int(angleChar - '1')
+			if angleIdx >= 0 && angleIdx < frames {
+				slots[frameChar][angleIdx] = spriteName
+			}
+		}
+		// Gestione della specchiatura (es. A2A8)
+		if len(spriteName) == frames {
+			frameChar2 := spriteName[6]
+			angleChar2 := spriteName[7]
+			if slots[frameChar2] == nil {
+				slots[frameChar2] = &frameData{}
+			}
+			angleIdx2 := int(angleChar2 - '1')
+			if angleIdx2 >= 0 && angleIdx2 < frames {
+				slots[frameChar2][angleIdx2] = spriteName
+			}
+		}
+	}
+	out := make([][]string, len(EnemyStateSequences))
+	for idx, sequence := range EnemyStateSequences {
+		for angle := 0; angle < frames; angle++ {
+			var temporalFrames []string
+			for _, frameLetter := range sequence {
+				anglesData := slots[frameLetter]
+				if anglesData == nil {
+					continue
+				}
+				texId := anglesData[angle]
+				if texId == "" {
+					texId = anglesData[0]
+				}
+				temporalFrames = append(temporalFrames, SpriteCreateId(texId))
+			}
+			if len(temporalFrames) == 0 {
+				continue
+			}
+			out[idx] = temporalFrames
+		}
+	}
+	return out
 }

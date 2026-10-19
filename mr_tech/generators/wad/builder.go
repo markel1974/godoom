@@ -218,13 +218,36 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) *co
 	if !hasAnim {
 		fmt.Printf("WARNING No animation found for thing type %d, using default sprite\n", t.Type)
 	} else {
-		cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
+		multiAngleAnim := CreateAnimation2(texHandler, sd.Sprite)
+		ms := config.NewMultiSprite()
+		counter := 0
+		for _, angleAnim := range multiAngleAnim {
+			//for _, view := range temporalFrames {
+			var mat *config.Material
+			if len(angleAnim[0]) > 0 {
+				actionFrames := angleAnim[0]
+				mat = config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+			}
+			ms.Add(mat)
+			counter++
+		}
+
+		if counter > 0 {
+			cfgThing.MultiSprite = ms
+		} else {
+			fmt.Printf("WARNING Empty animation for thing type %d, using default sprite\n", t.Type)
+			cfgThing.MultiSprite = texHandler.BuildSprite(sd.Sprite)
+		}
 	}
+
 	if cfgThing.Kind == config.ThingEnemyDef {
-		actions := [5]string{"run", "attack", "pain", "death", "xdeath"}
-		intervals := [5][2]int{{0, 10}, {0, 10}, {0, 10}, {0, 10}, {0, 10}}
 		animations := config.NewEnemyAnimations()
-		ConvertAnimation(animations, actions[:], intervals[:])
+		animations.Add(config.EnemyStateIdle, 0, 4)
+		animations.Add(config.EnemyStateRun, 0, 4)
+		animations.Add(config.EnemyStateShoot, 1, 3)
+		animations.Add(config.EnemyStatePain, 2, 1)
+		animations.Add(config.EnemyStateDead, 3, 5)
+		animations.Add(config.EnemyStateDead, 4, 9)
 		_ = common.NewEnemy(cfgThing, animations)
 		cfgThing.WakeupDistance = 500
 	} else {

@@ -64,8 +64,8 @@ type Model3DEntry struct {
 	ActionIntervals   [][2]int
 }
 
-// NewMD1 creates a new Model3DEntry instance with the specified number of frames and initializes it using the provided frame names.
-func NewMD1(numFrames int, frameNames []string) *Model3DEntry {
+// NewModel3DEntry creates a new Model3DEntry instance with the specified number of frames and initializes it using the provided frame names.
+func NewModel3DEntry(numFrames int, frameNames []string) *Model3DEntry {
 	m := &Model3DEntry{
 		Frames: make([]Model3DEntryFrame, numFrames),
 	}

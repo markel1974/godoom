@@ -463,7 +463,7 @@ func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArc
 	}
 
 	// Create a single-frame Model3DEntry
-	cModel := config.NewMD1(1, []string{"stand"})
+	cModel := config.NewModel3DEntry(1, []string{"stand"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
 	cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)

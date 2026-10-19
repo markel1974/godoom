@@ -92,7 +92,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 
 	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
-	cModel := config.NewMD1(int(md2.Header.NumFrames), md2.Frames.FrameNames)
+	cModel := config.NewModel3DEntry(int(md2.Header.NumFrames), md2.Frames.FrameNames)
 	skinW := float32(md2.Header.SkinWidth)
 	skinH := float32(md2.Header.SkinHeight)
 
@@ -193,7 +193,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
-	model3d := config.NewMD1(1, []string{"default"})
+	model3d := config.NewModel3DEntry(1, []string{"default"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil

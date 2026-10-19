@@ -146,7 +146,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
-	model3d := config.NewMD1(1, []string{"default"})
+	model3d := config.NewModel3DEntry(1, []string{"default"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := t.doCreate(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil
@@ -399,7 +399,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 	if err != nil {
 		return nil, err
 	}
-	cfg := config.NewMD1(int(res.Header.NumFrames), nil)
+	cfg := config.NewModel3DEntry(int(res.Header.NumFrames), nil)
 	cfg.ActionDefinitions = []string{"idle"}
 	cfg.ActionIntervals = [][2]int{{0, int(res.Header.NumFrames) - 1}}
 	if res.Header.NumTags > 0 && res.Header.OfsTags > 0 {

@@ -83,14 +83,14 @@ func (m *Model3DEntry) compute(frameNames []string) {
 	if len(frameNames) == 0 {
 		return
 	}
-	currentBase, counter := m.getBaseName(frameNames[0])
+	currentBase, counter := m.GetBaseName(frameNames[0])
 	startIdx := 0
 	for i := 1; i <= len(frameNames); i++ {
 		var base string
 		update := false
 		if i < len(frameNames) {
 			var nc int
-			base, nc = m.getBaseName(frameNames[i])
+			base, nc = m.GetBaseName(frameNames[i])
 			if base != currentBase {
 				update = true
 			} else if nc != counter+1 {
@@ -122,8 +122,8 @@ func (m *Model3DEntry) compute(frameNames []string) {
 	}
 }
 
-// getBaseName extracts the base name from a string by removing trailing numeric characters and returns the result.
-func (m *Model3DEntry) getBaseName(fn string) (string, int) {
+// GetBaseName extracts the base name from a string by removing trailing numeric characters and returns the result.
+func (m *Model3DEntry) GetBaseName(fn string) (string, int) {
 	pos := -1
 	for x := 0; x < len(fn); x++ {
 		t := fn[x]
@@ -145,6 +145,7 @@ func (m *Model3DEntry) getBaseName(fn string) (string, int) {
 	return a, val
 }
 
+// DropToFloor repositions the 3D model so that its lowest point aligns with the floor and is centered on the X-Y plane.
 func (m *Model3DEntry) DropToFloor() {
 	if m == nil || len(m.Frames) == 0 {
 		return

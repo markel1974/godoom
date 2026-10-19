@@ -432,17 +432,9 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 
 		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
 		if lFace != nil && rCage != nil {
-			//manifold := s.computeManifold(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
-			//b = manifold.Bucket
-			//dist = manifold.HitDist
-			//pen = manifold.Depth
-			//nX, nY, nZ = manifold.NormalX, manifold.NormalY, manifold.NormalZ
-			//p0x, p0y, p0z = manifold.P0X, manifold.P0Y, manifold.P0Z
-			//minOverlap = manifold.MinOverlap
-			//rMaxZ = manifold.RMaxZ
+			//b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeManifold(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
-
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
 
@@ -626,6 +618,46 @@ func sweptAxisInterval(rel, sumRad, imp float64) (float64, float64, bool) {
 	return t2, t1, true
 }
 
+const toiTieEpsilon = 1e-4
+
+func computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ float64) (float64, float64, float64, float64, float64, bool) {
+	// Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
+	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, impX)
+	if !okX {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnterY, tExitY, okY := sweptAxisInterval(relY, sumRadY, impY)
+	if !okY {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnterZ, tExitZ, okZ := sweptAxisInterval(relZ, sumRadZ, impZ)
+	if !okZ {
+		return 0, 0, 0, 0, 0, false
+	}
+	tEnter := math.Max(tEnterX, math.Max(tEnterY, tEnterZ))
+	tExit := math.Min(tExitX, math.Min(tExitY, tExitZ))
+	// Condizione necessaria e sufficiente di intersezione temporale AABB in t in [0, 1]
+	if tEnter > tExit+toiTieEpsilon || tExit < -toiTieEpsilon || tEnter > 1.0+toiTieEpsilon {
+		return 0, 0, 0, 0, 0, false
+	}
+	return tEnter, tExit, tEnterX, tEnterY, tEnterZ, true
+}
+
+func isDiscreteMTV(prevA, boxA, relA, impA, prevB, boxB, prevC, boxC float64) bool {
+	if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
+		return false
+	}
+	tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
+	tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
+	if tieB && boxA > boxB+satFilterEpsilon && relA*impA >= -planeEpsilon {
+		return false
+	}
+	if tieC && boxA > boxC+satFilterEpsilon && relA*impA >= -planeEpsilon {
+		return false
+	}
+	return true
+}
+
 // computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
 // It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
 func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
@@ -667,7 +699,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).
 	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
 	if math.Abs(outDot) <= planeEpsilon {
-		if rFace.GetTag() == "" {
+		if len(rFace.GetTag()) == 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		if relX*nX+relY*nY+relZ*nZ < 0 {
@@ -695,26 +727,8 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	sumRadY := s.eRadY + rRadY
 	sumRadZ := s.eRadZ + rRadZ
 
-	// Intervalli temporali completi [tEnter_i, tExit_i] su tutti e tre gli assi (inclusi gli assi già sovrapposti a t = 0)
-	const toiTieEpsilon = 1e-4
-	tEnterX, tExitX, okX := sweptAxisInterval(relX, sumRadX, impX)
-	if !okX {
-		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-	}
-	tEnterY, tExitY, okY := sweptAxisInterval(relY, sumRadY, impY)
-	if !okY {
-		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-	}
-	tEnterZ, tExitZ, okZ := sweptAxisInterval(relZ, sumRadZ, impZ)
-	if !okZ {
-		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-	}
-
-	tEnter := math.Max(tEnterX, math.Max(tEnterY, tEnterZ))
-	tExit := math.Min(tExitX, math.Min(tExitY, tExitZ))
-
-	// Condizione necessaria e sufficiente di intersezione temporale AABB in t in [0, 1]
-	if tEnter > tExit+toiTieEpsilon || tExit < -toiTieEpsilon || tEnter > 1.0+toiTieEpsilon {
+	tEnter, tExit, tEnterX, tEnterY, tEnterZ, ok := computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ)
+	if !ok {
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
@@ -723,10 +737,6 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	relTx := s.tX - rTx
 	relTy := s.tY - rTy
 	relTz := s.tZ - rTz
-
-	boxOX := sumRadX - math.Abs(relTx)
-	boxOY := sumRadY - math.Abs(relTy)
-	boxOZ := sumRadZ - math.Abs(relTz)
 
 	entryOX := sumRadX - relTx
 	if relX < 0 || (relX == 0 && nX < 0) {
@@ -741,20 +751,21 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 		entryOZ = sumRadZ + relTz
 	}
 
-	sepX := math.Abs(relX) - sumRadX
-	sepY := math.Abs(relY) - sumRadY
-	sepZ := math.Abs(relZ) - sumRadZ
-
-	prevOX := math.Max(0.0, -sepX)
-	prevOY := math.Max(0.0, -sepY)
-	prevOZ := math.Max(0.0, -sepZ)
-
-	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
-
 	// Distanza iniziale a t = 0 del centro locale rispetto al piano remoto a t = 0
 	distStart := (s.cX-p0x0)*nX + (s.cY-p0y0)*nY + (s.cZ-p0z0)*nZ
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 
+	var activeX, activeY, activeZ bool
+
+	// In modalità discreta (volumi già sovrapposti a t = 0 su tutti gli assi), se a t = 1 si sono separati non c'è impatto
+	boxOX := sumRadX - math.Abs(relTx)
+	boxOY := sumRadY - math.Abs(relTy)
+	boxOZ := sumRadZ - math.Abs(relTz)
+
+	sepX := math.Abs(relX) - sumRadX
+	sepY := math.Abs(relY) - sumRadY
+	sepZ := math.Abs(relZ) - sumRadZ
+	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
 	if sweptMode {
 		// In modalità swept il centro locale deve partire dal semispazio esterno del piano
 		if distStart < -planeEpsilon {
@@ -775,39 +786,22 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 			// A t = tEnter il centro locale aveva già oltrepassato il prolungamento infinito del piano (faccia fantasma)
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
+		// Determinazione degli assi temporali attivi (indipendente dall'asse dominante della faccia)
+		activeX = sepX > planeEpsilon && tEnterX >= tEnter-toiTieEpsilon && relX*impX < -planeEpsilon
+		activeY = sepY > planeEpsilon && tEnterY >= tEnter-toiTieEpsilon && relY*impY < -planeEpsilon
+		activeZ = sepZ > planeEpsilon && tEnterZ >= tEnter-toiTieEpsilon && relZ*impZ < -planeEpsilon
 	} else {
 		// In modalità discreta (compenetrazione già presente a t = 0), scartiamo solo se l'intero supporto a t = 0 era già oltre il piano
 		if distStart+rayEff < -planeEpsilon {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-	}
-
-	// Determinazione degli assi temporali/MTV attivi (indipendente dall'asse dominante della faccia)
-	var activeX, activeY, activeZ bool
-
-	if sweptMode {
-		activeX = sepX > planeEpsilon && tEnterX >= tEnter-toiTieEpsilon && relX*impX < -planeEpsilon
-		activeY = sepY > planeEpsilon && tEnterY >= tEnter-toiTieEpsilon && relY*impY < -planeEpsilon
-		activeZ = sepZ > planeEpsilon && tEnterZ >= tEnter-toiTieEpsilon && relZ*impZ < -planeEpsilon
-	} else {
-		// In modalità discreta (volumi già sovrapposti a t = 0 su tutti gli assi), se a t = 1 si sono separati non c'è impatto
 		if boxOX <= 0 || boxOY <= 0 || boxOZ <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		isDiscreteMTV := func(prevA, boxA, relA, impA, prevB, boxB, prevC, boxC float64) bool {
-			if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
-				return false
-			}
-			tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
-			tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
-			if tieB && boxA > boxB+satFilterEpsilon && relA*impA >= -planeEpsilon {
-				return false
-			}
-			if tieC && boxA > boxC+satFilterEpsilon && relA*impA >= -planeEpsilon {
-				return false
-			}
-			return true
-		}
+		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)
+		prevOX := math.Max(0.0, -sepX)
+		prevOY := math.Max(0.0, -sepY)
+		prevOZ := math.Max(0.0, -sepZ)
 		activeX = isDiscreteMTV(prevOX, boxOX, relX, impX, prevOY, boxOY, prevOZ, boxOZ)
 		activeY = isDiscreteMTV(prevOY, boxOY, relY, impY, prevOX, boxOX, prevOZ, boxOZ)
 		activeZ = isDiscreteMTV(prevOZ, boxOZ, relZ, impZ, prevOX, boxOX, prevOY, boxOY)
@@ -1051,6 +1045,14 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 		cm.PointY = (p1.Y + p2.Y) * 0.5
 		cm.PointZ = (p1.Z + p2.Z) * 0.5
 	}
+
+	//b = cm.Bucket
+	//dist = cm.HitDist
+	//pen = cm.Depth
+	//nX, nY, nZ = cm.NormalX, manifold.NormalY, manifold.NormalZ
+	//p0x, p0y, p0z = cm.P0X, manifold.P0Y, manifold.P0Z
+	//minOverlap = cm.MinOverlap
+	//rMaxZ = cm.RMaxZ
 	return cm
 }
 

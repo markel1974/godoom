@@ -100,10 +100,12 @@ func (m *Material) Shader() string {
 	return m.shader
 }
 
+// SetClampAnim sets whether the animation should clamp to the last frame when its duration exceeds the total frame count.
 func (m *Material) SetClampAnim(clamp bool) {
 	m.clampAnim = clamp
 }
 
+// RestartAnim resets the animation by setting the start tick to the current global tick.
 func (m *Material) RestartAnim() {
 	m.startTick = GlobalTick()
 }

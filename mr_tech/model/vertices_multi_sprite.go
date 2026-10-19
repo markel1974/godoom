@@ -45,13 +45,16 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		volume.Rebuild()
 		f.volumes[viewIdx] = volume
 	}
-	f.updateViewVolume()
 
 	if counter == 0 {
 		panic("[error] VerticesMultiSprite: no valid materials found")
 	}
 
-	fmt.Println("[info] VerticesMultiSprite: created", cfg.Id, counter, "valid volumes")
+	//TODO current angle
+	//viewVolume := v.volumes[v.currentAngle]
+	f.viewVolume = f.volumes[f.currentAction]
+
+	//fmt.Println("[info] VerticesMultiSprite: created", cfg.Id, counter, "valid volumes")
 	return f
 
 }
@@ -79,13 +82,17 @@ func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face,
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
 func (v *VerticesMultiSprite) SetAction(idx int) {
+	if v.currentAction == idx {
+		return
+	}
 	if idx < 0 || idx >= len(v.volumes) {
 		fmt.Println("[warning] VerticesMultiSprite SetAction index out of bounds:", idx)
 		return
 	}
-
 	v.currentAction = idx
-	v.updateViewVolume()
+	//TODO current angle
+	//viewVolume := v.volumes[v.currentAngle]
+	v.viewVolume = v.volumes[v.currentAction]
 	faces, count := v.viewVolume.GetFaces()
 	if count == 0 {
 		fmt.Println("[warning] VerticesMultiSprite GetVertices empty faces")
@@ -134,16 +141,6 @@ func (v *VerticesMultiSprite) SetThing(t IThing) {
 	}
 }
 
-// updateViewVolume updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
-func (v *VerticesMultiSprite) updateViewVolume() {
-	if v.currentAction < 0 || v.currentAction >= len(v.volumes) {
-		return
-	}
-	//TODO current angle
-	//viewVolume := v.volumes[v.currentAngle]
-	v.viewVolume = v.volumes[v.currentAction]
-}
-
 // createFaces constructs 3D box geometry with optional visual material and returns its set of face objects for rendering and physics.
 func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face, error) {
 	if material == nil {
@@ -162,6 +159,19 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	halfY := halfW
 	halfHeight := height * 0.5
 
+	var faces []*Face
+	var debug *textures.Material
+
+	const enableDebug = false
+	if enableDebug {
+		debug = material
+	}
+	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
+		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
+		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
+		faces = append(faces, f0, f1)
+	}
+
 	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfHeight}
 	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfHeight}
 	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfHeight}
@@ -171,17 +181,6 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfHeight}
 	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfHeight}
 	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfHeight}
-
-	var faces []*Face
-
-	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
-		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
-		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
-		faces = append(faces, f0, f1)
-	}
-
-	var debug *textures.Material = nil
-	//debug := material
 
 	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
 	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back

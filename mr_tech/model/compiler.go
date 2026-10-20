@@ -145,7 +145,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	var container []*Sector
 	var fixSegments []*Segment
 	facesTree := aabb.NewTree(1024, epsilon)
-	emptyAnim := anim.GetMaterial(nil)
+	emptyAnim := anim.GetEmptyMaterial()
 
 	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)

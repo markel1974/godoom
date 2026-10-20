@@ -26,13 +26,14 @@ func (r *Materials) GetTextures() textures.ITextures {
 	return r.tex
 }
 
+// GetEmptyMaterial retrieves the default empty material instance stored in the Materials object.
+func (r *Materials) GetEmptyMaterial() *textures.Material {
+	return r.empty
+}
+
 // GetMaterial retrieves or creates an material based on the given configuration and caches it for reuse.
 func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
-	if ca == nil {
-		return r.empty
-	}
 	key := ca.HashKey()
-	//key := fmt.Sprintf("%s|%d|%f|%f", strings.Join(ca.Frames, ";"), ca.Kind, ca.ScaleW, ca.ScaleH)
 	material, ok := r.frames[key]
 	if ok {
 		return material

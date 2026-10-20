@@ -13,9 +13,9 @@ import (
 // VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
 type VerticesMultiSprite struct {
 	currentAction int
-	currentAngle  int
-	volumes       []*Volume
-	viewVolume    *Volume
+	//currentAngle  int
+	volumes    []*Volume
+	viewVolume *Volume
 
 	renderMode float64
 	debug      bool
@@ -26,15 +26,15 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 	f := &VerticesMultiSprite{
 		volumes:       make([]*Volume, len(cfg.MultiSprite.Materials)),
 		currentAction: 0,
-		currentAngle:  0,
-		renderMode:    RenderModeBillboard,
-		debug:         false,
+		//currentAngle:  0,
+		renderMode: RenderModeBillboard,
+		debug:      false,
 	}
 	if f.debug {
 		f.renderMode = RenderModeModel3D
 	}
 	for viewIdx, view := range cfg.MultiSprite.Materials {
-		baseId := fmt.Sprintf("%s_multisprite_frame_%d", cfg.Id, viewIdx)
+		baseId := fmt.Sprintf("%s_multisprite_anim_%d", cfg.Id, viewIdx)
 		volume := NewVolume(viewIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		f.volumes[viewIdx] = volume
 		if view != nil && len(view.Frames) > 0 {
@@ -122,7 +122,8 @@ func (v *VerticesMultiSprite) SetThing(t IThing) {
 
 // compute updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
 func (v *VerticesMultiSprite) compute() {
-	viewVolume := v.volumes[v.currentAngle]
+	viewVolume := v.volumes[v.currentAction]
+	//viewVolume := v.volumes[v.currentAngle]
 	if viewVolume == v.viewVolume {
 		return
 	}

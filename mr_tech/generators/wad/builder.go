@@ -256,11 +256,10 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 	tId := fmt.Sprintf("%s_%d", sd.Sprite, i)
 	cfgThing := config.NewConfigThing(tId, geometry.XYZ{X: tX, Y: tY, Z: 0}, tAngle, sd.Kind, sd.Mass, sd.Radius, sd.Height, sd.Speed)
 	cfgThing.MultiSprite = ms
-	//TODO REMOVE
 	if cfgThing.Kind == config.ThingEnemyDef {
 		cfgThing.GForce = GForce
-		cfgThing.JumpForce = GForce * 8
-		cfgThing.WakeupDistance = 500
+		cfgThing.JumpForce = GForce * 6
+		cfgThing.WakeupDistance = 400
 		_ = common.NewEnemy(cfgThing, animations)
 	} else {
 		cfgThing.GForce = GForce

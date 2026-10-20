@@ -181,14 +181,7 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	addPhysicsQuad(v011, v001, v101, v111, "Top", debug)    // Top
 	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
 
-	//for _, test := range faces {
-	//	nX, nY, nZ := test.GetNormal()
-	//	fmt.Println("TAG", test.tag, nX, nY, nZ, test.tri)
-	//}
-	//os.Exit(1)
-
-	// 2. PIANO VISIVO (Render)
-	// Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
+	// PIANO VISIVO (Render) Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
 	t0 := [3]geometry.XYZ{
 		{X: -halfW, Y: 0.0, Z: halfHeight},  // TL
 		{X: -halfW, Y: 0.0, Z: -halfHeight}, // BL

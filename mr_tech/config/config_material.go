@@ -80,6 +80,8 @@ type Material struct {
 	IsLightning    bool            `json:"isLightning"`
 	IsSky          bool            `json:"isSky"`
 	IsBacksided    bool            `json:"isBacksided"`
+
+	hashKey string
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
@@ -106,6 +108,9 @@ func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v 
 
 // HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.
 func (m *Material) HashKey() string {
+	if len(m.hashKey) > 0 {
+		return m.hashKey
+	}
 	h := sha256.New()
 	h.Write([]byte(m.Shader))
 	h.Write([]byte{0})
@@ -140,5 +145,6 @@ func (m *Material) HashKey() string {
 	h.Write(buf[:4])
 	var digest [32]byte
 	h.Sum(digest[:0])
-	return base64.RawURLEncoding.EncodeToString(digest[:])
+	m.hashKey = base64.RawURLEncoding.EncodeToString(digest[:])
+	return m.hashKey
 }

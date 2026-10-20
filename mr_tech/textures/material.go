@@ -110,11 +110,19 @@ func (m *Material) RestartAnim() {
 	m.startTick = GlobalTick()
 }
 
+// HeadFrame returns the first frame of the material's texture sequence, or nil if no frames are available.
+func (m *Material) HeadFrame() *Texture {
+	if len(m.frames) == 0 {
+		return nil
+	}
+	return m.frames[0]
+}
+
 // CurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
 func (m *Material) CurrentFrame() *Texture {
 	if m.totalFrames > 1 {
 		if m.clampAnim {
-			return m.clampedFrame()
+			return m.ClampedFrame()
 		}
 		currentTick := GlobalTick() / m.tickInterval
 		return m.frames[currentTick%m.totalFrames]
@@ -122,8 +130,8 @@ func (m *Material) CurrentFrame() *Texture {
 	return m.frame
 }
 
-func (m *Material) clampedFrame() *Texture {
-
+// ClampedFrame calculates and returns the appropriate texture frame based on clamped animation logic and elapsed time.
+func (m *Material) ClampedFrame() *Texture {
 	elapsed := uint64(0)
 	if _globalTick > m.startTick {
 		elapsed = _globalTick - m.startTick
@@ -135,15 +143,17 @@ func (m *Material) clampedFrame() *Texture {
 	return m.frames[elapsedTick]
 }
 
+// BlendMode returns the current blend mode identifier as an integer.
 func (m *Material) BlendMode() int {
 	return m.blendMode
 }
 
+// SetBlendMode updates the blend mode of the material, determining how it combines with other textures during rendering.
 func (m *Material) SetBlendMode(b int) {
 	m.blendMode = b
 }
 
-// SetProperties assigns all the advanced rendering properties extracted from the shader configuration.
+// SetProperties configures various rendering properties of a material, such as culling, depth, fog, sorting, and more.
 func (m *Material) SetProperties(cullMode int, depthWrite bool, alphaTest float32, isFog bool, fogColor []float32, polygonOffset bool, sort int, noMipmaps bool, noPicMip bool, entityMergeable bool, deformVertexes [][]string, surfaceParms map[string]bool, skyParms []string, cloudParms []string, fogGen []string, isLightning bool, isSky bool, isBacksided bool) {
 	m.cullMode = cullMode
 	m.depthWrite = depthWrite

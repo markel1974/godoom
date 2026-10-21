@@ -84,7 +84,10 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
-			material := materials.GetMaterial(tri.Material)
+			var material *textures.Material
+			if tri.Material != nil {
+				material = materials.GetMaterial(tri.Material)
+			}
 			face := NewFace(points, tag, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)

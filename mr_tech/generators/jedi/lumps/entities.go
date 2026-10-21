@@ -4,72 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 )
 
-// Object represents a 3D entity with positional, rotational, and class-related attributes.
-type Object struct {
-	Class            string
-	Name             string
-	Data             string
-	X, Y, Z          float64
-	Yaw, Pitch, Roll float64
-	Diff             int // Difficulty flag
-	Sector           string
-	Id               string
-	Flags            string
-}
-
-// NewObject initializes and returns a pointer to a new Object instance with default values.
-func NewObject() *Object {
-	return &Object{}
-}
-
-func (obj *Object) Parse(tokens []string) {
-	for i := 0; i < len(tokens); i += 2 {
-		next := i + 1
-		if next >= len(tokens) {
-			break
-		}
-		key := strings.TrimSpace(strings.ToUpper(tokens[i]))
-		val := tokens[next]
-
-		switch key {
-		case "#":
-		case "CLASS:":
-			obj.Class = val
-		case "NAME:":
-			obj.Name = val
-		case "DATA:":
-			obj.Data = val
-		case "X:":
-			obj.X, _ = strconv.ParseFloat(val, 64)
-		case "Y:":
-			obj.Y, _ = strconv.ParseFloat(val, 64)
-		case "Z:":
-			obj.Z, _ = strconv.ParseFloat(val, 64)
-		case "YAW:":
-			obj.Yaw, _ = strconv.ParseFloat(val, 64)
-		case "PITCH:", "PCH:":
-			obj.Pitch, _ = strconv.ParseFloat(val, 64)
-		case "ROLL:", "ROL:":
-			obj.Roll, _ = strconv.ParseFloat(val, 64)
-		case "DIFF:":
-			obj.Diff, _ = strconv.Atoi(val)
-		case "SECTOR:":
-			obj.Sector = val
-		case "ID:":
-			obj.Id = val
-		case "FLAGS:":
-			obj.Flags = val
-		default:
-			fmt.Println("Unknown CLASS object attribute: ", key)
-		}
-	}
-}
-
-// Entities represents a collection of objects and a level name within a structured data model.
+// Entities represents a collection of elements within a game level, such as objects, sounds, models, and textures.
 type Entities struct {
 	LevelName string
 	Waxes     []string
@@ -79,12 +17,12 @@ type Entities struct {
 	Objects   []*Object
 }
 
-// NewEntities initializes and returns a new instance of Entities with default values.
+// NewEntities creates and returns a new instance of the Entities struct with initialized fields.
 func NewEntities() *Entities {
 	return &Entities{}
 }
 
-// Parse reads and parses input data from the provided io.Reader to populate the Entities struct with level and object data.
+// Parse reads and processes the entity data from the provided io.Reader and populates the Entities fields accordingly.
 func (e *Entities) Parse(r io.Reader) error {
 	insideComment := false
 	scanner := bufio.NewScanner(r)

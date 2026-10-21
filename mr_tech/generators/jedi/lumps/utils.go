@@ -8,6 +8,7 @@ import (
 	"unicode"
 )
 
+// CleanKey sanitizes the input string by removing non-alphanumeric characters and converting letters to uppercase.
 func CleanKey(in string) string {
 	var out []rune
 	for _, r := range in {
@@ -18,6 +19,7 @@ func CleanKey(in string) string {
 	return string(out)
 }
 
+// GetTokenIntAt retrieves an integer from the tokens slice at the specified index. Returns an error if conversion fails.
 func GetTokenIntAt(tokens []string, index int) (int, error) {
 	if index < 0 || index >= len(tokens) {
 		return 0, fmt.Errorf("index out of range")
@@ -29,6 +31,7 @@ func GetTokenIntAt(tokens []string, index int) (int, error) {
 	return count, nil
 }
 
+// GetTokenFloatAt parses the token at a given index in the input slice as a float64 and returns it or an error.
 func GetTokenFloatAt(tokens []string, index int) (float64, error) {
 	if index < 0 || index >= len(tokens) {
 		return 0, fmt.Errorf("index out of range")
@@ -40,6 +43,7 @@ func GetTokenFloatAt(tokens []string, index int) (float64, error) {
 	return count, nil
 }
 
+// GetTokenStringAt retrieves the string at the specified index from the tokens slice or returns an error if the index is out of bounds.
 func GetTokenStringAt(tokens []string, index int) (string, error) {
 	if index < 0 || index >= len(tokens) {
 		return "", fmt.Errorf("index out of range")
@@ -47,9 +51,7 @@ func GetTokenStringAt(tokens []string, index int) (string, error) {
 	return tokens[index], nil
 }
 
-// DecompressPayload controlla se i dati sono in chiaro o compressi.
-// Nel Jedi Engine, se i primi byte non sono una firma ASCII nota ("WAX ", "FME ", "3DO "),
-// i primi 4 byte rappresentano la dimensione decompressa e il resto è uno stream LZSS.
+// DecompressPayload decompresses the given byte slice if it is identified as an LZSS compressed stream or returns it as-is.
 func DecompressPayload(data []byte) ([]byte, error) {
 	if len(data) < 4 {
 		return data, nil
@@ -70,7 +72,9 @@ func DecompressPayload(data []byte) ([]byte, error) {
 	return decodeJediCompression(data)
 }
 
-// decodeJediCompression decomprime il payload usando la variante Okumura LZSS del Jedi Engine.
+// decodeJediCompression decompresses data compressed using the Jedi Engine's LZSS algorithm and returns the decompressed result.
+// It reads the decompressed size from the input, validates it, and reconstructs the original data via LZSS decoding.
+// Returns an error if the input data is invalid, truncated, or exceeds the allowed decompressed size.
 func decodeJediCompression(inData []byte) ([]byte, error) {
 	if len(inData) < 4 {
 		return nil, fmt.Errorf("data too short")

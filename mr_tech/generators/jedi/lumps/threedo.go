@@ -10,19 +10,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// ThreedoQuad represents a single face (which seems to default to Quads in this format).
+// ThreedoQuad represents a quadrilateral in 3D space with associated color and fill properties.
 type ThreedoQuad struct {
 	VertexIndices []int // Indices into the object's vertex list
 	Color         int
 	Fill          string // e.g., "PLANE", "TEXTURE"
 }
 
-// ThreedoTexQuad maps texture coordinate indices to a quad.
+// ThreedoTexQuad represents a textured quadrilateral in a 3DO object.
+// TexVertIndices is a slice of indices referencing texture vertices for the quad.
 type ThreedoTexQuad struct {
 	TexVertIndices []int // Indices into the object's texture vertex list
 }
 
-// ThreedoObject represents a distinct sub-mesh within the 3DO file.
+// ThreedoObject represents a 3D object with geometry, texture mapping, and associated metadata.
 type ThreedoObject struct {
 	Name        string
 	TextureIdx  int // Index into the global Textures array
@@ -32,7 +33,7 @@ type ThreedoObject struct {
 	TexQuads    []ThreedoTexQuad
 }
 
-// Threedo represents the entire parsed 3D model.
+// Threedo represents a 3D object in the system, containing metadata, textures, and objects with 3D geometry.
 type Threedo struct {
 	Name     string
 	Palette  string
@@ -40,11 +41,12 @@ type Threedo struct {
 	Objects  []*ThreedoObject
 }
 
+// NewThreedo creates and returns a new instance of the Threedo struct with default values.
 func NewThreedo() *Threedo {
 	return &Threedo{}
 }
 
-// Parse legge un file 3DO in formato testo
+// Parse reads and parses a 3DO file from the provided io.Reader, populating the Threedo object's fields with the parsed data.
 func (t *Threedo) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 

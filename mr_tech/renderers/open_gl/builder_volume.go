@@ -226,6 +226,10 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	counter := 0
 
 	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
+		if !thing.IsVisible() {
+			return
+		}
+
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetVerticesCenter()
@@ -236,8 +240,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		for fx := 0; fx < faceCount; fx++ {
 			face := faces[fx]
 			frameTex := face.GetCurrentFrameTexture()
+			if frameTex == nil {
+				continue
+			}
 			mat := face.GetMaterial()
-			if frameTex == nil || mat == nil {
+			if mat == nil {
 				continue
 			}
 			tId := float32(0)

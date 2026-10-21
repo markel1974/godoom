@@ -40,18 +40,20 @@ type Flash struct {
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
 type Player struct {
 	*Thing
-	Bobbing *Bobbing `json:"bobbing"`
-	Flash   *Flash   `json:"flash"`
-	Impulse float64  `json:"impulse"`
+	Bobbing   *Bobbing `json:"bobbing"`
+	Flash     *Flash   `json:"flash"`
+	Impulse   float64  `json:"impulse"`
+	IsVisible bool     `json:"isVisible"`
 }
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
 func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, height float64) *Player {
 	thing := NewConfigThing("PLAYER", position, angle, -1, mass, radius, height, speed)
 	p := &Player{
-		Thing:   thing,
-		Bobbing: &Bobbing{},
-		Flash:   &Flash{},
+		Thing:     thing,
+		Bobbing:   &Bobbing{},
+		Flash:     &Flash{},
+		IsVisible: false,
 	}
 	p.Impulse = 0.06
 	p.Flash.FovDeg = 80.0

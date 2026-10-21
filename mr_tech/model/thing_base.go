@@ -139,6 +139,11 @@ func (t *ThingBase) SetActive(active bool) {
 	t.isActive = active
 }
 
+// IsVisible determines whether the ThingBase instance is currently visible, returning true if it is visible.
+func (t *ThingBase) IsVisible() bool {
+	return true
+}
+
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *ThingBase) StagePrepare() bool {
 	entity := t.GetEntity()

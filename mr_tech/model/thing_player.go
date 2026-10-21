@@ -22,6 +22,7 @@ type ThingPlayer struct {
 	lightIntensity float64
 	bobbing        *Bobbing
 	flash          *Flash
+	visible        bool
 	debug          bool
 	*ThingBase
 }
@@ -59,6 +60,7 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 		pitchMin:       -5.0,
 		pitchMax:       5.0,
 		pitchSens:      0.05,
+		visible:        c.IsVisible,
 	}
 	thing.ThingBase = NewThingBase(thing, things, c.Thing, location)
 	entity := thing.GetEntity()
@@ -71,6 +73,11 @@ func NewThingPlayer(things *Things, c *config.Player, volumes *Volumes, debug bo
 // IsActive determines whether the ThingPlayer instance is currently active, returning true if active, otherwise false.
 func (p *ThingPlayer) IsActive() bool {
 	return true
+}
+
+// IsVisible determines whether the ThingPlayer instance is currently visible.
+func (p *ThingPlayer) IsVisible() bool {
+	return p.visible
 }
 
 // PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.

@@ -5,14 +5,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+// BindFunc is a function type used to bind and configure an IThingConfig instance for initialization or setup.
 type BindFunc func(self IThingConfig)
 
+// ThinkingFunc represents a function type that processes positional data of a player in 3D space.
 type ThinkingFunc func(playerX, playerY, playerZ float64)
 
+// CollisionFunc defines a function type for handling collisions with another IThingConfig entity.
 type CollisionFunc func(other IThingConfig)
 
+// ImpactFunc defines a function type for handling the impact between two configurable entities with force and direction inputs.
 type ImpactFunc func(other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)
 
+// IThingConfig defines the configuration and behavior contract for entities within the system.
 type IThingConfig interface {
 	GetId() string
 
@@ -35,6 +40,8 @@ type IThingConfig interface {
 	GetImpulse() float64
 
 	GetWakeUpDistance() float64
+
+	IsVisible() bool
 
 	MoveTowards(dirX, dirY, targetSpeed, accelForce float64)
 

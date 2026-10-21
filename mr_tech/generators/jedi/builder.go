@@ -15,7 +15,7 @@ import (
 // aspectRatio defines the proportional relationship between width and height, commonly used in graphics and media contexts.
 const aspectRatio = 1.6
 
-const scaleFactor = 12.0
+const scaleFactor = 11.0
 
 // scaleX represents the scaling factor along the X-axis used for transformations or calculations in a 2D context.
 const scaleX = scaleFactor
@@ -27,7 +27,7 @@ const scaleY = scaleFactor
 const scaleZ = scaleFactor
 
 // scaleSectorH defines the horizontal scaling factor used for dimensional calculations in sectors.
-const scaleSectorH = scaleFactor * 0.9
+const scaleSectorH = scaleFactor * 1
 
 const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
 const scaleTextureH = 1.0 // scaleTextureH defines the horizontal scaling factor for texture rendering, set to a default value of 1.0.

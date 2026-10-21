@@ -44,7 +44,7 @@ func (s *Sectors) GetSectors() []*Sector {
 // QueryPoint performs a 2D point query to find and return the Sector containing the point (px, py), or nil if none is found.
 func (s *Sectors) QueryPoint(px, py float64) *Sector {
 	var target *Sector = nil
-	s.tree.QueryPoint2d(px, py, func(object aabb.IAABB) bool {
+	s.tree.QueryPoint2d(px, py, func(object aabb.IObject) bool {
 		sector := object.(*Sector)
 		if target == nil {
 			target = sector

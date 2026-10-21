@@ -1,8 +1,8 @@
 package aabb
 
-// IAABB represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
+// IObject represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
-type IAABB interface {
+type IObject interface {
 	GetAABB() *AABB
 }
 

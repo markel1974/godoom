@@ -128,7 +128,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
-	volumes.QueryFrustum(frustumFront, func(object aabb.IAABB) bool {
+	volumes.QueryFrustum(frustumFront, func(object aabb.IObject) bool {
 		w.visibleVol.Add(object.(*model.Volume))
 		return false
 	})
@@ -198,7 +198,7 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 	w.fl.DeepReset()
 	w.fl.Prepare(pX, pY, pZ)
 	counter := 0
-	queryLights := func(object aabb.IAABB) bool {
+	queryLights := func(object aabb.IObject) bool {
 		light := object.(*model.Light)
 
 		//TODO
@@ -272,7 +272,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		}
 	}
 
-	qOcclusion := func(object aabb.IAABB) bool {
+	qOcclusion := func(object aabb.IObject) bool {
 		thing := object.(model.IThing)
 		occState := w.occlusion.GetState(thing.GetEntity().GetId())
 		if occState != nil && !occState.IsVisible {
@@ -291,7 +291,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		return false
 	}
 
-	qStatic := func(object aabb.IAABB) bool {
+	qStatic := func(object aabb.IObject) bool {
 		thing := object.(model.IThing)
 		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
 		if faceCount > 0 {

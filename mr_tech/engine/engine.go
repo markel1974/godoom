@@ -53,12 +53,12 @@ func (e *Engine) GetLights() *model.Lights {
 }
 
 // QueryFrustum checks which objects intersect the provided frustum and invokes the callback for each intersecting object.
-func (e *Engine) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (e *Engine) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	e.volumes.QueryFrustum(frustum, callback)
 }
 
 // QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
-func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	e.volumes.QueryMultiFrustum(front, rear, callback)
 }
 

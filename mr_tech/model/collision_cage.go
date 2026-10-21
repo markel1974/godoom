@@ -1083,7 +1083,7 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 }
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
-func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAABB, float64, float64, float64) {
+func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IObject, float64, float64, float64) {
 	lOx, lOy, lOz := s.object.GetVerticesCenter()
 	lOx += s.dX
 	lOy += s.dY
@@ -1098,7 +1098,7 @@ func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IAAB
 }
 
 // Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
-func (s *CollisionCage) Translate(slot int, src aabb.IAABB, deltaX, deltaY, deltaZ float64) *physics.Entity {
+func (s *CollisionCage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *physics.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
 	lMinX := to.GetMinX() + deltaX

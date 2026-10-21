@@ -6,7 +6,7 @@ const AABBNullNode = 0xffffffff
 // Node represents a node in an AABB tree, used for spatial partitioning of objects in a 3D space.
 type Node struct {
 	aabb            *AABB
-	object          IAABB
+	object          IObject
 	parentNodeIndex uint
 	leftNodeIndex   uint
 	rightNodeIndex  uint

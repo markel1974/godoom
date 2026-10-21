@@ -258,7 +258,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 		}
 		bestDistSq := math.MaxFloat64
 		var bestNeighborSegment *Segment
-		facesTree.QueryOverlaps(segment, func(object aabb.IAABB) bool {
+		facesTree.QueryOverlaps(segment, func(object aabb.IObject) bool {
 			overlapFace, ok := object.(*Segment)
 			if !ok {
 				return false

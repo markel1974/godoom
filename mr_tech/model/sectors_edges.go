@@ -48,7 +48,7 @@ func NewSectorsEdges(eps float64) *SectorEdges {
 // getOrAddVertex retrieves the ID of an existing vertex matching the given point or adds a new vertex and returns its ID.
 func (t *SectorEdges) getOrAddVertex(p geometry.XY) int {
 	foundId := -1
-	t.tree.QueryPoint2d(p.X, p.Y, func(object aabb.IAABB) bool {
+	t.tree.QueryPoint2d(p.X, p.Y, func(object aabb.IObject) bool {
 		if v, ok := object.(*VertexNode); ok {
 			if v.X == p.X && v.Y == p.Y {
 				foundId = v.Id

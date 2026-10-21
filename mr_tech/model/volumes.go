@@ -52,9 +52,9 @@ func (s *Volumes) Len() int {
 }
 
 // Query retrieves a list of world that overlap with the specified axis-aligned bounding box (AABB).
-func (s *Volumes) Query(targetObj aabb.IAABB) []*Volume {
+func (s *Volumes) Query(targetObj aabb.IObject) []*Volume {
 	var target []*Volume
-	s.tree.QueryOverlaps(targetObj, func(object aabb.IAABB) bool {
+	s.tree.QueryOverlaps(targetObj, func(object aabb.IObject) bool {
 		sector, ok := object.(*Volume)
 		if !ok {
 			return false
@@ -67,9 +67,9 @@ func (s *Volumes) Query(targetObj aabb.IAABB) []*Volume {
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
 func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
-	s.tree.QueryOverlaps(cage, func(object aabb.IAABB) bool {
+	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
 		vol := object.(*Volume)
-		vol.QueryOverlaps(cage, func(otherEnt aabb.IAABB) bool {
+		vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
 			rFace := otherEnt.(*Face)
 			cage.AddFace(rFace, nil)
 			return false
@@ -80,18 +80,18 @@ func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
 }
 
 // QueryFrustum performs a spatial query using a frustum, invoking the callback for each intersected object in the tree.
-func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	s.tree.QueryFrustum(frustum, callback)
 }
 
 // QueryMultiFrustum performs a spatial query using two frustums, invoking the callback for each overlapping object.
-func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	s.tree.QueryMultiFrustum(front, rear, callback)
 }
 
 // QueryRay performs a raycasting query starting from origin (oX, oY, oZ) in direction (dirX, dirY, dirZ) up to maxDistance.
 // It invokes the callback for each intersected object, passing the object and intersection distance as arguments.
-func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IAABB, distance float64) (float64, bool)) {
+func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool)) {
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
@@ -101,13 +101,13 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 	var bestFace *Face
 	var minZDist = math.MaxFloat64
 	// Broad-Phase Globale: troviamo i volumi il cui AABB 3D contiene il punto
-	s.tree.QueryPoint3d(px, py, pz, func(object aabb.IAABB) bool {
+	s.tree.QueryPoint3d(px, py, pz, func(object aabb.IObject) bool {
 		volume := object.(*Volume)
 		if bestVol == nil {
 			bestVol = volume
 		}
 		// Broad-Phase Locale
-		volume.facesTree.QueryPoint2d(px, py, func(object aabb.IAABB) bool {
+		volume.facesTree.QueryPoint2d(px, py, func(object aabb.IObject) bool {
 			face := object.(*Face)
 			if bestFace == nil {
 				bestFace = face
@@ -144,8 +144,8 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 }
 
 // QueryAABB performs a spatial query, invoking the callback for each Volume that overlaps with the specified AABB.
-func (s *Volumes) QueryAABB(targetObj aabb.IAABB, callback func(vol *Volume)) {
-	s.tree.QueryOverlaps(targetObj, func(object aabb.IAABB) bool {
+func (s *Volumes) QueryAABB(targetObj aabb.IObject, callback func(vol *Volume)) {
+	s.tree.QueryOverlaps(targetObj, func(object aabb.IObject) bool {
 		if vol, ok := object.(*Volume); ok {
 			callback(vol)
 		}

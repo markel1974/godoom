@@ -2,7 +2,7 @@ package aabb
 
 // Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
 type Tree struct {
-	objectNodeIndexMap map[IAABB]uint
+	objectNodeIndexMap map[IObject]uint
 	nodes              []*Node
 	rootNodeIndex      uint
 	allocatedNodeCount uint
@@ -25,7 +25,7 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
 		nodes:              make([]*Node, initialSize),
-		objectNodeIndexMap: make(map[IAABB]uint),
+		objectNodeIndexMap: make(map[IObject]uint),
 		stack:              make([]uint, initialSize),
 		margin:             margin,
 	}
@@ -50,7 +50,7 @@ func (a *Tree) GetRoot() (*AABB, bool) {
 }
 
 // Nodes returns a map linking objects implementing IAABB to their corresponding node indices in the AABB tree.
-func (a *Tree) Nodes() map[IAABB]uint {
+func (a *Tree) Nodes() map[IObject]uint {
 	return a.objectNodeIndexMap
 }
 
@@ -71,11 +71,11 @@ func (a *Tree) Clear() {
 	if a.nodeCapacity > 0 {
 		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
 	}
-	a.objectNodeIndexMap = make(map[IAABB]uint)
+	a.objectNodeIndexMap = make(map[IObject]uint)
 }
 
 // InsertObject inserts a new object into the Tree, updates its AABB, and associates it with a node index.
-func (a *Tree) InsertObject(object IAABB) {
+func (a *Tree) InsertObject(object IObject) {
 	nodeIndex, node := a.allocateNode()
 	node.object = object
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
@@ -84,7 +84,7 @@ func (a *Tree) InsertObject(object IAABB) {
 }
 
 // RemoveObject removes the specified object from the Tree if it exists.
-func (a *Tree) RemoveObject(object IAABB) {
+func (a *Tree) RemoveObject(object IObject) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
 		a.removeLeaf(nodeIndex)
 		a.deallocateNode(nodeIndex)
@@ -93,7 +93,7 @@ func (a *Tree) RemoveObject(object IAABB) {
 }
 
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
-func (a *Tree) UpdateObject(object IAABB) {
+func (a *Tree) UpdateObject(object IObject) {
 	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
 		node := a.nodes[nodeIndex]
 		// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
@@ -107,7 +107,7 @@ func (a *Tree) UpdateObject(object IAABB) {
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
-func (a *Tree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
+func (a *Tree) QueryOverlaps(object IObject, callback func(object IObject) bool) {
 	testAabb := object.GetAABB()
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
@@ -142,7 +142,7 @@ func (a *Tree) QueryOverlaps(object IAABB, callback func(object IAABB) bool) {
 }
 
 // QueryPoint2d searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
-func (a *Tree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
+func (a *Tree) QueryPoint2d(px, py float64, callback func(object IObject) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -173,7 +173,7 @@ func (a *Tree) QueryPoint2d(px, py float64, callback func(object IAABB) bool) {
 }
 
 // QueryPoint3d searches the tree for objects whose AABBs contain the given 3D point.
-func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool) {
+func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IObject) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -204,7 +204,7 @@ func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IAABB) bool
 }
 
 // QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
-func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) {
+func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -236,7 +236,7 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IAABB) bool) 
 }
 
 // QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
-func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bool) {
+func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IObject) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -272,7 +272,7 @@ func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IAABB) bo
 // dirX, dirY, dirZ represent the direction vector of the ray.
 // maxDistance specifies the maximum distance for the ray to query.
 // callback is invoked with each intersected object and its distance, and may update the maxDistance dynamically.
-func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IAABB, distance float64) (float64, bool)) {
+func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IObject, distance float64) (float64, bool)) {
 	// Pre-calcolo delle inverse per la vettorizzazione dello Slab Method
 	invDirX := 1.0 / dirX
 	invDirY := 1.0 / dirY

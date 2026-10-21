@@ -91,7 +91,7 @@ func (th *Things) Len() int {
 }
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
-	th.tree.QueryOverlaps(lCage, func(object aabb.IAABB) bool {
+	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(IThing)
 		if lThing == rThing {
 			return false
@@ -103,11 +103,11 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
-		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IAABB) bool {
+		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
 			rFace := rEnt.(*Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
 			// 3. Query sul BVH del Self
-			lThing.GetVolume().QueryOverlaps(z, func(lEnt aabb.IAABB) bool {
+			lThing.GetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*Face)
 				// Integrazione nel Manifold (Assicurati che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
@@ -122,17 +122,17 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
-func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	th.tree.QueryMultiFrustum(rear, front, callback)
 }
 
 // QueryFrustum performs a spatial query within the specified frustum, invoking the callback for each intersected object.
-func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IAABB) bool) {
+func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	th.tree.QueryFrustum(front, callback)
 }
 
 // QueryStatic iterates over all static objects, applying the provided callback function to each object.
-func (th *Things) QueryStatic(callback func(object aabb.IAABB) bool) {
+func (th *Things) QueryStatic(callback func(object aabb.IObject) bool) {
 	for _, st := range th.statics {
 		callback(st)
 	}
@@ -170,7 +170,7 @@ func (th *Things) GetActive() ([]IThing, int) {
 // - dirX, dirY, dirZ: Direction vector of the ray.
 // - maxDistance: Maximum distance the ray can travel.
 // - callback: Function invoked for each intersected object, receives the object and its distance as arguments.
-func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IAABB, distance float64) (float64, bool)) {
+func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool)) {
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 

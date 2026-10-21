@@ -241,11 +241,11 @@ func (v *Volume) GetCentroid() geometry.XYZ {
 }
 
 // QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.
-func (v *Volume) QueryOverlaps(object aabb.IAABB, callback func(object aabb.IAABB) bool) {
+func (v *Volume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.facesTree.QueryOverlaps(object, callback)
 }
 
-func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IAABB) bool) {
+func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObject) bool) {
 	v.facesTree.QueryPoint3d(px, py, pz, callback)
 }
 

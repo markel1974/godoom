@@ -179,7 +179,7 @@ func (w *Wall) Parse(tokens []string) {
 			i++
 			dMirror, err := GetTokenIntAt(tokens, i)
 			if err != nil {
-				fmt.Printf("doWall: DADJOIN invalid token at %d: %s\n", i, err.Error())
+				fmt.Printf("doWall: DMIRROR invalid token at %d: %s\n", i, err.Error())
 			} else {
 				w.DMirror = dMirror
 			}

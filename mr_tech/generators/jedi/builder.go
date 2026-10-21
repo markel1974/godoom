@@ -15,18 +15,19 @@ import (
 // aspectRatio defines the proportional relationship between width and height, commonly used in graphics and media contexts.
 const aspectRatio = 1.6
 
+// scaleFactor is a constant used to define a uniform scaling multiplier in various calculations.
 const scaleFactor = 11.0
 
-// scaleX represents the scaling factor along the X-axis used for transformations or calculations in a 2D context.
+// scaleX represents the horizontal scaling factor derived from the base value defined by scaleFactor.
 const scaleX = scaleFactor
 
-// scaleY defines a constant scaling factor for the Y-axis, set to a fixed value of 10.0.
+// scaleY defines the vertical scaling factor for transformations, derived from the base value of scaleFactor.
 const scaleY = scaleFactor
 
-// scaleZ represents the scaling factor applied along the Z-axis in a 3D transformation, defaulting to no scaling.
+// scaleZ represents the scaling factor applied along the Z-axis, derived from the predefined scaleFactor constant.
 const scaleZ = scaleFactor
 
-// scaleSectorH defines the horizontal scaling factor used for dimensional calculations in sectors.
+// scaleSectorH represents a height scaling factor derived from the base scale factor.
 const scaleSectorH = scaleFactor * 1
 
 const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
@@ -330,9 +331,9 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 
 	calibration := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	calibration.AspectRatio = aspectRatio
-	scaleFactor := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
+	sf := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
 	tex := archive.GetTextures()
-	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, scaleFactor, tex)
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, sf, tex)
 	cr.Things = configThings
 	cr.Vertices = globalVertices
 	cr.Lights = lights

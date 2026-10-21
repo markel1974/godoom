@@ -2,6 +2,7 @@ package jedi
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -159,6 +160,8 @@ func (t *Threedo) Parse(r io.Reader) error {
 				}
 				currentObject.TexQuads = append(currentObject.TexQuads, tQuad)
 			}
+		default:
+			fmt.Printf("[warning] Threedo Parse unknown mode: %s", parts[0])
 		}
 	}
 	return scanner.Err()

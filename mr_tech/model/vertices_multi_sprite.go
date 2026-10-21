@@ -31,10 +31,6 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 	if f.debug {
 		f.renderMode = RenderModeModel3D
 	}
-
-	//if len(cfg.MultiSprite.Views) > 1 {
-	//	fmt.Println("len(cfg.MultiSprite.Views) > 1")
-	//}
 	for viewIdx, view := range cfg.MultiSprite.Views {
 		if view == nil {
 			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
@@ -55,31 +51,26 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		}
 		volume.Rebuild()
 		f.volumes[viewIdx] = volume
-		//TEST
-		//f.volumes[0] = volume
 	}
 
 	f.actionVolume = f.volumes[0]
 	f.physicsVolume = f.volumes[0]
-	//TEST
-	//if len(f.volumes) > 3 {
-	//	f.activeVolume = f.volumes[3]
-	//}
 	return f
 }
 
 // GetVolume retrieves the current active volume associated with the VerticesMultiSprite instance.
 func (v *VerticesMultiSprite) GetVolume() *Volume {
-	return v.physicsVolume
+	return v.actionVolume
 }
 
 // GetEntity returns the physics entity associated with the current view volume of the VerticesMultiSprite.
 func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
-	return v.physicsVolume.GetEntity()
+	return v.actionVolume.GetEntity()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
+	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
 	return v.physicsVolume.GetEntity().GetAABB()
 }
 
@@ -92,7 +83,9 @@ func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face,
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
 func (v *VerticesMultiSprite) SetAction(idx int) {
 	//return
-	v.computeAction(idx, 0)
+	if !v.computeAction(idx, 0) {
+		return
+	}
 
 	// Restart animation for all faces in the new action volume
 	if faces, count := v.actionVolume.GetFaces(); faces != nil {
@@ -149,6 +142,7 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	if v.actionVolume == nil {
 		v.actionVolume = v.volumes[0]
 	}
+	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
 	return true
 }
 

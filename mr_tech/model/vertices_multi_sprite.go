@@ -12,20 +12,17 @@ import (
 
 // VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
 type VerticesMultiSprite struct {
-	currentAction int
 	//currentAngle  int
-	volumes    []*Volume
-	viewVolume *Volume
-
-	renderMode float64
-	debug      bool
+	volumes      []*Volume
+	activeVolume *Volume
+	renderMode   float64
+	debug        bool
 }
 
 // NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
 func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
-		volumes:       make([]*Volume, len(cfg.MultiSprite.Materials)),
-		currentAction: 0,
+		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
 		debug:      false,
@@ -33,58 +30,73 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 	if f.debug {
 		f.renderMode = RenderModeModel3D
 	}
-	for viewIdx, view := range cfg.MultiSprite.Materials {
+
+	//if len(cfg.MultiSprite.Views) > 1 {
+	//	fmt.Println("len(cfg.MultiSprite.Views) > 1")
+	//}
+	for viewIdx, view := range cfg.MultiSprite.Views {
+		if view == nil {
+			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
+		}
+		if len(view.Frames) == 0 {
+			panic(fmt.Sprintf("view Frames is empty for viewIdx %d", viewIdx))
+		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", cfg.Id, viewIdx)
-		volume := NewVolume(viewIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-		f.volumes[viewIdx] = volume
-		if view != nil && len(view.Frames) > 0 {
-			material := materials.GetMaterial(view)
-			faces, err := f.createFaces(material)
-			if err != nil {
-				fmt.Println("[error] NewVerticesMultiSprite createFaces error:", err)
-				continue
-			}
-			for _, face := range faces {
-				volume.AddFace(face)
-			}
+		thingId := fmt.Sprintf("thing_%s_%d", cfg.Id, viewIdx)
+		volume := NewVolume(viewIdx, baseId, thingId, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		material := materials.GetMaterial(view)
+		faces, err := f.createFaces(material)
+		if err != nil {
+			panic(fmt.Sprintf("[error] NewVerticesMultiSprite createFaces error: %s", err.Error()))
+		}
+		for _, face := range faces {
+			volume.AddFace(face)
 		}
 		volume.Rebuild()
+		f.volumes[viewIdx] = volume
+		//TEST
+		//f.volumes[0] = volume
 	}
-	f.compute()
+
+	f.activeVolume = f.volumes[0]
+	//TEST
+	//if len(f.volumes) > 1 {
+	//	f.viewVolume = f.volumes[1]
+	//} else {
+	//	f.viewVolume = f.volumes[0]
+	//}
+
+	//f.computeAction(1, 0)
 	return f
 }
 
 // GetVolume retrieves the current active volume associated with the VerticesMultiSprite instance.
 func (v *VerticesMultiSprite) GetVolume() *Volume {
-	return v.viewVolume
+	return v.activeVolume
 }
 
 // GetEntity returns the physics entity associated with the current view volume of the VerticesMultiSprite.
 func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
-	return v.viewVolume.GetEntity()
+	return v.activeVolume.GetEntity()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	return v.viewVolume.GetEntity().GetAABB()
+	return v.activeVolume.GetEntity().GetAABB()
 }
 
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
 func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	f, c := v.viewVolume.GetFaces()
+	f, c := v.activeVolume.GetFaces()
 	return f, c, f, c, 0.0, v.GetRenderMode()
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
 func (v *VerticesMultiSprite) SetAction(idx int) {
-	if idx < 0 || idx >= len(v.volumes) {
-		return
-	}
-	v.currentAction = idx
-	v.compute()
+	v.computeAction(idx, 0)
 
 	// Restart animation for all faces in the new action volume
-	if faces, count := v.volumes[idx].GetFaces(); faces != nil {
+	if faces, count := v.activeVolume.GetFaces(); faces != nil {
 		for i := 0; i < count; i++ {
 			f := (*faces)[i]
 			if f == nil {
@@ -92,12 +104,16 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 			}
 			if mat := f.GetMaterial(); mat != nil {
 				mat.RestartAnim()
-				// Action 3 is death and 4 is extreme death
-				if idx == 3 || idx == 4 {
-					mat.SetClampAnim(true)
-				} else {
-					mat.SetClampAnim(false)
-				}
+				//TODO
+				/*
+					// Action 3 is death and 4 is extreme death
+					if idx == 3 || idx == 4 {
+						mat.SetClampAnim(true)
+					} else {
+						mat.SetClampAnim(false)
+					}
+
+				*/
 			}
 		}
 	}
@@ -105,12 +121,12 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 
 // GetVerticesCenter retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
 func (v *VerticesMultiSprite) GetVerticesCenter() (float64, float64, float64) {
-	return v.viewVolume.GetEntity().GetCenter()
+	return v.activeVolume.GetEntity().GetCenter()
 }
 
 // GetRenderMode returns a constant value of 1.0, typically used to represent a uniform scaling factor for renderModes.
 func (v *VerticesMultiSprite) GetRenderMode() float64 {
-	return v.renderMode //3.0 Debug
+	return v.renderMode
 }
 
 // SetThing assigns the specified IThing instance to all volumes in the VerticesMultiSprite object.
@@ -121,16 +137,20 @@ func (v *VerticesMultiSprite) SetThing(t IThing) {
 }
 
 // compute updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
-func (v *VerticesMultiSprite) compute() {
-	viewVolume := v.volumes[v.currentAction]
-	//viewVolume := v.volumes[v.currentAngle]
-	if viewVolume == v.viewVolume {
-		return
+func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
+	if action < 0 || action >= len(v.volumes) {
+		action = 0
 	}
-	v.viewVolume = viewVolume
-	if v.viewVolume == nil {
-		v.viewVolume = v.volumes[0]
+	activeVolume := v.volumes[action]
+	//activeVolume := v.volumes[v.currentAngle]
+	if activeVolume == v.activeVolume {
+		return false
 	}
+	v.activeVolume = activeVolume
+	if v.activeVolume == nil {
+		v.activeVolume = v.volumes[0]
+	}
+	return true
 }
 
 // createFaces constructs 3D box geometry with optional visual material and returns its set of face objects for rendering and physics.
@@ -149,17 +169,17 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 
 	halfW := width * 0.5
 	halfY := halfW
-	halfHeight := height * 0.5
+	halfH := height * 0.5
 
-	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfHeight}
-	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfHeight}
-	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfHeight}
-	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfHeight}
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfH}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfH}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfH}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfH}
 
-	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfHeight}
-	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfHeight}
-	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfHeight}
-	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfHeight}
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfH}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfH}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfH}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfH}
 
 	var faces []*Face
 
@@ -182,25 +202,18 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
 
 	// PIANO VISIVO (Render) Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
-	t0 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: halfHeight},  // TL
-		{X: -halfW, Y: 0.0, Z: -halfHeight}, // BL
-		{X: halfW, Y: 0.0, Z: -halfHeight},  // BR
-	}
+	// TL BL BR
+	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: halfH}, {X: -halfW, Y: 0.0, Z: -halfH}, {X: halfW, Y: 0.0, Z: -halfH}}
 	f0 := NewFace(t0, "", material)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
-
-	t1 := [3]geometry.XYZ{
-		{X: -halfW, Y: 0.0, Z: halfHeight}, // TL
-		{X: halfW, Y: 0.0, Z: -halfHeight}, // BR
-		{X: halfW, Y: 0.0, Z: halfHeight},  // TR
-	}
+	faces = append(faces, f0)
+	// TL BR TR
+	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: halfH}, {X: halfW, Y: 0.0, Z: -halfH}, {X: halfW, Y: 0.0, Z: halfH}}
 	f1 := NewFace(t1, "", material)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
-
-	faces = append(faces, f0, f1)
+	faces = append(faces, f1)
 
 	return faces, nil
 }

@@ -12,20 +12,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const scaleFactor = 12.0
+
 // aspectRatio defines the proportional relationship between width and height, commonly used in graphics and media contexts.
 const aspectRatio = 1.6
 
 // scaleX represents the scaling factor along the X-axis used for transformations or calculations in a 2D context.
-const scaleX = 10.0
+const scaleX = scaleFactor
 
 // scaleY defines a constant scaling factor for the Y-axis, set to a fixed value of 10.0.
-const scaleY = 10.0
+const scaleY = scaleFactor
 
 // scaleZ represents the scaling factor applied along the Z-axis in a 3D transformation, defaulting to no scaling.
-const scaleZ = 1.0
+const scaleZ = scaleFactor
 
 // scaleSectorH defines the horizontal scaling factor used for dimensional calculations in sectors.
-const scaleSectorH = 8.0
+const scaleSectorH = scaleFactor * 0.8
 
 const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
 const scaleTextureH = 1.0 // scaleTextureH defines the horizontal scaling factor for texture rendering, set to a default value of 1.0.

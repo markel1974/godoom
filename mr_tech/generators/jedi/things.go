@@ -12,10 +12,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// Things represents a data handler for managing game objects and resources using the provided IArchive implementation.
 type Things struct {
 	archive lumps.IArchive
 }
 
+// NewThings creates and initializes a new instance of Things using the provided IArchive for resource management.
 func NewThings(archive lumps.IArchive) *Things {
 	return &Things{
 		archive: archive,
@@ -23,7 +25,7 @@ func NewThings(archive lumps.IArchive) *Things {
 }
 
 // WAXToThing converts a WAX file into a Thing object with animations or static visuals, defined at the given position.
-func (b *Things) WAXToThing(fileName string, pos geometry.XYZ) (*config.Thing, error) {
+func (b *Things) WAXToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := b.archive.GetPayload(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
@@ -32,40 +34,11 @@ func (b *Things) WAXToThing(fileName string, pos geometry.XYZ) (*config.Thing, e
 	if err != nil {
 		return nil, fmt.Errorf("could not decompress %s: %v\n", fileName, err)
 	}
-	//fmt.Printf("Decompression Success: %s\n", fileName)
-	//os.Exit(1)
 	wax := lumps.NewWAX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
 	}
-
-	/*
-		var frameTextureNames []string
-		for _, act := range wax.GetActions() {
-			if act == nil {
-				continue
-			}
-			for _, nodes := range act.GetViews() {
-				if nodes == nil {
-					continue
-				}
-				for _, cell := range nodes.GetCells() {
-					texId := cell.GetId()
-					sizeX, sizeY := cell.GetSize()
-					textures.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), colorPal)
-					frameTextureNames = append(frameTextureNames, texId)
-				}
-			}
-		}
-		material := config.NewConfigMaterial(frameTextureNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-		cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
-		cThing.Sprite = config.NewSprite(material)
-		configThings = append(configThings, cThing)
-
-	*/
-
 	multiSprite := config.NewMultiSprite()
 	for _, act := range wax.GetActions() {
 		if act == nil {
@@ -86,16 +59,15 @@ func (b *Things) WAXToThing(fileName string, pos geometry.XYZ) (*config.Thing, e
 			multiSprite.Add(material)
 		}
 	}
-
 	// Creiamo il materiale animato (o statico se 1 solo frame)
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+	cThing := b.createConfigThing(id, pos, kind, 0, 50, 3, 50, 400)
 	cThing.MultiSprite = multiSprite
 	return cThing, nil
 }
 
 // NWXToThing converts NWX animation data into a config.Thing by parsing its contents and creating associated materials.
-func (b *Things) NWXToThing(fileName string, pos geometry.XYZ) (*config.Thing, error) {
+func (b *Things) NWXToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := b.archive.GetPayload(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
@@ -144,7 +116,7 @@ func (b *Things) NWXToThing(fileName string, pos geometry.XYZ) (*config.Thing, e
 	}
 
 	id := fmt.Sprintf("%s_%s", "SPRITE", fileName)
-	cThing := b.createConfigThing(id, pos, config.ThingEnemyDef, 0, 50, 3, 50, 400)
+	cThing := b.createConfigThing(id, pos, kind, 0, 50, 3, 50, 400)
 	if counter > 0 {
 		cThing.MultiSprite = multiSprite
 	}
@@ -169,7 +141,7 @@ func (b *Things) createConfigThing(classname string, pos geometry.XYZ, kind conf
 }
 
 // ThreedoToThing converts a 3DO model file into a Thing object using the provided position and archive for resources.
-func (b *Things) ThreedoToThing(fileName string, pos geometry.XYZ) (*config.Thing, error) {
+func (b *Things) ThreedoToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
 	threedoData, err := b.archive.GetPayload(fileName)
 	if err != nil {
 		return nil, err
@@ -229,7 +201,7 @@ func (b *Things) ThreedoToThing(fileName string, pos geometry.XYZ) (*config.Thin
 	cModel := config.NewModel3DEntry(1, []string{"stand"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
-	cThing := b.createConfigThing(id, pos, config.ThingItemDef, 0, 40, 10, 50, 0)
+	cThing := b.createConfigThing(id, pos, kind, 0, 40, 10, 50, 0)
 	cThing.Model3DEntry = cModel
 	return cThing, nil
 }

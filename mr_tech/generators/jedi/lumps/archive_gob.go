@@ -164,7 +164,7 @@ func (g *ArchiveGob) Close() error {
 
 // SetLevel loads the specified level and its associated components, including entities and palette, into the archive.
 func (g *ArchiveGob) SetLevel(levelNumber int) error {
-	if levelNumber < 0 || levelNumber > len(g.levels) {
+	if levelNumber < 0 || levelNumber >= len(g.levels) {
 		return fmt.Errorf("invalid level number %d", levelNumber)
 	}
 	baseName := g.levels[levelNumber]

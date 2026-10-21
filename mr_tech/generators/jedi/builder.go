@@ -260,14 +260,14 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 			}
 			targetName := strings.ToUpper(item.Anim)
 			if strings.Contains(targetName, ".NWX") {
-				cThing, err := things.NWXToThing(item.Anim, pos)
+				cThing, err := things.NWXToThing(item.Anim, config.ThingEnemyDef, pos)
 				if err != nil {
 					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 					continue
 				}
 				configThings = append(configThings, cThing)
 			} else if strings.Contains(targetName, ".3DO") {
-				cThing, err := things.ThreedoToThing(targetName, pos)
+				cThing, err := things.ThreedoToThing(targetName, config.ThingItemDef, pos)
 				if err != nil {
 					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 					continue
@@ -298,7 +298,7 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 				continue
 			}
 			fileName := entities.Waxes[dataIdx]
-			cThing, err := things.WAXToThing(fileName, pos)
+			cThing, err := things.WAXToThing(fileName, config.ThingEnemyDef, pos)
 			if err != nil {
 				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue
@@ -314,7 +314,7 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 				continue
 			}
 			fileName := entities.Threedos[dataIdx]
-			cThing, err := things.ThreedoToThing(fileName, pos)
+			cThing, err := things.ThreedoToThing(fileName, config.ThingEnemyDef, pos)
 			if err != nil {
 				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue

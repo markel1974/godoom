@@ -156,9 +156,8 @@ func (bm *BMHeader) decode(r io.Reader, palette [256]color.RGBA) ([]*image.RGBA,
 func (bm *BMHeader) mapPixelToRGBA(img *image.RGBA, x, y int, pIndex byte, tIndex uint8, pal [256]color.RGBA) {
 	c := pal[pIndex]
 
-	// bm.Transparent è il flag nativo letto dall'header del file .BM.
-	// Se la texture è contrassegnata come trasparente E il pixel matcha l'indice chiave (solitamente 0), buca.
-	// Altrimenti, rendi il pixel solido, salvando il nero assoluto sui muri.
+	// Se la texture è contrassegnata come trasparente E il pixel matcha l'indice chiave (solitamente 0),
+	// e' alfa, altrimenti, bisogna rendere il pixel solido.
 	if bm.Transparent > 0 && pIndex == tIndex {
 		c.A = 0
 	} else {

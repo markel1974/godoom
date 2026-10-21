@@ -316,6 +316,7 @@ func (s *Sector) IsAbyss() bool {
 	return (s.Flags[0] & 2) != 0
 }
 
+// IsCCW determines if the sector's walls are ordered counter-clockwise (CCW) based on their vertices and area calculation.
 func (s *Sector) IsCCW() bool {
 	area := 0.0
 	for _, w := range s.Walls {

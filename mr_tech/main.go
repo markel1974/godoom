@@ -68,7 +68,7 @@ var _availableModes = []ModeDef{
 		Target: "resources" + string(os.PathSeparator) + "jedi",
 		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
-			return jf.Build(res, 1, target, level)
+			return jf.Build(res, 0, target, level)
 		},
 	},
 	{

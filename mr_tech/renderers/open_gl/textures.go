@@ -28,36 +28,19 @@ type Textures struct {
 func NewTextures(ctx api.IContext) *Textures {
 	return &Textures{
 		ctx:      ctx,
-		textures: make(map[*textures.Texture]float32),
+		textures: nil,
 	}
 }
 
-// Get retrieves the layer value associated with the given texture and returns a boolean indicating if the texture exists.
-func (tx *Textures) Get(tex *textures.Texture) (float32, bool) {
-	t, ok := tx.textures[tex]
-	return t, ok
-}
-
-// GetBucketsLen returns the number of buckets in the Textures structure.
-func (tx *Textures) GetBucketsLen() int {
-	return len(tx.buckets)
-}
-
-// GetBucket retrieves the DiffuseArray, NormalArray, and EmissiveArray from the specified bucket index b.
-func (tx *Textures) GetBucket(b int) (uint32, uint32, uint32) {
-	return tx.buckets[b].DiffuseArray, tx.buckets[b].NormalArray, tx.buckets[b].EmissiveArray
-}
-
+// Setup initializes texture arrays and their respective VRAM buckets for efficient rendering and management.
 func (tx *Textures) Setup(t textures.ITextures) error {
 	const stride = 4
 	tx.textures = make(map[*textures.Texture]float32)
-	names := t.GetNames()
-
-	if len(names) == 0 {
-		return nil
-	}
-
 	slots := []int{64, 128, 256, 1024}
+	tx.buckets = make([]Bucket, len(slots))
+	for i := range slots {
+		tx.buckets[i] = Bucket{Size: slots[i], Count: 0}
+	}
 
 	idxByDim := func(maxDim int) int {
 		bIdx := len(slots) - 1
@@ -69,11 +52,10 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		return bIdx
 	}
 
-	tx.buckets = make([]Bucket, len(slots))
-	for i := range slots {
-		tx.buckets[i] = Bucket{Size: slots[i], Count: 0}
+	names := t.GetNames()
+	if len(names) == 0 {
+		return nil
 	}
-
 	for _, id := range names {
 		tn := t.Get([]string{id})
 		if len(tn) == 0 {
@@ -159,6 +141,22 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		}
 	}
 	return nil
+}
+
+// Get retrieves the layer value associated with the given texture and returns a boolean indicating if the texture exists.
+func (tx *Textures) Get(tex *textures.Texture) (float32, bool) {
+	t, ok := tx.textures[tex]
+	return t, ok
+}
+
+// GetBucketsLen returns the number of buckets in the Textures structure.
+func (tx *Textures) GetBucketsLen() int {
+	return len(tx.buckets)
+}
+
+// GetBucket retrieves the DiffuseArray, NormalArray, and EmissiveArray from the specified bucket index b.
+func (tx *Textures) GetBucket(b int) (uint32, uint32, uint32) {
+	return tx.buckets[b].DiffuseArray, tx.buckets[b].NormalArray, tx.buckets[b].EmissiveArray
 }
 
 // BindBuckets binds texture buckets to specific OpenGL texture units for rendering diffuse, normal, and emissive maps.

@@ -13,10 +13,11 @@ import (
 // VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
 type VerticesMultiSprite struct {
 	//currentAngle  int
-	volumes      []*Volume
-	activeVolume *Volume
-	renderMode   float64
-	debug        bool
+	volumes       []*Volume
+	actionVolume  *Volume
+	physicsVolume *Volume
+	renderMode    float64
+	debug         bool
 }
 
 // NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
@@ -58,45 +59,43 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		//f.volumes[0] = volume
 	}
 
-	f.activeVolume = f.volumes[0]
+	f.actionVolume = f.volumes[0]
+	f.physicsVolume = f.volumes[0]
 	//TEST
-	//if len(f.volumes) > 1 {
-	//	f.viewVolume = f.volumes[1]
-	//} else {
-	//	f.viewVolume = f.volumes[0]
+	//if len(f.volumes) > 3 {
+	//	f.activeVolume = f.volumes[3]
 	//}
-
-	//f.computeAction(1, 0)
 	return f
 }
 
 // GetVolume retrieves the current active volume associated with the VerticesMultiSprite instance.
 func (v *VerticesMultiSprite) GetVolume() *Volume {
-	return v.activeVolume
+	return v.physicsVolume
 }
 
 // GetEntity returns the physics entity associated with the current view volume of the VerticesMultiSprite.
 func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
-	return v.activeVolume.GetEntity()
+	return v.physicsVolume.GetEntity()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	return v.activeVolume.GetEntity().GetAABB()
+	return v.physicsVolume.GetEntity().GetAABB()
 }
 
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
 func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	f, c := v.activeVolume.GetFaces()
+	f, c := v.actionVolume.GetFaces()
 	return f, c, f, c, 0.0, v.GetRenderMode()
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
 func (v *VerticesMultiSprite) SetAction(idx int) {
+	//return
 	v.computeAction(idx, 0)
 
 	// Restart animation for all faces in the new action volume
-	if faces, count := v.activeVolume.GetFaces(); faces != nil {
+	if faces, count := v.actionVolume.GetFaces(); faces != nil {
 		for i := 0; i < count; i++ {
 			f := (*faces)[i]
 			if f == nil {
@@ -121,7 +120,7 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 
 // GetVerticesCenter retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
 func (v *VerticesMultiSprite) GetVerticesCenter() (float64, float64, float64) {
-	return v.activeVolume.GetEntity().GetCenter()
+	return v.volumes[0].GetEntity().GetCenter()
 }
 
 // GetRenderMode returns a constant value of 1.0, typically used to represent a uniform scaling factor for renderModes.
@@ -143,12 +142,12 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	}
 	activeVolume := v.volumes[action]
 	//activeVolume := v.volumes[v.currentAngle]
-	if activeVolume == v.activeVolume {
+	if activeVolume == v.actionVolume {
 		return false
 	}
-	v.activeVolume = activeVolume
-	if v.activeVolume == nil {
-		v.activeVolume = v.volumes[0]
+	v.actionVolume = activeVolume
+	if v.actionVolume == nil {
+		v.actionVolume = v.volumes[0]
 	}
 	return true
 }

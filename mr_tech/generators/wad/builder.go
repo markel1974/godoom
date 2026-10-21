@@ -242,7 +242,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 			mat := config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
 			animId := ms.Add(mat)
 			//TODO PATCH
-			animId = 0
+			//animId = 0
 			for _, ad := range EnemyStateAdapter[idx] {
 				animations.Add(ad, animId, len(actionFrames))
 			}

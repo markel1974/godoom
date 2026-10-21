@@ -219,9 +219,15 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 						if found {
 							isWall = cn.Kind == config.SegmentWall
 							tag = cn.Tag
-							upper = anim.GetMaterial(cn.Upper)
-							middle = anim.GetMaterial(cn.Middle)
-							lower = anim.GetMaterial(cn.Lower)
+							if cn.Upper != nil {
+								upper = anim.GetMaterial(cn.Upper)
+							}
+							if cn.Middle != nil {
+								middle = anim.GetMaterial(cn.Middle)
+							}
+							if cn.Lower != nil {
+								lower = anim.GetMaterial(cn.Lower)
+							}
 							break
 						}
 					}

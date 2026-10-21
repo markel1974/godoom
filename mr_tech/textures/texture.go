@@ -34,10 +34,12 @@ func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	return z
 }
 
+// GetIdentifier retrieves the unique floating-point identifier associated with the Texture instance.
 func (t *Texture) GetIdentifier() float32 {
 	return t.identifier
 }
 
+// SetIdentifier assigns a new float32 value to the identifier property of the Texture instance.
 func (t *Texture) SetIdentifier(identifier float32) {
 	t.identifier = identifier
 }

@@ -12,10 +12,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-const scaleFactor = 12.0
-
 // aspectRatio defines the proportional relationship between width and height, commonly used in graphics and media contexts.
 const aspectRatio = 1.6
+
+const scaleFactor = 12.0
 
 // scaleX represents the scaling factor along the X-axis used for transformations or calculations in a 2D context.
 const scaleX = scaleFactor
@@ -27,7 +27,7 @@ const scaleY = scaleFactor
 const scaleZ = scaleFactor
 
 // scaleSectorH defines the horizontal scaling factor used for dimensional calculations in sectors.
-const scaleSectorH = scaleFactor * 0.8
+const scaleSectorH = scaleFactor * 0.9
 
 const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
 const scaleTextureH = 1.0 // scaleTextureH defines the horizontal scaling factor for texture rendering, set to a default value of 1.0.
@@ -171,15 +171,15 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
 				if wall.Adjoin == -1 {
 					if wall.MidTexture >= 0 {
-						cSeg.Kind = config.SegmentWall
 						texName := level.GetTexture(wall.MidTexture)
-						names, _ := archive.AddTexture(texName)
-						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-					} else {
-						if wall.MidTexture < 0 {
-							fmt.Println("WARNING MISSING MID_TEXTURE")
-							continue
+						if !isDefaultTexture(texName) {
+							cSeg.Kind = config.SegmentWall
+							names, _ := archive.AddTexture(texName)
+							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
+					} else {
+						fmt.Println("WARNING MISSING MID_TEXTURE")
+						continue
 					}
 				} else {
 					if wall.Adjoin >= len(level.Sectors) {
@@ -189,18 +189,25 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 					adjSec := level.Sectors[wall.Adjoin]
 					if wall.TopTexture >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
 						texName := level.GetTexture(wall.TopTexture)
-						names, _ := archive.AddTexture(texName)
-						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						if !isDefaultTexture(texName) {
+							names, _ := archive.AddTexture(texName)
+							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						}
 					}
 					if wall.BotTexture >= 0 {
 						texName := level.GetTexture(wall.BotTexture)
-						names, _ := archive.AddTexture(texName)
-						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						if !isDefaultTexture(texName) {
+							names, _ := archive.AddTexture(texName)
+							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						}
 					}
-					if wall.MidTexture >= 0 {
+					// Only portal walls with bit 0 set (force middle texture on adjoin: windows, grates, bars) have middle material
+					if wall.MidTexture >= 0 && (wall.Flags&1 != 0) {
 						texName := level.GetTexture(wall.MidTexture)
-						names, _ := archive.AddTexture(texName)
-						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						if !isDefaultTexture(texName) {
+							names, _ := archive.AddTexture(texName)
+							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						}
 					}
 				}
 				cSector.Segments[wallIdx] = cSeg
@@ -376,4 +383,8 @@ func (b *Builder) buildPlayer(pos geometry.XYZ) *config.Player {
 func CreateCoords(x, y, z float64) geometry.XYZ {
 	//return geometry.XYZ{X: x, Y: -z, Z: -y}
 	return geometry.XYZ{X: x, Y: z, Z: -y}
+}
+
+func isDefaultTexture(texName string) bool {
+	return len(texName) == 0 || strings.EqualFold(texName, "DEFAULT.PCX") || strings.EqualFold(texName, "DEFAULT.BM")
 }

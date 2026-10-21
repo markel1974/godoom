@@ -2,7 +2,7 @@ package config
 
 // MultiSprite represents a collection of materials used for multi-frame animations or visual compositions.
 type MultiSprite struct {
-	Materials []*Material
+	Views []*Material
 }
 
 // NewMultiSprite creates and returns a new instance of MultiSprite with an initialized empty slice of Materials.
@@ -12,12 +12,12 @@ func NewMultiSprite() *MultiSprite {
 
 // Add appends a Material to the MultiSprite's Material list and returns the index of the newly added Material.
 func (ms *MultiSprite) Add(material *Material) int {
-	counter := len(ms.Materials)
-	ms.Materials = append(ms.Materials, material)
+	counter := len(ms.Views)
+	ms.Views = append(ms.Views, material)
 	return counter
 }
 
 // Len returns the count of Materials in the MultiSprite.
 func (ms *MultiSprite) Len() int {
-	return len(ms.Materials)
+	return len(ms.Views)
 }

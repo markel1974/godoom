@@ -229,13 +229,13 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 		fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0
 	}
-	durationFrames, action, ok := e.playAnimation(state, e.animations.Content[state])
+	durationFrames, _, ok := e.playAnimation(state, e.animations.Content[state])
 	if !ok {
 		return 0
 	}
 	e.activeAnimation = state
 	e.animationDurationFrames = durationFrames
-	fmt.Println("State changed to:", e.self.GetId(), state, action)
+	//fmt.Println("State changed to:", e.self.GetId(), state, action)
 	return durationFrames
 }
 

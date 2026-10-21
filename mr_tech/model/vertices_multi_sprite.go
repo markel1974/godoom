@@ -18,6 +18,7 @@ type VerticesMultiSprite struct {
 	physicsVolume *Volume
 	renderMode    float64
 	debug         bool
+	clampAnim     []bool
 }
 
 // NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
@@ -26,6 +27,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
+		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
 		debug:      false,
 	}
 	if f.debug {
@@ -55,6 +57,12 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 
 	f.actionVolume = f.volumes[0]
 	f.physicsVolume = f.volumes[0]
+
+	for _, viewIdx := range cfg.MultiSprite.Clamps {
+		if viewIdx < len(f.volumes) {
+			f.clampAnim[viewIdx] = true
+		}
+	}
 	return f
 }
 
@@ -96,16 +104,9 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 			}
 			if mat := f.GetMaterial(); mat != nil {
 				mat.RestartAnim()
-				//TODO
-				/*
-					// Action 3 is death and 4 is extreme death
-					if idx == 3 || idx == 4 {
-						mat.SetClampAnim(true)
-					} else {
-						mat.SetClampAnim(false)
-					}
-
-				*/
+				if v.clampAnim[idx] {
+					mat.SetClampAnim(true)
+				}
 			}
 		}
 	}

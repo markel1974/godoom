@@ -2,7 +2,8 @@ package config
 
 // MultiSprite represents a collection of materials used for multi-frame animations or visual compositions.
 type MultiSprite struct {
-	Views []*Material
+	Views  []*Material
+	Clamps []int
 }
 
 // NewMultiSprite creates and returns a new instance of MultiSprite with an initialized empty slice of Materials.

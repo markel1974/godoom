@@ -221,6 +221,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 	animations := config.NewEnemyAnimations()
 	multiAngleAnim := CreateAnimation(texHandler, sd.Sprite)
 	ms := config.NewMultiSprite()
+	ms.Clamps = []int{3, 4}
 
 	if sd.Dead {
 		sd.Kind = config.ThingItemDef

@@ -136,12 +136,6 @@ func (t *Textures) TextureCreateAnimation(id string) []string {
 
 // FlatCreateAnimation generates a list of flattened animation IDs for a given texture ID, resolving nested animations recursively.
 func (t *Textures) FlatCreateAnimation(id string) []string {
-	//out := make([]string, len(_animationsBase[0]))
-	//for idx, i := range _animationsBase[0] {
-	//	out[idx] = FlatCreateId(i)
-	//}
-	//return out
-
 	id = cleanId(id)
 	if animation, ok := t.animations[id]; ok {
 		out := make([]string, len(animation))
@@ -157,118 +151,7 @@ func (t *Textures) FlatCreateAnimation(id string) []string {
 	return []string{targetId}
 }
 
-/*
-// SpriteCreateAnimation generates a list of sprite animation IDs for a given texture ID, resolving nested animations recursively.
-func (t *Textures) SpriteCreateAnimation(ids []string) []string {
-	var out []string
-	for _, id := range ids {
-		id = cleanId(id)
-		out = append(out, SpriteCreateId(id))
-	}
-	return out
-}
-*/
-
-/*
-
-// BuildSprite estrae dal WAD le sequenze fornite e le compatta in un MultiSprite lineare.
-func (t *Textures) BuildSprite(prefix string) *config.MultiSprite {
-	var EnemyStateSequences = [][]byte{
-		{'A', 'B', 'C', 'D'},      // Action 0: Walk / Chase
-		{'E', 'F', 'G'},           // Action 1: Attack (Melee/Missile)
-		{'H'},                     // Action 2: Pain
-		{'I', 'J', 'K', 'L', 'M'}, // Action 3: Death
-		{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'}, // Action 4: Extreme Death (Gibs)
-	}
-
-	const frames = 8
-
-	target := SpriteCreateId(prefix[:4])
-
-	type frameData [frames]string
-	slots := make(map[byte]*frameData)
-
-	for res := range t.resources {
-		if !strings.HasPrefix(res, target) {
-			continue
-		}
-		spriteName := strings.TrimPrefix(res, SpriteId)
-		if len(spriteName) <= 5 {
-			continue
-		}
-		frameChar := spriteName[4]
-		angleChar := spriteName[5]
-		if slots[frameChar] == nil {
-			slots[frameChar] = &frameData{}
-		}
-		if angleChar == '0' {
-			for i := 0; i < frames; i++ {
-				slots[frameChar][i] = spriteName
-			}
-		} else {
-			angleIdx := int(angleChar - '1')
-			if angleIdx >= 0 && angleIdx < frames {
-				slots[frameChar][angleIdx] = spriteName
-			}
-		}
-		// Gestione della specchiatura (es. A2A8)
-		if len(spriteName) == frames {
-			frameChar2 := spriteName[6]
-			angleChar2 := spriteName[7]
-			if slots[frameChar2] == nil {
-				slots[frameChar2] = &frameData{}
-			}
-			angleIdx2 := int(angleChar2 - '1')
-			if angleIdx2 >= 0 && angleIdx2 < frames {
-				slots[frameChar2][angleIdx2] = spriteName
-			}
-		}
-	}
-
-	ms := config.NewMultiSprite()
-
-	for _, sequence := range EnemyStateSequences {
-		for angle := 0; angle < frames; angle++ {
-			var temporalFrames []string
-			for _, frameLetter := range sequence {
-				anglesData := slots[frameLetter]
-				if anglesData == nil {
-					continue
-				}
-				texId := anglesData[angle]
-				if texId == "" {
-					texId = anglesData[0]
-				}
-				temporalFrames = append(temporalFrames, SpriteCreateId(texId))
-			}
-			if len(temporalFrames) == 0 {
-				ms.Add(nil)
-				continue
-			}
-			mat := config.NewConfigMaterial(temporalFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
-			ms.Add(mat)
-		}
-	}
-
-	return ms
-}
-*/
-
 // AddDirect directly adds a texture to the Textures collection with the specified name and texture object.
 func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	t.resources[name] = tex
 }
-
-/*
-func (t *Textures) GetSprite(id string) []string {
-	var names []string
-	src := SpriteCreateId(id)
-	for k := range t.resources {
-		if strings.HasPrefix(k, src) {
-			names = append(names, k)
-		}
-	}
-	sort.Strings(names)
-	return names
-}
-*/

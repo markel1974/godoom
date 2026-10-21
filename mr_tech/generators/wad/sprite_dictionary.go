@@ -246,8 +246,9 @@ var EnemyStateAdapter = [EnemyActionLatest][]config.EnemyState{
 var EnemyStateSequences = [EnemyActionLatest][]byte{
 	{'A', 'B', 'C', 'D'}, // Walk / Chase
 	{'E', 'F'},           // Attack
-	{'G', 'H'},           // Pain
-	{'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'}, // Extreme Death
+	{'G'},                // Pain
+	//{'H', 'I', 'J', 'K', 'L', 'M'}, // Death
+	{'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'}, // Extreme Death
 }
 
 func CreateAnimation(t *Textures, prefix string) [][][]string {

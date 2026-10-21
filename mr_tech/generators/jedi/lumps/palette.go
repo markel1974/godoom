@@ -1,4 +1,4 @@
-package jedi
+package lumps
 
 import (
 	"image/color"
@@ -7,14 +7,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
+// Palette represents a structure used to manage and manipulate color palettes for graphical applications.
 type Palette struct {
 }
 
+// NewPalette creates and returns a new instance of the Palette struct.
 func NewPalette() *Palette {
 	return &Palette{}
 }
 
-// Parse estrae la palette VGA a 6-bit e la normalizza in RGBA a 8-bit.
+// Parse reads VGA palette data from the provided io.Reader and converts it into an array of 256 color.RGBA values.
 func (p *Palette) Parse(r io.Reader) ([256]color.RGBA, error) {
 	var pal [256]color.RGBA
 	raw := make([]byte, 768)
@@ -33,7 +35,7 @@ func (p *Palette) Parse(r io.Reader) ([256]color.RGBA, error) {
 	return pal, nil
 }
 
-// ParseFromPCX reads a PCX file from the provided io.ReadSeeker and extracts a 256-color RGBA palette.
+// ParseFromPCX extracts a 256-color RGBA palette from a PCX file provided via an io.ReadSeeker. Returns the palette or an error.
 func (p *Palette) ParseFromPCX(r io.ReadSeeker) ([256]color.RGBA, error) {
 	pcx := common.NewPCX()
 	img, err := pcx.ParsePalette(r)

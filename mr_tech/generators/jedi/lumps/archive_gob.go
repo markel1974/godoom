@@ -1,4 +1,4 @@
-package jedi
+package lumps
 
 import (
 	"bytes"

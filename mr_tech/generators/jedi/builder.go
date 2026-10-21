@@ -8,6 +8,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/jedi/lumps"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -61,11 +62,11 @@ type IArchive interface {
 
 	GetPayload(name string) ([]byte, error)
 
-	GetTextures() *Textures
+	GetTextures() *lumps.Textures
 
-	GetLevel() *Level
+	GetLevel() *lumps.Level
 
-	GetEntities() *Entities
+	GetEntities() *lumps.Entities
 
 	AddTexture(texName string) ([]string, error)
 
@@ -87,9 +88,9 @@ func NewBuilder() *Builder {
 func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber int) (*config.Root, error) {
 	var archive IArchive
 	if mode >= 1 {
-		archive = NewArchiveLab(fs)
+		archive = lumps.NewArchiveLab(fs)
 	} else {
-		archive = NewArchiveGob(fs)
+		archive = lumps.NewArchiveGob(fs)
 	}
 
 	levelNumber -= 1
@@ -260,7 +261,7 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 				fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, err)
 				continue
 			}
-			item := NewItem()
+			item := lumps.NewItem()
 			err = item.Parse(bytes.NewReader(data))
 			if err != nil {
 				fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, err)
@@ -413,7 +414,7 @@ func (b *Builder) ThreedoToThing(fileName string, pos geometry.XYZ, archive IArc
 	if err != nil {
 		return nil, err
 	}
-	threedoObj := NewThreedo()
+	threedoObj := lumps.NewThreedo()
 	if err := threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
 		return nil, err
 	}
@@ -479,13 +480,13 @@ func (b *Builder) WAXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
 	}
-	waxData, err = DecompressPayload(waxData)
+	waxData, err = lumps.DecompressPayload(waxData)
 	if err != nil {
 		return nil, fmt.Errorf("could not decompress %s: %v\n", fileName, err)
 	}
 	//fmt.Printf("Decompression Success: %s\n", fileName)
 	//os.Exit(1)
-	wax := NewWAX()
+	wax := lumps.NewWAX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing WAX %s: %v\n", fileName, err)
@@ -551,14 +552,14 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
 	}
-	wax := NewNWX()
+	wax := lumps.NewNWX()
 	err = wax.Parse(fileName, bytes.NewReader(waxData))
 	if err != nil {
 		fmt.Printf("error parsing WAX %s: %v\n", fileName, err)
 	}
 	multiSprite := config.NewMultiSprite()
 	counter := 0
-	if wax.sequencer != nil {
+	if wax.GetSequencer() != nil {
 		for _, action := range wax.GetActions() {
 			if action == nil {
 				continue
@@ -574,7 +575,7 @@ func (b *Builder) NWXToThing(fileName string, archive IArchive, pos geometry.XYZ
 				}
 				var pixels []byte
 				args := []string{strconv.Itoa(int(node.GetIndex()))}
-				if node.flipX {
+				if node.GetFlipX() {
 					args = append(args, "FlipX")
 					pixels = cell.GetFlippedPixels()
 				} else {

@@ -1,4 +1,4 @@
-package jedi
+package lumps
 
 import (
 	"encoding/binary"
@@ -301,6 +301,11 @@ func (n *NWXSeqNode) GetIndex() int16 {
 	return n.index
 }
 
+// GetFlipX returns the horizontal flipping state of the NWXSeqNode as a boolean value.
+func (n *NWXSeqNode) GetFlipX() bool {
+	return n.flipX
+}
+
 // GetCell retrieves the associated NWXCell of the NWXSeqNode, which contains graphical rendering data.
 func (n *NWXSeqNode) GetCell() *NWXCell {
 	return n.cell
@@ -562,4 +567,9 @@ func (w *NWX) Parse(baseId string, r io.ReadSeeker) error {
 // GetActions returns a slice of pointers to NWXAction, representing the actions managed by the NWX sequencer.
 func (w *NWX) GetActions() []*NWXAction {
 	return w.sequencer.actions
+}
+
+// GetSequencer returns the NWXVerbSEQT instance associated with the NWX structure.
+func (w *NWX) GetSequencer() *NWXVerbSEQT {
+	return w.sequencer
 }

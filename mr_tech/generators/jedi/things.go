@@ -15,12 +15,14 @@ import (
 // Things represents a data handler for managing game objects and resources using the provided IArchive implementation.
 type Things struct {
 	archive lumps.IArchive
+	eMode   EngineMode
 }
 
 // NewThings creates and initializes a new instance of Things using the provided IArchive for resource management.
-func NewThings(archive lumps.IArchive) *Things {
+func NewThings(archive lumps.IArchive, eMode EngineMode) *Things {
 	return &Things{
 		archive: archive,
+		eMode:   eMode,
 	}
 }
 
@@ -28,105 +30,108 @@ func NewThings(archive lumps.IArchive) *Things {
 func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 	var cThings []*config.Thing
 	var cPlayer *config.Player
-	things := NewThings(b.archive)
 	entities := b.archive.GetEntities()
 
-	for _, obj := range entities.Objects {
-		if len(obj.Name) == 0 {
-			continue
-		}
-		pos := CreateCoords(obj.X, obj.Y, obj.Z)
-		key := strings.ToUpper(strings.TrimSpace(obj.Name))
-		switch key {
-		case "SPIRIT", "PLAYER":
-			if cPlayer == nil {
-				cPlayer = b.buildPlayer(pos)
-			}
-		case "STARTPOS": //TODO
-		case "BALLSTAR": //TODO
-		case "FLAGSTAR": //TODO
-		case "DOCSTART": //TODO
-		case "SIGNODD2": //TODO
-		case "GBPLATE": //TODO
-		default:
-			data, dErr := b.archive.GetPayload(obj.Name + ".ITM")
-			if dErr != nil {
-				fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, dErr)
+	if b.eMode == EngineModeOutlaws {
+		for _, obj := range entities.Objects {
+			if len(obj.Name) == 0 {
 				continue
 			}
-			item := lumps.NewItem()
-			iErr := item.Parse(bytes.NewReader(data))
-			if iErr != nil {
-				fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, iErr)
-				continue
-			}
-			if len(item.Anim) == 0 {
-				continue
-			}
-			targetName := strings.ToUpper(item.Anim)
-			if strings.Contains(targetName, ".NWX") {
-				cThing, err := things.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
-				if err != nil {
-					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+			pos := CreateCoords(obj.X, obj.Y, obj.Z)
+			key := strings.ToUpper(strings.TrimSpace(obj.Name))
+			switch key {
+			case "SPIRIT", "PLAYER":
+				if cPlayer == nil {
+					cPlayer = b.createPlayer(pos)
+				}
+			case "STARTPOS": //TODO
+			case "BALLSTAR": //TODO
+			case "FLAGSTAR": //TODO
+			case "DOCSTART": //TODO
+			case "SIGNODD2": //TODO
+			case "GBPLATE": //TODO
+			default:
+				data, dErr := b.archive.GetPayload(obj.Name + ".ITM")
+				if dErr != nil {
+					fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, dErr)
 					continue
 				}
-				cThings = append(cThings, cThing)
-			} else if strings.Contains(targetName, ".3DO") {
-				cThing, err := things.threedoToThing(targetName, config.ThingItemDef, pos)
-				if err != nil {
-					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+				item := lumps.NewItem()
+				iErr := item.Parse(bytes.NewReader(data))
+				if iErr != nil {
+					fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, iErr)
 					continue
 				}
-				cThings = append(cThings, cThing)
+				if len(item.Anim) == 0 {
+					continue
+				}
+				targetName := strings.ToUpper(item.Anim)
+				if strings.Contains(targetName, ".NWX") {
+					cThing, err := b.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
+					if err != nil {
+						fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+						continue
+					}
+					cThings = append(cThings, cThing)
+				} else if strings.Contains(targetName, ".3DO") {
+					cThing, err := b.threedoToThing(targetName, config.ThingItemDef, pos)
+					if err != nil {
+						fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+						continue
+					}
+					cThings = append(cThings, cThing)
+				}
 			}
 		}
 	}
 
-	for _, obj := range entities.Objects {
-		if len(obj.Class) == 0 {
-			continue
-		}
-		pos := CreateCoords(obj.X, obj.Y, obj.Z)
-		key := strings.ToUpper(strings.TrimSpace(obj.Class))
-		switch key {
-		case "SPIRIT", "PLAYER":
-			if cPlayer == nil {
-				cPlayer = b.buildPlayer(pos)
-			}
-		case "SPRITE":
-			dataIdx, _ := strconv.Atoi(obj.Data)
-			if dataIdx < 0 || dataIdx >= len(entities.Waxes) {
-				fmt.Printf("Warning: sprite index not valid: %s\n", obj.Data)
+	if b.eMode == EngineModeJedi {
+		for _, obj := range entities.Objects {
+			if len(obj.Class) == 0 {
 				continue
 			}
-			fileName := entities.Waxes[dataIdx]
-			cThing, err := things.waxToThing(fileName, config.ThingEnemyDef, pos)
-			if err != nil {
-				fmt.Printf("Error parsing %s: %v\n", fileName, err)
-				continue
-			}
-			cThings = append(cThings, cThing)
-		case "FRAME":
-			//fmt.Println("---------------- FRAME ------------")
-			//fmt.Println(obj)
-		case "3D":
-			dataIdx, _ := strconv.Atoi(obj.Data)
-			if dataIdx < 0 || dataIdx >= len(entities.Threedos) {
-				fmt.Printf("Warning: 3DO/POD index not valid: %s\n", obj.Data)
-				continue
-			}
-			fileName := entities.Threedos[dataIdx]
-			cThing, err := things.threedoToThing(fileName, config.ThingEnemyDef, pos)
-			if err != nil {
-				fmt.Printf("Error parsing %s: %v\n", fileName, err)
-				continue
-			}
-			cThings = append(cThings, cThing)
-		case "SAFE":
-		case "SOUND":
+			pos := CreateCoords(obj.X, obj.Y, obj.Z)
+			key := strings.ToUpper(strings.TrimSpace(obj.Class))
+			switch key {
+			case "SPIRIT", "PLAYER":
+				if cPlayer == nil {
+					cPlayer = b.createPlayer(pos)
+				}
+			case "SPRITE":
+				dataIdx, _ := strconv.Atoi(obj.Data)
+				if dataIdx < 0 || dataIdx >= len(entities.Waxes) {
+					fmt.Printf("Warning: sprite index not valid: %s\n", obj.Data)
+					continue
+				}
+				fileName := entities.Waxes[dataIdx]
+				cThing, err := b.waxToThing(fileName, config.ThingEnemyDef, pos)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", fileName, err)
+					continue
+				}
+				cThings = append(cThings, cThing)
+			case "FRAME":
+				//fmt.Println("---------------- FRAME ------------")
+				//fmt.Println(obj)
+			case "3D":
+				dataIdx, _ := strconv.Atoi(obj.Data)
+				if dataIdx < 0 || dataIdx >= len(entities.Threedos) {
+					fmt.Printf("Warning: 3DO/POD index not valid: %s\n", obj.Data)
+					continue
+				}
+				fileName := entities.Threedos[dataIdx]
+				cThing, err := b.threedoToThing(fileName, config.ThingEnemyDef, pos)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", fileName, err)
+					continue
+				}
+				cThings = append(cThings, cThing)
+			case "SAFE":
+			case "SOUND":
 
-		default:
-			return nil, nil, fmt.Errorf("unsupported object class: %s", key)
+			default:
+				return nil, nil, fmt.Errorf("unsupported object class: %s", key)
+			}
 		}
 	}
 
@@ -316,7 +321,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 }
 
 // buildPlayer initializes and returns a configured Player instance with specified position and predefined attributes.
-func (b *Things) buildPlayer(pos geometry.XYZ) *config.Player {
+func (b *Things) createPlayer(pos geometry.XYZ) *config.Player {
 	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
 	_ = common.NewPlayer(player)
 	player.JumpForce = JumpForce

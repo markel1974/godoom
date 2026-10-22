@@ -95,7 +95,7 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		return nil, err
 	}
 
-	things := NewThings(archive)
+	things := NewThings(archive, eMode)
 	cPlayer, cThings, err := things.Build()
 	if err != nil {
 		return nil, err

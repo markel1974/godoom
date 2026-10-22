@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 
@@ -235,7 +234,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 		return 0
 	}
 	if !e.hasAnimationState(state) {
-		fmt.Println("No animations for state:", e.self.GetId(), state)
+		//fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0
 	}
 	durationFrames, _, ok := e.playAnimation(state, e.animations.Content[state])
@@ -252,7 +251,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 func (e *Enemy) playAnimation(category config.EnemyState, eAnim *config.EnemyAnimation) (int, int, bool) {
 	chooseAnimation := func(state config.EnemyState, animations *config.EnemyAnimation) (int, int, bool) {
 		if len(animations.Indices) == 0 {
-			fmt.Println("No animations for state:", e.self.GetId(), state)
+			//fmt.Println("No animations for state:", e.self.GetId(), state)
 			return 0, 0, false
 		}
 		if len(animations.Indices) == 1 {

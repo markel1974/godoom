@@ -35,6 +35,9 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff 
 func (s *Sector) Scale(scale geometry.XYZ) {
 	xy := geometry.XY{X: scale.X, Y: scale.Y}
 	for _, seg := range s.Segments {
+		if seg == nil {
+			continue
+		}
 		seg.Start.Scale(xy)
 		seg.End.Scale(xy)
 	}

@@ -52,15 +52,27 @@ func (cfg *Root) Scale(scale geometry.XYZ) {
 		vertice.Scale(xy)
 	}
 	for _, sector := range cfg.Sectors {
+		if sector == nil {
+			continue
+		}
 		sector.Scale(scale)
 	}
 	for _, volume := range cfg.Volumes {
+		if volume == nil {
+			continue
+		}
 		volume.Scale(scale)
 	}
 	for _, thing := range cfg.Things {
+		if thing == nil {
+			continue
+		}
 		thing.Scale(scale)
 	}
 	for _, light := range cfg.Lights {
+		if light == nil {
+			continue
+		}
 		light.Pos.Scale(scale)
 	}
 }

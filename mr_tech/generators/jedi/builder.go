@@ -133,25 +133,48 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 // buildWorld parses the level data from the archive, constructs sectors, vertices, lights, and returns them with any errors.
 func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	level := archive.GetLevel()
-	type secWallKey struct{ secIdx, wallIdx int }
+
+	type secWallKey struct {
+		secIdx  int
+		wallIdx int
+	}
+
+	// Valida gli indici dei vertici prima di accedervi.
+	validWallVertices := func(sec *lumps.Sector, wall *lumps.Wall) bool {
+		return wall.LeftVertex >= 0 && wall.RightVertex >= 0 && wall.LeftVertex < len(sec.Vertices) && wall.RightVertex < len(sec.Vertices)
+	}
+
+	// Verifica che un indice texture sia utilizzabile.
+	validTexture := func(idx int) bool {
+		return idx >= 0 && !isDefaultTexture(level.GetTexture(idx))
+	}
+
+	// Identifica i segmenti superiori da trattare diversamente.
 	suppressUpperPortals := make(map[secWallKey]bool)
 
 	if eMode == EngineModeOutlaws {
 		for _, sec := range level.Sectors {
-			for _, w := range sec.Walls {
-				if w.DAdjoin >= 0 && w.DAdjoin < len(level.Sectors) && w.Adjoin >= 0 && w.Adjoin < len(level.Sectors) {
-					upperSecIdx := w.Adjoin
-					upperSec := level.Sectors[upperSecIdx]
-					v1 := sec.Vertices[w.LeftVertex]
-					v2 := sec.Vertices[w.RightVertex]
-					for uwIdx, uw := range upperSec.Walls {
-						if uw.LeftVertex >= 0 && uw.RightVertex >= 0 && uw.LeftVertex < len(upperSec.Vertices) && uw.RightVertex < len(upperSec.Vertices) {
-							uv1 := upperSec.Vertices[uw.LeftVertex]
-							uv2 := upperSec.Vertices[uw.RightVertex]
-							if (uv1 == v2 && uv2 == v1) || (uv1 == v1 && uv2 == v2) {
-								suppressUpperPortals[secWallKey{secIdx: upperSecIdx, wallIdx: uwIdx}] = true
-							}
-						}
+			for _, wall := range sec.Walls {
+				if wall.DAdjoin < 0 || wall.DAdjoin >= len(level.Sectors) || wall.Adjoin < 0 || wall.Adjoin >= len(level.Sectors) {
+					continue
+				}
+				if !validWallVertices(sec, wall) {
+					continue
+				}
+				upperSecIdx := wall.Adjoin
+				upperSec := level.Sectors[upperSecIdx]
+
+				v1 := sec.Vertices[wall.LeftVertex]
+				v2 := sec.Vertices[wall.RightVertex]
+
+				for upperWallIdx, upperWall := range upperSec.Walls {
+					if !validWallVertices(upperSec, upperWall) {
+						continue
+					}
+					uv1 := upperSec.Vertices[upperWall.LeftVertex]
+					uv2 := upperSec.Vertices[upperWall.RightVertex]
+					if sameEdge := (uv1 == v2 && uv2 == v1) || (uv1 == v1 && uv2 == v2); sameEdge {
+						suppressUpperPortals[secWallKey{secIdx: upperSecIdx, wallIdx: upperWallIdx}] = true
 					}
 				}
 			}
@@ -159,10 +182,12 @@ func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*confi
 	}
 
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
+
 	totalVertices := 0
 	for _, sec := range level.Sectors {
 		totalVertices += len(sec.Walls)
 	}
+
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 	var lights []*config.Light
 
@@ -174,20 +199,25 @@ func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*confi
 		secFloorY := sector.FloorY
 
 		if eMode == EngineModeOutlaws {
-			if v, ok := sector.GetFlag(1, 0x80000000); ok && v != 0 {
-				bestFY := sector.FloorY
-				foundAdj := false
-				for _, w := range sector.Walls {
-					if w.Adjoin >= 0 && w.Adjoin < len(level.Sectors) {
-						adjSec := level.Sectors[w.Adjoin]
-						if !foundAdj || adjSec.FloorY > bestFY {
-							bestFY = adjSec.FloorY
-							foundAdj = true
-						}
+			if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
+				bestFloorY := sector.FloorY
+				foundAdjacent := false
+
+				for _, wall := range sector.Walls {
+					if wall.Adjoin < 0 ||
+						wall.Adjoin >= len(level.Sectors) {
+						continue
+					}
+
+					adjacent := level.Sectors[wall.Adjoin]
+					if !foundAdjacent || adjacent.FloorY > bestFloorY {
+						bestFloorY = adjacent.FloorY
+						foundAdjacent = true
 					}
 				}
-				if foundAdj {
-					secFloorY = bestFY
+
+				if foundAdjacent {
+					secFloorY = bestFloorY
 				}
 			}
 		}
@@ -195,7 +225,7 @@ func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*confi
 		lightLevel, lightFalloff := b.computeLight(sector)
 
 		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)
-		// Quote altimetriche
+
 		cSector.FloorY = -secFloorY * scaleSectorH
 		cSector.CeilY = -sector.CeilingY * scaleSectorH
 
@@ -204,35 +234,37 @@ func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*confi
 			names, _ := archive.AddTexture(texName)
 			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
-			fmt.Println("MISSING FLOOR_TEXTURE")
+			fmt.Println("MISSING FLOOR_TEXTURE", sector.Id)
 		}
 
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names, _ := archive.AddTexture(texName)
+
 			animKind := config.MaterialKindLoop
 			if sector.IsSky() {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
+
 			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
-			fmt.Println("MISSING CEILING_TEXTURE")
+			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
 		}
 
-		wallCount := len(sector.Walls)
-		if wallCount > 0 {
-			cSector.Segments = make([]*config.Segment, wallCount)
+		if len(sector.Walls) > 0 {
+			cSector.Segments = make([]*config.Segment, len(sector.Walls))
+
 			for wallIdx, wall := range sector.Walls {
-				if wall.LeftVertex < 0 || wall.RightVertex < 0 || wall.LeftVertex >= len(sector.Vertices) || wall.RightVertex >= len(sector.Vertices) {
-					fmt.Println("INVALID VERTEX")
+				if !validWallVertices(sector, wall) {
+					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
 					continue
 				}
+
 				v1 := sector.Vertices[wall.LeftVertex]
 				v2 := sector.Vertices[wall.RightVertex]
 
-				globalVertices = append(globalVertices, v1)
-				globalVertices = append(globalVertices, v2)
+				globalVertices = append(globalVertices, v1, v2)
 
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
 
@@ -245,96 +277,113 @@ func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*confi
 				}
 
 				isSuppressedUpperPortal := suppressUpperPortals[secWallKey{secIdx: sIdx, wallIdx: wallIdx}]
-				if wall.Adjoin == -1 || isSuppressedUpperPortal {
+
+				// Parete solida oppure segmento superiore da sopprimere.
+				if wall.Adjoin == -1 {
 					texIdx := wall.MidTexture
-					if texIdx < 0 || isDefaultTexture(level.GetTexture(texIdx)) {
-						if wall.TopTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.TopTexture)) {
+					if !validTexture(texIdx) {
+						switch {
+						case validTexture(wall.TopTexture):
 							texIdx = wall.TopTexture
-						} else if wall.BotTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.BotTexture)) {
+						case validTexture(wall.BotTexture):
 							texIdx = wall.BotTexture
+						default:
+							fmt.Printf(
+								"WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n",
+								sector.Id,
+								wallIdx,
+								wall.MidTexture,
+								wall.TopTexture,
+								wall.BotTexture,
+							)
+							cSector.Segments[wallIdx] = cSeg
+							continue
 						}
 					}
-					if texIdx >= 0 {
-						texName := level.GetTexture(texIdx)
-						if !isDefaultTexture(texName) {
-							cSeg.Kind = config.SegmentWall
-							names, _ := archive.AddTexture(texName)
-							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						}
-					} else if isSuppressedUpperPortal {
-						cSeg.Kind = config.SegmentWall
-					} else {
-						fmt.Println("WARNING MISSING MID_TEXTURE")
-						continue
-					}
+
+					texName := level.GetTexture(texIdx)
+					names, _ := archive.AddTexture(texName)
+
+					cSeg.Kind = config.SegmentWall
+					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
+					// Mantiene il collegamento del portale anche quando
+					// non deve essere applicata la texture superiore.
 					targetSecIdx := wall.Adjoin
-					if eMode == EngineModeOutlaws {
-						if wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
-							upperSec := level.Sectors[wall.Adjoin]
-							lowerSec := level.Sectors[wall.DAdjoin]
-							if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
-								targetSecIdx = wall.DAdjoin
-							}
+
+					if targetSecIdx < 0 || targetSecIdx >= len(level.Sectors) {
+						fmt.Println("INVALID ADJOIN", sector.Id, wallIdx)
+						continue
+					}
+
+					adjacent := level.Sectors[targetSecIdx]
+
+					if eMode == EngineModeOutlaws && wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
+						upperSec := level.Sectors[wall.Adjoin]
+						lowerSec := level.Sectors[wall.DAdjoin]
+
+						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
+							targetSecIdx = wall.DAdjoin
+							adjacent = lowerSec
 						}
 					}
 
-					if targetSecIdx >= len(level.Sectors) {
-						fmt.Println("INVALID ADJOIN")
-						continue
-					}
-					adjSec := level.Sectors[targetSecIdx]
+					// Non assegnare materiale superiore ai portali soppressi.
+					if !isSuppressedUpperPortal &&
+						(!sector.IsSky() || !adjacent.IsSky()) {
 
-					topTexIdx := wall.TopTexture
-					if topTexIdx < 0 || isDefaultTexture(level.GetTexture(topTexIdx)) {
-						if wall.DAdjoin >= 0 {
-							if wall.BotTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.BotTexture)) {
+						topTexIdx := wall.TopTexture
+						if !validTexture(topTexIdx) && wall.DAdjoin >= 0 {
+							switch {
+							case validTexture(wall.BotTexture):
 								topTexIdx = wall.BotTexture
-							} else if wall.MidTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.MidTexture)) {
+							case validTexture(wall.MidTexture):
 								topTexIdx = wall.MidTexture
 							}
 						}
-					}
-					if topTexIdx >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
-						texName := level.GetTexture(topTexIdx)
-						if !isDefaultTexture(texName) {
+
+						if validTexture(topTexIdx) {
+							texName := level.GetTexture(topTexIdx)
 							names, _ := archive.AddTexture(texName)
+
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
 					}
 
 					isStepUp := true
 					if eMode == EngineModeOutlaws {
-						isStepUp = adjSec.FloorY < sector.FloorY-0.01
-					}
-					if isStepUp && wall.BotTexture >= 0 {
-						texName := level.GetTexture(wall.BotTexture)
-						if !isDefaultTexture(texName) {
-							names, _ := archive.AddTexture(texName)
-							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						}
+						isStepUp = adjacent.FloorY < sector.FloorY-0.01
 					}
 
-					// Only portal walls with bit 0 set (force middle texture on adjoin: windows, grates, bars) have middle material
-					if wall.MidTexture >= 0 && (wall.Flags&1 != 0) {
+					if isStepUp && validTexture(wall.BotTexture) {
+						texName := level.GetTexture(wall.BotTexture)
+						names, _ := archive.AddTexture(texName)
+						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+					}
+
+					// Texture middle solo per portali con flag esplicito.
+					if wall.Flags&1 != 0 && validTexture(wall.MidTexture) {
 						texName := level.GetTexture(wall.MidTexture)
-						if !isDefaultTexture(texName) {
-							names, _ := archive.AddTexture(texName)
-							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						}
+						names, _ := archive.AddTexture(texName)
+						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
 				}
+
 				cSector.Segments[wallIdx] = cSeg
 			}
 		}
+
 		if sector.SlopedFloor != nil {
 			cSector.SlopedFloorGradient = sector.SlopedFloor.GetGradient()
 		}
+
 		if sector.SlopedCeiling != nil {
 			cSector.SlopedCeilingGradient = sector.SlopedCeiling.GetGradient()
 		}
+
 		configSectors = append(configSectors, cSector)
 	}
+
 	return configSectors, globalVertices, lights, nil
 }
 

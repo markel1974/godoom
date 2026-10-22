@@ -113,12 +113,12 @@ func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
-// GetVolumes retrieves the Volumes instance associated with the current Compiler object.
 // GetCrosshair returns the compiled crosshair thing.
 func (r *Compiler) GetCrosshair() IThing {
 	return r.crosshair
 }
 
+// GetVolumes retrieves the Volumes instance associated with the current Compiler object.
 func (r *Compiler) GetVolumes() *Volumes {
 	return r.volumes
 }
@@ -167,6 +167,9 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 
 		// Cerca i segmenti pivot PRIMA di iterare sui triangoli
 		for _, cn := range cs.Segments {
+			if cn == nil {
+				continue
+			}
 			if cn.SlopedFloorRef {
 				if nX, nY, err := cn.ComputeNormal(cs.IsCCW()); err == nil {
 					sectorSlopeFloor = &Slope{Nx: nX, Ny: nY, Gradient: cs.SlopedFloorGradient, Start: cn.Start, End: cn.End}

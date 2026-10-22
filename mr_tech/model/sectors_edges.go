@@ -82,6 +82,9 @@ func (t *SectorEdges) Construct(vertices geometry.Polygon, css []*config.Sector)
 	for configIdx, cs := range css {
 		var edges []geometry.Edge
 		for i, cn := range cs.Segments {
+			if cn == nil {
+				continue
+			}
 			vStart := t.getOrAddVertex(cn.Start)
 			vEnd := t.getOrAddVertex(cn.End)
 			edges = append(edges, geometry.Edge{V1Idx: vStart, V2Idx: vEnd, Index: i})

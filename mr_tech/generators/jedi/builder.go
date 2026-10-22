@@ -90,8 +90,6 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		archive = lumps.NewArchiveGob(fs)
 	}
 
-	things := NewThings(archive)
-
 	levelNumber -= 1
 	if levelNumber <= 0 {
 		levelNumber = 0
@@ -106,9 +104,35 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		return nil, err
 	}
 
-	level := archive.GetLevel()
-	entities := archive.GetEntities()
+	configSectors, globalVertices, lights, err := b.buildWorld(archive, eMode)
+	if err != nil {
+		return nil, err
+	}
 
+	configPlayer, configThings, err := b.buildEntities(archive, eMode)
+	if err != nil {
+		return nil, err
+	}
+
+	calibration := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	calibration.AspectRatio = aspectRatio
+	sf := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
+	tex := archive.GetTextures()
+	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, sf, tex)
+	cr.Things = configThings
+	cr.Vertices = globalVertices
+	cr.Lights = lights
+
+	crosshair := common.NewSimpleCrosshair()
+	tex.AddDirect(crosshair.GetTexture())
+	cr.Crosshair = crosshair.Create()
+
+	return cr, nil
+}
+
+// buildWorld parses the level data from the archive, constructs sectors, vertices, lights, and returns them with any errors.
+func (b *Builder) buildWorld(archive lumps.IArchive, eMode EngineMode) ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
+	level := archive.GetLevel()
 	type secWallKey struct{ secIdx, wallIdx int }
 	suppressUpperPortals := make(map[secWallKey]bool)
 
@@ -151,7 +175,6 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 
 		if eMode == EngineModeOutlaws {
 			if v, ok := sector.GetFlag(1, 0x80000000); ok && v != 0 {
-				//if len(sector.Flags) > 1 && uint32(sector.Flags[1])&0x80000000 != 0 {
 				bestFY := sector.FloorY
 				foundAdj := false
 				for _, w := range sector.Walls {
@@ -312,9 +335,15 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		}
 		configSectors = append(configSectors, cSector)
 	}
+	return configSectors, globalVertices, lights, nil
+}
 
-	var configThings []*config.Thing
-	var configPlayer *config.Player
+// buildEntities parses and constructs player and entity configurations from the given archive, returning Player, Things, or an error.
+func (b *Builder) buildEntities(archive lumps.IArchive, _ EngineMode) (*config.Player, []*config.Thing, error) {
+	var cThings []*config.Thing
+	var cPlayer *config.Player
+	things := NewThings(archive)
+	entities := archive.GetEntities()
 
 	for _, obj := range entities.Objects {
 		if len(obj.Name) == 0 {
@@ -324,8 +353,8 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		key := strings.ToUpper(strings.TrimSpace(obj.Name))
 		switch key {
 		case "SPIRIT", "PLAYER":
-			if configPlayer == nil {
-				configPlayer = b.buildPlayer(pos)
+			if cPlayer == nil {
+				cPlayer = b.buildPlayer(pos)
 			}
 		case "STARTPOS": //TODO
 		case "BALLSTAR": //TODO
@@ -355,14 +384,14 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 					continue
 				}
-				configThings = append(configThings, cThing)
+				cThings = append(cThings, cThing)
 			} else if strings.Contains(targetName, ".3DO") {
 				cThing, err := things.ThreedoToThing(targetName, config.ThingItemDef, pos)
 				if err != nil {
 					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 					continue
 				}
-				configThings = append(configThings, cThing)
+				cThings = append(cThings, cThing)
 			}
 		}
 	}
@@ -375,8 +404,8 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 		key := strings.ToUpper(strings.TrimSpace(obj.Class))
 		switch key {
 		case "SPIRIT", "PLAYER":
-			if configPlayer == nil {
-				configPlayer = b.buildPlayer(pos)
+			if cPlayer == nil {
+				cPlayer = b.buildPlayer(pos)
 			}
 		case "SPRITE":
 			dataIdx, _ := strconv.Atoi(obj.Data)
@@ -390,7 +419,7 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue
 			}
-			configThings = append(configThings, cThing)
+			cThings = append(cThings, cThing)
 		case "FRAME":
 			//fmt.Println("---------------- FRAME ------------")
 			//fmt.Println(obj)
@@ -406,29 +435,16 @@ func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, lev
 				fmt.Printf("Error parsing %s: %v\n", fileName, err)
 				continue
 			}
-			configThings = append(configThings, cThing)
+			cThings = append(cThings, cThing)
 		case "SAFE":
 		case "SOUND":
 
 		default:
-			return nil, fmt.Errorf("unsupported object class: %s", key)
+			return nil, nil, fmt.Errorf("unsupported object class: %s", key)
 		}
 	}
 
-	calibration := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
-	calibration.AspectRatio = aspectRatio
-	sf := geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}
-	tex := archive.GetTextures()
-	cr := config.NewConfigRoot(calibration, configSectors, configPlayer, nil, sf, tex)
-	cr.Things = configThings
-	cr.Vertices = globalVertices
-	cr.Lights = lights
-
-	crosshair := common.NewSimpleCrosshair()
-	tex.AddDirect(crosshair.GetTexture())
-	cr.Crosshair = crosshair.Create()
-
-	return cr, nil
+	return cPlayer, cThings, nil
 }
 
 // buildPlayer initializes and returns a configured Player instance with specified position and predefined attributes.

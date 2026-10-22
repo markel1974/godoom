@@ -19,7 +19,12 @@ type Slope struct {
 // GetGradient calculates and returns the angle of the slope in radians using the pitch value.
 func (s *Slope) GetGradient() float64 {
 	degrees := float64(s.Pitch) / 100.0
-	return math.Tan(degrees * math.Pi / 180.0)
+	radians := degrees * (math.Pi / 180.0)
+	gradient := math.Tan(radians)
+	if math.IsNaN(gradient) || math.IsInf(gradient, 0) {
+		return 0 //TODO return false
+	}
+	return gradient //TODO return true
 }
 
 // Sector represents a spatial region with geometry, textures, physical properties, and relationships to walls and vertices.
@@ -318,23 +323,22 @@ func (s *Sector) IsAbyss() bool {
 
 // IsCCW determines if the sector's walls are ordered counter-clockwise (CCW) based on their vertices and area calculation.
 func (s *Sector) IsCCW() bool {
-	area := 0.0
+	n := len(s.Walls)
+	if n < 3 {
+		return false
+	}
+	var twiceArea float64
 	for _, w := range s.Walls {
-		// Fallback di sicurezza se la mappa ha indici corrotti
-		if w.LeftVertex < 0 || w.LeftVertex >= len(s.Vertices) ||
-			w.RightVertex < 0 || w.RightVertex >= len(s.Vertices) {
-			continue
+		if w.LeftVertex < 0 || w.LeftVertex >= len(s.Vertices) || w.RightVertex < 0 || w.RightVertex >= len(s.Vertices) {
+			return false
 		}
 		v1 := s.Vertices[w.LeftVertex]
 		v2 := s.Vertices[w.RightVertex]
-		// Formula di calcolo dell'area per curve chiuse: (X2 - X1) * (Y2 + Y1)
-		area += (v2.X - v1.X) * (v2.Y + v1.Y)
+		twiceArea += v1.X*v2.Y - v2.X*v1.Y
 	}
-	// Nello Screen-Space (Y che cresce verso il basso come in Outlaws/Doom):
-	// Area < 0 significa CCW (Antiorario)
-	// Area > 0 significa CW (Orario)
-	// se Y-up cartesiano puro, invertire operatore (> 0).*
-	return area < 0
+	// Coordinate screen-space: Y cresce verso il basso.
+	// Area positiva => contorno antiorario.
+	return twiceArea > 0
 }
 
 func (s *Sector) GetFlag(index int, mask uint32) (uint32, bool) {

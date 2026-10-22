@@ -30,13 +30,6 @@ func NewWorld(archive lumps.IArchive, eMode EngineMode) *World {
 func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	level := b.archive.GetLevel()
 
-	validWallVertices := func(sec *lumps.Sector, wall *lumps.Wall) bool {
-		return wall.LeftVertex >= 0 &&
-			wall.RightVertex >= 0 &&
-			wall.LeftVertex < len(sec.Vertices) &&
-			wall.RightVertex < len(sec.Vertices)
-	}
-
 	validTexture := func(idx int) bool {
 		return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
 	}
@@ -128,7 +121,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			cSector.Segments = make([]*config.Segment, len(sector.Walls))
 
 			for wallIdx, wall := range sector.Walls {
-				if !validWallVertices(sector, wall) {
+				if !b.validWallVertices(sector, wall) {
 					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
 					continue
 				}
@@ -251,7 +244,10 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 // validWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.
 func (b *World) validWallVertices(sec *lumps.Sector, wall *lumps.Wall) bool {
-	return wall.LeftVertex >= 0 && wall.RightVertex >= 0 && wall.LeftVertex < len(sec.Vertices) && wall.RightVertex < len(sec.Vertices)
+	return wall.LeftVertex >= 0 &&
+		wall.RightVertex >= 0 &&
+		wall.LeftVertex < len(sec.Vertices) &&
+		wall.RightVertex < len(sec.Vertices)
 }
 
 // computePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.

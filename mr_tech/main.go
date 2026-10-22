@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3"
 	"github.com/markel1974/godoom/mr_tech/generators/dungeon"
 	"github.com/markel1974/godoom/mr_tech/generators/jedi"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
@@ -100,6 +101,14 @@ var _availableModes = []ModeDef{
 		Target: "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3",
 		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
+			return qb.Setup(res, target, level)
+		},
+	},
+	{
+		Name:   "doom3",
+		Target: "resources" + string(os.PathSeparator) + "doom3" + string(os.PathSeparator) + "pak002.pk4",
+		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+			qb := doom3.NewBuilder()
 			return qb.Setup(res, target, level)
 		},
 	},

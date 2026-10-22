@@ -11,6 +11,8 @@ import (
 
 // Slope represents a 2D inclined plane characterized by its normal vector and gradient for geometric calculations.
 type Slope struct {
+	Gx       float64
+	Gy       float64
 	Nx       float64
 	Ny       float64
 	Gradient float64

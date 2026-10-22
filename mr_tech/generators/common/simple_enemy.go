@@ -218,6 +218,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 	}
 }
 
+// hasAnimationState checks if a specific animation state is defined and valid for the enemy's animation configuration.
 func (e *Enemy) hasAnimationState(state config.EnemyState) bool {
 	if e.animations == nil || e.animations.Content[state] == nil || len(e.animations.Content[state].Indices) == 0 {
 		return false

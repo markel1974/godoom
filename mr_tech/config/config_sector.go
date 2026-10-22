@@ -14,6 +14,10 @@ type Sector struct {
 	Tag                   string     `json:"tag"`
 	SlopedCeilingGradient float64    `json:"slopedCeilingGradient"`
 	SlopedFloorGradient   float64    `json:"slopedFloorGradient"`
+	SlopedFloorGX         float64    `json:"slopedFloorGX"`
+	SlopedFloorGY         float64    `json:"slopedFloorGY"`
+	SlopedCeilingGX       float64    `json:"slopedCeilingGX"`
+	SlopedCeilingGY       float64    `json:"slopedCeilingGY"`
 	//SlopedCeiling        geometry.XYZ `json:"slopedCeiling"`
 	//SlopedFloor          geometry.XYZ `json:"slopedFloor"`
 

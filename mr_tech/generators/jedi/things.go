@@ -24,8 +24,117 @@ func NewThings(archive lumps.IArchive) *Things {
 	}
 }
 
+// Build parses and constructs player and entity configurations from the given archive, returning Player, Things, or an error.
+func (b *Things) Build() (*config.Player, []*config.Thing, error) {
+	var cThings []*config.Thing
+	var cPlayer *config.Player
+	things := NewThings(b.archive)
+	entities := b.archive.GetEntities()
+
+	for _, obj := range entities.Objects {
+		if len(obj.Name) == 0 {
+			continue
+		}
+		pos := CreateCoords(obj.X, obj.Y, obj.Z)
+		key := strings.ToUpper(strings.TrimSpace(obj.Name))
+		switch key {
+		case "SPIRIT", "PLAYER":
+			if cPlayer == nil {
+				cPlayer = b.buildPlayer(pos)
+			}
+		case "STARTPOS": //TODO
+		case "BALLSTAR": //TODO
+		case "FLAGSTAR": //TODO
+		case "DOCSTART": //TODO
+		case "SIGNODD2": //TODO
+		case "GBPLATE": //TODO
+		default:
+			data, dErr := b.archive.GetPayload(obj.Name + ".ITM")
+			if dErr != nil {
+				fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, dErr)
+				continue
+			}
+			item := lumps.NewItem()
+			iErr := item.Parse(bytes.NewReader(data))
+			if iErr != nil {
+				fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, iErr)
+				continue
+			}
+			if len(item.Anim) == 0 {
+				continue
+			}
+			targetName := strings.ToUpper(item.Anim)
+			if strings.Contains(targetName, ".NWX") {
+				cThing, err := things.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+					continue
+				}
+				cThings = append(cThings, cThing)
+			} else if strings.Contains(targetName, ".3DO") {
+				cThing, err := things.threedoToThing(targetName, config.ThingItemDef, pos)
+				if err != nil {
+					fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+					continue
+				}
+				cThings = append(cThings, cThing)
+			}
+		}
+	}
+
+	for _, obj := range entities.Objects {
+		if len(obj.Class) == 0 {
+			continue
+		}
+		pos := CreateCoords(obj.X, obj.Y, obj.Z)
+		key := strings.ToUpper(strings.TrimSpace(obj.Class))
+		switch key {
+		case "SPIRIT", "PLAYER":
+			if cPlayer == nil {
+				cPlayer = b.buildPlayer(pos)
+			}
+		case "SPRITE":
+			dataIdx, _ := strconv.Atoi(obj.Data)
+			if dataIdx < 0 || dataIdx >= len(entities.Waxes) {
+				fmt.Printf("Warning: sprite index not valid: %s\n", obj.Data)
+				continue
+			}
+			fileName := entities.Waxes[dataIdx]
+			cThing, err := things.waxToThing(fileName, config.ThingEnemyDef, pos)
+			if err != nil {
+				fmt.Printf("Error parsing %s: %v\n", fileName, err)
+				continue
+			}
+			cThings = append(cThings, cThing)
+		case "FRAME":
+			//fmt.Println("---------------- FRAME ------------")
+			//fmt.Println(obj)
+		case "3D":
+			dataIdx, _ := strconv.Atoi(obj.Data)
+			if dataIdx < 0 || dataIdx >= len(entities.Threedos) {
+				fmt.Printf("Warning: 3DO/POD index not valid: %s\n", obj.Data)
+				continue
+			}
+			fileName := entities.Threedos[dataIdx]
+			cThing, err := things.threedoToThing(fileName, config.ThingEnemyDef, pos)
+			if err != nil {
+				fmt.Printf("Error parsing %s: %v\n", fileName, err)
+				continue
+			}
+			cThings = append(cThings, cThing)
+		case "SAFE":
+		case "SOUND":
+
+		default:
+			return nil, nil, fmt.Errorf("unsupported object class: %s", key)
+		}
+	}
+
+	return cPlayer, cThings, nil
+}
+
 // WAXToThing converts a WAX file into a Thing object with animations or static visuals, defined at the given position.
-func (b *Things) WAXToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
+func (b *Things) waxToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := b.archive.GetPayload(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
@@ -67,7 +176,7 @@ func (b *Things) WAXToThing(fileName string, kind config.ThingType, pos geometry
 }
 
 // NWXToThing converts NWX animation data into a config.Thing by parsing its contents and creating associated materials.
-func (b *Things) NWXToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
+func (b *Things) nwxToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
 	waxData, err := b.archive.GetPayload(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("could not load %s: %v\n", fileName, err)
@@ -141,10 +250,10 @@ func (b *Things) createConfigThing(classname string, pos geometry.XYZ, kind conf
 }
 
 // ThreedoToThing converts a 3DO model file into a Thing object using the provided position and archive for resources.
-func (b *Things) ThreedoToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
-	threedoData, err := b.archive.GetPayload(fileName)
-	if err != nil {
-		return nil, err
+func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geometry.XYZ) (*config.Thing, error) {
+	threedoData, tErr := b.archive.GetPayload(fileName)
+	if tErr != nil {
+		return nil, tErr
 	}
 	threedoObj := lumps.NewThreedo()
 	if err := threedoObj.Parse(bytes.NewReader(threedoData)); err != nil {
@@ -204,4 +313,39 @@ func (b *Things) ThreedoToThing(fileName string, kind config.ThingType, pos geom
 	cThing := b.createConfigThing(id, pos, kind, 0, 40, 10, 50, 0)
 	cThing.Model3DEntry = cModel
 	return cThing, nil
+}
+
+// buildPlayer initializes and returns a configured Player instance with specified position and predefined attributes.
+func (b *Things) buildPlayer(pos geometry.XYZ) *config.Player {
+	player := config.NewConfigPlayer(pos, 1.0, playerMass, playerSpeed, playerRadius, playerHeight)
+	_ = common.NewPlayer(player)
+	player.JumpForce = JumpForce
+	player.GForce = GForce
+	player.Impulse = 0.13 //mod
+
+	player.Flash.ZFar = 8192
+	player.Flash.Intensity = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+	player.Bobbing.SwayScale = 1.0 //mod
+	player.Bobbing.SwayOffsetX = 50
+	player.Bobbing.SwayOffsetY = -0.9
+	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
+	player.Bobbing.MaxAmplitudeY = 5.5
+	player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	//breathing
+	player.Bobbing.IdleAmpX = 0.9  //mod 0.9
+	player.Bobbing.IdleAmpY = 0.9  //mod 0.9
+	player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
+
+	player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
+	player.Bobbing.AmpLerp = 0.20
+	player.Bobbing.ImpactMax = 1000.0
+	player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
+	player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
+	player.Bobbing.SpringDamping = 0.80
+	player.Bobbing.TiltAmp = 0.05
+
+	return player
 }

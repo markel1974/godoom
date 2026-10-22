@@ -27,24 +27,22 @@ type Segment struct {
 	Upper            *Material   `json:"upper"`
 	Middle           *Material   `json:"middle"`
 	Lower            *Material   `json:"lower"`
-	SlopedCeilingRef bool        `json:"slopedCeilingRef"`
 	SlopedFloorRef   bool        `json:"slopedFloorRef"`
+	SlopedCeilingRef bool        `json:"slopedCeilingRef"`
 }
 
 // NewConfigSegment creates a new Segment instance with the specified parent, Kind, start, and end coordinates.
 func NewConfigSegment(parent string, kind int, s geometry.XY, e geometry.XY) *Segment {
 	is := &Segment{
-		Parent:           parent,
-		Id:               utils.NextUUId(),
-		Start:            s,
-		End:              e,
-		Kind:             kind,
-		Tag:              "",
-		Upper:            nil,
-		Lower:            nil,
-		Middle:           nil,
-		SlopedCeilingRef: false,
-		SlopedFloorRef:   false,
+		Parent: parent,
+		Id:     utils.NextUUId(),
+		Start:  s,
+		End:    e,
+		Kind:   kind,
+		Tag:    "",
+		Upper:  nil,
+		Lower:  nil,
+		Middle: nil,
 	}
 	return is
 }
@@ -55,15 +53,15 @@ func NewConfigSegment(parent string, kind int, s geometry.XY, e geometry.XY) *Se
 func (cs *Segment) ComputeNormal(isCCW bool) (float64, float64, error) {
 	dx := cs.End.X - cs.Start.X
 	dy := cs.End.Y - cs.Start.Y
-	length := math.Sqrt(dx*dx + dy*dy)
+	length := math.Hypot(dx, dy)
 	if length == 0 {
 		return 0, 0, fmt.Errorf("segment has zero length")
 	}
-	var nX, nY float64
-	if isCCW {
-		nX, nY = -dy/length, dx/length
-	} else {
-		nX, nY = dy/length, -dx/length
+	if math.IsNaN(length) || math.IsInf(length, 0) {
+		return 0, 0, fmt.Errorf("segment has invalid length")
 	}
-	return nX, nY, nil
+	if isCCW {
+		return -dy / length, dx / length, nil
+	}
+	return dy / length, -dx / length, nil
 }

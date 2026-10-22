@@ -1,0 +1,477 @@
+package jedi
+
+import (
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/jedi/lumps"
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
+
+// secWallKey represents a unique identifier for a wall within a sector, using sector and wall indices.
+// secIdx specifies the index of the sector containing the wall.
+// wallIdx specifies the index of the wall within the sector.
+type secWallKey struct {
+	secIdx  int
+	wallIdx int
+}
+
+// World represents the primary context for managing game state, including archives and engine mode configuration.
+type World struct {
+	archive lumps.IArchive
+	eMode   EngineMode
+}
+
+// NewWorld initializes and returns a new World instance using the provided game archive and engine mode.
+func NewWorld(archive lumps.IArchive, eMode EngineMode) *World {
+	w := &World{
+		archive: archive,
+		eMode:   eMode,
+	}
+	return w
+}
+
+// Build constructs the configuration for sectors, vertices, and lights based on the level data in the current context.
+
+func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
+	level := b.archive.GetLevel()
+
+	validWallVertices := func(sec *lumps.Sector, wall *lumps.Wall) bool {
+		return wall.LeftVertex >= 0 &&
+			wall.RightVertex >= 0 &&
+			wall.LeftVertex < len(sec.Vertices) &&
+			wall.RightVertex < len(sec.Vertices)
+	}
+
+	validTexture := func(idx int) bool {
+		return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
+	}
+
+	suppressUpperPortals := make(map[secWallKey]bool)
+	isUpperCanopySector := make(map[int]bool)
+
+	if b.eMode == EngineModeOutlaws {
+		for _, sec := range level.Sectors {
+			for _, wall := range sec.Walls {
+				if wall.DAdjoin < 0 ||
+					wall.DAdjoin >= len(level.Sectors) ||
+					wall.Adjoin < 0 ||
+					wall.Adjoin >= len(level.Sectors) {
+					continue
+				}
+
+				if !validWallVertices(sec, wall) {
+					continue
+				}
+
+				upperSecIdx := wall.Adjoin
+				upperSec := level.Sectors[upperSecIdx]
+				isUpperCanopySector[upperSecIdx] = true
+
+				v1 := sec.Vertices[wall.LeftVertex]
+				v2 := sec.Vertices[wall.RightVertex]
+
+				for upperWallIdx, upperWall := range upperSec.Walls {
+					if !validWallVertices(upperSec, upperWall) {
+						continue
+					}
+
+					uv1 := upperSec.Vertices[upperWall.LeftVertex]
+					uv2 := upperSec.Vertices[upperWall.RightVertex]
+
+					if (uv1 == v2 && uv2 == v1) ||
+						(uv1 == v1 && uv2 == v2) {
+						suppressUpperPortals[secWallKey{
+							secIdx:  upperSecIdx,
+							wallIdx: upperWallIdx,
+						}] = true
+					}
+				}
+			}
+		}
+	}
+
+	configSectors := make([]*config.Sector, 0, len(level.Sectors))
+
+	totalVertices := 0
+	for _, sec := range level.Sectors {
+		totalVertices += len(sec.Walls)
+	}
+
+	globalVertices := make(geometry.Polygon, 0, totalVertices)
+	var lights []*config.Light
+
+	for sIdx, sector := range level.Sectors {
+		if len(sector.Id) == 0 {
+			continue
+		}
+
+		secFloorY := sector.FloorY
+		secCeilY := sector.CeilingY
+
+		if b.eMode == EngineModeOutlaws {
+			if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
+				bestFloorY := sector.FloorY
+				foundAdjacent := false
+
+				for _, wall := range sector.Walls {
+					if wall.Adjoin < 0 ||
+						wall.Adjoin >= len(level.Sectors) {
+						continue
+					}
+
+					adjacent := level.Sectors[wall.Adjoin]
+					if !foundAdjacent || adjacent.FloorY > bestFloorY {
+						bestFloorY = adjacent.FloorY
+						foundAdjacent = true
+					}
+				}
+
+				if foundAdjacent {
+					secFloorY = bestFloorY
+				}
+			}
+		}
+
+		bestFloorWall, floorGrad, floorGX, floorGY, floorQuota, hasSlopedFloor :=
+			b.computePlane(level, sector, false)
+
+		if hasSlopedFloor {
+			secFloorY = floorQuota
+		}
+
+		bestCeilWall, ceilGrad, ceilGX, ceilGY, ceilQuota, hasSlopedCeil :=
+			b.computePlane(level, sector, true)
+
+		if hasSlopedCeil {
+			secCeilY = ceilQuota
+		}
+
+		if isUpperCanopySector[sIdx] {
+			secCeilY = secFloorY
+			hasSlopedCeil = hasSlopedFloor
+			ceilGrad = floorGrad
+			ceilGX = floorGX
+			ceilGY = floorGY
+			bestCeilWall = bestFloorWall
+		}
+
+		lightLevel, lightFalloff := b.computeLight(sector)
+
+		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)
+		cSector.FloorY = -secFloorY * scaleSectorH
+		cSector.CeilY = -secCeilY * scaleSectorH
+
+		if sector.FloorTexture >= 0 {
+			texName := level.GetTexture(sector.FloorTexture)
+			names, _ := b.archive.AddTexture(texName)
+			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+		} else {
+			fmt.Println("MISSING FLOOR_TEXTURE", sector.Id)
+		}
+
+		if sector.CeilingTexture >= 0 {
+			texName := level.GetTexture(sector.CeilingTexture)
+			names, _ := b.archive.AddTexture(texName)
+
+			animKind := config.MaterialKindLoop
+			if sector.IsSky() {
+				animKind = config.MaterialKindSky
+				cSector.Light.Kind = config.LightKindOpenAir
+			}
+
+			cSector.Ceil = config.NewConfigMaterial(
+				names,
+				animKind,
+				scaleTextureW,
+				scaleTextureH,
+				0,
+				0,
+			)
+		} else {
+			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
+		}
+
+		if len(sector.Walls) > 0 {
+			cSector.Segments = make([]*config.Segment, len(sector.Walls))
+
+			for wallIdx, wall := range sector.Walls {
+				if !validWallVertices(sector, wall) {
+					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
+					continue
+				}
+
+				v1 := sector.Vertices[wall.LeftVertex]
+				v2 := sector.Vertices[wall.RightVertex]
+
+				globalVertices = append(globalVertices, v1, v2)
+
+				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
+
+				if hasSlopedFloor && wallIdx == bestFloorWall {
+					cSeg.SlopedFloorRef = true
+				}
+
+				if hasSlopedCeil && wallIdx == bestCeilWall {
+					cSeg.SlopedCeilingRef = true
+				}
+
+				isSuppressedUpperPortal := suppressUpperPortals[secWallKey{
+					secIdx:  sIdx,
+					wallIdx: wallIdx,
+				}]
+
+				if isSuppressedUpperPortal {
+					cSeg.Kind = config.SegmentWall
+				} else if wall.Adjoin == -1 {
+					texIdx := wall.MidTexture
+
+					if !validTexture(texIdx) {
+						switch {
+						case validTexture(wall.TopTexture):
+							texIdx = wall.TopTexture
+						case validTexture(wall.BotTexture):
+							texIdx = wall.BotTexture
+						default:
+							fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
+							cSector.Segments[wallIdx] = cSeg
+							continue
+						}
+					}
+
+					texName := level.GetTexture(texIdx)
+					names, _ := b.archive.AddTexture(texName)
+
+					cSeg.Kind = config.SegmentWall
+					cSeg.Middle = config.NewConfigMaterial(
+						names,
+						config.MaterialKindLoop,
+						scaleTextureW,
+						scaleTextureH,
+						0,
+						0,
+					)
+				} else {
+					targetSecIdx := wall.Adjoin
+
+					if targetSecIdx < 0 ||
+						targetSecIdx >= len(level.Sectors) {
+						fmt.Println("INVALID ADJOIN", sector.Id, wallIdx)
+						continue
+					}
+
+					adjacent := level.Sectors[targetSecIdx]
+
+					if b.eMode == EngineModeOutlaws &&
+						wall.DAdjoin >= 0 &&
+						wall.DAdjoin < len(level.Sectors) {
+
+						upperSec := level.Sectors[wall.Adjoin]
+						lowerSec := level.Sectors[wall.DAdjoin]
+
+						if math.Abs(sector.FloorY-lowerSec.FloorY) <=
+							math.Abs(sector.FloorY-upperSec.FloorY) {
+							targetSecIdx = wall.DAdjoin
+							adjacent = lowerSec
+						}
+					}
+
+					if !isSuppressedUpperPortal &&
+						(!sector.IsSky() || !adjacent.IsSky()) {
+
+						topTexIdx := wall.TopTexture
+						if wall.DAdjoin >= 0 {
+							topTexIdx = -1
+						}
+
+						if validTexture(topTexIdx) {
+							texName := level.GetTexture(topTexIdx)
+							names, _ := b.archive.AddTexture(texName)
+
+							cSeg.Upper = config.NewConfigMaterial(
+								names,
+								config.MaterialKindLoop,
+								scaleTextureW,
+								scaleTextureH,
+								0,
+								0,
+							)
+						}
+					}
+
+					isStepUp := true
+					if b.eMode == EngineModeOutlaws {
+						isStepUp = adjacent.FloorY < sector.FloorY-0.01
+					}
+
+					if isStepUp && validTexture(wall.BotTexture) {
+						texName := level.GetTexture(wall.BotTexture)
+						names, _ := b.archive.AddTexture(texName)
+
+						cSeg.Lower = config.NewConfigMaterial(
+							names,
+							config.MaterialKindLoop,
+							scaleTextureW,
+							scaleTextureH,
+							0,
+							0,
+						)
+					}
+
+					// Texture middle solo per portali con flag esplicito.
+					if wall.Flags&1 != 0 && validTexture(wall.MidTexture) {
+						texName := level.GetTexture(wall.MidTexture)
+						names, _ := b.archive.AddTexture(texName)
+
+						cSeg.Middle = config.NewConfigMaterial(
+							names,
+							config.MaterialKindLoop,
+							scaleTextureW,
+							scaleTextureH,
+							0,
+							0,
+						)
+					}
+				}
+
+				cSector.Segments[wallIdx] = cSeg
+			}
+		}
+
+		if hasSlopedFloor {
+			cSector.SlopedFloorGradient = floorGrad
+			cSector.SlopedFloorGX = floorGX
+			cSector.SlopedFloorGY = floorGY
+		}
+
+		if hasSlopedCeil {
+			cSector.SlopedCeilingGradient = ceilGrad
+			cSector.SlopedCeilingGX = ceilGX
+			cSector.SlopedCeilingGY = ceilGY
+		}
+
+		configSectors = append(configSectors, cSector)
+	}
+
+	return configSectors, globalVertices, lights, nil
+}
+
+// validWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.
+func (b *World) validWallVertices(sec *lumps.Sector, wall *lumps.Wall) bool {
+	return wall.LeftVertex >= 0 && wall.RightVertex >= 0 && wall.LeftVertex < len(sec.Vertices) && wall.RightVertex < len(sec.Vertices)
+}
+
+// computePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.
+func (b *World) computePlane(level *lumps.Level, sec *lumps.Sector, isCeil bool) (int, float64, float64, float64, float64, bool) {
+	sl := sec.SlopedFloor
+	if isCeil {
+		sl = sec.SlopedCeiling
+	}
+
+	if sl == nil || sl.SectorIndex < 0 || sl.SectorIndex >= len(level.Sectors) {
+		return -1, 0, 0, 0, 0, false
+	}
+
+	pSec := level.Sectors[sl.SectorIndex]
+	if sl.WallIndex < 0 || sl.WallIndex >= len(pSec.Walls) {
+		return -1, 0, 0, 0, 0, false
+	}
+
+	pWall := pSec.Walls[sl.WallIndex]
+	if !b.validWallVertices(pSec, pWall) {
+		return -1, 0, 0, 0, 0, false
+	}
+
+	pv1 := pSec.Vertices[pWall.LeftVertex]
+	pv2 := pSec.Vertices[pWall.RightVertex]
+
+	pdx := pv2.X - pv1.X
+	pdy := pv2.Y - pv1.Y
+	pLen := math.Hypot(pdx, pdy)
+	if pLen == 0 {
+		return -1, 0, 0, 0, 0, false
+	}
+
+	var pnX, pnY float64
+	if pSec.IsCCW() {
+		pnX, pnY = -pdy/pLen, pdx/pLen
+	} else {
+		pnX, pnY = pdy/pLen, -pdx/pLen
+	}
+
+	grad := sl.GetGradient()
+	gx := pnX * grad
+	gy := pnY * grad
+
+	baseZ := pSec.FloorY
+	if isCeil {
+		baseZ = pSec.CeilingY
+	}
+
+	bestWall := -1
+	bestAbsDot := -1.0
+	bestDot := 0.0
+
+	for wIdx, w := range sec.Walls {
+		if !b.validWallVertices(sec, w) {
+			continue
+		}
+
+		v1 := sec.Vertices[w.LeftVertex]
+		v2 := sec.Vertices[w.RightVertex]
+
+		dx := v2.X - v1.X
+		dy := v2.Y - v1.Y
+		wLen := math.Hypot(dx, dy)
+		if wLen < 1e-4 {
+			continue
+		}
+
+		var wnX, wnY float64
+		if sec.IsCCW() {
+			wnX, wnY = -dy/wLen, dx/wLen
+		} else {
+			wnX, wnY = dy/wLen, -dx/wLen
+		}
+
+		dot := wnX*pnX + wnY*pnY
+		if math.Abs(dot) > bestAbsDot {
+			bestAbsDot = math.Abs(dot)
+			bestDot = dot
+			bestWall = wIdx
+		}
+	}
+
+	if bestWall < 0 {
+		return -1, 0, 0, 0, 0, false
+	}
+
+	vStart := sec.Vertices[sec.Walls[bestWall].LeftVertex]
+	quotaStart := baseZ +
+		gx*(vStart.X-pv1.X) +
+		gy*(vStart.Y-pv1.Y)
+
+	effGrad := grad
+	if bestDot < 0 {
+		effGrad = -grad
+	}
+
+	return bestWall, effGrad, gx, gy, quotaStart, true
+}
+
+// computeLight computes the light level and falloff for a given sector based on its properties and scaling factors.
+func (b *World) computeLight(sector *lumps.Sector) (float64, float64) {
+	lightLevel := sector.LightLevel * scaleLight
+	if lightLevel < 2.2 {
+		lightLevel = 2.2
+	}
+	lightFalloff := lightLevel * scaleLightFalloff
+	return lightLevel, lightFalloff
+}
+
+// isDefaultTexture checks if the given texture name is empty or matches the default texture names "DEFAULT.PCX" or "DEFAULT.BM".
+func (b *World) isDefaultTexture(texName string) bool {
+	return len(texName) == 0 || strings.EqualFold(texName, "DEFAULT.PCX") || strings.EqualFold(texName, "DEFAULT.BM")
+}

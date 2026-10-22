@@ -165,35 +165,7 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	halfY := halfW
 	halfH := height * 0.5
 
-	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfH}
-	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfH}
-	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfH}
-	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfH}
-
-	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfH}
-	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfH}
-	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfH}
-	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfH}
-
 	var faces []*Face
-
-	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
-		f0 := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
-		f1 := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
-		faces = append(faces, f0, f1)
-	}
-
-	var debug *textures.Material = nil
-	if v.debug {
-		debug = material
-	}
-
-	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
-	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back
-	addPhysicsQuad(v011, v010, v000, v001, "Left", debug)   // Left
-	addPhysicsQuad(v101, v100, v110, v111, "Right", debug)  // Right
-	addPhysicsQuad(v011, v001, v101, v111, "Top", debug)    // Top
-	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
 
 	// PIANO VISIVO (Render) Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
 	// TL BL BR
@@ -208,6 +180,34 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
 	faces = append(faces, f1)
+
+	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
+		f0Phys := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
+		f1Phys := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
+		faces = append(faces, f0Phys, f1Phys)
+	}
+
+	var debug *textures.Material = nil
+	if v.debug {
+		debug = material
+	}
+
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfH}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfH}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfH}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfH}
+
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfH}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfH}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfH}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfH}
+
+	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
+	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back
+	addPhysicsQuad(v011, v010, v000, v001, "Left", debug)   // Left
+	addPhysicsQuad(v101, v100, v110, v111, "Right", debug)  // Right
+	addPhysicsQuad(v011, v001, v101, v111, "Top", debug)    // Top
+	addPhysicsQuad(v000, v010, v110, v100, "Bottom", debug) // Bottom
 
 	return faces, nil
 }

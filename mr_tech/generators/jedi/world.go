@@ -30,17 +30,6 @@ func NewWorld(archive lumps.IArchive, eMode EngineMode) *World {
 func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	level := b.archive.GetLevel()
 
-	validWallVertices := func(sec *lumps.Sector, wall *lumps.Wall) bool {
-		return wall.LeftVertex >= 0 &&
-			wall.RightVertex >= 0 &&
-			wall.LeftVertex < len(sec.Vertices) &&
-			wall.RightVertex < len(sec.Vertices)
-	}
-
-	validTexture := func(idx int) bool {
-		return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
-	}
-
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
 
 	totalVertices := 0
@@ -84,13 +73,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		}
 
 		bestFloorWall, floorGrad, floorGX, floorGY, floorQuota, hasSlopedFloor := b.computePlane(level, sector, false)
-
 		if hasSlopedFloor {
 			secFloorY = floorQuota
 		}
 
 		bestCeilWall, ceilGrad, ceilGX, ceilGY, ceilQuota, hasSlopedCeil := b.computePlane(level, sector, true)
-
 		if hasSlopedCeil {
 			secCeilY = ceilQuota
 		}
@@ -124,11 +111,27 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
 		}
 
+		secDefaultWallTex := -1
+		for _, w := range sector.Walls {
+			if b.validTexture(w.MidTexture, level) {
+				secDefaultWallTex = w.MidTexture
+				break
+			}
+			if b.validTexture(w.TopTexture, level) {
+				secDefaultWallTex = w.TopTexture
+				break
+			}
+			if b.validTexture(w.BotTexture, level) {
+				secDefaultWallTex = w.BotTexture
+				break
+			}
+		}
+
 		if len(sector.Walls) > 0 {
 			cSector.Segments = make([]*config.Segment, len(sector.Walls))
 
 			for wallIdx, wall := range sector.Walls {
-				if !validWallVertices(sector, wall) {
+				if !b.validWallVertices(sector, wall) {
 					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
 					continue
 				}
@@ -151,12 +154,14 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				if wall.Adjoin == -1 {
 					texIdx := wall.MidTexture
 
-					if !validTexture(texIdx) {
+					if !b.validTexture(texIdx, level) {
 						switch {
-						case validTexture(wall.TopTexture):
+						case b.validTexture(wall.TopTexture, level):
 							texIdx = wall.TopTexture
-						case validTexture(wall.BotTexture):
+						case b.validTexture(wall.BotTexture, level):
 							texIdx = wall.BotTexture
+						case b.validTexture(secDefaultWallTex, level):
+							texIdx = secDefaultWallTex
 						default:
 							fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
 							cSector.Segments[wallIdx] = cSeg
@@ -183,10 +188,32 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if b.eMode == EngineModeOutlaws && wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
 						upperSec := level.Sectors[wall.Adjoin]
 						lowerSec := level.Sectors[wall.DAdjoin]
-						if math.Abs(sector.FloorY-lowerSec.FloorY) <=
-							math.Abs(sector.FloorY-upperSec.FloorY) {
+						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
+						}
+					}
+
+					findOppWall := func(s *lumps.Sector) *lumps.Wall {
+						for _, ow := range s.Walls {
+							if !b.validWallVertices(s, ow) {
+								continue
+							}
+							ov1 := s.Vertices[ow.LeftVertex]
+							ov2 := s.Vertices[ow.RightVertex]
+							if (ov1 == v1 && ov2 == v2) || (ov1 == v2 && ov2 == v1) {
+								return ow
+							}
+						}
+						return nil
+					}
+
+					oppWall := findOppWall(adjacent)
+					if oppWall == nil && wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
+						if adjacent == level.Sectors[wall.DAdjoin] {
+							oppWall = findOppWall(level.Sectors[wall.Adjoin])
+						} else {
+							oppWall = findOppWall(level.Sectors[wall.DAdjoin])
 						}
 					}
 
@@ -196,30 +223,59 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
 					} else if !sector.IsSky() || !adjacent.IsSky() {
 						topTexIdx := wall.TopTexture
-						if wall.DAdjoin >= 0 {
-							topTexIdx = -1
+						if !b.validTexture(topTexIdx, level) {
+							switch {
+							case b.validTexture(wall.MidTexture, level):
+								topTexIdx = wall.MidTexture
+							case b.validTexture(wall.BotTexture, level):
+								topTexIdx = wall.BotTexture
+							case oppWall != nil && b.validTexture(oppWall.TopTexture, level):
+								topTexIdx = oppWall.TopTexture
+							case oppWall != nil && b.validTexture(oppWall.MidTexture, level):
+								topTexIdx = oppWall.MidTexture
+							case oppWall != nil && b.validTexture(oppWall.BotTexture, level):
+								topTexIdx = oppWall.BotTexture
+							case b.validTexture(secDefaultWallTex, level):
+								topTexIdx = secDefaultWallTex
+							}
 						}
-						if validTexture(topTexIdx) {
+						if b.validTexture(topTexIdx, level) {
 							texName := level.GetTexture(topTexIdx)
 							names, _ := b.archive.AddTexture(texName)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
 					}
 
-					isStepUp := true
-					if b.eMode == EngineModeOutlaws {
-						isStepUp = adjacent.FloorY < sector.FloorY-0.01
+					botTexIdx := wall.BotTexture
+					if !b.validTexture(botTexIdx, level) {
+						switch {
+						case b.validTexture(wall.MidTexture, level):
+							botTexIdx = wall.MidTexture
+						case b.validTexture(wall.TopTexture, level):
+							botTexIdx = wall.TopTexture
+						case oppWall != nil && b.validTexture(oppWall.BotTexture, level):
+							botTexIdx = oppWall.BotTexture
+						case oppWall != nil && b.validTexture(oppWall.MidTexture, level):
+							botTexIdx = oppWall.MidTexture
+						case oppWall != nil && b.validTexture(oppWall.TopTexture, level):
+							botTexIdx = oppWall.TopTexture
+						case b.validTexture(secDefaultWallTex, level):
+							botTexIdx = secDefaultWallTex
+						}
 					}
-
-					if isStepUp && validTexture(wall.BotTexture) {
-						texName := level.GetTexture(wall.BotTexture)
+					if b.validTexture(botTexIdx, level) {
+						texName := level.GetTexture(botTexIdx)
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
 
 					// Texture middle solo per portali con flag esplicito.
-					if wall.Flags&1 != 0 && validTexture(wall.MidTexture) {
-						texName := level.GetTexture(wall.MidTexture)
+					midTexIdx := wall.MidTexture
+					if !b.validTexture(midTexIdx, level) && oppWall != nil && b.validTexture(oppWall.MidTexture, level) {
+						midTexIdx = oppWall.MidTexture
+					}
+					if wall.Flags&1 != 0 && b.validTexture(midTexIdx, level) {
+						texName := level.GetTexture(midTexIdx)
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
@@ -249,7 +305,10 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 // validWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.
 func (b *World) validWallVertices(sec *lumps.Sector, wall *lumps.Wall) bool {
-	return wall.LeftVertex >= 0 && wall.RightVertex >= 0 && wall.LeftVertex < len(sec.Vertices) && wall.RightVertex < len(sec.Vertices)
+	return wall.LeftVertex >= 0 &&
+		wall.RightVertex >= 0 &&
+		wall.LeftVertex < len(sec.Vertices) &&
+		wall.RightVertex < len(sec.Vertices)
 }
 
 // computePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.
@@ -368,4 +427,8 @@ func (b *World) computeLight(sector *lumps.Sector) (float64, float64) {
 // isDefaultTexture checks if the given texture name is empty or matches the default texture names "DEFAULT.PCX" or "DEFAULT.BM".
 func (b *World) isDefaultTexture(texName string) bool {
 	return len(texName) == 0 || strings.EqualFold(texName, "DEFAULT.PCX") || strings.EqualFold(texName, "DEFAULT.BM")
+}
+
+func (b *World) validTexture(idx int, level *lumps.Level) bool {
+	return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
 }

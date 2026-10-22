@@ -18,9 +18,6 @@ type Sector struct {
 	SlopedFloorGY         float64    `json:"slopedFloorGY"`
 	SlopedCeilingGX       float64    `json:"slopedCeilingGX"`
 	SlopedCeilingGY       float64    `json:"slopedCeilingGY"`
-	//SlopedCeiling        geometry.XYZ `json:"slopedCeiling"`
-	//SlopedFloor          geometry.XYZ `json:"slopedFloor"`
-
 }
 
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.
@@ -45,23 +42,6 @@ func (s *Sector) Scale(scale geometry.XYZ) {
 		seg.Start.Scale(xy)
 		seg.End.Scale(xy)
 	}
-
-	// Scala l'equazione del piano inclinati (Floor)
-
-	/*
-		// 1. Z è un'intercetta (altezza all'origine), quindi VA SCALATA.
-		s.SlopedFloor.Z *= scale.Z
-		// 2. X e Y sono GRADIENTI.
-		// Se la scala è uniforme (es. 0.01 su X e 0.01 su Z), il rapporto è 1.
-		// I gradienti si scalano solo per il rapporto di deformazione degli assi!
-		s.SlopedFloor.X *= scale.Z / scale.X
-		s.SlopedFloor.Y *= scale.Z / scale.Y
-
-		s.SlopedCeiling.Z *= scale.Z
-		s.SlopedCeiling.X *= scale.Z / scale.X
-		s.SlopedCeiling.Y *= scale.Z / scale.Y
-
-	*/
 }
 
 // IsCCW determines if the sector's segments form a counter-clockwise loop by calculating the signed area of the polygon.

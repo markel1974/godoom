@@ -336,3 +336,10 @@ func (s *Sector) IsCCW() bool {
 	// se Y-up cartesiano puro, invertire operatore (> 0).*
 	return area < 0
 }
+
+func (s *Sector) GetFlag(index int, mask uint32) (uint32, bool) {
+	if index < 0 && index > len(s.Flags) {
+		return 0, false
+	}
+	return uint32(s.Flags[1]) & mask, true
+}

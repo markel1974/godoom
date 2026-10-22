@@ -3,6 +3,7 @@ package jedi
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -55,6 +56,13 @@ const GForce = 9.8 * 50
 
 const JumpForce = GForce * 8
 
+type EngineMode int
+
+const (
+	EngineModeJedi EngineMode = iota
+	EngineModeOutlaws
+)
+
 // Builder provides a flexible mechanism for constructing complex objects step-by-step.
 type Builder struct {
 }
@@ -64,10 +72,19 @@ func NewBuilder() *Builder {
 	return &Builder{}
 }
 
+func (b *Builder) computeLight(sector *lumps.Sector) (float64, float64) {
+	lightLevel := sector.LightLevel * scaleLight
+	if lightLevel < 2.2 {
+		lightLevel = 2.2
+	}
+	lightFalloff := lightLevel * scaleLightFalloff
+	return lightLevel, lightFalloff
+}
+
 // Build constructs a game configuration based on the provided mode, directory, and level number. Returns a config.Root or error.
-func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber int) (*config.Root, error) {
+func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, levelNumber int) (*config.Root, error) {
 	var archive lumps.IArchive
-	if mode >= 1 {
+	if eMode == EngineModeOutlaws {
 		archive = lumps.NewArchiveLab(fs)
 	} else {
 		archive = lumps.NewArchiveGob(fs)
@@ -92,6 +109,31 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 	level := archive.GetLevel()
 	entities := archive.GetEntities()
 
+	type secWallKey struct{ secIdx, wallIdx int }
+	suppressUpperPortals := make(map[secWallKey]bool)
+
+	if eMode == EngineModeOutlaws {
+		for _, sec := range level.Sectors {
+			for _, w := range sec.Walls {
+				if w.DAdjoin >= 0 && w.DAdjoin < len(level.Sectors) && w.Adjoin >= 0 && w.Adjoin < len(level.Sectors) {
+					upperSecIdx := w.Adjoin
+					upperSec := level.Sectors[upperSecIdx]
+					v1 := sec.Vertices[w.LeftVertex]
+					v2 := sec.Vertices[w.RightVertex]
+					for uwIdx, uw := range upperSec.Walls {
+						if uw.LeftVertex >= 0 && uw.RightVertex >= 0 && uw.LeftVertex < len(upperSec.Vertices) && uw.RightVertex < len(upperSec.Vertices) {
+							uv1 := upperSec.Vertices[uw.LeftVertex]
+							uv2 := upperSec.Vertices[uw.RightVertex]
+							if (uv1 == v2 && uv2 == v1) || (uv1 == v1 && uv2 == v2) {
+								suppressUpperPortals[secWallKey{secIdx: upperSecIdx, wallIdx: uwIdx}] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
 	totalVertices := 0
 	for _, sec := range level.Sectors {
@@ -100,21 +142,38 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 	var lights []*config.Light
 
-	for _, sector := range level.Sectors {
+	for sIdx, sector := range level.Sectors {
 		if len(sector.Id) == 0 {
 			continue
 		}
 
-		lightLevel := sector.LightLevel * scaleLight
-		if lightLevel < 2.2 {
-			lightLevel = 2.2
+		secFloorY := sector.FloorY
+
+		if eMode == EngineModeOutlaws {
+			if v, ok := sector.GetFlag(1, 0x80000000); ok && v != 0 {
+				//if len(sector.Flags) > 1 && uint32(sector.Flags[1])&0x80000000 != 0 {
+				bestFY := sector.FloorY
+				foundAdj := false
+				for _, w := range sector.Walls {
+					if w.Adjoin >= 0 && w.Adjoin < len(level.Sectors) {
+						adjSec := level.Sectors[w.Adjoin]
+						if !foundAdj || adjSec.FloorY > bestFY {
+							bestFY = adjSec.FloorY
+							foundAdj = true
+						}
+					}
+				}
+				if foundAdj {
+					secFloorY = bestFY
+				}
+			}
 		}
-		lightFalloff := lightLevel * scaleLightFalloff
+
+		lightLevel, lightFalloff := b.computeLight(sector)
 
 		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)
-
 		// Quote altimetriche
-		cSector.FloorY = -sector.FloorY * scaleSectorH
+		cSector.FloorY = -secFloorY * scaleSectorH
 		cSector.CeilY = -sector.CeilingY * scaleSectorH
 
 		if sector.FloorTexture >= 0 {
@@ -154,12 +213,6 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
 
-				//if wall.Light > 0 {
-				//	pos := geometry.XYZ{X: v1.X, Y: sector.CeilingY, Z: -v1.Y}
-				//	light := config.NewConfigLight(pos, float64(wall.Light), config.LightKindSpot, 50)
-				//	lights = append(lights, light)
-				//}
-
 				if sector.SlopedFloor != nil {
 					cSeg.SlopedFloorRef = wallIdx == sector.SlopedFloor.WallIndex
 				}
@@ -168,40 +221,77 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 					cSeg.SlopedCeilingRef = wallIdx == sector.SlopedCeiling.WallIndex
 				}
 
-				// Inversione asse Z (profondità planare)
-				//cSeg.Start.Y, cSeg.End.Y = -cSeg.Start.Y, -cSeg.End.Y
-				if wall.Adjoin == -1 {
-					if wall.MidTexture >= 0 {
-						texName := level.GetTexture(wall.MidTexture)
+				isSuppressedUpperPortal := suppressUpperPortals[secWallKey{secIdx: sIdx, wallIdx: wallIdx}]
+				if wall.Adjoin == -1 || isSuppressedUpperPortal {
+					texIdx := wall.MidTexture
+					if texIdx < 0 || isDefaultTexture(level.GetTexture(texIdx)) {
+						if wall.TopTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.TopTexture)) {
+							texIdx = wall.TopTexture
+						} else if wall.BotTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.BotTexture)) {
+							texIdx = wall.BotTexture
+						}
+					}
+					if texIdx >= 0 {
+						texName := level.GetTexture(texIdx)
 						if !isDefaultTexture(texName) {
 							cSeg.Kind = config.SegmentWall
 							names, _ := archive.AddTexture(texName)
 							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
+					} else if isSuppressedUpperPortal {
+						cSeg.Kind = config.SegmentWall
 					} else {
 						fmt.Println("WARNING MISSING MID_TEXTURE")
 						continue
 					}
 				} else {
-					if wall.Adjoin >= len(level.Sectors) {
+					targetSecIdx := wall.Adjoin
+					if eMode == EngineModeOutlaws {
+						if wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
+							upperSec := level.Sectors[wall.Adjoin]
+							lowerSec := level.Sectors[wall.DAdjoin]
+							if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
+								targetSecIdx = wall.DAdjoin
+							}
+						}
+					}
+
+					if targetSecIdx >= len(level.Sectors) {
 						fmt.Println("INVALID ADJOIN")
 						continue
 					}
-					adjSec := level.Sectors[wall.Adjoin]
-					if wall.TopTexture >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
-						texName := level.GetTexture(wall.TopTexture)
+					adjSec := level.Sectors[targetSecIdx]
+
+					topTexIdx := wall.TopTexture
+					if topTexIdx < 0 || isDefaultTexture(level.GetTexture(topTexIdx)) {
+						if wall.DAdjoin >= 0 {
+							if wall.BotTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.BotTexture)) {
+								topTexIdx = wall.BotTexture
+							} else if wall.MidTexture >= 0 && !isDefaultTexture(level.GetTexture(wall.MidTexture)) {
+								topTexIdx = wall.MidTexture
+							}
+						}
+					}
+					if topTexIdx >= 0 && (!sector.IsSky() || !adjSec.IsSky()) {
+						texName := level.GetTexture(topTexIdx)
 						if !isDefaultTexture(texName) {
 							names, _ := archive.AddTexture(texName)
 							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
 					}
-					if wall.BotTexture >= 0 {
+
+					isStepUp := true
+					if eMode == EngineModeOutlaws {
+						isStepUp = adjSec.FloorY < sector.FloorY-0.01
+					}
+					if isStepUp && wall.BotTexture >= 0 {
 						texName := level.GetTexture(wall.BotTexture)
 						if !isDefaultTexture(texName) {
 							names, _ := archive.AddTexture(texName)
 							cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 						}
 					}
+
 					// Only portal walls with bit 0 set (force middle texture on adjoin: windows, grates, bars) have middle material
 					if wall.MidTexture >= 0 && (wall.Flags&1 != 0) {
 						texName := level.GetTexture(wall.MidTexture)
@@ -212,7 +302,6 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 					}
 				}
 				cSector.Segments[wallIdx] = cSeg
-
 			}
 		}
 		if sector.SlopedFloor != nil {
@@ -278,9 +367,6 @@ func (b *Builder) Build(fs common.IFileSystem, mode int, dir string, levelNumber
 		}
 	}
 
-	//TODO RIMUOVERE
-	//fmt.Println("EXITING FOR DEBUGGING")
-	//os.Exit(1)
 	for _, obj := range entities.Objects {
 		if len(obj.Class) == 0 {
 			continue

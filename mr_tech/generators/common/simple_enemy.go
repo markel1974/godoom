@@ -181,10 +181,12 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		if entity.IsOnGround() {
 			e.handleJump(e.self, pCenterZ, selfZ, math.Sqrt(dist2dSq), dx, dy)
 		}
-		if e.shootCooldown <= 0 {
-			e.state = EnemyStateAttack
-			durationFrames := e.setAnimationState(config.EnemyStateShoot)
-			e.shootTimer = framesToSeconds(durationFrames) + 0.1
+		if e.hasAnimationState(config.EnemyStateShoot) {
+			if e.shootCooldown <= 0 {
+				e.state = EnemyStateAttack
+				durationFrames := e.setAnimationState(config.EnemyStateShoot)
+				e.shootTimer = framesToSeconds(durationFrames) + 0.1
+			}
 		}
 		return
 
@@ -216,6 +218,13 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 	}
 }
 
+func (e *Enemy) hasAnimationState(state config.EnemyState) bool {
+	if e.animations == nil || e.animations.Content[state] == nil || len(e.animations.Content[state].Indices) == 0 {
+		return false
+	}
+	return true
+}
+
 // setState updates the enemy's current state and triggers the corresponding animation unless the state is unchanged or dead.
 func (e *Enemy) setAnimationState(state config.EnemyState) int {
 	if e.activeAnimation == state {
@@ -224,8 +233,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 	if e.activeAnimation == config.EnemyStateDead {
 		return 0
 	}
-	if e.animations == nil || e.animations.Content[state] == nil ||
-		len(e.animations.Content[state].Indices) == 0 {
+	if !e.hasAnimationState(state) {
 		fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0
 	}

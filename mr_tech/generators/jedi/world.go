@@ -130,20 +130,23 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
+							upFloorY, _ := upperSec.Compute(level)
+							cSeg.HasUpperLimitZ = true
+							cSeg.UpperLimitZ = -upFloorY * scaleSectorH
 						}
 					}
 
-					if sector.IsSky() && adjacent.IsSky() {
+					topTexIdx := wall.TopTexture
+					if wall.DAdjoin >= 0 && !validTexture(topTexIdx) && validTexture(wall.MidTexture) {
+						topTexIdx = wall.MidTexture
+					}
+
+					if validTexture(topTexIdx) {
+						texName := level.GetTexture(topTexIdx)
+						names, _ := b.archive.AddTexture(texName)
+						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+					} else if sector.IsSky() && adjacent.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
-					} else if wall.DAdjoin >= 0 && sector.IsSky() {
-						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
-					} else if !sector.IsSky() || !adjacent.IsSky() {
-						topTexIdx := wall.TopTexture
-						if validTexture(topTexIdx) {
-							texName := level.GetTexture(topTexIdx)
-							names, _ := b.archive.AddTexture(texName)
-							cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
-						}
 					}
 
 					botTexIdx := wall.BotTexture

@@ -220,6 +220,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
 					tag := fmt.Sprintf("unknown_%d", unknownCounter)
 					unknownCounter++
+					var upperLimitZ float64
+					hasUpperLimitZ := false
 
 					for _, cn := range cs.Segments {
 						found := false
@@ -247,12 +249,19 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 							if cn.Lower != nil {
 								lower = anim.GetMaterial(cn.Lower)
 							}
+							if cn.HasUpperLimitZ {
+								hasUpperLimitZ = true
+								upperLimitZ = cn.UpperLimitZ
+							}
 							break
 						}
 					}
 
 					segMaterials := []*textures.Material{upper, middle, lower}
 					seg := NewSegment(nil, start, end, tag, segMaterials)
+					if hasUpperLimitZ {
+						seg.SetUpperLimitZ(upperLimitZ)
+					}
 					sector.AddSegment(seg)
 					sector.AddTag(tag)
 
@@ -468,18 +477,30 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 
 				zTopS1, zBotS1 := curCS, min(curCS, neiCS)
 				zTopE1, zBotE1 := midZ, midZ
+				if limitZ, ok := seg.GetUpperLimitZ(); ok {
+					zTopS1 = min(zTopS1, limitZ)
+					zTopE1 = min(zTopE1, limitZ)
+				}
 				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
 					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper)
 				}
 
 				zTopS2, zBotS2 := midZ, midZ
 				zTopE2, zBotE2 := curCE, min(curCE, neiCE)
+				if limitZ, ok := seg.GetUpperLimitZ(); ok {
+					zTopS2 = min(zTopS2, limitZ)
+					zTopE2 = min(zTopE2, limitZ)
+				}
 				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
 					buildQuad(vol3d, seg.GetNeighbor(), midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper)
 				}
 			} else {
 				zTopS, zBotS := curCS, min(curCS, neiCS)
 				zTopE, zBotE := curCE, min(curCE, neiCE)
+				if limitZ, ok := seg.GetUpperLimitZ(); ok {
+					zTopS = min(zTopS, limitZ)
+					zTopE = min(zTopE, limitZ)
+				}
 				if zBotS < zTopS || zBotE < zTopE {
 					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper)
 				}

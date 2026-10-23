@@ -8,14 +8,16 @@ import (
 
 // Segment represents a 3D segment with defined points, materials, and spatial relationships to sectors and bounding data.
 type Segment struct {
-	points    [3]geometry.XYZ
-	minZ      float64
-	maxZ      float64
-	materials []*textures.Material
-	tag       string
-	parent    *Sector
-	neighbor  *Sector
-	aabb      *aabb.AABB
+	points         [3]geometry.XYZ
+	minZ           float64
+	maxZ           float64
+	materials      []*textures.Material
+	tag            string
+	parent         *Sector
+	neighbor       *Sector
+	aabb           *aabb.AABB
+	hasUpperLimitZ bool
+	upperLimitZ    float64
 }
 
 // NewSegment creates and initializes a new Segment with the specified neighbor, start/end points, tag, and materials.
@@ -41,6 +43,15 @@ func NewSegment(neighbor *Sector, start geometry.XY, end geometry.XY, tag string
 // GetTag returns the tag associated with the Segment instance.
 func (s *Segment) GetTag() string {
 	return s.tag
+}
+
+func (s *Segment) SetUpperLimitZ(z float64) {
+	s.hasUpperLimitZ = true
+	s.upperLimitZ = z
+}
+
+func (s *Segment) GetUpperLimitZ() (float64, bool) {
+	return s.upperLimitZ, s.hasUpperLimitZ
 }
 
 // GetParent retrieves the parent Sector instance associated with the Segment. Returns a pointer to the Sector.

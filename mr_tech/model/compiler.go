@@ -256,7 +256,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 								dx := cn.End.X - cn.Start.X
 								dy := cn.End.Y - cn.Start.Y
 								lenSq := dx*dx + dy*dy
-								if lenSq > 1e-6 {
+								if lenSq > 0 {
 									t1 := ((p1.X-cn.Start.X)*dx + (p1.Y-cn.Start.Y)*dy) / lenSq
 									t2 := ((p2.X-cn.Start.X)*dx + (p2.Y-cn.Start.Y)*dy) / lenSq
 									upperLimitZS = cn.UpperLimitZS + t1*(cn.UpperLimitZE-cn.UpperLimitZS)

@@ -46,7 +46,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if len(sector.Id) == 0 {
 			continue
 		}
-
 		secFloorY, secCeilY := sector.Compute(level)
 		lightLevel, lightFalloff := b.computeLight(sector)
 
@@ -65,13 +64,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names, _ := b.archive.AddTexture(texName)
-
 			animKind := config.MaterialKindLoop
 			if sector.IsSky() {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
-
 			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleTextureW, scaleTextureH, 0, 0)
 		} else {
 			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
@@ -79,16 +76,13 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 		if len(sector.Walls) > 0 {
 			cSector.Segments = make([]*config.Segment, len(sector.Walls))
-
 			for wallIdx, wall := range sector.Walls {
 				if !wall.ValidWallVertices(len(sector.Vertices)) {
 					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
 					continue
 				}
-
 				v1 := sector.Vertices[wall.LeftVertex]
 				v2 := sector.Vertices[wall.RightVertex]
-
 				globalVertices = append(globalVertices, v1, v2)
 
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
@@ -97,12 +91,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true
 				}
-
 				if sector.HasSlopedCeil && wallIdx == sector.BestCeilWall {
 					cSeg.SlopedCeilingRef = true
 				}
 
-				if wall.Adjoin == -1 {
+				if wall.Adjoin < 0 {
 					texIdx := wall.MidTexture
 					if validTexture(texIdx) {
 						texName := level.GetTexture(texIdx)
@@ -199,79 +192,9 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		}
 	}
 
-	if secMap != nil {
-		b.closeRoofGaps(level, secMap)
-	}
 	configSectors = b.reorderSectorsForDAdjoin(configSectors)
 
 	return configSectors, globalVertices, lights, nil
-}
-
-// closeRoofGaps removes the thin slab left between the ceiling of a lower sector (room, porch) and the
-// floor of the upper sector stacked on it through a double adjoin (roof). The ceiling of the lower sector is
-// aligned to the roof plane (when the two planes are parallel), so that the perimeter walls join the roof exactly.
-func (b *World) closeRoofGaps(level *lumps.Level, secMap map[string]*config.Sector) {
-	//COMPLETAMENTE SBAGLIATO FARE QUESTO
-	const maxGap = 1.0 * scaleSectorH
-
-	floorRef := func(cs *config.Sector) (geometry.XY, bool) {
-		for _, seg := range cs.Segments {
-			if seg != nil && seg.SlopedFloorRef {
-				return seg.Start, true
-			}
-		}
-		return geometry.XY{}, false
-	}
-	ceilRef := func(cs *config.Sector) (geometry.XY, bool) {
-		for _, seg := range cs.Segments {
-			if seg != nil && seg.SlopedCeilingRef {
-				return seg.Start, true
-			}
-		}
-		return geometry.XY{}, false
-	}
-
-	done := make(map[string]bool)
-	for _, sec := range level.Sectors {
-		for _, w := range sec.Walls {
-			if w.DAdjoin < 0 || w.Adjoin < 0 || w.DAdjoin >= len(level.Sectors) || w.Adjoin >= len(level.Sectors) {
-				continue
-			}
-			cUp, okUp := secMap[level.Sectors[w.Adjoin].Id]
-			cLow, okLow := secMap[level.Sectors[w.DAdjoin].Id]
-			if !okUp || !okLow || done[cLow.Id] {
-				continue
-			}
-
-			// Upper floor plane evaluated on the reference point of the lower ceiling plane.
-			zRoof := cUp.FloorY
-			if cUp.SlopedFloorGradient != 0 || cLow.SlopedCeilingGradient != 0 {
-				if cUp.SlopedFloorGradient == 0 || cLow.SlopedCeilingGradient == 0 {
-					continue
-				}
-				if math.Abs(cUp.SlopedFloorGX-cLow.SlopedCeilingGX) > 0.01 || math.Abs(cUp.SlopedFloorGY-cLow.SlopedCeilingGY) > 0.01 {
-					continue
-				}
-				pu, ok1 := floorRef(cUp)
-				pl, ok2 := ceilRef(cLow)
-				if !ok1 || !ok2 {
-					continue
-				}
-				zRoof = cUp.FloorY + cUp.SlopedFloorGX*(pl.X-pu.X) + cUp.SlopedFloorGY*(pl.Y-pu.Y)
-			}
-
-			gap := zRoof - cLow.CeilY
-			if gap > 1e-6 && gap <= maxGap {
-				cLow.CeilY = zRoof
-				if cUp.SlopedFloorGradient != 0 {
-					cLow.SlopedCeilingGradient = cUp.SlopedFloorGradient
-					cLow.SlopedCeilingGX = cUp.SlopedFloorGX
-					cLow.SlopedCeilingGY = cUp.SlopedFloorGY
-				}
-				done[cLow.Id] = true
-			}
-		}
-	}
 }
 
 // reorderSectorsForDAdjoin topologically sorts configSectors so that for any sector

@@ -148,6 +148,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetEmptyMaterial()
 
+	css = r.reorderSectorsForDAdjoin(css)
+
 	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
 
@@ -220,7 +222,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					upper, middle, lower := emptyAnim, emptyAnim, emptyAnim
 					tag := fmt.Sprintf("unknown_%d", unknownCounter)
 					unknownCounter++
-					var upperLimitZ float64
+					var upperLimitZS, upperLimitZE float64
 					hasUpperLimitZ := false
 
 					for _, cn := range cs.Segments {
@@ -251,7 +253,8 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 							}
 							if cn.HasUpperLimitZ {
 								hasUpperLimitZ = true
-								upperLimitZ = cn.UpperLimitZ
+								upperLimitZS = cn.UpperLimitZS
+								upperLimitZE = cn.UpperLimitZE
 							}
 							break
 						}
@@ -260,7 +263,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 					segMaterials := []*textures.Material{upper, middle, lower}
 					seg := NewSegment(nil, start, end, tag, segMaterials)
 					if hasUpperLimitZ {
-						seg.SetUpperLimitZ(upperLimitZ)
+						seg.SetUpperLimitZ(upperLimitZS, upperLimitZE)
 					}
 					sector.AddSegment(seg)
 					sector.AddTag(tag)
@@ -477,9 +480,10 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 
 				zTopS1, zBotS1 := curCS, min(curCS, neiCS)
 				zTopE1, zBotE1 := midZ, midZ
-				if limitZ, ok := seg.GetUpperLimitZ(); ok {
-					zTopS1 = min(zTopS1, limitZ)
-					zTopE1 = min(zTopE1, limitZ)
+				if limS, limE, ok := seg.GetUpperLimitZ(); ok {
+					limMid := limS + t*(limE-limS)
+					zTopS1 = min(zTopS1, limS)
+					zTopE1 = min(zTopE1, limMid)
 				}
 				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
 					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper)
@@ -487,9 +491,10 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 
 				zTopS2, zBotS2 := midZ, midZ
 				zTopE2, zBotE2 := curCE, min(curCE, neiCE)
-				if limitZ, ok := seg.GetUpperLimitZ(); ok {
-					zTopS2 = min(zTopS2, limitZ)
-					zTopE2 = min(zTopE2, limitZ)
+				if limS, limE, ok := seg.GetUpperLimitZ(); ok {
+					limMid := limS + t*(limE-limS)
+					zTopS2 = min(zTopS2, limMid)
+					zTopE2 = min(zTopE2, limE)
 				}
 				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
 					buildQuad(vol3d, seg.GetNeighbor(), midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper)
@@ -497,9 +502,9 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 			} else {
 				zTopS, zBotS := curCS, min(curCS, neiCS)
 				zTopE, zBotE := curCE, min(curCE, neiCE)
-				if limitZ, ok := seg.GetUpperLimitZ(); ok {
-					zTopS = min(zTopS, limitZ)
-					zTopE = min(zTopE, limitZ)
+				if limS, limE, ok := seg.GetUpperLimitZ(); ok {
+					zTopS = min(zTopS, limS)
+					zTopE = min(zTopE, limE)
 				}
 				if zBotS < zTopS || zBotE < zTopE {
 					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper)
@@ -692,4 +697,76 @@ func (r *Compiler) compileLights2d(locator *Sectors, computeCenter bool) []*Ligh
 		}
 	}
 	return out
+}
+
+// reorderSectorsForDAdjoin rearranges sectors in dependency order, ensuring valid adjacency relationships are maintained.
+func (r *Compiler) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*config.Sector {
+	n := len(configSectors)
+	if n == 0 {
+		return configSectors
+	}
+
+	idToOrigIdx := make(map[string]int, n)
+	for i, cs := range configSectors {
+		idToOrigIdx[cs.Id] = i
+	}
+
+	adj := make(map[int][]int)
+	inDegree := make([]int, n)
+
+	for lowIdx, cs := range configSectors {
+		for _, upId := range cs.DependsOn {
+			if upIdx, ok := idToOrigIdx[upId]; ok && upIdx != lowIdx {
+				exists := false
+				for _, existing := range adj[upIdx] {
+					if existing == lowIdx {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					adj[upIdx] = append(adj[upIdx], lowIdx)
+					inDegree[lowIdx]++
+				}
+			}
+		}
+	}
+
+	result := make([]*config.Sector, 0, n)
+	ready := make([]bool, n)
+	for i := 0; i < n; i++ {
+		if inDegree[i] == 0 {
+			ready[i] = true
+		}
+	}
+
+	for len(result) < n {
+		nextIdx := -1
+		for i := 0; i < n; i++ {
+			if ready[i] {
+				nextIdx = i
+				break
+			}
+		}
+		if nextIdx == -1 {
+			// In case of a cycle, append any remaining sectors preserving their relative order.
+			for i := 0; i < n; i++ {
+				if inDegree[i] > 0 {
+					result = append(result, configSectors[i])
+				}
+			}
+			break
+		}
+		ready[nextIdx] = false
+		inDegree[nextIdx] = -1
+		result = append(result, configSectors[nextIdx])
+		for _, child := range adj[nextIdx] {
+			inDegree[child]--
+			if inDegree[child] == 0 {
+				ready[child] = true
+			}
+		}
+	}
+
+	return result
 }

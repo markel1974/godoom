@@ -17,7 +17,8 @@ type Segment struct {
 	neighbor       *Sector
 	aabb           *aabb.AABB
 	hasUpperLimitZ bool
-	upperLimitZ    float64
+	upperLimitZS   float64
+	upperLimitZE   float64
 }
 
 // NewSegment creates and initializes a new Segment with the specified neighbor, start/end points, tag, and materials.
@@ -45,13 +46,14 @@ func (s *Segment) GetTag() string {
 	return s.tag
 }
 
-func (s *Segment) SetUpperLimitZ(z float64) {
+func (s *Segment) SetUpperLimitZ(limS, limE float64) {
 	s.hasUpperLimitZ = true
-	s.upperLimitZ = z
+	s.upperLimitZS = limS
+	s.upperLimitZE = limE
 }
 
-func (s *Segment) GetUpperLimitZ() (float64, bool) {
-	return s.upperLimitZ, s.hasUpperLimitZ
+func (s *Segment) GetUpperLimitZ() (float64, float64, bool) {
+	return s.upperLimitZS, s.upperLimitZE, s.hasUpperLimitZ
 }
 
 // GetParent retrieves the parent Sector instance associated with the Segment. Returns a pointer to the Sector.

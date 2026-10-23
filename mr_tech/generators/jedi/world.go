@@ -130,9 +130,9 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
-							upFloorY, _ := upperSec.Compute(level)
 							cSeg.HasUpperLimitZ = true
-							cSeg.UpperLimitZ = -upFloorY * scaleSectorH
+							cSeg.UpperLimitZS = upperSec.EvaluateFloorZ(level, v1, scaleSectorH)
+							cSeg.UpperLimitZE = upperSec.EvaluateFloorZ(level, v2, scaleSectorH)
 						}
 					}
 
@@ -197,86 +197,9 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		}
 	}
 
-	configSectors = b.reorderSectorsForDAdjoin(configSectors)
+	//configSectors = b.reorderSectorsForDAdjoin(configSectors)
 
 	return configSectors, globalVertices, lights, nil
-}
-
-// reorderSectorsForDAdjoin topologically sorts configSectors so that for any sector
-// with dependencies in DependsOn, that sector appears after all sectors it depends on.
-// This ensures that for stacked portals (DAdjoin), lower sectors appear after upper
-// sectors in configSectors, allowing compiler segment adjacency resolution to correctly
-// pair exterior portals with ground-level sectors rather than roofs.
-// TODO MOVE IN COMPILER
-func (b *World) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*config.Sector {
-	n := len(configSectors)
-	if n == 0 {
-		return configSectors
-	}
-
-	idToOrigIdx := make(map[string]int, n)
-	for i, cs := range configSectors {
-		idToOrigIdx[cs.Id] = i
-	}
-
-	adj := make(map[int][]int)
-	inDegree := make([]int, n)
-
-	for lowIdx, cs := range configSectors {
-		for _, upId := range cs.DependsOn {
-			if upIdx, ok := idToOrigIdx[upId]; ok && upIdx != lowIdx {
-				exists := false
-				for _, existing := range adj[upIdx] {
-					if existing == lowIdx {
-						exists = true
-						break
-					}
-				}
-				if !exists {
-					adj[upIdx] = append(adj[upIdx], lowIdx)
-					inDegree[lowIdx]++
-				}
-			}
-		}
-	}
-
-	result := make([]*config.Sector, 0, n)
-	ready := make([]bool, n)
-	for i := 0; i < n; i++ {
-		if inDegree[i] == 0 {
-			ready[i] = true
-		}
-	}
-
-	for len(result) < n {
-		nextIdx := -1
-		for i := 0; i < n; i++ {
-			if ready[i] {
-				nextIdx = i
-				break
-			}
-		}
-		if nextIdx == -1 {
-			// In case of a cycle, append any remaining sectors preserving their relative order.
-			for i := 0; i < n; i++ {
-				if inDegree[i] > 0 {
-					result = append(result, configSectors[i])
-				}
-			}
-			break
-		}
-		ready[nextIdx] = false
-		inDegree[nextIdx] = -1
-		result = append(result, configSectors[nextIdx])
-		for _, child := range adj[nextIdx] {
-			inDegree[child]--
-			if inDegree[child] == 0 {
-				ready[child] = true
-			}
-		}
-	}
-
-	return result
 }
 
 // computeLight computes the light level and falloff for a given sector based on its properties and scaling factors.

@@ -484,3 +484,18 @@ func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, floa
 
 	return bestWall, effGrad, gx, gy, quotaStart, true
 }
+
+// EvaluateFloorZ returns the height Z in world coordinates of the sector's floor at point (x, y) given scaleH.
+func (s *Sector) EvaluateFloorZ(level *Level, pt geometry.XY, scaleH float64) float64 {
+	baseFloorY, _ := s.Compute(level)
+	baseZ := -baseFloorY * scaleH
+	if !s.HasSlopedFloor || s.BestFloorWall < 0 || s.BestFloorWall >= len(s.Walls) {
+		return baseZ
+	}
+	refW := s.Walls[s.BestFloorWall]
+	if !refW.ValidWallVertices(len(s.Vertices)) {
+		return baseZ
+	}
+	vRef := s.Vertices[refW.LeftVertex]
+	return baseZ + (s.FloorGX*(pt.X-vRef.X)+s.FloorGY*(pt.Y-vRef.Y))*scaleH
+}

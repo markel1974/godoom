@@ -30,7 +30,8 @@ type Segment struct {
 	SlopedFloorRef   bool        `json:"slopedFloorRef"`
 	SlopedCeilingRef bool        `json:"slopedCeilingRef"`
 	HasUpperLimitZ   bool        `json:"hasUpperLimitZ,omitempty"`
-	UpperLimitZ      float64     `json:"upperLimitZ,omitempty"`
+	UpperLimitZS     float64     `json:"upperLimitZS,omitempty"`
+	UpperLimitZE     float64     `json:"upperLimitZE,omitempty"`
 }
 
 // NewConfigSegment creates a new Segment instance with the specified parent, Kind, start, and end coordinates.

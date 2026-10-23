@@ -45,7 +45,7 @@ func (g *LabFile) Read() ([]byte, error) {
 
 // ArchiveLab represents a structure for managing LAB file archives and their extracted data.
 type ArchiveLab struct {
-	fs            common.IFileSystem
+	fs            common.IResources
 	container     map[string]*LabFile
 	files         []common.IReader
 	levels        []string
@@ -58,7 +58,7 @@ type ArchiveLab struct {
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
-func NewArchiveLab(fs common.IFileSystem) *ArchiveLab {
+func NewArchiveLab(fs common.IResources) *ArchiveLab {
 	return &ArchiveLab{
 		fs:            fs,
 		container:     make(map[string]*LabFile),

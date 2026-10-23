@@ -50,27 +50,25 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		secFloorY := sector.FloorY
 		secCeilY := sector.CeilingY
 
-		if b.eMode == EngineModeOutlaws {
-			if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
-				bestFloorY := sector.FloorY
-				foundAdjacent := false
+		if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
+			bestFloorY := sector.FloorY
+			foundAdjacent := false
 
-				for _, wall := range sector.Walls {
-					if wall.Adjoin < 0 ||
-						wall.Adjoin >= len(level.Sectors) {
-						continue
-					}
-
-					adjacent := level.Sectors[wall.Adjoin]
-					if !foundAdjacent || adjacent.FloorY > bestFloorY {
-						bestFloorY = adjacent.FloorY
-						foundAdjacent = true
-					}
+			for _, wall := range sector.Walls {
+				if wall.Adjoin < 0 ||
+					wall.Adjoin >= len(level.Sectors) {
+					continue
 				}
 
-				if foundAdjacent {
-					secFloorY = bestFloorY
+				adjacent := level.Sectors[wall.Adjoin]
+				if !foundAdjacent || adjacent.FloorY > bestFloorY {
+					bestFloorY = adjacent.FloorY
+					foundAdjacent = true
 				}
+			}
+
+			if foundAdjacent {
+				secFloorY = bestFloorY
 			}
 		}
 
@@ -171,11 +169,10 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 					adjacent := level.Sectors[targetSecIdx]
 
-					if b.eMode == EngineModeOutlaws && wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
+					if wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
 						upperSec := level.Sectors[wall.Adjoin]
 						lowerSec := level.Sectors[wall.DAdjoin]
-						if math.Abs(sector.FloorY-lowerSec.FloorY) <=
-							math.Abs(sector.FloorY-upperSec.FloorY) {
+						if !validTexture(wall.TopTexture) && math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
 						}
@@ -183,7 +180,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 					if sector.IsSky() && adjacent.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
-					} else if b.eMode == EngineModeOutlaws && wall.DAdjoin >= 0 && sector.IsSky() {
+					} else if wall.DAdjoin >= 0 && sector.IsSky() && !validTexture(wall.TopTexture) {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
 					} else if !sector.IsSky() || !adjacent.IsSky() {
 						topTexIdx := wall.TopTexture
@@ -201,6 +198,13 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							floorDiff := sector.FloorY - adjoinSec.FloorY
 							if floorDiff > 0.05 && floorDiff <= 5.0 {
 								botTexIdx = wall.MidTexture
+							}
+						}
+						if !validTexture(botTexIdx) && b.eMode == EngineModeOutlaws && wall.DAdjoin >= 0 {
+							if validTexture(wall.MidTexture) {
+								botTexIdx = wall.MidTexture
+							} else if validTexture(wall.TopTexture) {
+								botTexIdx = wall.TopTexture
 							}
 						}
 					}
@@ -237,18 +241,28 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
-	secMap := make(map[string]*config.Sector, len(configSectors))
-	for _, cs := range configSectors {
-		secMap[cs.Id] = cs
-	}
+	var secMap map[string]*config.Sector
 	for _, sec := range level.Sectors {
 		for _, w := range sec.Walls {
 			if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
 				w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
 				upperSec := level.Sectors[w.Adjoin]
 				lowerSec := level.Sectors[w.DAdjoin]
-				if cs, ok := secMap[lowerSec.Id]; ok {
-					cs.AddDependency(upperSec.Id)
+				if secMap == nil {
+					secMap = make(map[string]*config.Sector)
+					for _, cs := range configSectors {
+						secMap[cs.Id] = cs
+					}
+				}
+				isOpenCanopy := !validTexture(w.TopTexture) && math.Abs(sec.FloorY-lowerSec.FloorY) < 0.05
+				if isOpenCanopy {
+					if cs, ok := secMap[lowerSec.Id]; ok {
+						cs.AddDependency(upperSec.Id)
+					}
+				} else {
+					if cs, ok := secMap[upperSec.Id]; ok {
+						cs.AddDependency(lowerSec.Id)
+					}
 				}
 			}
 		}

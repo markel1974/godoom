@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"archive/zip"
@@ -9,27 +9,25 @@ import (
 	"path"
 	"sort"
 	"strings"
-
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
-// zipDirEntry represents a directory entry within a ZIP archive, providing methods to retrieve its attributes.
-type zipDirEntry struct {
+// ZipDirEntry represents a directory entry within a ZIP archive, providing methods to retrieve its attributes.
+type ZipDirEntry struct {
 	file *zip.File
 }
 
 // Name returns the base name of the file, excluding the directory path and any trailing slash.
-func (e zipDirEntry) Name() string {
+func (e ZipDirEntry) Name() string {
 	return path.Base(strings.TrimSuffix(path.Clean(e.file.Name), "/"))
 }
 
 // IsDir reports whether the zipDirEntry represents a directory based on the trailing slash in its file name.
-func (e zipDirEntry) IsDir() bool {
+func (e ZipDirEntry) IsDir() bool {
 	return strings.HasSuffix(e.file.Name, "/")
 }
 
 // Type returns the file mode of the entry, indicating if it is a directory or a regular file.
-func (e zipDirEntry) Type() fs.FileMode {
+func (e ZipDirEntry) Type() fs.FileMode {
 	if e.IsDir() {
 		return fs.ModeDir
 	}
@@ -37,7 +35,7 @@ func (e zipDirEntry) Type() fs.FileMode {
 }
 
 // Info returns the FileInfo of the zip entry and an error, if any occurs during retrieval.
-func (e zipDirEntry) Info() (fs.FileInfo, error) {
+func (e ZipDirEntry) Info() (fs.FileInfo, error) {
 	return e.file.FileInfo(), nil
 }
 
@@ -57,7 +55,7 @@ func (z *ResourcesZip) Setup(p string) error {
 }
 
 // Open extracts a file from the zip archive by name and returns a reader to access its content.
-func (z *ResourcesZip) Open(in string) (common.IReader, error) {
+func (z *ResourcesZip) Open(in string) (IReader, error) {
 	f, err := z.z.Open(in)
 	if err != nil {
 		return nil, fmt.Errorf("open %q in zip: %w", in, err)
@@ -105,7 +103,7 @@ func (z *ResourcesZip) ReadDir(fPath string) ([]os.DirEntry, error) {
 		if strings.HasSuffix(f.Name, "/") {
 			base := path.Base(strings.TrimSuffix(rel, "/"))
 			if base != "" {
-				entries[base] = zipDirEntry{file: f}
+				entries[base] = ZipDirEntry{file: f}
 			}
 			continue
 		}
@@ -115,7 +113,7 @@ func (z *ResourcesZip) ReadDir(fPath string) ([]os.DirEntry, error) {
 		if len(parts) > 1 {
 			dirName := parts[0]
 			if _, ok := entries[dirName]; !ok {
-				entries[dirName] = zipDirEntry{
+				entries[dirName] = ZipDirEntry{
 					file: &zip.File{
 						FileHeader: zip.FileHeader{
 							Name: dir + dirName + "/",
@@ -127,7 +125,7 @@ func (z *ResourcesZip) ReadDir(fPath string) ([]os.DirEntry, error) {
 
 		// File immediato.
 		if len(parts) == 1 {
-			entries[rel] = zipDirEntry{file: f}
+			entries[rel] = ZipDirEntry{file: f}
 		}
 	}
 

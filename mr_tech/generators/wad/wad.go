@@ -39,7 +39,7 @@ func New() *WAD {
 }
 
 // Load opens the WAD file, loads its internal structures, and initializes its resources.
-func (w *WAD) Load(fs common.IFileSystem, filename string) error {
+func (w *WAD) Load(fs common.IResources, filename string) error {
 	var err error
 	if w.file, err = fs.Open(filename); err != nil {
 		return err

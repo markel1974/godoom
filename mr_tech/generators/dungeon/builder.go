@@ -55,7 +55,7 @@ func NewBuilder() *Builder {
 }
 
 // Build generates and returns the root configuration for the application or system, along with any encountered errors.
-func (b *Builder) Build(res common.IFileSystem, level int) (*config.Root, error) {
+func (b *Builder) Build(res common.IResources, level int) (*config.Root, error) {
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(res, basePath)
 	//return b.generateSimple(t, 16, 16)

@@ -19,7 +19,7 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the game environment by loading and processing Doom 3 maps and assets from a .pk4 file.
-func (p *Builder) Setup(res common.IFileSystem, pk4Path string, lev int) (*config.Root, error) {
+func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config.Root, error) {
 	if lev < 1 {
 		lev = 1
 	}

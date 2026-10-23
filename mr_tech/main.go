@@ -24,7 +24,7 @@ import (
 type ModeDef struct {
 	Name    string
 	Target  string
-	Builder func(res common.IFileSystem, target string, level int) (*config.Root, error)
+	Builder func(res common.IResources, target string, level int) (*config.Root, error)
 }
 
 func IntToBool(i int) bool {
@@ -35,7 +35,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "script",
 		Target: "",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			p := script.NewBuilder()
 			return p.Build(res, script.StubOld2)
 		},
@@ -43,7 +43,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "generate",
 		Target: "",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			db := dungeon.NewBuilder()
 			return db.Build(res, level)
 		},
@@ -51,7 +51,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "wolfstein",
 		Target: "",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			p := wolfstein.NewBuilder()
 			return p.Build(level)
 		},
@@ -59,7 +59,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "doom",
 		Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			wb := wad.NewBuilder()
 			return wb.Build(res, target, level)
 		},
@@ -67,7 +67,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "jedi",
 		Target: "resources" + string(os.PathSeparator) + "jedi",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
 			return jf.Build(res, 0, target, level)
 		},
@@ -75,7 +75,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "outlaws",
 		Target: "resources" + string(os.PathSeparator) + "outlaws",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
 			return jf.Build(res, 1, target, level)
 		},
@@ -83,7 +83,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "quake",
 		Target: "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "pak0.pak",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
 			return qb.Setup(res, target, level)
 		},
@@ -91,7 +91,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "quake2",
 		Target: "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
 			return qb.Setup(res, target, level)
 		},
@@ -99,7 +99,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "quake3",
 		Target: "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
 			return qb.Setup(res, target, level)
 		},
@@ -107,7 +107,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "doom3",
 		Target: "resources" + string(os.PathSeparator) + "doom3" + string(os.PathSeparator) + "pak002.pk4",
-		Builder: func(res common.IFileSystem, target string, level int) (*config.Root, error) {
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := doom3.NewBuilder()
 			return qb.Setup(res, target, level)
 		},

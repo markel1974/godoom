@@ -67,7 +67,7 @@ func NewBuilder() *Builder {
 }
 
 // Build constructs a game configuration based on the provided mode, directory, and level number. Returns a config.Root or error.
-func (b *Builder) Build(fs common.IFileSystem, eMode EngineMode, dir string, levelNumber int) (*config.Root, error) {
+func (b *Builder) Build(fs common.IResources, eMode EngineMode, dir string, levelNumber int) (*config.Root, error) {
 	var archive lumps.IArchive
 	if eMode == EngineModeOutlaws {
 		archive = lumps.NewArchiveLab(fs)

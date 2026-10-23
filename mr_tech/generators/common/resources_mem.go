@@ -1,9 +1,7 @@
-package main
+package common
 
 import (
 	"os"
-
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // ResourcesMem is a structure for managing in-memory resources, designed to simulate file-like operations.
@@ -29,7 +27,7 @@ func (r *ResourcesMem) ReadDir(path string) ([]os.DirEntry, error) {
 }
 
 // Open opens an in-memory resource using the provided string and returns an IReader interface or an error if it fails.
-func (r *ResourcesMem) Open(in string) (common.IReader, error) {
+func (r *ResourcesMem) Open(in string) (IReader, error) {
 	return NewReaderMem(r.s), nil
 }
 

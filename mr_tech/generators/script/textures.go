@@ -13,7 +13,7 @@ type Textures struct {
 }
 
 // NewTextures loads textures from files in the specified directory and returns a Textures instance or an error.
-func NewTextures(res common.IFileSystem, basePath string) (*Textures, error) {
+func NewTextures(res common.IResources, basePath string) (*Textures, error) {
 	t := &Textures{
 		resources: make(map[string]*textures.Texture),
 	}

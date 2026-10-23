@@ -49,7 +49,7 @@ func NewBSPReader(arc interfaces.IArchive, bspPath string) (interfaces.IBSPReade
 }
 
 // NewArchive creates a new resources_os.go instance based on the file extension, supporting ".pk3" and other formats.
-func NewArchive(res common.IFileSystem, pakPath string) (interfaces.IArchive, error) {
+func NewArchive(res common.IResources, pakPath string) (interfaces.IArchive, error) {
 	if strings.HasSuffix(strings.ToLower(pakPath), ".pk3") {
 		return lumps.NewPk3(res), nil
 	}

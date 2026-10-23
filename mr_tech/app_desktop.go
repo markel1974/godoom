@@ -11,7 +11,7 @@ import (
 
 // App represents the core application structure holding resources and providing methods for application control.
 type App struct {
-	res    common.IFileSystem
+	res    common.IResources
 	width  int
 	height int
 	fps    int
@@ -21,7 +21,7 @@ type App struct {
 // NewApp creates and returns a new instance of App with initialized resources.
 func NewApp() *App {
 	return &App{
-		res: NewResourcesOs(),
+		res: common.NewResourcesOs(),
 	}
 }
 
@@ -51,6 +51,6 @@ func (a *App) UpdatePath(path string) string {
 }
 
 // GetResources retrieves the Resources instance associated with the App.
-func (a *App) GetResources() common.IFileSystem {
+func (a *App) GetResources() common.IResources {
 	return a.res
 }

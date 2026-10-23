@@ -1,11 +1,9 @@
-package main
+package common
 
 import (
 	"embed"
 	"io"
 	"os"
-
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // assets is an embedded file system used to store and access static files or resources bundled with the application.
@@ -31,7 +29,7 @@ func (r *ResourcesAsset) ReadDir(path string) ([]os.DirEntry, error) {
 }
 
 // Open retrieves an asset by its path, reads its contents, and returns an IReader for further processing.
-func (r *ResourcesAsset) Open(in string) (common.IReader, error) {
+func (r *ResourcesAsset) Open(in string) (IReader, error) {
 	f, err := assets.Open(in)
 	if err != nil {
 		return nil, err

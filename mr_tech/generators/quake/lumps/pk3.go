@@ -102,13 +102,13 @@ func (np *NodePk3) pathCleaner(in string) string {
 
 // Pk3 represents a structure for handling and navigating through PK3 archive files.
 type Pk3 struct {
-	res    common.IFileSystem
+	res    common.IResources
 	root   *NodePk3
 	reader *zip.Reader
 }
 
 // NewPk3 creates and returns a new instance of the Pk3 structure for handling PK3 archives.
-func NewPk3(res common.IFileSystem) *Pk3 {
+func NewPk3(res common.IResources) *Pk3 {
 	return &Pk3{
 		res: res,
 	}

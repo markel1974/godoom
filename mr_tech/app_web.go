@@ -14,7 +14,7 @@ import (
 
 // App represents the main application structure containing resources, display dimensions, and frame rate configuration.
 type App struct {
-	res    common.IFileSystem
+	res    common.IResources
 	width  int
 	height int
 	fps    int
@@ -37,9 +37,9 @@ func (a *App) Setup(width, height, fps int) error {
 		js.CopyBytesToGo(data, jsBuf)
 		// Free the JS reference so browser can GC it
 		js.Global().Get("window").Set("gameAssetBuffer", js.Null())
-		a.res = NewResourcesMem(data)
+		a.res = common.NewResourcesMem(data)
 	} else {
-		a.res = NewResourcesAsset(data)
+		a.res = common.NewResourcesAsset(data)
 	}
 	if err := a.res.Setup(); err != nil {
 		return err
@@ -62,7 +62,7 @@ func (a *App) GetContext(player *config.Player) api.IContext {
 }
 
 // GetResources returns the Resources instance associated with the App.
-func (a *App) GetResources() common.IFileSystem {
+func (a *App) GetResources() common.IResources {
 	return a.res
 }
 

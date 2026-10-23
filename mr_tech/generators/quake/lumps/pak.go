@@ -107,12 +107,12 @@ func (np *NodePak) GetNode(parts []string) *NodePak {
 
 // Pak represents a container for a hierarchical structure of files and directories.
 type Pak struct {
-	res  common.IFileSystem
+	res  common.IResources
 	root *NodePak
 }
 
 // NewPak initializes and returns a new instance of the Pak structure.
-func NewPak(res common.IFileSystem) *Pak {
+func NewPak(res common.IResources) *Pak {
 	return &Pak{
 		res: res,
 	}

@@ -1,9 +1,7 @@
-package main
+package common
 
 import (
 	"os"
-
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // ResourcesOs provides methods for accessing and managing resource files and directories.
@@ -21,7 +19,7 @@ func (r *ResourcesOs) Setup() error {
 }
 
 // Open opens the specified resource and returns an IReader interface for reading, seeking, closing, and offset reading.
-func (r *ResourcesOs) Open(in string) (common.IReader, error) {
+func (r *ResourcesOs) Open(in string) (IReader, error) {
 	return os.Open(in)
 
 }

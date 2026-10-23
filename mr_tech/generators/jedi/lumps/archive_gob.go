@@ -56,7 +56,7 @@ func (g *Gob) Read() ([]byte, error) {
 
 // ArchiveGob represents a collection of game assets, including entries, files, levels, textures, and entities.
 type ArchiveGob struct {
-	fs       common.IFileSystem
+	fs       common.IResources
 	entries  map[string]*Gob
 	files    []common.IReader
 	levels   []string
@@ -68,7 +68,7 @@ type ArchiveGob struct {
 }
 
 // NewArchiveGob initializes and returns a new ArchiveGob instance with default maps and textures.
-func NewArchiveGob(fs common.IFileSystem) *ArchiveGob {
+func NewArchiveGob(fs common.IResources) *ArchiveGob {
 	return &ArchiveGob{
 		fs:       fs,
 		entries:  make(map[string]*Gob),

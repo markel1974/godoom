@@ -13,8 +13,8 @@ type IReader interface {
 	io.ReaderAt
 }
 
-// IFileSystem defines an interface for abstract file system operations, including file opening and directory reading.
-type IFileSystem interface {
+// IResources defines an interface for abstract file system operations, including file opening and directory reading.
+type IResources interface {
 	Setup() error
 
 	Open(path string) (IReader, error)

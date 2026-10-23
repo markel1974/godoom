@@ -47,8 +47,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			continue
 		}
 
-		sector.Compute(level)
-		secFloorY, secCeilY := sector.ComputedFloorY, sector.ComputedCeilY
+		secFloorY, secCeilY := sector.Compute(level)
 		lightLevel, lightFalloff := b.computeLight(sector)
 
 		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)
@@ -105,7 +104,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 				if wall.Adjoin == -1 {
 					texIdx := wall.MidTexture
-
 					if !validTexture(texIdx) {
 						switch {
 						case validTexture(wall.TopTexture):
@@ -125,20 +123,19 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
 					targetSecIdx := wall.Adjoin
-
-					if targetSecIdx < 0 ||
-						targetSecIdx >= len(level.Sectors) {
+					adjacent := level.GetSector(targetSecIdx)
+					if adjacent == nil {
 						fmt.Println("INVALID ADJOIN", sector.Id, wallIdx)
 						continue
 					}
-
-					adjacent := level.Sectors[targetSecIdx]
-
-					if wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
-						upperSec := level.Sectors[wall.Adjoin]
-						lowerSec := level.Sectors[wall.DAdjoin]
-						if math.Abs(sector.FloorY-lowerSec.FloorY) <=
-							math.Abs(sector.FloorY-upperSec.FloorY) {
+					if wall.Adjoin >= 0 && wall.DAdjoin >= 0 {
+						upperSec := level.GetSector(wall.Adjoin)
+						lowerSec := level.GetSector(wall.DAdjoin)
+						if upperSec == nil || lowerSec == nil {
+							fmt.Println("INVALID ADJOIN/DADJOIN", wall.Adjoin)
+							continue
+						}
+						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
 						}
@@ -198,30 +195,29 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
-	/*
-		var secMap map[string]*config.Sector
-		for _, sec := range level.Sectors {
-			for _, w := range sec.Walls {
-				if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
-					w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
-					upperSec := level.Sectors[w.Adjoin]
-					lowerSec := level.Sectors[w.DAdjoin]
-					if secMap == nil {
-						secMap = make(map[string]*config.Sector)
-						for _, cs := range configSectors {
-							secMap[cs.Id] = cs
-						}
+	var secMap map[string]*config.Sector
+	for _, sec := range level.Sectors {
+		for _, w := range sec.Walls {
+			if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
+				w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
+				upperSec := level.Sectors[w.Adjoin]
+				lowerSec := level.Sectors[w.DAdjoin]
+				if secMap == nil {
+					secMap = make(map[string]*config.Sector)
+					for _, cs := range configSectors {
+						secMap[cs.Id] = cs
 					}
-					if cs, ok := secMap[lowerSec.Id]; ok {
-						cs.AddDependency(upperSec.Id)
-					}
+				}
+				if cs, ok := secMap[lowerSec.Id]; ok {
+					cs.AddDependency(upperSec.Id)
 				}
 			}
 		}
-	*/
-	//if secMap != nil {
-	//	b.closeRoofGaps(level, secMap)
-	//	}
+	}
+
+	if secMap != nil {
+		b.closeRoofGaps(level, secMap)
+	}
 	configSectors = b.reorderSectorsForDAdjoin(configSectors)
 
 	return configSectors, globalVertices, lights, nil

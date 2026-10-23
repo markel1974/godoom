@@ -31,8 +31,6 @@ type Sector struct {
 	SlopedFloor    *Slope
 	SlopedCeiling  *Slope
 
-	ComputedFloorY float64
-	ComputedCeilY  float64
 	BestCeilWall   int
 	BestFloorWall  int
 	CeilGrad       float64
@@ -351,37 +349,18 @@ func (s *Sector) IsCCW() bool {
 	return twiceArea > 0
 }
 
+// GetFlag retrieves the flag at the specified index in the Flags slice and applies the given mask, returning the result and a success boolean.
 func (s *Sector) GetFlag(index int, mask uint32) (uint32, bool) {
-	if index < 0 && index > len(s.Flags) {
+	if index < 0 || index >= len(s.Flags) {
 		return 0, false
 	}
-	return uint32(s.Flags[1]) & mask, true
+	return uint32(s.Flags[index]) & mask, true
 }
 
 // Compute updates the sector's sloped floor and ceiling properties by recalculating planes based on related sectors.
-func (s *Sector) Compute(level *Level) {
-	s.ComputedFloorY = s.FloorY
-	s.ComputedCeilY = s.CeilingY
-
-	if flag, ok := s.GetFlag(1, 0x80000000); ok && flag != 0 {
-		bestFloorY := s.FloorY
-		foundAdjacent := false
-		for _, wall := range s.Walls {
-			if wall.Adjoin < 0 ||
-				wall.Adjoin >= len(level.Sectors) {
-				continue
-			}
-			adjacent := level.Sectors[wall.Adjoin]
-			if !foundAdjacent || adjacent.FloorY > bestFloorY {
-				bestFloorY = adjacent.FloorY
-				foundAdjacent = true
-			}
-		}
-		if foundAdjacent {
-			s.ComputedFloorY = bestFloorY
-		}
-	}
-
+func (s *Sector) Compute(level *Level) (float64, float64) {
+	computedFloorY := s.computeBestFloor(level)
+	computedCeilY := s.CeilingY
 	if s.SlopedFloor != nil {
 		if pSec := level.GetSector(s.SlopedFloor.SectorIndex); pSec != nil {
 			s.BestFloorWall, s.FloorGrad, s.FloorGX, s.FloorGY, s.FloorQuota, s.HasSlopedFloor = s.computePlane(pSec, s.SlopedFloor, pSec.FloorY)
@@ -392,17 +371,39 @@ func (s *Sector) Compute(level *Level) {
 			s.BestCeilWall, s.CeilGrad, s.CeilGX, s.CeilGY, s.CeilQuota, s.HasSlopedCeil = s.computePlane(pSec, s.SlopedCeiling, pSec.CeilingY)
 		}
 	}
-
 	if s.HasSlopedFloor {
-		s.ComputedFloorY = s.FloorQuota
+		computedFloorY = s.FloorQuota
 	}
 	if s.HasSlopedCeil {
-		s.ComputedCeilY = s.CeilQuota
+		computedCeilY = s.CeilQuota
 	}
+	return computedFloorY, computedCeilY
+}
+
+// computeBestFloor determines the best floor height for the sector by comparing it against adjacent sectors' floor heights.
+func (s *Sector) computeBestFloor(level *Level) float64 {
+	bestFloorY := s.FloorY
+	if flag, ok := s.GetFlag(1, 0x80000000); ok && flag != 0 {
+		foundAdjacent := false
+		for _, wall := range s.Walls {
+			adjacent := level.GetSector(wall.Adjoin)
+			if adjacent == nil {
+				continue
+			}
+			if !foundAdjacent || adjacent.FloorY > bestFloorY {
+				bestFloorY = adjacent.FloorY
+				foundAdjacent = true
+			}
+		}
+	}
+	return bestFloorY
 }
 
 // ComputePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.
 func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, float64, float64, float64, float64, bool) {
+	if sl.WallIndex < 0 || sl.WallIndex >= len(pSec.Walls) {
+		return -1, 0, 0, 0, 0, false
+	}
 	pWall := pSec.Walls[sl.WallIndex]
 	if !pWall.ValidWallVertices(len(pSec.Vertices)) {
 		return -1, 0, 0, 0, 0, false
@@ -410,7 +411,6 @@ func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, floa
 
 	pv1 := pSec.Vertices[pWall.LeftVertex]
 	pv2 := pSec.Vertices[pWall.RightVertex]
-
 	pdx := pv2.X - pv1.X
 	pdy := pv2.Y - pv1.Y
 	pLen := math.Hypot(pdx, pdy)
@@ -428,11 +428,6 @@ func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, floa
 	grad := sl.GetGradient()
 	gx := pnX * grad
 	gy := pnY * grad
-
-	//baseZ := pSec.FloorY
-	//if isCeil {
-	//	baseZ = pSec.CeilingY
-	//}
 
 	bestWall := -1
 	bestAbsDot := -1.0
@@ -453,9 +448,12 @@ func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, floa
 			dx := v2.X - v1.X
 			dy := v2.Y - v1.Y
 			wLen := math.Hypot(dx, dy)
-			if wLen < 1e-4 {
+			if wLen <= 0 {
 				continue
 			}
+			//if wLen < 1e-4 {
+			//	continue
+			//}
 
 			var wnX, wnY float64
 			if s.IsCCW() {
@@ -478,10 +476,7 @@ func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, floa
 	}
 
 	vStart := s.Vertices[s.Walls[bestWall].LeftVertex]
-	quotaStart := baseZ -
-		(gx*(vStart.X-pv1.X) +
-			gy*(vStart.Y-pv1.Y))
-
+	quotaStart := baseZ - (gx*(vStart.X-pv1.X) + gy*(vStart.Y-pv1.Y))
 	effGrad := grad
 	if bestDot < 0 {
 		effGrad = -grad

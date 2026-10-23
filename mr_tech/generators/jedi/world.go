@@ -69,13 +69,13 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			}
 		}
 
-		bestFloorWall, floorGrad, floorGX, floorGY, floorQuota, hasSlopedFloor := sector.ComputePlane(level, false)
-		bestCeilWall, ceilGrad, ceilGX, ceilGY, ceilQuota, hasSlopedCeil := sector.ComputePlane(level, true)
-		if hasSlopedFloor {
-			secFloorY = floorQuota
+		sector.Compute(level)
+
+		if sector.HasSlopedFloor {
+			secFloorY = sector.FloorQuota
 		}
-		if hasSlopedCeil {
-			secCeilY = ceilQuota
+		if sector.HasSlopedCeil {
+			secCeilY = sector.CeilQuota
 		}
 
 		lightLevel, lightFalloff := b.computeLight(sector)
@@ -124,11 +124,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
 				cSector.Segments[wallIdx] = cSeg
 
-				if hasSlopedFloor && wallIdx == bestFloorWall {
+				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true
 				}
 
-				if hasSlopedCeil && wallIdx == bestCeilWall {
+				if sector.HasSlopedCeil && wallIdx == sector.BestCeilWall {
 					cSeg.SlopedCeilingRef = true
 				}
 
@@ -212,40 +212,42 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			}
 		}
 
-		if hasSlopedFloor {
-			cSector.SlopedFloorGradient = floorGrad
-			cSector.SlopedFloorGX = floorGX
-			cSector.SlopedFloorGY = floorGY
+		if sector.HasSlopedFloor {
+			cSector.SlopedFloorGradient = sector.FloorGrad
+			cSector.SlopedFloorGX = sector.FloorGX
+			cSector.SlopedFloorGY = sector.FloorGY
 		}
 
-		if hasSlopedCeil {
-			cSector.SlopedCeilingGradient = ceilGrad
-			cSector.SlopedCeilingGX = ceilGX
-			cSector.SlopedCeilingGY = ceilGY
+		if sector.HasSlopedCeil {
+			cSector.SlopedCeilingGradient = sector.CeilGrad
+			cSector.SlopedCeilingGX = sector.CeilGX
+			cSector.SlopedCeilingGY = sector.CeilGY
 		}
 
 		configSectors = append(configSectors, cSector)
 	}
 
-	var secMap map[string]*config.Sector
-	for _, sec := range level.Sectors {
-		for _, w := range sec.Walls {
-			if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
-				w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
-				upperSec := level.Sectors[w.Adjoin]
-				lowerSec := level.Sectors[w.DAdjoin]
-				if secMap == nil {
-					secMap = make(map[string]*config.Sector)
-					for _, cs := range configSectors {
-						secMap[cs.Id] = cs
+	/*
+		var secMap map[string]*config.Sector
+		for _, sec := range level.Sectors {
+			for _, w := range sec.Walls {
+				if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
+					w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
+					upperSec := level.Sectors[w.Adjoin]
+					lowerSec := level.Sectors[w.DAdjoin]
+					if secMap == nil {
+						secMap = make(map[string]*config.Sector)
+						for _, cs := range configSectors {
+							secMap[cs.Id] = cs
+						}
 					}
-				}
-				if cs, ok := secMap[lowerSec.Id]; ok {
-					cs.AddDependency(upperSec.Id)
+					if cs, ok := secMap[lowerSec.Id]; ok {
+						cs.AddDependency(upperSec.Id)
+					}
 				}
 			}
 		}
-	}
+	*/
 	//if secMap != nil {
 	//	b.closeRoofGaps(level, secMap)
 	//	}

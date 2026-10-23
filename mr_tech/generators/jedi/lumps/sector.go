@@ -9,37 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// Slope represents a sloped surface defined by a sector index, pitch, and wall index.
-type Slope struct {
-	SectorIndex int
-	Pitch       int
-	WallIndex   int
-
-	bestCeilWall   float64
-	bestFloorWall  float64
-	ceilGrad       float64
-	floorGrad      float64
-	ceilGX         float64
-	floorGX        float64
-	ceilGY         float64
-	floorGY        float64
-	floorQuota     float64
-	ceilQuota      float64
-	hasSlopedCeil  bool
-	hasSlopedFloor bool
-}
-
-// GetGradient calculates and returns the angle of the slope in radians using the pitch value.
-func (s *Slope) GetGradient() float64 {
-	degrees := float64(s.Pitch) / 100.0
-	radians := degrees * (math.Pi / 180.0)
-	gradient := math.Tan(radians)
-	if math.IsNaN(gradient) || math.IsInf(gradient, 0) {
-		return 0 //TODO return false
-	}
-	return gradient //TODO return true
-}
-
 // Sector represents a spatial region with geometry, textures, physical properties, and relationships to walls and vertices.
 type Sector struct {
 	Id             string
@@ -61,6 +30,19 @@ type Sector struct {
 	CMap           int
 	SlopedFloor    *Slope
 	SlopedCeiling  *Slope
+
+	BestCeilWall   int
+	BestFloorWall  int
+	CeilGrad       float64
+	FloorGrad      float64
+	CeilGX         float64
+	FloorGX        float64
+	CeilGY         float64
+	FloorGY        float64
+	FloorQuota     float64
+	CeilQuota      float64
+	HasSlopedCeil  bool
+	HasSlopedFloor bool
 }
 
 // NewSector creates and returns a new Sector instance with the specified id and index, initializing default values.
@@ -72,11 +54,24 @@ func NewSector(id string, index int) *Sector {
 		CeilingY:       0,
 		FloorTexture:   -1,
 		CeilingTexture: -1,
+
+		BestCeilWall:   -1,
+		BestFloorWall:  -1,
+		CeilGrad:       0,
+		FloorGrad:      0,
+		CeilGX:         0,
+		FloorGX:        0,
+		CeilGY:         0,
+		FloorGY:        0,
+		FloorQuota:     0,
+		CeilQuota:      0,
+		HasSlopedCeil:  false,
+		HasSlopedFloor: false,
 	}
 }
 
 // SetSlopedFloor sets the slope parameters of the sector's floor using the provided tokenized input.
-func (sec *Sector) SetSlopedFloor(tokens []string) {
+func (s *Sector) SetSlopedFloor(tokens []string) {
 	if len(tokens) < 4 {
 		fmt.Printf("Invalid SLOPEDFLOOR property in line: %v\n", tokens)
 		return
@@ -84,11 +79,11 @@ func (sec *Sector) SetSlopedFloor(tokens []string) {
 	sector, _ := strconv.Atoi(tokens[1])
 	wall, _ := strconv.Atoi(tokens[2])
 	pitch, _ := strconv.Atoi(tokens[3])
-	sec.SlopedFloor = &Slope{SectorIndex: sector, Pitch: pitch, WallIndex: wall}
+	s.SlopedFloor = NewSlope(sector, pitch, wall)
 }
 
 // SetSlopedCeiling sets the slope of the ceiling using parsed float values from the provided tokens slice.
-func (sec *Sector) SetSlopedCeiling(tokens []string) {
+func (s *Sector) SetSlopedCeiling(tokens []string) {
 	if len(tokens) < 4 {
 		fmt.Printf("Invalid SLOPEDCEILING property in line: %v\n", tokens)
 		return
@@ -96,11 +91,11 @@ func (sec *Sector) SetSlopedCeiling(tokens []string) {
 	sector, _ := strconv.Atoi(tokens[1])
 	wall, _ := strconv.Atoi(tokens[2])
 	pitch, _ := strconv.Atoi(tokens[3])
-	sec.SlopedCeiling = &Slope{SectorIndex: sector, Pitch: pitch, WallIndex: wall}
+	s.SlopedCeiling = NewSlope(sector, pitch, wall)
 }
 
 // SetCeiling processes and sets the ceiling properties of a sector based on the provided tokens.
-func (sec *Sector) SetCeiling(tokens []string) {
+func (s *Sector) SetCeiling(tokens []string) {
 	if len(tokens) < 1 {
 		fmt.Printf("Invalid CEILING property: '%s' in line: %v\n", tokens[1], tokens)
 	}
@@ -117,21 +112,21 @@ func (sec *Sector) SetCeiling(tokens []string) {
 			fmt.Printf("Invalid ceiling Y value: '%s' in line: %v\n", tokens[2], tokens)
 			return
 		}
-		sec.CeilingY = -ceilingY
+		s.CeilingY = -ceilingY
 		ceilingData, err := GetTokenStringAt(tokens, 3)
 		if err != nil {
 			fmt.Printf("Invalid CEILING texture value: '%s' in line: %v\n", tokens[3], tokens)
 			return
 		}
 		if ceilingData == "-" {
-			sec.CeilingTexture = -1
+			s.CeilingTexture = -1
 		} else {
 			ceilingTexture, err := strconv.Atoi(ceilingData)
 			if err != nil {
 				fmt.Printf("Invalid CEILINGG texture value: '%s' in line: %v\n", tokens[3], tokens)
 				return
 			}
-			sec.CeilingTexture = ceilingTexture
+			s.CeilingTexture = ceilingTexture
 		}
 
 	case "ALTITUDE":
@@ -140,10 +135,10 @@ func (sec *Sector) SetCeiling(tokens []string) {
 			fmt.Printf("Invalid ALTITUDE value: '%s' in line: %v\n", tokens[2], tokens)
 			return
 		}
-		sec.CeilingY = ceilingY
+		s.CeilingY = ceilingY
 	case "TEXTURE", "TEX", "TEXTURE:":
 		if tokens[2] != "-" {
-			sec.CeilingTexture, _ = strconv.Atoi(tokens[2])
+			s.CeilingTexture, _ = strconv.Atoi(tokens[2])
 		}
 	default:
 		fmt.Printf("Unknown CEILING sub-property: '%s' in line: %v\n", subKey, tokens)
@@ -152,7 +147,7 @@ func (sec *Sector) SetCeiling(tokens []string) {
 }
 
 // SetFloor parses and sets the floor properties of the Sector based on the provided tokens.
-func (sec *Sector) SetFloor(tokens []string) {
+func (s *Sector) SetFloor(tokens []string) {
 	if len(tokens) < 1 {
 		fmt.Printf("Invalid FLOOR property: '%s' in line: %v\n", tokens[1], tokens)
 		return
@@ -170,14 +165,14 @@ func (sec *Sector) SetFloor(tokens []string) {
 			fmt.Printf("Invalid FLOOR Y value: '%s' in line: %v\n", tokens[2], tokens)
 			return
 		}
-		sec.FloorY = -floorY
+		s.FloorY = -floorY
 		if tokens[3] != "-" {
 			floorTexture, err := GetTokenIntAt(tokens, 3)
 			if err != nil {
 				fmt.Printf("Invalid FLOOR texture value: '%s' in line: %v\n", tokens[3], tokens)
 				return
 			}
-			sec.FloorTexture = floorTexture
+			s.FloorTexture = floorTexture
 		}
 
 	case "ALTITUDE":
@@ -186,7 +181,7 @@ func (sec *Sector) SetFloor(tokens []string) {
 			fmt.Printf("Invalid floor Y value: '%s' in line: %v\n", tokens[2], tokens)
 			return
 		}
-		sec.FloorY = floorY
+		s.FloorY = floorY
 	case "TEXTURE", "TEX", "TEXTURE:":
 		floorTexture, err := GetTokenStringAt(tokens, 2)
 		if err != nil {
@@ -199,7 +194,7 @@ func (sec *Sector) SetFloor(tokens []string) {
 				fmt.Printf("Invalid floor texture value: '%s' in line: %v\n", tokens[2], tokens)
 				return
 			}
-			sec.FloorTexture = floorTextureId
+			s.FloorTexture = floorTextureId
 		}
 	case "OFFSETS":
 	case "SOUND":
@@ -209,19 +204,19 @@ func (sec *Sector) SetFloor(tokens []string) {
 }
 
 // WallAdd adds a new Wall to the Sector by parsing the provided tokens and updating the Walls slice and WallIdx counter.
-func (sec *Sector) WallAdd(tokens []string) {
-	if sec.WallIdx >= len(sec.Walls) {
+func (s *Sector) WallAdd(tokens []string) {
+	if s.WallIdx >= len(s.Walls) {
 		fmt.Println("max wall reached!")
 		return
 	}
 	wall := NewWall()
 	wall.Parse(tokens)
-	sec.Walls[sec.WallIdx] = wall
-	sec.WallIdx++
+	s.Walls[s.WallIdx] = wall
+	s.WallIdx++
 }
 
 // VertexAdd updates the Vertices slice of the Sector with coordinates parsed from the provided tokens.
-func (sec *Sector) VertexAdd(tokens []string) {
+func (s *Sector) VertexAdd(tokens []string) {
 	var err error
 	var ptX, ptZ float64
 	ord := -1
@@ -273,80 +268,80 @@ func (sec *Sector) VertexAdd(tokens []string) {
 		}
 	}
 
-	if ord < 0 || ord > len(sec.Vertices) {
+	if ord < 0 || ord > len(s.Vertices) {
 		fmt.Printf("doApplyVertices: invalid vertex id %d\n", ord)
 		return
 	}
-	sec.Vertices[ord] = geometry.XY{X: ptX, Y: ptZ}
+	s.Vertices[ord] = geometry.XY{X: ptX, Y: ptZ}
 }
 
 // VerticesInitialize initializes the Vertices slice with the size specified by the second token in the input array.
-func (sec *Sector) VerticesInitialize(tokens []string) {
-	sec.Vertices = nil
+func (s *Sector) VerticesInitialize(tokens []string) {
+	s.Vertices = nil
 	vCount, err := GetTokenIntAt(tokens, 1)
 	if err != nil {
 		fmt.Printf("doVertices: invalid token at 1 err: %s\n", err.Error())
 		return
 	}
-	sec.Vertices = make([]geometry.XY, vCount)
+	s.Vertices = make([]geometry.XY, vCount)
 }
 
 // WallsInitialize initializes the Walls slice of the Sector based on the count provided in the tokens and resets WallIdx.
-func (sec *Sector) WallsInitialize(tokens []string) {
+func (s *Sector) WallsInitialize(tokens []string) {
 	var err error
-	sec.Walls = nil
-	sec.WallIdx = 0
+	s.Walls = nil
+	s.WallIdx = 0
 	wCount, err := GetTokenIntAt(tokens, 1)
 	if err != nil {
 		fmt.Printf("doWalls: invalid token at 1 err: %s\n", err.Error())
 		return
 	}
-	sec.Walls = make([]*Wall, wCount)
+	s.Walls = make([]*Wall, wCount)
 }
 
 // FlagsAdd parses a slice of string tokens, converting them to integers and appending them to the Sector's Flags slice.
-func (sec *Sector) FlagsAdd(tokens []string) {
+func (s *Sector) FlagsAdd(tokens []string) {
 	flagCount := len(tokens) - 1
-	sec.Flags = make([]int, 0, flagCount)
+	s.Flags = make([]int, 0, flagCount)
 	for i := 1; i < len(tokens); i++ {
 		val, err := GetTokenIntAt(tokens, i)
 		if err != nil {
 			fmt.Printf("doFlags: invalid token at %d: %s\n", i, err.Error())
 			continue
 		}
-		sec.Flags = append(sec.Flags, val)
+		s.Flags = append(s.Flags, val)
 	}
 }
 
 // IsSky checks if the sector is marked as "sky" based on its flags. Returns true if the first flag bit is set, otherwise false.
-func (sec *Sector) IsSky() bool {
-	if len(sec.Flags) < 1 {
+func (s *Sector) IsSky() bool {
+	if len(s.Flags) < 1 {
 		return false
 	}
-	return (sec.Flags[0] & 1) != 0
+	return (s.Flags[0] & 1) != 0
 }
 
 // IsAbyss determines if the sector has the "abyss" flag set, based on its Flags property. Returns true if set, else false.
-func (sec *Sector) IsAbyss() bool {
-	if len(sec.Flags) < 1 {
+func (s *Sector) IsAbyss() bool {
+	if len(s.Flags) < 1 {
 		return false
 	}
-	return (sec.Flags[0] & 2) != 0
+	return (s.Flags[0] & 2) != 0
 }
 
 // IsCCW determines if the sector's walls are ordered counter-clockwise (CCW) based on their vertices and area calculation.
-func (sec *Sector) IsCCW() bool {
-	n := len(sec.Walls)
+func (s *Sector) IsCCW() bool {
+	n := len(s.Walls)
 	if n < 3 {
 		return false
 	}
 	var twiceArea float64
-	for _, w := range sec.Walls {
-		if w.LeftVertex < 0 || w.LeftVertex >= len(sec.Vertices) || w.RightVertex < 0 || w.RightVertex >= len(sec.Vertices) {
+	for _, w := range s.Walls {
+		if w.LeftVertex < 0 || w.LeftVertex >= len(s.Vertices) || w.RightVertex < 0 || w.RightVertex >= len(s.Vertices) {
 			return false
 		}
-		v1 := sec.Vertices[w.LeftVertex]
-		v2 := sec.Vertices[w.RightVertex]
+		v1 := s.Vertices[w.LeftVertex]
+		v2 := s.Vertices[w.RightVertex]
 		twiceArea += v1.X*v2.Y - v2.X*v1.Y
 	}
 	// Coordinate screen-space: Y cresce verso il basso.
@@ -354,29 +349,29 @@ func (sec *Sector) IsCCW() bool {
 	return twiceArea > 0
 }
 
-func (sec *Sector) GetFlag(index int, mask uint32) (uint32, bool) {
-	if index < 0 && index > len(sec.Flags) {
+func (s *Sector) GetFlag(index int, mask uint32) (uint32, bool) {
+	if index < 0 && index > len(s.Flags) {
 		return 0, false
 	}
-	return uint32(sec.Flags[1]) & mask, true
+	return uint32(s.Flags[1]) & mask, true
+}
+
+// Compute updates the sector's sloped floor and ceiling properties by recalculating planes based on related sectors.
+func (s *Sector) Compute(level *Level) {
+	if s.SlopedFloor != nil {
+		if pSec := level.GetSector(s.SlopedFloor.SectorIndex); pSec != nil {
+			s.BestFloorWall, s.FloorGrad, s.FloorGX, s.FloorGY, s.FloorQuota, s.HasSlopedFloor = s.computePlane(pSec, s.SlopedFloor, pSec.FloorY)
+		}
+	}
+	if s.SlopedCeiling != nil {
+		if pSec := level.GetSector(s.SlopedCeiling.SectorIndex); pSec != nil {
+			s.BestCeilWall, s.CeilGrad, s.CeilGX, s.CeilGY, s.CeilQuota, s.HasSlopedCeil = s.computePlane(pSec, s.SlopedCeiling, pSec.CeilingY)
+		}
+	}
 }
 
 // ComputePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.
-func (sec *Sector) ComputePlane(level *Level, isCeil bool) (int, float64, float64, float64, float64, bool) {
-	sl := sec.SlopedFloor
-	if isCeil {
-		sl = sec.SlopedCeiling
-	}
-
-	if sl == nil || sl.SectorIndex < 0 || sl.SectorIndex >= len(level.Sectors) {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	pSec := level.Sectors[sl.SectorIndex]
-	if sl.WallIndex < 0 || sl.WallIndex >= len(pSec.Walls) {
-		return -1, 0, 0, 0, 0, false
-	}
-
+func (s *Sector) computePlane(pSec *Sector, sl *Slope, baseZ float64) (int, float64, float64, float64, float64, bool) {
 	pWall := pSec.Walls[sl.WallIndex]
 	if !pWall.ValidWallVertices(len(pSec.Vertices)) {
 		return -1, 0, 0, 0, 0, false
@@ -403,26 +398,26 @@ func (sec *Sector) ComputePlane(level *Level, isCeil bool) (int, float64, float6
 	gx := pnX * grad
 	gy := pnY * grad
 
-	baseZ := pSec.FloorY
-	if isCeil {
-		baseZ = pSec.CeilingY
-	}
+	//baseZ := pSec.FloorY
+	//if isCeil {
+	//	baseZ = pSec.CeilingY
+	//}
 
 	bestWall := -1
 	bestAbsDot := -1.0
 	bestDot := 0.0
 
-	if sl.SectorIndex == sec.Index && pWall.ValidWallVertices(len(sec.Vertices)) {
+	if sl.SectorIndex == s.Index && pWall.ValidWallVertices(len(s.Vertices)) {
 		bestWall = sl.WallIndex
 		bestDot = 1.0
 	} else {
-		for wIdx, w := range sec.Walls {
-			if !w.ValidWallVertices(len(sec.Vertices)) {
+		for wIdx, w := range s.Walls {
+			if !w.ValidWallVertices(len(s.Vertices)) {
 				continue
 			}
 
-			v1 := sec.Vertices[w.LeftVertex]
-			v2 := sec.Vertices[w.RightVertex]
+			v1 := s.Vertices[w.LeftVertex]
+			v2 := s.Vertices[w.RightVertex]
 
 			dx := v2.X - v1.X
 			dy := v2.Y - v1.Y
@@ -432,7 +427,7 @@ func (sec *Sector) ComputePlane(level *Level, isCeil bool) (int, float64, float6
 			}
 
 			var wnX, wnY float64
-			if sec.IsCCW() {
+			if s.IsCCW() {
 				wnX, wnY = -dy/wLen, dx/wLen
 			} else {
 				wnX, wnY = dy/wLen, -dx/wLen
@@ -451,7 +446,7 @@ func (sec *Sector) ComputePlane(level *Level, isCeil bool) (int, float64, float6
 		return -1, 0, 0, 0, 0, false
 	}
 
-	vStart := sec.Vertices[sec.Walls[bestWall].LeftVertex]
+	vStart := s.Vertices[s.Walls[bestWall].LeftVertex]
 	quotaStart := baseZ -
 		(gx*(vStart.X-pv1.X) +
 			gy*(vStart.Y-pv1.Y))

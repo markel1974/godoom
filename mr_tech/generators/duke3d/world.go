@@ -57,14 +57,23 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 		// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
 		shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
-		lightLevel := math.Max(0.05, math.Min(1.0, 1.0-shade/64.0))
+		intensity := math.Max(1.2, math.Min(3.5, 2.5-shade/32.0))
+
+		roomH := math.Abs(ceilY - floorY)
+		if roomH < 128 {
+			roomH = 256
+		}
+		falloff := math.Max(1200.0, roomH*4.0)
 
 		lightKind := config.LightKindAmbient
 		if sec.IsSkyCeiling() {
 			lightKind = config.LightKindOpenAir
 		}
 
-		cSector := config.NewConfigSector(sectorId, lightLevel, lightKind, 0)
+		cSector := config.NewConfigSector(sectorId, intensity, lightKind, falloff)
+		cSector.Light.R = 1.0
+		cSector.Light.G = 0.98
+		cSector.Light.B = 0.95
 		cSector.FloorY = floorY
 		cSector.CeilY = ceilY
 

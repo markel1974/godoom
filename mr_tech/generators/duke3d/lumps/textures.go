@@ -44,6 +44,25 @@ func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	}
 }
 
+// AddTile adds an extracted tile image to the texture manager.
+func (t *Textures) AddTile(picNum int, img *image.RGBA) string {
+	name := fmt.Sprintf("duke_tile_%d", picNum)
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	texture := textures.NewTexture(name, uint32(picNum), w, h, false)
+	for y := 0; y < h; y++ {
+		flipY := h - 1 - y
+		for x := 0; x < w; x++ {
+			c := img.RGBAAt(x, flipY)
+			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
+			texture.Set(x, y, rgba)
+		}
+	}
+	t.resources[name] = texture
+	t.cache[picNum] = name
+	return name
+}
+
 // GetOrCreateTile retrieves or generates a tile texture by tile index.
 func (t *Textures) GetOrCreateTile(picNum int) string {
 	if name, ok := t.cache[picNum]; ok {

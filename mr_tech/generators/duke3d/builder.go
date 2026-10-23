@@ -58,6 +58,7 @@ func NewBuilder() *Builder {
 func (b *Builder) Build(res common.IResources, target string, levelNumber int) (*config.Root, error) {
 	var reader io.ReadCloser
 	sep := string(os.PathSeparator)
+	tex := lumps.NewTextures()
 
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
@@ -82,6 +83,27 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
 		}
 		defer arc.Close()
+
+		// Load palette and textures from GRP if present
+		if arc.HasFile("PALETTE.DAT") {
+			if palData, err := arc.GetPayload("PALETTE.DAT"); err == nil {
+				if pal, err := lumps.LoadPalette(palData); err == nil {
+					tileCount := 0
+					for artIdx := 0; artIdx < 100; artIdx++ {
+						artName := fmt.Sprintf("TILES%03d.ART", artIdx)
+						if !arc.HasFile(artName) {
+							break
+						}
+						if artData, err := arc.GetPayload(artName); err == nil {
+							_ = lumps.LoadArt(artData, pal, tex)
+							tileCount++
+						}
+					}
+					fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
+				}
+			}
+		}
+
 		maps := arc.GetMaps()
 		if len(maps) == 0 {
 			return nil, fmt.Errorf("duke3d: no .MAP files found in %s", target)
@@ -178,7 +200,6 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", target, err)
 	}
 
-	tex := lumps.NewTextures()
 	world := NewWorld(level, tex)
 	world.SetScales(b.scaleSectorH, b.scaleXY, ScaleTextureW, ScaleTextureH, true)
 
@@ -189,7 +210,6 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	pX := float64(level.Header.PosX) * b.scaleXY
 	pY := -float64(level.Header.PosY) * b.scaleXY // flip Y to Cartesian up
-	pZ := -float64(level.Header.PosZ) / 16.0 * b.scaleSectorH
 
 	// Build angle: 0 to 2047. In Build: 0=East (+X), 512=South (+Y).
 	// With Y flipped, 0=East, 512=South (-Y), 1536=North (+Y).
@@ -202,11 +222,17 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		pAngle += 360.0
 	}
 
-	playerPos := geometry.XYZ{X: pX, Y: pY, Z: pZ}
+	playerPos := geometry.XYZ{X: pX, Y: pY, Z: 0}
 	player := config.NewConfigPlayer(playerPos, pAngle, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
 	_ = common.NewPlayer(player)
 	player.GForce = GForce
 	player.JumpForce = JumpForce
+
+	player.Flash.ZFar = 8192
+	player.Flash.Intensity = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
 
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
 	cal.AspectRatio = AspectRatio

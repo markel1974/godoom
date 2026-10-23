@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3"
+	"github.com/markel1974/godoom/mr_tech/generators/duke3d"
 	"github.com/markel1974/godoom/mr_tech/generators/dungeon"
 	"github.com/markel1974/godoom/mr_tech/generators/jedi"
 	"github.com/markel1974/godoom/mr_tech/generators/quake"
@@ -110,6 +111,14 @@ var _availableModes = []ModeDef{
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := doom3.NewBuilder()
 			return qb.Setup(res, target, level)
+		},
+	},
+	{
+		Name:   "duke3d",
+		Target: "resources" + string(os.PathSeparator) + "duke3d",
+		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
+			b := duke3d.NewBuilder()
+			return b.Build(res, target, level)
 		},
 	},
 }

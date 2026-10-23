@@ -127,7 +127,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "duke3d",
 		Zip:    false,
-		Target: "resources" + string(os.PathSeparator) + "duke3d",
+		Target: "resources" + string(os.PathSeparator) + "duke3d" + string(os.PathSeparator) + "DUKE3D.GRP",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			b := duke3d.NewBuilder()
 			return b.Build(res, target, level)

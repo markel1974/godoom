@@ -13,6 +13,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// AspectRatio defines the default aspect ratio for the application's display.
+// ScaleSectorH determines the vertical scaling factor for sectors.
+// ScaleXY specifies a uniform scaling factor for both x and y dimensions.
+// ScaleTextureW represents the horizontal scaling factor for textures.
+// ScaleTextureH represents the vertical scaling factor for textures.
+// PlayerHeight calculates the height of the player based on ScaleSectorH.
+// PlayerRadius defines the radius of the player character.
+// PlayerSpeed specifies the movement speed of the player in units per second.
+// PlayerMass defines the mass of the player for physics calculations.
+// GForce represents the gravitational force multiplied by a fixed mass.
+// JumpForce calculates the jump force as a multiple of GForce.
 const (
 	AspectRatio   = 1.333
 	ScaleSectorH  = 1.0
@@ -29,11 +40,13 @@ const (
 	JumpForce = GForce * 8
 )
 
+// Builder is used to configure and construct game level structures with adjustable scaling properties.
 type Builder struct {
 	scaleSectorH float64
 	scaleXY      float64
 }
 
+// NewBuilder creates and initializes a new Builder instance with default scale values.
 func NewBuilder() *Builder {
 	return &Builder{
 		scaleSectorH: ScaleSectorH,
@@ -41,67 +54,128 @@ func NewBuilder() *Builder {
 	}
 }
 
+// Build constructs and initializes the game world configuration based on the provided resources, target path, and level number.
 func (b *Builder) Build(res common.IResources, target string, levelNumber int) (*config.Root, error) {
-	mapPath := target
-
-	// If target is a directory or empty, scan for .map files
-	isDir := false
-	if fi, err := os.Stat(target); err == nil && fi.IsDir() {
-		isDir = true
-	}
-	if isDir || (!strings.HasSuffix(strings.ToLower(target), ".map") && len(target) > 0) {
-		var entries []os.DirEntry
-		if res != nil {
-			if e, err := res.ReadDir(target); err == nil {
-				entries = e
-			}
-		}
-		if entries == nil {
-			entries, _ = os.ReadDir(target)
-		}
-		var mapFiles []string
-		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".map") {
-				mapFiles = append(mapFiles, e.Name())
-			}
-		}
-		if len(mapFiles) > 0 {
-			sort.Strings(mapFiles)
-			idx := levelNumber - 1
-			if idx < 0 {
-				idx = 0
-			}
-			if idx >= len(mapFiles) {
-				idx = len(mapFiles) - 1
-			}
-			sep := string(os.PathSeparator)
-			if strings.HasSuffix(target, sep) || strings.HasSuffix(target, "/") {
-				mapPath = target + mapFiles[idx]
-			} else {
-				mapPath = target + sep + mapFiles[idx]
-			}
-		}
-	}
-
 	var reader io.ReadCloser
-	if res != nil {
-		r, err := res.Open(mapPath)
-		if err == nil {
-			reader = r
+	sep := string(os.PathSeparator)
+
+	// Check if target is a GRP file directly
+	if strings.HasSuffix(strings.ToLower(target), ".grp") {
+		var grpReader io.ReaderAt
+		var grpCloser io.Closer
+		if res != nil {
+			if r, err := res.Open(target); err == nil {
+				grpReader = r
+				grpCloser = r
+			}
 		}
-	}
-	if reader == nil {
-		f, err := os.Open(mapPath)
+		if grpReader == nil {
+			if f, err := os.Open(target); err == nil {
+				grpReader = f
+				grpCloser = f
+			} else {
+				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
+			}
+		}
+		arc, err := lumps.OpenGrp(grpReader, grpCloser)
 		if err != nil {
-			return nil, fmt.Errorf("duke3d: failed to open map %s: %w", mapPath, err)
+			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
 		}
-		reader = f
+		defer arc.Close()
+		maps := arc.GetMaps()
+		if len(maps) == 0 {
+			return nil, fmt.Errorf("duke3d: no .MAP files found in %s", target)
+		}
+		idx := levelNumber - 1
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(maps) {
+			idx = len(maps) - 1
+		}
+		fmt.Printf("Loading Duke3D level %d (%s) from GRP (total %d maps)\n", idx+1, maps[idx], len(maps))
+		mapReader, err := arc.GetReader(maps[idx])
+		if err != nil {
+			return nil, fmt.Errorf("duke3d: failed to extract map %s from grp: %w", maps[idx], err)
+		}
+		reader = mapReader
+	} else {
+		// Target might be a directory or a .map file
+		isDir := false
+		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
+			isDir = true
+		}
+		if isDir || (!strings.HasSuffix(strings.ToLower(target), ".map") && len(target) > 0) {
+			var entries []os.DirEntry
+			if res != nil {
+				if e, err := res.ReadDir(target); err == nil {
+					entries = e
+				}
+			}
+			if entries == nil {
+				entries, _ = os.ReadDir(target)
+			}
+
+			// Check if there is a .GRP file in the directory first
+			var grpName string
+			var mapFiles []string
+			for _, e := range entries {
+				if e.IsDir() {
+					continue
+				}
+				nameLower := strings.ToLower(e.Name())
+				if strings.HasSuffix(nameLower, ".grp") {
+					grpName = e.Name()
+				} else if strings.HasSuffix(nameLower, ".map") {
+					mapFiles = append(mapFiles, e.Name())
+				}
+			}
+
+			if len(grpName) > 0 {
+				grpPath := target
+				if strings.HasSuffix(grpPath, sep) || strings.HasSuffix(grpPath, "/") {
+					grpPath += grpName
+				} else {
+					grpPath += sep + grpName
+				}
+				return b.Build(res, grpPath, levelNumber)
+			}
+
+			if len(mapFiles) > 0 {
+				sort.Strings(mapFiles)
+				idx := levelNumber - 1
+				if idx < 0 {
+					idx = 0
+				}
+				if idx >= len(mapFiles) {
+					idx = len(mapFiles) - 1
+				}
+				if strings.HasSuffix(target, sep) || strings.HasSuffix(target, "/") {
+					target = target + mapFiles[idx]
+				} else {
+					target = target + sep + mapFiles[idx]
+				}
+			}
+		}
+
+		if res != nil {
+			if r, err := res.Open(target); err == nil {
+				reader = r
+			}
+		}
+		if reader == nil {
+			f, err := os.Open(target)
+			if err != nil {
+				return nil, fmt.Errorf("duke3d: failed to open map %s: %w", target, err)
+			}
+			reader = f
+		}
 	}
 	defer reader.Close()
 
 	level, err := lumps.LoadMap(reader)
 	if err != nil {
-		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", mapPath, err)
+		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", target, err)
 	}
 
 	tex := lumps.NewTextures()

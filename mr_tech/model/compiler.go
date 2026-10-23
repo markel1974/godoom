@@ -253,8 +253,18 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 							}
 							if cn.HasUpperLimitZ {
 								hasUpperLimitZ = true
-								upperLimitZS = cn.UpperLimitZS
-								upperLimitZE = cn.UpperLimitZE
+								dx := cn.End.X - cn.Start.X
+								dy := cn.End.Y - cn.Start.Y
+								lenSq := dx*dx + dy*dy
+								if lenSq > 1e-6 {
+									t1 := ((p1.X-cn.Start.X)*dx + (p1.Y-cn.Start.Y)*dy) / lenSq
+									t2 := ((p2.X-cn.Start.X)*dx + (p2.Y-cn.Start.Y)*dy) / lenSq
+									upperLimitZS = cn.UpperLimitZS + t1*(cn.UpperLimitZE-cn.UpperLimitZS)
+									upperLimitZE = cn.UpperLimitZS + t2*(cn.UpperLimitZE-cn.UpperLimitZS)
+								} else {
+									upperLimitZS = cn.UpperLimitZS
+									upperLimitZE = cn.UpperLimitZE
+								}
 							}
 							break
 						}

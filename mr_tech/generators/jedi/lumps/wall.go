@@ -188,3 +188,11 @@ func (w *Wall) Parse(tokens []string) {
 		}
 	}
 }
+
+// ValidWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.
+func (w *Wall) ValidWallVertices(vertexCount int) bool {
+	return w.LeftVertex >= 0 &&
+		w.RightVertex >= 0 &&
+		w.LeftVertex < vertexCount &&
+		w.RightVertex < vertexCount
+}

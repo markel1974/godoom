@@ -69,14 +69,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			}
 		}
 
-		bestFloorWall, floorGrad, floorGX, floorGY, floorQuota, hasSlopedFloor := b.computePlane(level, sector, false)
-
+		bestFloorWall, floorGrad, floorGX, floorGY, floorQuota, hasSlopedFloor := sector.ComputePlane(level, false)
+		bestCeilWall, ceilGrad, ceilGX, ceilGY, ceilQuota, hasSlopedCeil := sector.ComputePlane(level, true)
 		if hasSlopedFloor {
 			secFloorY = floorQuota
 		}
-
-		bestCeilWall, ceilGrad, ceilGX, ceilGY, ceilQuota, hasSlopedCeil := b.computePlane(level, sector, true)
-
 		if hasSlopedCeil {
 			secCeilY = ceilQuota
 		}
@@ -114,7 +111,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			cSector.Segments = make([]*config.Segment, len(sector.Walls))
 
 			for wallIdx, wall := range sector.Walls {
-				if !b.validWallVertices(sector, wall) {
+				if !wall.ValidWallVertices(len(sector.Vertices)) {
 					fmt.Println("INVALID VERTEX", sector.Id, wallIdx)
 					continue
 				}
@@ -125,6 +122,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				globalVertices = append(globalVertices, v1, v2)
 
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
+				cSector.Segments[wallIdx] = cSeg
 
 				if hasSlopedFloor && wallIdx == bestFloorWall {
 					cSeg.SlopedFloorRef = true
@@ -145,8 +143,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							texIdx = wall.BotTexture
 						default:
 							fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
-							cSeg.Kind = config.SegmentUnknown
-							cSector.Segments[wallIdx] = cSeg
 							continue
 						}
 					}
@@ -213,8 +209,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
 				}
-
-				cSector.Segments[wallIdx] = cSeg
 			}
 		}
 
@@ -402,117 +396,6 @@ func (b *World) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*conf
 	}
 
 	return result
-}
-
-// validWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.
-func (b *World) validWallVertices(sec *lumps.Sector, wall *lumps.Wall) bool {
-	return wall.LeftVertex >= 0 &&
-		wall.RightVertex >= 0 &&
-		wall.LeftVertex < len(sec.Vertices) &&
-		wall.RightVertex < len(sec.Vertices)
-}
-
-// computePlane calculates the slope plane of a sector ceiling or floor, returning optimal wall index, gradient, quota, and status.
-func (b *World) computePlane(level *lumps.Level, sec *lumps.Sector, isCeil bool) (int, float64, float64, float64, float64, bool) {
-	sl := sec.SlopedFloor
-	if isCeil {
-		sl = sec.SlopedCeiling
-	}
-
-	if sl == nil || sl.SectorIndex < 0 || sl.SectorIndex >= len(level.Sectors) {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	pSec := level.Sectors[sl.SectorIndex]
-	if sl.WallIndex < 0 || sl.WallIndex >= len(pSec.Walls) {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	pWall := pSec.Walls[sl.WallIndex]
-	if !b.validWallVertices(pSec, pWall) {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	pv1 := pSec.Vertices[pWall.LeftVertex]
-	pv2 := pSec.Vertices[pWall.RightVertex]
-
-	pdx := pv2.X - pv1.X
-	pdy := pv2.Y - pv1.Y
-	pLen := math.Hypot(pdx, pdy)
-	if pLen == 0 {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	var pnX, pnY float64
-	if pSec.IsCCW() {
-		pnX, pnY = -pdy/pLen, pdx/pLen
-	} else {
-		pnX, pnY = pdy/pLen, -pdx/pLen
-	}
-
-	grad := sl.GetGradient()
-	gx := pnX * grad
-	gy := pnY * grad
-
-	baseZ := pSec.FloorY
-	if isCeil {
-		baseZ = pSec.CeilingY
-	}
-
-	bestWall := -1
-	bestAbsDot := -1.0
-	bestDot := 0.0
-
-	if sl.SectorIndex == sec.Index && b.validWallVertices(sec, pWall) {
-		bestWall = sl.WallIndex
-		bestDot = 1.0
-	} else {
-		for wIdx, w := range sec.Walls {
-			if !b.validWallVertices(sec, w) {
-				continue
-			}
-
-			v1 := sec.Vertices[w.LeftVertex]
-			v2 := sec.Vertices[w.RightVertex]
-
-			dx := v2.X - v1.X
-			dy := v2.Y - v1.Y
-			wLen := math.Hypot(dx, dy)
-			if wLen < 1e-4 {
-				continue
-			}
-
-			var wnX, wnY float64
-			if sec.IsCCW() {
-				wnX, wnY = -dy/wLen, dx/wLen
-			} else {
-				wnX, wnY = dy/wLen, -dx/wLen
-			}
-
-			dot := wnX*pnX + wnY*pnY
-			if math.Abs(dot) > bestAbsDot {
-				bestAbsDot = math.Abs(dot)
-				bestDot = dot
-				bestWall = wIdx
-			}
-		}
-	}
-
-	if bestWall < 0 {
-		return -1, 0, 0, 0, 0, false
-	}
-
-	vStart := sec.Vertices[sec.Walls[bestWall].LeftVertex]
-	quotaStart := baseZ -
-		(gx*(vStart.X-pv1.X) +
-			gy*(vStart.Y-pv1.Y))
-
-	effGrad := grad
-	if bestDot < 0 {
-		effGrad = -grad
-	}
-
-	return bestWall, effGrad, gx, gy, quotaStart, true
 }
 
 // computeLight computes the light level and falloff for a given sector based on its properties and scaling factors.

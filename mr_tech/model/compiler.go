@@ -705,15 +705,12 @@ func (r *Compiler) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*c
 	if n == 0 {
 		return configSectors
 	}
-
 	idToOrigIdx := make(map[string]int, n)
 	for i, cs := range configSectors {
 		idToOrigIdx[cs.Id] = i
 	}
-
 	adj := make(map[int][]int)
 	inDegree := make([]int, n)
-
 	for lowIdx, cs := range configSectors {
 		for _, upId := range cs.DependsOn {
 			if upIdx, ok := idToOrigIdx[upId]; ok && upIdx != lowIdx {
@@ -731,7 +728,6 @@ func (r *Compiler) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*c
 			}
 		}
 	}
-
 	result := make([]*config.Sector, 0, n)
 	ready := make([]bool, n)
 	for i := 0; i < n; i++ {
@@ -739,7 +735,6 @@ func (r *Compiler) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*c
 			ready[i] = true
 		}
 	}
-
 	for len(result) < n {
 		nextIdx := -1
 		for i := 0; i < n; i++ {
@@ -767,6 +762,5 @@ func (r *Compiler) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*c
 			}
 		}
 	}
-
 	return result
 }

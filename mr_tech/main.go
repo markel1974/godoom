@@ -25,6 +25,7 @@ import (
 type ModeDef struct {
 	Name    string
 	Target  string
+	Zip     bool
 	Builder func(res common.IResources, target string, level int) (*config.Root, error)
 }
 
@@ -36,6 +37,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "script",
 		Target: "",
+		Zip:    false,
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			p := script.NewBuilder()
 			return p.Build(res, script.StubOld2)
@@ -44,6 +46,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "generate",
 		Target: "",
+		Zip:    false,
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			db := dungeon.NewBuilder()
 			return db.Build(res, level)
@@ -52,6 +55,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "wolfstein",
 		Target: "",
+		Zip:    false,
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			p := wolfstein.NewBuilder()
 			return p.Build(level)
@@ -59,6 +63,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "doom",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			wb := wad.NewBuilder()
@@ -67,7 +72,8 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "jedi",
-		Target: "resources" + string(os.PathSeparator) + "jedi",
+		Zip:    true,
+		Target: "resources" + string(os.PathSeparator) + "jedi" + string(os.PathSeparator) + "jedi.zip",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
 			return jf.Build(res, 0, target, level)
@@ -75,7 +81,8 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "outlaws",
-		Target: "resources" + string(os.PathSeparator) + "outlaws",
+		Zip:    true,
+		Target: "resources" + string(os.PathSeparator) + "outlaws" + string(os.PathSeparator) + "outlaws1.zip",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
 			return jf.Build(res, 1, target, level)
@@ -83,6 +90,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "quake",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "quake" + string(os.PathSeparator) + "pak0.pak",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
@@ -91,6 +99,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "quake2",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "quake2" + string(os.PathSeparator) + "pak0.pak",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
@@ -99,6 +108,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "quake3",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "quake3arena" + string(os.PathSeparator) + "pak0.pk3",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := quake.NewBuilder()
@@ -107,6 +117,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "doom3",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "doom3" + string(os.PathSeparator) + "pak002.pk4",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := doom3.NewBuilder()
@@ -115,6 +126,7 @@ var _availableModes = []ModeDef{
 	},
 	{
 		Name:   "duke3d",
+		Zip:    false,
 		Target: "resources" + string(os.PathSeparator) + "duke3d",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			b := duke3d.NewBuilder()
@@ -166,8 +178,10 @@ func main() {
 		return
 	}
 
-	app := NewApp(false)
-	if err := app.Setup(width, height, fps); err != nil {
+	gen := _availableModes[mode]
+
+	app := NewApp()
+	if err := app.Setup(gen.Zip, gen.Target, width, height, fps); err != nil {
 		fmt.Println("Error setting up application:", err)
 		return
 	}
@@ -176,9 +190,8 @@ func main() {
 	physics.SetFps(uint64(fps))
 
 	res := app.GetResources()
-	target := app.UpdatePath(_availableModes[mode].Target)
-	fn := _availableModes[mode].Builder
-	cfg, err := fn(res, target, level)
+	target := app.GetPath()
+	cfg, err := gen.Builder(res, target, level)
 	if err != nil {
 		fmt.Println(err)
 		return

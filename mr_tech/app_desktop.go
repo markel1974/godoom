@@ -12,30 +12,33 @@ import (
 // App represents the core application structure holding resources and providing methods for application control.
 type App struct {
 	res    common.IResources
-	useZip bool
 	width  int
 	height int
 	fps    int
 	zFile  string
+	path   string
 }
 
 // NewApp creates and returns a new instance of App with initialized resources.
-func NewApp(useZip bool) *App {
+func NewApp() *App {
 	return &App{
-		useZip: useZip,
-		res:    nil,
+		res: nil,
 	}
 }
 
 // Setup initializes the application with specified width, height, and FPS, and configures its resources.
-func (a *App) Setup(width, height, fps int) error {
-	if a.useZip {
-		a.res = common.NewResourcesZip()
+func (a *App) Setup(useZip bool, path string, width, height, fps int) error {
+	if useZip {
+		res := common.NewResourcesZip()
+		res.SetPath(path)
+		a.path = ""
+		a.res = res
 	} else {
+		a.path = path
 		a.res = common.NewResourcesOs()
 	}
 	if err := a.res.Setup(); err != nil {
-		return nil
+		return err
 	}
 	a.width, a.height, a.fps = width, height, fps
 	return nil
@@ -52,9 +55,9 @@ func (a *App) WaitExit() {
 	// quindi qui non dobbiamo fare nulla.
 }
 
-// UpdatePath modifies the provided path based on the given mode and returns the updated path as a string.
-func (a *App) UpdatePath(path string) string {
-	return path
+// GetPath retrieves the current file path associated with the application instance.
+func (a *App) GetPath() string {
+	return a.path
 }
 
 // GetResources retrieves the Resources instance associated with the App.

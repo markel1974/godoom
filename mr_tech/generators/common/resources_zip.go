@@ -56,6 +56,16 @@ func NewResourcesZip() *ResourcesZip {
 	}
 }
 
+// SetPath sets the file path for the ZIP resource, used for initializing and interacting with the ZIP file content.
+func (z *ResourcesZip) SetPath(path string) {
+	z.fPath = path
+}
+
+// SetBuffer sets the internal buffer of the ZIP archive with the provided byte slice.
+func (z *ResourcesZip) SetBuffer(b []byte) {
+	z.fBuffer = b
+}
+
 // Setup initializes the ReaderZip by opening the zip file at the given path. It returns an error if the file cannot be opened.
 func (z *ResourcesZip) Setup() error {
 	if len(z.fPath) > 0 {

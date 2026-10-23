@@ -91,7 +91,13 @@ func (g *ArchiveGob) Parse(dirPath string) error {
 		if !strings.HasSuffix(pName, ".GOB") {
 			continue
 		}
-		if err := g.add(dirPath + string(os.PathSeparator) + entry.Name()); err != nil {
+		var tFile string
+		if len(dirPath) > 0 {
+			tFile = dirPath + string(os.PathSeparator) + entry.Name()
+		} else {
+			tFile = entry.Name()
+		}
+		if err := g.add(tFile); err != nil {
 			return err
 		}
 	}

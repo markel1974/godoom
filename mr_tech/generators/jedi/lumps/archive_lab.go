@@ -86,8 +86,13 @@ func (al *ArchiveLab) Parse(dirPath string) error {
 		if !strings.HasSuffix(pName, ".LAB") {
 			continue
 		}
-		entryPath := dirPath + string(os.PathSeparator) + entry.Name()
-		if err := al.add(entryPath); err != nil {
+		var tFile string
+		if len(dirPath) > 0 {
+			tFile = dirPath + string(os.PathSeparator) + entry.Name()
+		} else {
+			tFile = entry.Name()
+		}
+		if err := al.add(tFile); err != nil {
 			return err
 		}
 	}

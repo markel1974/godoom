@@ -4,6 +4,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"path/filepath"
 	"syscall/js"
 
@@ -16,22 +17,24 @@ import (
 // App represents the main application structure containing resources, display dimensions, and frame rate configuration.
 type App struct {
 	res    common.IResources
-	useZip bool
 	width  int
 	height int
 	fps    int
+	path   string
 }
 
 // NewApp creates and initializes a new App instance with its resources.
-func NewApp(useZip bool) *App {
+func NewApp() *App {
 	return &App{
-		res:    nil,
-		useZip: useZip,
+		res: nil,
 	}
 }
 
 // Setup initializes the App with the specified width, height, and frames per second (fps). Returns an error if initialization fails.
-func (a *App) Setup(width, height, fps int) error {
+func (a *App) Setup(useZip bool, path string, width, height, fps int) error {
+	_, file := filepath.Split(path)
+	a.path = "html/asset/" + file
+
 	var data []byte
 	jsBuf := js.Global().Get("window").Get("gameAssetBuffer")
 	if !jsBuf.IsUndefined() && !jsBuf.IsNull() {
@@ -62,9 +65,8 @@ func (a *App) Setup(width, height, fps int) error {
 }
 
 // UpdatePath converts the given path to a standardized asset path by keeping only the file name and prefixing it with "html/asset/".
-func (a *App) UpdatePath(path string) string {
-	_, file := filepath.Split(path)
-	return "html/asset/" + file
+func (a *App) GetPath() string {
+	return a.path
 }
 
 // GetContext returns a new instance of api.IContext configured with the app's width, height, and frames per second (fps).

@@ -42,6 +42,13 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 	globalVertices := make(geometry.Polygon, 0, totalVertices)
 	var lights []*config.Light
 
+	type Adjoin struct {
+		Lower *lumps.Sector
+		Upper *lumps.Sector
+	}
+
+	var adjoins []Adjoin
+
 	for _, sector := range level.Sectors {
 		if len(sector.Id) == 0 {
 			continue
@@ -119,6 +126,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							fmt.Println("INVALID ADJOIN/DADJOIN", wall.Adjoin)
 							continue
 						}
+						adjoins = append(adjoins, Adjoin{Lower: lowerSec, Upper: upperSec})
 						if math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
@@ -146,7 +154,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					}
 
 					// Texture middle solo per portali con flag esplicito.
-					if wall.Flags&1 != 0 {
+					if wall.GetFlags(1) {
 						if validTexture(wall.MidTexture) {
 							texName := level.GetTexture(wall.MidTexture)
 							names, _ := b.archive.AddTexture(texName)
@@ -172,22 +180,16 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
-	var secMap map[string]*config.Sector
-	for _, sec := range level.Sectors {
-		for _, w := range sec.Walls {
-			if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
-				w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
-				upperSec := level.Sectors[w.Adjoin]
-				lowerSec := level.Sectors[w.DAdjoin]
-				if secMap == nil {
-					secMap = make(map[string]*config.Sector)
-					for _, cs := range configSectors {
-						secMap[cs.Id] = cs
-					}
-				}
-				if cs, ok := secMap[lowerSec.Id]; ok {
-					cs.AddDependency(upperSec.Id)
-				}
+	if len(adjoins) > 0 {
+		secMap := make(map[string]*config.Sector)
+		for _, cs := range configSectors {
+			secMap[cs.Id] = cs
+		}
+		for _, adj := range adjoins {
+			if cs, ok := secMap[adj.Lower.Id]; ok {
+				cs.AddDependency(adj.Upper.Id)
+			} else {
+				fmt.Println("sector not found in map:", adj.Lower.Id)
 			}
 		}
 	}

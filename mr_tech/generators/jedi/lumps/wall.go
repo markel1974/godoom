@@ -196,3 +196,8 @@ func (w *Wall) ValidWallVertices(vertexCount int) bool {
 		w.LeftVertex < vertexCount &&
 		w.RightVertex < vertexCount
 }
+
+// GetFlags checks if the specified flags are set in the wall's flag bitmask. Returns true if the flags are present.
+func (w *Wall) GetFlags(f int) bool {
+	return w.Flags&f != 0
+}

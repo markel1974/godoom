@@ -13,7 +13,7 @@ import (
 
 const PakSeparator = "/"
 
-// EntryPAK represents a file entry within a PAK reader.go, containing metadata such as file, name, offset, and size.
+// EntryPAK represents a file entry within a PAK resources_os.go, containing metadata such as file, name, offset, and size.
 type EntryPAK struct {
 	file   common.IReader
 	offset int64
@@ -159,7 +159,7 @@ func (pk *Pak) Setup(path string) error {
 	return nil
 }
 
-// Open retrieves a file or resource from the PAK reader.go by its name and returns a reader to access its contents.
+// Open retrieves a file or resource from the PAK resources_os.go by its name and returns a reader to access its contents.
 func (pk *Pak) Open(fullPath string) (io.ReadSeeker, error) {
 	parts := pk.Parts(fullPath)
 	node := pk.root.GetNode(parts)

@@ -165,7 +165,6 @@ func main() {
 
 	textures.SetFps(uint64(fps))
 	physics.SetFps(uint64(fps))
-	//model.BobbingSetFPS(float64(fps)) //60
 
 	res := app.GetResources()
 	target := app.UpdatePath(_availableModes[mode].Target)

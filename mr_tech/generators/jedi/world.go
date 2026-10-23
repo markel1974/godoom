@@ -199,7 +199,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					botTexIdx := wall.BotTexture
 					if !validTexture(botTexIdx) {
 						if b.eMode == EngineModeOutlaws && wall.Flags&1 == 0 && validTexture(wall.MidTexture) {
-							adjoinSec := level.Sectors[wall.Adjoin]
+							adjoinSec := level.Sectors[targetSecIdx]
 							floorDiff := sector.FloorY - adjoinSec.FloorY
 							if floorDiff > 0.05 && floorDiff <= 5.0 {
 								botTexIdx = wall.MidTexture
@@ -239,7 +239,93 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
+	if b.eMode == EngineModeOutlaws {
+		configSectors = b.reorderSectorsForDAdjoin(level, configSectors)
+	}
+
 	return configSectors, globalVertices, lights, nil
+}
+
+// reorderSectorsForDAdjoin topologically sorts configSectors so that for any wall
+// with a stacked portal (DAdjoin >= 0 and Adjoin >= 0), the lower sector appears
+// after the upper sector. This ensures the compiler's segment adjacency resolution
+// pairs adjacent exterior sectors with the lower sector (ground level) rather than
+// the upper roof sector, preventing spurious blocking walls at building overhangs.
+func (b *World) reorderSectorsForDAdjoin(level *lumps.Level, configSectors []*config.Sector) []*config.Sector {
+	n := len(configSectors)
+	if n == 0 {
+		return configSectors
+	}
+
+	idToOrigIdx := make(map[string]int, n)
+	for i, cs := range configSectors {
+		idToOrigIdx[cs.Id] = i
+	}
+
+	adj := make(map[int][]int)
+	inDegree := make([]int, n)
+
+	for _, sec := range level.Sectors {
+		for _, w := range sec.Walls {
+			if w.DAdjoin >= 0 && w.Adjoin >= 0 && w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
+				upId := level.Sectors[w.Adjoin].Id
+				lowId := level.Sectors[w.DAdjoin].Id
+				upIdx, okUp := idToOrigIdx[upId]
+				lowIdx, okLow := idToOrigIdx[lowId]
+				if okUp && okLow && upIdx != lowIdx {
+					exists := false
+					for _, existing := range adj[upIdx] {
+						if existing == lowIdx {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						adj[upIdx] = append(adj[upIdx], lowIdx)
+						inDegree[lowIdx]++
+					}
+				}
+			}
+		}
+	}
+
+	result := make([]*config.Sector, 0, n)
+	ready := make([]bool, n)
+	for i := 0; i < n; i++ {
+		if inDegree[i] == 0 {
+			ready[i] = true
+		}
+	}
+
+	for len(result) < n {
+		nextIdx := -1
+		for i := 0; i < n; i++ {
+			if ready[i] {
+				nextIdx = i
+				break
+			}
+		}
+		if nextIdx == -1 {
+			// In case of a cycle, append any remaining sectors preserving their relative order.
+			for i := 0; i < n; i++ {
+				if inDegree[i] > 0 {
+					result = append(result, configSectors[i])
+				}
+			}
+			break
+		}
+		ready[nextIdx] = false
+		inDegree[nextIdx] = -1
+		result = append(result, configSectors[nextIdx])
+		for _, child := range adj[nextIdx] {
+			inDegree[child]--
+			if inDegree[child] == 0 {
+				ready[child] = true
+			}
+		}
+	}
+
+	return result
 }
 
 // validWallVertices checks if a wall's vertices are within the valid range of the sector's vertex list. Returns true if valid.

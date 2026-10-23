@@ -32,7 +32,7 @@ type BSPReader struct {
 	playerPos   geometry.XYZ
 }
 
-// NewQ2BSPReader creates a new BSPReader instance with the provided reader.go, BSP file reader, and optional palette reader.
+// NewQ2BSPReader creates a new BSPReader instance with the provided resources_os.go, BSP file reader, and optional palette reader.
 func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
 	return &BSPReader{
 		arc:        arc,

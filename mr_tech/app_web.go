@@ -3,10 +3,6 @@
 package main
 
 import (
-	"bytes"
-	"embed"
-	"io"
-	"os"
 	"path/filepath"
 	"syscall/js"
 
@@ -16,71 +12,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/web"
 )
 
-// assets is an embedded file system containing application resources and assets for runtime access.
-var assets embed.FS
-
-// AssetReader is a wrapper around bytes.Reader that includes a no-op Close method for compatibility with io.ReadCloser.
-type AssetReader struct {
-	*bytes.Reader
-}
-
-// NewAssetReader creates and returns a new AssetReader initialized with the provided byte slice.
-func NewAssetReader(data []byte) *AssetReader {
-	return &AssetReader{
-		Reader: bytes.NewReader(data),
-	}
-}
-
-// Close releases resources associated with the AssetReader, ensuring proper cleanup. It satisfies the io.Closer interface.
-func (r *AssetReader) Close() error {
-	return nil
-}
-
-// Resources is a type that provides functionality to manage and access embedded or runtime-loaded assets in the system.
-type Resources struct {
-}
-
-// NewResources creates and returns a new instance of the Resources struct.
-func NewResources() *Resources {
-	return &Resources{}
-}
-
-// Open retrieves a resource as an IReader, prioritizing JS-provided buffers, with a fallback to embedded assets.
-func (r *Resources) Open(in string) (common.IReader, error) {
-	// First check if JS provided a buffer
-	jsBuf := js.Global().Get("window").Get("gameAssetBuffer")
-	if !jsBuf.IsUndefined() && !jsBuf.IsNull() {
-		length := jsBuf.Get("length").Int()
-		data := make([]byte, length)
-		js.CopyBytesToGo(data, jsBuf)
-
-		// Free the JS reference so browser can GC it
-		js.Global().Get("window").Set("gameAssetBuffer", js.Null())
-
-		return NewAssetReader(data), nil
-	}
-
-	// Fallback to embedded assets if no JS buffer was provided
-	f, err := assets.Open(in)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return NewAssetReader(data), nil
-}
-
-// ReadDir reads the contents of the directory specified by the given path and returns a list of directory entries.
-func (r *Resources) ReadDir(path string) ([]os.DirEntry, error) {
-	return assets.ReadDir(path)
-}
-
 // App represents the main application structure containing resources, display dimensions, and frame rate configuration.
 type App struct {
-	res    *Resources
+	res    common.IFileSystem
 	width  int
 	height int
 	fps    int
@@ -89,12 +23,27 @@ type App struct {
 // NewApp creates and initializes a new App instance with its resources.
 func NewApp() *App {
 	return &App{
-		res: NewResources(),
+		res: nil,
 	}
 }
 
 // Setup initializes the App with the specified width, height, and frames per second (fps). Returns an error if initialization fails.
 func (a *App) Setup(width, height, fps int) error {
+	var data []byte
+	jsBuf := js.Global().Get("window").Get("gameAssetBuffer")
+	if !jsBuf.IsUndefined() && !jsBuf.IsNull() {
+		length := jsBuf.Get("length").Int()
+		data = make([]byte, length)
+		js.CopyBytesToGo(data, jsBuf)
+		// Free the JS reference so browser can GC it
+		js.Global().Get("window").Set("gameAssetBuffer", js.Null())
+		a.res = NewResourcesMem(data)
+	} else {
+		a.res = NewResourcesAsset(data)
+	}
+	if err := a.res.Setup(); err != nil {
+		return err
+	}
 	a.width = width
 	a.height = height
 	a.fps = fps
@@ -113,7 +62,7 @@ func (a *App) GetContext(player *config.Player) api.IContext {
 }
 
 // GetResources returns the Resources instance associated with the App.
-func (a *App) GetResources() *Resources {
+func (a *App) GetResources() common.IFileSystem {
 	return a.res
 }
 

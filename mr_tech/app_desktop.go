@@ -3,49 +3,33 @@
 package main
 
 import (
-	"os"
-
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/desktop"
 )
 
-// Resources provides methods for accessing and managing resource files and directories.
-type Resources struct {
-}
-
-// NewResources creates and initializes a new instance of the Resources struct and returns a pointer to it.
-func NewResources() *Resources {
-	return &Resources{}
-}
-
-// Open opens the specified resource and returns an IReader interface for reading, seeking, closing, and offset reading.
-func (r *Resources) Open(in string) (common.IReader, error) {
-	return os.Open(in)
-}
-
-// ReadDir reads the contents of the specified directory and returns a list of directory entries or an error.
-func (r *Resources) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
-}
-
 // App represents the core application structure holding resources and providing methods for application control.
 type App struct {
-	res    *Resources
+	res    common.IFileSystem
 	width  int
 	height int
 	fps    int
+	zFile  string
 }
 
 // NewApp creates and returns a new instance of App with initialized resources.
 func NewApp() *App {
 	return &App{
-		res: NewResources(),
+		res: NewResourcesOs(),
 	}
 }
 
+// Setup initializes the application with specified width, height, and FPS, and configures its resources.
 func (a *App) Setup(width, height, fps int) error {
+	if err := a.res.Setup(); err != nil {
+		return nil
+	}
 	a.width, a.height, a.fps = width, height, fps
 	return nil
 }
@@ -67,6 +51,6 @@ func (a *App) UpdatePath(path string) string {
 }
 
 // GetResources retrieves the Resources instance associated with the App.
-func (a *App) GetResources() *Resources {
+func (a *App) GetResources() common.IFileSystem {
 	return a.res
 }

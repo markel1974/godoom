@@ -15,6 +15,8 @@ type IReader interface {
 
 // IFileSystem defines an interface for abstract file system operations, including file opening and directory reading.
 type IFileSystem interface {
+	Setup() error
+
 	Open(path string) (IReader, error)
 
 	ReadDir(path string) ([]os.DirEntry, error)

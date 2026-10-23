@@ -26,10 +26,8 @@ func NewWorld(archive lumps.IArchive, eMode EngineMode) *World {
 }
 
 // Build constructs the configuration for sectors, vertices, and lights based on the level data in the current context.
-
 func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	level := b.archive.GetLevel()
-
 	validTexture := func(idx int) bool {
 		return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
 	}
@@ -239,19 +237,33 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
-	if b.eMode == EngineModeOutlaws {
-		configSectors = b.reorderSectorsForDAdjoin(level, configSectors)
+	secMap := make(map[string]*config.Sector, len(configSectors))
+	for _, cs := range configSectors {
+		secMap[cs.Id] = cs
 	}
+	for _, sec := range level.Sectors {
+		for _, w := range sec.Walls {
+			if w.DAdjoin >= 0 && w.Adjoin >= 0 &&
+				w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
+				upperSec := level.Sectors[w.Adjoin]
+				lowerSec := level.Sectors[w.DAdjoin]
+				if cs, ok := secMap[lowerSec.Id]; ok {
+					cs.AddDependency(upperSec.Id)
+				}
+			}
+		}
+	}
+	configSectors = b.reorderSectorsForDAdjoin(configSectors)
 
 	return configSectors, globalVertices, lights, nil
 }
 
-// reorderSectorsForDAdjoin topologically sorts configSectors so that for any wall
-// with a stacked portal (DAdjoin >= 0 and Adjoin >= 0), the lower sector appears
-// after the upper sector. This ensures the compiler's segment adjacency resolution
-// pairs adjacent exterior sectors with the lower sector (ground level) rather than
-// the upper roof sector, preventing spurious blocking walls at building overhangs.
-func (b *World) reorderSectorsForDAdjoin(level *lumps.Level, configSectors []*config.Sector) []*config.Sector {
+// reorderSectorsForDAdjoin topologically sorts configSectors so that for any sector
+// with dependencies in DependsOn, that sector appears after all sectors it depends on.
+// This ensures that for stacked portals (DAdjoin), lower sectors appear after upper
+// sectors in configSectors, allowing compiler segment adjacency resolution to correctly
+// pair exterior portals with ground-level sectors rather than roofs.
+func (b *World) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*config.Sector {
 	n := len(configSectors)
 	if n == 0 {
 		return configSectors
@@ -265,25 +277,19 @@ func (b *World) reorderSectorsForDAdjoin(level *lumps.Level, configSectors []*co
 	adj := make(map[int][]int)
 	inDegree := make([]int, n)
 
-	for _, sec := range level.Sectors {
-		for _, w := range sec.Walls {
-			if w.DAdjoin >= 0 && w.Adjoin >= 0 && w.DAdjoin < len(level.Sectors) && w.Adjoin < len(level.Sectors) {
-				upId := level.Sectors[w.Adjoin].Id
-				lowId := level.Sectors[w.DAdjoin].Id
-				upIdx, okUp := idToOrigIdx[upId]
-				lowIdx, okLow := idToOrigIdx[lowId]
-				if okUp && okLow && upIdx != lowIdx {
-					exists := false
-					for _, existing := range adj[upIdx] {
-						if existing == lowIdx {
-							exists = true
-							break
-						}
+	for lowIdx, cs := range configSectors {
+		for _, upId := range cs.DependsOn {
+			if upIdx, ok := idToOrigIdx[upId]; ok && upIdx != lowIdx {
+				exists := false
+				for _, existing := range adj[upIdx] {
+					if existing == lowIdx {
+						exists = true
+						break
 					}
-					if !exists {
-						adj[upIdx] = append(adj[upIdx], lowIdx)
-						inDegree[lowIdx]++
-					}
+				}
+				if !exists {
+					adj[upIdx] = append(adj[upIdx], lowIdx)
+					inDegree[lowIdx]++
 				}
 			}
 		}

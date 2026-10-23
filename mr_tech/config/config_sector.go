@@ -18,6 +18,7 @@ type Sector struct {
 	SlopedFloorGY         float64    `json:"slopedFloorGY"`
 	SlopedCeilingGX       float64    `json:"slopedCeilingGX"`
 	SlopedCeilingGY       float64    `json:"slopedCeilingGY"`
+	DependsOn             []string   `json:"dependsOn,omitempty"`
 }
 
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.
@@ -59,4 +60,17 @@ func (s *Sector) IsCCW() bool {
 	// Area > 0 significa CW (Orario)
 	// se Y-up cartesiano puro, invertire operatore (> 0).*
 	return area < 0
+}
+
+// AddDependency registers a sector ID that this sector depends on (must precede this sector in compilation order).
+func (s *Sector) AddDependency(id string) {
+	if len(id) == 0 || id == s.Id {
+		return
+	}
+	for _, dep := range s.DependsOn {
+		if dep == id {
+			return
+		}
+	}
+	s.DependsOn = append(s.DependsOn, id)
 }

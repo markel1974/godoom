@@ -2,6 +2,7 @@ package common
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -41,22 +42,45 @@ func (e ZipDirEntry) Info() (fs.FileInfo, error) {
 
 // ResourcesZip is a type for interacting with ZIP files, enabling setup, file extraction, and directory reading.
 type ResourcesZip struct {
-	z *zip.ReadCloser
+	zr *zip.Reader
+	//closer  io.Closer
+	fPath   string
+	fBuffer []byte
+}
+
+// NewResourcesZip creates and returns a new instance of ResourcesZip for interacting with ZIP file resources.
+func NewResourcesZip() *ResourcesZip {
+	return &ResourcesZip{
+		fPath:   "",
+		fBuffer: nil,
+	}
 }
 
 // Setup initializes the ReaderZip by opening the zip file at the given path. It returns an error if the file cannot be opened.
-func (z *ResourcesZip) Setup(p string) error {
-	zf, err := zip.OpenReader(p)
-	if err != nil {
-		return err
+func (z *ResourcesZip) Setup() error {
+	if len(z.fPath) > 0 {
+		zf, err := zip.OpenReader(z.fPath)
+		if err != nil {
+			return err
+		}
+		z.zr = &zf.Reader
+		//z.closer = zf
+		return nil
 	}
-	z.z = zf
-	return nil
+	if len(z.fBuffer) > 0 {
+		zr, err := zip.NewReader(bytes.NewReader(z.fBuffer), int64(len(z.fBuffer)))
+		if err != nil {
+			return err
+		}
+		z.zr = zr
+		return nil
+	}
+	return fmt.Errorf("zip file not setup")
 }
 
 // Open extracts a file from the zip archive by name and returns a reader to access its content.
 func (z *ResourcesZip) Open(in string) (IReader, error) {
-	f, err := z.z.Open(in)
+	f, err := z.zr.Open(in)
 	if err != nil {
 		return nil, fmt.Errorf("open %q in zip: %w", in, err)
 	}
@@ -88,7 +112,7 @@ func (z *ResourcesZip) ReadDir(fPath string) ([]os.DirEntry, error) {
 		dir += "/"
 	}
 	entries := map[string]os.DirEntry{}
-	for _, f := range z.z.File {
+	for _, f := range z.zr.File {
 		name, err := safeZipPath(f.Name)
 		if err != nil {
 			continue

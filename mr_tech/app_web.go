@@ -15,15 +15,17 @@ import (
 // App represents the main application structure containing resources, display dimensions, and frame rate configuration.
 type App struct {
 	res    common.IResources
+	useZip bool
 	width  int
 	height int
 	fps    int
 }
 
 // NewApp creates and initializes a new App instance with its resources.
-func NewApp() *App {
+func NewApp(useZip bool) *App {
 	return &App{
-		res: nil,
+		res:    nil,
+		useZip: useZip,
 	}
 }
 

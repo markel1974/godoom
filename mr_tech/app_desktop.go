@@ -12,6 +12,7 @@ import (
 // App represents the core application structure holding resources and providing methods for application control.
 type App struct {
 	res    common.IResources
+	useZip bool
 	width  int
 	height int
 	fps    int
@@ -19,14 +20,20 @@ type App struct {
 }
 
 // NewApp creates and returns a new instance of App with initialized resources.
-func NewApp() *App {
+func NewApp(useZip bool) *App {
 	return &App{
-		res: common.NewResourcesOs(),
+		useZip: useZip,
+		res:    nil,
 	}
 }
 
 // Setup initializes the application with specified width, height, and FPS, and configures its resources.
 func (a *App) Setup(width, height, fps int) error {
+	if a.useZip {
+		a.res = common.NewResourcesZip()
+	} else {
+		a.res = common.NewResourcesOs()
+	}
 	if err := a.res.Setup(); err != nil {
 		return nil
 	}

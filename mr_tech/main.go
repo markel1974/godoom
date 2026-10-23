@@ -157,7 +157,7 @@ func main() {
 		return
 	}
 
-	app := NewApp()
+	app := NewApp(false)
 	if err := app.Setup(width, height, fps); err != nil {
 		fmt.Println("Error setting up application:", err)
 		return

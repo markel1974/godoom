@@ -3,6 +3,7 @@
 package main
 
 import (
+	"archive/zip"
 	"path/filepath"
 	"syscall/js"
 
@@ -39,7 +40,15 @@ func (a *App) Setup(width, height, fps int) error {
 		js.CopyBytesToGo(data, jsBuf)
 		// Free the JS reference so browser can GC it
 		js.Global().Get("window").Set("gameAssetBuffer", js.Null())
-		a.res = common.NewResourcesMem(data)
+		if a.useZip {
+			zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+			if err != nil {
+				return err
+			}
+			a.res = common.NewResourcesZip(zr)
+		} else {
+			a.res = common.NewResourcesMem(data)
+		}
 	} else {
 		a.res = common.NewResourcesAsset(data)
 	}

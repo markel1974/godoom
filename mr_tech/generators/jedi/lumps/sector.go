@@ -31,6 +31,8 @@ type Sector struct {
 	SlopedFloor    *Slope
 	SlopedCeiling  *Slope
 
+	ComputedFloorY float64
+	ComputedCeilY  float64
 	BestCeilWall   int
 	BestFloorWall  int
 	CeilGrad       float64
@@ -358,6 +360,28 @@ func (s *Sector) GetFlag(index int, mask uint32) (uint32, bool) {
 
 // Compute updates the sector's sloped floor and ceiling properties by recalculating planes based on related sectors.
 func (s *Sector) Compute(level *Level) {
+	s.ComputedFloorY = s.FloorY
+	s.ComputedCeilY = s.CeilingY
+
+	if flag, ok := s.GetFlag(1, 0x80000000); ok && flag != 0 {
+		bestFloorY := s.FloorY
+		foundAdjacent := false
+		for _, wall := range s.Walls {
+			if wall.Adjoin < 0 ||
+				wall.Adjoin >= len(level.Sectors) {
+				continue
+			}
+			adjacent := level.Sectors[wall.Adjoin]
+			if !foundAdjacent || adjacent.FloorY > bestFloorY {
+				bestFloorY = adjacent.FloorY
+				foundAdjacent = true
+			}
+		}
+		if foundAdjacent {
+			s.ComputedFloorY = bestFloorY
+		}
+	}
+
 	if s.SlopedFloor != nil {
 		if pSec := level.GetSector(s.SlopedFloor.SectorIndex); pSec != nil {
 			s.BestFloorWall, s.FloorGrad, s.FloorGX, s.FloorGY, s.FloorQuota, s.HasSlopedFloor = s.computePlane(pSec, s.SlopedFloor, pSec.FloorY)
@@ -367,6 +391,13 @@ func (s *Sector) Compute(level *Level) {
 		if pSec := level.GetSector(s.SlopedCeiling.SectorIndex); pSec != nil {
 			s.BestCeilWall, s.CeilGrad, s.CeilGX, s.CeilGY, s.CeilQuota, s.HasSlopedCeil = s.computePlane(pSec, s.SlopedCeiling, pSec.CeilingY)
 		}
+	}
+
+	if s.HasSlopedFloor {
+		s.ComputedFloorY = s.FloorQuota
+	}
+	if s.HasSlopedCeil {
+		s.ComputedCeilY = s.CeilQuota
 	}
 }
 

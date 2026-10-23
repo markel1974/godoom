@@ -47,37 +47,8 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			continue
 		}
 
-		secFloorY := sector.FloorY
-		secCeilY := sector.CeilingY
-
-		if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
-			bestFloorY := sector.FloorY
-			foundAdjacent := false
-			for _, wall := range sector.Walls {
-				if wall.Adjoin < 0 ||
-					wall.Adjoin >= len(level.Sectors) {
-					continue
-				}
-				adjacent := level.Sectors[wall.Adjoin]
-				if !foundAdjacent || adjacent.FloorY > bestFloorY {
-					bestFloorY = adjacent.FloorY
-					foundAdjacent = true
-				}
-			}
-			if foundAdjacent {
-				secFloorY = bestFloorY
-			}
-		}
-
 		sector.Compute(level)
-
-		if sector.HasSlopedFloor {
-			secFloorY = sector.FloorQuota
-		}
-		if sector.HasSlopedCeil {
-			secCeilY = sector.CeilQuota
-		}
-
+		secFloorY, secCeilY := sector.ComputedFloorY, sector.ComputedCeilY
 		lightLevel, lightFalloff := b.computeLight(sector)
 
 		cSector := config.NewConfigSector(sector.Id, lightLevel, config.LightKindAmbient, lightFalloff)

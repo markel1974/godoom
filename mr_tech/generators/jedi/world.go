@@ -53,20 +53,17 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if flag, ok := sector.GetFlag(1, 0x80000000); ok && flag != 0 {
 			bestFloorY := sector.FloorY
 			foundAdjacent := false
-
 			for _, wall := range sector.Walls {
 				if wall.Adjoin < 0 ||
 					wall.Adjoin >= len(level.Sectors) {
 					continue
 				}
-
 				adjacent := level.Sectors[wall.Adjoin]
 				if !foundAdjacent || adjacent.FloorY > bestFloorY {
 					bestFloorY = adjacent.FloorY
 					foundAdjacent = true
 				}
 			}
-
 			if foundAdjacent {
 				secFloorY = bestFloorY
 			}
@@ -148,6 +145,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							texIdx = wall.BotTexture
 						default:
 							fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
+							cSeg.Kind = config.SegmentUnknown
 							cSector.Segments[wallIdx] = cSeg
 							continue
 						}
@@ -172,7 +170,8 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if wall.DAdjoin >= 0 && wall.DAdjoin < len(level.Sectors) {
 						upperSec := level.Sectors[wall.Adjoin]
 						lowerSec := level.Sectors[wall.DAdjoin]
-						if !validTexture(wall.TopTexture) && math.Abs(sector.FloorY-lowerSec.FloorY) <= math.Abs(sector.FloorY-upperSec.FloorY) {
+						if math.Abs(sector.FloorY-lowerSec.FloorY) <=
+							math.Abs(sector.FloorY-upperSec.FloorY) {
 							targetSecIdx = wall.DAdjoin
 							adjacent = lowerSec
 						}
@@ -180,7 +179,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 					if sector.IsSky() && adjacent.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
-					} else if wall.DAdjoin >= 0 && sector.IsSky() && !validTexture(wall.TopTexture) {
+					} else if wall.DAdjoin >= 0 && sector.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
 					} else if !sector.IsSky() || !adjacent.IsSky() {
 						topTexIdx := wall.TopTexture
@@ -198,13 +197,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							floorDiff := sector.FloorY - adjoinSec.FloorY
 							if floorDiff > 0.05 && floorDiff <= 5.0 {
 								botTexIdx = wall.MidTexture
-							}
-						}
-						if !validTexture(botTexIdx) && b.eMode == EngineModeOutlaws && wall.DAdjoin >= 0 {
-							if validTexture(wall.MidTexture) {
-								botTexIdx = wall.MidTexture
-							} else if validTexture(wall.TopTexture) {
-								botTexIdx = wall.TopTexture
 							}
 						}
 					}
@@ -254,22 +246,85 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						secMap[cs.Id] = cs
 					}
 				}
-				isOpenCanopy := !validTexture(w.TopTexture) && math.Abs(sec.FloorY-lowerSec.FloorY) < 0.05
-				if isOpenCanopy {
-					if cs, ok := secMap[lowerSec.Id]; ok {
-						cs.AddDependency(upperSec.Id)
-					}
-				} else {
-					if cs, ok := secMap[upperSec.Id]; ok {
-						cs.AddDependency(lowerSec.Id)
-					}
+				if cs, ok := secMap[lowerSec.Id]; ok {
+					cs.AddDependency(upperSec.Id)
 				}
 			}
 		}
 	}
+	//if secMap != nil {
+	//	b.closeRoofGaps(level, secMap)
+	//	}
 	configSectors = b.reorderSectorsForDAdjoin(configSectors)
 
 	return configSectors, globalVertices, lights, nil
+}
+
+// closeRoofGaps removes the thin slab left between the ceiling of a lower sector (room, porch) and the
+// floor of the upper sector stacked on it through a double adjoin (roof). The ceiling of the lower sector is
+// aligned to the roof plane (when the two planes are parallel), so that the perimeter walls join the roof exactly.
+func (b *World) closeRoofGaps(level *lumps.Level, secMap map[string]*config.Sector) {
+	//COMPLETAMENTE SBAGLIATO FARE QUESTO
+	const maxGap = 1.0 * scaleSectorH
+
+	floorRef := func(cs *config.Sector) (geometry.XY, bool) {
+		for _, seg := range cs.Segments {
+			if seg != nil && seg.SlopedFloorRef {
+				return seg.Start, true
+			}
+		}
+		return geometry.XY{}, false
+	}
+	ceilRef := func(cs *config.Sector) (geometry.XY, bool) {
+		for _, seg := range cs.Segments {
+			if seg != nil && seg.SlopedCeilingRef {
+				return seg.Start, true
+			}
+		}
+		return geometry.XY{}, false
+	}
+
+	done := make(map[string]bool)
+	for _, sec := range level.Sectors {
+		for _, w := range sec.Walls {
+			if w.DAdjoin < 0 || w.Adjoin < 0 || w.DAdjoin >= len(level.Sectors) || w.Adjoin >= len(level.Sectors) {
+				continue
+			}
+			cUp, okUp := secMap[level.Sectors[w.Adjoin].Id]
+			cLow, okLow := secMap[level.Sectors[w.DAdjoin].Id]
+			if !okUp || !okLow || done[cLow.Id] {
+				continue
+			}
+
+			// Upper floor plane evaluated on the reference point of the lower ceiling plane.
+			zRoof := cUp.FloorY
+			if cUp.SlopedFloorGradient != 0 || cLow.SlopedCeilingGradient != 0 {
+				if cUp.SlopedFloorGradient == 0 || cLow.SlopedCeilingGradient == 0 {
+					continue
+				}
+				if math.Abs(cUp.SlopedFloorGX-cLow.SlopedCeilingGX) > 0.01 || math.Abs(cUp.SlopedFloorGY-cLow.SlopedCeilingGY) > 0.01 {
+					continue
+				}
+				pu, ok1 := floorRef(cUp)
+				pl, ok2 := ceilRef(cLow)
+				if !ok1 || !ok2 {
+					continue
+				}
+				zRoof = cUp.FloorY + cUp.SlopedFloorGX*(pl.X-pu.X) + cUp.SlopedFloorGY*(pl.Y-pu.Y)
+			}
+
+			gap := zRoof - cLow.CeilY
+			if gap > 1e-6 && gap <= maxGap {
+				cLow.CeilY = zRoof
+				if cUp.SlopedFloorGradient != 0 {
+					cLow.SlopedCeilingGradient = cUp.SlopedFloorGradient
+					cLow.SlopedCeilingGX = cUp.SlopedFloorGX
+					cLow.SlopedCeilingGY = cUp.SlopedFloorGY
+				}
+				done[cLow.Id] = true
+			}
+		}
+	}
 }
 
 // reorderSectorsForDAdjoin topologically sorts configSectors so that for any sector
@@ -277,6 +332,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 // This ensures that for stacked portals (DAdjoin), lower sectors appear after upper
 // sectors in configSectors, allowing compiler segment adjacency resolution to correctly
 // pair exterior portals with ground-level sectors rather than roofs.
+// TODO MOVE IN COMPILER
 func (b *World) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*config.Sector {
 	n := len(configSectors)
 	if n == 0 {

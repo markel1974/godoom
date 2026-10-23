@@ -104,23 +104,25 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 				if wall.Adjoin == -1 {
 					texIdx := wall.MidTexture
-					if !validTexture(texIdx) {
-						switch {
-						case validTexture(wall.TopTexture):
-							texIdx = wall.TopTexture
-						case validTexture(wall.BotTexture):
-							texIdx = wall.BotTexture
-						default:
-							fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
-							continue
+					/*
+						if !validTexture(texIdx) {
+							switch {
+							case validTexture(wall.TopTexture):
+								texIdx = wall.TopTexture
+							case validTexture(wall.BotTexture):
+								texIdx = wall.BotTexture
+							default:
+								fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
+								continue
+							}
 						}
+					*/
+					if validTexture(texIdx) {
+						texName := level.GetTexture(texIdx)
+						names, _ := b.archive.AddTexture(texName)
+						cSeg.Kind = config.SegmentWall
+						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 					}
-
-					texName := level.GetTexture(texIdx)
-					names, _ := b.archive.AddTexture(texName)
-
-					cSeg.Kind = config.SegmentWall
-					cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
 				} else {
 					targetSecIdx := wall.Adjoin
 					adjacent := level.GetSector(targetSecIdx)
@@ -156,11 +158,13 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 					botTexIdx := wall.BotTexture
 					if !validTexture(botTexIdx) {
-						if b.eMode == EngineModeOutlaws && wall.Flags&1 == 0 && validTexture(wall.MidTexture) {
-							adjoinSec := level.Sectors[targetSecIdx]
-							floorDiff := sector.FloorY - adjoinSec.FloorY
-							if floorDiff > 0.05 && floorDiff <= 5.0 {
-								botTexIdx = wall.MidTexture
+						if wall.Flags&1 == 0 {
+							if validTexture(wall.MidTexture) {
+								adjoinSec := level.Sectors[targetSecIdx]
+								floorDiff := sector.FloorY - adjoinSec.FloorY
+								if floorDiff > 0.05 && floorDiff <= 5.0 {
+									botTexIdx = wall.MidTexture
+								}
 							}
 						}
 					}
@@ -171,10 +175,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					}
 
 					// Texture middle solo per portali con flag esplicito.
-					if wall.Flags&1 != 0 && validTexture(wall.MidTexture) {
-						texName := level.GetTexture(wall.MidTexture)
-						names, _ := b.archive.AddTexture(texName)
-						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+					if wall.Flags&1 != 0 {
+						if validTexture(wall.MidTexture) {
+							texName := level.GetTexture(wall.MidTexture)
+							names, _ := b.archive.AddTexture(texName)
+							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						}
 					}
 				}
 			}

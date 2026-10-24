@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -19,12 +20,19 @@ type GrpEntry struct {
 	Size   int64
 }
 
+func NewGrpEntry(name string, offset, size int64) *GrpEntry {
+	return &GrpEntry{
+		Name:   name,
+		Offset: offset,
+		Size:   size,
+	}
+}
+
 // ArchiveGrp represents a container for managing and accessing files within a GRP archive format.
 type ArchiveGrp struct {
 	reader  io.ReaderAt
 	closer  io.Closer
 	entries map[string]*GrpEntry
-	maps    []string
 }
 
 // NewArchiveGrp initializes and returns a new instance of ArchiveGrp with default values.
@@ -79,29 +87,31 @@ func (a *ArchiveGrp) Parse(reader io.ReaderAt, closer io.Closer) error {
 		} else {
 			name = string(rawName)
 		}
-		name = strings.TrimSpace(name)
-		nameUpper := strings.ToUpper(name)
-
-		entry := &GrpEntry{
-			Name:   nameUpper,
-			Offset: curDataOffset,
-			Size:   fileSize,
-		}
+		nameUpper := strings.ToUpper(strings.TrimSpace(name))
+		entry := NewGrpEntry(nameUpper, curDataOffset, fileSize)
 		a.entries[nameUpper] = entry
-		if strings.HasSuffix(nameUpper, ".MAP") {
-			a.maps = append(a.maps, nameUpper)
-		}
-
 		curDataOffset += fileSize
 	}
 
-	sort.Strings(a.maps)
 	return nil
 }
 
-// GetMaps returns a sorted list of map file names contained in the ArchiveGrp.
-func (a *ArchiveGrp) GetMaps() []string {
-	return a.maps
+// Match searches the archive for file names matching the provided regex pattern and optionally sorts the results.
+func (a *ArchiveGrp) Match(p string, useSort bool) ([]string, error) {
+	r, err := regexp.Compile(p)
+	if err != nil {
+		return nil, err
+	}
+	var matches []string
+	for name := range a.entries {
+		if r.MatchString(name) {
+			matches = append(matches, name)
+		}
+	}
+	if useSort {
+		sort.Strings(matches)
+	}
+	return matches, nil
 }
 
 // HasFile checks if a file with the specified name exists in the ArchiveGrp. The check is case-insensitive.

@@ -27,7 +27,7 @@ func (arts *Arts) Load(data []byte) error {
 		return fmt.Errorf("parsing art: %w", err)
 	}
 
-	for tileNum, tile := range art.Tiles {
+	for _, tile := range art.Tiles {
 		if tile == nil {
 			continue
 		}
@@ -41,7 +41,7 @@ func (arts *Arts) Load(data []byte) error {
 				img.SetRGBA(x, y, c)
 			}
 		}
-		arts.tex.AddTile(tileNum, img)
+		arts.tex.AddTile(tile.TileNum, img)
 	}
 	return nil
 }

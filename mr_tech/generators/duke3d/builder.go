@@ -28,8 +28,8 @@ const (
 	AspectRatio   = 1.333
 	ScaleSectorH  = 1.0
 	ScaleXY       = 1.0 / 16.0
-	ScaleTextureW = 1.0
-	ScaleTextureH = 1.0
+	ScaleTextureW = 0.5
+	ScaleTextureH = 0.5
 
 	PlayerHeight = 56.0 * ScaleSectorH
 	PlayerRadius = 16.0
@@ -62,53 +62,40 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
-		var grpReader io.ReaderAt
-		var grpCloser io.Closer
-		if res != nil {
-			if r, err := res.Open(target); err == nil {
-				grpReader = r
-				grpCloser = r
-			}
-		}
-		if grpReader == nil {
-			if f, err := os.Open(target); err == nil {
-				grpReader = f
-				grpCloser = f
-			} else {
-				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
-			}
+		r, rErr := res.Open(target)
+		if rErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, rErr)
 		}
 		arc := lumps.NewArchiveGrp()
-		err := arc.Parse(grpReader, grpCloser)
-		if err != nil {
+		if err := arc.Parse(r, r); err != nil {
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
 		}
 		defer arc.Close()
 
 		// Load palette and textures from GRP if present
-		if arc.HasFile("PALETTE.DAT") {
-			if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
-
-				pal := lumps.NewPalette()
-				if err := pal.Parse(palData); err == nil {
-					arts := lumps.NewArts(pal.GetData(), tex)
-					tileCount := 0
-					for artIdx := 0; artIdx < 100; artIdx++ {
-						artName := fmt.Sprintf("TILES%03d.ART", artIdx)
-						if !arc.HasFile(artName) {
-							break
-						}
-						if artData, err := arc.GetPayload(artName); err == nil {
-							_ = arts.Load(artData)
-							tileCount++
-						}
+		if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
+			pal := lumps.NewPalette()
+			if err := pal.Parse(palData); err == nil {
+				arts := lumps.NewArts(pal.GetData(), tex)
+				tileCount := 0
+				for artIdx := 0; artIdx < 100; artIdx++ {
+					artName := fmt.Sprintf("TILES%03d.ART", artIdx)
+					if !arc.HasFile(artName) {
+						break
 					}
-					fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
+					if artData, err := arc.GetPayload(artName); err == nil {
+						_ = arts.Load(artData)
+						tileCount++
+					}
 				}
+				fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
 			}
 		}
 
-		maps := arc.GetMaps()
+		maps, err := arc.Match(".*\\.MAP", true)
+		if err != nil {
+			return nil, fmt.Errorf("duke3d: failed to extract map files from grp: %w", err)
+		}
 		if len(maps) == 0 {
 			return nil, fmt.Errorf("duke3d: no .MAP files found in %s", target)
 		}

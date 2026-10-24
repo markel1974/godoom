@@ -76,6 +76,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		}
 
 		cSector := config.NewConfigSector(sectorId, intensity, lightKind, falloff)
+		cSector.Tag = sectorId
 		cSector.Light.R = 1.0
 		cSector.Light.G = 0.98
 		cSector.Light.B = 0.95
@@ -84,11 +85,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 		// Floor material
 		floorTile := w.textures.GetOrCreateTile(int(sec.FloorPicNum))
-		floorKind := config.MaterialKindLoop
-		if sec.IsSkyFloor() {
-			floorKind = config.MaterialKindSky
-		}
-		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, floorKind, w.scaleTextureW, w.scaleTextureH, 0, 0)
+		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
 
 		// Ceiling material
 		ceilTile := w.textures.GetOrCreateTile(int(sec.CeilingPicNum))

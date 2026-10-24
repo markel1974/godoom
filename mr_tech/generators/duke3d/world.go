@@ -80,7 +80,11 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 		// Floor material
 		floorTile := w.textures.GetTile(int(sec.FloorPicNum))
-		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		floorKind := config.MaterialKindLoop
+		if sec.IsSkyFloor() {
+			floorKind = config.MaterialKindSky
+		}
+		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, floorKind, 1.0, 1.0, 0, 0)
 
 		// Ceiling material
 		ceilTile := w.textures.GetTile(int(sec.CeilingPicNum))

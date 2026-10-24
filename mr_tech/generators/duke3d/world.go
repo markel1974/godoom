@@ -94,6 +94,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		floorKind := config.MaterialKindLoop
 		if sec.IsSkyFloor() {
 			floorKind = config.MaterialKindSky
+			floorTile = w.textures.GetSkyTile(int(sec.FloorPicNum))
 		}
 		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, floorKind, 1.0, 1.0, 0, 0)
 
@@ -102,6 +103,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		ceilKind := config.MaterialKindLoop
 		if sec.IsSkyCeiling() {
 			ceilKind = config.MaterialKindSky
+			ceilTile = w.textures.GetSkyTile(int(sec.CeilingPicNum))
 		}
 		cSector.Ceil = config.NewConfigMaterial([]string{ceilTile}, ceilKind, 1.0, 1.0, 0, 0)
 
@@ -173,12 +175,12 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						adjFloorY := w.computeHeight(adjSec.FloorZ)
 
 						// Upper step wall
-						if ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling() {
+						if (ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling()) && !(sec.IsSkyCeiling() && adjSec.IsSkyCeiling()) {
 							tile := w.textures.GetTile(int(wall.PicNum))
 							cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 						// Lower step wall
-						if floorY < adjFloorY || sec.IsSlopedFloor() || adjSec.IsSlopedFloor() {
+						if (floorY < adjFloorY || sec.IsSlopedFloor() || adjSec.IsSlopedFloor()) && !(sec.IsSkyFloor() && adjSec.IsSkyFloor()) {
 							tile := w.textures.GetTile(int(wall.PicNum))
 							cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}

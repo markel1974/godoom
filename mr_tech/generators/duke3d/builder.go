@@ -59,111 +59,69 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
-		r, rErr := res.Open(target)
-		if rErr != nil {
-			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, rErr)
-		}
-		defer r.Close()
-		arc := lumps.NewArchiveGrp()
-		if pErr := arc.Parse(r); pErr != nil {
-			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, pErr)
-		}
-		defer arc.Close()
-		palData, pErr := arc.GetPayload("PALETTE.DAT")
-		if pErr != nil {
-			return nil, fmt.Errorf("duke3d: failed to get palette data from grp %s: %w", target, pErr)
-		}
-		pal := lumps.NewPalette()
-		if err := pal.Parse(palData); err != nil {
-			return nil, fmt.Errorf("duke3d: failed to parse palette data from grp %s: %w", target, err)
-		}
-		tiles, tErr := arc.Match("TILES\\d{3}.ART", false)
-		if tErr != nil {
-			return nil, fmt.Errorf("duke3d: failed to match TILES files in grp %s: %w", target, tErr)
-		}
-		arts := lumps.NewArts(pal.GetData())
-		tileCount := 0
-		for _, artName := range tiles {
-			if artData, err := arc.GetPayload(artName); err == nil {
-				_ = arts.Load(artData)
-				tileCount++
-			}
-		}
-		for tId, tImg := range arts.GetTiles() {
-			tex.AddDepot(tId, tImg)
-		}
-		fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
-		maps, err := arc.Match(".*\\.MAP", true)
+		grpReader, err := b.createGrpReader(res, target, levelNumber, tex)
 		if err != nil {
-			return nil, fmt.Errorf("duke3d: failed to extract map files from grp: %w", err)
+			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
 		}
-		if len(maps) == 0 {
-			return nil, fmt.Errorf("duke3d: no .MAP files found in %s", target)
-		}
-		idx := levelNumber - 1
-		if idx < 0 {
-			idx = 0
-		}
-		if idx >= len(maps) {
-			idx = len(maps) - 1
-		}
-		fmt.Printf("Loading Duke3D level %d (%s) from GRP (total %d maps)\n", idx+1, maps[idx], len(maps))
-		mapReader, err := arc.GetReader(maps[idx])
-		if err != nil {
-			return nil, fmt.Errorf("duke3d: failed to extract map %s from grp: %w", maps[idx], err)
-		}
-		reader = mapReader
+		reader = grpReader
 	} else {
 		// Target might be a directory or a .map file
-		entries, err := res.ReadDir(target)
-		if err == nil && len(entries) > 0 {
-			// Check if there is a .GRP file in the directory first
-			var grpName string
-			var mapFiles []string
-			for _, e := range entries {
-				if e.IsDir() {
-					continue
-				}
-				nameLower := strings.ToLower(e.Name())
-				if strings.HasSuffix(nameLower, ".grp") {
-					grpName = e.Name()
-				} else if strings.HasSuffix(nameLower, ".map") {
-					mapFiles = append(mapFiles, e.Name())
-				}
+		entries, eErr := res.ReadDir(target)
+		if eErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to read directory %s: %w", target, eErr)
+		}
+		if len(entries) == 0 {
+			return nil, fmt.Errorf("duke3d: no files found in directory %s", target)
+		}
+		// Check if there is a .GRP file in the directory first
+		var grpName string
+		var mapFiles []string
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
 			}
-
-			if len(grpName) > 0 {
-				grpPath := target
-				if strings.HasSuffix(grpPath, "/") {
-					grpPath += grpName
-				} else {
-					grpPath += "/" + grpName
-				}
-				return b.Build(res, grpPath, levelNumber)
-			}
-
-			if len(mapFiles) > 0 {
-				sort.Strings(mapFiles)
-				idx := levelNumber - 1
-				if idx < 0 {
-					idx = 0
-				}
-				if idx >= len(mapFiles) {
-					idx = len(mapFiles) - 1
-				}
-				if strings.HasSuffix(target, "/") {
-					target = target + mapFiles[idx]
-				} else {
-					target = target + "/" + mapFiles[idx]
-				}
+			nameLower := strings.ToLower(e.Name())
+			if strings.HasSuffix(nameLower, ".grp") {
+				grpName = e.Name()
+			} else if strings.HasSuffix(nameLower, ".map") {
+				mapFiles = append(mapFiles, e.Name())
 			}
 		}
 
-		r, err := res.Open(target)
-		if err != nil {
-			return nil, fmt.Errorf("duke3d: failed to open map %s: %w", target, err)
+		if len(grpName) > 0 {
+			grpPath := target
+			if strings.HasSuffix(grpPath, "/") {
+				grpPath += grpName
+			} else {
+				grpPath += "/" + grpName
+			}
+			grpReader, err := b.createGrpReader(res, target, levelNumber, tex)
+			if err != nil {
+				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
+			}
+			reader = grpReader
+		} else if len(mapFiles) > 0 {
+			sort.Strings(mapFiles)
+			idx := levelNumber - 1
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= len(mapFiles) {
+				idx = len(mapFiles) - 1
+			}
+			if strings.HasSuffix(target, "/") {
+				target = target + mapFiles[idx]
+			} else {
+				target = target + "/" + mapFiles[idx]
+			}
+			r, err := res.Open(target)
+			if err != nil {
+				return nil, fmt.Errorf("duke3d: failed to open map %s: %w", target, err)
+			}
+			reader = r
+		} else {
+			return nil, fmt.Errorf("duke3d: no map found for level %d", levelNumber)
 		}
-		reader = r
 	}
 	defer reader.Close()
 
@@ -220,4 +178,61 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	cr.Crosshair = crosshair.Create()
 
 	return cr, nil
+}
+
+func (b *Builder) createGrpReader(res common.IResources, target string, levelNumber int, tex *lumps.Textures) (io.ReadCloser, error) {
+	r, rErr := res.Open(target)
+	if rErr != nil {
+		return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, rErr)
+	}
+	defer r.Close()
+	arc := lumps.NewArchiveGrp()
+	if pErr := arc.Parse(r); pErr != nil {
+		return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, pErr)
+	}
+	defer arc.Close()
+	palData, pErr := arc.GetPayload("PALETTE.DAT")
+	if pErr != nil {
+		return nil, fmt.Errorf("duke3d: failed to get palette data from grp %s: %w", target, pErr)
+	}
+	pal := lumps.NewPalette()
+	if err := pal.Parse(palData); err != nil {
+		return nil, fmt.Errorf("duke3d: failed to parse palette data from grp %s: %w", target, err)
+	}
+	tiles, tErr := arc.Match("TILES\\d{3}.ART", false)
+	if tErr != nil {
+		return nil, fmt.Errorf("duke3d: failed to match TILES files in grp %s: %w", target, tErr)
+	}
+	arts := lumps.NewArts(pal.GetData())
+	tileCount := 0
+	for _, artName := range tiles {
+		if artData, err := arc.GetPayload(artName); err == nil {
+			_ = arts.Load(artData)
+			tileCount++
+		}
+	}
+	for tId, tImg := range arts.GetTiles() {
+		tex.AddDepot(tId, tImg)
+	}
+	fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
+	maps, err := arc.Match(".*\\.MAP", true)
+	if err != nil {
+		return nil, fmt.Errorf("duke3d: failed to extract map files from grp: %w", err)
+	}
+	if len(maps) == 0 {
+		return nil, fmt.Errorf("duke3d: no .MAP files found in %s", target)
+	}
+	idx := levelNumber - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(maps) {
+		idx = len(maps) - 1
+	}
+	fmt.Printf("Loading Duke3D level %d (%s) from GRP (total %d maps)\n", idx+1, maps[idx], len(maps))
+	mapReader, err := arc.GetReader(maps[idx])
+	if err != nil {
+		return nil, fmt.Errorf("duke3d: failed to extract map %s from grp: %w", maps[idx], err)
+	}
+	return mapReader, nil
 }

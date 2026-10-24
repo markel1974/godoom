@@ -72,6 +72,82 @@ func (t *Textures) GetTile(picNum int) string {
 	return name
 }
 
+// GetSkyTile retrieves the name of a composite 360-degree cylindrical sky texture, or creates one if it does not exist.
+func (t *Textures) GetSkyTile(picNum int) string {
+	var basePic int
+	var panels []int
+
+	switch {
+	case picNum >= 89 && picNum <= 93:
+		basePic = 89
+		// Duke Nukem 3D Los Angeles multi-panel panorama (8 panels of 128px = 1024px total)
+		panels = []int{89, 91, 92, 90, 91, 90, 92, 93}
+	case picNum >= 80 && picNum <= 83:
+		basePic = 80
+		// Duke Nukem 3D Moon sky (8 panels)
+		panels = []int{80, 81, 80, 80, 82, 83, 80, 82}
+	case picNum >= 84 && picNum <= 88:
+		basePic = 84
+		// Duke Nukem 3D Big Orbit / space station sky (8 panels)
+		panels = []int{84, 85, 86, 87, 84, 84, 88, 84}
+	default:
+		return t.GetTile(picNum)
+	}
+
+	name := fmt.Sprintf("duke_sky_%d", basePic)
+	if _, exists := t.resources[name]; exists {
+		return name
+	}
+
+	const canvasSize = 512
+	const horizonY = canvasSize * 0.1
+
+	yH := horizonY
+
+	skyImg := image.NewRGBA(image.Rect(0, 0, canvasSize, canvasSize))
+
+	black := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+	for y := 0; y < canvasSize; y++ {
+		for x := 0; x < canvasSize; x++ {
+			skyImg.SetRGBA(x, y, black)
+		}
+	}
+
+	// In OpenGL texture space:
+	// y = 0 is bottom (nadir, v = 0.0)
+	// y = 512 is horizon (d.y = 0, v = 0.5)
+	// y = 1023 is top (zenith, v = 1.0)
+	// In Duke3D tiles, row 0 is top of hills / stars, and row h-1 is bottom of buildings.
+	// We position the base of the skyline at horizonY (v ~ 0.47) so the horizon is grounded.
+	curX := 0
+	for _, p := range panels {
+		img, ok := t.depot[p]
+		if !ok || img == nil {
+			curX += 32
+			continue
+		}
+		w := img.Bounds().Dx()
+		h := img.Bounds().Dy()
+		for x := 0; x < w && curX+x < canvasSize; x++ {
+			for y := 0; y < h; y++ {
+				targetY := int(yH) + (h - 1 - y)
+				if targetY >= 0 && targetY < canvasSize {
+					skyImg.SetRGBA(curX+x, targetY, img.RGBAAt(x, y))
+				}
+			}
+			topCol := img.RGBAAt(x, 0)
+			for targetY := int(yH) + h; targetY < canvasSize; targetY++ {
+				skyImg.SetRGBA(curX+x, targetY, topCol)
+			}
+		}
+		curX += w
+	}
+
+	texture := t.createTextureFromImage(name, uint32(basePic), skyImg)
+	t.resources[name] = texture
+	return name
+}
+
 // addTile creates a new texture from the given RGBA image and associates it with the specified picture number.
 func (t *Textures) createTextureFromImage(name string, picNum uint32, img *image.RGBA) *textures.Texture {
 	b := img.Bounds()

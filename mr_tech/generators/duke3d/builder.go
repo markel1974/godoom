@@ -62,28 +62,16 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
-		var r io.ReaderAt
-		var c io.Closer
-		if res != nil {
-			if reader, err := res.Open(target); err == nil {
-				r = reader
-				c = reader
-			}
+		r, rErr := res.Open(target)
+		if rErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, rErr)
 		}
-		if r == nil {
-			f, err := os.Open(target)
-			if err != nil {
-				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
-			}
-			r = f
-			c = f
-		}
+		defer r.Close()
 		arc := lumps.NewArchiveGrp()
-		if err := arc.Parse(r, c); err != nil {
-			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
+		if pErr := arc.Parse(r, r); pErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, pErr)
 		}
 		defer arc.Close()
-
 		// Load palette and textures from GRP if present
 		if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
 			pal := lumps.NewPalette()
@@ -101,7 +89,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 					}
 				}
 				for tId, tImg := range arts.GetTiles() {
-					tex.AddToTilesDepot(tId, tImg)
+					tex.AddDepot(tId, tImg)
 				}
 				fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
 			}

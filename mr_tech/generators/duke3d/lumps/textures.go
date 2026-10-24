@@ -12,7 +12,6 @@ import (
 // Textures manages a collection of Texture objects and provides mapping and retrieval functionalities.
 type Textures struct {
 	resources map[string]*textures.Texture
-	cache     map[int]string
 	depot     map[int]*image.RGBA
 }
 
@@ -20,14 +19,13 @@ type Textures struct {
 func NewTextures() *Textures {
 	return &Textures{
 		resources: make(map[string]*textures.Texture),
-		cache:     make(map[int]string),
 		depot:     make(map[int]*image.RGBA),
 	}
 }
 
-// AddToTilesDepot stores an RGBA image in the tilesDepot map, associating it with the specified integer ID.
-func (t *Textures) AddToTilesDepot(id int, img *image.RGBA) {
-	t.depot[id] = img
+// AddDepot adds an RGBA image to the depot map indexed by the specified texture ID.
+func (t *Textures) AddDepot(tId int, img *image.RGBA) {
+	t.depot[tId] = img
 }
 
 // GetNames retrieves all the keys of the resources map in the Textures instance sorted alphabetically for determinism.
@@ -60,20 +58,14 @@ func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 
 // GetOrCreateTile retrieves the name of a cached tile or creates a new one if it does not exist.
 func (t *Textures) GetOrCreateTile(picNum int) string {
-	if name, ok := t.cache[picNum]; ok {
-		return name
-	}
-
 	name := fmt.Sprintf("duke_tile_%d", picNum)
 	if _, exists := t.resources[name]; exists {
-		t.cache[picNum] = name
 		return name
 	}
 
 	if img, ok := t.depot[picNum]; ok {
 		texture := t.createTexture(name, uint32(picNum), img)
 		t.resources[name] = texture
-		t.cache[picNum] = name
 		return name
 	}
 
@@ -114,7 +106,6 @@ func (t *Textures) GetOrCreateTile(picNum int) string {
 		}
 	}
 	t.resources[name] = texture
-	t.cache[picNum] = name
 	return name
 }
 

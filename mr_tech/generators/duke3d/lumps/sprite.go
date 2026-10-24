@@ -3,13 +3,24 @@ package lumps
 // SpriteType represents the type/category of a sprite based on specific configuration bits in its CStat property.
 type SpriteType int16
 
-// FaceSprite represents a sprite with a face-on orientation.
-// WallAlignedSprite represents a sprite that stands vertically, aligned along an angle.
-// FloorAlignedSprite represents a sprite aligned flat on the floor or ceiling.
+// Build Engine Sprite CStat bitmask constants
 const (
-	FaceSprite  = SpriteType(0)
-	WallSprite  = SpriteType(16) // stands vertically along ang
-	FloorSprite = SpriteType(32) // flat on floor/ceiling
+	CStatBlocking         = 1 << 0 // Bit 0: Block players/monsters/shots
+	CStatTransparent      = 1 << 1 // Bit 1: Translucent sprite rendering (transparency)
+	CStatXFlip            = 1 << 2 // Bit 2: Flip sprite horizontally
+	CStatYFlip            = 1 << 3 // Bit 3: Flip sprite vertically
+	CStatAlignmentMask    = 3 << 4 // Bits 4-5: Sprite alignment type mask
+	CStatOneSided         = 1 << 6 // Bit 6: One-sided sprite (invisible from back)
+	CStatCenterVertically = 1 << 7 // Bit 7: Center vertically around Z coordinate
+	CStatInvisible        = 1 << 8 // Bit 8: Invisible sprite
+	CStatInvisibleHitscan = 1 << 9 // Bit 9: Invisible to hitscans / blocking disabled for shots
+)
+
+// Sprite alignment types defined by bits 4 and 5 (values 0, 16, 32).
+const (
+	FaceSprite  = SpriteType(0 << 4) // Faces the player/camera (billboard)
+	WallSprite  = SpriteType(1 << 4) // Stands vertically along ang
+	FloorSprite = SpriteType(2 << 4) // Flat on floor/ceiling
 )
 
 // Sprite represents an entity in the game world with position, appearance, motion, and tagging attributes.
@@ -39,44 +50,47 @@ type Sprite struct {
 	Extra    int16
 }
 
-// IsBlocking determines if the sprite is blocking other entities based on its CStat field. Returns true if blocking is enabled.
+// IsBlocking determines if the sprite is blocking other entities.
 func (s *Sprite) IsBlocking() bool {
-	const blockingBit = 1
-	return s.CStat&blockingBit != 0
+	return s.CStat&CStatBlocking != 0
 }
 
-// IsTransparent checks if the sprite is transparent by evaluating the transparent bit in its CStat field. Returns true if transparent.
+// IsTransparent checks if the sprite has translucent rendering enabled.
 func (s *Sprite) IsTransparent() bool {
-	const transparentBit = 2
-	return s.CStat&transparentBit != 0
+	return s.CStat&CStatTransparent != 0
 }
 
-// HasHorizontalFlip determines if the sprite's horizontal flip bit is set in its CStat field. Returns true if flipped, otherwise false.
+// HasHorizontalFlip determines if the sprite's horizontal flip bit is set.
 func (s *Sprite) HasHorizontalFlip() bool {
-	const hFlipBit = 4
-	return s.CStat&hFlipBit != 0
+	return s.CStat&CStatXFlip != 0
 }
 
-// HasVerticalFlip determines if the sprite is vertically flipped based on its CStat property. Returns true if flipped.
+// HasVerticalFlip determines if the sprite is vertically flipped.
 func (s *Sprite) HasVerticalFlip() bool {
-	const vFlipBit = 8
-	return s.CStat&vFlipBit != 0
+	return s.CStat&CStatYFlip != 0
 }
 
-// IsTwoSided checks if the sprite is two-sided (CStat & 64 == 0). Returns true if two-sided, false otherwise.
+// IsTwoSided checks if the sprite is two-sided (not one-sided).
 func (s *Sprite) IsTwoSided() bool {
-	const twoSidedBit = 64 // sp.CStat & 64 == 0
-	return s.CStat&twoSidedBit == 0
+	return s.CStat&CStatOneSided == 0
 }
 
-// GetType returns the type of the sprite based on specific bits in the CStat field.
+// GetType returns the structural alignment type of the sprite.
 func (s *Sprite) GetType() SpriteType {
-	const typeMask = int16(FaceSprite) | int16(WallSprite) | int16(FloorSprite)
-	return SpriteType(s.CStat & typeMask)
+	return SpriteType(s.CStat & CStatAlignmentMask)
 }
 
-// HasVerticalAlignment checks if the sprite is vertically aligned by evaluating the centered vertically bit in CStat. Returns true if aligned.
+// HasVerticalAlignment checks if the sprite is vertically centered around its Z coordinate.
 func (s *Sprite) HasVerticalAlignment() bool {
-	const verticalAlignmentBit = 128
-	return s.CStat&verticalAlignmentBit != 0
+	return s.CStat&CStatCenterVertically != 0
+}
+
+// IsInvisible checks if the sprite is completely invisible.
+func (s *Sprite) IsInvisible() bool {
+	return s.CStat&CStatInvisible != 0
+}
+
+// IsInvisibleHitscan checks if the sprite is invisible to hitscans / blockable hits.
+func (s *Sprite) IsInvisibleHitscan() bool {
+	return s.CStat&CStatInvisibleHitscan != 0
 }

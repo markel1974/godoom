@@ -190,6 +190,9 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", target, err)
 	}
 
+	//assembler := NewWorldAssembler(level)
+	//assembler.Assemble()
+
 	world := NewWorld(level, tex)
 	world.SetScales(b.scaleSectorH, b.scaleXY, true)
 
@@ -200,6 +203,12 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	pX := float64(level.Header.PosX) * b.scaleXY
 	pY := -float64(level.Header.PosY) * b.scaleXY // flip Y to Cartesian up
+
+	var pZ float64 = 0
+	if level.Header.CurSectNum >= 0 && int(level.Header.CurSectNum) < len(level.Sectors) {
+		startSec := level.Sectors[level.Header.CurSectNum]
+		pZ = -float64(startSec.FloorZ) / 256.0 * b.scaleSectorH
+	}
 
 	// Build angle: 0 to 2047. In Build: 0=East (+X), 512=South (+Y).
 	// With Y flipped, 0=East, 512=South (-Y), 1536=North (+Y).
@@ -212,7 +221,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		pAngle += 360.0
 	}
 
-	playerPos := geometry.XYZ{X: pX, Y: pY, Z: 0}
+	playerPos := geometry.XYZ{X: pX, Y: pY, Z: pZ}
 	player := config.NewConfigPlayer(playerPos, pAngle, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
 	_ = common.NewPlayer(player)
 	player.GForce = GForce

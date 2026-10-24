@@ -78,7 +78,8 @@ func (t *Textures) createTextureFromImage(name string, picNum uint32, img *image
 	w, h := b.Dx(), b.Dy()
 	texture := textures.NewTexture(name, picNum, w, h, false)
 	for y := 0; y < h; y++ {
-		flipY := h - 1 - y
+		//flipY := h - 1 - y
+		flipY := y
 		for x := 0; x < w; x++ {
 			c := img.RGBAAt(x, flipY)
 			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)

@@ -47,6 +47,9 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 	var lights []*config.Light
 
 	for secIdx, sec := range w.level.Sectors {
+		if sec.WallNum == 0 {
+			continue
+		}
 		sectorId := fmt.Sprintf("sector_%d", secIdx)
 
 		// Build engine: 16 units of Z per 1 unit of X/Y.

@@ -158,12 +158,12 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						adjFloorY := -float64(adjSec.FloorZ) / 256.0 * w.scaleSectorH
 
 						// Upper step wall
-						if ceilY > adjCeilY {
+						if ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling() {
 							tile := w.textures.GetTile(int(wall.PicNum))
 							cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 						// Lower step wall
-						if floorY < adjFloorY {
+						if floorY < adjFloorY || sec.IsSlopedFloor() || adjSec.IsSlopedFloor() {
 							tile := w.textures.GetTile(int(wall.PicNum))
 							cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}

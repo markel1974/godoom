@@ -138,21 +138,23 @@ func (l *Level) computeSlope(pivotWallIdx int, heiNum int16, scaleSectorH float6
 		return 0, 0, 0, false
 	}
 
-	// In Build engine, sector interior is to the right of the wall when Y goes down.
-	// When Y is flipped (Cartesian Y up), sector interior is to the left of the wall: (-dy/lenW, dx/lenW).
-	// Without flip: (dy/lenW, -dx/lenW).
+	// In Build engine, sector interior is to the right of the wall when walking along wall from w1 to w2.
+	// When Y is flipped (Cartesian Y up), walking along wall in clockwise order has sector interior to the right:
+	// Right normal in Cartesian (Y up) for (dx, dy) is (dy / lenW, -dx / lenW).
+	// Without flip (Y down), right normal for (dx, dy) is (-dy / lenW, dx / lenW).
 	var nx, ny float64
 	if flipY {
-		nx = -dy / lenW
-		ny = dx / lenW
-	} else {
 		nx = dy / lenW
 		ny = -dx / lenW
+	} else {
+		nx = -dy / lenW
+		ny = dx / lenW
 	}
 
 	// Height in godoom: Z_godoom = -Z_build / 256.0 * scaleSectorH.
-	// dz / dd = -float64(heiNum) / (4096.0 * 256.0) * scaleSectorH / scaleXY.
-	grad := -float64(heiNum) / (4096.0 * 256.0) * (scaleSectorH / scaleXY)
+	// dz_build / dd_build = float64(heiNum) / 256.0.
+	// dz_godoom / dd_godoom = -float64(heiNum) / (256.0 * 256.0) * (scaleSectorH / scaleXY).
+	grad := -float64(heiNum) / (256.0 * 256.0) * (scaleSectorH / scaleXY)
 
 	return math.Abs(grad), grad * nx, grad * ny, true
 }

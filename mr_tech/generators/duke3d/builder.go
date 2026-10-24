@@ -68,7 +68,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		}
 		defer r.Close()
 		arc := lumps.NewArchiveGrp()
-		if pErr := arc.Parse(r, r); pErr != nil {
+		if pErr := arc.Parse(r); pErr != nil {
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, pErr)
 		}
 		defer arc.Close()

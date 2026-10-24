@@ -41,7 +41,7 @@ func NewArchiveGrp() *ArchiveGrp {
 }
 
 // Parse initializes the ArchiveGrp by reading and parsing the GRP file structure from the provided reader and closer.
-func (a *ArchiveGrp) Parse(reader io.ReaderAt, closer io.Closer) error {
+func (a *ArchiveGrp) Parse(reader io.ReaderAt) error {
 	var magic [12]byte
 	if _, err := reader.ReadAt(magic[:], 0); err != nil {
 		return fmt.Errorf("reading grp magic: %w", err)
@@ -61,7 +61,6 @@ func (a *ArchiveGrp) Parse(reader io.ReaderAt, closer io.Closer) error {
 	}
 
 	a.reader = reader
-	a.closer = closer
 	a.entries = make(map[string]*GrpEntry, numFiles)
 
 	// Read directory entries

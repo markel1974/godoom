@@ -150,17 +150,17 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		// Slopes
 		if sec.IsSlopedFloor() {
 			if grad, gx, gy, ok := w.level.ComputeFloorSlope(secIdx, w.scaleSectorH, w.scaleXY, w.flipY); ok {
-				cSector.SlopedFloorGradient = grad
-				cSector.SlopedFloorGX = gx
-				cSector.SlopedFloorGY = gy
+				cSector.SlopedFloor.Gradient = grad
+				cSector.SlopedFloor.GX = gx
+				cSector.SlopedFloor.GY = gy
 			}
 		}
 
 		if sec.IsSlopedCeiling() {
 			if grad, gx, gy, ok := w.level.ComputeCeilingSlope(secIdx, w.scaleSectorH, w.scaleXY, w.flipY); ok {
-				cSector.SlopedCeilingGradient = grad
-				cSector.SlopedCeilingGX = gx
-				cSector.SlopedCeilingGY = gy
+				cSector.SlopedCeiling.Gradient = grad
+				cSector.SlopedCeiling.GX = gx
+				cSector.SlopedCeiling.GY = gy
 			}
 		}
 

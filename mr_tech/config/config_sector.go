@@ -2,27 +2,6 @@ package config
 
 import "github.com/markel1974/godoom/mr_tech/geometry"
 
-// Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
-type Sector struct {
-	Id                    string     `json:"id"`
-	CeilY                 float64    `json:"ceilY"`
-	FloorY                float64    `json:"floorY"`
-	Ceil                  *Material  `json:"ceil"`
-	Floor                 *Material  `json:"floor"`
-	Light                 *Light     `json:"light"`
-	Segments              []*Segment `json:"segments"`
-	Tag                   string     `json:"tag"`
-	SlopedCeilingGradient float64    `json:"slopedCeilingGradient"`
-	SlopedFloorGradient   float64    `json:"slopedFloorGradient"`
-	SlopedFloorGX         float64    `json:"slopedFloorGX"`
-	SlopedFloorGY         float64    `json:"slopedFloorGY"`
-	SlopedCeilingGX       float64    `json:"slopedCeilingGX"`
-	SlopedCeilingGY       float64    `json:"slopedCeilingGY"`
-	FloorAlign            *UVAlign   `json:"floorAlign,omitempty"`
-	CeilAlign             *UVAlign   `json:"ceilAlign,omitempty"`
-	DependsOn             []string   `json:"dependsOn,omitempty"`
-}
-
 // UVAlign defines UV alignment and transformation parameters for sector floors and ceilings.
 type UVAlign struct {
 	FixUV     bool        `json:"fixUV"`
@@ -36,15 +15,48 @@ type UVAlign struct {
 	PanningY  float64     `json:"panningY"`
 }
 
+// Sloped represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.
+type Sloped struct {
+	GX       float64 `json:"gX"`
+	GY       float64 `json:"gY"`
+	Gradient float64 `json:"gradient"`
+}
+
+// NewSloped initializes and returns a pointer to a new Sloped instance with default values.
+func NewSloped() *Sloped {
+	return &Sloped{
+		GX:       0,
+		GY:       0,
+		Gradient: 0,
+	}
+}
+
+// Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
+type Sector struct {
+	Id            string     `json:"id"`
+	CeilY         float64    `json:"ceilY"`
+	FloorY        float64    `json:"floorY"`
+	Ceil          *Material  `json:"ceil"`
+	Floor         *Material  `json:"floor"`
+	Light         *Light     `json:"light"`
+	Segments      []*Segment `json:"segments"`
+	Tag           string     `json:"tag"`
+	SlopedFloor   *Sloped    `json:"slopedFloor"`
+	SlopedCeiling *Sloped    `json:"slopedCeiling"`
+	FloorAlign    *UVAlign   `json:"floorAlign,omitempty"`
+	CeilAlign     *UVAlign   `json:"ceilAlign,omitempty"`
+	DependsOn     []string   `json:"dependsOn,omitempty"`
+}
+
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.
 func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff float64) *Sector {
 	return &Sector{
-		Id:                    id,
-		Ceil:                  nil,
-		Floor:                 nil,
-		Light:                 NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
-		SlopedCeilingGradient: 0,
-		SlopedFloorGradient:   0,
+		Id:            id,
+		Ceil:          nil,
+		Floor:         nil,
+		Light:         NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
+		SlopedCeiling: NewSloped(),
+		SlopedFloor:   NewSloped(),
 	}
 }
 

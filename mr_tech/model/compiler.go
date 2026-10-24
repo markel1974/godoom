@@ -174,7 +174,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				continue
 			}
 			if cn.SlopedFloorRef {
-				sectorSlopeFloor = &Slope{Gx: cs.SlopedFloorGX, Gy: cs.SlopedFloorGY, Gradient: cs.SlopedFloorGradient, Start: cn.Start, End: cn.End}
+				sectorSlopeFloor = &Slope{Gx: cs.SlopedFloor.GX, Gy: cs.SlopedFloor.GY, Gradient: cs.SlopedFloor.Gradient, Start: cn.Start, End: cn.End}
 				break
 			}
 		}
@@ -184,7 +184,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 				continue
 			}
 			if cn.SlopedCeilingRef {
-				sectorSlopeCeiling = &Slope{Gx: cs.SlopedCeilingGX, Gy: cs.SlopedCeilingGY, Gradient: cs.SlopedCeilingGradient, Start: cn.Start, End: cn.End}
+				sectorSlopeCeiling = &Slope{Gx: cs.SlopedCeiling.GX, Gy: cs.SlopedCeiling.GY, Gradient: cs.SlopedCeiling.Gradient, Start: cn.Start, End: cn.End}
 				break
 			}
 		}

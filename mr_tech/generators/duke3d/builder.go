@@ -16,8 +16,6 @@ import (
 // AspectRatio defines the default aspect ratio for the application's display.
 // ScaleSectorH determines the vertical scaling factor for sectors.
 // ScaleXY specifies a uniform scaling factor for both x and y dimensions.
-// ScaleTextureW represents the horizontal scaling factor for textures.
-// ScaleTextureH represents the vertical scaling factor for textures.
 // PlayerHeight calculates the height of the player based on ScaleSectorH.
 // PlayerRadius defines the radius of the player character.
 // PlayerSpeed specifies the movement speed of the player in units per second.
@@ -25,12 +23,9 @@ import (
 // GForce represents the gravitational force multiplied by a fixed mass.
 // JumpForce calculates the jump force as a multiple of GForce.
 const (
-	AspectRatio   = 1.333
-	ScaleSectorH  = 1.0
-	ScaleXY       = 1.0 / 16.0
-	ScaleTextureW = 0.5
-	ScaleTextureH = 0.5
-
+	AspectRatio  = 1.333
+	ScaleSectorH = 1.0
+	ScaleXY      = 1.0 / 16.0
 	PlayerHeight = 56.0 * ScaleSectorH
 	PlayerRadius = 16.0
 	PlayerSpeed  = 1800.0
@@ -196,7 +191,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	}
 
 	world := NewWorld(level, tex)
-	world.SetScales(b.scaleSectorH, b.scaleXY, ScaleTextureW, ScaleTextureH, true)
+	world.SetScales(b.scaleSectorH, b.scaleXY, true)
 
 	cSectors, gVertices, lights, err := world.Build()
 	if err != nil {

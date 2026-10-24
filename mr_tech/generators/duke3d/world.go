@@ -11,34 +11,28 @@ import (
 
 // World represents a 3D game world, managing level data, textures, scaling factors, and axis inversion for rendering.
 type World struct {
-	level         *lumps.Level
-	textures      *lumps.Textures
-	scaleSectorH  float64
-	scaleXY       float64
-	scaleTextureW float64
-	scaleTextureH float64
-	flipY         bool
+	level        *lumps.Level
+	textures     *lumps.Textures
+	scaleSectorH float64
+	scaleXY      float64
+	flipY        bool
 }
 
 // NewWorld initializes and returns a new World instance with the provided level and textures for rendering and configuration.
 func NewWorld(level *lumps.Level, textures *lumps.Textures) *World {
 	return &World{
-		level:         level,
-		textures:      textures,
-		scaleSectorH:  1.0,
-		scaleXY:       1.0,
-		scaleTextureW: 1.0,
-		scaleTextureH: 1.0,
-		flipY:         true,
+		level:        level,
+		textures:     textures,
+		scaleSectorH: 1.0,
+		scaleXY:      1.0,
+		flipY:        true,
 	}
 }
 
 // SetScales updates scaling parameters for sector height, XY scaling, texture width/height, and vertical flip.
-func (w *World) SetScales(scaleSectorH, scaleXY, scaleTextureW, scaleTextureH float64, flipY bool) {
+func (w *World) SetScales(scaleSectorH, scaleXY float64, flipY bool) {
 	w.scaleSectorH = scaleSectorH
 	w.scaleXY = scaleXY
-	w.scaleTextureW = scaleTextureW
-	w.scaleTextureH = scaleTextureH
 	w.flipY = flipY
 }
 
@@ -63,6 +57,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
 		shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
 		intensity := math.Max(1.2, math.Min(3.5, 2.5-shade/32.0))
+		intensity *= 0.4
 
 		roomH := math.Abs(ceilY - floorY)
 		if roomH < 128 {
@@ -84,16 +79,16 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		cSector.CeilY = ceilY
 
 		// Floor material
-		floorTile := w.textures.GetOrCreateTile(int(sec.FloorPicNum))
-		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
+		floorTile := w.textures.GetTile(int(sec.FloorPicNum))
+		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 
 		// Ceiling material
-		ceilTile := w.textures.GetOrCreateTile(int(sec.CeilingPicNum))
+		ceilTile := w.textures.GetTile(int(sec.CeilingPicNum))
 		ceilKind := config.MaterialKindLoop
 		if sec.IsSkyCeiling() {
 			ceilKind = config.MaterialKindSky
 		}
-		cSector.Ceil = config.NewConfigMaterial([]string{ceilTile}, ceilKind, w.scaleTextureW, w.scaleTextureH, 0, 0)
+		cSector.Ceil = config.NewConfigMaterial([]string{ceilTile}, ceilKind, 1.0, 1.0, 0, 0)
 
 		// Slopes
 		if sec.IsSlopedFloor() {
@@ -152,8 +147,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				if wall.NextSector < 0 {
 					// 1-sided solid wall
 					cSeg.Kind = config.SegmentWall
-					tile := w.textures.GetOrCreateTile(int(wall.PicNum))
-					cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
+					tile := w.textures.GetTile(int(wall.PicNum))
+					cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				} else {
 					// 2-sided portal / adjoin
 					cSeg.Kind = config.SegmentUnknown
@@ -164,13 +159,13 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 						// Upper step wall
 						if ceilY > adjCeilY {
-							tile := w.textures.GetOrCreateTile(int(wall.PicNum))
-							cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
+							tile := w.textures.GetTile(int(wall.PicNum))
+							cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 						// Lower step wall
 						if floorY < adjFloorY {
-							tile := w.textures.GetOrCreateTile(int(wall.PicNum))
-							cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
+							tile := w.textures.GetTile(int(wall.PicNum))
+							cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 						// Masked / grating wall
 						if wall.IsMasked() {
@@ -178,8 +173,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							if tilePic < 0 {
 								tilePic = int(wall.PicNum)
 							}
-							tile := w.textures.GetOrCreateTile(tilePic)
-							cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, w.scaleTextureW, w.scaleTextureH, 0, 0)
+							tile := w.textures.GetTile(tilePic)
+							cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 					}
 				}

@@ -56,32 +56,48 @@ func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	}
 }
 
-// GetOrCreateTile retrieves the name of a cached tile or creates a new one if it does not exist.
-func (t *Textures) GetOrCreateTile(picNum int) string {
+// GetTile retrieves the name of a cached tile or creates a new one if it does not exist.
+func (t *Textures) GetTile(picNum int) string {
 	name := fmt.Sprintf("duke_tile_%d", picNum)
 	if _, exists := t.resources[name]; exists {
 		return name
 	}
-
+	var texture *textures.Texture
 	if img, ok := t.depot[picNum]; ok {
-		texture := t.createTexture(name, uint32(picNum), img)
-		t.resources[name] = texture
-		return name
+		texture = t.createTextureFromImage(name, uint32(picNum), img)
+	} else {
+		texture = t.createTextureArbitrary(name, uint32(picNum))
 	}
+	t.resources[name] = texture
+	return name
+}
 
-	// Generate a 64x64 texture with a subtle grid and color based on picNum.
+// addTile creates a new texture from the given RGBA image and associates it with the specified picture number.
+func (t *Textures) createTextureFromImage(name string, picNum uint32, img *image.RGBA) *textures.Texture {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	texture := textures.NewTexture(name, picNum, w, h, false)
+	for y := 0; y < h; y++ {
+		flipY := h - 1 - y
+		for x := 0; x < w; x++ {
+			c := img.RGBAAt(x, flipY)
+			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
+			texture.Set(x, y, rgba)
+		}
+	}
+	return texture
+}
+
+// createArbitraryTexture generates a 64x64 textured image using a grid pattern with colors derived from the provided picNum.
+func (t *Textures) createTextureArbitrary(name string, picNum uint32) *textures.Texture {
 	const size = 64
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
-
-	// Base palette generation from picNum
 	r := uint8((picNum*37+50)%200 + 40)
 	g := uint8((picNum*73+70)%200 + 40)
 	b := uint8((picNum*109+90)%200 + 40)
-
 	baseColor := color.RGBA{R: r, G: g, B: b, A: 255}
 	borderColor := color.RGBA{R: r / 2, G: g / 2, B: b / 2, A: 255}
 	crossColor := color.RGBA{R: min(r+30, 255), G: min(g+30, 255), B: min(b+30, 255), A: 255}
-
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
 			c := baseColor
@@ -95,32 +111,5 @@ func (t *Textures) GetOrCreateTile(picNum int) string {
 			img.Set(x, y, c)
 		}
 	}
-
-	texture := textures.NewTexture(name, uint32(picNum), size, size, false)
-	for y := 0; y < size; y++ {
-		flipY := size - 1 - y
-		for x := 0; x < size; x++ {
-			c := img.RGBAAt(x, flipY)
-			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
-			texture.Set(x, y, rgba)
-		}
-	}
-	t.resources[name] = texture
-	return name
-}
-
-// addTile creates a new texture from the given RGBA image and associates it with the specified picture number.
-func (t *Textures) createTexture(name string, picNum uint32, img *image.RGBA) *textures.Texture {
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	texture := textures.NewTexture(name, picNum, w, h, false)
-	for y := 0; y < h; y++ {
-		flipY := h - 1 - y
-		for x := 0; x < w; x++ {
-			c := img.RGBAAt(x, flipY)
-			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
-			texture.Set(x, y, rgba)
-		}
-	}
-	return texture
+	return t.createTextureFromImage(name, picNum, img)
 }

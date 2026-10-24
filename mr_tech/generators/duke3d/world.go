@@ -63,10 +63,10 @@ func (w *World) computeLight(sec *lumps.Sector, ceilY, floorY float64) (config.L
 	return lightKind, intensity, falloff
 }
 
-// Build generates sector configurations, global vertex geometry, and light definitions for the loaded level.
-func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
+// Build generates sector configurations, global vertex geometry, volumes, and light definitions for the loaded level.
+func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, []*config.Light, error) {
 	if w.level == nil {
-		return nil, nil, nil, fmt.Errorf("duke3d: no level loaded")
+		return nil, nil, nil, nil, fmt.Errorf("duke3d: no level loaded")
 	}
 
 	configSectors := make([]*config.Sector, 0, len(w.level.Sectors))
@@ -203,5 +203,183 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		configSectors = append(configSectors, cSector)
 	}
 
-	return configSectors, globalVertices, lights, nil
+	volumes := w.buildSprites()
+
+	return configSectors, globalVertices, volumes, lights, nil
+}
+
+func (w *World) buildSprites() []*config.Volume {
+	if w.level == nil || len(w.level.Sprites) == 0 {
+		return nil
+	}
+
+	volumes := make([]*config.Volume, 0, len(w.level.Sprites))
+
+	for spIdx, sp := range w.level.Sprites {
+		spriteType := sp.CStat & 48
+		switch spriteType {
+		case 16: // Wall-aligned sprite (stands vertically along ang)
+			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
+			if !ok || tileW <= 0 || tileH <= 0 {
+				tileW, tileH = 64, 64
+			}
+
+			// In Build, ang: 0..2047, where 2048 is 360 degrees.
+			angRad := float64(sp.Ang) * 2.0 * math.Pi / 2048.0
+			cosA := math.Cos(angRad)
+			sinA := math.Sin(angRad)
+
+			normalX := cosA
+			normalY := sinA
+
+			// Tangent along wall sprite (left to right when facing front)
+			tangentX := sinA
+			tangentY := -cosA
+
+			widthBuild := float64(tileW) * float64(sp.XRepeat) / 4.0
+			halfW := widthBuild / 2.0
+
+			pLeftX := float64(sp.X) - tangentX*halfW
+			pLeftY := float64(sp.Y) - tangentY*halfW
+			pRightX := float64(sp.X) + tangentX*halfW
+			pRightY := float64(sp.Y) + tangentY*halfW
+
+			// Offset 1-sided decals slightly along normal to prevent Z-fighting with walls
+			if sp.CStat&64 != 0 {
+				const decalOffset = 2.0
+				pLeftX += normalX * decalOffset
+				pLeftY += normalY * decalOffset
+				pRightX += normalX * decalOffset
+				pRightY += normalY * decalOffset
+			}
+
+			pLeft := geometry.XY{X: pLeftX * w.scaleXY, Y: pLeftY * w.scaleXY}
+			pRight := geometry.XY{X: pRightX * w.scaleXY, Y: pRightY * w.scaleXY}
+			if w.flipY {
+				pLeft.Y = -pLeft.Y
+				pRight.Y = -pRight.Y
+			}
+
+			heightBuildZ := int32(tileH) * int32(sp.YRepeat)
+			var bottomZ_Build, topZ_Build int32
+			if sp.CStat&128 != 0 { // Centered vertically
+				bottomZ_Build = sp.Z + heightBuildZ/2
+				topZ_Build = sp.Z - heightBuildZ/2
+			} else { // Bottom-aligned
+				bottomZ_Build = sp.Z
+				topZ_Build = sp.Z - heightBuildZ
+			}
+
+			bottomZ := w.computeHeight(bottomZ_Build)
+			topZ := w.computeHeight(topZ_Build)
+
+			v0 := geometry.XYZ{X: pLeft.X, Y: pLeft.Y, Z: bottomZ}
+			v1 := geometry.XYZ{X: pRight.X, Y: pRight.Y, Z: bottomZ}
+			v2 := geometry.XYZ{X: pRight.X, Y: pRight.Y, Z: topZ}
+			v3 := geometry.XYZ{X: pLeft.X, Y: pLeft.Y, Z: topZ}
+
+			uMin, uMax := 0.0, 1.0
+			if sp.CStat&4 != 0 {
+				uMin, uMax = 1.0, 0.0
+			}
+			vBottom, vTop := -1.0, 0.0
+			if sp.CStat&8 != 0 {
+				vBottom, vTop = 0.0, -1.0
+			}
+
+			tile := w.textures.GetTile(int(sp.PicNum))
+			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
+			frontFace := config.NewConfigFace(
+				[]geometry.XYZ{v0, v1, v2, v3},
+				[][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}},
+				mat,
+				fmt.Sprintf("sp_wall_%d_f", spIdx),
+			)
+			vol.AddFace(frontFace)
+
+			// If 2-sided (sp.CStat & 64 == 0), add back face
+			if sp.CStat&64 == 0 {
+				backFace := config.NewConfigFace(
+					[]geometry.XYZ{v1, v0, v3, v2},
+					[][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}},
+					mat,
+					fmt.Sprintf("sp_wall_%d_b", spIdx),
+				)
+				vol.AddFace(backFace)
+			}
+
+			volumes = append(volumes, vol)
+
+		case 32: // Floor-aligned sprite (flat on floor/ceiling)
+			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
+			if !ok || tileW <= 0 || tileH <= 0 {
+				tileW, tileH = 64, 64
+			}
+
+			angRad := float64(sp.Ang) * 2.0 * math.Pi / 2048.0
+			cosA := math.Cos(angRad)
+			sinA := math.Sin(angRad)
+
+			dirX := cosA
+			dirY := sinA
+			perpX := sinA
+			perpY := -cosA
+
+			halfW := float64(tileW) * float64(sp.XRepeat) / 8.0
+			halfH := float64(tileH) * float64(sp.YRepeat) / 8.0
+
+			c0X := float64(sp.X) - perpX*halfW - dirX*halfH
+			c0Y := float64(sp.Y) - perpY*halfW - dirY*halfH
+			c1X := float64(sp.X) + perpX*halfW - dirX*halfH
+			c1Y := float64(sp.Y) + perpY*halfW - dirY*halfH
+			c2X := float64(sp.X) + perpX*halfW + dirX*halfH
+			c2Y := float64(sp.Y) + perpY*halfW + dirY*halfH
+			c3X := float64(sp.X) - perpX*halfW + dirX*halfH
+			c3Y := float64(sp.Y) - perpY*halfW + dirY*halfH
+
+			pt0 := geometry.XY{X: c0X * w.scaleXY, Y: c0Y * w.scaleXY}
+			pt1 := geometry.XY{X: c1X * w.scaleXY, Y: c1Y * w.scaleXY}
+			pt2 := geometry.XY{X: c2X * w.scaleXY, Y: c2Y * w.scaleXY}
+			pt3 := geometry.XY{X: c3X * w.scaleXY, Y: c3Y * w.scaleXY}
+			if w.flipY {
+				pt0.Y = -pt0.Y
+				pt1.Y = -pt1.Y
+				pt2.Y = -pt2.Y
+				pt3.Y = -pt3.Y
+			}
+
+			zVal := w.computeHeight(sp.Z) + 0.1
+
+			v0 := geometry.XYZ{X: pt0.X, Y: pt0.Y, Z: zVal}
+			v1 := geometry.XYZ{X: pt1.X, Y: pt1.Y, Z: zVal}
+			v2 := geometry.XYZ{X: pt2.X, Y: pt2.Y, Z: zVal}
+			v3 := geometry.XYZ{X: pt3.X, Y: pt3.Y, Z: zVal}
+
+			uMin, uMax := 0.0, 1.0
+			if sp.CStat&4 != 0 {
+				uMin, uMax = 1.0, 0.0
+			}
+			vMin, vMax := -1.0, 0.0
+			if sp.CStat&8 != 0 {
+				vMin, vMax = 0.0, -1.0
+			}
+
+			tile := w.textures.GetTile(int(sp.PicNum))
+			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+			vol := config.NewConfigVolume(fmt.Sprintf("sp_floor_%d", spIdx), "sp_floor")
+			topFace := config.NewConfigFace(
+				[]geometry.XYZ{v0, v1, v2, v3},
+				[][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}},
+				mat,
+				fmt.Sprintf("sp_floor_%d_t", spIdx),
+			)
+			vol.AddFace(topFace)
+			volumes = append(volumes, vol)
+		}
+	}
+
+	return volumes
 }

@@ -95,9 +95,9 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 			} else {
 				grpPath += "/" + grpName
 			}
-			grpReader, err := b.createGrpReader(res, target, levelNumber, tex)
+			grpReader, err := b.createGrpReader(res, grpPath, levelNumber, tex)
 			if err != nil {
-				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
+				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", grpPath, err)
 			}
 			reader = grpReader
 		} else if len(mapFiles) > 0 {
@@ -134,7 +134,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	world := NewWorld(level, tex)
 	world.SetScales(b.scaleSectorH, b.scaleXY, true)
 
-	cSectors, gVertices, lights, err := world.Build()
+	cSectors, gVertices, volumes, lights, err := world.Build()
 	if err != nil {
 		return nil, fmt.Errorf("duke3d: failed to build world: %w", err)
 	}
@@ -174,12 +174,14 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1.0}
 	cr := config.NewConfigRoot(cal, cSectors, player, nil, scaleFactor, tex)
 	cr.Vertices = gVertices
+	cr.Volumes = volumes
 	cr.Lights = lights
 	cr.Crosshair = crosshair.Create()
 
 	return cr, nil
 }
 
+// createGrpReader parses a .GRP file, loads textures and level data, and returns a reader for the specified level map.
 func (b *Builder) createGrpReader(res common.IResources, target string, levelNumber int, tex *lumps.Textures) (io.ReadCloser, error) {
 	r, rErr := res.Open(target)
 	if rErr != nil {

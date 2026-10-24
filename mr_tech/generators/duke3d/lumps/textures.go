@@ -72,6 +72,15 @@ func (t *Textures) GetTile(picNum int) string {
 	return name
 }
 
+// GetTileSize retrieves the width and height in pixels for the specified tile.
+func (t *Textures) GetTileSize(picNum int) (int, int, bool) {
+	if img, ok := t.depot[picNum]; ok && img != nil {
+		b := img.Bounds()
+		return b.Dx(), b.Dy(), true
+	}
+	return 0, 0, false
+}
+
 // GetSkyTile retrieves the name of a composite 360-degree cylindrical sky texture, or creates one if it does not exist.
 func (t *Textures) GetSkyTile(picNum int) string {
 	var basePic int

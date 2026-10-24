@@ -92,6 +92,17 @@ func (l *Level) GetWall(idx int) *Wall {
 	return &l.Walls[idx]
 }
 
+func (l *Level) GetNumSprite() int {
+	return len(l.Sprites)
+}
+
+func (l *Level) GetSprite(idx int) *Sprite {
+	if idx < 0 || idx >= len(l.Sprites) {
+		return nil
+	}
+	return &l.Sprites[idx]
+}
+
 // ComputeFloorSlope calculates the slope gradient and direction of a floor in a specific sector.
 // secIdx specifies the sector index, scaleSectorH adjusts the Z-axis scale, and scaleXY adjusts the XY-axis scale.
 // flipY determines whether the Y-axis is inverted. Returns gradient, gx, gy, and ok indicating success or failure.

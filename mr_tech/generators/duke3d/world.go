@@ -210,13 +210,19 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 // buildSprites converts sprite data from the level into 3D volumes with faces, materials, and geometry transformations.
 func (w *World) buildSprites() []*config.Volume {
-	if w.level == nil || len(w.level.Sprites) == 0 {
+	sNum := w.level.GetNumSprite()
+	if w.level == nil || sNum == 0 {
 		return nil
 	}
 
-	volumes := make([]*config.Volume, 0, len(w.level.Sprites))
+	volumes := make([]*config.Volume, 0, sNum)
 
-	for spIdx, sp := range w.level.Sprites {
+	for spIdx := 0; spIdx < sNum; spIdx++ {
+		sp := w.level.GetSprite(spIdx)
+		if sp == nil {
+			fmt.Println("nil sprite idx", spIdx)
+			continue
+		}
 		switch sp.GetType() {
 		case lumps.WallSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))

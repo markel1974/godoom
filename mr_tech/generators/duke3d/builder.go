@@ -69,29 +69,30 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, pErr)
 		}
 		defer arc.Close()
-		// Load palette and textures from GRP if present
-		if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
-			pal := lumps.NewPalette()
-			if err := pal.Parse(palData); err == nil {
-				tiles, tErr := arc.Match("TILES\\d{3}.ART", false)
-				if tErr != nil {
-					return nil, fmt.Errorf("duke3d: failed to match TILES files in grp %s: %w", target, tErr)
-				}
-				arts := lumps.NewArts(pal.GetData())
-				tileCount := 0
-				for _, artName := range tiles {
-					if artData, err := arc.GetPayload(artName); err == nil {
-						_ = arts.Load(artData)
-						tileCount++
-					}
-				}
-				for tId, tImg := range arts.GetTiles() {
-					tex.AddDepot(tId, tImg)
-				}
-				fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
+		palData, pErr := arc.GetPayload("PALETTE.DAT")
+		if pErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to get palette data from grp %s: %w", target, pErr)
+		}
+		pal := lumps.NewPalette()
+		if err := pal.Parse(palData); err != nil {
+			return nil, fmt.Errorf("duke3d: failed to parse palette data from grp %s: %w", target, err)
+		}
+		tiles, tErr := arc.Match("TILES\\d{3}.ART", false)
+		if tErr != nil {
+			return nil, fmt.Errorf("duke3d: failed to match TILES files in grp %s: %w", target, tErr)
+		}
+		arts := lumps.NewArts(pal.GetData())
+		tileCount := 0
+		for _, artName := range tiles {
+			if artData, err := arc.GetPayload(artName); err == nil {
+				_ = arts.Load(artData)
+				tileCount++
 			}
 		}
-
+		for tId, tImg := range arts.GetTiles() {
+			tex.AddDepot(tId, tImg)
+		}
+		fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
 		maps, err := arc.Match(".*\\.MAP", true)
 		if err != nil {
 			return nil, fmt.Errorf("duke3d: failed to extract map files from grp: %w", err)

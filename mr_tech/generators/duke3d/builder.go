@@ -3,7 +3,6 @@ package duke3d
 import (
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -51,8 +50,11 @@ func NewBuilder() *Builder {
 
 // Build constructs and initializes the game world configuration based on the provided resources, target path, and level number.
 func (b *Builder) Build(res common.IResources, target string, levelNumber int) (*config.Root, error) {
+	if res == nil {
+		return nil, fmt.Errorf("duke3d: resources interface cannot be nil")
+	}
+
 	var reader io.ReadCloser
-	sep := string(os.PathSeparator)
 	tex := lumps.NewTextures()
 
 	// Check if target is a GRP file directly
@@ -112,21 +114,8 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		reader = mapReader
 	} else {
 		// Target might be a directory or a .map file
-		isDir := false
-		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
-			isDir = true
-		}
-		if isDir || (!strings.HasSuffix(strings.ToLower(target), ".map") && len(target) > 0) {
-			var entries []os.DirEntry
-			if res != nil {
-				if e, err := res.ReadDir(target); err == nil {
-					entries = e
-				}
-			}
-			if entries == nil {
-				entries, _ = os.ReadDir(target)
-			}
-
+		entries, err := res.ReadDir(target)
+		if err == nil && len(entries) > 0 {
 			// Check if there is a .GRP file in the directory first
 			var grpName string
 			var mapFiles []string
@@ -144,10 +133,10 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 			if len(grpName) > 0 {
 				grpPath := target
-				if strings.HasSuffix(grpPath, sep) || strings.HasSuffix(grpPath, "/") {
+				if strings.HasSuffix(grpPath, "/") {
 					grpPath += grpName
 				} else {
-					grpPath += sep + grpName
+					grpPath += "/" + grpName
 				}
 				return b.Build(res, grpPath, levelNumber)
 			}
@@ -161,26 +150,19 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 				if idx >= len(mapFiles) {
 					idx = len(mapFiles) - 1
 				}
-				if strings.HasSuffix(target, sep) || strings.HasSuffix(target, "/") {
+				if strings.HasSuffix(target, "/") {
 					target = target + mapFiles[idx]
 				} else {
-					target = target + sep + mapFiles[idx]
+					target = target + "/" + mapFiles[idx]
 				}
 			}
 		}
 
-		if res != nil {
-			if r, err := res.Open(target); err == nil {
-				reader = r
-			}
+		r, err := res.Open(target)
+		if err != nil {
+			return nil, fmt.Errorf("duke3d: failed to open map %s: %w", target, err)
 		}
-		if reader == nil {
-			f, err := os.Open(target)
-			if err != nil {
-				return nil, fmt.Errorf("duke3d: failed to open map %s: %w", target, err)
-			}
-			reader = f
-		}
+		reader = r
 	}
 	defer reader.Close()
 
@@ -189,9 +171,6 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	if err := level.Parse(reader); err != nil {
 		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", target, err)
 	}
-
-	//assembler := NewWorldAssembler(level)
-	//assembler.Assemble()
 
 	world := NewWorld(level, tex)
 	world.SetScales(b.scaleSectorH, b.scaleXY, true)
@@ -204,12 +183,6 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	pX := float64(level.Header.PosX) * b.scaleXY
 	pY := -float64(level.Header.PosY) * b.scaleXY // flip Y to Cartesian up
 
-	var pZ float64 = 0
-	if level.Header.CurSectNum >= 0 && int(level.Header.CurSectNum) < len(level.Sectors) {
-		startSec := level.Sectors[level.Header.CurSectNum]
-		pZ = -float64(startSec.FloorZ) / 256.0 * b.scaleSectorH
-	}
-
 	// Build angle: 0 to 2047. In Build: 0=East (+X), 512=South (+Y).
 	// With Y flipped, 0=East, 512=South (-Y), 1536=North (+Y).
 	// In Cartesian degrees: (2048 - ang) * 360 / 2048.
@@ -221,7 +194,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		pAngle += 360.0
 	}
 
-	playerPos := geometry.XYZ{X: pX, Y: pY, Z: pZ}
+	playerPos := geometry.XYZ{X: pX, Y: pY, Z: 0}
 	player := config.NewConfigPlayer(playerPos, pAngle, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
 	_ = common.NewPlayer(player)
 	player.GForce = GForce

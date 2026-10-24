@@ -36,6 +36,33 @@ func (w *World) SetScales(scaleSectorH, scaleXY float64, flipY bool) {
 	w.flipY = flipY
 }
 
+// computeHeight transforms a Build engine Z-coordinate to a scaled world height based on sector height scale.
+func (w *World) computeHeight(k int32) float64 {
+	// Build engine: 16 units of Z per 1 unit of X/Y.
+	// Scaled to match 1 world unit = 16 Build X/Y units = 256 Build Z units:
+	return -float64(k) / 256.0 * w.scaleSectorH
+}
+
+func (w *World) computeLight(sec *lumps.Sector, ceilY, floorY float64) (config.LightKind, float64, float64) {
+	// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
+	shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
+	intensity := math.Max(1.2, math.Min(3.5, 2.5-shade/32.0))
+	intensity *= 0.4
+
+	roomH := math.Abs(ceilY - floorY)
+	if roomH < 128 {
+		roomH = 256
+	}
+	falloff := math.Max(1200.0, roomH*4.0)
+
+	lightKind := config.LightKindAmbient
+	if sec.IsSkyCeiling() {
+		lightKind = config.LightKindOpenAir
+	}
+
+	return lightKind, intensity, falloff
+}
+
 // Build generates sector configurations, global vertex geometry, and light definitions for the loaded level.
 func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	if w.level == nil {
@@ -47,31 +74,12 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 	var lights []*config.Light
 
 	for secIdx, sec := range w.level.Sectors {
-		if sec.WallNum == 0 {
-			continue
-		}
 		sectorId := fmt.Sprintf("sector_%d", secIdx)
 
-		// Build engine: 16 units of Z per 1 unit of X/Y.
-		// Scaled to match 1 world unit = 16 Build X/Y units = 256 Build Z units:
-		floorY := -float64(sec.FloorZ) / 256.0 * w.scaleSectorH
-		ceilY := -float64(sec.CeilingZ) / 256.0 * w.scaleSectorH
+		floorY := w.computeHeight(sec.FloorZ)
+		ceilY := w.computeHeight(sec.CeilingZ)
 
-		// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
-		shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
-		intensity := math.Max(1.2, math.Min(3.5, 2.5-shade/32.0))
-		intensity *= 0.4
-
-		roomH := math.Abs(ceilY - floorY)
-		if roomH < 128 {
-			roomH = 256
-		}
-		falloff := math.Max(1200.0, roomH*4.0)
-
-		lightKind := config.LightKindAmbient
-		if sec.IsSkyCeiling() {
-			lightKind = config.LightKindOpenAir
-		}
+		lightKind, intensity, falloff := w.computeLight(&sec, ceilY, floorY)
 
 		cSector := config.NewConfigSector(sectorId, intensity, lightKind, falloff)
 		cSector.Tag = sectorId
@@ -161,8 +169,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					cSeg.Kind = config.SegmentUnknown
 					adjSec := w.level.GetSector(int(wall.NextSector))
 					if adjSec != nil {
-						adjCeilY := -float64(adjSec.CeilingZ) / 256.0 * w.scaleSectorH
-						adjFloorY := -float64(adjSec.FloorZ) / 256.0 * w.scaleSectorH
+						adjCeilY := w.computeHeight(adjSec.CeilingZ)
+						adjFloorY := w.computeHeight(adjSec.FloorZ)
 
 						// Upper step wall
 						if ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling() {

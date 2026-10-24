@@ -62,12 +62,24 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
-		r, rErr := res.Open(target)
-		if rErr != nil {
-			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, rErr)
+		var r io.ReaderAt
+		var c io.Closer
+		if res != nil {
+			if reader, err := res.Open(target); err == nil {
+				r = reader
+				c = reader
+			}
+		}
+		if r == nil {
+			f, err := os.Open(target)
+			if err != nil {
+				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
+			}
+			r = f
+			c = f
 		}
 		arc := lumps.NewArchiveGrp()
-		if err := arc.Parse(r, r); err != nil {
+		if err := arc.Parse(r, c); err != nil {
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
 		}
 		defer arc.Close()
@@ -76,17 +88,20 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
 			pal := lumps.NewPalette()
 			if err := pal.Parse(palData); err == nil {
-				arts := lumps.NewArts(pal.GetData(), tex)
+				tiles, tErr := arc.Match("TILES\\d{3}.ART", false)
+				if tErr != nil {
+					return nil, fmt.Errorf("duke3d: failed to match TILES files in grp %s: %w", target, tErr)
+				}
+				arts := lumps.NewArts(pal.GetData())
 				tileCount := 0
-				for artIdx := 0; artIdx < 100; artIdx++ {
-					artName := fmt.Sprintf("TILES%03d.ART", artIdx)
-					if !arc.HasFile(artName) {
-						break
-					}
+				for _, artName := range tiles {
 					if artData, err := arc.GetPayload(artName); err == nil {
 						_ = arts.Load(artData)
 						tileCount++
 					}
+				}
+				for tId, tImg := range arts.GetTiles() {
+					tex.AddToTilesDepot(tId, tImg)
 				}
 				fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
 			}

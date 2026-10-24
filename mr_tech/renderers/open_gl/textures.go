@@ -2,6 +2,7 @@ package open_gl
 
 import (
 	"math"
+	"sort"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -56,6 +57,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	if len(names) == 0 {
 		return nil
 	}
+	sort.Strings(names)
 	for _, id := range names {
 		tn := t.Get([]string{id})
 		if len(tn) == 0 {

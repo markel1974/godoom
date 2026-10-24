@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"sort"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -12,6 +13,7 @@ import (
 type Textures struct {
 	resources map[string]*textures.Texture
 	cache     map[int]string
+	depot     map[int]*image.RGBA
 }
 
 // NewTextures creates and returns a new instance of Textures with initialized resource and cache maps.
@@ -19,15 +21,22 @@ func NewTextures() *Textures {
 	return &Textures{
 		resources: make(map[string]*textures.Texture),
 		cache:     make(map[int]string),
+		depot:     make(map[int]*image.RGBA),
 	}
 }
 
-// GetNames retrieves all the keys of the resources map in the Textures instance and returns them as a slice of strings.
+// AddToTilesDepot stores an RGBA image in the tilesDepot map, associating it with the specified integer ID.
+func (t *Textures) AddToTilesDepot(id int, img *image.RGBA) {
+	t.depot[id] = img
+}
+
+// GetNames retrieves all the keys of the resources map in the Textures instance sorted alphabetically for determinism.
 func (t *Textures) GetNames() []string {
 	names := make([]string, 0, len(t.resources))
 	for k := range t.resources {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -49,25 +58,6 @@ func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	}
 }
 
-// AddTile creates a new texture from the given RGBA image and associates it with the specified picture number.
-func (t *Textures) AddTile(picNum int, img *image.RGBA) string {
-	name := fmt.Sprintf("duke_tile_%d", picNum)
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	texture := textures.NewTexture(name, uint32(picNum), w, h, false)
-	for y := 0; y < h; y++ {
-		flipY := h - 1 - y
-		for x := 0; x < w; x++ {
-			c := img.RGBAAt(x, flipY)
-			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
-			texture.Set(x, y, rgba)
-		}
-	}
-	t.resources[name] = texture
-	t.cache[picNum] = name
-	return name
-}
-
 // GetOrCreateTile retrieves the name of a cached tile or creates a new one if it does not exist.
 func (t *Textures) GetOrCreateTile(picNum int) string {
 	if name, ok := t.cache[picNum]; ok {
@@ -76,6 +66,13 @@ func (t *Textures) GetOrCreateTile(picNum int) string {
 
 	name := fmt.Sprintf("duke_tile_%d", picNum)
 	if _, exists := t.resources[name]; exists {
+		t.cache[picNum] = name
+		return name
+	}
+
+	if img, ok := t.depot[picNum]; ok {
+		texture := t.createTexture(name, uint32(picNum), img)
+		t.resources[name] = texture
 		t.cache[picNum] = name
 		return name
 	}
@@ -119,4 +116,20 @@ func (t *Textures) GetOrCreateTile(picNum int) string {
 	t.resources[name] = texture
 	t.cache[picNum] = name
 	return name
+}
+
+// addTile creates a new texture from the given RGBA image and associates it with the specified picture number.
+func (t *Textures) createTexture(name string, picNum uint32, img *image.RGBA) *textures.Texture {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	texture := textures.NewTexture(name, picNum, w, h, false)
+	for y := 0; y < h; y++ {
+		flipY := h - 1 - y
+		for x := 0; x < w; x++ {
+			c := img.RGBAAt(x, flipY)
+			rgba := int(c.R)<<24 | int(c.G)<<16 | int(c.B)<<8 | int(c.A)
+			texture.Set(x, y, rgba)
+		}
+	}
+	return texture
 }

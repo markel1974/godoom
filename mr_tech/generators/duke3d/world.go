@@ -208,6 +208,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 	return configSectors, globalVertices, volumes, lights, nil
 }
 
+// buildSprites converts sprite data from the level into 3D volumes with faces, materials, and geometry transformations.
 func (w *World) buildSprites() []*config.Volume {
 	if w.level == nil || len(w.level.Sprites) == 0 {
 		return nil
@@ -216,68 +217,57 @@ func (w *World) buildSprites() []*config.Volume {
 	volumes := make([]*config.Volume, 0, len(w.level.Sprites))
 
 	for spIdx, sp := range w.level.Sprites {
-		spriteType := sp.CStat & 48
+		spriteType := sp.Type()
 		switch spriteType {
-		case 16: // Wall-aligned sprite (stands vertically along ang)
+		case lumps.WallAlignedSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
 			}
-
 			// In Build, ang: 0..2047, where 2048 is 360 degrees.
 			angRad := float64(sp.Ang) * 2.0 * math.Pi / 2048.0
 			cosA := math.Cos(angRad)
 			sinA := math.Sin(angRad)
-
 			normalX := cosA
 			normalY := sinA
-
 			// Tangent along wall sprite (left to right when facing front)
 			tangentX := sinA
 			tangentY := -cosA
-
 			widthBuild := float64(tileW) * float64(sp.XRepeat) / 4.0
 			halfW := widthBuild / 2.0
-
 			pLeftX := float64(sp.X) - tangentX*halfW
 			pLeftY := float64(sp.Y) - tangentY*halfW
 			pRightX := float64(sp.X) + tangentX*halfW
 			pRightY := float64(sp.Y) + tangentY*halfW
-
 			// Offset 1-sided decals slightly along normal to prevent Z-fighting with walls
-			if sp.CStat&64 != 0 {
+			if !sp.IsTwoSided() {
 				const decalOffset = 2.0
 				pLeftX += normalX * decalOffset
 				pLeftY += normalY * decalOffset
 				pRightX += normalX * decalOffset
 				pRightY += normalY * decalOffset
 			}
-
 			pLeft := geometry.XY{X: pLeftX * w.scaleXY, Y: pLeftY * w.scaleXY}
 			pRight := geometry.XY{X: pRightX * w.scaleXY, Y: pRightY * w.scaleXY}
 			if w.flipY {
 				pLeft.Y = -pLeft.Y
 				pRight.Y = -pRight.Y
 			}
-
 			heightBuildZ := int32(tileH) * int32(sp.YRepeat)
-			var bottomZ_Build, topZ_Build int32
-			if sp.CStat&128 != 0 { // Centered vertically
-				bottomZ_Build = sp.Z + heightBuildZ/2
-				topZ_Build = sp.Z - heightBuildZ/2
+			var bottomZBuild, topZBuild int32
+			if sp.IsCenteredVertically() {
+				bottomZBuild = sp.Z + heightBuildZ/2
+				topZBuild = sp.Z - heightBuildZ/2
 			} else { // Bottom-aligned
-				bottomZ_Build = sp.Z
-				topZ_Build = sp.Z - heightBuildZ
+				bottomZBuild = sp.Z
+				topZBuild = sp.Z - heightBuildZ
 			}
-
-			bottomZ := w.computeHeight(bottomZ_Build)
-			topZ := w.computeHeight(topZ_Build)
-
+			bottomZ := w.computeHeight(bottomZBuild)
+			topZ := w.computeHeight(topZBuild)
 			v0 := geometry.XYZ{X: pLeft.X, Y: pLeft.Y, Z: bottomZ}
 			v1 := geometry.XYZ{X: pRight.X, Y: pRight.Y, Z: bottomZ}
 			v2 := geometry.XYZ{X: pRight.X, Y: pRight.Y, Z: topZ}
 			v3 := geometry.XYZ{X: pLeft.X, Y: pLeft.Y, Z: topZ}
-
 			uMin, uMax := 0.0, 1.0
 			if sp.CStat&4 != 0 {
 				uMin, uMax = 1.0, 0.0
@@ -286,10 +276,8 @@ func (w *World) buildSprites() []*config.Volume {
 			if sp.CStat&8 != 0 {
 				vBottom, vTop = 0.0, -1.0
 			}
-
 			tile := w.textures.GetTile(int(sp.PicNum))
 			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
 			frontFace := config.NewConfigFace(
 				[]geometry.XYZ{v0, v1, v2, v3},
@@ -300,19 +288,14 @@ func (w *World) buildSprites() []*config.Volume {
 			vol.AddFace(frontFace)
 
 			// If 2-sided (sp.CStat & 64 == 0), add back face
-			if sp.CStat&64 == 0 {
-				backFace := config.NewConfigFace(
-					[]geometry.XYZ{v1, v0, v3, v2},
-					[][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}},
-					mat,
-					fmt.Sprintf("sp_wall_%d_b", spIdx),
-				)
+			if sp.IsTwoSided() {
+				backFace := config.NewConfigFace([]geometry.XYZ{v1, v0, v3, v2}, [][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}}, mat, fmt.Sprintf("sp_wall_%d_b", spIdx))
 				vol.AddFace(backFace)
 			}
 
 			volumes = append(volumes, vol)
 
-		case 32: // Floor-aligned sprite (flat on floor/ceiling)
+		case lumps.FloorAlignedSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64

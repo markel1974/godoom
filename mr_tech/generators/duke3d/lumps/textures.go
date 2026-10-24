@@ -28,14 +28,11 @@ func (t *Textures) AddDepot(tId int, img *image.RGBA) {
 	t.depot[tId] = img
 }
 
-// GetNames retrieves all the keys of the resources map in the Textures instance sorted alphabetically for determinism.
-func (t *Textures) GetNames() []string {
-	names := make([]string, 0, len(t.resources))
-	for k := range t.resources {
-		names = append(names, k)
+// AddDirect adds a texture to the resources map using the specified name if the provided texture is not nil.
+func (t *Textures) AddDirect(name string, tex *textures.Texture) {
+	if tex != nil {
+		t.resources[name] = tex
 	}
-	sort.Strings(names)
-	return names
 }
 
 // Get retrieves a slice of textures based on the provided list of texture names. Only textures found in resources are returned.
@@ -49,11 +46,14 @@ func (t *Textures) Get(names []string) []*textures.Texture {
 	return out
 }
 
-// AddDirect adds a texture to the resources map using the specified name if the provided texture is not nil.
-func (t *Textures) AddDirect(name string, tex *textures.Texture) {
-	if tex != nil {
-		t.resources[name] = tex
+// GetNames retrieves all the keys of the resources map in the Textures instance sorted alphabetically for determinism.
+func (t *Textures) GetNames() []string {
+	names := make([]string, 0, len(t.resources))
+	for k := range t.resources {
+		names = append(names, k)
 	}
+	sort.Strings(names)
+	return names
 }
 
 // GetTile retrieves the name of a cached tile or creates a new one if it does not exist.

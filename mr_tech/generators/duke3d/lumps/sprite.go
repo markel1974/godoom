@@ -25,3 +25,24 @@ type Sprite struct {
 	HiTag    int16
 	Extra    int16
 }
+
+func (s *Sprite) IsTwoSided() bool {
+	const twoSidedBit = 64 // sp.CStat & 64 == 0
+	return s.CStat&twoSidedBit == 0
+}
+
+func (s *Sprite) IsCenteredVertically() bool {
+	const centeredVerticallyBit = 128
+	return s.CStat&centeredVerticallyBit != 0
+}
+
+type SpriteType int16
+
+const (
+	WallAlignedSprite  = SpriteType(16) // stands vertically along ang
+	FloorAlignedSprite = SpriteType(32) // flat on floor/ceiling
+)
+
+func (s *Sprite) Type() SpriteType {
+	return SpriteType(s.CStat & 48)
+}

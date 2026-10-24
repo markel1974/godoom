@@ -217,15 +217,13 @@ func (w *World) buildSprites() []*config.Volume {
 	volumes := make([]*config.Volume, 0, len(w.level.Sprites))
 
 	for spIdx, sp := range w.level.Sprites {
-		spriteType := sp.Type()
-		switch spriteType {
-		case lumps.WallAlignedSprite:
+		switch sp.GetType() {
+		case lumps.WallSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
 			}
-			// In Build, ang: 0..2047, where 2048 is 360 degrees.
-			angRad := float64(sp.Ang) * 2.0 * math.Pi / 2048.0
+			angRad := ToRadians(sp.Ang)
 			cosA := math.Cos(angRad)
 			sinA := math.Sin(angRad)
 			normalX := cosA
@@ -255,7 +253,7 @@ func (w *World) buildSprites() []*config.Volume {
 			}
 			heightBuildZ := int32(tileH) * int32(sp.YRepeat)
 			var bottomZBuild, topZBuild int32
-			if sp.IsCenteredVertically() {
+			if sp.HasVerticalAlignment() {
 				bottomZBuild = sp.Z + heightBuildZ/2
 				topZBuild = sp.Z - heightBuildZ/2
 			} else { // Bottom-aligned
@@ -269,33 +267,32 @@ func (w *World) buildSprites() []*config.Volume {
 			v2 := geometry.XYZ{X: pRight.X, Y: pRight.Y, Z: topZ}
 			v3 := geometry.XYZ{X: pLeft.X, Y: pLeft.Y, Z: topZ}
 			uMin, uMax := 0.0, 1.0
-			if sp.CStat&4 != 0 {
+			if sp.HasHorizontalFlip() {
 				uMin, uMax = 1.0, 0.0
 			}
 			vBottom, vTop := -1.0, 0.0
-			if sp.CStat&8 != 0 {
+			if sp.HasVerticalFlip() {
 				vBottom, vTop = 0.0, -1.0
 			}
 			tile := w.textures.GetTile(int(sp.PicNum))
 			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
-			frontFace := config.NewConfigFace(
-				[]geometry.XYZ{v0, v1, v2, v3},
-				[][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}},
-				mat,
-				fmt.Sprintf("sp_wall_%d_f", spIdx),
-			)
+
+			fPoints := []geometry.XYZ{v0, v1, v2, v3}
+			uvs := [][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}}
+			frontFace := config.NewConfigFace(fPoints, uvs, mat, fmt.Sprintf("sp_wall_%d_f", spIdx))
 			vol.AddFace(frontFace)
 
 			// If 2-sided (sp.CStat & 64 == 0), add back face
 			if sp.IsTwoSided() {
-				backFace := config.NewConfigFace([]geometry.XYZ{v1, v0, v3, v2}, [][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}}, mat, fmt.Sprintf("sp_wall_%d_b", spIdx))
+				bPoints := []geometry.XYZ{v1, v0, v3, v2}
+				backFace := config.NewConfigFace(bPoints, uvs, mat, fmt.Sprintf("sp_wall_%d_b", spIdx))
 				vol.AddFace(backFace)
 			}
 
 			volumes = append(volumes, vol)
 
-		case lumps.FloorAlignedSprite:
+		case lumps.FloorSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
@@ -351,14 +348,10 @@ func (w *World) buildSprites() []*config.Volume {
 
 			tile := w.textures.GetTile(int(sp.PicNum))
 			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_floor_%d", spIdx), "sp_floor")
-			topFace := config.NewConfigFace(
-				[]geometry.XYZ{v0, v1, v2, v3},
-				[][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}},
-				mat,
-				fmt.Sprintf("sp_floor_%d_t", spIdx),
-			)
+			tPoints := []geometry.XYZ{v0, v1, v2, v3}
+			uvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
+			topFace := config.NewConfigFace(tPoints, uvs, mat, fmt.Sprintf("sp_floor_%d_t", spIdx))
 			vol.AddFace(topFace)
 			volumes = append(volumes, vol)
 		}

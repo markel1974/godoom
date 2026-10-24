@@ -107,6 +107,46 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		}
 		cSector.Ceil = config.NewConfigMaterial([]string{ceilTile}, ceilKind, 1.0, 1.0, 0, 0)
 
+		// First wall reference for UV alignment and slopes
+		wallStart := int(sec.WallPtr)
+		wallCount := int(sec.WallNum)
+		if wallStart >= 0 && wallStart < len(w.level.Walls) {
+			w1 := w.level.Walls[wallStart]
+			p2 := int(w1.Point2)
+			if p2 >= 0 && p2 < len(w.level.Walls) {
+				w2 := w.level.Walls[p2]
+				vFirst1 := geometry.XY{X: float64(w1.X) * w.scaleXY, Y: float64(w1.Y) * w.scaleXY}
+				vFirst2 := geometry.XY{X: float64(w2.X) * w.scaleXY, Y: float64(w2.Y) * w.scaleXY}
+				if w.flipY {
+					vFirst1.Y = -vFirst1.Y
+					vFirst2.Y = -vFirst2.Y
+				}
+
+				cSector.FloorAlign = &config.UVAlign{
+					FixUV:     true,
+					AlignWall: sec.FloorStat&64 != 0,
+					Start:     vFirst1,
+					End:       vFirst2,
+					SwapXY:    sec.FloorStat&4 != 0,
+					FlipX:     sec.FloorStat&16 != 0,
+					FlipY:     sec.FloorStat&32 != 0,
+					PanningX:  float64(sec.FloorXPanning),
+					PanningY:  float64(sec.FloorYPanning),
+				}
+				cSector.CeilAlign = &config.UVAlign{
+					FixUV:     true,
+					AlignWall: sec.CeilingStat&64 != 0,
+					Start:     vFirst1,
+					End:       vFirst2,
+					SwapXY:    sec.CeilingStat&4 != 0,
+					FlipX:     sec.CeilingStat&16 != 0,
+					FlipY:     sec.CeilingStat&32 != 0,
+					PanningX:  float64(sec.CeilingXPanning),
+					PanningY:  float64(sec.CeilingYPanning),
+				}
+			}
+		}
+
 		// Slopes
 		if sec.IsSlopedFloor() {
 			if grad, gx, gy, ok := w.level.ComputeFloorSlope(secIdx, w.scaleSectorH, w.scaleXY, w.flipY); ok {
@@ -125,8 +165,6 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		}
 
 		// Process walls belonging to this sector
-		wallStart := int(sec.WallPtr)
-		wallCount := int(sec.WallNum)
 		if wallStart >= 0 && wallStart+wallCount <= len(w.level.Walls) {
 			cSector.Segments = make([]*config.Segment, 0, wallCount)
 

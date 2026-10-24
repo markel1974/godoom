@@ -203,6 +203,7 @@ func (r *Compiler) compile2d(vertices geometry.Polygon, css []*config.Sector, an
 
 				sector := NewSector(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
 				sector.SetSlopes(sectorSlopeFloor, sectorSlopeCeiling)
+				sector.SetAlign(cs.FloorAlign, cs.CeilAlign)
 
 				modelSectorId++
 
@@ -416,14 +417,18 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 			{X: p1.X, Y: p1.Y, Z: zC1},
 			{X: p2.X, Y: p2.Y, Z: zC2},
 		}
-		vol3d.AddFace(NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1)))
+		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
+		r.applyUVAlign(ceilFace, sector.GetCeilAlign(), ceilP)
+		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{
 			{X: p0.X, Y: p0.Y, Z: zF0},
 			{X: p2.X, Y: p2.Y, Z: zF2},
 			{X: p1.X, Y: p1.Y, Z: zF1},
 		}
-		vol3d.AddFace(NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0)))
+		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
+		r.applyUVAlign(floorFace, sector.GetFloorAlign(), floorP)
+		vol3d.AddFace(floorFace)
 
 		for x := 0; x < segmentCount; x++ {
 			seg := segments[x]
@@ -529,6 +534,72 @@ func (r *Compiler) upgrade3d(sectors []*Sector) []*Volume {
 	}
 
 	return volumes3d
+}
+
+// applyUVAlign projects and locks UV coordinates for a floor or ceiling face if alignment parameters are configured.
+func (r *Compiler) applyUVAlign(face *Face, align *config.UVAlign, tri [3]geometry.XYZ) {
+	if align == nil || !align.FixUV {
+		return
+	}
+	mat := face.GetMaterial()
+	if mat == nil {
+		return
+	}
+	tex := mat.CurrentFrame()
+	if tex == nil {
+		return
+	}
+	w, h := tex.GetSizeScaled()
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	var tx, ty, nx, ny float64
+	if align.AlignWall {
+		dx := align.End.X - align.Start.X
+		dy := align.End.Y - align.Start.Y
+		length := math.Hypot(dx, dy)
+		if length < 1e-6 {
+			dx, dy, length = 1, 0, 1
+		}
+		tx = dx / length
+		ty = dy / length
+		nx = -ty
+		ny = tx
+	}
+
+	var uvs [3][2]float64
+	for i := 0; i < 3; i++ {
+		var u, v float64
+		if align.AlignWall {
+			relX := tri[i].X - align.Start.X
+			relY := tri[i].Y - align.Start.Y
+			u = relX*tx + relY*ty
+			v = relX*nx + relY*ny
+		} else {
+			u = tri[i].X
+			v = tri[i].Y
+		}
+		if align.SwapXY {
+			u, v = v, u
+		}
+		if align.FlipX {
+			u = -u
+		}
+		if align.FlipY {
+			v = -v
+		}
+		if align.PanningX != 0 {
+			u += align.PanningX * (w / 256.0)
+		}
+		if align.PanningY != 0 {
+			v += align.PanningY * (h / 256.0)
+		}
+		uvs[i][0] = u / w
+		uvs[i][1] = v / h
+	}
+	face.SetUV(uvs[0][0], uvs[0][1], uvs[1][0], uvs[1][1], uvs[2][0], uvs[2][1])
+	face.LockUV(true)
 }
 
 // compile3d constructs 3D volumes from configurations and materials, linking geometry and calculating adjacency portals.

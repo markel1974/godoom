@@ -18,7 +18,22 @@ type Sector struct {
 	SlopedFloorGY         float64    `json:"slopedFloorGY"`
 	SlopedCeilingGX       float64    `json:"slopedCeilingGX"`
 	SlopedCeilingGY       float64    `json:"slopedCeilingGY"`
+	FloorAlign            *UVAlign   `json:"floorAlign,omitempty"`
+	CeilAlign             *UVAlign   `json:"ceilAlign,omitempty"`
 	DependsOn             []string   `json:"dependsOn,omitempty"`
+}
+
+// UVAlign defines UV alignment and transformation parameters for sector floors and ceilings.
+type UVAlign struct {
+	FixUV     bool        `json:"fixUV"`
+	AlignWall bool        `json:"alignWall"`
+	Start     geometry.XY `json:"start"`
+	End       geometry.XY `json:"end"`
+	SwapXY    bool        `json:"swapXY"`
+	FlipX     bool        `json:"flipX"`
+	FlipY     bool        `json:"flipY"`
+	PanningX  float64     `json:"panningX"`
+	PanningY  float64     `json:"panningY"`
 }
 
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.
@@ -42,6 +57,14 @@ func (s *Sector) Scale(scale geometry.XYZ) {
 		}
 		seg.Start.Scale(xy)
 		seg.End.Scale(xy)
+	}
+	if s.FloorAlign != nil {
+		s.FloorAlign.Start.Scale(xy)
+		s.FloorAlign.End.Scale(xy)
+	}
+	if s.CeilAlign != nil {
+		s.CeilAlign.Start.Scale(xy)
+		s.CeilAlign.End.Scale(xy)
 	}
 }
 

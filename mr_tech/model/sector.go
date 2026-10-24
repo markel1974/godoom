@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -35,6 +36,8 @@ type Sector struct {
 	segmentsTree *aabb.Tree
 	slopeF       *Slope
 	slopeC       *Slope
+	floorAlign   *config.UVAlign
+	ceilAlign    *config.UVAlign
 }
 
 // NewSector creates and returns a pointer to a new Sector with specified parameters such as id, bounds, and materials.
@@ -120,6 +123,22 @@ func (s *Sector) GetSlopes() (*Slope, *Slope) {
 func (s *Sector) SetSlopes(slopeF *Slope, slopeC *Slope) {
 	s.slopeF = slopeF
 	s.slopeC = slopeC
+}
+
+// SetAlign sets the UV alignment parameters for floor and ceiling.
+func (s *Sector) SetAlign(floorAlign, ceilAlign *config.UVAlign) {
+	s.floorAlign = floorAlign
+	s.ceilAlign = ceilAlign
+}
+
+// GetFloorAlign returns the UV alignment configuration for the floor.
+func (s *Sector) GetFloorAlign() *config.UVAlign {
+	return s.floorAlign
+}
+
+// GetCeilAlign returns the UV alignment configuration for the ceiling.
+func (s *Sector) GetCeilAlign() *config.UVAlign {
+	return s.ceilAlign
 }
 
 // AddSegment adds a new segment to the sector, setting its parent and expanding the internal storage if necessary.

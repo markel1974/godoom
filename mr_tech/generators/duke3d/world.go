@@ -304,8 +304,7 @@ func (w *World) buildSprites() []*config.Volume {
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
 			}
-
-			angRad := float64(sp.Ang) * 2.0 * math.Pi / 2048.0
+			angRad := ToRadians(sp.Ang)
 			cosA := math.Cos(angRad)
 			sinA := math.Sin(angRad)
 

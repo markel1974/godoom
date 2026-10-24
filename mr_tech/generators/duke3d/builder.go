@@ -142,17 +142,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	pX := float64(level.Header.PosX) * b.scaleXY
 	pY := -float64(level.Header.PosY) * b.scaleXY // flip Y to Cartesian up
 
-	// Build angle: 0 to 2047. In Build: 0=East (+X), 512=South (+Y).
-	// With Y flipped, 0=East, 512=South (-Y), 1536=North (+Y).
-	// In Cartesian degrees: (2048 - ang) * 360 / 2048.
-	pAngle := (2048.0 - float64(level.Header.Ang)) * 360.0 / 2048.0
-	for pAngle >= 360.0 {
-		pAngle -= 360.0
-	}
-	for pAngle < 0.0 {
-		pAngle += 360.0
-	}
-
+	pAngle := ToDegrees(level.Header.Ang)
 	playerPos := geometry.XYZ{X: pX, Y: pY, Z: 0}
 	player := config.NewConfigPlayer(playerPos, pAngle, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
 	_ = common.NewPlayer(player)

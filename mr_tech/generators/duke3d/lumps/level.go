@@ -134,7 +134,7 @@ func (l *Level) computeSlope(pivotWallIdx int, heiNum int16, scaleSectorH float6
 	dx := v2.X - v1.X
 	dy := v2.Y - v1.Y
 	lenW := math.Hypot(dx, dy)
-	if lenW < 1e-6 {
+	if lenW <= 0 {
 		return 0, 0, 0, false
 	}
 

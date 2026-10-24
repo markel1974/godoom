@@ -9,17 +9,17 @@ import (
 	"strings"
 )
 
-// GrpMagic is the expected magic string that identifies a valid GRP file format.
+// GrpMagic is the signature string used to validate the header of a GRP archive file.
 const GrpMagic = "KenSilverman"
 
-// GrpEntry represents a single file entry within a GRP archive, including its name, offset, and size.
+// GrpEntry represents an entry in a GRP archive, including its name, offset within the archive, and size in bytes.
 type GrpEntry struct {
 	Name   string
 	Offset int64
 	Size   int64
 }
 
-// ArchiveGrp represents a container for handling GRP archive files, supporting file retrieval and resource management.
+// ArchiveGrp represents a container for managing and accessing files within a GRP archive format.
 type ArchiveGrp struct {
 	reader  io.ReaderAt
 	closer  io.Closer
@@ -27,38 +27,41 @@ type ArchiveGrp struct {
 	maps    []string
 }
 
-// OpenGrp opens and parses a GRP archive, validating its signature and reading its directory entries.
-func OpenGrp(reader io.ReaderAt, closer io.Closer) (*ArchiveGrp, error) {
+// NewArchiveGrp initializes and returns a new instance of ArchiveGrp with default values.
+func NewArchiveGrp() *ArchiveGrp {
+	return &ArchiveGrp{}
+}
+
+// Parse initializes the ArchiveGrp by reading and parsing the GRP file structure from the provided reader and closer.
+func (a *ArchiveGrp) Parse(reader io.ReaderAt, closer io.Closer) error {
 	var magic [12]byte
 	if _, err := reader.ReadAt(magic[:], 0); err != nil {
-		return nil, fmt.Errorf("reading grp magic: %w", err)
+		return fmt.Errorf("reading grp magic: %w", err)
 	}
 	if string(magic[:]) != GrpMagic {
-		return nil, fmt.Errorf("invalid grp signature %q (expected %q)", string(magic[:]), GrpMagic)
+		return fmt.Errorf("invalid grp signature %q (expected %q)", string(magic[:]), GrpMagic)
 	}
 
 	var numFiles int32
 	var numFilesBuf [4]byte
 	if _, err := reader.ReadAt(numFilesBuf[:], 12); err != nil {
-		return nil, fmt.Errorf("reading grp numfiles: %w", err)
+		return fmt.Errorf("reading grp numfiles: %w", err)
 	}
 	numFiles = int32(binary.LittleEndian.Uint32(numFilesBuf[:]))
 	if numFiles < 0 {
-		return nil, fmt.Errorf("invalid grp numfiles %d", numFiles)
+		return fmt.Errorf("invalid grp numfiles %d", numFiles)
 	}
 
-	arc := &ArchiveGrp{
-		reader:  reader,
-		closer:  closer,
-		entries: make(map[string]*GrpEntry, numFiles),
-	}
+	a.reader = reader
+	a.closer = closer
+	a.entries = make(map[string]*GrpEntry, numFiles)
 
 	// Read directory entries
 	// Each entry is 12 bytes filename + 4 bytes filesize = 16 bytes
 	dirSize := int64(numFiles) * 16
 	dirBuf := make([]byte, dirSize)
 	if _, err := reader.ReadAt(dirBuf, 16); err != nil {
-		return nil, fmt.Errorf("reading grp directory: %w", err)
+		return fmt.Errorf("reading grp directory: %w", err)
 	}
 
 	curDataOffset := int64(16) + dirSize
@@ -84,30 +87,31 @@ func OpenGrp(reader io.ReaderAt, closer io.Closer) (*ArchiveGrp, error) {
 			Offset: curDataOffset,
 			Size:   fileSize,
 		}
-		arc.entries[nameUpper] = entry
+		a.entries[nameUpper] = entry
 		if strings.HasSuffix(nameUpper, ".MAP") {
-			arc.maps = append(arc.maps, nameUpper)
+			a.maps = append(a.maps, nameUpper)
 		}
 
 		curDataOffset += fileSize
 	}
 
-	sort.Strings(arc.maps)
-	return arc, nil
+	sort.Strings(a.maps)
+	return nil
 }
 
-// GetMaps returns a slice of strings containing the names of map entries stored in the ArchiveGrp instance.
+// GetMaps returns a sorted list of map file names contained in the ArchiveGrp.
 func (a *ArchiveGrp) GetMaps() []string {
 	return a.maps
 }
 
-// HasFile checks if a file with the specified name exists in the archive, ignoring case sensitivity. Returns true if found.
+// HasFile checks if a file with the specified name exists in the ArchiveGrp. The check is case-insensitive.
 func (a *ArchiveGrp) HasFile(name string) bool {
 	_, ok := a.entries[strings.ToUpper(name)]
 	return ok
 }
 
-// GetPayload retrieves the content of a specified file from the archive as a byte slice, or returns an error if unavailable.
+// GetPayload retrieves the raw data for the specified file name from the archive.
+// It returns the file's contents as a byte slice or an error if the file is not found or cannot be read.
 func (a *ArchiveGrp) GetPayload(name string) ([]byte, error) {
 	entry, ok := a.entries[strings.ToUpper(name)]
 	if !ok {
@@ -120,7 +124,7 @@ func (a *ArchiveGrp) GetPayload(name string) ([]byte, error) {
 	return data, nil
 }
 
-// GetReader returns an io.ReadCloser for the specified file name in the archive or an error if the file is not found.
+// GetReader retrieves a file from the archive by name and returns it as an io.ReadCloser or an error if not found.
 func (a *ArchiveGrp) GetReader(name string) (io.ReadCloser, error) {
 	data, err := a.GetPayload(name)
 	if err != nil {
@@ -129,7 +133,7 @@ func (a *ArchiveGrp) GetReader(name string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-// Close releases any resources associated with the ArchiveGrp, closing the underlying closer if available.
+// Close releases resources associated with the ArchiveGrp by invoking the underlying io.Closer if present.
 func (a *ArchiveGrp) Close() error {
 	if a.closer != nil {
 		return a.closer.Close()

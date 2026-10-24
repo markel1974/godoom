@@ -27,12 +27,12 @@ import (
 const (
 	AspectRatio   = 1.333
 	ScaleSectorH  = 1.0
-	ScaleXY       = 1.0
+	ScaleXY       = 1.0 / 16.0
 	ScaleTextureW = 1.0
 	ScaleTextureH = 1.0
 
-	PlayerHeight = 40.0 * ScaleSectorH
-	PlayerRadius = 18.0
+	PlayerHeight = 56.0 * ScaleSectorH
+	PlayerRadius = 16.0
 	PlayerSpeed  = 1800.0
 	PlayerMass   = 50.0
 
@@ -78,7 +78,8 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
 			}
 		}
-		arc, err := lumps.OpenGrp(grpReader, grpCloser)
+		arc := lumps.NewArchiveGrp()
+		err := arc.Parse(grpReader, grpCloser)
 		if err != nil {
 			return nil, fmt.Errorf("duke3d: failed to parse grp %s: %w", target, err)
 		}
@@ -86,8 +87,11 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 		// Load palette and textures from GRP if present
 		if arc.HasFile("PALETTE.DAT") {
-			if palData, err := arc.GetPayload("PALETTE.DAT"); err == nil {
-				if pal, err := lumps.LoadPalette(palData); err == nil {
+			if palData, pErr := arc.GetPayload("PALETTE.DAT"); pErr == nil {
+
+				pal := lumps.NewPalette()
+				if err := pal.Parse(palData); err == nil {
+					arts := lumps.NewArts(pal.GetData(), tex)
 					tileCount := 0
 					for artIdx := 0; artIdx < 100; artIdx++ {
 						artName := fmt.Sprintf("TILES%03d.ART", artIdx)
@@ -95,7 +99,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 							break
 						}
 						if artData, err := arc.GetPayload(artName); err == nil {
-							_ = lumps.LoadArt(artData, pal, tex)
+							_ = arts.Load(artData)
 							tileCount++
 						}
 					}
@@ -195,8 +199,9 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	}
 	defer reader.Close()
 
-	level, err := lumps.LoadMap(reader)
-	if err != nil {
+	level := lumps.NewLevel()
+
+	if err := level.Parse(reader); err != nil {
 		return nil, fmt.Errorf("duke3d: failed to load map %s: %w", target, err)
 	}
 
@@ -240,7 +245,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	crosshair := common.NewSimpleCrosshair()
 	tex.AddDirect(crosshair.GetTexture())
 
-	scaleFactor := geometry.XYZ{X: b.scaleXY, Y: b.scaleXY, Z: b.scaleSectorH}
+	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1.0}
 	cr := config.NewConfigRoot(cal, cSectors, player, nil, scaleFactor, tex)
 	cr.Vertices = gVertices
 	cr.Lights = lights

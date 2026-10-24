@@ -8,11 +8,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// Textures manages a collection of Texture objects and provides mapping and retrieval functionalities.
 type Textures struct {
 	resources map[string]*textures.Texture
 	cache     map[int]string
 }
 
+// NewTextures creates and returns a new instance of Textures with initialized resource and cache maps.
 func NewTextures() *Textures {
 	return &Textures{
 		resources: make(map[string]*textures.Texture),
@@ -20,6 +22,7 @@ func NewTextures() *Textures {
 	}
 }
 
+// GetNames retrieves all the keys of the resources map in the Textures instance and returns them as a slice of strings.
 func (t *Textures) GetNames() []string {
 	names := make([]string, 0, len(t.resources))
 	for k := range t.resources {
@@ -28,6 +31,7 @@ func (t *Textures) GetNames() []string {
 	return names
 }
 
+// Get retrieves a slice of textures based on the provided list of texture names. Only textures found in resources are returned.
 func (t *Textures) Get(names []string) []*textures.Texture {
 	out := make([]*textures.Texture, 0, len(names))
 	for _, name := range names {
@@ -38,13 +42,14 @@ func (t *Textures) Get(names []string) []*textures.Texture {
 	return out
 }
 
+// AddDirect adds a texture to the resources map using the specified name if the provided texture is not nil.
 func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	if tex != nil {
 		t.resources[name] = tex
 	}
 }
 
-// AddTile adds an extracted tile image to the texture manager.
+// AddTile creates a new texture from the given RGBA image and associates it with the specified picture number.
 func (t *Textures) AddTile(picNum int, img *image.RGBA) string {
 	name := fmt.Sprintf("duke_tile_%d", picNum)
 	b := img.Bounds()
@@ -63,7 +68,7 @@ func (t *Textures) AddTile(picNum int, img *image.RGBA) string {
 	return name
 }
 
-// GetOrCreateTile retrieves or generates a tile texture by tile index.
+// GetOrCreateTile retrieves the name of a cached tile or creates a new one if it does not exist.
 func (t *Textures) GetOrCreateTile(picNum int) string {
 	if name, ok := t.cache[picNum]; ok {
 		return name

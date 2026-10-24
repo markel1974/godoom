@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// World represents a 3D game world, managing level data, textures, scaling factors, and axis inversion for rendering.
 type World struct {
 	level         *lumps.Level
 	textures      *lumps.Textures
@@ -19,6 +20,7 @@ type World struct {
 	flipY         bool
 }
 
+// NewWorld initializes and returns a new World instance with the provided level and textures for rendering and configuration.
 func NewWorld(level *lumps.Level, textures *lumps.Textures) *World {
 	return &World{
 		level:         level,
@@ -31,6 +33,7 @@ func NewWorld(level *lumps.Level, textures *lumps.Textures) *World {
 	}
 }
 
+// SetScales updates scaling parameters for sector height, XY scaling, texture width/height, and vertical flip.
 func (w *World) SetScales(scaleSectorH, scaleXY, scaleTextureW, scaleTextureH float64, flipY bool) {
 	w.scaleSectorH = scaleSectorH
 	w.scaleXY = scaleXY
@@ -39,6 +42,7 @@ func (w *World) SetScales(scaleSectorH, scaleXY, scaleTextureW, scaleTextureH fl
 	w.flipY = flipY
 }
 
+// Build generates sector configurations, global vertex geometry, and light definitions for the loaded level.
 func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	if w.level == nil {
 		return nil, nil, nil, fmt.Errorf("duke3d: no level loaded")
@@ -51,9 +55,10 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 	for secIdx, sec := range w.level.Sectors {
 		sectorId := fmt.Sprintf("sector_%d", secIdx)
 
-		// Build engine Z: 1 unit = 1/16 of an X/Y unit, and Z points downwards.
-		floorY := -float64(sec.FloorZ) / 16.0 * w.scaleSectorH
-		ceilY := -float64(sec.CeilingZ) / 16.0 * w.scaleSectorH
+		// Build engine: 16 units of Z per 1 unit of X/Y.
+		// Scaled to match 1 world unit = 16 Build X/Y units = 256 Build Z units:
+		floorY := -float64(sec.FloorZ) / 256.0 * w.scaleSectorH
+		ceilY := -float64(sec.CeilingZ) / 256.0 * w.scaleSectorH
 
 		// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
 		shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
@@ -157,8 +162,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					cSeg.Kind = config.SegmentUnknown
 					adjSec := w.level.GetSector(int(wall.NextSector))
 					if adjSec != nil {
-						adjCeilY := -float64(adjSec.CeilingZ) / 16.0 * w.scaleSectorH
-						adjFloorY := -float64(adjSec.FloorZ) / 16.0 * w.scaleSectorH
+						adjCeilY := -float64(adjSec.CeilingZ) / 256.0 * w.scaleSectorH
+						adjFloorY := -float64(adjSec.FloorZ) / 256.0 * w.scaleSectorH
 
 						// Upper step wall
 						if ceilY > adjCeilY {

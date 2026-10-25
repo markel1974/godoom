@@ -83,7 +83,7 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 	r.lights.AddLights(r.compileLights2d(locator, true))
 
 	allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
-	allVolumes = append(allVolumes, r.buildUncoveredWalls(uncoveredWalls)...)
+	allVolumes = append(allVolumes, r.upgrade3dUncoveredWalls(uncoveredWalls)...)
 
 	return allVolumes, nil
 }
@@ -556,7 +556,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 }
 
 // buildUncoveredWalls processes a list of uncoveredWall instances and generates corresponding 3D volumes with optional lighting.
-func (r *Compiler2d) buildUncoveredWalls(walls []*uncoveredWall) []*Volume {
+func (r *Compiler2d) upgrade3dUncoveredWalls(walls []*uncoveredWall) []*Volume {
 	var volumes []*Volume
 	for _, uw := range walls {
 		if uw.mat == nil || uw.mat.CurrentFrame() == nil {

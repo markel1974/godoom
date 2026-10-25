@@ -27,6 +27,9 @@ func (p *Palette) Parse(data []byte) error {
 		b := data[i*3+2] << 2
 		a := uint8(255)
 		if i == 255 {
+			r = 0
+			g = 0
+			b = 0
 			a = 0 // In Build Engine, color 255 is the transparency key
 		}
 		p.Data[i] = color.RGBA{R: r, G: g, B: b, A: a}

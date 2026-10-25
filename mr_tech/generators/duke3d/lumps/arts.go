@@ -42,15 +42,43 @@ func (arts *Arts) CreateImage(picNum int) *image.RGBA {
 		return nil
 	}
 	img := image.NewRGBA(image.Rect(0, 0, tile.Width, tile.Height))
+	hasTransparent := false
 	// Build engine stores tiles in Column-Major order: x*h + y
 	for x := 0; x < tile.Width; x++ {
 		colOffset := x * tile.Height
 		for y := 0; y < tile.Height; y++ {
 			colorIdx := tile.RawPixels[colOffset+y]
+			if colorIdx == 255 {
+				hasTransparent = true
+			}
 			c := arts.palette[colorIdx]
 			img.SetRGBA(x, y, c)
 		}
 	}
+
+	if hasTransparent {
+		w, h := tile.Width, tile.Height
+		for x := 0; x < w; x++ {
+			for y := 0; y < h; y++ {
+				if img.RGBAAt(x, y).A == 0 {
+					if x > 0 && img.RGBAAt(x-1, y).A > 0 {
+						nc := img.RGBAAt(x-1, y)
+						img.SetRGBA(x, y, color.RGBA{R: nc.R, G: nc.G, B: nc.B, A: 0})
+					} else if x < w-1 && img.RGBAAt(x+1, y).A > 0 {
+						nc := img.RGBAAt(x+1, y)
+						img.SetRGBA(x, y, color.RGBA{R: nc.R, G: nc.G, B: nc.B, A: 0})
+					} else if y > 0 && img.RGBAAt(x, y-1).A > 0 {
+						nc := img.RGBAAt(x, y-1)
+						img.SetRGBA(x, y, color.RGBA{R: nc.R, G: nc.G, B: nc.B, A: 0})
+					} else if y < h-1 && img.RGBAAt(x, y+1).A > 0 {
+						nc := img.RGBAAt(x, y+1)
+						img.SetRGBA(x, y, color.RGBA{R: nc.R, G: nc.G, B: nc.B, A: 0})
+					}
+				}
+			}
+		}
+	}
+
 	return img
 }
 

@@ -10,50 +10,72 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+type uncoveredWall struct {
+	start   geometry.XY
+	end     geometry.XY
+	zBS     float64
+	zBE     float64
+	zTS     float64
+	zTE     float64
+	tag     string
+	mat     *textures.Material
+	csId    string
+	csTag   string
+	csLight *config.Light
+	modelId int
+}
+
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
+	cfg       *config.Root
+	materials *Materials
+	lights    *Lights
 }
 
 // NewCompiler2d creates and returns a new instance of Compiler2d, used for compiling 2D game sectors and related data.
-func NewCompiler2d() *Compiler2d {
-	return &Compiler2d{}
+func NewCompiler2d(cfg *config.Root, materials *Materials, lights *Lights) *Compiler2d {
+	return &Compiler2d{
+		cfg:       cfg,
+		materials: materials,
+		lights:    lights,
+	}
 }
 
 // Compile generates 2D and 3D volumes based on the configuration, materials, and lights, returning the compiled volumes.
-func (r *Compiler2d) Compile(cfg *config.Root, materials *Materials, lights *Lights) ([]*Volume, error) {
+func (r *Compiler2d) Compile() ([]*Volume, error) {
 	var allVolumes []*Volume
-	if len(cfg.Sectors) == 0 {
+	if len(r.cfg.Sectors) == 0 {
 		return nil, nil
 	}
 
-	sectors, uncoveredWalls := r.compile2d(cfg.Vertices, cfg.Sectors, materials)
+	sectors, uncoveredWalls := r.compile2d()
 	if len(sectors) == 0 {
 		return nil, fmt.Errorf("no 2D volumes compiled")
 	}
 	locator := NewSectors(sectors, false)
 	locator.Setup()
 	//player Z
-	pv := locator.QueryPoint(cfg.Player.Position.X, cfg.Player.Position.Y)
+	pv := locator.QueryPoint(r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
 	if pv == nil {
-		return nil, fmt.Errorf("can't find 2d player location at X: %f Y: %f", cfg.Player.Position.X, cfg.Player.Position.Y)
+		return nil, fmt.Errorf("can't find 2d player location at X: %f Y: %f", r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
 	}
-	if cfg.Player.Position.Z == 0 {
-		cfg.Player.Position.Z = pv.GetMinZ()
+	if r.cfg.Player.Position.Z == 0 {
+		r.cfg.Player.Position.Z = pv.GetMinZ()
 	}
 	//things Z
-	for idx := range cfg.Things {
-		tx, ty := cfg.Things[idx].Position.X, cfg.Things[idx].Position.Y
+	for idx := range r.cfg.Things {
+		tx, ty := r.cfg.Things[idx].Position.X, r.cfg.Things[idx].Position.Y
 		tv := locator.QueryPoint(tx, ty)
 		if tv == nil {
 			fmt.Println("can't find thing location at", tx, ty)
 			continue
 		}
-		if cfg.Things[idx].Position.Z == 0 {
-			cfg.Things[idx].Position.Z = tv.GetMinZ()
+		if r.cfg.Things[idx].Position.Z == 0 {
+			r.cfg.Things[idx].Position.Z = tv.GetMinZ()
 		}
 	}
 	//light 2d
-	lights.AddLights(r.compileLights2d(locator, true))
+	r.lights.AddLights(r.compileLights2d(locator, true))
 
 	allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
 	allVolumes = append(allVolumes, r.buildUncoveredWalls(uncoveredWalls)...)
@@ -62,7 +84,8 @@ func (r *Compiler2d) Compile(cfg *config.Root, materials *Materials, lights *Lig
 }
 
 // compile2d processes 2D geometry and sector configurations to construct 2D sectors and identifies uncovered walls.
-func (r *Compiler2d) compile2d(vertices geometry.Polygon, css []*config.Sector, anim *Materials) ([]*Sector, []*uncoveredWall) {
+func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
+	vertices, css, anim := r.cfg.Vertices, r.cfg.Sectors, r.materials
 	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Sector

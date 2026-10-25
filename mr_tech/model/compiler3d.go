@@ -10,24 +10,32 @@ import (
 
 // Compiler3d is a type responsible for compiling 3D volumes and their associated materials and lighting configurations.
 type Compiler3d struct {
+	cfg       *config.Root
+	materials *Materials
+	lights    *Lights
 }
 
 // NewCompiler3d creates and returns a new instance of the Compiler3d type.
-func NewCompiler3d() *Compiler3d {
-	return &Compiler3d{}
+func NewCompiler3d(cfg *config.Root, materials *Materials, lights *Lights) *Compiler3d {
+	return &Compiler3d{
+		cfg:       cfg,
+		materials: materials,
+		lights:    lights,
+	}
 }
 
 // Compile processes the configuration, materials, and lights to generate 3D volumes. Returns the volumes or an error.
-func (r *Compiler3d) Compile(cfg *config.Root, materials *Materials, lights *Lights) ([]*Volume, error) {
-	if len(cfg.Volumes) == 0 {
+func (r *Compiler3d) Compile() ([]*Volume, error) {
+	if len(r.cfg.Volumes) == 0 {
 		return nil, nil
 	}
-	allVolumes := r.compile3d(cfg.Volumes, materials)
+	allVolumes := r.compile3d()
 	return allVolumes, nil
 }
 
 // compile3d processes a list of 3D volumes, triangulates their geometry, applies materials, and organizes them into a container.
-func (r *Compiler3d) compile3d(volumes []*config.Volume, anim *Materials) []*Volume {
+func (r *Compiler3d) compile3d() []*Volume {
+	volumes, anim := r.cfg.Volumes, r.materials
 	totalFaces := 0
 	var container []*Volume
 	var fixFaces []*Face

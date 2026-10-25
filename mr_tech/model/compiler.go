@@ -5,22 +5,10 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-type uncoveredWall struct {
-	start   geometry.XY
-	end     geometry.XY
-	zBS     float64
-	zBE     float64
-	zTS     float64
-	zTE     float64
-	tag     string
-	mat     *textures.Material
-	csId    string
-	csTag   string
-	csLight *config.Light
-	modelId int
+type ICompiler interface {
+	Compile() ([]*Volume, error)
 }
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
@@ -61,21 +49,20 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	materials := NewMaterials(cfg.GetTextures())
 	r.lights = NewLights()
 
-	compiler2d := NewCompiler2d()
-	compiler3d := NewCompiler3d()
+	compilers := []ICompiler{
+		NewCompiler2d(cfg, materials, r.lights),
+		NewCompiler3d(cfg, materials, r.lights),
+	}
 
 	var allVolumes []*Volume
 
-	v1, err := compiler2d.Compile(cfg, materials, r.lights)
-	if err != nil {
-		return err
+	for _, compiler := range compilers {
+		av, err := compiler.Compile()
+		if err != nil {
+			return err
+		}
+		allVolumes = append(allVolumes, av...)
 	}
-	allVolumes = append(allVolumes, v1...)
-	v2, err := compiler3d.Compile(cfg, materials, r.lights)
-	if err != nil {
-		return err
-	}
-	allVolumes = append(allVolumes, v2...)
 
 	r.volumes = NewVolumes(allVolumes)
 	r.volumes.Setup()

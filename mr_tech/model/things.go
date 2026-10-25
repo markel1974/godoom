@@ -92,6 +92,8 @@ func (th *Things) GetMaterials() *Materials {
 func (th *Things) Len() int {
 	return len(th.ready)
 }
+
+// QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
 func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 	lThing := lCage.GetThing()
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {

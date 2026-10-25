@@ -64,14 +64,18 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 	}
 	//things Z
 	for idx := range r.cfg.Things {
-		tx, ty := r.cfg.Things[idx].Position.X, r.cfg.Things[idx].Position.Y
+		thing := r.cfg.Things[idx]
+		if thing == nil {
+			continue
+		}
+		tx, ty := thing.Position.X, thing.Position.Y
 		tv := locator.QueryPoint(tx, ty)
 		if tv == nil {
 			fmt.Println("can't find thing location at", tx, ty)
 			continue
 		}
-		if r.cfg.Things[idx].Position.Z == 0 {
-			r.cfg.Things[idx].Position.Z = tv.GetMinZ()
+		if thing.Position.Z == 0 {
+			thing.Position.Z = tv.GetMinZ()
 		}
 	}
 	//light 2d

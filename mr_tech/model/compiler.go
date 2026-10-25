@@ -49,14 +49,14 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	materials := NewMaterials(cfg.GetTextures())
 	r.lights = NewLights()
 
-	compilers := []ICompiler{
+	pipeline := []ICompiler{
 		NewCompiler2d(cfg, materials, r.lights),
 		NewCompiler3d(cfg, materials, r.lights),
 	}
 
 	var allVolumes []*Volume
 
-	for _, compiler := range compilers {
+	for _, compiler := range pipeline {
 		av, err := compiler.Compile()
 		if err != nil {
 			return err

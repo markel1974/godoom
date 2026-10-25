@@ -67,6 +67,9 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 	const enableThingsCreation = true
 	if enableThingsCreation {
 		for _, ct := range cfg {
+			if ct == nil {
+				continue
+			}
 			volume, _ := e.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
 			if volume == nil {
 				//volume = e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)

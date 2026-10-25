@@ -8,6 +8,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+// Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
+type Tag struct {
+	Origin geometry.XYZ
+	Axis   [3]geometry.XYZ
+}
+
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
 type Volume struct {
 	modelId    int
@@ -22,12 +28,6 @@ type Volume struct {
 	thing      IThing
 	sector     *Sector
 	vertexTags []Tag
-}
-
-// Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
-type Tag struct {
-	Origin geometry.XYZ
-	Axis   [3]geometry.XYZ
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
@@ -46,6 +46,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 	return v
 }
 
+// NewVolumeConcrete creates a new Volume instance configured with concrete-specific physics properties like mass, friction, and restitution.
 func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteMass = 0.0
 	const concreteRestitution = 0.0

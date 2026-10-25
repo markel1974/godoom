@@ -214,19 +214,27 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 						adjFloorY := w.computeHeight(adjSec.FloorZ)
 
 						// Upper step wall
-						if (ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling()) && !(sec.IsSkyCeiling() && adjSec.IsSkyCeiling()) {
-							tile := w.textures.GetTile(int(wall.PicNum))
-							cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+						if ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling() {
+							if sec.IsSkyCeiling() && adjSec.IsSkyCeiling() {
+								cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, 1.0, 1.0, 0, 0)
+							} else {
+								tile := w.textures.GetTile(int(wall.PicNum))
+								cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+							}
 						}
 						// Lower step wall
-						if (floorY < adjFloorY || sec.IsSlopedFloor() || adjSec.IsSlopedFloor()) && !(sec.IsSkyFloor() && adjSec.IsSkyFloor()) {
-							tile := w.textures.GetTile(int(wall.PicNum))
-							cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+						if floorY < adjFloorY || sec.IsSlopedFloor() || adjSec.IsSlopedFloor() {
+							if sec.IsSkyFloor() && adjSec.IsSkyFloor() {
+								cSeg.Lower = config.NewConfigMaterial(nil, config.MaterialKindSky, 1.0, 1.0, 0, 0)
+							} else {
+								tile := w.textures.GetTile(int(wall.PicNum))
+								cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+							}
 						}
-						// Masked / grating wall
-						if wall.IsMasked() {
+						// Masked / grating wall / one-way
+						if wall.IsMasked() || wall.IsOneWay() {
 							tilePic := int(wall.OverPicNum)
-							if tilePic < 0 {
+							if wall.IsOneWay() || tilePic < 0 {
 								tilePic = int(wall.PicNum)
 							}
 							tile := w.textures.GetTile(tilePic)

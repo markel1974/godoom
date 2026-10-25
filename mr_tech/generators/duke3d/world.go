@@ -131,8 +131,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					SwapXY:    sec.SwapXYFloor(),
 					FlipX:     sec.XFlipFloor(),
 					FlipY:     sec.YFlipFloor(),
-					PanningX:  float64(sec.FloorXPanning),
-					PanningY:  float64(sec.FloorYPanning),
+					Panning:   geometry.XY{X: float64(sec.FloorXPanning), Y: float64(sec.FloorYPanning)},
 				}
 				cSector.CeilAlign = &config.UVAlign{
 					FixUV:     true,
@@ -142,8 +141,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					SwapXY:    sec.SwapXYCeiling(),
 					FlipX:     sec.XFlipCeiling(),
 					FlipY:     sec.YFlipCeiling(),
-					PanningX:  float64(sec.CeilingXPanning),
-					PanningY:  float64(sec.CeilingYPanning),
+					Panning:   geometry.XY{X: float64(sec.CeilingXPanning), Y: float64(sec.CeilingYPanning)},
 				}
 			}
 		}
@@ -152,16 +150,16 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		if sec.IsSlopedFloor() {
 			if grad, gx, gy, ok := w.level.ComputeFloorSlope(secIdx, w.scaleSectorH, w.scaleXY, w.flipY); ok {
 				cSector.SlopeFloor.Gradient = grad
-				cSector.SlopeFloor.GX = gx
-				cSector.SlopeFloor.GY = gy
+				cSector.SlopeFloor.G.X = gx
+				cSector.SlopeFloor.G.Y = gy
 			}
 		}
 
 		if sec.IsSlopedCeiling() {
 			if grad, gx, gy, ok := w.level.ComputeCeilingSlope(secIdx, w.scaleSectorH, w.scaleXY, w.flipY); ok {
 				cSector.SlopeCeiling.Gradient = grad
-				cSector.SlopeCeiling.GX = gx
-				cSector.SlopeCeiling.GY = gy
+				cSector.SlopeCeiling.G.X = gx
+				cSector.SlopeCeiling.G.Y = gy
 			}
 		}
 
@@ -189,6 +187,15 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 				globalVertices = append(globalVertices, v1, v2)
 
 				cSeg := config.NewConfigSegment(sectorId, config.SegmentUnknown, v1, v2)
+
+				cSeg.UVAlign = &config.UVAlign{
+					FixUV:       true,
+					Length:      math.Hypot(v2.X-v1.X, v2.Y-v1.Y),
+					Panning:     geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)},
+					FlipX:       wall.HasHorizontalFlip(),
+					FlipY:       wall.HasVerticalFlip(),
+					AlignBottom: wall.IsBottomAligned(),
+				}
 
 				// First wall is the pivot reference for floor/ceiling slopes
 				if i == 0 {

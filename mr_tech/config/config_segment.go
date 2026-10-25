@@ -29,6 +29,7 @@ type Segment struct {
 	HasUpperLimitZ   bool        `json:"hasUpperLimitZ,omitempty"`
 	UpperLimitZS     float64     `json:"upperLimitZS,omitempty"`
 	UpperLimitZE     float64     `json:"upperLimitZE,omitempty"`
+	UVAlign          *UVAlign    `json:"uvAlign,omitempty"`
 }
 
 // NewConfigSegment creates a new Segment instance with the specified parent, Kind, start, and end coordinates.

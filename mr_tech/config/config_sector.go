@@ -1,32 +1,33 @@
 package config
 
-import "github.com/markel1974/godoom/mr_tech/geometry"
+import (
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
 
-// UVAlign defines UV alignment and transformation parameters for sector floors and ceilings.
+// UVAlign defines UV alignment and transformation parameters for sector floors, ceilings, and walls.
 type UVAlign struct {
-	FixUV     bool        `json:"fixUV"`
-	AlignWall bool        `json:"alignWall"`
-	Start     geometry.XY `json:"start"`
-	End       geometry.XY `json:"end"`
-	SwapXY    bool        `json:"swapXY"`
-	FlipX     bool        `json:"flipX"`
-	FlipY     bool        `json:"flipY"`
-	PanningX  float64     `json:"panningX"`
-	PanningY  float64     `json:"panningY"`
+	FixUV       bool        `json:"fixUV"`
+	AlignWall   bool        `json:"alignWall"`
+	Start       geometry.XY `json:"start"`
+	End         geometry.XY `json:"end"`
+	SwapXY      bool        `json:"swapXY"`
+	FlipX       bool        `json:"flipX"`
+	FlipY       bool        `json:"flipY"`
+	Panning     geometry.XY `json:"panning"`
+	Length      float64     `json:"length,omitempty"`
+	AlignBottom bool        `json:"alignBottom,omitempty"`
 }
 
 // Slope represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.
 type Slope struct {
-	GX       float64 `json:"gX"`
-	GY       float64 `json:"gY"`
-	Gradient float64 `json:"gradient"`
+	G        geometry.XY `json:"g"`
+	Gradient float64     `json:"gradient"`
 }
 
 // NewSloped initializes and returns a pointer to a new Sloped instance with default values.
 func NewSloped() *Slope {
 	return &Slope{
-		GX:       0,
-		GY:       0,
+		G:        geometry.XY{X: 0, Y: 0},
 		Gradient: 0,
 	}
 }
@@ -80,10 +81,18 @@ func (s *Sector) Scale(scale geometry.XYZ) {
 	}
 }
 
+/*
 // IsCCW determines if the sector's segments form a counter-clockwise loop by calculating the signed area of the polygon.
 func (s *Sector) IsCCW() bool {
 	area := 0.0
-	for _, segment := range s.Segments {
+	for i, segment := range s.Segments {
+		next := s.Segments[(i+1)%len(s.Segments)]
+		// Continuità: ogni segmento deve iniziare dove finisce il precedente
+		if segment.End != next.Start {
+			fmt.Println("Sector not well formatted")
+			//return false // oppure log/errore: settore non ben formato
+		}
+
 		// Fallback di sicurezza se la mappa ha indici corrotti
 		v1 := segment.Start
 		v2 := segment.End
@@ -96,6 +105,7 @@ func (s *Sector) IsCCW() bool {
 	// se Y-up cartesiano puro, invertire operatore (> 0).*
 	return area < 0
 }
+*/
 
 // AddDependency registers a sector ID that this sector depends on (must precede this sector in compilation order).
 func (s *Sector) AddDependency(id string) {

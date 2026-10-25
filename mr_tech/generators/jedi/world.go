@@ -170,14 +170,14 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 		if sector.HasSlopedFloor {
 			cSector.SlopeFloor.Gradient = sector.FloorGrad
-			cSector.SlopeFloor.GX = sector.FloorGX
-			cSector.SlopeFloor.GY = sector.FloorGY
+			cSector.SlopeFloor.G.X = sector.FloorGX
+			cSector.SlopeFloor.G.Y = sector.FloorGY
 		}
 
 		if sector.HasSlopedCeil {
 			cSector.SlopeCeiling.Gradient = sector.CeilGrad
-			cSector.SlopeCeiling.GX = sector.CeilGX
-			cSector.SlopeCeiling.GY = sector.CeilGY
+			cSector.SlopeCeiling.G.X = sector.CeilGX
+			cSector.SlopeCeiling.G.Y = sector.CeilGY
 		}
 
 		configSectors = append(configSectors, cSector)

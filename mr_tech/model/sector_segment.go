@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -19,6 +20,9 @@ type Segment struct {
 	hasUpperLimitZ bool
 	upperLimitZS   float64
 	upperLimitZE   float64
+	uvAlign        *config.UVAlign
+	uvT1           float64
+	uvT2           float64
 }
 
 // NewSegment creates and initializes a new Segment with the specified neighbor, start/end points, tag, and materials.
@@ -46,14 +50,28 @@ func (s *Segment) GetTag() string {
 	return s.tag
 }
 
+// SetUpperLimitZ defines the upper Z limits for the segment and marks them as active.
 func (s *Segment) SetUpperLimitZ(limS, limE float64) {
 	s.hasUpperLimitZ = true
 	s.upperLimitZS = limS
 	s.upperLimitZE = limE
 }
 
+// GetUpperLimitZ retrieves the upper Z limits for the segment and a flag indicating if these limits are defined.
 func (s *Segment) GetUpperLimitZ() (float64, float64, bool) {
 	return s.upperLimitZS, s.upperLimitZE, s.hasUpperLimitZ
+}
+
+// SetUVAlign updates the UV alignment parameters and texture coordinate values for the segment.
+func (s *Segment) SetUVAlign(align *config.UVAlign, t1, t2 float64) {
+	s.uvAlign = align
+	s.uvT1 = t1
+	s.uvT2 = t2
+}
+
+// GetUVAlign returns the UV alignment parameters and texture coordinate values associated with the segment.
+func (s *Segment) GetUVAlign() (*config.UVAlign, float64, float64) {
+	return s.uvAlign, s.uvT1, s.uvT2
 }
 
 // GetParent retrieves the parent Sector instance associated with the Segment. Returns a pointer to the Sector.

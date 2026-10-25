@@ -1,9 +1,6 @@
 package config
 
 import (
-	"fmt"
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -50,6 +47,7 @@ func NewConfigSegment(parent string, kind int, s geometry.XY, e geometry.XY) *Se
 	return is
 }
 
+/*
 // ComputeNormal calculates the normalized normal vector of the segment based on its orientation.
 // isCCW determines whether the normal vector should be counterclockwise or clockwise.
 // Returns the x and y components of the normal vector and an error if the segment length is zero.
@@ -68,3 +66,4 @@ func (cs *Segment) ComputeNormal(isCCW bool) (float64, float64, error) {
 	}
 	return dy / length, -dx / length, nil
 }
+*/

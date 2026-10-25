@@ -43,6 +43,7 @@ func (w *World) computeHeight(k int32) float64 {
 	return -float64(k) / 256.0 * w.scaleSectorH
 }
 
+// computeLight calculates the light type, intensity, and falloff for a given sector based on its shading and height properties.
 func (w *World) computeLight(sec *lumps.Sector, ceilY, floorY float64) (config.LightKind, float64, float64) {
 	// Shade in Build: -128 (bright) to 127 (dark), 0 is normal.
 	shade := float64(sec.CeilingShade+sec.FloorShade) * 0.5
@@ -124,23 +125,23 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 				cSector.FloorAlign = &config.UVAlign{
 					FixUV:     true,
-					AlignWall: sec.FloorStat&64 != 0,
+					AlignWall: sec.AlignFirstWallFloor(),
 					Start:     vFirst1,
 					End:       vFirst2,
-					SwapXY:    sec.FloorStat&4 != 0,
-					FlipX:     sec.FloorStat&16 != 0,
-					FlipY:     sec.FloorStat&32 != 0,
+					SwapXY:    sec.SwapXYFloor(),
+					FlipX:     sec.XFlipFloor(),
+					FlipY:     sec.YFlipFloor(),
 					PanningX:  float64(sec.FloorXPanning),
 					PanningY:  float64(sec.FloorYPanning),
 				}
 				cSector.CeilAlign = &config.UVAlign{
 					FixUV:     true,
-					AlignWall: sec.CeilingStat&64 != 0,
+					AlignWall: sec.AlignFirstWallCeiling(),
 					Start:     vFirst1,
 					End:       vFirst2,
-					SwapXY:    sec.CeilingStat&4 != 0,
-					FlipX:     sec.CeilingStat&16 != 0,
-					FlipY:     sec.CeilingStat&32 != 0,
+					SwapXY:    sec.SwapXYCeiling(),
+					FlipX:     sec.XFlipCeiling(),
+					FlipY:     sec.YFlipCeiling(),
 					PanningX:  float64(sec.CeilingXPanning),
 					PanningY:  float64(sec.CeilingYPanning),
 				}

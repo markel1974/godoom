@@ -387,9 +387,8 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 
 		face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
 		face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
-		if align != nil && align.FixUV {
-			r.applyWallUV(face1, face2, s, e, align, t1, t2, zBS, zBE, zTS, zTE)
-		}
+		face1.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, true)
+		face2.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, false)
 		vol3d.AddFace(face1)
 		vol3d.AddFace(face2)
 	}
@@ -421,12 +420,12 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
-		r.applyUVAlign(ceilFace, sector.GetCeilAlign(), ceilP)
+		ceilFace.ApplyUVAlign(sector.GetCeilAlign(), ceilP)
 		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
 		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
-		r.applyUVAlign(floorFace, sector.GetFloorAlign(), floorP)
+		floorFace.ApplyUVAlign(sector.GetFloorAlign(), floorP)
 		vol3d.AddFace(floorFace)
 
 		for x := 0; x < segmentCount; x++ {
@@ -577,131 +576,14 @@ func (r *Compiler2d) buildUncoveredWalls(walls []*uncoveredWall) []*Volume {
 		v3 := geometry.XYZ{X: uw.start.X, Y: uw.start.Y, Z: uw.zTS}
 		face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, uw.tag, uw.mat)
 		face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, uw.tag, uw.mat)
-		if uw.align != nil && uw.align.FixUV {
-			r.applyWallUV(face1, face2, uw.start, uw.end, uw.align, 0.0, 1.0, uw.zBS, uw.zBE, uw.zTS, uw.zTE)
-		}
+		face1.ApplyWallUV(uw.start, uw.end, uw.align, 0.0, 1.0, uw.zBS, uw.zBE, uw.zTS, uw.zTE, true)
+		face2.ApplyWallUV(uw.start, uw.end, uw.align, 0.0, 1.0, uw.zBS, uw.zBE, uw.zTS, uw.zTE, false)
 		vol3d.AddFace(face1)
 		vol3d.AddFace(face2)
 		vol3d.Rebuild()
 		volumes = append(volumes, vol3d)
 	}
 	return volumes
-}
-
-// applyWallUV modifies the UV mapping of two quad faces based on wall alignment settings and quad coordinates.
-func (r *Compiler2d) applyWallUV(face1, face2 *Face, s, e geometry.XY, align *config.UVAlign, t1, t2 float64, zBS, zBE, zTS, zTE float64) {
-	if align == nil || !align.FixUV {
-		return
-	}
-	mat := face1.GetMaterial()
-	if mat == nil {
-		return
-	}
-	tex := mat.CurrentFrame()
-	if tex == nil {
-		return
-	}
-	w, h := tex.GetSizeScaled()
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	wallLen := align.Length
-	if wallLen <= 0 {
-		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
-	}
-
-	d1 := t1 * wallLen
-	d2 := t2 * wallLen
-	minD := math.Min(d1, d2)
-	maxD := math.Max(d1, d2)
-
-	uStart := (minD + align.Panning.X) / w
-	uEnd := (maxD + align.Panning.X) / w
-	if align.FlipX {
-		uStart, uEnd = uEnd, uStart
-	}
-
-	vBS := (zBS + align.Panning.Y) / h
-	vBE := (zBE + align.Panning.Y) / h
-	vTS := (zTS + align.Panning.Y) / h
-	vTE := (zTE + align.Panning.Y) / h
-	if align.FlipY {
-		vBS, vTS = vTS, vBS
-		vBE, vTE = vTE, vBE
-	}
-
-	face1.SetUV(uStart, vBS, uEnd, vBE, uEnd, vTE)
-	face1.LockUV(true)
-
-	face2.SetUV(uStart, vBS, uEnd, vTE, uStart, vTS)
-	face2.LockUV(true)
-}
-
-// applyUVAlign modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
-func (r *Compiler2d) applyUVAlign(face *Face, align *config.UVAlign, tri [3]geometry.XYZ) {
-	if align == nil || !align.FixUV {
-		return
-	}
-	mat := face.GetMaterial()
-	if mat == nil {
-		return
-	}
-	tex := mat.CurrentFrame()
-	if tex == nil {
-		return
-	}
-	w, h := tex.GetSizeScaled()
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	var tx, ty, nx, ny float64
-	if align.AlignWall {
-		dx := align.End.X - align.Start.X
-		dy := align.End.Y - align.Start.Y
-		length := math.Hypot(dx, dy)
-		if length < 1e-6 {
-			dx, dy, length = 1, 0, 1
-		}
-		tx = dx / length
-		ty = dy / length
-		nx = -ty
-		ny = tx
-	}
-
-	var uvs [3][2]float64
-	for i := 0; i < 3; i++ {
-		var u, v float64
-		if align.AlignWall {
-			relX := tri[i].X - align.Start.X
-			relY := tri[i].Y - align.Start.Y
-			u = relX*tx + relY*ty
-			v = relX*nx + relY*ny
-		} else {
-			u = tri[i].X
-			v = tri[i].Y
-		}
-		if align.SwapXY {
-			u, v = v, u
-		}
-		if align.FlipX {
-			u = -u
-		}
-		if align.FlipY {
-			v = -v
-		}
-		if align.Panning.X != 0 {
-			u += align.Panning.X
-		}
-		if align.Panning.Y != 0 {
-			v += align.Panning.Y
-		}
-		uvs[i][0] = u / w
-		uvs[i][1] = v / h
-	}
-	face.SetUV(uvs[0][0], uvs[0][1], uvs[1][0], uvs[1][1], uvs[2][0], uvs[2][1])
-	face.LockUV(true)
 }
 
 // updateAdjDependencies resolves dependency order among sectors and reorders them for adjacency processing.

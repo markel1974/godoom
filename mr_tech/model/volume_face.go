@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -36,81 +37,81 @@ func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face
 }
 
 // LockUV locks or unlocks the UV coordinates of a Face based on the provided staticUV parameter.
-func (s *Face) LockUV(lockUV bool) {
-	s.lockUV = lockUV
+func (fc *Face) LockUV(lockUV bool) {
+	fc.lockUV = lockUV
 }
 
 // SetUV sets the UV texture coordinates for the three vertices of the face.
-func (s *Face) SetUV(u0, v0, u1, v1, u2, v2 float64) {
-	s.u[0], s.v[0] = u0, v0
-	s.u[1], s.v[1] = u1, v1
-	s.u[2], s.v[2] = u2, v2
+func (fc *Face) SetUV(u0, v0, u1, v1, u2, v2 float64) {
+	fc.u[0], fc.v[0] = u0, v0
+	fc.u[1], fc.v[1] = u1, v1
+	fc.u[2], fc.v[2] = u2, v2
 }
 
 // GetUV retrieves the `u` and `v` coordinate arrays representing the UV mapping of the face.
-func (s *Face) GetUV() ([3]float64, [3]float64) {
-	return s.u, s.v
+func (fc *Face) GetUV() ([3]float64, [3]float64) {
+	return fc.u, fc.v
 }
 
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
-func (s *Face) GetParent() *Volume {
-	return s.parent
+func (fc *Face) GetParent() *Volume {
+	return fc.parent
 }
 
 // SetParent assigns a parent sector to the segment.
-func (s *Face) SetParent(parent *Volume) {
-	s.parent = parent
+func (fc *Face) SetParent(parent *Volume) {
+	fc.parent = parent
 }
 
 // GetTag returns the tag associated with the segment.
-func (s *Face) GetTag() string {
-	return s.tag
+func (fc *Face) GetTag() string {
+	return fc.tag
 }
 
 // SetTag sets the tag field of the Face to the specified string value.
-func (s *Face) SetTag(tag string) {
-	s.tag = tag
+func (fc *Face) SetTag(tag string) {
+	fc.tag = tag
 }
 
 // GetNormal retrieves the normalized vector components (X, Y, Z) representing the face's orientation in 3D space.
-func (s *Face) GetNormal() (float64, float64, float64) {
-	return s.n.X, s.n.Y, s.n.Z
+func (fc *Face) GetNormal() (float64, float64, float64) {
+	return fc.n.X, fc.n.Y, fc.n.Z
 }
 
 // GetNormalAbs returns the absolute values of the normal vector components (X, Y, Z) for the face.
-func (s *Face) GetNormalAbs() (float64, float64, float64) {
-	return s.nAbs.X, s.nAbs.Y, s.nAbs.Z
+func (fc *Face) GetNormalAbs() (float64, float64, float64) {
+	return fc.nAbs.X, fc.nAbs.Y, fc.nAbs.Z
 }
 
 // GetCurrentFrameTextureDetails retrieves the material's texture, type, width scale, and height scale for the face.
-func (s *Face) GetCurrentFrameTextureDetails() (*textures.Texture, int) {
-	if s.material == nil {
+func (fc *Face) GetCurrentFrameTextureDetails() (*textures.Texture, int) {
+	if fc.material == nil {
 		return nil, 0
 	}
-	return s.material.CurrentFrame(), s.material.Kind()
+	return fc.material.CurrentFrame(), fc.material.Kind()
 }
 
 // GetCurrentFrameTexture returns the root texture material of the face, or nil if it does not exist.
-func (s *Face) GetCurrentFrameTexture() *textures.Texture {
-	if s.material == nil {
+func (fc *Face) GetCurrentFrameTexture() *textures.Texture {
+	if fc.material == nil {
 		return nil
 	}
-	return s.material.CurrentFrame()
+	return fc.material.CurrentFrame()
 }
 
 // GetMaterial retrieves the material object associated with the Face or nil if no material is set.
-func (s *Face) GetMaterial() *textures.Material {
-	return s.material
+func (fc *Face) GetMaterial() *textures.Material {
+	return fc.material
 }
 
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
-func (s *Face) GetPoints() [3]geometry.XYZ {
-	return s.tri
+func (fc *Face) GetPoints() [3]geometry.XYZ {
+	return fc.tri
 }
 
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
-func (s *Face) PointInside2d(px, py float64) bool {
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+func (fc *Face) PointInside2d(px, py float64) bool {
+	p0, p1, p2 := fc.tri[0], fc.tri[1], fc.tri[2]
 	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
 	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
 	d3 := (px-p2.X)*(p0.Y-p2.Y) - (py-p2.Y)*(p0.X-p2.X)
@@ -121,25 +122,25 @@ func (s *Face) PointInside2d(px, py float64) bool {
 }
 
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
-func (s *Face) Rebuild() {
-	s.computeAABB()
-	s.computeNormal()
-	s.computeUV()
+func (fc *Face) Rebuild() {
+	fc.computeAABB()
+	fc.computeNormal()
+	fc.computeUV()
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
-func (s *Face) GetAABB() *aabb.AABB {
-	return s.aabb
+func (fc *Face) GetAABB() *aabb.AABB {
+	return fc.aabb
 }
 
 // computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.
-func (s *Face) computeNormal() {
+func (fc *Face) computeNormal() {
 	const snapToZero = 1e-15
 	const areaCulling = 1e-12
 
-	s.n = geometry.XYZ{X: 0, Y: 0, Z: 1}
+	fc.n = geometry.XYZ{X: 0, Y: 0, Z: 1}
 	// Prodotto vettoriale standard per poligoni 3D
-	p0, p1, p2 := s.tri[0], s.tri[1], s.tri[2]
+	p0, p1, p2 := fc.tri[0], fc.tri[1], fc.tri[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
 	nx := v1y*v2z - v1z*v2y
@@ -160,21 +161,21 @@ func (s *Face) computeNormal() {
 	// il triangolo è un "Sliver" degenere prodotto dal clipping.
 	if l < areaCulling {
 		// Lo marchiamo con normale nulla: la QueryCollisionCage lo scarterà
-		s.n.X, s.n.Y, s.n.Z = 0, 0, 0
-		s.nAbs.X, s.nAbs.Y, s.nAbs.Z = 0, 0, 0
+		fc.n.X, fc.n.Y, fc.n.Z = 0, 0, 0
+		fc.nAbs.X, fc.nAbs.Y, fc.nAbs.Z = 0, 0, 0
 		//fmt.Printf("Ignorato triangolo degenere (Sliver) %f\n", l)
 		return
 	}
-	s.n.X, s.n.Y, s.n.Z = nx/l, ny/l, nz/l
-	s.nAbs.X, s.nAbs.Y, s.nAbs.Z = math.Abs(s.n.X), math.Abs(s.n.Y), math.Abs(s.n.Z)
+	fc.n.X, fc.n.Y, fc.n.Z = nx/l, ny/l, nz/l
+	fc.nAbs.X, fc.nAbs.Y, fc.nAbs.Z = math.Abs(fc.n.X), math.Abs(fc.n.Y), math.Abs(fc.n.Z)
 }
 
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
-func (s *Face) computeAABB() {
+func (fc *Face) computeAABB() {
 	const eps = 0.001
-	minX, minY, minZ := s.tri[0].X, s.tri[0].Y, s.tri[0].Z
+	minX, minY, minZ := fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
 	maxX, maxY, maxZ := minX, minY, minZ
-	for _, p := range s.tri {
+	for _, p := range fc.tri {
 		if p.X < minX {
 			minX = p.X
 		}
@@ -198,36 +199,153 @@ func (s *Face) computeAABB() {
 		minZ -= eps
 		maxZ += eps
 	}
-	s.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
+	fc.aabb.Rebuild(minX-eps, minY-eps, minZ, maxX+eps, maxY+eps, maxZ)
 }
 
 // computeUV computes the UV mapping for the current face based on its n, material, and texture scaling factors.
-func (s *Face) computeUV() {
-	if s.lockUV {
+func (fc *Face) computeUV() {
+	if fc.lockUV {
 		return
 	}
-	if s.material == nil {
+	if fc.material == nil {
 		return
 	}
-	tex := s.material.CurrentFrame()
+	tex := fc.material.CurrentFrame()
 	if tex == nil {
 		return
 	}
 	w, h := tex.GetSizeScaled()
-	nAbsX, nAbsY, nAbsZ := s.GetNormalAbs()
+	nAbsX, nAbsY, nAbsZ := fc.GetNormalAbs()
 	// Pure Triplanar Projection.
 	if nAbsZ >= nAbsX && nAbsZ >= nAbsY {
 		// Upper / Lower (Floors and Ceilings)
-		u0, v0 := s.tri[0].X/w, s.tri[0].Y/h
-		u1, v1 := s.tri[1].X/w, s.tri[1].Y/h
-		u2, v2 := s.tri[2].X/w, s.tri[2].Y/h
-		s.SetUV(u0, v0, u1, v1, u2, v2)
+		u0, v0 := fc.tri[0].X/w, fc.tri[0].Y/h
+		u1, v1 := fc.tri[1].X/w, fc.tri[1].Y/h
+		u2, v2 := fc.tri[2].X/w, fc.tri[2].Y/h
+		fc.SetUV(u0, v0, u1, v1, u2, v2)
 	} else if nAbsY >= nAbsX && nAbsY >= nAbsZ {
 		// Walls facing Y
-		s.SetUV(s.tri[0].X/w, s.tri[0].Z/h, s.tri[1].X/w, s.tri[1].Z/h, s.tri[2].X/w, s.tri[2].Z/h)
+		fc.SetUV(fc.tri[0].X/w, fc.tri[0].Z/h, fc.tri[1].X/w, fc.tri[1].Z/h, fc.tri[2].X/w, fc.tri[2].Z/h)
 	} else {
 		// Walls facing X
-		s.SetUV(s.tri[0].Y/w, s.tri[0].Z/h, s.tri[1].Y/w, s.tri[1].Z/h, s.tri[2].Y/w, s.tri[2].Z/h)
+		fc.SetUV(fc.tri[0].Y/w, fc.tri[0].Z/h, fc.tri[1].Y/w, fc.tri[1].Z/h, fc.tri[2].Y/w, fc.tri[2].Z/h)
+	}
+}
+
+// ApplyUVAlign modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
+func (fc *Face) ApplyUVAlign(align *config.UVAlign, tri [3]geometry.XYZ) {
+	if align == nil || !align.FixUV {
+		return
+	}
+	mat := fc.GetMaterial()
+	if mat == nil {
+		return
+	}
+	tex := mat.HeadFrame()
+	if tex == nil {
+		return
+	}
+	w, h := tex.GetSizeScaled()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	var tx, ty, nx, ny float64
+	if align.AlignWall {
+		dx := align.End.X - align.Start.X
+		dy := align.End.Y - align.Start.Y
+		length := math.Hypot(dx, dy)
+		if length < 1e-6 {
+			dx, dy, length = 1, 0, 1
+		}
+		tx = dx / length
+		ty = dy / length
+		nx = -ty
+		ny = tx
+	}
+
+	var uvs [3][2]float64
+	for i := 0; i < 3; i++ {
+		var u, v float64
+		if align.AlignWall {
+			relX := tri[i].X - align.Start.X
+			relY := tri[i].Y - align.Start.Y
+			u = relX*tx + relY*ty
+			v = relX*nx + relY*ny
+		} else {
+			u = tri[i].X
+			v = tri[i].Y
+		}
+		if align.SwapXY {
+			u, v = v, u
+		}
+		if align.FlipX {
+			u = -u
+		}
+		if align.FlipY {
+			v = -v
+		}
+		if align.Panning.X != 0 {
+			u += align.Panning.X
+		}
+		if align.Panning.Y != 0 {
+			v += align.Panning.Y
+		}
+		uvs[i][0] = u / w
+		uvs[i][1] = v / h
+	}
+	fc.SetUV(uvs[0][0], uvs[0][1], uvs[1][0], uvs[1][1], uvs[2][0], uvs[2][1])
+	fc.LockUV(true)
+}
+
+// ApplyWallUV modifies the UV mapping of two quad faces based on wall alignment settings and quad coordinates.
+func (fc *Face) ApplyWallUV(s, e geometry.XY, align *config.UVAlign, t1, t2 float64, zBS, zBE, zTS, zTE float64, isLowerTri bool) {
+	if align == nil || !align.FixUV {
+		return
+	}
+	mat := fc.GetMaterial()
+	if mat == nil {
+		return
+	}
+	tex := mat.HeadFrame()
+	if tex == nil {
+		return
+	}
+	w, h := tex.GetSizeScaled()
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	wallLen := align.Length
+	if wallLen <= 0 {
+		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
+	}
+
+	d1 := t1 * wallLen
+	d2 := t2 * wallLen
+	minD := math.Min(d1, d2)
+	maxD := math.Max(d1, d2)
+
+	uStart := (minD + align.Panning.X) / w
+	uEnd := (maxD + align.Panning.X) / w
+	if align.FlipX {
+		uStart, uEnd = uEnd, uStart
+	}
+
+	vBS := (zBS + align.Panning.Y) / h
+	vBE := (zBE + align.Panning.Y) / h
+	vTS := (zTS + align.Panning.Y) / h
+	vTE := (zTE + align.Panning.Y) / h
+	if align.FlipY {
+		vBS, vTS = vTS, vBS
+		vBE, vTE = vTE, vBE
+	}
+
+	if isLowerTri {
+		fc.SetUV(uStart, vBS, uEnd, vBE, uEnd, vTE)
+		fc.LockUV(true)
+	} else {
+		fc.SetUV(uStart, vBS, uEnd, vTE, uStart, vTS)
+		fc.LockUV(true)
 	}
 }
 

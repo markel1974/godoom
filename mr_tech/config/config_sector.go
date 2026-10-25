@@ -15,16 +15,16 @@ type UVAlign struct {
 	PanningY  float64     `json:"panningY"`
 }
 
-// Sloped represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.
-type Sloped struct {
+// Slope represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.
+type Slope struct {
 	GX       float64 `json:"gX"`
 	GY       float64 `json:"gY"`
 	Gradient float64 `json:"gradient"`
 }
 
 // NewSloped initializes and returns a pointer to a new Sloped instance with default values.
-func NewSloped() *Sloped {
-	return &Sloped{
+func NewSloped() *Slope {
+	return &Slope{
 		GX:       0,
 		GY:       0,
 		Gradient: 0,
@@ -33,30 +33,30 @@ func NewSloped() *Sloped {
 
 // Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type Sector struct {
-	Id            string     `json:"id"`
-	CeilY         float64    `json:"ceilY"`
-	FloorY        float64    `json:"floorY"`
-	Ceil          *Material  `json:"ceil"`
-	Floor         *Material  `json:"floor"`
-	Light         *Light     `json:"light"`
-	Segments      []*Segment `json:"segments"`
-	Tag           string     `json:"tag"`
-	SlopedFloor   *Sloped    `json:"slopedFloor"`
-	SlopedCeiling *Sloped    `json:"slopedCeiling"`
-	FloorAlign    *UVAlign   `json:"floorAlign,omitempty"`
-	CeilAlign     *UVAlign   `json:"ceilAlign,omitempty"`
-	DependsOn     []string   `json:"dependsOn,omitempty"`
+	Id           string     `json:"id"`
+	CeilY        float64    `json:"ceilY"`
+	FloorY       float64    `json:"floorY"`
+	Ceil         *Material  `json:"ceil"`
+	Floor        *Material  `json:"floor"`
+	Light        *Light     `json:"light"`
+	Segments     []*Segment `json:"segments"`
+	Tag          string     `json:"tag"`
+	SlopeFloor   *Slope     `json:"slopedFloor"`
+	SlopeCeiling *Slope     `json:"slopedCeiling"`
+	FloorAlign   *UVAlign   `json:"floorAlign,omitempty"`
+	CeilAlign    *UVAlign   `json:"ceilAlign,omitempty"`
+	DependsOn    []string   `json:"dependsOn,omitempty"`
 }
 
 // NewConfigSector creates a new Sector instance with the given id, initializing its fields with default values.
 func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff float64) *Sector {
 	return &Sector{
-		Id:            id,
-		Ceil:          nil,
-		Floor:         nil,
-		Light:         NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
-		SlopedCeiling: NewSloped(),
-		SlopedFloor:   NewSloped(),
+		Id:           id,
+		Ceil:         nil,
+		Floor:        nil,
+		Light:        NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
+		SlopeCeiling: NewSloped(),
+		SlopeFloor:   NewSloped(),
 	}
 }
 
@@ -108,4 +108,34 @@ func (s *Sector) AddDependency(id string) {
 		}
 	}
 	s.DependsOn = append(s.DependsOn, id)
+}
+
+// GetSlopeFloor returns the first segment within the sector's segments marked as referencing a sloped floor, or nil if none.
+func (s *Sector) GetSlopeFloor() *Segment {
+	var slopeSegmentFloor *Segment = nil
+	for _, cn := range s.Segments {
+		if cn == nil {
+			continue
+		}
+		if cn.SlopedFloorRef {
+			slopeSegmentFloor = cn
+			break
+		}
+	}
+	return slopeSegmentFloor
+}
+
+// GetSlopeCeiling retrieves the first segment in the sector that references a sloped ceiling, or nil if none exists.
+func (s *Sector) GetSlopeCeiling() *Segment {
+	var slopeSegmentCeiling *Segment = nil
+	for _, cn := range s.Segments {
+		if cn == nil {
+			continue
+		}
+		if cn.SlopedCeilingRef {
+			slopeSegmentCeiling = cn
+			break
+		}
+	}
+	return slopeSegmentCeiling
 }

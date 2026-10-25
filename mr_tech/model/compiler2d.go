@@ -94,7 +94,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetEmptyMaterial()
 
-	css = r.reorderSectorsForDAdjoin(css)
+	css = r.updateAdjDependencies(css)
 
 	ve := NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
@@ -111,32 +111,18 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 			continue
 		}
 
-		// Pre-calcolo delle pendenze per l'intero settore.
-		var sectorSlopeFloor *Slope
-		var sectorSlopeCeiling *Slope
-
-		for _, cn := range cs.Segments {
-			if cn == nil {
-				continue
-			}
-			if cn.SlopedFloorRef {
-				sectorSlopeFloor = &Slope{Gx: cs.SlopedFloor.GX, Gy: cs.SlopedFloor.GY, Gradient: cs.SlopedFloor.Gradient, Start: cn.Start, End: cn.End}
-				break
-			}
+		var sSlopeFloor *Slope = nil
+		var sSlopeCeiling *Slope = nil
+		if slSeg := cs.GetSlopeFloor(); slSeg != nil {
+			sl := cs.SlopeFloor
+			sSlopeFloor = &Slope{Gx: sl.GX, Gy: sl.GY, Gradient: sl.Gradient, Start: slSeg.Start, End: slSeg.End}
 		}
-
-		for _, cn := range cs.Segments {
-			if cn == nil {
-				continue
-			}
-			if cn.SlopedCeilingRef {
-				sectorSlopeCeiling = &Slope{Gx: cs.SlopedCeiling.GX, Gy: cs.SlopedCeiling.GY, Gradient: cs.SlopedCeiling.Gradient, Start: cn.Start, End: cn.End}
-				break
-			}
+		if slSeg := cs.GetSlopeCeiling(); slSeg != nil {
+			sl := cs.SlopeCeiling
+			sSlopeCeiling = &Slope{Gx: sl.GX, Gy: sl.GY, Gradient: sl.Gradient, Start: slSeg.Start, End: slSeg.End}
 		}
 
 		coveredSegments := make([]bool, len(cs.Segments))
-
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
 				if len(tri) != 3 {
@@ -144,13 +130,10 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 					continue
 				}
 
-				volumeMaterials := []*textures.Material{
-					anim.GetMaterial(cs.Floor),
-					anim.GetMaterial(cs.Ceil),
-				}
+				volumeMaterials := []*textures.Material{anim.GetMaterial(cs.Floor), anim.GetMaterial(cs.Ceil)}
 
 				sector := NewSector(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
-				sector.SetSlopes(sectorSlopeFloor, sectorSlopeCeiling)
+				sector.SetSlopes(sSlopeFloor, sSlopeCeiling)
 				sector.SetAlign(cs.FloorAlign, cs.CeilAlign)
 
 				modelSectorId++
@@ -277,13 +260,13 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 
 			curFS, curFE := cs.FloorY, cs.FloorY
 			curCS, curCE := cs.CeilY, cs.CeilY
-			if sectorSlopeFloor != nil {
-				curFS = cs.FloorY + sectorSlopeFloor.Gx*(cn.Start.X-sectorSlopeFloor.Start.X) + sectorSlopeFloor.Gy*(cn.Start.Y-sectorSlopeFloor.Start.Y)
-				curFE = cs.FloorY + sectorSlopeFloor.Gx*(cn.End.X-sectorSlopeFloor.Start.X) + sectorSlopeFloor.Gy*(cn.End.Y-sectorSlopeFloor.Start.Y)
+			if sSlopeFloor != nil {
+				curFS = cs.FloorY + sSlopeFloor.Gx*(cn.Start.X-sSlopeFloor.Start.X) + sSlopeFloor.Gy*(cn.Start.Y-sSlopeFloor.Start.Y)
+				curFE = cs.FloorY + sSlopeFloor.Gx*(cn.End.X-sSlopeFloor.Start.X) + sSlopeFloor.Gy*(cn.End.Y-sSlopeFloor.Start.Y)
 			}
-			if sectorSlopeCeiling != nil {
-				curCS = cs.CeilY + sectorSlopeCeiling.Gx*(cn.Start.X-sectorSlopeCeiling.Start.X) + sectorSlopeCeiling.Gy*(cn.Start.Y-sectorSlopeCeiling.Start.Y)
-				curCE = cs.CeilY + sectorSlopeCeiling.Gx*(cn.End.X-sectorSlopeCeiling.Start.X) + sectorSlopeCeiling.Gy*(cn.End.Y-sectorSlopeCeiling.Start.Y)
+			if sSlopeCeiling != nil {
+				curCS = cs.CeilY + sSlopeCeiling.Gx*(cn.Start.X-sSlopeCeiling.Start.X) + sSlopeCeiling.Gy*(cn.Start.Y-sSlopeCeiling.Start.Y)
+				curCE = cs.CeilY + sSlopeCeiling.Gx*(cn.End.X-sSlopeCeiling.Start.X) + sSlopeCeiling.Gy*(cn.End.Y-sSlopeCeiling.Start.Y)
 			}
 
 			uncoveredWalls = append(uncoveredWalls, &uncoveredWall{
@@ -634,8 +617,8 @@ func (r *Compiler2d) applyUVAlign(face *Face, align *config.UVAlign, tri [3]geom
 	face.LockUV(true)
 }
 
-// reorderSectorsForDAdjoin resolves dependency order among sectors and reorders them for adjacency processing.
-func (r *Compiler2d) reorderSectorsForDAdjoin(configSectors []*config.Sector) []*config.Sector {
+// updateAdjDependencies resolves dependency order among sectors and reorders them for adjacency processing.
+func (r *Compiler2d) updateAdjDependencies(configSectors []*config.Sector) []*config.Sector {
 	n := len(configSectors)
 	if n == 0 {
 		return configSectors

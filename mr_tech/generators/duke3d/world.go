@@ -123,6 +123,21 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					vFirst2.Y = -vFirst2.Y
 				}
 
+				floorW, floorH, _ := w.textures.GetTileSize(int(sec.FloorPicNum))
+				if floorW <= 0 {
+					floorW = 64
+				}
+				if floorH <= 0 {
+					floorH = 64
+				}
+				ceilW, ceilH, _ := w.textures.GetTileSize(int(sec.CeilingPicNum))
+				if ceilW <= 0 {
+					ceilW = 64
+				}
+				if ceilH <= 0 {
+					ceilH = 64
+				}
+
 				cSector.FloorAlign = &config.UVAlign{
 					FixUV:     true,
 					AlignWall: sec.AlignFirstWallFloor(),
@@ -131,7 +146,10 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					SwapXY:    sec.SwapXYFloor(),
 					FlipX:     sec.XFlipFloor(),
 					FlipY:     sec.YFlipFloor(),
-					Panning:   geometry.XY{X: float64(sec.FloorXPanning), Y: float64(sec.FloorYPanning)},
+					Panning: geometry.XY{
+						X: float64(sec.FloorXPanning) * (float64(floorW) / 256.0),
+						Y: float64(sec.FloorYPanning) * (float64(floorH) / 256.0),
+					},
 				}
 				cSector.CeilAlign = &config.UVAlign{
 					FixUV:     true,
@@ -141,7 +159,10 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					SwapXY:    sec.SwapXYCeiling(),
 					FlipX:     sec.XFlipCeiling(),
 					FlipY:     sec.YFlipCeiling(),
-					Panning:   geometry.XY{X: float64(sec.CeilingXPanning), Y: float64(sec.CeilingYPanning)},
+					Panning: geometry.XY{
+						X: float64(sec.CeilingXPanning) * (float64(ceilW) / 256.0),
+						Y: float64(sec.CeilingYPanning) * (float64(ceilH) / 256.0),
+					},
 				}
 			}
 		}

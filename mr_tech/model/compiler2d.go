@@ -692,10 +692,10 @@ func (r *Compiler2d) applyUVAlign(face *Face, align *config.UVAlign, tri [3]geom
 			v = -v
 		}
 		if align.Panning.X != 0 {
-			u += align.Panning.X * (w / 256.0)
+			u += align.Panning.X
 		}
 		if align.Panning.Y != 0 {
-			v += align.Panning.Y * (h / 256.0)
+			v += align.Panning.Y
 		}
 		uvs[i][0] = u / w
 		uvs[i][1] = v / h

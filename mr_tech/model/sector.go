@@ -10,15 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Slope represents a 2D inclined plane characterized by its normal vector and gradient for geometric calculations.
-type Slope struct {
-	G        geometry.XY
-	N        geometry.XY
-	Gradient float64
-	Start    geometry.XY
-	End      geometry.XY
-}
-
 // Sector represents a 3D environment area with assigned properties such as geometry, materials, light, and physics data.
 type Sector struct {
 	modelId      int
@@ -66,114 +57,114 @@ func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*
 }
 
 // GetModelId retrieves the model ID associated with the sector instance.
-func (s *Sector) GetModelId() int {
-	return s.modelId
+func (sr *Sector) GetModelId() int {
+	return sr.modelId
 }
 
 // GetId retrieves the unique identifier of the Sector instance.
-func (s *Sector) GetId() string {
-	return s.id
+func (sr *Sector) GetId() string {
+	return sr.id
 }
 
 // GetEntity returns the physics.Entity instance associated with the Sector.
-func (s *Sector) GetEntity() *physics.Entity {
-	return s.entity
+func (sr *Sector) GetEntity() *physics.Entity {
+	return sr.entity
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) of the Sector's associated physics entity.
-func (s *Sector) GetAABB() *aabb.AABB {
-	return s.entity.GetAABB()
+func (sr *Sector) GetAABB() *aabb.AABB {
+	return sr.entity.GetAABB()
 }
 
 // GetTag retrieves the tag string associated with the sector.
-func (s *Sector) GetTag() string {
-	return s.tag
+func (sr *Sector) GetTag() string {
+	return sr.tag
 }
 
 // GetMinZ returns the minimum Z value (floor height) for the sector.
-func (s *Sector) GetMinZ() float64 {
-	return s.minZ
+func (sr *Sector) GetMinZ() float64 {
+	return sr.minZ
 }
 
 // GetMaxZ returns the maximum Z-coordinate value of the sector.
-func (s *Sector) GetMaxZ() float64 {
-	return s.maxZ
+func (sr *Sector) GetMaxZ() float64 {
+	return sr.maxZ
 }
 
 // GetLight retrieves the Light instance associated with the Sector. Returns a pointer to the Light object.
-func (s *Sector) GetLight() *Light {
-	return s.light
+func (sr *Sector) GetLight() *Light {
+	return sr.light
 }
 
 // GetMaterialIndex returns the material at the specified index modulo the total number of materials in the sector.
-func (s *Sector) GetMaterialIndex(m int) *textures.Material {
+func (sr *Sector) GetMaterialIndex(m int) *textures.Material {
 	//floor 0, ceil 1
-	idx := m % len(s.materials)
-	return s.materials[idx]
+	idx := m % len(sr.materials)
+	return sr.materials[idx]
 }
 
 // GetSlopes returns the floor and ceiling slopes of the sector as two Slope pointers.
-func (s *Sector) GetSlopes() (*Slope, *Slope) {
-	return s.slopeF, s.slopeC
+func (sr *Sector) GetSlopes() (*Slope, *Slope) {
+	return sr.slopeF, sr.slopeC
 }
 
 // SetSlopes sets the floor and ceiling slopes of the sector using the provided Slope objects.
-func (s *Sector) SetSlopes(slopeF *Slope, slopeC *Slope) {
-	s.slopeF = slopeF
-	s.slopeC = slopeC
+func (sr *Sector) SetSlopes(slopeF *Slope, slopeC *Slope) {
+	sr.slopeF = slopeF
+	sr.slopeC = slopeC
 }
 
 // SetAlign sets the UV alignment parameters for floor and ceiling.
-func (s *Sector) SetAlign(floorAlign, ceilAlign *config.UVAlign) {
-	s.floorAlign = floorAlign
-	s.ceilAlign = ceilAlign
+func (sr *Sector) SetAlign(floorAlign, ceilAlign *config.UVAlign) {
+	sr.floorAlign = floorAlign
+	sr.ceilAlign = ceilAlign
 }
 
 // GetFloorAlign returns the UV alignment configuration for the floor.
-func (s *Sector) GetFloorAlign() *config.UVAlign {
-	return s.floorAlign
+func (sr *Sector) GetFloorAlign() *config.UVAlign {
+	return sr.floorAlign
 }
 
 // GetCeilAlign returns the UV alignment configuration for the ceiling.
-func (s *Sector) GetCeilAlign() *config.UVAlign {
-	return s.ceilAlign
+func (sr *Sector) GetCeilAlign() *config.UVAlign {
+	return sr.ceilAlign
 }
 
 // AddSegment adds a new segment to the sector, setting its parent and expanding the internal storage if necessary.
-func (s *Sector) AddSegment(segment *Segment) {
-	segment.SetParent(s)
-	if s.segmentCount >= len(s.segments) {
-		newFaces := make([]*Segment, s.segmentCount*2)
-		copy(newFaces, s.segments)
-		s.segments = newFaces
+func (sr *Sector) AddSegment(segment *Segment) {
+	segment.SetParent(sr)
+	if sr.segmentCount >= len(sr.segments) {
+		newFaces := make([]*Segment, sr.segmentCount*2)
+		copy(newFaces, sr.segments)
+		sr.segments = newFaces
 	}
-	s.segments[s.segmentCount] = segment
-	s.segmentCount++
+	sr.segments[sr.segmentCount] = segment
+	sr.segmentCount++
 }
 
 // AddTag appends a semicolon-delimited string to the sector's existing tag if the input is non-empty.
-func (s *Sector) AddTag(tags string) {
+func (sr *Sector) AddTag(tags string) {
 	if len(tags) > 0 {
-		s.tag += ";" + tags
+		sr.tag += ";" + tags
 	}
 }
 
 // SetLight assigns a Light object to the Sector, replacing any previously set Light instance.
-func (s *Sector) SetLight(light *Light) {
-	s.light = light
+func (sr *Sector) SetLight(light *Light) {
+	sr.light = light
 }
 
 // GetSegments returns the list of segments in the sector and the total count of those segments.
-func (s *Sector) GetSegments() ([]*Segment, int) {
-	return s.segments, s.segmentCount
+func (sr *Sector) GetSegments() ([]*Segment, int) {
+	return sr.segments, sr.segmentCount
 }
 
 // GetCentroid computes and returns the centroid (geometry.XYZ) of the Sector, considering its 2D polygon and minimum Z value.
-func (s *Sector) GetCentroid() geometry.XYZ {
+func (sr *Sector) GetCentroid() geometry.XYZ {
 	var signedArea, cx, cy float64
-	for x := 0; x < s.segmentCount; x++ {
-		start := s.segments[x].GetStart()
-		end := s.segments[x].GetEnd()
+	for x := 0; x < sr.segmentCount; x++ {
+		start := sr.segments[x].GetStart()
+		end := sr.segments[x].GetEnd()
 		x0, y0 := start.X, start.Y
 		x1, y1 := end.X, end.Y
 
@@ -182,10 +173,10 @@ func (s *Sector) GetCentroid() geometry.XYZ {
 		cx += (x0 + x1) * a
 		cy += (y0 + y1) * a
 	}
-	floorY := s.GetMinZ()
+	floorY := sr.GetMinZ()
 	signedArea *= 0.5
 	if signedArea == 0 {
-		start := s.segments[0].GetStart()
+		start := sr.segments[0].GetStart()
 		return geometry.XYZ{X: start.X, Y: start.Y, Z: floorY}
 	}
 	return geometry.XYZ{
@@ -196,12 +187,12 @@ func (s *Sector) GetCentroid() geometry.XYZ {
 }
 
 // Rebuild updates the sector's bounding box, recalculates segment bounds, and rebuilds the spatial data structure.
-func (s *Sector) Rebuild() bool {
+func (sr *Sector) Rebuild() bool {
 	minX, minY := math.MaxFloat64, math.MaxFloat64
 	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
-	for x := 0; x < s.segmentCount; x++ {
-		face := s.segments[x]
-		face.SetZ(s.minZ, s.maxZ)
+	for x := 0; x < sr.segmentCount; x++ {
+		face := sr.segments[x]
+		face.SetZ(sr.minZ, sr.maxZ)
 		for _, p := range face.GetPoints() {
 			if p.X < minX {
 				minX = p.X
@@ -217,23 +208,40 @@ func (s *Sector) Rebuild() bool {
 			}
 		}
 	}
-	s.entity.GetAABB().Rebuild(minX, minY, s.minZ, maxX, maxY, s.maxZ)
-	s.segmentsTree.Clear()
-	for x := 0; x < s.segmentCount; x++ {
-		segment := s.segments[x]
+	sr.entity.GetAABB().Rebuild(minX, minY, sr.minZ, maxX, maxY, sr.maxZ)
+	sr.segmentsTree.Clear()
+	for x := 0; x < sr.segmentCount; x++ {
+		segment := sr.segments[x]
 		segment.Rebuild()
-		s.segmentsTree.InsertObject(segment)
+		sr.segmentsTree.InsertObject(segment)
 	}
 	return true
 }
 
 // PointInLineSide determines if a point (px, py) lies on the valid side of all segments within the Sector. Returns false if not.
-func (s *Sector) PointInLineSide(px, py float64) bool {
-	for x := 0; x < s.segmentCount; x++ {
-		face := s.segments[x]
+func (sr *Sector) PointInLineSide(px, py float64) bool {
+	for x := 0; x < sr.segmentCount; x++ {
+		face := sr.segments[x]
 		if !face.PointInLineSide(px, py) {
 			return false
 		}
 	}
 	return true
+}
+
+// ResolveZ calculates the adjusted floor (zF) and ceiling (zC) heights at a given point p using base values and slope data.
+func (sr *Sector) ResolveZ(p geometry.XYZ, baseF, baseC float64, clamp bool) (float64, float64) {
+	zF := baseF
+	if sr.slopeF != nil {
+		zF = sr.slopeF.ComputeZ(baseF, p.X, p.Y)
+	}
+	zC := baseC
+	if sr.slopeC != nil {
+		zC = sr.slopeC.ComputeZ(baseC, p.X, p.Y)
+	}
+	if clamp && zF > zC {
+		mid := (zF + zC) * 0.5
+		return mid, mid
+	}
+	return zF, zC
 }

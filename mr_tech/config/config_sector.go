@@ -24,8 +24,8 @@ type Slope struct {
 	Gradient float64     `json:"gradient"`
 }
 
-// NewSloped initializes and returns a pointer to a new Sloped instance with default values.
-func NewSloped() *Slope {
+// NewSlope initializes and returns a pointer to a new Sloped instance with default values.
+func NewSlope() *Slope {
 	return &Slope{
 		G:        geometry.XY{X: 0, Y: 0},
 		Gradient: 0,
@@ -56,8 +56,8 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff 
 		Ceil:         nil,
 		Floor:        nil,
 		Light:        NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
-		SlopeCeiling: NewSloped(),
-		SlopeFloor:   NewSloped(),
+		SlopeCeiling: NewSlope(),
+		SlopeFloor:   NewSlope(),
 	}
 }
 

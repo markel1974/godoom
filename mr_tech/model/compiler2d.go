@@ -10,22 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-type uncoveredWall struct {
-	start   geometry.XY
-	end     geometry.XY
-	zBS     float64
-	zBE     float64
-	zTS     float64
-	zTE     float64
-	tag     string
-	mat     *textures.Material
-	csId    string
-	csTag   string
-	csLight *config.Light
-	modelId int
-	align   *config.UVAlign
-}
-
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
@@ -89,12 +73,12 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 }
 
 // compile2d processes 2D geometry and sector configurations to construct 2D sectors and identifies uncovered walls.
-func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
+func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 	vertices, css, anim := r.cfg.Vertices, r.cfg.Sectors, r.materials
 	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Sector
-	var uncoveredWalls []*uncoveredWall
+	var uncoveredWalls []*SegmentUncovered
 	var fixSegments []*Segment
 	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetEmptyMaterial()
@@ -120,12 +104,11 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 		var sSlopeCeiling *Slope = nil
 		if slSeg := cs.GetSlopeFloor(); slSeg != nil {
 			sl := cs.SlopeFloor
-
-			sSlopeFloor = &Slope{G: sl.G, Gradient: sl.Gradient, Start: slSeg.Start, End: slSeg.End}
+			sSlopeFloor = NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
 		}
 		if slSeg := cs.GetSlopeCeiling(); slSeg != nil {
 			sl := cs.SlopeCeiling
-			sSlopeCeiling = &Slope{G: sl.G, Gradient: sl.Gradient, Start: slSeg.Start, End: slSeg.End}
+			sSlopeCeiling = NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
 		}
 
 		coveredSegments := make([]bool, len(cs.Segments))
@@ -249,13 +232,11 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 					}
 					light.Setup(cs.Light, lightPos)
 				}
-
 				sector.Rebuild()
 				segments, segmentCount := sector.GetSegments()
 				for x := 0; x < segmentCount; x++ {
 					facesTree.InsertObject(segments[x])
 				}
-
 				container = append(container, sector)
 			}
 		}
@@ -275,36 +256,21 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*uncoveredWall) {
 				continue
 			}
 			mat := anim.GetMaterial(matCfg)
-			if mat == nil || mat.CurrentFrame() == nil {
+			if mat == nil || mat.HeadFrame() == nil {
 				continue
 			}
-
 			curFS, curFE := cs.FloorY, cs.FloorY
 			curCS, curCE := cs.CeilY, cs.CeilY
 			if sSlopeFloor != nil {
-				curFS = cs.FloorY + sSlopeFloor.G.X*(cn.Start.X-sSlopeFloor.Start.X) + sSlopeFloor.G.Y*(cn.Start.Y-sSlopeFloor.Start.Y)
-				curFE = cs.FloorY + sSlopeFloor.G.X*(cn.End.X-sSlopeFloor.Start.X) + sSlopeFloor.G.Y*(cn.End.Y-sSlopeFloor.Start.Y)
+				curFS = sSlopeFloor.ComputeZ(cs.FloorY, cn.Start.X, cn.Start.Y)
+				curFE = sSlopeFloor.ComputeZ(cs.FloorY, cn.End.X, cn.End.Y)
 			}
 			if sSlopeCeiling != nil {
-				curCS = cs.CeilY + sSlopeCeiling.G.X*(cn.Start.X-sSlopeCeiling.Start.X) + sSlopeCeiling.G.Y*(cn.Start.Y-sSlopeCeiling.Start.Y)
-				curCE = cs.CeilY + sSlopeCeiling.G.X*(cn.End.X-sSlopeCeiling.Start.X) + sSlopeCeiling.G.Y*(cn.End.Y-sSlopeCeiling.Start.Y)
+				curCS = sSlopeCeiling.ComputeZ(cs.CeilY, cn.Start.X, cn.Start.Y)
+				curCE = sSlopeCeiling.ComputeZ(cs.CeilY, cn.End.X, cn.End.Y)
 			}
-
-			uncoveredWalls = append(uncoveredWalls, &uncoveredWall{
-				start:   cn.Start,
-				end:     cn.End,
-				zBS:     curFS,
-				zBE:     curFE,
-				zTS:     curCS,
-				zTE:     curCE,
-				tag:     cn.Tag,
-				mat:     mat,
-				csId:    cs.Id,
-				csTag:   cs.Tag,
-				csLight: cs.Light,
-				modelId: modelSectorId,
-				align:   cn.UVAlign,
-			})
+			uw := NewSegmentUncovered(cn.Start, cn.End, curFS, curFE, curCS, curCE, cn.Tag, mat, cs.Id, cs.Tag, cs.Light, modelSectorId, cn.UVAlign)
+			uncoveredWalls = append(uncoveredWalls, uw)
 			modelSectorId++
 		}
 	}
@@ -362,37 +328,6 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 	var volumes3d []*Volume
 	volMap := make(map[*Sector]*Volume)
 
-	resolveZ := func(sector *Sector, p geometry.XYZ, baseF, baseC float64, clamp bool) (float64, float64) {
-		zF := baseF
-		slopeF, slopeC := sector.GetSlopes()
-		if slopeF != nil {
-			zF = baseF + slopeF.G.X*(p.X-slopeF.Start.X) + slopeF.G.Y*(p.Y-slopeF.Start.Y)
-		}
-		zC := baseC
-		if slopeC != nil {
-			zC = baseC + slopeC.G.X*(p.X-slopeC.Start.X) + slopeC.G.Y*(p.Y-slopeC.Start.Y)
-		}
-		if clamp && zF > zC {
-			mid := (zF + zC) * 0.5
-			return mid, mid
-		}
-		return zF, zC
-	}
-
-	buildQuad := func(vol3d *Volume, neighbor *Sector, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64) {
-		v0 := geometry.XYZ{X: s.X, Y: s.Y, Z: zBS}
-		v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
-		v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
-		v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
-
-		face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
-		face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
-		face1.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, true)
-		face2.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, false)
-		vol3d.AddFace(face1)
-		vol3d.AddFace(face2)
-	}
-
 	for _, sector := range sectors {
 		id := fmt.Sprintf("%s_3d", sector.GetId())
 		vol3d := NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
@@ -414,9 +349,9 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 		p1 := segments[1].GetStart()
 		p2 := segments[2].GetStart()
 
-		zF0, zC0 := resolveZ(sector, p0, curFloorY, curCeilY, false)
-		zF1, zC1 := resolveZ(sector, p1, curFloorY, curCeilY, false)
-		zF2, zC2 := resolveZ(sector, p2, curFloorY, curCeilY, false)
+		zF0, zC0 := sector.ResolveZ(p0, curFloorY, curCeilY, false)
+		zF1, zC1 := sector.ResolveZ(p1, curFloorY, curCeilY, false)
+		zF2, zC2 := sector.ResolveZ(p2, curFloorY, curCeilY, false)
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
@@ -433,22 +368,22 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 			s, e := seg.GetStart(), seg.GetEnd()
 			align, t1, t2 := seg.GetUVAlign()
 
-			curFS, curCS := resolveZ(sector, s, curFloorY, curCeilY, false)
-			curFE, curCE := resolveZ(sector, e, curFloorY, curCeilY, false)
+			curFS, curCS := sector.ResolveZ(s, curFloorY, curCeilY, false)
+			curFE, curCE := sector.ResolveZ(e, curFloorY, curCeilY, false)
 
 			neighbor := seg.GetNeighbor()
 			if neighbor == nil {
 				s2 := geometry.XY{X: s.X, Y: s.Y}
 				e2 := geometry.XY{X: e.X, Y: e.Y}
-				buildQuad(vol3d, nil, s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), seg.GetMaterialIndex(1), align, t1, t2)
+				vol3d.BuildQuad(s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), seg.GetMaterialIndex(1), align, t1, t2)
 				continue
 			}
 
 			neiFloorY := neighbor.GetMinZ()
 			neiCeilY := neighbor.GetMaxZ()
 
-			neiFS, neiCS := resolveZ(neighbor, s, neiFloorY, neiCeilY, false)
-			neiFE, neiCE := resolveZ(neighbor, e, neiFloorY, neiCeilY, false)
+			neiFS, neiCS := neighbor.ResolveZ(s, neiFloorY, neiCeilY, false)
+			neiFE, neiCE := neighbor.ResolveZ(e, neiFloorY, neiCeilY, false)
 
 			tagLower := seg.GetTag() + "_lower"
 			tagUpper := seg.GetTag() + "_upper"
@@ -469,19 +404,19 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 				subT1 := t1
 				subT2 := t1 + t*(t2-t1)
 				if zHighS1 > zLowS1 || zHighE1 > zLowE1 {
-					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, midXY, zLowS1, zLowE1, zHighS1, zHighE1, tagLower, matLower, align, subT1, subT2)
+					vol3d.BuildQuad(geometry.XY{X: s.X, Y: s.Y}, midXY, zLowS1, zLowE1, zHighS1, zHighE1, tagLower, matLower, align, subT1, subT2)
 				}
 
 				zLowS2, zHighS2 := midZ, midZ
 				zLowE2, zHighE2 := curFE, max(curFE, neiFE)
 				if zHighS2 > zLowS2 || zHighE2 > zLowE2 {
-					buildQuad(vol3d, seg.GetNeighbor(), midXY, geometry.XY{X: e.X, Y: e.Y}, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower, align, subT2, t2)
+					vol3d.BuildQuad(midXY, geometry.XY{X: e.X, Y: e.Y}, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower, align, subT2, t2)
 				}
 			} else {
 				zLowS, zHighS := curFS, max(curFS, neiFS)
 				zLowE, zHighE := curFE, max(curFE, neiFE)
 				if zHighS > zLowS || zHighE > zLowE {
-					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zLowS, zLowE, zHighS, zHighE, tagLower, matLower, align, t1, t2)
+					vol3d.BuildQuad(geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zLowS, zLowE, zHighS, zHighE, tagLower, matLower, align, t1, t2)
 				}
 			}
 
@@ -504,7 +439,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 				subT1 := t1
 				subT2 := t1 + t*(t2-t1)
 				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
-					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper, align, subT1, subT2)
+					vol3d.BuildQuad(geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper, align, subT1, subT2)
 				}
 
 				zTopS2, zBotS2 := midZ, midZ
@@ -515,7 +450,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 					zTopE2 = min(zTopE2, limE)
 				}
 				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
-					buildQuad(vol3d, seg.GetNeighbor(), midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper, align, subT2, t2)
+					vol3d.BuildQuad(midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper, align, subT2, t2)
 				}
 			} else {
 				zTopS, zBotS := curCS, min(curCS, neiCS)
@@ -525,7 +460,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 					zTopE = min(zTopE, limE)
 				}
 				if zBotS < zTopS || zBotE < zTopE {
-					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper, align, t1, t2)
+					vol3d.BuildQuad(geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper, align, t1, t2)
 				}
 			}
 
@@ -541,7 +476,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 					midTopE = min(midTopE, limE)
 				}
 				if midTopS > midBotS || midTopE > midBotE {
-					buildQuad(vol3d, seg.GetNeighbor(), geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, midBotS, midBotE, midTopS, midTopE, seg.GetTag()+"_middle", matMiddle, align, t1, t2)
+					vol3d.BuildQuad(geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, midBotS, midBotE, midTopS, midTopE, seg.GetTag()+"_middle", matMiddle, align, t1, t2)
 				}
 			}
 		}
@@ -556,7 +491,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 }
 
 // buildUncoveredWalls processes a list of uncoveredWall instances and generates corresponding 3D volumes with optional lighting.
-func (r *Compiler2d) upgrade3dUncoveredWalls(walls []*uncoveredWall) []*Volume {
+func (r *Compiler2d) upgrade3dUncoveredWalls(walls []*SegmentUncovered) []*Volume {
 	var volumes []*Volume
 	for _, uw := range walls {
 		if uw.mat == nil || uw.mat.CurrentFrame() == nil {
@@ -565,21 +500,13 @@ func (r *Compiler2d) upgrade3dUncoveredWalls(walls []*uncoveredWall) []*Volume {
 		vol3d := NewVolumeConcrete(uw.modelId, fmt.Sprintf("%s_wall_extra_%d", uw.csId, uw.modelId), uw.csTag)
 		if uw.csLight != nil {
 			light := NewLight()
-			centroid := geometry.XY{X: (uw.start.X + uw.end.X) * 0.5, Y: (uw.start.Y + uw.end.Y) * 0.5}
-			lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: (uw.zBS + uw.zBE + uw.zTS + uw.zTE) * 0.25}
-			light.Setup(uw.csLight, lightPos)
+			light.Setup(uw.csLight, uw.lightPos)
 			vol3d.SetLight(light)
 		}
-		v0 := geometry.XYZ{X: uw.start.X, Y: uw.start.Y, Z: uw.zBS}
-		v1 := geometry.XYZ{X: uw.end.X, Y: uw.end.Y, Z: uw.zBE}
-		v2 := geometry.XYZ{X: uw.end.X, Y: uw.end.Y, Z: uw.zTE}
-		v3 := geometry.XYZ{X: uw.start.X, Y: uw.start.Y, Z: uw.zTS}
-		face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, uw.tag, uw.mat)
-		face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, uw.tag, uw.mat)
-		face1.ApplyWallUV(uw.start, uw.end, uw.align, 0.0, 1.0, uw.zBS, uw.zBE, uw.zTS, uw.zTE, true)
-		face2.ApplyWallUV(uw.start, uw.end, uw.align, 0.0, 1.0, uw.zBS, uw.zBE, uw.zTS, uw.zTE, false)
-		vol3d.AddFace(face1)
-		vol3d.AddFace(face2)
+		faces := uw.CreateFaces()
+		for _, face := range faces {
+			vol3d.AddFace(face)
+		}
 		vol3d.Rebuild()
 		volumes = append(volumes, vol3d)
 	}

@@ -159,6 +159,12 @@ func (sr *Sector) GetSegments() ([]*Segment, int) {
 	return sr.segments, sr.segmentCount
 }
 
+func (sr *Sector) GetLightPos(z float64) geometry.XYZ {
+	centroid := sr.GetCentroid()
+	lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
+	return lightPos
+}
+
 // GetCentroid computes and returns the centroid (geometry.XYZ) of the Sector, considering its 2D polygon and minimum Z value.
 func (sr *Sector) GetCentroid() geometry.XYZ {
 	var signedArea, cx, cy float64

@@ -33,7 +33,7 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 		return nil, nil
 	}
 
-	sectors, uncoveredWalls := r.compile2d()
+	sectors, segmentsUncovered := r.compile2d()
 	if len(sectors) == 0 {
 		return nil, fmt.Errorf("no 2D volumes compiled")
 	}
@@ -67,7 +67,7 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 	r.lights.AddLights(r.compileLights2d(locator, true))
 
 	allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
-	allVolumes = append(allVolumes, r.upgrade3dUncoveredWalls(uncoveredWalls)...)
+	allVolumes = append(allVolumes, r.upgrade3dSegmentsUncovered(segmentsUncovered)...)
 
 	return allVolumes, nil
 }
@@ -78,7 +78,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 	const epsilon = 0.01
 	modelSectorId := 0
 	var container []*Sector
-	var uncoveredWalls []*SegmentUncovered
+	var segmentsUncovered []*SegmentUncovered
 	var fixSegments []*Segment
 	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetEmptyMaterial()
@@ -111,7 +111,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 			sSlopeCeiling = NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
 		}
 
-		coveredSegments := make([]bool, len(cs.Segments))
+		segmentsCovered := make([]bool, len(cs.Segments))
 		for _, triangles := range triContainer {
 			for _, tri := range triangles {
 				if len(tri) != 3 {
@@ -180,7 +180,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 						}
 
 						if found {
-							coveredSegments[cnIdx] = true
+							segmentsCovered[cnIdx] = true
 							isWall = cn.Kind == config.SegmentWall
 							tag = cn.Tag
 							segUVAlign = cn.UVAlign
@@ -222,14 +222,8 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 
 				light := NewLight()
 				sector.SetLight(light)
-
 				if cs.Light != nil {
-					centroid := sector.GetCentroid()
-					lightPos := geometry.XYZ{
-						X: centroid.X,
-						Y: centroid.Y,
-						Z: cs.FloorY + cs.CeilY,
-					}
+					lightPos := sector.GetLightPos(cs.FloorY + cs.CeilY)
 					light.Setup(cs.Light, lightPos)
 				}
 				sector.Rebuild()
@@ -242,7 +236,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 		}
 
 		for cnIdx, cn := range cs.Segments {
-			if cn == nil || coveredSegments[cnIdx] {
+			if cn == nil || segmentsCovered[cnIdx] {
 				continue
 			}
 			matCfg := cn.Middle
@@ -270,7 +264,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 				curCE = sSlopeCeiling.ComputeZ(cs.CeilY, cn.End.X, cn.End.Y)
 			}
 			uw := NewSegmentUncovered(cn.Start, cn.End, curFS, curFE, curCS, curCE, cn.Tag, mat, cs.Id, cs.Tag, cs.Light, modelSectorId, cn.UVAlign)
-			uncoveredWalls = append(uncoveredWalls, uw)
+			segmentsUncovered = append(segmentsUncovered, uw)
 			modelSectorId++
 		}
 	}
@@ -319,7 +313,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 		}
 	}
 
-	return container, uncoveredWalls
+	return container, segmentsUncovered
 }
 
 // upgrade3d converts a collection of 2D sectors into corresponding 3D volumes by resolving their geometric features.
@@ -466,7 +460,7 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 
 			// Middle wall for two-sided portal segments with middle material (e.g. fences, grates, masked/transparent walls)
 			matMiddle := seg.GetMaterialIndex(1)
-			if matMiddle != nil && matMiddle.CurrentFrame() != nil {
+			if matMiddle != nil && matMiddle.HeadFrame() != nil {
 				midBotS := max(curFS, neiFS)
 				midBotE := max(curFE, neiFE)
 				midTopS := min(curCS, neiCS)
@@ -490,20 +484,20 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 	return volumes3d
 }
 
-// buildUncoveredWalls processes a list of uncoveredWall instances and generates corresponding 3D volumes with optional lighting.
-func (r *Compiler2d) upgrade3dUncoveredWalls(walls []*SegmentUncovered) []*Volume {
+// upgrade3dSegmentUncovered converts uncovered wall segments into 3D volumes by generating faces and applying lighting.
+func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*SegmentUncovered) []*Volume {
 	var volumes []*Volume
-	for _, uw := range walls {
-		if uw.mat == nil || uw.mat.CurrentFrame() == nil {
+	for _, su := range segments {
+		if su.mat == nil || su.mat.HeadFrame() == nil {
 			continue
 		}
-		vol3d := NewVolumeConcrete(uw.modelId, fmt.Sprintf("%s_wall_extra_%d", uw.csId, uw.modelId), uw.csTag)
-		if uw.csLight != nil {
+		vol3d := NewVolumeConcrete(su.modelId, fmt.Sprintf("%s_wall_extra_%d", su.csId, su.modelId), su.csTag)
+		if su.csLight != nil {
 			light := NewLight()
-			light.Setup(uw.csLight, uw.lightPos)
+			light.Setup(su.csLight, su.lightPos)
 			vol3d.SetLight(light)
 		}
-		faces := uw.CreateFaces()
+		faces := su.CreateFaces()
 		for _, face := range faces {
 			vol3d.AddFace(face)
 		}

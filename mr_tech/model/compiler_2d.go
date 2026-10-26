@@ -14,35 +14,33 @@ import (
 type Compiler2d struct {
 	cfg       *config.Root
 	materials *Materials
-	lights    *Lights
 }
 
 // NewCompiler2d creates and returns a new instance of Compiler2d, used for compiling 2D game sectors and related data.
-func NewCompiler2d(cfg *config.Root, materials *Materials, lights *Lights) *Compiler2d {
+func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
 	return &Compiler2d{
 		cfg:       cfg,
 		materials: materials,
-		lights:    lights,
 	}
 }
 
-// Compile generates 2D and 3D volumes based on the configuration, materials, and lights, returning the compiled volumes.
-func (r *Compiler2d) Compile() ([]*Volume, error) {
+// Compile constructs 3D volumes and lights from 2D sector data, resolving player and thing positions using sector geometry.
+func (r *Compiler2d) Compile() ([]*Volume, []*Light, error) {
 	var allVolumes []*Volume
 	if len(r.cfg.Sectors) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	sectors, segmentsUncovered := r.compile2d()
 	if len(sectors) == 0 {
-		return nil, fmt.Errorf("no 2D volumes compiled")
+		return nil, nil, fmt.Errorf("no 2D volumes compiled")
 	}
 	locator := NewSectors(sectors, false)
 	locator.Setup()
 	//player Z
 	pv := locator.QueryPoint(r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
 	if pv == nil {
-		return nil, fmt.Errorf("can't find 2d player location at X: %f Y: %f", r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
+		return nil, nil, fmt.Errorf("can't find 2d player location at X: %f Y: %f", r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
 	}
 	if r.cfg.Player.Position.Z == 0 {
 		r.cfg.Player.Position.Z = pv.GetMinZ()
@@ -64,12 +62,12 @@ func (r *Compiler2d) Compile() ([]*Volume, error) {
 		}
 	}
 	//light 2d
-	r.lights.AddLights(r.compileLights2d(locator, true))
+	allLights := r.compileLights2d(locator, true)
 
 	allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
 	allVolumes = append(allVolumes, r.upgrade3dSegmentsUncovered(segmentsUncovered)...)
 
-	return allVolumes, nil
+	return allVolumes, allLights, nil
 }
 
 // compile2d processes 2D geometry and sector configurations to construct 2D sectors and identifies uncovered walls.

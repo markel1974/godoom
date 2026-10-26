@@ -12,25 +12,23 @@ import (
 type Compiler3d struct {
 	cfg       *config.Root
 	materials *Materials
-	lights    *Lights
 }
 
 // NewCompiler3d creates and returns a new instance of the Compiler3d type.
-func NewCompiler3d(cfg *config.Root, materials *Materials, lights *Lights) *Compiler3d {
+func NewCompiler3d(cfg *config.Root, materials *Materials) *Compiler3d {
 	return &Compiler3d{
 		cfg:       cfg,
 		materials: materials,
-		lights:    lights,
 	}
 }
 
-// Compile processes the configuration, materials, and lights to generate 3D volumes. Returns the volumes or an error.
-func (r *Compiler3d) Compile() ([]*Volume, error) {
+// Compile processes the 3D configuration, generating volumes and lights, and returns them along with any encountered error.
+func (r *Compiler3d) Compile() ([]*Volume, []*Light, error) {
 	if len(r.cfg.Volumes) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	allVolumes := r.compile3d()
-	return allVolumes, nil
+	return allVolumes, nil, nil
 }
 
 // compile3d processes a list of 3D volumes, triangulates their geometry, applies materials, and organizes them into a container.

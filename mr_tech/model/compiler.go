@@ -8,7 +8,7 @@ import (
 )
 
 type ICompiler interface {
-	Compile() ([]*Volume, error)
+	Compile() ([]*Volume, []*Light, error)
 }
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
@@ -47,27 +47,39 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 
 	cfg.Scale(r.gScale)
 	materials := NewMaterials(cfg.GetTextures())
-	r.lights = NewLights()
 
 	pipeline := []ICompiler{
-		NewCompiler2d(cfg, materials, r.lights),
-		NewCompiler3d(cfg, materials, r.lights),
+		NewCompiler2d(cfg, materials),
+		NewCompiler3d(cfg, materials),
+		NewCompilerLights(cfg.Lights),
 	}
 
 	var allVolumes []*Volume
+	var allLights []*Light
 
 	for _, compiler := range pipeline {
-		av, err := compiler.Compile()
+		volumes, lights, err := compiler.Compile()
 		if err != nil {
 			return err
 		}
-		allVolumes = append(allVolumes, av...)
+		if len(volumes) > 0 {
+			allVolumes = append(allVolumes, volumes...)
+		}
+		if len(lights) > 0 {
+			allLights = append(allLights, lights...)
+		}
 	}
 
 	r.volumes = NewVolumes(allVolumes)
-	r.volumes.Setup()
+	if err := r.volumes.Setup(); err != nil {
+		return err
+	}
 
-	r.lights.AddLights(r.compileLights(cfg.Lights))
+	r.lights = NewLights(allLights)
+	if err := r.lights.Setup(); err != nil {
+		return err
+	}
+
 	r.things = NewThings(r.gScale, 10, cfg.Things, r.volumes, materials)
 	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
 	if r.player == nil {
@@ -113,18 +125,4 @@ func (r *Compiler) GetLights() *Lights {
 // GetCalibration returns the Calibration instance associated with the Compiler.
 func (r *Compiler) GetCalibration() *Calibration {
 	return r.calibration
-}
-
-// compileLights processes a list of configuration light positions and returns a slice of initialized Light objects.
-func (r *Compiler) compileLights(cLights []*config.Light) []*Light {
-	var out []*Light
-	for _, cl := range cLights {
-		if cl == nil {
-			continue
-		}
-		light := NewLight()
-		light.Setup(cl, cl.Pos)
-		out = append(out, light)
-	}
-	return out
 }

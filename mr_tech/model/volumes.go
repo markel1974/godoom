@@ -28,12 +28,13 @@ func NewVolumes(container []*Volume) *Volumes {
 }
 
 // Setup constructs a new AABB tree based on the current container and populates it with rebuilt location objects.
-func (s *Volumes) Setup() {
+func (s *Volumes) Setup() error {
 	for _, volume := range s.container {
 		if volume.Rebuild() {
 			s.tree.InsertObject(volume)
 		}
 	}
+	return nil
 }
 
 // GetVolume retrieves a Volume from the cache using the provided unique identifier.

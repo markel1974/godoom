@@ -11,12 +11,21 @@ type Lights struct {
 }
 
 // NewLights initializes and returns a new Lights object with an empty container and a new AABBTree with a capacity of 1024.
-func NewLights() *Lights {
+func NewLights(e []*Light) *Lights {
 	l := &Lights{
-		container: make([]*Light, 0),
+		container: make([]*Light, len(e)),
 		tree:      aabb.NewTree(1024, 4.0),
 	}
+	for idx, light := range e {
+		l.container[idx] = light
+		l.tree.InsertObject(light)
+	}
 	return l
+}
+
+// Setup initializes the Lights collection and prepares the spatial partitioning structure (AABBTree) for usage.
+func (l *Lights) Setup() error {
+	return nil
 }
 
 // Len returns the number of Light objects contained in the Lights collection.
@@ -24,18 +33,13 @@ func (l *Lights) Len() int {
 	return len(l.container)
 }
 
-// AddLights adds multiple Light objects to the Lights collection and inserts them into the spatial partitioning tree.
-func (l *Lights) AddLights(e []*Light) {
-	for _, light := range e {
-		l.AddLight(light)
-	}
-}
-
+/*
 // AddLight adds a single light to the container and inserts it into the AABB tree for spatial management.
 func (l *Lights) AddLight(e *Light) {
 	l.container = append(l.container, e)
 	l.tree.InsertObject(e)
 }
+*/
 
 // Get retrieves all Light objects stored in the Lights container.
 func (l *Lights) Get() []*Light {

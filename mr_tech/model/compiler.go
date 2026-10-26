@@ -46,7 +46,11 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	cfg.Scale(r.gScale)
+
 	materials := NewMaterials(cfg.GetTextures())
+	if err := materials.Setup(); err != nil {
+		return err
+	}
 
 	pipeline := []ICompiler{
 		NewCompiler2d(cfg, materials),
@@ -81,11 +85,14 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	r.things = NewThings(r.gScale, 10, cfg.Things, r.volumes, materials)
-	r.player = NewThingPlayer(r.things, cfg.Player, r.volumes, false)
-	if r.player == nil {
-		return fmt.Errorf("player not found")
+	if err := r.things.Setup(); err != nil {
+		return err
 	}
-	r.things.SetPlayer(r.player)
+
+	r.player = NewThingPlayer(r.volumes, r.things, cfg.Player, false)
+	if err := r.player.Setup(); err != nil {
+		return err
+	}
 
 	if cfg.Crosshair != nil {
 		vol, _ := r.volumes.QueryPoint(cfg.Crosshair.Position.X, cfg.Crosshair.Position.Y, cfg.Crosshair.Position.Z)

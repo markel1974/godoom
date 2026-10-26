@@ -37,6 +37,7 @@ type Things struct {
 	solverIterations int
 	event            *ThingEvent
 	updated          bool
+	cfg              []*config.Thing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -45,6 +46,7 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 	e := &Things{
 		gScale:           gScale,
 		solverIterations: solverIterations,
+		cfg:              cfg,
 		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
 		entities:         make(map[uint64]IThing),
 		running:          make([]IThing, defaultLen),
@@ -64,23 +66,25 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		updated:          false,
 	}
 	e.pendingLen.Store(0)
-	const enableThingsCreation = true
-	if enableThingsCreation {
-		for _, ct := range cfg {
-			if ct == nil {
-				continue
-			}
-			volume, _ := e.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
-			if volume == nil {
-				//volume = e.volumes.LocateVolume(ct.Position.X, ct.Position.Y, ct.Position.Z)
-				fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
-				continue
-			}
-			t2 := e.createThing(ct, volume)
-			e.addThing(t2)
-		}
-	}
+
 	return e
+}
+
+// Setup initializes the necessary configurations or resources required for the Things object to function properly.
+func (th *Things) Setup() error {
+	for _, ct := range th.cfg {
+		if ct == nil {
+			continue
+		}
+		volume, _ := th.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		if volume == nil {
+			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
+			continue
+		}
+		t2 := th.createThing(ct, volume)
+		th.addThing(t2)
+	}
+	return nil
 }
 
 // GetMaterials returns a pointer to the Materials associated with the Things instance.

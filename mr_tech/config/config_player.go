@@ -48,7 +48,7 @@ type Player struct {
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
 func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, height float64) *Player {
-	thing := NewConfigThing("PLAYER", position, angle, -1, mass, radius, height, speed)
+	thing := NewConfigThing("PLAYER", position, angle, ThingPlayerDef, mass, radius, height, speed)
 	p := &Player{
 		Thing:     thing,
 		Bobbing:   &Bobbing{},

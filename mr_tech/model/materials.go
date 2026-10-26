@@ -21,6 +21,11 @@ func NewMaterials(tex textures.ITextures) *Materials {
 	}
 }
 
+// Setup initializes the Materials collection and prepares it for use, returning an error if setup fails.
+func (r *Materials) Setup() error {
+	return nil
+}
+
 // GetTextures returns the ITextures instance associated with the Materials object.
 func (r *Materials) GetTextures() textures.ITextures {
 	return r.tex

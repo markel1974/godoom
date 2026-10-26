@@ -100,7 +100,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		r.things.AddStaticThing(r.crosshair)
 	}
 	r.calibration = NewCalibration(cfg.Calibration, r.volumes)
-	fmt.Printf("Scan complete world: %d\n", r.volumes.Len())
+	fmt.Printf("Scan complete world: volumes %d lights: %d\n", r.volumes.Len(), r.lights.Len())
 	return nil
 }
 

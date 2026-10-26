@@ -149,11 +149,6 @@ func (sr *Sector) AddTag(tags string) {
 	}
 }
 
-// SetLight assigns a Light object to the Sector, replacing any previously set Light instance.
-func (sr *Sector) SetLight(light *Light) {
-	sr.light = light
-}
-
 // GetSegments returns the list of segments in the sector and the total count of those segments.
 func (sr *Sector) GetSegments() ([]*Segment, int) {
 	return sr.segments, sr.segmentCount
@@ -163,6 +158,17 @@ func (sr *Sector) GetLightPos(z float64) geometry.XYZ {
 	centroid := sr.GetCentroid()
 	lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
 	return lightPos
+}
+
+// CreateLight initializes a light source for the Sector at a specified Z-coordinate using the provided light configuration.
+func (sr *Sector) CreateLight(light *config.Light, z float64) {
+	if light == nil {
+		return
+	}
+	centroid := sr.GetCentroid()
+	lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
+	sr.light = NewLight()
+	sr.light.Setup(light, lightPos)
 }
 
 // GetCentroid computes and returns the centroid (geometry.XYZ) of the Sector, considering its 2D polygon and minimum Z value.

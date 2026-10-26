@@ -214,18 +214,11 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 					}
 					sector.AddSegment(seg)
 					sector.AddTag(tag)
-
 					if !isWall {
 						fixSegments = append(fixSegments, seg)
 					}
 				}
-
-				light := NewLight()
-				sector.SetLight(light)
-				if cs.Light != nil {
-					lightPos := sector.GetLightPos(cs.FloorY + cs.CeilY)
-					light.Setup(cs.Light, lightPos)
-				}
+				sector.CreateLight(cs.Light, cs.FloorY+cs.CeilY)
 				sector.Rebuild()
 				segments, segmentCount := sector.GetSegments()
 				for x := 0; x < segmentCount; x++ {
@@ -235,6 +228,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 			}
 		}
 
+		//Uncovered Segments Handling
 		for cnIdx, cn := range cs.Segments {
 			if cn == nil || segmentsCovered[cnIdx] {
 				continue

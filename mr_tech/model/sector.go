@@ -91,11 +91,6 @@ func (sr *Sector) GetMaxZ() float64 {
 	return sr.maxZ
 }
 
-// GetLight retrieves the Light instance associated with the Sector. Returns a pointer to the Light object.
-func (sr *Sector) GetLight() *Light {
-	return sr.light
-}
-
 // GetMaterialIndex returns the material at the specified index modulo the total number of materials in the sector.
 func (sr *Sector) GetMaterialIndex(m int) *textures.Material {
 	//floor 0, ceil 1
@@ -154,10 +149,9 @@ func (sr *Sector) GetSegments() ([]*Segment, int) {
 	return sr.segments, sr.segmentCount
 }
 
-func (sr *Sector) GetLightPos(z float64) geometry.XYZ {
-	centroid := sr.GetCentroid()
-	lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
-	return lightPos
+// GetLight retrieves the Light instance associated with the Sector. Returns a pointer to the Light object.
+func (sr *Sector) GetLight() *Light {
+	return sr.light
 }
 
 // CreateLight initializes a light source for the Sector at a specified Z-coordinate using the provided light configuration.

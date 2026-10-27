@@ -6,9 +6,20 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+// CreateFaces generates two triangular faces representing a wall surface based on the SegmentUncovered's geometry and properties.
+func CreateFaces(uw *sectors.SegmentUncovered) []*Face {
+	v0, v1, v2, v3 := uw.CreateQuad()
+	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, uw.GetTag(), uw.GetMat())
+	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, uw.GetTag(), uw.GetMat())
+	face1.ApplyWallUV(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), true)
+	face2.ApplyWallUV(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), false)
+	return []*Face{face1, face2}
+}
 
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
@@ -31,11 +42,11 @@ func (r *Compiler2d) Compile() ([]*Volume, []*Light, error) {
 		return nil, nil, nil
 	}
 
-	sectors, segmentsUncovered := r.compile2d()
-	if len(sectors) == 0 {
+	sectors2d, segmentsUncovered := r.compile2d()
+	if len(sectors2d) == 0 {
 		return nil, nil, fmt.Errorf("no 2D volumes compiled")
 	}
-	locator := NewSectors(sectors, false)
+	locator := sectors.NewSectors(sectors2d, false)
 	locator.Setup()
 	//player Z
 	pv := locator.QueryPoint(r.cfg.Player.Position.X, r.cfg.Player.Position.Y)
@@ -64,26 +75,26 @@ func (r *Compiler2d) Compile() ([]*Volume, []*Light, error) {
 	//light 2d
 	allLights := r.compileLights2d(locator, true)
 
-	allVolumes = append(allVolumes, r.upgrade3d(sectors)...)
+	allVolumes = append(allVolumes, r.upgrade3d(sectors2d)...)
 	allVolumes = append(allVolumes, r.upgrade3dSegmentsUncovered(segmentsUncovered)...)
 
 	return allVolumes, allLights, nil
 }
 
 // compile2d processes 2D geometry and sector configurations to construct 2D sectors and identifies uncovered walls.
-func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
+func (r *Compiler2d) compile2d() ([]*sectors.Sector, []*sectors.SegmentUncovered) {
 	vertices, css, anim := r.cfg.Vertices, r.cfg.Sectors, r.materials
 	const epsilon = 0.01
 	modelSectorId := 0
-	var container []*Sector
-	var segmentsUncovered []*SegmentUncovered
-	var fixSegments []*Segment
+	var container []*sectors.Sector
+	var segmentsUncovered []*sectors.SegmentUncovered
+	var fixSegments []*sectors.Segment
 	facesTree := aabb.NewTree(1024, epsilon)
 	emptyAnim := anim.GetEmptyMaterial()
 
 	css = r.updateAdjDependencies(css)
 
-	ve := NewSectorsEdges(epsilon)
+	ve := sectors.NewSectorsEdges(epsilon)
 	ve.Construct(vertices, css)
 
 	unknownCounter := 0
@@ -98,15 +109,15 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 			continue
 		}
 
-		var sSlopeFloor *Slope = nil
-		var sSlopeCeiling *Slope = nil
+		var sSlopeFloor *sectors.Slope = nil
+		var sSlopeCeiling *sectors.Slope = nil
 		if slSeg := cs.GetSlopeFloor(); slSeg != nil {
 			sl := cs.SlopeFloor
-			sSlopeFloor = NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
+			sSlopeFloor = sectors.NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
 		}
 		if slSeg := cs.GetSlopeCeiling(); slSeg != nil {
 			sl := cs.SlopeCeiling
-			sSlopeCeiling = NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
+			sSlopeCeiling = sectors.NewSlope(sl.G, sl.Gradient, slSeg.Start, slSeg.End)
 		}
 
 		segmentsCovered := make([]bool, len(cs.Segments))
@@ -119,7 +130,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 
 				volumeMaterials := []*textures.Material{anim.GetMaterial(cs.Floor), anim.GetMaterial(cs.Ceil)}
 
-				sector := NewSector(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
+				sector := sectors.NewSector(modelSectorId, cs.Id, cs.FloorY, cs.CeilY, volumeMaterials, cs.Tag)
 				sector.SetSlopes(sSlopeFloor, sSlopeCeiling)
 				sector.SetAlign(cs.FloorAlign, cs.CeilAlign)
 
@@ -203,7 +214,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 					}
 
 					segMaterials := []*textures.Material{upper, middle, lower}
-					seg := NewSegment(nil, start, end, tag, segMaterials)
+					seg := sectors.NewSegment(nil, start, end, tag, segMaterials)
 					if hasUpperLimitZ {
 						seg.SetUpperLimitZ(upperLimitZS, upperLimitZE)
 					}
@@ -255,7 +266,7 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 				curCS = sSlopeCeiling.ComputeZ(cs.CeilY, cn.Start.X, cn.Start.Y)
 				curCE = sSlopeCeiling.ComputeZ(cs.CeilY, cn.End.X, cn.End.Y)
 			}
-			uw := NewSegmentUncovered(cn.Start, cn.End, curFS, curFE, curCS, curCE, cn.Tag, mat, cs.Id, cs.Tag, cs.Light, modelSectorId, cn.UVAlign)
+			uw := sectors.NewSegmentUncovered(cn.Start, cn.End, curFS, curFE, curCS, curCE, cn.Tag, mat, cs.Id, cs.Tag, cs.Light, modelSectorId, cn.UVAlign)
 			segmentsUncovered = append(segmentsUncovered, uw)
 			modelSectorId++
 		}
@@ -268,10 +279,10 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 		}
 
 		bestDistSq := math.MaxFloat64
-		var bestNeighborSegment *Segment
+		var bestNeighborSegment *sectors.Segment
 
 		facesTree.QueryOverlaps(segment, func(object aabb.IObject) bool {
-			overlapFace, ok := object.(*Segment)
+			overlapFace, ok := object.(*sectors.Segment)
 			if !ok {
 				return false
 			}
@@ -310,16 +321,18 @@ func (r *Compiler2d) compile2d() ([]*Sector, []*SegmentUncovered) {
 
 // upgrade3d converts a collection of 2D sectors into corresponding 3D volumes by resolving their geometric features.
 // It applies floor and ceiling heights, handles segment neighbors, and builds walls based on slope and material properties.
-func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
+func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 	var volumes3d []*Volume
-	volMap := make(map[*Sector]*Volume)
+	volMap := make(map[*sectors.Sector]*Volume)
 
-	for _, sector := range sectors {
+	for _, sector := range sectors2d {
 		id := fmt.Sprintf("%s_3d", sector.GetId())
 		vol3d := NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
 
-		if sector.light != nil {
-			vol3d.SetLight(sector.light)
+		if cLight := sector.GetLight(); cLight != nil {
+			light := NewLight()
+			light.Setup(cLight, cLight.Pos)
+			vol3d.SetLight(light)
 		}
 
 		segments, segmentCount := sector.GetSegments()
@@ -477,19 +490,19 @@ func (r *Compiler2d) upgrade3d(sectors []*Sector) []*Volume {
 }
 
 // upgrade3dSegmentUncovered converts uncovered wall segments into 3D volumes by generating faces and applying lighting.
-func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*SegmentUncovered) []*Volume {
+func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncovered) []*Volume {
 	var volumes []*Volume
 	for _, su := range segments {
-		if su.mat == nil || su.mat.HeadFrame() == nil {
+		if su.GetMat() == nil || su.GetMat().HeadFrame() == nil {
 			continue
 		}
-		vol3d := NewVolumeConcrete(su.modelId, fmt.Sprintf("%s_wall_extra_%d", su.csId, su.modelId), su.csTag)
-		if su.csLight != nil {
+		vol3d := NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())
+		if su.GetCsLight() != nil {
 			light := NewLight()
-			light.Setup(su.csLight, su.lightPos)
+			light.Setup(su.GetCsLight(), su.GetLightPos())
 			vol3d.SetLight(light)
 		}
-		faces := su.CreateFaces()
+		faces := CreateFaces(su)
 		for _, face := range faces {
 			vol3d.AddFace(face)
 		}
@@ -566,12 +579,12 @@ func (r *Compiler2d) updateAdjDependencies(configSectors []*config.Sector) []*co
 }
 
 // compileLights2d processes 2D sector data to generate and configure light objects based on sector connectivity and attributes.
-func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Light {
+func (r *Compiler2d) compileLights2d(locator *sectors.Sectors, computeCenter bool) []*Light {
 	// Unifies adjacent volume that belong to the same macroscopic sector.
 	visited := make(map[string]bool)
 	var out []*Light
 
-	addLight := func(z *Sector, pos geometry.XYZ, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, style []float64) {
+	addLight := func(z *sectors.Sector, pos geometry.XYZ, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, style []float64) {
 		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
 		cl := config.NewConfigLight(pos, intensity, kind, falloff)
 		cl.R = r
@@ -588,8 +601,8 @@ func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Li
 			continue
 		}
 		// We use a Flood Fill algorithm to find all connected sectors
-		var areaSectors []*Sector
-		queue := []*Sector{sect}
+		var areaSectors []*sectors.Sector
+		queue := []*sectors.Sector{sect}
 		visited[sect.GetId()] = true
 		for len(queue) > 0 {
 			curr := queue[0]
@@ -602,7 +615,7 @@ func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Li
 				if n := face.GetNeighbor(); n != nil {
 					if !visited[n.GetId()] {
 						// "Same Area" condition: adjacent and with same heights/lights
-						if n.GetMaxZ() == curr.GetMaxZ() && n.GetMinZ() == curr.GetMinZ() && n.light.intensity == curr.light.intensity {
+						if n.GetMaxZ() == curr.GetMaxZ() && n.GetMinZ() == curr.GetMinZ() && n.GetLight().Intensity == curr.GetLight().Intensity {
 							visited[n.GetId()] = true
 							queue = append(queue, n)
 						}
@@ -615,7 +628,8 @@ func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Li
 		if len(areaSectors) > 1 {
 			if !computeCenter {
 				for _, s := range areaSectors {
-					addLight(s, s.GetCentroid(), s.light.intensity, s.light.falloff, s.light.kind, s.light.r, s.light.g, s.light.b, s.light.style)
+					cLight := s.GetLight()
+					addLight(s, s.GetCentroid(), cLight.Intensity, cLight.Falloff, cLight.Kind, cLight.R, cLight.G, cLight.B, cLight.Style)
 				}
 			} else {
 				var sumX, sumY, totalArea float64
@@ -633,11 +647,12 @@ func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Li
 						area += (x0 * y1) - (x1 * y0)
 					}
 					area = math.Abs(area * 0.5)
-					sumX += s.light.pos.X * area
-					sumY += s.light.pos.Y * area
+					cLight := s.GetLight()
+					sumX += cLight.Pos.X * area
+					sumY += cLight.Pos.Y * area
 					totalArea += area
-					intensity += s.light.intensity
-					falloff += s.light.falloff
+					intensity += cLight.Intensity
+					falloff += cLight.Falloff
 				}
 				if totalArea == 0 {
 					fmt.Println("total area is zero")
@@ -646,24 +661,27 @@ func (r *Compiler2d) compileLights2d(locator *Sectors, computeCenter bool) []*Li
 				intensity /= float64(len(areaSectors))
 				falloff /= float64(len(areaSectors))
 				gc := geometry.XYZ{X: sumX / totalArea, Y: sumY / totalArea, Z: 0.0}
+
 				// Legacy: assign the new global light center to all area fragments
 				for _, s := range areaSectors {
-					s.light.pos.X = gc.X
-					s.light.pos.Y = gc.Y
+					cLight := s.GetLight()
+					cLight.Pos.X = gc.X
+					cLight.Pos.Y = gc.Y
 				}
 				first := areaSectors[0]
-				cVolume := locator.QueryPoint(first.light.pos.X, first.light.pos.Y)
+				fLight := first.GetLight()
+				cVolume := locator.QueryPoint(fLight.Pos.X, fLight.Pos.Y)
 				if cVolume == nil {
 					cVolume = first
-					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, first.light.pos.X, first.light.pos.Y, first.light.pos.Z)
+					fmt.Printf("Warning: sector not found for light position (idx:%d x:%f, y:%f, z:%f)\n", idx, fLight.Pos.X, fLight.Pos.Y, fLight.Pos.Z)
 				}
-				light := cVolume.light
-				addLight(cVolume, gc, intensity, falloff, light.kind, light.r, light.g, light.b, light.style)
+				light := cVolume.GetLight()
+				addLight(cVolume, gc, intensity, falloff, light.Kind, light.R, light.G, light.B, light.Style)
 			}
 		} else if len(areaSectors) == 1 {
 			first := areaSectors[0]
-			light := first.light
-			addLight(first, first.GetCentroid(), light.intensity, light.falloff, light.kind, light.r, light.g, light.b, light.style)
+			fLight := first.GetLight()
+			addLight(first, first.GetCentroid(), fLight.Intensity, fLight.Falloff, fLight.Kind, fLight.R, fLight.G, fLight.B, fLight.Style)
 		}
 	}
 	return out

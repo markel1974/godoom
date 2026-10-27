@@ -1,4 +1,4 @@
-package model
+package sectors
 
 import (
 	"math"
@@ -20,7 +20,7 @@ type Sector struct {
 	tag          string
 	segments     []*Segment
 	segmentCount int
-	light        *Light
+	cLight       *config.Light
 	entity       *physics.Entity
 	segmentsTree *aabb.Tree
 	slopeF       *Slope
@@ -44,7 +44,7 @@ func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*
 		tag:          tag,
 		segments:     make([]*Segment, 128),
 		segmentCount: 0,
-		light:        nil,
+		cLight:       &config.Light{},
 		entity:       physics.NewEntity(concreteMass, concreteRestitution, concreteFriction, concreteGForce),
 		segmentsTree: aabb.NewTree(64, 0.0),
 		slopeF:       nil,
@@ -150,19 +150,18 @@ func (sr *Sector) GetSegments() ([]*Segment, int) {
 }
 
 // GetLight retrieves the Light instance associated with the Sector. Returns a pointer to the Light object.
-func (sr *Sector) GetLight() *Light {
-	return sr.light
+func (sr *Sector) GetLight() *config.Light {
+	return sr.cLight
 }
 
 // CreateLight initializes a light source for the Sector at a specified Z-coordinate using the provided light configuration.
-func (sr *Sector) CreateLight(light *config.Light, z float64) {
-	if light == nil {
+func (sr *Sector) CreateLight(cLight *config.Light, z float64) {
+	if cLight == nil {
 		return
 	}
 	centroid := sr.GetCentroid()
-	lightPos := geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
-	sr.light = NewLight()
-	sr.light.Setup(light, lightPos)
+	sr.cLight = cLight.Clone()
+	sr.cLight.Pos = geometry.XYZ{X: centroid.X, Y: centroid.Y, Z: z}
 }
 
 // GetCentroid computes and returns the centroid (geometry.XYZ) of the Sector, considering its 2D polygon and minimum Z value.

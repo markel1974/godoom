@@ -67,3 +67,22 @@ func NewConfigLight(pos geometry.XYZ, intensity float64, kind LightKind, falloff
 func (t *Light) Scale(scale geometry.XYZ) {
 	t.Pos.Scale(scale)
 }
+
+func (t *Light) Clone() *Light {
+	return &Light{
+		Id:          t.Id,
+		Pos:         t.Pos,
+		Intensity:   t.Intensity,
+		Kind:        t.Kind,
+		Falloff:     t.Falloff,
+		R:           t.R,
+		G:           t.G,
+		B:           t.B,
+		DirX:        t.DirX,
+		DirY:        t.DirY,
+		DirZ:        t.DirZ,
+		Style:       t.Style,
+		CutOff:      t.CutOff,
+		OuterCutOff: t.OuterCutOff,
+	}
+}

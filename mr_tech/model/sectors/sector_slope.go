@@ -1,8 +1,7 @@
-package model
+package sectors
 
 import "github.com/markel1974/godoom/mr_tech/geometry"
 
-// Slope represents a 2D inclined plane characterized by its normal vector and gradient for geometric calculations.
 type Slope struct {
 	G        geometry.XY
 	Gradient float64

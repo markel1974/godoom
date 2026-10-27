@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -74,7 +75,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
-	var sectors []*model.Sector
+	var sectors []*sectors.Sector
 	for _, v := range e.volumes.GetVolumes() {
 		if sector := v.GetSector(); sector != nil {
 			sectors = append(sectors, sector)

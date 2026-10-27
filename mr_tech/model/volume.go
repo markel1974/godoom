@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -28,7 +29,7 @@ type Volume struct {
 	entity     *physics.Entity
 	facesTree  *aabb.Tree
 	thing      IThing
-	sector     *Sector
+	sector     *sectors.Sector
 	vertexTags []Tag
 }
 
@@ -174,12 +175,12 @@ func (v *Volume) SetLight(light *Light) {
 }
 
 // GetSector retrieves the Sector associated with the Volume instance.
-func (v *Volume) GetSector() *Sector {
+func (v *Volume) GetSector() *sectors.Sector {
 	return v.sector
 }
 
 // SetSector assigns the specified Sector to the Volume instance.
-func (v *Volume) SetSector(s *Sector) {
+func (v *Volume) SetSector(s *sectors.Sector) {
 	v.sector = s
 }
 

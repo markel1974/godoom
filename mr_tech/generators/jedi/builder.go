@@ -110,7 +110,7 @@ func (b *Builder) Build(fs common.IResources, eMode EngineMode, dir string, leve
 	cr := config.NewConfigRoot(cal, cSectors, cPlayer, cThings, geometry.XYZ{X: scaleX, Y: scaleY, Z: scaleZ}, tex)
 	cr.Vertices = gVertices
 	cr.Lights = lights
-	cr.Crosshair = crosshair.Create()
+	cr.AddUIElement(crosshair.Create())
 
 	return cr, nil
 }

@@ -4,16 +4,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Engine represents the core structure for managing game components and interactions.
 type Engine struct {
-	things      *model.Things
-	player      *model.ThingPlayer
-	crosshair   model.IThing
+	things *model.Things
+	player *model.ThingPlayer
+	//ui          []model.IThing
 	volumes     *model.Volumes
 	lights      *lights.Lights
 	calibration *model.Calibration
@@ -44,10 +43,10 @@ func (e *Engine) GetThings() *model.Things {
 	return e.things
 }
 
-// GetCrosshair returns the crosshair thing.
-func (e *Engine) GetCrosshair() model.IThing {
-	return e.crosshair
-}
+// GetUI retrieves the list of UI-related IThing instances currently managed by the Engine.
+//func (e *Engine) GetUI() []model.IThing {
+//	return e.ui
+//}
 
 // GetLights retrieves the list of light sources currently managed by the engine.
 func (e *Engine) GetLights() *lights.Lights {
@@ -71,17 +70,11 @@ func (e *Engine) Setup(cfg *config.Root) error {
 		return err
 	}
 	e.player = compiler.GetPlayer()
-	e.crosshair = compiler.GetCrosshair()
+	//e.ui = compiler.GetUI()
 	e.things = compiler.GetThings()
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
-	var sectors []*sectors.Sector
-	for _, v := range e.volumes.GetVolumes() {
-		if sector := v.GetSector(); sector != nil {
-			sectors = append(sectors, sector)
-		}
-	}
 	return nil
 }
 
@@ -96,14 +89,6 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	// Update Textures
 	textures.Tick()
 }
-
-/*
-// Traverse processes the given ViewMatrix through the portal system, returning a list of compiled volumes and their count.
-func (e *Engine) Traverse(fbw, fbh int32, vi *model.ViewMatrix) ([]*model.CompiledVolume, int) {
-	cs, count := e.portal.Traverse(fbw, fbh, vi)
-	return cs, count
-}
-*/
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.
 func (e *Engine) GetCalibration() *model.Calibration {

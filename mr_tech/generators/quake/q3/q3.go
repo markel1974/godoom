@@ -299,7 +299,7 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 
 	crosshair := common.NewSimpleCrosshair()
 	texManager.AddDirect(crosshair.GetTexture())
-	root.Crosshair = crosshair.Create()
+	root.AddUIElement(crosshair.Create())
 
 	playerAngle, playerPos := q3.GetPlayerInfo()
 

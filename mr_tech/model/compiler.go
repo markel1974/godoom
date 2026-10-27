@@ -19,7 +19,7 @@ type Compiler struct {
 	player      *ThingPlayer
 	lights      *lights.Lights
 	things      *Things
-	crosshair   IThing
+	ui          []IThing
 	calibration *Calibration
 }
 
@@ -95,10 +95,10 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 
-	if cfg.Crosshair != nil {
-		//vol, _ := r.volumes.QueryPoint(cfg.Crosshair.Position.X, cfg.Crosshair.Position.Y, cfg.Crosshair.Position.Z)
-		r.crosshair = r.things.Create(cfg.Crosshair, nil)
-		r.things.AddStaticThing(r.crosshair)
+	for _, i := range cfg.UI {
+		e := r.things.Create(i, nil)
+		r.things.AddStaticThing(e)
+		r.ui = append(r.ui, e)
 	}
 
 	r.calibration = NewCalibration(cfg.Calibration, r.volumes)
@@ -115,9 +115,9 @@ func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
-// GetCrosshair returns the compiled crosshair thing.
-func (r *Compiler) GetCrosshair() IThing {
-	return r.crosshair
+// GetUI returns the list of UI-related IThing instances managed by the Compiler.
+func (r *Compiler) GetUI() []IThing {
+	return r.ui
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.

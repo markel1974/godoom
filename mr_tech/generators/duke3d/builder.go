@@ -185,7 +185,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	cr.Vertices = gVertices
 	cr.Volumes = volumes
 	cr.Lights = lights
-	cr.Crosshair = crosshair.Create()
+	cr.AddUIElement(crosshair.Create())
 
 	return cr, nil
 }

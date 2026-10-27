@@ -28,6 +28,6 @@ func (b *Builder) Build(level int) (*config.Root, error) {
 	}
 	crosshair := common.NewSimpleCrosshair()
 	tex.AddDirect(crosshair.GetTexture())
-	cr.Crosshair = crosshair.Create()
+	cr.AddUIElement(crosshair.Create())
 	return cr, nil
 }

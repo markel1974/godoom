@@ -17,7 +17,7 @@ type Root struct {
 	Vertices    geometry.Polygon `json:"vertices"`
 	Volumes     []*Volume        `json:"volumes"`
 	Lights      []*Light         `json:"lights"`
-	Crosshair   *Thing           `json:"crosshair"`
+	UI          []*Thing         `json:"ui"`
 	textures    textures.ITextures
 }
 
@@ -32,6 +32,11 @@ func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, 
 		ScaleFactor: scaleFactor,
 		textures:    t,
 	}
+}
+
+// AddUIElement appends a new UI element to the UI slice of the Root configuration.
+func (cfg *Root) AddUIElement(ui *Thing) {
+	cfg.UI = append(cfg.UI, ui)
 }
 
 // GetTextures retrieves the texture collection associated with the Root configuration.

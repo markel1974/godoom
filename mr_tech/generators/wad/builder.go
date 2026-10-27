@@ -144,7 +144,7 @@ func (bld *Builder) Build(fs common.IResources, wadFile string, levelNumber int)
 
 	crosshair := common.NewSimpleCrosshair()
 	texHandler.AddDirect(crosshair.GetTexture())
-	cr.Crosshair = crosshair.Create()
+	cr.AddUIElement(crosshair.Create())
 
 	return cr, nil
 }

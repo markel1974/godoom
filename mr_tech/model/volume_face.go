@@ -36,6 +36,12 @@ func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face
 	return out
 }
 
+// Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
+func (fc *Face) Translate(idx int, offX, offY, offZ float64) (float64, float64, float64) {
+	p0x, p0y, p0z := fc.tri[idx].X+offX, fc.tri[idx].Y+offY, fc.tri[idx].Z+offZ
+	return p0x, p0y, p0z
+}
+
 // LockUV locks or unlocks the UV coordinates of a Face based on the provided staticUV parameter.
 func (fc *Face) LockUV(lockUV bool) {
 	fc.lockUV = lockUV

@@ -465,7 +465,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		lFace := faces.lFace
 
 		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.material; mat != nil && mat.Kind() == int(config.MaterialKindLiquid) {
+		if mat := rFace.GetMaterial(); mat != nil && mat.Kind() == int(config.MaterialKindLiquid) {
 			//fmt.Println("Liquid material detected")
 			continue
 		}
@@ -535,7 +535,7 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 	solidNS := nAbsY > nAbsZ
 
 	// Translation (Local -> World)
-	p0x, p0y, p0z := rFace.tri[0].X+offX, rFace.tri[0].Y+offY, rFace.tri[0].Z+offZ
+	p0x, p0y, p0z := rFace.Translate(0, offX, offY, offZ)
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 
 	var bucket BucketType
@@ -656,9 +656,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 
 	// Punto di ancoraggio del piano remoto in World Space a fine frame (t = 1),
 	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.
-	p0x := rFace.tri[0].X + rOffX
-	p0y := rFace.tri[0].Y + rOffY
-	p0z := rFace.tri[0].Z + rOffZ
+	p0x, p0y, p0z := rFace.Translate(0, rOffX, rOffY, rOffZ)
 
 	rParent := rFace.GetParent()
 	if rParent == nil {
@@ -835,12 +833,9 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	var hitDist float64
 
 	for i := 0; i < 3; i++ {
-		vx := lFace.tri[i].X + lOffX
-		vy := lFace.tri[i].Y + lOffY
-		vz := lFace.tri[i].Z + lOffZ
+		vx, vy, vz := rFace.Translate(i, lOffX, lOffY, lOffZ)
 		vDist := (vx-p0x)*nX + (vy-p0y)*nY + (vz-p0z)*nZ
-		pen := -vDist
-		if pen > maxPenetration {
+		if pen := -vDist; pen > maxPenetration {
 			maxPenetration = pen
 			hitDist = vDist
 		}

@@ -588,9 +588,7 @@ func (r *Compiler2d) compileLights2d(locator *sectors.Sectors, computeCenter boo
 	addLight := func(z *sectors.Sector, pos geometry.XYZ, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, style []float64) {
 		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
 		cl := config.NewConfigLight(pos, intensity, kind, falloff)
-		cl.R = r
-		cl.G = g
-		cl.B = b
+		cl.R, cl.G, cl.B = r, g, b
 		cl.Style = style
 		light := lights.NewLight()
 		light.Setup(cl, lightPos)

@@ -27,13 +27,27 @@ func (arts *Arts) Load(r io.Reader) error {
 	if err := art.Parse(r); err != nil {
 		return fmt.Errorf("parsing art: %w", err)
 	}
-
 	for _, tile := range art.Tiles {
 		if tile != nil && tile.Width > 0 && tile.Height > 0 {
 			arts.tiles[tile.TileNum] = tile
 		}
 	}
 	return nil
+}
+
+// HasTile checks if a tile with the specified picNum exists in the collection.
+func (arts *Arts) HasTile(tileNum int) bool {
+	_, ok := arts.tiles[tileNum]
+	return ok
+}
+
+// GetTiles returns the map of art tiles where the key is the tile number and the value is a pointer to an ArtTile.
+func (arts *Arts) GetTiles() map[int]*image.RGBA {
+	out := make(map[int]*image.RGBA)
+	for k := range arts.tiles {
+		out[k] = arts.createImage(k)
+	}
+	return out
 }
 
 // GetAnims returns the map of tile animations.
@@ -48,7 +62,7 @@ func (arts *Arts) GetAnims() map[int]*ArtTileAnim {
 }
 
 // CreateImage decodes a single tile into an RGBA image using the palette colors in Build engine column-major order.
-func (arts *Arts) CreateImage(picNum int) *image.RGBA {
+func (arts *Arts) createImage(picNum int) *image.RGBA {
 	tile, ok := arts.tiles[picNum]
 	if !ok || tile == nil || tile.Width <= 0 || tile.Height <= 0 {
 		return nil
@@ -92,19 +106,4 @@ func (arts *Arts) CreateImage(picNum int) *image.RGBA {
 	}
 
 	return img
-}
-
-// HasTile checks if a tile with the specified picNum exists in the collection.
-func (arts *Arts) HasTile(picNum int) bool {
-	_, ok := arts.tiles[picNum]
-	return ok
-}
-
-// GetTiles returns the map of art tiles where the key is the tile number and the value is a pointer to an ArtTile.
-func (arts *Arts) GetTiles() map[int]*image.RGBA {
-	out := make(map[int]*image.RGBA)
-	for k := range arts.tiles {
-		out[k] = arts.CreateImage(k)
-	}
-	return out
 }

@@ -11,35 +11,28 @@ import (
 
 // Textures manages a collection of Texture objects and provides mapping and retrieval functionalities.
 type Textures struct {
-	resources map[string]*textures.Texture
-	depot     map[int]*image.RGBA
-	anims     map[int]*ArtTileAnim
+	resources  map[string]*textures.Texture
+	depotTiles map[int]*image.RGBA
+	depotAnims map[int]*ArtTileAnim
 }
 
 // NewTextures creates and returns a new instance of Textures with initialized resource and cache maps.
 func NewTextures() *Textures {
 	return &Textures{
-		resources: make(map[string]*textures.Texture),
-		depot:     make(map[int]*image.RGBA),
-		anims:     make(map[int]*ArtTileAnim),
+		resources:  make(map[string]*textures.Texture),
+		depotTiles: make(map[int]*image.RGBA),
+		depotAnims: make(map[int]*ArtTileAnim),
 	}
 }
 
-// AddAnims copies a map of tile animation parameters into the textures cache.
-func (t *Textures) AddAnims(anims map[int]*ArtTileAnim) {
-	for k, v := range anims {
-		t.anims[k] = v
-	}
+// AddDepotAnim stores an animation descriptor for a specific picture number.
+func (t *Textures) AddDepotAnim(picNum int, anim *ArtTileAnim) {
+	t.depotAnims[picNum] = anim
 }
 
-// AddAnim stores an animation descriptor for a specific picture number.
-func (t *Textures) AddAnim(picNum int, anim *ArtTileAnim) {
-	t.anims[picNum] = anim
-}
-
-// AddDepot adds an RGBA image to the depot map indexed by the specified texture ID.
-func (t *Textures) AddDepot(tId int, img *image.RGBA) {
-	t.depot[tId] = img
+// AddDepotTile adds an RGBA image to the depot map indexed by the specified texture ID.
+func (t *Textures) AddDepotTile(tId int, img *image.RGBA) {
+	t.depotTiles[tId] = img
 }
 
 // AddDirect adds a texture to the resources map using the specified name if the provided texture is not nil.
@@ -77,7 +70,7 @@ func (t *Textures) GetTile(picNum int) string {
 		return name
 	}
 	var texture *textures.Texture
-	if img, ok := t.depot[picNum]; ok {
+	if img, ok := t.depotTiles[picNum]; ok {
 		texture = t.createTextureFromImage(name, uint32(picNum), img)
 	} else {
 		texture = t.createTextureArbitrary(name, uint32(picNum))
@@ -88,7 +81,7 @@ func (t *Textures) GetTile(picNum int) string {
 
 // GetTileFrames returns the list of texture frame names for an animated tile, or a single frame if static.
 func (t *Textures) GetTileFrames(picNum int) []string {
-	anim, ok := t.anims[picNum]
+	anim, ok := t.depotAnims[picNum]
 	if !ok || anim.AnimType == 0 || anim.NumFrames <= 0 {
 		return []string{t.GetTile(picNum)}
 	}
@@ -123,7 +116,7 @@ func (t *Textures) GetTileFrames(picNum int) []string {
 
 // GetTileSize retrieves the width and height in pixels for the specified tile.
 func (t *Textures) GetTileSize(picNum int) (int, int, bool) {
-	if img, ok := t.depot[picNum]; ok && img != nil {
+	if img, ok := t.depotTiles[picNum]; ok && img != nil {
 		b := img.Bounds()
 		return b.Dx(), b.Dy(), true
 	}
@@ -171,7 +164,7 @@ func (t *Textures) GetSkyTile(picNum int) string {
 	// We position the base of the skyline at horizonY (v ~ 0.47) so the horizon is grounded.
 	curX := 0
 	for _, p := range panels {
-		img, ok := t.depot[p]
+		img, ok := t.depotTiles[p]
 		if !ok || img == nil {
 			curX += 32
 			continue

@@ -25,14 +25,24 @@ type ArtTile struct {
 }
 
 // NewArtTile creates and initializes a new ArtTile with the given width, height, and tile number.
-func NewArtTile(w int, h int, tileNum int) *ArtTile {
-	totalPixels := w * h
-	return &ArtTile{
+func NewArtTile(w int, h int, tileNum int, val int32) *ArtTile {
+	b0 := byte(val & 0xFF)
+	b1 := int8((val >> 8) & 0xFF)
+	b2 := int8((val >> 16) & 0xFF)
+	b3 := byte((val >> 24) & 0xFF)
+	numFrames := int(b0 & 63)
+	animType := int((b0 >> 6) & 3)
+	speed := int(b3 & 15)
+	xOffset := b1
+	yOffset := b2
+	at := &ArtTile{
 		Width:     w,
 		Height:    h,
 		TileNum:   tileNum,
-		RawPixels: make([]byte, totalPixels),
+		RawPixels: make([]byte, w*h),
+		Anim:      NewArtTileAnim(numFrames, animType, speed, xOffset, yOffset),
 	}
+	return at
 }
 
 // ArtTileAnim defines animation properties for a tile, including frame count, type, speed, and offsets for positioning.
@@ -97,18 +107,9 @@ func (a *Art) Parse(data []byte) error {
 		if w <= 0 || h <= 0 {
 			continue
 		}
-		tile := NewArtTile(w, h, tileNum)
+
 		val := picAnm[i]
-		b0 := byte(val & 0xFF)
-		b1 := int8((val >> 8) & 0xFF)
-		b2 := int8((val >> 16) & 0xFF)
-		b3 := byte((val >> 24) & 0xFF)
-		numFrames := int(b0 & 63)
-		animType := int((b0 >> 6) & 3)
-		speed := int(b3 & 15)
-		xOffset := b1
-		yOffset := b2
-		tile.Anim = NewArtTileAnim(numFrames, animType, speed, xOffset, yOffset)
+		tile := NewArtTile(w, h, tileNum, val)
 
 		if _, err := io.ReadFull(r, tile.RawPixels); err != nil {
 			return fmt.Errorf("reading raw tile %d pixels: %w", tileNum, err)

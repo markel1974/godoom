@@ -13,7 +13,7 @@ import (
 type Textures struct {
 	resources map[string]*textures.Texture
 	depot     map[int]*image.RGBA
-	anims     map[int]TileAnim
+	anims     map[int]*ArtTileAnim
 }
 
 // NewTextures creates and returns a new instance of Textures with initialized resource and cache maps.
@@ -21,19 +21,19 @@ func NewTextures() *Textures {
 	return &Textures{
 		resources: make(map[string]*textures.Texture),
 		depot:     make(map[int]*image.RGBA),
-		anims:     make(map[int]TileAnim),
+		anims:     make(map[int]*ArtTileAnim),
 	}
 }
 
 // AddAnims copies a map of tile animation parameters into the textures cache.
-func (t *Textures) AddAnims(anims map[int]TileAnim) {
+func (t *Textures) AddAnims(anims map[int]*ArtTileAnim) {
 	for k, v := range anims {
 		t.anims[k] = v
 	}
 }
 
 // AddAnim stores an animation descriptor for a specific picture number.
-func (t *Textures) AddAnim(picNum int, anim TileAnim) {
+func (t *Textures) AddAnim(picNum int, anim *ArtTileAnim) {
 	t.anims[picNum] = anim
 }
 

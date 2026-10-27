@@ -10,7 +10,7 @@ import (
 type Arts struct {
 	palette [256]color.RGBA
 	tiles   map[int]*ArtTile
-	anims   map[int]TileAnim
+	anims   map[int]*ArtTileAnim
 }
 
 // NewArts creates a new Arts instance using the provided palette.
@@ -18,7 +18,7 @@ func NewArts(palette [256]color.RGBA) *Arts {
 	return &Arts{
 		palette: palette,
 		tiles:   make(map[int]*ArtTile),
-		anims:   make(map[int]TileAnim),
+		anims:   make(map[int]*ArtTileAnim),
 	}
 }
 
@@ -41,7 +41,7 @@ func (arts *Arts) Load(data []byte) error {
 }
 
 // GetAnims returns the map of tile animations.
-func (arts *Arts) GetAnims() map[int]TileAnim {
+func (arts *Arts) GetAnims() map[int]*ArtTileAnim {
 	return arts.anims
 }
 

@@ -13,6 +13,7 @@ import (
 type Textures struct {
 	resources map[string]*textures.Texture
 	depot     map[int]*image.RGBA
+	anims     map[int]TileAnim
 }
 
 // NewTextures creates and returns a new instance of Textures with initialized resource and cache maps.
@@ -20,7 +21,20 @@ func NewTextures() *Textures {
 	return &Textures{
 		resources: make(map[string]*textures.Texture),
 		depot:     make(map[int]*image.RGBA),
+		anims:     make(map[int]TileAnim),
 	}
+}
+
+// AddAnims copies a map of tile animation parameters into the textures cache.
+func (t *Textures) AddAnims(anims map[int]TileAnim) {
+	for k, v := range anims {
+		t.anims[k] = v
+	}
+}
+
+// AddAnim stores an animation descriptor for a specific picture number.
+func (t *Textures) AddAnim(picNum int, anim TileAnim) {
+	t.anims[picNum] = anim
 }
 
 // AddDepot adds an RGBA image to the depot map indexed by the specified texture ID.
@@ -72,6 +86,41 @@ func (t *Textures) GetTile(picNum int) string {
 	return name
 }
 
+// GetTileFrames returns the list of texture frame names for an animated tile, or a single frame if static.
+func (t *Textures) GetTileFrames(picNum int) []string {
+	anim, ok := t.anims[picNum]
+	if !ok || anim.AnimType == 0 || anim.NumFrames <= 0 {
+		return []string{t.GetTile(picNum)}
+	}
+
+	pics := make([]int, 0, anim.NumFrames*2+1)
+	switch anim.AnimType {
+	case 1: // Oscillating (ping-pong)
+		for i := 0; i <= anim.NumFrames; i++ {
+			pics = append(pics, picNum+i)
+		}
+		for i := anim.NumFrames - 1; i >= 1; i-- {
+			pics = append(pics, picNum+i)
+		}
+	case 2: // Forward loop
+		for i := 0; i <= anim.NumFrames; i++ {
+			pics = append(pics, picNum+i)
+		}
+	case 3: // Backward loop
+		for i := 0; i <= anim.NumFrames; i++ {
+			pics = append(pics, picNum-i)
+		}
+	default:
+		return []string{t.GetTile(picNum)}
+	}
+
+	frames := make([]string, 0, len(pics))
+	for _, p := range pics {
+		frames = append(frames, t.GetTile(p))
+	}
+	return frames
+}
+
 // GetTileSize retrieves the width and height in pixels for the specified tile.
 func (t *Textures) GetTileSize(picNum int) (int, int, bool) {
 	if img, ok := t.depot[picNum]; ok && img != nil {
@@ -83,27 +132,27 @@ func (t *Textures) GetTileSize(picNum int) (int, int, bool) {
 
 // GetSkyTile retrieves the name of a composite 360-degree cylindrical sky texture, or creates one if it does not exist.
 func (t *Textures) GetSkyTile(picNum int) string {
-	var basePic int
+	//var basePic int
 	var panels []int
 
 	switch {
 	case picNum >= 89 && picNum <= 93:
-		basePic = 89
+		//basePic = 89
 		// Duke Nukem 3D Los Angeles multi-panel panorama (8 panels of 128px = 1024px total)
 		panels = []int{89, 91, 92, 90, 91, 90, 92, 93}
 	case picNum >= 80 && picNum <= 83:
-		basePic = 80
+		//basePic = 80
 		// Duke Nukem 3D Moon sky (8 panels)
 		panels = []int{80, 81, 80, 80, 82, 83, 80, 82}
 	case picNum >= 84 && picNum <= 88:
-		basePic = 84
+		//basePic = 84
 		// Duke Nukem 3D Big Orbit / space station sky (8 panels)
 		panels = []int{84, 85, 86, 87, 84, 84, 88, 84}
 	default:
 		return t.GetTile(picNum)
 	}
 
-	name := fmt.Sprintf("duke_sky_%d", basePic)
+	name := fmt.Sprintf("duke_sky_%d", panels[0])
 	if _, exists := t.resources[name]; exists {
 		return name
 	}
@@ -152,12 +201,12 @@ func (t *Textures) GetSkyTile(picNum int) string {
 		curX += w
 	}
 
-	texture := t.createTextureFromImage(name, uint32(basePic), skyImg)
+	texture := t.createTextureFromImage(name, uint32(panels[0]), skyImg)
 	t.resources[name] = texture
 	return name
 }
 
-// addTile creates a new texture from the given RGBA image and associates it with the specified picture number.
+// createTextureFromImage creates a new texture from the given RGBA image and associates it with the specified picture number.
 func (t *Textures) createTextureFromImage(name string, picNum uint32, img *image.RGBA) *textures.Texture {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()

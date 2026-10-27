@@ -225,6 +225,7 @@ func (b *Builder) createGrpReader(res common.IResources, target string, levelNum
 	for tId, tImg := range arts.GetTiles() {
 		tex.AddDepot(tId, tImg)
 	}
+	tex.AddAnims(arts.GetAnims())
 	fmt.Printf("Loaded %d ART files from GRP into texture manager\n", tileCount)
 	maps, err := arc.Match(".*\\.MAP", true)
 	if err != nil {

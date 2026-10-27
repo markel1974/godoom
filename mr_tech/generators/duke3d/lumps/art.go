@@ -15,12 +15,22 @@ type ArtHeader struct {
 	LocalTileArtEnd   int32
 }
 
-// ArtTiles represents an individual tile of art with defined width, height, raw pixel data, and total pixel count.
+// TileAnim represents animation parameters for a tile in Build engine .ART files.
+type TileAnim struct {
+	NumFrames int  // Number of additional frames (0 = static, 1 = 2 frames, etc.)
+	AnimType  int  // 0 = none, 1 = oscillating, 2 = forward, 3 = backward
+	Speed     int  // Animation speed
+	XOffset   int8 // Center X offset
+	YOffset   int8 // Center Y offset
+}
+
+// ArtTile represents an individual tile of art with defined width, height, raw pixel data, and animation metadata.
 type ArtTile struct {
 	Width     int
 	Height    int
 	TileNum   int
 	RawPixels []byte
+	Anim      TileAnim
 }
 
 func NewArtTile(w int, h int, tileNum int) *ArtTile {
@@ -76,6 +86,18 @@ func (a *Art) Parse(data []byte) error {
 			continue
 		}
 		tile := NewArtTile(w, h, tileNum)
+		val := picAnm[i]
+		b0 := byte(val & 0xFF)
+		b1 := int8((val >> 8) & 0xFF)
+		b2 := int8((val >> 16) & 0xFF)
+		b3 := byte((val >> 24) & 0xFF)
+		tile.Anim = TileAnim{
+			NumFrames: int(b0 & 63),
+			AnimType:  int((b0 >> 6) & 3),
+			Speed:     int(b3 & 15),
+			XOffset:   b1,
+			YOffset:   b2,
+		}
 		if _, err := io.ReadFull(r, tile.RawPixels); err != nil {
 			return fmt.Errorf("reading raw tile %d pixels: %w", tileNum, err)
 		}

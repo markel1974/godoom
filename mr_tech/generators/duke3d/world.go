@@ -91,22 +91,26 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		cSector.CeilY = ceilY
 
 		// Floor material
-		floorTile := w.textures.GetTile(int(sec.FloorPicNum))
 		floorKind := config.MaterialKindLoop
+		var floorFrames []string
 		if sec.IsSkyFloor() {
 			floorKind = config.MaterialKindSky
-			floorTile = w.textures.GetSkyTile(int(sec.FloorPicNum))
+			floorFrames = []string{w.textures.GetSkyTile(int(sec.FloorPicNum))}
+		} else {
+			floorFrames = w.textures.GetTileFrames(int(sec.FloorPicNum))
 		}
-		cSector.Floor = config.NewConfigMaterial([]string{floorTile}, floorKind, 1.0, 1.0, 0, 0)
+		cSector.Floor = config.NewConfigMaterial(floorFrames, floorKind, 1.0, 1.0, 0, 0)
 
 		// Ceiling material
-		ceilTile := w.textures.GetTile(int(sec.CeilingPicNum))
 		ceilKind := config.MaterialKindLoop
+		var ceilFrames []string
 		if sec.IsSkyCeiling() {
 			ceilKind = config.MaterialKindSky
-			ceilTile = w.textures.GetSkyTile(int(sec.CeilingPicNum))
+			ceilFrames = []string{w.textures.GetSkyTile(int(sec.CeilingPicNum))}
+		} else {
+			ceilFrames = w.textures.GetTileFrames(int(sec.CeilingPicNum))
 		}
-		cSector.Ceil = config.NewConfigMaterial([]string{ceilTile}, ceilKind, 1.0, 1.0, 0, 0)
+		cSector.Ceil = config.NewConfigMaterial(ceilFrames, ceilKind, 1.0, 1.0, 0, 0)
 
 		// First wall reference for UV alignment and slopes
 		wallStart := int(sec.WallPtr)
@@ -231,8 +235,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 				if wall.NextSector < 0 {
 					// 1-sided solid wall
 					cSeg.Kind = config.SegmentWall
-					tile := w.textures.GetTile(int(wall.PicNum))
-					cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+					frames := w.textures.GetTileFrames(int(wall.PicNum))
+					cSeg.Middle = config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 				} else {
 					// 2-sided portal / adjoin
 					cSeg.Kind = config.SegmentUnknown
@@ -246,8 +250,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							if sec.IsSkyCeiling() && adjSec.IsSkyCeiling() {
 								cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, 1.0, 1.0, 0, 0)
 							} else {
-								tile := w.textures.GetTile(int(wall.PicNum))
-								cSeg.Upper = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+								frames := w.textures.GetTileFrames(int(wall.PicNum))
+								cSeg.Upper = config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 							}
 						}
 						// Lower step wall
@@ -255,8 +259,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							if sec.IsSkyFloor() && adjSec.IsSkyFloor() {
 								cSeg.Lower = config.NewConfigMaterial(nil, config.MaterialKindSky, 1.0, 1.0, 0, 0)
 							} else {
-								tile := w.textures.GetTile(int(wall.PicNum))
-								cSeg.Lower = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+								frames := w.textures.GetTileFrames(int(wall.PicNum))
+								cSeg.Lower = config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 							}
 						}
 						// Masked / grating wall / one-way
@@ -265,8 +269,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							if wall.IsOneWay() || tilePic < 0 {
 								tilePic = int(wall.PicNum)
 							}
-							tile := w.textures.GetTile(tilePic)
-							cSeg.Middle = config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+							frames := w.textures.GetTileFrames(tilePic)
+							cSeg.Middle = config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						}
 					}
 				}
@@ -304,6 +308,7 @@ func (w *World) buildSprites() []*config.Volume {
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
 			}
+			//TODO VERICARE IL MOLTIPLICATORE *3!!!!
 			tileH *= 3
 			angRad := ToRadians(sp.Ang)
 			cosA := math.Cos(angRad)
@@ -356,8 +361,8 @@ func (w *World) buildSprites() []*config.Volume {
 			if sp.HasVerticalFlip() {
 				vBottom, vTop = 0.0, -1.0
 			}
-			tile := w.textures.GetTile(int(sp.PicNum))
-			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			frames := w.textures.GetTileFrames(int(sp.PicNum))
+			mat := config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
 
 			fPoints := []geometry.XYZ{v0, v1, v2, v3}
@@ -427,8 +432,8 @@ func (w *World) buildSprites() []*config.Volume {
 				vMin, vMax = 0.0, -1.0
 			}
 
-			tile := w.textures.GetTile(int(sp.PicNum))
-			mat := config.NewConfigMaterial([]string{tile}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			frames := w.textures.GetTileFrames(int(sp.PicNum))
+			mat := config.NewConfigMaterial(frames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_floor_%d", spIdx), "sp_floor")
 			tPoints := []geometry.XYZ{v0, v1, v2, v3}
 			uvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}

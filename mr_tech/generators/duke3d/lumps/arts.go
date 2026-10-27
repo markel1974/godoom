@@ -6,10 +6,11 @@ import (
 	"image/color"
 )
 
-// Arts represents a collection of raw art tiles and a color palette used for decoding textures on demand.
+// Arts represents a collection of raw art tiles, animation metadata, and a color palette used for decoding textures on demand.
 type Arts struct {
 	palette [256]color.RGBA
 	tiles   map[int]*ArtTile
+	anims   map[int]TileAnim
 }
 
 // NewArts creates a new Arts instance using the provided palette.
@@ -17,6 +18,7 @@ func NewArts(palette [256]color.RGBA) *Arts {
 	return &Arts{
 		palette: palette,
 		tiles:   make(map[int]*ArtTile),
+		anims:   make(map[int]TileAnim),
 	}
 }
 
@@ -30,9 +32,17 @@ func (arts *Arts) Load(data []byte) error {
 	for _, tile := range art.Tiles {
 		if tile != nil && tile.Width > 0 && tile.Height > 0 {
 			arts.tiles[tile.TileNum] = tile
+			if tile.Anim.AnimType != 0 && tile.Anim.NumFrames > 0 {
+				arts.anims[tile.TileNum] = tile.Anim
+			}
 		}
 	}
 	return nil
+}
+
+// GetAnims returns the map of tile animations.
+func (arts *Arts) GetAnims() map[int]TileAnim {
+	return arts.anims
 }
 
 // CreateImage decodes a single tile into an RGBA image using the palette colors in Build engine column-major order.

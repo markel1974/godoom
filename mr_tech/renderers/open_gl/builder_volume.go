@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -124,14 +123,14 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumes(volumes *volumes.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
+func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
 	//w.occBuffer.Clear()
 
 	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
 	volumes.QueryFrustum(frustumFront, func(object aabb.IObject) bool {
-		w.visibleVol.Add(object.(*volumes.Volume))
+		w.visibleVol.Add(object.(*model.Volume))
 		return false
 	})
 
@@ -227,7 +226,7 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
 	counter := 0
 
-	pushPassThing := func(thing model.IThing, pFaces *[]*volumes.Face, faceCount int, pNextFaces *[]*volumes.Face, _ int, lp float64, renderMode float64) {
+	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
 		if !thing.IsVisible() {
 			return
 		}

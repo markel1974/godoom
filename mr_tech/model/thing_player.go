@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 )
 
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
@@ -113,7 +114,7 @@ func (pr *ThingPlayer) StartLoop() {
 }
 
 // GetLight retrieves the light object associated with the ThingPlayer.
-func (pr *ThingPlayer) GetLight() *Light {
+func (pr *ThingPlayer) GetLight() *lights.Light {
 	return nil
 }
 

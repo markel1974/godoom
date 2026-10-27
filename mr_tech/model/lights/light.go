@@ -1,4 +1,4 @@
-package model
+package lights
 
 import (
 	"math"
@@ -11,9 +11,12 @@ import (
 
 const defaultFalloff = 10.0
 
+type IParent interface {
+}
+
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
-	parent           *Volume
+	parent           IParent
 	intensity        float64
 	intensityDefault float64
 	falloff          float64
@@ -97,12 +100,12 @@ func (cl *Light) Rebuild() {
 }
 
 // SetParent assigns a parent Volume to the Light, establishing a hierarchical relationship.
-func (cl *Light) SetParent(p *Volume) {
+func (cl *Light) SetParent(p IParent) {
 	cl.parent = p
 }
 
 // GetParent retrieves the location associated with the Light instance
-func (cl *Light) GetParent() *Volume {
+func (cl *Light) GetParent() IParent {
 	return cl.parent
 }
 

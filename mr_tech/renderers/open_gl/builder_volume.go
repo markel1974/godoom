@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -194,12 +195,12 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
 // It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare(pX, pY, pZ)
 	counter := 0
 	queryLights := func(object aabb.IObject) bool {
-		light := object.(*model.Light)
+		light := object.(*lights.Light)
 
 		//TODO
 		//occState := w.occlusion.GetState(light.GetId())
@@ -216,7 +217,7 @@ func (w *BuilderVolume) pushQLights(lights *model.Lights, frustumFront, frustumR
 		counter++
 		return false
 	}
-	lights.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
+	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
 
 	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
 }

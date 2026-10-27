@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
@@ -23,7 +24,7 @@ func NewCompiler3d(cfg *config.Root, materials *Materials) *Compiler3d {
 }
 
 // Compile processes the 3D configuration, generating volumes and lights, and returns them along with any encountered error.
-func (r *Compiler3d) Compile() ([]*Volume, []*Light, error) {
+func (r *Compiler3d) Compile() ([]*Volume, []*lights.Light, error) {
 	if len(r.cfg.Volumes) == 0 {
 		return nil, nil, nil
 	}
@@ -85,7 +86,7 @@ func (r *Compiler3d) compile3d() []*Volume {
 			}
 		}
 		// Initialize default light (will be calculated later in compileVolumesLights)
-		volume.light = NewLight()
+		volume.light = lights.NewLight()
 		volume.Rebuild()
 		container = append(container, volume)
 	}

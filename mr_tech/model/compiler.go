@@ -5,10 +5,11 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 )
 
 type ICompiler interface {
-	Compile() ([]*Volume, []*Light, error)
+	Compile() ([]*Volume, []*lights.Light, error)
 }
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
@@ -16,7 +17,7 @@ type Compiler struct {
 	gScale      geometry.XYZ
 	volumes     *Volumes
 	player      *ThingPlayer
-	lights      *Lights
+	lights      *lights.Lights
 	things      *Things
 	crosshair   IThing
 	calibration *Calibration
@@ -59,7 +60,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	var allVolumes []*Volume
-	var allLights []*Light
+	var allLights []*lights.Light
 
 	for _, compiler := range pipeline {
 		volumes, lights, err := compiler.Compile()
@@ -79,7 +80,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 
-	r.lights = NewLights(allLights)
+	r.lights = lights.NewLights(allLights)
 	if err := r.lights.Setup(); err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func (r *Compiler) GetPlayer() *ThingPlayer {
 }
 
 // GetLights retrieves the list of Light objects managed by the Compiler.
-func (r *Compiler) GetLights() *Lights {
+func (r *Compiler) GetLights() *lights.Lights {
 	return r.lights
 }
 

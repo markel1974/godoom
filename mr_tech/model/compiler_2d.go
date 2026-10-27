@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -36,7 +37,7 @@ func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
 }
 
 // Compile constructs 3D volumes and lights from 2D sector data, resolving player and thing positions using sector geometry.
-func (r *Compiler2d) Compile() ([]*Volume, []*Light, error) {
+func (r *Compiler2d) Compile() ([]*Volume, []*lights.Light, error) {
 	var allVolumes []*Volume
 	if len(r.cfg.Sectors) == 0 {
 		return nil, nil, nil
@@ -330,7 +331,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 		vol3d := NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
 
 		if cLight := sector.GetLight(); cLight != nil {
-			light := NewLight()
+			light := lights.NewLight()
 			light.Setup(cLight, cLight.Pos)
 			vol3d.SetLight(light)
 		}
@@ -498,7 +499,7 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 		}
 		vol3d := NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())
 		if su.GetCsLight() != nil {
-			light := NewLight()
+			light := lights.NewLight()
 			light.Setup(su.GetCsLight(), su.GetLightPos())
 			vol3d.SetLight(light)
 		}
@@ -579,10 +580,10 @@ func (r *Compiler2d) updateAdjDependencies(configSectors []*config.Sector) []*co
 }
 
 // compileLights2d processes 2D sector data to generate and configure light objects based on sector connectivity and attributes.
-func (r *Compiler2d) compileLights2d(locator *sectors.Sectors, computeCenter bool) []*Light {
+func (r *Compiler2d) compileLights2d(locator *sectors.Sectors, computeCenter bool) []*lights.Light {
 	// Unifies adjacent volume that belong to the same macroscopic sector.
 	visited := make(map[string]bool)
-	var out []*Light
+	var out []*lights.Light
 
 	addLight := func(z *sectors.Sector, pos geometry.XYZ, intensity float64, falloff float64, kind config.LightKind, r, g, b float64, style []float64) {
 		lightPos := geometry.XYZ{X: pos.X, Y: pos.Y, Z: z.GetMinZ() + z.GetMaxZ()}
@@ -591,7 +592,7 @@ func (r *Compiler2d) compileLights2d(locator *sectors.Sectors, computeCenter boo
 		cl.G = g
 		cl.B = b
 		cl.Style = style
-		light := NewLight()
+		light := lights.NewLight()
 		light.Setup(cl, lightPos)
 		out = append(out, light)
 	}

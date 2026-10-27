@@ -4,7 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -94,7 +94,7 @@ func (f *FrameLights) Prepare(pX, pY, pZ float64) {
 }
 
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
-func (f *FrameLights) Create(light *model.Light) {
+func (f *FrameLights) Create(light *lights.Light) {
 	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
 	posX, posY, posZ := light.GetPosXYZ()
 	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)

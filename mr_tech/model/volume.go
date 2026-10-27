@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -25,7 +26,7 @@ type Volume struct {
 	facesPtr   *[]*Face
 	faceCount  int
 	tag        string
-	light      *Light
+	light      *lights.Light
 	entity     *physics.Entity
 	facesTree  *aabb.Tree
 	thing      IThing
@@ -131,7 +132,7 @@ func (v *Volume) GetId() string {
 }
 
 // GetLight retrieves the Light object associated with the Volume, or nil if no Light is assigned.
-func (v *Volume) GetLight() *Light {
+func (v *Volume) GetLight() *lights.Light {
 	return v.light
 }
 
@@ -169,7 +170,7 @@ func (v *Volume) GetFaces() (*[]*Face, int) {
 }
 
 // SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.
-func (v *Volume) SetLight(light *Light) {
+func (v *Volume) SetLight(light *lights.Light) {
 	v.light = light
 	v.light.SetParent(v)
 }

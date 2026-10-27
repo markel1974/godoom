@@ -46,18 +46,17 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		AoFactor:           cfg.AoFactor,
 		volumes:            volumes,
 	}
-	c.init()
 	return c
 }
 
 // init initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.
-func (c *Calibration) init() {
+func (c *Calibration) Setup() error {
 	if !c.Auto {
-		return
+		return nil
 	}
 	root, ok := c.volumes.tree.GetRoot()
 	if !ok {
-		return
+		return nil
 	}
 	width := root.GetWidth()
 	depth := root.GetDepth()
@@ -74,4 +73,6 @@ func (c *Calibration) init() {
 	// Distanze di proiezione relative dalla telecamera
 	c.ZNearRoom = 1.0
 	c.ZFarRoom = root.GetMaxY() - root.GetMinY()
+
+	return nil
 }

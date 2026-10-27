@@ -63,15 +63,15 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	var allLights []*lights.Light
 
 	for _, compiler := range pipeline {
-		volumes, lights, err := compiler.Compile()
+		vs, ls, err := compiler.Compile()
 		if err != nil {
 			return err
 		}
-		if len(volumes) > 0 {
-			allVolumes = append(allVolumes, volumes...)
+		if len(vs) > 0 {
+			allVolumes = append(allVolumes, vs...)
 		}
-		if len(lights) > 0 {
-			allLights = append(allLights, lights...)
+		if len(ls) > 0 {
+			allLights = append(allLights, ls...)
 		}
 	}
 
@@ -100,7 +100,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		r.crosshair = r.things.createThing(cfg.Crosshair, vol)
 		r.things.AddStaticThing(r.crosshair)
 	}
+
 	r.calibration = NewCalibration(cfg.Calibration, r.volumes)
+	if err := r.calibration.Setup(); err != nil {
+		return err
+	}
+
 	fmt.Printf("Scan complete world: volumes %d lights: %d\n", r.volumes.Len(), r.lights.Len())
 	return nil
 }

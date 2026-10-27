@@ -65,7 +65,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		elements[i] = entry
 
 		if len(entry.volumes) > 0 && entry.volumes[0] != nil {
-			_, count := entry.volumes[0].GetFaces()
+			count := entry.volumes[0].GetFaceCount()
 			partFaceOffsets[i] = totalFaces
 			partFaceCounts[i] = count
 			totalFaces += count
@@ -273,10 +273,12 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		if el == nil || len(el.volumes) == 0 || el.volumes[0] == nil {
 			continue
 		}
-		faces, count := el.volumes[0].GetFaces()
+		//faces, count := el.volumes[0].GetFaces()
+		target := el.volumes[0]
+		count := target.GetFaceCount()
 		offset := v.partFaceOffsets[i]
 		for j := 0; j < count; j++ {
-			src := (*faces)[j]
+			src := target.GetFace(j) //(*faces)[j]
 			idx := offset + j
 
 			v.facesA[idx] = &Face{
@@ -385,20 +387,26 @@ func (v *Vertices3D) SetThing(t IThing) {
 func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
 	var lerpTRet float64
 
+	reset := func(i int) {
+		v.volsA[i] = nil
+		v.volsB[i] = nil
+		v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
+		v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
+		v.rotationsA[i] = _identityMatrix
+		v.rotationsB[i] = _identityMatrix
+	}
+
 	for _, i := range v.executionOrder {
 		el := v.elements[i]
 		if el == nil {
-			v.volsA[i] = nil
-			v.volsB[i] = nil
-			v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
-			v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
-			v.rotationsA[i] = _identityMatrix
-			v.rotationsB[i] = _identityMatrix
+			reset(i)
 			continue
 		}
-
 		volA, volB, lerpT := el.GetVolumesAt(tick)
-
+		if volA == nil && volB == nil {
+			reset(i)
+			continue
+		}
 		// Fallback to the available volume if one is nil
 		if volA == nil {
 			volA = volB
@@ -427,7 +435,6 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			if tagIdx >= 0 {
 				tagOrigA, tagAxisA, okA := v.volsA[pIdx].GetVertexTag(tagIdx)
 				tagOrigB, tagAxisB, okB := v.volsB[pIdx].GetVertexTag(tagIdx)
-
 				if okA {
 					rotOrigA := v3dRotatePoint(v.rotationsA[pIdx], tagOrigA)
 					v.originsA[i].X = v.originsA[pIdx].X + rotOrigA.X
@@ -435,12 +442,10 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigA.Z
 					v.rotationsA[i] = v3dMultiplyMatrix(tagAxisA, v.rotationsA[pIdx])
 				} else {
-					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
-						v.links[i].Tag, tagIdx, pIdx, i)
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsA[i] = v.originsA[pIdx]
 					v.rotationsA[i] = v.rotationsA[pIdx]
 				}
-
 				if okB {
 					rotOrigB := v3dRotatePoint(v.rotationsB[pIdx], tagOrigB)
 					v.originsB[i].X = v.originsB[pIdx].X + rotOrigB.X
@@ -448,14 +453,12 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigB.Z
 					v.rotationsB[i] = v3dMultiplyMatrix(tagAxisB, v.rotationsB[pIdx])
 				} else {
-					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
-						v.links[i].Tag, tagIdx, pIdx, i)
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsB[i] = v.originsB[pIdx]
 					v.rotationsB[i] = v.rotationsB[pIdx]
 				}
 			} else {
-				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
-					v.links[i].Tag, pIdx, i)
+				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, pIdx, i)
 				v.originsA[i] = v.originsA[pIdx]
 				v.originsB[i] = v.originsB[pIdx]
 				v.rotationsA[i] = v.rotationsA[pIdx]
@@ -471,17 +474,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		offset := v.partFaceOffsets[i]
 		partCount := v.partFaceCounts[i]
 
-		if volA == nil || volB == nil {
-			// Part is not renderable: collapse faces so stale geometry is never rendered
-			for j := 0; j < partCount; j++ {
-				v3dZeroFace(v.facesA[offset+j])
-				v3dZeroFace(v.facesB[offset+j])
-			}
-			continue
-		}
-
-		facesA, countA := volA.GetFaces()
-		facesB, countB := volB.GetFaces()
+		countA := volA.GetFaceCount()
+		countB := volB.GetFaceCount()
 
 		count := countA
 		if countB < count {
@@ -500,7 +494,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		isIdentB := v3dIsIdentity(rotB)
 
 		for j := 0; j < count; j++ {
-			srcA := (*facesA)[j]
+			srcA := volA.GetFace(j)
 			dstA := v.facesA[offset+j]
 			if isIdentA {
 				if origA.X == 0 && origA.Y == 0 && origA.Z == 0 {
@@ -512,7 +506,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				v3dTransformPointsWithMatrix(dstA, srcA, origA, rotA)
 			}
 
-			srcB := (*facesB)[j]
+			srcB := volB.GetFace(j)
 			dstB := v.facesB[offset+j]
 			if isIdentB {
 				if origB.X == 0 && origB.Y == 0 && origB.Z == 0 {

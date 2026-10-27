@@ -115,6 +115,50 @@ func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 	p.jumpBobVelocity += vz * p.impactScale
 }
 
+// Compute updates the procedural bobbing motion based on elapsed time, speed, and velocity vector components.
+func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
+	const calibrationFPS = 60.0
+	fps := float64(physics.GetFps())
+	if fps <= 0 {
+		return
+	}
+	dtFPS := dt * fps
+	// Soglia di velocità indipendente dagli FPS.
+	// Mantiene la calibrazione precedente: maxSpeed=1200 -> 60.
+	frameMaxSpeed := maxSpeed * 3.0 / calibrationFPS
+	rawSpeed := math.Sqrt(v2x*v2x + v2y*v2y)
+	if rawSpeed > frameMaxSpeed {
+		frameMaxSpeed = frameMaxSpeed*0.95 + rawSpeed*0.05
+	}
+	// Coefficienti di smoothing calibrati a 60 FPS.
+	timeLerpSpeed := 1.0 - math.Pow(1.0-p.speedLerp, dt*calibrationFPS)
+	timeLerpAmp := 1.0 - math.Pow(1.0-p.ampLerp, dt*calibrationFPS)
+	p.smoothedSpeed += (rawSpeed - p.smoothedSpeed) * timeLerpSpeed
+	// Fase espressa in funzione del tempo trascorso.
+	// Fase: il movimento aggiunge oscillazione, ma l'idle continua sempre.
+	p.phase += (p.idleDrift + p.smoothedSpeed*p.strideLength) * dt
+	// Intensità del movimento normalizzata.
+	ratio := 0.0
+	if frameMaxSpeed > 0 {
+		ratio = min(p.smoothedSpeed/frameMaxSpeed, 1.0)
+	}
+	// Ampiezze: non scendono mai sotto quelle configurate per l'idle.
+	targetAmpX := p.idleAmpX + ratio*(p.maxAmplitudeX-p.idleAmpX)
+	targetAmpY := p.idleAmpY + ratio*(p.maxAmplitudeY-p.idleAmpY)
+
+	p.ampX += (targetAmpX - p.ampX) * timeLerpAmp
+	p.ampY += (targetAmpY - p.ampY) * timeLerpAmp
+	p.bobX = math.Cos(p.phase*0.5) * p.ampX
+	p.bobY = math.Abs(math.Sin(p.phase)) * p.ampY
+
+	// Molla del salto.
+	// Tensione e damping restano calibrati per passo di riferimento.
+	accel := -(p.jumpBobOffset * p.springTension)
+	p.jumpBobVelocity += accel * dtFPS
+	p.jumpBobVelocity *= math.Pow(p.springDamping, dtFPS)
+	p.jumpBobOffset += p.jumpBobVelocity * dtFPS
+}
+
 /*
 // Compute updates the bobbing motion based on delta time, speed, and velocity components, smoothing transitions and physics effects.
 func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
@@ -169,46 +213,3 @@ func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	)
 }
 */
-
-func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
-	const calibrationFPS = 60.0
-	fps := float64(physics.GetFps())
-	if fps <= 0 {
-		return
-	}
-	dtFPS := dt * fps
-	// Soglia di velocità indipendente dagli FPS.
-	// Mantiene la calibrazione precedente: maxSpeed=1200 -> 60.
-	frameMaxSpeed := maxSpeed * 3.0 / calibrationFPS
-	rawSpeed := math.Sqrt(v2x*v2x + v2y*v2y)
-	if rawSpeed > frameMaxSpeed {
-		frameMaxSpeed = frameMaxSpeed*0.95 + rawSpeed*0.05
-	}
-	// Coefficienti di smoothing calibrati a 60 FPS.
-	timeLerpSpeed := 1.0 - math.Pow(1.0-p.speedLerp, dt*calibrationFPS)
-	timeLerpAmp := 1.0 - math.Pow(1.0-p.ampLerp, dt*calibrationFPS)
-	p.smoothedSpeed += (rawSpeed - p.smoothedSpeed) * timeLerpSpeed
-	// Fase espressa in funzione del tempo trascorso.
-	// Fase: il movimento aggiunge oscillazione, ma l'idle continua sempre.
-	p.phase += (p.idleDrift + p.smoothedSpeed*p.strideLength) * dt
-	// Intensità del movimento normalizzata.
-	ratio := 0.0
-	if frameMaxSpeed > 0 {
-		ratio = min(p.smoothedSpeed/frameMaxSpeed, 1.0)
-	}
-	// Ampiezze: non scendono mai sotto quelle configurate per l'idle.
-	targetAmpX := p.idleAmpX + ratio*(p.maxAmplitudeX-p.idleAmpX)
-	targetAmpY := p.idleAmpY + ratio*(p.maxAmplitudeY-p.idleAmpY)
-
-	p.ampX += (targetAmpX - p.ampX) * timeLerpAmp
-	p.ampY += (targetAmpY - p.ampY) * timeLerpAmp
-	p.bobX = math.Cos(p.phase*0.5) * p.ampX
-	p.bobY = math.Abs(math.Sin(p.phase)) * p.ampY
-
-	// Molla del salto.
-	// Tensione e damping restano calibrati per passo di riferimento.
-	accel := -(p.jumpBobOffset * p.springTension)
-	p.jumpBobVelocity += accel * dtFPS
-	p.jumpBobVelocity *= math.Pow(p.springDamping, dtFPS)
-	p.jumpBobOffset += p.jumpBobVelocity * dtFPS
-}

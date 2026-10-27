@@ -10,9 +10,9 @@ type ThingInterface struct {
 }
 
 // NewThingInterface creates a new ThingInterface instance.
-func NewThingInterface(things *Things, cfg *config.Thing, volume *Volume) *ThingInterface {
+func NewThingInterface(things *Things, cfg *config.Thing) *ThingInterface {
 	thing := &ThingInterface{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
+	thing.ThingBase = NewThingBase(thing, things, cfg, nil)
 	return thing
 }
 

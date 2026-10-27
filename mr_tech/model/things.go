@@ -81,7 +81,7 @@ func (th *Things) Setup() error {
 			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
 			continue
 		}
-		t2 := th.createThing(ct, volume)
+		t2 := th.Create(ct, volume)
 		th.addThing(t2)
 	}
 	return nil
@@ -183,8 +183,8 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// CreateThing creates a new IThing instance based on the provided Thing and adds it to the Things collection.
-func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
+// Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
+func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
 	const disableEnemies = false
 	if disableEnemies {
 		if ct.Kind == config.ThingEnemyDef {
@@ -202,7 +202,7 @@ func (th *Things) createThing(ct *config.Thing, volume *Volume) IThing {
 	case config.ThingKeyDef:
 		thing = NewThingItem(th, ct, volume)
 	case config.ThingInterfaceDef:
-		thing = NewThingInterface(th, ct, volume)
+		thing = NewThingInterface(th, ct)
 	case config.ThingItemDef:
 		thing = NewThingItem(th, ct, volume)
 	default:
@@ -234,7 +234,7 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 		fmt.Println("max slot reached!")
 		return
 	}
-	throwable := th.createThing(dst, volume)
+	throwable := th.Create(dst, volume)
 	throwable.GetEntity().SetOnGround(false)
 	th.pending[slot] = throwable
 	th.hasPending = true

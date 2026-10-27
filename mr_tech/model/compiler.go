@@ -96,8 +96,8 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	if cfg.Crosshair != nil {
-		vol, _ := r.volumes.QueryPoint(cfg.Crosshair.Position.X, cfg.Crosshair.Position.Y, cfg.Crosshair.Position.Z)
-		r.crosshair = r.things.createThing(cfg.Crosshair, vol)
+		//vol, _ := r.volumes.QueryPoint(cfg.Crosshair.Position.X, cfg.Crosshair.Position.Y, cfg.Crosshair.Position.Z)
+		r.crosshair = r.things.Create(cfg.Crosshair, nil)
 		r.things.AddStaticThing(r.crosshair)
 	}
 

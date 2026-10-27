@@ -33,13 +33,11 @@ func (l *Lights) Len() int {
 	return len(l.container)
 }
 
-/*
-// AddLight adds a single light to the container and inserts it into the AABB tree for spatial management.
+// AddLight appends a Light object to the container and inserts it into the spatial tree for spatial partitioning.
 func (l *Lights) AddLight(e *Light) {
 	l.container = append(l.container, e)
 	l.tree.InsertObject(e)
 }
-*/
 
 // Get retrieves all Light objects stored in the Lights container.
 func (l *Lights) Get() []*Light {

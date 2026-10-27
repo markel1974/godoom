@@ -54,6 +54,7 @@ func (e *ThingEvent) GetSolverJitter() float64 {
 	return e.solverJitter
 }
 
+// SetSolver updates the solver index and solver jitter values for the ThingEvent.
 func (e *ThingEvent) SetSolver(solverIndex int, solverJitter float64) {
 	e.solverIndex = solverIndex
 	e.solverJitter = solverJitter
@@ -64,6 +65,7 @@ func (e *ThingEvent) SetStage(stage ComputeStage) {
 	e.stage = stage
 }
 
+// SetCoords updates the X, Y, and Z player coordinates for the ThingEvent instance.
 func (e *ThingEvent) SetCoords(x, y, z float64) {
 	e.playerX, e.playerY, e.playerZ = x, y, z
 }

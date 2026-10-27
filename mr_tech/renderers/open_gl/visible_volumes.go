@@ -3,12 +3,12 @@ package open_gl
 import (
 	"sort"
 
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // VisibleVolumes manages a collection of visible 3D volumes, maintaining their order and proximity to a camera position.
 type VisibleVolumes struct {
-	volumes          []*model.Volume
+	volumes          []*volumes.Volume
 	index            int
 	camX, camY, camZ float64
 }
@@ -16,7 +16,7 @@ type VisibleVolumes struct {
 // NewVisibleVols creates and initializes a new VisibleVolumes instance with the specified initial capacity for volumes.
 func NewVisibleVols(initSize int) *VisibleVolumes {
 	return &VisibleVolumes{
-		volumes: make([]*model.Volume, initSize),
+		volumes: make([]*volumes.Volume, initSize),
 		index:   0,
 		camX:    0,
 		camY:    0,
@@ -31,17 +31,17 @@ func (vs *VisibleVolumes) Reset(maxLen int, camX, camY, camZ float64) {
 	vs.camY = camY
 	vs.camZ = camZ
 	if maxLen >= len(vs.volumes) {
-		vs.volumes = make([]*model.Volume, maxLen*2)
+		vs.volumes = make([]*volumes.Volume, maxLen*2)
 	}
 }
 
 // At returns the Volume at the specified index within the VisibleVolumes' internal volumes slice.
-func (vs *VisibleVolumes) At(index int) *model.Volume {
+func (vs *VisibleVolumes) At(index int) *volumes.Volume {
 	return vs.volumes[index]
 }
 
 // Add appends the given Volume to the VisibleVolumes list and increments the internal index.
-func (vs *VisibleVolumes) Add(volume *model.Volume) {
+func (vs *VisibleVolumes) Add(volume *volumes.Volume) {
 	vs.volumes[vs.index] = volume
 	vs.index++
 }

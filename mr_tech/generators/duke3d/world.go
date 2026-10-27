@@ -324,8 +324,6 @@ func (w *World) buildSprites() []*config.Volume {
 			if !ok || tileW <= 0 || tileH <= 0 {
 				tileW, tileH = 64, 64
 			}
-			//TODO VERICARE IL MOLTIPLICATORE *3!!!!
-			tileH *= 3
 			angRad := ToRadians(sp.Ang)
 			cosA := math.Cos(angRad)
 			sinA := math.Sin(angRad)
@@ -354,7 +352,11 @@ func (w *World) buildSprites() []*config.Volume {
 				pLeft.Y = -pLeft.Y
 				pRight.Y = -pRight.Y
 			}
-			heightBuildZ := int32(tileH) * int32(sp.YRepeat)
+			// In Build Engine, 1 Build XY unit = 16 Build Z units.
+			// Sprite width in godoom = (tileW * sp.XRepeat) / (4.0 * 16.0) = (tileW * sp.XRepeat) / 64.0.
+			// Sprite height in godoom = (heightBuildZ) / 256.0.
+			// For 1:1 pixel aspect ratio, heightBuildZ must be tileH * sp.YRepeat * 4.
+			heightBuildZ := int32(tileH) * int32(sp.YRepeat) * 4
 			var bottomZBuild, topZBuild int32
 			if sp.HasVerticalAlignment() {
 				bottomZBuild = sp.Z + heightBuildZ/2
@@ -453,8 +455,23 @@ func (w *World) buildSprites() []*config.Volume {
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_floor_%d", spIdx), "sp_floor")
 			tPoints := []geometry.XYZ{v0, v1, v2, v3}
 			uvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
+			if w.flipY {
+				tPoints = []geometry.XYZ{v0, v3, v2, v1}
+				uvs = [][2]float64{{uMin, vMin}, {uMin, vMax}, {uMax, vMax}, {uMax, vMin}}
+			}
 			topFace := config.NewConfigFace(tPoints, uvs, mat, fmt.Sprintf("sp_floor_%d_t", spIdx))
 			vol.AddFace(topFace)
+
+			if sp.IsTwoSided() {
+				bPoints := []geometry.XYZ{v0, v1, v2, v3}
+				bUvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
+				if !w.flipY {
+					bPoints = []geometry.XYZ{v0, v3, v2, v1}
+					bUvs = [][2]float64{{uMin, vMin}, {uMin, vMax}, {uMax, vMax}, {uMax, vMin}}
+				}
+				backFace := config.NewConfigFace(bPoints, bUvs, mat, fmt.Sprintf("sp_floor_%d_b", spIdx))
+				vol.AddFace(backFace)
+			}
 			volumes = append(volumes, vol)
 		}
 	}

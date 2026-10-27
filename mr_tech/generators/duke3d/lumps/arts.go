@@ -44,8 +44,8 @@ func (arts *Arts) HasTile(tileNum int) bool {
 // GetTiles returns the map of art tiles where the key is the tile number and the value is a pointer to an ArtTile.
 func (arts *Arts) GetTiles() map[int]*image.RGBA {
 	out := make(map[int]*image.RGBA)
-	for k := range arts.tiles {
-		out[k] = arts.createImage(k)
+	for k, v := range arts.tiles {
+		out[k] = arts.createImage(v)
 	}
 	return out
 }
@@ -62,11 +62,7 @@ func (arts *Arts) GetAnims() map[int]*ArtTileAnim {
 }
 
 // CreateImage decodes a single tile into an RGBA image using the palette colors in Build engine column-major order.
-func (arts *Arts) createImage(picNum int) *image.RGBA {
-	tile, ok := arts.tiles[picNum]
-	if !ok || tile == nil || tile.Width <= 0 || tile.Height <= 0 {
-		return nil
-	}
+func (arts *Arts) createImage(tile *ArtTile) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, tile.Width, tile.Height))
 	hasTransparent := false
 	// Build engine stores tiles in Column-Major order: x*h + y

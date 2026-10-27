@@ -57,14 +57,12 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 
 	var reader io.ReadCloser
 	tex := lumps.NewTextures()
-
 	// Check if target is a GRP file directly
 	if strings.HasSuffix(strings.ToLower(target), ".grp") {
-		grpReader, err := b.createGrpReader(res, target, levelNumber, tex)
-		if err != nil {
+		var err error
+		if reader, err = b.createGrpReader(res, target, levelNumber, tex); err != nil {
 			return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", target, err)
 		}
-		reader = grpReader
 	} else {
 		// Target might be a directory or a .map file
 		entries, eErr := res.ReadDir(target)
@@ -96,11 +94,10 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 			} else {
 				grpPath += "/" + grpName
 			}
-			grpReader, err := b.createGrpReader(res, grpPath, levelNumber, tex)
-			if err != nil {
+			var err error
+			if reader, err = b.createGrpReader(res, grpPath, levelNumber, tex); err != nil {
 				return nil, fmt.Errorf("duke3d: failed to open grp %s: %w", grpPath, err)
 			}
-			reader = grpReader
 		} else if len(mapFiles) > 0 {
 			sort.Strings(mapFiles)
 			idx := levelNumber - 1

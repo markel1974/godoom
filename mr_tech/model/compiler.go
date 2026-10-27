@@ -96,7 +96,8 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	for _, i := range cfg.UI {
-		e := r.things.Create(i, nil)
+		e := NewThingInterface(r.things, i)
+		//e := r.things.Create(i, nil)
 		r.things.AddStaticThing(e)
 		r.ui = append(r.ui, e)
 	}

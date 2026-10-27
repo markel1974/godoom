@@ -132,22 +132,14 @@ func (t *Textures) GetTileSize(picNum int) (int, int, bool) {
 
 // GetSkyTile retrieves the name of a composite 360-degree cylindrical sky texture, or creates one if it does not exist.
 func (t *Textures) GetSkyTile(picNum int) string {
-	//var basePic int
 	var panels []int
-
 	switch {
 	case picNum >= 89 && picNum <= 93:
-		//basePic = 89
-		// Duke Nukem 3D Los Angeles multi-panel panorama (8 panels of 128px = 1024px total)
-		panels = []int{89, 91, 92, 90, 91, 90, 92, 93}
+		panels = []int{89, 91, 92, 90, 91, 90, 92, 93} //Los Angeles multi-panel panorama (8 panels of 128px = 1024px total)
 	case picNum >= 80 && picNum <= 83:
-		//basePic = 80
-		// Duke Nukem 3D Moon sky (8 panels)
-		panels = []int{80, 81, 80, 80, 82, 83, 80, 82}
+		panels = []int{80, 81, 80, 80, 82, 83, 80, 82} // Moon sky (8 panels)
 	case picNum >= 84 && picNum <= 88:
-		//basePic = 84
-		// Duke Nukem 3D Big Orbit / space station sky (8 panels)
-		panels = []int{84, 85, 86, 87, 84, 84, 88, 84}
+		panels = []int{84, 85, 86, 87, 84, 84, 88, 84} // Big Orbit / space station sky (8 panels)
 	default:
 		return t.GetTile(picNum)
 	}

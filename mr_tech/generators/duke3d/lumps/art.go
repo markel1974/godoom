@@ -1,19 +1,12 @@
 package lumps
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 )
 
-// ArtHeader represents the header metadata of an ART file, including version and tile range information.
-type ArtHeader struct {
-	ArtVersion        int32
-	NumTiles          int32
-	LocalTileArtStart int32
-	LocalTileArtEnd   int32
-}
+const maxTiles = 4096
 
 // ArtTile represents a single tile in an art file, including its dimensions, pixel data, and optional animation metadata.
 type ArtTile struct {
@@ -45,6 +38,14 @@ func NewArtTile(w int, h int, tileNum int, val int32) *ArtTile {
 	return at
 }
 
+// Parse reads and populates the RawPixels field of the ArtTile from the given io.Reader. Returns an error if the read fails.
+func (at *ArtTile) Parse(r io.Reader) error {
+	if _, err := io.ReadFull(r, at.RawPixels); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ArtTileAnim defines animation properties for a tile, including frame count, type, speed, and offsets for positioning.
 type ArtTileAnim struct {
 	NumFrames int  // Number of additional frames (0 = static, 1 = 2 frames, etc.)
@@ -65,6 +66,14 @@ func NewArtTileAnim(NumFrames int, AnimType int, Speed int, XOffset int8, YOffse
 	}
 }
 
+// ArtHeader represents the header metadata of an ART file, including version and tile range information.
+type ArtHeader struct {
+	ArtVersion        int32
+	NumTiles          int32
+	LocalTileArtStart int32
+	LocalTileArtEnd   int32
+}
+
 // Art represents a container for art assets, including a header and a collection of tiles.
 type Art struct {
 	Header ArtHeader
@@ -77,13 +86,12 @@ func NewArt() *Art {
 }
 
 // Parse parses binary data into an Art structure, decoding header, tiles, and animation metadata.
-func (a *Art) Parse(data []byte) error {
-	r := bytes.NewReader(data)
+func (a *Art) Parse(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &a.Header); err != nil {
 		return fmt.Errorf("reading art header: %w", err)
 	}
 	numTiles := int(a.Header.LocalTileArtEnd - a.Header.LocalTileArtStart + 1)
-	if numTiles <= 0 || numTiles > 4096 {
+	if numTiles <= 0 || numTiles > maxTiles {
 		return fmt.Errorf("invalid numtiles in art file: %d", numTiles)
 	}
 	tileSizesX := make([]int16, numTiles)
@@ -103,16 +111,14 @@ func (a *Art) Parse(data []byte) error {
 	for i := 0; i < numTiles; i++ {
 		w := int(tileSizesX[i])
 		h := int(tileSizesY[i])
-		tileNum := int(a.Header.LocalTileArtStart) + i
+		val := picAnm[i]
 		if w <= 0 || h <= 0 {
 			continue
 		}
-
-		val := picAnm[i]
+		tileNum := int(a.Header.LocalTileArtStart) + i
 		tile := NewArtTile(w, h, tileNum, val)
-
-		if _, err := io.ReadFull(r, tile.RawPixels); err != nil {
-			return fmt.Errorf("reading raw tile %d pixels: %w", tileNum, err)
+		if err := tile.Parse(r); err != nil {
+			return fmt.Errorf("parsing tile %d: %w", tileNum, err)
 		}
 		a.Tiles = append(a.Tiles, tile)
 	}

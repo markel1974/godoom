@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 )
 
 // Arts represents a collection of raw art tiles, animation metadata, and a color palette used for decoding textures on demand.
@@ -23,9 +24,9 @@ func NewArts(palette [256]color.RGBA) *Arts {
 }
 
 // Load processes the given binary art data and stores the raw tiles in memory for on-demand decoding.
-func (arts *Arts) Load(data []byte) error {
+func (arts *Arts) Load(r io.Reader) error {
 	art := NewArt()
-	if err := art.Parse(data); err != nil {
+	if err := art.Parse(r); err != nil {
 		return fmt.Errorf("parsing art: %w", err)
 	}
 

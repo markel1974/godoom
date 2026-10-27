@@ -1,6 +1,7 @@
 package duke3d
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sort"
@@ -218,7 +219,7 @@ func (b *Builder) createGrpReader(res common.IResources, target string, levelNum
 	tileCount := 0
 	for _, artName := range tiles {
 		if artData, err := arc.GetPayload(artName); err == nil {
-			_ = arts.Load(artData)
+			_ = arts.Load(bytes.NewReader(artData))
 			tileCount++
 		}
 	}

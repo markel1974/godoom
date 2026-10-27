@@ -16,6 +16,7 @@ type UVAlign struct {
 	Panning     geometry.XY `json:"panning"`
 	Length      float64     `json:"length,omitempty"`
 	AlignBottom bool        `json:"alignBottom,omitempty"`
+	ScaleY      float64     `json:"scaleY,omitempty"`
 }
 
 // Slope represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.

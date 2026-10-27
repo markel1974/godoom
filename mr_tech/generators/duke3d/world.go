@@ -213,6 +213,16 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 				cSeg := config.NewConfigSegment(sectorId, config.SegmentUnknown, v1, v2)
 
+				wallTexLen := float64(wall.XRepeat) * 8.0
+				if wallTexLen <= 0 {
+					wallTexLen = math.Hypot(v2.X-v1.X, v2.Y-v1.Y)
+				}
+
+				scaleY := (float64(wall.YRepeat) / 8.0) / w.scaleSectorH
+				if scaleY <= 0 {
+					scaleY = 1.0
+				}
+
 				flipX := wall.HasHorizontalFlip()
 				if w.flipY {
 					flipX = !flipX
@@ -220,7 +230,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 				cSeg.UVAlign = &config.UVAlign{
 					FixUV:       true,
-					Length:      math.Hypot(v2.X-v1.X, v2.Y-v1.Y),
+					Length:      wallTexLen,
+					ScaleY:      scaleY,
 					Panning:     geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)},
 					FlipX:       flipX,
 					FlipY:       wall.HasVerticalFlip(),

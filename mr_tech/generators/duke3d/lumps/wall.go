@@ -23,16 +23,16 @@ type Wall struct {
 
 // Build Engine Wall CStat bitmask constants
 const (
-	CStatWallBlocking      = 1 << 0 // Bit 0: Block players/monsters
-	CStatWallBottomAligned = 1 << 1 // Bit 1: Bottom aligned texture
-	CStatWallRedMarker     = 1 << 2 // Bit 2: Red marker (EDF/Map editor)
-	CStatWallPegTop        = 1 << 3 // Bit 3: Don't peg texture to floor
-	CStatWallMasked        = 1 << 4 // Bit 4: Masked / grating wall texture
-	CStatWallOneWay        = 1 << 5 // Bit 5: One-way wall (blocks only from front side)
-	CStatWallXFlip         = 1 << 6 // Bit 6: Flip wall texture horizontally
-	CStatWallTranslucent   = 1 << 7 // Bit 7: Translucent wall rendering
-	CStatWallYFlip         = 1 << 8 // Bit 8: Flip wall texture vertically
-	CStatWallAlignBottom   = 1 << 9 // Bit 9: Align texture to bottom
+	CStatWallBlocking       = 1 << 0 // Bit 0: Block players/monsters
+	CStatWallBottomSwap     = 1 << 1 // Bit 1: Bottoms of invisible walls swapped
+	CStatWallAlignBottom    = 1 << 2 // Bit 2: Align picture on bottom (for doors), 0 = top
+	CStatWallXFlip          = 1 << 3 // Bit 3: Flip wall texture horizontally
+	CStatWallMasked         = 1 << 4 // Bit 4: Masked / grating wall texture
+	CStatWallOneWay         = 1 << 5 // Bit 5: One-way wall (blocks only from front side)
+	CStatWallHitscanBlock   = 1 << 6 // Bit 6: Block hitscan weapons
+	CStatWallTranslucent    = 1 << 7 // Bit 7: Translucent wall rendering
+	CStatWallYFlip          = 1 << 8 // Bit 8: Flip wall texture vertically
+	CStatWallTranslucentRev = 1 << 9 // Bit 9: 33% translucence (reverse)
 )
 
 // IsBlocking checks if the wall blocks players and monsters.
@@ -42,17 +42,12 @@ func (w *Wall) IsBlocking() bool {
 
 // IsBottomAligned checks if the wall texture is bottom-aligned.
 func (w *Wall) IsBottomAligned() bool {
-	return w.CStat&CStatWallBottomAligned != 0
+	return w.CStat&CStatWallAlignBottom != 0
 }
 
-// IsRedMarker checks if the red marker flag is set on the wall.
-func (w *Wall) IsRedMarker() bool {
-	return w.CStat&CStatWallRedMarker != 0
-}
-
-// IsPegTop checks if the wall texture is pegged to the top.
-func (w *Wall) IsPegTop() bool {
-	return w.CStat&CStatWallPegTop != 0
+// IsBottomSwap checks if the bottoms of invisible walls are swapped.
+func (w *Wall) IsBottomSwap() bool {
+	return w.CStat&CStatWallBottomSwap != 0
 }
 
 // IsMasked determines if the wall has a masked or grating texture.

@@ -337,10 +337,27 @@ func (fc *Face) ApplyWallUV(s, e geometry.XY, align *config.UVAlign, t1, t2 floa
 		uStart, uEnd = uEnd, uStart
 	}
 
-	vBS := (zBS + align.Panning.Y) / h
-	vBE := (zBE + align.Panning.Y) / h
-	vTS := (zTS + align.Panning.Y) / h
-	vTE := (zTE + align.Panning.Y) / h
+	scaleY := align.ScaleY
+	if scaleY <= 0 {
+		scaleY = 1.0
+	}
+
+	var vBS, vBE, vTS, vTE float64
+	if align.AlignBottom {
+		hWallS := (zTS - zBS) * scaleY
+		hWallE := (zTE - zBE) * scaleY
+		vBS = align.Panning.Y / h
+		vBE = align.Panning.Y / h
+		vTS = (hWallS + align.Panning.Y) / h
+		vTE = (hWallE + align.Panning.Y) / h
+	} else {
+		hWallS := (zTS - zBS) * scaleY
+		hWallE := (zTE - zBE) * scaleY
+		vTS = 1.0 + align.Panning.Y/h
+		vTE = 1.0 + align.Panning.Y/h
+		vBS = vTS - hWallS/h
+		vBE = vTE - hWallE/h
+	}
 	if align.FlipY {
 		vBS, vTS = vTS, vBS
 		vBE, vTE = vTE, vBE

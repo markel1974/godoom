@@ -128,7 +128,7 @@ func (t *Textures) GetSkyTile(picNum int) string {
 	var panels []int
 	switch {
 	case picNum >= 89 && picNum <= 93:
-		panels = []int{89, 91, 92, 90, 91, 90, 92, 93} //Los Angeles multi-panel panorama (8 panels of 128px = 1024px total)
+		panels = []int{89, 91, 92, 90, 91, 90, 92, 93} // Los Angeles (8 panels of 128px = 1024px total)
 	case picNum >= 80 && picNum <= 83:
 		panels = []int{80, 81, 80, 80, 82, 83, 80, 82} // Moon sky (8 panels)
 	case picNum >= 84 && picNum <= 88:
@@ -149,12 +149,12 @@ func (t *Textures) GetSkyTile(picNum int) string {
 
 	skyImg := image.NewRGBA(image.Rect(0, 0, canvasSize, canvasSize))
 
-	black := color.RGBA{R: 0, G: 0, B: 0, A: 255}
-	for y := 0; y < canvasSize; y++ {
-		for x := 0; x < canvasSize; x++ {
-			skyImg.SetRGBA(x, y, black)
-		}
-	}
+	//black := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+	//for y := 0; y < canvasSize; y++ {
+	//	for x := 0; x < canvasSize; x++ {
+	//		skyImg.SetRGBA(x, y, black)
+	//	}
+	//}
 
 	// In OpenGL texture space:
 	// y = 0 is bottom (nadir, v = 0.0)
@@ -169,12 +169,10 @@ func (t *Textures) GetSkyTile(picNum int) string {
 			curX += 32
 			continue
 		}
-		w := img.Bounds().Dx()
-		h := img.Bounds().Dy()
+		w, h := img.Bounds().Dx(), img.Bounds().Dy()
 		for x := 0; x < w && curX+x < canvasSize; x++ {
 			for y := 0; y < h; y++ {
-				targetY := int(yH) + (h - 1 - y)
-				if targetY >= 0 && targetY < canvasSize {
+				if targetY := int(yH) + (h - 1 - y); targetY >= 0 && targetY < canvasSize {
 					skyImg.SetRGBA(curX+x, targetY, img.RGBAAt(x, y))
 				}
 			}
@@ -185,9 +183,7 @@ func (t *Textures) GetSkyTile(picNum int) string {
 		}
 		curX += w
 	}
-
-	texture := t.createTextureFromImage(name, uint32(panels[0]), skyImg)
-	t.resources[name] = texture
+	t.resources[name] = t.createTextureFromImage(name, uint32(panels[0]), skyImg)
 	return name
 }
 

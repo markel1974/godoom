@@ -11,7 +11,6 @@ import (
 type Arts struct {
 	palette [256]color.RGBA
 	tiles   map[int]*ArtTile
-	anims   map[int]*ArtTileAnim
 }
 
 // NewArts creates a new Arts instance using the provided palette.
@@ -19,7 +18,6 @@ func NewArts(palette [256]color.RGBA) *Arts {
 	return &Arts{
 		palette: palette,
 		tiles:   make(map[int]*ArtTile),
-		anims:   make(map[int]*ArtTileAnim),
 	}
 }
 
@@ -33,9 +31,6 @@ func (arts *Arts) Load(r io.Reader) error {
 	for _, tile := range art.Tiles {
 		if tile != nil && tile.Width > 0 && tile.Height > 0 {
 			arts.tiles[tile.TileNum] = tile
-			if tile.Anim.AnimType != 0 && tile.Anim.NumFrames > 0 {
-				arts.anims[tile.TileNum] = tile.Anim
-			}
 		}
 	}
 	return nil
@@ -43,7 +38,13 @@ func (arts *Arts) Load(r io.Reader) error {
 
 // GetAnims returns the map of tile animations.
 func (arts *Arts) GetAnims() map[int]*ArtTileAnim {
-	return arts.anims
+	out := make(map[int]*ArtTileAnim)
+	for _, tile := range arts.tiles {
+		if tile.Anim.AnimType != 0 && tile.Anim.NumFrames > 0 {
+			out[tile.TileNum] = tile.Anim
+		}
+	}
+	return out
 }
 
 // CreateImage decodes a single tile into an RGBA image using the palette colors in Build engine column-major order.

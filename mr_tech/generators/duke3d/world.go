@@ -213,11 +213,16 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 				cSeg := config.NewConfigSegment(sectorId, config.SegmentUnknown, v1, v2)
 
+				flipX := wall.HasHorizontalFlip()
+				if w.flipY {
+					flipX = !flipX
+				}
+
 				cSeg.UVAlign = &config.UVAlign{
 					FixUV:       true,
 					Length:      math.Hypot(v2.X-v1.X, v2.Y-v1.Y),
 					Panning:     geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)},
-					FlipX:       wall.HasHorizontalFlip(),
+					FlipX:       flipX,
 					FlipY:       wall.HasVerticalFlip(),
 					AlignBottom: wall.IsBottomAligned(),
 				}

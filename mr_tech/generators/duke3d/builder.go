@@ -24,7 +24,7 @@ import (
 // JumpForce calculates the jump force as a multiple of GForce.
 const (
 	AspectRatio  = 1.333
-	ScaleSectorH = 1.0
+	ScaleSectorH = 0.8
 	ScaleXY      = 1.0 / 16.0
 	PlayerHeight = 56.0 * ScaleSectorH
 	PlayerRadius = 16.0

@@ -4,35 +4,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// UVAlign defines UV alignment and transformation parameters for sector floors, ceilings, and walls.
-type UVAlign struct {
-	FixUV       bool        `json:"fixUV"`
-	AlignWall   bool        `json:"alignWall"`
-	Start       geometry.XY `json:"start"`
-	End         geometry.XY `json:"end"`
-	SwapXY      bool        `json:"swapXY"`
-	FlipX       bool        `json:"flipX"`
-	FlipY       bool        `json:"flipY"`
-	Panning     geometry.XY `json:"panning"`
-	Length      float64     `json:"length,omitempty"`
-	AlignBottom bool        `json:"alignBottom,omitempty"`
-	ScaleY      float64     `json:"scaleY,omitempty"`
-}
-
-// Slope represents a geometric slope with X and Y gradients and a precomputed gradient value for calculations.
-type Slope struct {
-	G        geometry.XY `json:"g"`
-	Gradient float64     `json:"gradient"`
-}
-
-// NewSlope initializes and returns a pointer to a new Sloped instance with default values.
-func NewSlope() *Slope {
-	return &Slope{
-		G:        geometry.XY{X: 0, Y: 0},
-		Gradient: 0,
-	}
-}
-
 // Sector represents a Sector configuration in a level, including geometric, texture, and tag information.
 type Sector struct {
 	Id           string     `json:"id"`
@@ -57,8 +28,8 @@ func NewConfigSector(id string, lightIntensity float64, kind LightKind, falloff 
 		Ceil:         nil,
 		Floor:        nil,
 		Light:        NewConfigLight(geometry.XYZ{}, lightIntensity, kind, falloff),
-		SlopeCeiling: NewSlope(),
-		SlopeFloor:   NewSlope(),
+		SlopeCeiling: NewConfigSlope(),
+		SlopeFloor:   NewConfigSlope(),
 	}
 }
 
@@ -81,32 +52,6 @@ func (s *Sector) Scale(scale geometry.XYZ) {
 		s.CeilAlign.End.Scale(xy)
 	}
 }
-
-/*
-// IsCCW determines if the sector's segments form a counter-clockwise loop by calculating the signed area of the polygon.
-func (s *Sector) IsCCW() bool {
-	area := 0.0
-	for i, segment := range s.Segments {
-		next := s.Segments[(i+1)%len(s.Segments)]
-		// Continuità: ogni segmento deve iniziare dove finisce il precedente
-		if segment.End != next.Start {
-			fmt.Println("Sector not well formatted")
-			//return false // oppure log/errore: settore non ben formato
-		}
-
-		// Fallback di sicurezza se la mappa ha indici corrotti
-		v1 := segment.Start
-		v2 := segment.End
-		// Formula di calcolo dell'area per curve chiuse: (X2 - X1) * (Y2 + Y1)
-		area += (v2.X - v1.X) * (v2.Y + v1.Y)
-	}
-	// Nello Screen-Space (Y che cresce verso il basso come in Outlaws/Doom):
-	// Area < 0 significa CCW (Antiorario)
-	// Area > 0 significa CW (Orario)
-	// se Y-up cartesiano puro, invertire operatore (> 0).*
-	return area < 0
-}
-*/
 
 // AddDependency registers a sector ID that this sector depends on (must precede this sector in compilation order).
 func (s *Sector) AddDependency(id string) {
@@ -150,3 +95,29 @@ func (s *Sector) GetSlopeCeiling() *Segment {
 	}
 	return slopeSegmentCeiling
 }
+
+/*
+// IsCCW determines if the sector's segments form a counter-clockwise loop by calculating the signed area of the polygon.
+func (s *Sector) IsCCW() bool {
+	area := 0.0
+	for i, segment := range s.Segments {
+		next := s.Segments[(i+1)%len(s.Segments)]
+		// Continuità: ogni segmento deve iniziare dove finisce il precedente
+		if segment.End != next.Start {
+			fmt.Println("Sector not well formatted")
+			//return false // oppure log/errore: settore non ben formato
+		}
+
+		// Fallback di sicurezza se la mappa ha indici corrotti
+		v1 := segment.Start
+		v2 := segment.End
+		// Formula di calcolo dell'area per curve chiuse: (X2 - X1) * (Y2 + Y1)
+		area += (v2.X - v1.X) * (v2.Y + v1.Y)
+	}
+	// Nello Screen-Space (Y che cresce verso il basso come in Outlaws/Doom):
+	// Area < 0 significa CCW (Antiorario)
+	// Area > 0 significa CW (Orario)
+	// se Y-up cartesiano puro, invertire operatore (> 0).*
+	return area < 0
+}
+*/

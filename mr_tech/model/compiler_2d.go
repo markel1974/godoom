@@ -12,16 +12,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// CreateFaces generates two triangular faces representing a wall surface based on the SegmentUncovered's geometry and properties.
-func CreateFaces(uw *sectors.SegmentUncovered) []*Face {
-	v0, v1, v2, v3 := uw.CreateQuad()
-	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, uw.GetTag(), uw.GetMat())
-	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, uw.GetTag(), uw.GetMat())
-	face1.ApplyWallAlignment(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), true)
-	face2.ApplyWallAlignment(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), false)
-	return []*Face{face1, face2}
-}
-
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
@@ -503,10 +493,15 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 			light.Setup(su.GetCsLight(), su.GetLightPos())
 			vol3d.SetLight(light)
 		}
-		faces := CreateFaces(su)
-		for _, face := range faces {
-			vol3d.AddFace(face)
-		}
+
+		v0, v1, v2, v3 := su.CreateQuad()
+		face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, su.GetTag(), su.GetMat())
+		face1.ApplyWallAlignment(su.GetStart(), su.GetEnd(), su.GetAlign(), 0.0, 1.0, su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), true)
+		vol3d.AddFace(face1)
+		face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, su.GetTag(), su.GetMat())
+		face2.ApplyWallAlignment(su.GetStart(), su.GetEnd(), su.GetAlign(), 0.0, 1.0, su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), false)
+		vol3d.AddFace(face2)
+
 		vol3d.Rebuild()
 		volumes = append(volumes, vol3d)
 	}

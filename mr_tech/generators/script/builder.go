@@ -26,11 +26,7 @@ const (
 	JumpForce = GForce * 6
 )
 
-// scaleW defines the scaling factor for width calculations.
-// scaleH defines the scaling factor for height calculations.
 const (
-	scaleW      = 1.0
-	scaleH      = 1.0
 	texUnitSize = 8.0 // 1 full 1024x1024 texture every 8 map units
 	scaleTex    = 1024.0 / texUnitSize
 )
@@ -102,7 +98,6 @@ func (p *Builder) Build(res common.IResources, id string) (*config.Root, error) 
 	if cfg.Vertices == nil {
 		return nil, errors.New("nil vertices")
 	}
-
 	p.finalize(cfg)
 
 	return cfg, nil

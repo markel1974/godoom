@@ -154,11 +154,9 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidT, pMidB)
 						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 0, 0)
-						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						doorSeg.Middle = anim
 						doorLen := math.Hypot(pMidB.X-pMidT.X, pMidB.Y-pMidT.Y) * (64.0 / wp.tileSize)
 						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
-						doorSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
-						doorSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
 					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidT, pMidB)
@@ -174,11 +172,9 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidL, pMidR)
 						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 0, 0)
-						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						doorSeg.Middle = anim
 						doorLen := math.Hypot(pMidR.X-pMidL.X, pMidR.Y-pMidL.Y) * (64.0 / wp.tileSize)
 						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
-						doorSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
-						doorSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
 					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidL, pMidR)
@@ -253,60 +249,40 @@ func (wp *Parser) prepare(width int, height int, md []uint16) error {
 // addSegment adds a new segment to the specified Sector using level geometry, neighbors, and texture information.
 func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end geometry.XY, nx, ny int, currentCell uint16) {
 	kind := config.SegmentUnknown
-	isAdjDoor := false
-	cell := uint16(1)
-	if _, wall := wp.isWall(width, height, nx, ny); wall {
+	target, wall := wp.isWall(width, height, nx, ny)
+	if wall {
 		kind = config.SegmentWall
-	} else {
-		if isDoor(cell) {
-			isAdjDoor = true
-		}
 	}
 	seg := config.NewConfigSegment(cs.Id, kind, start, end)
 	isEW := math.Abs(start.X-end.X) < 0.001 // Calcolo normale: X costante -> Est/Ovest
-	var texName string
-	if isDoor(currentCell) {
-		if kind != config.SegmentWall {
-			idx := 98
-			if isEW {
-				idx++
-			}
-			texName = fmt.Sprintf("image%d.png", idx)
-		} else {
+	if kind == config.SegmentWall {
+		var texName string
+		if isDoor(currentCell) {
 			idx := 104
 			if isEW {
 				idx++
 			}
 			texName = fmt.Sprintf("image%d.png", idx)
-		}
-	} else {
-		if kind == config.SegmentWall {
+		} else {
+			cell := uint16(1)
+			if target >= 0 && target < len(wp.mapData) {
+				cell = wp.mapData[target]
+			}
 			idx := (int(cell) - 1) * 2
 			if isEW {
 				idx++
 			}
 			texName = fmt.Sprintf("image%d.png", idx)
-		} else if isAdjDoor {
-			idx := 98
-			if isEW {
-				idx++
-			}
-			texName = fmt.Sprintf("image%d.png", idx)
 		}
+		if texName != "" {
+			anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 0, 0)
+			seg.Middle = anim
+		}
+		wallTexLen := math.Hypot(end.X-start.X, end.Y-start.Y) * (64.0 / wp.tileSize)
+		scaleY := 64.0 / (wp.sectorHeight * ScaleFactorH)
+		panning := geometry.XY{}
+		seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
 	}
-	if texName != "" {
-		anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 0, 0)
-		seg.Upper = anim
-		seg.Middle = anim
-		seg.Lower = anim
-	}
-
-	wallTexLen := math.Hypot(end.X-start.X, end.Y-start.Y) * (64.0 / wp.tileSize)
-	scaleY := 64.0 / (wp.sectorHeight * ScaleFactorH)
-	panning := geometry.XY{}
-	seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
-	seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
-	seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
 
 	cs.Segments = append(cs.Segments, seg)
 }

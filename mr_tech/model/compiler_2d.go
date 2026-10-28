@@ -328,7 +328,7 @@ func (r *Compiler2d) compile2d() ([]*sectors.Sector, []*sectors.SegmentUncovered
 			return false
 		})
 
-		if bestNeighborSegment != nil {
+		if bestNeighborSegment != nil && bestDistSq < 0.01 {
 			bestNeighborSegment.SetNeighbor(segment.GetParent())
 			segment.SetNeighbor(bestNeighborSegment.GetParent())
 		} else {
@@ -407,9 +407,13 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 
 			neighbor := seg.GetNeighbor()
 			if neighbor == nil {
+				matMiddle := seg.GetMaterialIndex(1)
+				if matMiddle == nil || matMiddle.HeadFrame() == nil {
+					continue
+				}
 				s2 := geometry.XY{X: s.X, Y: s.Y}
 				e2 := geometry.XY{X: e.X, Y: e.Y}
-				buildQuad(vol3d, s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), seg.GetMaterialIndex(1), align, t1, t2)
+				buildQuad(vol3d, s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), matMiddle, align, t1, t2)
 				continue
 			}
 

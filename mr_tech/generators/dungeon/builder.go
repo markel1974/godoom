@@ -21,7 +21,6 @@ const (
 const (
 	AspectRatio  = 1.333
 	ScaleSectorH = 0.8
-	ScaleXY      = 1.0 / 16.0
 	PlayerHeight = 56.0 * ScaleSectorH
 	PlayerRadius = 16.0
 	PlayerSpeed  = 1800.0
@@ -32,7 +31,7 @@ const (
 )
 
 const (
-	texUnitSize = 8.0
+	texUnitSize = 32.0
 	scaleTex    = 1024.0 / texUnitSize
 )
 
@@ -102,7 +101,6 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		start := pts[i]
 		end := pts[(i+1)%4]
 
-		// Allocazione corretta tramite costruttore
 		seg := config.NewConfigSegment("", config.SegmentUnknown, start, end)
 
 		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
@@ -114,9 +112,9 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 		wallLen := math.Hypot(end.X-start.X, end.Y-start.Y)
 		panning := geometry.XY{}
-		seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
-		seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
-		seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+		seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+		seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+		seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -126,22 +124,14 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
-	p := NewPlayer(0, 0, 0) //PlayerHeight, PlayerRadius, PlayerSpeed, PlayerMass)
-	player := p.Build()
-
-	//player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
-	//player.Flash.ZFar = 8192
-	//player.Flash.Intensity = 0.02
-	//player.Flash.Falloff = 0
-	//player.Flash.OffsetX = 0.2
-	//player.Flash.OffsetY = 0.1
-
-	_ = common.NewPlayer(player)
+	p := NewPlayer(0, 0, 0)
+	player2 := p.Build()
+	_ = common.NewPlayer(player2)
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
-	cal.AspectRatio = 1.0
+	cal.AspectRatio = AspectRatio
 
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
-	cfg := config.NewConfigRoot(cal, nil, player, nil, scaleFactor, t)
+	cfg := config.NewConfigRoot(cal, nil, player2, nil, scaleFactor, t)
 	s1 := b.createCube(0, 0, 8, 0, 20)
 	s1.Id = "root"
 	cfg.Sectors = append(cfg.Sectors, s1)
@@ -237,8 +227,8 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 0, 0)
 			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 0, 0)
 
-			sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
-			sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
+			sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
+			sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 
 			sectorGrid[x][y] = sector
 			cfg.Sectors = append(cfg.Sectors, sector)
@@ -280,18 +270,21 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 				}
 
 				seg := config.NewConfigSegment("", kind, e.p1, e.p2)
-				upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
-				lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
-				middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 0, 0)
-				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 0, 0)
-				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 0, 0)
-
-				wallLen := math.Hypot(e.p2.X-e.p1.X, e.p2.Y-e.p1.Y)
+				wallLen := math.Hypot(e.p2.X-e.p1.X, e.p2.Y-e.p1.Y) * scaleTex
 				panning := geometry.XY{}
-				seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
-				seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
-				seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+
+				if kind == config.SegmentWall {
+					middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
+					seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 0, 0)
+					seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+				} else {
+					upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
+					lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
+					seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 0, 0)
+					seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 0, 0)
+					seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+					seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+				}
 
 				sector.Segments = append(sector.Segments, seg)
 			}

@@ -29,7 +29,12 @@ func NewWorld(archive lumps.IArchive, eMode EngineMode) *World {
 func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, error) {
 	level := b.archive.GetLevel()
 	validTexture := func(idx int) bool {
-		return idx >= 0 && !b.isDefaultTexture(level.GetTexture(idx))
+		if idx < 0 {
+			fmt.Printf("invalid texture index: %d", idx)
+			return false
+		}
+		tex := level.GetTexture(idx)
+		return !b.isDefaultTexture(tex)
 	}
 
 	configSectors := make([]*config.Sector, 0, len(level.Sectors))
@@ -139,9 +144,10 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Kind = config.SegmentWall
 						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
-					} else {
-						fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
 					}
+					//else {
+					//	fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
+					//}
 				} else {
 					targetSecIdx := wall.Adjoin
 					adjacent := level.GetSector(targetSecIdx)

@@ -82,7 +82,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "outlaws",
 		Zip:    true,
-		Target: "resources" + string(os.PathSeparator) + "outlaws" + string(os.PathSeparator) + "outlaws1.zip",
+		Target: "resources" + string(os.PathSeparator) + "outlaws" + string(os.PathSeparator) + "outlaws2.zip",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			jf := jedi.NewBuilder()
 			return jf.Build(res, 1, target, level)

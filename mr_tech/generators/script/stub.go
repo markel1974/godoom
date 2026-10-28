@@ -111,7 +111,7 @@ sector	16 28	1 2 8 7 6	x x x x x
 sector	16 36	0 1 6 5 23  25 41 42  48 47	x x x x x  x x x x x
 sector	16 36	23 24 26 25	x x x x
 # top floor middle, lower ceiling
-sector	16 26	6 7 43  42 26 24	x x x x x x
+#sector	16 26	6 7 43  42 26 24	x x x x x x
 
 # stairs
 sector	 2 20	14 15 28 27	x x x x

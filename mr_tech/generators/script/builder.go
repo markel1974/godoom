@@ -17,7 +17,7 @@ const (
 	AspectRatio  = 1.333
 	ScaleSectorH = 0.4
 	PlayerHeight = 7.0 * ScaleSectorH
-	PlayerRadius = 1.5
+	PlayerRadius = 0.8
 	PlayerSpeed  = 200.0
 	PlayerMass   = 10.0
 

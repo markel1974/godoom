@@ -430,6 +430,9 @@ func (s *Sector) computeBestFloor(level *Level) float64 {
 	if flag, ok := s.GetFlag(1, 0x80000000); ok && flag != 0 {
 		foundAdjacent := false
 		for _, wall := range s.Walls {
+			if wall.Adjoin < 0 {
+				continue
+			}
 			adjacent := level.GetSector(wall.Adjoin)
 			if adjacent == nil {
 				continue

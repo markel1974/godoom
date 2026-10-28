@@ -142,11 +142,20 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					ceilH = 64
 				}
 
+				scaleFloor := 1.0
+				if sec.FloorStat&lumps.StatDoubleSmooshiness != 0 {
+					scaleFloor = 2.0
+				}
+				scaleCeil := 1.0
+				if sec.CeilingStat&lumps.StatDoubleSmooshiness != 0 {
+					scaleCeil = 2.0
+				}
+
 				fPanning := geometry.XY{X: float64(sec.FloorXPanning) * (float64(floorW) / 256.0), Y: float64(sec.FloorYPanning) * (float64(floorH) / 256.0)}
-				cSector.FloorAlign = config.NewUVAlignWall(sec.AlignFirstWallFloor(), vFirst1, vFirst2, sec.SwapXYFloor(), sec.XFlipFloor(), sec.YFlipFloor(), fPanning)
+				cSector.FloorAlign = config.NewUVAlignWallScaled(sec.AlignFirstWallFloor(), vFirst1, vFirst2, sec.SwapXYFloor(), sec.XFlipFloor(), sec.YFlipFloor(), fPanning, scaleFloor, scaleFloor)
 
 				cPanning := geometry.XY{X: float64(sec.CeilingXPanning) * (float64(ceilW) / 256.0), Y: float64(sec.CeilingYPanning) * (float64(ceilH) / 256.0)}
-				cSector.CeilAlign = config.NewUVAlignWall(sec.AlignFirstWallCeiling(), vFirst1, vFirst2, sec.SwapXYCeiling(), sec.XFlipCeiling(), sec.YFlipCeiling(), cPanning)
+				cSector.CeilAlign = config.NewUVAlignWallScaled(sec.AlignFirstWallCeiling(), vFirst1, vFirst2, sec.SwapXYCeiling(), sec.XFlipCeiling(), sec.YFlipCeiling(), cPanning, scaleCeil, scaleCeil)
 			}
 		}
 
@@ -203,12 +212,12 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 				}
 
 				flipX := wall.HasHorizontalFlip()
-				if w.flipY {
-					flipX = !flipX
-				}
+				flipY := wall.HasVerticalFlip()
 
 				csPanning := geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)}
-				cSeg.UVAlign = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, wall.HasVerticalFlip(), csPanning, wallTexLen, scaleY)
+				cSeg.UVAlign = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
+				cSeg.UVAlignUpper = config.NewUVAlignBottom(false, flipX, flipY, csPanning, wallTexLen, scaleY)
+				cSeg.UVAlignLower = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
 
 				// First wall is the pivot reference for floor/ceiling slopes
 				if i == 0 {

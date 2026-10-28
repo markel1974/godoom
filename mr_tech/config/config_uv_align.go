@@ -72,71 +72,86 @@ func NewUVAlignBottom(alignBottom bool, flipX bool, flipY bool, panning geometry
 	}
 }
 
-// ComputeWall calculates UV coordinates and their alignment based on wall geometry, scaling, and panning properties.
-func (align *UVAlign) ComputeWall(w, h float64, t1, t2 float64, s geometry.XY, e geometry.XY, zBS, zBE, zTS, zTE float64) (float64, float64, float64, float64, float64, float64) {
-	wallLen := align.Length
+// ComputeWall calculates the UV coordinates for wall textures based on alignment, scaling, panning, and flipping settings.
+func (an *UVAlign) ComputeWall(w, h float64, t1, t2 float64, s geometry.XY, e geometry.XY, zBS, zBE, zTS, zTE float64) (float64, float64, float64, float64, float64, float64) {
+	wallLen := an.Length
 	if wallLen <= 0 {
 		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
 	}
 
-	d1 := t1 * wallLen
-	d2 := t2 * wallLen
-
-	uStart := (d1 + align.Panning.X) / w
-	uEnd := (d2 + align.Panning.X) / w
-	if align.FlipX {
-		uStart, uEnd = uEnd, uStart
+	effT1 := t1
+	effT2 := t2
+	if an.FlipX {
+		effT1 = 1.0 - effT1
+		effT2 = 1.0 - effT2
 	}
 
-	scaleY := align.ScaleY
+	d1 := effT1 * wallLen
+	d2 := effT2 * wallLen
+
+	uStart := (d1 + an.Panning.X) / w
+	uEnd := (d2 + an.Panning.X) / w
+
+	scaleY := an.ScaleY
 	if scaleY <= 0 {
 		scaleY = 1.0
 	}
 
 	var vBS, vBE, vTS, vTE float64
-	if align.AlignBottom {
+	if an.AlignBottom {
 		hWallS := (zTS - zBS) * scaleY
 		hWallE := (zTE - zBE) * scaleY
-		vBS = align.Panning.Y / h
-		vBE = align.Panning.Y / h
-		vTS = (hWallS + align.Panning.Y) / h
-		vTE = (hWallE + align.Panning.Y) / h
+		if an.FlipY {
+			vBS = (hWallS + an.Panning.Y) / h
+			vBE = (hWallE + an.Panning.Y) / h
+			vTS = an.Panning.Y / h
+			vTE = an.Panning.Y / h
+		} else {
+			vBS = an.Panning.Y / h
+			vBE = an.Panning.Y / h
+			vTS = (hWallS + an.Panning.Y) / h
+			vTE = (hWallE + an.Panning.Y) / h
+		}
 	} else {
 		hWallS := (zTS - zBS) * scaleY
 		hWallE := (zTE - zBE) * scaleY
-		vTS = 1.0 + align.Panning.Y/h
-		vTE = 1.0 + align.Panning.Y/h
-		vBS = vTS - hWallS/h
-		vBE = vTE - hWallE/h
-	}
-	if align.FlipY {
-		vBS, vTS = vTS, vBS
-		vBE, vTE = vTE, vBE
+		if an.FlipY {
+			vTS = -an.Panning.Y / h
+			vTE = -an.Panning.Y / h
+			vBS = vTS + hWallS/h
+			vBE = vTE + hWallE/h
+		} else {
+			vTS = 1.0 + an.Panning.Y/h
+			vTE = 1.0 + an.Panning.Y/h
+			vBS = vTS - hWallS/h
+			vBE = vTE - hWallE/h
+		}
 	}
 
 	return uStart, uEnd, vBS, vBE, vTS, vTE
 }
 
-func (align *UVAlign) Compute(w, h float64, tri [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64) {
+// Compute calculates UV texture coordinates for a triangular surface based on alignment, scaling, and transformation settings.
+func (an *UVAlign) Compute(w, h float64, tri [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64) {
 	var tx, ty, nx, ny float64
-	if align.AlignWall {
-		dx := align.End.X - align.Start.X
-		dy := align.End.Y - align.Start.Y
+	if an.AlignWall {
+		dx := an.End.X - an.Start.X
+		dy := an.End.Y - an.Start.Y
 		length := math.Hypot(dx, dy)
 		if length < 1e-6 {
 			dx, dy, length = 1, 0, 1
 		}
 		tx = dx / length
 		ty = dy / length
-		nx = -ty
-		ny = tx
+		nx = ty
+		ny = -tx
 	}
 
-	scaleX := align.ScaleX
+	scaleX := an.ScaleX
 	if scaleX <= 0 {
 		scaleX = 1.0
 	}
-	scaleY := align.ScaleY
+	scaleY := an.ScaleY
 	if scaleY <= 0 {
 		scaleY = 1.0
 	}
@@ -144,9 +159,9 @@ func (align *UVAlign) Compute(w, h float64, tri [3]geometry.XYZ) (float64, float
 	var uvs [3][2]float64
 	for i := 0; i < 3; i++ {
 		var u, v float64
-		if align.AlignWall {
-			relX := tri[i].X - align.Start.X
-			relY := tri[i].Y - align.Start.Y
+		if an.AlignWall {
+			relX := tri[i].X - an.Start.X
+			relY := tri[i].Y - an.Start.Y
 			u = relX*tx + relY*ty
 			v = relX*nx + relY*ny
 		} else {
@@ -155,20 +170,20 @@ func (align *UVAlign) Compute(w, h float64, tri [3]geometry.XYZ) (float64, float
 		}
 		u *= scaleX
 		v *= scaleY
-		if align.SwapXY {
+		if an.SwapXY {
 			u, v = v, u
 		}
-		if align.FlipX {
+		if an.FlipX {
 			u = -u
 		}
-		if align.FlipY {
+		if an.FlipY {
 			v = -v
 		}
-		if align.Panning.X != 0 {
-			u += align.Panning.X
+		if an.Panning.X != 0 {
+			u += an.Panning.X
 		}
-		if align.Panning.Y != 0 {
-			v += align.Panning.Y
+		if an.Panning.Y != 0 {
+			v += an.Panning.Y
 		}
 		uvs[i][0] = u / w
 		uvs[i][1] = v / h

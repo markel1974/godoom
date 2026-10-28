@@ -123,12 +123,8 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				}
 
 				cSeg.UVAlign = config.NewUVAlignBottom(false, false, false, midPanning, wallTexLen, scaleY)
-				if validTexture(wall.TopTexture) {
-					cSeg.UVAlignUpper = config.NewUVAlignBottom(false, false, false, topPanning, wallTexLen, scaleY)
-				}
-				if validTexture(wall.BotTexture) {
-					cSeg.UVAlignLower = config.NewUVAlignBottom(true, false, false, botPanning, wallTexLen, scaleY)
-				}
+				cSeg.UVAlignUpper = config.NewUVAlignBottom(false, false, false, topPanning, wallTexLen, scaleY)
+				cSeg.UVAlignLower = config.NewUVAlignBottom(true, false, false, botPanning, wallTexLen, scaleY)
 
 				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true

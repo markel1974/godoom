@@ -100,7 +100,7 @@ sector	 0 20	27 28 29 36 37  38 39 40 46 45	x x x x x  x x x x x
 sector	 0 14	12 13 40 39 52 50	x x x x x x
 
 # hideout under stairs
-sector	 0 12	51 50 52 53	x x x x
+#sector	 0 12	51 50 52 53	x x x x
 
 # top floor
 sector	16 28	22 8 2 49 44 35		x x x x x x

@@ -25,20 +25,21 @@ func NewPlayer(posX, posY, angle float64) *Player {
 // Build creates and configures a new Player instance with predefined physical, visual, and motion attributes.
 func (p *Player) Build() *config.Player {
 	playerPos := geometry.XYZ{X: p.posX, Y: p.posY, Z: 0}
-	player := config.NewConfigPlayer(playerPos, p.angle, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
+	player := config.NewConfigPlayer(playerPos, 0, PlayerMass, PlayerSpeed, PlayerRadius, PlayerHeight)
 	_ = common.NewPlayer(player)
 	player.GForce = GForce
 	player.JumpForce = JumpForce
 	player.Impulse = 0.1 //mod
 
 	player.Flash.ZFar = 8192
-	player.Flash.Intensity = 0.02
-	player.Flash.Falloff = 2000
-	player.Flash.OffsetX = 0.2
-	player.Flash.OffsetY = 0.1
-	player.Bobbing.SwayScale = 1.0 //mod
-	player.Bobbing.SwayOffsetX = 50
-	player.Bobbing.SwayOffsetY = -0.9
+	player.Flash.Intensity = 0.009
+	player.Flash.Falloff = 500
+	player.Flash.OffsetX = -0.2
+	player.Flash.OffsetY = 0.2
+
+	player.Bobbing.SwayScale = 1.0 //mod 2.0
+	player.Bobbing.SwayOffsetX = 5
+	player.Bobbing.SwayOffsetY = -1
 	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	player.Bobbing.MaxAmplitudeY = 5.5
 	player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.

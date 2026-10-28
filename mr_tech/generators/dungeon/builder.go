@@ -21,9 +21,9 @@ const (
 const (
 	AspectRatio  = 1.333
 	ScaleSectorH = 0.8
-	PlayerHeight = 56.0 * ScaleSectorH
-	PlayerRadius = 16.0
-	PlayerSpeed  = 1800.0
+	PlayerHeight = 15.0 * ScaleSectorH
+	PlayerRadius = 4.0
+	PlayerSpeed  = 800.0
 	PlayerMass   = 50.0
 
 	GForce    = 9.8 * 50
@@ -74,7 +74,7 @@ func (b *Builder) Build(res common.IResources, level int) (*config.Root, error) 
 	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
 	t, _ := NewTextures(res, basePath)
 	//return b.generateSimple(t, 16, 16)
-	return b.generateDungeon(t, 16, 16, cellSize)
+	return b.generateDungeon(t, 32, 32, cellSize)
 }
 
 // createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.
@@ -159,16 +159,11 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 }
 
 func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 150, 1, 10)
-	player.Flash.ZFar = 8192
-	player.Flash.Intensity = 0.015
-	player.Flash.Falloff = 2000
-	player.Flash.OffsetX = 0.2
-	player.Flash.OffsetY = 0.1
-
+	p := NewPlayer(0, 0, 0)
+	player := p.Build()
 	_ = common.NewPlayer(player)
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
-	cal.AspectRatio = 1.0
+	cal.AspectRatio = AspectRatio
 
 	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	cfg := config.NewConfigRoot(cal, nil, player, nil, scale, t)
@@ -214,7 +209,7 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 			}
 
 			id := fmt.Sprintf("cell_%d_%d", x, y)
-			lightIntensity := randomF(0.2, 1.0)
+			lightIntensity := randomF(0.1, 0.5)
 			sector := config.NewConfigSector(id, lightIntensity, config.LightKindAmbient, lightFalloff)
 
 			// Creiamo un dislivello progressivo dal centro per simulare gradini/colline

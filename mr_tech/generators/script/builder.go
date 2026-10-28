@@ -16,10 +16,10 @@ import (
 
 const (
 	AspectRatio  = 1.333
-	ScaleSectorH = 1.0
+	ScaleSectorH = 0.7
 	PlayerHeight = 6.0 * ScaleSectorH
-	PlayerRadius = 0.8
-	PlayerSpeed  = 60.0
+	PlayerRadius = 2
+	PlayerSpeed  = 400.0
 	PlayerMass   = 10.0
 
 	GForce    = 9.8 * 20
@@ -103,8 +103,15 @@ func (p *Builder) Build(res common.IResources, id string) (*config.Root, error) 
 	return cfg, nil
 }
 
-// segmentsOverlapOpposite checks if two line segments are collinear, point in opposite directions, and overlap.
-func segmentsOverlapOpposite(a1, a2, b1, b2 geometry.XY) bool {
+// segmentsExactOpposite checks if two line segments share the exact same endpoints in reverse direction.
+func segmentsExactOpposite(a1, a2, b1, b2 geometry.XY) bool {
+	const eps = 1e-4
+	return math.Abs(a1.X-b2.X) < eps && math.Abs(a1.Y-b2.Y) < eps &&
+		math.Abs(a2.X-b1.X) < eps && math.Abs(a2.Y-b1.Y) < eps
+}
+
+// segmentOverlapLength returns the length of overlap if two line segments are collinear and point in opposite directions.
+func segmentOverlapLength(a1, a2, b1, b2 geometry.XY) float64 {
 	dxA := a2.X - a1.X
 	dyA := a2.Y - a1.Y
 	dxB := b2.X - b1.X
@@ -113,24 +120,24 @@ func segmentsOverlapOpposite(a1, a2, b1, b2 geometry.XY) bool {
 	// Must run in opposite directions
 	dot := dxA*dxB + dyA*dyB
 	if dot >= -1e-6 {
-		return false
+		return 0
 	}
 
 	// Must be parallel (cross product close to 0)
 	cross := dxA*dyB - dyA*dxB
 	if math.Abs(cross) > 1e-4 {
-		return false
+		return 0
 	}
 
 	lenSqA := dxA*dxA + dyA*dyA
 	if lenSqA < 1e-8 {
-		return false
+		return 0
 	}
 
 	// Point b1 must lie on line a1-a2
 	crossP := (b1.X-a1.X)*dyA - (b1.Y-a1.Y)*dxA
 	if math.Abs(crossP) > 1e-4 {
-		return false
+		return 0
 	}
 
 	// Project B endpoints onto line A parameter interval [0, 1]
@@ -141,31 +148,54 @@ func segmentsOverlapOpposite(a1, a2, b1, b2 geometry.XY) bool {
 	maxT := math.Max(tB1, tB2)
 
 	overlap := math.Min(1.0, maxT) - math.Max(0.0, minT)
-	return overlap > 1e-4
+	if overlap > 1e-4 {
+		return overlap * math.Sqrt(lenSqA)
+	}
+	return 0
 }
 
 // finalize processes and updates sector segment relationships within the configuration by performing a topological rescan.
 func (p *Builder) finalize(cfg *config.Root) {
 	for _, sector := range cfg.Sectors {
 		for _, s := range sector.Segments {
-			foundNeighbor := false
 			var neighborSector *config.Sector
+			foundExact := false
+
+			// Priority 1: Look for an exact opposite match (perfect boundary fit)
 			for _, otherSector := range cfg.Sectors {
 				if otherSector.Id == sector.Id {
 					continue
 				}
 				for _, otherSeg := range otherSector.Segments {
-					if segmentsOverlapOpposite(s.Start, s.End, otherSeg.Start, otherSeg.End) {
-						foundNeighbor = true
+					if segmentsExactOpposite(s.Start, s.End, otherSeg.Start, otherSeg.End) {
 						neighborSector = otherSector
+						foundExact = true
 						break
 					}
 				}
-				if foundNeighbor {
+				if foundExact {
 					break
 				}
 			}
-			if foundNeighbor && neighborSector != nil {
+
+			// Priority 2: If no exact match, find the neighbor with the greatest overlap length
+			if !foundExact {
+				var bestOverlap float64
+				for _, otherSector := range cfg.Sectors {
+					if otherSector.Id == sector.Id {
+						continue
+					}
+					for _, otherSeg := range otherSector.Segments {
+						ol := segmentOverlapLength(s.Start, s.End, otherSeg.Start, otherSeg.End)
+						if ol > bestOverlap {
+							bestOverlap = ol
+							neighborSector = otherSector
+						}
+					}
+				}
+			}
+
+			if neighborSector != nil {
 				s.Tag = neighborSector.Id
 				s.Kind = config.SegmentUnknown
 				s.Middle = nil
@@ -214,7 +244,7 @@ func (p *Builder) parseSector(r io.Reader, cfgVertices []geometry.XY, configSect
 		return nil, errors.New("nil vertices")
 	}
 	const falloff = 50.0
-	const lightIntensity = 1.5
+	const lightIntensity = 1.0
 	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), lightIntensity, config.LightKindAmbient, falloff)
 	if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 		return nil, err

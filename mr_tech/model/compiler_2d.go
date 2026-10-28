@@ -12,6 +12,21 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+func materialSize(mat *textures.Material) (float64, float64, bool) {
+	if mat == nil {
+		return 0, 0, false
+	}
+	tex := mat.HeadFrame()
+	if tex == nil {
+		return 0, 0, false
+	}
+	w, h := tex.GetSizeScaled()
+	if w <= 0 || h <= 0 {
+		return 0, 0, false
+	}
+	return w, h, true
+}
+
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
@@ -339,14 +354,10 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
 		if align := sector.GetCeilAlign(); align != nil {
-			if mat := ceilFace.GetMaterial(); mat != nil {
-				if tex := mat.HeadFrame(); tex != nil {
-					if w, h := tex.GetSizeScaled(); w > 0 && h > 0 {
-						u0, v0, u1, v1, u2, v2 := align.Compute(w, h, ceilFace.tri)
-						ceilFace.SetUV(u0, v0, u1, v1, u2, v2)
-						ceilFace.LockUV(true)
-					}
-				}
+			if w, h, ok := materialSize(ceilFace.GetMaterial()); ok {
+				u0, v0, u1, v1, u2, v2 := align.Compute(w, h, ceilFace.tri)
+				ceilFace.SetUV(u0, v0, u1, v1, u2, v2)
+				ceilFace.LockUV(true)
 			}
 		}
 
@@ -356,14 +367,10 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
 
 		if align := sector.GetFloorAlign(); align != nil {
-			if mat := floorFace.GetMaterial(); mat != nil {
-				if tex := mat.HeadFrame(); tex != nil {
-					if w, h := tex.GetSizeScaled(); w > 0 && h > 0 {
-						u0, v0, u1, v1, u2, v2 := align.Compute(w, h, floorFace.tri)
-						floorFace.SetUV(u0, v0, u1, v1, u2, v2)
-						floorFace.LockUV(true)
-					}
-				}
+			if w, h, ok := materialSize(floorFace.GetMaterial()); ok {
+				u0, v0, u1, v1, u2, v2 := align.Compute(w, h, floorFace.tri)
+				floorFace.SetUV(u0, v0, u1, v1, u2, v2)
+				floorFace.LockUV(true)
 			}
 		}
 

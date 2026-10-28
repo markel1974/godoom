@@ -74,9 +74,10 @@ func (b *Builder) Build(res common.IResources, level int) (*config.Root, error) 
 		level = 1
 	}
 	grid := 16 * level
+	cSize := cellSize
 	t, _ := NewTextures(res)
 	//return b.generateSimple(t, 16, 16)
-	return b.generateDungeon(t, grid, grid, cellSize)
+	return b.generateDungeon(t, grid, grid, cSize)
 }
 
 // createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.
@@ -160,6 +161,7 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 	return cfg, nil
 }
 
+// generateDungeon creates a dungeon using a Drunkard's Walk algorithm, generating sectors, topology, and player spawn.
 func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, cellSize float64) (*config.Root, error) {
 	p := NewPlayer(0, 0, 0)
 	player := p.Build()
@@ -242,11 +244,13 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 			px, py := float64(x)*cellSize, float64(y)*cellSize
 
-			// Definiamo i 4 bordi (Nord, Est, Sud, Ovest)
-			edges := []struct {
+			type Edge struct {
 				nx, ny int
 				p1, p2 geometry.XY
-			}{
+			}
+
+			// Definiamo i 4 bordi (Nord, Est, Sud, Ovest)
+			edges := []Edge{
 				{x, y - 1, geometry.XY{X: px, Y: py}, geometry.XY{X: px + cellSize, Y: py}},                       // Nord
 				{x + 1, y, geometry.XY{X: px + cellSize, Y: py}, geometry.XY{X: px + cellSize, Y: py + cellSize}}, // Est
 				{x, y + 1, geometry.XY{X: px + cellSize, Y: py + cellSize}, geometry.XY{X: px, Y: py + cellSize}}, // Sud

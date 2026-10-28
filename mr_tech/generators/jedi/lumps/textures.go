@@ -24,6 +24,17 @@ func NewTextures() *Textures {
 	return t
 }
 
+// GetFromCache retrieves cached texture frame names by texture identifier if present.
+func (t *Textures) GetFromCache(name string) ([]string, bool) {
+	v, ok := t.cache[name]
+	return v, ok
+}
+
+// SetCache sets cached texture frame names for a given texture identifier.
+func (t *Textures) SetCache(name string, frames []string) {
+	t.cache[name] = frames
+}
+
 // AddTexture adds a texture by parsing bitmap data and applying a palette, caching the result for future requests.
 func (t *Textures) AddTexture(texName string, images []*image.RGBA) []string {
 	v, ok := t.cache[texName]

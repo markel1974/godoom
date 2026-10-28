@@ -55,6 +55,8 @@ type ArchiveLab struct {
 	colorPal      [][256]color.RGBA
 	colorPalIndex int
 	entities      *Entities
+	atxMap        map[string]*ATX
+	frameToAtx    map[string]string
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
@@ -64,12 +66,22 @@ func NewArchiveLab(fs common.IResources) *ArchiveLab {
 		container:     make(map[string]*LabFile),
 		textures:      NewTextures(),
 		colorPalIndex: 0,
+		atxMap:        make(map[string]*ATX),
+		frameToAtx:    make(map[string]string),
 	}
 }
 
 // GetLevels retrieves the list of level names parsed from the archive.
 func (al *ArchiveLab) GetLevels() []string {
 	return al.levels
+}
+
+func (al *ArchiveLab) GetContainerKeys() []string {
+	keys := make([]string, 0, len(al.container))
+	for k := range al.container {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Parse scans the specified directory for `.LAB` files, processes them, and adds their data to the instance container.
@@ -96,7 +108,32 @@ func (al *ArchiveLab) Parse(dirPath string) error {
 			return err
 		}
 	}
+	al.indexATX()
 	return nil
+}
+
+// indexATX discovers and parses all .ATX animated texture scripts in the archive.
+func (al *ArchiveLab) indexATX() {
+	for name := range al.container {
+		if strings.HasSuffix(strings.ToUpper(name), ".ATX") {
+			data, err := al.GetPayload(name)
+			if err != nil {
+				continue
+			}
+			atx, err := ParseATX(name, bytes.NewReader(data))
+			if err != nil {
+				continue
+			}
+			cleanAtx := al.cleanName(name)
+			al.atxMap[cleanAtx] = atx
+			if atx.IsLooping() {
+				for _, tex := range atx.Textures {
+					cleanTex := al.cleanName(tex)
+					al.frameToAtx[cleanTex] = cleanAtx
+				}
+			}
+		}
+	}
 }
 
 // add processes a .LAB archive file at the specified path and adds its contents to the ArchiveLab instance.
@@ -237,7 +274,26 @@ func (al *ArchiveLab) GetTextures() *Textures {
 }
 
 func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
-	data, err := al.GetPayload(texName)
+	cleanName := al.cleanName(texName)
+	if cached, ok := al.textures.GetFromCache(cleanName); ok {
+		return cached, nil
+	}
+
+	// 1. Script di texture animata (.ATX)
+	if strings.HasSuffix(cleanName, ".ATX") {
+		return al.addATXTexture(cleanName)
+	}
+
+	// 2. Frame appartenente a un'animazione ciclica ATX (es. MFWATER1.PCX -> MAWATER.ATX)
+	if atxName, ok := al.frameToAtx[cleanName]; ok {
+		frames, err := al.addATXTexture(atxName)
+		if err == nil && len(frames) > 0 {
+			al.textures.SetCache(cleanName, frames)
+			return frames, nil
+		}
+	}
+
+	data, err := al.GetPayload(cleanName)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +302,7 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 		return nil, fmt.Errorf("invalid palette index %d", al.colorPalIndex)
 	}
 	colorPal := al.colorPal[al.colorPalIndex]
-	if strings.HasSuffix(strings.ToUpper(texName), ".PCX") {
+	if strings.HasSuffix(cleanName, ".PCX") {
 		parser := common.NewPCX()
 		img, err := parser.Parse(bytes.NewReader(data), colorPal)
 		if err != nil {
@@ -261,7 +317,77 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := al.textures.AddTexture(texName, images)
+	out := al.textures.AddTexture(cleanName, images)
+	return out, nil
+}
+
+// addATXTexture loads all frames of an animated texture defined by an .ATX script.
+func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
+	cleanAtx := al.cleanName(atxName)
+	if cached, ok := al.textures.GetFromCache(cleanAtx); ok {
+		return cached, nil
+	}
+
+	atx, ok := al.atxMap[cleanAtx]
+	if !ok {
+		data, err := al.GetPayload(cleanAtx)
+		if err != nil {
+			return nil, err
+		}
+		var pErr error
+		atx, pErr = ParseATX(cleanAtx, bytes.NewReader(data))
+		if pErr != nil {
+			return nil, pErr
+		}
+		al.atxMap[cleanAtx] = atx
+	}
+
+	if len(atx.Textures) == 0 {
+		return nil, fmt.Errorf("atx %s has no textures", cleanAtx)
+	}
+
+	if al.colorPalIndex >= len(al.level.Palettes) {
+		return nil, fmt.Errorf("invalid palette index %d", al.colorPalIndex)
+	}
+	colorPal := al.colorPal[al.colorPalIndex]
+	parser := common.NewPCX()
+
+	targetTextures := atx.Textures
+	if !atx.IsLooping() {
+		targetTextures = atx.Textures[:1]
+	}
+
+	var images []*image.RGBA
+	for _, frameName := range targetTextures {
+		cleanFrame := al.cleanName(frameName)
+		frameData, err := al.GetPayload(cleanFrame)
+		if err != nil {
+			// Prova aggiungendo .PCX se manca estensione
+			if !strings.Contains(cleanFrame, ".") {
+				cleanFrame += ".PCX"
+				frameData, err = al.GetPayload(cleanFrame)
+			}
+		}
+		if err != nil {
+			fmt.Printf("warning: could not load frame %s for ATX %s: %v\n", frameName, cleanAtx, err)
+			continue
+		}
+		img, err := parser.Parse(bytes.NewReader(frameData), colorPal)
+		if err != nil {
+			fmt.Printf("warning: could not parse PCX frame %s for ATX %s: %v\n", frameName, cleanAtx, err)
+			continue
+		}
+		images = append(images, img)
+	}
+
+	if len(images) == 0 {
+		return nil, fmt.Errorf("no valid frames loaded for ATX %s", cleanAtx)
+	}
+
+	out := al.textures.AddTexture(cleanAtx, images)
+	for _, frameName := range atx.Textures {
+		al.textures.SetCache(al.cleanName(frameName), out)
+	}
 	return out, nil
 }
 

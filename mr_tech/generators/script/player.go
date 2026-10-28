@@ -29,7 +29,7 @@ func (p *Player) Build() *config.Player {
 	_ = common.NewPlayer(player)
 	player.GForce = GForce
 	player.JumpForce = JumpForce
-	player.Impulse = 0.1 //mod
+	player.Impulse = 0.05 //mod
 
 	player.Flash.ZFar = 8192
 	player.Flash.Intensity = 0.02

@@ -97,7 +97,7 @@ sector	 0 20	3 4 13 12 11  10 9 16 15 14	x x x x x  x x x x x
 sector	 0 20	27 28 29 36 37  38 39 40 46 45	x x x x x  x x x x x
 
 # tunnel under stairs
-sector	 0 14	12 13 40 39 52 50	x x x x x x
+#sector	 0 14	12 13 40 39 52 50	x x x x x x
 
 # hideout under stairs
 #sector	 0 12	51 50 52 53	x x x x

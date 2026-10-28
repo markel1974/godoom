@@ -16,10 +16,10 @@ import (
 
 const (
 	AspectRatio  = 1.333
-	ScaleSectorH = 0.7
-	PlayerHeight = 6.0 * ScaleSectorH
-	PlayerRadius = 2
-	PlayerSpeed  = 400.0
+	ScaleSectorH = 0.4
+	PlayerHeight = 7.0 * ScaleSectorH
+	PlayerRadius = 1.5
+	PlayerSpeed  = 200.0
 	PlayerMass   = 10.0
 
 	GForce    = 9.8 * 20
@@ -243,12 +243,16 @@ func (p *Builder) parseSector(r io.Reader, cfgVertices []geometry.XY, configSect
 	if cfgVertices == nil {
 		return nil, errors.New("nil vertices")
 	}
-	const falloff = 50.0
-	const lightIntensity = 1.0
+	const falloff = 20.0
+	const lightIntensity = 0.5
 	cs := config.NewConfigSector(strconv.Itoa(configSectorIdx), lightIntensity, config.LightKindAmbient, falloff)
 	if _, err := fmt.Fscanf(r, "%f%f", &cs.FloorY, &cs.CeilY); err != nil {
 		return nil, err
 	}
+
+	cs.FloorY *= ScaleSectorH
+	cs.CeilY *= ScaleSectorH
+
 	type data struct {
 		Val  int
 		Kind int

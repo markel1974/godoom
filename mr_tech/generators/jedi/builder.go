@@ -116,7 +116,9 @@ func (b *Builder) Build(fs common.IResources, eMode EngineMode, dir string, leve
 }
 
 // CreateCoords generates a geometry.XYZ object from the provided x, y, and z coordinates with modified Y and Z values.
-func CreateCoords(x, y, z float64) geometry.XYZ {
-	//return geometry.XYZ{X: x, Y: -z, Z: -y}
+func CreateCoords(eMode EngineMode, x, y, z float64) geometry.XYZ {
+	if eMode == EngineModeOutlaws {
+		return geometry.XYZ{X: x, Y: z, Z: y}
+	}
 	return geometry.XYZ{X: x, Y: z, Z: -y}
 }

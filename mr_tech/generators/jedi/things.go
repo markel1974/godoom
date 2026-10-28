@@ -37,7 +37,7 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 			if len(obj.Name) == 0 {
 				continue
 			}
-			pos := CreateCoords(obj.X, obj.Y, obj.Z)
+			pos := CreateCoords(b.eMode, obj.X, obj.Y, obj.Z)
 			key := strings.ToUpper(strings.TrimSpace(obj.Name))
 			switch key {
 			case "SPIRIT", "PLAYER":
@@ -90,7 +90,7 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 			if len(obj.Class) == 0 {
 				continue
 			}
-			pos := CreateCoords(obj.X, obj.Y, obj.Z)
+			pos := CreateCoords(b.eMode, obj.X, obj.Y, obj.Z)
 			key := strings.ToUpper(strings.TrimSpace(obj.Class))
 			switch key {
 			case "SPIRIT", "PLAYER":

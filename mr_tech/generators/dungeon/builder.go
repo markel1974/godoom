@@ -70,9 +70,13 @@ func NewBuilder() *Builder {
 
 // Build generates and returns the root configuration for the application or system, along with any encountered errors.
 func (b *Builder) Build(res common.IResources, level int) (*config.Root, error) {
+	if level <= 0 {
+		level = 1
+	}
+	grid := 16 * level
 	t, _ := NewTextures(res)
 	//return b.generateSimple(t, 16, 16)
-	return b.generateDungeon(t, 32, 32, cellSize)
+	return b.generateDungeon(t, grid, grid, cellSize)
 }
 
 // createCube initializes and returns a Sector representing a cubical sector in a level with specified properties.

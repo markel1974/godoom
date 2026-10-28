@@ -16,9 +16,9 @@ func NewTextures(res common.IResources) (*Textures, error) {
 		resources: make(map[string]*textures.Texture),
 	}
 	basePath := ""
-	files, err := res.ReadDir(basePath)
-	if err != nil {
-		return nil, err
+	files, fErr := res.ReadDir(basePath)
+	if fErr != nil {
+		return nil, fErr
 	}
 
 	for idx, f := range files {
@@ -65,12 +65,4 @@ func (t *Textures) GetNames() []string {
 		out = append(out, id)
 	}
 	return out
-}
-
-func (t *Textures) AddDirect(name string, tex *textures.Texture) {
-	t.resources[name] = tex
-}
-
-func (t *Textures) AddTexture(name string, tex *textures.Texture) {
-	t.resources[name] = tex
 }

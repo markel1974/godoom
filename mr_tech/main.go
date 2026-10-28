@@ -44,9 +44,9 @@ var _availableModes = []ModeDef{
 		},
 	},
 	{
-		Name:   "generate",
-		Target: "",
-		Zip:    false,
+		Name:   "dungeon",
+		Target: "resources" + string(os.PathSeparator) + "dungeon" + string(os.PathSeparator) + "textures.zip",
+		Zip:    true,
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			db := dungeon.NewBuilder()
 			return db.Build(res, level)

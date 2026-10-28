@@ -30,6 +30,7 @@
                 <label style="display: block; font-size: 14px; color: #888; margin-bottom: 5px;">Mode</label>
                 <label for="selMode"></label>
                 <select id="selMode" style="padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #111; color: white;">
+                    <option value="1">Dungeon</option>
                     <option value="2">Wolf3D</option>
                     <option value="3">Doom</option>
                     <option value="4">Jedi Knight</option>
@@ -37,6 +38,7 @@
                     <option value="6" selected>Quake 1</option>
                     <option value="7">Quake 2</option>
                     <option value="8">Quake 3 Arena</option>
+                    <option value="10">Duke Nukem 3D</option>
                 </select>
             </div>
             <div>
@@ -378,10 +380,27 @@
         if (!wasmInstance) return;
         let mode = document.getElementById("selMode").value;
         let url = "";
-        if (mode === "3") url = "asset/DOOM.WAD";
-        else if (mode === "6") url = "asset/q1_pak0.pak";
-        else if (mode === "7") url = "asset/q2_pak0.pak";
-        else if (mode === "8") url = "asset/q3_pak0.pk3";
+        switch (mode) {
+            case "1": url = "asset/textures.zip"; break;
+            case "2": url = "NO_ASSET"; break;
+            case "3": url = "asset/DOOM.WAD"; break;
+            case "4": url = "asset/jedi.zip"; break;
+            case "5": url = "asset/outlaws1.zip"; break;
+            case "6": url = "asset/q1_pak0.pak"; break;
+            case "7": url = "asset/q2_pak0.pak"; break;
+            case "8": url = "asset/q3_pak0.pk3"; break;
+            case "10": url = "asset/DUKE3D.GRP"; break;
+            default: url = ""; break;
+        }
+        //if (mode === "3") url = "asset/DOOM.WAD";
+        //else if (mode === "6") url = "asset/q1_pak0.pak";
+        //else if (mode === "7") url = "asset/q2_pak0.pak";
+        //else if (mode === "8") url = "asset/q3_pak0.pk3";
+
+        if (url === "NO_ASSET") {
+            startGame(null);
+            return;
+        }
 
         if (url === "") {
             document.getElementById("status").innerText = "No default asset mapped for this mode.";

@@ -48,6 +48,7 @@ func (a *App) Setup(useZip bool, path string, width, height, fps int) error {
 				return err
 			}
 			a.res = res
+			a.path = ""
 		} else {
 			a.res = common.NewResourcesMem(data)
 		}

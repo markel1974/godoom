@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	rnd "math/rand"
-	"os"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
@@ -71,8 +70,7 @@ func NewBuilder() *Builder {
 
 // Build generates and returns the root configuration for the application or system, along with any encountered errors.
 func (b *Builder) Build(res common.IResources, level int) (*config.Root, error) {
-	basePath := "resources" + string(os.PathSeparator) + "textures" + string(os.PathSeparator)
-	t, _ := NewTextures(res, basePath)
+	t, _ := NewTextures(res)
 	//return b.generateSimple(t, 16, 16)
 	return b.generateDungeon(t, 32, 32, cellSize)
 }

@@ -80,7 +80,6 @@ func (b *Builder) Build(fs common.IResources, eMode EngineMode, dir string, leve
 	if levelNumber <= 0 {
 		levelNumber = 0
 	}
-
 	if err := archive.Parse(dir); err != nil {
 		return nil, err
 	}

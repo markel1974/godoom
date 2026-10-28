@@ -338,12 +338,35 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
-		ceilFace.ApplyAlignment(sector.GetCeilAlign())
+		if align := sector.GetCeilAlign(); align != nil {
+			if mat := ceilFace.GetMaterial(); mat != nil {
+				if tex := mat.HeadFrame(); tex != nil {
+					if w, h := tex.GetSizeScaled(); w > 0 && h > 0 {
+						u0, v0, u1, v1, u2, v2 := align.Compute(w, h, ceilFace.tri)
+						ceilFace.SetUV(u0, v0, u1, v1, u2, v2)
+						ceilFace.LockUV(true)
+					}
+				}
+			}
+		}
+
 		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
 		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
-		floorFace.ApplyAlignment(sector.GetFloorAlign())
+
+		if align := sector.GetFloorAlign(); align != nil {
+			if mat := floorFace.GetMaterial(); mat != nil {
+				if tex := mat.HeadFrame(); tex != nil {
+					if w, h := tex.GetSizeScaled(); w > 0 && h > 0 {
+						u0, v0, u1, v1, u2, v2 := align.Compute(w, h, floorFace.tri)
+						floorFace.SetUV(u0, v0, u1, v1, u2, v2)
+						floorFace.LockUV(true)
+					}
+				}
+			}
+		}
+
 		vol3d.AddFace(floorFace)
 
 		for x := 0; x < segmentCount; x++ {

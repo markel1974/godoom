@@ -3,7 +3,6 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -236,29 +235,6 @@ func (fc *Face) computeUV() {
 		// Walls facing X
 		fc.SetUV(fc.tri[0].Y/w, fc.tri[0].Z/h, fc.tri[1].Y/w, fc.tri[1].Z/h, fc.tri[2].Y/w, fc.tri[2].Z/h)
 	}
-}
-
-// ApplyAlignment modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
-func (fc *Face) ApplyAlignment(align *config.UVAlign) {
-	if align == nil {
-		return
-	}
-	mat := fc.GetMaterial()
-	if mat == nil {
-		return
-	}
-	tex := mat.HeadFrame()
-	if tex == nil {
-		return
-	}
-	w, h := tex.GetSizeScaled()
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	u0, v0, u1, v1, u2, v2 := align.Compute(w, h, fc.tri)
-	fc.SetUV(u0, v0, u1, v1, u2, v2)
-	fc.LockUV(true)
 }
 
 /*

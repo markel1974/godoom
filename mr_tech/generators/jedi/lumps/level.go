@@ -210,11 +210,13 @@ func (p *Level) Parse(r io.Reader) error {
 				sector.SetSlopedCeiling(tokens)
 			}
 		case "OFFSET:":
-			// Assorbe l'offset se dichiarato come parametro globale del settore (es. allineamento planare)
 			if sector != nil && len(tokens) >= 3 {
-				// Opzionale: mappare su sector.FloorOffsetX, sector.FloorOffsetY
-				_, _ = strconv.ParseFloat(tokens[1], 64)
-				_, _ = strconv.ParseFloat(tokens[2], 64)
+				if offX, err := strconv.ParseFloat(tokens[1], 64); err == nil {
+					sector.FloorOffsetX = offX
+				}
+				if offY, err := strconv.ParseFloat(tokens[2], 64); err == nil {
+					sector.FloorOffsetY = offY
+				}
 			}
 		default:
 			if mode == modeVertices {

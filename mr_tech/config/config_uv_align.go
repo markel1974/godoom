@@ -1,10 +1,11 @@
 package config
 
-import "github.com/markel1974/godoom/mr_tech/geometry"
+import (
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
 
 // UVAlign represents UV alignment properties for texture mapping, including transformations, scaling, and wall alignment.
 type UVAlign struct {
-	FixUV       bool        `json:"fixUV"`
 	AlignWall   bool        `json:"alignWall"`
 	Start       geometry.XY `json:"start"`
 	End         geometry.XY `json:"end"`
@@ -20,7 +21,6 @@ type UVAlign struct {
 // NewUVAlignWall creates a new UVAlign instance configured for wall alignment with specified transformation options.
 func NewUVAlignWall(alignWall bool, start geometry.XY, end geometry.XY, swapXY bool, flipX bool, flipY bool, panning geometry.XY) *UVAlign {
 	return &UVAlign{
-		FixUV:       true,
 		AlignWall:   alignWall,
 		AlignBottom: false,
 		Start:       start,
@@ -43,7 +43,6 @@ func NewUVAlignWall(alignWall bool, start geometry.XY, end geometry.XY, swapXY b
 // scaleY specifies the vertical scaling factor applied to the UV mapping.
 func NewUVAlignBottom(alignBottom bool, flipX bool, flipY bool, panning geometry.XY, length float64, scaleY float64) *UVAlign {
 	return &UVAlign{
-		FixUV:       true,
 		AlignWall:   false,
 		AlignBottom: alignBottom,
 		Start:       geometry.XY{},
@@ -56,3 +55,48 @@ func NewUVAlignBottom(alignBottom bool, flipX bool, flipY bool, panning geometry
 		ScaleY:      scaleY,
 	}
 }
+
+/*
+func (align *UVAlign) ComputeWall(w, h float64, e geometry.XY, s geometry.XY, zBS, zBE, zTS, zTE float64) (float64, float64, float64, float64) {
+	wallLen := align.Length
+	if wallLen <= 0 {
+		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
+	}
+
+	d1 := t1 * wallLen
+	d2 := t2 * wallLen
+	minD := math.Min(d1, d2)
+	maxD := math.Max(d1, d2)
+
+	uStart := (minD + align.Panning.X) / w
+	uEnd := (maxD + align.Panning.X) / w
+	if align.FlipX {
+		uStart, uEnd = uEnd, uStart
+	}
+
+	scaleY := align.ScaleY
+	if scaleY <= 0 {
+		scaleY = 1.0
+	}
+
+	var vBS, vBE, vTS, vTE float64
+	if align.AlignBottom {
+		hWallS := (zTS - zBS) * scaleY
+		hWallE := (zTE - zBE) * scaleY
+		vBS = align.Panning.Y / h
+		vBE = align.Panning.Y / h
+		vTS = (hWallS + align.Panning.Y) / h
+		vTE = (hWallE + align.Panning.Y) / h
+	} else {
+		hWallS := (zTS - zBS) * scaleY
+		hWallE := (zTE - zBE) * scaleY
+		vTS = 1.0 + align.Panning.Y/h
+		vTE = 1.0 + align.Panning.Y/h
+		vBS = vTS - hWallS/h
+		vBE = vTE - hWallE/h
+	}
+
+	return vBS, vBE, vTS, vTE
+}
+
+*/

@@ -60,6 +60,17 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		cSector.FloorY = -secFloorY * scaleSectorH
 		cSector.CeilY = -secCeilY * scaleSectorH
 
+		var vFirst1, vFirst2 geometry.XY
+		if len(sector.Walls) > 0 && sector.Walls[0].ValidWallVertices(len(sector.Vertices)) {
+			vFirst1 = sector.Vertices[sector.Walls[0].LeftVertex]
+			vFirst2 = sector.Vertices[sector.Walls[0].RightVertex]
+		}
+		fPanning := geometry.XY{X: sector.FloorOffsetX * 8.0, Y: sector.FloorOffsetY * 8.0}
+		cSector.FloorAlign = config.NewUVAlignWall(false, vFirst1, vFirst2, false, false, false, fPanning)
+
+		cPanning := geometry.XY{X: sector.CeilOffsetX * 8.0, Y: sector.CeilOffsetY * 8.0}
+		cSector.CeilAlign = config.NewUVAlignWall(false, vFirst1, vFirst2, false, false, false, cPanning)
+
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := b.archive.AddTexture(texName)
@@ -94,6 +105,31 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 
 				cSeg := config.NewConfigSegment(sector.Id, config.SegmentUnknown, v1, v2)
 				cSector.Segments[wallIdx] = cSeg
+
+				wallLenDFU := math.Hypot(v2.X-v1.X, v2.Y-v1.Y)
+				wallTexLen := wallLenDFU * 8.0
+				scaleY := 8.0 / scaleSectorH
+
+				var wallPanning geometry.XY
+				alignBottom := false
+
+				if wall.Adjoin < 0 {
+					wallPanning = geometry.XY{X: wall.MidOffsetX * 8.0, Y: wall.MidOffsetY * 8.0}
+					alignBottom = false
+				} else {
+					if validTexture(wall.TopTexture) {
+						wallPanning = geometry.XY{X: wall.TopOffsetX * 8.0, Y: wall.TopOffsetY * 8.0}
+						alignBottom = false
+					} else if validTexture(wall.BotTexture) {
+						wallPanning = geometry.XY{X: wall.BotOffsetX * 8.0, Y: wall.BotOffsetY * 8.0}
+						alignBottom = true
+					} else if validTexture(wall.MidTexture) {
+						wallPanning = geometry.XY{X: wall.MidOffsetX * 8.0, Y: wall.MidOffsetY * 8.0}
+						alignBottom = false
+					}
+				}
+
+				cSeg.UVAlign = config.NewUVAlignBottom(alignBottom, false, false, wallPanning, wallTexLen, scaleY)
 
 				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true

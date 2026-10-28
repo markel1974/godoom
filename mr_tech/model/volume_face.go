@@ -238,9 +238,9 @@ func (fc *Face) computeUV() {
 	}
 }
 
-// ApplyUVAlign modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
-func (fc *Face) ApplyUVAlign(align *config.UVAlign, tri [3]geometry.XYZ) {
-	if align == nil || !align.FixUV {
+// ApplyAlignment modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
+func (fc *Face) ApplyAlignment(align *config.UVAlign, tri [3]geometry.XYZ) {
+	if align == nil {
 		return
 	}
 	mat := fc.GetMaterial()
@@ -303,9 +303,9 @@ func (fc *Face) ApplyUVAlign(align *config.UVAlign, tri [3]geometry.XYZ) {
 	fc.LockUV(true)
 }
 
-// ApplyWallUV modifies the UV mapping of two quad faces based on wall alignment settings and quad coordinates.
-func (fc *Face) ApplyWallUV(s, e geometry.XY, align *config.UVAlign, t1, t2 float64, zBS, zBE, zTS, zTE float64, isLowerTri bool) {
-	if align == nil || !align.FixUV {
+// ApplyWallAlignment modifies the UV mapping of two quad faces based on wall alignment settings and quad coordinates.
+func (fc *Face) ApplyWallAlignment(s, e geometry.XY, align *config.UVAlign, t1, t2 float64, zBS, zBE, zTS, zTE float64, isLowerTri bool) {
+	if align == nil {
 		return
 	}
 	mat := fc.GetMaterial()

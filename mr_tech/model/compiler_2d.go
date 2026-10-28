@@ -17,8 +17,8 @@ func CreateFaces(uw *sectors.SegmentUncovered) []*Face {
 	v0, v1, v2, v3 := uw.CreateQuad()
 	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, uw.GetTag(), uw.GetMat())
 	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, uw.GetTag(), uw.GetMat())
-	face1.ApplyWallUV(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), true)
-	face2.ApplyWallUV(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), false)
+	face1.ApplyWallAlignment(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), true)
+	face2.ApplyWallAlignment(uw.GetStart(), uw.GetEnd(), uw.GetAlign(), 0.0, 1.0, uw.GetZBS(), uw.GetZBE(), uw.GetZTS(), uw.GetZTE(), false)
 	return []*Face{face1, face2}
 }
 
@@ -355,12 +355,12 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
 		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
-		ceilFace.ApplyUVAlign(sector.GetCeilAlign(), ceilP)
+		ceilFace.ApplyAlignment(sector.GetCeilAlign(), ceilP)
 		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
 		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
-		floorFace.ApplyUVAlign(sector.GetFloorAlign(), floorP)
+		floorFace.ApplyAlignment(sector.GetFloorAlign(), floorP)
 		vol3d.AddFace(floorFace)
 
 		for x := 0; x < segmentCount; x++ {

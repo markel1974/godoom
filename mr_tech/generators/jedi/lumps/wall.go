@@ -2,6 +2,7 @@ package lumps
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -24,6 +25,14 @@ type Wall struct {
 	DMirror     int
 	OffsetX     float64
 	OffsetY     float64
+	MidOffsetX  float64
+	MidOffsetY  float64
+	TopOffsetX  float64
+	TopOffsetY  float64
+	BotOffsetX  float64
+	BotOffsetY  float64
+	SignOffsetX float64
+	SignOffsetY float64
 	Transparent bool
 }
 
@@ -95,6 +104,20 @@ func (w *Wall) Parse(tokens []string) {
 				}
 				w.MidTexture = midTexture
 			}
+			if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+				if offX, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+					w.MidOffsetX = offX
+					w.OffsetX = offX
+					i++
+					if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+						if offY, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+							w.MidOffsetY = offY
+							w.OffsetY = offY
+							i++
+						}
+					}
+				}
+			}
 		case "TOP:":
 			i++
 			topTexture, err := GetTokenIntAt(tokens, i)
@@ -105,6 +128,18 @@ func (w *Wall) Parse(tokens []string) {
 					w.Transparent = true
 				}
 				w.TopTexture = topTexture
+			}
+			if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+				if offX, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+					w.TopOffsetX = offX
+					i++
+					if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+						if offY, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+							w.TopOffsetY = offY
+							i++
+						}
+					}
+				}
 			}
 		case "BOT:":
 			i++
@@ -117,6 +152,18 @@ func (w *Wall) Parse(tokens []string) {
 				}
 				w.BotTexture = botTexture
 			}
+			if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+				if offX, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+					w.BotOffsetX = offX
+					i++
+					if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+						if offY, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+							w.BotOffsetY = offY
+							i++
+						}
+					}
+				}
+			}
 		case "SIGN:":
 			i++
 			signTexture, err := GetTokenIntAt(tokens, i)
@@ -124,6 +171,18 @@ func (w *Wall) Parse(tokens []string) {
 				fmt.Printf("doWall: SIGN invalid token id at %d: %s\n", i, err.Error())
 			} else {
 				w.SignTexture = signTexture
+			}
+			if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+				if offX, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+					w.SignOffsetX = offX
+					i++
+					if i+1 < len(tokens) && !strings.Contains(tokens[i+1], ":") {
+						if offY, err := strconv.ParseFloat(tokens[i+1], 64); err == nil {
+							w.SignOffsetY = offY
+							i++
+						}
+					}
+				}
 			}
 		case "FLAGS:":
 			i++

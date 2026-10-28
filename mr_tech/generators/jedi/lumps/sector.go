@@ -17,6 +17,10 @@ type Sector struct {
 	CeilingY       float64
 	FloorTexture   int
 	CeilingTexture int
+	FloorOffsetX   float64
+	FloorOffsetY   float64
+	CeilOffsetX    float64
+	CeilOffsetY    float64
 	LightLevel     float64
 	Vertices       []geometry.XY
 	Walls          []*Wall
@@ -128,6 +132,16 @@ func (s *Sector) SetCeiling(tokens []string) {
 			}
 			s.CeilingTexture = ceilingTexture
 		}
+		if len(tokens) > 4 {
+			if offX, err := GetTokenFloatAt(tokens, 4); err == nil {
+				s.CeilOffsetX = offX
+			}
+		}
+		if len(tokens) > 5 {
+			if offY, err := GetTokenFloatAt(tokens, 5); err == nil {
+				s.CeilOffsetY = offY
+			}
+		}
 
 	case "ALTITUDE":
 		ceilingY, err := GetTokenFloatAt(tokens, 2)
@@ -139,6 +153,16 @@ func (s *Sector) SetCeiling(tokens []string) {
 	case "TEXTURE", "TEX", "TEXTURE:":
 		if tokens[2] != "-" {
 			s.CeilingTexture, _ = strconv.Atoi(tokens[2])
+		}
+		if len(tokens) > 3 {
+			if offX, err := GetTokenFloatAt(tokens, 3); err == nil {
+				s.CeilOffsetX = offX
+			}
+		}
+		if len(tokens) > 4 {
+			if offY, err := GetTokenFloatAt(tokens, 4); err == nil {
+				s.CeilOffsetY = offY
+			}
 		}
 	default:
 		fmt.Printf("Unknown CEILING sub-property: '%s' in line: %v\n", subKey, tokens)
@@ -174,6 +198,16 @@ func (s *Sector) SetFloor(tokens []string) {
 			}
 			s.FloorTexture = floorTexture
 		}
+		if len(tokens) > 4 {
+			if offX, err := GetTokenFloatAt(tokens, 4); err == nil {
+				s.FloorOffsetX = offX
+			}
+		}
+		if len(tokens) > 5 {
+			if offY, err := GetTokenFloatAt(tokens, 5); err == nil {
+				s.FloorOffsetY = offY
+			}
+		}
 
 	case "ALTITUDE":
 		floorY, err := GetTokenFloatAt(tokens, 2)
@@ -195,6 +229,16 @@ func (s *Sector) SetFloor(tokens []string) {
 				return
 			}
 			s.FloorTexture = floorTextureId
+		}
+		if len(tokens) > 3 {
+			if offX, err := GetTokenFloatAt(tokens, 3); err == nil {
+				s.FloorOffsetX = offX
+			}
+		}
+		if len(tokens) > 4 {
+			if offY, err := GetTokenFloatAt(tokens, 4); err == nil {
+				s.FloorOffsetY = offY
+			}
 		}
 	case "OFFSETS":
 	case "SOUND":

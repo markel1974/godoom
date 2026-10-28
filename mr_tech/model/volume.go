@@ -254,8 +254,8 @@ func (v *Volume) BuildQuad(s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag str
 
 	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
 	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
-	face1.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, true)
-	face2.ApplyWallUV(s, e, align, t1, t2, zBS, zBE, zTS, zTE, false)
+	face1.ApplyWallAlignment(s, e, align, t1, t2, zBS, zBE, zTS, zTE, true)
+	face2.ApplyWallAlignment(s, e, align, t1, t2, zBS, zBE, zTS, zTE, false)
 	v.AddFace(face1)
 	v.AddFace(face2)
 }

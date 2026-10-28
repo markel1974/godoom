@@ -142,32 +142,11 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					ceilH = 64
 				}
 
-				cSector.FloorAlign = &config.UVAlign{
-					FixUV:     true,
-					AlignWall: sec.AlignFirstWallFloor(),
-					Start:     vFirst1,
-					End:       vFirst2,
-					SwapXY:    sec.SwapXYFloor(),
-					FlipX:     sec.XFlipFloor(),
-					FlipY:     sec.YFlipFloor(),
-					Panning: geometry.XY{
-						X: float64(sec.FloorXPanning) * (float64(floorW) / 256.0),
-						Y: float64(sec.FloorYPanning) * (float64(floorH) / 256.0),
-					},
-				}
-				cSector.CeilAlign = &config.UVAlign{
-					FixUV:     true,
-					AlignWall: sec.AlignFirstWallCeiling(),
-					Start:     vFirst1,
-					End:       vFirst2,
-					SwapXY:    sec.SwapXYCeiling(),
-					FlipX:     sec.XFlipCeiling(),
-					FlipY:     sec.YFlipCeiling(),
-					Panning: geometry.XY{
-						X: float64(sec.CeilingXPanning) * (float64(ceilW) / 256.0),
-						Y: float64(sec.CeilingYPanning) * (float64(ceilH) / 256.0),
-					},
-				}
+				fPanning := geometry.XY{X: float64(sec.FloorXPanning) * (float64(floorW) / 256.0), Y: float64(sec.FloorYPanning) * (float64(floorH) / 256.0)}
+				cSector.FloorAlign = config.NewUVAlignWall(sec.AlignFirstWallFloor(), vFirst1, vFirst2, sec.SwapXYFloor(), sec.XFlipFloor(), sec.YFlipFloor(), fPanning)
+
+				cPanning := geometry.XY{X: float64(sec.CeilingXPanning) * (float64(ceilW) / 256.0), Y: float64(sec.CeilingYPanning) * (float64(ceilH) / 256.0)}
+				cSector.CeilAlign = config.NewUVAlignWall(sec.AlignFirstWallCeiling(), vFirst1, vFirst2, sec.SwapXYCeiling(), sec.XFlipCeiling(), sec.YFlipCeiling(), cPanning)
 			}
 		}
 
@@ -228,15 +207,8 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					flipX = !flipX
 				}
 
-				cSeg.UVAlign = &config.UVAlign{
-					FixUV:       true,
-					Length:      wallTexLen,
-					ScaleY:      scaleY,
-					Panning:     geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)},
-					FlipX:       flipX,
-					FlipY:       wall.HasVerticalFlip(),
-					AlignBottom: wall.IsBottomAligned(),
-				}
+				csPanning := geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)}
+				cSeg.UVAlign = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, wall.HasVerticalFlip(), csPanning, wallTexLen, scaleY)
 
 				// First wall is the pivot reference for floor/ceiling slopes
 				if i == 0 {

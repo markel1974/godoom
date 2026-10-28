@@ -36,8 +36,8 @@ func IntToBool(i int) bool {
 var _availableModes = []ModeDef{
 	{
 		Name:   "script",
-		Target: "",
-		Zip:    false,
+		Target: "resources" + string(os.PathSeparator) + "dungeon" + string(os.PathSeparator) + "textures.zip",
+		Zip:    true,
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			p := script.NewBuilder()
 			return p.Build(res, script.StubOld2)

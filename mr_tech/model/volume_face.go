@@ -239,7 +239,7 @@ func (fc *Face) computeUV() {
 }
 
 // ApplyAlignment modifies the UV mapping of the provided face based on alignment settings and vertex positions of the triangle.
-func (fc *Face) ApplyAlignment(align *config.UVAlign, tri [3]geometry.XYZ) {
+func (fc *Face) ApplyAlignment(align *config.UVAlign) {
 	if align == nil {
 		return
 	}
@@ -255,121 +255,10 @@ func (fc *Face) ApplyAlignment(align *config.UVAlign, tri [3]geometry.XYZ) {
 	if w <= 0 || h <= 0 {
 		return
 	}
-	var tx, ty, nx, ny float64
-	if align.AlignWall {
-		dx := align.End.X - align.Start.X
-		dy := align.End.Y - align.Start.Y
-		length := math.Hypot(dx, dy)
-		if length < 1e-6 {
-			dx, dy, length = 1, 0, 1
-		}
-		tx = dx / length
-		ty = dy / length
-		nx = -ty
-		ny = tx
-	}
 
-	var uvs [3][2]float64
-	for i := 0; i < 3; i++ {
-		var u, v float64
-		if align.AlignWall {
-			relX := tri[i].X - align.Start.X
-			relY := tri[i].Y - align.Start.Y
-			u = relX*tx + relY*ty
-			v = relX*nx + relY*ny
-		} else {
-			u = tri[i].X
-			v = tri[i].Y
-		}
-		if align.SwapXY {
-			u, v = v, u
-		}
-		if align.FlipX {
-			u = -u
-		}
-		if align.FlipY {
-			v = -v
-		}
-		if align.Panning.X != 0 {
-			u += align.Panning.X
-		}
-		if align.Panning.Y != 0 {
-			v += align.Panning.Y
-		}
-		uvs[i][0] = u / w
-		uvs[i][1] = v / h
-	}
-	fc.SetUV(uvs[0][0], uvs[0][1], uvs[1][0], uvs[1][1], uvs[2][0], uvs[2][1])
+	u0, v0, u1, v1, u2, v2 := align.Compute(w, h, fc.tri)
+	fc.SetUV(u0, v0, u1, v1, u2, v2)
 	fc.LockUV(true)
-}
-
-// ApplyWallAlignment modifies the UV mapping of two quad faces based on wall alignment settings and quad coordinates.
-func (fc *Face) ApplyWallAlignment(s, e geometry.XY, align *config.UVAlign, t1, t2 float64, zBS, zBE, zTS, zTE float64, isLowerTri bool) {
-	if align == nil {
-		return
-	}
-	mat := fc.GetMaterial()
-	if mat == nil {
-		return
-	}
-	tex := mat.HeadFrame()
-	if tex == nil {
-		return
-	}
-	w, h := tex.GetSizeScaled()
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	wallLen := align.Length
-	if wallLen <= 0 {
-		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
-	}
-
-	d1 := t1 * wallLen
-	d2 := t2 * wallLen
-	minD := math.Min(d1, d2)
-	maxD := math.Max(d1, d2)
-
-	uStart := (minD + align.Panning.X) / w
-	uEnd := (maxD + align.Panning.X) / w
-	if align.FlipX {
-		uStart, uEnd = uEnd, uStart
-	}
-
-	scaleY := align.ScaleY
-	if scaleY <= 0 {
-		scaleY = 1.0
-	}
-
-	var vBS, vBE, vTS, vTE float64
-	if align.AlignBottom {
-		hWallS := (zTS - zBS) * scaleY
-		hWallE := (zTE - zBE) * scaleY
-		vBS = align.Panning.Y / h
-		vBE = align.Panning.Y / h
-		vTS = (hWallS + align.Panning.Y) / h
-		vTE = (hWallE + align.Panning.Y) / h
-	} else {
-		hWallS := (zTS - zBS) * scaleY
-		hWallE := (zTE - zBE) * scaleY
-		vTS = 1.0 + align.Panning.Y/h
-		vTE = 1.0 + align.Panning.Y/h
-		vBS = vTS - hWallS/h
-		vBE = vTE - hWallE/h
-	}
-	if align.FlipY {
-		vBS, vTS = vTS, vBS
-		vBE, vTE = vTE, vBE
-	}
-
-	if isLowerTri {
-		fc.SetUV(uStart, vBS, uEnd, vBE, uEnd, vTE)
-		fc.LockUV(true)
-	} else {
-		fc.SetUV(uStart, vBS, uEnd, vTE, uStart, vTS)
-		fc.LockUV(true)
-	}
 }
 
 /*

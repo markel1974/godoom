@@ -21,6 +21,8 @@ type Segment struct {
 	upperLimitZS   float64
 	upperLimitZE   float64
 	uvAlign        *config.UVAlign
+	uvAlignUpper   *config.UVAlign
+	uvAlignLower   *config.UVAlign
 	uvT1           float64
 	uvT2           float64
 }
@@ -65,12 +67,39 @@ func (s *Segment) GetUpperLimitZ() (float64, float64, bool) {
 // SetUVAlign updates the UV alignment parameters and texture coordinate values for the segment.
 func (s *Segment) SetUVAlign(align *config.UVAlign, t1, t2 float64) {
 	s.uvAlign = align
+	s.uvAlignUpper = nil
+	s.uvAlignLower = nil
+	s.uvT1 = t1
+	s.uvT2 = t2
+}
+
+// SetUVAlignAll updates the UV alignment parameters for middle, upper, and lower textures.
+func (s *Segment) SetUVAlignAll(align, alignUpper, alignLower *config.UVAlign, t1, t2 float64) {
+	s.uvAlign = align
+	s.uvAlignUpper = alignUpper
+	s.uvAlignLower = alignLower
 	s.uvT1 = t1
 	s.uvT2 = t2
 }
 
 // GetUVAlign returns the UV alignment parameters and texture coordinate values associated with the segment.
 func (s *Segment) GetUVAlign() (*config.UVAlign, float64, float64) {
+	return s.uvAlign, s.uvT1, s.uvT2
+}
+
+// GetUVAlignUpper returns the UV alignment parameters for the upper texture, falling back to default alignment.
+func (s *Segment) GetUVAlignUpper() (*config.UVAlign, float64, float64) {
+	if s.uvAlignUpper != nil {
+		return s.uvAlignUpper, s.uvT1, s.uvT2
+	}
+	return s.uvAlign, s.uvT1, s.uvT2
+}
+
+// GetUVAlignLower returns the UV alignment parameters for the lower texture, falling back to default alignment.
+func (s *Segment) GetUVAlignLower() (*config.UVAlign, float64, float64) {
+	if s.uvAlignLower != nil {
+		return s.uvAlignLower, s.uvT1, s.uvT2
+	}
 	return s.uvAlign, s.uvT1, s.uvT2
 }
 

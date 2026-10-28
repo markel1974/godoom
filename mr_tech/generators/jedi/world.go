@@ -65,11 +65,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			vFirst1 = sector.Vertices[sector.Walls[0].LeftVertex]
 			vFirst2 = sector.Vertices[sector.Walls[0].RightVertex]
 		}
+		scalePlane := 8.0 / scaleFactor
 		fPanning := geometry.XY{X: sector.FloorOffsetX * 8.0, Y: sector.FloorOffsetY * 8.0}
-		cSector.FloorAlign = config.NewUVAlignWall(false, vFirst1, vFirst2, false, false, false, fPanning)
+		cSector.FloorAlign = config.NewUVAlignWallScaled(false, vFirst1, vFirst2, false, false, false, fPanning, scalePlane, scalePlane)
 
 		cPanning := geometry.XY{X: sector.CeilOffsetX * 8.0, Y: sector.CeilOffsetY * 8.0}
-		cSector.CeilAlign = config.NewUVAlignWall(false, vFirst1, vFirst2, false, false, false, cPanning)
+		cSector.CeilAlign = config.NewUVAlignWallScaled(false, vFirst1, vFirst2, false, false, false, cPanning, scalePlane, scalePlane)
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
@@ -110,26 +111,24 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				wallTexLen := wallLenDFU * 8.0
 				scaleY := 8.0 / scaleSectorH
 
-				var wallPanning geometry.XY
-				alignBottom := false
-
-				if wall.Adjoin < 0 {
-					wallPanning = geometry.XY{X: wall.MidOffsetX * 8.0, Y: wall.MidOffsetY * 8.0}
-					alignBottom = false
-				} else {
-					if validTexture(wall.TopTexture) {
-						wallPanning = geometry.XY{X: wall.TopOffsetX * 8.0, Y: wall.TopOffsetY * 8.0}
-						alignBottom = false
-					} else if validTexture(wall.BotTexture) {
-						wallPanning = geometry.XY{X: wall.BotOffsetX * 8.0, Y: wall.BotOffsetY * 8.0}
-						alignBottom = true
-					} else if validTexture(wall.MidTexture) {
-						wallPanning = geometry.XY{X: wall.MidOffsetX * 8.0, Y: wall.MidOffsetY * 8.0}
-						alignBottom = false
-					}
+				var midPanning, topPanning, botPanning geometry.XY
+				if validTexture(wall.MidTexture) {
+					midPanning = geometry.XY{X: wall.MidOffsetX * 8.0, Y: wall.MidOffsetY * 8.0}
+				}
+				if validTexture(wall.TopTexture) {
+					topPanning = geometry.XY{X: wall.TopOffsetX * 8.0, Y: wall.TopOffsetY * 8.0}
+				}
+				if validTexture(wall.BotTexture) {
+					botPanning = geometry.XY{X: wall.BotOffsetX * 8.0, Y: wall.BotOffsetY * 8.0}
 				}
 
-				cSeg.UVAlign = config.NewUVAlignBottom(alignBottom, false, false, wallPanning, wallTexLen, scaleY)
+				cSeg.UVAlign = config.NewUVAlignBottom(false, false, false, midPanning, wallTexLen, scaleY)
+				if validTexture(wall.TopTexture) {
+					cSeg.UVAlignUpper = config.NewUVAlignBottom(false, false, false, topPanning, wallTexLen, scaleY)
+				}
+				if validTexture(wall.BotTexture) {
+					cSeg.UVAlignLower = config.NewUVAlignBottom(true, false, false, botPanning, wallTexLen, scaleY)
+				}
 
 				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true

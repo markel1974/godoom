@@ -6,7 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// UVAlign represents UV alignment properties for texture mapping, including transformations, scaling, and wall alignment.
+// UVAlign defines UV mapping alignment properties for 2D or 3D surfaces with options for scaling, flipping, and panning.
 type UVAlign struct {
 	AlignWall   bool        `json:"alignWall"`
 	Start       geometry.XY `json:"start"`
@@ -21,7 +21,14 @@ type UVAlign struct {
 	ScaleY      float64     `json:"scaleY,omitempty"`
 }
 
-// NewUVAlignSurface creates a new UVAlign instance with scale factors for floors and ceilings.
+// NewUVAlignSurface creates and initializes a new UVAlign instance for aligning UV mappings on surfaces.
+// alignWall specifies if alignment should follow wall constraints.
+// start and end define the start and end points for alignment.
+// swapXY swaps the X and Y components of UV mapping when true.
+// flipX flips the UV mapping across the X-axis when true.
+// flipY flips the UV mapping across the Y-axis when true.
+// panning adjusts UV mapping by the given XY offset.
+// scaleX and scaleY define scaling factors for the UV coordinates; values less than or equal to 0 default to 1.0.
 func NewUVAlignSurface(alignWall bool, start geometry.XY, end geometry.XY, swapXY bool, flipX bool, flipY bool, panning geometry.XY, scaleX, scaleY float64) *UVAlign {
 	if scaleX <= 0 {
 		scaleX = 1.0
@@ -44,13 +51,13 @@ func NewUVAlignSurface(alignWall bool, start geometry.XY, end geometry.XY, swapX
 	}
 }
 
-// NewUVAlignVertical creates and returns a new UVAlign instance with specified alignment, flipping, panning, length, and scaling.
-// alignBottom determines whether alignment is anchored at the bottom (true) or not.
-// flipX specifies whether the UV mapping is flipped horizontally.
-// flipY specifies whether the UV mapping is flipped vertically.
-// panning defines the XY offset to adjust the UV mapping position.
-// length sets the length for the UV mapping, with 0 implying no defined length.
-// scaleY specifies the vertical scaling factor applied to the UV mapping.
+// NewUVAlignVertical creates a new vertical UV alignment configuration for mapping textures onto 3D models.
+// alignBottom determines if UVs should align to the bottom of the geometry.
+// flipX and flipY control horizontal and vertical flipping of the UV coordinates, respectively.
+// panning specifies the UV offset in 2D space.
+// length adjusts the scaling factor along the vertical axis based on the geometry's height.
+// scaleY specifies the scaling factor applied to the vertical direction of the UV mapping.
+// Returns a pointer to a UVAlign instance.
 func NewUVAlignVertical(alignBottom bool, flipX bool, flipY bool, panning geometry.XY, length float64, scaleY float64) *UVAlign {
 	return &UVAlign{
 		AlignWall:   false,
@@ -67,8 +74,8 @@ func NewUVAlignVertical(alignBottom bool, flipX bool, flipY bool, panning geomet
 	}
 }
 
-// ComputeWall calculates the UV coordinates for wall textures based on alignment, scaling, panning, and flipping settings.
-func (an *UVAlign) ComputeWall(w, h float64, t1, t2 float64, s geometry.XY, e geometry.XY, zBS, zBE, zTS, zTE float64) (float64, float64, float64, float64, float64, float64) {
+// ComputeVertical calculates UV coordinates for vertical texture alignment based on geometry, scaling, and panning settings.
+func (an *UVAlign) ComputeVertical(w, h float64, t1, t2 float64, s geometry.XY, e geometry.XY, zBS, zBE, zTS, zTE float64) (float64, float64, float64, float64, float64, float64) {
 	wallLen := an.Length
 	if wallLen <= 0 {
 		wallLen = math.Hypot(e.X-s.X, e.Y-s.Y)
@@ -126,8 +133,8 @@ func (an *UVAlign) ComputeWall(w, h float64, t1, t2 float64, s geometry.XY, e ge
 	return uStart, uEnd, vBS, vBE, vTS, vTE
 }
 
-// Compute calculates UV texture coordinates for a triangular surface based on alignment, scaling, and transformation settings.
-func (an *UVAlign) Compute(w, h float64, tri [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64) {
+// ComputePlanar calculates UV coordinates for a triangle based on planar mapping and alignment settings of the UVAlign struct.
+func (an *UVAlign) ComputePlanar(w, h float64, tri [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64) {
 	var tx, ty, nx, ny float64
 	if an.AlignWall {
 		dx := an.End.X - an.Start.X

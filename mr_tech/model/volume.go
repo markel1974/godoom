@@ -3,13 +3,11 @@ package model
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
@@ -243,27 +241,6 @@ func (v *Volume) GetCentroid() geometry.XYZ {
 		return geometry.XYZ{X: cx / count, Y: cy / count, Z: cz / count}
 	}
 	return geometry.XYZ{}
-}
-
-// BuildQuad constructs two triangular faces that form a quad, applies UV mapping, and adds them to the specified 3D volume.
-func (v *Volume) BuildQuad(s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64) {
-	v0 := geometry.XYZ{X: s.X, Y: s.Y, Z: zBS}
-	v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
-	v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
-	v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
-	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
-	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
-	if align != nil {
-		if w, h, ok := materialSize(material); ok {
-			uStart, uEnd, vBS, vBE, vTS, vTE := align.ComputeWall(w, h, t1, t2, s, e, zBS, zBE, zTS, zTE)
-			face1.SetUV(uStart, vBS, uEnd, vBE, uEnd, vTE)
-			face1.LockUV(true)
-			face2.SetUV(uStart, vBS, uEnd, vTE, uStart, vTS)
-			face2.LockUV(true)
-		}
-	}
-	v.AddFace(face1)
-	v.AddFace(face2)
 }
 
 // QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.

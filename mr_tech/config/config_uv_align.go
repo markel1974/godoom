@@ -21,13 +21,8 @@ type UVAlign struct {
 	ScaleY      float64     `json:"scaleY,omitempty"`
 }
 
-// NewUVAlignWall creates a new UVAlign instance configured for wall alignment with specified transformation options.
-func NewUVAlignWall(alignWall bool, start geometry.XY, end geometry.XY, swapXY bool, flipX bool, flipY bool, panning geometry.XY) *UVAlign {
-	return NewUVAlignWallScaled(alignWall, start, end, swapXY, flipX, flipY, panning, 1.0, 1.0)
-}
-
-// NewUVAlignWallScaled creates a new UVAlign instance with scale factors for floors and ceilings.
-func NewUVAlignWallScaled(alignWall bool, start geometry.XY, end geometry.XY, swapXY bool, flipX bool, flipY bool, panning geometry.XY, scaleX, scaleY float64) *UVAlign {
+// NewUVAlignSurface creates a new UVAlign instance with scale factors for floors and ceilings.
+func NewUVAlignSurface(alignWall bool, start geometry.XY, end geometry.XY, swapXY bool, flipX bool, flipY bool, panning geometry.XY, scaleX, scaleY float64) *UVAlign {
 	if scaleX <= 0 {
 		scaleX = 1.0
 	}
@@ -49,14 +44,14 @@ func NewUVAlignWallScaled(alignWall bool, start geometry.XY, end geometry.XY, sw
 	}
 }
 
-// NewUVAlignBottom creates and returns a new UVAlign instance with specified alignment, flipping, panning, length, and scaling.
+// NewUVAlignVertical creates and returns a new UVAlign instance with specified alignment, flipping, panning, length, and scaling.
 // alignBottom determines whether alignment is anchored at the bottom (true) or not.
 // flipX specifies whether the UV mapping is flipped horizontally.
 // flipY specifies whether the UV mapping is flipped vertically.
 // panning defines the XY offset to adjust the UV mapping position.
 // length sets the length for the UV mapping, with 0 implying no defined length.
 // scaleY specifies the vertical scaling factor applied to the UV mapping.
-func NewUVAlignBottom(alignBottom bool, flipX bool, flipY bool, panning geometry.XY, length float64, scaleY float64) *UVAlign {
+func NewUVAlignVertical(alignBottom bool, flipX bool, flipY bool, panning geometry.XY, length float64, scaleY float64) *UVAlign {
 	return &UVAlign{
 		AlignWall:   false,
 		AlignBottom: alignBottom,

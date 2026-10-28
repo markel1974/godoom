@@ -67,10 +67,10 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		}
 		scalePlane := 8.0 / scaleFactor
 		fPanning := geometry.XY{X: sector.FloorOffsetX * 8.0, Y: sector.FloorOffsetY * 8.0}
-		cSector.FloorAlign = config.NewUVAlignWallScaled(false, vFirst1, vFirst2, false, false, false, fPanning, scalePlane, scalePlane)
+		cSector.FloorAlign = config.NewUVAlignSurface(false, vFirst1, vFirst2, false, false, false, fPanning, scalePlane, scalePlane)
 
 		cPanning := geometry.XY{X: sector.CeilOffsetX * 8.0, Y: sector.CeilOffsetY * 8.0}
-		cSector.CeilAlign = config.NewUVAlignWallScaled(false, vFirst1, vFirst2, false, false, false, cPanning, scalePlane, scalePlane)
+		cSector.CeilAlign = config.NewUVAlignSurface(false, vFirst1, vFirst2, false, false, false, cPanning, scalePlane, scalePlane)
 
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
@@ -122,9 +122,9 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					botPanning = geometry.XY{X: wall.BotOffsetX * 8.0, Y: wall.BotOffsetY * 8.0}
 				}
 
-				cSeg.UVAlign = config.NewUVAlignBottom(false, false, false, midPanning, wallTexLen, scaleY)
-				cSeg.UVAlignUpper = config.NewUVAlignBottom(false, false, false, topPanning, wallTexLen, scaleY)
-				cSeg.UVAlignLower = config.NewUVAlignBottom(true, false, false, botPanning, wallTexLen, scaleY)
+				cSeg.UVAlign = config.NewUVAlignVertical(false, false, false, midPanning, wallTexLen, scaleY)
+				cSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, topPanning, wallTexLen, scaleY)
+				cSeg.UVAlignLower = config.NewUVAlignVertical(true, false, false, botPanning, wallTexLen, scaleY)
 
 				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
 					cSeg.SlopedFloorRef = true

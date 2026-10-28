@@ -152,10 +152,10 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 				}
 
 				fPanning := geometry.XY{X: float64(sec.FloorXPanning) * (float64(floorW) / 256.0), Y: float64(sec.FloorYPanning) * (float64(floorH) / 256.0)}
-				cSector.FloorAlign = config.NewUVAlignWallScaled(sec.AlignFirstWallFloor(), vFirst1, vFirst2, sec.SwapXYFloor(), sec.XFlipFloor(), sec.YFlipFloor(), fPanning, scaleFloor, scaleFloor)
+				cSector.FloorAlign = config.NewUVAlignSurface(sec.AlignFirstWallFloor(), vFirst1, vFirst2, sec.SwapXYFloor(), sec.XFlipFloor(), sec.YFlipFloor(), fPanning, scaleFloor, scaleFloor)
 
 				cPanning := geometry.XY{X: float64(sec.CeilingXPanning) * (float64(ceilW) / 256.0), Y: float64(sec.CeilingYPanning) * (float64(ceilH) / 256.0)}
-				cSector.CeilAlign = config.NewUVAlignWallScaled(sec.AlignFirstWallCeiling(), vFirst1, vFirst2, sec.SwapXYCeiling(), sec.XFlipCeiling(), sec.YFlipCeiling(), cPanning, scaleCeil, scaleCeil)
+				cSector.CeilAlign = config.NewUVAlignSurface(sec.AlignFirstWallCeiling(), vFirst1, vFirst2, sec.SwapXYCeiling(), sec.XFlipCeiling(), sec.YFlipCeiling(), cPanning, scaleCeil, scaleCeil)
 			}
 		}
 
@@ -215,9 +215,9 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 				flipY := wall.HasVerticalFlip()
 
 				csPanning := geometry.XY{X: float64(wall.XPanning), Y: float64(wall.YPanning)}
-				cSeg.UVAlign = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
-				cSeg.UVAlignUpper = config.NewUVAlignBottom(false, flipX, flipY, csPanning, wallTexLen, scaleY)
-				cSeg.UVAlignLower = config.NewUVAlignBottom(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
+				cSeg.UVAlign = config.NewUVAlignVertical(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
+				cSeg.UVAlignUpper = config.NewUVAlignVertical(false, flipX, flipY, csPanning, wallTexLen, scaleY)
+				cSeg.UVAlignLower = config.NewUVAlignVertical(wall.IsBottomAligned(), flipX, flipY, csPanning, wallTexLen, scaleY)
 
 				// First wall is the pivot reference for floor/ceiling slopes
 				if i == 0 {

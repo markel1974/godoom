@@ -24,6 +24,7 @@ const scaleZ = scaleFactor
 
 // scaleSectorH represents a height scaling factor derived from the base scale factor.
 const scaleSectorH = scaleFactor
+const scaleSectorW = 8.0 / scaleSectorH
 
 const scaleTextureW = 1.0 // scaleTextureW represents the horizontal scaling factor for a texture in the rendering process.
 const scaleTextureH = 1.0 // scaleTextureH defines the horizontal scaling factor for texture rendering, set to a default value of 1.0.

@@ -431,6 +431,13 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 			diffFS := neiFS - curFS
 			diffFE := neiFE - curFE
 
+			//fmt.Printf(
+			//	"LOWER %s: curFS=%f curFE=%f neiFS=%f neiFE=%f diffFS=%f diffFE=%f\n",
+			//	seg.GetTag(),
+			//	curFS, curFE, neiFS, neiFE,
+			//	diffFS, diffFE,
+			//)
+
 			if (diffFS > 0 && diffFE < 0) || (diffFS < 0 && diffFE > 0) {
 				t := diffFS / (diffFS - diffFE)
 				midXY := geometry.XY{X: s.X + t*(e.X-s.X), Y: s.Y + t*(e.Y-s.Y)}
@@ -449,6 +456,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 				if zHighS2 > zLowS2 || zHighE2 > zLowE2 {
 					buildQuad(vol3d, midXY, geometry.XY{X: e.X, Y: e.Y}, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower, alignLower, subT2, t2Lower)
 				}
+				//fmt.Printf("LOWER INTERSECTION: t=%f midXY=(%f,%f) midZ=%f\n", t, midXY.X, midXY.Y, midZ)
 			} else {
 				zLowS, zHighS := curFS, max(curFS, neiFS)
 				zLowE, zHighE := curFE, max(curFE, neiFE)

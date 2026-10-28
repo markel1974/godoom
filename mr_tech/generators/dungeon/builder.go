@@ -14,10 +14,21 @@ import (
 )
 
 const (
-	textureScaleW = 1
-	textureScaleH = 1
-	lightFalloff  = 100.0
-	cellSize      = 16.0
+	lightFalloff = 100.0
+	cellSize     = 16.0
+)
+
+const (
+	AspectRatio  = 1.333
+	ScaleSectorH = 0.8
+	ScaleXY      = 1.0 / 16.0
+	PlayerHeight = 56.0 * ScaleSectorH
+	PlayerRadius = 16.0
+	PlayerSpeed  = 1800.0
+	PlayerMass   = 50.0
+
+	GForce    = 9.8 * 50
+	JumpForce = GForce * 8
 )
 
 // availableCeil contains a list of available ceiling texture file names in PPM format.
@@ -70,8 +81,10 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 	floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
+	sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
 
 	pts := [4]geometry.XY{
 		{X: x, Y: y},
@@ -90,9 +103,15 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 		lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 		middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+		wallLen := math.Hypot(end.X-start.X, end.Y-start.Y)
+		panning := geometry.XY{}
+		seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+		seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+		seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
 
 		sector.Segments = append(sector.Segments, seg)
 	}
@@ -102,12 +121,15 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 // GenerateSimple creates a new game configuration with sectors, a player, and randomized structures based on grid dimensions.
 func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root, error) {
-	player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
-	player.Flash.ZFar = 8192
-	player.Flash.Intensity = 0.02
-	player.Flash.Falloff = 0
-	player.Flash.OffsetX = 0.2
-	player.Flash.OffsetY = 0.1
+	p := NewPlayer(0, 0, 0) //PlayerHeight, PlayerRadius, PlayerSpeed, PlayerMass)
+	player := p.Build()
+
+	//player := config.NewConfigPlayer(geometry.XYZ{}, 0, 20, 90, 1, 10)
+	//player.Flash.ZFar = 8192
+	//player.Flash.Intensity = 0.02
+	//player.Flash.Falloff = 0
+	//player.Flash.OffsetX = 0.2
+	//player.Flash.OffsetY = 0.1
 
 	_ = common.NewPlayer(player)
 	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
@@ -207,8 +229,10 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 			floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
+			sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
 
 			sectorGrid[x][y] = sector
 			cfg.Sectors = append(cfg.Sectors, sector)
@@ -253,9 +277,15 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 				upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 				lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 				middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
-				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, textureScaleW, textureScaleH, 0, 0)
+				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+
+				wallLen := math.Hypot(e.p2.X-e.p1.X, e.p2.Y-e.p1.Y)
+				panning := geometry.XY{}
+				seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+				seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+				seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
 
 				sector.Segments = append(sector.Segments, seg)
 			}

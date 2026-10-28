@@ -177,6 +177,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	}
 	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, ScaleTextureW, ScaleTextureH, 0, 0)
 	miSector.Floor = config.NewConfigMaterial(texHandler.FlatCreateAnimation(floorPic), floorType, ScaleTextureW, ScaleTextureH, 0, 0)
+	miSector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
+	miSector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
 	return miSector
 }
 
@@ -189,6 +191,18 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
 	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
 	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
+
+	wallTexLen := math.Hypot(e.P2.X-e.P1.X, e.P2.Y-e.P1.Y)
+	panning := geometry.XY{X: float64(e.SideDef.XOffset), Y: float64(e.SideDef.YOffset)}
+
+	middleAlignBottom := e.LineDef.HasFlag(lumps.LowerUnpegged)
+	upperAlignBottom := !e.LineDef.HasFlag(lumps.UpperUnpegged)
+	lowerAlignBottom := e.LineDef.HasFlag(lumps.LowerUnpegged)
+
+	seg.UVAlign = config.NewUVAlignVertical(middleAlignBottom, false, false, panning, wallTexLen, ScaleTextureH)
+	seg.UVAlignUpper = config.NewUVAlignVertical(upperAlignBottom, false, false, panning, wallTexLen, ScaleTextureH)
+	seg.UVAlignLower = config.NewUVAlignVertical(lowerAlignBottom, false, false, panning, wallTexLen, ScaleTextureH)
+
 	// vertical sky hack
 	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.

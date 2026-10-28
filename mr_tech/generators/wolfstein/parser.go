@@ -10,25 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-const ScaleFactorH = 4.2
-
-// floorCeilScaleW defines the default scaling factor for floor and ceiling texture animations in the configuration.
-const floorCeilScaleW = 1.0
-
-// floorCeilScaleH defines the scale factor applied to the height of floor and ceiling textures in a sector.
-const floorCeilScaleH = 1.0
-
-// GForce represents the standard gravitational force multiplier applied to game entities, with a value of 9.8 * 8.
-const GForce = 9.8 * 20
-
-const AspectRatio = 1.0
-
-const playerHeight = 10 * ScaleFactorH
-
-const falloff = 40.0
-
-const lightIntensity = 1.5 * 4
-
 func isWall(cell uint16) bool {
 	return cell >= 1 && cell <= 99
 }
@@ -87,6 +68,10 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 	if err := wp.prepare(width, height, md); err != nil {
 		return nil, err
 	}
+	scalePlaneX := (64.0 / (wp.tileSize * scaleFactor.X)) * floorCeilScaleW
+	scalePlaneY := (64.0 / (wp.tileSize * scaleFactor.Y)) * floorCeilScaleH
+	scaleWallY := 64.0 / (wp.sectorHeight * ScaleFactorH)
+
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			cell := wp.mapData[y*width+x]
@@ -144,6 +129,8 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 			cs.Tag = "wolf_cell"
 			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			cs.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scalePlaneX, scalePlaneY)
+			cs.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scalePlaneX, scalePlaneY)
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
 			y0, y1 := float64(y)*wp.tileSize, float64(y+1)*wp.tileSize
 			pTL := geometry.XY{X: x0, Y: y0}
@@ -168,6 +155,10 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidT, pMidB)
 						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						doorLen := math.Hypot(pMidB.X-pMidT.X, pMidB.Y-pMidT.Y) * (64.0 / wp.tileSize)
+						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
+						doorSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
+						doorSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
 					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidT, pMidB)
@@ -184,6 +175,10 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidL, pMidR)
 						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
 						doorSeg.Upper, doorSeg.Middle, doorSeg.Lower = anim, anim, anim
+						doorLen := math.Hypot(pMidR.X-pMidL.X, pMidR.Y-pMidL.Y) * (64.0 / wp.tileSize)
+						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
+						doorSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
+						doorSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
 						cs.Segments = append(cs.Segments, doorSeg)
 					}
 					root.Vertices = append(root.Vertices, pTL, pTR, pBR, pBL, pMidL, pMidR)
@@ -205,7 +200,9 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 		playerPos = geometry.XYZ{X: pos.X + 5, Y: pos.Y + 5, Z: 0}
 	}
 
-	player := config.NewConfigPlayer(playerPos, 0, 60, 900, 20, playerHeight)
+	p := NewPlayer(playerPos.X, playerPos.Y, 0)
+	player := p.Build()
+	//player := config.NewConfigPlayer(playerPos, 0, 60, 900, 20, playerHeight)
 	root.Player = player
 	_ = common.NewPlayer(root.Player)
 
@@ -303,6 +300,14 @@ func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end ge
 		seg.Middle = anim
 		seg.Lower = anim
 	}
+
+	wallTexLen := math.Hypot(end.X-start.X, end.Y-start.Y) * (64.0 / wp.tileSize)
+	scaleY := 64.0 / (wp.sectorHeight * ScaleFactorH)
+	panning := geometry.XY{}
+	seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
+	seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
+	seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallTexLen, scaleY)
+
 	cs.Segments = append(cs.Segments, seg)
 }
 

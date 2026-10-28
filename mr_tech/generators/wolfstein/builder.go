@@ -5,6 +5,33 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
+const (
+	AspectRatio  = 1.333
+	ScaleSectorH = 0.8
+	ScaleXY      = 1.0 / 16.0
+	PlayerHeight = 56.0 * ScaleSectorH
+	PlayerRadius = 16.0
+	PlayerSpeed  = 2500.0
+	PlayerMass   = 50.0
+
+	GForce    = 9.8 * 50
+	JumpForce = GForce * 8
+
+	ScaleFactorH = 4.2
+
+	// floorCeilScaleW defines the default scaling factor for floor and ceiling texture animations in the configuration.
+	floorCeilScaleW = 1.0
+
+	// floorCeilScaleH defines the scale factor applied to the height of floor and ceiling textures in a sector.
+	floorCeilScaleH = 1.0
+
+	playerHeight = 10 * ScaleFactorH
+
+	falloff = 40.0
+
+	lightIntensity = 1.5 * 4
+)
+
 // Builder represents a configurable utility type that constructs complex data structures or configurations.
 type Builder struct {
 }

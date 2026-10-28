@@ -116,12 +116,13 @@ func (al *ArchiveLab) Parse(dirPath string) error {
 func (al *ArchiveLab) indexATX() {
 	for name := range al.container {
 		if strings.HasSuffix(strings.ToUpper(name), ".ATX") {
-			data, err := al.GetPayload(name)
-			if err != nil {
+			data, pErr := al.GetPayload(name)
+			if pErr != nil {
 				continue
 			}
-			atx, err := ParseATX(name, bytes.NewReader(data))
-			if err != nil {
+			atx := NewATX(name)
+			if err := atx.Parse(bytes.NewReader(data)); err != nil {
+				fmt.Println("ATX error:", err)
 				continue
 			}
 			cleanAtx := al.cleanName(name)
@@ -330,14 +331,14 @@ func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
 
 	atx, ok := al.atxMap[cleanAtx]
 	if !ok {
-		data, err := al.GetPayload(cleanAtx)
-		if err != nil {
-			return nil, err
-		}
-		var pErr error
-		atx, pErr = ParseATX(cleanAtx, bytes.NewReader(data))
+		data, pErr := al.GetPayload(cleanAtx)
 		if pErr != nil {
 			return nil, pErr
+		}
+		atx = NewATX(cleanAtx)
+		if err := atx.Parse(bytes.NewReader(data)); err != nil {
+			fmt.Println("atx error:", err)
+			return nil, err
 		}
 		al.atxMap[cleanAtx] = atx
 	}

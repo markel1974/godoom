@@ -2,6 +2,7 @@ package lumps
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -16,12 +17,15 @@ type ATX struct {
 	HasStop  bool
 }
 
-// ParseATX parses an ATX file from an io.Reader.
-func ParseATX(name string, r io.Reader) (*ATX, error) {
-	atx := &ATX{
+func NewATX(name string) *ATX {
+	return &ATX{
 		Name: name,
 		Rate: 6,
 	}
+}
+
+// Parse reads and parses the input data from the provided io.Reader into the ATX structure.
+func (atx *ATX) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -52,21 +56,31 @@ func ParseATX(name string, r io.Reader) (*ATX, error) {
 			atx.HasGoto = true
 		case "STOP":
 			atx.HasStop = true
+		case "GOTO_STOP":
+			//TODO
+		case "ATX":
+			//TODO
+		case "START_SOUND":
+			//TODO
+		case "INST":
+			//TODO
+		default:
+			fmt.Println("Unknown ATX field:", fields[0])
 		}
 	}
-	return atx, scanner.Err()
+	return scanner.Err()
 }
 
 // IsLooping returns true if this ATX represents a continuous repeating animation.
-func (a *ATX) IsLooping() bool {
+func (atx *ATX) IsLooping() bool {
 	// Water, waterfall, lava, saw, lamp are continuous animations.
 	// If it has no STOP, or if it loops and has multiple textures.
-	if !a.HasStop && len(a.Textures) > 1 {
+	if !atx.HasStop && len(atx.Textures) > 1 {
 		return true
 	}
-	u := strings.ToUpper(a.Name)
+	u := strings.ToUpper(atx.Name)
 	if strings.Contains(u, "WATER") || strings.Contains(u, "POOL") || strings.Contains(u, "LAVA") || strings.Contains(u, "WFALL") {
-		return len(a.Textures) > 1
+		return len(atx.Textures) > 1
 	}
-	return a.HasGoto && len(a.Textures) > 1 && !a.HasStop
+	return atx.HasGoto && len(atx.Textures) > 1 && !atx.HasStop
 }

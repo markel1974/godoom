@@ -75,7 +75,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := b.archive.AddTexture(texName)
-			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE", sector.Id)
 		}
@@ -88,7 +88,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
 			}
-			cSector.Ceil = config.NewConfigMaterial(names, animKind, scaleTextureW, scaleTextureH, 0, 0)
+			cSector.Ceil = config.NewConfigMaterial(names, animKind, 0, 0)
 		} else {
 			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
 		}
@@ -138,7 +138,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						texName := level.GetTexture(texIdx)
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Kind = config.SegmentWall
-						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
 					} else {
 						fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
 					}
@@ -174,16 +174,16 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if validTexture(topTexIdx) {
 						texName := level.GetTexture(topTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
 					} else if sector.IsSky() && adjacent.IsSky() {
-						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, scaleTextureW, scaleTextureH, 0, 0)
+						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, 0, 0)
 					}
 
 					botTexIdx := wall.BotTexture
 					if validTexture(botTexIdx) {
 						texName := level.GetTexture(botTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
 					}
 
 					// Texture middle solo per portali con flag esplicito.
@@ -191,7 +191,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						if validTexture(wall.MidTexture) {
 							texName := level.GetTexture(wall.MidTexture)
 							names, _ := b.archive.AddTexture(texName)
-							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, scaleTextureW, scaleTextureH, 0, 0)
+							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
 						}
 					}
 				}

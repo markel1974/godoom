@@ -90,7 +90,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		return nil, fmt.Errorf("failed to load skin %s: %s", fileName, err.Error())
 	}
 
-	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 0, 0)
 
 	cModel := config.NewModel3DEntry(int(md2.Header.NumFrames), md2.Frames.FrameNames)
 	skinW := float32(md2.Header.SkinWidth)
@@ -164,7 +164,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := TextInfo2ToMaterialKind(bspFace.Info)
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 0, 0)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()

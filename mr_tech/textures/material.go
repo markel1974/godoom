@@ -12,8 +12,6 @@ type Material struct {
 	frames      []*Texture
 	totalFrames uint64
 	kind        int
-	scaleW      float64
-	scaleH      float64
 	u           float64
 	v           float64
 
@@ -45,21 +43,13 @@ type Material struct {
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
 // If the slice contains only one Texture, it is set as the current frame.
-func NewMaterial(shader string, frames []*Texture, kind int, scaleW, scaleH, u, v float64) *Material {
-	if scaleW == 0 {
-		scaleW = 1
-	}
-	if scaleH == 0 {
-		scaleH = 1
-	}
+func NewMaterial(shader string, frames []*Texture, kind int, u, v float64) *Material {
 	a := &Material{
 		shader:      shader,
 		frames:      frames,
 		frame:       nil,
 		totalFrames: uint64(len(frames)),
 		kind:        kind,
-		scaleW:      scaleW,
-		scaleH:      scaleH,
 		u:           u,
 		v:           v,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
@@ -72,7 +62,7 @@ func NewMaterial(shader string, frames []*Texture, kind int, scaleW, scaleH, u, 
 			fmt.Println("nil frame")
 			break
 		}
-		frame.SetScaleFactor(scaleW, scaleH)
+		//frame.SetScaleFactor(scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]

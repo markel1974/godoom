@@ -80,7 +80,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	if err = th.texManager.RegisterPixelsPalette(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
 		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
 	}
-	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	anim := config.NewConfigMaterial([]string{skinName}, config.MaterialKindLoop, 0, 0)
 
 	cModel := config.NewModel3DEntry(int(md1.Header.NumFrames), md1.FrameNames)
 	for idx, f := range md1.Frames {
@@ -128,7 +128,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
 			animKind = config.MaterialKindLiquid
 		}
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, velX, velY)
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
@@ -209,7 +209,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
 			animKind = config.MaterialKindLiquid
 		}
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, velX, velY)
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, velX, velY)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()

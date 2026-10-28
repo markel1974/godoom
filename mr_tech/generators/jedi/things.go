@@ -169,7 +169,7 @@ func (b *Things) waxToThing(fileName string, kind config.ThingType, pos geometry
 				b.archive.AddRawTexture(texId, sizeX, sizeY, cell.GetPixels(), false)
 				tn = append(tn, texId)
 			}
-			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 0, 0)
 			multiSprite.Add(material)
 		}
 	}
@@ -222,7 +222,7 @@ func (b *Things) nwxToThing(fileName string, kind config.ThingType, pos geometry
 				//TargetIndex[ClosestAngleBucket][CurrentFrame]
 			}
 			if len(tn) > 0 {
-				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				material := config.NewConfigMaterial(tn, config.MaterialKindLoop, 0, 0)
 				multiSprite.Add(material)
 				counter += len(tn)
 			}
@@ -276,7 +276,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 			var ok bool
 			if material, ok = texMap[texName]; !ok {
 				tNames, _ := b.archive.AddTexture(texName)
-				material = config.NewConfigMaterial(tNames, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				material = config.NewConfigMaterial(tNames, config.MaterialKindLoop, 0, 0)
 				texMap[texName] = material
 			}
 		}

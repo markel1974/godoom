@@ -7,8 +7,7 @@ import (
 
 const (
 	AspectRatio  = 1.333
-	ScaleSectorH = 0.8
-	ScaleXY      = 1.0 / 16.0
+	ScaleSectorH = 1.0
 	PlayerHeight = 56.0 * ScaleSectorH
 	PlayerRadius = 16.0
 	PlayerSpeed  = 2500.0
@@ -17,7 +16,7 @@ const (
 	GForce    = 9.8 * 50
 	JumpForce = GForce * 8
 
-	ScaleFactorH = 4.2
+	ScaleFactorH = 5.2
 
 	// floorCeilScaleW defines the default scaling factor for floor and ceiling texture animations in the configuration.
 	floorCeilScaleW = 1.0
@@ -29,7 +28,7 @@ const (
 
 	falloff = 40.0
 
-	lightIntensity = 1.5 * 4
+	lightIntensity = 1.0 * 3
 )
 
 // Builder represents a configurable utility type that constructs complex data structures or configurations.

@@ -48,20 +48,20 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, e
 			for i, frame := range animMap {
 				animMapLC[i] = strings.ToLower(frame)
 			}
-			material = config.NewConfigMaterial(animMapLC, animKind, 1.0, 1.0, scrollU, scrollV)
+			material = config.NewConfigMaterial(animMapLC, animKind, scrollU, scrollV)
 		} else if v.Info.IsSky() {
 			// Sky textures might have a specific editor image, or we try to extract the map
 			if diffMap := f.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
-				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, 1.0, 1.0, scrollU, scrollV)
+				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, scrollU, scrollV)
 			} else {
-				material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, scrollU, scrollV)
+				material = config.NewConfigMaterial([]string{texNameLC}, animKind, scrollU, scrollV)
 			}
 		} else {
 			// For all other surfaces, extract the real texture map from the shader stages
 			if diffMap := f.shaders.GetDiffuseMap(texNameLC); diffMap != "" {
-				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, 1.0, 1.0, scrollU, scrollV)
+				material = config.NewConfigMaterial([]string{strings.ToLower(diffMap)}, animKind, scrollU, scrollV)
 			} else {
-				material = config.NewConfigMaterial([]string{texNameLC}, animKind, 1.0, 1.0, scrollU, scrollV)
+				material = config.NewConfigMaterial([]string{texNameLC}, animKind, scrollU, scrollV)
 			}
 		}
 		material.Shader = v.TexName

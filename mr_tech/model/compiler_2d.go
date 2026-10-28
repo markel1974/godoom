@@ -20,7 +20,7 @@ func materialSize(mat *textures.Material) (float64, float64, bool) {
 	if tex == nil {
 		return 0, 0, false
 	}
-	w, h := tex.GetSizeScaled()
+	w, h := tex.GetSize()
 	if w <= 0 || h <= 0 {
 		return 0, 0, false
 	}

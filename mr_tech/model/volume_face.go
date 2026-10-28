@@ -219,7 +219,7 @@ func (fc *Face) computeUV() {
 	if tex == nil {
 		return
 	}
-	w, h := tex.GetSizeScaled()
+	w, h := tex.GetSize()
 	nAbsX, nAbsY, nAbsZ := fc.GetNormalAbs()
 	// Pure Triplanar Projection.
 	if nAbsZ >= nAbsX && nAbsZ >= nAbsY {

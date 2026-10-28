@@ -112,7 +112,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		if bspFace.Info.IsSky() {
 			animKind = config.MaterialKindSky
 		}
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 1.0, 1.0, 0, 0)
+		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 0, 0)
 		specificMaterial.Shader = texName
 		texNameLC := strings.ToLower(texName)
 
@@ -462,7 +462,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			if t.shaders.IsLiquid(texNameLC) {
 				animKind = config.MaterialKindLiquid
 			}
-			material = config.NewConfigMaterial([]string{shaderName}, animKind, 1.0, 1.0, 0, 0)
+			material = config.NewConfigMaterial([]string{shaderName}, animKind, 0, 0)
 		}
 
 		// Assemble triangles for each frame

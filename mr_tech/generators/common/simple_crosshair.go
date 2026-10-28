@@ -66,10 +66,10 @@ func (c *SimpleCrosshair) GetTexture() (string, *textures.Texture) {
 
 // Create initializes and returns a new `Thing` configured as a "crosshair" with specific materials, behaviors, and attributes.
 func (c *SimpleCrosshair) Create() *config.Thing {
-	mat := config.NewConfigMaterial([]string{c.name}, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+	mat := config.NewConfigMaterial([]string{c.name}, config.MaterialKindLoop, 0, 0)
 	mat.BlendMode = config.BlendModeAdditive
-	mat.ScaleW = 1.0
-	mat.ScaleH = 1.0
+	//mat.ScaleW = 1.0
+	//mat.ScaleH = 1.0
 	sprite := config.NewConfigSprite(mat)
 	thing := config.NewConfigThing(
 		"crosshair",

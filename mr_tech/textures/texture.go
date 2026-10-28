@@ -11,10 +11,6 @@ type Texture struct {
 	w          int
 	h          int
 	data       [][]int
-	scaleW     float64
-	scaleH     float64
-	wScaled    float64
-	hScaled    float64
 	emissive   bool
 	identifier float32
 }
@@ -22,7 +18,10 @@ type Texture struct {
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
 func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	z := &Texture{
-		name: name, id: id, w: w, h: h,
+		name:       name,
+		id:         id,
+		w:          w,
+		h:          h,
 		data:       make([][]int, w),
 		emissive:   emissive,
 		identifier: -1,
@@ -30,7 +29,7 @@ func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
 	for i := range z.data {
 		z.data[i] = make([]int, h)
 	}
-	z.SetScaleFactor(1.0, 1.0)
+	//z.SetScaleFactor(1.0, 1.0)
 	return z
 }
 
@@ -44,30 +43,9 @@ func (t *Texture) SetIdentifier(identifier float32) {
 	t.identifier = identifier
 }
 
-// SetScaleFactor adjusts the global, width, and height scaling factors, recalculating the scaled dimensions of the texture.
-func (t *Texture) SetScaleFactor(scaleW, scaleH float64) {
-	t.scaleW = scaleW
-	t.scaleH = scaleH
-	t.wScaled, t.hScaled = float64(t.w), float64(t.h)
-	if t.scaleW != 1.0 || t.scaleH != 1.0 {
-		t.wScaled *= t.scaleW
-		t.hScaled *= t.scaleH
-	}
-}
-
-// GetSizeScaled returns the scaled width and height of the texture as two float64 values.
-func (t *Texture) GetSizeScaled() (float64, float64) {
-	return t.wScaled, t.hScaled
-}
-
-// GetScaleFactor returns the global scale factor and the width and height scale values of the texture as floats.
-func (t *Texture) GetScaleFactor() (float64, float64) {
-	return t.scaleW, t.scaleH
-}
-
-// GetScaleFactorH retrieves the height scaling factor of the Texture as a float64.
-func (t *Texture) GetScaleFactorH() float64 {
-	return t.scaleH
+// GetSize returns the width and height of the texture as two float64 values.
+func (t *Texture) GetSize() (float64, float64) {
+	return float64(t.w), float64(t.h)
 }
 
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).

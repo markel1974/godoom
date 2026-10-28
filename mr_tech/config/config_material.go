@@ -39,8 +39,6 @@ type Material struct {
 	Shader    string       `json:"shader"`
 	Frames    []string     `json:"frames"`
 	Kind      MaterialKind `json:"kind"`
-	ScaleW    float64      `json:"scaleW"`
-	ScaleH    float64      `json:"scaleH"`
 	U         float64      `json:"u"`
 	V         float64      `json:"v"`
 
@@ -85,13 +83,11 @@ type Material struct {
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
-func NewConfigMaterial(frames []string, kind MaterialKind, scaleW, scaleH, u, v float64) *Material {
+func NewConfigMaterial(frames []string, kind MaterialKind, u, v float64) *Material {
 	m := &Material{
 		Id:         utils.NextUUId(),
 		Frames:     frames,
 		Kind:       kind,
-		ScaleW:     scaleW,
-		ScaleH:     scaleH,
 		U:          u,
 		V:          v,
 		DepthWrite: true, // Default to true for opaque materials
@@ -132,10 +128,6 @@ func (m *Material) HashKey() string {
 		h.Write([]byte{0})
 	}
 	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.ScaleW))
-	h.Write(buf[:])
-	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.ScaleH))
-	h.Write(buf[:])
 	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.U))
 	h.Write(buf[:])
 	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.V))

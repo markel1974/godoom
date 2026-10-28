@@ -175,8 +175,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 		floorType = config.MaterialKindSky
 		miSector.Light.Kind = config.LightKindOpenAir
 	}
-	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, ScaleTextureW, ScaleTextureH, 0, 0)
-	miSector.Floor = config.NewConfigMaterial(texHandler.FlatCreateAnimation(floorPic), floorType, ScaleTextureW, ScaleTextureH, 0, 0)
+	miSector.Ceil = config.NewConfigMaterial(texHandler.FlatCreateAnimation(ceilPic), ceilingType, 0, 0)
+	miSector.Floor = config.NewConfigMaterial(texHandler.FlatCreateAnimation(floorPic), floorType, 0, 0)
 	miSector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
 	miSector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
 	return miSector
@@ -188,9 +188,9 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
-	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
-	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
-	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, ScaleTextureW, ScaleTextureH, 0, 0)
+	seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 0, 0)
+	seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 0, 0)
+	seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 0, 0)
 
 	wallTexLen := math.Hypot(e.P2.X-e.P1.X, e.P2.Y-e.P1.Y)
 	panning := geometry.XY{X: float64(e.SideDef.XOffset), Y: float64(e.SideDef.YOffset)}
@@ -207,11 +207,11 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	if e.LineDef.HasFlag(lumps.TwoSided) && e.BackSector != nil {
 		// If BOTH sectors have the ceiling set to sky, the upper wall is invisible/sky.
 		if e.Sector.CeilingPic == SkyPicture && e.BackSector.CeilingPic == SkyPicture {
-			seg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, ScaleTextureW, ScaleTextureH, 0, 0)
+			seg.Upper = config.NewConfigMaterial(nil, config.MaterialKindNone, 0, 0)
 		}
 		// Extension for floors (e.g. moats that show sky at the bottom)
 		if e.Sector.FloorPic == SkyPicture && e.BackSector.FloorPic == SkyPicture {
-			seg.Lower = config.NewConfigMaterial(nil, config.MaterialKindNone, ScaleTextureW, ScaleTextureH, 0, 0)
+			seg.Lower = config.NewConfigMaterial(nil, config.MaterialKindNone, 0, 0)
 		}
 	}
 	if !e.LineDef.HasFlag(2) {
@@ -245,7 +245,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 		}
 		actionFrames := angleAnim[0]
 		latestFrame := actionFrames[len(actionFrames)-1]
-		mat := config.NewConfigMaterial([]string{latestFrame}, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+		mat := config.NewConfigMaterial([]string{latestFrame}, config.MaterialKindLoop, 0, 0)
 		_ = ms.Add(mat)
 	} else {
 		for idx, angleAnim := range multiAngleAnim {
@@ -254,7 +254,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 				continue
 			}
 			actionFrames := angleAnim[0]
-			mat := config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, ScaleWThings, ScaleHThings, 0, 0)
+			mat := config.NewConfigMaterial(actionFrames, config.MaterialKindLoop, 0, 0)
 			animId := ms.Add(mat)
 			//TODO PATCH
 			//animId = 0

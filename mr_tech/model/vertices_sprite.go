@@ -25,9 +25,9 @@ func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite 
 			tex := material.CurrentFrame()
 			if tex != nil {
 				texW, texH := tex.Size()
-				scaleW, scaleH := tex.GetScaleFactor()
-				w = float64(texW) * scaleW
-				d = float64(texH) * scaleH
+				//scaleW, scaleH := tex.GetScaleFactor()
+				w = float64(texW) //* scaleW
+				d = float64(texH) //* scaleH
 			}
 		}
 	}

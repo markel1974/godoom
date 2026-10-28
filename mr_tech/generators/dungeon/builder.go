@@ -31,6 +31,11 @@ const (
 	JumpForce = GForce * 8
 )
 
+const (
+	texUnitSize = 8.0
+	scaleTex    = 1024.0 / texUnitSize
+)
+
 // availableCeil contains a list of available ceiling texture file names in PPM format.
 var _availableCeil = []string{"ceil.ppm", "ceil2.ppm", "ceil2_norm.ppm"}
 
@@ -81,10 +86,10 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 	floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-	sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
-	sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
+	sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 0, 0)
+	sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 0, 0)
+	sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
+	sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 
 	pts := [4]geometry.XY{
 		{X: x, Y: y},
@@ -103,9 +108,9 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 		lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 		middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+		seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 0, 0)
+		seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 0, 0)
+		seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 0, 0)
 
 		wallLen := math.Hypot(end.X-start.X, end.Y-start.Y)
 		panning := geometry.XY{}
@@ -229,8 +234,9 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 			floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+			sector.Floor = config.NewConfigMaterial(floorT, config.MaterialKindLoop, 0, 0)
+			sector.Ceil = config.NewConfigMaterial(ceilT, config.MaterialKindLoop, 0, 0)
+
 			sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
 			sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, 1.0, 1.0)
 
@@ -277,15 +283,15 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 				upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 				lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 				middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
-				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 1.0, 1.0, 0, 0)
+				seg.Upper = config.NewConfigMaterial(upperT, config.MaterialKindLoop, 0, 0)
+				seg.Lower = config.NewConfigMaterial(lowerT, config.MaterialKindLoop, 0, 0)
+				seg.Middle = config.NewConfigMaterial(middleT, config.MaterialKindLoop, 0, 0)
 
 				wallLen := math.Hypot(e.p2.X-e.p1.X, e.p2.Y-e.p1.Y)
 				panning := geometry.XY{}
-				seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
-				seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
-				seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, 1.0)
+				seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+				seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
+				seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 
 				sector.Segments = append(sector.Segments, seg)
 			}

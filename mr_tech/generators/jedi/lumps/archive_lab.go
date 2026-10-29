@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
-	"image/color"
 	"io"
 	"os"
 	"strings"
@@ -45,29 +44,30 @@ func (g *LabFile) Read() ([]byte, error) {
 
 // ArchiveLab represents a structure for managing LAB file archives and their extracted data.
 type ArchiveLab struct {
-	fs            common.IResources
-	container     map[string]*LabFile
-	files         []common.IReader
-	levels        []string
-	level         *Level
-	bm            *BM
-	textures      *Textures
-	colorPal      [][256]color.RGBA
-	colorPalIndex int
-	entities      *Entities
-	atxMap        map[string]*ATX
-	frameToAtx    map[string]string
+	fs        common.IResources
+	container map[string]*LabFile
+	files     []common.IReader
+	levels    []string
+	level     *Level
+	bm        *BM
+	textures  *Textures
+	//colorPal      [][256]color.RGBA
+	//colorPalIndex int
+	palettes   *Palettes
+	entities   *Entities
+	atxMap     map[string]*ATX
+	frameToAtx map[string]string
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
 func NewArchiveLab(fs common.IResources) *ArchiveLab {
 	return &ArchiveLab{
-		fs:            fs,
-		container:     make(map[string]*LabFile),
-		textures:      NewTextures(),
-		colorPalIndex: 0,
-		atxMap:        make(map[string]*ATX),
-		frameToAtx:    make(map[string]string),
+		fs:        fs,
+		container: make(map[string]*LabFile),
+		textures:  NewTextures(),
+		//colorPalIndex: 0,
+		atxMap:     make(map[string]*ATX),
+		frameToAtx: make(map[string]string),
 	}
 }
 
@@ -214,30 +214,29 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 	baseName := al.levels[levelNumber]
 	levelName := baseName + ExtLevelLVT
 
-	levelData, err := al.GetPayload(levelName)
-	if err != nil {
-		return fmt.Errorf("error reading %s: %w", levelName, err)
+	levelData, lErr := al.GetPayload(levelName)
+	if lErr != nil {
+		return fmt.Errorf("error reading %s: %w", levelName, lErr)
 	}
 
 	al.level = NewLevel()
-	if err = al.level.Parse(bytes.NewReader(levelData)); err != nil {
+	if err := al.level.Parse(bytes.NewReader(levelData)); err != nil {
 		return fmt.Errorf("syntax error in %s: %w", levelName, err)
 	}
 
 	entitiesName := baseName + ".OBT"
-	entitiesData, err := al.GetPayload(entitiesName)
-	if err != nil {
-		return fmt.Errorf("error reading %s: %w", entitiesName, err)
+	entitiesData, pErr := al.GetPayload(entitiesName)
+	if pErr != nil {
+		return fmt.Errorf("error reading %s: %w", entitiesName, pErr)
 	}
 	al.entities = NewEntities()
-	if err = al.entities.Parse(bytes.NewReader(entitiesData)); err != nil {
+	if err := al.entities.Parse(bytes.NewReader(entitiesData)); err != nil {
 		return err
 	}
 	if len(al.level.Palettes) == 0 {
 		return fmt.Errorf("no palettes declared in LVT")
 	}
-	al.colorPalIndex = 0
-	al.colorPal = make([][256]color.RGBA, len(al.level.Palettes))
+	al.palettes = NewPalettes(len(al.level.Palettes))
 	for idx, pal := range al.level.Palettes {
 		// Prendiamo la prima (la master per le texture di base)
 		palName := strings.ToUpper(pal)
@@ -248,12 +247,9 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 		if err != nil {
 			return fmt.Errorf("can't open palette %s: %v", palName, err)
 		}
-		palette := NewPalette()
-		colorPal, err := palette.ParseFromPCX(bytes.NewReader(palData))
-		if err != nil {
-			return fmt.Errorf("error while parsing palette %s: %w", palName, err)
+		if err := al.palettes.Set(idx, palData); err != nil {
+			return err
 		}
-		al.colorPal[idx] = colorPal
 	}
 	al.bm = NewBM()
 	return nil
@@ -299,10 +295,10 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 		return nil, err
 	}
 	var images []*image.RGBA
-	if al.colorPalIndex >= len(al.level.Palettes) {
-		return nil, fmt.Errorf("invalid palette index %d", al.colorPalIndex)
+	colorPal, err := al.palettes.Get()
+	if err != nil {
+		return nil, err
 	}
-	colorPal := al.colorPal[al.colorPalIndex]
 	if strings.HasSuffix(cleanName, ".PCX") {
 		parser := common.NewPCX()
 		img, err := parser.Parse(bytes.NewReader(data), colorPal)
@@ -346,11 +342,10 @@ func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
 	if len(atx.Textures) == 0 {
 		return nil, fmt.Errorf("atx %s has no textures", cleanAtx)
 	}
-
-	if al.colorPalIndex >= len(al.level.Palettes) {
-		return nil, fmt.Errorf("invalid palette index %d", al.colorPalIndex)
+	colorPal, cErr := al.palettes.Get()
+	if cErr != nil {
+		return nil, cErr
 	}
-	colorPal := al.colorPal[al.colorPalIndex]
 	parser := common.NewPCX()
 
 	targetTextures := atx.Textures
@@ -363,7 +358,6 @@ func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
 		cleanFrame := al.cleanName(frameName)
 		frameData, err := al.GetPayload(cleanFrame)
 		if err != nil {
-			// Prova aggiungendo .PCX se manca estensione
 			if !strings.Contains(cleanFrame, ".") {
 				cleanFrame += ".PCX"
 				frameData, err = al.GetPayload(cleanFrame)
@@ -394,11 +388,11 @@ func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
 
 // AddRawTexture directly maps an indexed raw pixel array to the global texture manager using the active palette.
 func (al *ArchiveLab) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte, dump bool) {
-	if al.colorPalIndex >= len(al.level.Palettes) {
-		fmt.Printf("invalid palette index %d\n", al.colorPalIndex)
+	colorPal, err := al.palettes.Get()
+	if err != nil {
+		fmt.Printf("invalid palette index %s\n", err.Error())
 		return
 	}
-	colorPal := al.colorPal[al.colorPalIndex]
 	al.textures.AddRawTexture(texName, sizeX, sizeY, pixels, colorPal, dump)
 }
 

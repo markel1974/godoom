@@ -56,7 +56,6 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	sort.Strings(names)
 
 	type Usable struct {
-		w, h   int
 		maxDim int
 		tex    *textures.Texture
 	}
@@ -79,7 +78,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		if h > maxDim {
 			maxDim = h
 		}
-		usable := &Usable{w: w, h: h, maxDim: maxDim, tex: tex}
+		usable := &Usable{maxDim: maxDim, tex: tex}
 		valid = append(valid, usable)
 		idx := tx.idxByDim(maxDim)
 		tx.buckets[idx].Count++
@@ -98,7 +97,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		bIdx := tx.idxByDim(usable.maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		normal, diffuse, emissive := usable.tex.Compile(size)
+		diffuse, normal, emissive := usable.tex.Compile(size)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(diffuse))
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)

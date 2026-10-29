@@ -111,24 +111,24 @@ func (t *Texture) RGBA() (int, int, []uint8) {
 	return width, height, pixels
 }
 
+// Compile generates normal, diffuse, and emissive maps for the texture given a target size in pixels.
 func (t *Texture) Compile(size int) ([]uint8, []uint8, []uint8) {
 	const stride = 4
-	aspectRatio := float64(t.w) / float64(t.h)
 	w, h, rgba := t.RGBA()
-	var resized []uint8
+	aspectRatio := float64(w) / float64(h)
+	var diffuse []uint8
 	const fast = false
 	if fast {
-		resized = UpscaleNearest(rgba, w, h, size, size, stride)
+		diffuse = UpscaleNearest(rgba, w, h, size, size, stride)
 	} else {
-		resized = UpscaleLanczosSeparable(rgba, w, h, size, size, stride)
+		diffuse = UpscaleLanczosSeparable(rgba, w, h, size, size, stride)
 	}
-	normal := GenerateNormalMapScharr(resized, size, size, stride, 15, 10, 3, aspectRatio)
-	diffuse := resized
-	emissive := resized
+	normal := GenerateNormalMapScharr(diffuse, size, size, stride, 15, 10, 3, aspectRatio)
+	emissive := diffuse
 	if !t.IsEmissive() {
 		emissive = CreateBlackPixels(size, size, stride)
 	}
-	return normal, diffuse, emissive
+	return diffuse, normal, emissive
 }
 
 // GenerateNormalMap creates a normal map from image pixel data, applying luminance-based calculations and strength scaling.

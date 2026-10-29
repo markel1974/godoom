@@ -47,8 +47,6 @@ func NewTextures(ctx api.IContext) *Textures {
 
 // Setup initializes texture arrays and their respective VRAM buckets for efficient rendering and management.
 func (tx *Textures) Setup(t textures.ITextures) error {
-	const stride = 4
-
 	names := t.GetNames()
 	if len(names) == 0 {
 		return nil

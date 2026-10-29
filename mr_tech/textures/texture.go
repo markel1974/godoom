@@ -8,30 +8,48 @@ import "math"
 // w and h define the width and height of the texture in pixels.
 // data holds the actual pixel information as a 2D array of integers.
 type Texture struct {
-	name       string
-	id         uint32
-	w          int
-	h          int
-	data       [][]int
-	emissive   bool
-	identifier float32
+	name         string
+	id           uint32
+	w            int
+	h            int
+	diffuse      [][]int
+	normal       [][]int
+	emissive     [][]int
+	autoEmissive bool
+	identifier   float32
 }
 
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
-func NewTexture(name string, id uint32, w int, h int, emissive bool) *Texture {
+func NewTexture(name string, id uint32, w int, h int, autoEmissive bool) *Texture {
 	z := &Texture{
-		name:       name,
-		id:         id,
-		w:          w,
-		h:          h,
-		data:       make([][]int, w),
-		emissive:   emissive,
-		identifier: -1,
+		name:         name,
+		id:           id,
+		w:            w,
+		h:            h,
+		diffuse:      make([][]int, w),
+		autoEmissive: autoEmissive,
+		identifier:   -1,
 	}
-	for i := range z.data {
-		z.data[i] = make([]int, h)
+	for i := range z.diffuse {
+		z.diffuse[i] = make([]int, h)
 	}
 	return z
+}
+
+// CreateNormal initializes the normal map as a 2D slice with dimensions matching the texture's width and height.
+func (t *Texture) CreateNormal() {
+	t.normal = make([][]int, t.w)
+	for i := range t.normal {
+		t.normal[i] = make([]int, t.h)
+	}
+}
+
+// CreateEmissive initializes the emissive map as a 2D slice with dimensions matching the texture's width and height.
+func (t *Texture) CreateEmissive() {
+	t.emissive = make([][]int, t.w)
+	for i := range t.emissive {
+		t.emissive[i] = make([]int, t.h)
+	}
 }
 
 // GetIdentifier retrieves the unique floating-point identifier associated with the Texture instance.
@@ -51,16 +69,113 @@ func (t *Texture) GetSize() (float64, float64) {
 
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) Get(x int, y int) int {
-	wrapX := (x%t.w + t.w) % t.w
-	wrapY := (y%t.h + t.h) % t.h
-	return t.data[wrapX][wrapY]
+	return t.GetDiffuse(x, y)
 }
 
 // Set updates the color of the pixel at the specified coordinates (x, y) after wrapping them within texture bounds.
 func (t *Texture) Set(x int, y int, color int) {
-	wrapX := (x%t.w + t.w) % t.w
-	wrapY := (y%t.h + t.h) % t.h
-	t.data[wrapX][wrapY] = color
+	t.SetDiffuse(x, y, color)
+}
+
+// GetDiffuse retrieves the diffuse color value at the specified wrapped texture coordinates (x, y).
+func (t *Texture) GetDiffuse(x int, y int) int {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		return t.diffuse[x][y]
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	return t.diffuse[x][y]
+}
+
+// GetNormal retrieves the normal value at the specified wrapped texture coordinates (x, y).
+func (t *Texture) GetNormal(x int, y int) int {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		return t.normal[x][y]
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	return t.normal[x][y]
+}
+
+// GetEmissive retrieves the emissive color value at the specified wrapped texture coordinates (x, y).
+func (t *Texture) GetEmissive(x int, y int) int {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		return t.emissive[x][y]
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	return t.emissive[x][y]
+}
+
+// SetDiffuse updates the diffuse color of the pixel at specified coordinates (x, y), wrapping them within texture bounds.
+func (t *Texture) SetDiffuse(x int, y int, color int) {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		t.diffuse[x][y] = color
+		return
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	t.diffuse[x][y] = color
+}
+
+// SetNormal sets the normal value at the specified coordinates (x, y) after wrapping them within texture bounds.
+func (t *Texture) SetNormal(x int, y int, color int) {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		t.normal[x][y] = color
+		return
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	t.normal[x][y] = color
+}
+
+func (t *Texture) SetEmissive(x int, y int, color int) {
+	if t.emissive == nil {
+		return
+	}
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		t.emissive[x][y] = color
+		return
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	t.emissive[x][y] = color
 }
 
 // BeginX returns the starting X coordinate for the texture, typically used as an offset in texture mapping.
@@ -88,19 +203,19 @@ func (t *Texture) GetName() string {
 	return t.name
 }
 
-// IsEmissive determines if the texture is marked as emissive and returns true if it is, otherwise false.
-func (t *Texture) IsEmissive() bool {
-	return t.emissive
+func (t *Texture) RGBA() (int, int, []uint8) {
+	w, h := t.Size()
+	return w, h, t.rgba(t.diffuse)
 }
 
-// RGBA returns the width, height, and a pixel array representing the texture in RGBA format.
-func (t *Texture) RGBA() (int, int, []uint8) {
+// Diffuse returns the width, height, and a pixel array representing the texture in RGBA format.
+func (t *Texture) rgba(data [][]int) []uint8 {
 	const stride = 4
 	width, height := t.Size()
 	pixels := make([]uint8, width*height*stride)
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			c := t.Get(x, y)
+			c := data[x][y]
 			idx := (y*width + x) * stride
 			pixels[idx] = uint8(c >> 24)   // R
 			pixels[idx+1] = uint8(c >> 16) // G
@@ -108,27 +223,36 @@ func (t *Texture) RGBA() (int, int, []uint8) {
 			pixels[idx+3] = uint8(c)       // A
 		}
 	}
-	return width, height, pixels
+	return pixels
 }
 
 // Compile generates normal, diffuse, and emissive maps for the texture given a target size in pixels.
 func (t *Texture) Compile(size int) ([]uint8, []uint8, []uint8) {
 	const stride = 4
-	w, h, rgba := t.RGBA()
-	aspectRatio := float64(w) / float64(h)
-	var diffuse []uint8
+	aspectRatio := float64(t.w) / float64(t.h)
+	var diffuseScaled []uint8
+	var normalScaled []uint8
+	var emissiveScaled []uint8
 	const fast = false
 	if fast {
-		diffuse = UpscaleNearest(rgba, w, h, size, size, stride)
+		diffuseScaled = UpscaleNearest(t.rgba(t.diffuse), t.w, t.h, size, size, stride)
 	} else {
-		diffuse = UpscaleLanczosSeparable(rgba, w, h, size, size, stride)
+		diffuseScaled = UpscaleLanczosSeparable(t.rgba(t.diffuse), t.w, t.h, size, size, stride)
 	}
-	normal := GenerateNormalMapScharr(diffuse, size, size, stride, 15, 10, 3, aspectRatio)
-	emissive := diffuse
-	if !t.IsEmissive() {
-		emissive = CreateBlackPixels(size, size, stride)
+	if len(t.normal) > 0 {
+		normalScaled = UpscaleNearest(t.rgba(t.normal), t.w, t.h, size, size, stride)
+	} else {
+		normalScaled = GenerateNormalMapScharr(diffuseScaled, size, size, stride, 15, 10, 3, aspectRatio)
 	}
-	return diffuse, normal, emissive
+	if len(t.emissive) > 0 {
+		emissiveScaled = UpscaleNearest(t.rgba(t.emissive), t.w, t.h, size, size, stride)
+	} else {
+		emissiveScaled = diffuseScaled
+		if !t.autoEmissive {
+			emissiveScaled = CreateBlackPixels(size, size, stride)
+		}
+	}
+	return diffuseScaled, normalScaled, emissiveScaled
 }
 
 // GenerateNormalMap creates a normal map from image pixel data, applying luminance-based calculations and strength scaling.

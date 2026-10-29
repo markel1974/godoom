@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
+// _aliases maps specific string keys to their corresponding alias strings used for standardizing naming conventions.
 var _aliases = map[string]string{
 	"GAMOBXS":  "GAMBOXS",
 	"GAMOBXB":  "GAMBOXB",
@@ -18,6 +19,7 @@ var _aliases = map[string]string{
 	"NAMBOXT":  "NAMBOXT1",
 }
 
+// GetAlias checks if the given name has a corresponding alias in the alias map and returns it; otherwise, it returns the name.
 func GetAlias(name string) string {
 	if v, ok := _aliases[name]; ok {
 		return v
@@ -25,6 +27,7 @@ func GetAlias(name string) string {
 	return name
 }
 
+// ConvertAnimation maps animations to enemy states and adds them to EnemyAnimations with their respective intervals and durations.
 func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, animation := range animations {
 		animation = strings.TrimSpace(strings.ToLower(animation))

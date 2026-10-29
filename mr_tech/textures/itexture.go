@@ -4,5 +4,5 @@ package textures
 type ITextures interface {
 	GetNames() []string
 
-	Get(name []string) []*Texture
+	GetMulti(name []string) []*Texture
 }

@@ -39,7 +39,7 @@ func (il *ImageLoader) fallbackImage() image.Image {
 
 // Load attempts to load a texture by its name, registers it if successful, and uses a fallback image if loading fails.
 func (il *ImageLoader) Load(id string, fileName string) error {
-	if texes := il.textures.Get([]string{id}); len(texes) > 0 && texes[0] != nil {
+	if texes := il.textures.GetMulti([]string{id}); len(texes) > 0 && texes[0] != nil {
 		return nil // Already loaded
 	}
 

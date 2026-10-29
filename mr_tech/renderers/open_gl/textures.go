@@ -59,7 +59,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	}
 	sort.Strings(names)
 	for _, id := range names {
-		tn := t.Get([]string{id})
+		tn := t.GetMulti([]string{id})
 		if len(tn) == 0 {
 			continue
 		}
@@ -83,12 +83,15 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 
 	// Popolamento e Packing
 	for _, id := range names {
-		tn := t.Get([]string{id})
+		tn := t.GetMulti([]string{id})
 		if len(tn) == 0 {
 			continue
 		}
 		tex := tn[0]
 		wOrig, hOrig, pixelsOrig := tex.RGBA()
+		if len(pixelsOrig) == 0 {
+			continue
+		}
 		if wOrig < 1 {
 			wOrig = 1
 		}

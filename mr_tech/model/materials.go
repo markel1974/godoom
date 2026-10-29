@@ -43,7 +43,7 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	if ok {
 		return material
 	}
-	tex := r.tex.Get(ca.Frames)
+	tex := r.tex.GetMulti(ca.Frames)
 	material = textures.NewMaterial(ca.Shader, tex, int(ca.Kind), ca.U, ca.V)
 	material.SetBlendMode(ca.BlendMode)
 	material.SetProperties(

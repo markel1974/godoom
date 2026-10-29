@@ -85,8 +85,8 @@ func (t *Textures) Add(srcId string, src *image.RGBA) *textures.Texture {
 	return texture
 }
 
-// Get retrieves a list of textures by their identifiers. Returns nil if the list is empty or contains invalid IDs.
-func (t *Textures) Get(ids []string) []*textures.Texture {
+// GetMulti retrieves a list of textures by their identifiers. Returns nil if the list is empty or contains invalid IDs.
+func (t *Textures) GetMulti(ids []string) []*textures.Texture {
 	l := len(ids)
 	if l == 0 {
 		return nil

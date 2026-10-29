@@ -211,7 +211,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		}
 		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, velX, velY)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
-		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+		if texes := texManager.GetMulti([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()
 			_ = th.texManager.RegisterPixelsRGBA(texName, tWidth, tHeight, pixels, false)
 		}

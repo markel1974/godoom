@@ -77,8 +77,8 @@ func (w *Textures) load(filename string, idx int32) (*textures.Texture, error) {
 	return tex, nil
 }
 
-// Get retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.
-func (w *Textures) Get(ids []string) []*textures.Texture {
+// GetMulti retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.
+func (w *Textures) GetMulti(ids []string) []*textures.Texture {
 	var out []*textures.Texture
 	for _, id := range ids {
 		x, ok := w.resources[id]

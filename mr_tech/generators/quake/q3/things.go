@@ -119,7 +119,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		t.shaders.MaterialBind(texNameLC, specificMaterial)
 
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
-		if texes := texManager.Get([]string{texName}); len(texes) > 0 && texes[0] != nil {
+		if texes := texManager.GetMulti([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tw, th, pixels := texes[0].RGBA()
 			_ = t.texManager.RegisterPixelsRGBA(texName, tw, th, pixels, true)
 		}

@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
@@ -146,6 +147,21 @@ func (g *ArchiveGob) add(filename string) error {
 // GetLevels returns a slice of level names available in the ArchiveGob.
 func (g *ArchiveGob) GetLevels() []string {
 	return g.levels
+}
+
+// List filters and returns a list of entry names in the archive that match the provided regular expression pattern.
+func (g *ArchiveGob) List(p string) ([]string, error) {
+	rgx, err := regexp.Compile(p)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for name := range g.entries {
+		if rgx.MatchString(name) {
+			out = append(g.levels, name)
+		}
+	}
+	return out, nil
 }
 
 // GetPayload retrieves the payload data for a given entry name. Returns an error if the entry is not found or unreadable.

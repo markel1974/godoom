@@ -7,6 +7,7 @@ import (
 	"image"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
@@ -172,6 +173,21 @@ func (al *ArchiveLab) GetPayload(name string) ([]byte, error) {
 		return nil, fmt.Errorf("%s not found", name)
 	}
 	return gob.Read()
+}
+
+// List retrieves a list of names from the container that match the provided regex pattern. Returns an error if the pattern is invalid.
+func (g *ArchiveLab) List(p string) ([]string, error) {
+	rgx, err := regexp.Compile(p)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for name := range g.container {
+		if rgx.MatchString(name) {
+			out = append(out, name)
+		}
+	}
+	return out, nil
 }
 
 // SetLevel loads the specified level topology, entities, and palette into the archive memory.

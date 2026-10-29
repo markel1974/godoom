@@ -8,6 +8,8 @@ type IArchive interface {
 
 	SetLevel(levelNumber int) error
 
+	List(p string) ([]string, error)
+
 	GetPayload(name string) ([]byte, error)
 
 	GetTextures() *Textures

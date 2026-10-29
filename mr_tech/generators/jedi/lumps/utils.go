@@ -10,10 +10,13 @@ import (
 )
 
 const (
-	PCXSuffix = ".PCX"
-	ATXSuffix = ".ATX"
-	LVTSuffix = ".LVT"
-	OBTSuffix = ".OBT"
+	PCXSuffix     = ".PCX"
+	ATXSuffix     = ".ATX"
+	LVTSuffix     = ".LVT"
+	OBTSuffix     = ".OBT"
+	ITMSuffix     = ".ITM"
+	NWXSuffix     = ".NWX"
+	THREEDOSuffix = ".3DO"
 )
 
 // IRetriever defines an interface for retrieving payloads identified by a string ID, returning the payload or an error.

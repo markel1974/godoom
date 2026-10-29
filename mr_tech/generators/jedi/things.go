@@ -33,54 +33,109 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 	entities := b.archive.GetEntities()
 
 	if b.eMode == EngineModeOutlaws {
+		validSectors := make(map[string]struct{})
+		if level := b.archive.GetLevel(); level != nil {
+			for _, sec := range level.Sectors {
+				if sec != nil && len(sec.Id) > 0 {
+					validSectors[strings.ToUpper(strings.TrimSpace(sec.Id))] = struct{}{}
+				}
+			}
+		}
+
+		aliases := map[string]string{
+			"GAMOBXS":  "GAMBOXS",
+			"GAMOBXB":  "GAMBOXB",
+			"GAMBOXP":  "GAMBOXB",
+			"GBAR":     "GGBAR",
+			"GSAK":     "GGSAK",
+			"HORSE2":   "SHORSE2",
+			"LANTERN1": "LANTERN",
+			"NAMBOXT":  "NAMBOXT1",
+		}
+
 		for _, obj := range entities.Objects {
 			if len(obj.Name) == 0 {
 				continue
 			}
+			if len(validSectors) > 0 {
+				secKey := strings.ToUpper(strings.TrimSpace(obj.Sector))
+				if _, ok := validSectors[secKey]; !ok {
+					continue
+				}
+			}
 			pos := CreateCoords(b.eMode, obj.X, obj.Y, obj.Z)
-			key := strings.ToUpper(strings.TrimSpace(obj.Name))
-			switch key {
+			name := strings.ToUpper(strings.TrimSpace(obj.Name))
+			if alias, ok := aliases[name]; ok {
+				name = alias
+			}
+
+			switch name {
 			case "SPIRIT", "PLAYER":
 				if cPlayer == nil {
 					cPlayer = b.createPlayer(pos)
 				}
-			case "STARTPOS": //TODO
-			case "BALLSTAR": //TODO
-			case "FLAGSTAR": //TODO
-			case "DOCSTART": //TODO
-			case "SIGNODD2": //TODO
-			case "GBPLATE": //TODO
+			case "STARTPOS":
+				// Multiplayer start position (or fallback player spawn if cPlayer is not yet set)
+				if cPlayer == nil {
+					cPlayer = b.createPlayer(pos)
+				}
+			case "BALLSTAR", "FLAGSTAR", "DOCSTART":
+				// Multiplayer game-mode logical markers (no visual sprite)
+				continue
 			default:
-				data, dErr := b.archive.GetPayload(obj.Name + ".ITM")
-				if dErr != nil {
-					fmt.Printf("Warning: could not load ITM %s: %v\n", obj.Name, dErr)
+				// 1. Try ITM definition
+				data, dErr := b.archive.GetPayload(name + lumps.ITMSuffix)
+				if dErr == nil {
+					item := lumps.NewItem()
+					if iErr := item.Parse(bytes.NewReader(data)); iErr != nil {
+						fmt.Printf("Error parsing ITM %s: %v\n", name, iErr)
+						continue
+					}
+					if len(item.Anim) == 0 {
+						continue
+					}
+					targetName := strings.ToUpper(item.Anim)
+					if strings.Contains(targetName, ".NWX") {
+						cThing, err := b.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
+						if err != nil {
+							fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+							continue
+						}
+						cThings = append(cThings, cThing)
+					} else if strings.Contains(targetName, ".3DO") {
+						cThing, err := b.threedoToThing(targetName, config.ThingItemDef, pos)
+						if err != nil {
+							fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+							continue
+						}
+						cThings = append(cThings, cThing)
+					}
 					continue
 				}
-				item := lumps.NewItem()
-				iErr := item.Parse(bytes.NewReader(data))
-				if iErr != nil {
-					fmt.Printf("Error parsing ITM %s: %v\n", obj.Name, iErr)
-					continue
-				}
-				if len(item.Anim) == 0 {
-					continue
-				}
-				targetName := strings.ToUpper(item.Anim)
-				if strings.Contains(targetName, ".NWX") {
-					cThing, err := b.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
+
+				// 2. Direct NWX sprite
+				if _, nErr := b.archive.GetPayload(name + lumps.NWXSuffix); nErr == nil {
+					cThing, err := b.nwxToThing(name+lumps.NWXSuffix, config.ThingItemDef, pos)
 					if err != nil {
-						fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+						fmt.Printf("Error parsing %s: %v\n", name+lumps.NWXSuffix, err)
 						continue
 					}
 					cThings = append(cThings, cThing)
-				} else if strings.Contains(targetName, ".3DO") {
-					cThing, err := b.threedoToThing(targetName, config.ThingItemDef, pos)
+					continue
+				}
+
+				// 3. Direct 3DO model
+				if _, thErr := b.archive.GetPayload(name + lumps.THREEDOSuffix); thErr == nil {
+					cThing, err := b.threedoToThing(name+lumps.THREEDOSuffix, config.ThingItemDef, pos)
 					if err != nil {
-						fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
+						fmt.Printf("Error parsing %s: %v\n", name+lumps.THREEDOSuffix, err)
 						continue
 					}
 					cThings = append(cThings, cThing)
+					continue
 				}
+
+				fmt.Println("No valid sprite found for", name)
 			}
 		}
 	}

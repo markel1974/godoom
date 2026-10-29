@@ -1,4 +1,4 @@
-package open_gl
+package textures
 
 import (
 	"math"

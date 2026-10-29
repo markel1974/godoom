@@ -18,40 +18,36 @@ type Bucket struct {
 	EmissiveArray uint32
 }
 
+func NewBucket(size int) *Bucket {
+	return &Bucket{Size: size, Count: 0}
+}
+
 // Textures manages a collection of 2D textures and their associated VRAM buckets for efficient rendering and sampling.
 type Textures struct {
 	ctx      api.IContext
+	slots    []int
+	buckets  []*Bucket
 	textures map[*textures.Texture]float32
-	buckets  []Bucket
 }
 
 // NewTextures creates and returns a new instance of Textures with an initialized map to store texture references.
 func NewTextures(ctx api.IContext) *Textures {
-	return &Textures{
+	slots := []int{64, 128, 256, 1024}
+	tx := &Textures{
 		ctx:      ctx,
-		textures: nil,
+		slots:    slots,
+		buckets:  make([]*Bucket, len(slots)),
+		textures: make(map[*textures.Texture]float32),
 	}
+	for i := range tx.slots {
+		tx.buckets[i] = NewBucket(tx.slots[i])
+	}
+	return tx
 }
 
 // Setup initializes texture arrays and their respective VRAM buckets for efficient rendering and management.
 func (tx *Textures) Setup(t textures.ITextures) error {
 	const stride = 4
-	tx.textures = make(map[*textures.Texture]float32)
-	slots := []int{64, 128, 256, 1024}
-	tx.buckets = make([]Bucket, len(slots))
-	for i := range slots {
-		tx.buckets[i] = Bucket{Size: slots[i], Count: 0}
-	}
-
-	idxByDim := func(maxDim int) int {
-		bIdx := len(slots) - 1
-		for x := 0; x < bIdx; x++ {
-			if maxDim <= slots[x] {
-				return x
-			}
-		}
-		return bIdx
-	}
 
 	names := t.GetNames()
 	if len(names) == 0 {
@@ -62,7 +58,6 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	type Usable struct {
 		w, h   int
 		maxDim int
-		rgba   []uint8
 		tex    *textures.Texture
 	}
 
@@ -76,17 +71,17 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		if tex == nil {
 			continue
 		}
-		w, h, rgba := tex.RGBA()
-		if w <= 0 || h <= 0 || len(rgba) == 0 {
+		w, h := tex.Size()
+		if w <= 0 || h <= 0 {
 			continue
 		}
 		maxDim := w
 		if h > maxDim {
 			maxDim = h
 		}
-		usable := &Usable{w: w, h: h, maxDim: maxDim, rgba: rgba, tex: tex}
+		usable := &Usable{w: w, h: h, maxDim: maxDim, tex: tex}
 		valid = append(valid, usable)
-		idx := idxByDim(maxDim)
+		idx := tx.idxByDim(maxDim)
 		tx.buckets[idx].Count++
 	}
 
@@ -100,32 +95,16 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	}
 
 	for _, usable := range valid {
-		bIdx := idxByDim(usable.maxDim)
+		bIdx := tx.idxByDim(usable.maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		aspectRatio := float64(usable.w) / float64(usable.h)
-		var resizedPixels []uint8
-		const fast = false
-		if fast {
-			resizedPixels = UpscaleNearest(usable.rgba, usable.w, usable.h, size, size, stride)
-		} else {
-			resizedPixels = UpscaleLanczosSeparable(usable.rgba, usable.w, usable.h, size, size, stride)
-		}
-		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3, aspectRatio)
-		diffuse := resizedPixels
-		emissive := resizedPixels
-		if !usable.tex.IsEmissive() {
-			emissive = createBlackPixels(size, size, stride)
-		}
+		normal, diffuse, emissive := usable.tex.Compile(size)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(diffuse))
-
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
-		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(normalPixels))
-
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(normal))
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].EmissiveArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(emissive))
-
 		//Impacchettiamo Bucket e Layer in un solo Float
 		packedValue := float32(bIdx*1000) + float32(layer)
 		tx.textures[usable.tex] = packedValue
@@ -178,6 +157,17 @@ func (tx *Textures) BindBuckets() {
 	}
 }
 
+// idxByDim returns the index of the first slot in the `slots` array with a value greater than or equal to `maxDim`.
+func (tx *Textures) idxByDim(maxDim int) int {
+	bIdx := len(tx.slots) - 1
+	for x := 0; x < bIdx; x++ {
+		if maxDim <= tx.slots[x] {
+			return x
+		}
+	}
+	return bIdx
+}
+
 // createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.
 func createTextureArray(ctx api.IContext, width, height int, layers int32) uint32 {
 	computeMipMapLevel := func(width, height int) int32 {
@@ -228,129 +218,6 @@ func createTextureArray(ctx api.IContext, width, height int, layers int32) uint3
 	ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
 
 	return tex
-}
-
-// generateNormalMap creates a normal map from image pixel data, applying luminance-based calculations and strength scaling.
-func generateNormalMap(pixels []uint8, width, height, stride int, strength float64) []uint8 {
-	normPixels := make([]uint8, len(pixels))
-	luma := func(x, y int) float64 {
-		if x < 0 {
-			x = 0
-		} else if x >= width {
-			x = width - 1
-		}
-		if y < 0 {
-			y = 0
-		} else if y >= height {
-			y = height - 1
-		}
-		idx := (y*width + x) * stride
-		return (0.299*float64(pixels[idx]) + 0.587*float64(pixels[idx+1]) + 0.114*float64(pixels[idx+2])) / 255.0
-	}
-
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			dX := (luma(x+1, y) - luma(x-1, y)) * strength
-			dY := (luma(x, y+1) - luma(x, y-1)) * strength
-			invLen := 1.0 / math.Sqrt(dX*dX+dY*dY+1.0)
-			idx := (y*width + x) * stride
-			normPixels[idx] = uint8(((dX * invLen) + 1.0) * 127.5)
-			normPixels[idx+1] = uint8(((-dY * invLen) + 1.0) * 127.5)
-			normPixels[idx+2] = uint8((invLen + 1.0) * 127.5)
-			normPixels[idx+3] = 255
-		}
-	}
-	return normPixels
-}
-
-// generateNormalMapScharr generates a normal map from an image using the Scharr operator for edge detection.
-// pixels is the input RGBA pixel data of the image.
-// width and height define the dimensions of the input image.
-// stride is the number of bytes per pixel; typically 4 for RGBA data.
-// strength controls the influence of the detected edges on the resulting normal map.
-// aspectRatio is the ratio of original width to original height (wOrig / hOrig) to preserve isotropic normals when non-square textures are upscaled into square layers.
-// Returns the RGBA pixel data for the generated normal map.
-func generateNormalMapScharr(pixels []uint8, width, height, stride int, strength float64, sCenterWeight float64, sSideWeight float64, aspectRatio float64) []uint8 {
-	//const sCenterWeight = 10.0
-	//const sSideWeight = 3.0
-	sPositive := 2.0*sSideWeight + sCenterWeight
-	sRange := 2.0 * sPositive
-
-	size := width * height
-	luma := make([]float64, size)
-
-	// Pre-calcolo della mappa di luminanza (O(N) invece di O(N*9))
-	for i := 0; i < size; i++ {
-		idx := i * stride
-		luma[i] = (0.299*float64(pixels[idx]) + 0.587*float64(pixels[idx+1]) + 0.114*float64(pixels[idx+2])) / 255.0
-	}
-
-	normPixels := make([]uint8, len(pixels))
-
-	getLuma := func(x, y int) float64 {
-		if x < 0 {
-			x = 0
-		} else if x >= width {
-			x = width - 1
-		}
-		if y < 0 {
-			y = 0
-		} else if y >= height {
-			y = height - 1
-		}
-		return luma[y*width+x]
-	}
-
-	// Fattore di normalizzazione in base ai pesi del kernel.
-	// Il range teorico è il doppio della somma dei pesi positivi.
-	weightNormX := strength / sRange
-	weightNormY := weightNormX * aspectRatio
-
-	// Convoluzione di Scharr 3x3
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			tl := getLuma(x-1, y-1)
-			tc := getLuma(x, y-1)
-			tr := getLuma(x+1, y-1)
-
-			l := getLuma(x-1, y)
-			r := getLuma(x+1, y)
-
-			bl := getLuma(x-1, y+1)
-			bc := getLuma(x, y+1)
-			br := getLuma(x+1, y+1)
-
-			// Operatore Scharr X e Y
-			dX := ((sSideWeight*tr + sCenterWeight*r + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*l + sSideWeight*bl)) * weightNormX
-			dY := ((sSideWeight*bl + sCenterWeight*bc + sSideWeight*br) - (sSideWeight*tl + sCenterWeight*tc + sSideWeight*tr)) * weightNormY
-
-			invLen := 1.0 / math.Sqrt(dX*dX+dY*dY+1.0)
-			idx := (y*width + x) * stride
-
-			// Packing nel range [0, 255]
-			normPixels[idx] = uint8(((dX*invLen)+1.0)*127.5 + 0.5)
-			normPixels[idx+1] = uint8(((-dY*invLen)+1.0)*127.5 + 0.5)
-			normPixels[idx+2] = uint8((invLen+1.0)*127.5 + 0.5)
-
-			if stride >= 4 {
-				normPixels[idx+3] = 255
-			}
-		}
-	}
-	return normPixels
-}
-
-// createBlackPixels generates an RGBA pixel array of black color with dimensions w x h and given stride.
-func createBlackPixels(w, h, stride int) []uint8 {
-	s := w * h * stride
-	blackPixels := make([]uint8, s)
-	for i := 0; i < len(blackPixels); i += stride {
-		blackPixels[i] = 0
-		blackPixels[i+1] = 0
-		blackPixels[i+2] = 0
-		blackPixels[i+3] = 255
-	}
-	return blackPixels
 }
 
 /*

@@ -58,16 +58,34 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		return nil
 	}
 	sort.Strings(names)
+
+	type Usable struct {
+		w, h   int
+		maxDim int
+		rgba   []uint8
+		tex    *textures.Texture
+	}
+
+	var valid []*Usable
 	for _, id := range names {
 		tn := t.GetMulti([]string{id})
 		if len(tn) == 0 {
 			continue
 		}
-		w, h := tn[0].Size()
+		tex := tn[0]
+		if tex == nil {
+			continue
+		}
+		w, h, rgba := tex.RGBA()
+		if w <= 0 || h <= 0 || len(rgba) == 0 {
+			continue
+		}
 		maxDim := w
 		if h > maxDim {
 			maxDim = h
 		}
+		usable := &Usable{w: w, h: h, maxDim: maxDim, rgba: rgba, tex: tex}
+		valid = append(valid, usable)
 		idx := idxByDim(maxDim)
 		tx.buckets[idx].Count++
 	}
@@ -81,42 +99,22 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		}
 	}
 
-	// Popolamento e Packing
-	for _, id := range names {
-		tn := t.GetMulti([]string{id})
-		if len(tn) == 0 {
-			continue
-		}
-		tex := tn[0]
-		wOrig, hOrig, pixelsOrig := tex.RGBA()
-		if len(pixelsOrig) == 0 {
-			continue
-		}
-		if wOrig < 1 {
-			wOrig = 1
-		}
-		if hOrig < 1 {
-			hOrig = 1
-		}
-		maxDim := wOrig
-		if hOrig > maxDim {
-			maxDim = hOrig
-		}
-		bIdx := idxByDim(maxDim)
+	for _, usable := range valid {
+		bIdx := idxByDim(usable.maxDim)
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
-		aspectRatio := float64(wOrig) / float64(hOrig)
+		aspectRatio := float64(usable.w) / float64(usable.h)
 		var resizedPixels []uint8
 		const fast = false
 		if fast {
-			resizedPixels = UpscaleNearest(pixelsOrig, wOrig, hOrig, size, size, stride)
+			resizedPixels = UpscaleNearest(usable.rgba, usable.w, usable.h, size, size, stride)
 		} else {
-			resizedPixels = UpscaleLanczosSeparable(pixelsOrig, wOrig, hOrig, size, size, stride)
+			resizedPixels = UpscaleLanczosSeparable(usable.rgba, usable.w, usable.h, size, size, stride)
 		}
 		normalPixels := generateNormalMapScharr(resizedPixels, size, size, stride, 15, 10, 3, aspectRatio)
 		diffuse := resizedPixels
 		emissive := resizedPixels
-		if !tex.IsEmissive() {
+		if !usable.tex.IsEmissive() {
 			emissive = createBlackPixels(size, size, stride)
 		}
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
@@ -130,7 +128,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 
 		//Impacchettiamo Bucket e Layer in un solo Float
 		packedValue := float32(bIdx*1000) + float32(layer)
-		tx.textures[tex] = packedValue
+		tx.textures[usable.tex] = packedValue
 		tx.buckets[bIdx].Layer++
 	}
 

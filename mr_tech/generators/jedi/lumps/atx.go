@@ -2,10 +2,15 @@ package lumps
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
 // ATX represents an animated texture definition from an Outlaws .ATX script.
@@ -15,12 +20,17 @@ type ATX struct {
 	Textures []string
 	HasGoto  bool
 	HasStop  bool
+	ret      IRetriever
+	parser   *common.PCX
 }
 
-func NewATX(name string) *ATX {
+// NewATX initializes and returns a pointer to an ATX instance with a default rate and a new PCX parser.
+func NewATX(ret IRetriever, name string) *ATX {
 	return &ATX{
-		Name: name,
-		Rate: 6,
+		ret:    ret,
+		Name:   name,
+		Rate:   6,
+		parser: common.NewPCX(),
 	}
 }
 
@@ -69,6 +79,44 @@ func (atx *ATX) Parse(r io.Reader) error {
 		}
 	}
 	return scanner.Err()
+}
+
+// CreateImages converts ATX texture frames into RGBA images using the provided 256-color palette and returns the results.
+func (atx *ATX) CreateImages(colorPal [256]color.RGBA) ([]*image.RGBA, error) {
+	if len(atx.Textures) == 0 {
+		return nil, fmt.Errorf("atx %s has no textures", atx.Name)
+	}
+	targetTextures := atx.Textures
+	if !atx.IsLooping() {
+		targetTextures = atx.Textures[:1]
+	}
+	var images []*image.RGBA
+	for _, frameName := range targetTextures {
+		cleanFrame := CleanName(frameName)
+		frameData, err := atx.ret.GetPayload(cleanFrame)
+		if err != nil {
+			if !strings.Contains(cleanFrame, ".") {
+				cleanFrame += PCXSuffix
+				frameData, err = atx.ret.GetPayload(cleanFrame)
+			}
+		}
+		if err != nil {
+			fmt.Printf("warning: could not load frame %s for atx %s: %v\n", frameName, atx.Name, err)
+			continue
+		}
+		img, err := atx.parser.Parse(bytes.NewReader(frameData), colorPal)
+		if err != nil {
+			fmt.Printf("warning: could not parse PCX frame %s for ATX %s: %v\n", frameName, atx.Name, err)
+			continue
+		}
+		images = append(images, img)
+	}
+
+	if len(images) == 0 {
+		return nil, fmt.Errorf("no valid frames loaded for ATX %s", atx.Name)
+	}
+
+	return images, nil
 }
 
 // IsLooping returns true if this ATX represents a continuous repeating animation.

@@ -5,8 +5,26 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode"
 )
+
+const (
+	PCXSuffix = ".PCX"
+	ATXSuffix = ".ATX"
+	LVTSuffix = ".LVT"
+	OBTSuffix = ".OBT"
+)
+
+// IRetriever defines an interface for retrieving payloads identified by a string ID, returning the payload or an error.
+type IRetriever interface {
+	GetPayload(id string) ([]byte, error)
+}
+
+// CleanName standardizes a file name by trimming whitespace and converting it to uppercase.
+func CleanName(name string) string {
+	return strings.ToUpper(strings.TrimSpace(name))
+}
 
 // CleanKey sanitizes the input string by removing non-alphanumeric characters and converting letters to uppercase.
 func CleanKey(in string) string {
@@ -82,13 +100,13 @@ func decodeJediCompression(inData []byte) ([]byte, error) {
 
 	decompressedSize := binary.LittleEndian.Uint32(inData[0:4])
 
-	// 1. Sanity check (es. max 16MB per asset Jedi Engine)
+	//  Sanity check (es. max 16MB per asset Jedi Engine)
 	const maxDecompressedSize = 16 * 1024 * 1024
 	if decompressedSize > maxDecompressedSize {
 		return nil, fmt.Errorf("excessive decompressed size: %d", decompressedSize)
 	}
 
-	// 2. Allocazione statica
+	// Allocazione statica
 	outData := make([]byte, decompressedSize)
 	outPos := uint32(0)
 

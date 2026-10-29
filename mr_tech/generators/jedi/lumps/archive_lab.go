@@ -12,8 +12,18 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
-// ExtLevelLVT represents the file extension for level topology files within a LAB archive.
-const ExtLevelLVT = ".LVT"
+type LABHeader struct {
+	Magic           [4]byte
+	Version         uint32
+	NumFiles        uint32
+	StringTableSize uint32
+}
+type LABEntry struct {
+	NameOffset uint32
+	DataOffset uint32
+	DataSize   uint32
+	FourCC     [4]byte
+}
 
 // LabFile represents a segment of a file with a specific offset and size for thread-safe read access.
 type LabFile struct {
@@ -51,24 +61,21 @@ type ArchiveLab struct {
 	level     *Level
 	bm        *BM
 	textures  *Textures
-	//colorPal      [][256]color.RGBA
-	//colorPalIndex int
-	palettes   *Palettes
-	entities   *Entities
-	atxMap     map[string]*ATX
-	frameToAtx map[string]string
+	palIndex  int
+	palettes  *Palettes
+	entities  *Entities
+	atxs      *ATXHandler
 }
 
 // NewArchiveLab initializes and returns a new instance of ArchiveLab with an empty container map.
 func NewArchiveLab(fs common.IResources) *ArchiveLab {
-	return &ArchiveLab{
+	al := &ArchiveLab{
 		fs:        fs,
 		container: make(map[string]*LabFile),
 		textures:  NewTextures(),
-		//colorPalIndex: 0,
-		atxMap:     make(map[string]*ATX),
-		frameToAtx: make(map[string]string),
+		palIndex:  0,
 	}
+	return al
 }
 
 // GetLevels retrieves the list of level names parsed from the archive.
@@ -108,50 +115,11 @@ func (al *ArchiveLab) Parse(dirPath string) error {
 			return err
 		}
 	}
-	al.indexATX()
 	return nil
-}
-
-// indexATX discovers and parses all .ATX animated texture scripts in the archive.
-func (al *ArchiveLab) indexATX() {
-	for name := range al.container {
-		if strings.HasSuffix(strings.ToUpper(name), ".ATX") {
-			data, pErr := al.GetPayload(name)
-			if pErr != nil {
-				continue
-			}
-			atx := NewATX(name)
-			if err := atx.Parse(bytes.NewReader(data)); err != nil {
-				fmt.Println("ATX error:", err)
-				continue
-			}
-			cleanAtx := al.cleanName(name)
-			al.atxMap[cleanAtx] = atx
-			if atx.IsLooping() {
-				for _, tex := range atx.Textures {
-					cleanTex := al.cleanName(tex)
-					al.frameToAtx[cleanTex] = cleanAtx
-				}
-			}
-		}
-	}
 }
 
 // add processes a .LAB archive file at the specified path and adds its contents to the ArchiveLab instance.
 func (al *ArchiveLab) add(path string) error {
-	type LABHeader struct {
-		Magic           [4]byte
-		Version         uint32
-		NumFiles        uint32
-		StringTableSize uint32
-	}
-	type LABEntry struct {
-		NameOffset uint32
-		DataOffset uint32
-		DataSize   uint32
-		FourCC     [4]byte
-	}
-
 	file, err := al.fs.Open(path)
 	if err != nil {
 		return err
@@ -187,10 +155,10 @@ func (al *ArchiveLab) add(path string) error {
 			end++
 		}
 		fileName := string(stringTable[start:end])
-		cleanName := al.cleanName(fileName)
+		cleanName := CleanName(fileName)
 		//fmt.Printf("Adding %s\n", cleanName)
 		al.container[cleanName] = NewLabFile(file, int(e.DataOffset), int(e.DataSize))
-		if pos := strings.Index(cleanName, ExtLevelLVT); pos > 0 {
+		if pos := strings.Index(cleanName, LVTSuffix); pos > 0 {
 			al.levels = append(al.levels, cleanName[:pos])
 		}
 	}
@@ -199,7 +167,7 @@ func (al *ArchiveLab) add(path string) error {
 
 // GetPayload retrieves the payload data associated with the given name from the container.
 func (al *ArchiveLab) GetPayload(name string) ([]byte, error) {
-	gob, ok := al.container[al.cleanName(name)]
+	gob, ok := al.container[CleanName(name)]
 	if !ok {
 		return nil, fmt.Errorf("%s not found", name)
 	}
@@ -212,19 +180,16 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 		return fmt.Errorf("invalid level number %d", levelNumber)
 	}
 	baseName := al.levels[levelNumber]
-	levelName := baseName + ExtLevelLVT
-
+	levelName := baseName + LVTSuffix
 	levelData, lErr := al.GetPayload(levelName)
 	if lErr != nil {
 		return fmt.Errorf("error reading %s: %w", levelName, lErr)
 	}
-
 	al.level = NewLevel()
 	if err := al.level.Parse(bytes.NewReader(levelData)); err != nil {
 		return fmt.Errorf("syntax error in %s: %w", levelName, err)
 	}
-
-	entitiesName := baseName + ".OBT"
+	entitiesName := baseName + OBTSuffix
 	entitiesData, pErr := al.GetPayload(entitiesName)
 	if pErr != nil {
 		return fmt.Errorf("error reading %s: %w", entitiesName, pErr)
@@ -236,22 +201,19 @@ func (al *ArchiveLab) SetLevel(levelNumber int) error {
 	if len(al.level.Palettes) == 0 {
 		return fmt.Errorf("no palettes declared in LVT")
 	}
-	al.palettes = NewPalettes(len(al.level.Palettes))
-	for idx, pal := range al.level.Palettes {
-		// Prendiamo la prima (la master per le texture di base)
-		palName := strings.ToUpper(pal)
-		if !strings.HasSuffix(palName, ".PCX") {
-			palName += ".PCX"
-		}
-		palData, err := al.GetPayload(palName)
-		if err != nil {
-			return fmt.Errorf("can't open palette %s: %v", palName, err)
-		}
-		if err := al.palettes.Set(idx, palData); err != nil {
-			return err
-		}
+	al.palettes = NewPalettes(al)
+	if err := al.palettes.Setup(al.level.Palettes); err != nil {
+		return err
 	}
 	al.bm = NewBM()
+	al.atxs = NewATXS(al, al.textures, al.palettes)
+	for name := range al.container {
+		if strings.HasSuffix(name, ATXSuffix) {
+			if err := al.atxs.AddScript(name); err != nil {
+				fmt.Printf("Error adding %s to ATX: %v\n", name, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -270,44 +232,37 @@ func (al *ArchiveLab) GetTextures() *Textures {
 	return al.textures
 }
 
+// AddTexture adds a texture to the texture manager by its name and returns a list of associated texture names or an error.
 func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
-	cleanName := al.cleanName(texName)
+	cleanName := CleanName(texName)
 	if cached, ok := al.textures.GetFromCache(cleanName); ok {
 		return cached, nil
 	}
-
-	// 1. Script di texture animata (.ATX)
-	if strings.HasSuffix(cleanName, ".ATX") {
-		return al.addATXTexture(cleanName)
+	if strings.HasSuffix(cleanName, ATXSuffix) {
+		return al.atxs.CompileScriptTexture(cleanName, al.palIndex)
+	}
+	if frames, ok := al.atxs.CyclicFrame(cleanName, al.palIndex); ok {
+		return frames, nil
 	}
 
-	// 2. Frame appartenente a un'animazione ciclica ATX (es. MFWATER1.PCX -> MAWATER.ATX)
-	if atxName, ok := al.frameToAtx[cleanName]; ok {
-		frames, err := al.addATXTexture(atxName)
-		if err == nil && len(frames) > 0 {
-			al.textures.SetCache(cleanName, frames)
-			return frames, nil
-		}
-	}
-
-	data, err := al.GetPayload(cleanName)
-	if err != nil {
-		return nil, err
+	data, dErr := al.GetPayload(cleanName)
+	if dErr != nil {
+		return nil, dErr
 	}
 	var images []*image.RGBA
-	colorPal, err := al.palettes.Get()
-	if err != nil {
-		return nil, err
+	colorPal, cErr := al.palettes.Get(al.palIndex)
+	if cErr != nil {
+		return nil, cErr
 	}
-	if strings.HasSuffix(cleanName, ".PCX") {
+	var err error
+	if strings.HasSuffix(cleanName, PCXSuffix) {
 		parser := common.NewPCX()
-		img, err := parser.Parse(bytes.NewReader(data), colorPal)
-		if err != nil {
-			return nil, err
+		img, iErr := parser.Parse(bytes.NewReader(data), colorPal)
+		if iErr != nil {
+			return nil, iErr
 		}
 		images = append(images, img)
 	} else {
-		// Fallback sul vecchio parser BM se implementi supporto misto DF/Outlaws
 		images, err = al.bm.Parse(bytes.NewReader(data), colorPal)
 	}
 
@@ -318,77 +273,9 @@ func (al *ArchiveLab) AddTexture(texName string) ([]string, error) {
 	return out, nil
 }
 
-// addATXTexture loads all frames of an animated texture defined by an .ATX script.
-func (al *ArchiveLab) addATXTexture(atxName string) ([]string, error) {
-	cleanAtx := al.cleanName(atxName)
-	if cached, ok := al.textures.GetFromCache(cleanAtx); ok {
-		return cached, nil
-	}
-
-	atx, ok := al.atxMap[cleanAtx]
-	if !ok {
-		data, pErr := al.GetPayload(cleanAtx)
-		if pErr != nil {
-			return nil, pErr
-		}
-		atx = NewATX(cleanAtx)
-		if err := atx.Parse(bytes.NewReader(data)); err != nil {
-			fmt.Println("atx error:", err)
-			return nil, err
-		}
-		al.atxMap[cleanAtx] = atx
-	}
-
-	if len(atx.Textures) == 0 {
-		return nil, fmt.Errorf("atx %s has no textures", cleanAtx)
-	}
-	colorPal, cErr := al.palettes.Get()
-	if cErr != nil {
-		return nil, cErr
-	}
-	parser := common.NewPCX()
-
-	targetTextures := atx.Textures
-	if !atx.IsLooping() {
-		targetTextures = atx.Textures[:1]
-	}
-
-	var images []*image.RGBA
-	for _, frameName := range targetTextures {
-		cleanFrame := al.cleanName(frameName)
-		frameData, err := al.GetPayload(cleanFrame)
-		if err != nil {
-			if !strings.Contains(cleanFrame, ".") {
-				cleanFrame += ".PCX"
-				frameData, err = al.GetPayload(cleanFrame)
-			}
-		}
-		if err != nil {
-			fmt.Printf("warning: could not load frame %s for ATX %s: %v\n", frameName, cleanAtx, err)
-			continue
-		}
-		img, err := parser.Parse(bytes.NewReader(frameData), colorPal)
-		if err != nil {
-			fmt.Printf("warning: could not parse PCX frame %s for ATX %s: %v\n", frameName, cleanAtx, err)
-			continue
-		}
-		images = append(images, img)
-	}
-
-	if len(images) == 0 {
-		return nil, fmt.Errorf("no valid frames loaded for ATX %s", cleanAtx)
-	}
-
-	out := al.textures.AddTexture(cleanAtx, images)
-	for _, frameName := range atx.Textures {
-		al.textures.SetCache(al.cleanName(frameName), out)
-	}
-	return out, nil
-}
-
 // AddRawTexture directly maps an indexed raw pixel array to the global texture manager using the active palette.
 func (al *ArchiveLab) AddRawTexture(texName string, sizeX int, sizeY int, pixels []byte, dump bool) {
-	colorPal, err := al.palettes.Get()
+	colorPal, err := al.palettes.Get(al.palIndex)
 	if err != nil {
 		fmt.Printf("invalid palette index %s\n", err.Error())
 		return
@@ -405,9 +292,4 @@ func (al *ArchiveLab) Close() error {
 	}
 	al.files = nil
 	return nil
-}
-
-// cleanName standardizes a file name by trimming whitespace and converting it to uppercase.
-func (al *ArchiveLab) cleanName(name string) string {
-	return strings.ToUpper(strings.TrimSpace(name))
 }

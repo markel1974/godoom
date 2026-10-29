@@ -7,6 +7,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
+var _aliases = map[string]string{
+	"GAMOBXS":  "GAMBOXS",
+	"GAMOBXB":  "GAMBOXB",
+	"GAMBOXP":  "GAMBOXB",
+	"GBAR":     "GGBAR",
+	"GSAK":     "GGSAK",
+	"HORSE2":   "SHORSE2",
+	"LANTERN1": "LANTERN",
+	"NAMBOXT":  "NAMBOXT1",
+}
+
+func GetAlias(name string) string {
+	if v, ok := _aliases[name]; ok {
+		return v
+	}
+	return name
+}
+
 func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
 	for idx, animation := range animations {
 		animation = strings.TrimSpace(strings.ToLower(animation))

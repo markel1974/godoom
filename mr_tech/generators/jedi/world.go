@@ -80,7 +80,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := b.archive.AddTexture(texName)
-			cSector.Floor = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
+			animKind := config.MaterialKindLoop
+			if b.isLiquid(texName) || sector.IsWater() {
+				animKind = config.MaterialKindLiquid
+			}
+			cSector.Floor = config.NewConfigMaterial(names, animKind, 0, 0)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE", sector.Id)
 		}
@@ -92,6 +96,8 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			if sector.IsSky() {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
+			} else if b.isLiquid(texName) {
+				animKind = config.MaterialKindLiquid
 			}
 			cSector.Ceil = config.NewConfigMaterial(names, animKind, 0, 0)
 		} else {
@@ -143,7 +149,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						texName := level.GetTexture(texIdx)
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Kind = config.SegmentWall
-						cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
+						animKind := config.MaterialKindLoop
+						if b.isLiquid(texName) {
+							animKind = config.MaterialKindLiquid
+						}
+						cSeg.Middle = config.NewConfigMaterial(names, animKind, 0, 0)
 					}
 					//else {
 					//	fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
@@ -180,7 +190,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if validTexture(topTexIdx) {
 						texName := level.GetTexture(topTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						cSeg.Upper = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
+						animKind := config.MaterialKindLoop
+						if b.isLiquid(texName) {
+							animKind = config.MaterialKindLiquid
+						}
+						cSeg.Upper = config.NewConfigMaterial(names, animKind, 0, 0)
 					} else if sector.IsSky() && adjacent.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial(nil, config.MaterialKindSky, 0, 0)
 					}
@@ -189,7 +203,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if validTexture(botTexIdx) {
 						texName := level.GetTexture(botTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						cSeg.Lower = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
+						animKind := config.MaterialKindLoop
+						if b.isLiquid(texName) {
+							animKind = config.MaterialKindLiquid
+						}
+						cSeg.Lower = config.NewConfigMaterial(names, animKind, 0, 0)
 					}
 
 					// Texture middle solo per portali con flag esplicito.
@@ -197,7 +215,11 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						if validTexture(wall.MidTexture) {
 							texName := level.GetTexture(wall.MidTexture)
 							names, _ := b.archive.AddTexture(texName)
-							cSeg.Middle = config.NewConfigMaterial(names, config.MaterialKindLoop, 0, 0)
+							animKind := config.MaterialKindLoop
+							if b.isLiquid(texName) {
+								animKind = config.MaterialKindLiquid
+							}
+							cSeg.Middle = config.NewConfigMaterial(names, animKind, 0, 0)
 						}
 					}
 				}
@@ -251,4 +273,17 @@ func (b *World) computeLight(sector *lumps.Sector) (float64, float64) {
 // isDefaultTexture checks if the given texture name is empty or matches the default texture names "DEFAULT.PCX" or "DEFAULT.BM".
 func (b *World) isDefaultTexture(texName string) bool {
 	return len(texName) == 0 || strings.EqualFold(texName, "DEFAULT.PCX") || strings.EqualFold(texName, "DEFAULT.BM")
+}
+
+// isLiquid checks if a texture name corresponds to liquid / water / slime / lava.
+func (b *World) isLiquid(texName string) bool {
+	u := strings.ToUpper(strings.TrimSpace(texName))
+	return strings.Contains(u, "WATER") ||
+		strings.Contains(u, "EXWAT") ||
+		strings.Contains(u, "LAVA") ||
+		strings.Contains(u, "SLIME") ||
+		strings.Contains(u, "WFALL") ||
+		strings.Contains(u, "POOL") ||
+		strings.Contains(u, "RIVER") ||
+		strings.Contains(u, "STREAM")
 }

@@ -37,20 +37,9 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 		if level := b.archive.GetLevel(); level != nil {
 			for _, sec := range level.Sectors {
 				if sec != nil && len(sec.Id) > 0 {
-					validSectors[strings.ToUpper(strings.TrimSpace(sec.Id))] = struct{}{}
+					validSectors[lumps.CleanName(sec.Id)] = struct{}{}
 				}
 			}
-		}
-
-		aliases := map[string]string{
-			"GAMOBXS":  "GAMBOXS",
-			"GAMOBXB":  "GAMBOXB",
-			"GAMBOXP":  "GAMBOXB",
-			"GBAR":     "GGBAR",
-			"GSAK":     "GGSAK",
-			"HORSE2":   "SHORSE2",
-			"LANTERN1": "LANTERN",
-			"NAMBOXT":  "NAMBOXT1",
 		}
 
 		for _, obj := range entities.Objects {
@@ -58,16 +47,14 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 				continue
 			}
 			if len(validSectors) > 0 {
-				secKey := strings.ToUpper(strings.TrimSpace(obj.Sector))
+				secKey := lumps.CleanName(obj.Sector)
 				if _, ok := validSectors[secKey]; !ok {
 					continue
 				}
 			}
 			pos := CreateCoords(b.eMode, obj.X, obj.Y, obj.Z)
-			name := strings.ToUpper(strings.TrimSpace(obj.Name))
-			if alias, ok := aliases[name]; ok {
-				name = alias
-			}
+			name := lumps.CleanKey(obj.Name)
+			name = GetAlias(name)
 
 			switch name {
 			case "SPIRIT", "PLAYER":
@@ -83,7 +70,7 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 				// Multiplayer game-mode logical markers (no visual sprite)
 				continue
 			default:
-				// 1. Try ITM definition
+				// Try ITM definition
 				data, dErr := b.archive.GetPayload(name + lumps.ITMSuffix)
 				if dErr == nil {
 					item := lumps.NewItem()
@@ -95,25 +82,29 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 						continue
 					}
 					targetName := strings.ToUpper(item.Anim)
-					if strings.Contains(targetName, ".NWX") {
+					if strings.Contains(targetName, lumps.NWXSuffix) {
 						cThing, err := b.nwxToThing(item.Anim, config.ThingEnemyDef, pos)
 						if err != nil {
 							fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 							continue
 						}
 						cThings = append(cThings, cThing)
-					} else if strings.Contains(targetName, ".3DO") {
+						continue
+					}
+					if strings.Contains(targetName, lumps.THREEDOSuffix) {
 						cThing, err := b.threedoToThing(targetName, config.ThingItemDef, pos)
 						if err != nil {
 							fmt.Printf("Error parsing %s: %v\n", item.Anim, err)
 							continue
 						}
 						cThings = append(cThings, cThing)
+						continue
 					}
+					fmt.Printf("unknown target %s\n", item.Anim)
 					continue
 				}
 
-				// 2. Direct NWX sprite
+				// Direct NWX sprite
 				if _, nErr := b.archive.GetPayload(name + lumps.NWXSuffix); nErr == nil {
 					cThing, err := b.nwxToThing(name+lumps.NWXSuffix, config.ThingItemDef, pos)
 					if err != nil {
@@ -146,7 +137,7 @@ func (b *Things) Build() (*config.Player, []*config.Thing, error) {
 				continue
 			}
 			pos := CreateCoords(b.eMode, obj.X, obj.Y, obj.Z)
-			key := strings.ToUpper(strings.TrimSpace(obj.Class))
+			key := lumps.CleanName(obj.Class)
 			switch key {
 			case "SPIRIT", "PLAYER":
 				if cPlayer == nil {

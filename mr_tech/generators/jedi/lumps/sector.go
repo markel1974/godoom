@@ -373,6 +373,14 @@ func (s *Sector) IsAbyss() bool {
 	return (s.Flags[0] & 2) != 0
 }
 
+// IsWater determines if the sector has the "water" flag set, based on its Flags property.
+func (s *Sector) IsWater() bool {
+	if len(s.Flags) < 1 {
+		return false
+	}
+	return (s.Flags[0] & 128) != 0
+}
+
 // IsCCW determines if the sector's walls are ordered counter-clockwise (CCW) based on their vertices and area calculation.
 func (s *Sector) IsCCW() bool {
 	n := len(s.Walls)

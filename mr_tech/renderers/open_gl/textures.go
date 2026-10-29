@@ -18,6 +18,7 @@ type Bucket struct {
 	EmissiveArray uint32
 }
 
+// NewBucket creates and initializes a new Bucket with the specified size and a default count of zero.
 func NewBucket(size int) *Bucket {
 	return &Bucket{Size: size, Count: 0}
 }
@@ -85,9 +86,9 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 	// Allocazione VRAM selettiva
 	for i := range tx.buckets {
 		if tx.buckets[i].Count > 0 {
-			tx.buckets[i].DiffuseArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
-			tx.buckets[i].NormalArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
-			tx.buckets[i].EmissiveArray = createTextureArray(tx.ctx, tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].DiffuseArray = tx.createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].NormalArray = tx.createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
+			tx.buckets[i].EmissiveArray = tx.createTextureArray(tx.buckets[i].Size, tx.buckets[i].Size, tx.buckets[i].Count)
 		}
 	}
 
@@ -165,25 +166,27 @@ func (tx *Textures) idxByDim(maxDim int) int {
 	return bIdx
 }
 
-// createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.
-func createTextureArray(ctx api.IContext, width, height int, layers int32) uint32 {
-	computeMipMapLevel := func(width, height int) int32 {
-		maxDim := float64(width)
-		if height > width {
-			maxDim = float64(height)
-		}
-		mipCount := int32(math.Floor(math.Log2(maxDim))) + 1
-		return mipCount
+// computeMipMapLevel calculates the number of mipmap levels based on the maximum dimension of the texture.
+func (tx *Textures) computeMipMapLevel(width, height int) int32 {
+	maxDim := float64(width)
+	if height > width {
+		maxDim = float64(height)
 	}
-	var tex uint32
-	ctx.GenTextures(1, &tex)
-	ctx.BindTexture(api.TEXTURE_2D_ARRAY, tex)
+	mipCount := int32(math.Floor(math.Log2(maxDim))) + 1
+	return mipCount
+}
 
-	mipCount := computeMipMapLevel(width, height)
+// createTextureArray creates a texture array with specified width, height, and number of layers, and sets up mipmaps and filtering.
+func (tx *Textures) createTextureArray(width, height int, layers int32) uint32 {
+	var tex uint32
+	tx.ctx.GenTextures(1, &tex)
+	tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tex)
+
+	mipCount := tx.computeMipMapLevel(width, height)
 
 	// Set MipMap limits BEFORE allocation
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_BASE_LEVEL, 0)
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_LEVEL, mipCount-1)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_BASE_LEVEL, 0)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_LEVEL, mipCount-1)
 
 	// Explicit "Immutable-Style" allocation
 	for i := int32(0); i < mipCount; i++ {
@@ -195,24 +198,24 @@ func createTextureArray(ctx api.IContext, width, height int, layers int32) uint3
 		if h < 1 {
 			h = 1
 		}
-		ctx.TexImage3D(api.TEXTURE_2D_ARRAY, i, api.RGBA8, w, h, layers, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
+		tx.ctx.TexImage3D(api.TEXTURE_2D_ARRAY, i, api.RGBA8, w, h, layers, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
 	}
 
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_MIN_FILTER, gl_api.NEAREST_MIPMAP_NEAREST)
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_MAG_FILTER, gl_api.NEAREST)
 
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MIN_FILTER, api.LINEAR_MIPMAP_LINEAR)
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MIN_FILTER, api.LINEAR_MIPMAP_LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAG_FILTER, api.LINEAR)
 
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_S, api.REPEAT)
-	ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_T, api.REPEAT)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_S, api.REPEAT)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_T, api.REPEAT)
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_S, gl_api.CLAMP_TO_EDGE)
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_T, gl_api.CLAMP_TO_EDGE)
 
 	// Anisotropic filtering
 	var maxAniso float32
-	ctx.GetFloatv(api.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
-	ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
+	tx.ctx.GetFloatv(api.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
+	tx.ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
 
 	return tex
 }

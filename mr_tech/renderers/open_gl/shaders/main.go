@@ -40,8 +40,7 @@ const (
 	MainLocSpecBoostWall
 	MainLocSpecBoostFloor
 	MainLocDebugLights
-
-	// Flashlight
+	// MainLocEnableFlashlight Flashlight
 	MainLocEnableFlashlight
 	MainLocFlashPosView
 	MainLocFlashDir
@@ -49,13 +48,10 @@ const (
 	MainLocFlashFalloff
 	MainLocFlashConeStart
 	MainLocFlashConeEnd
-
-	// Dynamic Shadow Lights
+	// MainLocNumShadowLights Dynamic Shadow Lights
 	MainLocNumShadowLights
-
-	// Dynamic UBO Lights
+	// MainLocNumLights Dynamic UBO Lights
 	MainLocNumLights
-
 	MainLocLast
 )
 

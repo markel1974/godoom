@@ -1,7 +1,5 @@
 package config
 
-// ITextures provides methods to retrieve texture names and access textures by their names.
-
 import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -78,7 +76,6 @@ type Material struct {
 	IsBacksided    bool            `json:"isBacksided"`
 	SpecularBoost  float64         `json:"specularBoost"`
 	Shininess      float64         `json:"shininess"`
-	//hashKey string
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
@@ -104,43 +101,4 @@ func NewConfigMaterial(name string, frames []string, kind MaterialKind) *Materia
 // HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.
 func (m *Material) HashKey() string {
 	return m.Id
-	/*
-		if len(m.hashKey) > 0 {
-			return m.hashKey
-		}
-		h := sha256.New()
-		h.Write([]byte(m.Shader))
-		h.Write([]byte{0})
-		h.Write([]byte{byte(m.BlendMode)})
-		h.Write([]byte{byte(m.CullMode)})
-		if m.DepthWrite {
-			h.Write([]byte{1})
-		} else {
-			h.Write([]byte{0})
-		}
-		h.Write([]byte(m.DiffuseMap))
-		h.Write([]byte(m.NormalMap))
-		h.Write([]byte(m.SpecularMap))
-		h.Write([]byte(m.EmissionMap))
-		h.Write([]byte(m.DetailMap))
-		h.Write([]byte(m.BlendMap))
-
-		h.Write([]byte{0})
-		for _, f := range m.Frames {
-			h.Write([]byte(f))
-			h.Write([]byte{0})
-		}
-		var buf [8]byte
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.U))
-		h.Write(buf[:])
-		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.V))
-		h.Write(buf[:])
-		binary.LittleEndian.PutUint32(buf[:4], uint32(m.Kind))
-		h.Write(buf[:4])
-		var digest [32]byte
-		h.Sum(digest[:0])
-		m.hashKey = base64.RawURLEncoding.EncodeToString(digest[:])
-		return m.hashKey
-
-	*/
 }

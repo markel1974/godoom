@@ -79,7 +79,7 @@ func (w *FrameVertices) AddVertex12(x, y, z, u, v, texLayer, ox, oy, oz, isBB fl
 }
 
 // AddVertex17 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
-func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, spec, shine float32) uint32 {
+func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, specBoost, shininess float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount >= int32(len(w.vertices)) {
@@ -107,9 +107,10 @@ func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	w.vertices[head+13] = lerp
 	// Location 6: aYaw
 	w.vertices[head+14] = yaw
-	// Location 7: shine/specBoost
-	w.vertices[head+15] = spec
-	w.vertices[head+16] = shine
+	// Location 7: specBoost
+	w.vertices[head+15] = specBoost
+	// Location 8: shininess
+	w.vertices[head+16] = shininess
 	slot := w.verticesSlot
 	w.verticesSlot++
 	return slot

@@ -51,6 +51,20 @@ type Material struct {
 	DetailMap   string `json:"detailMap"`
 	BlendMap    string `json:"blendMap"`
 
+	// Multi-layer / Terrain Blend (WorldVertexTransition)
+	DiffuseMap2 string `json:"diffuseMap2"`
+	NormalMap2  string `json:"normalMap2"`
+
+	// Detail Texture Properties
+	DetailScale  float32 `json:"detailScale"`
+	DetailFactor float32 `json:"detailFactor"`
+
+	// Environment / Cubemap Reflections & Tint
+	EnvMap     string    `json:"envMap"`
+	EnvMapMask string    `json:"envMapMask"`
+	EnvMapTint []float32 `json:"envMapTint"`
+	ColorTint  []float32 `json:"colorTint"`
+
 	// UV Animations
 	ScrollU float32 `json:"scrollU"`
 	ScrollV float32 `json:"scrollV"`
@@ -95,6 +109,8 @@ func NewConfigMaterial(name string, frames []string, kind MaterialKind) *Materia
 	}
 	m.SpecularBoost = 0.1
 	m.Shininess = 40.0
+	m.DetailScale = 1.0
+	m.DetailFactor = 1.0
 	return m
 }
 

@@ -41,6 +41,28 @@ type Material struct {
 	specularBoost float64
 	shininess     float64
 
+	// Texture Slots
+	diffuseMap  string
+	normalMap   string
+	specularMap string
+	emissionMap string
+	detailMap   string
+	blendMap    string
+
+	// Multi-layer / Terrain Blend
+	diffuseMap2 string
+	normalMap2  string
+
+	// Detail Properties
+	detailScale  float32
+	detailFactor float32
+
+	// Environment / Cubemap Reflections & Tint
+	envMap     string
+	envMapMask string
+	envMapTint []float32
+	colorTint  []float32
+
 	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
 	tickInterval uint64
 }
@@ -49,11 +71,13 @@ type Material struct {
 // If the slice contains only one Texture, it is set as the current frame.
 func NewMaterial(name string, frames []*Texture, kind int) *Material {
 	a := &Material{
-		name:        name,
-		frames:      frames,
-		frame:       nil,
-		totalFrames: uint64(len(frames)),
-		kind:        kind,
+		name:         name,
+		frames:       frames,
+		frame:        nil,
+		totalFrames:  uint64(len(frames)),
+		kind:         kind,
+		detailScale:  1.0,
+		detailFactor: 1.0,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
 		tickInterval: 32,
 	}
@@ -136,6 +160,48 @@ func (m *Material) GetSpecularBoost() float64 { return m.specularBoost }
 
 // GetShininess returns the shininess property of the material, which determines the specular highlight intensity.
 func (m *Material) GetShininess() float64 { return m.shininess }
+
+// GetDiffuseMap returns the diffuse map path/name.
+func (m *Material) GetDiffuseMap() string { return m.diffuseMap }
+
+// GetNormalMap returns the normal map path/name.
+func (m *Material) GetNormalMap() string { return m.normalMap }
+
+// GetSpecularMap returns the specular map path/name.
+func (m *Material) GetSpecularMap() string { return m.specularMap }
+
+// GetEmissionMap returns the emission map path/name.
+func (m *Material) GetEmissionMap() string { return m.emissionMap }
+
+// GetDetailMap returns the detail map path/name.
+func (m *Material) GetDetailMap() string { return m.detailMap }
+
+// GetBlendMap returns the blend map path/name.
+func (m *Material) GetBlendMap() string { return m.blendMap }
+
+// GetDiffuseMap2 returns the secondary diffuse map for terrain blending.
+func (m *Material) GetDiffuseMap2() string { return m.diffuseMap2 }
+
+// GetNormalMap2 returns the secondary normal map for terrain blending.
+func (m *Material) GetNormalMap2() string { return m.normalMap2 }
+
+// GetDetailScale returns the tiling scale of the detail texture.
+func (m *Material) GetDetailScale() float32 { return m.detailScale }
+
+// GetDetailFactor returns the blend factor of the detail texture.
+func (m *Material) GetDetailFactor() float32 { return m.detailFactor }
+
+// GetEnvMap returns the cubemap environment reflection identifier.
+func (m *Material) GetEnvMap() string { return m.envMap }
+
+// GetEnvMapMask returns the environment reflection mask path/name.
+func (m *Material) GetEnvMapMask() string { return m.envMapMask }
+
+// GetEnvMapTint returns the environment reflection color tint.
+func (m *Material) GetEnvMapTint() []float32 { return m.envMapTint }
+
+// GetColorTint returns the stage/material color tint.
+func (m *Material) GetColorTint() []float32 { return m.colorTint }
 
 // GetBlendMode returns the current blend mode identifier as an integer.
 func (m *Material) GetBlendMode() int {
@@ -279,3 +345,45 @@ func (m *Material) SetSpecularBoost(specularBoost float64) { m.specularBoost = s
 
 // SetShininess sets the shininess property of the material.
 func (m *Material) SetShininess(shininess float64) { m.shininess = shininess }
+
+// SetDiffuseMap sets the diffuse map path/name.
+func (m *Material) SetDiffuseMap(diffuseMap string) { m.diffuseMap = diffuseMap }
+
+// SetNormalMap sets the normal map path/name.
+func (m *Material) SetNormalMap(normalMap string) { m.normalMap = normalMap }
+
+// SetSpecularMap sets the specular map path/name.
+func (m *Material) SetSpecularMap(specularMap string) { m.specularMap = specularMap }
+
+// SetEmissionMap sets the emission map path/name.
+func (m *Material) SetEmissionMap(emissionMap string) { m.emissionMap = emissionMap }
+
+// SetDetailMap sets the detail map path/name.
+func (m *Material) SetDetailMap(detailMap string) { m.detailMap = detailMap }
+
+// SetBlendMap sets the blend map path/name.
+func (m *Material) SetBlendMap(blendMap string) { m.blendMap = blendMap }
+
+// SetDiffuseMap2 sets the secondary diffuse map for terrain blending.
+func (m *Material) SetDiffuseMap2(diffuseMap2 string) { m.diffuseMap2 = diffuseMap2 }
+
+// SetNormalMap2 sets the secondary normal map for terrain blending.
+func (m *Material) SetNormalMap2(normalMap2 string) { m.normalMap2 = normalMap2 }
+
+// SetDetailScale sets the tiling scale of the detail texture.
+func (m *Material) SetDetailScale(detailScale float32) { m.detailScale = detailScale }
+
+// SetDetailFactor sets the blend factor of the detail texture.
+func (m *Material) SetDetailFactor(detailFactor float32) { m.detailFactor = detailFactor }
+
+// SetEnvMap sets the cubemap environment reflection identifier.
+func (m *Material) SetEnvMap(envMap string) { m.envMap = envMap }
+
+// SetEnvMapMask sets the environment reflection mask path/name.
+func (m *Material) SetEnvMapMask(envMapMask string) { m.envMapMask = envMapMask }
+
+// SetEnvMapTint sets the environment reflection color tint.
+func (m *Material) SetEnvMapTint(envMapTint []float32) { m.envMapTint = envMapTint }
+
+// SetColorTint sets the stage/material color tint.
+func (m *Material) SetColorTint(colorTint []float32) { m.colorTint = colorTint }

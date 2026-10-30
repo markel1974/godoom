@@ -66,6 +66,20 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetBacksided(ca.IsBacksided)
 	material.SetSpecularBoost(ca.SpecularBoost)
 	material.SetShininess(ca.Shininess)
+	material.SetDiffuseMap(ca.DiffuseMap)
+	material.SetNormalMap(ca.NormalMap)
+	material.SetSpecularMap(ca.SpecularMap)
+	material.SetEmissionMap(ca.EmissionMap)
+	material.SetDetailMap(ca.DetailMap)
+	material.SetBlendMap(ca.BlendMap)
+	material.SetDiffuseMap2(ca.DiffuseMap2)
+	material.SetNormalMap2(ca.NormalMap2)
+	material.SetDetailScale(ca.DetailScale)
+	material.SetDetailFactor(ca.DetailFactor)
+	material.SetEnvMap(ca.EnvMap)
+	material.SetEnvMapMask(ca.EnvMapMask)
+	material.SetEnvMapTint(ca.EnvMapTint)
+	material.SetColorTint(ca.ColorTint)
 
 	r.container[key] = material
 	return material

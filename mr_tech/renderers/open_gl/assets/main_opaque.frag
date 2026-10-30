@@ -131,14 +131,13 @@ vec3 calculateNormal() {
 }
 
 float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir) {
-    vec3 H = normalize(lightDir + viewDir);
-    float NdotH = max(dot(normal, H), 0.0);
     float shininess = Shininess;
     float specBoost = SpecBoost;
-
     if (shininess <= 0.01) {
         return 0.0;
     }
+    vec3 H = normalize(lightDir + viewDir);
+    float NdotH = max(dot(normal, H), 0.0);
 
     float energyConservation = (shininess + 2.0) / (8.0 * PI);
     return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;

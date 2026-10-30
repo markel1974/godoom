@@ -9,6 +9,7 @@ layout (location = 5) in float aLerp;
 layout (location = 6) in float aYaw;
 layout (location = 7) in float aSpecBoost;
 layout (location = 8) in float aShininess;
+layout (location = 9) in vec2 aDetailParams;
 
 out vec3 TexCoords;
 out float FragDepth;
@@ -19,6 +20,7 @@ out vec4 FragPosLightFlash;
 out float IsFullbright;
 out float SpecBoost;
 out float Shininess;
+out vec2 DetailParams;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
@@ -126,6 +128,7 @@ void main() {
     TexCoords = aTexCoords;
     SpecBoost = aSpecBoost;
     Shininess = aShininess;
+    DetailParams = aDetailParams;
 
     if (aRenderMode > 0.4 && aRenderMode < 1.0) {
         renderLiquid();

@@ -12,6 +12,7 @@ in vec4 FragPosLightFlash;
 in float IsFullbright;
 in float SpecBoost;
 in float Shininess;
+in vec2 DetailParams;
 
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
@@ -143,6 +144,30 @@ float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir) {
     return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
 }
 
+// Procedural micro-surface detail noise generator (eliminates up-close pixelation)
+float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float detailNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash21(i);
+    float b = hash21(i + vec2(1.0, 0.0));
+    float c = hash21(i + vec2(0.0, 1.0));
+    float d = hash21(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float getDetailMask(vec2 uv) {
+    float n1 = detailNoise(uv);
+    float n2 = detailNoise(uv * 2.03 + vec2(1.7, 9.2));
+    return (n1 * 0.65 + n2 * 0.35);
+}
+
 void main() {
     vec4 texColor = getDiffuse(TexCoords);
     if (texColor.a < 0.5) {
@@ -150,6 +175,16 @@ void main() {
     }
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
+
+    // High-frequency detail micro-texture to eliminate pixelation up close
+    if (DetailParams.y > 0.001) {
+        float distFade = clamp(1.0 - FragDepth / 600.0, 0.0, 1.0);
+        if (distFade > 0.001) {
+            float detail = getDetailMask(TexCoords.xy * DetailParams.x);
+            float modFactor = mix(1.0, detail * 2.0, DetailParams.y * distFade);
+            albedo *= modFactor;
+        }
+    }
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 

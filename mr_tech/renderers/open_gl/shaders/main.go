@@ -187,6 +187,10 @@ func (s *Main) Init() error {
 		// Location 8: aShininess - 1 float
 		s.ctx.VertexAttribPointer(8, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(16*4))
 		s.ctx.EnableVertexAttribArray(8)
+
+		// Location 9: aDetailParams (detailScale, detailFactor) - 2 float
+		s.ctx.VertexAttribPointer(9, 2, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(17*4))
+		s.ctx.EnableVertexAttribArray(9)
 	}
 
 	s.ctx.Enable(api.DEPTH_TEST)

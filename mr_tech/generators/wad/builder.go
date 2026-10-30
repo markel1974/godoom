@@ -422,14 +422,16 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 	return sectorsEdges
 }
 
-// configureMaterial assigns physically differentiated specular and shininess properties based on the texture name.
+// configureMaterial assigns physically differentiated specular and detail texture properties based on the texture name.
 func (bld *Builder) configureMaterial(mat *config.Material, texName string) {
 	if mat == nil {
 		return
 	}
-	spec, shine := bld.heuristicMaterialProperties(texName)
+	spec, shine, dScale, dFactor := bld.heuristicMaterialProperties(texName)
 	mat.SpecularBoost = spec
 	mat.Shininess = shine
+	mat.DetailScale = dScale
+	mat.DetailFactor = dFactor
 }
 
 // configureThingMaterial assigns physically differentiated specular and shininess properties for game entities/sprites.
@@ -440,35 +442,36 @@ func (bld *Builder) configureThingMaterial(mat *config.Material, spriteName stri
 	spec, shine := bld.heuristicThingMaterialProperties(spriteName)
 	mat.SpecularBoost = spec
 	mat.Shininess = shine
+	mat.DetailFactor = 0.0 // Preserve clean 2D sprite art
 }
 
-// heuristicMaterialProperties deduces realistic physical specular properties (boost & shininess)
+// heuristicMaterialProperties deduces realistic physical specular and detail texture properties (scale & factor)
 // based on canonical Doom 1 & Doom 2 texture naming conventions.
-func (bld *Builder) heuristicMaterialProperties(texName string) (float64, float64) {
+func (bld *Builder) heuristicMaterialProperties(texName string) (float64, float64, float32, float32) {
 	name := strings.TrimSpace(strings.ToUpper(texName))
 	if name == "" || name == "-" {
-		return 0.0, 0.0
+		return 0.0, 0.0, 1.0, 0.0
 	}
 
-	// Sky: no specular reflections
+	// Sky: no specular reflections or detail noise
 	if name == SkyPicture || strings.Contains(name, "SKY") {
-		return 0.0, 0.0
+		return 0.0, 0.0, 1.0, 0.0
 	}
 
-	// Liquids: highly reflective, mirror-like highlight
+	// Liquids: highly reflective, fluid mirror surface without rock/metal grain
 	if strings.Contains(name, "NUKAGE") || strings.Contains(name, "SLIME") ||
 		strings.Contains(name, "LAVA") || strings.Contains(name, "BLOOD") ||
 		strings.Contains(name, "FWATER") || strings.Contains(name, "WATER") {
-		return 0.75, 95.0
+		return 0.75, 95.0, 1.0, 0.0
 	}
 
-	// Glass, Screens, High-tech lights, Computer terminals: intense sharp highlights
+	// Glass, Screens, High-tech lights, Computer terminals: intense sharp highlights, subtle phosphor grain
 	if strings.HasPrefix(name, "LITE") || strings.Contains(name, "COMP") ||
 		strings.Contains(name, "CONS") || strings.Contains(name, "GLASS") {
-		return 0.85, 110.0
+		return 0.85, 110.0, 32.0, 0.12
 	}
 
-	// Metals, Tech panels, Doors, Pipes, Steels, Crates: clear metallic specular response
+	// Metals, Tech panels, Doors, Pipes, Steels, Crates: clear metallic response and brushed fine grain
 	if strings.HasPrefix(name, "STARTAN") || strings.HasPrefix(name, "TEKWALL") ||
 		strings.HasPrefix(name, "SILVER") || strings.HasPrefix(name, "SHAWN") ||
 		strings.Contains(name, "DOOR") || strings.Contains(name, "SUPPORT") ||
@@ -478,30 +481,30 @@ func (bld *Builder) heuristicMaterialProperties(texName string) (float64, float6
 		strings.Contains(name, "STEP") || strings.HasPrefix(name, "FLOOR4_") ||
 		strings.HasPrefix(name, "FLOOR5_") || strings.HasPrefix(name, "CEIL5_") ||
 		strings.HasPrefix(name, "GATE") || strings.HasPrefix(name, "CRAT") {
-		return 0.65, 75.0
+		return 0.65, 75.0, 24.0, 0.22
 	}
 
-	// Polished Marble / Temple stones: smooth surface with moderate highlight
+	// Polished Marble / Temple stones: smooth surface with moderate highlight and delicate veins
 	if strings.HasPrefix(name, "MARB") || strings.Contains(name, "MARBLE") ||
 		strings.HasPrefix(name, "DEM1_") || strings.HasPrefix(name, "DEM2_") {
-		return 0.35, 45.0
+		return 0.35, 45.0, 20.0, 0.18
 	}
 
-	// Flesh, Skin, Organic hell walls: moist, damp organic sheen
+	// Flesh, Skin, Organic hell walls: moist, damp organic sheen and porous skin micro-texture
 	if strings.HasPrefix(name, "SKIN") || strings.Contains(name, "SNAKE") ||
 		strings.Contains(name, "SKSPINE") || strings.Contains(name, "SP_DUDE") ||
 		strings.Contains(name, "SP_FACE") || strings.Contains(name, "SKFACES") ||
 		strings.HasPrefix(name, "SFLAT") {
-		return 0.30, 28.0
+		return 0.30, 28.0, 14.0, 0.30
 	}
 
-	// Wood: soft diffuse reflection
+	// Wood: soft diffuse reflection and grain texture
 	if strings.Contains(name, "WOOD") || strings.Contains(name, "PANCASE") ||
 		strings.Contains(name, "PANBORDER") || strings.HasPrefix(name, "CEIL1_") {
-		return 0.12, 16.0
+		return 0.12, 16.0, 18.0, 0.25
 	}
 
-	// Rough Stone, Bricks, Cement, Dirt, Soil, Rocks, Grass: matte, diffuse surface
+	// Rough Stone, Bricks, Cement, Dirt, Soil, Rocks, Grass: matte surface with pronounced porous detail
 	if strings.Contains(name, "BROWN") || strings.Contains(name, "BRICK") ||
 		strings.Contains(name, "STONE") || strings.Contains(name, "ROCK") ||
 		strings.Contains(name, "GRAY") || strings.Contains(name, "STUCCO") ||
@@ -509,11 +512,11 @@ func (bld *Builder) heuristicMaterialProperties(texName string) (float64, float6
 		strings.HasPrefix(name, "FLAT5") || strings.HasPrefix(name, "FLAT10") ||
 		strings.HasPrefix(name, "FLOOR0_") || strings.Contains(name, "GRASS") ||
 		strings.Contains(name, "DIRT") || strings.Contains(name, "MUCK") {
-		return 0.05, 8.0
+		return 0.05, 8.0, 16.0, 0.38
 	}
 
 	// Default generic fallback
-	return 0.15, 30.0
+	return 0.15, 30.0, 16.0, 0.25
 }
 
 // heuristicThingMaterialProperties determines specular properties for items, weapons, barrels, and creatures.

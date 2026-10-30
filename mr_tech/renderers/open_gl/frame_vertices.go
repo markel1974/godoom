@@ -24,7 +24,7 @@ type FrameVertices struct {
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
-	const maxStride = 17
+	const maxStride = 19
 	fv := &FrameVertices{
 		ctx:      ctx,
 		vertices: make([]float32, maxVerts),
@@ -70,16 +70,31 @@ func (w *FrameVertices) VerticesStride() int32 {
 
 // AddVertex6 adds a vertex with position (x, y, z), texture coordinates (u, v), and texture layer (texLayer) to the buffer.
 func (w *FrameVertices) AddVertex6(x, y, z, u, v, texLayer float32) uint32 {
-	return w.AddVertex17(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return w.AddVertex19(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0.0)
 }
 
-// AddVertex12 adds a vertex with position, texture coordinates, origin, and a billboard flag to the vertex buffer.
+// AddVertex12 adds a vertex with position, texture coordinates, origin, billboard flag, specular boost, and shininess.
 func (w *FrameVertices) AddVertex12(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32, spec, shine float32) uint32 {
-	return w.AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0, spec, shine)
+	return w.AddVertex19(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0, spec, shine, 1.0, 0.0)
 }
 
-// AddVertex17 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
+// AddVertex14 adds a vertex with position, texture coordinates, origin, billboard flag, specular, and detail parameters.
+func (w *FrameVertices) AddVertex14(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32, spec, shine, detailScale, detailFactor float32) uint32 {
+	return w.AddVertex19(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0, spec, shine, detailScale, detailFactor)
+}
+
+// AddVertex15 adds a vertex with 15 parameters.
+func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw float32) uint32 {
+	return w.AddVertex19(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, 0, 0, 1.0, 0.0)
+}
+
+// AddVertex17 adds a vertex to the buffer with position, texture coordinates, animation, and specular attributes.
 func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, specBoost, shininess float32) uint32 {
+	return w.AddVertex19(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, specBoost, shininess, 1.0, 0.0)
+}
+
+// AddVertex19 adds a vertex to the buffer with 19 parameters, including detail scale and detail factor.
+func (w *FrameVertices) AddVertex19(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, specBoost, shininess, detailScale, detailFactor float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount >= int32(len(w.vertices)) {
@@ -111,6 +126,9 @@ func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	w.vertices[head+15] = specBoost
 	// Location 8: shininess
 	w.vertices[head+16] = shininess
+	// Location 9: aDetailParams
+	w.vertices[head+17] = detailScale
+	w.vertices[head+18] = detailFactor
 	slot := w.verticesSlot
 	w.verticesSlot++
 	return slot

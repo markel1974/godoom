@@ -92,6 +92,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 	}
 
 	anim := config.NewConfigMaterial("thing", []string{materialName}, config.MaterialKindLoop)
+	ConfigureThingMaterial(anim, classname)
 
 	cModel := config.NewModel3DEntry(int(md2.Header.NumFrames), md2.Frames.FrameNames)
 	skinW := float32(md2.Header.SkinWidth)
@@ -166,6 +167,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		texName := bspFace.TexName
 		animKind := TextInfo2ToMaterialKind(bspFace.Info)
 		specificMaterial := config.NewConfigMaterial("bsp", []string{texName}, animKind)
+		ConfigureFaceMaterial(specificMaterial, texName, bspFace.Info)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.GetFrames([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()

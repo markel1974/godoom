@@ -82,6 +82,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
 	}
 	anim := config.NewConfigMaterial("thing", []string{skinName}, config.MaterialKindLoop)
+	ConfigureThingMaterial(anim, classname)
 
 	cModel := config.NewModel3DEntry(int(md1.Header.NumFrames), md1.FrameNames)
 	for idx, f := range md1.Frames {
@@ -132,6 +133,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		specificMaterial := config.NewConfigMaterial("bmodel", []string{texName}, animKind)
 		specificMaterial.U = velX
 		specificMaterial.V = velY
+		ConfigureFaceMaterial(specificMaterial, texName, bspFace.IsSky)
 		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
@@ -215,6 +217,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		specificMaterial := config.NewConfigMaterial("bsp", []string{texName}, animKind)
 		specificMaterial.U = velX
 		specificMaterial.V = velY
+		ConfigureFaceMaterial(specificMaterial, texName, bspFace.IsSky)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.GetFrames([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()

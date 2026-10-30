@@ -31,6 +31,7 @@ func (vs *Volumes) Create(faces []*lumps.RawFace2) []*config.Volume {
 	for _, v := range faces {
 		animKind := TextInfo2ToMaterialKind(v.Info)
 		material := config.NewConfigMaterial("volume", []string{v.TexName}, animKind)
+		ConfigureFaceMaterial(material, v.TexName, v.Info)
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		for _, tri := range triangles {

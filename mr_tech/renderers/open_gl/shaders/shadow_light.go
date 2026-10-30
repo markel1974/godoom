@@ -51,10 +51,6 @@ const (
 	ShadowLightLocFlashConeEnd
 	ShadowLightLocFalloff
 	ShadowLightLocEnableShadows
-	ShadowLightLocShininessWall
-	ShadowLightLocShininessFloor
-	ShadowLightLocSpecBoostWall
-	ShadowLightLocSpecBoostFloor
 	ShadowLightLocBeamRatioFactor
 	ShadowLightLocVolumetricSteps
 	ShadowLightLocIsAbsolute
@@ -177,10 +173,6 @@ func (s *ShadowLight) Compile(a IAssets) error {
 	s.table[ShadowLightLocFlashConeEnd] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashConeEnd\x00"))
 	s.table[ShadowLightLocFalloff] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashFalloff\x00"))
 	s.table[ShadowLightLocEnableShadows] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_enableShadows\x00"))
-	s.table[ShadowLightLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
-	s.table[ShadowLightLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
-	s.table[ShadowLightLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
-	s.table[ShadowLightLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
 	s.table[ShadowLightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
 	s.table[ShadowLightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
 	s.table[ShadowLightLocIsAbsolute] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_isAbsolute\x00"))
@@ -238,10 +230,6 @@ func (s *ShadowLight) Render(renderGeometry func(), lightIndex int32, posViewX, 
 	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocFlashConeEnd), coneEnd)
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocEnableShadows), s.shadowsInt)
 
-	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocShininessWall), float32(s.cal.ShininessWall))
-	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocShininessFloor), float32(s.cal.ShininessFloor))
-	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	s.ctx.Uniform1f(s.GetUniform(ShadowLightLocBeamRatioFactor), float32(s.cal.BeamRatio))
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocVolumetricSteps), int32(s.cal.VolSteps))
 	s.ctx.Uniform1i(s.GetUniform(ShadowLightLocIsAbsolute), isAbsolute)

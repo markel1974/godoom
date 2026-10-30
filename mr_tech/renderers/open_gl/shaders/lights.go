@@ -40,10 +40,6 @@ const (
 	LightLocAmbientLight
 
 	LightLocNumLights
-	LightLocShininessWall
-	LightLocShininessFloor
-	LightLocSpecBoostWall
-	LightLocSpecBoostFloor
 	LightLocDebugLights
 	LightLocLast
 )
@@ -160,10 +156,6 @@ func (s *Lights) Compile(a IAssets) error {
 	//s.table[LightLocVolumetricSteps] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_volumetricSteps\x00"))
 	//s.table[LightLocBeamRatioFactor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_beamRatioFactor\x00"))
 	s.table[LightLocNumLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_numLights\x00"))
-	s.table[LightLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
-	s.table[LightLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
-	s.table[LightLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
-	s.table[LightLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
 	s.table[LightLocDebugLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debugLights\x00"))
 
 	for idx, v := range s.table {
@@ -213,10 +205,6 @@ func (s *Lights) Render(renderGeometry func(), ambient float32) {
 	//s.ctx.Uniform1i(s.GetUniform(LightLocEnableShadows), s.shadows)
 	//s.ctx.Uniform1i(s.GetUniform(LightLocVolumetricSteps), int32(s.cal.VolSteps))
 	//s.ctx.Uniform1f(s.GetUniform(LightLocBeamRatioFactor), float32(s.cal.BeamRatio))
-	s.ctx.Uniform1f(s.GetUniform(LightLocShininessWall), float32(s.cal.ShininessWall))
-	s.ctx.Uniform1f(s.GetUniform(LightLocShininessFloor), float32(s.cal.ShininessFloor))
-	s.ctx.Uniform1f(s.GetUniform(LightLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	s.ctx.Uniform1f(s.GetUniform(LightLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	s.ctx.Uniform1i(s.GetUniform(LightLocDebugLights), int32(s.debugLights))
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.uboLights[s.frameIdx])
 	if s.shadows != 0 {

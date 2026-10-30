@@ -13,10 +13,6 @@ type Calibration struct {
 	Auto               bool
 	AspectRatio        float64
 	FovVerticalDegrees float64
-	ShininessWall      float64
-	ShininessFloor     float64
-	SpecBoostWall      float64
-	SpecBoostFloor     float64
 	BeamRatio          float64
 	VolSteps           float64
 	AoFactor           float64
@@ -37,10 +33,6 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		Auto:               cfg.Auto,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
-		ShininessWall:      cfg.ShininessWall,
-		ShininessFloor:     cfg.ShininessFloor,
-		SpecBoostWall:      cfg.SpecBoostWall,
-		SpecBoostFloor:     cfg.SpecBoostFloor,
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
 		AoFactor:           cfg.AoFactor,

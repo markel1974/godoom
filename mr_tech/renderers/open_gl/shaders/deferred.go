@@ -30,10 +30,6 @@ const (
 	DeferredLocAmbientLight
 	DeferredLocNumLights
 	DeferredLocNumShadowLights
-	DeferredLocShininessWall
-	DeferredLocShininessFloor
-	DeferredLocSpecBoostWall
-	DeferredLocSpecBoostFloor
 	DeferredLocFlashSpaceMatrix
 	DeferredLocFlashPosView
 	DeferredLocFlashSpotDir
@@ -197,10 +193,6 @@ func (s *Deferred) Compile(a IAssets) error {
 	s.table[DeferredLocAmbientLight] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_ambient_light\x00"))
 	s.table[DeferredLocNumLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_numLights\x00"))
 	s.table[DeferredLocNumShadowLights] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_numShadowLights\x00"))
-	s.table[DeferredLocShininessWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessWall\x00"))
-	s.table[DeferredLocShininessFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_shininessFloor\x00"))
-	s.table[DeferredLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostWall\x00"))
-	s.table[DeferredLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_specBoostFloor\x00"))
 
 	s.table[DeferredLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashSpaceMatrix\x00"))
 	s.table[DeferredLocFlashPosView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_flashPosView\x00"))
@@ -295,11 +287,6 @@ func (s *Deferred) Render(ambient float32, flashX, flashY, flashDirX, flashDirY 
 	s.ctx.Uniform2f(s.GetUniform(DeferredLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(DeferredLocAmbientLight), ambient)
 	s.ctx.Uniform1f(s.GetUniform(DeferredLocAoFactor), s.handler.GetAoFactor())
-
-	s.ctx.Uniform1f(s.GetUniform(DeferredLocShininessWall), float32(s.cal.ShininessWall))
-	s.ctx.Uniform1f(s.GetUniform(DeferredLocShininessFloor), float32(s.cal.ShininessFloor))
-	s.ctx.Uniform1f(s.GetUniform(DeferredLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	s.ctx.Uniform1f(s.GetUniform(DeferredLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 
 	// Flashlight
 	s.ctx.UniformMatrix4fv(s.GetUniform(DeferredLocFlashSpaceMatrix), 1, false, s.flashlightMetrics.GetShadowSpacePtr())

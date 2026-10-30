@@ -13,14 +13,7 @@ type Calibration struct {
 	BeamRatio          float64 `json:"beamRatio"`
 	VolSteps           float64 `json:"volSteps"`
 	AoFactor           float64 `json:"aoFactor"`
-
-	//TODO MOVE TO MATERIAL
-	ShininessWall  float64 `json:"shininessWall"`
-	ShininessFloor float64 `json:"shininessFloor"`
-	SpecBoostWall  float64 `json:"specBoostWall"`
-	SpecBoostFloor float64 `json:"specBoostFloor"`
-
-	Auto bool `json:"auto"`
+	Auto               bool    `json:"auto"`
 }
 
 // NewConfigCalibration creates and returns a new Calibration instance with the specified parameters.
@@ -44,12 +37,5 @@ func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoo
 	c.BeamRatio = 0.05
 	c.VolSteps = 8
 	c.AoFactor = 0.8
-
-	//TODO MOVE TO MATERIAL
-	c.ShininessWall = 20.0
-	c.ShininessFloor = 40.0
-	c.SpecBoostWall = 0.05
-	c.SpecBoostFloor = 0.1
-
 	return c
 }

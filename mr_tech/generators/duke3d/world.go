@@ -376,13 +376,6 @@ func (w *World) buildSprites() []*config.Volume {
 			frontFace := config.NewConfigFace(fPoints, uvs, mat, fmt.Sprintf("sp_wall_%d_f", spIdx))
 			vol.AddFace(frontFace)
 
-			// If 2-sided (sp.CStat & 64 == 0), add back face
-			if sp.IsTwoSided() {
-				bPoints := []geometry.XYZ{v1, v0, v3, v2}
-				backFace := config.NewConfigFace(bPoints, uvs, mat, fmt.Sprintf("sp_wall_%d_b", spIdx))
-				vol.AddFace(backFace)
-			}
-
 			volumes = append(volumes, vol)
 
 		case lumps.FloorSprite:

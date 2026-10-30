@@ -10,6 +10,8 @@ in vec3 WorldPos;
 in vec4 FragPosLightRoom;
 in vec4 FragPosLightFlash;
 in float IsFullbright;
+in float SpecBoost;
+in float Shininess;
 
 uniform sampler2DArray u_texture[4];
 uniform sampler2DArray u_normalMap[4];
@@ -26,10 +28,6 @@ uniform float u_emissiveIntensity;
 uniform float u_ambient_light;
 uniform int u_enableShadows;
 
-uniform float u_shininessWall;
-uniform float u_shininessFloor;
-uniform float u_specBoostWall;
-uniform float u_specBoostFloor;
 uniform int u_debugLights;
 
 // Flashlight
@@ -132,11 +130,11 @@ vec3 calculateNormal() {
     return geoNormal;
 }
 
-float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir, bool isHorizontal) {
+float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir) {
     vec3 H = normalize(lightDir + viewDir);
     float NdotH = max(dot(normal, H), 0.0);
-    float shininess = mix(u_shininessWall, u_shininessFloor, float(isHorizontal));
-    float specBoost = mix(u_specBoostWall, u_specBoostFloor, float(isHorizontal));
+    float shininess = Shininess;
+    float specBoost = SpecBoost;
 
     if (shininess <= 0.01) {
         return 0.0;
@@ -165,7 +163,6 @@ void main() {
     }
 
     vec3 finalNormal = calculateNormal();
-    bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
     vec3 V = normalize(-ViewPos);
 
     //  AMBIENT & ROOM LIGHT
@@ -219,7 +216,7 @@ void main() {
             }
 
             float diffFlash = max(dot(finalNormal, L_flash), 0.0);
-            float specFlash = calculateSpecular(finalNormal, L_flash, V, isHorizontal);
+            float specFlash = calculateSpecular(finalNormal, L_flash, V);
             litFlash = (albedo * diffFlash + vec3(specFlash)) * (flashIntensity * 2.5) * shadowFlash * vec3(1.0, 0.98, 0.9);
         }
     }
@@ -280,7 +277,7 @@ void main() {
         }
 
         float NdotL = max(dot(finalNormal, L), 0.0);
-        float spec = calculateSpecular(finalNormal, L, V, isHorizontal);
+        float spec = calculateSpecular(finalNormal, L, V);
         shadowLightsTotal += (albedo * lightColor * NdotL + vec3(spec) * lightColor) * (intensity * expFalloff * spotEffect * shadow);
     }
 
@@ -320,7 +317,7 @@ void main() {
         }
 
         float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
-        float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V, isHorizontal);
+        float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
         dynamicLightsTotal += (diffuse + specular) * intensity * falloff * spotEffect;

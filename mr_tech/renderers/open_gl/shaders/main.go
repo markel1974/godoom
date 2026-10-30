@@ -35,10 +35,6 @@ const (
 	MainLocEmissiveIntensity
 	MainLocAmbientLight
 	MainLocEnableShadows
-	MainLocShininessWall
-	MainLocShininessFloor
-	MainLocSpecBoostWall
-	MainLocSpecBoostFloor
 	MainLocDebugLights
 	// MainLocEnableFlashlight Flashlight
 	MainLocEnableFlashlight
@@ -183,6 +179,14 @@ func (s *Main) Init() error {
 		// Location 6: aYaw (angle) - 1 float
 		s.ctx.VertexAttribPointer(6, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(14*4))
 		s.ctx.EnableVertexAttribArray(6)
+
+		// Location 7: aSpecBoost - 1 float
+		s.ctx.VertexAttribPointer(7, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(15*4))
+		s.ctx.EnableVertexAttribArray(7)
+
+		// Location 8: aShininess - 1 float
+		s.ctx.VertexAttribPointer(8, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(16*4))
+		s.ctx.EnableVertexAttribArray(8)
 	}
 
 	s.ctx.Enable(api.DEPTH_TEST)
@@ -267,10 +271,6 @@ func (s *Main) Compile(a IAssets) error {
 	s.tableOpaque[MainLocEmissiveIntensity] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveIntensity\x00"))
 	s.tableOpaque[MainLocAmbientLight] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_ambient_light\x00"))
 	s.tableOpaque[MainLocEnableShadows] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_enableShadows\x00"))
-	s.tableOpaque[MainLocShininessWall] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_shininessWall\x00"))
-	s.tableOpaque[MainLocShininessFloor] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_shininessFloor\x00"))
-	s.tableOpaque[MainLocSpecBoostWall] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_specBoostWall\x00"))
-	s.tableOpaque[MainLocSpecBoostFloor] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_specBoostFloor\x00"))
 	s.tableOpaque[MainLocDebugLights] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_debugLights\x00"))
 
 	// Flashlight
@@ -361,10 +361,6 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
 	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocAmbientLight), ambient)
 	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocEnableShadows), s.shadows)
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocShininessWall), float32(s.cal.ShininessWall))
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocShininessFloor), float32(s.cal.ShininessFloor))
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocSpecBoostWall), float32(s.cal.SpecBoostWall))
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocSpecBoostFloor), float32(s.cal.SpecBoostFloor))
 	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocDebugLights), int32(s.debugLights))
 
 	// Flashlight

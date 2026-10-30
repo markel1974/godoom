@@ -100,6 +100,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 			floorFrames = w.textures.GetTileFrames(int(sec.FloorPicNum))
 		}
 		cSector.Floor = config.NewConfigMaterial("floorFrames", floorFrames, floorKind)
+		ConfigureMaterial(cSector.Floor, int(sec.FloorPicNum), sec.IsSkyFloor())
 
 		// Ceiling material
 		ceilKind := config.MaterialKindLoop
@@ -111,6 +112,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 			ceilFrames = w.textures.GetTileFrames(int(sec.CeilingPicNum))
 		}
 		cSector.Ceil = config.NewConfigMaterial("ceilFrames", ceilFrames, ceilKind)
+		ConfigureMaterial(cSector.Ceil, int(sec.CeilingPicNum), sec.IsSkyCeiling())
 
 		// First wall reference for UV alignment and slopes
 		wallStart := int(sec.WallPtr)
@@ -234,6 +236,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					cSeg.Kind = config.SegmentWall
 					frames := w.textures.GetTileFrames(int(wall.PicNum))
 					cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
+					ConfigureWallMaterial(cSeg.Middle, &wall)
 				} else {
 					// 2-sided portal / adjoin
 					cSeg.Kind = config.SegmentUnknown
@@ -249,6 +252,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							} else {
 								frames := w.textures.GetTileFrames(int(wall.PicNum))
 								cSeg.Upper = config.NewConfigMaterial("cSeg.Upper", frames, config.MaterialKindLoop)
+								ConfigureWallMaterial(cSeg.Upper, &wall)
 							}
 						}
 						// Lower step wall
@@ -258,6 +262,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							} else {
 								frames := w.textures.GetTileFrames(int(wall.PicNum))
 								cSeg.Lower = config.NewConfigMaterial("cSeg.Lower", frames, config.MaterialKindLoop)
+								ConfigureWallMaterial(cSeg.Lower, &wall)
 							}
 						}
 						// Masked / grating wall / one-way
@@ -268,6 +273,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 							}
 							frames := w.textures.GetTileFrames(tilePic)
 							cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
+							ConfigureWallMaterial(cSeg.Middle, &wall)
 						}
 					}
 				}
@@ -362,6 +368,7 @@ func (w *World) buildSprites() []*config.Volume {
 			}
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
 			mat := config.NewConfigMaterial("wall", frames, config.MaterialKindLoop)
+			ConfigureSpriteMaterial(mat, sp)
 			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
 
 			fPoints := []geometry.XYZ{v0, v1, v2, v3}
@@ -434,6 +441,7 @@ func (w *World) buildSprites() []*config.Volume {
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
 			floorId := fmt.Sprintf("sp_floor_%d", spIdx)
 			mat := config.NewConfigMaterial(floorId, frames, config.MaterialKindLoop)
+			ConfigureSpriteMaterial(mat, sp)
 			vol := config.NewConfigVolume(floorId, "sp_floor")
 			tPoints := []geometry.XYZ{v0, v1, v2, v3}
 			uvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}

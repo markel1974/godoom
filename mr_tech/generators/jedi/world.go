@@ -81,10 +81,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := b.archive.AddTexture(texName)
 			animKind := config.MaterialKindLoop
-			if b.isLiquid(texName) || sector.IsWater() {
+			isLiquid := b.isLiquid(texName) || sector.IsWater()
+			if isLiquid {
 				animKind = config.MaterialKindLiquid
 			}
 			cSector.Floor = config.NewConfigMaterial("cSector.Floor", names, animKind)
+			ConfigureMaterial(cSector.Floor, texName, false, isLiquid, b.eMode)
 		} else {
 			fmt.Println("MISSING FLOOR_TEXTURE", sector.Id)
 		}
@@ -93,13 +95,16 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			texName := level.GetTexture(sector.CeilingTexture)
 			names, _ := b.archive.AddTexture(texName)
 			animKind := config.MaterialKindLoop
-			if sector.IsSky() {
+			isSky := sector.IsSky()
+			isLiquid := b.isLiquid(texName)
+			if isSky {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
-			} else if b.isLiquid(texName) {
+			} else if isLiquid {
 				animKind = config.MaterialKindLiquid
 			}
 			cSector.Ceil = config.NewConfigMaterial("cSector.Ceil", names, animKind)
+			ConfigureMaterial(cSector.Ceil, texName, isSky, isLiquid, b.eMode)
 		} else {
 			fmt.Println("MISSING CEILING_TEXTURE", sector.Id)
 		}
@@ -139,10 +144,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Kind = config.SegmentWall
 						animKind := config.MaterialKindLoop
-						if b.isLiquid(texName) {
+						isLiquid := b.isLiquid(texName)
+						if isLiquid {
 							animKind = config.MaterialKindLiquid
 						}
 						cSeg.Middle = config.NewConfigMaterial("cSector.Middle", names, animKind)
+						ConfigureMaterial(cSeg.Middle, texName, false, isLiquid, b.eMode)
 					}
 					//else {
 					//	fmt.Printf("WARNING MISSING WALL_TEXTURE sector=%s wall=%d mid=%d top=%d bot=%d\n", sector.Id, wallIdx, wall.MidTexture, wall.TopTexture, wall.BotTexture)
@@ -193,12 +200,15 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						texName := level.GetTexture(topTexIdx)
 						names, _ := b.archive.AddTexture(texName)
 						animKind := config.MaterialKindLoop
-						if b.isLiquid(texName) {
+						isLiquid := b.isLiquid(texName)
+						if isLiquid {
 							animKind = config.MaterialKindLiquid
 						}
 						cSeg.Upper = config.NewConfigMaterial("cSeg.Upper", names, animKind)
+						ConfigureMaterial(cSeg.Upper, texName, false, isLiquid, b.eMode)
 					} else if sector.IsSky() && adjacent.IsSky() {
 						cSeg.Upper = config.NewConfigMaterial("sky", nil, config.MaterialKindSky)
+						ConfigureMaterial(cSeg.Upper, "SKY", true, false, b.eMode)
 					}
 
 					botTexIdx := wall.BotTexture
@@ -206,10 +216,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						texName := level.GetTexture(botTexIdx)
 						names, _ := b.archive.AddTexture(texName)
 						animKind := config.MaterialKindLoop
-						if b.isLiquid(texName) {
+						isLiquid := b.isLiquid(texName)
+						if isLiquid {
 							animKind = config.MaterialKindLiquid
 						}
 						cSeg.Lower = config.NewConfigMaterial("cSeg.Lower", names, animKind)
+						ConfigureMaterial(cSeg.Lower, texName, false, isLiquid, b.eMode)
 					}
 
 					// Texture middle solo per portali con flag esplicito.
@@ -218,10 +230,12 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							texName := level.GetTexture(wall.MidTexture)
 							names, _ := b.archive.AddTexture(texName)
 							animKind := config.MaterialKindLoop
-							if b.isLiquid(texName) {
+							isLiquid := b.isLiquid(texName)
+							if isLiquid {
 								animKind = config.MaterialKindLiquid
 							}
 							cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", names, animKind)
+							ConfigureMaterial(cSeg.Middle, texName, false, isLiquid, b.eMode)
 						}
 					}
 				}

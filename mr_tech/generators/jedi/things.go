@@ -216,6 +216,7 @@ func (b *Things) waxToThing(fileName string, kind config.ThingType, pos geometry
 				tn = append(tn, texId)
 			}
 			material := config.NewConfigMaterial("multisprite", tn, config.MaterialKindLoop)
+			ConfigureThingMaterial(material, fileName, b.eMode)
 			multiSprite.Add(material)
 		}
 	}
@@ -269,6 +270,7 @@ func (b *Things) nwxToThing(fileName string, kind config.ThingType, pos geometry
 			}
 			if len(tn) > 0 {
 				material := config.NewConfigMaterial("multisprite", tn, config.MaterialKindLoop)
+				ConfigureThingMaterial(material, fileName, b.eMode)
 				multiSprite.Add(material)
 				counter += len(tn)
 			}
@@ -323,6 +325,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 			if material, ok = texMap[texName]; !ok {
 				tNames, _ := b.archive.AddTexture(texName)
 				material = config.NewConfigMaterial("threedo", tNames, config.MaterialKindLoop)
+				ConfigureThingMaterial(material, fileName, b.eMode)
 				texMap[texName] = material
 			}
 		}

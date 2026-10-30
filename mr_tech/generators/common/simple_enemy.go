@@ -170,10 +170,10 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 			e.self.SetAngle(angle)
 			nx := dx / playerDist2d
 			ny := dy / playerDist2d
-			stopDistance := entity.GetWidth() * 5
-			targetImpulse := e.self.GetImpulse()
-			if playerDist2d < stopDistance {
-				targetImpulse = 0
+			stopDistance := entity.GetWidth() * 3
+			targetImpulse := float64(0)
+			if playerDist2d > stopDistance {
+				targetImpulse = e.self.GetImpulse()
 			}
 			e.self.MoveTowards(nx, ny, e.self.GetSpeed()*targetImpulse, e.self.GetAcceleration())
 		}

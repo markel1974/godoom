@@ -68,10 +68,13 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 	// Load materials for the Model3D model
 	for _, frame := range cModel.Frames {
 		for _, tri := range frame.Triangles {
-			if tri.Material != nil && len(tri.Material.Frames) > 0 {
-				texName := strings.TrimSpace(strings.ToLower(tri.Material.Frames[0]))
-				if lErr := il.Load(texName, false); lErr != nil {
-					fmt.Printf("warning: %s\n", lErr.Error())
+			if tri.Material != nil {
+				ConfigureThingMaterial(tri.Material, classname)
+				if len(tri.Material.Frames) > 0 {
+					texName := strings.TrimSpace(strings.ToLower(tri.Material.Frames[0]))
+					if lErr := il.Load(texName, false); lErr != nil {
+						fmt.Printf("warning: %s\n", lErr.Error())
+					}
 				}
 			}
 		}
@@ -464,6 +467,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 				animKind = config.MaterialKindLiquid
 			}
 			material = config.NewConfigMaterial("md3.part", []string{shaderName}, animKind)
+			t.shaders.MaterialBind(texNameLC, material)
 		}
 
 		// Assemble triangles for each frame

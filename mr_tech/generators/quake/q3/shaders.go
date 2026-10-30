@@ -114,6 +114,35 @@ func (s *Shaders) MaterialBind(texName string, material *config.Material) {
 	material.IsLightning = s.IsLightning(texNameLC)
 	material.IsSky = s.IsSky(texNameLC)
 	material.IsBacksided = s.IsBacksided(texNameLC)
+
+	// Direct parsing of shader stages for DetailMap, DetailScale, ClampU/V, EnvMap
+	if sh, ok := s.container[texNameLC]; ok {
+		for _, st := range sh.stages {
+			if st.clampMap != "" {
+				material.ClampU = true
+				material.ClampV = true
+			}
+			if st.detail {
+				if st.mapData != "" {
+					material.DetailMap = st.mapData
+				}
+				for _, tcMod := range st.tcMods {
+					if len(tcMod) >= 3 && strings.ToLower(tcMod[0]) == "scale" {
+						if su, err := strconv.ParseFloat(tcMod[1], 32); err == nil && su > 0 {
+							material.DetailScale = float32(su)
+						}
+					}
+				}
+			}
+			if len(st.tcGen) > 0 && strings.ToLower(st.tcGen[0]) == "environment" {
+				if st.mapData != "" {
+					material.EnvMap = st.mapData
+				}
+			}
+		}
+	}
+
+	ConfigureMaterial(material, texNameLC, s.Get(texNameLC))
 }
 
 // Get retrieves a Shader from the container by the specified target. Returns nil if the target is not found.

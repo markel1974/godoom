@@ -59,6 +59,52 @@ func randomF(min float64, max float64) float64 {
 	return min + rnd.Float64()*(max-min)
 }
 
+// randomizeMaterial assigns randomized physical specular and detail properties to test rendering effects.
+func (b *Builder) randomizeMaterial(mat *config.Material) {
+	if mat == nil {
+		return
+	}
+	// Test di diversi profili fisici casuali:
+	// 0: Metallo ultra-speculare (riflessi brillanti e netti)
+	// 1: Pietra ruvida / cemento opaco con forte micro-grana di dettaglio
+	// 2: Marmo levigato semi-lucido
+	// 3: Superficie bagnata o vetro (lucentezza estrema, zero grana)
+	// 4: Range continuo casuale
+	mode := random(0, 4)
+	switch mode {
+	case 0: // Metallo lucido
+		mat.SpecularBoost = randomF(0.8, 1.4)
+		mat.Shininess = randomF(70.0, 120.0)
+		mat.DetailScale = float32(randomF(20.0, 32.0))
+		mat.DetailFactor = float32(randomF(0.15, 0.30))
+	case 1: // Pietra/cemento poroso
+		mat.SpecularBoost = randomF(0.02, 0.10)
+		mat.Shininess = randomF(6.0, 15.0)
+		mat.DetailScale = float32(randomF(8.0, 16.0))
+		mat.DetailFactor = float32(randomF(0.40, 0.65))
+	case 2: // Marmo / superficie levigata
+		mat.SpecularBoost = randomF(0.35, 0.60)
+		mat.Shininess = randomF(35.0, 60.0)
+		mat.DetailScale = float32(randomF(16.0, 24.0))
+		mat.DetailFactor = float32(randomF(0.15, 0.25))
+	case 3: // Bagnato / specchio
+		mat.SpecularBoost = randomF(1.0, 1.5)
+		mat.Shininess = randomF(90.0, 130.0)
+		mat.DetailScale = 1.0
+		mat.DetailFactor = 0.0
+	default: // Range continuo
+		mat.SpecularBoost = randomF(0.05, 1.2)
+		mat.Shininess = randomF(10.0, 100.0)
+		mat.DetailScale = float32(randomF(6.0, 32.0))
+		mat.DetailFactor = float32(randomF(0.05, 0.50))
+	}
+
+	// Test variazioni di tiling UV
+	tilingOpts := []float32{0.5, 1.0, 1.0, 1.0, 2.0}
+	mat.ScaleU = tilingOpts[random(0, len(tilingOpts)-1)]
+	mat.ScaleV = tilingOpts[random(0, len(tilingOpts)-1)]
+}
+
 // Builder provides methods to construct and generate a configuration tree for the application.
 type Builder struct {
 }
@@ -90,6 +136,8 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
 	sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindLoop)
 	sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindLoop)
+	b.randomizeMaterial(sector.Floor)
+	b.randomizeMaterial(sector.Ceil)
 	sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 	sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 
@@ -112,6 +160,9 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindLoop)
 		seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindLoop)
 		seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindLoop)
+		b.randomizeMaterial(seg.Upper)
+		b.randomizeMaterial(seg.Lower)
+		b.randomizeMaterial(seg.Middle)
 
 		wallLen := math.Hypot(end.X-start.X, end.Y-start.Y)
 		panning := geometry.XY{}
@@ -225,6 +276,8 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
 			sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindLoop)
 			sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindLoop)
+			b.randomizeMaterial(sector.Floor)
+			b.randomizeMaterial(sector.Ceil)
 
 			sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 			sector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
@@ -277,12 +330,15 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 				if kind == config.SegmentWall {
 					middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
 					seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindLoop)
+					b.randomizeMaterial(seg.Middle)
 					seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 				} else {
 					upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 					lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 					seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindLoop)
 					seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindLoop)
+					b.randomizeMaterial(seg.Upper)
+					b.randomizeMaterial(seg.Lower)
 					seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 					seg.UVAlignLower = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 				}

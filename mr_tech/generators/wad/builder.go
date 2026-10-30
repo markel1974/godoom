@@ -177,6 +177,8 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	}
 	miSector.Ceil = config.NewConfigMaterial("miSector.Ceil", texHandler.FlatCreateAnimation(ceilPic), ceilingType)
 	miSector.Floor = config.NewConfigMaterial("miSector.Floor", texHandler.FlatCreateAnimation(floorPic), floorType)
+	bld.configureMaterial(miSector.Ceil, ceilPic)
+	bld.configureMaterial(miSector.Floor, floorPic)
 	miSector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
 	miSector.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
 	return miSector
@@ -191,6 +193,9 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	seg.Middle = config.NewConfigMaterial("seg.Middle", middleT, config.MaterialKindLoop)
 	seg.Upper = config.NewConfigMaterial("seg.Upper", upperT, config.MaterialKindLoop)
 	seg.Lower = config.NewConfigMaterial("seg.Lower", lowerT, config.MaterialKindLoop)
+	bld.configureMaterial(seg.Middle, e.SideDef.MiddleTexture)
+	bld.configureMaterial(seg.Upper, e.SideDef.UpperTexture)
+	bld.configureMaterial(seg.Lower, e.SideDef.LowerTexture)
 
 	wallTexLen := math.Hypot(e.P2.X-e.P1.X, e.P2.Y-e.P1.Y)
 	panning := geometry.XY{X: float64(e.SideDef.XOffset), Y: float64(e.SideDef.YOffset)}
@@ -246,6 +251,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 		actionFrames := angleAnim[0]
 		latestFrame := actionFrames[len(actionFrames)-1]
 		mat := config.NewConfigMaterial("anim.dead", []string{latestFrame}, config.MaterialKindLoop)
+		bld.configureThingMaterial(mat, sd.Sprite)
 		_ = ms.Add(mat)
 	} else {
 		for idx, angleAnim := range multiAngleAnim {
@@ -255,6 +261,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 			}
 			actionFrames := angleAnim[0]
 			mat := config.NewConfigMaterial("anim", actionFrames, config.MaterialKindLoop)
+			bld.configureThingMaterial(mat, sd.Sprite)
 			animId := ms.Add(mat)
 			//TODO PATCH
 			//animId = 0
@@ -413,6 +420,125 @@ func (bld *Builder) createSectorsEdges(level *Level, vertexes geometry.Polygon) 
 		}
 	}
 	return sectorsEdges
+}
+
+// configureMaterial assigns physically differentiated specular and shininess properties based on the texture name.
+func (bld *Builder) configureMaterial(mat *config.Material, texName string) {
+	if mat == nil {
+		return
+	}
+	spec, shine := bld.heuristicMaterialProperties(texName)
+	mat.SpecularBoost = spec
+	mat.Shininess = shine
+}
+
+// configureThingMaterial assigns physically differentiated specular and shininess properties for game entities/sprites.
+func (bld *Builder) configureThingMaterial(mat *config.Material, spriteName string) {
+	if mat == nil {
+		return
+	}
+	spec, shine := bld.heuristicThingMaterialProperties(spriteName)
+	mat.SpecularBoost = spec
+	mat.Shininess = shine
+}
+
+// heuristicMaterialProperties deduces realistic physical specular properties (boost & shininess)
+// based on canonical Doom 1 & Doom 2 texture naming conventions.
+func (bld *Builder) heuristicMaterialProperties(texName string) (float64, float64) {
+	name := strings.TrimSpace(strings.ToUpper(texName))
+	if name == "" || name == "-" {
+		return 0.0, 0.0
+	}
+
+	// Sky: no specular reflections
+	if name == SkyPicture || strings.Contains(name, "SKY") {
+		return 0.0, 0.0
+	}
+
+	// Liquids: highly reflective, mirror-like highlight
+	if strings.Contains(name, "NUKAGE") || strings.Contains(name, "SLIME") ||
+		strings.Contains(name, "LAVA") || strings.Contains(name, "BLOOD") ||
+		strings.Contains(name, "FWATER") || strings.Contains(name, "WATER") {
+		return 0.75, 95.0
+	}
+
+	// Glass, Screens, High-tech lights, Computer terminals: intense sharp highlights
+	if strings.HasPrefix(name, "LITE") || strings.Contains(name, "COMP") ||
+		strings.Contains(name, "CONS") || strings.Contains(name, "GLASS") {
+		return 0.85, 110.0
+	}
+
+	// Metals, Tech panels, Doors, Pipes, Steels, Crates: clear metallic specular response
+	if strings.HasPrefix(name, "STARTAN") || strings.HasPrefix(name, "TEKWALL") ||
+		strings.HasPrefix(name, "SILVER") || strings.HasPrefix(name, "SHAWN") ||
+		strings.Contains(name, "DOOR") || strings.Contains(name, "SUPPORT") ||
+		strings.Contains(name, "PIPE") || strings.Contains(name, "BRONZE") ||
+		strings.Contains(name, "METAL") || strings.Contains(name, "PANEL") ||
+		strings.Contains(name, "SPACE") || strings.Contains(name, "PLAT") ||
+		strings.Contains(name, "STEP") || strings.HasPrefix(name, "FLOOR4_") ||
+		strings.HasPrefix(name, "FLOOR5_") || strings.HasPrefix(name, "CEIL5_") ||
+		strings.HasPrefix(name, "GATE") || strings.HasPrefix(name, "CRAT") {
+		return 0.65, 75.0
+	}
+
+	// Polished Marble / Temple stones: smooth surface with moderate highlight
+	if strings.HasPrefix(name, "MARB") || strings.Contains(name, "MARBLE") ||
+		strings.HasPrefix(name, "DEM1_") || strings.HasPrefix(name, "DEM2_") {
+		return 0.35, 45.0
+	}
+
+	// Flesh, Skin, Organic hell walls: moist, damp organic sheen
+	if strings.HasPrefix(name, "SKIN") || strings.Contains(name, "SNAKE") ||
+		strings.Contains(name, "SKSPINE") || strings.Contains(name, "SP_DUDE") ||
+		strings.Contains(name, "SP_FACE") || strings.Contains(name, "SKFACES") ||
+		strings.HasPrefix(name, "SFLAT") {
+		return 0.30, 28.0
+	}
+
+	// Wood: soft diffuse reflection
+	if strings.Contains(name, "WOOD") || strings.Contains(name, "PANCASE") ||
+		strings.Contains(name, "PANBORDER") || strings.HasPrefix(name, "CEIL1_") {
+		return 0.12, 16.0
+	}
+
+	// Rough Stone, Bricks, Cement, Dirt, Soil, Rocks, Grass: matte, diffuse surface
+	if strings.Contains(name, "BROWN") || strings.Contains(name, "BRICK") ||
+		strings.Contains(name, "STONE") || strings.Contains(name, "ROCK") ||
+		strings.Contains(name, "GRAY") || strings.Contains(name, "STUCCO") ||
+		strings.Contains(name, "ASHWALL") || strings.HasPrefix(name, "FLAT1") ||
+		strings.HasPrefix(name, "FLAT5") || strings.HasPrefix(name, "FLAT10") ||
+		strings.HasPrefix(name, "FLOOR0_") || strings.Contains(name, "GRASS") ||
+		strings.Contains(name, "DIRT") || strings.Contains(name, "MUCK") {
+		return 0.05, 8.0
+	}
+
+	// Default generic fallback
+	return 0.15, 30.0
+}
+
+// heuristicThingMaterialProperties determines specular properties for items, weapons, barrels, and creatures.
+func (bld *Builder) heuristicThingMaterialProperties(spriteName string) (float64, float64) {
+	s := strings.TrimSpace(strings.ToUpper(spriteName))
+	if len(s) >= 4 {
+		s = s[:4]
+	}
+
+	// Tech, metal items: barrels, armor, keys, weapons
+	if s == "BAR1" || s == "BEXP" || // Barrels
+		s == "ARM1" || s == "ARM2" || s == "BON1" || s == "BON2" || // Armor & Helmets
+		s == "BFUG" || s == "CSAW" || s == "LAUN" || s == "MGUN" || s == "PLAS" || s == "SHOT" || s == "SGN2" || // Weapons
+		s == "BKEY" || s == "RKEY" || s == "YKEY" || s == "BSKU" || s == "RSKU" || s == "YSKU" || // Keys & Skulls
+		s == "SOUL" || s == "MEGA" || s == "PINV" || s == "PSTR" || s == "PINS" || s == "SUIT" { // Artifacts & Tech
+		return 0.70, 75.0
+	}
+
+	// Cyborg / Mechanical Bosses (Cyberdemon, Spider Mastermind, Arachnotron)
+	if s == "CYBR" || s == "SPID" || s == "BSPI" {
+		return 0.45, 55.0
+	}
+
+	// Organic monsters (Imp, Cacodemon, Pinky Demon, Hell Knight, Baron, etc.)
+	return 0.25, 25.0
 }
 
 // heuristicMaterial determines the material type and whether it matches known liquid kinds based on the texture name.

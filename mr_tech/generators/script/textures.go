@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // Textures is a collection of texture resources identified by unique string keys.

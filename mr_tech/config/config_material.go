@@ -1,5 +1,7 @@
 package config
 
+// ITextures provides methods to retrieve texture names and access textures by their names.
+
 import (
 	"crypto/sha256"
 	"encoding/base64"

@@ -40,7 +40,7 @@ type Vertices3D struct {
 }
 
 // NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
-func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
+func NewVertices3D(cfg *config.Thing, materials *config.Materials) *Vertices3D {
 	if cfg.Model3D == nil {
 		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
 	}

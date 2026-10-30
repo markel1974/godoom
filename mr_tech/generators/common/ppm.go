@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // PPMToTexture converts a binary PPM image to a Texture object with the specified properties (name, ID, emissive flag).

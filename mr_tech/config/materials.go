@@ -1,23 +1,20 @@
-package model
+package config
 
-import (
-	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/textures"
-)
+import "github.com/markel1974/godoom/mr_tech/model/textures"
 
 // Materials is a type that manages a collection of named materials and provides access to these materials.
 type Materials struct {
-	frames map[string]*textures.Material
-	tex    textures.ITextures
-	empty  *textures.Material
+	container map[string]*textures.Material
+	handler   textures.ITextures
+	empty     *textures.Material
 }
 
 // NewMaterials creates a new Materials instance with the provided textures and initializes its material map.
-func NewMaterials(tex textures.ITextures) *Materials {
+func NewMaterials(handler textures.ITextures) *Materials {
 	return &Materials{
-		tex:    tex,
-		frames: make(map[string]*textures.Material),
-		empty:  textures.NewMaterial("", nil, int(config.MaterialKindNone), 0, 0),
+		handler:   handler,
+		container: make(map[string]*textures.Material),
+		empty:     textures.NewMaterial("", nil, int(MaterialKindNone), 0, 0),
 	}
 }
 
@@ -28,7 +25,7 @@ func (r *Materials) Setup() error {
 
 // GetTextures returns the ITextures instance associated with the Materials object.
 func (r *Materials) GetTextures() textures.ITextures {
-	return r.tex
+	return r.handler
 }
 
 // GetEmptyMaterial retrieves the default empty material instance stored in the Materials object.
@@ -37,13 +34,13 @@ func (r *Materials) GetEmptyMaterial() *textures.Material {
 }
 
 // GetMaterial retrieves or creates an material based on the given configuration and caches it for reuse.
-func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
+func (r *Materials) GetMaterial(ca *Material) *textures.Material {
 	key := ca.HashKey()
-	material, ok := r.frames[key]
+	material, ok := r.container[key]
 	if ok {
 		return material
 	}
-	tex := r.tex.GetMulti(ca.Frames)
+	tex := r.handler.GetMulti(ca.Frames)
 	material = textures.NewMaterial(ca.Shader, tex, int(ca.Kind), ca.U, ca.V)
 	material.SetBlendMode(ca.BlendMode)
 	material.SetProperties(
@@ -54,6 +51,6 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 		ca.SurfaceParms, ca.SkyParms, ca.CloudParms,
 		ca.FogGen, ca.IsLightning, ca.IsSky, ca.IsBacksided,
 	)
-	r.frames[key] = material
+	r.container[key] = material
 	return material
 }

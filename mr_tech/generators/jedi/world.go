@@ -132,17 +132,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					botPanning = geometry.XY{X: wall.BotOffsetX * 8.0, Y: wall.BotOffsetY * 8.0}
 				}
 
-				cSeg.UVAlign = config.NewUVAlignVertical(false, false, false, midPanning, wallTexLen, scaleSectorW)
-				cSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, topPanning, wallTexLen, scaleSectorW)
-				cSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, botPanning, wallTexLen, scaleSectorW)
-
-				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
-					cSeg.SlopedFloorRef = true
-				}
-				if sector.HasSlopedCeil && wallIdx == sector.BestCeilWall {
-					cSeg.SlopedCeilingRef = true
-				}
-
 				if wall.Adjoin < 0 {
 					texIdx := wall.MidTexture
 					if validTexture(texIdx) {
@@ -185,6 +174,19 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					topTexIdx := wall.TopTexture
 					if wall.DAdjoin >= 0 && !validTexture(topTexIdx) && validTexture(wall.MidTexture) {
 						topTexIdx = wall.MidTexture
+						topPanning = midPanning
+					} else if wall.TopOffsetX == 0 && wall.TopOffsetY == 0 && wall.TopTexture == wall.MidTexture && validTexture(wall.MidTexture) {
+						topPanning = midPanning
+					}
+
+					if adjacent != nil {
+						_, adjCeilY := adjacent.Compute(level)
+						lintel := -adjCeilY
+						floor := -secFloorY
+						if wall.TopOffsetY != 0 && lintel > floor && wall.TopOffsetY >= (lintel-floor) {
+							effTopOffsetY := wall.TopOffsetY - (lintel - floor)
+							topPanning.Y = effTopOffsetY * 8.0
+						}
 					}
 
 					if validTexture(topTexIdx) {
@@ -222,6 +224,20 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							cSeg.Middle = config.NewConfigMaterial(names, animKind, 0, 0)
 						}
 					}
+				}
+
+				cSeg.UVAlign = config.NewUVAlignVertical(false, false, false, midPanning, wallTexLen, scaleSectorW)
+				cSeg.UVAlign.SetRefZ(cSector.CeilY)
+				cSeg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, topPanning, wallTexLen, scaleSectorW)
+				cSeg.UVAlignUpper.SetRefZ(cSector.CeilY)
+				cSeg.UVAlignLower = config.NewUVAlignVertical(false, false, false, botPanning, wallTexLen, scaleSectorW)
+				cSeg.UVAlignLower.SetRefZ(cSector.CeilY)
+
+				if sector.HasSlopedFloor && wallIdx == sector.BestFloorWall {
+					cSeg.SlopedFloorRef = true
+				}
+				if sector.HasSlopedCeil && wallIdx == sector.BestCeilWall {
+					cSeg.SlopedCeilingRef = true
 				}
 			}
 		}

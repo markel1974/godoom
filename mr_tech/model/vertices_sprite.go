@@ -3,9 +3,9 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
@@ -14,7 +14,7 @@ type VerticesSprite struct {
 }
 
 // NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
-func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite {
+func NewVerticesSprite(cfg *config.Thing, materials *config.Materials) *VerticesSprite {
 	w := cfg.Radius * 2
 	d := cfg.Height
 

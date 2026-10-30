@@ -62,7 +62,6 @@ func NewMaterial(shader string, frames []*Texture, kind int, u, v float64) *Mate
 			fmt.Println("nil frame")
 			break
 		}
-		//frame.SetScaleFactor(scaleW, scaleH)
 	}
 	if a.totalFrames == 1 {
 		a.frame = frames[0]

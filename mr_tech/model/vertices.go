@@ -35,7 +35,7 @@ type IVertices interface {
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
-func VerticesFactory(thing IThing, cfg *config.Thing, materials *Materials) IVertices {
+func VerticesFactory(thing IThing, cfg *config.Thing, materials *config.Materials) IVertices {
 	var out IVertices
 	if cfg.Model3D != nil {
 		out = NewVertices3D(cfg, materials)

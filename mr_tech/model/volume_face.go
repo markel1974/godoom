@@ -4,8 +4,8 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
@@ -17,14 +17,14 @@ type Face struct {
 	tri      [3]geometry.XYZ
 	n        geometry.XYZ
 	nAbs     geometry.XYZ
-	material *textures.Material
+	material *textures2.Material
 	u        [3]float64
 	v        [3]float64
 	lockUV   bool
 }
 
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
-func NewFace(tri [3]geometry.XYZ, tag string, material *textures.Material) *Face {
+func NewFace(tri [3]geometry.XYZ, tag string, material *textures2.Material) *Face {
 	out := &Face{
 		tag:      tag,
 		material: material,
@@ -89,7 +89,7 @@ func (fc *Face) GetNormalAbs() (float64, float64, float64) {
 }
 
 // GetCurrentFrameTextureDetails retrieves the material's texture, type, width scale, and height scale for the face.
-func (fc *Face) GetCurrentFrameTextureDetails() (*textures.Texture, int) {
+func (fc *Face) GetCurrentFrameTextureDetails() (*textures2.Texture, int) {
 	if fc.material == nil {
 		return nil, 0
 	}
@@ -97,7 +97,7 @@ func (fc *Face) GetCurrentFrameTextureDetails() (*textures.Texture, int) {
 }
 
 // GetCurrentFrameTexture returns the root texture material of the face, or nil if it does not exist.
-func (fc *Face) GetCurrentFrameTexture() *textures.Texture {
+func (fc *Face) GetCurrentFrameTexture() *textures2.Texture {
 	if fc.material == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (fc *Face) GetCurrentFrameTexture() *textures.Texture {
 }
 
 // GetMaterial retrieves the material object associated with the Face or nil if no material is set.
-func (fc *Face) GetMaterial() *textures.Material {
+func (fc *Face) GetMaterial() *textures2.Material {
 	return fc.material
 }
 

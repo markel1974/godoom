@@ -8,8 +8,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 func materialSize(mat *textures.Material) (float64, float64, bool) {
@@ -51,11 +51,11 @@ func buildQuad(v *Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag stri
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
-	materials *Materials
+	materials *config.Materials
 }
 
 // NewCompiler2d creates and returns a new instance of Compiler2d, used for compiling 2D game sectors and related data.
-func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
+func NewCompiler2d(cfg *config.Root, materials *config.Materials) *Compiler2d {
 	return &Compiler2d{
 		cfg:       cfg,
 		materials: materials,

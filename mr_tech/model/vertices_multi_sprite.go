@@ -5,9 +5,9 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
@@ -22,7 +22,7 @@ type VerticesMultiSprite struct {
 }
 
 // NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
-func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
+func NewVerticesMultiSprite(cfg *config.Thing, materials *config.Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,

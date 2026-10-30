@@ -7,11 +7,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
@@ -26,7 +26,7 @@ type BuilderVolume struct {
 	dcRenderOpaque   *shaders.DrawCommandsRender
 	dcRenderAdditive *shaders.DrawCommandsRender
 	dcRenderLiquid   *shaders.DrawCommandsRender
-	cSky             *textures.Texture
+	cSky             *textures2.Texture
 	cSkyU, cSkyV     float64
 	cal              *model.Calibration
 	visibleVol       *VisibleVolumes
@@ -85,7 +85,7 @@ func (w *BuilderVolume) GetVertices() (unsafe.Pointer, int, int32, unsafe.Pointe
 func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl.GetLights() }
 
 // GetSkyTexture retrieves the current sky texture associated with the BuilderVolume. Returns nil if no texture is set.
-func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }
+func (w *BuilderVolume) GetSkyTexture() *textures2.Texture { return w.cSky }
 
 // GetSkyUV retrieves the horizontal and vertical scroll offsets for the sky texture.
 func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV }
@@ -281,7 +281,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false                               // CULLATO! Non generiamo i vertici
 		}
 		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures2.GlobalTick())
 		if faceCount == 0 {
 			// Anche se non ha facce, teniamo vivo occlusion test
 			return false
@@ -294,7 +294,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	qStatic := func(object aabb.IObject) bool {
 		thing := object.(model.IThing)
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures2.GlobalTick())
 		if faceCount > 0 {
 			pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
 		}

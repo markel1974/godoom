@@ -3,7 +3,7 @@ package sectors
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // SegmentUncovered represents a linear segment in 3D space with associated material, alignment, and light properties.

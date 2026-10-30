@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // DrawCommand represents a rendering command with a starting index and the number of indices to be drawn.

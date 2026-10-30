@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 /*

@@ -6,8 +6,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
@@ -18,7 +18,7 @@ type Things struct {
 	gScale           geometry.XYZ
 	config           []*config.Thing
 	volumes          *Volumes
-	materials        *Materials
+	materials        *config.Materials
 	tree             *aabb.Tree
 	player           *ThingPlayer
 	entities         map[uint64]IThing
@@ -41,7 +41,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *config.Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
@@ -88,7 +88,7 @@ func (th *Things) Setup() error {
 }
 
 // GetMaterials returns a pointer to the Materials associated with the Things instance.
-func (th *Things) GetMaterials() *Materials {
+func (th *Things) GetMaterials() *config.Materials {
 	return th.materials
 }
 

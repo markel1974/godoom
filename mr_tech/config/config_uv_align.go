@@ -19,6 +19,14 @@ type UVAlign struct {
 	AlignBottom bool        `json:"alignBottom,omitempty"`
 	ScaleX      float64     `json:"scaleX,omitempty"`
 	ScaleY      float64     `json:"scaleY,omitempty"`
+	HasRefZ     bool        `json:"hasRefZ,omitempty"`
+	RefZ        float64     `json:"refZ,omitempty"`
+}
+
+// SetRefZ configures an explicit reference Z altitude for vertical texture mapping.
+func (an *UVAlign) SetRefZ(refZ float64) {
+	an.HasRefZ = true
+	an.RefZ = refZ
 }
 
 // NewUVAlignSurface creates and initializes a new UVAlign instance for aligning UV mappings on surfaces.
@@ -100,33 +108,48 @@ func (an *UVAlign) ComputeVertical(w, h float64, t1, t2 float64, s geometry.XY, 
 	}
 
 	var vBS, vBE, vTS, vTE float64
+	dt := t2 - t1
 	if an.AlignBottom {
-		hWallS := (zTS - zBS) * scaleY
-		hWallE := (zTE - zBE) * scaleY
+		zBotStart := zBS
+		if an.HasRefZ {
+			zBotStart = an.RefZ
+		} else if math.Abs(dt) > 1e-6 && math.Abs(t1) > 1e-6 {
+			zBotStart = zBS - (t1/dt)*(zBE-zBS)
+		}
 		if an.FlipY {
-			vBS = (hWallS + an.Panning.Y) / h
-			vBE = (hWallE + an.Panning.Y) / h
-			vTS = an.Panning.Y / h
-			vTE = an.Panning.Y / h
+			zTopStart := zTS
+			if an.HasRefZ {
+				zTopStart = an.RefZ
+			} else if math.Abs(dt) > 1e-6 && math.Abs(t1) > 1e-6 {
+				zTopStart = zTS - (t1/dt)*(zTE-zTS)
+			}
+			vTS = an.Panning.Y/h + ((zTopStart-zTS)*scaleY)/h
+			vTE = an.Panning.Y/h + ((zTopStart-zTE)*scaleY)/h
+			vBS = an.Panning.Y/h + ((zTopStart-zBS)*scaleY)/h
+			vBE = an.Panning.Y/h + ((zTopStart-zBE)*scaleY)/h
 		} else {
-			vBS = an.Panning.Y / h
-			vBE = an.Panning.Y / h
-			vTS = (hWallS + an.Panning.Y) / h
-			vTE = (hWallE + an.Panning.Y) / h
+			vBS = an.Panning.Y/h + ((zBS-zBotStart)*scaleY)/h
+			vBE = an.Panning.Y/h + ((zBE-zBotStart)*scaleY)/h
+			vTS = an.Panning.Y/h + ((zTS-zBotStart)*scaleY)/h
+			vTE = an.Panning.Y/h + ((zTE-zBotStart)*scaleY)/h
 		}
 	} else {
-		hWallS := (zTS - zBS) * scaleY
-		hWallE := (zTE - zBE) * scaleY
+		zTopStart := zTS
+		if an.HasRefZ {
+			zTopStart = an.RefZ
+		} else if math.Abs(dt) > 1e-6 && math.Abs(t1) > 1e-6 {
+			zTopStart = zTS - (t1/dt)*(zTE-zTS)
+		}
 		if an.FlipY {
-			vTS = -an.Panning.Y / h
-			vTE = -an.Panning.Y / h
-			vBS = vTS + hWallS/h
-			vBE = vTE + hWallE/h
+			vTS = -an.Panning.Y/h + ((zTopStart-zTS)*scaleY)/h
+			vTE = -an.Panning.Y/h + ((zTopStart-zTE)*scaleY)/h
+			vBS = -an.Panning.Y/h + ((zTopStart-zBS)*scaleY)/h
+			vBE = -an.Panning.Y/h + ((zTopStart-zBE)*scaleY)/h
 		} else {
-			vTS = 1.0 + an.Panning.Y/h
-			vTE = 1.0 + an.Panning.Y/h
-			vBS = vTS - hWallS/h
-			vBE = vTE - hWallE/h
+			vTS = 1.0 + an.Panning.Y/h + ((zTS-zTopStart)*scaleY)/h
+			vTE = 1.0 + an.Panning.Y/h + ((zTE-zTopStart)*scaleY)/h
+			vBS = 1.0 + an.Panning.Y/h + ((zBS-zTopStart)*scaleY)/h
+			vBE = 1.0 + an.Panning.Y/h + ((zBE-zTopStart)*scaleY)/h
 		}
 	}
 

@@ -6,7 +6,7 @@ import (
 	_ "image/png"
 	"io"
 
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // Textures manages a collection of Texture objects, allowing storage, retrieval, and registration of textures by name.

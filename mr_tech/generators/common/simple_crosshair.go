@@ -3,7 +3,7 @@ package common
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // SimpleCrosshair represents a graphical element used as a visual targeting reference, typically displayed at the center of the screen.

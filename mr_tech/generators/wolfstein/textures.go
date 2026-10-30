@@ -6,7 +6,7 @@ import (
 	_ "image/png"
 	"io"
 
-	"github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
 )
 
 // assets represents an embedded file system containing application resources such as container or assets.

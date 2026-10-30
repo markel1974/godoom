@@ -117,26 +117,19 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 	if e.state == EnemyStateDead {
 		return
 	}
-	//if e.self.GetId() == "monster_soldier" {
-	//	fmt.Println("handleLaunch called for monster_soldier")
-	//}
-	fps := physics.GetFps()
-	if fps <= 0 {
-		return
+
+	getPlayerDistance := func(selfX, selfY, selfZ float64) (float64, float64, float64, float64, float64) {
+		dx := pCenterX - selfX
+		dy := pCenterY - selfY
+		dz := pCenterZ - selfZ
+		dist2dSq := dx*dx + dy*dy
+		dist3dSq := dist2dSq + dz*dz
+		return dx, dy, dz, dist2dSq, dist3dSq
 	}
-	dt := 1.0 / float64(fps)
-
-	entity := e.self.GetEntity()
-	selfX, selfY, selfZ := entity.GetCenter()
-
-	dx := pCenterX - selfX
-	dy := pCenterY - selfY
-	dz := pCenterZ - selfZ
-
-	dist2dSq := dx*dx + dy*dy
-	dist3dSq := dist2dSq + dz*dz
 
 	if e.shootCooldown > 0 {
+		fps := physics.GetFps()
+		dt := 1.0 / float64(fps)
 		e.shootCooldown -= dt
 		if e.shootCooldown < 0 {
 			e.shootCooldown = 0
@@ -150,32 +143,37 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStateIdle:
+		selfX, selfY, selfZ := e.self.GetEntity().GetCenter()
+		_, _, _, _, dist3dSq := getPlayerDistance(selfX, selfY, selfZ)
 		wakeDistance := e.self.GetWakeUpDistance()
-		if dist3dSq < wakeDistance*wakeDistance {
+		if dist3dSq < (wakeDistance * wakeDistance) {
 			e.state = EnemyStateChase
 			e.setAnimationState(config.EnemyStateRun)
 		}
 		return
 
 	case EnemyStateChase:
+		entity := e.self.GetEntity()
+		selfX, selfY, selfZ := entity.GetCenter()
+		dx, dy, _, dist2dSq, dist3dSq := getPlayerDistance(selfX, selfY, selfZ)
 		wakeDistance := e.self.GetWakeUpDistance()
-		if dist3dSq > wakeDistance*wakeDistance {
+		if dist3dSq > (wakeDistance * wakeDistance) {
 			e.state = EnemyStateIdle
 			e.setAnimationState(config.EnemyStateIdle)
 			return
 		}
 		if dist2dSq > 0.000001 {
-			playerDist2d := math.Sqrt(dist2dSq)
-			angle := math.Atan2(dy, dx)
-			e.self.SetAngle(angle)
-			nx := dx / playerDist2d
-			ny := dy / playerDist2d
+			e.self.SetAngle(math.Atan2(dy, dx))
+			nx := float64(0)
+			ny := float64(0)
+			targetSpeed := float64(0)
 			stopDistance := entity.GetWidth() * 3
-			targetImpulse := float64(0)
-			if playerDist2d > stopDistance {
-				targetImpulse = e.self.GetImpulse()
+			if playerDist2d := math.Sqrt(dist2dSq); playerDist2d > stopDistance {
+				nx = dx / playerDist2d
+				ny = dy / playerDist2d
+				targetSpeed = e.self.GetSpeed() * e.self.GetImpulse()
 			}
-			e.self.MoveTowards(nx, ny, e.self.GetSpeed()*targetImpulse, e.self.GetAcceleration())
+			e.self.MoveTowards(nx, ny, targetSpeed, e.self.GetAcceleration())
 		}
 		if entity.IsOnGround() {
 			e.handleJump(e.self, pCenterZ, selfZ, math.Sqrt(dist2dSq), dx, dy)
@@ -190,8 +188,11 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStateAttack:
+		dt := 1.0 / float64(physics.GetFps())
 		e.shootTimer -= dt
 		if e.shootTimer <= 0 {
+			selfX, selfY, selfZ := e.self.GetEntity().GetCenter()
+			dx, dy, dz, dist2dSq, _ := getPlayerDistance(selfX, selfY, selfZ)
 			e.shootTimer = 0
 			angle := math.Atan2(dy, dx)
 			playerDist2d := math.Sqrt(dist2dSq)
@@ -203,6 +204,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStatePain:
+		dt := 1.0 / float64(physics.GetFps())
 		e.painTimer -= dt
 		if e.painTimer <= 0 {
 			e.painTimer = 0

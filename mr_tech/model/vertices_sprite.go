@@ -14,7 +14,7 @@ type VerticesSprite struct {
 }
 
 // NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
-func NewVerticesSprite(cfg *config.Thing, materials *config.Materials) *VerticesSprite {
+func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite {
 	w := cfg.Radius * 2
 	d := cfg.Height
 

@@ -4,5 +4,5 @@ package textures
 type ITextures interface {
 	GetNames() []string
 
-	GetMulti(name []string) []*Texture
+	GetFrames(name []string) []*Texture
 }

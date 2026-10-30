@@ -61,7 +61,7 @@ func (tx *Textures) Setup(t textures2.ITextures) error {
 
 	var valid []*Usable
 	for _, id := range names {
-		tn := t.GetMulti([]string{id})
+		tn := t.GetFrames([]string{id})
 		if len(tn) == 0 {
 			continue
 		}

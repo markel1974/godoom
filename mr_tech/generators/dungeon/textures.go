@@ -45,8 +45,8 @@ func NewTextures(res common.IResources) (*Textures, error) {
 	return t, nil
 }
 
-// GetMulti retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.
-func (t *Textures) GetMulti(ids []string) []*textures.Texture {
+// GetFrames retrieves textures matching the provided `ids` from the Textures resource map. Returns nil if an id is not found.
+func (t *Textures) GetFrames(ids []string) []*textures.Texture {
 	var out []*textures.Texture
 	for _, id := range ids {
 		x, ok := t.resources[id]

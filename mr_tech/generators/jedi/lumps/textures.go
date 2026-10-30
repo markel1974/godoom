@@ -121,8 +121,8 @@ func (t *Textures) add(srcId string, src *image.RGBA) *textures.Texture {
 	return texture
 }
 
-// GetMulti retrieves a list of textures corresponding to the given slice of IDs. Missing textures are replaced with nil.
-func (t *Textures) GetMulti(ids []string) []*textures.Texture {
+// GetFrames retrieves a list of textures corresponding to the given slice of IDs. Missing textures are replaced with nil.
+func (t *Textures) GetFrames(ids []string) []*textures.Texture {
 	l := len(ids)
 	if l == 0 {
 		return nil

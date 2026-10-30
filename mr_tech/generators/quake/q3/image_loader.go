@@ -64,7 +64,7 @@ func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
 	if texName == "noshader" || len(texName) == 0 {
 		return nil
 	}
-	if texes := il.textures.GetMulti([]string{texName}); len(texes) > 0 && texes[0] != nil {
+	if texes := il.textures.GetFrames([]string{texName}); len(texes) > 0 && texes[0] != nil {
 		return nil // Already loaded
 	}
 

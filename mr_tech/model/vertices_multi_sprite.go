@@ -22,7 +22,7 @@ type VerticesMultiSprite struct {
 }
 
 // NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
-func NewVerticesMultiSprite(cfg *config.Thing, materials *config.Materials) *VerticesMultiSprite {
+func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,

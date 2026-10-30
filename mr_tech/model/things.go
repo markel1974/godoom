@@ -18,7 +18,7 @@ type Things struct {
 	gScale           geometry.XYZ
 	config           []*config.Thing
 	volumes          *Volumes
-	materials        *config.Materials
+	materials        *Materials
 	tree             *aabb.Tree
 	player           *ThingPlayer
 	entities         map[uint64]IThing
@@ -41,7 +41,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *config.Materials) *Things {
+func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
 		gScale:           gScale,
@@ -88,7 +88,7 @@ func (th *Things) Setup() error {
 }
 
 // GetMaterials returns a pointer to the Materials associated with the Things instance.
-func (th *Things) GetMaterials() *config.Materials {
+func (th *Things) GetMaterials() *Materials {
 	return th.materials
 }
 

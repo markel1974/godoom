@@ -29,7 +29,7 @@ type Vertices3DEntry struct {
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
-func NewVertices3DEntry(cfg *config.Thing, materials *config.Materials) *Vertices3DEntry {
+func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntry {
 	if len(cfg.Model3DEntry.Frames) == 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
 	}

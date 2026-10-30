@@ -1,6 +1,9 @@
-package config
+package model
 
-import "github.com/markel1974/godoom/mr_tech/model/textures"
+import (
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/model/textures"
+)
 
 // Materials is a type that manages a collection of named materials and provides access to these materials.
 type Materials struct {
@@ -14,7 +17,7 @@ func NewMaterials(handler textures.ITextures) *Materials {
 	return &Materials{
 		handler:   handler,
 		container: make(map[string]*textures.Material),
-		empty:     textures.NewMaterial("", nil, int(MaterialKindNone), 0, 0),
+		empty:     textures.NewMaterial("", nil, int(config.MaterialKindNone), 0, 0),
 	}
 }
 
@@ -34,14 +37,14 @@ func (r *Materials) GetEmptyMaterial() *textures.Material {
 }
 
 // GetMaterial retrieves or creates an material based on the given configuration and caches it for reuse.
-func (r *Materials) GetMaterial(ca *Material) *textures.Material {
+func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	key := ca.HashKey()
 	material, ok := r.container[key]
 	if ok {
 		return material
 	}
-	tex := r.handler.GetMulti(ca.Frames)
-	material = textures.NewMaterial(ca.Shader, tex, int(ca.Kind), ca.U, ca.V)
+	frames := r.handler.GetFrames(ca.Frames)
+	material = textures.NewMaterial(ca.Shader, frames, int(ca.Kind), ca.U, ca.V)
 	material.SetBlendMode(ca.BlendMode)
 	material.SetProperties(
 		ca.CullMode, ca.DepthWrite, ca.AlphaTest,

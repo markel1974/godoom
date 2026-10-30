@@ -12,11 +12,11 @@ import (
 // Compiler3d is a type responsible for compiling 3D volumes and their associated materials and lighting configurations.
 type Compiler3d struct {
 	cfg       *config.Root
-	materials *config.Materials
+	materials *Materials
 }
 
 // NewCompiler3d creates and returns a new instance of the Compiler3d type.
-func NewCompiler3d(cfg *config.Root, materials *config.Materials) *Compiler3d {
+func NewCompiler3d(cfg *config.Root, materials *Materials) *Compiler3d {
 	return &Compiler3d{
 		cfg:       cfg,
 		materials: materials,

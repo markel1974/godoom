@@ -22,9 +22,9 @@ func NewTextures() *Textures {
 	return t
 }
 
-// GetMulti retrieves a list of textures corresponding to the given slice of IDs from the Textures' resources map.
+// GetFrames retrieves a list of textures corresponding to the given slice of IDs from the Textures' resources map.
 // Returns nil if any ID is not found or if resources are uninitialized.
-func (w *Textures) GetMulti(ids []string) []*textures.Texture {
+func (w *Textures) GetFrames(ids []string) []*textures.Texture {
 	var out []*textures.Texture
 	for _, id := range ids {
 		x, ok := w.resources[id]

@@ -51,11 +51,11 @@ func buildQuad(v *Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag stri
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
-	materials *config.Materials
+	materials *Materials
 }
 
 // NewCompiler2d creates and returns a new instance of Compiler2d, used for compiling 2D game sectors and related data.
-func NewCompiler2d(cfg *config.Root, materials *config.Materials) *Compiler2d {
+func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
 	return &Compiler2d{
 		cfg:       cfg,
 		materials: materials,

@@ -42,8 +42,8 @@ func (t *Textures) AddDirect(name string, tex *textures.Texture) {
 	}
 }
 
-// GetMulti retrieves a slice of textures based on the provided list of texture names. Only textures found in resources are returned.
-func (t *Textures) GetMulti(names []string) []*textures.Texture {
+// GetFrames retrieves a slice of textures based on the provided list of texture names. Only textures found in resources are returned.
+func (t *Textures) GetFrames(names []string) []*textures.Texture {
 	out := make([]*textures.Texture, 0, len(names))
 	for _, name := range names {
 		if tex, ok := t.resources[name]; ok {

@@ -48,7 +48,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 
 	cfg.Scale(r.gScale)
 
-	materials := config.NewMaterials(cfg.GetTextures())
+	materials := NewMaterials(cfg.GetTextures())
 	if err := materials.Setup(); err != nil {
 		return err
 	}

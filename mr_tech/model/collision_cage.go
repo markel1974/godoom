@@ -493,9 +493,10 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			}
 		}
 
-		_, texKind := rFace.GetCurrentFrameTextureDetails()
-		if texKind == int(config.MaterialKindSky) {
-			continue // Skybox/transparent: ignore collision
+		if mat := rFace.GetMaterial(); mat != nil {
+			if mat.Kind() == int(config.MaterialKindSky) {
+				continue // Skybox/transparent: ignore collision
+			}
 		}
 
 		if pen <= 0 {

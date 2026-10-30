@@ -146,20 +146,23 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 			var added int
 			for x := 0; x < faceCount; x++ {
 				face := (*faces)[x]
-				matObj := face.GetMaterial()
-				mat, texKind := face.GetCurrentFrameTextureDetails()
-				if mat == nil || matObj == nil {
+				mat := face.GetMaterial()
+				if mat == nil {
 					continue
 				}
-				tId := float32(0)
-				if tId = mat.GetIdentifier(); tId < 0 {
-					tId, _ = w.tex.Get(mat)
-					mat.SetIdentifier(tId)
+				tex := mat.CurrentFrame()
+				if tex == nil {
+					continue
+				}
+				tId := tex.GetIdentifier()
+				if tId < 0 {
+					tId, _ = w.tex.Get(tex)
+					tex.SetIdentifier(tId)
 				}
 				faceBlendT := float32(0.0)
-				switch texKind {
+				switch mat.Kind() {
 				case int(config.MaterialKindSky):
-					w.cSky, w.cSkyU, w.cSkyV = mat, matObj.U(), matObj.V()
+					w.cSky, w.cSkyU, w.cSkyV = tex, mat.U(), mat.V()
 					continue
 				case int(config.MaterialKindLiquid):
 					//TODO ALL MATERIALS
@@ -177,9 +180,9 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 				endIdx := w.fv.GetIndicesLen()
 				if startIdx != endIdx {
-					blendMode := matObj.BlendMode()
+					blendMode := mat.BlendMode()
 					targetDc := w.modes[blendMode]
-					targetDc.Compute(startIdx, endIdx, matObj)
+					targetDc.Compute(startIdx, endIdx, mat)
 					startIdx = endIdx
 				}
 			}
@@ -240,18 +243,18 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 		for fx := 0; fx < faceCount; fx++ {
 			face := faces[fx]
-			frameTex := face.GetCurrentFrameTexture()
-			if frameTex == nil {
-				continue
-			}
 			mat := face.GetMaterial()
 			if mat == nil {
 				continue
 			}
-			tId := float32(0)
-			if tId = frameTex.GetIdentifier(); tId < 0 {
-				tId, _ = w.tex.Get(frameTex)
-				frameTex.SetIdentifier(tId)
+			tex := mat.CurrentFrame()
+			if tex == nil {
+				continue
+			}
+			tId := tex.GetIdentifier()
+			if tId < 0 {
+				tId, _ = w.tex.Get(tex)
+				tex.SetIdentifier(tId)
 			}
 			p := face.GetPoints()
 			u, v := face.GetUV()

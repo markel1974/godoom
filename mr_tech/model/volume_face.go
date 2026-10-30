@@ -88,22 +88,6 @@ func (fc *Face) GetNormalAbs() (float64, float64, float64) {
 	return fc.nAbs.X, fc.nAbs.Y, fc.nAbs.Z
 }
 
-// GetCurrentFrameTextureDetails retrieves the material's texture, type, width scale, and height scale for the face.
-func (fc *Face) GetCurrentFrameTextureDetails() (*textures2.Texture, int) {
-	if fc.material == nil {
-		return nil, 0
-	}
-	return fc.material.CurrentFrame(), fc.material.Kind()
-}
-
-// GetCurrentFrameTexture returns the root texture material of the face, or nil if it does not exist.
-func (fc *Face) GetCurrentFrameTexture() *textures2.Texture {
-	if fc.material == nil {
-		return nil
-	}
-	return fc.material.CurrentFrame()
-}
-
 // GetMaterial retrieves the material object associated with the Face or nil if no material is set.
 func (fc *Face) GetMaterial() *textures2.Material {
 	return fc.material

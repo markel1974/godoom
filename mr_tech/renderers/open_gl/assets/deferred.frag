@@ -121,7 +121,7 @@ void main() {
     vec3 albedo = pow(albedoSpec.rgb, vec3(2.2));
     vec3 ViewPos = positionDepth.xyz;
     vec4 worldPos = u_invView * vec4(ViewPos, 1.0);
-    
+
     vec4 normalData = texture(u_gNormal, TexCoords);
     vec3 finalNormal = normalData.xyz;
     if (dot(finalNormal, ViewPos) > 0.0) {
@@ -129,22 +129,22 @@ void main() {
     }
     vec3 V = normalize(-ViewPos);
     bool isHorizontal = step(0.8, abs(finalNormal.y)) > 0.5;
-    
+
     vec4 emissiveData = texture(u_gEmissive, TexCoords);
     vec3 emissive = emissiveData.rgb;
     float IsFullbright = emissiveData.a;
-    
+
     vec2 screenUV = gl_FragCoord.xy / u_screenResolution;
     float edgeFade = smoothstep(0.0, 0.08, screenUV.x) * smoothstep(1.0, 0.92, screenUV.x);
 
-    // 1. SSAO & AMBIENT BASE
+    // SSAO & AMBIENT BASE
     float ao = texture(u_ssao, TexCoords).r;
     float linearAo = max(pow(ao * u_aoFactor, 2.2), 0.05);
 
     // Modulate ambient by sector light level and SSAO
     vec3 ambient = albedo * (u_ambient_light * linearAo);
 
-    // 2. ROOM DIRECTIONAL LIGHT
+    // ROOM DIRECTIONAL LIGHT
     vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     vec3 litRoom = albedo * NdotL_room * (u_ambient_light * 0.5);
@@ -155,8 +155,8 @@ void main() {
     }
 
     vec3 baseColor = ambient + litRoom + (emissive * edgeFade);
-    
-    // 3. FLASHLIGHT
+
+    // FLASHLIGHT
     vec3 flashLight = vec3(0.0);
     vec3 flashBeam = vec3(0.0);
     if (u_flashIntensityFactor > 0.001) {
@@ -251,21 +251,21 @@ void main() {
         flashBeam = vec3(0.9, 0.95, 1.0) * volFlash * u_flashIntensityFactor * beamRatio * edgeFade;
     }
 
-    // 4. DYNAMIC LIGHTS (Normal lights without shadows)
+    // DYNAMIC LIGHTS (Normal lights without shadows)
     vec3 dynamicLights = vec3(0.0);
 
     for (int i = 0; i < u_numLights; ++i) {
         int lightType = int(u_lights[i].pos_type.w);
         float intensity = max(u_lights[i].color_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
-        
+
         vec3 lightColor = u_lights[i].color_intensity.xyz;
-        
+
         // --- OPTIMIZATION: In the future, these should be computed on CPU ---
         vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
         vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
         // ---------------------------------------------------------------------
-        
+
         float falloffFactor = max(u_lights[i].dir_falloff.w, 1.0);
 
         vec3 L;
@@ -280,7 +280,7 @@ void main() {
             dist = length(diffVec);
             float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
             if (dist > effectiveRadius) continue;
-            
+
             L = diffVec / dist;
             falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
             if (lightType == 1) {
@@ -293,14 +293,14 @@ void main() {
 
         float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
         float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V, isHorizontal);
-        
+
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
-        
+
         dynamicLights += (diffuse + specular) * intensity * falloff * spotEffect;
     }
 
-    // 5. DYNAMIC SHADOW LIGHTS (Top 8 lights with shadows)
+    // DYNAMIC SHADOW LIGHTS (Top 8 lights with shadows)
     vec3 shadowLightsColor = vec3(0.0);
     for (int i = 0; i < u_numShadowLights; ++i) {
         float intensity = u_shadowLights[i].color_intensity.w;

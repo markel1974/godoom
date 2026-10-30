@@ -6,18 +6,16 @@ import (
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
 type Material struct {
-	blendMode   int
-	name        string
-	frame       *Texture
-	frames      []*Texture
-	totalFrames uint64
-	kind        int
-	u           float64
-	v           float64
-
-	clampAnim bool
-	startTick uint64
-
+	blendMode       int
+	name            string
+	frame           *Texture
+	frames          []*Texture
+	totalFrames     uint64
+	kind            int
+	u               float64
+	v               float64
+	clampAnim       bool
+	startTick       uint64
 	shader          string
 	cullMode        int
 	depthWrite      bool
@@ -37,10 +35,8 @@ type Material struct {
 	isLightning     bool
 	isSky           bool
 	isBacksided     bool
-
-	specularBoost float64
-	shininess     float64
-
+	specularBoost   float64
+	shininess       float64
 	// Texture Slots
 	diffuseMap  string
 	normalMap   string
@@ -48,21 +44,24 @@ type Material struct {
 	emissionMap string
 	detailMap   string
 	blendMap    string
-
 	// Multi-layer / Terrain Blend
 	diffuseMap2 string
 	normalMap2  string
-
 	// Detail Properties
 	detailScale  float32
 	detailFactor float32
-
 	// Environment / Cubemap Reflections & Tint
 	envMap     string
 	envMapMask string
 	envMapTint []float32
 	colorTint  []float32
-
+	// UV Transformations & Clamping
+	scaleU float32
+	scaleV float32
+	clampU bool
+	clampV bool
+	// Pipeline Flags
+	vertexLitGeneric bool
 	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
 	tickInterval uint64
 }
@@ -78,6 +77,8 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		kind:         kind,
 		detailScale:  1.0,
 		detailFactor: 1.0,
+		scaleU:       1.0,
+		scaleV:       1.0,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
 		tickInterval: 32,
 	}
@@ -202,6 +203,21 @@ func (m *Material) GetEnvMapTint() []float32 { return m.envMapTint }
 
 // GetColorTint returns the stage/material color tint.
 func (m *Material) GetColorTint() []float32 { return m.colorTint }
+
+// GetScaleU returns the horizontal tiling scale of the material.
+func (m *Material) GetScaleU() float32 { return m.scaleU }
+
+// GetScaleV returns the vertical tiling scale of the material.
+func (m *Material) GetScaleV() float32 { return m.scaleV }
+
+// GetClampU returns whether U texture coordinates are clamped to edge.
+func (m *Material) GetClampU() bool { return m.clampU }
+
+// GetClampV returns whether V texture coordinates are clamped to edge.
+func (m *Material) GetClampV() bool { return m.clampV }
+
+// IsVertexLitGeneric returns whether the material uses VertexLitGeneric shading.
+func (m *Material) IsVertexLitGeneric() bool { return m.vertexLitGeneric }
 
 // GetBlendMode returns the current blend mode identifier as an integer.
 func (m *Material) GetBlendMode() int {
@@ -387,3 +403,18 @@ func (m *Material) SetEnvMapTint(envMapTint []float32) { m.envMapTint = envMapTi
 
 // SetColorTint sets the stage/material color tint.
 func (m *Material) SetColorTint(colorTint []float32) { m.colorTint = colorTint }
+
+// SetScaleU sets the horizontal tiling scale of the material.
+func (m *Material) SetScaleU(scaleU float32) { m.scaleU = scaleU }
+
+// SetScaleV sets the vertical tiling scale of the material.
+func (m *Material) SetScaleV(scaleV float32) { m.scaleV = scaleV }
+
+// SetClampU sets whether U texture coordinates are clamped to edge.
+func (m *Material) SetClampU(clampU bool) { m.clampU = clampU }
+
+// SetClampV sets whether V texture coordinates are clamped to edge.
+func (m *Material) SetClampV(clampV bool) { m.clampV = clampV }
+
+// SetVertexLitGeneric sets whether the material uses VertexLitGeneric shading.
+func (m *Material) SetVertexLitGeneric(vertexLitGeneric bool) { m.vertexLitGeneric = vertexLitGeneric }

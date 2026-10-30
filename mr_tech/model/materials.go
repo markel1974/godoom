@@ -80,6 +80,11 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetEnvMapMask(ca.EnvMapMask)
 	material.SetEnvMapTint(ca.EnvMapTint)
 	material.SetColorTint(ca.ColorTint)
+	material.SetScaleU(ca.ScaleU)
+	material.SetScaleV(ca.ScaleV)
+	material.SetClampU(ca.ClampU)
+	material.SetClampV(ca.ClampV)
+	material.SetVertexLitGeneric(ca.VertexLitGeneric)
 
 	r.container[key] = material
 	return material

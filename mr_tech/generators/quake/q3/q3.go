@@ -11,6 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -26,7 +27,7 @@ type BSPReader struct {
 	arc         interfaces.IArchive
 	headers     lumps.Headers3
 	rs          io.ReadSeeker
-	texManager  *lumps.Textures
+	texManager  *common2.Textures
 	playerAngle float64
 	playerPos   geometry.XYZ
 	shaders     *Shaders
@@ -37,7 +38,7 @@ func NewQ3BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
 	q3 := &BSPReader{
 		arc:        arc,
 		rs:         rs,
-		texManager: lumps.NewTextures(),
+		texManager: common2.NewTextures(),
 		shaders:    NewShaders(),
 	}
 
@@ -72,7 +73,7 @@ func (q3 *BSPReader) GetPlayerInfo() (float64, geometry.XYZ) {
 }
 
 // GetTextures retrieves the texture manager containing the loaded textures for the current Q3 BSP file.
-func (q3 *BSPReader) GetTextures() *lumps.Textures {
+func (q3 *BSPReader) GetTextures() *common2.Textures {
 	return q3.texManager
 }
 

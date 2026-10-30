@@ -24,7 +24,7 @@ type FrameVertices struct {
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
-	const maxStride = 15
+	const maxStride = 17
 	fv := &FrameVertices{
 		ctx:      ctx,
 		vertices: make([]float32, maxVerts),
@@ -70,16 +70,16 @@ func (w *FrameVertices) VerticesStride() int32 {
 
 // AddVertex6 adds a vertex with position (x, y, z), texture coordinates (u, v), and texture layer (texLayer) to the buffer.
 func (w *FrameVertices) AddVertex6(x, y, z, u, v, texLayer float32) uint32 {
-	return w.AddVertex15(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return w.AddVertex17(x, y, z, u, v, texLayer, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
-// AddVertex10 adds a vertex with position, texture coordinates, origin, and a billboard flag to the vertex buffer.
-func (w *FrameVertices) AddVertex10(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32) uint32 {
-	return w.AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0)
+// AddVertex12 adds a vertex with position, texture coordinates, origin, and a billboard flag to the vertex buffer.
+func (w *FrameVertices) AddVertex12(x, y, z, u, v, texLayer, ox, oy, oz, isBB float32, spec, shine float32) uint32 {
+	return w.AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, 0, 0, 0, 0, 0, spec, shine)
 }
 
-// AddVertex15 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
-func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw float32) uint32 {
+// AddVertex17 adds a vertex to the buffer with 15 parameters, including position, texture coordinates, and additional attributes.
+func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, spec, shine float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount >= int32(len(w.vertices)) {
@@ -107,6 +107,9 @@ func (w *FrameVertices) AddVertex15(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	w.vertices[head+13] = lerp
 	// Location 6: aYaw
 	w.vertices[head+14] = yaw
+	// Location 7: shine/specBoost
+	w.vertices[head+15] = spec
+	w.vertices[head+16] = shine
 	slot := w.verticesSlot
 	w.verticesSlot++
 	return slot

@@ -3,7 +3,7 @@ package common
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // SimpleCrosshair represents a graphical element used as a visual targeting reference, typically displayed at the center of the screen.
@@ -66,7 +66,7 @@ func (c *SimpleCrosshair) GetTexture() (string, *textures.Texture) {
 
 // Create initializes and returns a new `Thing` configured as a "crosshair" with specific materials, behaviors, and attributes.
 func (c *SimpleCrosshair) Create() *config.Thing {
-	mat := config.NewConfigMaterial([]string{c.name}, config.MaterialKindLoop, 0, 0)
+	mat := config.NewConfigMaterial("crosshair", []string{c.name}, config.MaterialKindLoop)
 	mat.BlendMode = config.BlendModeAdditive
 	//mat.ScaleW = 1.0
 	//mat.ScaleH = 1.0

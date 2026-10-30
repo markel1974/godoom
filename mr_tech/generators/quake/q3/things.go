@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -16,11 +17,11 @@ import (
 type Things struct {
 	arc        interfaces.IArchive
 	shaders    *Shaders
-	texManager *lumps.Textures
+	texManager *common2.Textures
 }
 
 // NewThings initializes and returns a new Things instance with the provided archive, shaders, and texture manager.
-func NewThings(arc interfaces.IArchive, shaders *Shaders, texManager *lumps.Textures) *Things {
+func NewThings(arc interfaces.IArchive, shaders *Shaders, texManager *common2.Textures) *Things {
 	return &Things{
 		arc:        arc,
 		shaders:    shaders,
@@ -112,8 +113,8 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 		if bspFace.Info.IsSky() {
 			animKind = config.MaterialKindSky
 		}
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 0, 0)
-		specificMaterial.Shader = texName
+		specificMaterial := config.NewConfigMaterial("thing", []string{texName}, animKind)
+		specificMaterial.Name = texName
 		texNameLC := strings.ToLower(texName)
 
 		t.shaders.MaterialBind(texNameLC, specificMaterial)
@@ -462,7 +463,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			if t.shaders.IsLiquid(texNameLC) {
 				animKind = config.MaterialKindLiquid
 			}
-			material = config.NewConfigMaterial([]string{shaderName}, animKind, 0, 0)
+			material = config.NewConfigMaterial("md3.part", []string{shaderName}, animKind)
 		}
 
 		// Assemble triangles for each frame

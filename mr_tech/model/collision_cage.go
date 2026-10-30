@@ -465,7 +465,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		lFace := faces.lFace
 
 		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.GetMaterial(); mat != nil && mat.Kind() == int(config.MaterialKindLiquid) {
+		if mat := rFace.GetMaterial(); mat != nil && mat.GetKind() == int(config.MaterialKindLiquid) {
 			//fmt.Println("Liquid material detected")
 			continue
 		}
@@ -494,7 +494,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		}
 
 		if mat := rFace.GetMaterial(); mat != nil {
-			if mat.Kind() == int(config.MaterialKindSky) {
+			if mat.GetKind() == int(config.MaterialKindSky) {
 				continue // Skybox/transparent: ignore collision
 			}
 		}

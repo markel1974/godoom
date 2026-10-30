@@ -291,9 +291,9 @@ func (p *Builder) parseSector(r io.Reader, cfgVertices []geometry.XY, configSect
 		end := cfgVertices[v2Idx.Val]
 
 		seg := config.NewConfigSegment("", neighborId.Kind, start, end)
-		seg.Middle = config.NewConfigMaterial([]string{"wall2.ppm"}, config.MaterialKindLoop, 0, 0)
-		seg.Lower = config.NewConfigMaterial([]string{"wall.ppm"}, config.MaterialKindLoop, 0, 0)
-		seg.Upper = config.NewConfigMaterial([]string{"wall3.ppm"}, config.MaterialKindLoop, 0, 0)
+		seg.Middle = config.NewConfigMaterial("seg.Middle", []string{"wall2.ppm"}, config.MaterialKindLoop)
+		seg.Lower = config.NewConfigMaterial("seg.Lower", []string{"wall.ppm"}, config.MaterialKindLoop)
+		seg.Upper = config.NewConfigMaterial("seg.Upper", []string{"wall3.ppm"}, config.MaterialKindLoop)
 
 		wallLen := math.Hypot(end.X-start.X, end.Y-start.Y) * scaleTex
 		panning := geometry.XY{}
@@ -303,8 +303,8 @@ func (p *Builder) parseSector(r io.Reader, cfgVertices []geometry.XY, configSect
 
 		cs.Segments = append(cs.Segments, seg)
 	}
-	cs.Floor = config.NewConfigMaterial([]string{"floor.ppm"}, config.MaterialKindLoop, 0, 0)
-	cs.Ceil = config.NewConfigMaterial([]string{"ceil.ppm"}, config.MaterialKindLoop, 0, 0)
+	cs.Floor = config.NewConfigMaterial("cs.Floor", []string{"floor.ppm"}, config.MaterialKindLoop)
+	cs.Ceil = config.NewConfigMaterial("cs.Ceil", []string{"ceil.ppm"}, config.MaterialKindLoop)
 
 	cs.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
 	cs.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)

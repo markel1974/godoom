@@ -12,6 +12,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -27,7 +28,7 @@ type BSPReader struct {
 	header      lumps.Headers2
 	rs          io.ReadSeeker
 	palette     [256]color.RGBA
-	texManager  *lumps.Textures
+	texManager  *common2.Textures
 	playerAngle float64
 	playerPos   geometry.XYZ
 }
@@ -37,7 +38,7 @@ func NewQ2BSPReader(arc interfaces.IArchive, rs io.ReadSeeker) *BSPReader {
 	return &BSPReader{
 		arc:        arc,
 		rs:         rs,
-		texManager: lumps.NewTextures(),
+		texManager: common2.NewTextures(),
 	}
 }
 
@@ -72,7 +73,7 @@ func (q2 *BSPReader) GetArchive() interfaces.IArchive {
 }
 
 // GetTextures returns a reference to the Textures manager associated with the BSPReader.
-func (q2 *BSPReader) GetTextures() *lumps.Textures {
+func (q2 *BSPReader) GetTextures() *common2.Textures {
 	return q2.texManager
 }
 

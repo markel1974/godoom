@@ -4,8 +4,8 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	textures2 "github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
@@ -199,7 +199,7 @@ func (fc *Face) computeUV() {
 	if fc.material == nil {
 		return
 	}
-	tex := fc.material.CurrentFrame()
+	tex := fc.material.GetCurrentFrame()
 	if tex == nil {
 		return
 	}

@@ -6,7 +6,7 @@ import (
 	"image/color"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
-	"github.com/markel1974/godoom/mr_tech/model/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Textures manages a collection of 2D textures and provides caching for efficient retrieval.

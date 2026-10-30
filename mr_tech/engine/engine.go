@@ -4,8 +4,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Engine represents the core structure for managing game components and interactions.
@@ -34,7 +34,7 @@ func (e *Engine) GetPlayer() *model.ThingPlayer {
 }
 
 // GetTextures retrieves the ITextures instance, providing access to texture names and indexed textures.
-func (e *Engine) GetTextures() textures2.ITextures {
+func (e *Engine) GetTextures() textures.ITextures {
 	return e.things.GetTextures()
 }
 
@@ -87,7 +87,7 @@ func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
 	// Post-Sync ViewMatrix
 	vi.Update(player)
 	// Update Textures
-	textures2.Tick()
+	textures.Tick()
 }
 
 // GetCalibration retrieves calibration parameters used for rendering, derived from the volumes' spatial configuration.

@@ -5,9 +5,9 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
@@ -152,15 +152,11 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	if material == nil {
 		return nil, fmt.Errorf("material is nil")
 	}
-	tex := material.HeadFrame()
+	tex := material.GetHeadFrame()
 	if tex == nil {
 		return nil, fmt.Errorf("texture is nil")
 	}
-	texW, texH := tex.Size()
-	//scaleW, scaleH := tex.GetScaleFactor()
-	width := float64(texW)  // * scaleW
-	height := float64(texH) // * scaleH
-
+	width, height := tex.GetSize()
 	halfW := width * 0.5
 	halfY := halfW
 	halfH := height * 0.5

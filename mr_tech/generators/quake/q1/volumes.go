@@ -38,7 +38,9 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 		} else if len(v.TexName) > 0 && v.TexName[0] == '*' {
 			animKind = config.MaterialKindLiquid
 		}
-		material := config.NewConfigMaterial([]string{v.TexName}, animKind, velX, velY)
+		material := config.NewConfigMaterial("volume", []string{v.TexName}, animKind)
+		material.U = velX
+		material.V = velY
 		triangles := lumps.TriangulateConvex3d(v.Points)
 
 		//isLiquid := len(v.TexName) > 0 && v.TexName[0] == '*'

@@ -106,7 +106,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					sequence = []string{"image194.png", "image195.png", "image196.png", "image197.png"}
 				}
 				id := fmt.Sprintf("thing_%s_%d_%d", object, x, y)
-				anim := config.NewConfigMaterial(sequence, config.MaterialKindLoop, 0, 0)
+				anim := config.NewConfigMaterial(id, sequence, config.MaterialKindLoop)
 				if useEnemy {
 					cfgThing := config.NewConfigThing(id, pos, angle, kind, 10.0, 1, 1, 6)
 					cfgThing.Sprite = config.NewConfigSprite(anim)
@@ -127,8 +127,8 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 			cs.FloorY = 0
 			cs.CeilY = wp.sectorHeight * ScaleFactorH
 			cs.Tag = "wolf_cell"
-			cs.Floor = config.NewConfigMaterial([]string{"image91.png"}, config.MaterialKindLoop, 0, 0)
-			cs.Ceil = config.NewConfigMaterial([]string{"image89.png"}, config.MaterialKindLoop, 0, 0)
+			cs.Floor = config.NewConfigMaterial("cs.Floor", []string{"image91.png"}, config.MaterialKindLoop)
+			cs.Ceil = config.NewConfigMaterial("cs.Ceil", []string{"image89.png"}, config.MaterialKindLoop)
 			cs.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scalePlaneX, scalePlaneY)
 			cs.CeilAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scalePlaneX, scalePlaneY)
 			x0, x1 := float64(x)*wp.tileSize, float64(x+1)*wp.tileSize
@@ -153,7 +153,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					wp.addSegment(cs, width, height, pBL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidT, pMidB)
-						anim := config.NewConfigMaterial([]string{"image99.png"}, config.MaterialKindLoop, 0, 0)
+						anim := config.NewConfigMaterial("image99.png", []string{"image99.png"}, config.MaterialKindLoop)
 						doorSeg.Middle = anim
 						doorLen := math.Hypot(pMidB.X-pMidT.X, pMidB.Y-pMidT.Y) * (64.0 / wp.tileSize)
 						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
@@ -171,7 +171,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					wp.addSegment(cs, width, height, pMidL, pTL, x-1, y, cell)
 					if !wp.openDoors {
 						doorSeg := config.NewConfigSegment(cs.Id, config.SegmentWall, pMidL, pMidR)
-						anim := config.NewConfigMaterial([]string{"image98.png"}, config.MaterialKindLoop, 0, 0)
+						anim := config.NewConfigMaterial("image98.png", []string{"image98.png"}, config.MaterialKindLoop)
 						doorSeg.Middle = anim
 						doorLen := math.Hypot(pMidR.X-pMidL.X, pMidR.Y-pMidL.Y) * (64.0 / wp.tileSize)
 						doorSeg.UVAlign = config.NewUVAlignVertical(false, false, false, geometry.XY{}, doorLen, scaleWallY)
@@ -275,7 +275,7 @@ func (wp *Parser) addSegment(cs *config.Sector, width, height int, start, end ge
 			texName = fmt.Sprintf("image%d.png", idx)
 		}
 		if texName != "" {
-			anim := config.NewConfigMaterial([]string{texName}, config.MaterialKindLoop, 0, 0)
+			anim := config.NewConfigMaterial("seg.Middle", []string{texName}, config.MaterialKindLoop)
 			seg.Middle = anim
 		}
 		wallTexLen := math.Hypot(end.X-start.X, end.Y-start.Y) * (64.0 / wp.tileSize)

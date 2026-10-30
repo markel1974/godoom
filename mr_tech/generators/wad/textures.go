@@ -5,7 +5,7 @@ import (
 	"image"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/model/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 const FlatId = "__FLAT__"

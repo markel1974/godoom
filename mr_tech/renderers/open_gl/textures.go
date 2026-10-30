@@ -4,8 +4,8 @@ import (
 	"math"
 	"sort"
 
-	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	textures3 "github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Bucket represents a structure used for storing texture-related arrays and metadata for rendering operations.
@@ -28,7 +28,7 @@ type Textures struct {
 	ctx      api.IContext
 	slots    []int
 	buckets  []*Bucket
-	textures map[*textures2.Texture]float32
+	textures map[*textures3.Texture]float32
 }
 
 // NewTextures creates and returns a new instance of Textures with an initialized map to store texture references.
@@ -38,7 +38,7 @@ func NewTextures(ctx api.IContext) *Textures {
 		ctx:      ctx,
 		slots:    slots,
 		buckets:  make([]*Bucket, len(slots)),
-		textures: make(map[*textures2.Texture]float32),
+		textures: make(map[*textures3.Texture]float32),
 	}
 	for i := range tx.slots {
 		tx.buckets[i] = NewBucket(tx.slots[i])
@@ -47,7 +47,7 @@ func NewTextures(ctx api.IContext) *Textures {
 }
 
 // Setup initializes texture arrays and their respective VRAM buckets for efficient rendering and management.
-func (tx *Textures) Setup(t textures2.ITextures) error {
+func (tx *Textures) Setup(t textures3.ITextures) error {
 	names := t.GetNames()
 	if len(names) == 0 {
 		return nil
@@ -56,7 +56,7 @@ func (tx *Textures) Setup(t textures2.ITextures) error {
 
 	type Usable struct {
 		maxDim int
-		tex    *textures2.Texture
+		tex    *textures3.Texture
 	}
 
 	var valid []*Usable
@@ -69,13 +69,13 @@ func (tx *Textures) Setup(t textures2.ITextures) error {
 		if tex == nil {
 			continue
 		}
-		w, h := tex.Size()
+		w, h := tex.GetSize()
 		if w <= 0 || h <= 0 {
 			continue
 		}
-		maxDim := w
-		if h > maxDim {
-			maxDim = h
+		maxDim := int(w)
+		if int(h) > maxDim {
+			maxDim = int(h)
 		}
 		usable := &Usable{maxDim: maxDim, tex: tex}
 		valid = append(valid, usable)
@@ -124,7 +124,7 @@ func (tx *Textures) Setup(t textures2.ITextures) error {
 }
 
 // Get retrieves the layer value associated with the given texture and returns a boolean indicating if the texture exists.
-func (tx *Textures) Get(tex *textures2.Texture) (float32, bool) {
+func (tx *Textures) Get(tex *textures3.Texture) (float32, bool) {
 	t, ok := tx.textures[tex]
 	return t, ok
 }

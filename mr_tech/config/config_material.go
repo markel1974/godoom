@@ -3,11 +3,6 @@ package config
 // ITextures provides methods to retrieve texture names and access textures by their names.
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
@@ -36,13 +31,14 @@ const (
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.
 type Material struct {
-	Id        string       `json:"id"`
-	BlendMode int          `json:"blendMode"`
-	Shader    string       `json:"shader"`
-	Frames    []string     `json:"frames"`
-	Kind      MaterialKind `json:"kind"`
-	U         float64      `json:"u"`
-	V         float64      `json:"v"`
+	Id        string `json:"id"`
+	BlendMode int    `json:"blendMode"`
+	Name      string `json:"name"`
+	//Shader    string       `json:"shader"`
+	Frames []string     `json:"frames"`
+	Kind   MaterialKind `json:"kind"`
+	U      float64      `json:"u"`
+	V      float64      `json:"v"`
 
 	// Universal Modern Rendering Properties
 	CullMode   int     `json:"cullMode"`
@@ -80,18 +76,18 @@ type Material struct {
 	IsLightning    bool            `json:"isLightning"`
 	IsSky          bool            `json:"isSky"`
 	IsBacksided    bool            `json:"isBacksided"`
-
-	hashKey string
+	SpecularBoost  float64         `json:"specularBoost"`
+	Shininess      float64         `json:"shininess"`
+	//hashKey string
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
-func NewConfigMaterial(frames []string, kind MaterialKind, u, v float64) *Material {
+func NewConfigMaterial(name string, frames []string, kind MaterialKind) *Material {
 	m := &Material{
+		Name:       name,
 		Id:         utils.NextUUId(),
 		Frames:     frames,
 		Kind:       kind,
-		U:          u,
-		V:          v,
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
 		BlendMode:  BlendModeOpaque,
@@ -100,44 +96,51 @@ func NewConfigMaterial(frames []string, kind MaterialKind, u, v float64) *Materi
 		m.BlendMode = BlendModeLiquid
 		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco!
 	}
+	m.SpecularBoost = 0.1
+	m.Shininess = 40.0
 	return m
 }
 
 // HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.
 func (m *Material) HashKey() string {
-	if len(m.hashKey) > 0 {
+	return m.Id
+	/*
+		if len(m.hashKey) > 0 {
+			return m.hashKey
+		}
+		h := sha256.New()
+		h.Write([]byte(m.Shader))
+		h.Write([]byte{0})
+		h.Write([]byte{byte(m.BlendMode)})
+		h.Write([]byte{byte(m.CullMode)})
+		if m.DepthWrite {
+			h.Write([]byte{1})
+		} else {
+			h.Write([]byte{0})
+		}
+		h.Write([]byte(m.DiffuseMap))
+		h.Write([]byte(m.NormalMap))
+		h.Write([]byte(m.SpecularMap))
+		h.Write([]byte(m.EmissionMap))
+		h.Write([]byte(m.DetailMap))
+		h.Write([]byte(m.BlendMap))
+
+		h.Write([]byte{0})
+		for _, f := range m.Frames {
+			h.Write([]byte(f))
+			h.Write([]byte{0})
+		}
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.U))
+		h.Write(buf[:])
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.V))
+		h.Write(buf[:])
+		binary.LittleEndian.PutUint32(buf[:4], uint32(m.Kind))
+		h.Write(buf[:4])
+		var digest [32]byte
+		h.Sum(digest[:0])
+		m.hashKey = base64.RawURLEncoding.EncodeToString(digest[:])
 		return m.hashKey
-	}
-	h := sha256.New()
-	h.Write([]byte(m.Shader))
-	h.Write([]byte{0})
-	h.Write([]byte{byte(m.BlendMode)})
-	h.Write([]byte{byte(m.CullMode)})
-	if m.DepthWrite {
-		h.Write([]byte{1})
-	} else {
-		h.Write([]byte{0})
-	}
-	h.Write([]byte(m.DiffuseMap))
-	h.Write([]byte(m.NormalMap))
-	h.Write([]byte(m.SpecularMap))
-	h.Write([]byte(m.EmissionMap))
-	h.Write([]byte(m.DetailMap))
-	h.Write([]byte(m.BlendMap))
-	h.Write([]byte{0})
-	for _, f := range m.Frames {
-		h.Write([]byte(f))
-		h.Write([]byte{0})
-	}
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.U))
-	h.Write(buf[:])
-	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(m.V))
-	h.Write(buf[:])
-	binary.LittleEndian.PutUint32(buf[:4], uint32(m.Kind))
-	h.Write(buf[:4])
-	var digest [32]byte
-	h.Sum(digest[:0])
-	m.hashKey = base64.RawURLEncoding.EncodeToString(digest[:])
-	return m.hashKey
+
+	*/
 }

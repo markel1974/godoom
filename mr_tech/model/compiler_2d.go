@@ -8,15 +8,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
-	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 func materialSize(mat *textures.Material) (float64, float64, bool) {
 	if mat == nil {
 		return 0, 0, false
 	}
-	tex := mat.HeadFrame()
+	tex := mat.GetHeadFrame()
 	if tex == nil {
 		return 0, 0, false
 	}
@@ -273,7 +273,7 @@ func (r *Compiler2d) compile2d() ([]*sectors.Sector, []*sectors.SegmentUncovered
 				continue
 			}
 			mat := anim.GetMaterial(matCfg)
-			if mat == nil || mat.HeadFrame() == nil {
+			if mat == nil || mat.GetHeadFrame() == nil {
 				continue
 			}
 			curFS, curFE := cs.FloorY, cs.FloorY
@@ -408,7 +408,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 			neighbor := seg.GetNeighbor()
 			if neighbor == nil {
 				matMiddle := seg.GetMaterialIndex(1)
-				if matMiddle == nil || matMiddle.HeadFrame() == nil {
+				if matMiddle == nil || matMiddle.GetHeadFrame() == nil {
 					continue
 				}
 				s2 := geometry.XY{X: s.X, Y: s.Y}
@@ -515,7 +515,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 
 			// Middle wall for two-sided portal segments with middle material (e.g. fences, grates, masked/transparent walls)
 			matMiddle := seg.GetMaterialIndex(1)
-			if matMiddle != nil && matMiddle.HeadFrame() != nil {
+			if matMiddle != nil && matMiddle.GetHeadFrame() != nil {
 				midBotS := max(curFS, neiFS)
 				midBotE := max(curFE, neiFE)
 				midTopS := min(curCS, neiCS)
@@ -543,7 +543,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncovered) []*Volume {
 	var volumes []*Volume
 	for _, su := range segments {
-		if su.GetMat() == nil || su.GetMat().HeadFrame() == nil {
+		if su.GetMat() == nil || su.GetMat().GetHeadFrame() == nil {
 			continue
 		}
 		vol3d := NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())

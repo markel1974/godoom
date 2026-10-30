@@ -7,9 +7,9 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Vertices3DEntry represents a structured collection of 3D model data, including frames, actions, and volume association.
@@ -84,7 +84,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		for triIdx, tri := range cfgFrame.Triangles {
 			tag := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
-			var material *textures2.Material
+			var material *textures.Material
 			if tri.Material != nil {
 				material = materials.GetMaterial(tri.Material)
 			}
@@ -136,7 +136,7 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 	v.currentAction = idx
 	v.startFrame = v.actionIntervals[idx][0]
 	v.endFrame = v.actionIntervals[idx][1]
-	v.startTick = textures2.GlobalTick()
+	v.startTick = textures.GlobalTick()
 	v.clampAnim = false
 	if idx < len(v.actionClamps) {
 		v.clampAnim = v.actionClamps[idx]
@@ -178,7 +178,7 @@ func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) 
 		}
 		frameFloat = float64(elapsed) / groupSize
 	} else {
-		frameFloat = textures2.TickGrouped(tick, int(groupSize))
+		frameFloat = textures.TickGrouped(tick, int(groupSize))
 	}
 
 	animLength := v.endFrame - v.startFrame + 1

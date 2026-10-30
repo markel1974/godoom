@@ -6,7 +6,7 @@ import (
 	"image/color"
 	"sort"
 
-	"github.com/markel1974/godoom/mr_tech/model/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Textures manages a collection of Texture objects and provides mapping and retrieval functionalities.

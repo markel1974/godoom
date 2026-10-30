@@ -1,8 +1,8 @@
 package open_gl
 
 import (
-	"github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // DrawCommands manages a collection of draw command objects used to define rendering batches in a graphics pipeline.

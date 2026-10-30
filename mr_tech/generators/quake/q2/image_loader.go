@@ -10,18 +10,18 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 )
 
 // ImageLoader handles image loading, texture management, and color palette application in rendering workflows.
 type ImageLoader struct {
 	arc      interfaces.IArchive
-	textures *lumps.Textures
+	textures *common2.Textures
 	palette  [256]color.RGBA
 }
 
 // NewImageLoader initializes a new ImageLoader with the given IArchive, Textures, and color palette.
-func NewImageLoader(arc interfaces.IArchive, textures *lumps.Textures, palette [256]color.RGBA) *ImageLoader {
+func NewImageLoader(arc interfaces.IArchive, textures *common2.Textures, palette [256]color.RGBA) *ImageLoader {
 	return &ImageLoader{arc: arc, textures: textures, palette: palette}
 }
 

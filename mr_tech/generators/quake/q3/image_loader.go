@@ -12,7 +12,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 )
 
 type imageDriver struct {
@@ -38,12 +38,12 @@ func BaseName(in string) string {
 // ImageLoader is a utility for loading image assets from an archive implementing the IArchive interface.
 type ImageLoader struct {
 	arc      interfaces.IArchive
-	textures *lumps.Textures
+	textures *common2.Textures
 	shaders  *Shaders
 }
 
 // NewImageLoader creates a new ImageLoader instance using the provided IArchive for file access and directory operations.
-func NewImageLoader(arc interfaces.IArchive, textures *lumps.Textures, shaders *Shaders) *ImageLoader {
+func NewImageLoader(arc interfaces.IArchive, textures *common2.Textures, shaders *Shaders) *ImageLoader {
 	return &ImageLoader{arc: arc, textures: textures, shaders: shaders}
 }
 

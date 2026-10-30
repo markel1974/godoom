@@ -49,7 +49,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 	return c
 }
 
-// init initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.
+// Setup initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.
 func (c *Calibration) Setup() error {
 	if !c.Auto {
 		return nil

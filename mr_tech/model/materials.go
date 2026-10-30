@@ -2,7 +2,7 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Materials is a type that manages a collection of named materials and provides access to these materials.
@@ -17,7 +17,7 @@ func NewMaterials(handler textures.ITextures) *Materials {
 	return &Materials{
 		handler:   handler,
 		container: make(map[string]*textures.Material),
-		empty:     textures.NewMaterial("", nil, int(config.MaterialKindNone), 0, 0),
+		empty:     textures.NewMaterial("empty", nil, int(config.MaterialKindNone)),
 	}
 }
 
@@ -43,17 +43,30 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	if ok {
 		return material
 	}
-	frames := r.handler.GetFrames(ca.Frames)
-	material = textures.NewMaterial(ca.Shader, frames, int(ca.Kind), ca.U, ca.V)
+	material = textures.NewMaterial(ca.Name, r.handler.GetFrames(ca.Frames), int(ca.Kind))
+	material.SetUV(ca.U, ca.V)
 	material.SetBlendMode(ca.BlendMode)
-	material.SetProperties(
-		ca.CullMode, ca.DepthWrite, ca.AlphaTest,
-		ca.IsFog, ca.FogColor, ca.PolygonOffset,
-		ca.Sort, ca.NoMipmaps, ca.NoPicMip,
-		ca.EntityMergeable, ca.DeformVertexes,
-		ca.SurfaceParms, ca.SkyParms, ca.CloudParms,
-		ca.FogGen, ca.IsLightning, ca.IsSky, ca.IsBacksided,
-	)
+	material.SetCullMode(ca.CullMode)
+	material.SetDepthWrite(ca.DepthWrite)
+	material.SetAlphaTest(ca.AlphaTest)
+	material.SetFog(ca.IsFog)
+	material.SetFogColor(ca.FogColor)
+	material.SetPolygonOffset(ca.PolygonOffset)
+	material.SetSort(ca.Sort)
+	material.SetNoMipmaps(ca.NoMipmaps)
+	material.SetNoPicMip(ca.NoPicMip)
+	material.SetEntityMergeable(ca.EntityMergeable)
+	material.SetDeformVertexes(ca.DeformVertexes)
+	material.SetSurfaceParms(ca.SurfaceParms)
+	material.SetSkyParms(ca.SkyParms)
+	material.SetCloudParms(ca.CloudParms)
+	material.SetFogGen(ca.FogGen)
+	material.SetLightning(ca.IsLightning)
+	material.SetSky(ca.IsSky)
+	material.SetBacksided(ca.IsBacksided)
+	material.SetSpecularBoost(ca.SpecularBoost)
+	material.SetShininess(ca.Shininess)
+
 	r.container[key] = material
 	return material
 }

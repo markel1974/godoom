@@ -3,17 +3,17 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
-	textures2 "github.com/markel1974/godoom/mr_tech/model/textures"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // IBuilder provides methods for constructing and managing rendering data, such as vertices, lights, textures, and draw commands.
 type IBuilder interface {
 	Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine)
 
-	GetSkyTexture() *textures2.Texture
+	GetSkyTexture() *textures.Texture
 
 	GetSkyUV() (float64, float64)
 
@@ -240,7 +240,7 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 			skyTex.SetIdentifier(skyTexId)
 		}
 		u, v := w.builder.GetSkyUV()
-		tick := float32(textures2.TickF())
+		tick := float32(textures.TickF())
 		w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
 	}
 	// MSAA resolution

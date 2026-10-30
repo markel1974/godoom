@@ -34,20 +34,14 @@ func NewTexture(name string, id uint32, w int, h int, autoEmissive bool) *Textur
 	return z
 }
 
-// CreateNormal initializes the normal map as a 2D slice with dimensions matching the texture's width and height.
-func (t *Texture) CreateNormal() {
-	t.normal = make([][]int, t.w)
-	for i := range t.normal {
-		t.normal[i] = make([]int, t.h)
-	}
+// GetId returns the unique identifier (id) of the Texture instance as a uint32.
+func (t *Texture) GetId() uint32 {
+	return t.id
 }
 
-// CreateEmissive initializes the emissive map as a 2D slice with dimensions matching the texture's width and height.
-func (t *Texture) CreateEmissive() {
-	t.emissive = make([][]int, t.w)
-	for i := range t.emissive {
-		t.emissive[i] = make([]int, t.h)
-	}
+// GetName returns the name of the texture as a string.
+func (t *Texture) GetName() string {
+	return t.name
 }
 
 // GetIdentifier retrieves the unique floating-point identifier associated with the Texture instance.
@@ -65,6 +59,11 @@ func (t *Texture) GetSize() (float64, float64) {
 	return float64(t.w), float64(t.h)
 }
 
+// Size returns the width and height of the texture as two integer values.
+//func (t *Texture) Size() (int, int) {
+//	return t.w, t.h
+//}
+
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) Get(x int, y int) int {
 	return t.GetDiffuse(x, y)
@@ -77,102 +76,36 @@ func (t *Texture) Set(x int, y int, color int) {
 
 // GetDiffuse retrieves the diffuse color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) GetDiffuse(x int, y int) int {
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		return t.diffuse[x][y]
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	return t.diffuse[x][y]
 }
 
 // GetNormal retrieves the normal value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) GetNormal(x int, y int) int {
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		return t.normal[x][y]
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	return t.normal[x][y]
 }
 
 // GetEmissive retrieves the emissive color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) GetEmissive(x int, y int) int {
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		return t.emissive[x][y]
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	return t.emissive[x][y]
 }
 
 // SetDiffuse updates the diffuse color of the pixel at specified coordinates (x, y), wrapping them within texture bounds.
 func (t *Texture) SetDiffuse(x int, y int, color int) {
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		t.diffuse[x][y] = color
-		return
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	t.diffuse[x][y] = color
 }
 
 // SetNormal sets the normal value at the specified coordinates (x, y) after wrapping them within texture bounds.
 func (t *Texture) SetNormal(x int, y int, color int) {
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		t.normal[x][y] = color
-		return
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	t.normal[x][y] = color
 }
 
 func (t *Texture) SetEmissive(x int, y int, color int) {
-	if t.emissive == nil {
-		return
-	}
-	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
-		t.emissive[x][y] = color
-		return
-	}
-	x %= t.w
-	y %= t.h
-	if x < 0 {
-		x += t.w
-	}
-	if y < 0 {
-		y += t.h
-	}
+	x, y = t.updateCoords(x, y)
 	t.emissive[x][y] = color
 }
 
@@ -186,42 +119,25 @@ func (t *Texture) BeginY() int {
 	return 0
 }
 
-// Size returns the width and height of the texture as two integer values.
-func (t *Texture) Size() (int, int) {
-	return t.w, t.h
-}
-
-// GetId returns the unique identifier (id) of the Texture instance as a uint32.
-func (t *Texture) GetId() uint32 {
-	return t.id
-}
-
-// GetName returns the name of the texture as a string.
-func (t *Texture) GetName() string {
-	return t.name
-}
-
-func (t *Texture) RGBA() (int, int, []uint8) {
-	w, h := t.Size()
-	return w, h, t.rgba(t.diffuse)
-}
-
-// Diffuse returns the width, height, and a pixel array representing the texture in RGBA format.
-func (t *Texture) rgba(data [][]int) []uint8 {
-	const stride = 4
-	width, height := t.Size()
-	pixels := make([]uint8, width*height*stride)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			c := data[x][y]
-			idx := (y*width + x) * stride
-			pixels[idx] = uint8(c >> 24)   // R
-			pixels[idx+1] = uint8(c >> 16) // G
-			pixels[idx+2] = uint8(c >> 8)  // B
-			pixels[idx+3] = uint8(c)       // A
-		}
+// CreateNormal initializes the normal map as a 2D slice with dimensions matching the texture's width and height.
+func (t *Texture) CreateNormal() {
+	t.normal = make([][]int, t.w)
+	for i := range t.normal {
+		t.normal[i] = make([]int, t.h)
 	}
-	return pixels
+}
+
+// CreateEmissive initializes the emissive map as a 2D slice with dimensions matching the texture's width and height.
+func (t *Texture) CreateEmissive() {
+	t.emissive = make([][]int, t.w)
+	for i := range t.emissive {
+		t.emissive[i] = make([]int, t.h)
+	}
+}
+
+// RGBA returns the width, height, and a slice of uint8 representing the texture's pixel data in RGBA format.
+func (t *Texture) RGBA() (int, int, []uint8) {
+	return t.w, t.h, t.rgba(t.diffuse)
 }
 
 // Compile generates normal, diffuse, and emissive maps for the texture given a target size in pixels.
@@ -251,4 +167,37 @@ func (t *Texture) Compile(size int) ([]uint8, []uint8, []uint8) {
 		}
 	}
 	return diffuseScaled, normalScaled, emissiveScaled
+}
+
+// updateCoords wraps the given coordinates (x, y) within the bounds of the texture, ensuring they remain non-negative.
+func (t *Texture) updateCoords(x, y int) (int, int) {
+	if uint(x) < uint(t.w) && uint(y) < uint(t.h) {
+		return x, y
+	}
+	x %= t.w
+	y %= t.h
+	if x < 0 {
+		x += t.w
+	}
+	if y < 0 {
+		y += t.h
+	}
+	return x, y
+}
+
+// Diffuse returns the width, height, and a pixel array representing the texture in RGBA format.
+func (t *Texture) rgba(data [][]int) []uint8 {
+	const stride = 4
+	pixels := make([]uint8, t.w*t.h*stride)
+	for y := 0; y < t.h; y++ {
+		for x := 0; x < t.w; x++ {
+			c := data[x][y]
+			idx := (y*t.w + x) * stride
+			pixels[idx] = uint8(c >> 24)   // R
+			pixels[idx+1] = uint8(c >> 16) // G
+			pixels[idx+2] = uint8(c >> 8)  // B
+			pixels[idx+3] = uint8(c)       // A
+		}
+	}
+	return pixels
 }

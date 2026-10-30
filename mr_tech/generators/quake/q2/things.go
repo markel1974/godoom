@@ -9,19 +9,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
+	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Things represents a collection of resources and utilities for managing textures and images within an archive.
 type Things struct {
 	arc        interfaces.IArchive
-	texManager *lumps.Textures
+	texManager *common2.Textures
 	palette    [256]color.RGBA
 	il         *ImageLoader
 }
 
 // NewThings creates and initializes a new Things instance with the provided archive, texture manager, and color palette.
-func NewThings(arc interfaces.IArchive, texManager *lumps.Textures, palette [256]color.RGBA) *Things {
+func NewThings(arc interfaces.IArchive, texManager *common2.Textures, palette [256]color.RGBA) *Things {
 	return &Things{
 		arc:        arc,
 		texManager: texManager,
@@ -90,7 +91,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		return nil, fmt.Errorf("failed to load skin %s: %s", fileName, err.Error())
 	}
 
-	anim := config.NewConfigMaterial([]string{materialName}, config.MaterialKindLoop, 0, 0)
+	anim := config.NewConfigMaterial("thing", []string{materialName}, config.MaterialKindLoop)
 
 	cModel := config.NewModel3DEntry(int(md2.Header.NumFrames), md2.Frames.FrameNames)
 	skinW := float32(md2.Header.SkinWidth)
@@ -164,7 +165,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := TextInfo2ToMaterialKind(bspFace.Info)
-		specificMaterial := config.NewConfigMaterial([]string{texName}, animKind, 0, 0)
+		specificMaterial := config.NewConfigMaterial("bsp", []string{texName}, animKind)
 		// Texture Manager handling for external BModels (Q3 vs Q1/Q2)
 		if texes := texManager.GetFrames([]string{texName}); len(texes) > 0 && texes[0] != nil {
 			tWidth, tHeight, pixels := texes[0].RGBA()

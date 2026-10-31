@@ -99,6 +99,7 @@ func (s *Occlusion) Render(renderQueries func()) {
 	s.ctx.ColorMask(false, false, false, false)
 	s.ctx.DepthMask(false)
 	s.ctx.DepthFunc(api.LEQUAL)
+	s.ctx.Enable(api.CULL_FACE)
 
 	s.ctx.UseProgram(s.prg)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocView), 1, false, view)
@@ -106,6 +107,7 @@ func (s *Occlusion) Render(renderQueries func()) {
 
 	renderQueries()
 
+	s.ctx.Disable(api.CULL_FACE)
 	s.ctx.ColorMask(true, true, true, true)
 	s.ctx.DepthMask(true)
 	s.ctx.DepthFunc(api.LESS)

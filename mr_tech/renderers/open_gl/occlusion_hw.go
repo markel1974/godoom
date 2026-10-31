@@ -12,6 +12,7 @@ type OcclusionState struct {
 	QueryID     uint32
 	QueryActive bool
 	IsVisible   bool
+	LastFrame   int
 }
 
 // NewOcclusionState creates and returns a new OcclusionState with the given query ID and initial visibility status.
@@ -108,9 +109,15 @@ func (hw *OcclusionHW) GetState(id uint64) *OcclusionState {
 			return nil // Pool esaurito!
 		}
 		state = NewOcclusionState(hw.queryIDs[hw.queryIdx], true)
+		state.LastFrame = hw.frameCounter
 		hw.states[id] = state
 		hw.queryIdx++
+		return state
 	}
+	if hw.frameCounter-state.LastFrame > hw.interval+1 {
+		state.IsVisible = true
+	}
+	state.LastFrame = hw.frameCounter
 	return state
 }
 

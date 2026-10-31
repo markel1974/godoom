@@ -259,6 +259,11 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					frames := w.textures.GetTileFrames(int(wall.PicNum))
 					cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
 					ConfigureWallMaterial(cSeg.Middle, &wall)
+					refZ := ceilY
+					if wall.IsBottomAligned() {
+						refZ = floorY
+					}
+					cSeg.UVAlign.SetRefZ(refZ)
 				} else {
 					// 2-sided portal / adjoin
 					cSeg.Kind = config.SegmentUnknown
@@ -266,6 +271,19 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					if adjSec != nil {
 						adjCeilY := w.computeHeight(adjSec.CeilingZ)
 						adjFloorY := w.computeHeight(adjSec.FloorZ)
+
+						cSeg.UVAlignUpper.SetRefZ(ceilY)
+						refLower := adjFloorY
+						if wall.IsBottomAligned() {
+							refLower = floorY
+						}
+						cSeg.UVAlignLower.SetRefZ(refLower)
+
+						refMiddle := math.Min(ceilY, adjCeilY)
+						if wall.IsBottomAligned() {
+							refMiddle = math.Max(floorY, adjFloorY)
+						}
+						cSeg.UVAlign.SetRefZ(refMiddle)
 
 						// Upper step wall
 						if ceilY > adjCeilY || sec.IsSlopedCeiling() || adjSec.IsSlopedCeiling() {

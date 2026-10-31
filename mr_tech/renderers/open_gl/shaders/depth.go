@@ -255,6 +255,10 @@ func (s *Depth) Prepare() {
 
 // Render performs the depth render into the unified master shadow atlas.
 func (s *Depth) Render(renderScene func()) {
+	if !s.shadows {
+		return
+	}
+
 	const atlasSize = int32(2048)
 
 	fbW, fbH := s.handler.GetSize()

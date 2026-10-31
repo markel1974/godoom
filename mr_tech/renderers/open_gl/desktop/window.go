@@ -83,6 +83,10 @@ var _currWin *Window
 
 // NewGLWindow creates and initializes a new OpenGL window using the specified context and window configuration.
 func NewGLWindow(ctx api.IContext, cfg WindowConfig, player *config.Player) *Window {
+	vsync := 0
+	if cfg.VSync {
+		vsync = 1
+	}
 	w := &Window{
 		ctx:           ctx,
 		th:            _thread,
@@ -90,6 +94,7 @@ func NewGLWindow(ctx api.IContext, cfg WindowConfig, player *config.Player) *Win
 		player:        player,
 		cursorVisible: true,
 		keysPressed:   make(map[Button]bool),
+		vsync:         vsync,
 	}
 	return w
 }
@@ -272,6 +277,12 @@ func (w *Window) SetVSync(vsync bool) {
 		w.vsync = 1
 	} else {
 		w.vsync = 0
+	}
+	if w.window != nil {
+		w.th.Call(func() {
+			w.begin()
+			glfw.SwapInterval(w.vsync)
+		})
 	}
 }
 
@@ -613,6 +624,7 @@ func (w *Window) doPrepare() error {
 		}
 		w.ctx.BlendEquation(api.FUNC_ADD)
 		w.ctx.Enable(api.MULTISAMPLE)
+		glfw.SwapInterval(w.vsync)
 
 		//w.th.Init(w.cfg.DisableScissorTest)
 		w.end()

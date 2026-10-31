@@ -125,6 +125,10 @@ func (s *Bloom) Render() {
 		s.allocate(fbW, fbH)
 	}
 
+	if s.handler.GetBloomIntensity() <= 0.001 || s.hvPassages <= 0 {
+		return
+	}
+
 	s.ctx.UseProgram(s.prg)
 	s.ctx.Uniform1i(s.table[BloomLocImage], 0)
 	s.ctx.BindVertexArray(s.vao)

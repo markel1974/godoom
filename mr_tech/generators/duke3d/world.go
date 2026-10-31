@@ -64,6 +64,28 @@ func (w *World) computeLight(sec *lumps.Sector, ceilY, floorY float64) (config.L
 	return lightKind, intensity, falloff
 }
 
+// isBetterMaskedWall determines which wall of a 2-sided masked portal is the primary/front wall.
+func isBetterMaskedWall(w1, w2 *lumps.Wall, w1Idx, w2Idx int) bool {
+	// A wall with a valid OverPicNum is better than one with <= 0
+	if (w1.OverPicNum > 0) != (w2.OverPicNum > 0) {
+		return w1.OverPicNum > 0
+	}
+	// An unflipped front wall is preferred over a flipped back wall
+	w1Flip := w1.HasHorizontalFlip()
+	w2Flip := w2.HasHorizontalFlip()
+	if w1Flip != w2Flip {
+		return !w1Flip
+	}
+	// A wall with explicit mapper panning is preferred over default (0, 0)
+	w1Pan := w1.XPanning > 0 || w1.YPanning > 0
+	w2Pan := w2.XPanning > 0 || w2.YPanning > 0
+	if w1Pan != w2Pan {
+		return w1Pan
+	}
+	// Deterministic tie-breaker
+	return w1Idx < w2Idx
+}
+
 // Build generates sector configurations, global vertex geometry, volumes, and light definitions for the loaded level.
 func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, []*config.Light, error) {
 	if w.level == nil {
@@ -268,16 +290,12 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 						// Masked / grating wall / one-way
 						if wall.IsMasked() || wall.IsOneWay() {
 							// If both sides of a 2-sided portal are masked, only generate middle material once
-							// to avoid generating two overlapping, horizontally shifted / z-fighting quads.
+							// on the primary/front face to avoid duplicate, horizontally shifted / unaligned quads.
 							isDuplicated := false
 							partnerWall := w.level.GetWall(int(wall.NextWall))
 							if wall.IsMasked() && !wall.IsOneWay() && partnerWall != nil {
 								if partnerWall.IsMasked() && !partnerWall.IsOneWay() {
-									if wall.OverPicNum <= 0 && partnerWall.OverPicNum > 0 {
-										isDuplicated = true
-									} else if partnerWall.OverPicNum <= 0 && wall.OverPicNum > 0 {
-										isDuplicated = false
-									} else if wIdx > int(wall.NextWall) {
+									if isBetterMaskedWall(partnerWall, &wall, int(wall.NextWall), wIdx) {
 										isDuplicated = true
 									}
 								}

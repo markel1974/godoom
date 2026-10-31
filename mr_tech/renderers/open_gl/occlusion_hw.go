@@ -75,24 +75,12 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	// Allocate HW queries in batch
 	ctx.GenQueries(int32(maxEntities), &hw.queryIDs[0])
 
-	// Create the bounding box geometry (1x1x1 cube from 0.0 to 1.0)
-	// This way, by multiplying by (Max-Min) and translating to (Min),
-	// the cube will perfectly cover any AABB.
-	vertices := []float32{
-		0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, // Back
-		1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, // Right
-		1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, // Front
-		0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, // Left
-		0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, // Top
-		0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, // Bottom
-	}
-
 	ctx.GenVertexArrays(1, &hw.cubeVAO)
 	ctx.BindVertexArray(hw.cubeVAO)
 
 	ctx.GenBuffers(1, &hw.cubeVBO)
 	ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
-	ctx.BufferData(api.ARRAY_BUFFER, len(vertices)*4, ctx.Ptr(vertices), api.STATIC_DRAW)
+	ctx.BufferData(api.ARRAY_BUFFER, len(hw.allVertices)*4, nil, api.DYNAMIC_DRAW)
 
 	// aPos (location = 0)
 	ctx.VertexAttribPointer(0, 3, api.FLOAT, false, 3*4, ctx.PtrOffset(0))
@@ -154,7 +142,7 @@ func (hw *OcclusionHW) GetInterval() int {
 
 // Add appends a new AABBTest containing the given AABB and OcclusionState to the tests slice if state is not nil and scheduling is active.
 func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
-	if state == nil || !hw.CanSchedule() {
+	if state == nil || !hw.CanSchedule() || state.QueryActive {
 		return
 	}
 	if hw.testsLen >= len(hw.tests) {
@@ -212,36 +200,130 @@ func (hw *OcclusionHW) Render() {
 		for i := 0; i < hw.testsLen; i++ {
 			test := hw.tests[i]
 			if !test.State.QueryActive {
-				mX, mY, mZ := float32(test.AABB.GetMinX()), float32(test.AABB.GetMinY()), float32(test.AABB.GetMinZ())
-				xX, xY, xZ := float32(test.AABB.GetMaxX()), float32(test.AABB.GetMaxY()), float32(test.AABB.GetMaxZ())
-
-				// AABB vertices in Engine space SWAP for the OpenGL shader: (X, Z, -Y)
-				v0 := [3]float32{mX, mZ, -mY}
-				v1 := [3]float32{xX, mZ, -mY}
-				v2 := [3]float32{xX, mZ, -xY}
-				v3 := [3]float32{mX, mZ, -xY}
-				v4 := [3]float32{mX, xZ, -mY}
-				v5 := [3]float32{xX, xZ, -mY}
-				v6 := [3]float32{xX, xZ, -xY}
-				v7 := [3]float32{mX, xZ, -xY}
-
-				// 36 vertices (12 triangles)
-				vertices := [108]float32{
-					v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v0[0], v0[1], v0[2], // Back
-					v1[0], v1[1], v1[2], v5[0], v5[1], v5[2], v6[0], v6[1], v6[2], v6[0], v6[1], v6[2], v2[0], v2[1], v2[2], v1[0], v1[1], v1[2], // Right
-					v5[0], v5[1], v5[2], v4[0], v4[1], v4[2], v7[0], v7[1], v7[2], v7[0], v7[1], v7[2], v6[0], v6[1], v6[2], v5[0], v5[1], v5[2], // Front
-					v4[0], v4[1], v4[2], v0[0], v0[1], v0[2], v3[0], v3[1], v3[2], v3[0], v3[1], v3[2], v7[0], v7[1], v7[2], v4[0], v4[1], v4[2], // Left
-					v3[0], v3[1], v3[2], v2[0], v2[1], v2[2], v6[0], v6[1], v6[2], v6[0], v6[1], v6[2], v7[0], v7[1], v7[2], v3[0], v3[1], v3[2], // Top
-					v4[0], v4[1], v4[2], v5[0], v5[1], v5[2], v1[0], v1[1], v1[2], v1[0], v1[1], v1[2], v0[0], v0[1], v0[2], v4[0], v4[1], v4[2], // Bottom
-				}
-
-				if tc+len(vertices) >= len(hw.allVertices) {
+				if tc+108 >= len(hw.allVertices) {
 					hw.growAllVertices()
 				}
+				mX, mY, mZ := float32(test.AABB.GetMinX()), float32(test.AABB.GetMinY()), float32(test.AABB.GetMinZ())
+				xX, xY, xZ := float32(test.AABB.GetMaxX()), float32(test.AABB.GetMaxY()), float32(test.AABB.GetMaxZ())
+				nmY, nxY := -mY, -xY
 
-				copy(hw.allVertices[tc:], vertices[:])
+				dst := hw.allVertices[tc : tc+108]
+				// Back
+				dst[0] = mX
+				dst[1] = mZ
+				dst[2] = nmY
+				dst[3] = xX
+				dst[4] = mZ
+				dst[5] = nmY
+				dst[6] = xX
+				dst[7] = mZ
+				dst[8] = nxY
+				dst[9] = xX
+				dst[10] = mZ
+				dst[11] = nxY
+				dst[12] = mX
+				dst[13] = mZ
+				dst[14] = nxY
+				dst[15] = mX
+				dst[16] = mZ
+				dst[17] = nmY
+				// Right
+				dst[18] = xX
+				dst[19] = mZ
+				dst[20] = nmY
+				dst[21] = xX
+				dst[22] = xZ
+				dst[23] = nmY
+				dst[24] = xX
+				dst[25] = xZ
+				dst[26] = nxY
+				dst[27] = xX
+				dst[28] = xZ
+				dst[29] = nxY
+				dst[30] = xX
+				dst[31] = mZ
+				dst[32] = nxY
+				dst[33] = xX
+				dst[34] = mZ
+				dst[35] = nmY
+				// Front
+				dst[36] = xX
+				dst[37] = xZ
+				dst[38] = nmY
+				dst[39] = mX
+				dst[40] = xZ
+				dst[41] = nmY
+				dst[42] = mX
+				dst[43] = xZ
+				dst[44] = nxY
+				dst[45] = mX
+				dst[46] = xZ
+				dst[47] = nxY
+				dst[48] = xX
+				dst[49] = xZ
+				dst[50] = nxY
+				dst[51] = xX
+				dst[52] = xZ
+				dst[53] = nmY
+				// Left
+				dst[54] = mX
+				dst[55] = xZ
+				dst[56] = nmY
+				dst[57] = mX
+				dst[58] = mZ
+				dst[59] = nmY
+				dst[60] = mX
+				dst[61] = mZ
+				dst[62] = nxY
+				dst[63] = mX
+				dst[64] = mZ
+				dst[65] = nxY
+				dst[66] = mX
+				dst[67] = xZ
+				dst[68] = nxY
+				dst[69] = mX
+				dst[70] = xZ
+				dst[71] = nmY
+				// Top
+				dst[72] = mX
+				dst[73] = mZ
+				dst[74] = nxY
+				dst[75] = xX
+				dst[76] = mZ
+				dst[77] = nxY
+				dst[78] = xX
+				dst[79] = xZ
+				dst[80] = nxY
+				dst[81] = xX
+				dst[82] = xZ
+				dst[83] = nxY
+				dst[84] = mX
+				dst[85] = xZ
+				dst[86] = nxY
+				dst[87] = mX
+				dst[88] = mZ
+				dst[89] = nxY
+				// Bottom
+				dst[90] = mX
+				dst[91] = xZ
+				dst[92] = nmY
+				dst[93] = xX
+				dst[94] = xZ
+				dst[95] = nmY
+				dst[96] = xX
+				dst[97] = mZ
+				dst[98] = nmY
+				dst[99] = xX
+				dst[100] = mZ
+				dst[101] = nmY
+				dst[102] = mX
+				dst[103] = mZ
+				dst[104] = nmY
+				dst[105] = mX
+				dst[106] = xZ
+				dst[107] = nmY
 
-				tc += len(vertices)
+				tc += 108
 				vc++
 			}
 		}
@@ -249,7 +331,7 @@ func (hw *OcclusionHW) Render() {
 		if vc > 0 {
 			hw.ctx.BindVertexArray(hw.cubeVAO)
 			hw.ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
-			hw.ctx.BufferData(api.ARRAY_BUFFER, tc*4, hw.allVerticesPtr, api.DYNAMIC_DRAW)
+			hw.ctx.BufferSubData(api.ARRAY_BUFFER, 0, tc*4, hw.allVerticesPtr)
 
 			idx := int32(0)
 			for i := 0; i < hw.testsLen; i++ {
@@ -283,6 +365,10 @@ func (hw *OcclusionHW) growAllVertices() {
 	copy(newData, hw.allVertices)
 	hw.allVertices = newData
 	hw.allVerticesPtr = hw.ctx.Ptr(hw.allVertices)
+
+	hw.ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
+	hw.ctx.BufferData(api.ARRAY_BUFFER, len(hw.allVertices)*4, nil, api.DYNAMIC_DRAW)
+	hw.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
 }
 
 // growActiveStates doubles the capacity of the activeStates slice, initializing it to 1024 if empty, and preserves existing data.

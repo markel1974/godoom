@@ -46,6 +46,7 @@ type OcclusionHW struct {
 	interval       int
 	frameCounter   int
 	activeStates   []*OcclusionState
+	activeLen      int
 }
 
 const defaultOcclusionInterval = 4
@@ -62,7 +63,8 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 		queryIdx:     0,
 		interval:     defaultOcclusionInterval,
 		frameCounter: 0,
-		activeStates: make([]*OcclusionState, 0, 1024),
+		activeStates: make([]*OcclusionState, maxEntities),
+		activeLen:    0,
 	}
 	hw.allVerticesPtr = ctx.Ptr(hw.allVertices)
 
@@ -173,11 +175,12 @@ func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
 
 // Readback checks pending queries and updates their visibility status asynchronously without blocking.
 func (hw *OcclusionHW) Readback() {
-	if len(hw.activeStates) == 0 {
+	if hw.activeLen == 0 {
 		return
 	}
-	remaining := hw.activeStates[:0]
-	for _, state := range hw.activeStates {
+	writeIdx := 0
+	for readIdx := 0; readIdx < hw.activeLen; readIdx++ {
+		state := hw.activeStates[readIdx]
 		if !state.QueryActive {
 			continue
 		}
@@ -190,10 +193,14 @@ func (hw *OcclusionHW) Readback() {
 			state.IsVisible = passed > 0
 			state.QueryActive = false
 		} else {
-			remaining = append(remaining, state)
+			hw.activeStates[writeIdx] = state
+			writeIdx++
 		}
 	}
-	hw.activeStates = remaining
+	for i := writeIdx; i < hw.activeLen; i++ {
+		hw.activeStates[i] = nil
+	}
+	hw.activeLen = writeIdx
 }
 
 // Render performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
@@ -229,7 +236,7 @@ func (hw *OcclusionHW) Render() {
 				}
 
 				if tc+len(vertices) >= len(hw.allVertices) {
-					hw.grow()
+					hw.growAllVertices()
 				}
 
 				copy(hw.allVertices[tc:], vertices[:])
@@ -252,7 +259,11 @@ func (hw *OcclusionHW) Render() {
 					hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
 					hw.ctx.EndQuery(api.ANY_SAMPLES_PASSED)
 					test.State.QueryActive = true
-					hw.activeStates = append(hw.activeStates, test.State)
+					if hw.activeLen >= len(hw.activeStates) {
+						hw.growActiveStates()
+					}
+					hw.activeStates[hw.activeLen] = test.State
+					hw.activeLen++
 					idx++
 				}
 			}
@@ -265,11 +276,22 @@ func (hw *OcclusionHW) Render() {
 	hw.Readback()
 }
 
-// grow doubles the size of the allVertices slice, copies existing data into the new slice, and updates its GPU pointer.
-func (hw *OcclusionHW) grow() {
+// growAllVertices doubles the capacity of the allVertices slice and updates the associated pointer in the GPU context.
+func (hw *OcclusionHW) growAllVertices() {
 	newSize := len(hw.allVertices) * 2
 	newData := make([]float32, newSize)
 	copy(newData, hw.allVertices)
 	hw.allVertices = newData
 	hw.allVerticesPtr = hw.ctx.Ptr(hw.allVertices)
+}
+
+// growActiveStates doubles the capacity of the activeStates slice, initializing it to 1024 if empty, and preserves existing data.
+func (hw *OcclusionHW) growActiveStates() {
+	newSize := len(hw.activeStates) * 2
+	if newSize == 0 {
+		newSize = 1024
+	}
+	newData := make([]*OcclusionState, newSize)
+	copy(newData, hw.activeStates)
+	hw.activeStates = newData
 }

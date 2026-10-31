@@ -1,7 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -257,9 +256,9 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 		return false
 	}
 	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
-	_, _, dynamicCount := w.fl.GetLights()
-	_, shadowCount := w.fl.GetShadowLights()
-	fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
+	//_, _, dynamicCount := w.fl.GetLights()
+	//_, shadowCount := w.fl.GetShadowLights()
+	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.

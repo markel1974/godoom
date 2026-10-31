@@ -220,7 +220,11 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	// MAIN OPAQUE (Single-Pass Forward with all lights & shadows)
 	w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
 	// HW OCCLUSION
-	w.occlusion.Render(w.hwOcc.Render)
+	if w.hwOcc.HasDrawTests() {
+		w.occlusion.Render(w.hwOcc.Render)
+	} else {
+		w.hwOcc.Readback()
+	}
 	// MAIN ADDITIVE
 	if w.dcAdditive.HasCommands() {
 		w.additive.RenderAdditive(w.dcAdditive.Render)

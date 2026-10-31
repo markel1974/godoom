@@ -25,11 +25,11 @@ type FrameLights struct {
 	stride            int32
 	shadowLights      [ShadowLightNumber]*metrics.Light
 	shadowLightsIndex int32
-	glCamX            float32
-	glCamY            float32
-	glCamZ            float32
-	useShadowLight    bool
-	debug             bool
+	//glCamX            float32
+	//glCamY            float32
+	//glCamZ            float32
+	useShadowLight bool
+	debug          bool
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
@@ -86,15 +86,15 @@ func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*metrics.Light, int3
 }
 
 // Prepare initializes camera position for lighting calculations and resets the shadow lights index to zero.
-func (f *FrameLights) Prepare(pX, pY, pZ float64) {
+func (f *FrameLights) Prepare() {
 	//TODO VERIFICA
 	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
-	f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
+	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
 	f.shadowLightsIndex = 0
 }
 
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
-func (f *FrameLights) Create(light *lights.Light) {
+func (f *FrameLights) Create(light *lights.Light, distSq float64) {
 	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
 	posX, posY, posZ := light.GetPosXYZ()
 	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)
@@ -119,8 +119,8 @@ func (f *FrameLights) Create(light *lights.Light) {
 		lType = 1
 		if f.useShadowLight {
 			added := f.addShadowLight(
+				float32(distSq),
 				glPosX, glPosY, glPosZ,
-				f.glCamX, f.glCamY, f.glCamZ,
 				lType,
 				r, g, b, intensity,
 				glDirX, glDirY, glDirZ, falloff,
@@ -179,8 +179,8 @@ func (f *FrameLights) add(
 // addShadowLight adds a shadow-casting light to the list of frame lights based on its attributes and distance to the camera.
 // Returns true if the light was successfully added, or false if it didn't qualify or was replaced in the min-heap.
 func (f *FrameLights) addShadowLight(
+	distSq float32,
 	posX, posY, posZ float32,
-	camX, camY, camZ float32,
 	lightType float32,
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
@@ -190,8 +190,8 @@ func (f *FrameLights) addShadowLight(
 	//TODO VERIFICA LE ombre generati non sono coerenti
 	//return false
 
-	dx, dy, dz := posX-camX, posY-camY, posZ-camZ
-	distSq := dx*dx + dy*dy + dz*dz
+	//dx, dy, dz := posX-camX, posY-camY, posZ-camZ
+	//distSq := dx*dx + dy*dy + dz*dz
 
 	//target := radius
 	target := radius * radius * 4
@@ -213,17 +213,12 @@ func (f *FrameLights) addShadowLight(
 		}
 		return true
 	}
-
-	//return true
 	// La luce peggiore è SEMPRE all'indice 0. Ricerca O(1).
 	if score <= f.shadowLights[0].Score {
 		return false
 	}
-
-	// TODO RIMUOVERE!
 	// Sostituzione: declassiamo la radice (la peggiore) e inseriamo la nuova
 	worst := f.shadowLights[0]
-
 	f.add(
 		worst.X, worst.Y, worst.Z, worst.Kind,
 		worst.R, worst.G, worst.B, worst.Intensity,

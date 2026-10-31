@@ -204,29 +204,53 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 // It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
 func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
-	w.fl.Prepare(pX, pY, pZ)
+	w.fl.Prepare()
 	counter := 0
+
 	queryLights := func(object aabb.IObject) bool {
 		light := object.(*lights.Light)
+		if light.GetKind() == config.LightKindNone {
+			return false
+		}
 
-		//TODO
-		//occState := w.occlusion.GetState(light.GetId())
-		//if occState != nil && !occState.IsVisible {
-		//	w.occlusion.Add(light.GetAABB(), occState)
-		//	return false
-		//}
-		//w.occlusion.Add(light.GetAABB(), occState)
+		intensity := light.GetIntensityStyled(textures.GlobalTick())
+		if intensity <= 0.001 {
+			return false
+		}
 
-		//if w.occBuffer.IsAABBOccluded(light.GetAABB(), mvp) {
-		//	return false
-		//}
-		w.fl.Create(light)
+		// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
+		falloff := light.GetFalloff()
+		effectiveRadius := 4.605 * falloff * intensity
+		if effectiveRadius < 100.0 {
+			effectiveRadius = 100.0
+		}
+
+		posX, posY, posZ := light.GetPosXYZ()
+		dx := posX - pX
+		dy := posY - pY
+		dz := posZ - pZ
+		distSq := dx*dx + dy*dy + dz*dz
+
+		// 1. Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
+		// la luce illumina l'ambiente circostante il giocatore.
+		// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
+		nearRadius := effectiveRadius + 250.0
+		if distSq > nearRadius*nearRadius {
+			// 2. Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
+			b := light.GetAABB()
+			if !b.IntersectFrustum(frustumFront) {
+				return false
+			}
+		}
+
+		w.fl.Create(light, distSq)
 		counter++
 		return false
 	}
 	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
-
-	//fmt.Println("LIGHTS", lights.Len(), "DRAW", counter)
+	//_, _, dynamicCount := w.fl.GetLights()
+	//_, shadowCount := w.fl.GetShadowLights()
+	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.

@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -16,6 +17,7 @@ type IParent interface {
 
 // Light represents a light source with an intensity, falloff, type, and position in 3D space.
 type Light struct {
+	id               uint64
 	parent           IParent
 	intensity        float64
 	intensityDefault float64
@@ -38,6 +40,7 @@ type Light struct {
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
 func NewLight() *Light {
 	l := &Light{
+		id:               uint64(physics.GetGlobalId()),
 		parent:           nil,
 		intensity:        0.0,
 		intensityDefault: 0.0,
@@ -67,10 +70,15 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 	cl.kind = c.Kind
 	cl.cutOff = math.Cos(c.CutOff * math.Pi / 180.0)
 	cl.outerCutOff = math.Cos(c.OuterCutOff * math.Pi / 180.0)
-	const influence = 10
-	// Usiamo il falloff reale per il Culling. L'AABB rappresenterà
-	// esattamente il raggio di influenza massimo della luce nel mondo.
+	// Raggio di influenza massimo reale (stessa formula di decadimento esponenziale dello shader GLSL: e^-4.605 ≈ 0.01)
+	influence := 4.605
+	if c.Intensity > 1.0 {
+		influence *= c.Intensity
+	}
 	cl.radius = c.Falloff * influence
+	if cl.radius < 100.0 {
+		cl.radius = 100.0
+	}
 
 	if len(cl.style) == 0 {
 		cl.style = []float64{1.0}
@@ -97,6 +105,11 @@ func (cl *Light) Setup(c *config.Light, coords geometry.XYZ) {
 func (cl *Light) Rebuild() {
 	r := cl.radius
 	cl.aabb.Rebuild(cl.pos.X-r, cl.pos.Y-r, cl.pos.Z-r, cl.pos.X+r, cl.pos.Y+r, cl.pos.Z+r)
+}
+
+// GetId returns the unique identifier of the Light.
+func (cl *Light) GetId() uint64 {
+	return cl.id
 }
 
 // SetParent assigns a parent Volume to the Light, establishing a hierarchical relationship.

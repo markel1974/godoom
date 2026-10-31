@@ -26,8 +26,9 @@ func (s *ShadowLights) Update(shadowLights [ShadowLightsCount]*Light, count uint
 	s.count = count
 	if s.count == 0 {
 		return
-	} else if s.count >= ShadowLightsCount {
-		s.count = ShadowLightsCount - 1
+	}
+	if s.count > ShadowLightsCount {
+		s.count = ShadowLightsCount
 	}
 	for lx := uint32(0); lx < s.count; lx++ {
 		light := shadowLights[lx]

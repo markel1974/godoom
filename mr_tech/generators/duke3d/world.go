@@ -305,6 +305,14 @@ func (w *World) buildSprites() []*config.Volume {
 			fmt.Println("nil sprite idx", spIdx)
 			continue
 		}
+		if sp.IsInvisible() {
+			continue
+		}
+		// Skip Build/Duke3D non-visual utility / editor sprites (e.g. SE, Activator, Touchplate, Music, Locators)
+		// Tile 0 is empty; tiles 1..10 are internal editor trigger/marker sprites.
+		if sp.PicNum <= 0 || (sp.PicNum >= 1 && sp.PicNum <= 10) {
+			continue
+		}
 		switch sp.GetType() {
 		case lumps.WallSprite:
 			tileW, tileH, ok := w.textures.GetTileSize(int(sp.PicNum))
@@ -367,9 +375,12 @@ func (w *World) buildSprites() []*config.Volume {
 				vBottom, vTop = 0.0, -1.0
 			}
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
-			mat := config.NewConfigMaterial("wall", frames, config.MaterialKindLoop)
+			wallId := fmt.Sprintf("sp_wall_%d", spIdx)
+			mat := config.NewConfigMaterial(wallId, frames, config.MaterialKindLoop)
+			mat.ClampU = true
+			mat.ClampV = true
 			ConfigureSpriteMaterial(mat, sp)
-			vol := config.NewConfigVolume(fmt.Sprintf("sp_wall_%d", spIdx), "sp_wall")
+			vol := config.NewConfigVolume(wallId, "sp_wall")
 
 			fPoints := []geometry.XYZ{v0, v1, v2, v3}
 			uvs := [][2]float64{{uMin, vBottom}, {uMax, vBottom}, {uMax, vTop}, {uMin, vTop}}
@@ -423,17 +434,19 @@ func (w *World) buildSprites() []*config.Volume {
 			v3 := geometry.XYZ{X: pt3.X, Y: pt3.Y, Z: zVal}
 
 			uMin, uMax := 0.0, 1.0
-			if sp.CStat&4 != 0 {
+			if sp.HasHorizontalFlip() {
 				uMin, uMax = 1.0, 0.0
 			}
 			vMin, vMax := -1.0, 0.0
-			if sp.CStat&8 != 0 {
+			if sp.HasVerticalFlip() {
 				vMin, vMax = 0.0, -1.0
 			}
 
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
 			floorId := fmt.Sprintf("sp_floor_%d", spIdx)
 			mat := config.NewConfigMaterial(floorId, frames, config.MaterialKindLoop)
+			mat.ClampU = true
+			mat.ClampV = true
 			ConfigureSpriteMaterial(mat, sp)
 			vol := config.NewConfigVolume(floorId, "sp_floor")
 			tPoints := []geometry.XYZ{v0, v1, v2, v3}
@@ -445,16 +458,6 @@ func (w *World) buildSprites() []*config.Volume {
 			topFace := config.NewConfigFace(tPoints, uvs, mat, fmt.Sprintf("sp_floor_%d_t", spIdx))
 			vol.AddFace(topFace)
 
-			if sp.IsTwoSided() {
-				bPoints := []geometry.XYZ{v0, v1, v2, v3}
-				bUvs := [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
-				if !w.flipY {
-					bPoints = []geometry.XYZ{v0, v3, v2, v1}
-					bUvs = [][2]float64{{uMin, vMin}, {uMin, vMax}, {uMax, vMax}, {uMax, vMin}}
-				}
-				backFace := config.NewConfigFace(bPoints, bUvs, mat, fmt.Sprintf("sp_floor_%d_b", spIdx))
-				vol.AddFace(backFace)
-			}
 			volumes = append(volumes, vol)
 		}
 	}

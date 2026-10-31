@@ -12,8 +12,9 @@ const (
 	CStatAlignmentMask    = 3 << 4 // Bits 4-5: Sprite alignment type mask
 	CStatOneSided         = 1 << 6 // Bit 6: One-sided sprite (invisible from back)
 	CStatCenterVertically = 1 << 7 // Bit 7: Center vertically around Z coordinate
-	CStatInvisible        = 1 << 8 // Bit 8: Invisible sprite
-	CStatInvisibleHitscan = 1 << 9 // Bit 9: Invisible to hitscans / blocking disabled for shots
+	CStatHitscan          = 1 << 8 // Bit 8: Hitscan blocking
+	CStatTransAlt         = 1 << 9 // Bit 9: Alternative translucency (33% / 66%)
+	CStatInvisible        = 1 << 15
 )
 
 // Sprite alignment types defined by bits 4 and 5 (values 0, 16, 32).
@@ -85,12 +86,12 @@ func (s *Sprite) HasVerticalAlignment() bool {
 	return s.CStat&CStatCenterVertically != 0
 }
 
-// IsInvisible checks if the sprite is completely invisible.
+// IsInvisible checks if the sprite is completely invisible (bit 15).
 func (s *Sprite) IsInvisible() bool {
-	return s.CStat&CStatInvisible != 0
+	return uint16(s.CStat)&CStatInvisible != 0
 }
 
 // IsInvisibleHitscan checks if the sprite is invisible to hitscans / blockable hits.
 func (s *Sprite) IsInvisibleHitscan() bool {
-	return s.CStat&CStatInvisibleHitscan != 0
+	return s.CStat&CStatHitscan != 0
 }
